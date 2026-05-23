@@ -242,6 +242,9 @@ func New(cfg config.IntegrationsSection) *Dispatcher {
 	if cfg.Sentinel != nil && cfg.Sentinel.Enabled {
 		d.targets = append(d.targets, &sentinelTarget{cfg: cfg.Sentinel, client: d.client})
 	}
+	if cfg.Loki != nil && cfg.Loki.Enabled {
+		d.targets = append(d.targets, &lokiTarget{cfg: cfg.Loki, client: d.client})
+	}
 	if cfg.Device42 != nil && cfg.Device42.Enabled {
 		d.targets = append(d.targets, &device42Target{cfg: cfg.Device42, client: d.client})
 	}
@@ -661,4 +664,55 @@ func (d *datadogTarget) Dispatch(ctx context.Context, e Event) error {
 	url := fmt.Sprintf("https://api.%s/api/v1/events", site)
 	headers := map[string]string{"DD-API-KEY": d.cfg.APIKey}
 	return postJSON(ctx, d.client, url, headers, payload)
+}
+
+// --- Grafana Loki ---
+
+type lokiTarget struct {
+	cfg    *config.LokiIntegration
+	client *http.Client
+}
+
+func (l *lokiTarget) Name() string             { return "loki" }
+func (l *lokiTarget) Accepts(event Event) bool { return acceptsEvent(l.cfg.Events, event.Name) }
+func (l *lokiTarget) Dispatch(ctx context.Context, e Event) error {
+	// Body carries the high-cardinality fields; labels stay low-cardinality
+	// (service, severity, event_name) per Loki best practice.
+	body, err := json.Marshal(map[string]any{
+		"hostname": e.Hostname,
+		"envoy_id": e.EnvoyID,
+		"summary":  e.Summary,
+		"details":  e.Details,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal body: %w", err)
+	}
+
+	stream := map[string]string{
+		"service":    "vigo",
+		"severity":   e.Severity.String(),
+		"event_name": e.Name,
+	}
+	payload := map[string]any{
+		"streams": []map[string]any{{
+			"stream": stream,
+			"values": [][]string{{
+				fmt.Sprintf("%d", e.Timestamp.UnixNano()),
+				string(body),
+			}},
+		}},
+	}
+
+	headers := map[string]string{}
+	if l.cfg.TenantID != "" {
+		headers["X-Scope-OrgID"] = l.cfg.TenantID
+	}
+	if l.cfg.BearerToken != "" {
+		headers["Authorization"] = "Bearer " + l.cfg.BearerToken
+	} else if l.cfg.Username != "" {
+		headers["Authorization"] = "Basic " + base64Encode([]byte(l.cfg.Username+":"+l.cfg.Password))
+	}
+
+	url := strings.TrimSuffix(l.cfg.URL, "/") + "/loki/api/v1/push"
+	return postJSON(ctx, l.client, url, headers, payload)
 }

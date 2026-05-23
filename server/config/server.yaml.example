@@ -762,6 +762,22 @@ watcher:
 #     log_type: "VigoEvents"
 #     events: []
 #
+#   # Grafana Loki — forward events as labeled log streams (LogQL-queryable).
+#   # Labels stay low-cardinality (service, severity, event_name); high-cardinality
+#   # fields (hostname, envoy_id) go in the log line body. Audit-trail rows reach
+#   # Loki as `audit.<eventType>` events alongside envoy.offline / run.failure /
+#   # security.* etc. Auth: leave empty for unauthenticated Loki, set username+
+#   # password for basic-auth, or set bearer_token (Grafana Cloud Logs); tenant_id
+#   # is the X-Scope-OrgID header for multi-tenant deployments.
+#   loki:
+#     enabled: true
+#     url: "https://logs-prod-us-central1.grafana.net"
+#     tenant_id: "123456"
+#     username: "123456"
+#     password: "secret:vigo/loki/password"
+#     # bearer_token: "secret:vigo/loki/token"
+#     events: []
+#
 #   # Device42 — sync inventory
 #   device42:
 #     enabled: true

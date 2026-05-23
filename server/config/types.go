@@ -454,6 +454,7 @@ type IntegrationsSection struct {
 	Kaseya       *KaseyaIntegration       `yaml:"kaseya,omitempty" doc:"Kaseya VSA — create tickets via the VSA API."`
 	SumoLogic    *SumoLogicIntegration    `yaml:"sumologic,omitempty" doc:"Sumo Logic — forward events to an HTTP source."`
 	Sentinel     *SentinelIntegration     `yaml:"sentinel,omitempty" doc:"Microsoft Sentinel — forward events to Log Analytics."`
+	Loki         *LokiIntegration         `yaml:"loki,omitempty" doc:"Grafana Loki — forward events as labeled log streams."`
 	Device42     *Device42Integration     `yaml:"device42,omitempty" doc:"Device42 — sync envoy inventory to the Device42 CMDB."`
 	SnipeIT      *SnipeITIntegration      `yaml:"snipeit,omitempty" doc:"Snipe-IT — sync envoy inventory to Snipe-IT asset management."`
 }
@@ -625,6 +626,22 @@ type SentinelIntegration struct {
 	WorkspaceID string   `yaml:"workspace_id" doc:"Log Analytics workspace GUID." example:"12345678-1234-1234-1234-123456789abc"`
 	SharedKey   string   `yaml:"shared_key" doc:"Log Analytics primary or secondary shared key (supports the secret: prefix)." example:"secret:vigo/sentinel/shared_key"`
 	LogType     string   `yaml:"log_type" doc:"Custom log table name events are written to." default:"VigoEvents" example:"VigoEvents, VigoDrift"`
+	Events      []string `yaml:"events" doc:"Event types to forward. Empty means all events." example:"[] (forward all)"`
+}
+
+// LokiIntegration forwards events to a Grafana Loki push endpoint as labeled log
+// streams. Labels stay low-cardinality (service, severity, event_name) per Loki
+// best practice — high-cardinality fields (hostname, envoy_id) ride in the log
+// line body. Auth is optional: leave Username/Password/BearerToken empty for
+// unauthenticated Loki; set BasicAuth (Username + Password) for nginx/htpasswd
+// fronted Loki; set BearerToken for Grafana Cloud Logs or token-gated deployments.
+type LokiIntegration struct {
+	Enabled     bool     `yaml:"enabled" doc:"Forward events to Grafana Loki." default:"false" example:"true"`
+	URL         string   `yaml:"url" doc:"Loki base URL (without /loki/api/v1/push — appended automatically)." example:"https://logs.example.com, https://logs-prod-us-central1.grafana.net"`
+	TenantID    string   `yaml:"tenant_id" doc:"Loki tenant for multi-tenant deployments (sent as X-Scope-OrgID). Leave empty for single-tenant." example:"acme, 123456"`
+	Username    string   `yaml:"username" doc:"Basic-auth username (Grafana Cloud users: your instance ID). Mutually exclusive with bearer_token." example:"123456"`
+	Password    string   `yaml:"password" doc:"Basic-auth password (supports the secret: prefix). Mutually exclusive with bearer_token." example:"secret:vigo/loki/password"`
+	BearerToken string   `yaml:"bearer_token" doc:"Bearer token (supports the secret: prefix). Mutually exclusive with basic-auth." example:"secret:vigo/loki/token"`
 	Events      []string `yaml:"events" doc:"Event types to forward. Empty means all events." example:"[] (forward all)"`
 }
 
@@ -1038,6 +1055,15 @@ type ModuleDefinition struct {
 	Vars       map[string]any      `yaml:"vars"`
 	Compliance map[string][]string `yaml:"compliance"`
 
+	// Provides lists Vigo-curated provision tags (e.g. "time-sync",
+	// "audit-trail") that the module satisfies. The loader expands each
+	// tag through compliance.ModuleProvisions into framework → control
+	// IDs and unions the result with the explicit Compliance map. Tags
+	// not in the catalog are reported by modlint (server/modlint/
+	// rule_module_provisions.go) and contribute nothing to coverage —
+	// they don't fail the load.
+	Provides []string `yaml:"provides"`
+
 	// TemplateSources are stockpile-relative paths the module references
 	// via `source:` on any of its resources, captured by resolveSourceFiles
 	// before the source attribute is rewritten into content. Used by the
@@ -1092,6 +1118,10 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 		case "compliance":
 			if err := val.Decode(&m.Compliance); err != nil {
 				return fmt.Errorf("decoding compliance: %w", err)
+			}
+		case "provides":
+			if err := val.Decode(&m.Provides); err != nil {
+				return fmt.Errorf("decoding provides: %w", err)
 			}
 		}
 	}

@@ -291,7 +291,18 @@ integrations:
     api_key: "secret:vigo/datadog/api-key"
     site: "datadoghq.com"
     events: []
+
+  loki:
+    enabled: true
+    url: "https://logs-prod-us-central1.grafana.net"
+    tenant_id: "123456"               # X-Scope-OrgID for multi-tenant Loki; omit for single-tenant
+    username: "123456"                # basic-auth username (Grafana Cloud: instance ID)
+    password: "secret:vigo/loki/password"
+    # bearer_token: "secret:vigo/loki/token"  # alternative to basic-auth
+    events: []
 ```
+
+Loki receives events as labeled log streams. Labels stay low-cardinality (`service=vigo`, `severity`, `event_name`) per Loki best practice — high-cardinality fields (`hostname`, `envoy_id`) ride in the JSON log line body. Audit-trail rows arrive as `audit.<eventType>` events alongside `envoy.offline` / `run.failure` / `security.*` etc., so an operator can query the audit chain in LogQL: `{service="vigo", event_name=~"audit\\..*"}`.
 
 ### CMDB
 

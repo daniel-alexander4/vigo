@@ -538,50 +538,31 @@ scrape_configs:
     scrape_interval: 30s
 ```
 
-## Suggested Alerts
+## Alert rules
+
+A curated alert-rules file ships alongside the Grafana dashboards:
+
+```
+[grafana/alerts.yaml](grafana/alerts.yaml)
+```
+
+Fifteen Prometheus rules across convergence (failed / degraded / diverged / offline), runs (p95 duration), security (sig-verify failures, critical CVEs), operability (config reload errors, secret resolution errors), license (enforcement errors, days remaining, stage), and swarm (spanner bolt roster). Every rule references a metric defined in `server/metrics/registry.go`; thresholds are starting points — tune to your fleet.
+
+Load into a stock Prometheus:
 
 ```yaml
-groups:
-  - name: vigo
-    rules:
-      - alert: VigoComplianceLow
-        expr: vigo_compliance_pct < 90
-        for: 10m
-        labels: { severity: warning }
-        annotations:
-          summary: "Fleet compliance below 90%"
-
-      - alert: VigoLicenseExpiring
-        expr: vigo_license_days_remaining < 30 and vigo_license_days_remaining > 0
-        for: 1h
-        labels: { severity: warning }
-        annotations:
-          summary: "License expires in {{ $value }} days"
-
-      - alert: VigoLicenseOverLimit
-        expr: vigo_license_stage > 0
-        for: 5m
-        labels: { severity: critical }
-        annotations:
-          summary: "License enforcement active (stage {{ $value }})"
-
-      - alert: VigoConfigReloadFailed
-        expr: increase(vigo_config_reload_errors_total[5m]) > 0
-        labels: { severity: warning }
-        annotations:
-          summary: "Config reload failed"
-
-      - alert: VigoSignatureVerifyFailed
-        expr: increase(vigo_sig_verify_failed_total[5m]) > 0
-        labels: { severity: critical }
-        annotations:
-          summary: "ED25519 signature verification failures detected"
+# prometheus.yml
+rule_files:
+  - "/etc/prometheus/vigo-alerts.yaml"
 ```
+
+Or import into Grafana via Alerting → Alert rules → Import. Route alerts to PagerDuty / Slack / ServiceNow / Loki via the [integrations](#integrations) section above.
 
 ## What's next
 
 - **A metric is high and you don't know which envoy** → drill in via `vigocli envoys list` then the envoy detail page.
 - **You need an alert routed to PagerDuty / Slack / ServiceNow** → see the integrations section above; same config block, different endpoint.
+- **You want events as queryable logs alongside the metrics** → [Ship events to Grafana Loki](loki-integration.md).
 - **A metric value looks wrong** → [Troubleshoot common issues](troubleshoot.md).
 
 ---

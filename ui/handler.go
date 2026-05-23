@@ -2652,6 +2652,11 @@ func (h *Handler) Integrations(w http.ResponseWriter, r *http.Request) {
 	} else {
 		a("Microsoft Sentinel", "sentinel", "SIEM / Observability", false, 0)
 	}
+	if cfg.Loki != nil {
+		a("Grafana Loki", "loki", "SIEM / Observability", cfg.Loki.Enabled, e(cfg.Loki.Events))
+	} else {
+		a("Grafana Loki", "loki", "SIEM / Observability", false, 0)
+	}
 	// RMM
 	if cfg.NinjaRMM != nil {
 		a("NinjaRMM", "ninjarmm", "RMM", cfg.NinjaRMM.Enabled, e(cfg.NinjaRMM.Events))
@@ -2874,6 +2879,22 @@ func (h *Handler) integrationLiveConfig(slug string) (bool, int, string) {
 			return false, 0, ""
 		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  sentinel:\n    enabled: true\n    workspace_id: %s\n    shared_key: %q\n    events: %s", c.WorkspaceID, mask(c.SharedKey), fmtEvents(c.Events))
+	case "loki":
+		c := cfg.Loki
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
+		auth := ""
+		if c.BearerToken != "" {
+			auth = fmt.Sprintf("\n    bearer_token: %q", mask(c.BearerToken))
+		} else if c.Username != "" {
+			auth = fmt.Sprintf("\n    username: %s\n    password: %q", c.Username, mask(c.Password))
+		}
+		tenant := ""
+		if c.TenantID != "" {
+			tenant = fmt.Sprintf("\n    tenant_id: %s", c.TenantID)
+		}
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  loki:\n    enabled: true\n    url: %q%s%s\n    events: %s", c.URL, tenant, auth, fmtEvents(c.Events))
 	case "ninjarmm":
 		c := cfg.NinjaRMM
 		if c == nil || !c.Enabled {
@@ -2947,6 +2968,8 @@ var integrationExamples = map[string]IntegrationExample{
 		Events: "All event types", ExampleYAML: "integrations:\n  sumologic:\n    enabled: true\n    url: \"https://endpoint.collection.us2.sumologic.com/receiver/v1/http/...\"\n    events: []"},
 	"sentinel": {Name: "Microsoft Sentinel", Slug: "sentinel", Description: "Forwards events to Azure Log Analytics via the Data Collector API for Microsoft Sentinel.",
 		Events: "All event types", ExampleYAML: "integrations:\n  sentinel:\n    enabled: true\n    workspace_id: your-workspace-id\n    shared_key: \"secret:vigo/sentinel/shared-key\"\n    events: []"},
+	"loki": {Name: "Grafana Loki", Slug: "loki", Description: "Forwards events as labeled log streams to Loki's push API. Low-cardinality labels (service, severity, event_name); high-cardinality fields in the JSON body. Audit-trail rows arrive as audit.<eventType> events.",
+		Events: "All event types", ExampleYAML: "integrations:\n  loki:\n    enabled: true\n    url: \"https://logs-prod-us-central1.grafana.net\"\n    tenant_id: \"123456\"\n    username: \"123456\"\n    password: \"secret:vigo/loki/password\"\n    events: []"},
 	"ninjarmm": {Name: "NinjaRMM", Slug: "ninjarmm", Description: "Creates tickets in NinjaRMM platform.",
 		Events: "All event types", ExampleYAML: "integrations:\n  ninjarmm:\n    enabled: true\n    url: \"https://app.ninjarmm.com\"\n    client_id: your-client-id\n    client_secret: \"secret:vigo/ninjarmm/client-secret\"\n    events: [\"run.failure\"]"},
 	"kaseya": {Name: "Kaseya VSA", Slug: "kaseya", Description: "Creates tickets in Kaseya VSA.",

@@ -97,3 +97,46 @@ func TestRecordIfWriterNil(t *testing.T) {
 	// Should not panic when writer is nil.
 	RecordIfWriter(nil, ctx, "test.event", "tester", "test", "should be no-op", "{}")
 }
+
+func TestRecordInvokesOnRecord(t *testing.T) {
+	_, queries := setupTestDB(t)
+	ctx := context.Background()
+
+	w := NewWriter(queries)
+
+	var got struct {
+		eventType, actor, source, summary, payload string
+		calls                                      int
+	}
+	w.OnRecord = func(eventType, actor, source, summary, payload string) {
+		got.eventType = eventType
+		got.actor = actor
+		got.source = source
+		got.summary = summary
+		got.payload = payload
+		got.calls++
+	}
+
+	if err := w.Record(ctx, "config.published", "dan", "cli", "stack v42", `{"version":42}`); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	if got.calls != 1 {
+		t.Fatalf("OnRecord called %d times, want 1", got.calls)
+	}
+	if got.eventType != "config.published" || got.actor != "dan" || got.source != "cli" ||
+		got.summary != "stack v42" || got.payload != `{"version":42}` {
+		t.Fatalf("OnRecord got mismatched args: %+v", got)
+	}
+}
+
+func TestRecordOnRecordNilTolerant(t *testing.T) {
+	_, queries := setupTestDB(t)
+	ctx := context.Background()
+
+	// Writer with no OnRecord must not panic.
+	w := NewWriter(queries)
+	if err := w.Record(ctx, "test.event", "tester", "test", "no callback", "{}"); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+}

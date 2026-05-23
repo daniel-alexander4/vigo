@@ -25,6 +25,13 @@ type Writer struct {
 	queries  *db.Queries
 	mu       sync.Mutex
 	prevHash string // hash of the last entry (empty string for first entry)
+
+	// OnRecord, when set, is invoked after a successful chain-write with the
+	// same fields that were persisted. The server wires this to the
+	// integrations dispatcher so audit rows surface as `audit.<eventType>`
+	// events to Loki / Splunk / Datadog / Sentinel / etc. alongside the
+	// existing event stream (envoy.offline, run.failure, ...). Nil-tolerant.
+	OnRecord func(eventType, actor, source, summary, payload string)
 }
 
 // NewWriter creates a Writer and loads the latest hash from the DB
@@ -79,6 +86,10 @@ func (w *Writer) Record(ctx context.Context, eventType, actor, source, summary, 
 		"type", eventType,
 		"actor", actor,
 	)
+
+	if w.OnRecord != nil {
+		w.OnRecord(eventType, actor, source, summary, payload)
+	}
 
 	return nil
 }
