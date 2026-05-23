@@ -51,6 +51,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startAIWarmup()
 	s.startSwarm(ctx)
 	s.startHTTPServer()
+	s.startS3Server()
 	s.startSpannerGossip(ctx)
 
 	slog.Info("server ready",
@@ -65,6 +66,11 @@ func (s *Server) Run(ctx context.Context) error {
 	s.grpcSrv.GracefulStop()
 	if err := s.httpSrv.Shutdown(context.Background()); err != nil {
 		slog.Error("REST gateway shutdown error", "error", err)
+	}
+	if s.s3Srv != nil {
+		if err := s.s3Srv.Shutdown(context.Background()); err != nil {
+			slog.Error("curator S3 API shutdown error", "error", err)
+		}
 	}
 
 	slog.Info("server stopped")
@@ -398,6 +404,21 @@ func (s *Server) startHTTPServer() {
 		slog.Info("REST gateway starting", "addr", s.cfg.Server.APIListen, "tls", true)
 		if err := s.httpSrv.ListenAndServeTLS(s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
 			slog.Error("REST gateway error", "error", err)
+		}
+	}()
+}
+
+// startS3Server starts the curator S3-compatible API listener (ADR-027) when
+// swarm.curator.s3_port is configured; no-op otherwise. Reuses the server's
+// TLS material — the same cert/key the REST gateway serves.
+func (s *Server) startS3Server() {
+	if s.s3Srv == nil {
+		return
+	}
+	go func() {
+		slog.Info("curator S3 API starting", "addr", s.s3Srv.Addr, "tls", true)
+		if err := s.s3Srv.ListenAndServeTLS(s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
+			slog.Error("curator S3 API error", "error", err)
 		}
 	}()
 }

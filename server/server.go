@@ -50,6 +50,7 @@ import (
 	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
+	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/workflows"
 	"git.alexander4.io/vigo/ui"
@@ -238,6 +239,9 @@ type Server struct {
 	// --- HTTP server: pure struct construction. The
 	// `httpSrv.ListenAndServeTLS` goroutine stays in chunk 5. ---
 	httpSrv *http.Server
+	// s3Srv is the opt-in curator S3-compatible API listener (ADR-027);
+	// nil unless swarm.curator.s3_port is set and the `local` backend runs.
+	s3Srv *http.Server
 }
 
 // NewServer constructs a *Server from configFile. Performs no I/O beyond
@@ -1280,9 +1284,35 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			// publish side is what's gated), fleet.read operator views,
 			// and admin block/unblock moderation backstop. Curator feed
 			// reactor goroutine stays in run() / chunk 5.
-			curatorHandler := api.NewCuratorHandler(s.curatorAgg, s.queries, s.fleetIndex, filepath.Join(filepath.Dir(seedDir), ".blobs"))
+			blobsDir := filepath.Join(filepath.Dir(seedDir), ".blobs")
+			curatorHandler := api.NewCuratorHandler(s.curatorAgg, s.queries, s.fleetIndex, blobsDir)
 			curatorHandler.RegisterRoutes(gwMux)
 			uiHandler.SetCuratorFleet(curatorHandler)
+
+			// Curator S3 API (ADR-027): an opt-in HTTPS listener exposing
+			// curator artifacts to non-envoy S3 clients. Requires an
+			// `s3_port` and the `local` secrets backend (the SigV4 secret
+			// derivation roots in the master key) — off, with a clear log
+			// line, otherwise.
+			if port := s.cfg.Swarm.Curator.S3Port; port != 0 {
+				if lp, ok := s.provider.(*secrets.LocalProvider); ok {
+					s3Server := curators3.NewServer(
+						curators3.NewVerifier(curators3.NewCredStore(s.queries, lp)),
+						curatorHandler,
+						gitbackmesh.NewAggregator(s.queries),
+						s.fleetIndex,
+						blobsDir,
+						s.metrics,
+					)
+					s.s3Srv = &http.Server{
+						Addr:    fmt.Sprintf(":%d", port),
+						Handler: s3Server.Handler(),
+					}
+					slog.Info("curator S3 API enabled", "port", port)
+				} else {
+					slog.Warn("curator S3 API configured but disabled — requires the `local` secrets backend", "port", port)
+				}
+			}
 
 			// Track pattern lists across reloads so we can audit operator
 			// edits to each subsystem's authorization. Patterns are what
@@ -1342,6 +1372,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// Serve license files so agents can download them during bootstrap.
 		gwMux.HandleFunc("GET /license/LICENSE", serveLicenseFile(s.serverRoot, "LICENSE"))
 		gwMux.HandleFunc("GET /license/COMMERCIAL-TERMS.md", serveLicenseFile(s.serverRoot, "COMMERCIAL-TERMS.md"))
+		if !s.swarmEnabled && s.cfg.Swarm.Curator.S3Port != 0 {
+			slog.Warn("curator S3 API configured but disabled — this server does not run the curator substrate (swarm.enabled does not match this host)",
+				"port", s.cfg.Swarm.Curator.S3Port)
+		}
 		s.httpSrv = &http.Server{
 			Addr:    s.cfg.Server.APIListen,
 			Handler: s.authProvider.Middleware(api.MaxBodyMiddleware(gwMux)),

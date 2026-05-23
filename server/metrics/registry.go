@@ -133,6 +133,7 @@ type Metrics struct {
 
 	CuratorArtifacts  prometheus.Gauge
 	CuratorPublishers prometheus.Gauge
+	CuratorS3Requests *prometheus.CounterVec
 
 	// --- Swarm: lockbox ---
 
@@ -465,6 +466,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_curator_publishers",
 			Help: "Number of envoys publishing curator artifacts.",
 		}),
+		CuratorS3Requests: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_curator_s3_requests_total",
+			Help: "Curator S3-compatible API requests, by operation (ADR-027).",
+		}, []string{"operation"}),
 
 		// --- Swarm: lockbox ---
 

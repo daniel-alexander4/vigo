@@ -291,6 +291,18 @@ func unambiguousNameByPubkey(grouped map[string][]NameClaim) map[string]string {
 	return out
 }
 
+// ReverseNameMap returns the founder-puddle-pubkey-hex → friendly-name map for
+// every unambiguously-claimed name in the fleet (ADR-022); a contested name
+// resolves to nothing. This is the single exported home of the unambiguous-
+// claim rule for callers outside this package — the curator S3 API uses it to
+// render the `<publisher>` segment of an object key.
+func ReverseNameMap(fn *FleetNames) map[string]string {
+	if fn == nil {
+		return map[string]string{}
+	}
+	return unambiguousNameByPubkey(fn.Names)
+}
+
 // build fetches every envoy's `gitback` trait, joins per-envoy
 // project entries by project_id, and computes per-ref consensus.
 func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
