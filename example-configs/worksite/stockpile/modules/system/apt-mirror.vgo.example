@@ -1,0 +1,87 @@
+name: apt-mirror
+
+# Local Debian/Ubuntu apt-mirror that pulls an upstream archive and serves it
+# over HTTP for the rest of the fleet to consume via apt — no swarm, no
+# curator, just one mirror host the fleet points its sources at.
+#
+# Pair with the `nginx` module on the same host: this module drops a server
+# block into /etc/nginx/conf.d/ and notifies the nginx service for reload.
+# Clients on other envoys point their apt sources at:
+#
+#   deb http://{{ .Vars.server_name }}/{{ .Vars.upstream_host }}/{{ .Vars.upstream_path }} {{ .Vars.distribution }} {{ .Vars.components }}
+#
+# The Debian package ships /etc/cron.d/apt-mirror (weekly). This module adds
+# a more frequent run via the apt-mirror user's crontab; the package's
+# built-in lockfile prevents concurrent runs.
+
+vars:
+  base_path:        "/var/spool/apt-mirror"
+  nthreads:         "20"
+  defaultarch:      "amd64"
+  upstream_archive: "http://archive.ubuntu.com/ubuntu"
+  upstream_host:    "archive.ubuntu.com"
+  upstream_path:    "ubuntu"
+  distribution:     "jammy"
+  components:       "main restricted universe multiverse"
+  schedule:         "0 4 * * *"
+  server_name:      "mirror.lab.local"
+
+resources:
+  - name: install-apt-mirror
+    type: package
+    package: apt-mirror
+    state: present
+    when: "os_family('debian')"
+
+  - name: mirror-list
+    type: file
+    target_path: /etc/apt/mirror.list
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      set base_path    {{ .Vars.base_path }}
+      set nthreads     {{ .Vars.nthreads }}
+      set defaultarch  {{ .Vars.defaultarch }}
+      set _autoclean   1
+
+      deb {{ .Vars.upstream_archive }} {{ .Vars.distribution }} {{ .Vars.components }}
+      deb {{ .Vars.upstream_archive }} {{ .Vars.distribution }}-updates {{ .Vars.components }}
+      deb {{ .Vars.upstream_archive }} {{ .Vars.distribution }}-security {{ .Vars.components }}
+      deb {{ .Vars.upstream_archive }} {{ .Vars.distribution }}-backports {{ .Vars.components }}
+
+      clean {{ .Vars.upstream_archive }}
+    when: "os_family('debian')"
+    depends_on: [install-apt-mirror]
+
+  - name: apt-mirror-cron
+    type: cron
+    command: "/usr/bin/apt-mirror"
+    schedule: "{{ .Vars.schedule }}"
+    user: apt-mirror
+    state: present
+    when: "os_family('debian')"
+    depends_on: [mirror-list]
+
+  - name: mirror-nginx-site
+    type: file
+    target_path: /etc/nginx/conf.d/apt-mirror.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — do not edit manually
+      server {
+          listen 80;
+          server_name {{ .Vars.server_name }};
+
+          root {{ .Vars.base_path }}/mirror;
+          autoindex on;
+          access_log /var/log/nginx/apt-mirror.access.log;
+
+          location / {
+              try_files $uri $uri/ =404;
+          }
+      }
+    when: "os_family('debian')"
+    notify: [nginx-service]
