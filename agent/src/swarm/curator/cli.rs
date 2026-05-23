@@ -44,7 +44,8 @@ use sha2::{Digest, Sha256};
 
 use super::catalog::{
     canonical_bytes, default_kind, validate_artifact_name, validate_kind, ArtifactVersion,
-    CatalogEntry, CatalogEntryBody, Platform, ID_LEN, SCHEMA_VERSION, SIG_LEN,
+    CatalogEntry, CatalogEntryBody, Platform, ID_LEN, KIND_APK_REPO, KIND_APT_REPO, KIND_DNF_REPO,
+    SCHEMA_VERSION, SIG_LEN,
 };
 use super::catalog_cache;
 use super::helper::socket_path as helper_socket_path;
@@ -69,6 +70,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "resolve" => cmd_resolve(&args[1..]),
         "pull" => cmd_pull(&args[1..]),
         "push" => with_curator_authz(|| cmd_push(&args[1..])),
+        "repo-publish" => with_curator_authz(|| cmd_repo_publish(&args[1..])),
         "tag" => with_curator_authz(|| cmd_tag(&args[1..])),
         "untag" => with_curator_authz(|| cmd_untag(&args[1..])),
         "set-recipients" => with_curator_authz(|| cmd_set_recipients(&args[1..])),
@@ -139,6 +141,20 @@ MUTATING VERBS (require `curator: true` on your usercrate + an unlocked puddle):
                                     streams the bytes through the helper daemon,
                                     and the daemon stages the blob + records a
                                     manifest seed with the artifact's target.
+    repo-publish <name> --dir <pkgs> --kind <apt-repo|dnf-repo|apk-repo>
+        --sign-key <id> [--suite <s>] [--component <c>] [--arch <a>]
+        [--version <v>] [--tag <tag>]
+                                    Build a signed package-repository tree from
+                                    a directory of .deb/.rpm/.apk files and
+                                    publish it as a curator artifact. Shells out
+                                    to the matching toolchain (dpkg-scanpackages
+                                    / createrepo_c / apk, plus gpg or abuild-
+                                    sign) — install it on the publishing host.
+                                    --sign-key is a GPG key id for apt/dnf, an
+                                    abuild RSA key path for apk. --suite/
+                                    --component default stable/main (apt);
+                                    --arch defaults x86_64 (apk). --version
+                                    defaults to today's UTC date; --tag latest.
     tag <ref> <tag>=<version>       Move/set a tag; re-signs the entry.
     untag <ref> <tag>               Remove a tag; re-signs the entry.
     set-recipients <ref> <list>     Replace `recipients`. Pass `*` or a comma-
@@ -207,10 +223,16 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         );
     }
     println!();
-    println!("  Cached fleet catalog ({}):", catalog_cache::catalog_path_in(&catalog_cache::artifacts_dir()).display());
+    println!(
+        "  Cached fleet catalog ({}):",
+        catalog_cache::catalog_path_in(&catalog_cache::artifacts_dir()).display()
+    );
     println!("    Cached entries: {}", cached.len());
     println!();
-    println!("  Materialization cache ({}):", catalog_cache::cache_map_path_in(&catalog_cache::artifacts_dir()).display());
+    println!(
+        "  Materialization cache ({}):",
+        catalog_cache::cache_map_path_in(&catalog_cache::artifacts_dir()).display()
+    );
     println!("    Materialized refs: {}", cache_map.entries.len());
     Ok(())
 }
@@ -230,7 +252,10 @@ fn cmd_list(_args: &[String]) -> Result<()> {
         println!("No curator artifacts on this envoy (local or cached).");
         return Ok(());
     }
-    println!("{:<24} {:<13} {:<9} {:<6} {:<20} {:<8} ARTIFACT_ID", "NAME", "KIND", "VERSIONS", "TAGS", "PLATFORMS", "ORIGIN");
+    println!(
+        "{:<24} {:<13} {:<9} {:<6} {:<20} {:<8} ARTIFACT_ID",
+        "NAME", "KIND", "VERSIONS", "TAGS", "PLATFORMS", "ORIGIN"
+    );
     // Index local ones so we can tag the ORIGIN column.
     let local_set: std::collections::HashSet<String> = local
         .entries
@@ -240,7 +265,11 @@ fn cmd_list(_args: &[String]) -> Result<()> {
     for e in &merged {
         let aid = e.artifact_id_hex().unwrap_or_else(|_| "?".repeat(12));
         let platforms = platform_summary(e);
-        let origin = if local_set.contains(&aid) { "local" } else { "cached" };
+        let origin = if local_set.contains(&aid) {
+            "local"
+        } else {
+            "cached"
+        };
         println!(
             "{:<24} {:<13} {:<9} {:<6} {:<20} {:<8} {}",
             truncate(&e.body.name, 24),
@@ -268,7 +297,10 @@ fn cmd_inspect(args: &[String]) -> Result<()> {
     println!("Name:           {}", entry.body.name);
     println!("Artifact ID:    {}", aid);
     println!("Kind:           {}", entry.body.kind);
-    println!("Founder puddle: ed25519:{}", entry.body.founder_puddle_pubkey);
+    println!(
+        "Founder puddle: ed25519:{}",
+        entry.body.founder_puddle_pubkey
+    );
     if !entry
         .body
         .signing_puddle_pubkey
@@ -286,7 +318,10 @@ fn cmd_inspect(args: &[String]) -> Result<()> {
     // Reverse tag map for the row's TAGS column.
     let mut tags_by_version: std::collections::BTreeMap<String, Vec<String>> = Default::default();
     for (tag, v) in &entry.body.tags {
-        tags_by_version.entry(v.clone()).or_default().push(tag.clone());
+        tags_by_version
+            .entry(v.clone())
+            .or_default()
+            .push(tag.clone());
     }
     for ts in tags_by_version.values_mut() {
         ts.sort();
@@ -294,7 +329,10 @@ fn cmd_inspect(args: &[String]) -> Result<()> {
     if !entry.body.versions.is_empty() {
         println!();
         println!("Versions:");
-        println!("  {:<14} {:<14} {:<14} {:<10} SHA", "VERSION", "TAGS", "OS/ARCH", "SIZE");
+        println!(
+            "  {:<14} {:<14} {:<14} {:<10} SHA",
+            "VERSION", "TAGS", "OS/ARCH", "SIZE"
+        );
         for (v, av) in &entry.body.versions {
             let tag_col = tags_by_version
                 .get(v)
@@ -332,7 +370,11 @@ fn cmd_inspect(args: &[String]) -> Result<()> {
     if !dangling.is_empty() {
         dangling.sort();
         println!();
-        println!("Note: {} dangling tag(s): {}", dangling.len(), dangling.join(", "));
+        println!(
+            "Note: {} dangling tag(s): {}",
+            dangling.len(),
+            dangling.join(", ")
+        );
     }
     Ok(())
 }
@@ -350,11 +392,18 @@ fn cmd_versions(args: &[String]) -> Result<()> {
         println!("No versions for {}.", entry.body.name);
         return Ok(());
     }
-    println!("Artifact: {}  (id {})", entry.body.name, short_sha(&entry.artifact_id_hex()?));
+    println!(
+        "Artifact: {}  (id {})",
+        entry.body.name,
+        short_sha(&entry.artifact_id_hex()?)
+    );
     println!();
     let mut tags_by_version: std::collections::BTreeMap<String, Vec<String>> = Default::default();
     for (tag, v) in &entry.body.tags {
-        tags_by_version.entry(v.clone()).or_default().push(tag.clone());
+        tags_by_version
+            .entry(v.clone())
+            .or_default()
+            .push(tag.clone());
     }
     for ts in tags_by_version.values_mut() {
         ts.sort();
@@ -365,7 +414,11 @@ fn cmd_versions(args: &[String]) -> Result<()> {
             .get(v)
             .map(|ts| ts.join(","))
             .unwrap_or_else(|| "—".into());
-        let mut plats: Vec<String> = av.platforms.iter().map(|p| format!("{}/{}", p.os, p.arch)).collect();
+        let mut plats: Vec<String> = av
+            .platforms
+            .iter()
+            .map(|p| format!("{}/{}", p.os, p.arch))
+            .collect();
         plats.sort();
         println!("{:<14} {:<14} {}", v, tag_col, plats.join(", "));
     }
@@ -383,7 +436,14 @@ fn cmd_resolve(args: &[String]) -> Result<()> {
     let r = resolver
         .resolve(&aid, &tag_or_ver, &os, &arch)
         .with_context(|| format!("resolve {}@{} on {}/{}", aid, tag_or_ver, os, arch))?;
-    println!("Resolved {}/{} @ {} on {}/{}", short_sha(&r.artifact_id_hex), r.name, r.version, r.os, r.arch);
+    println!(
+        "Resolved {}/{} @ {} on {}/{}",
+        short_sha(&r.artifact_id_hex),
+        r.name,
+        r.version,
+        r.os,
+        r.arch
+    );
     println!("  blob_sha: {}", r.blob_sha);
     println!("  size:     {}", format_bytes(r.size));
     if let Some(t) = &r.tag {
@@ -406,11 +466,14 @@ fn cmd_pull(args: &[String]) -> Result<()> {
 
 fn parse_resolve_args(args: &[String], verb: &str) -> Result<(String, String, String, String)> {
     if args.len() != 4 {
-        bail!(
-            "usage: vigo swarm curator {verb} <artifact_id|name> <tag-or-version> <os> <arch>"
-        );
+        bail!("usage: vigo swarm curator {verb} <artifact_id|name> <tag-or-version> <os> <arch>");
     }
-    Ok((args[0].clone(), args[1].clone(), args[2].clone(), args[3].clone()))
+    Ok((
+        args[0].clone(),
+        args[1].clone(),
+        args[2].clone(),
+        args[3].clone(),
+    ))
 }
 
 // ============================================================
@@ -519,7 +582,11 @@ fn resolve_ref(target: &str) -> Result<CatalogEntry> {
     resolve_ref_in(target, &passwd, cached)
 }
 
-fn resolve_ref_in(target: &str, passwd_body: &str, cached: Vec<CatalogEntry>) -> Result<CatalogEntry> {
+fn resolve_ref_in(
+    target: &str,
+    passwd_body: &str,
+    cached: Vec<CatalogEntry>,
+) -> Result<CatalogEntry> {
     let local = collect_local_entries(passwd_body);
     let pool = merge_entries(local.entries, cached);
     if pool.is_empty() {
@@ -532,7 +599,11 @@ fn resolve_ref_in(target: &str, passwd_body: &str, cached: Vec<CatalogEntry>) ->
             .find(|e| e.artifact_id_hex().map(|a| a == want).unwrap_or(false))
             .ok_or_else(|| anyhow!("no artifact matches artifact_id {target}"));
     }
-    let exact: Vec<CatalogEntry> = pool.iter().filter(|e| e.body.name == target).cloned().collect();
+    let exact: Vec<CatalogEntry> = pool
+        .iter()
+        .filter(|e| e.body.name == target)
+        .cloned()
+        .collect();
     if exact.len() == 1 {
         return Ok(exact.into_iter().next().unwrap());
     }
@@ -557,7 +628,10 @@ fn resolve_ref_in(target: &str, passwd_body: &str, cached: Vec<CatalogEntry>) ->
     }
     if prefix.len() > 1 {
         let names: Vec<String> = prefix.iter().map(|e| e.body.name.clone()).collect();
-        bail!("prefix {target:?} is ambiguous; candidates: {}", names.join(", "));
+        bail!(
+            "prefix {target:?} is ambiguous; candidates: {}",
+            names.join(", ")
+        );
     }
     bail!("no curator artifact matches {target:?}")
 }
@@ -665,7 +739,11 @@ fn format_millis(ms: i64) -> String {
     // Days since 1970-01-01 → (year, month, day) using the Howard Hinnant
     // shift-by-March-1 algorithm. Constant-time, no leap-year branch maze.
     let z = days + 719_468;
-    let era = if z >= 0 { z / 146_097 } else { (z - 146_096) / 146_097 };
+    let era = if z >= 0 {
+        z / 146_097
+    } else {
+        (z - 146_096) / 146_097
+    };
     let doe = (z - era * 146_097) as u64;
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
     let mut year = (yoe as i64) + era * 400;
@@ -679,9 +757,7 @@ fn format_millis(ms: i64) -> String {
     if !(1970..=2099).contains(&year) {
         return format!("(ms={ms})");
     }
-    format!(
-        "{year:04}-{month:02}-{day:02} {hours:02}:{minutes:02}:{seconds:02} UTC"
-    )
+    format!("{year:04}-{month:02}-{day:02} {hours:02}:{minutes:02}:{seconds:02} UTC")
 }
 
 fn is_hex64(s: &str) -> bool {
@@ -869,7 +945,10 @@ fn resolve_local_ref(home: &Path, target: &str) -> Result<(String, CatalogEntry)
     }
     if prefix.len() > 1 {
         let names: Vec<String> = prefix.iter().map(|(_, e)| e.body.name.clone()).collect();
-        bail!("prefix {target:?} is ambiguous; candidates: {}", names.join(", "));
+        bail!(
+            "prefix {target:?} is ambiguous; candidates: {}",
+            names.join(", ")
+        );
     }
     bail!(
         "no local artifact matches {target:?}. If you're trying to mutate someone else's \
@@ -891,8 +970,8 @@ fn helper_socket() -> Result<UnixStream> {
             path.display()
         );
     }
-    let s = UnixStream::connect(&path)
-        .with_context(|| format!("connecting to {}", path.display()))?;
+    let s =
+        UnixStream::connect(&path).with_context(|| format!("connecting to {}", path.display()))?;
     s.set_read_timeout(Some(Duration::from_secs(120))).ok();
     s.set_write_timeout(Some(Duration::from_secs(120))).ok();
     Ok(s)
@@ -1008,15 +1087,45 @@ fn cmd_push(args: &[String]) -> Result<()> {
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--file" => { i += 1; file_arg = Some(args.get(i).context("--file requires a value")?.clone()); }
-            "--version" => { i += 1; version_arg = Some(args.get(i).context("--version requires a value")?.clone()); }
-            "--os" => { i += 1; os_arg = Some(args.get(i).context("--os requires a value")?.clone()); }
-            "--arch" => { i += 1; arch_arg = Some(args.get(i).context("--arch requires a value")?.clone()); }
-            "--tag" => { i += 1; tag_arg = Some(args.get(i).context("--tag requires a value")?.clone()); }
-            "--target" => { i += 1; target_arg = Some(args.get(i).context("--target requires a value")?.clone()); }
-            "--recipients" => { i += 1; recipients_arg = Some(args.get(i).context("--recipients requires a value")?.clone()); }
-            "--kind" => { i += 1; kind_arg = Some(args.get(i).context("--kind requires a value")?.clone()); }
-            other if !other.starts_with('-') && name_arg.is_none() => name_arg = Some(other.to_string()),
+            "--file" => {
+                i += 1;
+                file_arg = Some(args.get(i).context("--file requires a value")?.clone());
+            }
+            "--version" => {
+                i += 1;
+                version_arg = Some(args.get(i).context("--version requires a value")?.clone());
+            }
+            "--os" => {
+                i += 1;
+                os_arg = Some(args.get(i).context("--os requires a value")?.clone());
+            }
+            "--arch" => {
+                i += 1;
+                arch_arg = Some(args.get(i).context("--arch requires a value")?.clone());
+            }
+            "--tag" => {
+                i += 1;
+                tag_arg = Some(args.get(i).context("--tag requires a value")?.clone());
+            }
+            "--target" => {
+                i += 1;
+                target_arg = Some(args.get(i).context("--target requires a value")?.clone());
+            }
+            "--recipients" => {
+                i += 1;
+                recipients_arg = Some(
+                    args.get(i)
+                        .context("--recipients requires a value")?
+                        .clone(),
+                );
+            }
+            "--kind" => {
+                i += 1;
+                kind_arg = Some(args.get(i).context("--kind requires a value")?.clone());
+            }
+            other if !other.starts_with('-') && name_arg.is_none() => {
+                name_arg = Some(other.to_string())
+            }
             other => bail!("unknown push flag: {other}"),
         }
         i += 1;
@@ -1039,9 +1148,8 @@ fn cmd_push(args: &[String]) -> Result<()> {
     let artifact_id_hex = hex::encode(super::catalog::artifact_id_for(&founder_pub, &name));
 
     // Hash + size the file we're about to ship.
-    let (blob_sha, blob_size) = hash_file(&file_path).with_context(|| {
-        format!("hashing artifact file {}", file_path.display())
-    })?;
+    let (blob_sha, blob_size) = hash_file(&file_path)
+        .with_context(|| format!("hashing artifact file {}", file_path.display()))?;
 
     // Build the new body: start from the existing entry if any, replace this
     // platform's record under the named version, optionally apply tag/target/
@@ -1060,7 +1168,8 @@ fn cmd_push(args: &[String]) -> Result<()> {
                     bail!(
                         "artifact {:?} was published as kind {:?}; kind is immutable — \
                          a different shape needs a different artifact name",
-                        name, e.body.kind
+                        name,
+                        e.body.kind
                     );
                 }
             }
@@ -1133,10 +1242,144 @@ fn cmd_push(args: &[String]) -> Result<()> {
     let entry = issue_via_session(body)?;
     submit_push(&entry, &version, &os, &arch, &file_path, blob_size)?;
 
-    println!("✓ Published {}@{} on {}/{} ({})", name, version, os, arch, format_bytes(blob_size));
+    println!(
+        "✓ Published {}@{} on {}/{} ({})",
+        name,
+        version,
+        os,
+        arch,
+        format_bytes(blob_size)
+    );
     println!("  artifact_id: {}", artifact_id_hex);
     println!("  blob_sha:    {}", blob_sha);
     Ok(())
+}
+
+/// repo-publish: build a signed apt/dnf/apk repository tree from a directory
+/// of loose packages, tar it, and publish it as a curator artifact of the
+/// matching `*-repo` kind. The build is orchestration of the standard
+/// toolchain — see `repobuild`. Then reuses the `push` path verbatim.
+fn cmd_repo_publish(args: &[String]) -> Result<()> {
+    let mut name_arg: Option<String> = None;
+    let mut dir_arg: Option<String> = None;
+    let mut kind_arg: Option<String> = None;
+    let mut sign_key_arg: Option<String> = None;
+    let mut suite_arg: Option<String> = None;
+    let mut component_arg: Option<String> = None;
+    let mut apk_arch_arg: Option<String> = None;
+    let mut version_arg: Option<String> = None;
+    let mut tag_arg: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--dir" => {
+                i += 1;
+                dir_arg = Some(args.get(i).context("--dir requires a value")?.clone());
+            }
+            "--kind" => {
+                i += 1;
+                kind_arg = Some(args.get(i).context("--kind requires a value")?.clone());
+            }
+            "--sign-key" => {
+                i += 1;
+                sign_key_arg = Some(args.get(i).context("--sign-key requires a value")?.clone());
+            }
+            "--suite" => {
+                i += 1;
+                suite_arg = Some(args.get(i).context("--suite requires a value")?.clone());
+            }
+            "--component" => {
+                i += 1;
+                component_arg = Some(args.get(i).context("--component requires a value")?.clone());
+            }
+            "--arch" => {
+                i += 1;
+                apk_arch_arg = Some(args.get(i).context("--arch requires a value")?.clone());
+            }
+            "--version" => {
+                i += 1;
+                version_arg = Some(args.get(i).context("--version requires a value")?.clone());
+            }
+            "--tag" => {
+                i += 1;
+                tag_arg = Some(args.get(i).context("--tag requires a value")?.clone());
+            }
+            other if !other.starts_with('-') && name_arg.is_none() => {
+                name_arg = Some(other.to_string())
+            }
+            other => bail!("unknown repo-publish flag: {other}"),
+        }
+        i += 1;
+    }
+
+    let name = name_arg.context("repo-publish: artifact <name> is required")?;
+    validate_artifact_name(&name)?;
+    let dir = dir_arg.context("repo-publish: --dir <packages> is required")?;
+    let kind = kind_arg.context("repo-publish: --kind <apt-repo|dnf-repo|apk-repo> is required")?;
+    if !matches!(kind.as_str(), KIND_APT_REPO | KIND_DNF_REPO | KIND_APK_REPO) {
+        bail!("repo-publish: --kind must be apt-repo, dnf-repo, or apk-repo (got {kind:?})");
+    }
+    let sign_key = sign_key_arg.context(
+        "repo-publish: --sign-key is required (a GPG key id for apt-repo/dnf-repo, \
+         an abuild RSA private-key path for apk-repo)",
+    )?;
+    let suite = suite_arg.unwrap_or_else(|| "stable".to_string());
+    let component = component_arg.unwrap_or_else(|| "main".to_string());
+    let apk_arch = apk_arch_arg.unwrap_or_else(|| "x86_64".to_string());
+    let tag = tag_arg.unwrap_or_else(|| "latest".to_string());
+    let version = version_arg.unwrap_or_else(default_repo_version);
+
+    let runner = crate::executors::DefaultRunner;
+    println!("Building the {kind} tree from {dir} …");
+    let built = super::repobuild::build(
+        &runner,
+        &kind,
+        std::path::Path::new(&dir),
+        &sign_key,
+        &suite,
+        &component,
+        &apk_arch,
+    )?;
+
+    // Reuse the full puddle-signed push path verbatim — the built tarball is
+    // published as a single (name, version) build, linux/all, of the repo kind.
+    let push_args = vec![
+        name,
+        "--file".to_string(),
+        built.tarball.to_string_lossy().into_owned(),
+        "--version".to_string(),
+        version,
+        "--os".to_string(),
+        "linux".to_string(),
+        "--arch".to_string(),
+        "all".to_string(),
+        "--kind".to_string(),
+        kind,
+        "--tag".to_string(),
+        tag,
+    ];
+    cmd_push(&push_args)
+    // `built` (and its temp dir) lives until this function returns — i.e. until
+    // after the cmd_push call above has read the tarball.
+}
+
+/// default_repo_version is today's UTC date (`YYYY-MM-DD`) — repos are
+/// naturally date-versioned and `--tag latest` always moves to the newest.
+fn default_repo_version() -> String {
+    use crate::executors::CommandRunner;
+    if let Ok(out) = crate::executors::DefaultRunner.run("date", &["-u", "+%Y-%m-%d"]) {
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !s.is_empty() {
+                return s;
+            }
+        }
+    }
+    // Fallback: unix epoch seconds — always a valid, monotonic version string.
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_else(|_| "0".to_string())
 }
 
 fn cmd_tag(args: &[String]) -> Result<()> {
@@ -1206,7 +1449,11 @@ fn cmd_set_recipients(args: &[String]) -> Result<()> {
     body.issued_at = next_issued_at(body.issued_at);
     let entry = issue_via_session(body)?;
     submit_entry(&entry)?;
-    println!("✓ Set recipients on {} to {}", short_sha(&aid), list.join(", "));
+    println!(
+        "✓ Set recipients on {} to {}",
+        short_sha(&aid),
+        list.join(", ")
+    );
     Ok(())
 }
 
@@ -1227,9 +1474,7 @@ fn cmd_set_target(args: &[String]) -> Result<()> {
     let entry = issue_via_session(body)?;
     submit_entry(&entry)?;
     println!("✓ Set target on {} to {}", short_sha(&aid), target);
-    println!(
-        "  Manifest seeds refreshed; filecast Manager will redistribute on the next pass."
-    );
+    println!("  Manifest seeds refreshed; filecast Manager will redistribute on the next pass.");
     Ok(())
 }
 
@@ -1240,13 +1485,19 @@ fn cmd_rm(args: &[String]) -> Result<()> {
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--version" => { i += 1; version_arg = Some(args.get(i).context("--version requires a value")?.clone()); }
-            other if !other.starts_with('-') && ref_arg.is_none() => ref_arg = Some(other.to_string()),
+            "--version" => {
+                i += 1;
+                version_arg = Some(args.get(i).context("--version requires a value")?.clone());
+            }
+            other if !other.starts_with('-') && ref_arg.is_none() => {
+                ref_arg = Some(other.to_string())
+            }
             other => bail!("unknown rm flag: {other}"),
         }
         i += 1;
     }
-    let target = ref_arg.context("usage: vigo swarm curator rm <artifact_id|name> [--version <v>]")?;
+    let target =
+        ref_arg.context("usage: vigo swarm curator rm <artifact_id|name> [--version <v>]")?;
     let caller = resolve_caller()?;
     let (aid, base) = resolve_local_ref(&caller.home, &target)?;
 
@@ -1318,7 +1569,9 @@ fn parse_recipients(arg: &str) -> Result<Vec<String>> {
             continue;
         }
         if item == "*" {
-            bail!("`*` in a recipient list is redundant — pass either `*` alone or a list of pubkeys");
+            bail!(
+                "`*` in a recipient list is redundant — pass either `*` alone or a list of pubkeys"
+            );
         }
         let hex_part = item.strip_prefix("ed25519:").unwrap_or(item);
         if hex_part.len() != ID_LEN * 2 {
@@ -1343,10 +1596,10 @@ const PENDING_STALE_SECS: u64 = 180;
 
 #[derive(Default, Debug)]
 struct StaleReport {
-    pending_too_old: Vec<(PathBuf, u64)>,        // (path, age_seconds)
-    corrupt_entries: Vec<(PathBuf, String)>,     // (path, reason)
+    pending_too_old: Vec<(PathBuf, u64)>,    // (path, age_seconds)
+    corrupt_entries: Vec<(PathBuf, String)>, // (path, reason)
     dangling_tags: Vec<(String, String, String)>, // (artifact_name, tag, missing_version)
-    orphan_blobs: Vec<(String, String, u64)>,    // (label, sha, size_bytes) — slice "would gc"
+    orphan_blobs: Vec<(String, String, u64)>, // (label, sha, size_bytes) — slice "would gc"
 }
 
 fn cmd_stale(_args: &[String]) -> Result<()> {
@@ -1452,7 +1705,8 @@ fn cmd_purge(args: &[String]) -> Result<()> {
     // User scope: scrub ~/.vigo-curator/ for the calling user. Always done.
     let user_dir = state::user_curator_dir(&caller.home);
     let user_scrubbed = if user_dir.exists() {
-        std::fs::remove_dir_all(&user_dir).with_context(|| format!("removing {}", user_dir.display()))?;
+        std::fs::remove_dir_all(&user_dir)
+            .with_context(|| format!("removing {}", user_dir.display()))?;
         true
     } else {
         false
@@ -1660,7 +1914,9 @@ fn blobs_dir_parent() -> PathBuf {
 /// curator blob. Same `state/envoy.id` file the rest of the agent reads.
 fn current_envoy_id() -> Option<String> {
     let path = crate::platform::paths::default_state_dir().join("envoy.id");
-    std::fs::read_to_string(&path).ok().map(|s| s.trim().to_string())
+    std::fs::read_to_string(&path)
+        .ok()
+        .map(|s| s.trim().to_string())
 }
 
 // path helpers we re-export so the agent can mark these dirs read-from
@@ -1821,7 +2077,10 @@ mod tests {
         let passwd = passwd_line("dan", 1000, home.path());
 
         let err = resolve_ref_in("redis", &passwd, vec![]).unwrap_err();
-        assert!(format!("{err:#}").contains("different founders"), "got: {err:#}");
+        assert!(
+            format!("{err:#}").contains("different founders"),
+            "got: {err:#}"
+        );
     }
 
     #[test]
@@ -1880,7 +2139,10 @@ mod tests {
         assert!(parse_recipients("").is_err());
         assert!(parse_recipients("not-hex").is_err());
         assert!(parse_recipients(&"a".repeat(63)).is_err()); // wrong length
-        assert!(parse_recipients(&format!("*,{pk1}")).is_err(), "* alongside an explicit list is rejected");
+        assert!(
+            parse_recipients(&format!("*,{pk1}")).is_err(),
+            "* alongside an explicit list is rejected"
+        );
     }
 
     #[test]
@@ -1910,7 +2172,11 @@ mod tests {
         // Promote it past .pending so resolve_local_ref sees it.
         let dir = state::artifact_dir(home, aid);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(state::entry_path(home, aid), serde_json::to_vec(entry).unwrap()).unwrap();
+        std::fs::write(
+            state::entry_path(home, aid),
+            serde_json::to_vec(entry).unwrap(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1981,9 +2247,7 @@ mod tests {
         // 2. An entry with a dangling tag (`stable → 9.9.9`, no such version).
         let mut with_dangling = clean.body.clone();
         with_dangling.name = "with-dangling".into();
-        with_dangling
-            .tags
-            .insert("stable".into(), "9.9.9".into());
+        with_dangling.tags.insert("stable".into(), "9.9.9".into());
         with_dangling.issued_at += 1;
         let signed = CatalogEntry::issue(&k, with_dangling).unwrap();
         write_canonical_entry(home.path(), &signed.artifact_id_hex().unwrap(), &signed);
@@ -2004,7 +2268,12 @@ mod tests {
         .unwrap();
 
         let r = collect_stale(home.path(), SystemTime::now()).unwrap();
-        assert_eq!(r.corrupt_entries.len(), 2, "corrupt + misfiled both reported: {:?}", r.corrupt_entries);
+        assert_eq!(
+            r.corrupt_entries.len(),
+            2,
+            "corrupt + misfiled both reported: {:?}",
+            r.corrupt_entries
+        );
         assert_eq!(r.dangling_tags.len(), 1, "only 'with-dangling' is dangling");
         assert_eq!(r.dangling_tags[0].0, "with-dangling");
         assert_eq!(r.dangling_tags[0].1, "stable");

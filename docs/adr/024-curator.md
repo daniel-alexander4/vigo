@@ -4,7 +4,7 @@ title: "ADR-024: curator — P2P artifact registry"
 
 # ADR-024: curator — P2P artifact registry
 
-**Status:** Implemented — slices 0–5 (catalog + helper + server REST + agent CLI + UI/docs) shipped 0.51.0 (2026-05-14); slice 6 (`artifact:` executor param) shipped 0.51.5 (2026-05-13); slice 7 (Docker Registry v2 shim) shipped 0.51.6 (2026-05-13); the `anchor` layer (curator's puddle-rooted-ownership cross-subsystem primitive, shared with gitback) extracted into `agent/src/swarm/anchor/` at 0.51.7 (2026-05-14); slice 8 (agent self-update accelerator — `vigo-agent` artifact convention, REST stays authoritative) shipped 0.51.8 (2026-05-13); slice 9 (artifact `kind` discriminator — see the Addendum) shipped 0.66.24 (2026-05-22); slice 10 (package-repo facade — see the Addendum) shipped 0.66.26 (2026-05-22).
+**Status:** Implemented — slices 0–5 (catalog + helper + server REST + agent CLI + UI/docs) shipped 0.51.0 (2026-05-14); slice 6 (`artifact:` executor param) shipped 0.51.5 (2026-05-13); slice 7 (Docker Registry v2 shim) shipped 0.51.6 (2026-05-13); the `anchor` layer (curator's puddle-rooted-ownership cross-subsystem primitive, shared with gitback) extracted into `agent/src/swarm/anchor/` at 0.51.7 (2026-05-14); slice 8 (agent self-update accelerator — `vigo-agent` artifact convention, REST stays authoritative) shipped 0.51.8 (2026-05-13); slice 9 (artifact `kind` discriminator — see the Addendum) shipped 0.66.24 (2026-05-22); slice 10 (package-repo facade — see the Addendum) shipped 0.66.26 (2026-05-22); slice 11 (`repo-publish` verb — see the Addendum) shipped 0.66.30 (2026-05-22).
 **Date:** 2026-05-11
 
 ## Context
@@ -112,4 +112,10 @@ Set at publish via `vigo swarm curator push --kind <kind>` (default `generic`); 
 
 **Config rename.** The listener now serves two facades, so `swarm.curator.registry_port` was renamed `swarm.curator.local_port` (proto field `curator_local_port`, agent accessor `curator_local_port()`) — `registry_port` undersold what the port does.
 
-**Caveats.** A repo is one tarball artifact — adding a package means rebuild + re-publish the whole repo as a new artifact version (fine for modest private repos; large repos may need `swarm.curator.max_bytes` raised). With slice 10 alone the operator hand-builds + signs + tars the repo with standard tools (`dpkg-scanpackages`/`apt-ftparchive`, `createrepo_c`, `gpg`) and `curator push`es it; a `repo-publish` convenience verb that orchestrates those tools is a deferred follow-on (its own design pass).
+**Caveats.** A repo is one tarball artifact — adding a package means rebuild + re-publish the whole repo as a new artifact version (fine for modest private repos; large repos may need `swarm.curator.max_bytes` raised). With slice 10 alone the operator hand-builds + signs + tars the repo with standard tools and `curator push`es it; the `repo-publish` verb (slice 11, Addendum below) orchestrates those tools into one command.
+
+## Addendum (2026-05-22): `repo-publish` verb — slice 11 (0.66.30)
+
+The package-repo facade (slice 10) consumes a built, signed, plain-tar repo tree; with slice 10 alone the operator hand-runs `dpkg-scanpackages`/`createrepo_c`/`apk` + `gpg`/`abuild-sign` + `tar` + `curator push`. Slice 11 adds **`vigo swarm curator repo-publish`** — one command from a directory of loose `.deb`/`.rpm`/`.apk` files to a published artifact.
+
+It is orchestration, not reimplementation: a new `agent/src/swarm/curator/repobuild.rs` shells the standard toolchain (per kind) through the executors' `CommandRunner` (mockable — tested with a recording runner), assembles the tree, signs the metadata (GPG for `apt-repo`/`dnf-repo`, abuild-RSA for `apk-repo`), tars it plain/uncompressed, then hands the tarball to `cmd_push` verbatim — the entire puddle-signed push path is reused unchanged. Deliberately thin: one suite, one component, the arches present in `--dir`; source packages, `Contents`, multi-component, and incremental adds stay on the hand-built recipe. A missing toolchain yields an actionable "install …" error.

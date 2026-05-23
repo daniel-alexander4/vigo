@@ -167,6 +167,30 @@ Flags:
 
 Per-blob size cap is `swarm.curator.max_bytes` (default 2 GiB); the daemon refuses over-cap pushes before reading the body. Disk space on the receiving side is also checked.
 
+### `vigo swarm curator repo-publish`
+
+```
+vigo swarm curator repo-publish <name> --dir <pkgs> --kind <apt-repo|dnf-repo|apk-repo>
+    --sign-key <id> [--suite <s>] [--component <c>] [--arch <a>]
+    [--version <v>] [--tag <tag>]
+```
+
+Builds a signed package-repository tree from a directory of loose `.deb`/`.rpm`/`.apk` files and publishes it as a curator artifact — the one-command form of hand-building a repo tree and `push`ing it. See [Hosting a private package repository](../../howto/set-up-curator.md#hosting-a-private-package-repository).
+
+The build shells out to the toolchain matching `--kind` — `dpkg-scanpackages` + `gpg` (`apt-repo`), `createrepo_c` + `gpg` (`dnf-repo`), `apk index` + `abuild-sign` (`apk-repo`) — which must be installed on the publishing host; a missing tool gives a clear "install …" error. The built tarball is then handed to the `push` path unchanged (puddle-signed, helper-daemon staged).
+
+| Flag | Meaning |
+|---|---|
+| `--dir <pkgs>` | Directory of loose `.deb`/`.rpm`/`.apk` files (required). |
+| `--kind` | `apt-repo`, `dnf-repo`, or `apk-repo` (required). |
+| `--sign-key <id>` | A GPG key id for `apt-repo`/`dnf-repo`; an abuild RSA private-key path for `apk-repo` (required). |
+| `--suite` / `--component` | apt suite / component. Default `stable` / `main`. |
+| `--arch <a>` | apk repo architecture. Default `x86_64`. |
+| `--version <v>` | Artifact version. Default: today's UTC date. |
+| `--tag <tag>` | Artifact tag. Default `latest`. |
+
+Requires `curator: true` on your usercrate and an unlocked puddle, same as `push`. Deliberately thin — one suite, one component, the arches present; the long tail (source packages, multiple components, incremental adds) stays on the hand-built recipe.
+
 ### `vigo swarm curator tag <ref> <tag>=<version>`
 
 Set or move a tag. Validates that the version exists in the entry; lists the available versions on error.

@@ -58,6 +58,7 @@ pub mod cli;
 pub mod executor_resolver;
 pub mod helper;
 pub mod registry;
+pub mod repobuild;
 pub mod resolver;
 pub mod state;
 

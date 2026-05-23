@@ -204,21 +204,17 @@ The agent translates `artifact: <ns>/<name>:<tag>` to `docker pull 127.0.0.1:<po
 
 The same `swarm.curator.local_port` listener also serves a **package-repo facade** at `http://127.0.0.1:<port>/repo/<name>/…` — a private apt/dnf/apk repository, distributed P2P, with no repo server (no Aptly, reprepro, Pulp, or nginx). Use it to host *your own* `.deb`/`.rpm`/`.apk` packages — in-house builds, vendored third-party, air-gapped sets. (Pointing hosts at an *upstream* distro repo stays the [`repository`](../reference/vigo/resources/repository.md) resource's job; this is for repos *you* publish.)
 
-**Publish.** Build and GPG-sign the repo tree with the standard tools (`dpkg-scanpackages` / `apt-ftparchive` + `gpg` for Debian; `createrepo_c` + `gpg` for RPM), pack it as a **plain, uncompressed `.tar`**, and push it as a curator artifact of kind `apt-repo` (or `dnf-repo` / `apk-repo`):
+**Publish.** `vigo swarm curator repo-publish` builds the repo tree, signs the metadata, tars it, and publishes it as a curator artifact — one command from a directory of loose packages:
 
 ```sh
-# ./acme-repo/ holds a built + signed Debian repo tree. Include the public
-# signing key as a file in the tree (e.g. ./acme-repo/key.asc) so consumers
-# can fetch it from the same facade.
-tar -cf acme-repo.tar -C acme-repo .
-
-vigo swarm curator push acme-repo \
-    --file acme-repo.tar --version 2026-05-22 --tag latest \
-    --os linux --arch all \
-    --kind apt-repo
+# ./debs/ holds your .deb files; the signing key is your own gnupg key.
+vigo swarm curator repo-publish acme-repo \
+    --dir ./debs --kind apt-repo --sign-key ACME-SIGNING-KEY-ID
 ```
 
-`--kind` is set once at first publish and is immutable. A repo tarball is architecture-agnostic (one tree holds every `binary-*`), so `--os linux --arch all` is just a placeholder — the facade ignores it. apt/dnf/apk URLs carry no tag, so the facade always serves the `latest` tag.
+`repo-publish` shells out to the toolchain matching `--kind` — `dpkg-scanpackages` + `gpg` for `apt-repo`, `createrepo_c` + `gpg` for `dnf-repo`, `apk index` + `abuild-sign` for `apk-repo` — so the publishing host must have it installed (a missing tool gives a clear "install …" error). `--sign-key` is a GPG key id for `apt-repo`/`dnf-repo` and an abuild RSA private-key path for `apk-repo` (apk repos are RSA-signed, not GPG). `--suite`/`--component` default to `stable`/`main` (apt only); `--version` defaults to today's UTC date, `--tag` to `latest`. `--kind` is set once at first publish and is immutable. apt/dnf/apk URLs carry no tag, so the facade always serves the `latest` tag.
+
+`repo-publish` is deliberately thin — one suite, one component, the architectures present in `--dir`. For the long tail (source packages, multiple components, incremental adds) build the signed tree yourself with the standard tools, pack it as a **plain, uncompressed `.tar`** (the facade requires uncompressed), include the public signing key as a file in the tree so consumers can fetch it from the same facade, and `vigo swarm curator push <name> --file <tar> --version <v> --tag latest --os linux --arch all --kind apt-repo` it (a repo tarball is architecture-agnostic — `--os linux --arch all` is a placeholder the facade ignores).
 
 **Consume.** Point a `repository` resource at the facade — no new resource type, the existing one already imports a signing key and writes the source entry:
 
