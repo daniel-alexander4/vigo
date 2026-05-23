@@ -31,12 +31,14 @@ func TestLoadSessionReadOnly_NoCookie_GetUserDoesNotPanic(t *testing.T) {
 	require.Nil(t, user)
 }
 
-// TestPutGetUser_SSHPublicKeyRoundTrips is the regression case for the 0.53.2
-// browser-scrier "no SSH pubkey available" bug: the session-cached User struct
-// must carry SSHPublicKey alongside the other five fields, otherwise browser
-// scrier sessions read an empty pubkey at setupSession even when the DB has
-// the user's key stored.
-func TestPutGetUser_SSHPublicKeyRoundTrips(t *testing.T) {
+// TestPutGetUserRoundTrips pins that the entire User snapshot survives the
+// session round-trip. The session stores User as one gob value, so every
+// field comes back. The earlier shape hand-projected named fields and
+// silently dropped whichever the projection missed — SSHPublicKey (0.53.2
+// browser-scrier "no SSH pubkey" bug) and then Permissions (0.66.24, which
+// redirected viewer/compliance webusers off the dashboard because
+// HasPermission saw an empty slice).
+func TestPutGetUserRoundTrips(t *testing.T) {
 	_, sm, _, _, _ := setupBasicProvider(t)
 
 	// Load a fresh scs session into a context so Put/Get have somewhere to
@@ -50,18 +52,19 @@ func TestPutGetUser_SSHPublicKeyRoundTrips(t *testing.T) {
 		Username:     "dan",
 		DisplayName:  "Dan Alexander",
 		Email:        "dan@example.com",
-		Role:         "admin",
+		Role:         "viewer",
+		Permissions:  ViewerPermissions,
 		SSHPublicKey: "ssh-ed25519 AAAA-test-key-bytes operator@laptop",
+		TOTPEnabled:  true,
 	}
 	sm.PutUser(ctx, original)
 
 	got := sm.GetUser(ctx)
 	require.NotNil(t, got)
-	require.Equal(t, original.ID, got.ID)
-	require.Equal(t, original.Username, got.Username)
-	require.Equal(t, original.DisplayName, got.DisplayName)
-	require.Equal(t, original.Email, got.Email)
-	require.Equal(t, original.Role, got.Role)
-	require.Equal(t, original.SSHPublicKey, got.SSHPublicKey,
-		"SSHPublicKey must survive the session round-trip — browser scrier reads this")
+	require.Equal(t, original, got, "the whole User snapshot must survive the session round-trip")
+
+	// The concrete regression: a viewer's permissions must come back intact,
+	// or the dashboard's fleet.read check redirects them to /compliance.
+	require.True(t, got.HasPermission(PermFleetRead),
+		"viewer must retain fleet.read after the session round-trip")
 }

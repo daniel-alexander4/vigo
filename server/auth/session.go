@@ -6,6 +6,7 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"encoding/gob"
 	"net/http"
 	"time"
 
@@ -42,41 +43,32 @@ func NewSessionManager(sqlDB *sql.DB, idleTimeout time.Duration) *SessionManager
 
 // session key constants
 const (
-	sessionKeyUserID       = "user_id"
-	sessionKeyUsername     = "username"
-	sessionKeyDisplayName  = "display_name"
-	sessionKeyEmail        = "email"
-	sessionKeyRole         = "role"
-	sessionKeySSHPublicKey = "ssh_public_key"
-	sessionKeyCSRFToken    = "csrf_token"
+	sessionKeyUser      = "user"
+	sessionKeyCSRFToken = "csrf_token"
 )
 
-// PutUser stores the user in the session.
-func (sm *SessionManager) PutUser(ctx context.Context, u *User) {
-	sm.Put(ctx, sessionKeyUserID, u.ID)
-	sm.Put(ctx, sessionKeyUsername, u.Username)
-	sm.Put(ctx, sessionKeyDisplayName, u.DisplayName)
-	sm.Put(ctx, sessionKeyEmail, u.Email)
-	sm.Put(ctx, sessionKeyRole, u.Role)
-	sm.Put(ctx, sessionKeySSHPublicKey, u.SSHPublicKey)
+// The SCS session map is gob-encoded; the User snapshot stored under
+// sessionKeyUser needs its concrete type registered before the first
+// encode/decode.
+func init() {
+	gob.Register(User{})
 }
 
-// GetUser retrieves the user from the session. Returns nil if no user is stored.
-// Rotated fields (role, email, ssh_public_key) require the operator to re-login
-// for changes to take effect — same contract for every cached field.
+// PutUser stores the authenticated user snapshot in the session.
+func (sm *SessionManager) PutUser(ctx context.Context, u *User) {
+	sm.Put(ctx, sessionKeyUser, *u)
+}
+
+// GetUser retrieves the authenticated user snapshot from the session, or nil
+// if none is stored. The snapshot is taken at login: rotated fields (role,
+// permissions, email, ssh_public_key) require the operator to re-login for
+// changes to take effect.
 func (sm *SessionManager) GetUser(ctx context.Context) *User {
-	id := sm.GetString(ctx, sessionKeyUserID)
-	if id == "" {
+	u, ok := sm.Get(ctx, sessionKeyUser).(User)
+	if !ok {
 		return nil
 	}
-	return &User{
-		ID:           id,
-		Username:     sm.GetString(ctx, sessionKeyUsername),
-		DisplayName:  sm.GetString(ctx, sessionKeyDisplayName),
-		Email:        sm.GetString(ctx, sessionKeyEmail),
-		Role:         sm.GetString(ctx, sessionKeyRole),
-		SSHPublicKey: sm.GetString(ctx, sessionKeySSHPublicKey),
-	}
+	return &u
 }
 
 // DestroyUser removes the user from the session and destroys it.
