@@ -30,6 +30,8 @@ Installs, upgrades, and removes OS packages. Auto-detects the system's package m
 
 Queries the package manager to check if the package is installed and its current version. Only installs, upgrades, or removes when drift is detected. `state: latest` always attempts an upgrade when the package is already installed (the package manager itself is idempotent if already at the latest version).
 
+`state: latest` reports `changed` honestly: the agent snapshots the installed-package set before and after the upgrade and reports a change **only when something actually moved**. A `latest` upgrade (single package or `package: "*"`) that finds nothing to do reports `Settled` — it does not inflate `ChangedCount` or trip drift detection on a fleet that runs a routine upgrade module every cycle. (If the snapshot can't be taken, the run falls back to reporting a change.)
+
 ## Package Manager Detection
 
 The package manager is auto-detected at agent startup based on OS family:

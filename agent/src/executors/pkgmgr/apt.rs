@@ -308,6 +308,19 @@ impl PackageManager for AptManager {
         apt_get_with_retry(&str_args, "upgrade all")
     }
 
+    fn installed_snapshot(&self) -> Result<String, String> {
+        let output = Command::new("dpkg-query")
+            .args(["-W", "-f=${Package} ${Version}\n"])
+            .output()
+            .map_err(|e| format!("dpkg-query snapshot: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("dpkg-query snapshot failed: {}", stderr));
+        }
+        Ok(super::normalize_snapshot(&String::from_utf8_lossy(&output.stdout)))
+    }
+
     fn set_flags(&self, flags: &[String]) {
         *self.extra_flags.lock().unwrap() = flags.to_vec();
     }

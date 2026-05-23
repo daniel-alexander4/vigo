@@ -1143,16 +1143,32 @@ impl Executor for PackageExecutorWrapper {
                 }
             }
 
-            result.action = Action::Updated;
-            result.changed = true;
-
-            if !dry_run {
+            if dry_run {
+                // Dry-run can't observe a real change without running the
+                // upgrade — report the optimistic "would update".
+                result.action = Action::Updated;
+                result.changed = true;
+            } else {
+                // Snapshot installed state before/after so `changed`
+                // reflects whether the upgrade actually moved anything,
+                // instead of reporting a change every cycle (drift noise).
+                let before = self.pkg_mgr.installed_snapshot();
                 if let Err(e) = self.pkg_mgr.upgrade_all() {
                     result.error = Some(format!("upgrade all packages: {}", e));
-                } else if pkg_params.post_cleanup {
-                    if let Err(e) = self.pkg_mgr.post_cleanup() {
-                        // Non-fatal: upgrade succeeded, cleanup failed.
-                        tracing::warn!(error = %e, "post_cleanup failed after upgrade");
+                } else {
+                    if pkg_params.post_cleanup {
+                        if let Err(e) = self.pkg_mgr.post_cleanup() {
+                            // Non-fatal: upgrade succeeded, cleanup failed.
+                            tracing::warn!(error = %e, "post_cleanup failed after upgrade");
+                        }
+                    }
+                    let after = self.pkg_mgr.installed_snapshot();
+                    if snapshot_changed(before, after) {
+                        result.action = Action::Updated;
+                        result.changed = true;
+                    } else {
+                        result.action = Action::None;
+                        result.changed = false;
                     }
                 }
             }
@@ -1195,6 +1211,17 @@ impl Executor for PackageExecutorWrapper {
         self.pkg_mgr.clear_flags();
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
+    }
+}
+
+/// Decide whether an upgrade changed anything by diffing the installed
+/// snapshots taken before and after. A failed snapshot on either side
+/// degrades conservatively to "changed" — no worse than the always-
+/// report-a-change behavior this replaces.
+fn snapshot_changed(before: Result<String, String>, after: Result<String, String>) -> bool {
+    match (before, after) {
+        (Ok(b), Ok(a)) => b != a,
+        _ => true,
     }
 }
 
@@ -1285,13 +1312,26 @@ impl PackageExecutorWrapper {
                             return result;
                         }
                     }
-                    result.action = Action::Updated;
-                    result.changed = true;
                     if dry_run {
+                        // Can't observe a real change without running it.
+                        result.action = Action::Updated;
+                        result.changed = true;
                         return result;
                     }
+                    // Snapshot before/after so `changed` reflects whether
+                    // the upgrade actually moved a version (drift honesty).
+                    let before = self.pkg_mgr.installed_snapshot();
                     if let Err(e) = self.pkg_mgr.upgrade_latest(name) {
                         result.error = Some(format!("upgrade package {}: {}", name, e));
+                        return result;
+                    }
+                    let after = self.pkg_mgr.installed_snapshot();
+                    if snapshot_changed(before, after) {
+                        result.action = Action::Updated;
+                        result.changed = true;
+                    } else {
+                        result.action = Action::None;
+                        result.changed = false;
                     }
                     return result;
                 }
@@ -2646,6 +2686,9 @@ mod tests {
         calls: Arc<Mutex<Vec<(String, String)>>>,
         /// Flags set via set_flags.
         flags: std::sync::Mutex<Vec<String>>,
+        /// Snapshots returned by installed_snapshot, popped front-to-back.
+        /// Empty → installed_snapshot errors (runner falls back to changed=true).
+        snapshots: std::sync::Mutex<std::collections::VecDeque<String>>,
     }
 
     impl MockPkgMgr {
@@ -2658,7 +2701,14 @@ mod tests {
                 installed: std::sync::Mutex::new(map),
                 calls: Arc::new(Mutex::new(Vec::new())),
                 flags: std::sync::Mutex::new(Vec::new()),
+                snapshots: std::sync::Mutex::new(std::collections::VecDeque::new()),
             }
+        }
+
+        /// Configure the snapshots installed_snapshot returns, in order.
+        fn with_snapshots(self, snaps: &[&str]) -> Self {
+            *self.snapshots.lock().unwrap() = snaps.iter().map(|s| s.to_string()).collect();
+            self
         }
     }
 
@@ -2713,6 +2763,13 @@ mod tests {
         fn post_cleanup(&self) -> Result<(), String> {
             self.calls.lock().unwrap().push(("post_cleanup".into(), String::new()));
             Ok(())
+        }
+        fn installed_snapshot(&self) -> Result<String, String> {
+            self.snapshots
+                .lock()
+                .unwrap()
+                .pop_front()
+                .ok_or_else(|| "no snapshot configured".to_string())
         }
         fn set_flags(&self, flags: &[String]) {
             *self.flags.lock().unwrap() = flags.to_vec();
@@ -3135,6 +3192,61 @@ mod tests {
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 1);
         assert_eq!(recorded[0].0, "upgrade_all");
+    }
+
+    #[test]
+    fn pkg_wildcard_no_change_reports_settled() {
+        // Identical before/after snapshot — the upgrade moved nothing.
+        let mock = MockPkgMgr::new(vec![]).with_snapshots(&["pkgs-v1", "pkgs-v1"]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(!result.changed, "no-op upgrade must not report changed");
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn pkg_wildcard_change_reports_updated() {
+        let mock = MockPkgMgr::new(vec![]).with_snapshots(&["pkgs-v1", "pkgs-v2"]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed, "real upgrade must report changed");
+        assert_eq!(result.action, Action::Updated);
+    }
+
+    #[test]
+    fn pkg_specific_latest_no_change_reports_settled() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.24.0")])
+            .with_snapshots(&["nginx 1.24.0", "nginx 1.24.0"]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(!result.changed, "no-op upgrade must not report changed");
+        assert_eq!(result.action, Action::None);
+    }
+
+    #[test]
+    fn pkg_specific_latest_change_reports_updated() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.24.0")])
+            .with_snapshots(&["nginx 1.24.0", "nginx 1.26.0"]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed, "real upgrade must report changed");
+        assert_eq!(result.action, Action::Updated);
     }
 }
 

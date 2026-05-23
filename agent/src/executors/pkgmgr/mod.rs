@@ -57,6 +57,13 @@ pub trait PackageManager: Send + Sync {
     fn upgrade_all(&self) -> Result<(), String> {
         Err("upgrade_all not supported by this package manager".to_string())
     }
+    /// Snapshot every installed package + version as a stable, sorted
+    /// string. Callers diff the before/after snapshots around an upgrade
+    /// to decide whether anything actually changed. Default errors — a
+    /// backend without a snapshot degrades to "assume changed".
+    fn installed_snapshot(&self) -> Result<String, String> {
+        Err("installed_snapshot not supported by this package manager".to_string())
+    }
     /// Remove orphaned dependencies after install/upgrade.
     /// APT: `apt-get autoremove -y`, DNF: `dnf autoremove -y`, etc.
     fn post_cleanup(&self) -> Result<(), String> {
@@ -135,6 +142,19 @@ fn command_exists(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Normalize package-list output into a stable, comparable string: trim
+/// each line, drop blanks, sort. Lets a raw before/after diff detect a
+/// real change without tripping on output ordering.
+fn normalize_snapshot(raw: &str) -> String {
+    let mut lines: Vec<&str> = raw
+        .lines()
+        .map(str::trim_end)
+        .filter(|l| !l.is_empty())
+        .collect();
+    lines.sort_unstable();
+    lines.join("\n")
+}
+
 /// Generic package manager that wraps common install/remove/query patterns.
 /// Covers dnf, yum, apk, pacman, zypper, pkg, pkg_add, pkgin, brew.
 pub struct GenericPkgMgr {
@@ -167,6 +187,15 @@ pub struct GenericPkgMgr {
     unhold_args: Option<&'static [&'static str]>,
     /// Optional cleanup args (autoremove orphaned deps). If set, `post_cleanup()` runs `[cmd] [cleanup_args...]`.
     cleanup_args: Option<&'static [&'static str]>,
+    /// Args for "upgrade everything" when they differ from `upgrade_args`
+    /// (which targets a named package — e.g. apk's `add --upgrade`, or
+    /// pacman/pkg_add which have no named-upgrade form). When `None`,
+    /// `upgrade_all` falls back to `upgrade_args`.
+    upgrade_all_args: Option<&'static [&'static str]>,
+    /// Args for listing every installed package with its version, run as
+    /// `[query_cmd] [snapshot_args...]`. Used to snapshot state before and
+    /// after an upgrade so `state: latest` can report `changed` honestly.
+    snapshot_args: &'static [&'static str],
     /// Extra flags appended to install/upgrade/remove commands.
     /// Mutex for interior mutability — set per-invocation from the executor wrapper.
     extra_flags: std::sync::Mutex<Vec<String>>,
@@ -190,6 +219,8 @@ impl GenericPkgMgr {
             unhold_cmd: Some("dnf"),
             unhold_args: Some(&["versionlock", "delete"]),
             cleanup_args: Some(&["autoremove", "-y"]),
+            upgrade_all_args: None,
+            snapshot_args: &["-qa"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -211,6 +242,8 @@ impl GenericPkgMgr {
             unhold_cmd: Some("yum"),
             unhold_args: Some(&["versionlock", "delete"]),
             cleanup_args: Some(&["autoremove", "-y"]),
+            upgrade_all_args: None,
+            snapshot_args: &["-qa"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -232,6 +265,8 @@ impl GenericPkgMgr {
             unhold_cmd: None,
             unhold_args: None,
             cleanup_args: None,
+            upgrade_all_args: Some(&["upgrade"]),
+            snapshot_args: &["list", "-I"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -256,6 +291,8 @@ impl GenericPkgMgr {
             unhold_cmd: None,
             unhold_args: None,
             cleanup_args: None,
+            upgrade_all_args: Some(&["-Syu", "--noconfirm"]),
+            snapshot_args: &["-Q"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -277,6 +314,8 @@ impl GenericPkgMgr {
             unhold_cmd: Some("zypper"),
             unhold_args: Some(&["removelock"]),
             cleanup_args: None,
+            upgrade_all_args: None,
+            snapshot_args: &["-qa"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -306,6 +345,8 @@ impl GenericPkgMgr {
             unhold_cmd: Some("pkg"),
             unhold_args: Some(&["unlock"]),
             cleanup_args: Some(&["autoremove", "-y"]),
+            upgrade_all_args: None,
+            snapshot_args: &["info"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -336,6 +377,8 @@ impl GenericPkgMgr {
             unhold_cmd: None,
             unhold_args: None,
             cleanup_args: None,
+            upgrade_all_args: Some(&["-u"]),
+            snapshot_args: &[],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -357,6 +400,8 @@ impl GenericPkgMgr {
             unhold_cmd: None,
             unhold_args: None,
             cleanup_args: Some(&["-y", "autoremove"]),
+            upgrade_all_args: None,
+            snapshot_args: &[],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -393,6 +438,8 @@ impl GenericPkgMgr {
             unhold_cmd: Some("pkg"),
             unhold_args: Some(&["unfreeze"]),
             cleanup_args: None,
+            upgrade_all_args: None,
+            snapshot_args: &["list", "-H"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -417,6 +464,8 @@ impl GenericPkgMgr {
             unhold_cmd: Some("brew"),
             unhold_args: Some(&["unpin"]),
             cleanup_args: Some(&["cleanup"]),
+            upgrade_all_args: None,
+            snapshot_args: &["list", "--versions"],
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -606,7 +655,10 @@ impl PackageManager for GenericPkgMgr {
     }
 
     fn upgrade_all(&self) -> Result<(), String> {
-        let Some(ug_args) = self.upgrade_args else {
+        // Prefer a dedicated upgrade-all command; fall back to upgrade_args
+        // for backends whose named-upgrade form upgrades everything when
+        // given no package (dnf, pkg, brew, ...).
+        let Some(ug_args) = self.upgrade_all_args.or(self.upgrade_args) else {
             return Err(format!("{}: upgrade_all not supported", self.cmd));
         };
 
@@ -647,6 +699,19 @@ impl PackageManager for GenericPkgMgr {
         Ok(())
     }
 
+    fn installed_snapshot(&self) -> Result<String, String> {
+        let output = std::process::Command::new(self.query_cmd)
+            .args(self.snapshot_args)
+            .output()
+            .map_err(|e| format!("{} snapshot: {}", self.query_cmd, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} snapshot failed: {}", self.query_cmd, stderr));
+        }
+        Ok(normalize_snapshot(&String::from_utf8_lossy(&output.stdout)))
+    }
+
     fn set_flags(&self, flags: &[String]) {
         *self.extra_flags.lock().unwrap() = flags.to_vec();
     }
@@ -672,5 +737,20 @@ mod tests {
     fn detect_unsupported() {
         let pm = detect("unknown", "unknown");
         assert!(pm.is_err());
+    }
+
+    #[test]
+    fn upgrade_all_args_set_for_compound_managers() {
+        // apk/pacman/pkg_add can't upgrade-all via their named-upgrade
+        // form, so each must carry a dedicated upgrade_all_args.
+        assert_eq!(GenericPkgMgr::apk().upgrade_all_args, Some(&["upgrade"][..]));
+        assert_eq!(
+            GenericPkgMgr::pacman().upgrade_all_args,
+            Some(&["-Syu", "--noconfirm"][..]),
+        );
+        assert_eq!(GenericPkgMgr::pkg_add().upgrade_all_args, Some(&["-u"][..]));
+        // Managers whose upgrade_args already upgrades everything keep None.
+        assert_eq!(GenericPkgMgr::dnf().upgrade_all_args, None);
+        assert_eq!(GenericPkgMgr::brew().upgrade_all_args, None);
     }
 }
