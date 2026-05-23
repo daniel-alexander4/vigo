@@ -29,7 +29,7 @@ func buildSystemPrompt(docsCorpus string) string {
 - **Role**: A named list of modules assigned to envoys
 - **Trait**: Auto-discovered facts about a envoy (OS, hardware, network, packages, etc.)
 - **Run**: A single convergence cycle where the agent applies desired state
-- **Convergence**: Status derived from last run — converged/relapsed/diverged/failed/offline/no data
+- **Convergence**: failure axis converged/degraded/failed/no data, drift axis changed/diverged, reachability offline
 
 ## Resource Types (34)
 file, package, service, user, exec, source_package, nonrepo_package, repository, cron, process, file_line,

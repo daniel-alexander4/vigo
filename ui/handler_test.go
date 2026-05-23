@@ -807,7 +807,7 @@ func (m *mockDataSource) DashboardData(baseInterval, offlineThreshold time.Durat
 		if c.status == "failed" {
 			failureCount++
 		}
-		if c.status == "relapsed" || c.status == "diverged" {
+		if c.status == "changed" || c.status == "diverged" {
 			driftCount++
 		}
 	}
@@ -859,7 +859,7 @@ func (m *mockDataSource) DashboardData(baseInterval, offlineThreshold time.Durat
 func (m *mockDataSource) ConvergenceData(baseInterval, offlineThreshold time.Duration) ConvergencePageData {
 	total := len(m.data.envoys)
 	counts := map[string]int64{
-		"converged": 0, "relapsed": 0, "diverged": 0, "failed": 0, "stale": 0, "unknown": 0,
+		"converged": 0, "changed": 0, "diverged": 0, "failed": 0, "stale": 0, "unknown": 0,
 	}
 
 	var nonConverged []ConvergenceRow

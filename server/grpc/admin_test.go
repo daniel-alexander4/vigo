@@ -162,28 +162,27 @@ func TestGetConvergenceSummarySpannerCacheAggregate(t *testing.T) {
 }
 
 // TestConvergenceCountersToProto guards the converter every
-// GetConvergenceSummary path now routes through. In particular it
-// pins Diverged and Offline as carried through — the pre-2-ii-a
-// hand-rolled standalone handler reported both as always-0. Relapsed
-// stays zero: it is a stale proto field with no canonical counterpart,
-// retired by the filed convergence-model reconciliation.
+// GetConvergenceSummary path now routes through. It pins the full
+// canonical model — the failure axis (converged/degraded/failed/
+// no_data, summing to total), the drift axis (changed/diverged), and
+// reachability (offline) — all carried through, none zeroed.
 func TestConvergenceCountersToProto(t *testing.T) {
 	resp := convergenceCountersToProto(spanner.ConvergenceCounters{
 		Total: 20, Converged: 12, Degraded: 3, Failed: 3, NoData: 2,
 		Changed: 5, Diverged: 4, Offline: 2,
 	})
-	if resp.Total != 20 || resp.Converged != 12 || resp.Failed != 3 || resp.NoData != 2 {
-		t.Errorf("failure axis: Total=%d Converged=%d Failed=%d NoData=%d, want 20/12/3/2",
-			resp.Total, resp.Converged, resp.Failed, resp.NoData)
+	if resp.Total != 20 || resp.Converged != 12 || resp.Degraded != 3 || resp.Failed != 3 || resp.NoData != 2 {
+		t.Errorf("failure axis: Total=%d Converged=%d Degraded=%d Failed=%d NoData=%d, want 20/12/3/3/2",
+			resp.Total, resp.Converged, resp.Degraded, resp.Failed, resp.NoData)
 	}
-	if resp.Diverged != 4 {
-		t.Errorf("Diverged = %d, want 4 (must be carried, not zeroed)", resp.Diverged)
+	if got := resp.Converged + resp.Degraded + resp.Failed + resp.NoData; got != resp.Total {
+		t.Errorf("failure axis sums to %d, want Total=%d", got, resp.Total)
+	}
+	if resp.Changed != 5 || resp.Diverged != 4 {
+		t.Errorf("drift axis: Changed=%d Diverged=%d, want 5/4 (carried, not zeroed)", resp.Changed, resp.Diverged)
 	}
 	if resp.Offline != 2 {
-		t.Errorf("Offline = %d, want 2 (must be carried, not zeroed)", resp.Offline)
-	}
-	if resp.Relapsed != 0 {
-		t.Errorf("Relapsed = %d, want 0 (stale field, no canonical source)", resp.Relapsed)
+		t.Errorf("Offline = %d, want 2 (carried, not zeroed)", resp.Offline)
 	}
 }
 

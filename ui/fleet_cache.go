@@ -98,7 +98,7 @@ type FleetStatusEntry struct {
 	Offline bool
 	// ObserveOnly iff the global checkin.observe_only flag is set OR the
 	// matching envoys.vgo block has observe_only: true. Orthogonal to
-	// convergence status (an observe-only envoy can be converged, relapsed,
+	// convergence status (an observe-only envoy can be converged, degraded,
 	// or anything else — observe-only governs enforcement, not convergence).
 	ObserveOnly bool
 }
@@ -132,7 +132,7 @@ type FleetStatusCounts struct {
 // other consumer) sees a self-consistent snapshot — convergence status
 // + observe-only flag from the same point in time. Without this, the
 // pills and the table would diverge on observe-only state the same way
-// they previously diverged on relapsed/diverged convergence.
+// they previously diverged on changed/diverged convergence.
 type FleetCache struct {
 	mu                sync.RWMutex
 	queries           *db.Queries
@@ -214,7 +214,7 @@ func (fc *FleetCache) Entries() []FleetStatusEntry {
 }
 
 // WorstEntries returns up to n entries sorted worst-status-first.
-// Order: failed, diverged, relapsed, no data, converged.
+// Order: failed, diverged, degraded, changed, no data, converged.
 func (fc *FleetCache) WorstEntries(n int) []FleetStatusEntry {
 	all := fc.Entries()
 	sortByWorstStatus(all)

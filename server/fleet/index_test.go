@@ -461,7 +461,7 @@ func TestConvergencePercent(t *testing.T) {
 
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "converged"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "relapsed"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "degraded"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", ConvergenceStatus: "failed"}, nil)
 
 	pct := fi.ConvergencePercent()

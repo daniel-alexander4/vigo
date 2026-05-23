@@ -122,7 +122,7 @@ Risk scores range from 0 (lowest risk) to 100 (highest risk), capped at 100.
 | Malware (ClamAV) | +25 per file | `security_scan.clamav.infected` |
 | Integrity breach (AIDE) | +15 | `security_scan.aide.changed` |
 | Open ports | +1 per port | `ports.listening.*` |
-| Relapsed | +10 | convergence status |
+| Degraded | +10 | convergence status |
 | Diverged | +15 | convergence status |
 | Convergence errors | +15 | convergence status |
 | Lost contact | +20 | last seen > 2.5× check-in interval |

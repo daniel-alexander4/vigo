@@ -210,7 +210,7 @@ var AppControls = []AppControl{
 	{
 		ID:          "drift-detection",
 		Title:       "Continuous drift detection on every check-in",
-		Description: "Agents re-evaluate desired vs actual state on every check-in (default 5 min). Relapsed/diverged states are detected on the 2/3-run threshold and alert via webhook + SMTP.",
+		Description: "Agents re-evaluate desired vs actual state on every check-in (default 5 min). Changed/diverged drift is detected across recent runs and alerts via webhook + SMTP.",
 		Evidence:    "server/convergence; server/api/report.go convergence rollup; server/integrations notifier.",
 		Frameworks: []FrameworkRef{
 			{Slug: "soc2", ControlIDs: []string{"CC4.1", "CC7.1", "CC7.2"}},

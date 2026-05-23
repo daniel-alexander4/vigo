@@ -1261,7 +1261,7 @@ Stream the zip.
 | `evidence.json` | Per-control structured evidence: scope, status, modules, traits, attached doc IDs + filenames + SHA-256 (when `compliance.read` is held). |
 | `docs/<doc-id>__<filename>` | Decrypted copies of every active compliance doc linked to the framework's controls. Filename sanitized — path separators stripped so docs/ is flat. Only present with `compliance.read`. |
 | `audit-log.csv` | Audit-chain entries with timestamps within the period. Columns: id, timestamp, event_type, actor, source, summary, payload, prev_hash, hash. |
-| `convergence.csv` | Daily fleet convergence snapshots within the period. Columns: recorded_at, total, converged, relapsed, diverged, failed, offline, no_data. |
+| `convergence.csv` | Daily fleet convergence snapshots within the period. Columns: recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline. |
 
 **Verification example:**
 
@@ -1688,7 +1688,7 @@ Returns a JSON array of SIEM events derived from run results.
 | `changed` | bool | Whether the resource was modified |
 | `error` | string | Error message (omitted when empty) |
 | `duration_ms` | int | Time spent on this resource in milliseconds |
-| `run_status` | string | Overall run status (converged, relapsed, diverged, errors) |
+| `run_status` | string | Overall run status (converged, degraded, failed) |
 | `source` | string | Always `"vigo"` |
 
 ### GET /api/v1/export/cmdb
@@ -1701,7 +1701,7 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `degraded`, `failed`, `offline`, `no data` |
+| `status` | (all) | Filter by convergence status: `converged`, `degraded`, `failed`, `no data`, `offline` |
 | `environment` | (all) | Filter by environment (e.g., `prod`, `staging`) |
 
 **Response:**

@@ -51,7 +51,7 @@ type EnvoyState struct {
 	LastRunAt           time.Time
 	// RecentRuns holds the most-recent-first trailing run history used to
 	// compute ConvergenceStatus. Bounded to [MaxRecentRuns] entries so
-	// drift detection (relapsed/diverged) has enough signal without
+	// drift detection (changed/diverged) has enough signal without
 	// growing unbounded. Populated by [FleetIndex.UpdateRunStatus] at
 	// check-in time and rehydrated from the DB on server startup.
 	RecentRuns            []convergence.RunInfo

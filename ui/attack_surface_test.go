@@ -141,7 +141,7 @@ func TestFactorDrillURL_CoversEveryRiskFactorName(t *testing.T) {
 		"Open Ports",
 		"Expiring Certificates",
 		"Running CVEs",
-		"Relapsed",
+		"Degraded",
 		"Diverged",
 		"Convergence Failed",
 		"Offline",

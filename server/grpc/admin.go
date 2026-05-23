@@ -809,17 +809,20 @@ func (s *AdminService) localConvergenceCounters() spanner.ConvergenceCounters {
 }
 
 // convergenceCountersToProto projects a spanner.ConvergenceCounters
-// into a *pb.GetConvergenceSummaryResponse. The Relapsed field has no
-// counterpart in the counters axes (it is a legacy proto field) and is
-// left zero. ConvergencePct is filled by finalizeConvergencePct.
+// into a *pb.GetConvergenceSummaryResponse — the full canonical model:
+// failure axis (converged/degraded/failed/no_data, sums to total), drift
+// axis (changed/diverged), reachability (offline). ConvergencePct is
+// filled by finalizeConvergencePct.
 func convergenceCountersToProto(c spanner.ConvergenceCounters) *pb.GetConvergenceSummaryResponse {
 	return &pb.GetConvergenceSummaryResponse{
 		Total:     int32(c.Total),
 		Converged: int32(c.Converged),
+		Degraded:  int32(c.Degraded),
 		Failed:    int32(c.Failed),
-		Offline:   int32(c.Offline),
 		NoData:    int32(c.NoData),
+		Changed:   int32(c.Changed),
 		Diverged:  int32(c.Diverged),
+		Offline:   int32(c.Offline),
 	}
 }
 
@@ -828,10 +831,12 @@ func convergenceCountersToProto(c spanner.ConvergenceCounters) *pb.GetConvergenc
 func foldLocalConvergence(agg *pb.GetConvergenceSummaryResponse, local spanner.ConvergenceCounters) {
 	agg.Total += int32(local.Total)
 	agg.Converged += int32(local.Converged)
+	agg.Degraded += int32(local.Degraded)
 	agg.Failed += int32(local.Failed)
-	agg.Offline += int32(local.Offline)
 	agg.NoData += int32(local.NoData)
+	agg.Changed += int32(local.Changed)
 	agg.Diverged += int32(local.Diverged)
+	agg.Offline += int32(local.Offline)
 }
 
 // finalizeConvergencePct computes ConvergencePct from the aggregate's

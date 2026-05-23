@@ -26,7 +26,7 @@ The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (d
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_compliance_status` | Gauge | `envoy`, `status` | Per-envoy convergence status (1 for current status). Status values: converged, relapsed, diverged, degraded, failed, offline, no data |
+| `vigo_compliance_status` | Gauge | `envoy`, `status` | Per-envoy convergence status (1 for current status). Status values: converged, degraded, failed, no data (failure axis); changed, diverged (drift axis); offline |
 
 ### Check-ins
 
@@ -136,7 +136,8 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | Metric | Type | Description |
 |--------|------|-------------|
 | `vigo_convergence_converged` | Gauge | Number of envoys in converged state |
-| `vigo_convergence_relapsed` | Gauge | Number of envoys in relapsed state |
+| `vigo_convergence_degraded` | Gauge | Number of envoys in degraded state (some modules failed last run) |
+| `vigo_convergence_changed` | Gauge | Number of envoys whose last run had changes (drift axis) |
 | `vigo_convergence_diverged` | Gauge | Number of envoys in diverged state |
 | `vigo_convergence_failed` | Gauge | Number of envoys in error state |
 | `vigo_convergence_offline` | Gauge | Number of envoys that have offline |
@@ -471,9 +472,9 @@ Per-envoy convergence status breakdown, compliance trends, and check-in health.
 
 | Panel | Type | Metric |
 |-------|------|--------|
-| Convergence Status | Pie chart (green/yellow/orange/red/gray) | `vigo_convergence_converged`, `_relapsed`, `_diverged`, `_failed`, `_offline`, `_no_data` |
+| Convergence Status | Pie chart (green/yellow/orange/red/gray) | `vigo_convergence_converged`, `_degraded`, `_changed`, `_diverged`, `_failed`, `_offline`, `_no_data` |
 | Converged | Stat (green) | `vigo_convergence_converged` |
-| Relapsed | Stat (yellow) | `vigo_convergence_relapsed` |
+| Degraded | Stat (yellow) | `vigo_convergence_degraded` |
 | Diverged | Stat (red) | `vigo_convergence_diverged` |
 | Errors | Stat (green/red) | `vigo_convergence_failed` |
 | Offline | Stat (green/orange) | `vigo_convergence_offline` |

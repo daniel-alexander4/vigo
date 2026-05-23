@@ -4946,15 +4946,19 @@ func (*GetConvergenceSummaryRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetConvergenceSummaryResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Total          int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
-	Converged      int32                  `protobuf:"varint,2,opt,name=converged,proto3" json:"converged,omitempty"`
-	Relapsed       int32                  `protobuf:"varint,3,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
-	Failed         int32                  `protobuf:"varint,4,opt,name=failed,proto3" json:"failed,omitempty"`
-	Offline        int32                  `protobuf:"varint,5,opt,name=offline,proto3" json:"offline,omitempty"`
-	NoData         int32                  `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
-	ConvergencePct float32                `protobuf:"fixed32,7,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
-	Diverged       int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Total int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
+	// Failure axis (mutually exclusive; sums to total).
+	Converged int32 `protobuf:"varint,2,opt,name=converged,proto3" json:"converged,omitempty"`
+	Degraded  int32 `protobuf:"varint,10,opt,name=degraded,proto3" json:"degraded,omitempty"`
+	Failed    int32 `protobuf:"varint,4,opt,name=failed,proto3" json:"failed,omitempty"`
+	NoData    int32 `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
+	// Drift axis (orthogonal to failure; diverged is a subset of changed).
+	Changed  int32 `protobuf:"varint,11,opt,name=changed,proto3" json:"changed,omitempty"`
+	Diverged int32 `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
+	// Reachability.
+	Offline        int32   `protobuf:"varint,5,opt,name=offline,proto3" json:"offline,omitempty"`
+	ConvergencePct float32 `protobuf:"fixed32,7,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	// snapshot_age_seconds is the age, in seconds, of the oldest peer
 	// fleet-snapshot that contributed to this aggregate (spanner Slice
 	// 2-ii-a). Zero when the answer is purely local (standalone, or the
@@ -5009,9 +5013,9 @@ func (x *GetConvergenceSummaryResponse) GetConverged() int32 {
 	return 0
 }
 
-func (x *GetConvergenceSummaryResponse) GetRelapsed() int32 {
+func (x *GetConvergenceSummaryResponse) GetDegraded() int32 {
 	if x != nil {
-		return x.Relapsed
+		return x.Degraded
 	}
 	return 0
 }
@@ -5023,13 +5027,6 @@ func (x *GetConvergenceSummaryResponse) GetFailed() int32 {
 	return 0
 }
 
-func (x *GetConvergenceSummaryResponse) GetOffline() int32 {
-	if x != nil {
-		return x.Offline
-	}
-	return 0
-}
-
 func (x *GetConvergenceSummaryResponse) GetNoData() int32 {
 	if x != nil {
 		return x.NoData
@@ -5037,9 +5034,9 @@ func (x *GetConvergenceSummaryResponse) GetNoData() int32 {
 	return 0
 }
 
-func (x *GetConvergenceSummaryResponse) GetConvergencePct() float32 {
+func (x *GetConvergenceSummaryResponse) GetChanged() int32 {
 	if x != nil {
-		return x.ConvergencePct
+		return x.Changed
 	}
 	return 0
 }
@@ -5047,6 +5044,20 @@ func (x *GetConvergenceSummaryResponse) GetConvergencePct() float32 {
 func (x *GetConvergenceSummaryResponse) GetDiverged() int32 {
 	if x != nil {
 		return x.Diverged
+	}
+	return 0
+}
+
+func (x *GetConvergenceSummaryResponse) GetOffline() int32 {
+	if x != nil {
+		return x.Offline
+	}
+	return 0
+}
+
+func (x *GetConvergenceSummaryResponse) GetConvergencePct() float32 {
+	if x != nil {
+		return x.ConvergencePct
 	}
 	return 0
 }
@@ -7677,17 +7688,19 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
 	"\x06active\x18\x05 \x01(\bR\x06active\"\x1e\n" +
-	"\x1cGetConvergenceSummaryRequest\"\xb1\x02\n" +
+	"\x1cGetConvergenceSummaryRequest\"\xdb\x02\n" +
 	"\x1dGetConvergenceSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1c\n" +
 	"\tconverged\x18\x02 \x01(\x05R\tconverged\x12\x1a\n" +
-	"\brelapsed\x18\x03 \x01(\x05R\brelapsed\x12\x16\n" +
-	"\x06failed\x18\x04 \x01(\x05R\x06failed\x12\x18\n" +
-	"\aoffline\x18\x05 \x01(\x05R\aoffline\x12\x17\n" +
-	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12'\n" +
-	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\x12\x1a\n" +
-	"\bdiverged\x18\b \x01(\x05R\bdiverged\x120\n" +
-	"\x14snapshot_age_seconds\x18\t \x01(\x03R\x12snapshotAgeSeconds\",\n" +
+	"\bdegraded\x18\n" +
+	" \x01(\x05R\bdegraded\x12\x16\n" +
+	"\x06failed\x18\x04 \x01(\x05R\x06failed\x12\x17\n" +
+	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12\x18\n" +
+	"\achanged\x18\v \x01(\x05R\achanged\x12\x1a\n" +
+	"\bdiverged\x18\b \x01(\x05R\bdiverged\x12\x18\n" +
+	"\aoffline\x18\x05 \x01(\x05R\aoffline\x12'\n" +
+	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\x120\n" +
+	"\x14snapshot_age_seconds\x18\t \x01(\x03R\x12snapshotAgeSecondsJ\x04\b\x03\x10\x04R\brelapsed\",\n" +
 	"\x1aGetEnvoyConvergenceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x96\x01\n" +
 	"\x1bGetEnvoyConvergenceResponse\x12\x16\n" +

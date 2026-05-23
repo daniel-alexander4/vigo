@@ -177,7 +177,7 @@ func TestExecutiveReport_TopIssuesOrdering(t *testing.T) {
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e1", Hostname: "ok.example.com", ConvergenceStatus: "converged", LastSeen: time.Now()}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e2", Hostname: "err.example.com", ConvergenceStatus: "failed", LastSeen: time.Now()}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e3", Hostname: "stale.example.com", ConvergenceStatus: "converged", Offline: true, LastSeen: time.Now().Add(-24 * time.Hour)}, nil)
-	fi.AddEnvoy(fleet.EnvoyState{ID: "e4", Hostname: "drift.example.com", ConvergenceStatus: "relapsed", LastSeen: time.Now()}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e4", Hostname: "drift.example.com", ConvergenceStatus: "degraded", LastSeen: time.Now()}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e5", Hostname: "new.example.com", ConvergenceStatus: "no data", LastSeen: time.Now()}, nil)
 
 	_, mux := newExecutiveTestHandler(t, fi, queries)

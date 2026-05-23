@@ -1320,7 +1320,7 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
   .badge-partial { background: #fff3cd; color: #856404; }
   .badge-not_satisfied { background: #f8d7da; color: #721c24; }
   .badge-compliant { background: #d4edda; color: #155724; }
-  .badge-errors, .badge-relapsed, .badge-diverged, .badge-offline, .badge-no-data { background: #f8d7da; color: #721c24; }
+  .badge-errors, .badge-diverged, .badge-offline, .badge-no-data { background: #f8d7da; color: #721c24; }
   .audit-status { padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
   .audit-valid { background: #d4edda; }
   .audit-broken { background: #f8d7da; }

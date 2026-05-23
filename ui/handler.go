@@ -4851,7 +4851,7 @@ func factorDrillURL(name, envoyID string) string {
 		return "/security/certs/" + envoyID
 	case "Running CVEs":
 		return "/security#sec-panel-high"
-	case "Relapsed", "Diverged", "Convergence Failed":
+	case "Degraded", "Diverged", "Convergence Failed":
 		return "/envoys/" + envoyID + "/trace"
 	}
 	// Open Ports, Offline — no canonical drill-down, on-page detail
@@ -5628,12 +5628,11 @@ func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration,
 			break
 		}
 
-		// Compute convergence from the latest run status.
-		// For the paged view we only have 1 run, so we can determine
-		// converged/failed/no-data but not relapsed/diverged (which need 2-3 runs).
-		// This is acceptable for the paginated list — the fleet cache provides
-		// accurate counts for the filter buttons.
-		// Compute convergence status from failure percentage thresholds.
+		// Compute convergence from the latest run. The paged view has only
+		// one run, so it classifies the failure axis (converged/degraded/
+		// failed/no-data) and the drift broad bucket (changed) — never
+		// diverged, which needs the consecutive-run history. The fleet
+		// cache provides the accurate counts for the filter buttons.
 		var status string
 		if !n.LastRunStatus.Valid {
 			status = "no data"
@@ -5649,10 +5648,10 @@ func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration,
 			case "failure":
 				status = "failed"
 			case "blocked":
-				status = "diverged"
+				status = "failed" // a blocked run is a failure-axis state, not drift
 			case "success", "partial":
 				if n.LastRunChanged.Valid && n.LastRunChanged.Int64 > 0 {
-					status = "relapsed"
+					status = "changed"
 				} else {
 					status = "converged"
 				}
@@ -5687,7 +5686,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration,
 		// Check if this envoy is in observe-only mode: global (server.yaml) OR per-entry.
 		// Surfaced as a separate ObserveOnly flag on the row — orthogonal to
 		// convergence status, since an observe-only envoy can be converged,
-		// relapsed, etc. (the flag governs enforcement, not convergence).
+		// degraded, etc. (the flag governs enforcement, not convergence).
 		observeOnly := ds.globalObserveOnly
 		if ds.configStore != nil {
 			if _, cfg := ds.configStore.Match(n.Hostname); cfg != nil {

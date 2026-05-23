@@ -481,7 +481,7 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 
 	// --- Keyword-based prefetch (fallback when no page context) ---
 	if askCtx.Page == "" {
-		if containsAny(lower, "compliance", "converged", "relapsed", "diverged", "failed", "offline") {
+		if containsAny(lower, "compliance", "converged", "degraded", "changed", "diverged", "failed", "offline") {
 			if data, err := a.tools.getCompliance(ctx, map[string]any{}); err == nil {
 				parts = append(parts, "## Compliance Summary\n"+data)
 			}

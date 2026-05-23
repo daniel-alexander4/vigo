@@ -781,14 +781,20 @@ message WebhookInfo {
 message GetConvergenceSummaryRequest {}
 
 message GetConvergenceSummaryResponse {
+  reserved 3;
+  reserved "relapsed";  // dropped in the convergence axis split
   int32 total = 1;
+  // Failure axis (mutually exclusive; sums to total).
   int32 converged = 2;
-  int32 relapsed = 3;
+  int32 degraded = 10;
   int32 failed = 4;
-  int32 offline = 5;
   int32 no_data = 6;
-  float convergence_pct = 7;
+  // Drift axis (orthogonal to failure; diverged is a subset of changed).
+  int32 changed = 11;
   int32 diverged = 8;
+  // Reachability.
+  int32 offline = 5;
+  float convergence_pct = 7;
   // snapshot_age_seconds is the age, in seconds, of the oldest peer
   // fleet-snapshot that contributed to this aggregate (spanner Slice
   // 2-ii-a). Zero when the answer is purely local (standalone, or the

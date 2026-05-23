@@ -326,11 +326,12 @@ func (a *SpannerAdmin) AggregateConvergenceFanout(ctx context.Context) (*pb.GetC
 		resp := r.value.(*pb.GetConvergenceSummaryResponse)
 		agg.Total += resp.Total
 		agg.Converged += resp.Converged
-		agg.Relapsed += resp.Relapsed
-		agg.Diverged += resp.Diverged
+		agg.Degraded += resp.Degraded
 		agg.Failed += resp.Failed
-		agg.Offline += resp.Offline
 		agg.NoData += resp.NoData
+		agg.Changed += resp.Changed
+		agg.Diverged += resp.Diverged
+		agg.Offline += resp.Offline
 	}
 	return agg, nil
 }
