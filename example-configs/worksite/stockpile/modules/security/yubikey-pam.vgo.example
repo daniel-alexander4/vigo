@@ -3,9 +3,7 @@
 #~ module + adds it to sshd's stack.
 name: yubikey-pam
 
-compliance:
-  nist-800-53: [IA-2(1), IA-5(11)]
-  iso-27001: [A.9.4.2]
+provides: [multi-factor-auth]
 
 resources:
   - name: install-libpam-u2f

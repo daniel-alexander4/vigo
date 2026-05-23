@@ -1,10 +1,6 @@
 name: fail2ban
 
-compliance:
-  nist-800-53: [AC-7]
-  pci-dss: [8.3.4]
-  hipaa: [164.308(a)(5)(ii)(D)]
-  iso-27001: [A.9.4.2]
+provides: [brute-force-protection]
 
 resources:
   - name: install-fail2ban

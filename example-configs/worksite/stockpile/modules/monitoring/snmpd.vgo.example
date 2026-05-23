@@ -2,9 +2,7 @@
 #~ a downstream poller. Read-only community by default.
 name: snmpd
 
-compliance:
-  nist-800-53: [SI-4, CA-7]
-  iso-27001: [A.12.1.3]
+provides: [monitoring-probe]
 
 vars:
   snmp_community: "public"

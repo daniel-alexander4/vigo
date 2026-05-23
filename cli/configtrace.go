@@ -265,8 +265,10 @@ type dependencyTraceEntry = struct {
 }
 
 type complianceTraceEntry = struct {
-	Module     string              `json:"module"`
-	Frameworks map[string][]string `json:"frameworks"`
+	Module         string                       `json:"module"`
+	Provides       []string                     `json:"provides,omitempty"`
+	Frameworks     map[string][]string          `json:"frameworks"`
+	ControlSources map[string]map[string]string `json:"control_sources,omitempty"`
 }
 
 type envoyWaiverTraceEntry = struct {
@@ -655,10 +657,19 @@ func renderDependencyInheritance(deps []dependencyTraceEntry) {
 	fmt.Println()
 }
 
-// renderComplianceInheritance draws Section 6: compliance framework tags per module.
+// renderComplianceInheritance draws Section 6: compliance framework
+// tags per module. When the module declares `provides:`, each control
+// is annotated with its source — `(via <provision>)` for catalog-
+// derived controls, no suffix for explicit `compliance:` claims. The
+// module header lists the provision tags so the operator sees "this
+// module declared time-sync" before reading the expanded controls.
 func renderComplianceInheritance(tags []complianceTraceEntry) {
 	for _, ct := range tags {
-		fmt.Printf("  %s\n", amber(ct.Module))
+		header := amber(ct.Module)
+		if len(ct.Provides) > 0 {
+			header = header + dim("  provides: ["+strings.Join(ct.Provides, ", ")+"]")
+		}
+		fmt.Printf("  %s\n", header)
 
 		// Sort framework names for consistent output.
 		fwNames := make([]string, 0, len(ct.Frameworks))
@@ -669,7 +680,24 @@ func renderComplianceInheritance(tags []complianceTraceEntry) {
 
 		for _, fw := range fwNames {
 			controls := ct.Frameworks[fw]
-			fmt.Printf("    %s  %s\n", bold(fw+":"), strings.Join(controls, ", "))
+			if len(ct.ControlSources) == 0 {
+				// No provides on this module — render the legacy
+				// compact form (all controls one line).
+				fmt.Printf("    %s  %s\n", bold(fw+":"), strings.Join(controls, ", "))
+				continue
+			}
+			// Annotate each control with its source. Sort within a
+			// framework so the output is stable.
+			sortedControls := append([]string(nil), controls...)
+			sort.Strings(sortedControls)
+			for _, cid := range sortedControls {
+				src := ct.ControlSources[fw][cid]
+				suffix := ""
+				if strings.HasPrefix(src, "provides:") {
+					suffix = "  " + dim("(via "+strings.TrimPrefix(src, "provides:")+")")
+				}
+				fmt.Printf("    %s  %s%s\n", bold(fw+":"), cid, suffix)
+			}
 		}
 	}
 	fmt.Println()

@@ -3,9 +3,7 @@
 #~ config; operators tune scores via /etc/rspamd/local.d/.
 name: rspamd
 
-compliance:
-  nist-800-53: [SI-3, SI-8]
-  iso-27001: [A.13.2.3]
+provides: [email-anti-malware]
 
 resources:
   - name: install-rspamd

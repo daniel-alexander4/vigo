@@ -82,6 +82,10 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 			if err := val.Decode(&def.Compliance); err != nil {
 				return nil, fmt.Errorf("decoding compliance: %w", err)
 			}
+		case "provides":
+			if err := val.Decode(&def.Provides); err != nil {
+				return nil, fmt.Errorf("decoding provides: %w", err)
+			}
 		}
 	}
 

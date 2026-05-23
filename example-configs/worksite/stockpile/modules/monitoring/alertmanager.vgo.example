@@ -2,9 +2,7 @@
 #~ them to receivers (email, Slack, PagerDuty, webhooks).
 name: alertmanager
 
-compliance:
-  nist-800-53: [SI-4, IR-4, IR-6]
-  iso-27001: [A.16.1.2, A.16.1.4]
+provides: [alerting]
 
 vars:
   alertmanager_version: "0.27.0"

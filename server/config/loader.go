@@ -17,6 +17,7 @@ import (
 	texttemplate "text/template"
 	"time"
 
+	"git.alexander4.io/vigo/server/compliance"
 	"git.alexander4.io/vigo/server/conditionals"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/secrets"
@@ -757,10 +758,20 @@ type DependencyTraceEntry struct {
 	Level string `json:"level"` // "module" or "resource"
 }
 
-// ComplianceTraceEntry tracks compliance framework tags on a resolved module.
+// ComplianceTraceEntry tracks compliance framework tags on a resolved
+// module. Frameworks carries the union of explicit `compliance:` entries
+// and capabilities-derived controls (resolved via
+// compliance.ModuleProvisions). ControlSources, when populated,
+// attributes each (framework, control) pair to its origin —
+// "provides:time-sync" or "explicit" — so `vigocli config trace` can
+// answer "which control came from where" without a second walk.
+// ControlSources is sparse: present only when the module has either a
+// provides: tag or a control declared via both paths.
 type ComplianceTraceEntry struct {
-	Module     string              `json:"module"`
-	Frameworks map[string][]string `json:"frameworks"` // framework → control IDs
+	Module         string                       `json:"module"`
+	Provides       []string                     `json:"provides,omitempty"`        // the module's raw provides: list (kept for renderer headers)
+	Frameworks     map[string][]string          `json:"frameworks"`                // framework → control IDs (union of explicit + provides)
+	ControlSources map[string]map[string]string `json:"control_sources,omitempty"` // framework → control_id → "provides:<id>" or "explicit"
 }
 
 // EnvoyWaiverFileEntry stores per-file waiver data for trace display.
@@ -1250,13 +1261,60 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 
 	// --- Compliance Inheritance ---
+	// Build the union of explicit `compliance:` entries and
+	// controls implied by each `provides:` tag, tagging each
+	// (framework, control) with its source so the trace renderer
+	// can attribute every row. A control declared by both a
+	// provision and an explicit entry resolves to "explicit" —
+	// the explicit author intent wins for attribution.
 	for _, mod := range cfg.Modules {
-		if def, ok := cs.moduleDefs[mod.Name]; ok && len(def.Compliance) > 0 {
-			trace.ComplianceTags = append(trace.ComplianceTags, ComplianceTraceEntry{
-				Module:     mod.Name,
-				Frameworks: def.Compliance,
-			})
+		def, ok := cs.moduleDefs[mod.Name]
+		if !ok || (len(def.Compliance) == 0 && len(def.Provides) == 0) {
+			continue
 		}
+		entry := ComplianceTraceEntry{Module: mod.Name}
+		if len(def.Provides) > 0 {
+			entry.Provides = append([]string(nil), def.Provides...)
+		}
+		fw := make(map[string][]string)
+		src := make(map[string]map[string]string)
+		seen := make(map[string]map[string]bool)
+		addControl := func(standard, cid, source string) {
+			if seen[standard] == nil {
+				seen[standard] = make(map[string]bool)
+			}
+			if !seen[standard][cid] {
+				seen[standard][cid] = true
+				fw[standard] = append(fw[standard], cid)
+				if src[standard] == nil {
+					src[standard] = make(map[string]string)
+				}
+				src[standard][cid] = source
+			}
+			// Explicit overrides a provides: tag for attribution
+			// purposes — operators reading the trace want the
+			// "operator wrote this" signal preserved.
+			if source == "explicit" && src[standard] != nil {
+				src[standard][cid] = "explicit"
+			}
+		}
+		for _, prov := range def.Provides {
+			for standard, controlIDs := range compliance.ResolveProvision(prov) {
+				for _, cid := range controlIDs {
+					addControl(standard, cid, "provides:"+prov)
+				}
+			}
+		}
+		for standard, controlIDs := range def.Compliance {
+			for _, cid := range controlIDs {
+				addControl(standard, cid, "explicit")
+			}
+		}
+		entry.Frameworks = fw
+		if len(def.Provides) > 0 {
+			entry.ControlSources = src
+		}
+		trace.ComplianceTags = append(trace.ComplianceTags, entry)
 	}
 
 	// --- Compliance Waivers ---
@@ -1517,16 +1575,46 @@ var SlugForStandardKey = func() map[string]string {
 	return m
 }()
 
-// buildComplianceIndex creates a reverse index from module compliance tags.
+// buildComplianceIndex creates a reverse index from module compliance
+// tags. Each module's controls are the UNION of two sources: the
+// explicit `compliance:` block, and the controls implied by each
+// `provides:` tag resolved through compliance.ModuleProvisions. The
+// per-control []module_names slice is deduped — without that, a module
+// declaring the same (framework, control) via both `provides:` and
+// `compliance:` would appear twice in coverage drilldowns.
 func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]map[string][]string {
 	idx := make(map[string]map[string][]string)
+	// Track which (standard, control, module) tuples we've already
+	// recorded so the per-control owner list stays a set even when a
+	// module declares the same coverage via two paths.
+	seen := make(map[string]map[string]map[string]bool)
+	add := func(standard, cid, modName string) {
+		if seen[standard] == nil {
+			seen[standard] = make(map[string]map[string]bool)
+		}
+		if seen[standard][cid] == nil {
+			seen[standard][cid] = make(map[string]bool)
+		}
+		if seen[standard][cid][modName] {
+			return
+		}
+		seen[standard][cid][modName] = true
+		if idx[standard] == nil {
+			idx[standard] = make(map[string][]string)
+		}
+		idx[standard][cid] = append(idx[standard][cid], modName)
+	}
 	for _, mod := range moduleDefs {
-		for standard, controlIDs := range mod.Compliance {
-			if _, ok := idx[standard]; !ok {
-				idx[standard] = make(map[string][]string)
+		for _, prov := range mod.Provides {
+			for standard, controlIDs := range compliance.ResolveProvision(prov) {
+				for _, cid := range controlIDs {
+					add(standard, cid, mod.Name)
+				}
 			}
+		}
+		for standard, controlIDs := range mod.Compliance {
 			for _, cid := range controlIDs {
-				idx[standard][cid] = append(idx[standard][cid], mod.Name)
+				add(standard, cid, mod.Name)
 			}
 		}
 	}

@@ -1,9 +1,6 @@
 name: rsyslog
 
-compliance:
-  nist-800-53: [AU-2, AU-3, AU-9]
-  pci-dss: [10.5.3]
-  iso-27001: [A.12.4.1]
+provides: [log-shipping]
 # Prefer: cis-ubuntu-logging or cis-rhel-logging (compliance roles install
 # rsyslog, enable the service, and set file permissions with compliance tags).
 # Safe to combine if you need remote forwarding — this module uses a different

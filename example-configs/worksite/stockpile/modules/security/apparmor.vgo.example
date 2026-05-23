@@ -3,9 +3,7 @@
 #~ in /etc/apparmor.d/.
 name: apparmor
 
-compliance:
-  nist-800-53: [AC-3, AC-6, SI-4]
-  iso-27001: [A.9.4.1, A.12.4.1]
+provides: [mandatory-access-control]
 
 resources:
   - name: install-apparmor

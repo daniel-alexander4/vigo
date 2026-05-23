@@ -18,10 +18,7 @@
 #~ Linux only — vigosrv is Linux-host. Composite role: vigo-server.
 name: vigo-firewall
 
-compliance:
-  nist-800-53: [SC-7, AC-4]
-  iso-27001: [A.13.1.1]
-  cis-ubuntu: [3.4.1.1]
+provides: [host-firewall]
 
 vars:
   ssh_from: "any"

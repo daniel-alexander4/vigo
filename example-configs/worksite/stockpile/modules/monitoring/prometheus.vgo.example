@@ -1,9 +1,6 @@
 name: prometheus
 
-compliance:
-  nist-800-53: [SI-4, AU-12]
-  soc2: [CC7.1]
-  iso-27001: [A.12.4.1]
+provides: [system-resource-monitoring]
 
 vars:
   prometheus_retention: "30d"

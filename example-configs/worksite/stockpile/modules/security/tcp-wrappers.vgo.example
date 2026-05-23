@@ -1,8 +1,6 @@
 name: tcp-wrappers
 
-compliance:
-  nist-800-53: [AC-3]
-  iso-27001: [A.9.4.1]
+provides: [tcp-access-control]
 
 vars:
   allowed_sshd_networks: "LOCAL"
