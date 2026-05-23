@@ -41,10 +41,9 @@ impl Executor for HostnameBsdExecutor {
             return result;
         }
 
-        result.action = Action::Updated;
-        result.changed = true;
-
         if dry_run {
+            result.action = Action::Updated;
+            result.changed = true;
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -90,6 +89,10 @@ impl Executor for HostnameBsdExecutor {
             }
         }
 
+        if result.error.is_none() {
+            result.action = Action::Updated;
+            result.changed = true;
+        }
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
     }

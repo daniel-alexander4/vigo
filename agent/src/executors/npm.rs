@@ -60,20 +60,21 @@ impl Executor for NpmExecutor {
 
         match state {
             "present" => {
-                if let Some(ref cur) = current {
+                // Commit action/changed only after the runner reports success.
+                let intended = if let Some(ref cur) = current {
                     if version.is_empty() || *cur == version {
                         result.action = Action::None;
                         result.duration_ms = start.elapsed().as_millis() as i32;
                         return result;
                     }
-                    result.action = Action::Updated;
-                    result.changed = true;
+                    Action::Updated
                 } else {
-                    result.action = Action::Created;
-                    result.changed = true;
-                }
+                    Action::Created
+                };
 
                 if dry_run {
+                    result.action = intended;
+                    result.changed = true;
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
@@ -90,14 +91,16 @@ impl Executor for NpmExecutor {
                         result.error = Some(format!("npm install: {}", stderr));
                     }
                     Err(e) => result.error = Some(format!("npm install: {}", e)),
-                    _ => {}
+                    _ => {
+                        result.action = intended;
+                        result.changed = true;
+                    }
                 }
             }
             "latest" => {
-                result.action = Action::Updated;
-                result.changed = true;
-
                 if dry_run {
+                    result.action = Action::Updated;
+                    result.changed = true;
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
@@ -109,7 +112,10 @@ impl Executor for NpmExecutor {
                         result.error = Some(format!("npm install latest: {}", stderr));
                     }
                     Err(e) => result.error = Some(format!("npm install latest: {}", e)),
-                    _ => {}
+                    _ => {
+                        result.action = Action::Updated;
+                        result.changed = true;
+                    }
                 }
             }
             "absent" => {
@@ -119,17 +125,20 @@ impl Executor for NpmExecutor {
                     return result;
                 }
 
-                result.action = Action::Deleted;
-                result.changed = true;
-
-                if !dry_run {
+                if dry_run {
+                    result.action = Action::Deleted;
+                    result.changed = true;
+                } else {
                     match self.runner.run(npm_cmd, &["uninstall", "-g", &name]) {
                         Ok(o) if !o.status.success() => {
                             let stderr = String::from_utf8_lossy(&o.stderr);
                             result.error = Some(format!("npm uninstall: {}", stderr));
                         }
                         Err(e) => result.error = Some(format!("npm uninstall: {}", e)),
-                        _ => {}
+                        _ => {
+                            result.action = Action::Deleted;
+                            result.changed = true;
+                        }
                     }
                 }
             }

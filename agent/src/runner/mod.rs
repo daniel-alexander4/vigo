@@ -651,7 +651,7 @@ fn execute_resource(
     let is_background = node.resource_type == "exec"
         && node.params.get("background").map(|s| s == "true").unwrap_or(false);
 
-    let result = if is_background {
+    let mut result = if is_background {
         executor.execute(&params, dry_run)
     } else {
         // Determine execution timeout.
@@ -688,6 +688,10 @@ fn execute_resource(
             }
         })
     };
+    // Enforce the ResourceResult contract: error + Created/Updated/Deleted
+    // is contradictory — scrub action/changed at the boundary so the UI
+    // never has to render an impossible row. See executors/mod.rs.
+    result.normalize_for_error();
 
     // Cache the result.
     if !dry_run {

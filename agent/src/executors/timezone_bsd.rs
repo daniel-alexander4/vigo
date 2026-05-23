@@ -52,9 +52,9 @@ impl Executor for TimezoneBsdExecutor {
             return result;
         }
 
-        result.action = Action::Updated;
-        result.changed = true;
         if dry_run {
+            result.action = Action::Updated;
+            result.changed = true;
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -69,6 +69,9 @@ impl Executor for TimezoneBsdExecutor {
         // Copy zoneinfo file to /etc/localtime (BSD convention).
         if let Err(e) = std::fs::copy(&zoneinfo, "/etc/localtime") {
             result.error = Some(format!("copy zoneinfo: {}", e));
+        } else {
+            result.action = Action::Updated;
+            result.changed = true;
         }
 
         result.duration_ms = start.elapsed().as_millis() as i32;

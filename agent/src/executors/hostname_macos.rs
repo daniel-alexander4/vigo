@@ -40,15 +40,16 @@ impl Executor for HostnameMacosExecutor {
             return result;
         }
 
-        result.action = Action::Updated;
-        result.changed = true;
-
         if dry_run {
+            result.action = Action::Updated;
+            result.changed = true;
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
 
-        // Set all three macOS hostname types.
+        // Set all three macOS hostname types. Mark Updated only if all three
+        // succeed — partial success would leave the system in an inconsistent
+        // naming state and should not be reported as a clean change.
         for name_type in &["HostName", "ComputerName", "LocalHostName"] {
             match self.runner.run("scutil", &["--set", name_type, &desired]) {
                 Ok(o) if o.status.success() => {}
@@ -64,6 +65,10 @@ impl Executor for HostnameMacosExecutor {
             }
         }
 
+        if result.error.is_none() {
+            result.action = Action::Updated;
+            result.changed = true;
+        }
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
     }

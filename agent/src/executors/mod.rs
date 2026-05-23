@@ -225,6 +225,15 @@ impl Action {
 }
 
 /// The outcome of executing a single resource.
+///
+/// **Contract:** at runner emission, `error.is_some()` implies
+/// `action ∈ {None, Skipped, Blocked} && changed == false`. Executors may
+/// set `action`/`changed` optimistically before a fallible operation —
+/// `Runner` calls `normalize_for_error` to scrub contradictory state
+/// (`Created`/`Updated`/`Deleted` + error) at the result boundary, so
+/// per-executor manual rollback is unnecessary. `Blocked` survives the
+/// normalizer because it carries a legitimate diagnostic ("diverged but
+/// not failed"); see `Action::Blocked`.
 #[derive(Debug, Clone, Default)]
 pub struct ResourceResult {
     pub module_name: String,
@@ -266,6 +275,22 @@ impl ResourceResult {
     pub fn with_error(mut self, msg: String) -> Self {
         self.error = Some(msg);
         self
+    }
+
+    /// Enforce the `ResourceResult` contract at result emission: if an error
+    /// is set and the action claims a state change (Created/Updated/Deleted),
+    /// scrub `action` to `None` and `changed` to `false`. Preserves
+    /// `Blocked` (diverged-not-failed with diagnostic), `Skipped`, and the
+    /// already-correct `None`. Preserves `duration_ms` — time spent on the
+    /// failed operation is useful operator data.
+    pub fn normalize_for_error(&mut self) {
+        if self.error.is_none() {
+            return;
+        }
+        if matches!(self.action, Action::Created | Action::Updated | Action::Deleted) {
+            self.action = Action::None;
+            self.changed = false;
+        }
     }
 }
 
@@ -676,5 +701,85 @@ mod tests {
         let r = ResourceResult::new("file", "/etc/app.conf")
             .with_error("something broke".into());
         assert_eq!(r.error.as_deref(), Some("something broke"));
+    }
+
+    #[test]
+    fn normalize_for_error_scrubs_created() {
+        let mut r = ResourceResult::new("pip", "requests");
+        r.action = Action::Created;
+        r.changed = true;
+        r.duration_ms = 42;
+        r.error = Some("pip install failed".into());
+        r.normalize_for_error();
+        assert_eq!(r.action, Action::None);
+        assert!(!r.changed);
+        assert_eq!(r.duration_ms, 42, "duration must be preserved");
+        assert_eq!(r.error.as_deref(), Some("pip install failed"));
+    }
+
+    #[test]
+    fn normalize_for_error_scrubs_updated() {
+        let mut r = ResourceResult::new("pip", "requests");
+        r.action = Action::Updated;
+        r.changed = true;
+        r.error = Some("upgrade failed".into());
+        r.normalize_for_error();
+        assert_eq!(r.action, Action::None);
+        assert!(!r.changed);
+    }
+
+    #[test]
+    fn normalize_for_error_scrubs_deleted() {
+        let mut r = ResourceResult::new("pip", "requests");
+        r.action = Action::Deleted;
+        r.changed = true;
+        r.error = Some("uninstall failed".into());
+        r.normalize_for_error();
+        assert_eq!(r.action, Action::None);
+        assert!(!r.changed);
+    }
+
+    #[test]
+    fn normalize_for_error_preserves_blocked() {
+        // Blocked + error is legitimate: "diverged but not failed" with
+        // diagnostic. Server treats Blocked as a separate convergence axis
+        // (see Action::Blocked docs).
+        let mut r = ResourceResult::new("package", "nginx");
+        r.action = Action::Blocked;
+        r.changed = false;
+        r.error = Some("apt repo unreachable".into());
+        r.normalize_for_error();
+        assert_eq!(r.action, Action::Blocked);
+        assert!(!r.changed);
+        assert_eq!(r.error.as_deref(), Some("apt repo unreachable"));
+    }
+
+    #[test]
+    fn normalize_for_error_preserves_skipped() {
+        let mut r = ResourceResult::new("exec", "task");
+        r.action = Action::Skipped;
+        r.error = Some("dep failed".into());
+        r.normalize_for_error();
+        assert_eq!(r.action, Action::Skipped);
+    }
+
+    #[test]
+    fn normalize_for_error_noop_on_success() {
+        let mut r = ResourceResult::new("pip", "requests");
+        r.action = Action::Created;
+        r.changed = true;
+        r.normalize_for_error();
+        assert_eq!(r.action, Action::Created, "no error → no scrub");
+        assert!(r.changed);
+    }
+
+    #[test]
+    fn normalize_for_error_noop_on_none_with_error() {
+        let mut r = ResourceResult::new("file", "/x");
+        r.action = Action::None;
+        r.error = Some("validation failed".into());
+        r.normalize_for_error();
+        assert_eq!(r.action, Action::None);
+        assert!(!r.changed);
     }
 }

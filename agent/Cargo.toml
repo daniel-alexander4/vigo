@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.66.50"
+version = "0.66.51"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"

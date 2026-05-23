@@ -60,10 +60,9 @@ impl Executor for TimezoneExecutor {
             return result;
         }
 
-        result.action = Action::Updated;
-        result.changed = true;
-
         if dry_run {
+            result.action = Action::Updated;
+            result.changed = true;
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -74,6 +73,8 @@ impl Executor for TimezoneExecutor {
                 // Also write /etc/timezone — timedatectl doesn't always update it,
                 // which causes the idempotency check to see stale data on next run.
                 let _ = std::fs::write("/etc/timezone", format!("{}\n", desired));
+                result.action = Action::Updated;
+                result.changed = true;
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
@@ -93,6 +94,8 @@ impl Executor for TimezoneExecutor {
 
         let _ = std::fs::write("/etc/timezone", format!("{}\n", desired));
 
+        result.action = Action::Updated;
+        result.changed = true;
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
     }

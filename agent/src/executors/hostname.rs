@@ -56,10 +56,9 @@ impl Executor for HostnameExecutor {
             return result;
         }
 
-        result.action = Action::Updated;
-        result.changed = true;
-
         if dry_run {
+            result.action = Action::Updated;
+            result.changed = true;
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -68,6 +67,8 @@ impl Executor for HostnameExecutor {
         let output = self.runner.run("hostnamectl", &["set-hostname", &desired]);
         if let Ok(o) = &output {
             if o.status.success() {
+                result.action = Action::Updated;
+                result.changed = true;
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
@@ -84,9 +85,13 @@ impl Executor for HostnameExecutor {
             if !o.status.success() {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 result.error = Some(format!("hostname {}: {}", desired, stderr));
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
             }
         }
 
+        result.action = Action::Updated;
+        result.changed = true;
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
     }
@@ -169,8 +174,9 @@ mod tests {
     #[test]
     fn hostnamectl_failure_falls_through() {
         // When hostnamectl fails, the executor falls through to write /etc/hostname.
-        // That write will fail in tests (no root), but we can verify the fallthrough
-        // by checking that hostnamectl was called.
+        // That write will fail in tests (no root) and surface as an error; per the
+        // ResourceResult contract, a failed operation must NOT report
+        // action=Updated/changed=true.
         let mock = MockRunner::new(vec![
             fail_output("no systemd"),
         ]);
@@ -187,10 +193,10 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "hostnamectl");
         assert_eq!(calls[0].1, vec!["set-hostname", "test-hostname-that-does-not-exist-98765"]);
-        // The write to /etc/hostname will fail (no root perms), so there should be an error.
-        // That's expected — the point is verifying fallthrough.
-        assert_eq!(result.action, Action::Updated);
-        assert!(result.changed);
+        // Write to /etc/hostname failed → action stays None, error is set.
+        assert!(result.error.is_some(), "expected error from /etc/hostname write");
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
     }
 
 }

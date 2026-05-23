@@ -49,15 +49,18 @@ impl Executor for TimezoneMacosExecutor {
             return result;
         }
 
-        result.action = Action::Updated;
-        result.changed = true;
         if dry_run {
+            result.action = Action::Updated;
+            result.changed = true;
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
 
         match self.runner.run("systemsetup", &["-settimezone", &desired]) {
-            Ok(o) if o.status.success() => {}
+            Ok(o) if o.status.success() => {
+                result.action = Action::Updated;
+                result.changed = true;
+            }
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 result.error = Some(format!("systemsetup -settimezone: {}", stderr));
