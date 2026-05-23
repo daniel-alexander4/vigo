@@ -548,6 +548,12 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 				ModuleCount:  r.ModuleCount,
 				ChangedCount: r.ChangedCount,
 				FailedCount:  r.FailedCount,
+				Outcome: convergence.ComputeStatus(convergence.RunInfo{
+					Status:       r.Status,
+					ChangedCount: r.ChangedCount,
+					FailedCount:  r.FailedCount,
+					ModuleCount:  r.ModuleCount,
+				}).String(),
 			},
 			Results: resultsByRun[r.ID],
 		})
@@ -594,6 +600,12 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
 			FailurePct:   convergence.FailurePct(r.FailedCount, r.ModuleCount),
+			Outcome: convergence.ComputeStatus(convergence.RunInfo{
+				Status:       r.Status,
+				ChangedCount: r.ChangedCount,
+				FailedCount:  r.FailedCount,
+				ModuleCount:  r.ModuleCount,
+			}).String(),
 		})
 	}
 

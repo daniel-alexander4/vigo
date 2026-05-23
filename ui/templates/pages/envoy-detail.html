@@ -96,7 +96,7 @@
             {{range .Runs}}
             <tr>
                 <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
-                <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown">0/0</span>{{else}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{end}}</td>
+                <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<span class="badge {{convergenceBadgeClass .Outcome ""}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>{{end}}</td>
                 <td>{{.ModuleCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>
