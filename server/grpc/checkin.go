@@ -40,6 +40,8 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
 	envoyID := req.GetEnvoyId()
+	var traceID string
+	ctx, traceID = EnsureTraceID(ctx, req.GetTraceparent())
 
 	// Validate envoy is not revoked + look up state in one lock acquisition.
 	var envoy db.Envoy
@@ -74,7 +76,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// Log warning on every check-in if license is in grace or enrollment-block.
 	if s.licenseEnforcer != nil {
 		if warn := s.licenseEnforcer.CheckInWarning(); warn != "" {
-			slog.Warn(warn, "envoy_id", envoyID)
+			slog.Warn(warn, "envoy_id", envoyID, "trace_id", traceID)
 		}
 	}
 
@@ -111,7 +113,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// Maintenance mode: return empty policy so envoy skips convergence
 	// but still reports traits.
 	if s.fleetIndex != nil && s.fleetIndex.IsInMaintenance(envoyID) {
-		slog.Info("envoy in maintenance mode, returning empty policy", "envoy_id", envoyID)
+		slog.Info("envoy in maintenance mode, returning empty policy", "envoy_id", envoyID, "trace_id", traceID)
 		return &pb.CheckInResponse{}, nil
 	}
 

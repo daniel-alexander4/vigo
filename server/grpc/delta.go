@@ -37,6 +37,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 	failedCount := int64(run.FailedCount)
 	skippedCount := int64(run.SkippedCount)
 	moduleCount := int64(run.TotalCount)
+	_, traceID := ParseOrGenerate(run.GetTraceparent())
 
 	// Attribute the run: "force-push" if the server force-pushed the
 	// bundle this convergence applied, else "scheduled". Consumed once
@@ -103,6 +104,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 	slog.Info("run completed (delta)",
 		"run_id", run.RunId,
 		"envoy_id", envoyID,
+		"trace_id", traceID,
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
@@ -118,10 +120,11 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 			EnvoyID:   envoyID,
 			Summary:   fmt.Sprintf("run %s: %d changed, %d failed", runStatus, changedCount, failedCount),
 			Details: map[string]any{
-				"run_id":  run.RunId,
-				"status":  runStatus,
-				"changed": changedCount,
-				"failed":  failedCount,
+				"run_id":   run.RunId,
+				"trace_id": traceID,
+				"status":   runStatus,
+				"changed":  changedCount,
+				"failed":   failedCount,
 			},
 		})
 
@@ -132,7 +135,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 				Hostname:  hostname,
 				EnvoyID:   envoyID,
 				Summary:   fmt.Sprintf("%d resources changed on %s", changedCount, hostname),
-				Details:   map[string]any{"run_id": run.RunId, "changed": changedCount},
+				Details:   map[string]any{"run_id": run.RunId, "trace_id": traceID, "changed": changedCount},
 			})
 		}
 	}

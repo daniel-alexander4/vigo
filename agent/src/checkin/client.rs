@@ -18,6 +18,7 @@ use ed25519_dalek::SigningKey;
 use std::collections::HashMap;
 use std::time::Duration;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
+use tracing::Instrument;
 
 /// Number of consecutive failures before switching to the next server.
 const FAILOVER_THRESHOLD: u32 = 3;
@@ -292,6 +293,7 @@ impl Client {
                 // server's recurring CheckIn loop, and stamping a delta
                 // here would reset the cadence the server sees on the
                 // failover channel. Send 0 (server treats as bootstrap).
+                let (traceparent, _) = super::traceparent::generate();
                 let req = CheckInRequest {
                     envoy_id: self.envoy_id.clone(),
                     state_fingerprint: String::new(),
@@ -305,6 +307,7 @@ impl Client {
                     agent_version: self.agent_version.clone(),
                     ip_address: crate::platform::net::get_outbound_ip(),
                     last_checkin_delta_ms: 0,
+                    traceparent,
                 };
 
                 match probe_client.check_in(tonic::Request::new(req)).await {
@@ -377,6 +380,7 @@ impl Client {
     ) -> Result<CheckInResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
+        let (traceparent, trace_id) = super::traceparent::generate();
 
         let req = CheckInRequest {
             envoy_id: self.envoy_id.clone(),
@@ -391,11 +395,14 @@ impl Client {
             agent_version: self.agent_version.clone(),
             ip_address: crate::platform::net::get_outbound_ip(),
             last_checkin_delta_ms: self.next_checkin_delta_ms(),
+            traceparent,
         };
 
+        let span = tracing::info_span!("check_in", trace_id = %trace_id);
         let resp = self
             .agent
             .check_in(tonic::Request::new(req))
+            .instrument(span)
             .await
             .context("check-in RPC")?;
 
@@ -461,6 +468,7 @@ impl Client {
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
+        let (traceparent, trace_id) = super::traceparent::generate();
 
         let req = ReportResultRequest {
             run_id: run_id.to_string(),
@@ -468,11 +476,14 @@ impl Client {
             results,
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
+            traceparent,
         };
 
+        let span = tracing::info_span!("report_result", trace_id = %trace_id, run_id = %run_id);
         let resp = self
             .agent
             .report_result(tonic::Request::new(req))
+            .instrument(span)
             .await
             .context("report-result RPC")?;
 
@@ -488,6 +499,7 @@ impl Client {
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
+        let (traceparent, trace_id) = super::traceparent::generate();
 
         let req = ReportResultRequest {
             run_id: run_id.to_string(),
@@ -495,11 +507,14 @@ impl Client {
             results,
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
+            traceparent,
         };
 
+        let span = tracing::info_span!("report_result_for", trace_id = %trace_id, run_id = %run_id);
         let resp = self
             .agent
             .report_result(tonic::Request::new(req))
+            .instrument(span)
             .await
             .context("report-result-for RPC")?;
 
@@ -510,16 +525,20 @@ impl Client {
     pub async fn report_traits(&mut self, traits_json: &[u8]) -> Result<()> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(traits_json, &ts, &self.signing_key);
+        let (traceparent, trace_id) = super::traceparent::generate();
 
         let req = ReportTraitsRequest {
             envoy_id: self.envoy_id.clone(),
             traits_json: traits_json.to_vec(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
+            traceparent,
         };
 
+        let span = tracing::info_span!("report_traits", trace_id = %trace_id);
         self.agent
             .report_traits(tonic::Request::new(req))
+            .instrument(span)
             .await
             .context("report-traits RPC")?;
 
@@ -530,16 +549,20 @@ impl Client {
     pub async fn report_traits_for(&mut self, envoy_id: &str, traits_json: &[u8]) -> Result<()> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(traits_json, &ts, &self.signing_key);
+        let (traceparent, trace_id) = super::traceparent::generate();
 
         let req = ReportTraitsRequest {
             envoy_id: envoy_id.to_string(),
             traits_json: traits_json.to_vec(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
+            traceparent,
         };
 
+        let span = tracing::info_span!("report_traits_for", trace_id = %trace_id);
         self.agent
             .report_traits(tonic::Request::new(req))
+            .instrument(span)
             .await
             .context("report-traits-for RPC")?;
 
@@ -593,6 +616,7 @@ impl Client {
     ) -> CheckInRequest {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
+        let (traceparent, _) = super::traceparent::generate();
 
         CheckInRequest {
             envoy_id: self.envoy_id.clone(),
@@ -607,6 +631,7 @@ impl Client {
             agent_version: self.agent_version.clone(),
             ip_address: crate::platform::net::get_outbound_ip(),
             last_checkin_delta_ms: self.next_checkin_delta_ms(),
+            traceparent,
         }
     }
 
@@ -618,6 +643,7 @@ impl Client {
     ) -> ReportResultRequest {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
+        let (traceparent, _) = super::traceparent::generate();
 
         ReportResultRequest {
             run_id: run_id.to_string(),
@@ -625,6 +651,7 @@ impl Client {
             results,
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
+            traceparent,
         }
     }
 

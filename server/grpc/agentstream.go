@@ -86,8 +86,11 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 		}
 	}()
 
-	// Send initial policy response.
-	resp, err := s.buildCheckInResponse(stream.Context(), envoyID, envoy, checkin, true)
+	// Send initial policy response. Trace_id is attached to the ctx so the
+	// handler reuses the value from the handshake (ADR-028) rather than
+	// generating a fresh one.
+	handshakeCtx, handshakeTraceID := EnsureTraceID(stream.Context(), checkin.GetTraceparent())
+	resp, err := s.buildCheckInResponse(handshakeCtx, envoyID, envoy, checkin, true)
 	if err != nil {
 		return err
 	}
@@ -103,6 +106,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 	slog.Info("agent stream established",
 		"envoy_id", envoyID,
 		"hostname", envoy.Hostname,
+		"trace_id", handshakeTraceID,
 	)
 
 	// Two goroutines: one reads from agent, one writes push messages.
@@ -142,9 +146,10 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
-				resp, err := s.buildCheckInResponse(stream.Context(), envoyID, envoy, m.CheckIn, true)
+				ctx, traceID := EnsureTraceID(stream.Context(), m.CheckIn.GetTraceparent())
+				resp, err := s.buildCheckInResponse(ctx, envoyID, envoy, m.CheckIn, true)
 				if err != nil {
-					slog.Error("stream check-in error", "envoy_id", envoyID, "error", err)
+					slog.Error("stream check-in error", "envoy_id", envoyID, "trace_id", traceID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -172,9 +177,10 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 					}
 				}
 
-				resp, err := s.ReportResult(stream.Context(), m.ReportResult)
+				ctx, traceID := EnsureTraceID(stream.Context(), m.ReportResult.GetTraceparent())
+				resp, err := s.ReportResult(ctx, m.ReportResult)
 				if err != nil {
-					slog.Error("stream report-result error", "envoy_id", envoyID, "error", err)
+					slog.Error("stream report-result error", "envoy_id", envoyID, "trace_id", traceID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -187,9 +193,10 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				}
 
 			case *pb.AgentStreamMessage_ReportTraits:
-				resp, err := s.ReportTraits(stream.Context(), m.ReportTraits)
+				ctx, traceID := EnsureTraceID(stream.Context(), m.ReportTraits.GetTraceparent())
+				resp, err := s.ReportTraits(ctx, m.ReportTraits)
 				if err != nil {
-					slog.Error("stream report-traits error", "envoy_id", envoyID, "error", err)
+					slog.Error("stream report-traits error", "envoy_id", envoyID, "trace_id", traceID, "error", err)
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -580,6 +587,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Curator.Enabled) {
 		gates["swarm_curator_enabled"] = false
 	}
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Poolq.Enabled) {
+		gates["swarm_poolq_enabled"] = false
+	}
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Longdrawer.Enabled) {
 		gates["swarm_longdrawer_enabled"] = false
 	}
@@ -779,6 +789,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 		sc.Lockbox.MaxFileBytes == 0 && sc.Lockbox.EnvelopeRetention == "" &&
 		sc.Gitback.MaxBundleBytes == 0 && sc.Gitback.EnvelopeRetention == "" &&
 		sc.Curator.MaxBytes == 0 && sc.Curator.LocalPort == 0 &&
+		sc.Poolq.MaxMsgBytes == 0 && sc.Poolq.Retention == "" &&
 		sc.Longdrawer.MaxFileBytes == 0 {
 		return nil
 	}
@@ -792,6 +803,8 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 		LongdrawerMaxFileBytes:       uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
 		CuratorMaxBytes:              uint64(maxNonNeg(sc.Curator.MaxBytes)),
 		CuratorLocalPort:             sc.Curator.LocalPort,
+		PoolqMaxMsgBytes:             uint64(maxNonNeg(sc.Poolq.MaxMsgBytes)),
+		PoolqRetentionSecs:           durationSecsOrZero(sc.Poolq.Retention),
 	}
 }
 

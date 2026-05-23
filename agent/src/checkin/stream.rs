@@ -26,8 +26,9 @@ pub struct StreamHandle {
     pub request_tx: mpsc::Sender<AgentStreamMessage>,
     /// Server-initiated policy pushes.
     pub policy_push_rx: mpsc::Receiver<StreamPolicyPush>,
-    /// Server-initiated force pushes.
-    pub force_push_rx: mpsc::Receiver<()>,
+    /// Server-initiated force pushes. Carries the W3C traceparent so the
+    /// agent can log the receive event under the operator-side trace_id.
+    pub force_push_rx: mpsc::Receiver<String>,
     /// Check-in response correlation.
     pub check_in_resp_rx: mpsc::Receiver<CheckInResponse>,
     /// Server-dispatched ad-hoc tasks.
@@ -129,7 +130,7 @@ pub async fn open(
 
     // Create dispatch channels.
     let (policy_push_tx, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
-    let (force_push_tx, force_push_rx) = mpsc::channel::<()>(4);
+    let (force_push_tx, force_push_rx) = mpsc::channel::<String>(4);
     let (check_in_resp_tx, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
     let (task_dispatch_tx, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
     let (query_request_tx, query_request_rx) = mpsc::channel::<QueryRequest>(8);
@@ -176,7 +177,7 @@ pub async fn open(
 async fn read_loop(
     mut stream: Streaming<ServerStreamMessage>,
     policy_push_tx: mpsc::Sender<StreamPolicyPush>,
-    force_push_tx: mpsc::Sender<()>,
+    force_push_tx: mpsc::Sender<String>,
     check_in_resp_tx: mpsc::Sender<CheckInResponse>,
     task_dispatch_tx: mpsc::Sender<TaskDispatch>,
     query_request_tx: mpsc::Sender<QueryRequest>,
@@ -203,8 +204,8 @@ async fn read_loop(
                                 warn!("policy push dropped (buffer full)");
                             }
                         }
-                        server_stream_message::Msg::ForcePush(_) => {
-                            let _ = force_push_tx.try_send(());
+                        server_stream_message::Msg::ForcePush(fp) => {
+                            let _ = force_push_tx.try_send(fp.traceparent);
                         }
                         server_stream_message::Msg::TaskDispatch(dispatch) => {
                             if task_dispatch_tx.try_send(dispatch).is_err() {
@@ -433,7 +434,7 @@ mod tests {
     async fn test_stream_handle_has_release_channel() {
         let (request_tx, _) = mpsc::channel::<AgentStreamMessage>(4);
         let (_, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
-        let (_, force_push_rx) = mpsc::channel::<()>(4);
+        let (_, force_push_rx) = mpsc::channel::<String>(4);
         let (_, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
         let (_, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
         let (_, query_request_rx) = mpsc::channel::<QueryRequest>(8);

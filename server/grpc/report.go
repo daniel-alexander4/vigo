@@ -27,6 +27,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
 	envoyID := req.GetEnvoyId()
+	var traceID string
+	ctx, traceID = EnsureTraceID(ctx, req.GetTraceparent())
 
 	// Attribute the run: "force-push" if the server force-pushed the
 	// bundle this convergence applied, else "scheduled". One run per
@@ -90,6 +92,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	if err := s.runStore.BatchCreateRunResults(ctx, batch); err != nil {
 		slog.Error("failed to store run results",
 			"run_id", runID,
+			"trace_id", traceID,
 			"count", len(batch),
 			"error", err,
 		)
@@ -115,6 +118,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	if err != nil {
 		slog.Error("failed to finish run",
 			"run_id", runID,
+			"trace_id", traceID,
 			"error", err,
 		)
 		return nil, status.Errorf(codes.Internal, "finishing run: %v", err)
@@ -174,6 +178,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		}); err != nil {
 			slog.Error("failed to save file snapshot",
 				"run_id", runID,
+				"trace_id", traceID,
 				"file_path", result.GetFilePath(),
 				"error", err,
 			)
@@ -183,6 +188,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	slog.Info("run completed",
 		"run_id", runID,
 		"envoy_id", envoyID,
+		"trace_id", traceID,
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
@@ -199,11 +205,12 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			EnvoyID:   envoyID,
 			Summary:   fmt.Sprintf("run %s: %d changed, %d failed, %d blocked", runStatus, changedCount, failedCount, blockedCount),
 			Details: map[string]any{
-				"run_id":  runID,
-				"status":  runStatus,
-				"changed": changedCount,
-				"failed":  failedCount,
-				"blocked": blockedCount,
+				"run_id":   runID,
+				"trace_id": traceID,
+				"status":   runStatus,
+				"changed":  changedCount,
+				"failed":   failedCount,
+				"blocked":  blockedCount,
 			},
 		})
 
@@ -214,7 +221,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 				Hostname:  hostname,
 				EnvoyID:   envoyID,
 				Summary:   fmt.Sprintf("%d resources changed on %s", changedCount, hostname),
-				Details:   map[string]any{"run_id": runID, "changed": changedCount},
+				Details:   map[string]any{"run_id": runID, "trace_id": traceID, "changed": changedCount},
 			})
 		}
 
@@ -231,6 +238,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 						Details: map[string]any{
 							"module":   result.GetModuleName(),
 							"resource": result.GetResourceName(),
+							"trace_id": traceID,
 							"error":    result.GetErrorMessage(),
 						},
 					})

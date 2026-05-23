@@ -244,6 +244,7 @@ message CheckInRequest {
   string agent_version = 10;             // agent binary version (e.g. "1.2.0" or "dev")
   string ip_address = 11;                // agent's preferred outbound IP (refreshed each check-in)
   uint32 last_checkin_delta_ms = 12;     // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
+  string traceparent = 13;               // W3C traceparent (ADR-028); 55-char format "00-<trace_id>-<span_id>-<flags>"; empty/malformed → server generates
 }
 
 message CheckInResponse {
@@ -295,6 +296,8 @@ message SwarmRuntimeLimits {
   uint64 longdrawer_max_file_bytes = 7;            // per-file size cap on LAN sync; 0 = no cap
   uint64 curator_max_bytes = 8;                // per-blob (one {name,version,os,arch} artifact) cap on the curator publish path; 0 = compile-time default (2 GiB)
   uint32 curator_local_port = 9;               // localhost HTTP port for curator's agent-local facades — the OCI Distribution v2 registry shim (`docker pull 127.0.0.1:<port>/...`) and the apt/dnf/apk package-repo server (`/repo/<name>/...`); 0 = disabled
+  uint64 poolq_max_msg_bytes = 10;             // per-message body cap on the poolq publish path; 0 = compile-time default (16 KiB). Hard ceiling 64 KiB enforced agent-side.
+  uint64 poolq_retention_secs = 11;            // per-topic message-age retention window in seconds; messages older than this are pruned and stale-on-ingest is refused; 0 = compile-time default (7d).
 }
 
 // SwarmManifestEntry is a single entry in the swarm manifest CRDT,
@@ -419,6 +422,7 @@ message ReportResultRequest {
   repeated ModuleResult results = 3;
   bytes signature = 4;
   google.protobuf.Timestamp timestamp = 5;
+  string traceparent = 6;  // W3C traceparent (ADR-028)
 }
 
 message ModuleResult {
@@ -443,6 +447,7 @@ message ReportTraitsRequest {
   bytes traits_json = 2;       // JSON-encoded traits map
   bytes signature = 3;
   google.protobuf.Timestamp timestamp = 4;
+  string traceparent = 5;  // W3C traceparent (ADR-028)
 }
 
 message ReportTraitsResponse {
@@ -498,10 +503,13 @@ message StreamRelease {
 message StreamPolicyPush {
   PolicyBundle policy_bundle = 1;
   uint64 policy_version = 2;
+  string traceparent = 3;  // W3C traceparent (ADR-028)
 }
 
 // StreamForcePush signals the agent to run a convergence cycle immediately.
-message StreamForcePush {}
+message StreamForcePush {
+  string traceparent = 1;  // W3C traceparent (ADR-028)
+}
 
 // =============================================================================
 // Delta streaming protocol (Phase 22)
@@ -529,6 +537,7 @@ message RunCompleted {
   int32 skipped_count = 6;
   repeated ModuleResult results = 7;  // only changed/failed (no-ops omitted)
   uint64 bundle_version = 8;         // policy bundle version used for this run
+  string traceparent = 9;            // W3C traceparent (ADR-028)
 }
 
 // TraitsDelta reports changed/removed traits (reserved for future use).
@@ -562,6 +571,7 @@ message TaskDispatch {
   int32 timeout_seconds = 3;   // max execution time (0 = use default 60s)
   map<string, string> env = 4; // additional environment variables
   int32 nice = 5;              // CPU/IO nice level 0-19 (0 = normal, 19 = lowest)
+  string traceparent = 6;      // W3C traceparent (ADR-028); agent echoes back in TaskResult
 }
 
 // TaskAck is sent agent→server to acknowledge receipt of a task dispatch.
@@ -580,6 +590,7 @@ message TaskResult {
   string status = 5;           // completed, failed, timeout, killed
   int32 duration_ms = 6;
   string error_message = 7;   // set on internal errors (not command stderr)
+  string traceparent = 8;     // W3C traceparent (ADR-028); echoes the value from TaskDispatch
 }
 
 // QueryRequest is sent server→agent to retrieve trait values.

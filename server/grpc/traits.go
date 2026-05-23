@@ -27,6 +27,8 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 	envoyID := req.GetEnvoyId()
+	var traceID string
+	ctx, traceID = EnsureTraceID(ctx, req.GetTraceparent())
 
 	traitsJSON := req.GetTraitsJson()
 	if len(traitsJSON) == 0 {
@@ -70,6 +72,7 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 
 	slog.Info("traits reported",
 		"envoy_id", envoyID,
+		"trace_id", traceID,
 		"traits_size", len(traitsJSON),
 	)
 

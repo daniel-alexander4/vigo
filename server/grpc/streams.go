@@ -207,9 +207,10 @@ func (sm *streamManager) workCompleted(envoyID string) {
 // forcePush sends a force-push signal to a specific agent. If envoyID is empty,
 // sends to all connected agents.
 func (sm *streamManager) forcePush(envoyID string) int {
+	traceparent, _ := GenerateTraceparent()
 	msg := &pb.ServerStreamMessage{
 		Msg: &pb.ServerStreamMessage_ForcePush{
-			ForcePush: &pb.StreamForcePush{},
+			ForcePush: &pb.StreamForcePush{Traceparent: traceparent},
 		},
 	}
 

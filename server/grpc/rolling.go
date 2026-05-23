@@ -157,6 +157,7 @@ func (s *AgentService) runRollingExecution(
 	healthCheck string,
 	env map[string]string,
 	totalConnected int,
+	traceparent string,
 ) {
 	ctx := context.Background()
 	batchTimeout := time.Duration(timeoutSecs+30) * time.Second
@@ -188,6 +189,7 @@ func (s *AgentService) runRollingExecution(
 						TimeoutSeconds: timeoutSecs,
 						Env:            env,
 						Nice:           nice,
+						Traceparent:    traceparent,
 					},
 				},
 			}

@@ -197,6 +197,7 @@ type CheckInRequest struct {
 	AgentVersion       string                 `protobuf:"bytes,10,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                                                                                              // agent binary version (e.g. "1.2.0" or "dev")
 	IpAddress          string                 `protobuf:"bytes,11,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                                                                                                       // agent's preferred outbound IP (refreshed each check-in)
 	LastCheckinDeltaMs uint32                 `protobuf:"varint,12,opt,name=last_checkin_delta_ms,json=lastCheckinDeltaMs,proto3" json:"last_checkin_delta_ms,omitempty"`                                                                       // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
+	Traceparent        string                 `protobuf:"bytes,13,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                                                                                                                    // W3C traceparent (ADR-028); 55-char format "00-<trace_id>-<span_id>-<flags>"; empty/malformed → server generates
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -313,6 +314,13 @@ func (x *CheckInRequest) GetLastCheckinDeltaMs() uint32 {
 		return x.LastCheckinDeltaMs
 	}
 	return 0
+}
+
+func (x *CheckInRequest) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
+	}
+	return ""
 }
 
 type CheckInResponse struct {
@@ -530,6 +538,8 @@ type SwarmRuntimeLimits struct {
 	LongdrawerMaxFileBytes       uint64                 `protobuf:"varint,7,opt,name=longdrawer_max_file_bytes,json=longdrawerMaxFileBytes,proto3" json:"longdrawer_max_file_bytes,omitempty"`                   // per-file size cap on LAN sync; 0 = no cap
 	CuratorMaxBytes              uint64                 `protobuf:"varint,8,opt,name=curator_max_bytes,json=curatorMaxBytes,proto3" json:"curator_max_bytes,omitempty"`                                          // per-blob (one {name,version,os,arch} artifact) cap on the curator publish path; 0 = compile-time default (2 GiB)
 	CuratorLocalPort             uint32                 `protobuf:"varint,9,opt,name=curator_local_port,json=curatorLocalPort,proto3" json:"curator_local_port,omitempty"`                                       // localhost HTTP port for curator's agent-local facades — the OCI Distribution v2 registry shim (`docker pull 127.0.0.1:<port>/...`) and the apt/dnf/apk package-repo server (`/repo/<name>/...`); 0 = disabled
+	PoolqMaxMsgBytes             uint64                 `protobuf:"varint,10,opt,name=poolq_max_msg_bytes,json=poolqMaxMsgBytes,proto3" json:"poolq_max_msg_bytes,omitempty"`                                    // per-message body cap on the poolq publish path; 0 = compile-time default (16 KiB). Hard ceiling 64 KiB enforced agent-side.
+	PoolqRetentionSecs           uint64                 `protobuf:"varint,11,opt,name=poolq_retention_secs,json=poolqRetentionSecs,proto3" json:"poolq_retention_secs,omitempty"`                                // per-topic message-age retention window in seconds; messages older than this are pruned and stale-on-ingest is refused; 0 = compile-time default (7d).
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -623,6 +633,20 @@ func (x *SwarmRuntimeLimits) GetCuratorMaxBytes() uint64 {
 func (x *SwarmRuntimeLimits) GetCuratorLocalPort() uint32 {
 	if x != nil {
 		return x.CuratorLocalPort
+	}
+	return 0
+}
+
+func (x *SwarmRuntimeLimits) GetPoolqMaxMsgBytes() uint64 {
+	if x != nil {
+		return x.PoolqMaxMsgBytes
+	}
+	return 0
+}
+
+func (x *SwarmRuntimeLimits) GetPoolqRetentionSecs() uint64 {
+	if x != nil {
+		return x.PoolqRetentionSecs
 	}
 	return 0
 }
@@ -1481,6 +1505,7 @@ type ReportResultRequest struct {
 	Results       []*ModuleResult        `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	Signature     []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Traceparent   string                 `protobuf:"bytes,6,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1548,6 +1573,13 @@ func (x *ReportResultRequest) GetTimestamp() *timestamppb.Timestamp {
 		return x.Timestamp
 	}
 	return nil
+}
+
+func (x *ReportResultRequest) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
+	}
+	return ""
 }
 
 type ModuleResult struct {
@@ -1716,6 +1748,7 @@ type ReportTraitsRequest struct {
 	TraitsJson    []byte                 `protobuf:"bytes,2,opt,name=traits_json,json=traitsJson,proto3" json:"traits_json,omitempty"` // JSON-encoded traits map
 	Signature     []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Traceparent   string                 `protobuf:"bytes,5,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1776,6 +1809,13 @@ func (x *ReportTraitsRequest) GetTimestamp() *timestamppb.Timestamp {
 		return x.Timestamp
 	}
 	return nil
+}
+
+func (x *ReportTraitsRequest) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
+	}
+	return ""
 }
 
 type ReportTraitsResponse struct {
@@ -2293,6 +2333,7 @@ type StreamPolicyPush struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PolicyBundle  *PolicyBundle          `protobuf:"bytes,1,opt,name=policy_bundle,json=policyBundle,proto3" json:"policy_bundle,omitempty"`
 	PolicyVersion uint64                 `protobuf:"varint,2,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	Traceparent   string                 `protobuf:"bytes,3,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2341,9 +2382,17 @@ func (x *StreamPolicyPush) GetPolicyVersion() uint64 {
 	return 0
 }
 
+func (x *StreamPolicyPush) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
+	}
+	return ""
+}
+
 // StreamForcePush signals the agent to run a convergence cycle immediately.
 type StreamForcePush struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Traceparent   string                 `protobuf:"bytes,1,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2376,6 +2425,13 @@ func (x *StreamForcePush) ProtoReflect() protoreflect.Message {
 // Deprecated: Use StreamForcePush.ProtoReflect.Descriptor instead.
 func (*StreamForcePush) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *StreamForcePush) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
+	}
+	return ""
 }
 
 // DeltaEvent is sent by the agent on the bidi stream to report state changes
@@ -2498,6 +2554,7 @@ type RunCompleted struct {
 	SkippedCount  int32                  `protobuf:"varint,6,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
 	Results       []*ModuleResult        `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // only changed/failed (no-ops omitted)
 	BundleVersion uint64                 `protobuf:"varint,8,opt,name=bundle_version,json=bundleVersion,proto3" json:"bundle_version,omitempty"` // policy bundle version used for this run
+	Traceparent   string                 `protobuf:"bytes,9,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                           // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2586,6 +2643,13 @@ func (x *RunCompleted) GetBundleVersion() uint64 {
 		return x.BundleVersion
 	}
 	return 0
+}
+
+func (x *RunCompleted) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
+	}
+	return ""
 }
 
 // TraitsDelta reports changed/removed traits (reserved for future use).
@@ -2784,6 +2848,7 @@ type TaskDispatch struct {
 	TimeoutSeconds int32                  `protobuf:"varint,3,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`                              // max execution time (0 = use default 60s)
 	Env            map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // additional environment variables
 	Nice           int32                  `protobuf:"varint,5,opt,name=nice,proto3" json:"nice,omitempty"`                                                                        // CPU/IO nice level 0-19 (0 = normal, 19 = lowest)
+	Traceparent    string                 `protobuf:"bytes,6,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                                                           // W3C traceparent (ADR-028); agent echoes back in TaskResult
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2851,6 +2916,13 @@ func (x *TaskDispatch) GetNice() int32 {
 		return x.Nice
 	}
 	return 0
+}
+
+func (x *TaskDispatch) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
+	}
+	return ""
 }
 
 // TaskAck is sent agent→server to acknowledge receipt of a task dispatch.
@@ -2924,6 +2996,7 @@ type TaskResult struct {
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // completed, failed, timeout, killed
 	DurationMs    int32                  `protobuf:"varint,6,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
 	ErrorMessage  string                 `protobuf:"bytes,7,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // set on internal errors (not command stderr)
+	Traceparent   string                 `protobuf:"bytes,8,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                       // W3C traceparent (ADR-028); echoes the value from TaskDispatch
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3003,6 +3076,13 @@ func (x *TaskResult) GetDurationMs() int32 {
 func (x *TaskResult) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *TaskResult) GetTraceparent() string {
+	if x != nil {
+		return x.Traceparent
 	}
 	return ""
 }
@@ -7310,7 +7390,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1b\n" +
 	"\tbolt_addr\x18\x04 \x01(\tR\bboltAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xfb\x04\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\x9d\x05\n" +
 	"\x0eCheckInRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -7327,7 +7407,8 @@ const file_vigo_proto_rawDesc = "" +
 	" \x01(\tR\fagentVersion\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x121\n" +
-	"\x15last_checkin_delta_ms\x18\f \x01(\rR\x12lastCheckinDeltaMs\x1aE\n" +
+	"\x15last_checkin_delta_ms\x18\f \x01(\rR\x12lastCheckinDeltaMs\x12 \n" +
+	"\vtraceparent\x18\r \x01(\tR\vtraceparent\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\a\n" +
@@ -7353,7 +7434,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
 	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimits\x12'\n" +
-	"\x0fcurator_catalog\x18\x18 \x01(\fR\x0ecuratorCatalogJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\x9a\x04\n" +
+	"\x0fcurator_catalog\x18\x18 \x01(\fR\x0ecuratorCatalogJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xfb\x04\n" +
 	"\x12SwarmRuntimeLimits\x125\n" +
 	"\x17filecast_max_size_bytes\x18\x01 \x01(\x04R\x14filecastMaxSizeBytes\x12<\n" +
 	"\x1afilecast_default_retention\x18\x02 \x01(\tR\x18filecastDefaultRetention\x123\n" +
@@ -7363,7 +7444,10 @@ const file_vigo_proto_rawDesc = "" +
 	"\x1fgitback_envelope_retention_secs\x18\x06 \x01(\x04R\x1cgitbackEnvelopeRetentionSecs\x129\n" +
 	"\x19longdrawer_max_file_bytes\x18\a \x01(\x04R\x16longdrawerMaxFileBytes\x12*\n" +
 	"\x11curator_max_bytes\x18\b \x01(\x04R\x0fcuratorMaxBytes\x12,\n" +
-	"\x12curator_local_port\x18\t \x01(\rR\x10curatorLocalPort\"\xff\x01\n" +
+	"\x12curator_local_port\x18\t \x01(\rR\x10curatorLocalPort\x12-\n" +
+	"\x13poolq_max_msg_bytes\x18\n" +
+	" \x01(\x04R\x10poolqMaxMsgBytes\x120\n" +
+	"\x14poolq_retention_secs\x18\v \x01(\x04R\x12poolqRetentionSecs\"\xff\x01\n" +
 	"\x12SwarmManifestEntry\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
@@ -7453,13 +7537,14 @@ const file_vigo_proto_rawDesc = "" +
 	"\fwatch_secret\x18\a \x03(\tR\vwatchSecret\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd0\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf2\x01\n" +
 	"\x13ReportResultRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x19\n" +
 	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x12/\n" +
 	"\aresults\x18\x03 \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\fR\tsignature\x128\n" +
-	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\xe7\x02\n" +
+	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12 \n" +
+	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\"\xe7\x02\n" +
 	"\fModuleResult\x12\x1f\n" +
 	"\vmodule_name\x18\x01 \x01(\tR\n" +
 	"moduleName\x12#\n" +
@@ -7475,13 +7560,14 @@ const file_vigo_proto_rawDesc = "" +
 	"\tfile_path\x18\n" +
 	" \x01(\tR\bfilePath\":\n" +
 	"\x14ReportResultResponse\x12\"\n" +
-	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xa9\x01\n" +
+	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xcb\x01\n" +
 	"\x13ReportTraitsRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1f\n" +
 	"\vtraits_json\x18\x02 \x01(\fR\n" +
 	"traitsJson\x12\x1c\n" +
 	"\tsignature\x18\x03 \x01(\fR\tsignature\x128\n" +
-	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\":\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12 \n" +
+	"\vtraceparent\x18\x05 \x01(\tR\vtraceparent\":\n" +
 	"\x14ReportTraitsResponse\x12\"\n" +
 	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xb0\x03\n" +
 	"\x12AgentStreamMessage\x124\n" +
@@ -7513,18 +7599,20 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\"'\n" +
 	"\rStreamRelease\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"u\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\x97\x01\n" +
 	"\x10StreamPolicyPush\x12:\n" +
 	"\rpolicy_bundle\x18\x01 \x01(\v2\x15.vigo.v1.PolicyBundleR\fpolicyBundle\x12%\n" +
-	"\x0epolicy_version\x18\x02 \x01(\x04R\rpolicyVersion\"\x11\n" +
-	"\x0fStreamForcePush\"\xc5\x01\n" +
+	"\x0epolicy_version\x18\x02 \x01(\x04R\rpolicyVersion\x12 \n" +
+	"\vtraceparent\x18\x03 \x01(\tR\vtraceparent\"3\n" +
+	"\x0fStreamForcePush\x12 \n" +
+	"\vtraceparent\x18\x01 \x01(\tR\vtraceparent\"\xc5\x01\n" +
 	"\n" +
 	"DeltaEvent\x12\x1a\n" +
 	"\bsequence\x18\x01 \x01(\x03R\bsequence\x12)\n" +
 	"\x03run\x18\x02 \x01(\v2\x15.vigo.v1.RunCompletedH\x00R\x03run\x12.\n" +
 	"\x06traits\x18\x03 \x01(\v2\x14.vigo.v1.TraitsDeltaH\x00R\x06traits\x127\n" +
 	"\theartbeat\x18\x04 \x01(\v2\x17.vigo.v1.HeartbeatDeltaH\x00R\theartbeatB\a\n" +
-	"\x05event\"\xa3\x02\n" +
+	"\x05event\"\xc5\x02\n" +
 	"\fRunCompleted\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
@@ -7534,7 +7622,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\ffailed_count\x18\x05 \x01(\x05R\vfailedCount\x12#\n" +
 	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x12/\n" +
 	"\aresults\x18\a \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\x12%\n" +
-	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\"\xa0\x01\n" +
+	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\x12 \n" +
+	"\vtraceparent\x18\t \x01(\tR\vtraceparent\"\xa0\x01\n" +
 	"\vTraitsDelta\x12;\n" +
 	"\achanged\x18\x01 \x03(\v2!.vigo.v1.TraitsDelta.ChangedEntryR\achanged\x12\x18\n" +
 	"\aremoved\x18\x02 \x03(\tR\aremoved\x1a:\n" +
@@ -7546,20 +7635,21 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0eacked_sequence\x18\x01 \x01(\x03R\rackedSequence\"k\n" +
 	"\x12StreamCapabilities\x12%\n" +
 	"\x0esupports_delta\x18\x01 \x01(\bR\rsupportsDelta\x12.\n" +
-	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\xe8\x01\n" +
+	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\x8a\x02\n" +
 	"\fTaskDispatch\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12'\n" +
 	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\x120\n" +
 	"\x03env\x18\x04 \x03(\v2\x1e.vigo.v1.TaskDispatch.EnvEntryR\x03env\x12\x12\n" +
-	"\x04nice\x18\x05 \x01(\x05R\x04nice\x1a6\n" +
+	"\x04nice\x18\x05 \x01(\x05R\x04nice\x12 \n" +
+	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"c\n" +
 	"\aTaskAck\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1a\n" +
 	"\baccepted\x18\x02 \x01(\bR\baccepted\x12#\n" +
-	"\rreject_reason\x18\x03 \x01(\tR\frejectReason\"\xd0\x01\n" +
+	"\rreject_reason\x18\x03 \x01(\tR\frejectReason\"\xf2\x01\n" +
 	"\n" +
 	"TaskResult\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1b\n" +
@@ -7569,7 +7659,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1f\n" +
 	"\vduration_ms\x18\x06 \x01(\x05R\n" +
 	"durationMs\x12#\n" +
-	"\rerror_message\x18\a \x01(\tR\ferrorMessage\"H\n" +
+	"\rerror_message\x18\a \x01(\tR\ferrorMessage\x12 \n" +
+	"\vtraceparent\x18\b \x01(\tR\vtraceparent\"H\n" +
 	"\fQueryRequest\x12\x19\n" +
 	"\bquery_id\x18\x01 \x01(\tR\aqueryId\x12\x1d\n" +
 	"\n" +

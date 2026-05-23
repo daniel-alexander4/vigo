@@ -18,6 +18,7 @@ Loki is one more target on the Vigo events dispatcher. Same plumbing as Splunk H
 - Uses **low-cardinality labels** only: `service=vigo`, `severity=<info|warning|critical>`, `event_name=<envoy.offline|run.failure|audit.config_published|...>`.
 - Puts **high-cardinality data** (`hostname`, `envoy_id`, `summary`, `details`) in the log line body as JSON — query with LogQL's `| json` parser.
 - Bridges the **audit trail**: every entry the audit-writer chains into SQLite is also dispatched as `audit.<eventType>` so it surfaces in Loki alongside everything else.
+- Carries a per-operation **`trace_id`** in `Details` so you can pivot from any event to every server- and agent-side log line for the same check-in / report / task dispatch — see [Correlate server + agent logs by trace_id](log-correlation.md).
 
 This shape avoids the most common Loki anti-pattern: high-cardinality labels (one label value per envoy) that blow up the index.
 

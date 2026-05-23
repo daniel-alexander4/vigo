@@ -186,9 +186,11 @@ func (r *taskRouter) handleTaskResult(ctx context.Context, envoyID string, resul
 			"target_id", targetID, "error", err)
 	}
 
+	_, traceID := ParseOrGenerate(result.GetTraceparent())
 	slog.Info("task result received",
 		"task_id", result.TaskId,
 		"envoy_id", envoyID,
+		"trace_id", traceID,
 		"status", result.Status,
 		"exit_code", result.ExitCode,
 		"duration_ms", result.DurationMs,
@@ -362,6 +364,10 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		return nil, err
 	}
 
+	// One trace_id per task run — shared across every TaskDispatch target
+	// and echoed back in each TaskResult (ADR-028).
+	traceparent, _ := GenerateTraceparent()
+
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 
 	// Create offline target records.
@@ -409,7 +415,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			slog.Error("failed to start task run", "task_run_id", taskRun.ID, "error", err)
 		}
 
-		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.Nice, params.MaxFailures, params.HealthCheck, taskEnv, len(dispatchable))
+		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.Nice, params.MaxFailures, params.HealthCheck, taskEnv, len(dispatchable), traceparent)
 	} else {
 		// Non-batched: dispatch all targets inline (original behavior).
 		dispatched := 0
@@ -436,6 +442,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 						TimeoutSeconds: timeoutSecs,
 						Env:            taskEnv,
 						Nice:           params.Nice,
+						Traceparent:    traceparent,
 					},
 				},
 			}
@@ -481,6 +488,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 						TimeoutSeconds: timeoutSecs,
 						Env:            taskEnv,
 						Nice:           params.Nice,
+						Traceparent:    traceparent,
 					},
 				},
 			}

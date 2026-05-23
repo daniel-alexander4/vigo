@@ -1269,6 +1269,7 @@ fn build_run_delta(results: &[ResourceResult], seq: i64, bundle_version: u64) ->
         "success".to_string()
     };
 
+    let (traceparent, _) = crate::checkin::traceparent::generate();
     let delta = DeltaEvent {
         sequence: seq,
         event: Some(delta_event::Event::Run(RunCompleted {
@@ -1280,6 +1281,7 @@ fn build_run_delta(results: &[ResourceResult], seq: i64, bundle_version: u64) ->
             skipped_count,
             results: filtered,
             bundle_version,
+            traceparent,
         })),
     };
 
@@ -1490,8 +1492,10 @@ async fn stream_loop(
                     cycle_start = Instant::now();
                 }
 
-                _ = force_push_rx.recv() => {
-                    info!("received force push via stream");
+                fp = force_push_rx.recv() => {
+                    let traceparent = fp.unwrap_or_default();
+                    let trace_id = crate::checkin::traceparent::trace_id_of(&traceparent).unwrap_or("");
+                    info!(trace_id = trace_id, "received force push via stream");
                     let (traits_val, traits_json) = collect_traits_basic(collectors).await;
 
                     let req = client.build_check_in_request(

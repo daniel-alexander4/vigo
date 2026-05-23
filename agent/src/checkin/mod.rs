@@ -6,4 +6,5 @@ pub mod client;
 pub mod loop_impl;
 pub mod modulecache;
 pub mod stream;
+pub mod traceparent;
 pub mod verify;

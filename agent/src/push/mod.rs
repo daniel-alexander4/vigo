@@ -61,6 +61,8 @@ pub async fn send_result(tx: &mpsc::Sender<AgentStreamMessage>, result: TaskResu
 pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> TaskResult {
     let start = Instant::now();
     let task_id = &dispatch.task_id;
+    let traceparent = dispatch.traceparent.clone();
+    let trace_id = crate::checkin::traceparent::trace_id_of(&traceparent).unwrap_or("");
 
     let timeout_secs = if dispatch.timeout_seconds <= 0 {
         DEFAULT_TIMEOUT_SECS
@@ -70,6 +72,7 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
 
     info!(
         task_id = task_id,
+        trace_id = trace_id,
         command = &dispatch.command,
         timeout_secs = timeout_secs,
         "executing task"
@@ -108,6 +111,7 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
                 status: "failed".to_string(),
                 duration_ms: start.elapsed().as_millis() as i32,
                 error_message: format!("spawn failed: {}", e),
+                traceparent: traceparent.clone(),
             };
         }
     };
@@ -116,7 +120,7 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
         Some(pid) => pid as i32,
         None => {
             // Process already exited before we could get the PID.
-            return collect_child_output(&mut child, task_id, &start, "complete").await;
+            return collect_child_output(&mut child, task_id, &start, "complete", &traceparent).await;
         }
     };
 
@@ -141,17 +145,18 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
                         status: "failed".to_string(),
                         duration_ms: start.elapsed().as_millis() as i32,
                         error_message: format!("wait failed: {}", e),
+                        traceparent: traceparent.clone(),
                     };
                 }
             }
         }
         _ = &mut timeout => {
-            warn!(task_id = task_id, "task timed out after {}s", timeout_secs);
+            warn!(task_id = task_id, trace_id = trace_id, "task timed out after {}s", timeout_secs);
             kill_process_group(pid).await;
             (child.wait().await.ok(), "timeout")
         }
         _ = cancel.cancelled() => {
-            warn!(task_id = task_id, "stream closed, killing task subprocess");
+            warn!(task_id = task_id, trace_id = trace_id, "stream closed, killing task subprocess");
             kill_process_group(pid).await;
             (child.wait().await.ok(), "killed")
         }
@@ -176,6 +181,7 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
         status: actual_status.to_string(),
         duration_ms: start.elapsed().as_millis() as i32,
         error_message: String::new(),
+        traceparent: traceparent.clone(),
     }
 }
 
@@ -185,6 +191,7 @@ async fn collect_child_output(
     task_id: &str,
     start: &Instant,
     status: &str,
+    traceparent: &str,
 ) -> TaskResult {
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
@@ -206,6 +213,7 @@ async fn collect_child_output(
         status: actual_status.to_string(),
         duration_ms: start.elapsed().as_millis() as i32,
         error_message: String::new(),
+        traceparent: traceparent.to_string(),
     }
 }
 
@@ -283,6 +291,7 @@ mod tests {
             timeout_seconds: 10,
             env: HashMap::new(),
             nice: 0,
+            traceparent: String::new(),
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -305,6 +314,7 @@ mod tests {
             timeout_seconds: 10,
             env,
             nice: 0,
+            traceparent: String::new(),
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -324,6 +334,7 @@ mod tests {
             timeout_seconds: 10,
             env: HashMap::new(),
             nice: 0,
+            traceparent: String::new(),
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -340,6 +351,7 @@ mod tests {
             timeout_seconds: 10,
             env: HashMap::new(),
             nice: 0,
+            traceparent: String::new(),
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -359,6 +371,7 @@ mod tests {
             timeout_seconds: 1,
             env: HashMap::new(),
             nice: 0,
+            traceparent: String::new(),
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -375,6 +388,7 @@ mod tests {
             timeout_seconds: 30,
             env: HashMap::new(),
             nice: 0,
+            traceparent: String::new(),
         };
 
         let cancel_clone = cancel.clone();
@@ -397,6 +411,7 @@ mod tests {
             timeout_seconds: 0,
             env: HashMap::new(),
             nice: 0,
+            traceparent: String::new(),
         };
 
         let result = execute(&dispatch, &cancel).await;
