@@ -68,6 +68,11 @@ type DataSource interface {
 	EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error)
 	RunsData(statusFilter string) RunsPageData
 	RunDetailData(runID string) (RunDetailPageData, error)
+	// EnvoyDriftLabel returns the envoy's current drift-axis label
+	// ("none" / "changed" / "diverged") or "" if the envoy isn't in the
+	// FleetIndex. Used by the dashboard recent-runs widget builder to
+	// stamp RunRow.EnvoyDriftLabel without copying the full envoy state.
+	EnvoyDriftLabel(envoyID string) string
 	ConfigData(hostname string) (ConfigPageData, error)
 	PlanDetailData(planID string) (PlanDetailPageData, error)
 	SecurityScanData() SecurityScanPageData
@@ -1064,6 +1069,14 @@ type RunRow struct {
 	// time via convergence.ComputeStatus so the dashboard can show the
 	// verdict next to the ratio without each surface re-deriving it.
 	Outcome string
+	// EnvoyDriftLabel is the envoy's *current* drift level — "none",
+	// "changed", "diverged" — surfaced per-run so the convergence badge
+	// can paint orange (badge--diverged) for every run row of an envoy
+	// that's currently Diverged, matching the envoy header pill. Per-run
+	// drift isn't a thing (drift is per-envoy), but the operator-facing
+	// expectation is that a Diverged envoy's runs visually link to its
+	// header — see ui/render.go's convergenceBadgeClass.
+	EnvoyDriftLabel string
 	// TopFailedModule is the first module that produced a non-empty
 	// error in this run, or empty when nothing failed. Populated by
 	// db.ListRunsWithHostname's subquery; lets operators triage from
@@ -2366,6 +2379,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 			FailedCount:     r.FailedCount,
 			FailurePct:      failPct,
 			Outcome:         outcome,
+			EnvoyDriftLabel: h.dataSource.EnvoyDriftLabel(r.EnvoyID),
 			TopFailedModule: r.TopFailedModule,
 			DurationLabel:   dur,
 		})

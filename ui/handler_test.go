@@ -359,6 +359,7 @@ func (m *footprintMock) RunsData(s string) RunsPageData { return m.base.RunsData
 func (m *footprintMock) RunDetailData(id string) (RunDetailPageData, error) {
 	return m.base.RunDetailData(id)
 }
+func (m *footprintMock) EnvoyDriftLabel(id string) string  { return m.base.EnvoyDriftLabel(id) }
 func (m *footprintMock) ConfigData(h string) (ConfigPageData, error) { return m.base.ConfigData(h) }
 func (m *footprintMock) PlanDetailData(id string) (PlanDetailPageData, error) {
 	return m.base.PlanDetailData(id)
@@ -1102,6 +1103,10 @@ func (m *mockDataSource) RunDetailData(runID string) (RunDetailPageData, error) 
 		}
 	}
 	return RunDetailPageData{}, fmt.Errorf("run not found")
+}
+
+func (m *mockDataSource) EnvoyDriftLabel(envoyID string) string {
+	return ""
 }
 
 func (m *mockDataSource) ConfigData(hostname string) (ConfigPageData, error) {

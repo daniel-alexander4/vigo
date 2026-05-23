@@ -46,6 +46,18 @@ func NewDataSource(fleet *FleetIndex, queries *db.Queries, runStore db.RunStore,
 // EnvoyState→EnvoyRow mapping — the envoys page, the dashboard
 // worst-list, and the envoy detail header all build their rows here so a
 // field added to EnvoyRow can't silently go missing on one surface.
+// EnvoyDriftLabel returns the envoy's current drift-axis label ("none" /
+// "changed" / "diverged") or "" if the envoy isn't in the FleetIndex.
+// Cheap O(1) FleetIndex lookup; used by the dashboard recent-runs
+// widget to stamp RunRow.EnvoyDriftLabel per row so the convergence
+// badge can paint orange when the envoy is currently Diverged.
+func (ds *DataSource) EnvoyDriftLabel(envoyID string) string {
+	if ts := ds.fleet.GetEnvoy(envoyID); ts != nil {
+		return ts.Drift.String()
+	}
+	return ""
+}
+
 func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold time.Duration) ui.EnvoyRow {
 	var failurePct float64
 	if ts.LastRunModuleCount > 0 {
@@ -509,8 +521,10 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, error) {
 	ts := ds.fleet.GetEnvoy(envoyID)
 	hostname := envoyID
+	driftLabel := ""
 	if ts != nil {
 		hostname = ts.Hostname
+		driftLabel = ts.Drift.String()
 	}
 
 	ctx := context.Background()
@@ -555,6 +569,7 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 		runs = append(runs, ui.EnvoyDetailRunRow{
 			RunRow: ui.RunRow{
 				ID:           r.ID,
+				EnvoyID:      envoyID,
 				Hostname:     hostname,
 				StartedAt:    r.StartedAt,
 				Status:       r.Status,
@@ -567,6 +582,7 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 					FailedCount:  r.FailedCount,
 					ModuleCount:  r.ModuleCount,
 				}).String(),
+				EnvoyDriftLabel: driftLabel,
 			},
 			Results: resultsByRun[r.ID],
 		})
@@ -600,8 +616,10 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 			continue
 		}
 		hostname := r.EnvoyID
+		driftLabel := ""
 		if ts := ds.fleet.GetEnvoy(r.EnvoyID); ts != nil {
 			hostname = ts.Hostname
+			driftLabel = ts.Drift.String()
 		}
 		rows = append(rows, ui.RunRow{
 			ID:           r.ID,
@@ -619,6 +637,7 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 				FailedCount:  r.FailedCount,
 				ModuleCount:  r.ModuleCount,
 			}).String(),
+			EnvoyDriftLabel: driftLabel,
 		})
 	}
 
@@ -640,9 +659,11 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 	// Get hostname from FleetIndex.
 	hostname := r.EnvoyID
 	envoyID := r.EnvoyID
+	driftLabel := ""
 	ts := ds.fleet.GetEnvoy(r.EnvoyID)
 	if ts != nil {
 		hostname = ts.Hostname
+		driftLabel = ts.Drift.String()
 	} else {
 		envoy, err := ds.queries.GetEnvoyByID(ctx, r.EnvoyID)
 		if err == nil {
@@ -676,14 +697,16 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 		PageData: ui.PageData{Title: "Run Detail", ActiveNav: "runs"},
 		EnvoyID:  envoyID,
 		Run: ui.RunRow{
-			ID:           r.ID,
-			Hostname:     hostname,
-			StartedAt:    r.StartedAt,
-			Status:       r.Status,
-			Trigger:      r.Trigger,
-			ModuleCount:  r.ModuleCount,
-			ChangedCount: r.ChangedCount,
-			FailedCount:  r.FailedCount,
+			ID:              r.ID,
+			EnvoyID:         envoyID,
+			Hostname:        hostname,
+			StartedAt:       r.StartedAt,
+			Status:          r.Status,
+			Trigger:         r.Trigger,
+			ModuleCount:     r.ModuleCount,
+			ChangedCount:    r.ChangedCount,
+			FailedCount:     r.FailedCount,
+			EnvoyDriftLabel: driftLabel,
 		},
 		Results: results,
 	}, nil

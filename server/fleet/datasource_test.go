@@ -42,3 +42,25 @@ func TestEnvoyDetailData_HeaderRowCarriesConvergence(t *testing.T) {
 		t.Errorf("LastRunID = %q, want \"run-1\"", e.LastRunID)
 	}
 }
+
+// TestEnvoyDriftLabel_LookupAndFallback pins that the dataSource exposes
+// the envoy's current drift label as a 1-call helper for the dashboard
+// recent-runs widget (which can't reach FleetIndex directly), and that
+// it falls back to "" when the envoy isn't in the index.
+func TestEnvoyDriftLabel_LookupAndFallback(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{ID: "e1", Hostname: "host1"}, genKey(t))
+	// 5 consecutive runs with changes → DriftDiverged.
+	now := time.Now()
+	for i := 0; i < 5; i++ {
+		fi.UpdateRunStatus("e1", "r", "success", 1, 0, 10, now.Add(time.Duration(i)*time.Minute))
+	}
+
+	ds := NewDataSource(fi, nil, nil, nil)
+	if got := ds.EnvoyDriftLabel("e1"); got != "diverged" {
+		t.Errorf("EnvoyDriftLabel(\"e1\") = %q, want \"diverged\"", got)
+	}
+	if got := ds.EnvoyDriftLabel("unknown-id"); got != "" {
+		t.Errorf("EnvoyDriftLabel(unknown) = %q, want \"\" (fallback)", got)
+	}
+}

@@ -130,8 +130,17 @@ func funcMap() template.FuncMap {
 		// the failure-axis bucket. That's the visual link an operator
 		// needs to spot the diverged envoy in the table; Status (Failed,
 		// Degraded, Converged) would otherwise win and Diverged would be
-		// invisible. Pass the empty string when drift isn't known —
-		// degrades to the pre-0.53.x behavior cleanly.
+		// invisible.
+		//
+		// Per-run badges carry the envoy's *current* drift label too
+		// (RunRow.EnvoyDriftLabel, populated at row build time via the
+		// FleetIndex), so every run row of a Diverged envoy paints Peach
+		// — operator can trace the envoy header pill down to its
+		// contributing run rows at a glance. Drift is a present-tense
+		// classification across the UI (chip counts, header pills, fleet
+		// stats); per-run badges follow the same rule. Pass the empty
+		// string only when no envoy context exists (no current call
+		// site does — kept as the no-op fallback).
 		"convergenceBadgeClass": func(status, drift string) string {
 			if convergence.ClassifyDrift(drift) == convergence.DriftDiverged {
 				return "badge--diverged"
