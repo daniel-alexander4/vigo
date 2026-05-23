@@ -59,12 +59,9 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
-	// Mount UI routes.
-	// When FleetIndex is available, use it as the data source for O(1) fleet queries.
-	var customDS ui.DataSource
-	if fleetIndex != nil {
-		customDS = fleet.NewDataSource(fleetIndex, queries, runStore, configStore)
-	}
+	// Mount UI routes. The FleetIndex is the UI data source — O(1)
+	// in-memory fleet queries; DB only for historical data.
+	customDS := fleet.NewDataSource(fleetIndex, queries, runStore, configStore)
 	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, offlineThreshold, serverAddr, caFile, agentDir, version, assistant, spannerAdmin, customDS, docsDir, authMethod, enforcer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating UI handler: %w", err)
