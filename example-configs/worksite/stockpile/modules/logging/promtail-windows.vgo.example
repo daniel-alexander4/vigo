@@ -3,9 +3,7 @@
 #~ event log and forwards to Loki.
 name: promtail-windows
 
-compliance:
-  nist-800-53: [AU-3, AU-4, AU-6]
-  iso-27001: [A.12.4.1, A.12.4.3]
+provides: [log-processing]
 
 vars:
   promtail_version: "3.0.0"

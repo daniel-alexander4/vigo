@@ -23,11 +23,7 @@
 #~     backup_retain: "90"
 name: vigo-server-backup
 
-compliance:
-  nist-800-53: [CP-9]
-  hipaa: [164.308(a)(7)(ii)(A)]
-  iso-27001: [A.12.3.1]
-  soc2: [A1.2]
+provides: [host-backup]
 
 vars:
   vigo_root: "/srv/vigo"

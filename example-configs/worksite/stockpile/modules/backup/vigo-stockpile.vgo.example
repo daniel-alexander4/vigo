@@ -19,11 +19,7 @@
 #~ Apply to the host running vigosrv. Linux-only.
 name: vigo-stockpile
 
-compliance:
-  nist-800-53: [CP-9, CM-2, CM-3]
-  hipaa: [164.308(a)(7)(ii)(A)]
-  iso-27001: [A.12.3.1, A.14.2.4]
-  soc2: [CC8.1]
+provides: [vigo-stockpile-backup]
 
 vars:
   stockpile_dir: "/srv/vigo/stacks/stockpile"

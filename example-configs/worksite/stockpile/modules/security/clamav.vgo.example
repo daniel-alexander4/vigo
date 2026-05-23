@@ -2,10 +2,7 @@
 #~ via clamonacc real-time scanning (requires kernel fanotify).
 name: clamav
 
-compliance:
-  nist-800-53: [SI-3, SI-7]
-  iso-27001: [A.12.2.1]
-  pci-dss: ["5.1", "5.2", "5.3"]
+provides: [anti-malware]
 
 resources:
   - name: install-clamav

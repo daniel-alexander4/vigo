@@ -2,9 +2,7 @@
 #~ or create pools (operator-specific). Use sysctl/zfs vars for tunables.
 name: zfs
 
-compliance:
-  nist-800-53: [CP-9, SC-28]
-  iso-27001: [A.12.3.1]
+provides: [filesystem-encrypted-snapshots]
 
 resources:
   - name: install-zfsutils

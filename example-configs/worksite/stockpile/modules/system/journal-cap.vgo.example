@@ -1,8 +1,6 @@
 name: journal-cap
 
-compliance:
-  nist-800-53: [AU-4]
-  iso-27001: [A.12.4.1]
+provides: [journal-retention]
 
 vars:
   journal_max_use: "500M"

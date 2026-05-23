@@ -2,9 +2,7 @@
 #~ provides target portal + IQN via vars or runs iscsiadm manually.
 name: iscsi-initiator
 
-compliance:
-  nist-800-53: [SC-8, SC-12]
-  iso-27001: [A.13.1.1]
+provides: [iscsi-initiator]
 
 vars:
   iscsi_initiator_name: "iqn.2024-01.example:host01"

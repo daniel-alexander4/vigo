@@ -1,9 +1,7 @@
 #~ OpenDKIM milter for outbound DKIM signing on postfix-style MTAs.
 name: opendkim
 
-compliance:
-  nist-800-53: [SC-8, SC-23]
-  iso-27001: [A.13.2.3]
+provides: [dkim-signing]
 
 vars:
   selector: "mail"

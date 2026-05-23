@@ -2,9 +2,7 @@
 #~ files are operator-specific (drop them at /etc/bind/zones/).
 name: bind
 
-compliance:
-  nist-800-53: [SC-20, SC-21]
-  iso-27001: [A.13.1.1]
+provides: [dns-server]
 
 resources:
   - name: install-bind9

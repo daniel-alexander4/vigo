@@ -2,10 +2,7 @@
 #~ module installs via chocolatey and registers a Windows service.
 name: step-ca-windows
 
-compliance:
-  nist-800-53: [SC-8, SC-12, SC-13, SC-17]
-  iso-27001: [A.10.1.1, A.10.1.2]
-  pci-dss: [3.5, 4.1]
+provides: [internal-pki-ca]
 
 vars:
   step_ca_dns: "ca.internal.example.com"

@@ -17,12 +17,7 @@
 #~ shipped here is the Linux/musl static build.
 name: vigo-litestream
 
-compliance:
-  nist-800-53: [CP-9, CP-10, AU-9]
-  hipaa: [164.308(a)(7)(ii)(A), 164.310(d)(2)(iv)]
-  iso-27001: [A.12.3.1, A.17.1.2]
-  soc2: [A1.2, A1.3]
-  pci-dss: ["9.5.1", "9.5.1.2"]
+provides: [vigo-litestream-replication]
 
 vars:
   litestream_version: "0.3.13"

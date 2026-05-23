@@ -3,9 +3,7 @@
 #~ ship their domain-specific /etc/sssd/sssd.conf separately.
 name: sssd
 
-compliance:
-  nist-800-53: [IA-2, IA-5]
-  iso-27001: [A.9.2.1, A.9.4.2]
+provides: [central-identity]
 
 resources:
   - name: install-sssd

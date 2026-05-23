@@ -23,11 +23,7 @@
 #~ Scan output: /var/lib/vigo/security/
 name: security-scanning
 
-compliance:
-  nist-800-53: [RA-5, SI-2, SI-7]
-  pci-dss: [6.3.1, 6.3.3, 11.5.2]
-  iso-27001: [A.12.6.1]
-  hipaa: [164.308(a)(1)(ii)(D)]
+provides: [host-vuln-scanning]
 
 vars:
   scan_hour_start: "2"

@@ -92,5 +92,4 @@ resources:
       - dhcpd-config
       - dhcpd-defaults
 
-compliance:
-  nist-800-53: ["CM-6"]
+provides: [dhcp-server]

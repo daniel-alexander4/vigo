@@ -2,10 +2,7 @@
 #~ log + tails configured paths and forwards to the same downstream.
 name: fluentbit-windows
 
-compliance:
-  nist-800-53: [AU-3, AU-4, AU-6]
-  iso-27001: [A.12.4.1, A.12.4.3]
-  pci-dss: ["10.2", "10.3"]
+provides: [log-processing-pci]
 
 vars:
   forward_host: "loki.example.com"

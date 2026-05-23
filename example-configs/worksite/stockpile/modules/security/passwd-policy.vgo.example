@@ -1,12 +1,6 @@
 name: passwd-policy
 
-compliance:
-  cis-ubuntu: [5.4.1.1, 5.4.1.2, 5.4.1.3, 5.4.1.4, 5.4.1.5]
-  cis-rhel: [5.4.1.1, 5.4.1.2, 5.4.1.3, 5.4.1.4, 5.4.1.5]
-  nist-800-53: [IA-5]
-  pci-dss: [8.3.5, 8.3.6, 8.3.7, 8.3.9]
-  hipaa: [164.308(a)(5)(ii)(D)]
-  iso-27001: [A.9.4.3]
+provides: [password-policy-comprehensive]
 # Prefer: cis-ubuntu-access or cis-rhel-access (compliance roles include
 # password aging, pwquality, and PAM faillock with compliance tags).
 # Only use this module if you are NOT using CIS compliance roles — both write

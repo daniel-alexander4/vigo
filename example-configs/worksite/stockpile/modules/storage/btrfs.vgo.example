@@ -2,9 +2,7 @@
 #~ devices (operator-specific).
 name: btrfs
 
-compliance:
-  nist-800-53: [CP-9]
-  iso-27001: [A.12.3.1]
+provides: [filesystem-snapshots]
 
 resources:
   - name: install-btrfs-progs

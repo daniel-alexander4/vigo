@@ -2,9 +2,7 @@
 #~ from the secret vault and imported via certutil.
 name: ca-anchors-windows
 
-compliance:
-  nist-800-53: [SC-12, SC-17]
-  iso-27001: [A.10.1.2]
+provides: [system-ca-trust]
 
 vars:
   internal_ca_pem: "secret:vigo/ca/internal_root_pem"

@@ -1,9 +1,7 @@
 #~ OpenDMARC milter for inbound DMARC validation + reporting.
 name: opendmarc
 
-compliance:
-  nist-800-53: [SC-8, SI-3]
-  iso-27001: [A.13.2.3]
+provides: [dmarc-enforcement]
 
 resources:
   - name: install-opendmarc

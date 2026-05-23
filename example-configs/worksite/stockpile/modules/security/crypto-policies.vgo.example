@@ -3,10 +3,7 @@
 #~ Available profiles: DEFAULT, LEGACY, FUTURE, FIPS.
 name: crypto-policies
 
-compliance:
-  nist-800-53: [SC-12, SC-13]
-  iso-27001: [A.10.1.1, A.13.2.1]
-  pci-dss: ["4.1"]
+provides: [system-crypto-policy]
 
 vars:
   policy: "FUTURE"

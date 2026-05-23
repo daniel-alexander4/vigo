@@ -3,9 +3,7 @@
 #~ assumed handled by their site config.
 name: ldap-client
 
-compliance:
-  nist-800-53: [IA-2, IA-5]
-  iso-27001: [A.9.2.1]
+provides: [central-identity]
 
 resources:
   - name: install-ldap-utils

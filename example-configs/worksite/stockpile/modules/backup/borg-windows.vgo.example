@@ -6,9 +6,7 @@
 #~ erroring on Windows envoys; it installs nothing.
 name: borg-windows
 
-compliance:
-  nist-800-53: [CP-9]
-  iso-27001: [A.12.3.1]
+provides: [host-backup]
 
 resources: []
 

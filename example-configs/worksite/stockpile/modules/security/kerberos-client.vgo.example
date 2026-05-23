@@ -1,9 +1,7 @@
 #~ Kerberos client libraries. Site-specific /etc/krb5.conf assumed.
 name: kerberos-client
 
-compliance:
-  nist-800-53: [IA-2, IA-5]
-  iso-27001: [A.9.4.2]
+provides: [kerberos-auth]
 
 resources:
   - name: install-krb5-user

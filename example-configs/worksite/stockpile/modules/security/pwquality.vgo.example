@@ -3,10 +3,7 @@
 #~ (passwd, su, sudo, login).
 name: pwquality
 
-compliance:
-  nist-800-53: [IA-5(1)]
-  iso-27001: [A.9.4.3]
-  pci-dss: ["8.3.6", "8.3.9"]
+provides: [password-policy]
 
 vars:
   minlen: "14"

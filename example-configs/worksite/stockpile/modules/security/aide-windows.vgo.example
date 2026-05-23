@@ -3,11 +3,7 @@
 #~ operators can ship customized rules.
 name: aide-windows
 
-compliance:
-  nist-800-53: [SI-7, CM-3]
-  hipaa: [164.312(c)(1)]
-  iso-27001: [A.12.4.1, A.14.2.4]
-  pci-dss: ["11.5"]
+provides: [file-integrity]
 
 resources:
   - name: install-sysmon

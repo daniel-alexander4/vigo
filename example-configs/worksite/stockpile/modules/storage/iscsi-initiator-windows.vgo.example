@@ -3,9 +3,7 @@
 #~ in PowerShell or the iSCSI Initiator GUI).
 name: iscsi-initiator-windows
 
-compliance:
-  nist-800-53: [SC-8, SC-12]
-  iso-27001: [A.13.1.1]
+provides: [iscsi-initiator]
 
 resources:
   - name: msiscsi-service

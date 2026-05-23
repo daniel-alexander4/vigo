@@ -6,13 +6,7 @@ name: os-users
 # password complexity, /etc/login.defs defaults, MFA, automated inactivity
 # disabling, password storage cryptography) is enforced by other modules
 # or PAM and is NOT claimed here. See docs/concepts/compliance.md.
-compliance:
-  cis-ubuntu: ["5.4.1"]
-  cis-rhel: ["5.4.1"]
-  nist-800-53: [AC-3, AC-6, AC-6(1), IA-2, IA-5]
-  pci-dss: ["8.1.1", "8.1.2", "8.1.4"]
-  soc2: [CC6.1, CC6.2, CC6.3]
-  hipaa: ["164.312(a)(1)", "164.312(a)(2)(i)", "164.312(d)"]
+provides: [os-user-management]
 
 resources:
   # --- Admin user with SSH access and explicit sudo ---

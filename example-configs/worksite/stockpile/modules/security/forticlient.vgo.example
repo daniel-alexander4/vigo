@@ -1,9 +1,6 @@
 name: forticlient
 
-compliance:
-  nist-800-53: [AC-17, SC-8]
-  iso-27001: [A.13.2.1]
-  hipaa: [164.312(e)(1)]
+provides: [vpn-endpoint-client]
 vars:
   forticlient_version: "latest"
   vpn_server: ""

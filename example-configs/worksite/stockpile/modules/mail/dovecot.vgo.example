@@ -2,9 +2,7 @@
 #~ with their own auth backend + TLS cert paths.
 name: dovecot
 
-compliance:
-  nist-800-53: [AC-3, SC-8, SC-13]
-  iso-27001: [A.10.1.1, A.13.2.3]
+provides: [imap-encryption]
 
 vars:
   ssl_cert: "/etc/letsencrypt/live/mail.example.com/fullchain.pem"

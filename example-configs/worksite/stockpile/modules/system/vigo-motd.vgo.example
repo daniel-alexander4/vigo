@@ -4,9 +4,7 @@
 #~ or DNS lies. Apply to the host running vigosrv. Linux-only.
 name: vigo-motd
 
-compliance:
-  nist-800-53: [AC-8]
-  iso-27001: [A.9.4.1]
+provides: [vigo-login-banner]
 
 vars:
   motd_text: |2

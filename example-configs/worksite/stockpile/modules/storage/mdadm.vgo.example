@@ -3,9 +3,7 @@
 #~ who need declarative arrays should add resources here.
 name: mdadm
 
-compliance:
-  nist-800-53: [CP-9, CP-10]
-  iso-27001: [A.12.3.1]
+provides: [storage-raid]
 
 resources:
   - name: install-mdadm

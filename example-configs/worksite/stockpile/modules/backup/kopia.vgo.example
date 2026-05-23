@@ -3,11 +3,7 @@
 #~ Reads repository URL + password from the secret vault.
 name: kopia
 
-compliance:
-  nist-800-53: [CP-9, CP-10, SC-28]
-  hipaa: [164.308(a)(7)(ii)(A)]
-  iso-27001: [A.12.3.1, A.10.1.1]
-  pci-dss: ["9.5.1", "3.4"]
+provides: [host-backup-encrypted]
 
 vars:
   kopia_version: "0.17.0"

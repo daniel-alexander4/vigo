@@ -3,9 +3,7 @@
 #~ cron.
 name: chkrootkit
 
-compliance:
-  nist-800-53: [SI-3, SI-4]
-  iso-27001: [A.12.2.1]
+provides: [rootkit-detection]
 
 resources:
   - name: install-chkrootkit

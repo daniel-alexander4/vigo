@@ -2,10 +2,7 @@
 #~ and peer public key from the secret vault.
 name: wireguard
 
-compliance:
-  nist-800-53: [AC-17, SC-8, SC-13]
-  iso-27001: [A.13.1.1, A.13.2.1]
-  pci-dss: [4.1]
+provides: [vpn]
 
 vars:
   wg_address: "10.99.0.1/24"

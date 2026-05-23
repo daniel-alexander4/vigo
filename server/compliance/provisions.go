@@ -163,11 +163,12 @@ var ModuleProvisions = map[string]ModuleProvision{
 	"host-firewall": {
 		ID:          "host-firewall",
 		Title:       "Host-level firewall",
-		Description: "Installs and configures a host firewall (ufw, firewalld, nftables, iptables, Windows Firewall) with a default-deny stance. Narrow claim: the firewall is installed + default-deny + enabled. Modules that also assert specific allow/deny rule sets (firewall-rules, distro-specific hardening) layer extra controls via an explicit `compliance:` block.",
+		Description: "Installs and configures a host firewall (ufw, firewalld, nftables, iptables, Windows Firewall) with a default-deny stance. Covers both the firewall-installed + default-deny base case and modules that assert specific allow/deny rule sets — a host firewall with any rule set satisfies the same broad control set.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"3.4.1.1"},
+			"cis-ubuntu":  {"3.4.1.1", "3.4.1.2"},
 			"iso-27001":   {"A.13.1.1"},
 			"nist-800-53": {"SC-7", "AC-4"},
+			"pci-dss":     {"1.2.1", "1.2.5", "1.3.1", "1.4.1"},
 		},
 	},
 	"tcp-access-control": {
@@ -182,9 +183,9 @@ var ModuleProvisions = map[string]ModuleProvision{
 	"central-identity": {
 		ID:          "central-identity",
 		Title:       "Central identity / directory integration",
-		Description: "Joins the host to a central identity service (FreeIPA, AD, LDAP) so account and authorization decisions are centrally managed. Narrow claim: account management. Modules that also enforce credential lifecycle (sssd password ageing, freeipa OTP) layer extra controls via an explicit `compliance:` block.",
+		Description: "Joins the host to a central identity service (FreeIPA, AD, LDAP, sssd) so account and authorization decisions are centrally managed. Covers basic directory join + credential resolution; modules that add MFA layer it via the `multi-factor-auth` provision.",
 		Frameworks: map[string][]string{
-			"iso-27001":   {"A.9.2.1"},
+			"iso-27001":   {"A.9.2.1", "A.9.4.2"},
 			"nist-800-53": {"IA-2", "IA-5"},
 		},
 	},
@@ -200,10 +201,460 @@ var ModuleProvisions = map[string]ModuleProvision{
 	"vpn": {
 		ID:          "vpn",
 		Title:       "Encrypted remote access (VPN)",
-		Description: "Runs a VPN endpoint (WireGuard, OpenVPN, Tailscale, …) that encrypts traffic in transit between hosts or sites. Narrow claim: encrypted tunnel transport. Modules that also assert specific cipher / cryptographic-control posture (OpenVPN's data-cipher pin, WireGuard's curve choice) layer extra controls via an explicit `compliance:` block.",
+		Description: "Runs a VPN endpoint (WireGuard, Tailscale, etc.) that encrypts traffic in transit between hosts or sites with a strong cipher suite. Covers tunnel transport + cryptographic-control posture; modules that ride a PKI-based bidirectional auth (OpenVPN-style) declare `vpn-with-pki` instead.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.13.1.1", "A.13.2.1"},
+			"nist-800-53": {"AC-17", "SC-8", "SC-13"},
+			"pci-dss":     {"4.1"},
+		},
+	},
+	"vpn-with-pki": {
+		ID:          "vpn-with-pki",
+		Title:       "Encrypted remote access (PKI-authenticated)",
+		Description: "Runs a VPN endpoint that authenticates peers via X.509 (OpenVPN, IKEv2). Covers the same transport encryption as `vpn` plus mutual PKI authentication and bidirectional certificate validation.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.312(e)(1)"},
+			"iso-27001":   {"A.13.2.1"},
+			"nist-800-53": {"AC-17", "SC-8", "SC-13"},
+			"pci-dss":     {"4.2.1"},
+		},
+	},
+	"vpn-endpoint-client": {
+		ID:          "vpn-endpoint-client",
+		Title:       "VPN endpoint client",
+		Description: "Installs and configures a VPN client (FortiClient, AnyConnect, etc.) on a workstation/endpoint so it can reach the corporate VPN.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.312(e)(1)"},
+			"iso-27001":   {"A.13.2.1"},
+			"nist-800-53": {"AC-17", "SC-8"},
+		},
+	},
+	"host-backup": {
+		ID:          "host-backup",
+		Title:       "Host file backup",
+		Description: "Backs up host data on a schedule to a remote target. Narrow claim: scheduled backups exist and the backup plan is documented. Modules that also assert encryption at rest declare `host-backup-encrypted` instead.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.308(a)(7)(ii)(A)"},
+			"iso-27001":   {"A.12.3.1"},
+			"nist-800-53": {"CP-9"},
+			"soc2":        {"A1.2"},
+		},
+	},
+	"host-backup-encrypted": {
+		ID:          "host-backup-encrypted",
+		Title:       "Encrypted host file backup",
+		Description: "Backs up host data to a remote target with at-rest encryption (repository key, passphrase, or KMS). Adds cryptographic-protection + key-management claims on top of `host-backup`; modules use one or the other, not both.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.308(a)(7)(ii)(A)", "164.310(d)(2)(iv)"},
+			"iso-27001":   {"A.12.3.1", "A.10.1.1"},
+			"nist-800-53": {"CP-9", "CP-10", "SC-28"},
+			"pci-dss":     {"9.5.1", "3.4"},
+		},
+	},
+	"vigo-stockpile-backup": {
+		ID:          "vigo-stockpile-backup",
+		Title:       "Vigo stockpile snapshot",
+		Description: "Snapshots the Vigo server's stockpile (config-as-code state) on a schedule to a remote target. Vigo-specific: backs up the config-management *control plane* itself, not the managed-host data.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.308(a)(7)(ii)(A)"},
+			"iso-27001":   {"A.12.3.1", "A.14.2.4"},
+			"nist-800-53": {"CP-9", "CM-2", "CM-3"},
+			"soc2":        {"CC8.1"},
+		},
+	},
+	"vigo-litestream-replication": {
+		ID:          "vigo-litestream-replication",
+		Title:       "Vigo SQLite replication (Litestream)",
+		Description: "Streams the Vigo SQLite database via Litestream to S3-compatible storage with continuous WAL replication. Backs the Vigo server's audit-chain + state durability story.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.308(a)(7)(ii)(A)", "164.310(d)(2)(iv)"},
+			"iso-27001":   {"A.12.3.1", "A.17.1.2"},
+			"nist-800-53": {"CP-9", "CP-10", "AU-9"},
+			"pci-dss":     {"9.5.1", "9.5.1.2"},
+			"soc2":        {"A1.2", "A1.3"},
+		},
+	},
+	"log-processing": {
+		ID:          "log-processing",
+		Title:       "Log shipper with parsing/buffering",
+		Description: "Tails host logs, parses structure, buffers to disk, and forwards to a downstream collector (fluent-bit, promtail, vector). Distinct from `log-shipping` (raw syslog forwarding) by the buffering + storage-capacity guarantee.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.4.1", "A.12.4.3"},
+			"nist-800-53": {"AU-3", "AU-4", "AU-6"},
+		},
+	},
+	"log-processing-pci": {
+		ID:          "log-processing-pci",
+		Title:       "PCI-aware log shipper with parsing",
+		Description: "Log shipper that asserts PCI 10.2/10.3 alignment (audit-trail capture + retention) on top of the basic parsing claim. Fluent-bit's PCI claim is the canonical fit.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.4.1", "A.12.4.3"},
+			"nist-800-53": {"AU-3", "AU-4", "AU-6"},
+			"pci-dss":     {"10.2", "10.3"},
+		},
+	},
+	"vigo-log-forward": {
+		ID:          "vigo-log-forward",
+		Title:       "Vigo container log forwarder",
+		Description: "Forwards vigosrv container logs to a remote syslog/Loki endpoint with hash-chain durability claims layered in (Vigo's audit-trail story).",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.312(b)", "164.308(a)(1)(ii)(D)"},
+			"iso-27001":   {"A.12.4.1", "A.12.4.3"},
+			"nist-800-53": {"AU-3", "AU-4", "AU-6", "AU-12"},
+			"pci-dss":     {"10.2", "10.3", "10.5.4"},
+			"soc2":        {"CC7.2", "CC7.3"},
+		},
+	},
+	"dns-server": {
+		ID:          "dns-server",
+		Title:       "DNS resolver / authoritative server",
+		Description: "Runs a DNS server (BIND, Unbound, Knot, …) for recursive resolution or authoritative zone serving.",
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.13.1.1"},
-			"nist-800-53": {"AC-17", "SC-8"},
+			"nist-800-53": {"SC-20", "SC-21"},
+		},
+	},
+	"dhcp-server": {
+		ID:          "dhcp-server",
+		Title:       "DHCP server",
+		Description: "Runs a DHCP server that hands out leases on configured subnets.",
+		Frameworks: map[string][]string{
+			"nist-800-53": {"CM-6"},
+		},
+	},
+	"audit-rules": {
+		ID:          "audit-rules",
+		Title:       "Auditd rule sets",
+		Description: "Loads a rule set into the OS audit subsystem to capture specific syscalls + file accesses + auth events. Pairs with the `audit-trail` provision: `audit-trail` runs the daemon; `audit-rules` declares what the daemon watches.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.312(b)"},
+			"iso-27001":   {"A.12.4.1", "A.12.4.3"},
+			"nist-800-53": {"AU-2", "AU-3", "AU-12"},
+			"pci-dss":     {"10.2"},
+		},
+	},
+	"password-policy": {
+		ID:          "password-policy",
+		Title:       "Password complexity policy (pwquality)",
+		Description: "Configures password-strength rules via pwquality / PAM. Narrow claim: complexity rules. Modules that also assert aging / lockout / history layer `password-policy-comprehensive` instead.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.9.4.3"},
+			"nist-800-53": {"IA-5(1)"},
+			"pci-dss":     {"8.3.6", "8.3.9"},
+		},
+	},
+	"password-policy-comprehensive": {
+		ID:          "password-policy-comprehensive",
+		Title:       "Password policy (complexity + aging + lockout)",
+		Description: "Configures the full password-policy surface: pwquality complexity + login.defs aging + PAM faillock lockout + history.",
+		Frameworks: map[string][]string{
+			"cis-rhel":    {"5.4.1.1", "5.4.1.2", "5.4.1.3", "5.4.1.4", "5.4.1.5"},
+			"cis-ubuntu":  {"5.4.1.1", "5.4.1.2", "5.4.1.3", "5.4.1.4", "5.4.1.5"},
+			"hipaa":       {"164.308(a)(5)(ii)(D)"},
+			"iso-27001":   {"A.9.4.3"},
+			"nist-800-53": {"IA-5"},
+			"pci-dss":     {"8.3.5", "8.3.6", "8.3.7", "8.3.9"},
+		},
+	},
+	"ssh-hardening": {
+		ID:          "ssh-hardening",
+		Title:       "OpenSSH server hardening",
+		Description: "Configures the OpenSSH server with CIS-aligned settings: strong crypto, root login disabled, key-only auth, protocol pinning, idle timeout, max-auth-tries.",
+		Frameworks: map[string][]string{
+			"cis-rhel":    {"5.2.1", "5.2.4", "5.2.6", "5.2.7", "5.2.10", "5.2.13", "5.2.14", "5.2.15", "5.2.20"},
+			"cis-ubuntu":  {"5.2.1", "5.2.4", "5.2.6", "5.2.7", "5.2.10", "5.2.13", "5.2.14", "5.2.15", "5.2.20"},
+			"hipaa":       {"164.312(a)(1)", "164.312(d)", "164.312(e)(1)"},
+			"iso-27001":   {"A.9.4.2", "A.13.2.1"},
+			"nist-800-53": {"AC-17", "IA-2"},
+			"pci-dss":     {"2.2.7", "8.3.1"},
+		},
+	},
+	"selinux-enforcing": {
+		ID:          "selinux-enforcing",
+		Title:       "SELinux in enforcing mode",
+		Description: "Sets SELinux to enforcing mode with a hardened policy (targeted or strict). RHEL-family hosts only.",
+		Frameworks: map[string][]string{
+			"cis-rhel":    {"1.6.1.1", "1.6.1.2", "1.6.1.3", "1.6.1.4", "1.6.1.5"},
+			"iso-27001":   {"A.9.4.1"},
+			"nist-800-53": {"AC-3", "SC-3"},
+		},
+	},
+	"sudo-policy": {
+		ID:          "sudo-policy",
+		Title:       "Sudo least-privilege policy",
+		Description: "Configures sudo with use_pty, logfile, default require-password, and command authorization — moves OS users out of direct-root and into per-command least privilege.",
+		Frameworks: map[string][]string{
+			"cis-rhel":    {"5.3.1", "5.3.2", "5.3.3", "5.3.4"},
+			"cis-ubuntu":  {"5.3.1", "5.3.2", "5.3.3", "5.3.4"},
+			"hipaa":       {"164.308(a)(4)(ii)(B)", "164.312(a)(1)"},
+			"iso-27001":   {"A.9.2.3", "A.9.4.4"},
+			"nist-800-53": {"AC-6", "AU-2"},
+			"pci-dss":     {"7.2.1", "7.2.2", "7.2.3", "8.2.1", "10.2.1.2"},
+		},
+	},
+	"anti-malware": {
+		ID:          "anti-malware",
+		Title:       "Anti-malware scanner",
+		Description: "Runs an anti-malware scanner (ClamAV, Defender, …) with scheduled scans + signature updates + on-access scanning where supported.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.2.1"},
+			"nist-800-53": {"SI-3", "SI-7"},
+			"pci-dss":     {"5.1", "5.2", "5.3"},
+		},
+	},
+	"rootkit-detection": {
+		ID:          "rootkit-detection",
+		Title:       "Rootkit / kernel-module integrity detection",
+		Description: "Runs a rootkit detector (rkhunter, chkrootkit) on a schedule and surfaces anomalies.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.2.1"},
+			"nist-800-53": {"SI-3", "SI-4"},
+		},
+	},
+	"host-vuln-scanning": {
+		ID:          "host-vuln-scanning",
+		Title:       "Host vulnerability scanning",
+		Description: "Runs a local vulnerability scanner (Lynis, OpenSCAP, hardening checks) with scheduled scans + result archival.",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.308(a)(1)(ii)(D)"},
+			"iso-27001":   {"A.12.6.1"},
+			"nist-800-53": {"RA-5", "SI-2", "SI-7"},
+			"pci-dss":     {"6.3.1", "6.3.3", "11.5.2"},
+		},
+	},
+	"host-vuln-scanning-windows": {
+		ID:          "host-vuln-scanning-windows",
+		Title:       "Host vulnerability scanning (Windows)",
+		Description: "Runs the Windows-platform vulnerability scanner (Defender baseline scans, MBSA-style audits).",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.6.1"},
+			"nist-800-53": {"RA-5", "SI-2"},
+			"pci-dss":     {"5.2.1", "6.3.3", "11.3.1"},
+		},
+	},
+	"kerberos-auth": {
+		ID:          "kerberos-auth",
+		Title:       "Kerberos authentication client",
+		Description: "Configures a Kerberos client (krb5 / SSPI on Windows) for the host so users can present TGT-derived service tickets to network services.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.9.4.2"},
+			"nist-800-53": {"IA-2", "IA-5"},
+		},
+	},
+	"tls-cert-acme": {
+		ID:          "tls-cert-acme",
+		Title:       "ACME-based TLS certificate management",
+		Description: "Manages public TLS certificates via ACME (Let's Encrypt, ZeroSSL, BuyPass). Automatic renewal + reload of consumer services.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.10.1.1", "A.13.2.1"},
+			"nist-800-53": {"SC-8", "SC-13", "SC-17"},
+			"pci-dss":     {"4.1", "4.2"},
+		},
+	},
+	"internal-pki-ca": {
+		ID:          "internal-pki-ca",
+		Title:       "Internal PKI / certificate authority",
+		Description: "Runs an internal CA (Step-CA, Vault PKI, EJBCA) that mints certs for internal services + workloads.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.10.1.1", "A.10.1.2"},
+			"nist-800-53": {"SC-8", "SC-12", "SC-13", "SC-17"},
+			"pci-dss":     {"3.5", "4.1"},
+		},
+	},
+	"system-ca-trust": {
+		ID:          "system-ca-trust",
+		Title:       "System CA trust store management",
+		Description: "Installs / refreshes the host's system CA anchor set so the OS trust store accepts the operator's chosen roots (corporate CA, internal CA).",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.10.1.2"},
+			"nist-800-53": {"SC-12", "SC-17"},
+		},
+	},
+	"system-crypto-policy": {
+		ID:          "system-crypto-policy",
+		Title:       "System-wide cryptographic policy",
+		Description: "Pins the host's system-wide crypto policy (RHEL crypto-policies, Debian openssl.cnf hardening) to a known baseline (FUTURE / FIPS / DEFAULT).",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.10.1.1", "A.13.2.1"},
+			"nist-800-53": {"SC-12", "SC-13"},
+			"pci-dss":     {"4.1"},
+		},
+	},
+	"secrets-storage-hardening": {
+		ID:          "secrets-storage-hardening",
+		Title:       "Secrets storage permissions hardening",
+		Description: "Enforces tight filesystem permissions on secret-bearing directories + files (Vigo secrets vault, application credentials, TLS private keys).",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.312(a)(2)(iv)"},
+			"iso-27001":   {"A.9.4.1", "A.10.1.1"},
+			"nist-800-53": {"AC-3", "AC-6", "SC-12", "SC-28"},
+			"pci-dss":     {"3.4", "3.5.1", "7.1"},
+			"soc2":        {"CC6.1"},
+		},
+	},
+	"tls-public-cert": {
+		ID:          "tls-public-cert",
+		Title:       "Public-facing TLS material",
+		Description: "Provisions and rotates TLS material for public-facing services (Vigo's UI/REST endpoint, customer-facing app TLS).",
+		Frameworks: map[string][]string{
+			"hipaa":       {"164.312(e)(1)"},
+			"iso-27001":   {"A.10.1.1", "A.13.2.1"},
+			"nist-800-53": {"SC-8", "SC-13", "SC-17"},
+			"pci-dss":     {"4.1", "4.2"},
+			"soc2":        {"CC6.7"},
+		},
+	},
+	"filesystem-snapshots": {
+		ID:          "filesystem-snapshots",
+		Title:       "Filesystem snapshots",
+		Description: "Configures snapshot-capable filesystems (btrfs, ZFS) with retention so point-in-time restores are available.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.3.1"},
+			"nist-800-53": {"CP-9"},
+		},
+	},
+	"filesystem-encrypted-snapshots": {
+		ID:          "filesystem-encrypted-snapshots",
+		Title:       "Encrypted filesystem snapshots",
+		Description: "Snapshot-capable filesystem with at-rest encryption (ZFS native encryption, btrfs+LUKS).",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.3.1"},
+			"nist-800-53": {"CP-9", "SC-28"},
+		},
+	},
+	"storage-raid": {
+		ID:          "storage-raid",
+		Title:       "Block-storage RAID",
+		Description: "Configures software RAID (mdadm) for disk redundancy.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.3.1"},
+			"nist-800-53": {"CP-9", "CP-10"},
+		},
+	},
+	"iscsi-initiator": {
+		ID:          "iscsi-initiator",
+		Title:       "iSCSI initiator with CHAP",
+		Description: "Configures the host as an iSCSI initiator with CHAP authentication for remote block-storage access.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.13.1.1"},
+			"nist-800-53": {"SC-8", "SC-12"},
+		},
+	},
+	"failover-cluster": {
+		ID:          "failover-cluster",
+		Title:       "Failover cluster (VRRP)",
+		Description: "Runs a VRRP-style failover daemon (keepalived) so a virtual IP migrates between hosts on failure.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.17.2.1"},
+			"nist-800-53": {"CP-7"},
+		},
+	},
+	"container-keepalive": {
+		ID:          "container-keepalive",
+		Title:       "Container watchdog / keepalive",
+		Description: "Runs a watchdog that monitors critical containers and restarts them on failure (Vigo's docker-keepalive pattern).",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.1.3", "A.17.1.2"},
+			"nist-800-53": {"CP-2", "CP-10", "SI-13"},
+			"soc2":        {"A1.2"},
+		},
+	},
+	"login-banner": {
+		ID:          "login-banner",
+		Title:       "Login banner / MOTD",
+		Description: "Sets a login banner (issue / motd) with the operator's chosen warning text — CIS-aligned framing for legal notice.",
+		Frameworks: map[string][]string{
+			"cis-rhel":    {"1.7.1", "1.7.2", "1.7.3"},
+			"cis-ubuntu":  {"1.7.1", "1.7.2", "1.7.3"},
+			"iso-27001":   {"A.9.1.2"},
+			"nist-800-53": {"AC-8"},
+		},
+	},
+	"vigo-login-banner": {
+		ID:          "vigo-login-banner",
+		Title:       "Vigo operator MOTD",
+		Description: "Sets a Vigo-managed MOTD that surfaces fleet-membership status + last-converged timestamp at SSH login.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.9.4.1"},
+			"nist-800-53": {"AC-8"},
+		},
+	},
+	"os-user-management": {
+		ID:          "os-user-management",
+		Title:       "OS user account management",
+		Description: "Creates and manages OS user accounts with declarative shell, groups, SSH keys, and home-directory permissions.",
+		Frameworks: map[string][]string{
+			"cis-rhel":    {"5.4.1"},
+			"cis-ubuntu":  {"5.4.1"},
+			"hipaa":       {"164.312(a)(1)", "164.312(a)(2)(i)", "164.312(d)"},
+			"iso-27001":   {"A.9.2.1", "A.9.4.2"},
+			"nist-800-53": {"AC-3", "AC-6", "AC-6(1)", "IA-2", "IA-5"},
+			"pci-dss":     {"8.1.1", "8.1.2", "8.1.4"},
+			"soc2":        {"CC6.1", "CC6.2", "CC6.3"},
+		},
+	},
+	"journal-retention": {
+		ID:          "journal-retention",
+		Title:       "systemd-journal retention cap",
+		Description: "Caps the systemd-journal storage size so the host doesn't exhaust disk via journal growth. Complements `log-rotation` for the journald-only case.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.4.1"},
+			"nist-800-53": {"AU-4"},
+		},
+	},
+	"network-device-baseline": {
+		ID:          "network-device-baseline",
+		Title:       "Network device baseline (switch/router)",
+		Description: "Configures baseline hardening on a managed network device: banner, NTP, syslog destination, snmp community policy. Used by the Vigo network-device executors (Cisco, Juniper).",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.4.1"},
+			"nist-800-53": {"AC-8", "AU-8", "CM-6"},
+		},
+	},
+	"network-segmentation": {
+		ID:          "network-segmentation",
+		Title:       "Network segmentation (VLANs / subnets)",
+		Description: "Configures VLAN tags / port assignments on a switch so traffic between trust zones is segmented at L2.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.13.1.3"},
+			"nist-800-53": {"AC-4", "SC-7"},
+			"pci-dss":     {"1.2.1", "1.4.1"},
+		},
+	},
+	"imap-encryption": {
+		ID:          "imap-encryption",
+		Title:       "IMAP/POP3 with TLS",
+		Description: "Runs an IMAP/POP3 server (Dovecot) with STARTTLS / implicit TLS so mailbox access is encrypted in transit.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.10.1.1", "A.13.2.3"},
+			"nist-800-53": {"AC-3", "SC-8", "SC-13"},
+		},
+	},
+	"dkim-signing": {
+		ID:          "dkim-signing",
+		Title:       "DKIM outbound signing",
+		Description: "Signs outbound mail with DKIM so receivers can verify message origin + integrity.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.13.2.3"},
+			"nist-800-53": {"SC-8", "SC-23"},
+		},
+	},
+	"dmarc-enforcement": {
+		ID:          "dmarc-enforcement",
+		Title:       "DMARC policy enforcement",
+		Description: "Enforces DMARC on inbound mail (reject / quarantine) so spoofed senders are filtered.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.13.2.3"},
+			"nist-800-53": {"SC-8", "SI-3"},
+		},
+	},
+	"service-uptime-probe": {
+		ID:          "service-uptime-probe",
+		Title:       "Service uptime probe (host-resident)",
+		Description: "Runs host-resident service-uptime probes (NRPE, monit) that report local service state to a central monitoring system.",
+		Frameworks: map[string][]string{
+			"iso-27001":   {"A.12.4.1"},
+			"nist-800-53": {"SI-4"},
 		},
 	},
 	"vulnerability-scanning": {

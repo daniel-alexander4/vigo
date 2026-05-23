@@ -1,9 +1,7 @@
 # router-base — baseline configuration for Juniper Junos routers.
 name: router-base
 
-compliance:
-  nist-800-53: [AC-8, AU-8, CM-6]
-  iso-27001: [A.12.4.1]
+provides: [network-device-baseline]
 resources:
   - name: login-banner
     type: network_banner
