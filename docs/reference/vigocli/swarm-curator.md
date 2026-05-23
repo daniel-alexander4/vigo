@@ -62,16 +62,17 @@ One row per artifact known to the fleet catalog.
 
 ```
 $ vigocli swarm curator list
-NAME             VERSIONS  TAGS  PLATFORMS               TARGET   STATUS    ARTIFACT_ID
-nginx-config     2         1     linux/amd64             *        ok        1d8a5e23fffa
-redis-bin        3         2     linux/amd64,linux/arm64 us-west* ok        8e23bc5491cf
-vigo-agent       12        3     darwin/arm64,linux/…    *        ok        e3b0c44298fc
-old-thing        1         0     linux/amd64             *        blocked   af31c2e84d12
+NAME             KIND         VERSIONS  TAGS  PLATFORMS               TARGET   STATUS    ARTIFACT_ID
+nginx-image      oci-archive  2         1     linux/amd64             *        ok        1d8a5e23fffa
+redis-bin        generic      3         2     linux/amd64,linux/arm64 us-west* ok        8e23bc5491cf
+vigo-agent       generic      12        3     darwin/arm64,linux/…    *        ok        e3b0c44298fc
+old-thing        generic      1         0     linux/amd64             *        blocked   af31c2e84d12
 ```
 
 | Column | Meaning |
 |---|---|
 | `NAME` | Artifact name from the catalog entry. |
+| `KIND` | The artifact's consume facade — `generic` / `oci-archive` / `apt-repo` / `dnf-repo` / `apk-repo`. |
 | `VERSIONS` | Number of distinct version strings published. |
 | `TAGS` | Number of distinct tag bindings. |
 | `PLATFORMS` | Sorted, deduped union of `<os>/<arch>` across all versions. Truncated for display; use `show` for the full breakdown. |
@@ -85,8 +86,8 @@ If a block was issued against an artifact whose publisher has since `rm`'d the e
 
 ```
 $ vigocli swarm curator list
-NAME       VERSIONS  TAGS  PLATFORMS    TARGET  STATUS  ARTIFACT_ID
-nginx-cfg  1         1     linux/amd64  *       ok      1d8a5e23fffa
+NAME       KIND     VERSIONS  TAGS  PLATFORMS    TARGET  STATUS  ARTIFACT_ID
+nginx-cfg  generic  1         1     linux/amd64  *       ok      1d8a5e23fffa
 
 Note: 1 block(s) without a current catalog entry:
   af31c2e84d12  blocked 2026-05-12 by dan — supply-chain incident #ABC
@@ -100,6 +101,7 @@ Detailed view of one artifact — full signed catalog entry.
 $ vigocli swarm curator show vigo-agent
 Name:           vigo-agent
 Artifact ID:    e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+Kind:           generic
 Founder puddle: ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
 Target:         *
 Recipients:     *

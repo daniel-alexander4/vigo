@@ -25,7 +25,7 @@ type CuratorPageData struct {
 	Health   HealthBanner
 	Catalog  *curatormesh.Catalog
 	Blocked  []db.CuratorBlockedArtifact
-	Artifact *curatorArtifactView   // non-nil for the detail page
+	Artifact *curatorArtifactView // non-nil for the detail page
 	Error    string
 }
 
@@ -36,6 +36,7 @@ type CuratorPageData struct {
 type curatorArtifactView struct {
 	ArtifactID          string
 	Name                string
+	Kind                string
 	FounderPuddlePubkey string
 	SigningPuddlePubkey string
 	Target              string
@@ -46,13 +47,13 @@ type curatorArtifactView struct {
 	// what `*` resolves to on this fleet, not what it could resolve to on
 	// any fleet. Empty when no live envoys match (publish-only glob, or
 	// curator.enabled = []).
-	TargetEnvoys        []string
-	Recipients          []string
-	IssuedAt            int64
-	Versions            []curatorVersionRow
-	DanglingTags        []curatorTagBinding
-	Rekeyed             bool
-	Blocked             bool
+	TargetEnvoys []string
+	Recipients   []string
+	IssuedAt     int64
+	Versions     []curatorVersionRow
+	DanglingTags []curatorTagBinding
+	Rekeyed      bool
+	Blocked      bool
 }
 
 type curatorVersionRow struct {
@@ -289,6 +290,7 @@ func buildCuratorArtifactView(artifactID string, e *curatormesh.CatalogEntry, bl
 	return &curatorArtifactView{
 		ArtifactID:          artifactID,
 		Name:                e.Body.Name,
+		Kind:                e.Body.Kind,
 		FounderPuddlePubkey: e.Body.FounderPuddlePubkey,
 		SigningPuddlePubkey: e.Body.SigningPuddlePubkey,
 		Target:              e.Body.Target,

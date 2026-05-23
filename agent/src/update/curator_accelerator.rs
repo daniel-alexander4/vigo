@@ -165,7 +165,9 @@ pub fn fetch_via_curator_for(
 mod tests {
     use super::*;
     use crate::swarm::cache::BlobCache;
-    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntry, CatalogEntryBody, Platform};
+    use crate::swarm::curator::catalog::{
+        ArtifactVersion, CatalogEntry, CatalogEntryBody, Platform, KIND_GENERIC,
+    };
     use crate::swarm::curator::catalog_cache;
     use crate::swarm::puddle::name::{NameClaim, NameClaimBody};
     use anyhow::Result;
@@ -214,6 +216,7 @@ mod tests {
             founder,
             CatalogEntryBody {
                 schema_version: 1,
+                kind: KIND_GENERIC.into(),
                 name: "vigo-agent".into(),
                 founder_puddle_pubkey: hex::encode(founder.verifying_key().to_bytes()),
                 signing_puddle_pubkey: hex::encode(founder.verifying_key().to_bytes()),

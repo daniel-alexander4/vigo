@@ -31,6 +31,7 @@ func entryFor(founderByte byte, name string) curatorCatalogEntry {
 		Body: curatorCatalogEntryBody{
 			SchemaVersion:       1,
 			Name:                name,
+			Kind:                "generic",
 			FounderPuddlePubkey: pk,
 			SigningPuddlePubkey: pk,
 			Versions: map[string]curatorArtifactVersion{

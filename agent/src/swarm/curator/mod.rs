@@ -192,7 +192,9 @@ fn promote_pending_entry(pending: &Path, entry_path: &Path, dir_name: &str) -> a
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntry, CatalogEntryBody, Platform};
+    use crate::swarm::curator::catalog::{
+        ArtifactVersion, CatalogEntry, CatalogEntryBody, Platform, KIND_GENERIC,
+    };
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use std::collections::BTreeMap;
@@ -218,6 +220,7 @@ mod tests {
             CatalogEntryBody {
                 schema_version: 1,
                 name: name.into(),
+                kind: KIND_GENERIC.into(),
                 founder_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),
                 signing_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),
                 versions,

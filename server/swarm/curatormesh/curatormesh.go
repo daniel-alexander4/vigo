@@ -70,6 +70,7 @@ type CatalogEntry struct {
 type CatalogEntryBody struct {
 	SchemaVersion       uint32                     `json:"schema_version"`
 	Name                string                     `json:"name"`
+	Kind                string                     `json:"kind"`
 	FounderPuddlePubkey string                     `json:"founder_puddle_pubkey"`
 	SigningPuddlePubkey string                     `json:"signing_puddle_pubkey"`
 	Versions            map[string]ArtifactVersion `json:"versions"`

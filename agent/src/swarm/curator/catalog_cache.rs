@@ -184,7 +184,7 @@ pub fn write_cache_map_in(dir: &Path, map: &CacheMap) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntryBody, Platform};
+    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntryBody, Platform, KIND_GENERIC};
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use tempfile::TempDir;
@@ -207,6 +207,7 @@ mod tests {
             CatalogEntryBody {
                 schema_version: 1,
                 name: name.into(),
+                kind: KIND_GENERIC.into(),
                 founder_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),
                 signing_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),
                 versions,

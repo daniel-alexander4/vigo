@@ -50,6 +50,7 @@ type curatorArtifactVersion struct {
 type curatorCatalogEntryBody struct {
 	SchemaVersion       uint32                            `json:"schema_version"`
 	Name                string                            `json:"name"`
+	Kind                string                            `json:"kind"`
 	FounderPuddlePubkey string                            `json:"founder_puddle_pubkey"`
 	SigningPuddlePubkey string                            `json:"signing_puddle_pubkey"`
 	Versions            map[string]curatorArtifactVersion `json:"versions"`
@@ -287,8 +288,8 @@ func renderCuratorList(list *curatorListResponse, out io.Writer) error {
 	})
 
 	w := newAlignedTable(out)
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-		bold("NAME"), bold("VERSIONS"), bold("TAGS"), bold("PLATFORMS"),
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		bold("NAME"), bold("KIND"), bold("VERSIONS"), bold("TAGS"), bold("PLATFORMS"),
 		bold("TARGET"), bold("STATUS"), bold("ARTIFACT_ID"))
 	for _, e := range sorted {
 		aid, err := curatorArtifactID(e)
@@ -300,8 +301,9 @@ func renderCuratorList(list *curatorListResponse, out io.Writer) error {
 		if blocked[strings.ToLower(aid)] {
 			status = red("blocked")
 		}
-		fmt.Fprintf(w, "%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
 			e.Body.Name,
+			e.Body.Kind,
 			len(e.Body.Versions),
 			len(e.Body.Tags),
 			platforms,
@@ -375,6 +377,7 @@ func renderCuratorShow(resp *curatorInspectResponse, out io.Writer) error {
 	e := resp.Entry
 	fmt.Fprintf(out, "Name:           %s\n", bold(e.Body.Name))
 	fmt.Fprintf(out, "Artifact ID:    %s\n", resp.ArtifactID)
+	fmt.Fprintf(out, "Kind:           %s\n", e.Body.Kind)
 	fmt.Fprintf(out, "Founder puddle: ed25519:%s\n", e.Body.FounderPuddlePubkey)
 	if !strings.EqualFold(e.Body.SigningPuddlePubkey, e.Body.FounderPuddlePubkey) {
 		fmt.Fprintf(out, "Signing puddle: ed25519:%s  %s\n",

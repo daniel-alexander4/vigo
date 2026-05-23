@@ -39,6 +39,7 @@ func entry(founderHex, name string, issuedAt int64, sig string) CatalogEntry {
 		Body: CatalogEntryBody{
 			SchemaVersion:       1,
 			Name:                name,
+			Kind:                "generic",
 			FounderPuddlePubkey: founderHex,
 			SigningPuddlePubkey: founderHex,
 			Versions: map[string]ArtifactVersion{

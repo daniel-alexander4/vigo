@@ -39,7 +39,7 @@ use hyper::{Method, Request, Response, StatusCode};
 use serde::Serialize;
 
 use super::oci_archive::{ArchiveFormat, OciArchive};
-use crate::swarm::curator::catalog::Platform;
+use crate::swarm::curator::catalog::{CatalogEntry, Platform, KIND_OCI_ARCHIVE};
 use crate::swarm::curator::catalog_cache;
 use crate::swarm::curator::executor_resolver::{current_platform, resolve_repo_to_artifact_id};
 use crate::swarm::curator::resolver::{Resolution, Resolver};
@@ -150,6 +150,34 @@ fn v2_root(head_only: bool) -> Response<Full<Bytes>> {
         .unwrap()
 }
 
+/// Load the verified catalog entry for `repo` and require it to be an
+/// `oci-archive` — the only `kind` the Docker Registry v2 shim serves. A
+/// wrong-kind artifact (e.g. a curator-hosted apt repo) gets a clean error
+/// naming the mismatch instead of a malformed-archive 500 deeper in. Returns
+/// the entry so the blob/tags handlers can reuse it without a second load.
+fn require_oci_entry(
+    repo: &str,
+    aid_hex: &str,
+    state: &ShimState,
+) -> Result<CatalogEntry, Response<Full<Bytes>>> {
+    let entries = catalog_cache::load_catalog_in(state.resolver.artifacts_dir());
+    let entry = match catalog_cache::lookup_verified(&entries, aid_hex) {
+        Some(e) => e.clone(),
+        None => return Err(name_unknown(repo, "no verifiable cached catalog entry")),
+    };
+    if entry.body.kind != KIND_OCI_ARCHIVE {
+        return Err(name_unknown(
+            repo,
+            &format!(
+                "artifact is kind `{}`, not `oci-archive` — the Docker registry shim \
+                 serves only OCI image artifacts",
+                entry.body.kind
+            ),
+        ));
+    }
+    Ok(entry)
+}
+
 async fn handle_manifest(
     repo: &str,
     reference: &str,
@@ -161,6 +189,9 @@ async fn handle_manifest(
         Ok(v) => v,
         Err(e) => return name_unknown(repo, &format!("{e:#}")),
     };
+    if let Err(resp) = require_oci_entry(repo, &aid_hex, state) {
+        return resp;
+    }
     let (os, arch) = current_platform();
 
     let resolution = match state.resolver.resolve(&aid_hex, reference, &os, &arch) {
@@ -243,9 +274,9 @@ async fn handle_blob(
         Ok(v) => v,
         Err(e) => return name_unknown(repo, &format!("{e:#}")),
     };
-    let entries = catalog_cache::load_catalog_in(state.resolver.artifacts_dir());
-    let Some(entry) = catalog_cache::lookup_verified(&entries, &aid_hex) else {
-        return name_unknown(repo, "no verifiable cached catalog entry");
+    let entry = match require_oci_entry(repo, &aid_hex, state) {
+        Ok(e) => e,
+        Err(resp) => return resp,
     };
     let (os, arch) = current_platform();
 
@@ -253,7 +284,7 @@ async fn handle_blob(
     // requested blob. Typical artifacts have 1–3 versions; per-blob cost is
     // bounded and the resolver short-circuits on already-materialized paths.
     for version in entry.body.versions.keys() {
-        let Some(_p) = catalog_cache::resolve_platform(entry, version, &os, &arch) else {
+        let Some(_p) = catalog_cache::resolve_platform(&entry, version, &os, &arch) else {
             continue;
         };
         let resolution = match state.resolver.resolve(&aid_hex, version, &os, &arch) {
@@ -297,11 +328,10 @@ async fn handle_tags(repo: &str, state: &ShimState, head_only: bool) -> Response
         Ok(v) => v,
         Err(e) => return name_unknown(repo, &format!("{e:#}")),
     };
-    let entries = catalog_cache::load_catalog_in(state.resolver.artifacts_dir());
-    let Some(entry) = catalog_cache::lookup_verified(&entries, &aid_hex) else {
-        return name_unknown(repo, "no verifiable cached catalog entry");
+    let entry = match require_oci_entry(repo, &aid_hex, state) {
+        Ok(e) => e,
+        Err(resp) => return resp,
     };
-    let _ = state; // tags don't need the resolver — purely catalog-driven
 
     #[derive(Serialize)]
     struct TagsBody<'a> {
@@ -466,7 +496,9 @@ fn _resolution_phantom(_r: &Resolution) {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntry, CatalogEntryBody, Platform};
+    use crate::swarm::curator::catalog::{
+        ArtifactVersion, CatalogEntry, CatalogEntryBody, Platform, KIND_GENERIC, KIND_OCI_ARCHIVE,
+    };
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use std::collections::BTreeMap;
@@ -604,7 +636,14 @@ mod tests {
         (tar_buf, manifest_digest, manifest_body)
     }
 
-    fn build_entry(k: &SigningKey, name: &str, blob: &[u8], os: &str, arch: &str) -> (CatalogEntry, String) {
+    fn build_entry(
+        k: &SigningKey,
+        name: &str,
+        blob: &[u8],
+        os: &str,
+        arch: &str,
+        kind: &str,
+    ) -> (CatalogEntry, String) {
         use sha2::{Digest, Sha256};
         let sha = hex::encode(Sha256::digest(blob));
         let mut versions = BTreeMap::new();
@@ -626,6 +665,7 @@ mod tests {
             CatalogEntryBody {
                 schema_version: 1,
                 name: name.into(),
+                kind: kind.into(),
                 founder_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),
                 signing_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),
                 versions,
@@ -653,12 +693,16 @@ mod tests {
     }
 
     fn bed_with_artifact(name: &str, os: &str, arch: &str) -> Bed {
+        bed_with_kind(name, os, arch, KIND_OCI_ARCHIVE)
+    }
+
+    fn bed_with_kind(name: &str, os: &str, arch: &str, kind: &str) -> Bed {
         let arts = TempDir::new().unwrap();
         let blobs = TempDir::new().unwrap();
         let k = SigningKey::generate(&mut OsRng);
         let pubkey_hex = hex::encode(k.verifying_key().to_bytes());
         let (blob, manifest_digest, manifest_body) = build_oci_archive_bytes("latest");
-        let (entry, sha) = build_entry(&k, name, &blob, os, arch);
+        let (entry, sha) = build_entry(&k, name, &blob, os, arch, kind);
 
         catalog_cache::write_catalog_in(
             arts.path(),
@@ -692,6 +736,28 @@ mod tests {
     async fn body_of(r: Response<Full<Bytes>>) -> Vec<u8> {
         use http_body_util::BodyExt;
         r.into_body().collect().await.unwrap().to_bytes().to_vec()
+    }
+
+    #[tokio::test]
+    async fn manifest_rejects_non_oci_archive_kind() {
+        // A `generic`-kind artifact (its blob here happens to be an OCI archive
+        // — the gate is catalog-driven, not content-sniffing) must be refused
+        // by the Docker shim with a clear kind-mismatch error.
+        let (os, arch) = current_platform();
+        let bed = bed_with_kind("some-tarball", &os, &arch, KIND_GENERIC);
+        let repo = format!("{}/some-tarball", bed.pubkey_hex);
+        let resp = route(
+            &Method::GET,
+            &format!("/v2/{repo}/manifests/latest"),
+            &bed.state,
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        let body = String::from_utf8(body_of(resp).await).unwrap();
+        assert!(
+            body.contains("oci-archive"),
+            "error should name the kind mismatch: {body}"
+        );
     }
 
     #[tokio::test]

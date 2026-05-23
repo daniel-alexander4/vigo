@@ -4,7 +4,7 @@ title: "ADR-024: curator — P2P artifact registry"
 
 # ADR-024: curator — P2P artifact registry
 
-**Status:** Implemented — slices 0–5 (catalog + helper + server REST + agent CLI + UI/docs) shipped 0.51.0 (2026-05-14); slice 6 (`artifact:` executor param) shipped 0.51.5 (2026-05-13); slice 7 (Docker Registry v2 shim) shipped 0.51.6 (2026-05-13); the `anchor` layer (curator's puddle-rooted-ownership cross-subsystem primitive, shared with gitback) extracted into `agent/src/swarm/anchor/` at 0.51.7 (2026-05-14); slice 8 (agent self-update accelerator — `vigo-agent` artifact convention, REST stays authoritative) shipped 0.51.8 (2026-05-13).
+**Status:** Implemented — slices 0–5 (catalog + helper + server REST + agent CLI + UI/docs) shipped 0.51.0 (2026-05-14); slice 6 (`artifact:` executor param) shipped 0.51.5 (2026-05-13); slice 7 (Docker Registry v2 shim) shipped 0.51.6 (2026-05-13); the `anchor` layer (curator's puddle-rooted-ownership cross-subsystem primitive, shared with gitback) extracted into `agent/src/swarm/anchor/` at 0.51.7 (2026-05-14); slice 8 (agent self-update accelerator — `vigo-agent` artifact convention, REST stays authoritative) shipped 0.51.8 (2026-05-13); slice 9 (artifact `kind` discriminator — see the Addendum) shipped 0.66.24 (2026-05-22).
 **Date:** 2026-05-11
 
 ## Context
@@ -28,7 +28,7 @@ An artifact is keyed `artifact_id = sha256(founder_puddle_pubkey ‖ name)` — 
 The **catalog entry** is one signed envelope per artifact (re-signed, with a higher `issued_at`, on every mutation; last-write-wins; domain prefix distinct from every other Vigo signed shape):
 
 ```
-{ version, artifact_id, name, founder_puddle_pubkey,
+{ version, artifact_id, name, kind, founder_puddle_pubkey,   # kind ∈ generic|oci-archive|apt-repo|dnf-repo|apk-repo (Addendum)
   versions: { <semver-or-string>: { platforms: [ {os, arch, blob_sha, size}, … ] } },
   tags:     { <tag>: <version> },          # mutable
   recipients: ["*"] | [ <puddle_pubkey>, … ],   # "*" = fleet-readable (default)
@@ -83,3 +83,16 @@ Open questions to settle during implementation:
 - **Slice 7** — Docker Registry v2 shim on `127.0.0.1:5000`.
 - **Slice 8** — agent-self-update accelerator (P2P-pull `vigo-agent:<v>` if cached, REST fallback).
 - **Later** — per-artifact byte-confidentiality (publish encrypted blobs, lockbox-style); cross-publisher moderation beyond `block` (a server-side `force-rm` tombstone); the operator-authority (server-published, filecast-style) flavor for fleet content if a multi-tenant scenario needs it.
+
+## Addendum (2026-05-22): artifact `kind` discriminator — slice 9 (0.66.24)
+
+**Problem.** The catalog entry carried no field describing *how* an artifact is meant to be consumed. With only the Docker Registry v2 shim (slice 7) that was invisible; once the package-repo and S3 facades land (the two curator-facade plans), an operator listing the catalog would see N artifacts of identical shape and could not tell which facade each works through — and pointing the wrong consumer at one fails with a cryptic parse error (a malformed-OCI-layout 500), not a "wrong facade" message.
+
+**Decision.** A `kind` field on `CatalogEntryBody` — a publisher-declared discriminator, settled via `/discuss` + `/scrutinize` (2026-05-22):
+
+- **Strict enum, five v1 values:** `generic` (raw bytes, no facade assumption — the default; today's `artifact:` executor pulls and the `vigo-agent` self-update binaries), `oci-archive` (a `docker pull`-able OCI image), `apt-repo` / `dnf-repo` / `apk-repo` (built, signed package-repo trees). The set grows additively — a new value is a `schema_version` bump. **No dead vocabulary:** mint a value only when a facade or consumer dispatches on it (so `vm-image`, `helm-repo`, language registries, etc. wait for their consumers).
+- **Artifact-level**, one field alongside `name` — not per-version/per-platform. The facade an artifact is consumed through is intrinsic to *what the artifact is*; two shapes are two artifacts. Set at first publish, **immutable thereafter** — a re-push with a conflicting `--kind` is refused (a pre-`v2` entry's serde-defaulted `kind` is not "set", so a re-push of one may still assign the real value).
+- **Signed.** `kind` lives inside `CatalogEntryBody`, covered by `canonical_bytes` and the founder signature — the same trust tier as `name`/`versions`/`founder_puddle_pubkey`. It tells a facade how to interpret bytes, so it must not be relay-tamperable (the server relays catalog entries verbatim and never verifies them). `canonical_bytes` appends `kind` at position 12; the signing domain bumped `curator-catalog-v1\0` → `v2` and `SCHEMA_VERSION` went 1 → 2. A pre-`v2` entry therefore fails signature verification and is dropped — never silently re-interpreted under the new shape.
+- **Enforcement — per-facade positive allow-list, asymmetric.** The Docker Registry v2 shim serves only `oci-archive`; a wrong-kind artifact gets a clean `NAME_UNKNOWN` error naming the mismatch instead of a malformed-archive failure deeper in. The package-repo facade (when built) will additionally match the request path shape to the specific repo kind. The S3 facade (when built) never gates on `kind` — it serves raw blob bytes for any kind. The `artifact:` executor and the self-update resolver are unaffected (they pull raw blobs, already correct for `generic`). An **unknown** `kind` (a future value an older agent doesn't recognize) degrades gracefully — carried and displayed verbatim, claimed by no facade, never an error.
+
+Set at publish via `vigo swarm curator push --kind <kind>` (default `generic`); surfaced in `vigo swarm curator list`/`inspect`, `vigocli swarm curator list`/`show`, and the `/swarm/curator` UI.

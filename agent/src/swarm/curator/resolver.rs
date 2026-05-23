@@ -385,7 +385,7 @@ fn is_hex64(s: &str) -> bool {
 mod tests {
     use super::*;
     use crate::swarm::cache::BlobCache;
-    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntryBody, Platform};
+    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntryBody, Platform, KIND_GENERIC};
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use std::collections::BTreeMap;
@@ -405,6 +405,7 @@ mod tests {
             k,
             CatalogEntryBody {
                 schema_version: 1,
+                kind: KIND_GENERIC.into(),
                 name: name.into(),
                 founder_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),
                 signing_puddle_pubkey: hex::encode(k.verifying_key().to_bytes()),

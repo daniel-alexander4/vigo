@@ -43,8 +43,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
 
 use super::catalog::{
-    canonical_bytes, validate_artifact_name, ArtifactVersion, CatalogEntry, CatalogEntryBody,
-    Platform, ID_LEN, SIG_LEN,
+    canonical_bytes, default_kind, validate_artifact_name, validate_kind, ArtifactVersion,
+    CatalogEntry, CatalogEntryBody, Platform, ID_LEN, SCHEMA_VERSION, SIG_LEN,
 };
 use super::catalog_cache;
 use super::helper::socket_path as helper_socket_path;
@@ -129,13 +129,16 @@ READ-ONLY VERBS:
 
 MUTATING VERBS (require `curator: true` on your usercrate + an unlocked puddle):
     push <name> --file <path> --version <v> --os <os> --arch <arch>
-        [--tag <tag>] [--target <glob>] [--recipients <list>]
+        [--tag <tag>] [--target <glob>] [--recipients <list>] [--kind <kind>]
                                     Publish a (name, version, os, arch) build.
-                                    Adds the platform to the artifact's catalog
-                                    entry, signs it, streams the bytes through
-                                    the helper daemon, and the daemon stages
-                                    the blob + records a manifest seed with
-                                    the artifact's target.
+                                    --kind (generic|oci-archive|apt-repo|dnf-repo
+                                    |apk-repo; default generic) declares the
+                                    consume facade — set at first publish,
+                                    immutable thereafter. Adds the platform to
+                                    the artifact's catalog entry, signs it,
+                                    streams the bytes through the helper daemon,
+                                    and the daemon stages the blob + records a
+                                    manifest seed with the artifact's target.
     tag <ref> <tag>=<version>       Move/set a tag; re-signs the entry.
     untag <ref> <tag>               Remove a tag; re-signs the entry.
     set-recipients <ref> <list>     Replace `recipients`. Pass `*` or a comma-
@@ -227,7 +230,7 @@ fn cmd_list(_args: &[String]) -> Result<()> {
         println!("No curator artifacts on this envoy (local or cached).");
         return Ok(());
     }
-    println!("{:<24} {:<10} {:<10} {:<22} {:<8} ARTIFACT_ID", "NAME", "VERSIONS", "TAGS", "PLATFORMS", "ORIGIN");
+    println!("{:<24} {:<13} {:<9} {:<6} {:<20} {:<8} ARTIFACT_ID", "NAME", "KIND", "VERSIONS", "TAGS", "PLATFORMS", "ORIGIN");
     // Index local ones so we can tag the ORIGIN column.
     let local_set: std::collections::HashSet<String> = local
         .entries
@@ -239,11 +242,12 @@ fn cmd_list(_args: &[String]) -> Result<()> {
         let platforms = platform_summary(e);
         let origin = if local_set.contains(&aid) { "local" } else { "cached" };
         println!(
-            "{:<24} {:<10} {:<10} {:<22} {:<8} {}",
+            "{:<24} {:<13} {:<9} {:<6} {:<20} {:<8} {}",
             truncate(&e.body.name, 24),
+            truncate(&e.body.kind, 13),
             e.body.versions.len(),
             e.body.tags.len(),
-            truncate(&platforms, 22),
+            truncate(&platforms, 20),
             origin,
             short_sha(&aid),
         );
@@ -263,6 +267,7 @@ fn cmd_inspect(args: &[String]) -> Result<()> {
     let aid = entry.artifact_id_hex()?;
     println!("Name:           {}", entry.body.name);
     println!("Artifact ID:    {}", aid);
+    println!("Kind:           {}", entry.body.kind);
     println!("Founder puddle: ed25519:{}", entry.body.founder_puddle_pubkey);
     if !entry
         .body
@@ -990,7 +995,7 @@ fn read_line_from(s: &mut UnixStream) -> Result<String> {
 
 fn cmd_push(args: &[String]) -> Result<()> {
     // push <name> --file <path> --version <v> --os <os> --arch <arch>
-    //             [--tag <tag>] [--target <glob>] [--recipients <list>]
+    //             [--tag <tag>] [--target <glob>] [--recipients <list>] [--kind <kind>]
     let mut name_arg: Option<String> = None;
     let mut file_arg: Option<String> = None;
     let mut version_arg: Option<String> = None;
@@ -999,6 +1004,7 @@ fn cmd_push(args: &[String]) -> Result<()> {
     let mut tag_arg: Option<String> = None;
     let mut target_arg: Option<String> = None;
     let mut recipients_arg: Option<String> = None;
+    let mut kind_arg: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -1009,6 +1015,7 @@ fn cmd_push(args: &[String]) -> Result<()> {
             "--tag" => { i += 1; tag_arg = Some(args.get(i).context("--tag requires a value")?.clone()); }
             "--target" => { i += 1; target_arg = Some(args.get(i).context("--target requires a value")?.clone()); }
             "--recipients" => { i += 1; recipients_arg = Some(args.get(i).context("--recipients requires a value")?.clone()); }
+            "--kind" => { i += 1; kind_arg = Some(args.get(i).context("--kind requires a value")?.clone()); }
             other if !other.starts_with('-') && name_arg.is_none() => name_arg = Some(other.to_string()),
             other => bail!("unknown push flag: {other}"),
         }
@@ -1016,9 +1023,12 @@ fn cmd_push(args: &[String]) -> Result<()> {
     }
     let name = name_arg.context(
         "usage: vigo swarm curator push <name> --file <path> --version <v> --os <os> --arch <arch> \
-         [--tag <tag>] [--target <glob>] [--recipients <list>]",
+         [--tag <tag>] [--target <glob>] [--recipients <list>] [--kind <kind>]",
     )?;
     validate_artifact_name(&name)?;
+    if let Some(k) = &kind_arg {
+        validate_kind(k)?;
+    }
     let file_path = PathBuf::from(file_arg.context("--file is required")?);
     let version = version_arg.context("--version is required")?;
     let os = os_arg.context("--os is required")?;
@@ -1038,6 +1048,27 @@ fn cmd_push(args: &[String]) -> Result<()> {
     // recipients overrides. A fresh push (no prior entry) needs a target or
     // defaults to "*" (fleet-replicate) and recipients to ["*"] (fleet-read).
     let existing = load_local_entry(&caller.home, &artifact_id_hex)?;
+
+    // kind is immutable once an artifact is published under schema v2+: a
+    // different shape is a different artifact. A pre-v2 entry's `kind` is a
+    // serde-default ("generic"), not an operator choice, so a re-push of one
+    // may still assign the real kind.
+    let kind = match &existing {
+        Some(e) if e.body.schema_version >= SCHEMA_VERSION => {
+            if let Some(req) = &kind_arg {
+                if req != &e.body.kind {
+                    bail!(
+                        "artifact {:?} was published as kind {:?}; kind is immutable — \
+                         a different shape needs a different artifact name",
+                        name, e.body.kind
+                    );
+                }
+            }
+            e.body.kind.clone()
+        }
+        _ => kind_arg.clone().unwrap_or_else(default_kind),
+    };
+
     let mut body = match existing {
         Some(e) => {
             if e.body.name != name {
@@ -1053,8 +1084,9 @@ fn cmd_push(args: &[String]) -> Result<()> {
             e.body
         }
         None => CatalogEntryBody {
-            schema_version: 1,
+            schema_version: SCHEMA_VERSION,
             name: name.clone(),
+            kind: kind.clone(),
             founder_puddle_pubkey: hex::encode(founder_pub),
             signing_puddle_pubkey: hex::encode(founder_pub),
             versions: Default::default(),
@@ -1065,6 +1097,10 @@ fn cmd_push(args: &[String]) -> Result<()> {
             delegations: vec![],
         },
     };
+    // Re-stamp the current schema + kind: a re-push of a pre-v2 entry inherits
+    // a stale schema_version and a defaulted kind from disk.
+    body.schema_version = SCHEMA_VERSION;
+    body.kind = kind;
 
     // Slot the platform in. Replaces any same-{os,arch} entry under this
     // version, so re-pushing a fixed build for the same triplet works.
@@ -1673,8 +1709,9 @@ mod tests {
         let mut tags = BTreeMap::new();
         tags.insert("latest".to_string(), "2.0.0".to_string());
         let body = CatalogEntryBody {
-            schema_version: 1,
+            schema_version: SCHEMA_VERSION,
             name: name.into(),
+            kind: default_kind(),
             founder_puddle_pubkey: pub_hex(k),
             signing_puddle_pubkey: pub_hex(k),
             versions,

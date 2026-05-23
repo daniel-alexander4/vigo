@@ -17,6 +17,7 @@
         <table class="table">
             <tbody>
                 <tr><td style="font-weight:600;width:200px;">Artifact ID</td><td><code>{{.Artifact.ArtifactID}}</code></td></tr>
+                <tr><td style="font-weight:600;">Kind</td><td><code>{{.Artifact.Kind}}</code> <span class="muted">— which consume facade this artifact targets</span></td></tr>
                 <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Artifact.FounderPuddlePubkey}}</code></td></tr>
                 {{if .Artifact.Rekeyed}}
                 <tr>
@@ -169,6 +170,7 @@
             <thead>
                 <tr>
                     <th>Name</th>
+                    <th>Kind</th>
                     <th>Versions</th>
                     <th>Tags</th>
                     <th>Platforms</th>
@@ -184,6 +186,7 @@
                 {{$isBlocked := curatorIsBlocked $aid $blocked}}
                 <tr onclick="location.href='/swarm/curator/{{$aid}}'" style="cursor:pointer;">
                     <td><strong>{{.Body.Name}}</strong></td>
+                    <td><code>{{.Body.Kind}}</code></td>
                     <td>{{len .Body.Versions}}</td>
                     <td>{{len .Body.Tags}}</td>
                     <td>{{curatorPlatformSummary .}}</td>

@@ -64,12 +64,12 @@ One row per artifact this envoy knows about (local entries merged with the cache
 
 ```
 $ vigo swarm curator list
-NAME                     VERSIONS   TAGS       PLATFORMS              ORIGIN   ARTIFACT_ID
-nginx-config             1          1          linux/amd64            cached   1d8a5e23fffa
-vigo-agent               12         3          darwin/arm64,linux/…   local    e3b0c44298fc
+NAME                     KIND          VERSIONS  TAGS   PLATFORMS            ORIGIN   ARTIFACT_ID
+nginx-image              oci-archive   1         1      linux/amd64          cached   1d8a5e23fffa
+vigo-agent               generic       12        3      darwin/arm64,linux/… local    e3b0c44298fc
 ```
 
-The `ORIGIN` column distinguishes artifacts published by this envoy (`local`) from artifacts learned via the cached fleet catalog (`cached`).
+The `KIND` column is the artifact's consume facade (`generic` / `oci-archive` / `apt-repo` / `dnf-repo` / `apk-repo`); the `ORIGIN` column distinguishes artifacts published by this envoy (`local`) from artifacts learned via the cached fleet catalog (`cached`).
 
 ### `vigo swarm curator inspect <ref>`
 
@@ -79,6 +79,7 @@ Full signed entry for one artifact: versions, tags, recipients, target, founder 
 $ vigo swarm curator inspect vigo-agent
 Name:           vigo-agent
 Artifact ID:    e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+Kind:           generic
 Founder puddle: ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
 Target:         *
 Recipients:     *
@@ -133,9 +134,12 @@ vigo swarm curator push <name>
     [--tag <tag>]
     [--target <glob>]
     [--recipients <* | pubkey-list>]
+    [--kind <kind>]
 ```
 
 Publish a `{name, version, os, arch}` build. Founds the artifact if no local entry exists for `sha256(your_puddle_pubkey ‖ name)`; otherwise slots the platform into the existing entry (replacing any same-`{os,arch}` record under the named version, so re-pushing a fixed build for the same triplet works). Re-signs the entry under the current puddle key and streams the bytes through the helper daemon's `PUSH` verb. The daemon stages the blob into the swarm cache and records a manifest seed with the artifact's `target` — the existing filecast `Manager` distributes it to matching swarm-enabled envoys.
+
+`--kind` declares which consume facade the artifact targets — `generic` (raw bytes, the default), `oci-archive` (a `docker pull`-able OCI image, served by the Docker Registry v2 shim), or `apt-repo` / `dnf-repo` / `apk-repo` (a built, signed package-repo tree). It is set at first publish and **immutable thereafter** — a re-push with a conflicting `--kind` is refused, because a different shape is a different artifact. Facades enforce it: the Docker shim serves only `oci-archive`, so pointing `docker pull` at a wrong-kind artifact returns a clear mismatch error instead of a malformed-archive failure.
 
 ```
 $ vigo swarm curator push vigo-agent \
@@ -159,6 +163,7 @@ Flags:
 | `--tag <tag>` | Optional: also set this tag to point at the version being pushed. |
 | `--target <glob>` | Optional: set the artifact's `target` field on first publish (or override on subsequent push). Defaults to `*` (fleet-wide DR replica). |
 | `--recipients <list>` | Optional: replace the artifact's `recipients`. Pass `*` or a comma-separated list of hex puddle pubkeys (with optional `ed25519:` prefix). Defaults to `["*"]`. Each pubkey is validated as 64 hex characters. |
+| `--kind <kind>` | Optional: the artifact's consume facade — `generic` (default) / `oci-archive` / `apt-repo` / `dnf-repo` / `apk-repo`. Set at first publish, **immutable** on re-push. |
 
 Per-blob size cap is `swarm.curator.max_bytes` (default 2 GiB); the daemon refuses over-cap pushes before reading the body. Disk space on the receiving side is also checked.
 

@@ -34,11 +34,19 @@ pub const ID_LEN: usize = 32;
 pub const SIG_LEN: usize = 64;
 
 /// Domain-separator prefix for the canonical bytes a catalog entry signs.
-/// Bumped if the entry shape changes. A receiver rejects a signature over a
-/// different domain even with matching key material — keeps a catalog-entry
-/// signature from being confused with a gitback token, a name claim, or a
-/// delegation envelope.
-pub const CATALOG_DOMAIN: &[u8] = b"curator-catalog-v1\0";
+/// Bumped if the entry shape changes (`v2` added the `kind` field). A receiver
+/// rejects a signature over a different domain even with matching key material
+/// — keeps a catalog-entry signature from being confused with a gitback token,
+/// a name claim, or a delegation envelope, and makes a pre-`kind` entry fail
+/// verification rather than be silently re-interpreted under the new shape.
+pub const CATALOG_DOMAIN: &[u8] = b"curator-catalog-v2\0";
+
+/// `schema_version` stamped on every freshly-signed [`CatalogEntryBody`]. `2`
+/// added the `kind` discriminator. Encoded into [`canonical_bytes`] and signed;
+/// never branched on at load — an entry whose shape predates the running code
+/// simply fails signature verification (its canonical bytes differ) and is
+/// dropped, so a stale-shape entry is never mis-read.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Max artifact-name length. Matches the gitback project-handle / puddle-name
 /// limit so `<puddle-name>/<name>:<tag>` references stay bounded.
@@ -68,6 +76,51 @@ pub fn validate_artifact_name(name: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Artifact `kind` — declares which consume facade an artifact targets, so the
+/// catalog can be told apart at a glance and a facade can refuse a wrong-shape
+/// artifact with a clear error instead of a malformed-archive parse failure.
+/// Set once at first publish, immutable thereafter; signed in [`canonical_bytes`].
+pub const KIND_GENERIC: &str = "generic";
+pub const KIND_OCI_ARCHIVE: &str = "oci-archive";
+pub const KIND_APT_REPO: &str = "apt-repo";
+pub const KIND_DNF_REPO: &str = "dnf-repo";
+pub const KIND_APK_REPO: &str = "apk-repo";
+
+/// The known `kind` vocabulary. `validate_kind` (publish-time) accepts exactly
+/// these; the set grows additively — a new value is a `schema_version` bump.
+/// Mint a value only when a facade or consumer dispatches on it (no dead
+/// vocabulary). Read paths never validate against this list: an older agent
+/// carries an unrecognized future `kind` verbatim, and facades positively
+/// allow-list the kinds they serve, so an unknown kind is simply served by none.
+pub const KNOWN_KINDS: &[&str] = &[
+    KIND_GENERIC,
+    KIND_OCI_ARCHIVE,
+    KIND_APT_REPO,
+    KIND_DNF_REPO,
+    KIND_APK_REPO,
+];
+
+/// The `kind` of an artifact published without `--kind`, and the serde default
+/// for a pre-`v2` entry that predates the field.
+pub fn default_kind() -> String {
+    KIND_GENERIC.to_string()
+}
+
+/// Validate a `--kind` value at publish time. Rejects anything outside
+/// [`KNOWN_KINDS`] so a typo can't mint dead vocabulary. Read paths never call
+/// this — they carry an unknown kind verbatim.
+pub fn validate_kind(kind: &str) -> Result<()> {
+    if KNOWN_KINDS.contains(&kind) {
+        Ok(())
+    } else {
+        bail!(
+            "unknown artifact kind {:?}; valid kinds: {}",
+            kind,
+            KNOWN_KINDS.join(", ")
+        );
+    }
 }
 
 /// `artifact_id = sha256(founder_puddle_pubkey ‖ name)` — frozen across all
@@ -112,10 +165,18 @@ pub struct ArtifactVersion {
 /// `canonical_bytes` is deterministic regardless of insertion order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CatalogEntryBody {
-    /// Schema version of this catalog-entry shape. Starts at 1.
+    /// Schema version of this catalog-entry shape — see [`SCHEMA_VERSION`].
     pub schema_version: u32,
     /// The artifact name (`validate_artifact_name`-checked).
     pub name: String,
+    /// Which consume facade this artifact targets — one of [`KNOWN_KINDS`], set
+    /// at first publish and immutable thereafter (a different shape is a
+    /// different artifact). `generic` (the default) is raw bytes with no facade
+    /// assumption. Signed; an older agent carries an unrecognized future value
+    /// verbatim. `#[serde(default)]` lets a pre-`v2` entry parse — it then fails
+    /// signature verification (canonical bytes differ) and is dropped.
+    #[serde(default = "default_kind")]
+    pub kind: String,
     /// Hex-encoded GENESIS founder puddle pubkey — `artifact_id` is anchored to
     /// this, frozen forever.
     pub founder_puddle_pubkey: String,
@@ -188,6 +249,7 @@ fn put_count(out: &mut Vec<u8>, n: usize, what: &str) -> Result<()> {
 /// 10. `tags` (u16 BE count; BTreeMap order; each: tag (u16 len ‖ UTF-8) ‖ version-string (u16 len ‖ UTF-8))
 /// 11. `delegations` (u16 BE count; each: project_id (32 B) ‖ old_founder_pubkey (32 B)
 ///     ‖ new_founder_pubkey (32 B) ‖ delegated_at (8 B BE) ‖ signature (64 B))
+/// 12. `kind` (u16 BE len ‖ UTF-8)
 pub fn canonical_bytes(body: &CatalogEntryBody) -> Result<Vec<u8>> {
     let founder = parse_hex32(&body.founder_puddle_pubkey, "founder_puddle_pubkey")?;
     let signer = parse_hex32(&body.signing_puddle_pubkey, "signing_puddle_pubkey")?;
@@ -233,6 +295,8 @@ pub fn canonical_bytes(body: &CatalogEntryBody) -> Result<Vec<u8>> {
         out.extend_from_slice(&env.delegated_at.to_be_bytes());
         out.extend_from_slice(&raw.signature);
     }
+
+    put_str(&mut out, &body.kind, "kind")?;
 
     Ok(out)
 }
@@ -392,8 +456,9 @@ mod tests {
         let mut tags = BTreeMap::new();
         tags.insert("latest".to_string(), "1.0.0".to_string());
         CatalogEntryBody {
-            schema_version: 1,
+            schema_version: SCHEMA_VERSION,
             name: name.to_string(),
+            kind: KIND_GENERIC.to_string(),
             founder_puddle_pubkey: pub_hex(founder),
             signing_puddle_pubkey: pub_hex(signer),
             versions,
@@ -462,6 +527,48 @@ mod tests {
         let mut t = base.clone();
         t.body.recipients = vec!["deadbeef".repeat(8)];
         assert!(t.verify(DELEGATION_MAX_LEN).is_err());
+
+        let mut t = base.clone();
+        t.body.kind = KIND_OCI_ARCHIVE.to_string();
+        assert!(t.verify(DELEGATION_MAX_LEN).is_err());
+    }
+
+    #[test]
+    fn validate_kind_accepts_known_rejects_unknown() {
+        for k in KNOWN_KINDS {
+            validate_kind(k).unwrap();
+        }
+        assert!(validate_kind("bogus-kind").is_err());
+        assert!(validate_kind("").is_err());
+    }
+
+    #[test]
+    fn unknown_kind_string_round_trips_through_serde() {
+        // A future agent may publish a `kind` this binary doesn't know. It must
+        // deserialize and survive verbatim — read paths never validate the set.
+        let k = fresh_key();
+        let mut body = body_for(&k, &k, "x");
+        body.kind = "helm-repo".to_string(); // not in KNOWN_KINDS (yet)
+        let entry = CatalogEntry::issue(&k, body).unwrap();
+        let json = serde_json::to_string(&entry).unwrap();
+        let back: CatalogEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.body.kind, "helm-repo");
+        back.verify(DELEGATION_MAX_LEN).unwrap();
+    }
+
+    #[test]
+    fn pre_v2_entry_without_kind_field_defaults_to_generic() {
+        // A pre-`v2` JSON payload has no `kind`; serde's default must land it on
+        // `generic` so the catalog still parses (the entry then fails
+        // verification — its signature predates the field — which is the
+        // intended safe-by-construction drop).
+        let k = fresh_key();
+        let entry = CatalogEntry::issue(&k, body_for(&k, &k, "x")).unwrap();
+        let mut v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&entry).unwrap()).unwrap();
+        v["body"].as_object_mut().unwrap().remove("kind");
+        let back: CatalogEntry = serde_json::from_value(v).unwrap();
+        assert_eq!(back.body.kind, KIND_GENERIC);
     }
 
     #[test]

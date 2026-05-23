@@ -118,7 +118,7 @@ fn unix_seconds_now() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntryBody, Platform};
+    use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntryBody, Platform, KIND_GENERIC};
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use tempfile::tempdir;
@@ -145,6 +145,7 @@ mod tests {
         let body = CatalogEntryBody {
             schema_version: 1,
             name: name.into(),
+            kind: KIND_GENERIC.into(),
             founder_puddle_pubkey: pub_hex(k),
             signing_puddle_pubkey: pub_hex(k),
             versions,

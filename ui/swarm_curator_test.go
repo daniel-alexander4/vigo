@@ -57,6 +57,7 @@ func sampleEntry(seed byte, name string, issuedMillis int64) curatormesh.Catalog
 		Body: curatormesh.CatalogEntryBody{
 			SchemaVersion:       1,
 			Name:                name,
+			Kind:                "generic",
 			FounderPuddlePubkey: pubkeyHex(seed),
 			SigningPuddlePubkey: pubkeyHex(seed),
 			Versions: map[string]curatormesh.ArtifactVersion{
