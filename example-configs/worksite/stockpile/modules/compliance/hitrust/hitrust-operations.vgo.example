@@ -1,10 +1,5 @@
 name: hitrust-operations
-compliance:
-  hipaa: [164.312(b)]
-  hitrust: [09.q, 09.s, 09.v, 10.h]
-  iso-27001: [A.12.4.1, A.12.4.3]
-  nist-800-53: [AU-2, AU-6, AU-9, SI-7]
-  soc2: [CC7.2, CC7.3]
+bundle: [hitrust-operations]
 resources:
   # 09.aa: Audit logging
   - name: auditd-package

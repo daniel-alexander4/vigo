@@ -17,19 +17,7 @@
 # stockpile/customerA/usercrates/dan.vgo — then include it from the
 # scoped carrier (customerA/common.vgo or envoys.vgo under customerA/).
 
-compliance:
-  cis-ubuntu:
-    - CIS-5.4.1    # Ensure password creation requirements are configured
-  cis-rhel:
-    - CIS-5.4.1    # Ensure password creation requirements are configured
-  nist-800-53:
-    - AC-3         # Access Enforcement
-  pci-dss:
-    - "8.1.1"      # Identify and authenticate users
-  soc2:
-    - CC6.1        # Logical access controls
-  hipaa:
-    - 164.312      # Access controls
+provides: [os-user-management]
 
 resources:
   - name: dan

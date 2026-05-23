@@ -1,10 +1,5 @@
 name: pci-file-integrity
-compliance:
-  hipaa: [164.312(c)(1)]
-  nerc-cip: [CIP-010-3-R2]
-  nist-800-53: [SI-7]
-  pci-dss: [11.5.1, 11.5.1.1]
-  soc2: [CC8.1]
+bundle: [pci-file-integrity]
 resources:
   - name: aide-package
     type: package

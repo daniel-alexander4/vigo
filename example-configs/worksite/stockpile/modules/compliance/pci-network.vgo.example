@@ -8,10 +8,7 @@
 
 name: pci-network
 
-compliance:
-  pci-dss: [1.2.1, 1.2.5, 1.3.1, 1.3.2, 1.4.1, 1.4.2]
-  nist-800-53: [SC-7, AC-4]
-  iso-27001: [A.13.1.1]
+bundle: [pci-network]
 
 vars:
   allowed_tcp_ports: "22 443"

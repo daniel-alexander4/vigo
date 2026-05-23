@@ -1,10 +1,5 @@
 name: hitrust-endpoint-protection
-compliance:
-  cyber-essentials: [CE-MW-1, CE-MW-2, CE-MW-3]
-  hipaa: [164.308(a)(5)(ii)(D)]
-  hitrust: [09.i, 09.k, 01.n]
-  iso-27001: [A.12.2.1]
-  nist-800-53: [SI-3, SI-4]
+bundle: [hitrust-endpoint-protection]
 resources:
   # 09.j: Controls against malicious code
   - name: clamav

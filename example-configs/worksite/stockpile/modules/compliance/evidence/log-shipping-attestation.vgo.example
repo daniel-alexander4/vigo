@@ -4,12 +4,7 @@
 #~ Writes a signed receipt the connwaer agent can collect.
 name: log-shipping-attestation
 
-compliance:
-  nist-800-53: [AU-9, AU-9(2), AU-11]
-  hipaa: [164.312(b), 164.308(a)(1)(ii)(D)]
-  pci-dss: ["10.5.3", "10.5.4"]
-  iso-27001: [A.12.4.2, A.12.4.3]
-  soc2: [CC7.2]
+bundle: [log-shipping-attestation]
 
 vars:
   evidence_dir: "/var/lib/vigo/evidence"

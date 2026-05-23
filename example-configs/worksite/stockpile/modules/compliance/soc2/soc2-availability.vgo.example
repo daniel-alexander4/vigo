@@ -1,9 +1,5 @@
 name: soc2-availability
-compliance:
-  hipaa: []
-  iso-27001: [A.17.1.1]
-  nist-800-53: [CP-9, CP-10]
-  soc2: [A1.1, A1.2]
+bundle: [soc2-availability]
 resources:
   # A1.1: Capacity management — monitoring tools
   - name: sysstat-package

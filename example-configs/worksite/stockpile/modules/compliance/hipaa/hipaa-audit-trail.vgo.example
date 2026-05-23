@@ -1,10 +1,5 @@
 name: hipaa-audit-trail
-compliance:
-  hipaa: [164.312(b), 164.312(c)(1)]
-  hitrust: [09.q, 09.s]
-  nist-800-53: [AU-2, AU-3, AU-6, AU-9]
-  pci-dss: [10.2.1, 10.2.1.1, 10.2.1.2, 10.2.1.3, 10.3.2]
-  soc2: [CC7.2, CC7.3]
+bundle: [hipaa-audit-trail]
 depends_on: [pci-logging]
 
 resources:

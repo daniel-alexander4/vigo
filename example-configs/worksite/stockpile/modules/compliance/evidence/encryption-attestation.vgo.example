@@ -3,12 +3,7 @@
 #~ encrypted, etc.). Output JSON for auditor collection.
 name: encryption-attestation
 
-compliance:
-  nist-800-53: [SC-28, SC-28(1)]
-  hipaa: [164.312(a)(2)(iv), 164.312(e)(2)(ii)]
-  pci-dss: ["3.4", "3.4.1"]
-  iso-27001: [A.10.1.1, A.10.1.2]
-  soc2: [CC6.1]
+bundle: [encryption-attestation]
 
 vars:
   evidence_dir: "/var/lib/vigo/evidence"

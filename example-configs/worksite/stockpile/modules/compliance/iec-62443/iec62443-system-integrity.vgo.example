@@ -1,10 +1,5 @@
 name: iec62443-system-integrity
-compliance:
-  iec-62443: [SR 3.1, SR 3.2, SR 3.3, SR 3.4, SR 3.5, SR 3.8, SR 3.9]
-  nist-800-53: [SI-2, SI-3, SI-7, CM-3, CM-6]
-  iso-27001: [A.12.2.1, A.12.5.1, A.12.6.1]
-  nerc-cip: [CIP-007-6-R2, CIP-007-6-R3, CIP-010-3-R1]
-  pci-dss: [5.2.1, 6.3.3, 11.5.1]
+bundle: [iec62443-system-integrity]
 vars:
   aide_db_path: "/var/lib/aide/aide.db"
   aide_schedule: "0 3 * * *"

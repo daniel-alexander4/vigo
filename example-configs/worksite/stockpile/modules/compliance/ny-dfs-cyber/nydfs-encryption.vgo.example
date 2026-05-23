@@ -2,8 +2,7 @@ name: nydfs-encryption
 # NY DFS Cybersecurity (23 NYCRR 500) — Encryption
 # Covers: NYCRR-500.15 (encryption of nonpublic information)
 
-compliance:
-  ny-dfs-cyber: [NYCRR-500.15]
+bundle: [nydfs-encryption]
 
 resources:
   - name: ssh-strong-ciphers

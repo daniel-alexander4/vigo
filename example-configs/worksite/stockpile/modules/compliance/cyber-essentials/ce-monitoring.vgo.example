@@ -1,10 +1,5 @@
 name: ce-monitoring
-compliance:
-  cyber-essentials: [CE-ML-3]
-  nist-800-53: [IR-4, CA-7]
-  iso-27001: [A.16.1.7]
-  soc2: [CC7.5]
-  hitrust: [11.a]
+bundle: [ce-monitoring]
 
 resources:
   - name: ossec-hids

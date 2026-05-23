@@ -4,8 +4,7 @@ name: fda-access-controls
 # Enforces unique user accounts, password policy, session management,
 # and authority checks for systems handling electronic records.
 
-compliance:
-  fda-21cfr11: [11.10-d, 11.10-g, 11.300-a, 11.300-b]
+bundle: [fda-access-controls]
 
 resources:
   - name: ssh-key-auth

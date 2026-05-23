@@ -1,10 +1,5 @@
 name: pci-access-control
-compliance:
-  pci-dss: [7.2.1, 7.2.2, 7.2.5, 8.2.1, 8.2.2, 8.3.9, 8.6.1]
-  nist-800-53: [AC-3, AC-6, IA-5]
-  hitrust: [01.c, 01.d, 01.v]
-  iso-27001: [A.9.2.3, A.9.3.1, A.9.4.3]
-  soc2: [CC6.2, CC6.3]
+bundle: [pci-access-control]
 
 resources:
   # 7.2.1/7.2.2: Restrict access by role

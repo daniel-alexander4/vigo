@@ -4,8 +4,7 @@ name: ccss-key-storage
 # Enforces filesystem permissions, HSM service availability,
 # and network segmentation for key storage infrastructure.
 
-compliance:
-  ccss: [CCSS-2.1, CCSS-2.2, CCSS-2.3, CCSS-2.4]
+bundle: [ccss-key-storage]
 
 resources:
   - name: key-storage-permissions

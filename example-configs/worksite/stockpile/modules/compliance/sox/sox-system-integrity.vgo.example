@@ -4,8 +4,7 @@ name: sox-system-integrity
 # File integrity monitoring detects unauthorized changes.
 # Continuous convergence remediates drift automatically.
 
-compliance:
-  sox: [ITGC-SI-1, ITGC-SI-2, ITGC-SI-3]
+bundle: [sox-system-integrity]
 
 resources:
   - name: install-aide

@@ -1,10 +1,5 @@
 name: gdpr-privacy-controls
-compliance:
-  gdpr: [Art.25(2), Art.30(1), Art.32(1)(c), Art.32(1)(d), Art.35(1)]
-  nist-800-53: [CP-9, CP-10]
-  iso-27001: [A.12.3.1, A.18.2.2, A.18.2.3]
-  soc2: [A1.2, PI1.1, PI1.2]
-  hitrust: [10.k, 10.l, 10.m]
+bundle: [gdpr-privacy-controls]
 
 resources:
   # Art 32(1)(c): Ability to restore availability — backup tools

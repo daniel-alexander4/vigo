@@ -6,11 +6,7 @@ name: gaming-rng-monitoring
 # testing labs (GLI, BMM, eCOGRA). Vigo cannot certify randomness.
 # Player protection mechanisms are application-level responsibilities.
 
-compliance:
-  # Vigo's framework catalog tracks gaming as one rollup; ID prefixes
-  # preserve the jurisdiction of origin (NGC-TS-* = Nevada, MGA-RGR-* =
-  # Malta, UKGC-RTS-* = United Kingdom).
-  gaming: [NGC-TS-4.1, NGC-TS-4.2, MGA-RGR-6.1, UKGC-RTS-6A]
+bundle: [gaming-rng-monitoring]
 
 resources:
   - name: rng-service-check

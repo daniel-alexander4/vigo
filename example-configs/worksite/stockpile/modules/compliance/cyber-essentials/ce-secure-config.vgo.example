@@ -1,10 +1,5 @@
 name: ce-secure-config
-compliance:
-  cis-ubuntu: [1.1.1, 5.2.x]
-  cis-rhel: [1.1.1, 5.2.x]
-  cyber-essentials: [CE-SC-1, CE-SC-2, CE-SC-3, CE-SC-4, CE-SC-5, CE-SC-6]
-  nist-800-53: [CM-6, CM-7]
-  pci-dss: [2.2.1, 2.2.4, 2.2.5]
+bundle: [ce-secure-config]
 resources:
   # Remove unnecessary packages
   - name: remove-telnet

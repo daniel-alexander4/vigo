@@ -1,9 +1,5 @@
 name: soc2-governance
-compliance:
-  soc2: [CC1.1, CC1.2, CC1.3, CC2.1, CC2.2, CC3.1, CC3.2, CC3.3, CC4.1, CC4.2, CC5.1, CC5.2, CC5.3, CC6.6, CC6.7, CC6.8, CC7.5, CC9.1, PI1.1, PI1.2]
-  nist-800-53: [CM-8, CA-7, IR-4]
-  iso-27001: [A.5.1, A.6.1, A.8.1, A.8.2, A.14.1.2, A.16.1.7]
-  hitrust: [06.c, 06.g, 06.h, 06.i, 11.a, 11.e, 12.c, 16.a]
+bundle: [soc2-governance]
 
 resources:
   # CC1/CC2/CC3: Governance, communication, risk — enforced via system monitoring

@@ -1,10 +1,5 @@
 name: nerc-access-security
-compliance:
-  nerc-cip: [CIP-003-8-R1, CIP-004-6-R4, CIP-004-6-R5, CIP-007-6-R2, CIP-007-6-R3, CIP-007-6-R5, CIP-011-2-R1]
-  nist-800-53: [AC-2, AC-3, SI-2, SI-3]
-  pci-dss: [7.2.1, 8.2.1, 5.2.1]
-  hitrust: [01.b, 01.c]
-  iso-27001: [A.9.2.1, A.9.4.1]
+bundle: [nerc-access-security]
 
 resources:
   # CIP-003 R1: Security policies enforced via config

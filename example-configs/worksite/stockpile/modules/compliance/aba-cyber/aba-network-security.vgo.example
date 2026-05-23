@@ -3,8 +3,7 @@ name: aba-network-security
 # Covers: ABA-477R-3 (secure channels), ABA-477R-7 (firewall),
 #          ABA-1.6-2 (encryption in transit)
 
-compliance:
-  aba-cyber: [ABA-477R-3, ABA-477R-7, ABA-1.6-2]
+bundle: [aba-network-security]
 
 resources:
   - name: ufw-enabled

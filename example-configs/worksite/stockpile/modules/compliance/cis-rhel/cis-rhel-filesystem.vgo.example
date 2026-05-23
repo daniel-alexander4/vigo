@@ -3,10 +3,7 @@ name: cis-rhel-filesystem
 # Level 1 + Level 2 controls
 # Applies to: RHEL 8/9, CentOS Stream 8/9, Rocky Linux 8/9, AlmaLinux 8/9
 
-compliance:
-  cis-rhel: ["1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8", "1.1.2", "1.1.3", "1.1.4", "1.1.5", "1.4.1", "1.4.2", "1.5.1", "1.5.2", "1.5.3"]
-  nist-800-53: [CM-6, CM-7, SC-7]
-  pci-dss: ["2.2.1", "2.2.5"]
+bundle: [cis-rhel-filesystem]
 
 resources:
   # --- 1.1.1: Disable unused filesystems ---

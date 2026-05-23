@@ -4,8 +4,7 @@ name: finra-infrastructure
 # Ensures critical infrastructure services are running, monitored,
 # and documented via trait collection.
 
-compliance:
-  finra: [Rule-4370-1, Rule-4370-2, Rule-4370-3]
+bundle: [finra-infrastructure]
 
 resources:
   - name: ntp-running

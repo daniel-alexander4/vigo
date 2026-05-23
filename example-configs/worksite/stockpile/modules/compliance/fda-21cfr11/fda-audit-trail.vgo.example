@@ -6,8 +6,7 @@ name: fda-audit-trail
 # audit trail requirement. Application-level record audit trails
 # are the responsibility of the application (LIMS, ERP, MES).
 
-compliance:
-  fda-21cfr11: [11.10-e, 11.10-k-2, 11.10-e-1]
+bundle: [fda-audit-trail]
 
 resources:
   - name: auditd-service

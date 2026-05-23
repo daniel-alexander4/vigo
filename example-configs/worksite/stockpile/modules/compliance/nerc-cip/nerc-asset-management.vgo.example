@@ -1,10 +1,5 @@
 name: nerc-asset-management
-compliance:
-  nerc-cip: [CIP-002-5.1, CIP-003-8-R2, CIP-011-2-R2]
-  nist-800-53: [CM-8]
-  hitrust: [07.a]
-  iso-27001: [A.8.1, A.8.2]
-  soc2: [CC6.8]
+bundle: [nerc-asset-management]
 
 resources:
   # CIP-002: BES Cyber System identification — inventory tools

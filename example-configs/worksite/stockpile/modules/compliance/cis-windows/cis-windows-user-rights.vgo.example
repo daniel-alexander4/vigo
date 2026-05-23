@@ -2,8 +2,7 @@ name: cis-windows-user-rights
 # CIS Windows Server 2022 Level 1 — User Rights Assignment
 # Status: ENFORCED by Vigo
 
-compliance:
-  cis-windows: ["2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.2.7", "2.2.8", "2.2.9", "2.2.10", "2.2.11", "2.2.12"]
+bundle: [cis-windows-user-rights]
 
 resources:
   # Deny access from the network (includes Guest)

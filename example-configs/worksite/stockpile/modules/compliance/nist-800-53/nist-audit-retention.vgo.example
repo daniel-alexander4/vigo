@@ -1,12 +1,5 @@
 name: nist-audit-retention
-compliance:
-  nist-800-53: [AU-8, AU-10, AU-11]
-  pci-dss: [10.4.1]
-  iso-27001: [A.12.4.4]
-  hitrust: [09.l]
-  soc2: [CC7.2]
-  cis-ubuntu: [4.1.x, 4.1.immutable, 4.2.x]
-  cis-rhel: [4.1.x, 4.1.immutable, 4.2.x]
+bundle: [nist-audit-retention]
 
 resources:
   # AU-8: Time source

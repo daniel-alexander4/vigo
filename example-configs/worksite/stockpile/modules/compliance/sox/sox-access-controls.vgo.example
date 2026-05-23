@@ -4,8 +4,7 @@ name: sox-access-controls
 # Enforces SSH hardening, sudo restrictions, password policy,
 # and disables shared/default accounts.
 
-compliance:
-  sox: [ITGC-AC-1, ITGC-AC-2, ITGC-AC-3, ITGC-AC-4, ITGC-AC-5]
+bundle: [sox-access-controls]
 
 resources:
   - name: ssh-no-root-login

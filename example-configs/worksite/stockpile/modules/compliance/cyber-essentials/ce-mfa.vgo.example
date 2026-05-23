@@ -1,10 +1,5 @@
 name: ce-mfa
-compliance:
-  cyber-essentials: [CE-AC-4]
-  hitrust: [01.i]
-  nist-800-53: [IA-2, IA-8]
-  pci-dss: [8.3.1, 8.3.6]
-  iso-27001: [A.9.4.2]
+bundle: [ce-mfa]
 
 resources:
   - name: libpam-google-authenticator

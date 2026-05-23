@@ -2,12 +2,7 @@
 #~ volume + other fixed disks. JSON evidence in the evidence dir.
 name: encryption-attestation-windows
 
-compliance:
-  nist-800-53: [SC-28, SC-28(1)]
-  hipaa: [164.312(a)(2)(iv), 164.312(e)(2)(ii)]
-  pci-dss: ["3.4", "3.4.1"]
-  iso-27001: [A.10.1.1, A.10.1.2]
-  soc2: [CC6.1]
+bundle: [encryption-attestation-windows]
 
 vars:
   evidence_dir: "C:\\ProgramData\\Vigo\\evidence"

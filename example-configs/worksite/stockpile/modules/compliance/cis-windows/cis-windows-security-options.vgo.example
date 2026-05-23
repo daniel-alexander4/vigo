@@ -2,8 +2,7 @@ name: cis-windows-security-options
 # CIS Windows Server 2022 Level 1 — Security Options & Windows Defender
 # Status: ENFORCED by Vigo
 
-compliance:
-  cis-windows: [2.3.1.1, 2.3.7.1, 2.3.10.1, 2.3.10.2, 18.4.1, 18.9.47.1]
+bundle: [cis-windows-security-options]
 
 resources:
   - name: disable-guest-account

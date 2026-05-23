@@ -6,8 +6,7 @@ name: fda-system-integrity
 #   electronic signature compliance (Part 11 e-signatures are an
 #   application responsibility, not infrastructure)
 
-compliance:
-  fda-21cfr11: [11.10-a, 11.10-c, 11.10-h]
+bundle: [fda-system-integrity]
 
 resources:
   - name: aide-installed

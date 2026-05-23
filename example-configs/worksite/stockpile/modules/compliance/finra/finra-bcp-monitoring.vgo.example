@@ -4,8 +4,7 @@ name: finra-bcp-monitoring
 # Vigo verifies that backup configurations exist and DR services
 # are running. Actual recovery capability requires external testing.
 
-compliance:
-  finra: [BCP-1, BCP-2, BCP-3]
+bundle: [finra-bcp-monitoring]
 
 resources:
   - name: backup-config-exists

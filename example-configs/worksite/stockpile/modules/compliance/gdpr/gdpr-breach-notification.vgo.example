@@ -1,10 +1,5 @@
 name: gdpr-breach-notification
-compliance:
-  gdpr: [Art.33(1), Art.33(3)]
-  hipaa: [164.308(a)(6)]
-  iso-27001: [A.16.1.2, A.16.1.5]
-  nist-800-53: [IR-5, IR-6]
-  soc2: [CC7.3, CC7.4]
+bundle: [gdpr-breach-notification]
 resources:
   # Art 33(5): Documentation of breaches — ensure logging infrastructure
   - name: auditd-package

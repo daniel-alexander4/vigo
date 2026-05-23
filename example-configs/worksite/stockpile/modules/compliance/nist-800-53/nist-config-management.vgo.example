@@ -1,12 +1,5 @@
 name: nist-config-management
-compliance:
-  cis-ubuntu: [1.1.1, 1.5.1]
-  cis-rhel: [1.1.1, 1.5.1]
-  cyber-essentials: [CE-SC-1, CE-SC-5]
-  iso-27001: [A.12.5.1, A.12.6.1]
-  nist-800-53: [CM-2, CM-3, CM-5, CM-6, CM-7, CM-11]
-  pci-dss: [2.2.1, 2.2.4, 2.2.5, 2.2.7]
-  soc2: [CC8.1]
+bundle: [nist-config-management]
 resources:
   # CM-7: Least functionality — disable unnecessary services
   - name: disable-avahi

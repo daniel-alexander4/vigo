@@ -1,9 +1,5 @@
 name: hitrust-governance
-compliance:
-  hitrust: [06.c, 06.g, 06.h, 06.i, 07.a, 09.b, 09.c, 09.d, 09.l, 10.f, 10.g, 10.k, 10.l, 10.m]
-  iso-27001: [A.5.1, A.6.1, A.14.1.2, A.14.2.2, A.18.2.2, A.18.2.3]
-  nist-800-53: [CM-8, CA-7]
-  soc2: [CC3.1, CC3.2, CC3.3, CC4.1, CC4.2, CC5.1, CC5.2, CC5.3]
+bundle: [hitrust-governance]
 
 resources:
   # 07.a: Asset inventory — hardware/software tracking

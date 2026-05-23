@@ -3,8 +3,7 @@ name: nydfs-monitoring
 # Covers: NYCRR-500.14 (monitoring and detection),
 #          NYCRR-500.13 (data retention and disposal)
 
-compliance:
-  ny-dfs-cyber: [NYCRR-500.14, NYCRR-500.13]
+bundle: [nydfs-monitoring]
 
 resources:
   - name: chkrootkit-installed

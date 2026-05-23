@@ -4,8 +4,7 @@ name: mifid2-change-management
 # All configuration changes are logged in the tamper-evident audit chain,
 # tracked via config publish history, and reversible via rollback.
 
-compliance:
-  mifid2: [RTS7-Art9-1, RTS7-Art9-2, RTS7-Art9-3]
+bundle: [mifid2-change-management]
 
 resources:
   - name: audit-service

@@ -1,11 +1,5 @@
 name: nist-access-control
-compliance:
-  cyber-essentials: [CE-AC-1, CE-AC-2, CE-AC-6]
-  hipaa: [164.312(a)(1), 164.312(d)]
-  hitrust: [01.b, 01.c, 01.d]
-  iso-27001: [A.9.1.2, A.9.2.3, A.9.4.1]
-  nist-800-53: [AC-2, AC-3, AC-6, AC-7, AC-11, AC-12]
-  soc2: [CC6.1, CC6.3]
+bundle: [nist-access-control]
 resources:
   # AC-6: Least privilege — restrict su to wheel group
   - name: restrict-su

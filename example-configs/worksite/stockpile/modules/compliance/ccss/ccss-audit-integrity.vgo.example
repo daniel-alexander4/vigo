@@ -5,8 +5,7 @@ name: ccss-audit-integrity
 # MONITORED: Backup existence, audit log forwarding
 # EXTERNAL: Third-party security audits, proof of reserves
 
-compliance:
-  ccss: [CCSS-8.1, CCSS-8.2, CCSS-9.1, CCSS-10.1]
+bundle: [ccss-audit-integrity]
 
 resources:
   - name: audit-service

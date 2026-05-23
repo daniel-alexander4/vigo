@@ -7,8 +7,7 @@ name: mifid2-capacity
 # platform integration — Vigo can verify the kill switch is installed
 # and configured but cannot be the kill switch itself.
 
-compliance:
-  mifid2: [RTS7-Art11-1, RTS7-Art11-2, RTS7-Art14-1]
+bundle: [mifid2-capacity]
 
 vars:
   disk_alert_threshold: 85

@@ -3,10 +3,7 @@ name: cis-ubuntu-services
 # Level 1 + Level 2 controls
 # Applies to: Ubuntu 20.04, 22.04, 24.04
 
-compliance:
-  cis-ubuntu: ["2.1.1", "2.1.2", "2.1.3", "2.1.4", "2.1.5", "2.1.6", "2.1.7", "2.1.8", "2.1.9", "2.1.10", "2.1.11", "2.1.12", "2.1.13", "2.1.14", "2.1.15", "2.1.16", "2.1.17", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6"]
-  nist-800-53: [CM-7]
-  pci-dss: ["2.2.2", "2.2.3"]
+bundle: [cis-ubuntu-services]
 
 vars:
   ntp_server: "time.cloudflare.com"

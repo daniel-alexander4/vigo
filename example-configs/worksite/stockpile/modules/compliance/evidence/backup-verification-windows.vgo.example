@@ -3,12 +3,7 @@
 #~ Outputs JSON evidence.
 name: backup-verification-windows
 
-compliance:
-  nist-800-53: [CP-9, CP-10(2), CP-10(4)]
-  hipaa: [164.308(a)(7)(ii)(D)]
-  pci-dss: ["12.10.1"]
-  iso-27001: [A.12.3.1, A.17.1.3]
-  soc2: [A1.3]
+bundle: [backup-verification-windows]
 
 vars:
   evidence_dir: "C:\\ProgramData\\Vigo\\evidence"

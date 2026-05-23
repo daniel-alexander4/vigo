@@ -1,9 +1,5 @@
 name: iso-communications-security
-compliance:
-  cyber-essentials: [CE-FW-1, CE-FW-4]
-  iso-27001: [A.13.1.1, A.13.2.1]
-  nist-800-53: [SC-7, SC-8]
-  pci-dss: [1.2.1, 1.2.5, 3.5.1.1]
+bundle: [iso-communications-security]
 resources:
   # A.13.1.1: Network controls
   - name: ufw-package

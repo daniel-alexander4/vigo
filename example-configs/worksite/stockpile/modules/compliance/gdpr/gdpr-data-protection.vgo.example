@@ -1,9 +1,5 @@
 name: gdpr-data-protection
-compliance:
-  gdpr: [Art.5(1)(f), Art.25(1), Art.32(1)(a), Art.32(1)(b)]
-  hipaa: [164.312(a)(2)(iv), 164.312(e)(1)]
-  iso-27001: [A.10.1.1, A.18.1.3]
-  nist-800-53: [SC-13, SC-28]
+bundle: [gdpr-data-protection]
 resources:
   # Art 32(1)(a): Encryption of personal data
   - name: cryptsetup

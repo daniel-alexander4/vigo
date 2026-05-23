@@ -3,12 +3,7 @@
 #~ across access-review windows.
 name: access-review-export
 
-compliance:
-  nist-800-53: [AC-2, AC-2(7), AC-6]
-  hipaa: [164.308(a)(3)(ii)(C), 164.308(a)(4)(ii)(C)]
-  pci-dss: ["7.1.4", "7.2.1"]
-  iso-27001: [A.9.2.5]
-  soc2: [CC6.2, CC6.3]
+bundle: [access-review-export]
 
 vars:
   evidence_dir: "/var/lib/vigo/evidence"
