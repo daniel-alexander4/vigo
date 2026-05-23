@@ -84,6 +84,10 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, err
 	}
 
+	if err := detectUnsupportedDriver(data); err != nil {
+		return nil, err
+	}
+
 	// Defaults that diverge from Go zero-values land here before unmarshal.
 	// YAML keys that explicitly appear overwrite these; absent keys keep the
 	// pre-set value. (The `default:` struct tags in types.go are doc-only —
@@ -254,6 +258,26 @@ func detectRetiredSpannerKeys(data []byte) error {
 	}
 	return fmt.Errorf("server.yaml uses retired spanner shape (per ADR-026 Phase 2 peer-equal admissions):\n  - %s",
 		strings.Join(retired, "\n  - "))
+}
+
+// detectUnsupportedDriver rejects server.yaml that selects the postgres
+// database driver. The postgres driver path exists in the codebase, but its
+// migration set is incomplete — migrations/postgres/ cannot build the current
+// schema — so a postgres server would start against missing tables. Fail fast
+// at config load with a pointer to the supported driver rather than ship that.
+func detectUnsupportedDriver(data []byte) error {
+	var raw struct {
+		Database struct {
+			Driver string `yaml:"driver"`
+		} `yaml:"database"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	if raw.Database.Driver == "postgres" {
+		return fmt.Errorf("database.driver: postgres is not supported in this release — the Postgres migration set is incomplete. Use the default SQLite driver: remove the database.driver line, or set it to \"sqlite\"")
+	}
+	return nil
 }
 
 // resolveServerSecrets resolves secret: prefixed values in the server config.

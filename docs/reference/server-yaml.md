@@ -41,19 +41,19 @@ server:
 
 ## database
 
-Storage backend. SQLite (default) or PostgreSQL.
+Storage backend. SQLite only — `postgres` is rejected at startup in this release.
 
 ```yaml
 database:
-  dsn: "secret:vigo/db/dsn"         # SQLite: file path; Postgres: connection string
-  driver: sqlite3                    # sqlite3 (default) | postgres
+  dsn: "secret:vigo/db/dsn"         # SQLite file path
+  driver: sqlite3                    # sqlite3 (default) — only supported driver
   retention: "30d"                   # auto-prune old runs/task runs/workflows
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `dsn` | (required) | Database connection string. Supports `secret:` prefix |
-| `driver` | `sqlite3` | Database driver: `sqlite3` or `postgres` |
+| `dsn` | (required) | SQLite database file path. Supports `secret:` prefix |
+| `driver` | `sqlite3` | Database driver. Only `sqlite3` is supported; the server rejects `postgres` at startup (the Postgres migration set is incomplete). |
 | `retention` | `30d` | Auto-prune data older than this duration. Applies to `runs` (cascades `run_results`), `task_runs`, `workflow_runs`, `file_snapshots`, `convergence_history`, `compliance_history`. `audit_entries` is never trimmed (tamper chain). |
 
 ## secrets

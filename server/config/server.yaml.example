@@ -26,12 +26,11 @@ server:
 
 
 # ── Database ──────────────────────────────────────────────────────────────
-# SQLite (default): dsn is a file path.
-# Postgres: dsn is a connection string. Set driver: postgres.
+# SQLite only — dsn is a file path. The driver defaults to sqlite3; postgres
+# is not supported in this release (the server rejects driver: postgres).
 
 database:
   dsn: "secret:vigo/db/dsn"
-  # driver: postgres
   retention: "30d"                             # auto-prune runs/tasks/workflows older than this; daily background pruner. Empty disables.
 
 

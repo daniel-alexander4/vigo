@@ -65,3 +65,28 @@ func TestLoadServerCertSANsMissingFile(t *testing.T) {
 		t.Errorf("LoadServerCertSANs(missing) = %v, want nil", got)
 	}
 }
+
+func TestDetectUnsupportedDriver(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{"postgres rejected", "database:\n  driver: postgres\n", true},
+		{"sqlite accepted", "database:\n  driver: sqlite\n", false},
+		{"sqlite3 accepted", "database:\n  driver: sqlite3\n", false},
+		{"empty driver accepted", "database:\n  driver: \"\"\n", false},
+		{"no database block accepted", "server:\n  hostname: danlap\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := detectUnsupportedDriver([]byte(tt.yaml))
+			if tt.wantErr && err == nil {
+				t.Errorf("detectUnsupportedDriver(%q) = nil, want error", tt.yaml)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("detectUnsupportedDriver(%q) = %v, want nil", tt.yaml, err)
+			}
+		})
+	}
+}
