@@ -376,6 +376,12 @@ func aggregate(rows []envelopeRow, cutoffMillis int64) *Snapshot {
 	}
 }
 
+// MsgIDFor is the exported alias the UI template helper calls. The
+// in-package callers (the aggregator's `aggregate` dedup) keep using the
+// unexported name to avoid the import-cycle ceremony other packages
+// would need for a Go-side recomputation of a single message's id.
+func MsgIDFor(b MessageBody) (string, error) { return msgIDFor(b) }
+
 // msgIDFor reproduces agent/src/swarm/poolq/message.rs's hand-rolled
 // canonical-bytes encoding so the server can dedup against the same
 // `msg_id` the agent computed at publish time.

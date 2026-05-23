@@ -1327,6 +1327,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			// block/unblock admin moderation lands in Slice 5.
 			poolqHandler := api.NewPoolqHandler(s.poolqAgg, s.queries, s.fleetIndex)
 			poolqHandler.RegisterRoutes(gwMux)
+			uiHandler.SetPoolqFleet(poolqHandler)
 
 			// Curator S3 API (ADR-027): an opt-in HTTPS listener exposing
 			// curator artifacts to non-envoy S3 clients. Requires an

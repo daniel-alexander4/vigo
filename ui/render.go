@@ -22,6 +22,7 @@ import (
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
+	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -659,6 +660,46 @@ func funcMap() template.FuncMap {
 			var out []db.CuratorBlockedArtifact
 			for _, b := range blocked {
 				if _, ok := live[strings.ToLower(b.ArtifactID)]; !ok {
+					out = append(out, b)
+				}
+			}
+			return out
+		},
+		// poolqMsgID derives sha256(canonical_bytes) for a Message —
+		// reproduces what the agent's `Message::msg_id_hex` does so the
+		// detail page can show a stable short id per message without
+		// the trait collector having to carry it on the wire. Pure;
+		// errors render as the empty string (degenerate row).
+		"poolqMsgID": func(m poolqmesh.Message) string {
+			id, _ := poolqmesh.MsgIDFor(m.Body)
+			return id
+		},
+		// poolqIsBlocked: linear scan for the topics-list template's
+		// per-row status badge. Same shape curatorIsBlocked has.
+		"poolqIsBlocked": func(topicID string, blocked []db.PoolqBlockedTopic) bool {
+			low := strings.ToLower(topicID)
+			for _, b := range blocked {
+				if strings.EqualFold(b.TopicID, low) {
+					return true
+				}
+			}
+			return false
+		},
+		// poolqOrphanBlocks returns block-table entries whose topic_id
+		// has no live snapshot row — typically the founder scrubbed
+		// `~/.vigo-poolq/<topic_id>/` directly. Lets the operator see
+		// in-effect blocks that survive a founder-side rm.
+		"poolqOrphanBlocks": func(snap *poolqmesh.Snapshot, blocked []db.PoolqBlockedTopic) []db.PoolqBlockedTopic {
+			if snap == nil || len(blocked) == 0 {
+				return nil
+			}
+			live := make(map[string]struct{}, len(snap.Topics))
+			for i := range snap.Topics {
+				live[strings.ToLower(snap.Topics[i].TopicIDHex)] = struct{}{}
+			}
+			var out []db.PoolqBlockedTopic
+			for _, b := range blocked {
+				if _, ok := live[strings.ToLower(b.TopicID)]; !ok {
 					out = append(out, b)
 				}
 			}

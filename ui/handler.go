@@ -44,6 +44,7 @@ import (
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
+	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
@@ -260,6 +261,7 @@ type Handler struct {
 	traitLookup       TraitLookup
 	gitbackFleet      GitbackFleetSource
 	curatorFleet      CuratorFleetSource
+	poolqFleet        PoolqFleetSource
 	mesh              MeshSource
 	swarmAPI          SwarmSource
 	traitQuery        TraitQueryDispatcher
@@ -336,6 +338,22 @@ type CuratorFleetSource interface {
 // on the swarm manifest store + the catalog feed reactor).
 func (h *Handler) SetCuratorFleet(src CuratorFleetSource) {
 	h.curatorFleet = src
+}
+
+// PoolqFleetSource surfaces the aggregated fleet-wide poolq view (signed
+// message log per topic + operator-block table) — the same data the
+// `/api/v1/swarm/poolq/*` REST endpoints serve. Implemented by
+// `*api.PoolqHandler` in the main binary; tiny interface so the ui
+// package doesn't depend on the full handler type (matches the curator
+// pattern).
+type PoolqFleetSource interface {
+	FleetSnapshot(ctx context.Context) (*poolqmesh.Snapshot, []db.PoolqBlockedTopic, error)
+}
+
+// SetPoolqFleet wires the poolq aggregator into the UI handler. Called
+// from server.go alongside SetCuratorFleet.
+func (h *Handler) SetPoolqFleet(src PoolqFleetSource) {
+	h.poolqFleet = src
 }
 
 // MeshSource surfaces the longdrawer + lockbox fleet aggregators.
@@ -650,6 +668,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm/gitback/{project_id}", h.Gitback)
 	mux.HandleFunc("GET /swarm/curator", h.Curator)
 	mux.HandleFunc("GET /swarm/curator/{artifact_id}", h.Curator)
+	mux.HandleFunc("GET /swarm/poolq", h.Poolq)
+	mux.HandleFunc("GET /swarm/poolq/{topic_id}", h.Poolq)
 	// Backwards-compat: /mesh → /longdrawer (or /lockbox when ?tab=crypt).
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)

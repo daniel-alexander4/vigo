@@ -95,6 +95,23 @@ func (h *PoolqHandler) snapshot(r *http.Request) (*poolqmesh.Snapshot, error) {
 	return h.agg.Snapshot(r.Context(), h.envoyInputs())
 }
 
+// FleetSnapshot returns the cached fleet snapshot plus the operator-block
+// table. Passthrough for the UI handler — the `/swarm/poolq` page reads
+// this via the [PoolqFleetSource] interface in `ui/swarm_poolq.go` so the
+// ui package doesn't import poolqmesh + db directly. Matches the curator
+// handler's `FleetSnapshot` shape.
+func (h *PoolqHandler) FleetSnapshot(ctx context.Context) (*poolqmesh.Snapshot, []db.PoolqBlockedTopic, error) {
+	snap, err := h.agg.Snapshot(ctx, h.envoyInputs())
+	if err != nil {
+		return nil, nil, err
+	}
+	blocked, _ := h.queries.ListBlockedPoolqTopics(ctx)
+	if blocked == nil {
+		blocked = []db.PoolqBlockedTopic{}
+	}
+	return snap, blocked, nil
+}
+
 // --- agent-facing (public) ------------------------------------------------
 
 // topicSummary mirrors the head-only view of a Topic — no messages, just

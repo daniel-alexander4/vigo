@@ -1,0 +1,160 @@
+{{define "page-content"}}
+{{if .Topic}}
+{{/* ── Detail view (single topic) ── */}}
+<div class="breadcrumb mb-1">
+    <a href="/swarm/poolq">Poolq</a> &rsaquo; {{.Topic.TopicName}}
+</div>
+
+{{template "health-banner" .Health}}
+
+<div class="card">
+    <div class="card-heading-row">
+        <h2 style="margin:0;">{{.Topic.TopicName}}{{if .Topic.Blocked}} <span class="badge badge--warn">blocked</span>{{end}}</h2>
+        <a href="/swarm/poolq" class="btn btn--sm">Back to list</a>
+    </div>
+
+    <div class="table-container" style="margin-bottom:24px;">
+        <table class="table">
+            <tbody>
+                <tr><td style="font-weight:600;width:200px;">Topic ID</td><td><code>{{.Topic.TopicIDHex}}</code></td></tr>
+                <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Topic.FounderPuddlePubkey}}</code></td></tr>
+                <tr><td style="font-weight:600;">Head seq</td><td>{{.Topic.HeadSeq}}</td></tr>
+                <tr><td style="font-weight:600;">Message count</td><td>{{.Topic.Count}}</td></tr>
+                <tr><td style="font-weight:600;">First posted</td><td>{{if gt .Topic.FirstPostedAt 0}}{{formatUnixTime (div .Topic.FirstPostedAt 1000)}}{{else}}&mdash;{{end}}</td></tr>
+                <tr><td style="font-weight:600;">Last posted</td><td>{{if gt .Topic.LastPostedAt 0}}{{formatUnixTime (div .Topic.LastPostedAt 1000)}}{{else}}&mdash;{{end}}</td></tr>
+                <tr>
+                    <td style="font-weight:600;">Status</td>
+                    <td>
+                        {{if .Topic.Blocked}}
+                            <span class="badge badge--warn">blocked by the operator</span>
+                            <br><span class="muted">The server refuses to serve <code>/topic/{{.Topic.TopicIDHex}}/range</code> and <code>/log</code> regardless of who founded the topic. The signed messages still exist in the founder's <code>~/.vigo-poolq/&lt;topic_id&gt;/</code> directory and the trait collector keeps emitting them. Run <code>vigocli swarm poolq unblock {{.Topic.TopicIDHex}}</code> to reverse.</span>
+                        {{else}}
+                            <span class="badge badge--ok">ok</span>
+                        {{end}}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3 style="margin:0 0 12px;">Messages</h3>
+    {{if .Topic.Messages}}
+    <table class="table">
+        <thead>
+            <tr>
+                <th style="width:70px;">Seq</th>
+                <th style="width:180px;">Posted at</th>
+                <th>Body</th>
+                <th style="width:120px;">Msg ID</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Topic.Messages}}
+            <tr>
+                <td><strong>{{.Body.Seq}}</strong></td>
+                <td>{{if gt .Body.PostedAt 0}}{{formatUnixTime (div .Body.PostedAt 1000)}}{{else}}&mdash;{{end}}</td>
+                <td><pre style="margin:0;white-space:pre-wrap;word-break:break-all;">{{.Body.Body}}</pre></td>
+                <td><code title="{{poolqMsgID .}}">{{truncGitSha (poolqMsgID .)}}</code></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="muted">No messages retained for this topic — either it has never been posted to, or every message has aged out past <code>swarm.poolq.retention</code>.</p>
+    {{end}}
+</div>
+{{else}}
+{{/* ── List view ── */}}
+<div class="page-header">
+    <h1>Poolq</h1>
+    <p>Fleet-wide P2P ordered-log queue (<a href="/docs/adr/029-poolq">ADR-029</a>). Topics are keyed by <code>topic_id = sha256(founder_puddle_pubkey ‖ topic_name)</code>; the post side is gated by the usercrate <code>poolq: true</code> flag, the read side is universal — every envoy can pull a topic's log via the server. Messages are signed end-to-end; the server publishes verbatim, never verifies.</p>
+</div>
+
+{{template "health-banner" .Health}}
+
+{{if .Error}}
+    <div class="alert alert--warn">Poolq aggregator: {{.Error}}</div>
+{{else if or (not .Snap) (eq (len .Snap.Topics) 0)}}
+    {{template "empty-state" dict "Message" "No poolq topics observed across the fleet." "Hint" "On a `swarm.poolq.enabled`-matched envoy, run `vigo swarm poolq post <topic-name> --body <text>` as a user with `poolq: true` on their usercrate and an unlocked puddle."}}
+{{else}}
+    <div class="stat-cards mb-2">
+        <div class="stat-card" title="Distinct topics in the fleet snapshot (bucketed by topic_id = sha256(founder_pubkey ‖ topic_name)).">
+            <div class="stat-card__label">Topics</div>
+            <div class="stat-card__value">{{len .Snap.Topics}}</div>
+        </div>
+        <div class="stat-card" title="Distinct envoys reporting a `poolq` trait (i.e. holding local message state for any user).">
+            <div class="stat-card__label">Participants</div>
+            <div class="stat-card__value">{{len .Snap.Participants}}</div>
+        </div>
+        <div class="stat-card" title="Operator-block table entries — topics the server refuses to serve regardless of who founded.">
+            <div class="stat-card__label">Blocked</div>
+            <div class="stat-card__value {{if gt (len .Blocked) 0}}text-warn{{end}}">{{len .Blocked}}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin:0 0 12px;">Topics</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Head seq</th>
+                    <th>Count</th>
+                    <th>First posted</th>
+                    <th>Last posted</th>
+                    <th>Founder</th>
+                    <th>Status</th>
+                    <th>Topic ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{$blocked := .Blocked}}
+                {{range .Snap.Topics}}
+                {{$tid := .TopicIDHex}}
+                {{$isBlocked := poolqIsBlocked $tid $blocked}}
+                <tr onclick="location.href='/swarm/poolq/{{$tid}}'" style="cursor:pointer;">
+                    <td><strong>{{.TopicName}}</strong></td>
+                    <td>{{.HeadSeq}}</td>
+                    <td>{{.Count}}</td>
+                    <td>{{if gt .FirstPostedAt 0}}{{formatUnixTime (div .FirstPostedAt 1000)}}{{else}}&mdash;{{end}}</td>
+                    <td>{{if gt .LastPostedAt 0}}{{formatUnixTime (div .LastPostedAt 1000)}}{{else}}&mdash;{{end}}</td>
+                    <td><code title="ed25519:{{.FounderPuddlePubkey}}">{{truncGitSha .FounderPuddlePubkey}}</code></td>
+                    <td>{{if $isBlocked}}<span class="badge badge--warn">blocked</span>{{else}}<span class="badge badge--ok">ok</span>{{end}}</td>
+                    <td><code title="{{$tid}}">{{truncGitSha $tid}}</code></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{/* Orphan blocks footer: blocked entries that no longer have a live topic. */}}
+    {{$orphans := poolqOrphanBlocks .Snap .Blocked}}
+    {{if $orphans}}
+    <div class="card mt-2">
+        <h3 style="margin:0 0 12px;">Operator blocks without a current topic</h3>
+        <p class="muted">These topic_ids are in the block table but no envoy currently advertises a topic for them — likely the founder scrubbed <code>~/.vigo-poolq/&lt;topic_id&gt;/</code> directly (or had their <code>poolq:</code> usercrate flag withdrawn). The block stays in effect: if anyone re-publishes under the same topic_id, the server will still refuse.</p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Topic ID</th>
+                    <th>Blocked at</th>
+                    <th>By</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $orphans}}
+                <tr>
+                    <td><code>{{.TopicID}}</code></td>
+                    <td>{{if not .BlockedAt.IsZero}}{{.BlockedAt.Format "2006-01-02 15:04:05 MST"}}{{else}}&mdash;{{end}}</td>
+                    <td>{{if .BlockedBy}}{{.BlockedBy}}{{else}}&mdash;{{end}}</td>
+                    <td>{{if .Reason}}{{.Reason}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+{{end}}
+{{end}}
+{{end}}
