@@ -4,7 +4,6 @@
        dist dist-agent dist-connwaer \
        dist-agent-windows dist-agent-macos dist-agent-freebsd dist-agent-illumos \
        dist-sign dist-sign-agent \
-       embed-examples \
        proto certs migrate sqlc schemas up down logs clean
 
 VERSION ?= $(shell cat VERSION 2>/dev/null || echo dev)
@@ -23,12 +22,9 @@ GO_HARDENED := -buildmode=pie -trimpath $(GO_LDFLAGS)
 export CGO_CFLAGS := -D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2
 export CGO_LDFLAGS := -Wl,-z,relro,-z,now,-z,noexecstack
 
-build: build-agent embed-examples schemas
+build: build-agent schemas
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigocli ./cli
-
-embed-examples:
-	cp server-seed/server.yaml.example server/config/server.yaml.example
 
 build-agent:
 	cd agent && cargo build --release

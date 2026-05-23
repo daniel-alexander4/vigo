@@ -5,8 +5,10 @@ package config
 
 import _ "embed"
 
-// ExampleServerConfig contains the annotated server.yaml.example file,
-// copied from server-seed/ at build time by `make embed-examples`.
+// ExampleServerConfig contains the annotated server.yaml reference,
+// embedded into the binary at build time. Edit server.yaml.example
+// (next to this file) directly — there is no source elsewhere to copy
+// from. Consumed by `vigocli server server.yaml full` / `list`.
 //
 //go:embed server.yaml.example
 var ExampleServerConfig string
