@@ -16,6 +16,7 @@ Operator-side view of [curator](../../howto/set-up-curator.md) — the P2P artif
 | `resolve <ref> <tag\|version> <os> <arch>` | Show the blob coordinates a pull would fetch |
 | `block <ref> [--reason <text>]` | Operator-block an artifact — server refuses to resolve/relay regardless of who published |
 | `unblock <ref>` | Reverse a prior block |
+| `s3-credentials {create,list,revoke}` | Manage SigV4 credentials for the curator S3 object API (ADR-027) — admin-only |
 
 Every read subcommand accepts `--json` to emit machine-readable output.
 
@@ -182,6 +183,24 @@ Unblocked af31c2e84d12.
 ```
 
 If the publisher has since `rm`'d the entry, unblock removes the row from the block table but doesn't restore an entry that no longer exists.
+
+## `vigocli swarm curator s3-credentials`
+
+Manage the AWS-SigV4 credentials that authenticate non-envoy clients against the curator S3-compatible object API (ADR-027, `swarm.curator.s3_port`). Admin-only. The server requires the `local` secrets backend for this command; under any other backend it returns 503.
+
+- **`create [--name <label>] [--scope <publisher>]`** — mint a credential. Prints the access key id and the secret access key. The secret is **derived, never stored** — shown once, not recoverable. `--scope` limits the credential to one publisher (a puddle friendly-name or founder-pubkey hex); the default `*` allows every publisher.
+- **`list`** — credential metadata (access key id, scope, name, created-at). No secrets — none are stored.
+- **`revoke <access-key-id>`** — delete a credential; it stops authenticating immediately.
+
+```
+$ vigocli swarm curator s3-credentials create --name ci-runner --scope alexander4
+Curator S3 credential created.
+  Access key ID:     VIGO2X4QPL7N8K3M9R6T
+  Secret access key: 9f3a…  (shown once — store it now)
+  Scope:             alexander4
+```
+
+Point an S3 SDK at `https://<server>:<s3_port>` with these keys — see [Exposing artifacts over an S3 API](../../howto/set-up-curator.md#exposing-artifacts-over-an-s3-api).
 
 ## JSON output
 

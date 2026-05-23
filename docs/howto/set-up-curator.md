@@ -234,6 +234,40 @@ From there it is native `apt`: `apt update` then `apt install <your-package>` re
 
 **Caveat.** A repo is one tarball artifact — adding a package means rebuilding and re-publishing the whole repo as a new artifact version. Fine for modest private repos; raise `swarm.curator.max_bytes` for large ones.
 
+### Exposing artifacts over an S3 API
+
+`swarm.curator.s3_port` opens a read-only, S3-compatible HTTPS endpoint (ADR-027) so **non-envoy** clients — CI runners, dev laptops, anything with an S3 SDK — can fetch curator artifacts. Any S3 toolchain works against it unmodified. It reuses the server's TLS material and requires the `local` secrets backend.
+
+Enable it in `server.yaml` (`0`, the default, disables it):
+
+```yaml
+swarm:
+  curator:
+    s3_port: 9000
+```
+
+Mint a credential — admin-only; the secret is **derived, never stored**, and shown once:
+
+```
+$ vigocli swarm curator s3-credentials create --name ci-runner
+Curator S3 credential created.
+  Access key ID:     VIGO2X4QPL7N8K3M9R6T
+  Secret access key: 9f3a…  (shown once — store it now)
+  Scope:             *
+```
+
+Point any S3 client at the endpoint with those keys:
+
+```
+$ aws --endpoint-url https://vigo.example.com:9000 s3 ls s3://vigo-curator/
+$ aws --endpoint-url https://vigo.example.com:9000 s3 cp \
+    s3://vigo-curator/alexander4/vigo-agent/0.66.28/linux-amd64 ./vigo
+```
+
+Object keys are `<publisher>/<artifact>/<version-or-tag>/<os>-<arch>` — `<publisher>` is the puddle friendly-name when one is unambiguously claimed, else the founder-pubkey hex (both forms resolve on `GetObject`). `HeadObject` carries the artifact's kind in an `x-amz-meta-vigo-kind` header.
+
+The API is **read-only** — every write or management verb returns an S3 `405`; publishing stays `vigo swarm curator push`. A credential can be scoped to one publisher (`s3-credentials create --scope <publisher>`); operator-blocked artifacts are invisible over S3 too. Note that `GetObject` of a repo-kind artifact (`apt-repo` / `dnf-repo` / `apk-repo`) returns the repo *tarball* — to consume a private apt/dnf/apk repo browsably, point a `repository` resource at the agent-local `/repo/` facade above, not at the S3 endpoint. Master-key rotation re-derives every S3 secret, so operators re-mint credentials after a rotation.
+
 ### Where to look when it doesn't work
 
 - **`vigo swarm curator status`** — local cache state, in-flight pushes, helper-daemon liveness.
@@ -249,6 +283,6 @@ From there it is native `apt`: `apt update` then `apt install <your-package>` re
 - **`pull` hangs or sha-mismatches** → [Troubleshoot common issues](troubleshoot.md).
 
 ---
-*Verified on Vigo 0.66.26 · 2026-05-22.*
+*Verified on Vigo 0.66.28 · 2026-05-22.*
 
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

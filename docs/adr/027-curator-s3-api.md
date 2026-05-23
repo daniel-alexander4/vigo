@@ -4,7 +4,7 @@ title: "ADR-027: curator S3 object-storage API"
 
 # ADR-027: curator S3 object-storage API
 
-**Status:** Approved 2026-05-22 (`/discuss` → `/scrutinize` ×2, 2026-05-21; re-verified 2026-05-22). Slices 0–3 implemented 2026-05-22 — config + credential table, the derive-don't-store credential store, the SigV4 verifier, and the S3 endpoint (listener + read handlers); the API goes live at 0.66.28. Slice 4 (docs) follows.
+**Status:** Implemented — `/discuss` → `/scrutinize` ×2 (2026-05-21); slices 0–4 (config + credential table, the derive-don't-store credential store, the SigV4 verifier, the S3 endpoint, docs) all shipped 2026-05-22; the API is live at 0.66.28.
 **Date:** 2026-05-22
 
 ## Context
