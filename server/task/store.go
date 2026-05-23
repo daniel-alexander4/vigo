@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"gopkg.in/yaml.v3"
+
+	"git.alexander4.io/vigo/server/validate"
 )
 
 // ParamDef defines a single task definition parameter.
@@ -79,6 +81,13 @@ func (s *Store) Load(dir string) error {
 		}
 		if def.Script == "" {
 			return fmt.Errorf("task definition %q has no script", def.Name)
+		}
+		// Self-protection guardrails — refuse to load a task whose
+		// script would be blocked at dispatch. Mirrors the equivalent
+		// check in workflows.Engine.Load; the agent's hardcoded
+		// guardrails are the final gate.
+		if err := validate.ValidatePushCommand(def.Script); err != nil {
+			return fmt.Errorf("task definition %q: %w", def.Name, err)
 		}
 		if def.Timeout <= 0 {
 			def.Timeout = 60

@@ -256,6 +256,20 @@ func (c *apiClient) setAuthHeader(req *http.Request) {
 	}
 }
 
+// httpStatusError is the typed error returned for any non-2xx
+// response. Callers that need the raw status code or body — the task
+// dispatch path keys on a structured `blocked` payload to drive the
+// guardrail-bypass confirmation — errors.As it; callers that just
+// print fall through to Error(), which preserves the prior
+// "server returned <code>: <message>" format.
+type httpStatusError struct {
+	Code int
+	Body []byte
+	msg  string
+}
+
+func (e *httpStatusError) Error() string { return e.msg }
+
 func (c *apiClient) decodeResponse(resp *http.Response, result any) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -264,19 +278,19 @@ func (c *apiClient) decodeResponse(resp *http.Response, result any) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// Try to extract a human-readable message from JSON error bodies.
+		msg := fmt.Sprintf("server returned %d: %s", resp.StatusCode, string(body))
 		var errBody struct {
 			Message string `json:"message"`
 			Error   string `json:"error"`
 		}
 		if json.Unmarshal(body, &errBody) == nil {
 			if errBody.Message != "" {
-				return fmt.Errorf("server returned %d: %s", resp.StatusCode, errBody.Message)
-			}
-			if errBody.Error != "" {
-				return fmt.Errorf("server returned %d: %s", resp.StatusCode, errBody.Error)
+				msg = fmt.Sprintf("server returned %d: %s", resp.StatusCode, errBody.Message)
+			} else if errBody.Error != "" {
+				msg = fmt.Sprintf("server returned %d: %s", resp.StatusCode, errBody.Error)
 			}
 		}
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		return &httpStatusError{Code: resp.StatusCode, Body: body, msg: msg}
 	}
 
 	if result != nil && len(body) > 0 {

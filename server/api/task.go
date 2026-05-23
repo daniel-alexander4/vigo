@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/validate"
 )
 
 // TaskDispatcher dispatches ad-hoc commands to connected agents.
@@ -66,6 +68,18 @@ type dispatchRequest struct {
 	DryRun      bool              `json:"dryRun"`
 	TaskName    string            `json:"taskName"`
 	Params      map[string]string `json:"params"`
+	Force       bool              `json:"force"`
+}
+
+// blockedResponse is the 400 body emitted when ValidatePushCommand
+// rejects a dispatch (and Force is false). Reason + Pattern come from
+// validate.Violation; Blocked is a flag the CLI keys on to distinguish
+// a guardrail block from other 400s (missing field, bad JSON).
+type blockedResponse struct {
+	Message string `json:"message"`
+	Blocked bool   `json:"blocked"`
+	Reason  string `json:"reason"`
+	Pattern string `json:"pattern"`
 }
 
 // HandleDispatch creates a new task run and dispatches the command to matching agents.
@@ -103,16 +117,39 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		DryRun:      req.DryRun,
 		TaskName:    req.TaskName,
 		Params:      req.Params,
+		Force:       req.Force,
 	})
 	if err != nil {
+		var v *validate.Violation
+		if errors.As(err, &v) {
+			// Guardrail block — surface a structured 400 so the CLI can
+			// prompt + retry with --force. Audit the block so a refused
+			// dispatch is as durable as a successful one.
+			recordAudit(r.Context(), h.auditWriter, "task.blocked", req.Operator, "rest",
+				req.Command+" on "+req.Target,
+				fmt.Sprintf(`{"reason":%q,"pattern":%q}`, v.Reason, v.Pattern))
+			writeJSON(w, http.StatusBadRequest, blockedResponse{
+				Message: v.Error(),
+				Blocked: true,
+				Reason:  v.Reason,
+				Pattern: v.Pattern,
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Record tamper-evident audit event (skip dry runs).
+	// Record tamper-evident audit event (skip dry runs). A forced dispatch
+	// (--force bypassed the server-side guardrail) carries `"forced":true`
+	// in the payload so audit reviewers can find every bypass.
 	if result.Status != "dry_run" {
+		payload := ""
+		if req.Force {
+			payload = `{"forced":true}`
+		}
 		recordAudit(r.Context(), h.auditWriter, "task.dispatch", req.Operator, "rest",
-			req.Command+" on "+req.Target, "")
+			req.Command+" on "+req.Target, payload)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

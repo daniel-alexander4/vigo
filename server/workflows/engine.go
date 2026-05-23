@@ -20,6 +20,7 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
 	"git.alexander4.io/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/validate"
 )
 
 // StepDef defines a single workflow step.
@@ -113,6 +114,21 @@ func (e *Engine) Load(dir string) error {
 		}
 		if len(def.Steps) == 0 {
 			return fmt.Errorf("workflow %q has no steps", def.Name)
+		}
+
+		// Self-protection guardrails — refuse to load a workflow whose
+		// ad-hoc command steps would be blocked at dispatch. The
+		// agent's hardcoded guardrails are the final gate; surfacing
+		// the block at workflow-load makes the failure visible at
+		// publish time instead of at runtime. Steps that reference a
+		// named task (step.Task) are validated at task-store load.
+		for i, step := range def.Steps {
+			if step.Command == "" {
+				continue
+			}
+			if err := validate.ValidatePushCommand(step.Command); err != nil {
+				return fmt.Errorf("workflow %q step %d (%s): %w", def.Name, i+1, step.Name, err)
+			}
 		}
 
 		workflows[def.Name] = &def

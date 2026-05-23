@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -196,6 +198,63 @@ func TestWorkflowHandler_AbortNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
+// TestWorkflowHandler_RunRecordsAuditEvent pins workflow.dispatch on
+// the audit hash chain: every workflow start carries an audit row with
+// the operator + workflow name, mirroring task.dispatch's coverage so
+// "who ran what when" is durable for workflows too. Without the
+// SetAuditWriter wiring (server/server.go), the engine.RunWorkflow
+// success silently lost the only attribution point on the chain.
+func TestWorkflowHandler_RunRecordsAuditEvent(t *testing.T) {
+	sqlDB := openWorkflowTestDB(t)
+	queries := db.New(sqlDB)
+	engine := workflows.NewEngine(queries, nil, nil)
+
+	// Load a workflow from disk so the engine has a known def to start.
+	// The dispatch is a background goroutine; we assert only the audit
+	// row is written synchronously inside HandleRun.
+	dir := t.TempDir()
+	wf := `name: trivial
+steps:
+  - name: noop
+    command: "true"
+    target: "*"
+`
+	if err := os.WriteFile(filepath.Join(dir, "trivial.vgo"), []byte(wf), 0644); err != nil {
+		t.Fatalf("write workflow: %v", err)
+	}
+	if err := engine.Load(dir); err != nil {
+		t.Fatalf("load workflows: %v", err)
+	}
+
+	audit := &recordingAuditWriter{}
+	handler := NewWorkflowHandler(queries, engine)
+	handler.SetAuditWriter(audit)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"name":"trivial","operator":"alice"}`
+	req := httptest.NewRequest("POST", "/api/v1/workflows", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("expected 1 audit event, got %d: %+v", len(audit.events), audit.events)
+	}
+	ev := audit.events[0]
+	if ev.EventType != "workflow.dispatch" {
+		t.Errorf("expected workflow.dispatch event, got %q", ev.EventType)
+	}
+	if ev.Actor != "alice" {
+		t.Errorf("expected actor=alice, got %q", ev.Actor)
+	}
+	if ev.Summary != "trivial" {
+		t.Errorf("expected summary=trivial, got %q", ev.Summary)
 	}
 }
 

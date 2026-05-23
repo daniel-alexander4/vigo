@@ -280,9 +280,14 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		}
 	}
 
-	// Self-protection guardrails — reject commands that target vigo infrastructure.
-	if err := validate.ValidatePushCommand(params.Command); err != nil {
-		return nil, fmt.Errorf("guardrail violation: %s", err)
+	// Self-protection guardrails — reject commands that target vigo
+	// infrastructure. Force skips this server-side gate; the agent's
+	// hardcoded guardrails still enforce. The returned *validate.Violation
+	// is unwrapped so REST callers errors.As it into a structured 400.
+	if !params.Force {
+		if err := validate.ValidatePushCommand(params.Command); err != nil {
+			return nil, err
+		}
 	}
 
 	// Build env vars for named task definitions.

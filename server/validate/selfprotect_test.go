@@ -3,7 +3,10 @@
 
 package validate
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestSelfProtect_FileTargetingAgentBinary(t *testing.T) {
 	mod := Module{
@@ -316,5 +319,41 @@ func TestValidatePushCommand_SafeCommand(t *testing.T) {
 	err := ValidatePushCommand("df -h && free -m")
 	if err != nil {
 		t.Fatalf("safe command should pass: %v", err)
+	}
+}
+
+// TestValidatePushCommand_ReturnsTypedViolation pins the typed return
+// shape: the error is *Violation carrying the matched pattern and a
+// human-readable reason. REST handlers errors.As this to build a 400
+// body and an audit row that names the exact rule that fired — both
+// would degrade to opaque strings if the typed return were dropped.
+func TestValidatePushCommand_ReturnsTypedViolation(t *testing.T) {
+	err := ValidatePushCommand("systemctl stop vigo-envoy now")
+	if err == nil {
+		t.Fatal("expected violation")
+	}
+	var v *Violation
+	if !errors.As(err, &v) {
+		t.Fatalf("expected *Violation, got %T: %v", err, err)
+	}
+	if v.Pattern != "systemctl stop vigo" {
+		t.Errorf("expected matched pattern, got %q", v.Pattern)
+	}
+	if v.Reason != "command matches dangerous pattern" {
+		t.Errorf("expected pattern reason, got %q", v.Reason)
+	}
+}
+
+func TestValidatePushCommand_ProtectedPathViolation(t *testing.T) {
+	err := ValidatePushCommand("rm -rf /srv/vigo/secrets")
+	var v *Violation
+	if !errors.As(err, &v) {
+		t.Fatalf("expected *Violation, got %T: %v", err, err)
+	}
+	if v.Reason != "command targets protected path" {
+		t.Errorf("expected protected-path reason, got %q", v.Reason)
+	}
+	if v.Pattern != "/srv/vigo/" {
+		t.Errorf("expected /srv/vigo/ pattern, got %q", v.Pattern)
 	}
 }

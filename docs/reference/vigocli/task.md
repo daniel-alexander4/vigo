@@ -37,7 +37,33 @@ vigocli task run <command-or-task-name> [flags]
 | `--health-check-url` | | | URL to probe between batches (abort on non-2xx) |
 | `--nice` | | `0` | CPU/IO priority 0–19 (0 = normal, 19 = lowest) |
 | `--dry-run` | | `false` | Display batch plan without executing |
+| `--force` | | `false` | Bypass the server-side guardrail check (agent guardrails still apply) |
 | `--param` | | | Task parameter (`key=value`), repeatable |
+
+### Guardrails
+
+The server refuses to dispatch a command whose text matches the
+hardcoded dangerous-pattern list — `systemctl stop vigo`, `pkill vigo`,
+an `rm` / `unlink` targeting `/srv/vigo/`, etc. Without `--force` the
+CLI prints the reason and prompts:
+
+```text
+warning: server-side guardrail blocked this command
+  reason:  command matches dangerous pattern
+  pattern: systemctl stop vigo
+  note:    the agent's hardcoded guardrails still apply on each envoy.
+Proceed anyway? [y/N]
+```
+
+`--force` skips the prompt and bypasses the server-side check in one
+step. Bypassed dispatches land on the audit hash chain as `task.dispatch`
+with `{"forced":true}` in the payload; refused dispatches (operator
+declined, no `--force`) land as `task.blocked` with the matched pattern.
+
+`--force` does **not** bypass the agent's guardrails on each envoy —
+that list (`agent/src/guardrails.rs`) is the final safety boundary and
+is hardcoded. A `--force`'d command that the agent still refuses will
+come back as `rejected` per target.
 
 ### Examples
 

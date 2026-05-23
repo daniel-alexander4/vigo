@@ -657,6 +657,23 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		})
 	})
 
+	// Wire audit-trail rows into the integrations dispatcher so every
+	// hash-chained entry also reaches Loki / Splunk / Datadog / Sentinel /
+	// etc. as an `audit.<eventType>` event. The audit DB remains the
+	// source of truth; this is a fan-out for external observability.
+	s.auditWriter.OnRecord = func(eventType, actor, source, summary, payload string) {
+		s.integrations.Dispatch(integrations.Event{
+			Name:      "audit." + eventType,
+			Timestamp: time.Now().UTC(),
+			Summary:   summary,
+			Details: map[string]any{
+				"actor":   actor,
+				"source":  source,
+				"payload": payload,
+			},
+		})
+	}
+
 	// --- Task definitions ---
 	s.taskStore = task.NewStore()
 	if err := s.taskStore.Load(s.taskDir); err != nil {
@@ -1127,6 +1144,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	workflowHandler := api.NewWorkflowHandler(s.queries, s.workflowEngine)
+	workflowHandler.SetAuditWriter(s.auditWriter)
 
 	// --- GRC evidence pusher (nil unless GRC integrations configured).
 	// The `.Start(ctx)` goroutine stays in run() / chunk 5. ---

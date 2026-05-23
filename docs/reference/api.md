@@ -33,7 +33,8 @@ Dispatch a command to matching envoys.
   "healthCheck": "curl -sf http://localhost/health",
   "dryRun": false,
   "taskName": "",
-  "params": {}
+  "params": {},
+  "force": false
 }
 ```
 
@@ -50,6 +51,7 @@ Dispatch a command to matching envoys.
 | `dryRun` | No | If true, return matched targets without executing |
 | `taskName` | No | Name of a reusable task definition from `.live/tasks/*.vgo` |
 | `params` | No | Parameter overrides for named tasks |
+| `force` | No | If true, skip the server-side guardrail check (agent guardrails still apply; audited as `task.dispatch` with `"forced":true` payload) |
 
 **Response (201 Created):**
 
@@ -63,6 +65,24 @@ Dispatch a command to matching envoys.
   "targets": [...]
 }
 ```
+
+**Response (400 Bad Request) — guardrail block:**
+
+When the command matches a hardcoded dangerous pattern and `force` is
+false, the dispatch is refused with a structured body the CLI keys on
+for its confirmation prompt:
+
+```json
+{
+  "message": "command matches dangerous pattern: systemctl stop vigo",
+  "blocked": true,
+  "reason": "command matches dangerous pattern",
+  "pattern": "systemctl stop vigo"
+}
+```
+
+Refused dispatches are recorded as `task.blocked` on the audit hash
+chain.
 
 
 ### GET /api/v1/task
@@ -165,7 +185,8 @@ Multi-step task orchestration with conditional branching.
 
 **Permission:** `workflow.execute`
 
-Start a workflow execution.
+Start a workflow execution. Recorded on the audit hash chain as
+`workflow.dispatch` with the workflow name in the summary.
 
 **Request body:**
 

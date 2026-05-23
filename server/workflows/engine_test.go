@@ -6,6 +6,7 @@ package workflows
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -188,5 +189,54 @@ steps:
 	}
 	if def.Steps[0].OnFailure != "alert" {
 		t.Errorf("expected on_failure=alert, got %s", def.Steps[0].OnFailure)
+	}
+}
+
+// TestEngine_LoadRejectsDangerousStepCommand pins workflow-load
+// guardrails: an ad-hoc command step that matches a dangerous pattern
+// (one the agent's hardcoded guardrails would refuse anyway) fails
+// the entire Load with a pointed error naming the workflow + step.
+// Surfacing the block at publish time avoids the alternative — the
+// workflow loads, runs partway, then a single step trips the agent
+// guardrail with operators left to discover it at runtime.
+func TestEngine_LoadRejectsDangerousStepCommand(t *testing.T) {
+	dir := t.TempDir()
+	writeWorkflow(t, dir, "bad.vgo", `
+name: bad
+steps:
+  - name: stop-vigo
+    command: systemctl stop vigo-envoy
+    target: "*"
+`)
+
+	engine := NewEngine(nil, nil, nil)
+	err := engine.Load(dir)
+	if err == nil {
+		t.Fatal("expected Load to fail on dangerous step command")
+	}
+	if !strings.Contains(err.Error(), "bad") || !strings.Contains(err.Error(), "stop-vigo") {
+		t.Errorf("expected error to name workflow + step, got: %v", err)
+	}
+}
+
+// TestEngine_LoadAllowsNamedTaskSteps pins the boundary: workflow load
+// validates only step.Command. step.Task references stay opaque here —
+// task-store-load enforces the same rule on the referenced script's
+// content, so the chain (task store rejects dangerous → workflow can't
+// dispatch unknown task at runtime) is the same operator-visible
+// outcome without the engine needing a task-store reference.
+func TestEngine_LoadAllowsNamedTaskSteps(t *testing.T) {
+	dir := t.TempDir()
+	writeWorkflow(t, dir, "ok.vgo", `
+name: ok
+steps:
+  - name: maybe-dangerous-named-task
+    task: restart-vigo
+    target: "*"
+`)
+
+	engine := NewEngine(nil, nil, nil)
+	if err := engine.Load(dir); err != nil {
+		t.Fatalf("expected Load to succeed for named-task step, got: %v", err)
 	}
 }

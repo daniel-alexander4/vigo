@@ -47,6 +47,26 @@ var dangerousPatterns = []string{
 	"killall vigosrv",
 }
 
+// Violation is the typed result of a guardrail check on a command. It
+// implements error so ValidatePushCommand can keep returning a plain
+// error; callers that want the structured fields (REST handlers
+// building a 400 body, audit rows attributing the matched pattern) use
+// errors.As to pull it out. Pattern is the exact dangerous-command
+// substring or protected path that triggered the block — sufficient for
+// audit attribution without re-running the matcher.
+type Violation struct {
+	Reason  string // human-readable: "command matches dangerous pattern" or "command targets protected path"
+	Pattern string // the matched dangerous-command substring or protected path
+}
+
+// Error implements error: "<reason>: <pattern>".
+func (v *Violation) Error() string {
+	if v.Pattern == "" {
+		return v.Reason
+	}
+	return v.Reason + ": " + v.Pattern
+}
+
 // ValidateSelfProtection checks a module's resources for guardrail violations.
 // Returns findings with SeverityError for any resource that would be blocked
 // by the agent's hardcoded guardrails.
@@ -58,19 +78,21 @@ func ValidateSelfProtection(mod Module) []Finding {
 	return findings
 }
 
-// ValidatePushCommand checks an ad-hoc push command for guardrail violations.
+// ValidatePushCommand checks an ad-hoc push command for guardrail
+// violations. Returns nil on pass, or a *Violation (as error) carrying
+// the reason + matched pattern on hit.
 func ValidatePushCommand(command string) error {
 	lower := strings.ToLower(command)
 	for _, pattern := range dangerousPatterns {
 		if strings.Contains(lower, pattern) {
-			return fmt.Errorf("command matches dangerous pattern: %q", pattern)
+			return &Violation{Reason: "command matches dangerous pattern", Pattern: pattern}
 		}
 	}
 	for _, path := range protectedPaths {
 		trimmed := strings.TrimRight(path, "/")
 		if (strings.Contains(lower, "rm ") || strings.Contains(lower, "unlink ")) &&
 			strings.Contains(lower, trimmed) {
-			return fmt.Errorf("command targets protected path: %s", path)
+			return &Violation{Reason: "command targets protected path", Pattern: path}
 		}
 	}
 	return nil

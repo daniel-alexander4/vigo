@@ -6,6 +6,7 @@ package task
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -229,5 +230,27 @@ func TestStore_All(t *testing.T) {
 	}
 	if all[0].Name != "a" || all[1].Name != "b" {
 		t.Errorf("expected sorted order [a, b], got [%s, %s]", all[0].Name, all[1].Name)
+	}
+}
+
+// TestStore_LoadRejectsDangerousScript pins task-store-load guardrails:
+// a task definition whose script matches a dangerous pattern fails Load.
+// This is the workflow-side counterpart to the ad-hoc command check —
+// without it, an operator could ship a named-task definition that the
+// agent would refuse, and the failure would surface only at dispatch.
+func TestStore_LoadRejectsDangerousScript(t *testing.T) {
+	dir := t.TempDir()
+	writeTask(t, dir, "stop-agent.vgo", `
+name: stop-agent
+script: systemctl stop vigo-envoy
+`)
+
+	store := NewStore()
+	err := store.Load(dir)
+	if err == nil {
+		t.Fatal("expected Load to fail on dangerous script")
+	}
+	if !strings.Contains(err.Error(), "stop-agent") {
+		t.Errorf("expected error to name the task, got: %v", err)
 	}
 }

@@ -31,6 +31,11 @@ type DispatchParams struct {
 	DryRun      bool
 	TaskName    string            // named task definition to resolve from task store
 	Params      map[string]string // parameters for named task definitions
+
+	// Force skips the server-side guardrail check (validate.ValidatePushCommand).
+	// The agent's hardcoded guardrails remain the final safety boundary — Force
+	// is "let the agent be the gate," not "ignore all guardrails."
+	Force bool
 }
 
 // DispatchResult is the result of a task dispatch.

@@ -18,13 +18,19 @@ import (
 
 // WorkflowHandler serves REST endpoints for workflow execution and status.
 type WorkflowHandler struct {
-	queries *db.Queries
-	engine  *workflows.Engine
+	queries     *db.Queries
+	engine      *workflows.Engine
+	auditWriter auditRecorder
 }
 
 // NewWorkflowHandler creates a WorkflowHandler.
 func NewWorkflowHandler(queries *db.Queries, engine *workflows.Engine) *WorkflowHandler {
 	return &WorkflowHandler{queries: queries, engine: engine}
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *WorkflowHandler) SetAuditWriter(w auditRecorder) {
+	h.auditWriter = w
 }
 
 // RegisterRoutes registers workflow endpoints on the given mux.
@@ -64,6 +70,11 @@ func (h *WorkflowHandler) HandleRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Record tamper-evident audit event — every workflow start is on
+	// the hash chain so a "who ran what when" reconstruction is durable.
+	recordAudit(r.Context(), h.auditWriter, "workflow.dispatch", req.Operator, "rest",
+		req.Name, "")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

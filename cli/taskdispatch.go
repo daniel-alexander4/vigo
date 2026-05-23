@@ -4,6 +4,9 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -36,6 +39,7 @@ var taskRunCmd = &cobra.Command{
 		maxFailures, _ := cmd.Flags().GetString("max-failures")
 		healthCheck, _ := cmd.Flags().GetString("health-check-url")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		force, _ := cmd.Flags().GetBool("force")
 		paramFlags, _ := cmd.Flags().GetStringArray("param")
 
 		if target == "" && len(paramFlags) == 0 {
@@ -71,6 +75,7 @@ var taskRunCmd = &cobra.Command{
 			"maxFailures": maxFailures,
 			"healthCheck": healthCheck,
 			"dryRun":      dryRun,
+			"force":       force,
 		}
 		if len(params) > 0 {
 			body["taskName"] = args[0]
@@ -91,7 +96,46 @@ var taskRunCmd = &cobra.Command{
 		}
 		err := client.post("/api/v1/task", body, &dispatchResp)
 		if err != nil {
-			return err
+			// Detect a server-side guardrail block. When the operator
+			// hasn't already passed --force, show the reason and ask;
+			// on confirm, retry the dispatch with force=true so the
+			// server skips its check (the agent still enforces its
+			// hardcoded guardrails — they are not bypassable here).
+			var stat *httpStatusError
+			if errors.As(err, &stat) && stat.Code == 400 {
+				var blocked struct {
+					Blocked bool   `json:"blocked"`
+					Reason  string `json:"reason"`
+					Pattern string `json:"pattern"`
+				}
+				if json.Unmarshal(stat.Body, &blocked) == nil && blocked.Blocked {
+					if force {
+						// --force was set but the server still
+						// rejected — should not happen (server skips
+						// the check when force=true). Surface verbatim.
+						return err
+					}
+					fmt.Fprintf(os.Stderr, "%s server-side guardrail blocked this command\n", yellow("warning:"))
+					fmt.Fprintf(os.Stderr, "  reason:  %s\n", blocked.Reason)
+					fmt.Fprintf(os.Stderr, "  pattern: %s\n", blocked.Pattern)
+					fmt.Fprintf(os.Stderr, "  note:    the agent's hardcoded guardrails still apply on each envoy.\n")
+					fmt.Fprint(os.Stderr, "Proceed anyway? [y/N] ")
+					reader := bufio.NewReader(os.Stdin)
+					answer, _ := reader.ReadString('\n')
+					answer = strings.TrimSpace(strings.ToLower(answer))
+					if answer != "y" && answer != "yes" {
+						return fmt.Errorf("aborted by operator")
+					}
+					body["force"] = true
+					if err := client.post("/api/v1/task", body, &dispatchResp); err != nil {
+						return err
+					}
+				} else {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
 
 		// Dry-run: display batch plan and exit.
@@ -370,6 +414,7 @@ func init() {
 	taskRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")
 	taskRunCmd.Flags().String("health-check-url", "", "URL to probe between batches (abort on non-2xx)")
 	taskRunCmd.Flags().Bool("dry-run", false, "Display batch plan without executing")
+	taskRunCmd.Flags().Bool("force", false, "Bypass the server-side guardrail check (agent guardrails still apply)")
 	taskRunCmd.Flags().StringArray("param", nil, "Task parameter (key=value), repeatable")
 	taskListCmd.Flags().Int("limit", 20, "Maximum number of tasks to display")
 	taskCancelCmd.Flags().Bool("running", false, "Cancel all tasks in running/pending state")

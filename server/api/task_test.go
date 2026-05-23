@@ -20,6 +20,7 @@ import (
 
 	"git.alexander4.io/vigo/server/db"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/validate"
 )
 
 // openTaskTestDB returns an in-memory SQLite database with the full
@@ -41,6 +42,25 @@ func (s *stubDispatcher) DispatchPush(_ context.Context, params isgrpc.DispatchP
 		return nil, s.returnErr
 	}
 	return s.returnResult, nil
+}
+
+// recordedAuditEvent captures a single recordAudit call for assertions.
+type recordedAuditEvent struct {
+	EventType string
+	Actor     string
+	Source    string
+	Summary   string
+	Payload   string
+}
+
+// recordingAuditWriter implements auditRecorder and stores every call.
+type recordingAuditWriter struct {
+	events []recordedAuditEvent
+}
+
+func (w *recordingAuditWriter) Record(_ context.Context, eventType, actor, source, summary, payload string) error {
+	w.events = append(w.events, recordedAuditEvent{eventType, actor, source, summary, payload})
+	return nil
 }
 
 func TestTaskHandler_Dispatch(t *testing.T) {
@@ -341,5 +361,90 @@ func TestTaskHandler_RequireDefinitionAllowsNamed(t *testing.T) {
 
 	if rec.Code != http.StatusCreated && rec.Code != http.StatusOK {
 		t.Fatalf("expected 200/201 for named task, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTaskHandler_DispatchBlockedByGuardrail pins the 400-shaped
+// response when ValidatePushCommand rejects a dispatch: structured
+// body with blocked=true + reason + pattern (so the CLI can prompt and
+// retry with --force) and a `task.blocked` audit entry on the hash
+// chain. A bare 500 would lose both — operator sees an opaque error
+// and audit has no record of the refused dispatch.
+func TestTaskHandler_DispatchBlockedByGuardrail(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	dispatcher := &stubDispatcher{
+		returnErr: &validate.Violation{Reason: "command matches dangerous pattern", Pattern: "systemctl stop vigo"},
+	}
+	audit := &recordingAuditWriter{}
+	handler := NewTaskHandler(db.New(sqlDB), dispatcher, false)
+	handler.SetAuditWriter(audit)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"command":"systemctl stop vigo-envoy","target":"*","operator":"alice"}`
+	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp blockedResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.Blocked {
+		t.Errorf("expected blocked=true, got %+v", resp)
+	}
+	if resp.Pattern != "systemctl stop vigo" {
+		t.Errorf("expected pattern in response, got %q", resp.Pattern)
+	}
+	if resp.Reason != "command matches dangerous pattern" {
+		t.Errorf("expected reason in response, got %q", resp.Reason)
+	}
+	if len(audit.events) != 1 || audit.events[0].EventType != "task.blocked" {
+		t.Fatalf("expected single task.blocked audit event, got %+v", audit.events)
+	}
+	if !strings.Contains(audit.events[0].Payload, "systemctl stop vigo") {
+		t.Errorf("expected payload to carry matched pattern, got %q", audit.events[0].Payload)
+	}
+	if audit.events[0].Actor != "alice" {
+		t.Errorf("expected actor=alice, got %q", audit.events[0].Actor)
+	}
+}
+
+// TestTaskHandler_DispatchForceBypassesGuardrail pins force=true:
+// DispatchParams.Force is passed through, the audit event is
+// `task.dispatch` with a `forced` payload (so audit reviewers can find
+// every bypass), and the response is the normal 201 dispatch result.
+func TestTaskHandler_DispatchForceBypassesGuardrail(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	dispatcher := &stubDispatcher{returnResult: &isgrpc.DispatchResult{ID: "push-forced", Status: "running"}}
+	audit := &recordingAuditWriter{}
+	handler := NewTaskHandler(db.New(sqlDB), dispatcher, false)
+	handler.SetAuditWriter(audit)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"command":"systemctl stop vigo-envoy","target":"*","operator":"alice","force":true}`
+	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !dispatcher.lastParams.Force {
+		t.Error("expected Force=true to reach DispatchPush")
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("expected one audit event, got %d: %+v", len(audit.events), audit.events)
+	}
+	ev := audit.events[0]
+	if ev.EventType != "task.dispatch" {
+		t.Errorf("expected task.dispatch (with forced payload), got %q", ev.EventType)
+	}
+	if !strings.Contains(ev.Payload, `"forced":true`) {
+		t.Errorf("expected forced=true payload, got %q", ev.Payload)
 	}
 }
