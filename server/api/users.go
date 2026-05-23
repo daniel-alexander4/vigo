@@ -266,13 +266,31 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		perms = string(data)
 	}
 
+	// Each updatable field is a partial update: an omitted (empty) field
+	// preserves the stored value rather than blanking it. This lets a
+	// role-only PUT (`webusers set-role`) leave display name, email, and
+	// the SSH key intact — the latter matters because wiping an admin's
+	// pubkey would break isowebauth/scrier landing on the next login.
+	displayName := existing.DisplayName
+	if req.DisplayName != "" {
+		displayName = req.DisplayName
+	}
+	email := existing.Email
+	if req.Email != "" {
+		email = req.Email
+	}
+	sshKey := existing.SSHPublicKey
+	if req.SSHPublicKey != "" {
+		sshKey = req.SSHPublicKey
+	}
+
 	if err := h.store.Update(r.Context(), db.UpdateUserParams{
 		ID:           id,
-		DisplayName:  req.DisplayName,
-		Email:        req.Email,
+		DisplayName:  displayName,
+		Email:        email,
 		Role:         role,
 		Permissions:  perms,
-		SshPublicKey: req.SSHPublicKey,
+		SshPublicKey: sshKey,
 	}); err != nil {
 		slog.Error("updating user", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to update user")

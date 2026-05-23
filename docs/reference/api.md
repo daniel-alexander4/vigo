@@ -1337,7 +1337,7 @@ Create a new user account. The first user created is automatically assigned the 
 
 **Permission:** Admin role
 
-Update a user account (role, password). Admin only.
+Update a user account. Admin only. Each field (`role`, `display_name`, `email`, `ssh_public_key`) is a partial update — an omitted field preserves the stored value. Changing `role` recalculates permissions and writes a `user.role_change` audit entry; promotion to `admin` is rejected unless the username maps to a human OS user on the server host.
 
 
 ### DELETE /api/v1/users/{id}

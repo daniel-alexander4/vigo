@@ -68,6 +68,26 @@ vigocli secrets set password vigo/web/auth/dan
 
 See [vigocli secrets](secrets.md) for details.
 
+### set-role
+
+Change an existing user's role. Permissions are recalculated from the new role and the change is written to the audit log.
+
+```bash
+vigocli webusers set-role --username alice --role compliance
+
+# Promoting to admin — run from the server host. The username must
+# match a human OS account (same constraint as `create --role admin`);
+# the server rejects the change with a remediation message otherwise.
+sudo vigocli webusers set-role --username dan --role admin
+```
+
+Only the role changes — display name, email, and the SSH public key are preserved. Demoting an operator out of `admin` takes effect at their next login; sessions already open keep their elevated permissions until then.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--username` | — | Username (required) |
+| `--role` | — | New role: `admin`, `viewer`, or `compliance` (required). Promotion to `admin` requires a matching human OS user on the server host. |
+
 ### delete
 
 Permanently remove a user account.

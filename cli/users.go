@@ -182,6 +182,63 @@ var webusersSetPasswordCmd = &cobra.Command{
 	},
 }
 
+var webusersSetRoleCmd = &cobra.Command{
+	Use:   "set-role",
+	Short: "Change a user's role (admin, viewer, or compliance)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if userUsername == "" {
+			return fmt.Errorf("--username is required")
+		}
+		if userRole == "" {
+			return fmt.Errorf("--role is required")
+		}
+		if !isValidRole(userRole) {
+			return fmt.Errorf("invalid --role %q (valid: %v)", userRole, validRoles)
+		}
+
+		// Look up the user by username to get the ID and current role.
+		client := newAPIClient()
+		var users []struct {
+			ID       string `json:"id"`
+			Username string `json:"username"`
+			Role     string `json:"role"`
+		}
+		if err := client.get("/api/v1/users", &users); err != nil {
+			return err
+		}
+
+		var userID, currentRole string
+		for _, u := range users {
+			if u.Username == userUsername {
+				userID, currentRole = u.ID, u.Role
+				break
+			}
+		}
+		if userID == "" {
+			return fmt.Errorf("user %q not found", userUsername)
+		}
+		if currentRole == userRole {
+			fmt.Printf("User %s is already role %s — no change.\n", userUsername, userRole)
+			return nil
+		}
+
+		// Promotion to admin must map 1:1 with a human OS user on the server
+		// host — the server validates this and rejects with a remediation
+		// message if it fails. Send only the role; the handler preserves
+		// display name, email, and the SSH key.
+		body := map[string]string{"role": userRole}
+		if err := client.put("/api/v1/users/"+userID, body, nil); err != nil {
+			return err
+		}
+
+		fmt.Printf("User %s role changed from %s to %s.\n", userUsername, currentRole, userRole)
+		if userRole != "admin" && currentRole == "admin" {
+			fmt.Printf("  %s is no longer an admin — existing sessions keep admin until next login.\n", userUsername)
+		}
+		return nil
+	},
+}
+
 // requireVaultUnlockedForWebusers gates webuser password operations behind
 // the same unlock verifier as `vigocli secrets set`. Bare two-check
 // primitive — no cobra plumbing — so it can be called from a RunE body
@@ -303,10 +360,14 @@ func init() {
 	webusersSetPasswordCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
 	webusersSetPasswordCmd.Flags().BoolVar(&userPasswordStdin, "password-stdin", false, "Read password from stdin instead of prompting (for scripted use)")
 
+	webusersSetRoleCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
+	webusersSetRoleCmd.Flags().StringVar(&userRole, "role", "", "New role: admin, viewer, or compliance (required)")
+
 	webusersDeleteCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
 
 	webusersCmd.AddCommand(webusersListCmd)
 	webusersCmd.AddCommand(webusersCreateCmd)
 	webusersCmd.AddCommand(webusersSetPasswordCmd)
+	webusersCmd.AddCommand(webusersSetRoleCmd)
 	webusersCmd.AddCommand(webusersDeleteCmd)
 }
