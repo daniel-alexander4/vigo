@@ -41,40 +41,49 @@ func NewDataSource(fleet *FleetIndex, queries *db.Queries, runStore db.RunStore,
 	}
 }
 
+// envoyRow converts one live FleetIndex EnvoyState into a
+// freshness-stamped ui.EnvoyRow. This is the single canonical
+// EnvoyState→EnvoyRow mapping — the envoys page, the dashboard
+// worst-list, and the envoy detail header all build their rows here so a
+// field added to EnvoyRow can't silently go missing on one surface.
+func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold time.Duration) ui.EnvoyRow {
+	var failurePct float64
+	if ts.LastRunModuleCount > 0 {
+		failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunModuleCount) * 100
+	}
+	observedCycle := ts.ObservedCycle()
+	lastSeenLabel, offline := ui.EnvoyFreshness(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
+	return ui.EnvoyRow{
+		ID:                  ts.ID,
+		Hostname:            ts.Hostname,
+		IPAddress:           ts.IP,
+		EnrolledAt:          ts.EnrolledAt,
+		LastSeen:            ts.LastSeen,
+		LastSeenLabel:       lastSeenLabel,
+		Offline:             offline,
+		LastRunAt:           ts.LastRunAt,
+		LastRunID:           ts.LastRunID,
+		Status:              ts.ConvergenceStatus,
+		Drift:               ts.Drift,
+		DriftLabel:          ts.Drift.String(),
+		FailurePct:          failurePct,
+		ModuleCount:         ts.LastRunModuleCount,
+		FailedCount:         ts.LastRunFailedCount,
+		ChangedCount:        ts.LastRunChangedCount,
+		ObserveOnly:         ts.ObserveOnly,
+		StaleThresholdLabel: ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, observedCycle, offlineThreshold)),
+		AgentVersion:        ts.AgentVersion,
+	}
+}
+
 // envoyRows builds the full freshness-stamped EnvoyRow set from the live
 // FleetIndex snapshot — the shared basis for the envoys page and the
 // dashboard worst-list.
 func (ds *DataSource) envoyRows(baseInterval, offlineThreshold time.Duration) []ui.EnvoyRow {
 	states := ds.fleet.SnapshotEnvoys()
 	rows := make([]ui.EnvoyRow, 0, len(states))
-	for _, ts := range states {
-		var failurePct float64
-		if ts.LastRunModuleCount > 0 {
-			failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunModuleCount) * 100
-		}
-		observedCycle := ts.ObservedCycle()
-		lastSeenLabel, offline := ui.EnvoyFreshness(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
-		rows = append(rows, ui.EnvoyRow{
-			ID:                  ts.ID,
-			Hostname:            ts.Hostname,
-			IPAddress:           ts.IP,
-			EnrolledAt:          ts.EnrolledAt,
-			LastSeen:            ts.LastSeen,
-			LastSeenLabel:       lastSeenLabel,
-			Offline:             offline,
-			LastRunAt:           ts.LastRunAt,
-			LastRunID:           ts.LastRunID,
-			Status:              ts.ConvergenceStatus,
-			Drift:               ts.Drift,
-			DriftLabel:          ts.Drift.String(),
-			FailurePct:          failurePct,
-			ModuleCount:         ts.LastRunModuleCount,
-			FailedCount:         ts.LastRunFailedCount,
-			ChangedCount:        ts.LastRunChangedCount,
-			ObserveOnly:         ts.ObserveOnly,
-			StaleThresholdLabel: ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, observedCycle, offlineThreshold)),
-			AgentVersion:        ts.AgentVersion,
-		})
+	for i := range states {
+		rows = append(rows, ds.envoyRow(&states[i], baseInterval, offlineThreshold))
 	}
 	return rows
 }
@@ -477,19 +486,23 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 			LastSeen:          lastSeen,
 			ConvergenceStatus: convStatus,
 		}
+		// Carry the last run's counts onto the synthetic state so the
+		// detail header pill renders the real convergence ratio rather
+		// than "no run data" for an envoy that has dropped out of the
+		// in-memory FleetIndex (revoked, or pre-rehydration). Drift stays
+		// None — it needs run history this single-run fetch doesn't have.
+		if len(runs) > 0 {
+			ts.LastRunID = runs[0].ID
+			ts.LastRunAt = runs[0].StartedAt
+			ts.LastRunModuleCount = runs[0].ModuleCount
+			ts.LastRunChangedCount = runs[0].ChangedCount
+			ts.LastRunFailedCount = runs[0].FailedCount
+		}
 	}
 
 	return ui.EnvoyDetailPageData{
 		PageData: ui.PageData{Title: "Envoy: " + ts.Hostname, ActiveNav: "envoys"},
-		Envoy: ui.EnvoyRow{
-			ID:         ts.ID,
-			Hostname:   ts.Hostname,
-			IPAddress:  ts.IP,
-			EnrolledAt: ts.EnrolledAt,
-			LastSeen:   ts.LastSeen,
-			Status:     ts.ConvergenceStatus,
-			Offline:    ts.Offline,
-		},
+		Envoy:    ds.envoyRow(ts, baseInterval, offlineThreshold),
 	}, nil
 }
 
