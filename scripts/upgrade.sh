@@ -8,9 +8,11 @@ set -euo pipefail
 #   sudo scripts/upgrade.sh [components...] [--norun] [--push]
 #
 # Components — presence-based: name it to build it, omit it to skip it.
-#   server-only  Rebuild vigosrv and hot-swap it into the running
-#                container. Fast; ephemeral (a container recreate reverts
-#                it). For UI / handler / API changes — no agent rebuild.
+#   server-only  Rebuild vigosrv + vigocli. Hot-swap vigosrv into the
+#                running container (ephemeral — a recreate reverts it);
+#                refresh vigocli in the container and the host
+#                /usr/local/bin. For UI / handler / API / CLI changes —
+#                no agent rebuild.
 #   full         Full Docker image rebuild (vigosrv + vigocli + amd64
 #                agent), redeploy from the new image. Durable; installs
 #                host vigocli.
@@ -63,7 +65,7 @@ usage() {
 Usage: sudo scripts/upgrade.sh [components...] [--norun] [--push]
 
 Components (name it to build it, omit it to skip it):
-  server-only  hot-swap vigosrv into the running container (fast, ephemeral)
+  server-only  hot-swap vigosrv + refresh vigocli (container + host); fast
   full         full Docker image rebuild + redeploy (durable; rebuilds amd64 agent)
   amd64        cross-compile + inject the linux/amd64 agent
   arm64        cross-compile + inject the linux/arm64 agent
@@ -411,32 +413,51 @@ if $DO_SERVERONLY || $DO_FULL; then
 fi
 
 # ---------------------------------------------------------------------------
-# server-only — hot-swap vigosrv into the running container
+# server-only — hot-swap vigosrv + vigocli without a full image rebuild
 # ---------------------------------------------------------------------------
 #
 # The UI templates + CSS are //go:embed'd into vigosrv, so a UI change means
-# recompiling the binary. Build it via Dockerfile.server's go-builder stage
-# (same prod build environment + flags; `--target go-builder` skips the Rust
-# stage entirely) and docker-cp it over the running container's vigosrv.
-# Ephemeral: a container recreate (docker compose up) reverts to the image's
-# binary — that's `full`'s job.
+# recompiling the binary. Build vigosrv + vigocli via Dockerfile.server's
+# go-builder stage (same prod build environment + flags; `--target go-builder`
+# skips the Rust stage entirely), then docker-cp them into place:
+#   - vigosrv  → the running container only. Ephemeral: a container recreate
+#                (docker compose up) reverts to the image's binary — that's
+#                `full`'s job.
+#   - vigocli  → both the running container AND the host /usr/local/bin, so
+#                CLI-only changes (new subcommands, flags) land without a
+#                full image rebuild. The host copy is durable; both copies
+#                are refreshed so the freshness check below stays honest.
 
 if $DO_SERVERONLY; then
     if ! docker ps -q -f name=vigo | grep -q .; then
-        echo "ERROR: the vigo container is not running — 'server-only' hot-swaps vigosrv into it." >&2
+        echo "ERROR: the vigo container is not running — 'server-only' hot-swaps binaries into it." >&2
         echo "       Start it with 'docker compose up -d', or run 'upgrade.sh full'." >&2
         exit 1
     fi
-    echo "Building vigosrv (go-builder stage)..."
+    echo "Building vigosrv + vigocli (go-builder stage)..."
     DOCKER_BUILDKIT=1 docker build \
         --target go-builder \
         -f "$STAGE_DIR/Dockerfile.server" -t vigo-uibuild:latest "$STAGE_DIR"
     cid="$(docker create vigo-uibuild:latest)"
     docker cp "$cid:/build/vigosrv" "$STAGE_DIR/vigosrv"
+    docker cp "$cid:/build/vigocli" "$STAGE_DIR/vigocli"
     docker rm "$cid" >/dev/null
+
+    # vigosrv → container (hot-swap; reverts on a container recreate).
     docker cp "$STAGE_DIR/vigosrv" vigo:/usr/local/sbin/vigosrv
     echo "  vigosrv → container ($(ls -lh "$STAGE_DIR/vigosrv" | awk '{print $5}'))"
-    echo "  (ephemeral — a container recreate reverts to the image's vigosrv)"
+
+    # vigocli → container + host. The go-builder vigocli is the exact binary
+    # the image ships at /usr/local/bin/vigocli (Dockerfile.server's runtime
+    # COPY), so this is a faithful CLI refresh. Root-only on the host: peer
+    # auth trusts any localhost caller, so the 0700 mode is the gate.
+    docker cp "$STAGE_DIR/vigocli" vigo:/usr/local/bin/vigocli
+    docker exec vigo chmod 0700 /usr/local/bin/vigocli
+    cp "$STAGE_DIR/vigocli" /usr/local/bin/vigocli
+    chown root:root /usr/local/bin/vigocli
+    chmod 0700 /usr/local/bin/vigocli
+    echo "  vigocli → container + host /usr/local/bin/vigocli ($(ls -lh "$STAGE_DIR/vigocli" | awk '{print $5}'))"
+    echo "  (vigosrv hot-swap is ephemeral — a container recreate reverts it)"
 fi
 
 # ---------------------------------------------------------------------------
