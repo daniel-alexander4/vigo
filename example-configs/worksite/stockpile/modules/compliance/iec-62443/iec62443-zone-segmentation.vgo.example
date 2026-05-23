@@ -1,5 +1,6 @@
 name: iec62443-zone-segmentation
-bundle: [iec62443-zone-segmentation]
+compliance:
+  bundle: [iec62443-zone-segmentation]
 vars:
   management_cidr: "10.100.0.0/24"
   scada_cidr: "10.200.0.0/24"

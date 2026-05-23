@@ -2,8 +2,8 @@
 #~ or create pools (operator-specific). Use sysctl/zfs vars for tunables.
 name: zfs
 
-provides: [filesystem-encrypted-snapshots]
-
+compliance:
+  provides: [filesystem-encrypted-snapshots]
 resources:
   - name: install-zfsutils
     type: package

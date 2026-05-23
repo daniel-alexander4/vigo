@@ -1,6 +1,6 @@
 name: soc2-governance
-bundle: [soc2-governance]
-
+compliance:
+  bundle: [soc2-governance]
 resources:
   # CC1/CC2/CC3: Governance, communication, risk — enforced via system monitoring
   - name: sysstat-package

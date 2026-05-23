@@ -27,13 +27,74 @@ resources:
 `
 	r := Lint([]byte(input), Options{})
 	if r.OK() {
-		t.Fatal("expected error for retired compliance: key")
+		t.Fatal("expected error for retired compliance: key (framework→control shape)")
 	}
 	if !containsError(r, "retired") {
 		t.Errorf("expected 'retired' in error; got %v", r.Errors)
 	}
 	if !containsError(r, "provides:") || !containsError(r, "bundle:") {
 		t.Errorf("expected provides: / bundle: in did-you-mean message; got %v", r.Errors)
+	}
+}
+
+// TestLint_ComplianceNewShape_Passes pins the 0.66.57 happy path: a
+// module declaring `compliance: { provides, bundle }` with known catalog
+// tags lints clean (and does NOT trip the retired-key rule, which fires
+// only on the old framework→control list shape).
+func TestLint_ComplianceNewShape_Passes(t *testing.T) {
+	input := `name: m
+compliance:
+  provides: [time-sync]
+  bundle: [cis-ubuntu-access]
+resources:
+  - name: vim
+    type: package
+    package: vim
+    state: present
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected clean lint for the new compliance: shape, got %v", r.Errors)
+	}
+}
+
+// TestLint_TopLevelProvides_Retired pins the 0.66.57 retirement of the
+// 0.66.48-through-0.66.56 authoring shape: top-level `provides:` on a
+// module errors with a migration pointer to the new `compliance:` parent.
+func TestLint_TopLevelProvides_Retired(t *testing.T) {
+	input := `name: m
+provides: [time-sync]
+resources:
+  - name: vim
+    type: package
+    package: vim
+    state: present
+`
+	r := Lint([]byte(input), Options{})
+	if r.OK() {
+		t.Fatal("expected error for top-level provides:")
+	}
+	if !containsError(r, "top-level") || !containsError(r, "compliance:") {
+		t.Errorf("expected migration-pointer error; got %v", r.Errors)
+	}
+}
+
+// TestLint_TopLevelBundle_Retired — sibling of the provides: variant.
+func TestLint_TopLevelBundle_Retired(t *testing.T) {
+	input := `name: m
+bundle: [cis-ubuntu-access]
+resources:
+  - name: vim
+    type: package
+    package: vim
+    state: present
+`
+	r := Lint([]byte(input), Options{})
+	if r.OK() {
+		t.Fatal("expected error for top-level bundle:")
+	}
+	if !containsError(r, "top-level") || !containsError(r, "compliance:") {
+		t.Errorf("expected migration-pointer error; got %v", r.Errors)
 	}
 }
 

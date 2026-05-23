@@ -1,5 +1,6 @@
 name: ce-firewalls
-bundle: [ce-firewalls]
+compliance:
+  bundle: [ce-firewalls]
 resources:
   - name: iptables-package
     type: package

@@ -2,8 +2,8 @@
 #~ volume + other fixed disks. JSON evidence in the evidence dir.
 name: encryption-attestation-windows
 
-bundle: [encryption-attestation-windows]
-
+compliance:
+  bundle: [encryption-attestation-windows]
 vars:
   evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
 

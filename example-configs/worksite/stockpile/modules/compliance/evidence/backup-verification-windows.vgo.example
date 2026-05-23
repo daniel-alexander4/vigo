@@ -3,8 +3,8 @@
 #~ Outputs JSON evidence.
 name: backup-verification-windows
 
-bundle: [backup-verification-windows]
-
+compliance:
+  bundle: [backup-verification-windows]
 vars:
   evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
 

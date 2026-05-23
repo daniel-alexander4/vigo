@@ -3,8 +3,8 @@
 #~ assumed handled by their site config.
 name: ldap-client
 
-provides: [central-identity]
-
+compliance:
+  provides: [central-identity]
 resources:
   - name: install-ldap-utils
     type: package

@@ -3,8 +3,8 @@
 #~ updating the secret entry.
 name: ca-anchors
 
-provides: [system-ca-trust]
-
+compliance:
+  provides: [system-ca-trust]
 vars:
   internal_ca_pem: "secret:vigo/ca/internal_root_pem"
 

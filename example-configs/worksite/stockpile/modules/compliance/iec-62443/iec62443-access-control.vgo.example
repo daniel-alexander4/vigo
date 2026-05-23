@@ -1,5 +1,6 @@
 name: iec62443-access-control
-bundle: [iec62443-access-control]
+compliance:
+  bundle: [iec62443-access-control]
 vars:
   max_auth_tries: "3"
   lockout_time: "900"

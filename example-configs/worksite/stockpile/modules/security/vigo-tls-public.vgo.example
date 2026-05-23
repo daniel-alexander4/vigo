@@ -20,8 +20,8 @@
 #~ Composite role: vigo-server.
 name: vigo-tls-public
 
-provides: [tls-public-cert]
-
+compliance:
+  provides: [tls-public-cert]
 vars:
   ui_hostname: "vigo.example.com"
   cert_email: "ops@example.com"

@@ -1,7 +1,7 @@
 name: elastic-stack
 
-provides: [log-aggregation]
-
+compliance:
+  provides: [log-aggregation]
 vars:
   es_cluster_name: "vigo-cluster"
   es_http_port: "9200"

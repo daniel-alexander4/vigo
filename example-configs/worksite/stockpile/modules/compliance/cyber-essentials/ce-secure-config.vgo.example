@@ -1,5 +1,6 @@
 name: ce-secure-config
-bundle: [ce-secure-config]
+compliance:
+  bundle: [ce-secure-config]
 resources:
   # Remove unnecessary packages
   - name: remove-telnet

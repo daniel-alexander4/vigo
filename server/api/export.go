@@ -56,7 +56,7 @@ func (h *ExportHandler) RegisterRoutes(mux *http.ServeMux) {
 type SIEMEvent struct {
 	Timestamp    string `json:"timestamp"`
 	Hostname     string `json:"hostname"`
-	EnvoyID     string `json:"envoy_id"`
+	EnvoyID      string `json:"envoy_id"`
 	RunID        string `json:"run_id"`
 	ModuleName   string `json:"module_name"`
 	ResourceName string `json:"resource_name"`
@@ -71,20 +71,20 @@ type SIEMEvent struct {
 
 // CMDBRecord is a CMDB-consumable configuration item for a envoy.
 type CMDBRecord struct {
-	Hostname         string `json:"hostname"`
-	IP               string `json:"ip"`
-	EnvoyID         string `json:"envoy_id"`
-	OS               string `json:"os,omitempty"`
-	OSVersion        string `json:"os_version,omitempty"`
-	Architecture     string `json:"architecture,omitempty"`
-	Kernel           string `json:"kernel,omitempty"`
-	CPUCount         string `json:"cpu_count,omitempty"`
-	MemoryTotal      string `json:"memory_total,omitempty"`
+	Hostname          string `json:"hostname"`
+	IP                string `json:"ip"`
+	EnvoyID           string `json:"envoy_id"`
+	OS                string `json:"os,omitempty"`
+	OSVersion         string `json:"os_version,omitempty"`
+	Architecture      string `json:"architecture,omitempty"`
+	Kernel            string `json:"kernel,omitempty"`
+	CPUCount          string `json:"cpu_count,omitempty"`
+	MemoryTotal       string `json:"memory_total,omitempty"`
 	ConvergenceStatus string `json:"compliance_status"`
-	LastSeen         string `json:"last_seen"`
-	Environment      string `json:"environment,omitempty"`
-	EnrolledAt       string `json:"enrolled_at"`
-	Uptime           string `json:"uptime,omitempty"`
+	LastSeen          string `json:"last_seen"`
+	Environment       string `json:"environment,omitempty"`
+	EnrolledAt        string `json:"enrolled_at"`
+	Uptime            string `json:"uptime,omitempty"`
 }
 
 const (
@@ -154,15 +154,14 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(events)
+	writeJSON(w, r, http.StatusOK, events)
 }
 
 func siemEventFromRow(row db.ListRunResultsSinceRow) SIEMEvent {
 	e := SIEMEvent{
 		Timestamp:    row.CreatedAt.Format(time.RFC3339),
 		Hostname:     row.Hostname,
-		EnvoyID:     row.EnvoyID,
+		EnvoyID:      row.EnvoyID,
 		RunID:        row.RunID,
 		ModuleName:   row.ModuleName,
 		ResourceName: row.ResourceName,
@@ -183,7 +182,7 @@ func siemEventFromByEnvoyRow(row db.ListRunResultsSinceByEnvoyRow) SIEMEvent {
 	e := SIEMEvent{
 		Timestamp:    row.CreatedAt.Format(time.RFC3339),
 		Hostname:     row.Hostname,
-		EnvoyID:     row.EnvoyID,
+		EnvoyID:      row.EnvoyID,
 		RunID:        row.RunID,
 		ModuleName:   row.ModuleName,
 		ResourceName: row.ResourceName,
@@ -228,18 +227,18 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 		}
 
 		rec := CMDBRecord{
-			Hostname:         ts.Hostname,
-			IP:               ts.IP,
-			EnvoyID:         ts.ID,
-			OS:               ts.Traits["os.family"],
-			OSVersion:        ts.Traits["os.version"],
-			Architecture:     ts.Traits["os.arch"],
-			Kernel:           ts.Traits["kernel.version"],
-			CPUCount:         ts.Traits["hardware.cpu_count"],
-			MemoryTotal:      ts.Traits["memory.total"],
+			Hostname:          ts.Hostname,
+			IP:                ts.IP,
+			EnvoyID:           ts.ID,
+			OS:                ts.Traits["os.family"],
+			OSVersion:         ts.Traits["os.version"],
+			Architecture:      ts.Traits["os.arch"],
+			Kernel:            ts.Traits["kernel.version"],
+			CPUCount:          ts.Traits["hardware.cpu_count"],
+			MemoryTotal:       ts.Traits["memory.total"],
 			ConvergenceStatus: ts.ConvergenceStatus,
-			Environment:      env,
-			Uptime:           ts.Traits["uptime.seconds"],
+			Environment:       env,
+			Uptime:            ts.Traits["uptime.seconds"],
 		}
 		if !ts.LastSeen.IsZero() {
 			rec.LastSeen = ts.LastSeen.Format(time.RFC3339)
@@ -251,8 +250,7 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 		records = append(records, rec)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(records)
+	writeJSON(w, r, http.StatusOK, records)
 }
 
 func (h *ExportHandler) handleOSCAL(w http.ResponseWriter, r *http.Request) {
@@ -291,9 +289,9 @@ func (h *ExportHandler) handleOSCAL(w http.ResponseWriter, r *http.Request) {
 			Title:       c.id + " " + c.title,
 			Description: c.desc,
 			Target: map[string]any{
-				"type":        "control",
-				"target-id":   c.id,
-				"title":       c.title,
+				"type":      "control",
+				"target-id": c.id,
+				"title":     c.title,
 				"status": map[string]string{
 					"state": c.status,
 				},

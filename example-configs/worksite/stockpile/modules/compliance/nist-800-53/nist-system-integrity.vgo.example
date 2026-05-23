@@ -1,5 +1,6 @@
 name: nist-system-integrity
-bundle: [nist-system-integrity]
+compliance:
+  bundle: [nist-system-integrity]
 resources:
   # SI-3: Malicious code protection
   - name: clamav-package

@@ -1,8 +1,8 @@
 #~ Promtail — Grafana's log-tailing agent that forwards to Loki.
 name: promtail
 
-provides: [log-processing]
-
+compliance:
+  provides: [log-processing]
 vars:
   promtail_version: "3.0.0"
   loki_host: "loki.example.com"

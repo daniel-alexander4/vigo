@@ -1,7 +1,8 @@
 # router-base — baseline configuration for Juniper Junos routers.
 name: router-base
 
-provides: [network-device-baseline]
+compliance:
+  provides: [network-device-baseline]
 resources:
   - name: login-banner
     type: network_banner

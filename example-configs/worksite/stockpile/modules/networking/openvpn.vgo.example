@@ -1,7 +1,7 @@
 name: openvpn
 
-provides: [vpn-with-pki]
-
+compliance:
+  provides: [vpn-with-pki]
 vars:
   vpn_mode: "server"
   vpn_port: "1194"

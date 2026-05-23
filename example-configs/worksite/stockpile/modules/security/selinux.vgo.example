@@ -1,6 +1,7 @@
 name: selinux
 
-provides: [selinux-enforcing]
+compliance:
+  provides: [selinux-enforcing]
 # Prefer: cis-rhel-access (compliance role includes SELinux enforcement with
 # compliance tags). Only use this module if you are NOT using the cis-rhel
 # role — both write /etc/selinux/config.

@@ -56,7 +56,7 @@ type fleetPubkeysResponse struct {
 // eviction).
 func (h *FleetPubkeysHandler) Pubkeys(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		writeJSON(w, http.StatusOK, fleetPubkeysResponse{Pubkeys: map[string]string{}})
+		writeJSON(w, r, http.StatusOK, fleetPubkeysResponse{Pubkeys: map[string]string{}})
 		return
 	}
 	envoys := h.fleetIndex.AllEnvoys()
@@ -71,5 +71,5 @@ func (h *FleetPubkeysHandler) Pubkeys(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Pubkeys[e.Hostname] = hex.EncodeToString(pk)
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, r, http.StatusOK, resp)
 }

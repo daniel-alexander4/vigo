@@ -3,8 +3,8 @@ name: cis-rhel-logging
 # Level 1 + Level 2 controls
 # Applies to: RHEL 8/9, CentOS Stream 8/9, Rocky Linux 8/9, AlmaLinux 8/9
 
-bundle: [cis-rhel-logging]
-
+compliance:
+  bundle: [cis-rhel-logging]
 vars:
   audit_max_log_file: "8"
   audit_max_log_file_action: KEEP_LOGS

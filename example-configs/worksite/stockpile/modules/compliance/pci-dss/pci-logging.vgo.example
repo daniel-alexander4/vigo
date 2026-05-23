@@ -1,5 +1,6 @@
 name: pci-logging
-bundle: [pci-logging]
+compliance:
+  bundle: [pci-logging]
 resources:
   - name: auditd-package
     type: package

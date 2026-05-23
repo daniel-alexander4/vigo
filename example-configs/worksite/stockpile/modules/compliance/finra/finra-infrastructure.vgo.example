@@ -4,8 +4,8 @@ name: finra-infrastructure
 # Ensures critical infrastructure services are running, monitored,
 # and documented via trait collection.
 
-bundle: [finra-infrastructure]
-
+compliance:
+  bundle: [finra-infrastructure]
 resources:
   - name: ntp-running
     type: service

@@ -4,7 +4,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"git.alexander4.io/vigo/server/auth"
@@ -31,6 +30,5 @@ func (h *LicenseHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *LicenseHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := h.enforcer.GetStatus()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	writeJSON(w, r, http.StatusOK, status)
 }

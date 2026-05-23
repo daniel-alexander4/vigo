@@ -3,8 +3,8 @@
 #~ ship their domain-specific /etc/sssd/sssd.conf separately.
 name: sssd
 
-provides: [central-identity]
-
+compliance:
+  provides: [central-identity]
 resources:
   - name: install-sssd
     type: package

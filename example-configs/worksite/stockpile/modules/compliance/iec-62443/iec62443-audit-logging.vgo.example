@@ -1,5 +1,6 @@
 name: iec62443-audit-logging
-bundle: [iec62443-audit-logging]
+compliance:
+  bundle: [iec62443-audit-logging]
 vars:
   log_retention_days: "365"
   syslog_server: ""

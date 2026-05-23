@@ -2,8 +2,8 @@
 #~ from the secret vault and imported via certutil.
 name: ca-anchors-windows
 
-provides: [system-ca-trust]
-
+compliance:
+  provides: [system-ca-trust]
 vars:
   internal_ca_pem: "secret:vigo/ca/internal_root_pem"
 

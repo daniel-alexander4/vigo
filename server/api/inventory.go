@@ -147,8 +147,7 @@ func (h *InventoryHandler) HandleInventory(w http.ResponseWriter, r *http.Reques
 		resp["available_keys"] = availableKeys
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, r, http.StatusOK, resp)
 }
 
 // filter represents a single where clause: dot.path = value.
@@ -181,7 +180,7 @@ func (h *InventoryHandler) HandleInventoryKeys(w http.ResponseWriter, r *http.Re
 	}
 
 	type keyEntry struct {
-		Key   string `json:"key"`
+		Key    string `json:"key"`
 		Sample string `json:"sample"`
 	}
 	var keys []keyEntry
@@ -194,8 +193,7 @@ func (h *InventoryHandler) HandleInventoryKeys(w http.ResponseWriter, r *http.Re
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i].Key < keys[j].Key })
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"count": len(keys),
 		"keys":  keys,
 	})

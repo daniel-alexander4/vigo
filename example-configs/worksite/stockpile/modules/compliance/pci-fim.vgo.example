@@ -10,8 +10,8 @@
 
 name: pci-fim
 
-bundle: [pci-fim]
-
+compliance:
+  bundle: [pci-fim]
 vars:
   aide_db_path: "/var/lib/aide/aide.db"
   aide_report_url: "file:///var/log/aide/aide.log"

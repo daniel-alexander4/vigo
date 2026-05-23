@@ -3,8 +3,8 @@ name: cis-ubuntu-services
 # Level 1 + Level 2 controls
 # Applies to: Ubuntu 20.04, 22.04, 24.04
 
-bundle: [cis-ubuntu-services]
-
+compliance:
+  bundle: [cis-ubuntu-services]
 vars:
   ntp_server: "time.cloudflare.com"
 

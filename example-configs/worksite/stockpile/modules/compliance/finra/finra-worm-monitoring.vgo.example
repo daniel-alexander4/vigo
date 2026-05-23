@@ -7,8 +7,8 @@ name: finra-worm-monitoring
 # Vigo does NOT provide WORM storage — it monitors the infrastructure
 # that supports it.
 
-bundle: [finra-worm-monitoring]
-
+compliance:
+  bundle: [finra-worm-monitoring]
 resources:
   - name: archival-service-running
     type: exec

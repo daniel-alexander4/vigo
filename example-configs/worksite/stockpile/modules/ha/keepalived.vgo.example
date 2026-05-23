@@ -1,7 +1,7 @@
 name: keepalived
 
-provides: [failover-cluster]
-
+compliance:
+  provides: [failover-cluster]
 vars:
   vrrp_interface: "eth0"
   virtual_ip: "10.0.0.100"

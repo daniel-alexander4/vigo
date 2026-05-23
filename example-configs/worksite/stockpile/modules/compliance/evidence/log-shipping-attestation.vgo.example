@@ -4,8 +4,8 @@
 #~ Writes a signed receipt the connwaer agent can collect.
 name: log-shipping-attestation
 
-bundle: [log-shipping-attestation]
-
+compliance:
+  bundle: [log-shipping-attestation]
 vars:
   evidence_dir: "/var/lib/vigo/evidence"
   log_collector_endpoint: "loki.example.com:3100"

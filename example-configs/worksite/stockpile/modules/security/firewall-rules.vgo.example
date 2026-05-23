@@ -1,6 +1,7 @@
 name: firewall-rules
 
-provides: [host-firewall]
+compliance:
+  provides: [host-firewall]
 # Prefer: cis-ubuntu-network (installs UFW with default-deny and compliance tags).
 # Safe to use alongside CIS if you only add allow rules here — but avoid
 # duplicating the default-deny and UFW enable logic.

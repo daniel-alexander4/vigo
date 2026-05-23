@@ -2,8 +2,8 @@
 #~ log + tails configured paths and forwards to the same downstream.
 name: fluentbit-windows
 
-provides: [log-processing-pci]
-
+compliance:
+  provides: [log-processing-pci]
 vars:
   forward_host: "loki.example.com"
   forward_port: "3100"

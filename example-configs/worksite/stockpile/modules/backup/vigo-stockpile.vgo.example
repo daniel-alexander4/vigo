@@ -19,8 +19,8 @@
 #~ Apply to the host running vigosrv. Linux-only.
 name: vigo-stockpile
 
-provides: [vigo-stockpile-backup]
-
+compliance:
+  provides: [vigo-stockpile-backup]
 vars:
   stockpile_dir: "/srv/vigo/stacks/stockpile"
   remote_url: "git@github.example.com:ops/vigo-stockpile-backup.git"

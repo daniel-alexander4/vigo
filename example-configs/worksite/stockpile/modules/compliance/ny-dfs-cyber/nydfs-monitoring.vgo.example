@@ -3,8 +3,8 @@ name: nydfs-monitoring
 # Covers: NYCRR-500.14 (monitoring and detection),
 #          NYCRR-500.13 (data retention and disposal)
 
-bundle: [nydfs-monitoring]
-
+compliance:
+  bundle: [nydfs-monitoring]
 resources:
   - name: chkrootkit-installed
     type: package

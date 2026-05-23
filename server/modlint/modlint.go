@@ -170,17 +170,29 @@ func (r *Result) warnf(line int, ruleID, format string, args ...any) {
 // emit module-level findings so the operator gets a "module foo.vgo:1:1"
 // style pointer rather than an unanchored message.
 type module struct {
-	Name            string
-	DependsOn       []string
-	Before          []string
-	Defaults        map[string]any
-	Provides        []string
-	Bundle          []string
-	Compliance      map[string][]string
-	ComplianceOrder []string // preserve original framework key order
-	Vars            map[string]any
-	VarOrder        []string // preserve original key order
-	Resources       []resource
+	Name      string
+	DependsOn []string
+	Before    []string
+	Defaults  map[string]any
+	// Provides and Bundle are decoded from the nested
+	// `compliance: { provides: [...], bundle: [...] }` shape (0.66.57+).
+	// Populated only when those sub-keys appear under `compliance:`.
+	Provides []string
+	Bundle   []string
+	// ComplianceUnknownSubKeys captures any direct-children keys of
+	// `compliance:` that are NOT `provides` or `bundle` — the pre-0.66.48
+	// framework→control list shape. rule_module_compliance_key_retired
+	// uses this to fire the retire-error on the old shape.
+	ComplianceUnknownSubKeys []string
+	// TopLevelProvidesLine / TopLevelBundleLine record the YAML line of
+	// a top-level `provides:` or `bundle:` key (the retired 0.66.48-
+	// through-0.66.56 authoring shape). 0 = absent.
+	// rule_module_top_level_provides_bundle uses these to fire.
+	TopLevelProvidesLine int
+	TopLevelBundleLine   int
+	Vars                 map[string]any
+	VarOrder             []string // preserve original key order
+	Resources            []resource
 
 	Line   int
 	Column int
@@ -435,7 +447,8 @@ func parse(data []byte) (*module, error) {
 
 	seen := make(map[string]bool)
 	for i := 0; i < len(root.Content)-1; i += 2 {
-		key := root.Content[i].Value
+		keyNode := root.Content[i]
+		key := keyNode.Value
 		val := root.Content[i+1]
 
 		if seen[key] {
@@ -460,20 +473,37 @@ func parse(data []byte) (*module, error) {
 				return nil, fmt.Errorf("decoding defaults: %w", err)
 			}
 		case "compliance":
-			if val.Kind == yaml.MappingNode {
-				mod.ComplianceOrder = extractKeyOrder(val)
+			// 0.66.57+ shape: { provides: [...], bundle: [...] }.
+			// Walk the mapping manually so we can distinguish the new
+			// sub-keys from pre-0.66.48 framework→control entries;
+			// rule_module_compliance_key_retired fires on the latter.
+			if val.Kind != yaml.MappingNode {
+				return nil, fmt.Errorf("compliance: expected mapping, got %v", val.Kind)
 			}
-			if err := val.Decode(&mod.Compliance); err != nil {
-				return nil, fmt.Errorf("decoding compliance: %w", err)
+			for j := 0; j < len(val.Content)-1; j += 2 {
+				subKey := val.Content[j].Value
+				subVal := val.Content[j+1]
+				switch subKey {
+				case "provides":
+					if err := subVal.Decode(&mod.Provides); err != nil {
+						return nil, fmt.Errorf("decoding compliance.provides: %w", err)
+					}
+				case "bundle":
+					if err := subVal.Decode(&mod.Bundle); err != nil {
+						return nil, fmt.Errorf("decoding compliance.bundle: %w", err)
+					}
+				default:
+					mod.ComplianceUnknownSubKeys = append(mod.ComplianceUnknownSubKeys, subKey)
+				}
 			}
 		case "provides":
-			if err := val.Decode(&mod.Provides); err != nil {
-				return nil, fmt.Errorf("decoding provides: %w", err)
-			}
+			// Top-level `provides:` was the 0.66.48-through-0.66.56
+			// authoring shape; retired in 0.66.57. Record the line so
+			// rule_module_top_level_provides_bundle can point at it.
+			mod.TopLevelProvidesLine = keyNode.Line
 		case "bundle":
-			if err := val.Decode(&mod.Bundle); err != nil {
-				return nil, fmt.Errorf("decoding bundle: %w", err)
-			}
+			// Top-level `bundle:` — same retirement as `provides:` above.
+			mod.TopLevelBundleLine = keyNode.Line
 		case "vars":
 			if val.Kind == yaml.MappingNode {
 				mod.VarOrder = extractKeyOrder(val)
@@ -650,23 +680,22 @@ func render(mod *module, opts Options, r *Result) string {
 		b.WriteString(fmt.Sprintf("before: [%s]\n", strings.Join(mod.Before, ", ")))
 	}
 
-	// Compliance.
-	if len(mod.Compliance) > 0 {
+	// Compliance — 0.66.57+ shape: `compliance: { provides: [...], bundle: [...] }`.
+	if len(mod.Provides) > 0 || len(mod.Bundle) > 0 {
 		b.WriteString("\ncompliance:\n")
-		order := mod.ComplianceOrder
-		if len(order) == 0 {
-			order = sortedKeys(mod.Compliance)
+		if len(mod.Provides) > 0 {
+			quoted := make([]string, len(mod.Provides))
+			for i, p := range mod.Provides {
+				quoted[i] = yamlScalar(p)
+			}
+			b.WriteString(fmt.Sprintf("  provides: [%s]\n", strings.Join(quoted, ", ")))
 		}
-		for _, fw := range order {
-			controls, ok := mod.Compliance[fw]
-			if !ok {
-				continue
+		if len(mod.Bundle) > 0 {
+			quoted := make([]string, len(mod.Bundle))
+			for i, x := range mod.Bundle {
+				quoted[i] = yamlScalar(x)
 			}
-			quoted := make([]string, len(controls))
-			for i, c := range controls {
-				quoted[i] = yamlScalar(c)
-			}
-			b.WriteString(fmt.Sprintf("  %s: [%s]\n", fw, strings.Join(quoted, ", ")))
+			b.WriteString(fmt.Sprintf("  bundle: [%s]\n", strings.Join(quoted, ", ")))
 		}
 	}
 

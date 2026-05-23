@@ -9,8 +9,8 @@
 #~ source-based installation.
 name: openvas
 
-provides: [vulnerability-scanning]
-
+compliance:
+  provides: [vulnerability-scanning]
 vars:
   gvm_admin_user: "admin"
   gvm_admin_pass: "secret:vigo/openvas/admin_password"

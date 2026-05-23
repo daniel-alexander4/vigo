@@ -1057,6 +1057,22 @@ const (
 	ModuleKindUsercrate ModuleKind = "usercrate" // loaded from a stockpile/**/usercrates/ dir
 )
 
+// ComplianceClaims is a module's per-module compliance attribution block.
+// Two parallel catalog-backed lists:
+//
+//   - Provides — functional capabilities the module delivers across
+//     frameworks (catalog: server/compliance/provisions.go).
+//   - Bundle — framework-scope-cuts the module implements (catalog:
+//     server/compliance/bundles.go).
+//
+// Both are tag lists; the loader expands each tag via the catalog into
+// the framework → control IDs it satisfies. Adding a framework touches
+// one catalog file instead of every module.
+type ComplianceClaims struct {
+	Provides []string `yaml:"provides"`
+	Bundle   []string `yaml:"bundle"`
+}
+
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
 // It has a custom UnmarshalYAML that flattens conditional_block entries
 // in the resources list into plain ResourceConfig items.
@@ -1069,39 +1085,35 @@ type ModuleDefinition struct {
 	Defaults   map[string]any      `yaml:"defaults"`
 	Resources  []ResourceConfig    `yaml:"resources"`
 	Vars       map[string]any      `yaml:"vars"`
-	// Compliance carries framework → control IDs claimed by this
-	// module. As of 0.66.48 the per-module `compliance:` YAML key is
-	// retired — modlint (rule_module_compliance_key_retired) errors
-	// on any module that uses it, so `vigocli config publish` refuses
-	// such modules. The field is retained because (a) the loader
-	// continues to decode the YAML key so historical fixtures + in-
-	// flight operator migrations don't crash before modlint runs,
-	// and (b) directory-level `compliance.vgo` inheritance
-	// (`loadComplianceConfigs` + `applyModuleComplianceInheritance`)
-	// still writes into it. Operator-facing per-module compliance
-	// authoring is `provides:` / `bundle:` exclusively.
-	Compliance map[string][]string `yaml:"compliance"`
+	// Compliance is the per-module compliance attribution block (0.66.57+).
+	// Two sub-keys, both routed through Vigo-curated catalogs:
+	//
+	//   compliance:
+	//     provides: [time-sync, login-banner]     # functional capabilities
+	//     bundle:   [cis-ubuntu-access]           # framework scope-cuts
+	//
+	// Re-parented under `compliance:` to restore the at-a-glance signal
+	// stripped when 0.66.48 promoted `provides:` / `bundle:` to top
+	// level — module YAML now declares its compliance intent under one
+	// recognisable key, but the cross-walks still live in the catalogs
+	// (server/compliance/provisions.go + bundles.go), not inline.
+	//
+	// modlint enforces the shape:
+	//   - rule_module_compliance_key_retired errors when `compliance:`
+	//     carries the pre-0.66.48 framework→control list shape.
+	//   - rule_module_top_level_provides_bundle errors when the
+	//     0.66.48-style top-level `provides:` / `bundle:` keys appear
+	//     on a module.
+	Compliance ComplianceClaims `yaml:"compliance"`
 
-	// Provides lists Vigo-curated provision tags (e.g. "time-sync",
-	// "audit-trail") that the module satisfies. The loader expands each
-	// tag through compliance.ModuleProvisions into framework → control
-	// IDs and unions the result with the explicit Compliance map. Tags
-	// not in the catalog are reported by modlint (server/modlint/
-	// rule_module_provisions.go) and contribute nothing to coverage —
-	// they don't fail the load.
-	Provides []string `yaml:"provides"`
-
-	// Bundle lists Vigo-curated framework-bundle tags (e.g.
-	// "cis-ubuntu-access-baseline", "ce-firewalls") that the module
-	// implements. Bundles are the framework-scope-cut sibling of
-	// Provides — Provides names what a module *does* across frameworks;
-	// Bundle names *which framework section* a module satisfies. The
-	// loader expands each tag through compliance.ModuleBundles and
-	// unions the result alongside Provides + Compliance. Two YAML keys,
-	// two catalogs, two different operator mental models — the conceptual
-	// split is intentional (ADR-style decision recorded in CLAUDE.md
-	// "Module System" section).
-	Bundle []string `yaml:"bundle"`
+	// InheritedCompliance is the framework → control IDs map populated
+	// by the loader from directory-level `compliance.vgo` inheritance
+	// files (`loadComplianceConfigs` + `applyModuleComplianceInheritance`).
+	// Never written by operator YAML — the inheritance file is a
+	// different file kind with its own decoder. Internal to the loader;
+	// buildComplianceIndex reads it alongside Compliance.Provides /
+	// Compliance.Bundle to build the per-envoy coverage trace.
+	InheritedCompliance map[string][]string `yaml:"-"`
 
 	// TemplateSources are stockpile-relative paths the module references
 	// via `source:` on any of its resources, captured by resolveSourceFiles
@@ -1155,21 +1167,13 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 			}
 			m.Resources = resources
 		case "compliance":
-			// Retired 0.66.48 — modlint
-			// (rule_module_compliance_key_retired) errors on it.
-			// Loader keeps decoding so historical fixtures + in-
-			// flight operator migrations load through; the lint gate
-			// is what enforces the new shape.
+			// 0.66.57+ shape: { provides: [...], bundle: [...] }.
+			// ComplianceClaims silently ignores any other sub-key,
+			// so pre-0.66.48 framework→control lists decode as
+			// empty here; modlint (rule_module_compliance_key_retired)
+			// is the gate that errors on the old shape.
 			if err := val.Decode(&m.Compliance); err != nil {
 				return fmt.Errorf("decoding compliance: %w", err)
-			}
-		case "provides":
-			if err := val.Decode(&m.Provides); err != nil {
-				return fmt.Errorf("decoding provides: %w", err)
-			}
-		case "bundle":
-			if err := val.Decode(&m.Bundle); err != nil {
-				return fmt.Errorf("decoding bundle: %w", err)
 			}
 		}
 	}

@@ -295,7 +295,7 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		h.forcePusher.ForcePush("")
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
+	writeJSON(w, r, http.StatusCreated, map[string]any{
 		"sha256": hash,
 		"label":  label,
 		"size":   size,
@@ -342,7 +342,7 @@ func (h *LodeHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"payloads": entries})
+	writeJSON(w, r, http.StatusOK, map[string]any{"payloads": entries})
 }
 
 func seedToLodeEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker, fi *fleet.FleetIndex) lodeEntry {
@@ -443,7 +443,7 @@ func (h *LodeHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"revoked":         hash,
 		"already_revoked": alreadyRevoked,
 	})
@@ -576,7 +576,7 @@ func (h *LodeHandler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"sha256":      hash,
 		"label":       label,
 		"status":      blobStatus,
@@ -647,7 +647,7 @@ func (h *LodeHandler) BrokenSeeds(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"envoys": envoys})
+	writeJSON(w, r, http.StatusOK, map[string]any{"envoys": envoys})
 }
 
 // Match returns the count of non-revoked envoys matching a target spec.
@@ -670,7 +670,7 @@ func (h *LodeHandler) Match(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"target": target, "count": count})
+	writeJSON(w, r, http.StatusOK, map[string]any{"target": target, "count": count})
 }
 
 // copyFile copies src to dst as a fallback when os.Rename fails (cross-device).

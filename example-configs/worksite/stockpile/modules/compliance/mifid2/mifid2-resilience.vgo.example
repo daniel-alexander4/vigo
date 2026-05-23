@@ -4,8 +4,8 @@ name: mifid2-resilience
 # Continuous monitoring with 15-second convergence provides provable
 # system resilience for trading infrastructure.
 
-bundle: [mifid2-resilience]
-
+compliance:
+  bundle: [mifid2-resilience]
 resources:
   - name: system-monitoring
     type: service

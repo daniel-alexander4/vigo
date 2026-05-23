@@ -4,7 +4,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"sort"
 	"strconv"
@@ -199,8 +198,7 @@ func (h *CVEHandler) handleCVESearch(w http.ResponseWriter, r *http.Request) {
 	}
 	result.TotalHosts = len(result.AffectedHosts)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 // searchCVEInTraits scans the unified security_scan.cves.N.{id,severity,packages}
@@ -257,13 +255,13 @@ func searchCVEInTraits(envoyID, hostname string, traitMap map[string]string, cve
 // from any matched row (all rows for one CVE share a severity).
 func runningBinariesForCVE(traitMap map[string]string, cveID string) ([]CVERunningBinary, string) {
 	type rowBuilder struct {
-		cveID          string
-		severity       string
-		pkg            string
-		pkgVersion     string
-		binaryPath     string
-		pidCount       string
-		deleted        string
+		cveID      string
+		severity   string
+		pkg        string
+		pkgVersion string
+		binaryPath string
+		pidCount   string
+		deleted    string
 	}
 
 	rows := make(map[string]*rowBuilder)

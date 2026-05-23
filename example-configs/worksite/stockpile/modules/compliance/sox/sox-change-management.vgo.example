@@ -4,8 +4,8 @@ name: sox-change-management
 # Every config change is logged in the tamper-evident audit chain,
 # requires publish approval (when enabled), and is reversible via rollback.
 
-bundle: [sox-change-management]
-
+compliance:
+  bundle: [sox-change-management]
 vars:
   change_log_retention_days: 365
 

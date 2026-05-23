@@ -16,12 +16,12 @@ import (
 // own product-level posture never inflates these counts.
 func TestPartitionEnvoyFindings(t *testing.T) {
 	findings := []ControlFinding{
-		{ControlID: "c-mod", Status: "not_satisfied"},      // covered via module tag
-		{ControlID: "c-connwaer", Status: "satisfied"},     // Connwaer trait escalation — no module, credit by status
-		{ControlID: "c-waived", Status: "waived"},          // waiver applied
-		{ControlID: "c-partial", Status: "partial"},        // framework half-credit
-		{ControlID: "c-miss", Status: "not_satisfied"},     // plain missing
-		{ControlID: "c-dual", Status: "waived"},            // both module tag AND waived — module wins
+		{ControlID: "c-mod", Status: "not_satisfied"},  // covered via module tag
+		{ControlID: "c-connwaer", Status: "satisfied"}, // Connwaer trait escalation — no module, credit by status
+		{ControlID: "c-waived", Status: "waived"},      // waiver applied
+		{ControlID: "c-partial", Status: "partial"},    // framework half-credit
+		{ControlID: "c-miss", Status: "not_satisfied"}, // plain missing
+		{ControlID: "c-dual", Status: "waived"},        // both module tag AND waived — module wins
 	}
 	coverage := &config.StandardCoverage{
 		CoveredControls: []config.ControlCoverage{

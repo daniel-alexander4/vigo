@@ -2,8 +2,8 @@
 #~ Configures one read-only community.
 name: snmpd-windows
 
-provides: [monitoring-probe]
-
+compliance:
+  provides: [monitoring-probe]
 vars:
   snmp_community: "public"
 

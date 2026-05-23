@@ -3,8 +3,8 @@
 #~ who need declarative arrays should add resources here.
 name: mdadm
 
-provides: [storage-raid]
-
+compliance:
+  provides: [storage-raid]
 resources:
   - name: install-mdadm
     type: package

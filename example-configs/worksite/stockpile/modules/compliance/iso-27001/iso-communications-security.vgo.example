@@ -1,5 +1,6 @@
 name: iso-communications-security
-bundle: [iso-communications-security]
+compliance:
+  bundle: [iso-communications-security]
 resources:
   # A.13.1.1: Network controls
   - name: ufw-package

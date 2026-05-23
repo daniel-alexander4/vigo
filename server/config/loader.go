@@ -1272,15 +1272,15 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	// the explicit author intent wins for attribution.
 	for _, mod := range cfg.Modules {
 		def, ok := cs.moduleDefs[mod.Name]
-		if !ok || (len(def.Compliance) == 0 && len(def.Provides) == 0 && len(def.Bundle) == 0) {
+		if !ok || (len(def.InheritedCompliance) == 0 && len(def.Compliance.Provides) == 0 && len(def.Compliance.Bundle) == 0) {
 			continue
 		}
 		entry := ComplianceTraceEntry{Module: mod.Name}
-		if len(def.Provides) > 0 {
-			entry.Provides = append([]string(nil), def.Provides...)
+		if len(def.Compliance.Provides) > 0 {
+			entry.Provides = append([]string(nil), def.Compliance.Provides...)
 		}
-		if len(def.Bundle) > 0 {
-			entry.Bundle = append([]string(nil), def.Bundle...)
+		if len(def.Compliance.Bundle) > 0 {
+			entry.Bundle = append([]string(nil), def.Compliance.Bundle...)
 		}
 		fw := make(map[string][]string)
 		src := make(map[string]map[string]string)
@@ -1304,27 +1304,27 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				src[standard][cid] = "explicit"
 			}
 		}
-		for _, prov := range def.Provides {
+		for _, prov := range def.Compliance.Provides {
 			for standard, controlIDs := range compliance.ResolveProvision(prov) {
 				for _, cid := range controlIDs {
 					addControl(standard, cid, "provides:"+prov)
 				}
 			}
 		}
-		for _, b := range def.Bundle {
+		for _, b := range def.Compliance.Bundle {
 			for standard, controlIDs := range compliance.ResolveBundle(b) {
 				for _, cid := range controlIDs {
 					addControl(standard, cid, "bundle:"+b)
 				}
 			}
 		}
-		for standard, controlIDs := range def.Compliance {
+		for standard, controlIDs := range def.InheritedCompliance {
 			for _, cid := range controlIDs {
 				addControl(standard, cid, "explicit")
 			}
 		}
 		entry.Frameworks = fw
-		if len(def.Provides) > 0 || len(def.Bundle) > 0 {
+		if len(def.Compliance.Provides) > 0 || len(def.Compliance.Bundle) > 0 {
 			entry.ControlSources = src
 		}
 		trace.ComplianceTags = append(trace.ComplianceTags, entry)
@@ -1620,21 +1620,21 @@ func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]ma
 		idx[standard][cid] = append(idx[standard][cid], modName)
 	}
 	for _, mod := range moduleDefs {
-		for _, prov := range mod.Provides {
+		for _, prov := range mod.Compliance.Provides {
 			for standard, controlIDs := range compliance.ResolveProvision(prov) {
 				for _, cid := range controlIDs {
 					add(standard, cid, mod.Name)
 				}
 			}
 		}
-		for _, b := range mod.Bundle {
+		for _, b := range mod.Compliance.Bundle {
 			for standard, controlIDs := range compliance.ResolveBundle(b) {
 				for _, cid := range controlIDs {
 					add(standard, cid, mod.Name)
 				}
 			}
 		}
-		for standard, controlIDs := range mod.Compliance {
+		for standard, controlIDs := range mod.InheritedCompliance {
 			for _, cid := range controlIDs {
 				add(standard, cid, mod.Name)
 			}
@@ -2718,14 +2718,16 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 				defName, via,
 				notFoundHint(defName, moduleCandidates(moduleDefs), "add a module definition to modules/"))
 		}
-		// Shallow-clone the compliance map so later mutation of one doesn't
-		// leak into the other. ModuleDefinition.Compliance already carries
+		// Shallow-clone the inherited-compliance map so later mutation
+		// of one doesn't leak into the other. InheritedCompliance carries
 		// any unioned ancestor compliance.vgo claims from
-		// applyModuleComplianceInheritance.
+		// applyModuleComplianceInheritance; the operator-facing per-module
+		// compliance attribution (Compliance.Provides + Compliance.Bundle)
+		// is unioned separately by the trace builder.
 		var compliance map[string][]string
-		if len(def.Compliance) > 0 {
-			compliance = make(map[string][]string, len(def.Compliance))
-			for k, v := range def.Compliance {
+		if len(def.InheritedCompliance) > 0 {
+			compliance = make(map[string][]string, len(def.InheritedCompliance))
+			for k, v := range def.InheritedCompliance {
 				compliance[k] = append([]string(nil), v...)
 			}
 		}
@@ -3844,17 +3846,20 @@ func applyModuleComplianceInheritance(
 			dir = parent
 		}
 
-		// Union ancestor claims into def.Compliance.
+		// Union ancestor claims into def.InheritedCompliance — the
+		// loader-internal framework→control map (operator-facing
+		// `compliance:` on a module is the new typed ComplianceClaims
+		// shape, not this map).
 		for _, d := range ancestors {
 			dirClaims, ok := byDir[d]
 			if !ok {
 				continue
 			}
-			if def.Compliance == nil {
-				def.Compliance = make(map[string][]string)
+			if def.InheritedCompliance == nil {
+				def.InheritedCompliance = make(map[string][]string)
 			}
 			for fw, controls := range dirClaims {
-				def.Compliance[fw] = unionDedupeStrings(def.Compliance[fw], controls)
+				def.InheritedCompliance[fw] = unionDedupeStrings(def.InheritedCompliance[fw], controls)
 			}
 		}
 	}

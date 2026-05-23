@@ -3,8 +3,8 @@ name: cis-ubuntu-network
 # Level 1 + Level 2 controls
 # Applies to: Ubuntu 20.04, 22.04, 24.04
 
-bundle: [cis-ubuntu-network]
-
+compliance:
+  bundle: [cis-ubuntu-network]
 resources:
   # --- 3.1: Disable unused network protocols ---
 

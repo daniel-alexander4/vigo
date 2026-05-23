@@ -14,8 +14,8 @@
 #~   sudo vigocli secrets set raw vigo/backup/restic_repo
 name: restic
 
-provides: [host-backup-encrypted]
-
+compliance:
+  provides: [host-backup-encrypted]
 vars:
   source_paths: "/etc /home /var/lib"
   schedule: "0 * * * *"

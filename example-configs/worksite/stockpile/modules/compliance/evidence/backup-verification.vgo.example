@@ -3,8 +3,8 @@
 #~ Pairs with backup/restic.
 name: backup-verification
 
-bundle: [backup-verification]
-
+compliance:
+  bundle: [backup-verification]
 vars:
   evidence_dir: "/var/lib/vigo/evidence"
 

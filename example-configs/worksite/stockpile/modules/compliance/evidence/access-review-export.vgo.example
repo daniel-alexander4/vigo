@@ -3,8 +3,8 @@
 #~ across access-review windows.
 name: access-review-export
 
-bundle: [access-review-export]
-
+compliance:
+  bundle: [access-review-export]
 vars:
   evidence_dir: "/var/lib/vigo/evidence"
 

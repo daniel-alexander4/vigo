@@ -140,7 +140,7 @@ func (h *ComplianceDocsHandler) list(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		out = append(out, toDocMetaJSON(row))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"docs": out})
+	writeJSON(w, r, http.StatusOK, map[string]any{"docs": out})
 }
 
 func (h *ComplianceDocsHandler) get(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +153,7 @@ func (h *ComplianceDocsHandler) get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "compliance doc not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, toDocMetaJSON(row))
+	writeJSON(w, r, http.StatusOK, toDocMetaJSON(row))
 }
 
 func (h *ComplianceDocsHandler) download(w http.ResponseWriter, r *http.Request) {
@@ -185,11 +185,11 @@ func (h *ComplianceDocsHandler) download(w http.ResponseWriter, r *http.Request)
 
 // uploadRequest is the multipart form layout for POST and PUT.
 //
-//   file: the binary upload (required)
-//   filename: optional override; defaults to the multipart Filename
-//   mime_type: optional declared MIME type (validated against magic bytes)
-//   doc_type: free-form category for cross-framework reuse hints
-//   links: JSON array of {framework, control_id} pairs
+//	file: the binary upload (required)
+//	filename: optional override; defaults to the multipart Filename
+//	mime_type: optional declared MIME type (validated against magic bytes)
+//	doc_type: free-form category for cross-framework reuse hints
+//	links: JSON array of {framework, control_id} pairs
 //
 // Limits derive from the store's caps; ParseMultipartForm uses the
 // same per-doc cap so the body never exceeds memory the operator
@@ -273,7 +273,7 @@ func (h *ComplianceDocsHandler) upload(w http.ResponseWriter, r *http.Request) {
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.upload", actorFromRequest(r), "compliance_docs",
 		fmt.Sprintf("uploaded %s (%s, %d bytes)", row.Filename, row.ID, row.SizeBytes),
 		fmt.Sprintf(`{"id":%q,"filename":%q,"sha256":%q,"size":%d,"links":%d}`, row.ID, row.Filename, row.Sha256, row.SizeBytes, len(in.links)))
-	writeJSON(w, http.StatusCreated, toDocMetaJSON(row))
+	writeJSON(w, r, http.StatusCreated, toDocMetaJSON(row))
 }
 
 func (h *ComplianceDocsHandler) replace(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +302,7 @@ func (h *ComplianceDocsHandler) replace(w http.ResponseWriter, r *http.Request) 
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.replace", actorFromRequest(r), "compliance_docs",
 		fmt.Sprintf("replaced %s with %s (%s)", id, row.ID, row.Filename),
 		fmt.Sprintf(`{"old_id":%q,"new_id":%q,"sha256":%q,"size":%d}`, id, row.ID, row.Sha256, row.SizeBytes))
-	writeJSON(w, http.StatusOK, toDocMetaJSON(row))
+	writeJSON(w, r, http.StatusOK, toDocMetaJSON(row))
 }
 
 func (h *ComplianceDocsHandler) softDelete(w http.ResponseWriter, r *http.Request) {
@@ -402,7 +402,7 @@ func (h *ComplianceDocsHandler) listLinks(w http.ResponseWriter, r *http.Request
 			"linked_by":  l.LinkedBy,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"links": out})
+	writeJSON(w, r, http.StatusOK, map[string]any{"links": out})
 }
 
 // classifyStoreError maps the typed errors from compliancedocs into

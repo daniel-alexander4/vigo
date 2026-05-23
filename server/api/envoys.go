@@ -57,7 +57,7 @@ func (h *EnvoysHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	if tags == nil {
 		tags = []string{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
+	writeJSON(w, r, http.StatusOK, map[string]any{"tags": tags})
 }
 
 // SetMaintenance sets a maintenance window for a envoy.
@@ -82,7 +82,7 @@ func (h *EnvoysHandler) SetMaintenance(w http.ResponseWriter, r *http.Request) {
 		h.fleetIndex.SetMaintenanceUntil(id, until)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"maintenance_until": until.Format(time.RFC3339),
 	})
 }
@@ -95,7 +95,7 @@ func (h *EnvoysHandler) ClearMaintenance(w http.ResponseWriter, r *http.Request)
 		h.fleetIndex.ClearMaintenance(id)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"maintenance_until": nil})
+	writeJSON(w, r, http.StatusOK, map[string]any{"maintenance_until": nil})
 }
 
 // GetConvergence returns the convergence status for an envoy.
@@ -108,7 +108,7 @@ func (h *EnvoysHandler) GetConvergence(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "envoy not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": ts.ConvergenceStatus})
+		writeJSON(w, r, http.StatusOK, map[string]any{"status": ts.ConvergenceStatus})
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *EnvoysHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.fleetIndex.SetForceUpdate(id, true)
-	writeJSON(w, http.StatusOK, map[string]any{"status": "queued"})
+	writeJSON(w, r, http.StatusOK, map[string]any{"status": "queued"})
 }
 
 // ForceUpdateAll sets the force_update flag on all active envoys.
@@ -141,5 +141,5 @@ func (h *EnvoysHandler) ForceUpdateAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	count := h.fleetIndex.SetForceUpdateAll()
-	writeJSON(w, http.StatusOK, map[string]any{"status": "queued", "count": count})
+	writeJSON(w, r, http.StatusOK, map[string]any{"status": "queued", "count": count})
 }

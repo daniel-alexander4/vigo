@@ -1,6 +1,6 @@
 name: ce-app-whitelisting
-bundle: [ce-app-whitelisting]
-
+compliance:
+  bundle: [ce-app-whitelisting]
 resources:
   - name: fapolicyd-package
     type: package

@@ -12,8 +12,8 @@
 #~ Apply to the host running vigosrv. Linux-only.
 name: vigo-healthcheck
 
-provides: [availability-healthcheck]
-
+compliance:
+  provides: [availability-healthcheck]
 vars:
   vigo_root: "/srv/vigo"
   healthz_url: "https://localhost:8443/healthz"

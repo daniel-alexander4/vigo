@@ -1,6 +1,6 @@
 name: ce-monitoring
-bundle: [ce-monitoring]
-
+compliance:
+  bundle: [ce-monitoring]
 resources:
   - name: ossec-hids
     type: package

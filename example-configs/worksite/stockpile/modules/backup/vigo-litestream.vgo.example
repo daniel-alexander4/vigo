@@ -17,8 +17,8 @@
 #~ shipped here is the Linux/musl static build.
 name: vigo-litestream
 
-provides: [vigo-litestream-replication]
-
+compliance:
+  provides: [vigo-litestream-replication]
 vars:
   litestream_version: "0.3.13"
   vigo_root: "/srv/vigo"

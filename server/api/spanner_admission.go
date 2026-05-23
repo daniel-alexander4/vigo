@@ -181,7 +181,7 @@ func (h *SpannerAdmissionHandler) handleInit(w http.ResponseWriter, r *http.Requ
 
 	slog.Info("spanner founded", "spanner_id", h.spannerID, "founder_pubkey", ownPubkey, "hostname", h.hostname)
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"spanner_id":     h.spannerID,
 		"founder_pubkey": ownPubkey,
 		"hostname":       h.hostname,
@@ -230,7 +230,7 @@ func (h *SpannerAdmissionHandler) handleInvite(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"bundle":     bundleStr,
 		"spanner_id": h.spannerID,
 		"peer_addr":  peerAddr,
@@ -356,7 +356,7 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeJSON(w, http.StatusOK, admitResponse{
+	writeJSON(w, r, http.StatusOK, admitResponse{
 		AdmittedRow:    boltToRosterRow(admissionRowToBolt(row, sig)),
 		Roster:         boltsToRosterRows(roster),
 		ConsumedTokens: tokens,
@@ -541,7 +541,7 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 
 	slog.Info("spanner joined", "from", req.FromAddr, "roster_size", written, "own_pubkey", ownPubkey)
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"joined":      true,
 		"from_addr":   req.FromAddr,
 		"roster_size": written,
@@ -599,7 +599,7 @@ func (h *SpannerAdmissionHandler) handleRoster(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"roster": boltsToRosterRows(roster)})
+	writeJSON(w, r, http.StatusOK, map[string]any{"roster": boltsToRosterRows(roster)})
 }
 
 // handleSnapshot returns this bolt's full CRDT state — the
@@ -620,7 +620,7 @@ func (h *SpannerAdmissionHandler) handleSnapshot(w http.ResponseWriter, r *http.
 		writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, spanner.Snapshot{
+	writeJSON(w, r, http.StatusOK, spanner.Snapshot{
 		Roster:         boltsToRosterRows(roster),
 		ConsumedTokens: tokens,
 	})

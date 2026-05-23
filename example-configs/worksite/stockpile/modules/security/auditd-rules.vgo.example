@@ -3,8 +3,8 @@
 #~ rule set; operators extend in /etc/audit/rules.d/.
 name: auditd-rules
 
-provides: [audit-rules]
-
+compliance:
+  provides: [audit-rules]
 resources:
   - name: install-auditd
     type: package

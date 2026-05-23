@@ -12,8 +12,8 @@ name: cis-windows-firewall
 # local_security_policy / windows_update / windows_defender executors" for
 # the broader CIS-Windows trail this fits into.
 
-bundle: [cis-windows-firewall]
-
+compliance:
+  bundle: [cis-windows-firewall]
 resources:
   - name: firewall-domain-on
     type: firewall_windows

@@ -1,5 +1,6 @@
 name: nerc-esp
-bundle: [nerc-esp]
+compliance:
+  bundle: [nerc-esp]
 resources:
   # CIP-005 R1: Electronic Security Perimeter
   - name: nftables-package

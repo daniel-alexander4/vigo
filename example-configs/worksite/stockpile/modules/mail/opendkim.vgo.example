@@ -1,8 +1,8 @@
 #~ OpenDKIM milter for outbound DKIM signing on postfix-style MTAs.
 name: opendkim
 
-provides: [dkim-signing]
-
+compliance:
+  provides: [dkim-signing]
 vars:
   selector: "mail"
   domain: "example.com"

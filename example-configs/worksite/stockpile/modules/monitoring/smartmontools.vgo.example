@@ -1,7 +1,7 @@
 name: smartmontools
 
-provides: [disk-health-monitoring]
-
+compliance:
+  provides: [disk-health-monitoring]
 vars:
   # Short self-test daily at 02:00, long self-test Saturdays at 03:00
   smartd_schedule: "-s (S/../.././02|L/../../6/03)"

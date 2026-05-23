@@ -5,8 +5,8 @@
 #~ Defender as the native, supported path.
 name: clamav-windows
 
-provides: [anti-malware]
-
+compliance:
+  provides: [anti-malware]
 resources:
   - name: enable-defender-realtime
     type: powershell

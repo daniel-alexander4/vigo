@@ -2,8 +2,8 @@ name: nydfs-audit-trail
 # NY DFS Cybersecurity (23 NYCRR 500) — Audit Trail
 # Covers: NYCRR-500.06 (audit trail — 6 year retention)
 
-bundle: [nydfs-audit-trail]
-
+compliance:
+  bundle: [nydfs-audit-trail]
 resources:
   - name: auditd-installed
     type: package

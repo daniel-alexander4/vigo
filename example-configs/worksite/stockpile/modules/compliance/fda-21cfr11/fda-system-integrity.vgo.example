@@ -6,8 +6,8 @@ name: fda-system-integrity
 #   electronic signature compliance (Part 11 e-signatures are an
 #   application responsibility, not infrastructure)
 
-bundle: [fda-system-integrity]
-
+compliance:
+  bundle: [fda-system-integrity]
 resources:
   - name: aide-installed
     type: package

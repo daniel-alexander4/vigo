@@ -4,8 +4,8 @@ name: mifid2-change-management
 # All configuration changes are logged in the tamper-evident audit chain,
 # tracked via config publish history, and reversible via rollback.
 
-bundle: [mifid2-change-management]
-
+compliance:
+  bundle: [mifid2-change-management]
 resources:
   - name: audit-service
     type: service

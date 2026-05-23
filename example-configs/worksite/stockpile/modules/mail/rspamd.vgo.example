@@ -3,8 +3,8 @@
 #~ config; operators tune scores via /etc/rspamd/local.d/.
 name: rspamd
 
-provides: [email-anti-malware]
-
+compliance:
+  provides: [email-anti-malware]
 resources:
   - name: install-rspamd
     type: package

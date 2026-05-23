@@ -1,5 +1,6 @@
 name: nist-access-control
-bundle: [nist-access-control]
+compliance:
+  bundle: [nist-access-control]
 resources:
   # AC-6: Least privilege — restrict su to wheel group
   - name: restrict-su

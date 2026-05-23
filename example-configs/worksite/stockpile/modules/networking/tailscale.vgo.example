@@ -2,8 +2,8 @@
 #~ --authkey=...` once with a key from the secret vault to enroll.
 name: tailscale
 
-provides: [vpn]
-
+compliance:
+  provides: [vpn]
 vars:
   tailscale_authkey: "secret:vigo/tailscale/authkey"
 

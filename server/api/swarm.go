@@ -79,7 +79,7 @@ func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // Status returns the fleet-wide substrate overview.
 func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, swarmview.SnapshotStatus(h.src))
+	writeJSON(w, r, http.StatusOK, swarmview.SnapshotStatus(h.src))
 }
 
 // Peers returns one row per envoy with substrate-participation counts.
@@ -94,7 +94,7 @@ func (h *SwarmHandler) Peers(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
-	writeJSON(w, http.StatusOK, swarmview.SnapshotPeers(h.src, sortKey, limit))
+	writeJSON(w, r, http.StatusOK, swarmview.SnapshotPeers(h.src, sortKey, limit))
 }
 
 // Cleanup dispatches the hidden `vigo swarm _apply-cleanup` verb to
@@ -116,10 +116,10 @@ func (h *SwarmHandler) Cleanup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "cleanup dispatch failed: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"target":       target,
-		"dispatched":   dispatched,
-		"task_run_id":  taskRunID,
+	writeJSON(w, r, http.StatusAccepted, map[string]any{
+		"target":      target,
+		"dispatched":  dispatched,
+		"task_run_id": taskRunID,
 	})
 }
 

@@ -76,9 +76,7 @@ func (h *WorkflowHandler) HandleRun(w http.ResponseWriter, r *http.Request) {
 	recordAudit(r.Context(), h.auditWriter, "workflow.dispatch", req.Operator, "rest",
 		req.Name, "")
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"id": runID, "status": "running"})
+	writeJSON(w, r, http.StatusCreated, map[string]string{"id": runID, "status": "running"})
 }
 
 type workflowSummary struct {
@@ -124,8 +122,7 @@ func (h *WorkflowHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 		summaries = append(summaries, s)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"workflows": summaries})
+	writeJSON(w, r, http.StatusOK, map[string]any{"workflows": summaries})
 }
 
 type workflowDetail struct {
@@ -142,12 +139,12 @@ type workflowDetail struct {
 }
 
 type stepDetail struct {
-	ID        string `json:"id"`
-	StepIndex int64  `json:"stepIndex"`
-	StepName  string `json:"stepName"`
-	TaskRunID string `json:"taskRunId,omitempty"`
-	Status    string `json:"status"`
-	StartedAt string `json:"startedAt,omitempty"`
+	ID         string `json:"id"`
+	StepIndex  int64  `json:"stepIndex"`
+	StepName   string `json:"stepName"`
+	TaskRunID  string `json:"taskRunId,omitempty"`
+	Status     string `json:"status"`
+	StartedAt  string `json:"startedAt,omitempty"`
 	FinishedAt string `json:"finishedAt,omitempty"`
 }
 
@@ -211,8 +208,7 @@ func (h *WorkflowHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		sds = append(sds, sd)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"workflow": wd,
 		"steps":    sds,
 	})
@@ -240,6 +236,5 @@ func (h *WorkflowHandler) HandleAbort(w http.ResponseWriter, r *http.Request) {
 
 	h.engine.Abort(id)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "aborting"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "aborting"})
 }

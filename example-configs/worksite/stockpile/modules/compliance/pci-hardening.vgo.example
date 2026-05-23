@@ -9,8 +9,8 @@
 
 name: pci-hardening
 
-bundle: [pci-hardening]
-
+compliance:
+  bundle: [pci-hardening]
 vars:
   # Req 2.2.5 — Password lockout
   pam_deny_count: "5"

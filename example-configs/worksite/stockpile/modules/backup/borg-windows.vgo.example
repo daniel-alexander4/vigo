@@ -6,8 +6,8 @@
 #~ erroring on Windows envoys; it installs nothing.
 name: borg-windows
 
-provides: [host-backup]
-
+compliance:
+  provides: [host-backup]
 resources: []
 
 # No native Windows BorgBackup. Install restic-windows or kopia-windows for

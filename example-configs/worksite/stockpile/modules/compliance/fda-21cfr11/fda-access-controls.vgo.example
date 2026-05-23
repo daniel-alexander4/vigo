@@ -4,8 +4,8 @@ name: fda-access-controls
 # Enforces unique user accounts, password policy, session management,
 # and authority checks for systems handling electronic records.
 
-bundle: [fda-access-controls]
-
+compliance:
+  bundle: [fda-access-controls]
 resources:
   - name: ssh-key-auth
     type: file_line

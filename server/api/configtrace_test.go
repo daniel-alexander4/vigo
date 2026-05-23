@@ -317,4 +317,3 @@ func TestConfigTrace_InverseModuleUsercrateConflict(t *testing.T) {
 		t.Fatalf("expected 400 for module+usercrate conflict, got %d", rec.Code)
 	}
 }
-

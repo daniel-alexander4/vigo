@@ -3,8 +3,8 @@
 #~ collection.
 name: log-shipping-attestation-windows
 
-bundle: [log-shipping-attestation-windows]
-
+compliance:
+  bundle: [log-shipping-attestation-windows]
 vars:
   evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
   log_collector_endpoint: "loki.example.com:3100"

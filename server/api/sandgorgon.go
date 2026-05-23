@@ -104,8 +104,7 @@ func (h *SandgorgonHandler) listAssets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(assets)
+	writeJSON(w, r, http.StatusOK, assets)
 }
 
 func (h *SandgorgonHandler) getAsset(w http.ResponseWriter, r *http.Request) {
@@ -116,8 +115,7 @@ func (h *SandgorgonHandler) getAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(asset)
+	writeJSON(w, r, http.StatusOK, asset)
 }
 
 func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
@@ -206,9 +204,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(asset)
+	writeJSON(w, r, http.StatusCreated, asset)
 }
 
 func (h *SandgorgonHandler) decommission(w http.ResponseWriter, r *http.Request) {
@@ -239,8 +235,7 @@ func (h *SandgorgonHandler) decommission(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 func (h *SandgorgonHandler) listCertificates(w http.ResponseWriter, r *http.Request) {
@@ -249,8 +244,7 @@ func (h *SandgorgonHandler) listCertificates(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(certs)
+	writeJSON(w, r, http.StatusOK, certs)
 }
 
 func (h *SandgorgonHandler) getCertificate(w http.ResponseWriter, r *http.Request) {
@@ -261,8 +255,7 @@ func (h *SandgorgonHandler) getCertificate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	data := sandgorgon.CertificateFromDB(cert, h.orgName)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	writeJSON(w, r, http.StatusOK, data)
 }
 
 func (h *SandgorgonHandler) getCertificateHTML(w http.ResponseWriter, r *http.Request) {
@@ -298,8 +291,7 @@ func (h *SandgorgonHandler) importCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 func (h *SandgorgonHandler) listEvents(w http.ResponseWriter, r *http.Request) {
@@ -312,8 +304,7 @@ func (h *SandgorgonHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(events)
+	writeJSON(w, r, http.StatusOK, events)
 }
 
 func (h *SandgorgonHandler) returnToAvailable(w http.ResponseWriter, r *http.Request) {
@@ -322,8 +313,7 @@ func (h *SandgorgonHandler) returnToAvailable(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "lifecycle_state": "available"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok", "lifecycle_state": "available"})
 }
 
 func (h *SandgorgonHandler) searchAssets(w http.ResponseWriter, r *http.Request) {
@@ -338,8 +328,7 @@ func (h *SandgorgonHandler) searchAssets(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(assets)
+	writeJSON(w, r, http.StatusOK, assets)
 }
 
 func (h *SandgorgonHandler) provision(w http.ResponseWriter, r *http.Request) {
@@ -369,8 +358,7 @@ func (h *SandgorgonHandler) provision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 func (h *SandgorgonHandler) listImages(w http.ResponseWriter, r *http.Request) {
@@ -379,8 +367,7 @@ func (h *SandgorgonHandler) listImages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(images)
+	writeJSON(w, r, http.StatusOK, images)
 }
 
 func (h *SandgorgonHandler) registerImage(w http.ResponseWriter, r *http.Request) {
@@ -418,9 +405,7 @@ func (h *SandgorgonHandler) registerImage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(image)
+	writeJSON(w, r, http.StatusCreated, image)
 }
 
 func (h *SandgorgonHandler) removeImage(w http.ResponseWriter, r *http.Request) {
@@ -429,8 +414,7 @@ func (h *SandgorgonHandler) removeImage(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *SandgorgonHandler) dhcpConfig(w http.ResponseWriter, r *http.Request) {
@@ -511,8 +495,7 @@ func (h *SandgorgonHandler) lifecycleReport(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(report)
+	writeJSON(w, r, http.StatusOK, report)
 }
 
 func (h *SandgorgonHandler) lifecycleReportHTML(w http.ResponseWriter, r *http.Request) {
@@ -548,4 +531,3 @@ func (h *SandgorgonHandler) preseedConfig(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(config))
 }
-

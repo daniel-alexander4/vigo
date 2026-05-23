@@ -1,5 +1,6 @@
 name: iec62443-system-integrity
-bundle: [iec62443-system-integrity]
+compliance:
+  bundle: [iec62443-system-integrity]
 vars:
   aide_db_path: "/var/lib/aide/aide.db"
   aide_schedule: "0 3 * * *"

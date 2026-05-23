@@ -1,7 +1,8 @@
 # switch-vlans — VLAN configuration for Cisco IOS switches.
 name: switch-vlans
 
-provides: [network-segmentation]
+compliance:
+  provides: [network-segmentation]
 resources:
   - name: mgmt-vlan
     type: cisco_vlan

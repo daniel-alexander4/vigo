@@ -1,6 +1,7 @@
 name: openssh
 
-provides: [ssh-hardening]
+compliance:
+  provides: [ssh-hardening]
 # Prefer: cis-ubuntu-access or cis-rhel-access (compliance roles include SSH
 # hardening with stronger crypto, compliance tags, and more settings).
 # Only use this module if you are NOT using CIS compliance roles — both manage

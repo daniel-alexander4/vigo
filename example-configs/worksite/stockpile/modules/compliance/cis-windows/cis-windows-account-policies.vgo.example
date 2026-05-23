@@ -2,8 +2,8 @@ name: cis-windows-account-policies
 # CIS Windows Server 2022 Level 1 — Account Policies
 # Status: ENFORCED by Vigo
 
-bundle: [cis-windows-account-policies]
-
+compliance:
+  bundle: [cis-windows-account-policies]
 resources:
   - name: password-min-length
     type: local_security_policy

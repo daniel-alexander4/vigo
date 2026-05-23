@@ -1,6 +1,7 @@
 name: forticlient
 
-provides: [vpn-endpoint-client]
+compliance:
+  provides: [vpn-endpoint-client]
 vars:
   forticlient_version: "latest"
   vpn_server: ""

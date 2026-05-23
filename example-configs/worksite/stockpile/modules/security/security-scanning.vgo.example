@@ -23,8 +23,8 @@
 #~ Scan output: /var/lib/vigo/security/
 name: security-scanning
 
-provides: [host-vuln-scanning]
-
+compliance:
+  provides: [host-vuln-scanning]
 vars:
   scan_hour_start: "2"
   scan_hour_end: "5"

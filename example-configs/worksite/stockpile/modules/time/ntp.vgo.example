@@ -1,6 +1,7 @@
 name: ntp
 
-provides: [time-sync]
+compliance:
+  provides: [time-sync]
 # Prefer: cis-ubuntu-services or cis-rhel-services (CIS benchmarks require
 # chrony, not ntpd). Only use this module on systems that cannot run chrony.
 

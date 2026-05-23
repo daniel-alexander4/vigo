@@ -4,8 +4,8 @@
 #~ or DNS lies. Apply to the host running vigosrv. Linux-only.
 name: vigo-motd
 
-provides: [vigo-login-banner]
-
+compliance:
+  provides: [vigo-login-banner]
 vars:
   motd_text: |2
 
@@ -23,7 +23,6 @@ vars:
       Operator surface:    vigocli (host)  |  https://localhost:8443 (UI)
       Stockpile:           /srv/vigo/stacks/stockpile/
       Logs:                docker compose logs vigo
-
 
 resources:
   - name: write-motd

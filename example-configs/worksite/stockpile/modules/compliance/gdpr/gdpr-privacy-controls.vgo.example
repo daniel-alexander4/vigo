@@ -1,6 +1,6 @@
 name: gdpr-privacy-controls
-bundle: [gdpr-privacy-controls]
-
+compliance:
+  bundle: [gdpr-privacy-controls]
 resources:
   # Art 32(1)(c): Ability to restore availability — backup tools
   - name: borgbackup

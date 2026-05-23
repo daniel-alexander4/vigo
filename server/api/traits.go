@@ -36,7 +36,7 @@ func (h *TraitsHandler) RegisterRoutes(mux *http.ServeMux) {
 type traitsResponse struct {
 	Hostname    string          `json:"hostname"`
 	CollectedAt string          `json:"collected_at"`
-	Traits       json.RawMessage `json:"traits"`
+	Traits      json.RawMessage `json:"traits"`
 }
 
 // HandleGetTraits returns the latest collected traits for a envoy, looked up
@@ -70,10 +70,8 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 	resp := traitsResponse{
 		Hostname:    hostname,
 		CollectedAt: traits.CollectedAt.Format(time.RFC3339),
-		Traits:       json.RawMessage(traits.Traits),
+		Traits:      json.RawMessage(traits.Traits),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, r, http.StatusOK, resp)
 }
-

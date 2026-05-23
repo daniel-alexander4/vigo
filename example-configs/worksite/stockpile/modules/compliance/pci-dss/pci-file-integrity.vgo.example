@@ -1,5 +1,6 @@
 name: pci-file-integrity
-bundle: [pci-file-integrity]
+compliance:
+  bundle: [pci-file-integrity]
 resources:
   - name: aide-package
     type: package

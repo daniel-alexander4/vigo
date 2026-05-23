@@ -1,6 +1,6 @@
 name: nist-audit-retention
-bundle: [nist-audit-retention]
-
+compliance:
+  bundle: [nist-audit-retention]
 resources:
   # AU-8: Time source
   - name: chrony-package

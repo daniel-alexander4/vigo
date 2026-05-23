@@ -3,8 +3,8 @@
 #~ Windows service. Tunnel name = wg0.
 name: wireguard-windows
 
-provides: [vpn]
-
+compliance:
+  provides: [vpn]
 vars:
   wg_address: "10.99.0.1/24"
   wg_listen_port: "51820"

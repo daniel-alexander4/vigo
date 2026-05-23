@@ -2,8 +2,8 @@ name: cis-windows-components
 # CIS Windows Server 2022 Level 1 — Windows Components
 # Status: ENFORCED by Vigo
 
-bundle: [cis-windows-components]
-
+compliance:
+  bundle: [cis-windows-components]
 resources:
   # --- Remote Desktop ---
 

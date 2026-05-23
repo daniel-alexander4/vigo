@@ -107,11 +107,11 @@ func (h *CuratorHandler) isBlocked(r *http.Request, artifactID string) bool {
 // --- agent-facing (public) ------------------------------------------------
 
 type resolveResponse struct {
-	ArtifactID  string                    `json:"artifact_id"`
-	Version     string                    `json:"version"`
-	BlobSha     string                    `json:"blob_sha"`
-	Size        uint64                    `json:"size"`
-	SignedEntry curatormesh.CatalogEntry  `json:"signed_entry"`
+	ArtifactID  string                   `json:"artifact_id"`
+	Version     string                   `json:"version"`
+	BlobSha     string                   `json:"blob_sha"`
+	Size        uint64                   `json:"size"`
+	SignedEntry curatormesh.CatalogEntry `json:"signed_entry"`
 }
 
 // handleResolve: GET /api/v1/swarm/curator/resolve?artifact_id=<hex>&tag=<t>|&version=<v>&os=<os>&arch=<arch>
@@ -164,7 +164,7 @@ func (h *CuratorHandler) handleResolve(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "artifact has no build for "+os_+"/"+arch+" at version "+v)
 		return
 	}
-	writeJSON(w, http.StatusOK, resolveResponse{
+	writeJSON(w, r, http.StatusOK, resolveResponse{
 		ArtifactID:  artifactID,
 		Version:     v,
 		BlobSha:     strings.ToLower(p.BlobSha),
@@ -250,7 +250,7 @@ func (h *CuratorHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	if blocked == nil {
 		blocked = []db.CuratorBlockedArtifact{}
 	}
-	writeJSON(w, http.StatusOK, listResponse{Catalog: cat, Blocked: blocked})
+	writeJSON(w, r, http.StatusOK, listResponse{Catalog: cat, Blocked: blocked})
 }
 
 type inspectResponse struct {
@@ -276,7 +276,7 @@ func (h *CuratorHandler) handleInspect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no such artifact")
 		return
 	}
-	writeJSON(w, http.StatusOK, inspectResponse{ArtifactID: id, Entry: e, Blocked: blocked})
+	writeJSON(w, r, http.StatusOK, inspectResponse{ArtifactID: id, Entry: e, Blocked: blocked})
 }
 
 type versionsResponse struct {
@@ -302,7 +302,7 @@ func (h *CuratorHandler) handleVersions(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "no such artifact")
 		return
 	}
-	writeJSON(w, http.StatusOK, versionsResponse{
+	writeJSON(w, r, http.StatusOK, versionsResponse{
 		ArtifactID: id,
 		Name:       e.Body.Name,
 		Versions:   e.Body.Versions,
@@ -326,7 +326,7 @@ func (h *CuratorHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 	if parts == nil {
 		parts = []string{}
 	}
-	writeJSON(w, http.StatusOK, fleetResponse{
+	writeJSON(w, r, http.StatusOK, fleetResponse{
 		GeneratedAt:   cat.GeneratedAt,
 		Participants:  parts,
 		ArtifactCount: len(cat.Artifacts),
@@ -358,7 +358,7 @@ func (h *CuratorHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 	// this blocked?" column on /list / /inspect synchronously consistent with
 	// the block we just wrote.
 	h.agg.InvalidateCache()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": true})
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": true})
 }
 
 func (h *CuratorHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
@@ -372,7 +372,7 @@ func (h *CuratorHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.agg.InvalidateCache()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": false})
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": false})
 }
 
 func isHex64(s string) bool {

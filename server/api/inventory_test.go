@@ -72,7 +72,7 @@ func TestInventory_NoFilter(t *testing.T) {
 	}
 
 	var resp struct {
-		Count   int              `json:"count"`
+		Count  int              `json:"count"`
 		Envoys []map[string]any `json:"envoys"`
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
@@ -90,7 +90,7 @@ func TestInventory_WhereFilter(t *testing.T) {
 	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
-		Count   int `json:"count"`
+		Count  int `json:"count"`
 		Envoys []struct {
 			Hostname string `json:"hostname"`
 		} `json:"envoys"`
@@ -115,7 +115,7 @@ func TestInventory_MultipleWhere(t *testing.T) {
 	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
-		Count   int `json:"count"`
+		Count  int `json:"count"`
 		Envoys []struct {
 			Hostname string `json:"hostname"`
 		} `json:"envoys"`
@@ -138,7 +138,7 @@ func TestInventory_ShowFields(t *testing.T) {
 	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
-		Count   int `json:"count"`
+		Count  int `json:"count"`
 		Envoys []struct {
 			Hostname string         `json:"hostname"`
 			Traits   map[string]any `json:"traits"`
@@ -189,7 +189,7 @@ func TestInventory_RevokedExcluded(t *testing.T) {
 	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
-		Count   int `json:"count"`
+		Count  int `json:"count"`
 		Envoys []struct {
 			Hostname string `json:"hostname"`
 		} `json:"envoys"`

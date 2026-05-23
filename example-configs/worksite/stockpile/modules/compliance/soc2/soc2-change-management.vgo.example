@@ -1,5 +1,6 @@
 name: soc2-change-management
-bundle: [soc2-change-management]
+compliance:
+  bundle: [soc2-change-management]
 resources:
   # CC8.1: Configuration baselines — track /etc changes
   - name: etckeeper-package

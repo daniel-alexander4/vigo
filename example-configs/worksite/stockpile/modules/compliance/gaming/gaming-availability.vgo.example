@@ -4,8 +4,8 @@ name: gaming-availability
 # Ensures critical gaming infrastructure services are running,
 # monitored, and recoverable.
 
-bundle: [gaming-availability]
-
+compliance:
+  bundle: [gaming-availability]
 resources:
   - name: monitoring-agent
     type: service

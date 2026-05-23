@@ -191,7 +191,9 @@ async fn read_loop(
                 if let Some(m) = msg.msg {
                     match m {
                         server_stream_message::Msg::CheckInResponse(resp) => {
-                            let _ = check_in_resp_tx.try_send(resp);
+                            if check_in_resp_tx.try_send(resp).is_err() {
+                                warn!("check-in response dropped (buffer full)");
+                            }
                         }
                         server_stream_message::Msg::ReportResultAck(_) => {
                             // Fire-and-forget — drain silently.
@@ -205,7 +207,9 @@ async fn read_loop(
                             }
                         }
                         server_stream_message::Msg::ForcePush(fp) => {
-                            let _ = force_push_tx.try_send(fp.traceparent);
+                            if force_push_tx.try_send(fp.traceparent).is_err() {
+                                warn!("force push dropped (buffer full)");
+                            }
                         }
                         server_stream_message::Msg::TaskDispatch(dispatch) => {
                             if task_dispatch_tx.try_send(dispatch).is_err() {
@@ -218,10 +222,14 @@ async fn read_loop(
                             }
                         }
                         server_stream_message::Msg::DeltaAck(ack) => {
-                            let _ = delta_ack_tx.try_send(ack);
+                            if delta_ack_tx.try_send(ack).is_err() {
+                                warn!("delta ack dropped (buffer full)");
+                            }
                         }
                         server_stream_message::Msg::StreamRelease(_) => {
-                            let _ = stream_release_tx.try_send(());
+                            if stream_release_tx.try_send(()).is_err() {
+                                warn!("stream release dropped (buffer full)");
+                            }
                         }
                         server_stream_message::Msg::TunnelRequest(req) => {
                             if tunnel_request_tx.try_send(req).is_err() {

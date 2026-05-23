@@ -1,6 +1,6 @@
 name: nist-login-banner
-bundle: [nist-login-banner]
-
+compliance:
+  bundle: [nist-login-banner]
 resources:
   - name: issue-banner
     type: file

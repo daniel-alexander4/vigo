@@ -1,6 +1,6 @@
 name: nist-key-management
-bundle: [nist-key-management]
-
+compliance:
+  bundle: [nist-key-management]
 resources:
   # SSH key permissions — daily cron.
   - name: ssh-key-permissions

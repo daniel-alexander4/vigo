@@ -1,5 +1,6 @@
 name: nist-config-management
-bundle: [nist-config-management]
+compliance:
+  bundle: [nist-config-management]
 resources:
   # CM-7: Least functionality — disable unnecessary services
   - name: disable-avahi

@@ -1,6 +1,7 @@
 name: auditd
 
-provides: [audit-trail]
+compliance:
+  provides: [audit-trail]
 # Prefer: cis-ubuntu-logging or cis-rhel-logging (compliance roles include
 # auditd with 17 CIS rule sets, immutable flag, and compliance tags).
 # Only use this module if you are NOT using CIS compliance roles — both write

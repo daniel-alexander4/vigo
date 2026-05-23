@@ -6,8 +6,8 @@
 #~ hardlinks effectively, unlike raw DB files which change every transaction.
 name: directory-backup
 
-provides: [host-backup]
-
+compliance:
+  provides: [host-backup]
 vars:
   backup_src: "/srv/myapp"
   backup_dest: "/srv/backups/myapp"

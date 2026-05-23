@@ -1,7 +1,7 @@
 name: timezone
 
-provides: [timezone]
-
+compliance:
+  provides: [timezone]
 vars:
   system_timezone: "UTC"
 

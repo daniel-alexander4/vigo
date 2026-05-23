@@ -13,8 +13,8 @@
 #~ config path.
 name: vigo-log-forward
 
-provides: [vigo-log-forward]
-
+compliance:
+  provides: [vigo-log-forward]
 vars:
   log_driver: "syslog"
   syslog_address: "udp://127.0.0.1:514"

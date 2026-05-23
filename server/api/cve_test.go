@@ -8,26 +8,26 @@ import "testing"
 func TestRunningBinariesForCVE_Matches(t *testing.T) {
 	traitMap := map[string]string{
 		// Row 0 matches the target CVE.
-		"cve_running_correlation.running_cves.0.cve_id":         "CVE-2024-1234",
-		"cve_running_correlation.running_cves.0.severity":       "critical",
-		"cve_running_correlation.running_cves.0.package":        "openssl",
+		"cve_running_correlation.running_cves.0.cve_id":          "CVE-2024-1234",
+		"cve_running_correlation.running_cves.0.severity":        "critical",
+		"cve_running_correlation.running_cves.0.package":         "openssl",
 		"cve_running_correlation.running_cves.0.package_version": "3.0.2",
-		"cve_running_correlation.running_cves.0.binary_path":    "/usr/bin/openssl",
-		"cve_running_correlation.running_cves.0.pid_count":      "2",
-		"cve_running_correlation.running_cves.0.deleted":        "false",
+		"cve_running_correlation.running_cves.0.binary_path":     "/usr/bin/openssl",
+		"cve_running_correlation.running_cves.0.pid_count":       "2",
+		"cve_running_correlation.running_cves.0.deleted":         "false",
 		// Row 1 matches the target CVE on a different binary.
-		"cve_running_correlation.running_cves.1.cve_id":         "CVE-2024-1234",
-		"cve_running_correlation.running_cves.1.severity":       "critical",
-		"cve_running_correlation.running_cves.1.package":        "openssl",
-		"cve_running_correlation.running_cves.1.binary_path":    "/usr/sbin/sshd",
-		"cve_running_correlation.running_cves.1.pid_count":      "1",
-		"cve_running_correlation.running_cves.1.deleted":        "true",
+		"cve_running_correlation.running_cves.1.cve_id":      "CVE-2024-1234",
+		"cve_running_correlation.running_cves.1.severity":    "critical",
+		"cve_running_correlation.running_cves.1.package":     "openssl",
+		"cve_running_correlation.running_cves.1.binary_path": "/usr/sbin/sshd",
+		"cve_running_correlation.running_cves.1.pid_count":   "1",
+		"cve_running_correlation.running_cves.1.deleted":     "true",
 		// Row 2 is a different CVE — must not be returned.
-		"cve_running_correlation.running_cves.2.cve_id":         "CVE-2024-9999",
-		"cve_running_correlation.running_cves.2.severity":       "medium",
-		"cve_running_correlation.running_cves.2.binary_path":    "/usr/bin/curl",
-		"cve_running_correlation.running_cves.2.pid_count":      "1",
-		"cve_running_correlation.running_cves.2.deleted":        "false",
+		"cve_running_correlation.running_cves.2.cve_id":      "CVE-2024-9999",
+		"cve_running_correlation.running_cves.2.severity":    "medium",
+		"cve_running_correlation.running_cves.2.binary_path": "/usr/bin/curl",
+		"cve_running_correlation.running_cves.2.pid_count":   "1",
+		"cve_running_correlation.running_cves.2.deleted":     "false",
 	}
 
 	bins, severity := runningBinariesForCVE(traitMap, "CVE-2024-1234")

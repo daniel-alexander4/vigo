@@ -3,8 +3,8 @@
 #~ via auditpol. Events land in Security event log.
 name: auditd-rules-windows
 
-provides: [audit-rules]
-
+compliance:
+  provides: [audit-rules]
 resources:
   - name: enable-account-mgmt-audit
     type: powershell

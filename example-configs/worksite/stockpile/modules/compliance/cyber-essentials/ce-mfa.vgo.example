@@ -1,6 +1,6 @@
 name: ce-mfa
-bundle: [ce-mfa]
-
+compliance:
+  bundle: [ce-mfa]
 resources:
   - name: libpam-google-authenticator
     type: package

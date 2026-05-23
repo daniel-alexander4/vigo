@@ -2,8 +2,8 @@
 #~ from vars and uses a one-time admin password (from the secret vault).
 name: freeipa-client
 
-provides: [central-identity]
-
+compliance:
+  provides: [central-identity]
 vars:
   ipa_domain: "ipa.example.com"
   ipa_server: "ipa01.example.com"

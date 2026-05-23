@@ -6,8 +6,8 @@ name: os-users
 # password complexity, /etc/login.defs defaults, MFA, automated inactivity
 # disabling, password storage cryptography) is enforced by other modules
 # or PAM and is NOT claimed here. See docs/concepts/compliance.md.
-provides: [os-user-management]
-
+compliance:
+  provides: [os-user-management]
 resources:
   # --- Admin user with SSH access and explicit sudo ---
   # Notes:

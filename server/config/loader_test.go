@@ -3187,14 +3187,14 @@ func TestBuildComplianceIndex(t *testing.T) {
 	mods := map[string]*ModuleDefinition{
 		"sshd": {
 			Name: "sshd",
-			Compliance: map[string][]string{
+			InheritedCompliance: map[string][]string{
 				"hipaa":   {"AC-1", "SC-8"},
 				"pci-dss": {"2.2.1", "8.3.1"},
 			},
 		},
 		"nginx": {
 			Name: "nginx",
-			Compliance: map[string][]string{
+			InheritedCompliance: map[string][]string{
 				"pci-dss": {"6.5.1"},
 			},
 		},
@@ -3228,25 +3228,34 @@ func TestBuildComplianceIndex(t *testing.T) {
 func TestEnvoyStandardCoverage(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	// Per-module subdirs with sibling compliance.vgo inheritance files —
+	// the post-0.66.57 way to attribute specific framework→control IDs
+	// to a single module (per-module `compliance:` carries the catalog-
+	// tag shape only; the inheritance file keeps the framework→control
+	// map shape).
+	writeFile(t, filepath.Join(dir, "modules", "sshd", "sshd.vgo"), `
 name: sshd
-compliance:
-  hipaa: [AC-1, SC-8]
-  pci-dss: ["2.2.1", "8.3.1"]
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
-name: nginx
+	writeFile(t, filepath.Join(dir, "modules", "sshd", "compliance.vgo"), `
 compliance:
-  pci-dss: ["6.5.1"]
+  hipaa: [AC-1, SC-8]
+  pci-dss: ["2.2.1", "8.3.1"]
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx", "nginx.vgo"), `
+name: nginx
 resources:
   - name: install-nginx
     type: package
     package: nginx
     state: present
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx", "compliance.vgo"), `
+compliance:
+  pci-dss: ["6.5.1"]
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
@@ -3512,15 +3521,17 @@ envoys:
 func TestTraceComplianceTags(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd", "sshd.vgo"), `
 name: sshd
-compliance:
-  hipaa: [AC-1, SC-8]
-  pci-dss: ["2.2.1"]
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
+`)
+	writeFile(t, filepath.Join(dir, "modules", "sshd", "compliance.vgo"), `
+compliance:
+  hipaa: [AC-1, SC-8]
+  pci-dss: ["2.2.1"]
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
@@ -3654,26 +3665,30 @@ envoys:
 func TestFilterByModuleFiltersNewSections(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd", "sshd.vgo"), `
 name: sshd
-compliance:
-  hipaa: [AC-1]
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
     when: "is_enabled"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
-name: nginx
+	writeFile(t, filepath.Join(dir, "modules", "sshd", "compliance.vgo"), `
 compliance:
-  pci-dss: ["6.5.1"]
+  hipaa: [AC-1]
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx", "nginx.vgo"), `
+name: nginx
 resources:
   - name: install-nginx
     type: package
     package: nginx
     state: present
     when: "os_family('debian')"
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx", "compliance.vgo"), `
+compliance:
+  pci-dss: ["6.5.1"]
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:

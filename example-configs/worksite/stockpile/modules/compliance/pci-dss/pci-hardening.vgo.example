@@ -1,6 +1,6 @@
 name: pci-hardening
-bundle: [pci-hardening-dss]
-
+compliance:
+  bundle: [pci-hardening-dss]
 resources:
   # 2.2.2: Disable unnecessary services
   - name: disable-xinetd

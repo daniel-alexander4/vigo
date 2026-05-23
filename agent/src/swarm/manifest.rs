@@ -68,8 +68,16 @@ impl ManifestData {
 }
 
 /// Thread-safe manifest with persistence.
+///
+/// The inner `ManifestData` is held under `RwLock<Arc<...>>` so
+/// `snapshot()` is an O(1) `Arc::clone` instead of a deep clone of
+/// the entries map. Writers use `Arc::make_mut` to get copy-on-write
+/// semantics — when no reader is holding a snapshot, the writer
+/// mutates the existing allocation in place; when a reader is holding
+/// one, the writer detaches by cloning the inner data and rewriting
+/// the Arc, so the reader's snapshot remains immutable.
 pub struct Manifest {
-    data: RwLock<ManifestData>,
+    data: RwLock<Arc<ManifestData>>,
     path: PathBuf,
 }
 
@@ -99,7 +107,7 @@ impl Manifest {
         };
 
         Arc::new(Self {
-            data: RwLock::new(data),
+            data: RwLock::new(Arc::new(data)),
             path,
         })
     }
@@ -147,17 +155,19 @@ impl Manifest {
         size: u64,
         seeder_address: &str,
     ) {
-        let mut data = self.data.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.data.write().unwrap_or_else(|e| e.into_inner());
 
         // Don't overwrite a revocation with a seed from the same timestamp
-        // window — the revocation should win.
-        if let Some(existing) = data.entries.get(sha256) {
+        // window — the revocation should win. Peek through the guard
+        // before make_mut so an early-return doesn't pay the CoW clone.
+        if let Some(existing) = guard.entries.get(sha256) {
             if existing.status == BlobStatus::Revoked {
                 return;
             }
         }
 
         let now = now_millis();
+        let data = Arc::make_mut(&mut guard);
         data.entries.insert(sha256.to_string(), BlobEntry {
             sha256: sha256.to_string(),
             label: label.to_string(),
@@ -171,21 +181,24 @@ impl Manifest {
             seeder_address: seeder_address.to_string(),
         });
         data.version += 1;
-        self.persist_locked(&data);
+        self.persist_locked(data);
     }
 
     /// Revoke a blob. Only succeeds if `author` is the original seeder or "server".
     pub fn revoke(&self, sha256: &str, author: &str) -> bool {
-        let mut data = self.data.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.data.write().unwrap_or_else(|e| e.into_inner());
 
-        // Check authorization: author must be the seeder or "server".
-        if let Some(existing) = data.entries.get(sha256) {
+        // Check authorization through the guard's Arc — done before
+        // make_mut so an unauthorized revoke doesn't trigger the CoW
+        // clone.
+        if let Some(existing) = guard.entries.get(sha256) {
             if author != "server" && author != existing.seeder_id {
                 return false;
             }
         }
 
         let now = now_millis();
+        let data = Arc::make_mut(&mut guard);
         if let Some(entry) = data.entries.get_mut(sha256) {
             entry.status = BlobStatus::Revoked;
             entry.updated_at = now;
@@ -208,13 +221,14 @@ impl Manifest {
         }
 
         data.version += 1;
-        self.persist_locked(&data);
+        self.persist_locked(data);
         true
     }
 
     /// Merge a remote manifest into ours. Returns true if anything changed.
     pub fn merge(&self, remote: &ManifestData) -> bool {
-        let mut data = self.data.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.data.write().unwrap_or_else(|e| e.into_inner());
+        let data = Arc::make_mut(&mut guard);
         let mut changed = false;
 
         for (sha256, remote_entry) in &remote.entries {
@@ -235,15 +249,21 @@ impl Manifest {
         if changed {
             // Advance version past both local and remote.
             data.version = data.version.max(remote.version) + 1;
-            self.persist_locked(&data);
+            self.persist_locked(data);
         }
 
         changed
     }
 
     /// Get a snapshot of the manifest data for serialization/gossip.
-    pub fn snapshot(&self) -> ManifestData {
-        self.data.read().unwrap_or_else(|e| e.into_inner()).clone()
+    ///
+    /// Returns an `Arc<ManifestData>` — O(1) ref-bump regardless of map
+    /// size. The returned handle is immutable; concurrent writers either
+    /// mutate the underlying allocation in place (when no other snapshot
+    /// is live) or clone-then-detach via `Arc::make_mut` so the snapshot
+    /// the caller is reading does not change underneath them.
+    pub fn snapshot(&self) -> Arc<ManifestData> {
+        Arc::clone(&self.data.read().unwrap_or_else(|e| e.into_inner()))
     }
 
     /// List all active blob hashes.
@@ -317,7 +337,8 @@ impl Manifest {
     /// Prune revoked entries older than the given duration.
     pub fn prune_revoked(&self, max_age: std::time::Duration) {
         let cutoff = now_millis().saturating_sub(max_age.as_millis() as u64);
-        let mut data = self.data.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.data.write().unwrap_or_else(|e| e.into_inner());
+        let data = Arc::make_mut(&mut guard);
         let before = data.entries.len();
         data.entries.retain(|_, e| {
             !(e.status == BlobStatus::Revoked && e.updated_at < cutoff)
@@ -325,7 +346,7 @@ impl Manifest {
         let pruned = before - data.entries.len();
         if pruned > 0 {
             data.version += 1;
-            self.persist_locked(&data);
+            self.persist_locked(data);
             info!(pruned, "pruned old revoked manifest entries");
         }
     }
@@ -542,11 +563,12 @@ mod tests {
         let manifest = Manifest::load(dir.path());
 
         // Insert a revoked entry with old timestamp.
-        let mut data = manifest.data.write().unwrap();
+        let mut guard = manifest.data.write().unwrap();
+        let data = Arc::make_mut(&mut guard);
         data.entries.insert("old".to_string(), make_entry("old", BlobStatus::Revoked, 1000, "a"));
         data.entries.insert("new".to_string(), make_entry("new", BlobStatus::Active, now_millis(), "a"));
         data.version += 1;
-        drop(data);
+        drop(guard);
 
         manifest.prune_revoked(std::time::Duration::from_secs(1));
 
@@ -580,7 +602,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let manifest = Manifest::load(dir.path());
 
-        let mut data = manifest.data.write().unwrap();
+        let mut guard = manifest.data.write().unwrap();
+        let data = Arc::make_mut(&mut guard);
         // A regular swarm seed with target "*" — should match.
         data.entries.insert(
             "aaa".to_string(),
@@ -596,7 +619,7 @@ mod tests {
             "ccc".to_string(),
             labelled_entry("ccc", "gitback-meta:danlap:dan:proj"),
         );
-        drop(data);
+        drop(guard);
 
         let traits = std::collections::HashMap::new();
         let assigned = manifest.assignments_for("any-host", &traits);
@@ -610,7 +633,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let manifest = Manifest::load(dir.path());
 
-        let mut data = manifest.data.write().unwrap();
+        let mut guard = manifest.data.write().unwrap();
+        let data = Arc::make_mut(&mut guard);
         data.entries.insert(
             "aaa".to_string(),
             labelled_entry("aaa", "gitback:danlap:dan:proj1"),
@@ -623,7 +647,7 @@ mod tests {
             "ccc".to_string(),
             labelled_entry("ccc", "gitback:danlap:dan:proj3"),
         );
-        drop(data);
+        drop(guard);
 
         let mut wanted = std::collections::HashSet::new();
         wanted.insert("gitback:danlap:dan:proj1".to_string());
@@ -641,12 +665,13 @@ mod tests {
     fn entries_for_labels_empty_set_returns_empty() {
         let dir = tempfile::tempdir().unwrap();
         let manifest = Manifest::load(dir.path());
-        let mut data = manifest.data.write().unwrap();
+        let mut guard = manifest.data.write().unwrap();
+        let data = Arc::make_mut(&mut guard);
         data.entries.insert(
             "aaa".to_string(),
             labelled_entry("aaa", "gitback:danlap:dan:proj"),
         );
-        drop(data);
+        drop(guard);
 
         let wanted = std::collections::HashSet::new();
         assert!(manifest.entries_for_labels(&wanted).is_empty());
@@ -657,11 +682,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let manifest = Manifest::load(dir.path());
 
-        let mut data = manifest.data.write().unwrap();
+        let mut guard = manifest.data.write().unwrap();
+        let data = Arc::make_mut(&mut guard);
         let mut e = labelled_entry("aaa", "gitback:danlap:dan:proj");
         e.status = BlobStatus::Revoked;
         data.entries.insert("aaa".to_string(), e);
-        drop(data);
+        drop(guard);
 
         let mut wanted = std::collections::HashSet::new();
         wanted.insert("gitback:danlap:dan:proj".to_string());

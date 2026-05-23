@@ -1,6 +1,7 @@
 name: rsyslog
 
-provides: [log-shipping]
+compliance:
+  provides: [log-shipping]
 # Prefer: cis-ubuntu-logging or cis-rhel-logging (compliance roles install
 # rsyslog, enable the service, and set file permissions with compliance tags).
 # Safe to combine if you need remote forwarding — this module uses a different

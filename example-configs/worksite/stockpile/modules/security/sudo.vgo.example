@@ -1,7 +1,7 @@
 name: sudo
 
-provides: [sudo-policy]
-
+compliance:
+  provides: [sudo-policy]
 vars:
   passwordless: "false"
   env_keep: "SSH_AUTH_SOCK EDITOR VISUAL"

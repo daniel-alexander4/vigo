@@ -2,8 +2,8 @@ name: cis-windows-network
 # CIS Windows Server 2022 Level 1 — Network Security
 # Status: ENFORCED by Vigo
 
-bundle: [cis-windows-network]
-
+compliance:
+  bundle: [cis-windows-network]
 resources:
   # Disable LLMNR
   - name: disable-llmnr

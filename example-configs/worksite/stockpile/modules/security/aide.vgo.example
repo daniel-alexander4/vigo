@@ -3,8 +3,8 @@
 #~ via daily cron.
 name: aide
 
-provides: [file-integrity]
-
+compliance:
+  provides: [file-integrity]
 resources:
   - name: install-aide
     type: package

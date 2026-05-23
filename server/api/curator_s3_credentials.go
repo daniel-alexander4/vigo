@@ -90,9 +90,7 @@ func (h *S3CredentialsHandler) handleCreate(w http.ResponseWriter, r *http.Reque
 	}
 	recordAudit(r.Context(), h.auditWriter, "curator.s3_credential.create", actorFromRequest(r), "rest",
 		fmt.Sprintf("minted curator S3 credential %s (scope %s)", created.AccessKeyID, created.Scope), "")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(createS3CredentialResponse{
+	writeJSON(w, r, http.StatusCreated, createS3CredentialResponse{
 		AccessKeyID:     created.AccessKeyID,
 		SecretAccessKey: created.SecretAccessKey,
 		Scope:           created.Scope,
@@ -119,8 +117,7 @@ func (h *S3CredentialsHandler) handleList(w http.ResponseWriter, r *http.Request
 			CreatedAt:   row.CreatedAt,
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(items)
+	writeJSON(w, r, http.StatusOK, items)
 }
 
 func (h *S3CredentialsHandler) handleDelete(w http.ResponseWriter, r *http.Request) {

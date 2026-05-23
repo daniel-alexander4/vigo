@@ -1,6 +1,6 @@
 name: pci-access-control
-bundle: [pci-access-control]
-
+compliance:
+  bundle: [pci-access-control]
 resources:
   # 7.2.1/7.2.2: Restrict access by role
   - name: sudo-group-only

@@ -2,8 +2,8 @@
 #~ via clamonacc real-time scanning (requires kernel fanotify).
 name: clamav
 
-provides: [anti-malware]
-
+compliance:
+  provides: [anti-malware]
 resources:
   - name: install-clamav
     type: package

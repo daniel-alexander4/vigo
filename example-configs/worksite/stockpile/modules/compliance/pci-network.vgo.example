@@ -8,8 +8,8 @@
 
 name: pci-network
 
-bundle: [pci-network]
-
+compliance:
+  bundle: [pci-network]
 vars:
   allowed_tcp_ports: "22 443"
   allowed_udp_ports: ""

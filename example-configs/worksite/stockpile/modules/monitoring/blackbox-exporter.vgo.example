@@ -2,8 +2,8 @@
 #~ scrapes /probe?target=... to record availability + latency.
 name: blackbox-exporter
 
-provides: [monitoring-probe]
-
+compliance:
+  provides: [monitoring-probe]
 vars:
   blackbox_version: "0.25.0"
 

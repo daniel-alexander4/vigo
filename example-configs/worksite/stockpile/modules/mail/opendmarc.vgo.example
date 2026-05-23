@@ -1,8 +1,8 @@
 #~ OpenDMARC milter for inbound DMARC validation + reporting.
 name: opendmarc
 
-provides: [dmarc-enforcement]
-
+compliance:
+  provides: [dmarc-enforcement]
 resources:
   - name: install-opendmarc
     type: package

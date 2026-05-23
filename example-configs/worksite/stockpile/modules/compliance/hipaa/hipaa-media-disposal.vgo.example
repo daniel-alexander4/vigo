@@ -1,6 +1,6 @@
 name: hipaa-media-disposal
-bundle: [hipaa-media-disposal]
-
+compliance:
+  bundle: [hipaa-media-disposal]
 resources:
   - name: secure-delete
     type: package

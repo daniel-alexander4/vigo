@@ -45,7 +45,7 @@ func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 
 	type affectedEnvoy struct {
 		Hostname string `json:"hostname"`
-		EnvoyID string `json:"envoy_id"`
+		EnvoyID  string `json:"envoy_id"`
 	}
 
 	// Find all envoys that include this module.
@@ -65,14 +65,14 @@ func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 			if mod.Name == moduleName {
 				affected = append(affected, affectedEnvoy{
 					Hostname: ts.Hostname,
-					EnvoyID: ts.ID,
+					EnvoyID:  ts.ID,
 				})
 				break
 			}
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"module":   moduleName,
 		"affected": affected,
 		"count":    len(affected),

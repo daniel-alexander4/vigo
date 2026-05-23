@@ -3,8 +3,8 @@
 #~ operators can ship customized rules.
 name: aide-windows
 
-provides: [file-integrity]
-
+compliance:
+  provides: [file-integrity]
 resources:
   - name: install-sysmon
     type: package

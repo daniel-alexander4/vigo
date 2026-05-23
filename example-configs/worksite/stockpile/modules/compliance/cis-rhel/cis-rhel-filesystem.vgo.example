@@ -3,8 +3,8 @@ name: cis-rhel-filesystem
 # Level 1 + Level 2 controls
 # Applies to: RHEL 8/9, CentOS Stream 8/9, Rocky Linux 8/9, AlmaLinux 8/9
 
-bundle: [cis-rhel-filesystem]
-
+compliance:
+  bundle: [cis-rhel-filesystem]
 resources:
   # --- 1.1.1: Disable unused filesystems ---
 

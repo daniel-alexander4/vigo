@@ -1,5 +1,6 @@
 name: iso-operations-security
-bundle: [iso-operations-security]
+compliance:
+  bundle: [iso-operations-security]
 resources:
   # A.12.1.2: Change management — track config changes
   - name: etckeeper-package

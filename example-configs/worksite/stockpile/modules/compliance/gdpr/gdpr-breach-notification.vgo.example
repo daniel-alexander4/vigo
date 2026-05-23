@@ -1,5 +1,6 @@
 name: gdpr-breach-notification
-bundle: [gdpr-breach-notification]
+compliance:
+  bundle: [gdpr-breach-notification]
 resources:
   # Art 33(5): Documentation of breaches — ensure logging infrastructure
   - name: auditd-package

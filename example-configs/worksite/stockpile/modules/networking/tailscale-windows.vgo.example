@@ -2,8 +2,8 @@
 #~ powershell with an authkey from the secret vault.
 name: tailscale-windows
 
-provides: [vpn]
-
+compliance:
+  provides: [vpn]
 vars:
   tailscale_authkey: "secret:vigo/tailscale/authkey"
 

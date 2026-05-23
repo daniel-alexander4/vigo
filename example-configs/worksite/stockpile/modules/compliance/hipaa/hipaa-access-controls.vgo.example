@@ -1,5 +1,6 @@
 name: hipaa-access-controls
-bundle: [hipaa-access-controls]
+compliance:
+  bundle: [hipaa-access-controls]
 resources:
   - name: libpam-pwquality
     type: package

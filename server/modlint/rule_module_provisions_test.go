@@ -53,14 +53,13 @@ func TestModuleProvisions_UnknownTagWithDidYouMean(t *testing.T) {
 // this rule).
 
 // TestModuleProvisions_NoProvidesNoFindings pins that the rule is a
-// no-op for modules without a provides: field — existing modules with
-// only `compliance:` blocks aren't disturbed.
+// no-op for modules with no `compliance.provides:` claim — modules that
+// only declare a `compliance.bundle:` (or no compliance at all) aren't
+// disturbed by the provisions rule.
 func TestModuleProvisions_NoProvidesNoFindings(t *testing.T) {
 	mod := &module{
-		Name: "legacy-module",
-		Compliance: map[string][]string{
-			"pci-dss": {"10.6.1"},
-		},
+		Name:   "bundle-only-module",
+		Bundle: []string{"cis-ubuntu-access"},
 	}
 	findings := moduleProvisionsRule{}.apply(mod, Options{})
 	if len(findings) != 0 {

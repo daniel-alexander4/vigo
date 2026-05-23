@@ -4,7 +4,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -65,8 +64,7 @@ func (h *PeerHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 		out.LastSyncTime = time.Unix(resp.LastSyncUnix, 0).UTC().Format(time.RFC3339)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	writeJSON(w, r, http.StatusOK, out)
 }
 
 // peerPromoteResponse is the JSON shape returned by POST /api/v1/peer/promote.
@@ -83,17 +81,14 @@ func (h *PeerHandler) handlePromote(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.peerSvc.Promote(r.Context(), nil)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(peerPromoteResponse{
+		writeJSON(w, r, http.StatusInternalServerError, peerPromoteResponse{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(peerPromoteResponse{
+	writeJSON(w, r, http.StatusOK, peerPromoteResponse{
 		Success: resp.Success,
 		Message: resp.Message,
 	})

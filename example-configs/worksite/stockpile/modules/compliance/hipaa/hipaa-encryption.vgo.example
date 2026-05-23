@@ -1,5 +1,6 @@
 name: hipaa-encryption
-bundle: [hipaa-encryption]
+compliance:
+  bundle: [hipaa-encryption]
 resources:
   - name: cryptsetup-package
     type: package

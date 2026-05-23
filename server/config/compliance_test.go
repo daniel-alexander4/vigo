@@ -239,8 +239,11 @@ envoys:
 	}
 }
 
-// Case 6: module with its own compliance: block + ancestor compliance.vgo
-// claims — effective claims are the union.
+// Case 6: module-specific compliance.vgo (sibling to the module file)
+// + ancestor compliance.vgo claims — effective claims are the union.
+// Post-0.66.57 the per-module framework→control attribution comes
+// through a sibling compliance.vgo file; the module YAML itself
+// carries only catalog-tag claims via `compliance: { provides, bundle }`.
 func TestCompliance_ModulesTree_UnionWithModuleOwnBlock(t *testing.T) {
 	dir := setupDir(t)
 
@@ -253,11 +256,13 @@ compliance:
   cis: ["1.1.2"]
   nist: ["AC-3"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
-name: users/dan
+	writeFile(t, filepath.Join(dir, "modules", "users", "dan", "compliance.vgo"), `
 compliance:
   cis: ["1.1.3"]
   soc2: ["CC6.1"]
+`)
+	writeFile(t, filepath.Join(dir, "modules", "users", "dan", "dan.vgo"), `
+name: users/dan
 resources:
   - name: dan
     type: user

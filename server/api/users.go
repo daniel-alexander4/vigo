@@ -134,8 +134,7 @@ func (h *UsersHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	writeJSON(w, r, http.StatusOK, users)
 }
 
 type createUserRequest struct {
@@ -207,9 +206,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	recordAudit(r.Context(), h.auditWriter, "user.create", u.Username, "rest", fmt.Sprintf("created user %s with role %s", req.Username, req.Role), "")
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	writeJSON(w, r, http.StatusCreated, user)
 }
 
 type updateUserRequest struct {
@@ -386,8 +383,7 @@ func (h *UsersHandler) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, r, http.StatusOK, map[string]string{
 		"secret": secret,
 		"url":    url,
 	})
@@ -442,8 +438,7 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 
 	recordAudit(r.Context(), h.auditWriter, "user.totp_enable", u.Username, "rest", fmt.Sprintf("TOTP enabled for %s", u.Username), "")
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":         "enabled",
 		"recovery_codes": plainCodes,
 	})

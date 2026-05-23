@@ -124,8 +124,7 @@ func (h *SpannerHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, r, http.StatusOK, resp)
 }
 
 // handlePeerBoltEnvoys serves one peer bolt's cached envoy roster in
@@ -142,8 +141,7 @@ func (h *SpannerHandler) handlePeerBoltEnvoys(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusNotFound, "no cached observability for bolt "+id)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"envoys": p.Envoys})
+	writeJSON(w, r, http.StatusOK, map[string]any{"envoys": p.Envoys})
 }
 
 // handlePeerBoltPush is the peer-equal analog of handleBoltPush: it
@@ -174,8 +172,7 @@ func (h *SpannerHandler) handlePeerBoltPush(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"envoys_notified": count})
+	writeJSON(w, r, http.StatusOK, map[string]any{"envoys_notified": count})
 }
 
 // handlePeerReassign is the peer-equal analog of handleReassign: it
@@ -219,8 +216,7 @@ func (h *SpannerHandler) handlePeerReassign(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 // handlePeerDrain is the peer-equal analog of handleDrain: it moves
@@ -259,8 +255,7 @@ func (h *SpannerHandler) handlePeerDrain(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 // handlePeerBoltDetail serves one peer bolt's cached observability
@@ -289,8 +284,7 @@ func (h *SpannerHandler) handlePeerBoltDetail(w http.ResponseWriter, r *http.Req
 	if !p.UpdatedAt.IsZero() {
 		view.SnapshotAgeSeconds = int64(time.Since(p.UpdatedAt).Seconds())
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(view)
+	writeJSON(w, r, http.StatusOK, view)
 }
 
 // handlePeerBoltRuns serves one peer bolt's runs via a direct admin
@@ -314,6 +308,5 @@ func (h *SpannerHandler) handlePeerBoltRuns(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"runs": runs})
+	writeJSON(w, r, http.StatusOK, map[string]any{"runs": runs})
 }

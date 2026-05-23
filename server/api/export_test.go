@@ -24,7 +24,6 @@ import (
 	"git.alexander4.io/vigo/server/secrets"
 )
 
-
 // insertExportTestData inserts a envoy, run, and run results for testing.
 // Returns the envoy ID and run ID.
 func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTime time.Time) (string, string) {
@@ -231,20 +230,20 @@ func TestExportSIEMLimit(t *testing.T) {
 func TestExportCMDBBasic(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{
-		ID:               "t1",
-		Hostname:         "web01.prod",
-		IP:               "10.0.0.1",
-		EnrolledAt:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		LastSeen:         time.Now().UTC(),
+		ID:                "t1",
+		Hostname:          "web01.prod",
+		IP:                "10.0.0.1",
+		EnrolledAt:        time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		LastSeen:          time.Now().UTC(),
 		ConvergenceStatus: "converged",
 		Traits: map[string]string{
-			"os.family":             "debian",
-			"os.version":            "22.04",
-			"os.arch": "amd64",
-			"kernel.version":        "6.8.0",
-			"hardware.cpu_count":    "4",
-			"memory.total":          "16384",
-			"uptime.seconds":        "86400",
+			"os.family":          "debian",
+			"os.version":         "22.04",
+			"os.arch":            "amd64",
+			"kernel.version":     "6.8.0",
+			"hardware.cpu_count": "4",
+			"memory.total":       "16384",
+			"uptime.seconds":     "86400",
 		},
 	}, nil)
 

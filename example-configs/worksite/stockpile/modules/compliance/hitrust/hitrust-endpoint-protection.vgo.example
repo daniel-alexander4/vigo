@@ -1,5 +1,6 @@
 name: hitrust-endpoint-protection
-bundle: [hitrust-endpoint-protection]
+compliance:
+  bundle: [hitrust-endpoint-protection]
 resources:
   # 09.j: Controls against malicious code
   - name: clamav

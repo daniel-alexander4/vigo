@@ -2,8 +2,8 @@
 #~ collector (Loki, Elasticsearch, fluentd, etc.).
 name: fluentbit
 
-provides: [log-processing-pci]
-
+compliance:
+  provides: [log-processing-pci]
 vars:
   forward_host: "loki.example.com"
   forward_port: "3100"

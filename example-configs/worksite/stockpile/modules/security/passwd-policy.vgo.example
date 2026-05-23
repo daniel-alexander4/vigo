@@ -1,6 +1,7 @@
 name: passwd-policy
 
-provides: [password-policy-comprehensive]
+compliance:
+  provides: [password-policy-comprehensive]
 # Prefer: cis-ubuntu-access or cis-rhel-access (compliance roles include
 # password aging, pwquality, and PAM faillock with compliance tags).
 # Only use this module if you are NOT using CIS compliance roles — both write

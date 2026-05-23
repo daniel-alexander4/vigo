@@ -3,8 +3,8 @@
 #~ secret vault.
 name: borg
 
-provides: [host-backup-encrypted]
-
+compliance:
+  provides: [host-backup-encrypted]
 vars:
   source_paths: "/etc /home /var/lib"
   schedule: "30 1 * * *"

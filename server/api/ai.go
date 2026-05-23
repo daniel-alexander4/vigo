@@ -57,8 +57,7 @@ func (h *AIHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, r, http.StatusOK, resp)
 }
 
 func (h *AIHandler) handleAskStream(w http.ResponseWriter, r *http.Request, req ai.AskRequest) {

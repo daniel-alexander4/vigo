@@ -1,7 +1,7 @@
 name: collectd
 
-provides: [system-resource-monitoring]
-
+compliance:
+  provides: [system-resource-monitoring]
 vars:
   collectd_interval: "10"
   collectd_hostname_override: ""

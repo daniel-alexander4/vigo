@@ -6,8 +6,8 @@ name: gaming-rng-monitoring
 # testing labs (GLI, BMM, eCOGRA). Vigo cannot certify randomness.
 # Player protection mechanisms are application-level responsibilities.
 
-bundle: [gaming-rng-monitoring]
-
+compliance:
+  bundle: [gaming-rng-monitoring]
 resources:
   - name: rng-service-check
     type: exec

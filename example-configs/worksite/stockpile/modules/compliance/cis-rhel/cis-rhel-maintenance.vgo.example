@@ -3,8 +3,8 @@ name: cis-rhel-maintenance
 # Level 1 controls
 # Applies to: RHEL 8/9, CentOS Stream 8/9, Rocky Linux 8/9, AlmaLinux 8/9
 
-bundle: [cis-rhel-maintenance]
-
+compliance:
+  bundle: [cis-rhel-maintenance]
 resources:
   # --- 6.1: System file permissions ---
 

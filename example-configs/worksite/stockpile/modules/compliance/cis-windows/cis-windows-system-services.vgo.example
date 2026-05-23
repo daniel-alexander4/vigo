@@ -2,8 +2,8 @@ name: cis-windows-system-services
 # CIS Windows Server 2022 Level 1 — System Services
 # Status: ENFORCED by Vigo
 
-bundle: [cis-windows-system-services]
-
+compliance:
+  bundle: [cis-windows-system-services]
 resources:
   # Disable Print Spooler (attack surface reduction — not needed on most servers)
   - name: disable-print-spooler

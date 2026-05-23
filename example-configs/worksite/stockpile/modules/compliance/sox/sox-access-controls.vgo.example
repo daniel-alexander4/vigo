@@ -4,8 +4,8 @@ name: sox-access-controls
 # Enforces SSH hardening, sudo restrictions, password policy,
 # and disables shared/default accounts.
 
-bundle: [sox-access-controls]
-
+compliance:
+  bundle: [sox-access-controls]
 resources:
   - name: ssh-no-root-login
     type: file_line

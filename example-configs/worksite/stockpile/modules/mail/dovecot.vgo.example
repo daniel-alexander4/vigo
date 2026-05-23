@@ -2,8 +2,8 @@
 #~ with their own auth backend + TLS cert paths.
 name: dovecot
 
-provides: [imap-encryption]
-
+compliance:
+  provides: [imap-encryption]
 vars:
   ssl_cert: "/etc/letsencrypt/live/mail.example.com/fullchain.pem"
   ssl_key: "/etc/letsencrypt/live/mail.example.com/privkey.pem"

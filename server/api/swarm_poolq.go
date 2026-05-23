@@ -129,9 +129,9 @@ type topicSummary struct {
 }
 
 type topicsResponse struct {
-	GeneratedAt  any            `json:"generated_at"`
-	Topics       []topicSummary `json:"topics"`
-	Participants []string       `json:"participants"`
+	GeneratedAt  any                    `json:"generated_at"`
+	Topics       []topicSummary         `json:"topics"`
+	Participants []string               `json:"participants"`
 	Blocked      []db.PoolqBlockedTopic `json:"blocked"`
 }
 
@@ -176,7 +176,7 @@ func (h *PoolqHandler) handleTopics(w http.ResponseWriter, r *http.Request) {
 		blockedRows = []db.PoolqBlockedTopic{}
 	}
 	out.Blocked = blockedRows
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, r, http.StatusOK, out)
 }
 
 // handleHead: GET /api/v1/swarm/poolq/topic/{topic_id}/head
@@ -201,13 +201,13 @@ func (h *PoolqHandler) handleHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	blocked := h.blockedSet(r.Context())
-	writeJSON(w, http.StatusOK, summarize(*t, blocked))
+	writeJSON(w, r, http.StatusOK, summarize(*t, blocked))
 }
 
 type rangeResponse struct {
-	TopicIDHex string             `json:"topic_id_hex"`
-	From       uint64             `json:"from"`
-	To         uint64             `json:"to"`
+	TopicIDHex string              `json:"topic_id_hex"`
+	From       uint64              `json:"from"`
+	To         uint64              `json:"to"`
 	Messages   []poolqmesh.Message `json:"messages"`
 }
 
@@ -248,7 +248,7 @@ func (h *PoolqHandler) handleRange(w http.ResponseWriter, r *http.Request) {
 	if msgs == nil {
 		msgs = []poolqmesh.Message{}
 	}
-	writeJSON(w, http.StatusOK, rangeResponse{
+	writeJSON(w, r, http.StatusOK, rangeResponse{
 		TopicIDHex: id,
 		From:       from,
 		To:         to,
@@ -280,7 +280,7 @@ func (h *PoolqHandler) handleLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no such topic")
 		return
 	}
-	writeJSON(w, http.StatusOK, t)
+	writeJSON(w, r, http.StatusOK, t)
 }
 
 // --- admin moderation -----------------------------------------------------
@@ -309,7 +309,7 @@ func (h *PoolqHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 	// blocked?" column on /topics synchronously consistent with the block we
 	// just wrote.
 	h.agg.InvalidateCache()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "topic_id": id, "blocked": true})
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "topic_id": id, "blocked": true})
 }
 
 // handleUnblock: POST /api/v1/swarm/poolq/unblock/{topic_id}
@@ -324,7 +324,7 @@ func (h *PoolqHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.agg.InvalidateCache()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "topic_id": id, "blocked": false})
+	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "topic_id": id, "blocked": false})
 }
 
 func parseSeqQuery(r *http.Request, name string, def uint64) (uint64, error) {

@@ -4,8 +4,8 @@ name: ccss-network-security
 # Enforces network segmentation, SSH hardening, and firewall rules
 # on signing servers and hot wallet infrastructure.
 
-bundle: [ccss-network-security]
-
+compliance:
+  bundle: [ccss-network-security]
 resources:
   - name: ssh-key-only
     type: file_line

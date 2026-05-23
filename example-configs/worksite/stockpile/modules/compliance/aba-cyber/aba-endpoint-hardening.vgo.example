@@ -3,8 +3,8 @@ name: aba-endpoint-hardening
 # Covers: ABA-477R-4 (device security), ABA-1.6-1 (encryption at rest),
 #          ABA-1.6-3 (access controls), ABA-1.6-5 (secure disposal)
 
-bundle: [aba-endpoint-hardening]
-
+compliance:
+  bundle: [aba-endpoint-hardening]
 resources:
   - name: screen-lock-timeout
     type: file_line

@@ -2,8 +2,8 @@
 #~ devices (operator-specific).
 name: btrfs
 
-provides: [filesystem-snapshots]
-
+compliance:
+  provides: [filesystem-snapshots]
 resources:
   - name: install-btrfs-progs
     type: package

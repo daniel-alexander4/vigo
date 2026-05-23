@@ -4,8 +4,8 @@ name: sox-system-integrity
 # File integrity monitoring detects unauthorized changes.
 # Continuous convergence remediates drift automatically.
 
-bundle: [sox-system-integrity]
-
+compliance:
+  bundle: [sox-system-integrity]
 resources:
   - name: install-aide
     type: package

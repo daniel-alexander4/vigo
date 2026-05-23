@@ -5,8 +5,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"git.alexander4.io/vigo/server/auth"
@@ -104,10 +102,7 @@ func (h *MeshHandler) handleLongdrawerFleet(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "longdrawer fleet query failed")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("longdrawer fleet response encode failed", "error", err)
-	}
+	writeJSON(w, r, http.StatusOK, fleet)
 }
 
 func (h *MeshHandler) handleLockboxFleet(w http.ResponseWriter, r *http.Request) {
@@ -120,10 +115,7 @@ func (h *MeshHandler) handleLockboxFleet(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, "lockbox fleet query failed")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("lockbox fleet response encode failed", "error", err)
-	}
+	writeJSON(w, r, http.StatusOK, fleet)
 }
 
 func (h *MeshHandler) handleLongdrawerDrilldown(w http.ResponseWriter, r *http.Request) {
@@ -141,12 +133,9 @@ func (h *MeshHandler) handleLongdrawerDrilldown(w http.ResponseWriter, r *http.R
 	if files == nil {
 		files = []longdrawermesh.FileRow{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(struct {
+	writeJSON(w, r, http.StatusOK, struct {
 		Files []longdrawermesh.FileRow `json:"files"`
-	}{Files: files}); err != nil {
-		slog.Debug("longdrawer drilldown response encode failed", "error", err)
-	}
+	}{Files: files})
 }
 
 func (h *MeshHandler) handleLockboxDrilldown(w http.ResponseWriter, r *http.Request) {
@@ -164,10 +153,7 @@ func (h *MeshHandler) handleLockboxDrilldown(w http.ResponseWriter, r *http.Requ
 	if files == nil {
 		files = []lockboxmesh.FileRow{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(struct {
+	writeJSON(w, r, http.StatusOK, struct {
 		Files []lockboxmesh.FileRow `json:"files"`
-	}{Files: files}); err != nil {
-		slog.Debug("lockbox drilldown response encode failed", "error", err)
-	}
+	}{Files: files})
 }

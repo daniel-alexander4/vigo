@@ -1,5 +1,6 @@
 name: pci-network-security
-bundle: [pci-network-security]
+compliance:
+  bundle: [pci-network-security]
 resources:
   - name: nftables-package
     type: package

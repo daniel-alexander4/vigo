@@ -1,7 +1,7 @@
 name: prometheus
 
-provides: [system-resource-monitoring]
-
+compliance:
+  provides: [system-resource-monitoring]
 vars:
   prometheus_retention: "30d"
   prometheus_scrape_interval: "15s"

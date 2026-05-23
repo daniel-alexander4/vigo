@@ -7,8 +7,8 @@
 
 name: pci-audit
 
-bundle: [pci-audit]
-
+compliance:
+  bundle: [pci-audit]
 vars:
   cde_data_dir: "/var/data/cardholder"
 

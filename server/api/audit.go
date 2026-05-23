@@ -176,7 +176,7 @@ func (h *AuditHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 		events = events[:limit]
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	writeJSON(w, r, http.StatusOK, map[string]any{"events": events})
 }
 
 // VerifyChain walks the tamper-evident hash chain and returns its integrity status.
@@ -186,7 +186,7 @@ func (h *AuditHandler) VerifyChain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "verification failed: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 // RecordEmergencyAccess records an emergency access event in the tamper-evident
@@ -212,5 +212,5 @@ func (h *AuditHandler) RecordEmergencyAccess(w http.ResponseWriter, r *http.Requ
 	}
 
 	recordAudit(r.Context(), h.auditWriter, "emergency.access", actor, "rest", req.Reason, fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-	writeJSON(w, http.StatusOK, map[string]string{"status": "recorded"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "recorded"})
 }

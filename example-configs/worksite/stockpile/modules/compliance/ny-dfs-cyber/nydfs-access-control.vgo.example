@@ -2,8 +2,8 @@ name: nydfs-access-control
 # NY DFS Cybersecurity (23 NYCRR 500) — Access Privileges
 # Covers: NYCRR-500.07 (access privileges), NYCRR-500.12 (MFA)
 
-bundle: [nydfs-access-control]
-
+compliance:
+  bundle: [nydfs-access-control]
 resources:
   - name: ssh-no-root
     type: file_line

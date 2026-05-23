@@ -5,8 +5,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"git.alexander4.io/vigo/server/auth"
@@ -90,10 +88,7 @@ func (h *GitbackHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "gitback fleet query failed")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("gitback fleet response encode failed", "error", err)
-	}
+	writeJSON(w, r, http.StatusOK, fleet)
 }
 
 // PuddleNamesSnapshot returns the cached aggregated friendly-name
@@ -113,10 +108,7 @@ func (h *GitbackHandler) handlePuddleNames(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "puddle name map query failed")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(out); err != nil {
-		slog.Debug("puddle names response encode failed", "error", err)
-	}
+	writeJSON(w, r, http.StatusOK, out)
 }
 
 // RosterResponse is the JSON shape returned by
@@ -173,10 +165,7 @@ func (h *GitbackHandler) handleRoster(w http.ResponseWriter, r *http.Request) {
 		DrScope:             summary.DrScope,
 		MemberFleetCount:    summary.MemberFleetCount,
 	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		slog.Debug("gitback roster response encode failed", "error", err)
-	}
+	writeJSON(w, r, http.StatusOK, resp)
 }
 
 // validProjectIDHex enforces the URL-segment shape: exactly 64

@@ -22,10 +22,20 @@ import (
 )
 
 // writeJSON writes a JSON response with the given status code.
-func writeJSON(w http.ResponseWriter, code int, v any) {
+//
+// All JSON-response handlers in server/api/ route through this helper —
+// it's the single source of truth for "what does a JSON response look
+// like" (Content-Type, status, encode, encode-error logging). Sites
+// that need extra response headers (Content-Disposition, custom
+// Cache-Control, etc.) bypass the helper and emit the direct
+// `if err := json.NewEncoder(w).Encode(...); err != nil { … }` shape
+// themselves — that's a deliberate long-tail exception.
+func writeJSON(w http.ResponseWriter, r *http.Request, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Debug("response encode failed", "path", r.URL.Path, "error", err)
+	}
 }
 
 var _ = time.Now // used by format
@@ -138,8 +148,8 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 // `vigocli config publish` in spanner mode to poll for "did the
 // gitback push land in .live/?" — operator sends publish, records
 // pre-version, then polls until version increments.
-func (h *ConfigHandler) GetVersion(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+func (h *ConfigHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"version": h.configStore.Version(),
 	})
 }
@@ -171,7 +181,7 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	// Record tamper-evident audit event.
 	recordAudit(r.Context(), h.auditWriter, "config.reload", actorFromRequest(r), "rest", "config reloaded", "")
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // SecretRotated marks a secret as rotated, triggering watch_secret resources
@@ -218,7 +228,7 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"path":     req.Path,
 		"affected": affected,
 	})
@@ -259,7 +269,7 @@ func (h *ConfigHandler) SecretsLifecycleEvent(w http.ResponseWriter, r *http.Req
 		fmt.Sprintf(`{"actor":%q}`, actor),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]any{"recorded": true})
+	writeJSON(w, r, http.StatusOK, map[string]any{"recorded": true})
 }
 
 // SecretAccessed records an audit trail entry when a secret is revealed via CLI.
@@ -283,7 +293,7 @@ func (h *ConfigHandler) SecretAccessed(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf(`{"path":%q}`, req.Path),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]any{"recorded": true})
+	writeJSON(w, r, http.StatusOK, map[string]any{"recorded": true})
 }
 
 // ListPublishes returns recent config publishes.
@@ -327,7 +337,7 @@ func (h *ConfigHandler) ListPublishes(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"publishes": result})
+	writeJSON(w, r, http.StatusOK, map[string]any{"publishes": result})
 }
 
 // GetPublish returns details for a single config publish.
@@ -347,7 +357,7 @@ func (h *ConfigHandler) GetPublish(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("malformed removed_files JSON", "publish_id", p.ID, "error", err)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"publish": map[string]any{
 			"id":            p.ID,
 			"operator":      p.Operator,
@@ -369,7 +379,7 @@ func (h *ConfigHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	if versions == nil {
 		versions = []string{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"versions": versions})
+	writeJSON(w, r, http.StatusOK, map[string]any{"versions": versions})
 }
 
 // RecordPublish records a config publish for audit trail.
@@ -399,7 +409,7 @@ func (h *ConfigHandler) RecordPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{"id": p.ID})
+	writeJSON(w, r, http.StatusCreated, map[string]any{"id": p.ID})
 }
 
 // Freeze sets a global config publish freeze.
@@ -423,7 +433,7 @@ func (h *ConfigHandler) Freeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.publishState.SetFreezeUntil(t)
-	writeJSON(w, http.StatusOK, map[string]any{"freeze_until": t.Format(time.RFC3339)})
+	writeJSON(w, r, http.StatusOK, map[string]any{"freeze_until": t.Format(time.RFC3339)})
 }
 
 // Unfreeze removes the global config publish freeze.
@@ -433,7 +443,7 @@ func (h *ConfigHandler) Unfreeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.publishState.ClearFreeze()
-	writeJSON(w, http.StatusOK, map[string]any{"status": "unfrozen"})
+	writeJSON(w, r, http.StatusOK, map[string]any{"status": "unfrozen"})
 }
 
 // Rollback restores a previous config version.
@@ -450,7 +460,7 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "rolled back", "version": version})
+	writeJSON(w, r, http.StatusOK, map[string]any{"status": "rolled back", "version": version})
 }
 
 // --- Module Retraction ---
@@ -489,14 +499,14 @@ type retractEnvoyInfo struct {
 // is generated first, then enhanced by AI for exec resources.
 func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 	if !h.publishCfg.Retraction.Enabled {
-		writeJSON(w, http.StatusOK, retractResponse{
+		writeJSON(w, r, http.StatusOK, retractResponse{
 			Enabled: false,
 			Reason:  "publish.retraction.enabled is false in server.yaml",
 		})
 		return
 	}
 	if !h.aiCfg.Enabled || h.assistant == nil {
-		writeJSON(w, http.StatusOK, retractResponse{
+		writeJSON(w, r, http.StatusOK, retractResponse{
 			Enabled: false,
 			Reason:  "ai.enabled is false in server.yaml (required for retraction)",
 		})
@@ -509,7 +519,7 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(req.Modules) == 0 {
-		writeJSON(w, http.StatusOK, retractResponse{Enabled: true})
+		writeJSON(w, r, http.StatusOK, retractResponse{Enabled: true})
 		return
 	}
 
@@ -519,7 +529,7 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 		results = append(results, result)
 	}
 
-	writeJSON(w, http.StatusOK, retractResponse{
+	writeJSON(w, r, http.StatusOK, retractResponse{
 		Enabled: true,
 		Results: results,
 	})

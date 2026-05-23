@@ -18,8 +18,8 @@
 #~ Linux only — vigosrv is Linux-host. Composite role: vigo-server.
 name: vigo-firewall
 
-provides: [host-firewall]
-
+compliance:
+  provides: [host-firewall]
 vars:
   ssh_from: "any"
   grpc_from: "any"

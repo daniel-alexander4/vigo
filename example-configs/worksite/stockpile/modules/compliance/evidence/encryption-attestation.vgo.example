@@ -3,8 +3,8 @@
 #~ encrypted, etc.). Output JSON for auditor collection.
 name: encryption-attestation
 
-bundle: [encryption-attestation]
-
+compliance:
+  bundle: [encryption-attestation]
 vars:
   evidence_dir: "/var/lib/vigo/evidence"
 

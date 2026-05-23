@@ -2,8 +2,8 @@
 #~ a downstream poller. Read-only community by default.
 name: snmpd
 
-provides: [monitoring-probe]
-
+compliance:
+  provides: [monitoring-probe]
 vars:
   snmp_community: "public"
   snmp_location: "datacenter-1"

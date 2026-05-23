@@ -92,4 +92,5 @@ resources:
       - dhcpd-config
       - dhcpd-defaults
 
-provides: [dhcp-server]
+compliance:
+  provides: [dhcp-server]

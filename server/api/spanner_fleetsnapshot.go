@@ -46,7 +46,7 @@ func (h *SpannerAdmissionHandler) handleFleetSnapshot(w http.ResponseWriter, r *
 		writeError(w, http.StatusInternalServerError, "signing fleet snapshot: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, snap)
+	writeJSON(w, r, http.StatusOK, snap)
 }
 
 // fleetEnvoyToLite projects one in-memory fleet.EnvoyState into the

@@ -4,8 +4,8 @@
 #~ secret vault.
 name: step-ca
 
-provides: [internal-pki-ca]
-
+compliance:
+  provides: [internal-pki-ca]
 vars:
   step_ca_dns: "ca.internal.example.com"
   step_ca_address: ":9000"

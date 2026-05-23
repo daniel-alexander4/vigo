@@ -2,8 +2,8 @@
 #~ files are operator-specific (drop them at /etc/bind/zones/).
 name: bind
 
-provides: [dns-server]
-
+compliance:
+  provides: [dns-server]
 resources:
   - name: install-bind9
     type: package

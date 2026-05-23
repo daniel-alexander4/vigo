@@ -1,5 +1,6 @@
 name: hipaa-audit-trail
-bundle: [hipaa-audit-trail]
+compliance:
+  bundle: [hipaa-audit-trail]
 depends_on: [pci-logging]
 
 resources:

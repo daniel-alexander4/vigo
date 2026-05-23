@@ -8,8 +8,8 @@
 #~ of the desktop app, not a systemd unit).
 name: vigo-docker-keepalive
 
-provides: [container-keepalive]
-
+compliance:
+  provides: [container-keepalive]
 vars:
   compose_file: "/srv/vigo/docker-compose.yml"
 

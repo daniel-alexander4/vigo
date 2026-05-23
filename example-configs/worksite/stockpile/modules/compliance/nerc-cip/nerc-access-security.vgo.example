@@ -1,6 +1,6 @@
 name: nerc-access-security
-bundle: [nerc-access-security]
-
+compliance:
+  bundle: [nerc-access-security]
 resources:
   # CIP-003 R1: Security policies enforced via config
   - name: security-policy-banner

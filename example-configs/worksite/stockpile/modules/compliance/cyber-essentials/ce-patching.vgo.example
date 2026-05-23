@@ -1,5 +1,6 @@
 name: ce-patching
-bundle: [ce-patching]
+compliance:
+  bundle: [ce-patching]
 vars:
   auto_reboot: "false"
   reboot_time: "02:00"

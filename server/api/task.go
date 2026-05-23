@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -26,10 +27,10 @@ type TaskDispatcher interface {
 
 // TaskHandler serves the REST endpoints for ad-hoc task dispatch and status.
 type TaskHandler struct {
-	queries            *db.Queries
-	dispatcher         TaskDispatcher
-	auditWriter        auditRecorder
-	requireDefinition  bool
+	queries           *db.Queries
+	dispatcher        TaskDispatcher
+	auditWriter       auditRecorder
+	requireDefinition bool
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
@@ -128,7 +129,7 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 			recordAudit(r.Context(), h.auditWriter, "task.blocked", req.Operator, "rest",
 				req.Command+" on "+req.Target,
 				fmt.Sprintf(`{"reason":%q,"pattern":%q}`, v.Reason, v.Pattern))
-			writeJSON(w, http.StatusBadRequest, blockedResponse{
+			writeJSON(w, r, http.StatusBadRequest, blockedResponse{
 				Message: v.Error(),
 				Blocked: true,
 				Reason:  v.Reason,
@@ -158,7 +159,9 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusCreated)
 	}
-	json.NewEncoder(w).Encode(result)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		slog.Debug("response encode failed", "path", r.URL.Path, "error", err)
+	}
 }
 
 type taskSummary struct {
@@ -204,8 +207,7 @@ func (h *TaskHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 		summaries = append(summaries, s)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"taskRuns": summaries})
+	writeJSON(w, r, http.StatusOK, map[string]any{"taskRuns": summaries})
 }
 
 type taskDetail struct {
@@ -309,8 +311,7 @@ func (h *TaskHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		tds = append(tds, d)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"task":    td,
 		"targets": tds,
 	})
@@ -331,7 +332,7 @@ func (h *TaskHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.queries.CancelTaskRunTargets(ctx, id)
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled", "id": id})
+	writeJSON(w, r, http.StatusOK, map[string]any{"status": "cancelled", "id": id})
 }
 
 // HandleCancelRunning cancels all tasks stuck in pending/running state.
@@ -354,5 +355,5 @@ func (h *TaskHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled", "count": len(ids)})
+	writeJSON(w, r, http.StatusOK, map[string]any{"status": "cancelled", "count": len(ids)})
 }

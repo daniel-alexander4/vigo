@@ -2,8 +2,8 @@
 #~ a LAN-side resolver in front of authoritative upstream.
 name: unbound
 
-provides: [dns-server]
-
+compliance:
+  provides: [dns-server]
 resources:
   - name: install-unbound
     type: package

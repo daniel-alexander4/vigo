@@ -87,8 +87,7 @@ func (h *RiskHandler) handleFleetRisk(w http.ResponseWriter, r *http.Request) {
 	fr := risk.ScoreFleet(inputs, h.baseInterval, h.offlineThreshold, 10)
 	fr.Envoys = nil // keep response concise
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(fr)
+	writeJSON(w, r, http.StatusOK, fr)
 }
 
 // handleEnvoyRisk returns the risk score breakdown for a single envoy.
@@ -107,8 +106,7 @@ func (h *RiskHandler) handleEnvoyRisk(w http.ResponseWriter, r *http.Request) {
 
 	er := risk.ScoreEnvoy(envoyToInput(*es), h.baseInterval, h.offlineThreshold)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(er)
+	writeJSON(w, r, http.StatusOK, er)
 }
 
 // handleRiskHistory returns daily risk posture snapshots.
@@ -152,8 +150,7 @@ func (h *RiskHandler) handleRiskHistory(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"history": entries})
+	writeJSON(w, r, http.StatusOK, map[string]any{"history": entries})
 }
 
 // InsuranceReport is the cyber insurance attestation report.

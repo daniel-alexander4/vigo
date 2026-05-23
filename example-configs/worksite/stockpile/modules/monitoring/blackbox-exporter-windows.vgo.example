@@ -2,8 +2,8 @@
 #~ service. Same probe config shape as Linux.
 name: blackbox-exporter-windows
 
-provides: [monitoring-probe]
-
+compliance:
+  provides: [monitoring-probe]
 vars:
   blackbox_version: "0.25.0"
 

@@ -34,14 +34,14 @@ func TestPayloadGate_AllowsWhenAllEnabled(t *testing.T) {
 		{
 			name: "wildcard fleet-wide on",
 			cfg: config.SwarmSection{
-				Enabled: []string{"*"},
+				Enabled:  []string{"*"},
 				Filecast: config.FilecastSection{Enabled: []string{"*"}},
 			},
 		},
 		{
 			name: "explicit allow set with hosts",
 			cfg: config.SwarmSection{
-				Enabled: []string{"annlap", "plex"},
+				Enabled:  []string{"annlap", "plex"},
 				Filecast: config.FilecastSection{Enabled: []string{"annlap", "plex"}},
 			},
 		},
@@ -73,7 +73,7 @@ func TestPayloadGate_DeniesWhenFleetDisabled(t *testing.T) {
 func TestPayloadGate_DeniesWhenPayloadDisabled(t *testing.T) {
 	h := &LodeHandler{}
 	h.SetSwarmConfig(config.SwarmSection{
-		Enabled: []string{"*"},
+		Enabled:  []string{"*"},
 		Filecast: config.FilecastSection{Enabled: nil},
 	})
 	ok, reason := h.payloadGate()
@@ -90,7 +90,7 @@ func TestDistribute_GatedReturns403AndAudits(t *testing.T) {
 	defer sqlDB.Close()
 
 	cfg := config.SwarmSection{
-		Enabled: []string{"*"},
+		Enabled:  []string{"*"},
 		Filecast: config.FilecastSection{Enabled: nil},
 	}
 	h := newGatedHandler(t, cfg, queries)
@@ -206,7 +206,7 @@ func TestDistribute_AllowedWhenNotGated_StillGuardsOnSeedDir(t *testing.T) {
 	defer sqlDB.Close()
 	h := NewLodeHandler("", nil, nil, nil, queries)
 	h.SetSwarmConfig(config.SwarmSection{
-		Enabled: []string{"*"},
+		Enabled:  []string{"*"},
 		Filecast: config.FilecastSection{Enabled: []string{"*"}},
 	})
 	h.SetAuditWriter(audit.NewWriter(queries))

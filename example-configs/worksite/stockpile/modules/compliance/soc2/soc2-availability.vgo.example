@@ -1,5 +1,6 @@
 name: soc2-availability
-bundle: [soc2-availability]
+compliance:
+  bundle: [soc2-availability]
 resources:
   # A1.1: Capacity management — monitoring tools
   - name: sysstat-package

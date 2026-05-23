@@ -1,7 +1,7 @@
 name: tcp-wrappers
 
-provides: [tcp-access-control]
-
+compliance:
+  provides: [tcp-access-control]
 vars:
   allowed_sshd_networks: "LOCAL"
   allowed_services: "sshd"

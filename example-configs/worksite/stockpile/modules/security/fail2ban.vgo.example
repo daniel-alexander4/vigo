@@ -1,7 +1,7 @@
 name: fail2ban
 
-provides: [brute-force-protection]
-
+compliance:
+  provides: [brute-force-protection]
 resources:
   - name: install-fail2ban
     type: package

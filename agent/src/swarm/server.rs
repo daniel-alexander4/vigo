@@ -237,7 +237,10 @@ async fn handle_request(
             ok_json(&format!(r#"{{"version":{}}}"#, state.manifest.version()))
         }
         (&Method::GET, "/manifest") => {
-            match serde_json::to_string(&state.manifest.snapshot()) {
+            // snapshot() returns Arc<ManifestData>; deref through &* so
+            // serde sees ManifestData directly (serde's Arc impl is
+            // behind the `rc` feature, which we don't enable).
+            match serde_json::to_string(&*state.manifest.snapshot()) {
                 Ok(json) => ok_json(&json),
                 Err(_) => Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)

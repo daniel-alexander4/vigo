@@ -3,8 +3,8 @@
 #~ event log and forwards to Loki.
 name: promtail-windows
 
-provides: [log-processing]
-
+compliance:
+  provides: [log-processing]
 vars:
   promtail_version: "3.0.0"
   loki_host: "loki.example.com"

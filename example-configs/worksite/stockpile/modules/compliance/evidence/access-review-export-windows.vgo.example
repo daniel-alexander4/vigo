@@ -2,8 +2,8 @@
 #~ admin-group rosters. Auditors compare across windows.
 name: access-review-export-windows
 
-bundle: [access-review-export-windows]
-
+compliance:
+  bundle: [access-review-export-windows]
 vars:
   evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
 

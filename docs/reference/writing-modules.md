@@ -99,23 +99,37 @@ resources:
 | `depends_on` | no | Other modules this module depends on (module-level ordering) |
 | `before` | no | Modules that must run after this module |
 | `resources` | yes | List of resources to manage |
-| `provides` | no | Provision tags (e.g. `[time-sync, audit-trail]`) — functional capability the module delivers. The loader expands each tag through `server/compliance/provisions.go` into framework → control coverage. See [Compliance authoring](#compliance-authoring) below. |
-| `bundle` | no | Framework-bundle tags (e.g. `[cis-ubuntu-access]`, `[ce-firewalls]`) — module exists to implement one section of a specific framework. The loader expands each tag through `server/compliance/bundles.go`. See [Compliance authoring](#compliance-authoring) below. |
+| `compliance` | no | Per-module compliance attribution block — two sub-keys, both routed through Vigo-curated catalogs (see [Compliance authoring](#compliance-authoring) below): `compliance.provides:` (functional capability tags) and `compliance.bundle:` (framework-scope-cut tags). |
 
-> **Retired (0.66.48):** the per-module `compliance:` key is gone. Modules declare compliance through `provides:` / `bundle:` only — modlint errors on any module YAML that carries `compliance:` (`module-compliance-key-retired` rule). Directory-level `compliance.vgo` files still accept `compliance:` for inheritance (a different file shape, not a module YAML).
+> **Shape history.** Pre-0.66.48 `compliance:` carried inline framework→control lists; that shape was retired when the catalogs landed. 0.66.48-through-0.66.56 parked the replacement keys at top level (`provides:` / `bundle:`). 0.66.57 re-folded them under a `compliance:` parent block — same catalog semantics, but the at-a-glance compliance signal is restored in module YAML. Modlint hard-errors on both retired shapes with migration pointers (`module-compliance-key-retired` for the framework→control shape; `module-top-level-provides-bundle` for the 0.66.48 top-level keys). Directory-level `compliance.vgo` files keep the framework→control shape — that's a different file kind (inheritance, not module attribution).
 
 ### Compliance authoring
 
-Two YAML keys, two Vigo-curated catalogs, one mental-model split:
+The `compliance:` block carries two parallel catalog-backed lists. Each tag in either list is resolved through a Vigo-curated catalog into the (framework → control IDs) it satisfies, and the loader unions the results into the module's effective coverage.
 
-- **`provides:`** — functional capability tag. The module ships a chrony daemon ⇒ `provides: [time-sync]`. The catalog (`server/compliance/provisions.go`) maps each tag to controls it satisfies across multiple frameworks; the module doesn't care which frameworks. Use this for cross-framework functional claims.
-- **`bundle:`** — framework-scope-cut tag. The module exists to implement CIS-Ubuntu §5 access controls ⇒ `bundle: [cis-ubuntu-access]`. The catalog (`server/compliance/bundles.go`) carries the framework's published cross-walks for that scope. Use this when the module is authored against a specific framework section.
+- **`compliance.provides:`** — functional capability tags. The module ships a chrony daemon ⇒ `compliance: { provides: [time-sync] }`. The catalog (`server/compliance/provisions.go`) maps each tag to controls it satisfies across multiple frameworks; the module doesn't care which frameworks. Use this for cross-framework functional claims.
+- **`compliance.bundle:`** — framework-scope-cut tags. The module exists to implement CIS-Ubuntu §5 access controls ⇒ `compliance: { bundle: [cis-ubuntu-access] }`. The catalog (`server/compliance/bundles.go`) carries the framework's published cross-walks for that scope. Use this when the module is authored against a specific framework section.
 
-A module may declare both — `provides:` for the functional layer + `bundle:` for the explicit framework targeting. The loader unions the controls from both catalogs into the module's effective coverage.
+A module may declare both:
+
+```yaml
+name: openssh
+compliance:
+  provides: [ssh-hardening]
+  bundle:   [cis-ubuntu-access]
+resources:
+  - name: install-sshd
+    type: package
+    package: openssh-server
+    state: present
+```
+
+Minimal `provides:`-only example:
 
 ```yaml
 name: chrony
-provides: [time-sync]
+compliance:
+  provides: [time-sync]
 resources:
   - name: install-chrony
     type: package
@@ -123,11 +137,14 @@ resources:
     state: present
 ```
 
-That `provides: [time-sync]` is equivalent to the hand-rolled `compliance:` block this module used to carry — `cis-ubuntu [2.1.1.1, 2.1.1.2]`, `cis-rhel [2.1.1.1, 2.1.1.2]`, `iso-27001 [A.12.4.4]`, `nist-800-53 [AU-8]`, `pci-dss [10.6.1, 10.6.2, 10.6.3]` — captured once in the catalog instead of repeated in every time-sync module.
+That `compliance.provides: [time-sync]` is equivalent to the hand-rolled framework→control block this module used to carry — `cis-ubuntu [2.1.1.1, 2.1.1.2]`, `cis-rhel [2.1.1.1, 2.1.1.2]`, `iso-27001 [A.12.4.4]`, `nist-800-53 [AU-8]`, `pci-dss [10.6.1, 10.6.2, 10.6.3]` — captured once in the catalog instead of repeated in every time-sync module.
+
+Minimal `bundle:`-only example:
 
 ```yaml
 name: cis-ubuntu-access
-bundle: [cis-ubuntu-access]
+compliance:
+  bundle: [cis-ubuntu-access]
 resources:
   - name: pam-faillock
     type: file

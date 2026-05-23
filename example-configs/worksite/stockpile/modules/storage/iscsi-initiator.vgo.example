@@ -2,8 +2,8 @@
 #~ provides target portal + IQN via vars or runs iscsiadm manually.
 name: iscsi-initiator
 
-provides: [iscsi-initiator]
-
+compliance:
+  provides: [iscsi-initiator]
 vars:
   iscsi_initiator_name: "iqn.2024-01.example:host01"
 

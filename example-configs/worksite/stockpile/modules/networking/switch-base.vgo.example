@@ -2,7 +2,8 @@
 # Apply to all managed switches via roles.
 name: switch-base
 
-provides: [network-device-baseline]
+compliance:
+  provides: [network-device-baseline]
 resources:
   - name: login-banner
     type: network_banner

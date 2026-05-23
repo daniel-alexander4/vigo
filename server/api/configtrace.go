@@ -4,7 +4,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"git.alexander4.io/vigo/server/auth"
@@ -41,8 +40,7 @@ func (h *ConfigTraceHandler) RegisterRoutes(mux *http.ServeMux) {
 // HandleTree returns the directory inheritance structure.
 func (h *ConfigTraceHandler) HandleTree(w http.ResponseWriter, r *http.Request) {
 	tree := h.configStore.Tree()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tree)
+	writeJSON(w, r, http.StatusOK, tree)
 }
 
 // HandleSearch finds envoy entries matching the given criteria.
@@ -57,22 +55,21 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 	}
 
 	result := h.configStore.Search(query, module, varName)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 // HandleTrace serves both forward (host-rooted) and inverse (subject-rooted)
 // config trace queries.
 //
 //   - ?hostname=H            → forward trace for H. ?module=M filters the
-//                              output to M's branch (existing behavior).
+//     output to M's branch (existing behavior).
 //   - ?module=M              → inverse: enrolled envoys whose resolved config
-//                              includes module M, plus the carrier that pulled
-//                              it in.
+//     includes module M, plus the carrier that pulled
+//     it in.
 //   - ?usercrate=U           → inverse: same for usercrate U.
 //   - ?include_tree=true     → inverse only: additionally lists envoyEntries
-//                              patterns that reference the subject but match
-//                              no enrolled envoy.
+//     patterns that reference the subject but match
+//     no enrolled envoy.
 //
 // Exactly one subject must be specified (?hostname, ?module, or ?usercrate);
 // ?module+?usercrate combined is rejected since they each select a different
@@ -110,8 +107,7 @@ func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request)
 		}
 
 		result := h.configStore.TraceInverse(subject, value, includeTree, envoys)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		writeJSON(w, r, http.StatusOK, result)
 		return
 	}
 
@@ -121,14 +117,11 @@ func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request)
 		trace = trace.FilterByModule(module)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(trace)
+	writeJSON(w, r, http.StatusOK, trace)
 }
 
 // HandleDedup scans the config tree for redundant modules and variables.
 func (h *ConfigTraceHandler) HandleDedup(w http.ResponseWriter, r *http.Request) {
 	result := h.configStore.Dedup()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
-

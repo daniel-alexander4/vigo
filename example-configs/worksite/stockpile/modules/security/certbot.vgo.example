@@ -4,8 +4,8 @@
 #~ instead — this module is for any other host.
 name: certbot
 
-provides: [tls-cert-acme]
-
+compliance:
+  provides: [tls-cert-acme]
 vars:
   cert_hostname: "host.example.com"
   cert_email: "ops@example.com"

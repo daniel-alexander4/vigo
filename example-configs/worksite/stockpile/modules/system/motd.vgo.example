@@ -1,7 +1,7 @@
 name: motd
 
-provides: [login-banner]
-
+compliance:
+  provides: [login-banner]
 vars:
   org_name: "ACME Corp"
   contact_email: "ops@example.com"

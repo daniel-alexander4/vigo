@@ -2,8 +2,8 @@ name: cis-windows-user-rights
 # CIS Windows Server 2022 Level 1 — User Rights Assignment
 # Status: ENFORCED by Vigo
 
-bundle: [cis-windows-user-rights]
-
+compliance:
+  bundle: [cis-windows-user-rights]
 resources:
   # Deny access from the network (includes Guest)
   - name: deny-network-access

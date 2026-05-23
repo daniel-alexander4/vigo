@@ -3,8 +3,8 @@
 #~ (passwd, su, sudo, login).
 name: pwquality
 
-provides: [password-policy]
-
+compliance:
+  provides: [password-policy]
 vars:
   minlen: "14"
   difok: "5"

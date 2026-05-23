@@ -1,8 +1,8 @@
 #~ rkhunter — rootkit hunter. Updates signatures + runs a check daily.
 name: rkhunter
 
-provides: [rootkit-detection]
-
+compliance:
+  provides: [rootkit-detection]
 resources:
   - name: install-rkhunter
     type: package

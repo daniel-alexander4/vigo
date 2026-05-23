@@ -2,8 +2,8 @@
 #~ daily snapshots. Repository password + URL come from the secret vault.
 name: kopia-windows
 
-provides: [host-backup-encrypted]
-
+compliance:
+  provides: [host-backup-encrypted]
 vars:
   source_paths: "C:\\Users C:\\ProgramData"
   kopia_password: "secret:vigo/backup/kopia_password"

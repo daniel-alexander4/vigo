@@ -4,8 +4,8 @@ name: gaming-system-integrity
 # Enforces system hardening, access controls, and change management
 # on gaming infrastructure (servers, not gaming devices/RNG directly).
 
-bundle: [gaming-system-integrity]
-
+compliance:
+  bundle: [gaming-system-integrity]
 resources:
   - name: ssh-hardening
     type: file_line

@@ -1,5 +1,6 @@
 name: gdpr-data-protection
-bundle: [gdpr-data-protection]
+compliance:
+  bundle: [gdpr-data-protection]
 resources:
   # Art 32(1)(a): Encryption of personal data
   - name: cryptsetup

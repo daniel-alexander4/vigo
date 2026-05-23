@@ -17,8 +17,8 @@
 # stockpile/customerA/usercrates/dan.vgo — then include it from the
 # scoped carrier (customerA/common.vgo or envoys.vgo under customerA/).
 
-provides: [os-user-management]
-
+compliance:
+  provides: [os-user-management]
 resources:
   - name: dan
     type: user

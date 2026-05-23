@@ -1,5 +1,6 @@
 name: nerc-recovery
-bundle: [nerc-recovery]
+compliance:
+  bundle: [nerc-recovery]
 resources:
   # CIP-009 R1/R2: Recovery plan — backup infrastructure
   - name: rsync-package

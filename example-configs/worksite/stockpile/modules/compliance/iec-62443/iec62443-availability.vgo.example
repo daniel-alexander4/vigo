@@ -1,5 +1,6 @@
 name: iec62443-availability
-bundle: [iec62443-availability]
+compliance:
+  bundle: [iec62443-availability]
 vars:
   backup_dir: "/var/backups/iec62443"
   backup_retention_days: "90"

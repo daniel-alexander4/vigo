@@ -11,8 +11,8 @@
 #~ Scan output: C:\ProgramData\Vigo\security\
 name: security-scanning-windows
 
-provides: [host-vuln-scanning-windows]
-
+compliance:
+  provides: [host-vuln-scanning-windows]
 vars:
   scan_dir: "C:\\ProgramData\\Vigo\\security"
   trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"

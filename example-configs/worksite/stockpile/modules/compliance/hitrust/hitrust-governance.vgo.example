@@ -1,6 +1,6 @@
 name: hitrust-governance
-bundle: [hitrust-governance]
-
+compliance:
+  bundle: [hitrust-governance]
 resources:
   # 07.a: Asset inventory — hardware/software tracking
   - name: dmidecode

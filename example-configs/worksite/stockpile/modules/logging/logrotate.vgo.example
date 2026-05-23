@@ -1,7 +1,7 @@
 name: logrotate
 
-provides: [log-rotation]
-
+compliance:
+  provides: [log-rotation]
 vars:
   rotate: 14
   rotate_size: 100M

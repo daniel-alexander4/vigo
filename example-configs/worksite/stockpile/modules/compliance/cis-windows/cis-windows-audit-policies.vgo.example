@@ -2,8 +2,8 @@ name: cis-windows-audit-policies
 # CIS Windows Server 2022 Level 1 — Audit Policies
 # Status: ENFORCED by Vigo
 
-bundle: [cis-windows-audit-policies]
-
+compliance:
+  bundle: [cis-windows-audit-policies]
 resources:
   - name: audit-credential-validation
     type: powershell

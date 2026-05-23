@@ -3,8 +3,8 @@
 #~ cron.
 name: chkrootkit
 
-provides: [rootkit-detection]
-
+compliance:
+  provides: [rootkit-detection]
 resources:
   - name: install-chkrootkit
     type: package

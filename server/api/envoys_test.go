@@ -155,7 +155,7 @@ func TestEnvoys_GetConvergence(t *testing.T) {
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: envoyID, Hostname: "web05.prod", IP: "10.0.0.5",
 		ConvergenceStatus: "converged",
-		EnrolledAt:       time.Now().UTC(), LastSeen: time.Now().UTC(),
+		EnrolledAt:        time.Now().UTC(), LastSeen: time.Now().UTC(),
 	}, nil)
 
 	handler := NewEnvoysHandler(queries, fi)

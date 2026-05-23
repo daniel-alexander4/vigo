@@ -1,7 +1,7 @@
 name: grafana
 
-provides: [dashboard]
-
+compliance:
+  provides: [dashboard]
 vars:
   grafana_port: "3000"
   grafana_admin_password: "secret:vigo/grafana/admin-password"

@@ -3,8 +3,8 @@
 #~ module + adds it to sshd's stack.
 name: yubikey-pam
 
-provides: [multi-factor-auth]
-
+compliance:
+  provides: [multi-factor-auth]
 resources:
   - name: install-libpam-u2f
     type: package

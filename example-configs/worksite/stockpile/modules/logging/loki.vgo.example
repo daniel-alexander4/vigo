@@ -3,8 +3,8 @@
 #~ own helm chart.
 name: loki
 
-provides: [log-processing, log-aggregation]
-
+compliance:
+  provides: [log-processing, log-aggregation]
 vars:
   loki_version: "3.0.0"
   loki_listen: "0.0.0.0:3100"

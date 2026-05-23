@@ -1,6 +1,6 @@
 name: nerc-asset-management
-bundle: [nerc-asset-management]
-
+compliance:
+  bundle: [nerc-asset-management]
 resources:
   # CIP-002: BES Cyber System identification — inventory tools
   - name: lshw

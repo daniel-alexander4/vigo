@@ -2,8 +2,8 @@ name: aba-audit-logging
 # ABA Cybersecurity — Audit Logging
 # Covers: ABA-477R-9 (audit logging)
 
-bundle: [aba-audit-logging]
-
+compliance:
+  bundle: [aba-audit-logging]
 resources:
   - name: auditd-installed
     type: package

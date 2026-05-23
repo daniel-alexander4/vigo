@@ -3,8 +3,8 @@
 #~ Available profiles: DEFAULT, LEGACY, FUTURE, FIPS.
 name: crypto-policies
 
-provides: [system-crypto-policy]
-
+compliance:
+  provides: [system-crypto-policy]
 vars:
   policy: "FUTURE"
 

@@ -89,9 +89,7 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	recordAudit(r.Context(), h.auditWriter, "token.create", u.Username, "rest", fmt.Sprintf("created token %s", req.Name), "")
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createTokenResponse{
+	writeJSON(w, r, http.StatusCreated, createTokenResponse{
 		Token: plaintext,
 		ID:    token.ID,
 		Name:  token.Name,
@@ -130,8 +128,7 @@ func (h *TokensHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tokens)
+	writeJSON(w, r, http.StatusOK, tokens)
 }
 
 func (h *TokensHandler) handleDelete(w http.ResponseWriter, r *http.Request) {

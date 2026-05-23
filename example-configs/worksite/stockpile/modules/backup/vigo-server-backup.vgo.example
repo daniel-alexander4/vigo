@@ -23,8 +23,8 @@
 #~     backup_retain: "90"
 name: vigo-server-backup
 
-provides: [host-backup]
-
+compliance:
+  provides: [host-backup]
 vars:
   vigo_root: "/srv/vigo"
   snapshot_dir: "/srv/vigo/snapshots"

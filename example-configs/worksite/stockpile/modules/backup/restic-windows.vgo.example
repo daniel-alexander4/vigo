@@ -7,8 +7,8 @@
 #~ operators can keep one set of vars across the fleet.
 name: restic-windows
 
-provides: [host-backup-encrypted]
-
+compliance:
+  provides: [host-backup-encrypted]
 vars:
   source_paths: "C:\\Users C:\\ProgramData"
   schedule_hour: "*"

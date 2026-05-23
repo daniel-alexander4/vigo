@@ -75,8 +75,7 @@ func (h *DatabaseHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 	tables, _ := h.tableRowCounts()
 	stats["tables"] = tables
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	writeJSON(w, r, http.StatusOK, stats)
 }
 
 // handleIntegrity runs PRAGMA integrity_check (SQLite) or checks connection health.
@@ -123,8 +122,7 @@ func (h *DatabaseHandler) handleIntegrity(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 // handleVacuum runs VACUUM to reclaim space and streams progress as
@@ -265,8 +263,7 @@ func (h *DatabaseHandler) handleCheckpoint(w http.ResponseWriter, r *http.Reques
 
 	slog.Info("WAL checkpoint complete", "pages_total", pagesTotal, "pages_written", pagesWritten)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":        "ok",
 		"pages_total":   pagesTotal,
 		"pages_written": pagesWritten,
@@ -286,8 +283,7 @@ func (h *DatabaseHandler) handleAnalyze(w http.ResponseWriter, r *http.Request) 
 	elapsed := time.Since(start)
 	slog.Info("database ANALYZE complete", "elapsed", elapsed)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":     "ok",
 		"elapsed_ms": elapsed.Milliseconds(),
 	})
@@ -321,8 +317,7 @@ func (h *DatabaseHandler) handlePrune(w http.ResponseWriter, r *http.Request) {
 	pruner.SetPostgres(h.driver == "postgres")
 	res := pruner.Prune(r.Context())
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":     "ok",
 		"older_than": req.OlderThan,
 		"deleted":    res.Deleted,
@@ -398,8 +393,7 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		results = append(results, row)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"columns": cols,
 		"rows":    results,
 		"count":   len(results),

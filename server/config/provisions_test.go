@@ -10,12 +10,12 @@ import (
 )
 
 // TestBuildComplianceIndex_ProvidesUnion pins the loader's union pass:
-// a module declaring `provides: [time-sync]` produces the same per-
-// framework owner list as the equivalent hand-rolled `compliance:`
-// block. Module migrations rely on this byte-for-byte equivalence.
+// a module declaring `compliance.provides: [time-sync]` produces the
+// expected per-framework owner list from catalog expansion alone.
+// Module migrations rely on this byte-for-byte equivalence.
 func TestBuildComplianceIndex_ProvidesUnion(t *testing.T) {
 	defs := map[string]*ModuleDefinition{
-		"chrony": {Name: "chrony", Provides: []string{"time-sync"}},
+		"chrony": {Name: "chrony", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},
 	}
 	idx := buildComplianceIndex(defs)
 
@@ -36,18 +36,19 @@ func TestBuildComplianceIndex_ProvidesUnion(t *testing.T) {
 
 // TestBuildComplianceIndex_DedupesAcrossSources catches the
 // pre-existing duplicate-append bug the rewrite quietly fixed: a module
-// declaring the same (framework, control) via both `provides:` and
-// `compliance:` must appear exactly once in the per-control owner
-// list. Without dedup the coverage drilldown would credit the module
-// twice.
+// declaring the same (framework, control) via both `compliance.provides`
+// and a directory-level compliance.vgo inheritance file must appear
+// exactly once in the per-control owner list. Without dedup the coverage
+// drilldown would credit the module twice.
 func TestBuildComplianceIndex_DedupesAcrossSources(t *testing.T) {
 	defs := map[string]*ModuleDefinition{
 		// time-sync expands pci-dss [10.6.1] (among others);
-		// duplicated in the explicit compliance block.
+		// duplicated via the inherited claim that ancestor
+		// compliance.vgo files merge in.
 		"chrony": {
-			Name:     "chrony",
-			Provides: []string{"time-sync"},
-			Compliance: map[string][]string{
+			Name:       "chrony",
+			Compliance: ComplianceClaims{Provides: []string{"time-sync"}},
+			InheritedCompliance: map[string][]string{
 				"pci-dss": {"10.6.1"},
 			},
 		},
@@ -65,7 +66,7 @@ func TestBuildComplianceIndex_DedupesAcrossSources(t *testing.T) {
 // quiet so a slightly-stale catalog doesn't break the world.
 func TestBuildComplianceIndex_UnknownProvisionNoop(t *testing.T) {
 	defs := map[string]*ModuleDefinition{
-		"bogus": {Name: "bogus", Provides: []string{"not-a-real-provision-xyz"}},
+		"bogus": {Name: "bogus", Compliance: ComplianceClaims{Provides: []string{"not-a-real-provision-xyz"}}},
 	}
 	idx := buildComplianceIndex(defs)
 	if len(idx) != 0 {
@@ -80,8 +81,8 @@ func TestBuildComplianceIndex_UnknownProvisionNoop(t *testing.T) {
 // is gone by construction.
 func TestBuildComplianceIndex_TwoModulesSameProvision(t *testing.T) {
 	defs := map[string]*ModuleDefinition{
-		"chrony": {Name: "chrony", Provides: []string{"time-sync"}},
-		"ntp":    {Name: "ntp", Provides: []string{"time-sync"}},
+		"chrony": {Name: "chrony", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},
+		"ntp":    {Name: "ntp", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},
 	}
 	idx := buildComplianceIndex(defs)
 	owners := append([]string(nil), idx["nist-800-53"]["AU-8"]...)
@@ -101,7 +102,8 @@ func TestTrace_ProvidesAttribution(t *testing.T) {
 	dir := setupDir(t)
 	writeFile(t, filepath.Join(dir, "modules", "chrony.vgo"), `
 name: chrony
-provides: [time-sync]
+compliance:
+  provides: [time-sync]
 resources:
   - name: noop
     type: exec
@@ -147,21 +149,26 @@ envoys:
 }
 
 // TestTrace_ExplicitOverridesProvides pins the attribution tie-break:
-// when a control appears in both `provides:` expansion and the
-// explicit `compliance:` block, the source is reported as "explicit"
-// because the operator hand-wrote it — that's the signal a future
-// `vigocli config trace` user wants preserved.
+// when a control appears in both `compliance.provides` expansion and
+// an inherited claim from a directory-level compliance.vgo, the source
+// is reported as "explicit" because the operator hand-wrote it — that's
+// the signal a future `vigocli config trace` user wants preserved.
 func TestTrace_ExplicitOverridesProvides(t *testing.T) {
 	dir := setupDir(t)
 	writeFile(t, filepath.Join(dir, "modules", "chrony.vgo"), `
 name: chrony
-provides: [time-sync]
 compliance:
-  pci-dss: ["10.6.1"]
+  provides: [time-sync]
 resources:
   - name: noop
     type: exec
     command: "true"
+`)
+	// Directory-level compliance.vgo — still the framework→control shape
+	// (a different file kind from module YAML).
+	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+compliance:
+  pci-dss: ["10.6.1"]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:

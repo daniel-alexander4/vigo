@@ -102,7 +102,7 @@ func TestPreview_AffectedEnvoys(t *testing.T) {
 		Module   string `json:"module"`
 		Affected []struct {
 			Hostname string `json:"hostname"`
-			EnvoyID string `json:"envoy_id"`
+			EnvoyID  string `json:"envoy_id"`
 		} `json:"affected"`
 		Count int `json:"count"`
 	}

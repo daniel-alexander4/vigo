@@ -1,5 +1,6 @@
 name: hitrust-operations
-bundle: [hitrust-operations]
+compliance:
+  bundle: [hitrust-operations]
 resources:
   # 09.aa: Audit logging
   - name: auditd-package

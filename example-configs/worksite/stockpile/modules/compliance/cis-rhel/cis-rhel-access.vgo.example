@@ -3,8 +3,8 @@ name: cis-rhel-access
 # Level 1 + Level 2 controls
 # Applies to: RHEL 8/9, CentOS Stream 8/9, Rocky Linux 8/9, AlmaLinux 8/9
 
-bundle: [cis-rhel-access]
-
+compliance:
+  bundle: [cis-rhel-access]
 vars:
   ssh_port: "22"
   max_auth_tries: "4"

@@ -1,7 +1,7 @@
 name: node-exporter
 
-provides: [system-resource-monitoring]
-
+compliance:
+  provides: [system-resource-monitoring]
 resources:
   - name: install-node-exporter
     type: package

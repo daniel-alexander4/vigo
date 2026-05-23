@@ -1,7 +1,7 @@
 name: journal-cap
 
-provides: [journal-retention]
-
+compliance:
+  provides: [journal-retention]
 vars:
   journal_max_use: "500M"
   journal_max_retention: "30day"
