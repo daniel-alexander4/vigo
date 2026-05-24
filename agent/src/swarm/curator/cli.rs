@@ -1653,7 +1653,7 @@ fn cmd_gc(_args: &[String]) -> Result<()> {
              must run as root. Re-run with sudo."
         );
     }
-    let manifest = crate::swarm::manifest::Manifest::load(&blobs_dir_parent());
+    let manifest = crate::swarm::manifest::Manifest::load(&crate::platform::paths::default_swarm_base());
     let live_shas = build_live_shas(&caller.home)?;
     let envoy_id = current_envoy_id().unwrap_or_default();
     if envoy_id.is_empty() {
@@ -1734,7 +1734,7 @@ fn cmd_purge(args: &[String]) -> Result<()> {
     }
     let envoy_id = current_envoy_id().unwrap_or_default();
     if !envoy_id.is_empty() {
-        let manifest = crate::swarm::manifest::Manifest::load(&blobs_dir_parent());
+        let manifest = crate::swarm::manifest::Manifest::load(&crate::platform::paths::default_swarm_base());
         let mut revoked = 0usize;
         for entry in manifest.snapshot().entries.values() {
             if !entry.label.starts_with("curator:") {
@@ -1899,15 +1899,6 @@ fn build_live_shas(home: &Path) -> Result<std::collections::HashSet<String>> {
         }
     }
     Ok(out)
-}
-
-/// `/var/lib/vigo/swarm/` — the directory the swarm manifest persists under.
-/// `Manifest::load(dir)` reads `dir/manifest.json`.
-fn blobs_dir_parent() -> PathBuf {
-    crate::platform::paths::default_blobs_dir()
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/var/lib/vigo/swarm"))
 }
 
 /// This envoy's enrollment id, the `seeder_id` `serve_push` records on every

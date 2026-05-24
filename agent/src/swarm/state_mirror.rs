@@ -26,9 +26,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-/// Default location for the mirror file.
-pub const STATE_MIRROR_PATH: &str = "/var/lib/vigo/swarm/state.json";
-
 /// Resolved swarm state mirrored to disk after each bundle accept.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct AgentSwarmState {
@@ -97,9 +94,11 @@ impl Default for GateState {
     }
 }
 
-/// Path to the on-disk state mirror under [`STATE_MIRROR_PATH`].
+/// Path to the on-disk state mirror: `state.json` under the canonical
+/// swarm base ([`crate::platform::paths::default_swarm_base`]). Honors
+/// `VIGO_BLOBS_DIR` via the underlying helper.
 pub fn default_path() -> PathBuf {
-    PathBuf::from(STATE_MIRROR_PATH)
+    crate::platform::paths::default_swarm_base().join("state.json")
 }
 
 /// Snapshot the resolved gates from `vars_json` (a freshly-accepted

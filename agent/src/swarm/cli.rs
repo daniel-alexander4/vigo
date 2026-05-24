@@ -33,8 +33,7 @@ use anyhow::{bail, Context, Result};
 
 use super::manifest::{BlobEntry, BlobStatus, ManifestData};
 use super::state_mirror;
-
-const SWARM_DIR: &str = "/var/lib/vigo/swarm";
+use crate::platform::paths::{default_blobs_dir, default_swarm_base};
 
 pub fn run(args: Vec<String>) -> Result<()> {
     let verb = args.first().map(String::as_str).unwrap_or("");
@@ -136,7 +135,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
     println!("    known (addr × blob) pairs: {}", peers.len());
     println!();
 
-    let blobs_dir = Path::new(SWARM_DIR).join(".blobs");
+    let blobs_dir = default_blobs_dir();
     match dir_size(&blobs_dir) {
         Ok(size) => println!("  Blob cache:       {} ({})", human_bytes(size), blobs_dir.display()),
         Err(_) => println!("  Blob cache:       (root-only) {}", blobs_dir.display()),
@@ -357,11 +356,11 @@ fn cmd_peers_list(_args: &[String]) -> Result<()> {
 // ---------------- helpers ----------------
 
 fn manifest_path() -> PathBuf {
-    Path::new(SWARM_DIR).join("manifest.json")
+    default_swarm_base().join("manifest.json")
 }
 
 fn peers_path() -> PathBuf {
-    Path::new(SWARM_DIR).join("peers.json")
+    default_swarm_base().join("peers.json")
 }
 
 fn read_manifest_data(path: &Path) -> Result<ManifestData> {
