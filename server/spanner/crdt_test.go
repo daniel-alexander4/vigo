@@ -87,7 +87,7 @@ func (f *crdtFixture) founderSelfRow() RosterRow {
 // merge applies a snapshot and returns the mutated-row count.
 func (f *crdtFixture) merge(snap Snapshot) int {
 	f.t.Helper()
-	n, err := MergeSnapshot(f.t.Context(), f.q, f.sqlDB, snap, f.founderPub)
+	n, err := MergeSnapshot(f.t.Context(), f.q, f.sqlDB, snap, f.founderPub, nil, nil)
 	if err != nil {
 		f.t.Fatalf("MergeSnapshot: %v", err)
 	}

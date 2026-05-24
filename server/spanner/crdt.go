@@ -250,7 +250,7 @@ func writeField(h hash.Hash, b []byte) {
 // consumed-token G-Set is unioned first because it is the FK target
 // of spanner_bolts.consumed_token_hash, then every verified bolt row
 // is run through MergeBoltLWW.
-func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snapshot, founderPubkey ed25519.PublicKey) (merged int, err error) {
+func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snapshot, founderPubkey ed25519.PublicKey, sessions *auth.SessionManager, audit AuditRecorder) (merged int, err error) {
 	if len(founderPubkey) != ed25519.PublicKeySize {
 		return 0, fmt.Errorf("spanner crdt: founder pubkey is %d bytes, expected %d", len(founderPubkey), ed25519.PublicKeySize)
 	}
@@ -308,8 +308,21 @@ func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snaps
 		merged += int(affected)
 	}
 
+	// ADR-030 Slice 2-iii-d: webusers LWW-Map merge rides the same
+	// transaction so the api_tokens cascade (on fresh tombstone) is
+	// atomic with the user-row soft-delete. Side-effect dispatch
+	// (DestroyUserSessions + audit emission) deliberately runs
+	// AFTER commit — see dispatchUserEffects.
+	userEffects, mErr := MergeUsers(ctx, qtx, snap.Users, buildKnownBolts(verified))
+	if mErr != nil {
+		return 0, mErr
+	}
+	merged += len(userEffects)
+
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("spanner crdt: commit: %w", err)
 	}
+
+	dispatchUserEffects(ctx, sessions, audit, userEffects)
 	return merged, nil
 }

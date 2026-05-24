@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	vigoauth "git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -88,6 +89,11 @@ type Gossiper struct {
 	// nil → Tier-1 digests carry a zero-valued ConvergenceCounters
 	// (still valid; the Tier-2 pull supplies the real counters).
 	localCounters func() ConvergenceCounters
+
+	// ADR-030 Slice 2-iii-d side-effect sinks for webusers merge.
+	// nil → no-op (standalone, or wired only after auth is up).
+	sessions *vigoauth.SessionManager
+	audit    AuditRecorder
 }
 
 // SetLocalCounters injects the source of this bolt's own convergence
@@ -95,6 +101,22 @@ type Gossiper struct {
 // fleet index is in scope.
 func (g *Gossiper) SetLocalCounters(fn func() ConvergenceCounters) {
 	g.localCounters = fn
+}
+
+// SetSessions injects the local SCS session manager so post-merge
+// role-change and tombstone effects (ADR-030 Slice 2-iii-d) can
+// destroy affected sessions. Wired in server.go after the auth
+// provider's session manager is in scope. nil leaves session
+// destruction as a no-op (standalone; tests).
+func (g *Gossiper) SetSessions(sm *vigoauth.SessionManager) {
+	g.sessions = sm
+}
+
+// SetAuditWriter injects the audit recorder for replication events
+// (webusers.role_changed_via_merge, webusers.tombstoned_via_merge).
+// nil silences emission.
+func (g *Gossiper) SetAuditWriter(w AuditRecorder) {
+	g.audit = w
 }
 
 // ObservabilityCache returns the Gossiper's fleet-observability cache —
@@ -353,7 +375,7 @@ func (g *Gossiper) pullAndMerge(ctx context.Context, peerHostname string, founde
 		return 0, fmt.Errorf("decoding peer /snapshot: %w", err)
 	}
 
-	merged, err := MergeSnapshot(ctx, g.queries, g.sqlDB, snap, founderPubkey)
+	merged, err := MergeSnapshot(ctx, g.queries, g.sqlDB, snap, founderPubkey, g.sessions, g.audit)
 	if err != nil {
 		return 0, fmt.Errorf("merging peer snapshot: %w", err)
 	}

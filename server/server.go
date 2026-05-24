@@ -1142,13 +1142,28 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// Wire the session manager so role changes and user deletes
 	// destroy the affected user's cached sessions immediately rather
 	// than waiting on the idle-timeout window.
+	var sessionMgr *vigoauth.SessionManager
 	switch p := s.authProvider.(type) {
 	case *vigoauth.BasicProvider:
-		usersHandler.SetSessions(p.Sessions())
+		sessionMgr = p.Sessions()
 	case *vigoauth.OIDCProvider:
-		usersHandler.SetSessions(p.Sessions())
+		sessionMgr = p.Sessions()
 	case *vigoauth.IsowebauthProvider:
-		usersHandler.SetSessions(p.Sessions())
+		sessionMgr = p.Sessions()
+	}
+	if sessionMgr != nil {
+		usersHandler.SetSessions(sessionMgr)
+	}
+	// ADR-030 Slice 2-iii-d: the gossiper's webusers merge fires
+	// session-destroy + audit on accepted role-change/tombstone effects.
+	// Wired post-NewGossiper because the session manager only exists
+	// after the auth provider is built. nil-safe on either side
+	// (standalone has no gossiper; tests may have no audit writer).
+	if s.spannerGossip != nil {
+		if sessionMgr != nil {
+			s.spannerGossip.SetSessions(sessionMgr)
+		}
+		s.spannerGossip.SetAuditWriter(s.auditWriter)
 	}
 	tokensHandler := api.NewTokensHandler(tokenStore, s.authMethod)
 	tokensHandler.SetAuditWriter(s.auditWriter)
