@@ -942,6 +942,25 @@ Set a global config publish freeze.
 
 Remove the config publish freeze.
 
+### GET /api/v1/config/status
+
+**Permission:** `fleet.read`
+
+Reload health for the server's config store. Returns `healthy: false` when the last `loadAll` (startup or `Reload`) failed with an `IdempotencyErrors` — in that case the store started empty and operators would otherwise see a silently-empty config with no signal.
+
+**Response:**
+
+```json
+{
+  "healthy": true,
+  "version": 7,
+  "last_error": "",
+  "last_reload_at": "2026-05-24T18:32:14Z"
+}
+```
+
+`version` increments on every successful reload. `last_error` is the formatted error message (empty when `healthy: true`). `last_reload_at` is RFC3339 UTC; empty only if `loadAll` has never run (the store was constructed but errored before its first load attempt).
+
 ### POST /api/v1/config/reload
 
 **Permission:** `config.publish`

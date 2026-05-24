@@ -268,6 +268,13 @@ func (h *DoctorHandler) checkIntegrations() DoctorCheck {
 }
 
 func (h *DoctorHandler) checkConfig() DoctorCheck {
+	if err := h.configStore.LastReloadError(); err != nil {
+		// IdempotencyErrors at startup leave the store empty with the
+		// error stashed in lastReloadErr. Without this, an empty store
+		// would surface as a "no modules loaded" WARN with no hint that
+		// reload actually failed.
+		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusFail, Message: "reload failed: " + err.Error()}
+	}
 	stats := h.configStore.Stats()
 	msg := fmt.Sprintf("%d modules, %d entries", stats.Modules, stats.Entries)
 

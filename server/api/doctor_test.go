@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +100,48 @@ func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 	store, err := config.NewConfigStore(dir, provider, true)
 	if err != nil {
 		t.Fatalf("NewConfigStore: %v", err)
+	}
+	return store
+}
+
+// newUnhealthyConfigStore builds a ConfigStore whose initial loadAll
+// produces an IdempotencyErrors (unguarded `exec` resource with
+// `dangerous=false`). The store comes back non-nil with empty config
+// and the error stashed in LastReloadError() — the same shape the
+// status endpoint and doctor check are wired to detect.
+func newUnhealthyConfigStore(t *testing.T) *config.ConfigStore {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"modules", "envoys", "roles"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", sub, err)
+		}
+	}
+	os.WriteFile(filepath.Join(dir, "modules", "bad.vgo"), []byte(`
+name: bad
+resources:
+  - name: yolo-exec
+    type: exec
+    command: "echo hello"
+`), 0644)
+	os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte(`
+envoys:
+  - match: "test.example.com"
+    modules: [bad]
+`), 0644)
+
+	provider, err := secrets.NewLocalProvider("", t.TempDir())
+	if err != nil {
+		t.Fatalf("new local provider: %v", err)
+	}
+	t.Cleanup(func() { provider.Close() })
+
+	store, err := config.NewConfigStore(dir, provider, false) // dangerous=false → unguarded exec rejects
+	if err != nil {
+		t.Fatalf("NewConfigStore should return non-nil store with stashed error, got: %v", err)
+	}
+	if store.LastReloadError() == nil {
+		t.Fatal("expected LastReloadError to be set after unguarded-exec load")
 	}
 	return store
 }
@@ -290,5 +333,48 @@ func TestDoctor_StaleEnvoys(t *testing.T) {
 		if c.Name == "stale_envoys" && c.Status != StatusWarn {
 			t.Errorf("expected stale_envoys check to warn, got %s: %s", c.Status, c.Message)
 		}
+	}
+}
+
+func TestDoctor_ConfigReloadFailure(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	certFile, keyFile := generateTestCerts(t)
+	enforcer := newTestLicenseEnforcer(t)
+	configStore := newUnhealthyConfigStore(t)
+
+	handler := NewDoctorHandler(DoctorConfig{
+		SQLDB:       sqlDB,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
+		Enforcer:    enforcer,
+		ConfigStore: configStore,
+		Queries:     queries,
+		Interval:    5 * time.Minute,
+	})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/doctor", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	var resp DoctorResponse
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	var found bool
+	for _, c := range resp.Checks {
+		if c.Name == "config" {
+			found = true
+			if c.Status != StatusFail {
+				t.Errorf("expected config check to FAIL on reload error, got %s: %s", c.Status, c.Message)
+			}
+			if !strings.Contains(c.Message, "reload failed") {
+				t.Errorf("expected message to mention 'reload failed', got: %s", c.Message)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("config check not found in response")
 	}
 }

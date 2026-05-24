@@ -215,6 +215,7 @@ type ConfigStore struct {
 	onReloadFailure         func(err error) // optional callback on reload failure
 	onReloadSuccess         func()          // optional callback after successful reload
 	lastReloadErr           error           // last reload error (nil if last reload succeeded)
+	lastReloadAt            time.Time       // wall-clock time of the last loadAll attempt (success or failure)
 	enabledStandards        map[string]bool // nil = all enabled; non-nil = only these standard keys
 	approvedSources         []string        // nil/empty = no annotation; non-empty = URL prefixes for package_source_audit trait
 	serverYamlPath          string          // path to server.yaml for re-reading compliance on reload
@@ -492,6 +493,15 @@ func (cs *ConfigStore) LastReloadError() error {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 	return cs.lastReloadErr
+}
+
+// LastReloadAt returns the wall-clock time of the most recent loadAll
+// attempt — success or failure. Zero value means loadAll has never run
+// (the store was constructed but New errored out before calling it).
+func (cs *ConfigStore) LastReloadAt() time.Time {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.lastReloadAt
 }
 
 // Get returns the resolved config for the given hostname. Entries are
@@ -2268,6 +2278,7 @@ func (cs *ConfigStore) loadAll() error {
 
 	cs.mu.Lock()
 	cs.lastReloadErr = err
+	cs.lastReloadAt = time.Now()
 	cs.mu.Unlock()
 
 	if cs.metrics != nil {

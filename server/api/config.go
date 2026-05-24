@@ -132,6 +132,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/config/publishes", publish(http.HandlerFunc(h.RecordPublish)))
 	mux.Handle("GET /api/v1/config/publishes/{id}", read(http.HandlerFunc(h.GetPublish)))
 	mux.Handle("GET /api/v1/config/version", read(http.HandlerFunc(h.GetVersion)))
+	mux.Handle("GET /api/v1/config/status", read(http.HandlerFunc(h.GetStatus)))
 	mux.Handle("GET /api/v1/config/versions", read(http.HandlerFunc(h.ListVersions)))
 	mux.Handle("POST /api/v1/config/rollback/{version}", rollback(http.HandlerFunc(h.Rollback)))
 	mux.Handle("POST /api/v1/config/freeze", publish(http.HandlerFunc(h.Freeze)))
@@ -151,6 +152,28 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 func (h *ConfigHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"version": h.configStore.Version(),
+	})
+}
+
+// GetStatus returns the config store's reload health: whether the last
+// loadAll succeeded, its version, the last error message (empty when
+// healthy), and the wall-clock time of the last attempt. Lets operators
+// detect a silently-empty config from an IdempotencyErrors at startup
+// without tail-ing the server log.
+func (h *ConfigHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
+	var lastErr string
+	if e := h.configStore.LastReloadError(); e != nil {
+		lastErr = e.Error()
+	}
+	var lastAt string
+	if t := h.configStore.LastReloadAt(); !t.IsZero() {
+		lastAt = t.UTC().Format(time.RFC3339)
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{
+		"healthy":        lastErr == "",
+		"version":        h.configStore.Version(),
+		"last_error":     lastErr,
+		"last_reload_at": lastAt,
 	})
 }
 

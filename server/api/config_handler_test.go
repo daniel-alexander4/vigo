@@ -18,6 +18,61 @@ import (
 	"git.alexander4.io/vigo/server/publish"
 )
 
+func TestConfig_GetStatus_Healthy(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	configStore := newDoctorTestConfigStore(t)
+
+	handler := NewConfigHandler(queries, configStore, fleet.NewFleetIndex(), &publish.State{}, "", "")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/config/status", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["healthy"] != true {
+		t.Errorf("expected healthy=true, got %v", resp["healthy"])
+	}
+	if got := resp["last_error"]; got != "" {
+		t.Errorf("expected last_error=\"\", got %q", got)
+	}
+	if resp["last_reload_at"] == "" {
+		t.Error("expected last_reload_at to be a non-empty RFC3339 timestamp")
+	} else if _, err := time.Parse(time.RFC3339, resp["last_reload_at"].(string)); err != nil {
+		t.Errorf("last_reload_at not RFC3339: %v", err)
+	}
+}
+
+func TestConfig_GetStatus_Unhealthy(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	configStore := newUnhealthyConfigStore(t)
+
+	handler := NewConfigHandler(queries, configStore, fleet.NewFleetIndex(), &publish.State{}, "", "")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/config/status", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["healthy"] != false {
+		t.Errorf("expected healthy=false, got %v", resp["healthy"])
+	}
+	if got, _ := resp["last_error"].(string); got == "" {
+		t.Error("expected non-empty last_error")
+	}
+}
+
 func TestConfig_RecordPublish(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
