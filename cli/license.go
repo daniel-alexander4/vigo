@@ -114,7 +114,11 @@ var cliLicenseFingerprintCmd = &cobra.Command{
 to this server. Send this fingerprint when requesting a new license.
 
 The fingerprint is SHA256(machine-id + primary-MAC + CA-cert-fingerprint).
-It changes on OS reinstall, primary NIC replacement, or CA cert regeneration.`,
+It changes on OS reinstall, primary NIC replacement, or CA cert regeneration.
+
+Required for every paid tier (Starter and above). Community-tier (free,
+up to 100 nodes) licenses do not require a fingerprint and run on any
+machine.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		caFile, _ := cmd.Flags().GetString("ca-file")
 		fp, err := vigolic.MachineFingerprint(caFile)

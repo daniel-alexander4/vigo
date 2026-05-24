@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -202,6 +203,87 @@ func TestEnforcerNoLicenseAndNoKey(t *testing.T) {
 	_, err := NewEnforcer(dir, dir, "", counter, func() {}, metrics.NewTestMetrics())
 	if err == nil {
 		t.Fatal("expected error when no key and no license file")
+	}
+}
+
+func TestEnforcerPaidTierRequiresFingerprint(t *testing.T) {
+	// A paid-tier license without a fingerprint must be rejected at
+	// install — gap 1 of the v0.67.15 license-process review. The
+	// enforcer routes this through the same staged-enforcement path
+	// the fingerprint-mismatch case uses: violation message set,
+	// stage advances to Grace, graceStart pinned to "now."
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
+
+	// Starter is the smallest paid tier (101-250 nodes per tessera's
+	// pricing table). RequiresBinding("starter") must return true.
+	payload := licfmt.Payload{
+		CustomerName: "Paid Customer",
+		CustomerID:   "paid-001",
+		LicenseID:    "lic-paid-no-fp",
+		Tier:         "starter",
+		MaxEnvoys:    200,
+		IssuedAt:     "2026-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+		// Fingerprint deliberately empty.
+	}
+
+	dir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	counter := func(ctx context.Context) (int, error) { return 0, nil }
+	e, err := NewEnforcer(dir, dir, "", counter, func() {}, metrics.NewTestMetrics())
+	if err != nil {
+		t.Fatalf("NewEnforcer: %v", err)
+	}
+
+	s := e.GetStatus()
+	if s.Violation == "" {
+		t.Fatal("expected non-empty violation for paid tier with no fingerprint")
+	}
+	if s.Stage != StageGrace {
+		t.Errorf("expected StageGrace, got %v", s.Stage)
+	}
+	// Operator should see the canonical fix path in the message.
+	for _, want := range []string{"fingerprint", "starter", "vigocli license fingerprint"} {
+		if !strings.Contains(s.Violation, want) {
+			t.Errorf("violation message %q must contain %q", s.Violation, want)
+		}
+	}
+}
+
+func TestEnforcerCommunityTierWithoutFingerprintInstalls(t *testing.T) {
+	// Community (free) tier without a fingerprint is the canonical
+	// install path — must reach Compliant, no violation.
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
+
+	payload := licfmt.Payload{
+		CustomerName: "Free User",
+		CustomerID:   "free-001",
+		LicenseID:    "lic-free",
+		Tier:         "community",
+		MaxEnvoys:    100,
+		IssuedAt:     "2026-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+
+	dir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	counter := func(ctx context.Context) (int, error) { return 10, nil }
+	e, err := NewEnforcer(dir, dir, "", counter, func() {}, metrics.NewTestMetrics())
+	if err != nil {
+		t.Fatalf("NewEnforcer: %v", err)
+	}
+
+	s := e.GetStatus()
+	if s.Stage != StageCompliant {
+		t.Errorf("community tier without fingerprint should be Compliant, got %v (violation=%q)", s.Stage, s.Violation)
 	}
 }
 

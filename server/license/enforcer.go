@@ -275,8 +275,31 @@ func (e *Enforcer) loadAndCheckLocked() error {
 	slog.Info("license loaded", "path", path)
 	e.license = payload
 
-	// Validate machine fingerprint for paid licenses.
-	// Free tier (no fingerprint) is always accepted.
+	// Paid-tier licenses must be machine-bound. Reject installation of
+	// any paid-tier license that wasn't issued with a fingerprint —
+	// `RequiresBinding` is the single source of truth (tessera's
+	// `license create` enforces the same rule at issuance, so a license
+	// reaching this point without a fingerprint either predates the
+	// rule or was signed out-of-band). Community (free) licenses fall
+	// through to the existing optional-binding path below.
+	if vigolic.RequiresBinding(payload.Tier) && payload.Fingerprint == "" {
+		slog.Warn("license fingerprint missing — paid tier requires machine binding",
+			"tier", payload.Tier,
+		)
+		e.violation = fmt.Sprintf("license fingerprint missing — %s tier requires machine binding. Regenerate the license with --fingerprint set; get the fingerprint via `vigocli license fingerprint`.", payload.Tier)
+		e.stage = StageGrace
+		if e.graceStart == nil {
+			now := time.Now()
+			e.graceStart = &now
+			writeGraceStart(e.graceDir, now)
+		}
+		return nil
+	}
+
+	// Validate machine fingerprint for licenses that carry one.
+	// Community (no fingerprint) and any other tier without binding fall
+	// through; mismatch on a fingerprinted license triggers staged
+	// enforcement.
 	if payload.Fingerprint != "" {
 		actual, fpErr := vigolic.MachineFingerprint(e.caFile)
 		if fpErr != nil {
