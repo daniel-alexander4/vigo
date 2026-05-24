@@ -562,7 +562,7 @@ fn run_auto_encrypt_with_retry(user: &str, filename: &str, home: &Path) {
     }
 }
 
-/// Remove `/var/lib/vigo/swarm/lockbox/<user>/` for any user no longer
+/// Remove `<swarm_base>/lockbox/<user>/` for any user no longer
 /// in `/etc/passwd`. Without this sweep, `userdel -r <user>` leaves a
 /// permanent ghost state dir (peers.json, tombstones.json, leaves.json,
 /// resurrects.json, signing.key/.pub), and reusing the username later
@@ -572,8 +572,8 @@ fn run_auto_encrypt_with_retry(user: &str, filename: &str, home: &Path) {
 /// list is no longer load-bearing.
 fn sweep_orphaned_state() {
     let active = passwd_user_set();
-    let parent = std::path::Path::new("/var/lib/vigo/swarm/lockbox");
-    sweep_orphaned_state_at(parent, &active);
+    let parent = super::config::agent_state_root();
+    sweep_orphaned_state_at(&parent, &active);
 }
 
 /// Testable inner: walk `parent`, remove subdirs whose name isn't in `active`.

@@ -178,10 +178,17 @@ pub fn regen_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("regen.pending")
 }
 
-/// `/var/lib/vigo/swarm/lockbox/<username>/` — root-owned state dir for
+/// `<swarm_base>/lockbox/` — root-owned parent of every per-user lockbox
+/// state dir. Derived from [`crate::platform::paths::default_swarm_base`]
+/// so a `VIGO_BLOBS_DIR` override cascades to lockbox state.
+pub fn agent_state_root() -> PathBuf {
+    crate::platform::paths::default_swarm_base().join("lockbox")
+}
+
+/// `<swarm_base>/lockbox/<username>/` — root-owned state dir for
 /// one user's peer table and reactor bookkeeping. Created lazily.
 pub fn agent_state_dir(username: &str) -> PathBuf {
-    PathBuf::from("/var/lib/vigo/swarm/lockbox").join(username)
+    agent_state_root().join(username)
 }
 
 pub fn peers_path(username: &str) -> PathBuf {
@@ -396,6 +403,21 @@ mod tests {
         let reloaded = load_config(dir.path());
         assert_eq!(reloaded.idle_timeout_minutes, 30);
         assert_eq!(reloaded.cross_subnet_peers, vec!["host-a".to_string()]);
+    }
+
+    #[test]
+    fn agent_state_dir_composes_root_with_username() {
+        assert_eq!(agent_state_dir("alice"), agent_state_root().join("alice"));
+    }
+
+    #[test]
+    fn agent_state_root_is_lockbox_under_swarm_base() {
+        let root = agent_state_root();
+        assert_eq!(
+            root.parent().map(Path::to_path_buf),
+            Some(crate::platform::paths::default_swarm_base()),
+        );
+        assert_eq!(root.file_name().and_then(|s| s.to_str()), Some("lockbox"));
     }
 
     #[test]

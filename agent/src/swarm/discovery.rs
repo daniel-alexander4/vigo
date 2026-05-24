@@ -649,11 +649,13 @@ fn verify_gitback_authenticity(
             true
         }
         CheckOutcome::Mismatch { cached_prefix } => {
+            let cache_path = crate::swarm::gitback::peer_pubkey_cache::cache_path();
             warn!(
                 hostname = %peer.hostname,
                 announced_pubkey_prefix = %peer.pubkey_hex.chars().take(12).collect::<String>(),
                 cached_pubkey_prefix = %cached_prefix,
-                "gitback: pubkey mismatch — dropping gitback content. Clear /var/lib/vigo/swarm/gitback/peer_pubkeys.json if the hostname was legitimately re-enrolled."
+                "gitback: pubkey mismatch — dropping gitback content. Clear {} if the hostname was legitimately re-enrolled.",
+                cache_path.display(),
             );
             false
         }

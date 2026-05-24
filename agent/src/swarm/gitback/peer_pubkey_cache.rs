@@ -41,9 +41,11 @@ use std::sync::Mutex;
 use tracing::{debug, info, warn};
 
 /// Cache file on disk. Root-owned, 0600. Reload on every startup;
-/// persist on every accepted mutation.
+/// persist on every accepted mutation. Routes through
+/// [`crate::platform::paths::default_gitback_dir`] so `VIGO_GITBACK_DIR`
+/// is honored.
 pub fn cache_path() -> PathBuf {
-    PathBuf::from("/var/lib/vigo/swarm/gitback/peer_pubkeys.json")
+    crate::platform::paths::default_gitback_dir().join("peer_pubkeys.json")
 }
 
 /// Wire-format for the cache file. One entry per known hostname.
@@ -309,5 +311,15 @@ mod tests {
         c.bootstrap_set("plex", "deadbeef", 100);
         c.bootstrap_set("plex", "deadbeef", 200);
         assert_eq!(c.check("plex", "deadbeef"), CheckOutcome::Match);
+    }
+
+    #[test]
+    fn cache_path_lives_under_gitback_dir() {
+        let p = cache_path();
+        assert_eq!(
+            p.parent().map(std::path::Path::to_path_buf),
+            Some(crate::platform::paths::default_gitback_dir()),
+        );
+        assert_eq!(p.file_name().and_then(|s| s.to_str()), Some("peer_pubkeys.json"));
     }
 }
