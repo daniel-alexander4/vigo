@@ -297,7 +297,7 @@ pub fn evict_revoked_blobs(manifest: &manifest::Manifest, peer_map: Option<&std:
         Ok(c) => c,
         Err(_) => return,
     };
-    let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+    let files_dir = crate::platform::paths::files_dir_for(&blobs_dir);
     let seeds_dir = crate::platform::paths::default_seeds_dir();
     let graveyard_dir = crate::platform::paths::default_graveyard_dir();
 
@@ -560,7 +560,7 @@ pub fn merge_manifest_entries(
 /// graveyard entries (those expire on age, separately).
 pub fn apply_cleanup() -> anyhow::Result<()> {
     let blobs_dir = crate::platform::paths::default_blobs_dir();
-    let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+    let files_dir = crate::platform::paths::files_dir_for(&blobs_dir);
     let result = run_cleanup(&blobs_dir, &files_dir);
     println!(
         "swarm cleanup: dangling_symlinks={} stale_partials={} errors={}",

@@ -290,7 +290,7 @@ impl BlobCache {
             return;
         }
 
-        let by_name_dir = self.dir.parent().unwrap_or(&self.dir).join("files");
+        let by_name_dir = crate::platform::paths::files_dir_for(&self.dir);
         if fs::create_dir_all(&by_name_dir).is_err() {
             return;
         }

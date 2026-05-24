@@ -150,6 +150,28 @@ pub fn default_swarm_base() -> PathBuf {
         .to_path_buf()
 }
 
+/// Sibling `files/` directory for a parametrized blob cache root. Used by
+/// the by-name symlink layer (`BlobCache::link_by_name`) and the cleanup
+/// passes that sweep dangling symlinks. The argument is the blob cache dir
+/// — typically [`default_blobs_dir`], but tests and the curator accelerator
+/// pass a parametrized path, so this helper takes `&Path` rather than
+/// reading the default itself.
+///
+/// `blobs_dir.parent().unwrap_or(blobs_dir)` matches the historic behavior
+/// at every call site: if the blob cache happens to be at a single-segment
+/// path (only possible in pathological test setups), we fall back to the
+/// blobs dir itself rather than panicking.
+pub fn files_dir_for(blobs_dir: &std::path::Path) -> PathBuf {
+    blobs_dir.parent().unwrap_or(blobs_dir).join("files")
+}
+
+/// Manifest directory for a parametrized blob cache root: the parent of the
+/// blob cache, where `manifest.json` lives. Used by the swarm_cache trait
+/// collector to load the manifest for revoked-blob filtering.
+pub fn manifest_dir_for(blobs_dir: &std::path::Path) -> PathBuf {
+    blobs_dir.parent().unwrap_or(blobs_dir).to_path_buf()
+}
+
 /// Default seed directory for envoy-originated swarm distribution.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_seeds_dir() -> PathBuf {
@@ -357,6 +379,32 @@ mod tests {
             PathBuf::from("/tmp/test-override"),
         );
         std::env::remove_var("VIGO_BLOBS_DIR");
+    }
+
+    #[test]
+    fn files_dir_for_is_sibling_of_blobs() {
+        // Real shape: blob cache at `/var/lib/vigo/swarm/.blobs` produces
+        // files at `/var/lib/vigo/swarm/files`.
+        let got = files_dir_for(std::path::Path::new("/var/lib/vigo/swarm/.blobs"));
+        assert_eq!(got, PathBuf::from("/var/lib/vigo/swarm/files"));
+    }
+
+    #[test]
+    fn files_dir_for_falls_back_when_blobs_has_no_parent() {
+        // Single-segment input — `.parent()` returns Some("") on Unix,
+        // None at the root. The helper's `unwrap_or(blobs_dir)` guard
+        // means we never panic; we get a `files/` under the input.
+        let got = files_dir_for(std::path::Path::new("blobs"));
+        // The parent of a single-segment relative path is "", so the join
+        // produces "files". For root-like input we'd get the blobs-dir
+        // fallback. Either way: non-empty and ends with "files".
+        assert!(got.ends_with("files"), "got {got:?}");
+    }
+
+    #[test]
+    fn manifest_dir_for_is_parent_of_blobs() {
+        let got = manifest_dir_for(std::path::Path::new("/var/lib/vigo/swarm/.blobs"));
+        assert_eq!(got, PathBuf::from("/var/lib/vigo/swarm"));
     }
 
     #[test]

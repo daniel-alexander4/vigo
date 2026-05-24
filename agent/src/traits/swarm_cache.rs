@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 
-use crate::platform::paths::default_blobs_dir;
+use crate::platform::paths::{default_blobs_dir, manifest_dir_for};
 use crate::swarm::cache::BlobCache;
 use crate::swarm::manifest::Manifest;
 
@@ -30,7 +30,7 @@ pub fn collect() -> Result<Value> {
     // of a sha from this trait to transition per-envoy state from
     // `revoking` → `revoked`, and a stuck report pins it at `revoking`
     // forever. The manifest lives one directory above `.blobs/`.
-    let manifest_dir = dir.parent().unwrap_or(dir.as_path()).to_path_buf();
+    let manifest_dir = manifest_dir_for(&dir);
     let manifest = Manifest::load(&manifest_dir);
 
     let entries = match fs::read_dir(&dir) {
