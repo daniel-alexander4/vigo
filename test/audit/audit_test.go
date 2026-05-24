@@ -10,6 +10,7 @@ package audit
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -313,32 +314,37 @@ func TestEveryCLICommandHasDocPage(t *testing.T) {
 func TestRESTEndpointsDocumented(t *testing.T) {
 	root := repoRoot(t)
 
-	// Collect all registered API routes from server/api/ and server/bootstrap/.
+	// Collect every registered /api/v1/ route across the server + UI trees.
+	// A hardcoded directory list was the original gap — `ui/handler.go` and
+	// `server/scrier/websocket.go` register /api/v1/ routes that bypassed the
+	// drift check. Recursive walk eliminates that class of bug.
 	routeRe := regexp.MustCompile(`(?:HandleFunc|Handle)\(\s*"((?:GET|POST|PUT|DELETE|PATCH)\s+/api/v1/[^"]+)"`)
 
 	var routes []string
 	for _, dir := range []string{
-		filepath.Join(root, "server", "api"),
-		filepath.Join(root, "server", "bootstrap"),
+		filepath.Join(root, "server"),
+		filepath.Join(root, "ui"),
 	} {
-		files, _ := filepath.Glob(filepath.Join(dir, "*.go"))
-		for _, f := range files {
-			// Skip test files.
-			if strings.HasSuffix(f, "_test.go") {
-				continue
+		_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
 			}
-			data, err := os.ReadFile(f)
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			data, err := os.ReadFile(path)
 			if err != nil {
-				continue
+				return nil
 			}
 			for _, m := range routeRe.FindAllStringSubmatch(string(data), -1) {
 				routes = append(routes, m[1])
 			}
-		}
+			return nil
+		})
 	}
 
 	if len(routes) == 0 {
-		t.Fatal("found no API routes in server/api/ or server/bootstrap/")
+		t.Fatal("found no API routes in server/ or ui/")
 	}
 
 	// Read docs/reference/api.md.
@@ -388,7 +394,7 @@ func TestRESTEndpointsDocumented(t *testing.T) {
 
 	sort.Strings(undocumented)
 	if len(undocumented) > 0 {
-		t.Errorf("API endpoints not documented in docs/api/rest.md:\n  %s", strings.Join(undocumented, "\n  "))
+		t.Errorf("API endpoints not documented in docs/reference/api.md:\n  %s", strings.Join(undocumented, "\n  "))
 	}
 }
 

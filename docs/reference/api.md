@@ -1154,6 +1154,48 @@ Returns the current compliance status for a envoy.
 
 ---
 
+## Compliance Waivers
+
+Operator-recorded exceptions to a regulatory framework control — typically for `documented`-scope controls that the deployment will satisfy through process or external attestation rather than automated enforcement. Each waiver is keyed on (framework, control_id) and may carry an `expires_at` date. Create + delete are tamper-evident audit events (`compliance.waiver_created`, `compliance.waiver_revoked`).
+
+### POST /api/v1/compliance/waivers
+
+**Permission:** Authenticated (route-level gate pending — `compliance.docs.write` recommended)
+
+Create a waiver for one control.
+
+**Request body:**
+
+```json
+{
+  "framework": "soc2",
+  "control_id": "CC6.1",
+  "reason": "covered by external SOC 2 Type II report; see /compliance/evidence",
+  "approver": "alice@example.com",
+  "expires_at": "2026-12-31"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `framework` | Yes | Framework slug (`soc2`, `hipaa`, `pci`, …) — must match a known framework. |
+| `control_id` | Yes | The control identifier inside that framework (e.g., `CC6.1`). |
+| `reason` | Yes | Free-form justification recorded in the audit chain. |
+| `approver` | Yes | Who approved the waiver (email or username). |
+| `expires_at` | No | `YYYY-MM-DD`. Waiver auto-lapses after this date. |
+
+**Response (200):** the created waiver row (id, framework, control_id, reason, approver, expires_at, created_at).
+
+### DELETE /api/v1/compliance/waivers/{id}
+
+**Permission:** Authenticated (route-level gate pending — `compliance.docs.write` recommended)
+
+Deactivate (revoke) a waiver. The row is marked inactive — the audit chain retains the original create + the revoke event.
+
+**Response:** `204 No Content`.
+
+---
+
 ## Compliance Documentation
 
 Operator-uploaded artifacts (BAA, IR plan, risk assessment, training records, signed contracts, etc.) that satisfy `documented`-scope framework controls. Files are envelope-encrypted at rest with the secrets master key under `compliance.docs.docs_dir` (default `/srv/vigo/compliance-docs/`); metadata is in `compliance_docs` and link rows in `compliance_doc_links`.
@@ -2209,6 +2251,8 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 
 ### Scrier
 
+- **POST /api/v1/scrier/connect** — Phase 1 of a Scrier session: validates the requested envoy + protocol (`ssh`/`rdp`/`vnc`), creates a session record, and kicks off the agent-side tunnel + SSH/guacd setup in the background. Body `{envoy_id, protocol, port, width, height, ssh_public_key?}`. Returns `{session_id, status}` (status is `waiting` on accept). _(admin)_
+- **GET /api/v1/scrier/sessions/{id}/status** — poll the setup state of one session. Returns `{status, error?}` where status is one of `waiting` / `connecting` / `ready` / `error`. The browser/CLI polls this until `ready`, then opens the WebSocket relay at `/ws/scrier/{id}`. _(admin; session owner only)_
 - **GET /api/v1/scrier/users** — list the Scrier OS-user mapping table.
 - **PUT /api/v1/scrier/users/{username}/osuser** — set the mapping for one admin username.
 
