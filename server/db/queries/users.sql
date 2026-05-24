@@ -1,17 +1,17 @@
 -- name: GetUserByID :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE id = ? AND deleted_at IS NULL;
 
 -- name: GetUserByUsername :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE username = ? AND deleted_at IS NULL;
 
 -- name: GetUserByOIDCSubject :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE oidc_subject = ? AND deleted_at IS NULL;
 
 -- name: ListUsers :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE deleted_at IS NULL ORDER BY username;
 
 -- name: ListUsersForReplication :many
@@ -20,13 +20,13 @@ FROM users WHERE deleted_at IS NULL ORDER BY username;
 -- to signed rows only -- legacy unsigned rows (origin_bolt='',
 -- signature NULL) don't replicate until Slice 2-iii-f's first-startup
 -- re-signing pass marks them eligible.
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE signature IS NOT NULL ORDER BY id;
 
 -- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject, updated_at_ms, origin_bolt, signature)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature;
+RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature;
 
 -- name: UpdateUser :exec
 UPDATE users SET
@@ -36,7 +36,6 @@ UPDATE users SET
     permissions = ?,
     ssh_public_key = ?,
     oidc_subject = ?,
-    updated_at = datetime('now'),
     updated_at_ms = ?,
     origin_bolt = ?,
     signature = ?
@@ -46,7 +45,6 @@ WHERE id = ?;
 UPDATE users SET
     deleted_at = ?,
     updated_at_ms = ?,
-    updated_at = datetime('now'),
     origin_bolt = ?,
     signature = ?
 WHERE id = ? AND deleted_at IS NULL;
@@ -62,17 +60,17 @@ SELECT COUNT(*) FROM users WHERE role = 'admin' AND deleted_at IS NULL;
 -- A -- bolt-local enrollment). DOES NOT touch updated_at_ms or
 -- origin_bolt/signature -- a TOTP change must not trigger peer
 -- replication of a row whose replicated content hasn't changed.
-UPDATE users SET totp_enabled = 1, totp_recovery = ?, updated_at = datetime('now')
+UPDATE users SET totp_enabled = 1, totp_recovery = ?
 WHERE id = ?;
 
 -- name: DisableTOTP :exec
 -- See EnableTOTP -- TOTP is bolt-local; no CRDT comparator bump.
-UPDATE users SET totp_enabled = 0, totp_recovery = '', updated_at = datetime('now')
+UPDATE users SET totp_enabled = 0, totp_recovery = ''
 WHERE id = ?;
 
 -- name: UpdateTOTPRecovery :exec
 -- See EnableTOTP -- TOTP is bolt-local; no CRDT comparator bump.
-UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
+UPDATE users SET totp_recovery = ?
 WHERE id = ?;
 
 -- name: GetUserSSHPublicKey :one
@@ -90,9 +88,9 @@ SELECT ssh_public_key FROM users WHERE id = ? AND deleted_at IS NULL;
 -- untouched. A merge can NEVER overwrite a peer's local TOTP state.
 INSERT INTO users (
     id, username, display_name, email, role, permissions, ssh_public_key,
-    oidc_subject, updated_at, updated_at_ms,
+    oidc_subject, updated_at_ms,
     origin_bolt, deleted_at, signature
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     username       = excluded.username,
     display_name   = excluded.display_name,
@@ -101,7 +99,6 @@ ON CONFLICT(id) DO UPDATE SET
     permissions    = excluded.permissions,
     ssh_public_key = excluded.ssh_public_key,
     oidc_subject   = excluded.oidc_subject,
-    updated_at     = datetime('now'),
     updated_at_ms  = excluded.updated_at_ms,
     origin_bolt    = excluded.origin_bolt,
     deleted_at     = excluded.deleted_at,

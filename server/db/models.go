@@ -432,7 +432,6 @@ type User struct {
 	TotpEnabled  int64         `json:"totp_enabled"`
 	TotpRecovery string        `json:"totp_recovery"`
 	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
 	UpdatedAtMs  int64         `json:"updated_at_ms"`
 	OriginBolt   string        `json:"origin_bolt"`
 	DeletedAt    sql.NullInt64 `json:"deleted_at"`

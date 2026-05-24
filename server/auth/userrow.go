@@ -13,8 +13,10 @@ import (
 // replication (ADR-030). Eleven fields — every replicatable column.
 // Excludes totp_enabled / totp_recovery per the Slice 2-iii-c
 // direction call: TOTP enrollment is bolt-local, never replicated.
-// Excludes created_at and updated_at (the DATETIME display column)
-// since they aren't part of the LWW ordering — updated_at_ms is.
+// Excludes created_at since it isn't part of the LWW ordering —
+// updated_at_ms is. (The pre-0.66.96 updated_at DATETIME column
+// was dropped in migration 000014 — never had any non-generated
+// readers; pure dead weight from Slice 2-iii-b.)
 //
 // The struct shape IS the canonical signing content: JSON marshalling
 // of UserRow is what SignUserRow / VerifyUserRow sign and verify over.

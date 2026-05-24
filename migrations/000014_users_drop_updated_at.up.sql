@@ -1,0 +1,18 @@
+-- Drop the dead-weight users.updated_at DATETIME column.
+--
+-- Slice 2-iii-b (migration 000013) added updated_at_ms as the CRDT
+-- comparator and preserved updated_at "as the human-readable display
+-- projection." A subsequent grep of every consumer (server/auth/,
+-- server/api/users.go, cli/webusers.go, ui/templates/, audit log
+-- formatters, every test) found ZERO non-generated readers of the
+-- column. It was pure dead weight from day one — the redundancy that
+-- decays into divergence the moment a future write bumps one timestamp
+-- and forgets the other. Drop it now while there's still no operator
+-- behavior to preserve.
+--
+-- All queries in server/db/queries/users.sql lose their updated_at
+-- column references in the same commit; sqlc regenerates the User
+-- struct without UpdatedAt. Display sites (none exist yet) that want
+-- "row last touched" should use UpdatedAtMs:
+--   time.UnixMilli(u.UpdatedAtMs).Format(time.RFC3339)
+ALTER TABLE users DROP COLUMN updated_at;

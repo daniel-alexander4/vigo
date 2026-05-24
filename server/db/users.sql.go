@@ -33,7 +33,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const disableTOTP = `-- name: DisableTOTP :exec
-UPDATE users SET totp_enabled = 0, totp_recovery = '', updated_at = datetime('now')
+UPDATE users SET totp_enabled = 0, totp_recovery = ''
 WHERE id = ?
 `
 
@@ -44,7 +44,7 @@ func (q *Queries) DisableTOTP(ctx context.Context, id string) error {
 }
 
 const enableTOTP = `-- name: EnableTOTP :exec
-UPDATE users SET totp_enabled = 1, totp_recovery = ?, updated_at = datetime('now')
+UPDATE users SET totp_enabled = 1, totp_recovery = ?
 WHERE id = ?
 `
 
@@ -63,7 +63,7 @@ func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) error {
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE id = ? AND deleted_at IS NULL
 `
 
@@ -82,7 +82,6 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.TotpEnabled,
 		&i.TotpRecovery,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.UpdatedAtMs,
 		&i.OriginBolt,
 		&i.DeletedAt,
@@ -92,7 +91,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 }
 
 const getUserByOIDCSubject = `-- name: GetUserByOIDCSubject :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE oidc_subject = ? AND deleted_at IS NULL
 `
 
@@ -111,7 +110,6 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 		&i.TotpEnabled,
 		&i.TotpRecovery,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.UpdatedAtMs,
 		&i.OriginBolt,
 		&i.DeletedAt,
@@ -121,7 +119,7 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE username = ? AND deleted_at IS NULL
 `
 
@@ -140,7 +138,6 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.TotpEnabled,
 		&i.TotpRecovery,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.UpdatedAtMs,
 		&i.OriginBolt,
 		&i.DeletedAt,
@@ -163,7 +160,7 @@ func (q *Queries) GetUserSSHPublicKey(ctx context.Context, id string) (string, e
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject, updated_at_ms, origin_bolt, signature)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 `
 
 type InsertUserParams struct {
@@ -203,7 +200,6 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.TotpEnabled,
 		&i.TotpRecovery,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.UpdatedAtMs,
 		&i.OriginBolt,
 		&i.DeletedAt,
@@ -213,7 +209,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE deleted_at IS NULL ORDER BY username
 `
 
@@ -238,7 +234,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.TotpEnabled,
 			&i.TotpRecovery,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.UpdatedAtMs,
 			&i.OriginBolt,
 			&i.DeletedAt,
@@ -258,7 +253,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersForReplication = `-- name: ListUsersForReplication :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
 FROM users WHERE signature IS NOT NULL ORDER BY id
 `
 
@@ -288,7 +283,6 @@ func (q *Queries) ListUsersForReplication(ctx context.Context) ([]User, error) {
 			&i.TotpEnabled,
 			&i.TotpRecovery,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.UpdatedAtMs,
 			&i.OriginBolt,
 			&i.DeletedAt,
@@ -310,9 +304,9 @@ func (q *Queries) ListUsersForReplication(ctx context.Context) ([]User, error) {
 const mergeUserLWW = `-- name: MergeUserLWW :execrows
 INSERT INTO users (
     id, username, display_name, email, role, permissions, ssh_public_key,
-    oidc_subject, updated_at, updated_at_ms,
+    oidc_subject, updated_at_ms,
     origin_bolt, deleted_at, signature
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     username       = excluded.username,
     display_name   = excluded.display_name,
@@ -321,7 +315,6 @@ ON CONFLICT(id) DO UPDATE SET
     permissions    = excluded.permissions,
     ssh_public_key = excluded.ssh_public_key,
     oidc_subject   = excluded.oidc_subject,
-    updated_at     = datetime('now'),
     updated_at_ms  = excluded.updated_at_ms,
     origin_bolt    = excluded.origin_bolt,
     deleted_at     = excluded.deleted_at,
@@ -380,7 +373,6 @@ const softDeleteUser = `-- name: SoftDeleteUser :exec
 UPDATE users SET
     deleted_at = ?,
     updated_at_ms = ?,
-    updated_at = datetime('now'),
     origin_bolt = ?,
     signature = ?
 WHERE id = ? AND deleted_at IS NULL
@@ -406,7 +398,7 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) 
 }
 
 const updateTOTPRecovery = `-- name: UpdateTOTPRecovery :exec
-UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
+UPDATE users SET totp_recovery = ?
 WHERE id = ?
 `
 
@@ -429,7 +421,6 @@ UPDATE users SET
     permissions = ?,
     ssh_public_key = ?,
     oidc_subject = ?,
-    updated_at = datetime('now'),
     updated_at_ms = ?,
     origin_bolt = ?,
     signature = ?
