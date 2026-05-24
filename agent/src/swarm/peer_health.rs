@@ -168,6 +168,7 @@ pub fn probe(agent: &ureq::Agent, peer_addr: &str, purpose: &Purpose) -> ProbeOu
     match fetch(agent, &url) {
         Ok(pct) => {
             let mut map = cache().lock().expect("peer_health cache lock poisoned");
+            prune_stale(&mut map);
             map.insert(
                 key,
                 CacheEntry {
@@ -228,6 +229,14 @@ struct CacheEntry {
 fn cache() -> &'static Mutex<HashMap<String, CacheEntry>> {
     static C: OnceLock<Mutex<HashMap<String, CacheEntry>>> = OnceLock::new();
     C.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Drop entries older than [`CACHE_TTL`]. Stale entries can never be a
+/// cache hit (the read path checks the same predicate), so retaining
+/// them is unbounded growth as peers/users churn. Called on the insert
+/// path only — the read path is hot and must not pay for eviction.
+fn prune_stale(map: &mut HashMap<String, CacheEntry>) {
+    map.retain(|_, e| e.fetched.elapsed() < CACHE_TTL);
 }
 
 fn cache_key(peer: &str, purpose: &Purpose) -> String {
@@ -493,6 +502,36 @@ mod tests {
         }
         let outcome = probe(&agent, "fake.invalid:1531", &Purpose::Swarm);
         assert!(matches!(outcome, ProbeOutcome::Unknown(_)));
+    }
+
+    #[test]
+    fn prune_stale_drops_old_entries_keeps_fresh() {
+        // The global cache is shared across tests in this file; use
+        // distinct keys so we don't trip cache_ttl_honored.
+        let stale_key = cache_key("prune-stale-host:1531", &Purpose::Swarm);
+        let fresh_key = cache_key("prune-fresh-host:1531", &Purpose::Swarm);
+        {
+            let mut map = cache().lock().unwrap();
+            map.insert(
+                stale_key.clone(),
+                CacheEntry {
+                    pct: 99.0,
+                    fetched: Instant::now() - (CACHE_TTL + Duration::from_secs(1)),
+                },
+            );
+            map.insert(
+                fresh_key.clone(),
+                CacheEntry {
+                    pct: 50.0,
+                    fetched: Instant::now(),
+                },
+            );
+            prune_stale(&mut map);
+            assert!(!map.contains_key(&stale_key), "stale entry must be evicted");
+            assert!(map.contains_key(&fresh_key), "fresh entry must be retained");
+            // Cleanup so we don't leak state to other tests.
+            map.remove(&fresh_key);
+        }
     }
 
     #[test]
