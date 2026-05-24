@@ -97,40 +97,24 @@ func (q *Queries) ListAPITokensByUser(ctx context.Context, userID string) ([]Lis
 	return items, nil
 }
 
-const listAllAPITokens = `-- name: ListAllAPITokens :many
-SELECT t.id, t.user_id, t.name, t.token_hash, t.created_at, t.last_used_at, t.expires_at
-FROM api_tokens t ORDER BY t.created_at DESC
+const lookupAPITokenByHash = `-- name: LookupAPITokenByHash :one
+SELECT id, user_id, name, token_hash, created_at, last_used_at, expires_at
+FROM api_tokens WHERE token_hash = ?
 `
 
-func (q *Queries) ListAllAPITokens(ctx context.Context) ([]ApiToken, error) {
-	rows, err := q.db.QueryContext(ctx, listAllAPITokens)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ApiToken{}
-	for rows.Next() {
-		var i ApiToken
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Name,
-			&i.TokenHash,
-			&i.CreatedAt,
-			&i.LastUsedAt,
-			&i.ExpiresAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) LookupAPITokenByHash(ctx context.Context, tokenHash string) (ApiToken, error) {
+	row := q.db.QueryRowContext(ctx, lookupAPITokenByHash, tokenHash)
+	var i ApiToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.TokenHash,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
 }
 
 const updateAPITokenLastUsed = `-- name: UpdateAPITokenLastUsed :exec

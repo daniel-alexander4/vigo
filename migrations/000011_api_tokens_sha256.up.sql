@@ -1,0 +1,20 @@
+-- api_tokens.token_hash switches from bcrypt-hashed plaintext to a
+-- raw SHA-256 hex digest. Rationale: vgot_ tokens carry 256 bits of
+-- entropy (32 random bytes from crypto/rand). Bcrypt exists to make
+-- low-entropy-password cracking expensive; against 256-bit random
+-- input that cost is wasted on every validation. SHA-256 + an
+-- indexed lookup gives O(1) validation, no per-call CompareHashAndPassword
+-- loop, no DoS shape under sustained invalid-token traffic.
+--
+-- The column itself is unchanged (still TEXT NOT NULL); only the
+-- format of what callers write into it changes. The UNIQUE index
+-- below replaces the old O(n) ListAllAPITokens + bcrypt-compare-each
+-- validation with a single WHERE token_hash = ? lookup.
+--
+-- Pre-existing bcrypt rows (60-char `$2a$…` strings) sit inert under
+-- the new validation path: a SHA-256 hex digest never collides with
+-- a bcrypt envelope, so the lookup just doesn't find them. Operators
+-- regenerate via `vigocli tokens generate`; dead rows can be
+-- `vigocli tokens delete`d at leisure. UNIQUE passes against the
+-- existing data because bcrypt's per-call salt makes each row unique.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens (token_hash);

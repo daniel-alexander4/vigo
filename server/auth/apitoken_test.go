@@ -18,15 +18,16 @@ func TestGenerateAPIToken(t *testing.T) {
 	plain, hash, err := GenerateAPIToken()
 	require.NoError(t, err)
 
-	// Token should have the prefix.
-	assert.True(t, len(plain) > 5)
+	// Token should have the prefix and the 64-char hex tail.
 	assert.Equal(t, "vgot_", plain[:5])
+	assert.Len(t, plain, 5+64)
 
-	// Hash should be valid bcrypt.
-	assert.True(t, ValidateAPIToken(plain, hash))
+	// Hash is the SHA-256 hex digest of the plaintext (64 chars).
+	assert.Len(t, hash, 64)
+	assert.Equal(t, hash, hashAPIToken(plain))
 
-	// Different plaintext should not match.
-	assert.False(t, ValidateAPIToken("vgot_wrong", hash))
+	// Different plaintext hashes differently.
+	assert.NotEqual(t, hash, hashAPIToken("vgot_wrong"))
 }
 
 func TestTokenCreateAndValidate(t *testing.T) {
@@ -156,4 +157,35 @@ func TestValidateAndResolve_LocalAdminToken(t *testing.T) {
 	resolved, err = bare.ValidateAndResolve(ctx, testLocalAdminToken, userStore)
 	require.NoError(t, err)
 	assert.Nil(t, resolved)
+}
+
+// BenchmarkValidateAndResolve pins the cost of the validation hot path.
+// Pre-rewrite (bcrypt loop) this was ~n × ~100ms on miss; the SHA-256 +
+// indexed-lookup shape should land in single-digit microseconds. The
+// benchmark seeds a small token corpus and times miss-path lookups
+// (the realistic adverse-traffic case the pending entry flagged).
+func BenchmarkValidateAndResolve(b *testing.B) {
+	queries := setupTestDB(&testing.T{})
+	userStore := NewUserStore(queries)
+	tokenStore := NewTokenStore(queries, "")
+	ctx := context.Background()
+
+	u, err := userStore.Create(ctx, db.InsertUserParams{Username: "bench", Role: "viewer"})
+	if err != nil {
+		b.Fatalf("create user: %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		if _, _, err := tokenStore.CreateToken(ctx, u.ID, "tok", nil); err != nil {
+			b.Fatalf("create token %d: %v", i, err)
+		}
+	}
+
+	miss := "vgot_" + strings.Repeat("0", 64)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := tokenStore.ValidateAndResolve(ctx, miss, userStore)
+		if err != nil {
+			b.Fatalf("validate: %v", err)
+		}
+	}
 }

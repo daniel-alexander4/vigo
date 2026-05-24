@@ -6,15 +6,16 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -24,25 +25,26 @@ const (
 	apiTokenBytes = 32
 )
 
+// hashAPIToken returns the SHA-256 hex digest of a token's plaintext.
+// vgot_ tokens carry 256 bits of entropy from crypto/rand, so a fast
+// hash with constant-time compare is the right primitive — bcrypt's
+// slowness is wasted cost against high-entropy random input and turns
+// validation into a DoS surface under sustained invalid traffic.
+func hashAPIToken(plaintext string) string {
+	sum := sha256.Sum256([]byte(plaintext))
+	return hex.EncodeToString(sum[:])
+}
+
 // GenerateAPIToken creates a new random API token with the vgot_ prefix.
-// Returns the plaintext token (shown once to the user) and the bcrypt hash
-// (stored in the database).
+// Returns the plaintext token (shown once to the user) and the SHA-256
+// hex digest (stored in the database, indexed for O(1) lookup).
 func GenerateAPIToken() (plaintext, hash string, err error) {
 	b := make([]byte, apiTokenBytes)
 	if _, err = rand.Read(b); err != nil {
 		return "", "", fmt.Errorf("generating token: %w", err)
 	}
 	plaintext = apiTokenPrefix + hex.EncodeToString(b)
-	h, err := bcrypt.GenerateFromPassword([]byte(plaintext), bcrypt.DefaultCost)
-	if err != nil {
-		return "", "", fmt.Errorf("hashing token: %w", err)
-	}
-	return plaintext, string(h), nil
-}
-
-// ValidateAPIToken checks a plaintext token against a bcrypt hash.
-func ValidateAPIToken(plaintext, hash string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plaintext)) == nil
+	return plaintext, hashAPIToken(plaintext), nil
 }
 
 // TokenStore provides API token CRUD operations.
@@ -86,8 +88,10 @@ func (ts *TokenStore) CreateToken(ctx context.Context, userID, name string, expi
 	return plain, token, nil
 }
 
-// ValidateAndResolve checks a bearer token against all stored tokens.
-// Returns the owning user on success, nil on failure. Updates last_used_at.
+// ValidateAndResolve checks a bearer token and returns the owning user
+// on success, nil on failure. Single indexed DB lookup, then constant-time
+// compare on the row's stored hash (defense in depth; the SQL WHERE already
+// determined the match). Updates last_used_at best-effort.
 func (ts *TokenStore) ValidateAndResolve(ctx context.Context, plaintext string, userStore *UserStore) (*User, error) {
 	if !strings.HasPrefix(plaintext, apiTokenPrefix) {
 		return nil, nil
@@ -101,28 +105,28 @@ func (ts *TokenStore) ValidateAndResolve(ctx context.Context, plaintext string, 
 		return localAdminUser, nil
 	}
 
-	tokens, err := ts.queries.ListAllAPITokens(ctx)
+	hash := hashAPIToken(plaintext)
+	tok, err := ts.queries.LookupAPITokenByHash(ctx, hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("listing tokens: %w", err)
+		return nil, fmt.Errorf("looking up token: %w", err)
 	}
 
-	for _, tok := range tokens {
-		// Check expiry first (cheap).
-		if tok.ExpiresAt.Valid && tok.ExpiresAt.Time.Before(time.Now()) {
-			continue
-		}
-
-		if !ValidateAPIToken(plaintext, tok.TokenHash) {
-			continue
-		}
-
-		// Match found — update last_used_at (best effort).
-		_ = ts.queries.UpdateAPITokenLastUsed(ctx, tok.ID)
-
-		return userStore.GetByID(ctx, tok.UserID)
+	// Defense in depth: the WHERE clause already matched, but compare in
+	// constant time to keep the validation path uniform regardless of
+	// future storage shape.
+	if subtle.ConstantTimeCompare([]byte(tok.TokenHash), []byte(hash)) != 1 {
+		return nil, nil
 	}
 
-	return nil, nil
+	if tok.ExpiresAt.Valid && tok.ExpiresAt.Time.Before(time.Now()) {
+		return nil, nil
+	}
+
+	_ = ts.queries.UpdateAPITokenLastUsed(ctx, tok.ID)
+	return userStore.GetByID(ctx, tok.UserID)
 }
 
 // ListByUser returns all tokens for a user (metadata only, no hashes).
