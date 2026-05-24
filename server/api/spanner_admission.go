@@ -620,9 +620,23 @@ func (h *SpannerAdmissionHandler) handleSnapshot(w http.ResponseWriter, r *http.
 		writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+err.Error())
 		return
 	}
+	// ADR-030 Slice 2-iii-c: webusers CRDT rides the admissions
+	// snapshot. ListUsersForReplication filters out legacy unsigned
+	// rows (signature IS NOT NULL) — those propagate after Slice
+	// 2-iii-f's first-startup re-signing pass, not before.
+	userRows, err := h.queries.ListUsersForReplication(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "listing users for replication: "+err.Error())
+		return
+	}
+	users := make([]spanner.UserSnapshotRow, 0, len(userRows))
+	for _, u := range userRows {
+		users = append(users, spanner.UserSnapshotRowFromDB(u))
+	}
 	writeJSON(w, r, http.StatusOK, spanner.Snapshot{
 		Roster:         boltsToRosterRows(roster),
 		ConsumedTokens: tokens,
+		Users:          users,
 	})
 }
 

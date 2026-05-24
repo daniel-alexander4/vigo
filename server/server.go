@@ -1115,6 +1115,25 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 	// Auth-related API handlers.
 	userStore := vigoauth.NewUserStore(s.queries)
+	// ADR-030 Slice 2-iii-c: in spanner mode, wire the BoltSigner so
+	// every user mutation populates origin_bolt + signature. Standalone
+	// (boltID nil) leaves the signer unset — writes proceed unchanged
+	// and the snapshot serve filters out unsigned rows. Wire BOTH the
+	// REST-handler's userStore AND the auth provider's userStore — the
+	// provider's instance handles OIDC autoprovisioning + similar
+	// signer-relevant writes.
+	if s.boltID != nil {
+		signer := spanner.NewBoltSigner(s.boltID)
+		userStore.SetSigner(signer)
+		switch p := s.authProvider.(type) {
+		case *vigoauth.BasicProvider:
+			p.UserStore().SetSigner(signer)
+		case *vigoauth.OIDCProvider:
+			p.UserStore().SetSigner(signer)
+		case *vigoauth.IsowebauthProvider:
+			p.UserStore().SetSigner(signer)
+		}
+	}
 	tokenStore := vigoauth.NewTokenStore(s.queries, s.localAdminToken)
 	usersHandler := api.NewUsersHandler(userStore, s.authMethod)
 	usersHandler.SetAuditWriter(s.auditWriter)

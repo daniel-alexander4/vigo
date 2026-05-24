@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -76,12 +77,34 @@ type ConsumedToken struct {
 	ExpiresAt      int64  `json:"expires_at"`
 }
 
-// Snapshot is one bolt's full roster + consumed-token G-Set, the
-// payload of GET /api/v1/spanner/snapshot and the input to
+// Snapshot is one bolt's full CRDT state: the admissions roster +
+// consumed-token G-Set + (ADR-030 Slice 2-iii-c) the webusers
+// LWW-Map. Payload of GET /api/v1/spanner/snapshot and the input to
 // MergeSnapshot.
 type Snapshot struct {
-	Roster         []RosterRow     `json:"roster"`
-	ConsumedTokens []ConsumedToken `json:"consumed_tokens"`
+	Roster         []RosterRow       `json:"roster"`
+	ConsumedTokens []ConsumedToken   `json:"consumed_tokens"`
+	Users          []UserSnapshotRow `json:"users,omitempty"`
+}
+
+// UserSnapshotRow is the wire shape of a users-table row for ADR-030
+// gossip. Embeds the canonical signed content (auth.UserRow) +
+// signature. Slice 2-iii-d's MergeUsers reconstructs UserRow from the
+// embedded fields and verifies Signature against the origin bolt's
+// pubkey looked up in the local roster.
+type UserSnapshotRow struct {
+	auth.UserRow
+	Signature []byte `json:"signature"`
+}
+
+// UserSnapshotRowFromDB projects a sqlc-generated db.User into the
+// wire shape. Skips the totp_* fields (not in UserRow per the
+// Slice 2-iii-c direction call) and carries the signature verbatim.
+func UserSnapshotRowFromDB(u db.User) UserSnapshotRow {
+	return UserSnapshotRow{
+		UserRow:   auth.UserRowFromDB(u),
+		Signature: u.Signature,
+	}
 }
 
 // AdmissionRowOf rebuilds the canonical AdmissionRow from a RosterRow

@@ -76,6 +76,9 @@ func (p *OIDCProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
 // reach it without a parallel construction path.
 func (p *OIDCProvider) Sessions() *SessionManager { return p.sessions }
 
+// UserStore returns the provider's user store (see BasicProvider.UserStore).
+func (p *OIDCProvider) UserStore() *UserStore { return p.userStore }
+
 func (p *OIDCProvider) Method() string { return "oidc" }
 
 // Middleware checks for a valid session or API token. Unauthenticated UI

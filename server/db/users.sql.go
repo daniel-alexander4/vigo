@@ -33,33 +33,32 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const disableTOTP = `-- name: DisableTOTP :exec
-UPDATE users SET totp_enabled = 0, totp_recovery = '', updated_at = datetime('now'), updated_at_ms = ?
+UPDATE users SET totp_enabled = 0, totp_recovery = '', updated_at = datetime('now')
 WHERE id = ?
 `
 
-type DisableTOTPParams struct {
-	UpdatedAtMs int64  `json:"updated_at_ms"`
-	ID          string `json:"id"`
-}
-
-func (q *Queries) DisableTOTP(ctx context.Context, arg DisableTOTPParams) error {
-	_, err := q.db.ExecContext(ctx, disableTOTP, arg.UpdatedAtMs, arg.ID)
+// See EnableTOTP -- TOTP is bolt-local; no CRDT comparator bump.
+func (q *Queries) DisableTOTP(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, disableTOTP, id)
 	return err
 }
 
 const enableTOTP = `-- name: EnableTOTP :exec
-UPDATE users SET totp_enabled = 1, totp_recovery = ?, updated_at = datetime('now'), updated_at_ms = ?
+UPDATE users SET totp_enabled = 1, totp_recovery = ?, updated_at = datetime('now')
 WHERE id = ?
 `
 
 type EnableTOTPParams struct {
 	TotpRecovery string `json:"totp_recovery"`
-	UpdatedAtMs  int64  `json:"updated_at_ms"`
 	ID           string `json:"id"`
 }
 
+// ADR-030 Slice 2-iii-c: TOTP fields don't replicate (direction call
+// A -- bolt-local enrollment). DOES NOT touch updated_at_ms or
+// origin_bolt/signature -- a TOTP change must not trigger peer
+// replication of a row whose replicated content hasn't changed.
 func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) error {
-	_, err := q.db.ExecContext(ctx, enableTOTP, arg.TotpRecovery, arg.UpdatedAtMs, arg.ID)
+	_, err := q.db.ExecContext(ctx, enableTOTP, arg.TotpRecovery, arg.ID)
 	return err
 }
 
@@ -162,8 +161,8 @@ func (q *Queries) GetUserSSHPublicKey(ctx context.Context, id string) (string, e
 }
 
 const insertUser = `-- name: InsertUser :one
-INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject, updated_at_ms)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject, updated_at_ms, origin_bolt, signature)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
 `
 
@@ -175,6 +174,8 @@ type InsertUserParams struct {
 	SshPublicKey string `json:"ssh_public_key"`
 	OidcSubject  string `json:"oidc_subject"`
 	UpdatedAtMs  int64  `json:"updated_at_ms"`
+	OriginBolt   string `json:"origin_bolt"`
+	Signature    []byte `json:"signature"`
 }
 
 func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, error) {
@@ -186,6 +187,8 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		arg.SshPublicKey,
 		arg.OidcSubject,
 		arg.UpdatedAtMs,
+		arg.OriginBolt,
+		arg.Signature,
 	)
 	var i User
 	err := row.Scan(
@@ -254,12 +257,62 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const listUsersForReplication = `-- name: ListUsersForReplication :many
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+FROM users WHERE signature IS NOT NULL ORDER BY id
+`
+
+// ADR-030 Slice 2-iii-c: snapshot endpoint source. Returns every
+// row (live AND soft-deleted) so peers see tombstones too, filtered
+// to signed rows only -- legacy unsigned rows (origin_bolt=”,
+// signature NULL) don't replicate until Slice 2-iii-f's first-startup
+// re-signing pass marks them eligible.
+func (q *Queries) ListUsersForReplication(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersForReplication)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.DisplayName,
+			&i.Email,
+			&i.Role,
+			&i.Permissions,
+			&i.SshPublicKey,
+			&i.OidcSubject,
+			&i.TotpEnabled,
+			&i.TotpRecovery,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UpdatedAtMs,
+			&i.OriginBolt,
+			&i.DeletedAt,
+			&i.Signature,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mergeUserLWW = `-- name: MergeUserLWW :execrows
 INSERT INTO users (
     id, username, display_name, email, role, permissions, ssh_public_key,
-    oidc_subject, totp_enabled, totp_recovery, updated_at, updated_at_ms,
+    oidc_subject, updated_at, updated_at_ms,
     origin_bolt, deleted_at, signature
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     username       = excluded.username,
     display_name   = excluded.display_name,
@@ -268,8 +321,6 @@ ON CONFLICT(id) DO UPDATE SET
     permissions    = excluded.permissions,
     ssh_public_key = excluded.ssh_public_key,
     oidc_subject   = excluded.oidc_subject,
-    totp_enabled   = excluded.totp_enabled,
-    totp_recovery  = excluded.totp_recovery,
     updated_at     = datetime('now'),
     updated_at_ms  = excluded.updated_at_ms,
     origin_bolt    = excluded.origin_bolt,
@@ -277,7 +328,7 @@ ON CONFLICT(id) DO UPDATE SET
     signature      = excluded.signature
 WHERE excluded.updated_at_ms > users.updated_at_ms
    OR (excluded.updated_at_ms = users.updated_at_ms
-       AND excluded.origin_bolt < users.origin_b
+       AND excluded.origin_bolt < users.origin_bolt)
 `
 
 type MergeUserLWWParams struct {
@@ -289,20 +340,21 @@ type MergeUserLWWParams struct {
 	Permissions  string        `json:"permissions"`
 	SshPublicKey string        `json:"ssh_public_key"`
 	OidcSubject  string        `json:"oidc_subject"`
-	TotpEnabled  int64         `json:"totp_enabled"`
-	TotpRecovery string        `json:"totp_recovery"`
 	UpdatedAtMs  int64         `json:"updated_at_ms"`
 	OriginBolt   string        `json:"origin_bolt"`
 	DeletedAt    sql.NullInt64 `json:"deleted_at"`
 	Signature    []byte        `json:"signature"`
 }
 
-// ADR-030 LWW merge: an incoming row wins if its updated_at_ms is
-// strictly newer, or — same-ms tiebreaker — its origin_bolt sorts
+// ADR-030 LWW merge: incoming row wins if its updated_at_ms is
+// strictly newer, or -- same-ms tiebreaker -- its origin_bolt sorts
 // lex-min against the local row's. Used by Slice 2-iii-d's MergeUsers.
-// All replicatable columns are written; updated_at is set to current
-// wall-clock so the display projection stays meaningful even after a
-// foreign-bolt merge.
+//
+// TOTP fields (totp_enabled, totp_recovery) are deliberately absent
+// from BOTH the INSERT column list and the UPDATE SET -- TOTP is
+// bolt-local per direction call A. On INSERT, the column defaults
+// (0, ”) apply; on UPDATE, SQLite leaves the existing values
+// untouched. A merge can NEVER overwrite a peer's local TOTP state.
 func (q *Queries) MergeUserLWW(ctx context.Context, arg MergeUserLWWParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, mergeUserLWW,
 		arg.ID,
@@ -313,8 +365,6 @@ func (q *Queries) MergeUserLWW(ctx context.Context, arg MergeUserLWWParams) (int
 		arg.Permissions,
 		arg.SshPublicKey,
 		arg.OidcSubject,
-		arg.TotpEnabled,
-		arg.TotpRecovery,
 		arg.UpdatedAtMs,
 		arg.OriginBolt,
 		arg.DeletedAt,
@@ -330,34 +380,44 @@ const softDeleteUser = `-- name: SoftDeleteUser :exec
 UPDATE users SET
     deleted_at = ?,
     updated_at_ms = ?,
-    updated_at = datetime('now')
+    updated_at = datetime('now'),
+    origin_bolt = ?,
+    signature = ?
 WHERE id = ? AND deleted_at IS NULL
 `
 
 type SoftDeleteUserParams struct {
 	DeletedAt   sql.NullInt64 `json:"deleted_at"`
 	UpdatedAtMs int64         `json:"updated_at_ms"`
+	OriginBolt  string        `json:"origin_bolt"`
+	Signature   []byte        `json:"signature"`
 	ID          string        `json:"id"`
 }
 
 func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error {
-	_, err := q.db.ExecContext(ctx, softDeleteUser, arg.DeletedAt, arg.UpdatedAtMs, arg.ID)
+	_, err := q.db.ExecContext(ctx, softDeleteUser,
+		arg.DeletedAt,
+		arg.UpdatedAtMs,
+		arg.OriginBolt,
+		arg.Signature,
+		arg.ID,
+	)
 	return err
 }
 
 const updateTOTPRecovery = `-- name: UpdateTOTPRecovery :exec
-UPDATE users SET totp_recovery = ?, updated_at = datetime('now'), updated_at_ms = ?
+UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
 WHERE id = ?
 `
 
 type UpdateTOTPRecoveryParams struct {
 	TotpRecovery string `json:"totp_recovery"`
-	UpdatedAtMs  int64  `json:"updated_at_ms"`
 	ID           string `json:"id"`
 }
 
+// See EnableTOTP -- TOTP is bolt-local; no CRDT comparator bump.
 func (q *Queries) UpdateTOTPRecovery(ctx context.Context, arg UpdateTOTPRecoveryParams) error {
-	_, err := q.db.ExecContext(ctx, updateTOTPRecovery, arg.TotpRecovery, arg.UpdatedAtMs, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateTOTPRecovery, arg.TotpRecovery, arg.ID)
 	return err
 }
 
@@ -370,7 +430,9 @@ UPDATE users SET
     ssh_public_key = ?,
     oidc_subject = ?,
     updated_at = datetime('now'),
-    updated_at_ms = ?
+    updated_at_ms = ?,
+    origin_bolt = ?,
+    signature = ?
 WHERE id = ?
 `
 
@@ -382,6 +444,8 @@ type UpdateUserParams struct {
 	SshPublicKey string `json:"ssh_public_key"`
 	OidcSubject  string `json:"oidc_subject"`
 	UpdatedAtMs  int64  `json:"updated_at_ms"`
+	OriginBolt   string `json:"origin_bolt"`
+	Signature    []byte `json:"signature"`
 	ID           string `json:"id"`
 }
 
@@ -394,6 +458,8 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 		arg.SshPublicKey,
 		arg.OidcSubject,
 		arg.UpdatedAtMs,
+		arg.OriginBolt,
+		arg.Signature,
 		arg.ID,
 	)
 	return err

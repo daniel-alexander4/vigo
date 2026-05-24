@@ -110,6 +110,107 @@ func TestUserStoreCRUD(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+// fakeSigner is a deterministic auth.Signer for ADR-030 store tests.
+// Stamps a fixed origin and a content-hash-shaped signature so
+// assertions can confirm signer wiring without needing crypto.
+type fakeSigner struct {
+	pubkeyHex  string
+	callCount  int
+	lastRowID  string
+	lastRoleOk bool
+}
+
+func (f *fakeSigner) Sign(row *UserRow) (string, []byte, error) {
+	f.callCount++
+	f.lastRowID = row.ID
+	f.lastRoleOk = row.Role != ""
+	row.OriginBolt = f.pubkeyHex
+	return f.pubkeyHex, []byte("fake-sig-" + row.ID), nil
+}
+
+// TestUserStore_Create_WithSigner_StampsOriginAndSignature pins that
+// the ADR-030 signer wiring populates origin_bolt + signature on every
+// row written via Create. The Create path signs twice: once pre-INSERT
+// (to satisfy the signer call before ID is known) and once post-INSERT
+// (to re-stamp with the real ID for replication-correctness). The test
+// asserts the final stored state, not the call count.
+func TestUserStore_Create_WithSigner_StampsOriginAndSignature(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	signer := &fakeSigner{pubkeyHex: "deadbeefcafebabe"}
+	store.SetSigner(signer)
+	ctx := context.Background()
+
+	u, err := store.Create(ctx, db.InsertUserParams{
+		Username: "signed-user",
+		Role:     "admin",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, u)
+
+	// Re-read the stored row to inspect the persisted CRDT columns —
+	// dbToUser doesn't surface them.
+	stored, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "deadbeefcafebabe", stored.OriginBolt, "origin_bolt must be stamped")
+	assert.NotEmpty(t, stored.Signature, "signature must be stamped")
+	assert.Equal(t, "fake-sig-"+u.ID, string(stored.Signature), "signature must cover the real (post-INSERT) row ID")
+}
+
+// TestUserStore_Create_WithoutSigner_LeavesEmpty pins standalone-mode
+// behavior: no signer → no origin_bolt, no signature, write succeeds.
+func TestUserStore_Create_WithoutSigner_LeavesEmpty(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	u, err := store.Create(ctx, db.InsertUserParams{
+		Username: "unsigned-user",
+		Role:     "viewer",
+	})
+	require.NoError(t, err)
+
+	stored, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Empty(t, stored.OriginBolt, "standalone mode must not stamp origin_bolt")
+	assert.Empty(t, stored.Signature, "standalone mode must not stamp signature")
+}
+
+// TestUserStore_TOTPMutationsDoNotBumpUpdatedAtMs pins direction call
+// A (Dan, 2026-05-24): TOTP doesn't replicate. EnableTOTP, DisableTOTP,
+// and UpdateRecoveryCodes must not touch updated_at_ms — a local TOTP
+// enrollment cannot trigger empty CRDT churn on peers.
+func TestUserStore_TOTPMutationsDoNotBumpUpdatedAtMs(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	u, err := store.Create(ctx, db.InsertUserParams{
+		Username: "totp-user",
+		Role:     "viewer",
+	})
+	require.NoError(t, err)
+
+	pre, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	preMs := pre.UpdatedAtMs
+
+	require.NoError(t, store.EnableTOTP(ctx, u.ID, `["recovery-code-1"]`))
+	afterEnable, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, preMs, afterEnable.UpdatedAtMs, "EnableTOTP must NOT bump updated_at_ms")
+
+	require.NoError(t, store.UpdateRecoveryCodes(ctx, u.ID, `["recovery-code-2"]`))
+	afterUpdate, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, preMs, afterUpdate.UpdatedAtMs, "UpdateRecoveryCodes must NOT bump updated_at_ms")
+
+	require.NoError(t, store.DisableTOTP(ctx, u.ID))
+	afterDisable, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, preMs, afterDisable.UpdatedAtMs, "DisableTOTP must NOT bump updated_at_ms")
+}
+
 // TestUserStoreSoftDelete pins the ADR-030 tombstone behavior: a
 // deleted user is invisible to every read path, its api_tokens are
 // gone (local cascade since soft-delete doesn't fire SQLite's

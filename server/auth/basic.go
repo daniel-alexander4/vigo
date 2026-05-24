@@ -62,6 +62,11 @@ func (p *BasicProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
 // reach it without a parallel construction path.
 func (p *BasicProvider) Sessions() *SessionManager { return p.sessions }
 
+// UserStore returns the provider's user store. Wired by server.go to
+// install the ADR-030 BoltSigner late — buildAuthProvider runs before
+// the bolt identity is loaded, so the signer is set after construction.
+func (p *BasicProvider) UserStore() *UserStore { return p.userStore }
+
 func (p *BasicProvider) Method() string { return "basic" }
 
 // Middleware checks for a valid session or API token.

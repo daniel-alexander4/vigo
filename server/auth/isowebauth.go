@@ -60,6 +60,9 @@ func (p *IsowebauthProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w
 // reach it without a parallel construction path.
 func (p *IsowebauthProvider) Sessions() *SessionManager { return p.sessions }
 
+// UserStore returns the provider's user store (see BasicProvider.UserStore).
+func (p *IsowebauthProvider) UserStore() *UserStore { return p.userStore }
+
 func (p *IsowebauthProvider) Method() string { return "isowebauth" }
 
 // Middleware checks for a valid session or API token. Same logic as OIDC.
