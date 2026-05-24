@@ -42,8 +42,9 @@ type UsersHandler struct {
 	authMethod     string
 	auditWriter    auditRecorder
 	secrets        secrets.Provider
-	queries        *db.Queries // optional; required for admin-username validation
-	serverHostname string      // optional; configured server.hostname (local agent envoy)
+	sessions       *auth.SessionManager // optional; required for session revocation on role change/delete
+	queries        *db.Queries          // optional; required for admin-username validation
+	serverHostname string               // optional; configured server.hostname (local agent envoy)
 }
 
 // SetAuditWriter sets the audit writer for recording user management events.
@@ -51,6 +52,13 @@ func (h *UsersHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // SetSecretsProvider sets the secrets provider for TOTP secret storage.
 func (h *UsersHandler) SetSecretsProvider(p secrets.Provider) { h.secrets = p }
+
+// SetSessions wires in the SCS session manager so role changes and user
+// deletes can destroy the affected user's cached sessions immediately.
+// Without it the demoted user retains their old role until the next idle
+// timeout. Tests that don't exercise session invalidation can leave it
+// unset — the destroy calls are nil-guarded.
+func (h *UsersHandler) SetSessions(sm *auth.SessionManager) { h.sessions = sm }
 
 // SetAdminValidation wires in the DB queries and the server's own hostname
 // so admin user creation can validate the requested username against the
@@ -317,6 +325,19 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 			actor = u.Username
 		}
 		recordAudit(r.Context(), h.auditWriter, "user.role_change", actor, "rest", fmt.Sprintf("%s role changed from %s to %s", existing.Username, existing.Role, req.Role), "")
+
+		// Destroy the updated user's active sessions so the new role takes
+		// effect on their next request, not after the 15-minute idle timeout.
+		// Best-effort: a destroy-loop error doesn't fail the request — the
+		// role change already committed.
+		if h.sessions != nil {
+			n, err := h.sessions.DestroyUserSessions(r.Context(), id)
+			if err != nil {
+				slog.Warn("destroying sessions after role change", "user", existing.Username, "destroyed", n, "error", err)
+			} else if n > 0 {
+				slog.Info("destroyed sessions after role change", "user", existing.Username, "count", n)
+			}
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -339,6 +360,22 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		slog.Error("deleting user", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete user")
 		return
+	}
+
+	// Destroy the deleted user's active sessions so any in-flight browser
+	// sessions stop authenticating immediately rather than continuing to
+	// resolve to a now-orphaned User snapshot until idle timeout.
+	if h.sessions != nil {
+		deletedName := id
+		if deleted != nil {
+			deletedName = deleted.Username
+		}
+		n, err := h.sessions.DestroyUserSessions(r.Context(), id)
+		if err != nil {
+			slog.Warn("destroying sessions after user delete", "user", deletedName, "destroyed", n, "error", err)
+		} else if n > 0 {
+			slog.Info("destroyed sessions after user delete", "user", deletedName, "count", n)
+		}
 	}
 
 	actor := ""

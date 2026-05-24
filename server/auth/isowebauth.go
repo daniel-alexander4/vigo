@@ -55,6 +55,11 @@ func NewIsowebauthProvider(cfg IsowebauthConfig, sessions *SessionManager, userS
 // SetAuditWriter sets the audit writer for recording auth events.
 func (p *IsowebauthProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
 
+// Sessions exposes the SCS session manager so handlers that need to
+// invalidate cached sessions (e.g. on role change or user delete) can
+// reach it without a parallel construction path.
+func (p *IsowebauthProvider) Sessions() *SessionManager { return p.sessions }
+
 func (p *IsowebauthProvider) Method() string { return "isowebauth" }
 
 // Middleware checks for a valid session or API token. Same logic as OIDC.

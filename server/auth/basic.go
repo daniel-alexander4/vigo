@@ -57,6 +57,11 @@ func NewBasicProvider(sessions *SessionManager, userStore *UserStore, tokenStore
 // SetAuditWriter sets the audit writer for recording auth events.
 func (p *BasicProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
 
+// Sessions exposes the SCS session manager so handlers that need to
+// invalidate cached sessions (e.g. on role change or user delete) can
+// reach it without a parallel construction path.
+func (p *BasicProvider) Sessions() *SessionManager { return p.sessions }
+
 func (p *BasicProvider) Method() string { return "basic" }
 
 // Middleware checks for a valid session or API token.

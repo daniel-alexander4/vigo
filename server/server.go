@@ -1120,6 +1120,17 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	usersHandler.SetAuditWriter(s.auditWriter)
 	usersHandler.SetSecretsProvider(s.provider)
 	usersHandler.SetAdminValidation(s.queries, s.cfg.Server.Hostname)
+	// Wire the session manager so role changes and user deletes
+	// destroy the affected user's cached sessions immediately rather
+	// than waiting on the idle-timeout window.
+	switch p := s.authProvider.(type) {
+	case *vigoauth.BasicProvider:
+		usersHandler.SetSessions(p.Sessions())
+	case *vigoauth.OIDCProvider:
+		usersHandler.SetSessions(p.Sessions())
+	case *vigoauth.IsowebauthProvider:
+		usersHandler.SetSessions(p.Sessions())
+	}
 	tokensHandler := api.NewTokensHandler(tokenStore, s.authMethod)
 	tokensHandler.SetAuditWriter(s.auditWriter)
 	// Curator S3 API (ADR-027) credential management. The store is wired

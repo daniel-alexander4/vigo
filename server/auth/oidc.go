@@ -71,6 +71,11 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig, sessions *SessionManag
 // SetAuditWriter sets the audit writer for recording auth events.
 func (p *OIDCProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
 
+// Sessions exposes the SCS session manager so handlers that need to
+// invalidate cached sessions (e.g. on role change or user delete) can
+// reach it without a parallel construction path.
+func (p *OIDCProvider) Sessions() *SessionManager { return p.sessions }
+
 func (p *OIDCProvider) Method() string { return "oidc" }
 
 // Middleware checks for a valid session or API token. Unauthenticated UI

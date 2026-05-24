@@ -68,3 +68,54 @@ func TestPutGetUserRoundTrips(t *testing.T) {
 	require.True(t, got.HasPermission(PermFleetRead),
 		"viewer must retain fleet.read after the session round-trip")
 }
+
+// TestDestroyUserSessions pins the invariant that DestroyUserSessions
+// destroys every active session belonging to the given user ID and leaves
+// other users' sessions intact. Backs the role-change/user-delete fix:
+// without it a demoted user keeps their old role from the cached session
+// for up to the idle timeout (15 min default).
+func TestDestroyUserSessions(t *testing.T) {
+	_, sm, _, _, _ := setupBasicProvider(t)
+	ctx := context.Background()
+
+	commit := func(u *User) string {
+		t.Helper()
+		sctx, err := sm.SessionManager.Load(ctx, "")
+		require.NoError(t, err)
+		sm.PutUser(sctx, u)
+		token, _, err := sm.SessionManager.Commit(sctx)
+		require.NoError(t, err)
+		return token
+	}
+	loadUser := func(token string) *User {
+		t.Helper()
+		sctx, err := sm.SessionManager.Load(ctx, token)
+		require.NoError(t, err)
+		return sm.GetUser(sctx)
+	}
+
+	alice := &User{ID: "u-alice", Username: "alice", Role: "admin", Permissions: AllPermissions}
+	bob := &User{ID: "u-bob", Username: "bob", Role: "viewer", Permissions: ViewerPermissions}
+
+	// Two sessions for alice (browser + tab in another window), one for bob.
+	aliceTok1 := commit(alice)
+	aliceTok2 := commit(alice)
+	bobTok := commit(bob)
+
+	n, err := sm.DestroyUserSessions(ctx, alice.ID)
+	require.NoError(t, err)
+	require.Equal(t, 2, n, "both of alice's sessions must be destroyed")
+
+	require.Nil(t, loadUser(aliceTok1), "alice's first session must be gone")
+	require.Nil(t, loadUser(aliceTok2), "alice's second session must be gone")
+
+	got := loadUser(bobTok)
+	require.NotNil(t, got, "bob's session must survive — destroy is scoped to the named user")
+	require.Equal(t, "bob", got.Username)
+
+	// Empty userID is a no-op (defensive: never wipe the entire session table).
+	n, err = sm.DestroyUserSessions(ctx, "")
+	require.NoError(t, err)
+	require.Equal(t, 0, n)
+	require.NotNil(t, loadUser(bobTok), "empty userID must not affect any session")
+}

@@ -42,6 +42,8 @@ auth:
 
 Set to `"0s"` to disable idle timeout (not recommended for regulated environments).
 
+Role changes take effect immediately. When an admin updates another user's role (`PUT /api/v1/users/{id}` or `vigocli webusers set-role`) the server destroys that user's cached browser sessions on the spot — they re-authenticate on the next request and the new role applies. The same happens on user delete. Without this, a demotion would stay invisible to the demoted user's open browser until the idle timeout fired. API tokens already resolve permissions on every call, so they need nothing extra.
+
 ## Basic (Username/Password)
 
 Basic authentication stores user accounts in the database and the password itself in the unlock-gated secrets vault (reversibly encrypted under the master key). The login handler resolves the stored value on every attempt and constant-time-compares it against the submitted password. This separation keeps credentials out of the database; the vault's unlock gate keeps casual access off the operator surface.

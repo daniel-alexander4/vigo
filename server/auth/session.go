@@ -76,6 +76,49 @@ func (sm *SessionManager) DestroyUser(ctx context.Context) error {
 	return sm.Destroy(ctx)
 }
 
+// DestroyUserSessions destroys every active session whose stored user
+// snapshot matches the given user ID. Returns the number of sessions
+// destroyed and the first error encountered (if any); on per-session
+// Destroy error the walk continues so a single bad row doesn't strand
+// the rest. Called by user-update handlers when a role changes or a
+// user is deleted, so the new role takes effect immediately rather
+// than after the 15-minute idle (or 24-hour absolute) timeout.
+//
+// SCS doesn't index sessions by user — the user is stored inside the
+// gob-encoded value — so we walk every active session. At Vigo's scale
+// (tens of web users, a handful of concurrent sessions each) the O(n)
+// walk is cheap; role changes are rare. If session count grows past
+// the point where this matters, switch to a user_id sessions-table
+// column rather than gob-walking on every demotion.
+func (sm *SessionManager) DestroyUserSessions(ctx context.Context, userID string) (int, error) {
+	if userID == "" {
+		return 0, nil
+	}
+	destroyed := 0
+	var firstErr error
+	iterErr := sm.SessionManager.Iterate(ctx, func(sctx context.Context) error {
+		u, ok := sm.Get(sctx, sessionKeyUser).(User)
+		if !ok {
+			return nil
+		}
+		if u.ID != userID {
+			return nil
+		}
+		if err := sm.Destroy(sctx); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			return nil
+		}
+		destroyed++
+		return nil
+	})
+	if iterErr != nil && firstErr == nil {
+		firstErr = iterErr
+	}
+	return destroyed, firstErr
+}
+
 // LoadSessionReadOnly loads session data into the context from the request's
 // session cookie WITHOUT wrapping the ResponseWriter. Used for WebSocket
 // upgrade requests where the ResponseWriter must implement http.Hijacker.
