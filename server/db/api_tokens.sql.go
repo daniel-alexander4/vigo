@@ -20,6 +20,20 @@ func (q *Queries) DeleteAPIToken(ctx context.Context, id string) error {
 	return err
 }
 
+const deleteAPITokensForUser = `-- name: DeleteAPITokensForUser :exec
+DELETE FROM api_tokens WHERE user_id = ?
+`
+
+// Local-cascade when a user is soft-deleted: SQLite's ON DELETE CASCADE
+// on api_tokens.user_id only fires on hard DELETE, not the soft-delete
+// UPDATE that ADR-030's CRDT uses. UserStore.Delete calls this
+// explicitly so a soft-deleted user can't authenticate via leftover
+// tokens.
+func (q *Queries) DeleteAPITokensForUser(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteAPITokensForUser, userID)
+	return err
+}
+
 const insertAPIToken = `-- name: InsertAPIToken :one
 INSERT INTO api_tokens (user_id, name, token_hash, expires_at)
 VALUES (?, ?, ?, ?)

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"git.alexander4.io/vigo/server/db"
 )
@@ -83,7 +84,10 @@ func (s *UserStore) GetByOIDCSubject(ctx context.Context, subject string) (*User
 }
 
 // Create inserts a new user and returns it with the generated ID.
+// Stamps updated_at_ms internally so external callers don't need to
+// know about the CRDT comparator (ADR-030).
 func (s *UserStore) Create(ctx context.Context, params db.InsertUserParams) (*User, error) {
+	params.UpdatedAtMs = time.Now().UnixMilli()
 	u, err := s.queries.InsertUser(ctx, params)
 	if err != nil {
 		return nil, err
@@ -91,14 +95,26 @@ func (s *UserStore) Create(ctx context.Context, params db.InsertUserParams) (*Us
 	return dbToUser(u), nil
 }
 
-// Update modifies an existing user.
+// Update modifies an existing user. Stamps updated_at_ms internally.
 func (s *UserStore) Update(ctx context.Context, params db.UpdateUserParams) error {
+	params.UpdatedAtMs = time.Now().UnixMilli()
 	return s.queries.UpdateUser(ctx, params)
 }
 
-// Delete removes a user by ID.
+// Delete soft-removes a user by ID (ADR-030 tombstone). Also runs the
+// local api_tokens cascade — SQLite's ON DELETE CASCADE doesn't fire
+// on the UPDATE that soft-delete uses, so an explicit DELETE keeps
+// orphan tokens from authenticating for the now-deleted user.
 func (s *UserStore) Delete(ctx context.Context, id string) error {
-	return s.queries.DeleteUser(ctx, id)
+	now := time.Now().UnixMilli()
+	if err := s.queries.SoftDeleteUser(ctx, db.SoftDeleteUserParams{
+		DeletedAt:   sql.NullInt64{Int64: now, Valid: true},
+		UpdatedAtMs: now,
+		ID:          id,
+	}); err != nil {
+		return err
+	}
+	return s.queries.DeleteAPITokensForUser(ctx, id)
 }
 
 // List returns all users ordered by username.
@@ -126,12 +142,19 @@ func (s *UserStore) CountAdmins(ctx context.Context) (int64, error) {
 
 // EnableTOTP marks a user as TOTP-enabled and stores hashed recovery codes.
 func (s *UserStore) EnableTOTP(ctx context.Context, id, recoveryJSON string) error {
-	return s.queries.EnableTOTP(ctx, db.EnableTOTPParams{TotpRecovery: recoveryJSON, ID: id})
+	return s.queries.EnableTOTP(ctx, db.EnableTOTPParams{
+		TotpRecovery: recoveryJSON,
+		UpdatedAtMs:  time.Now().UnixMilli(),
+		ID:           id,
+	})
 }
 
 // DisableTOTP removes TOTP from a user.
 func (s *UserStore) DisableTOTP(ctx context.Context, id string) error {
-	return s.queries.DisableTOTP(ctx, id)
+	return s.queries.DisableTOTP(ctx, db.DisableTOTPParams{
+		UpdatedAtMs: time.Now().UnixMilli(),
+		ID:          id,
+	})
 }
 
 // GetRecoveryCodes returns the raw recovery JSON for a user.
@@ -145,5 +168,9 @@ func (s *UserStore) GetRecoveryCodes(ctx context.Context, id string) (string, er
 
 // UpdateRecoveryCodes updates the recovery codes JSON.
 func (s *UserStore) UpdateRecoveryCodes(ctx context.Context, id, recoveryJSON string) error {
-	return s.queries.UpdateTOTPRecovery(ctx, db.UpdateTOTPRecoveryParams{TotpRecovery: recoveryJSON, ID: id})
+	return s.queries.UpdateTOTPRecovery(ctx, db.UpdateTOTPRecoveryParams{
+		TotpRecovery: recoveryJSON,
+		UpdatedAtMs:  time.Now().UnixMilli(),
+		ID:           id,
+	})
 }

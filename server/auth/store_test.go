@@ -110,6 +110,57 @@ func TestUserStoreCRUD(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+// TestUserStoreSoftDelete pins the ADR-030 tombstone behavior: a
+// deleted user is invisible to every read path, its api_tokens are
+// gone (local cascade since soft-delete doesn't fire SQLite's
+// ON DELETE CASCADE), and CountUsers/CountAdminUsers exclude it.
+func TestUserStoreSoftDelete(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	tokenStore := NewTokenStore(queries, "")
+	ctx := context.Background()
+
+	u, err := store.Create(ctx, db.InsertUserParams{
+		Username: "tombstoneme",
+		Role:     "admin",
+	})
+	require.NoError(t, err)
+
+	_, tok, err := tokenStore.CreateToken(ctx, u.ID, "doomed", nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tok.ID)
+
+	require.NoError(t, store.Delete(ctx, u.ID))
+
+	// Read paths all return nil/empty.
+	got, err := store.GetByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Nil(t, got, "GetByID must skip soft-deleted")
+
+	got, err = store.GetByUsername(ctx, "tombstoneme")
+	require.NoError(t, err)
+	assert.Nil(t, got, "GetByUsername must skip soft-deleted")
+
+	list, err := store.List(ctx)
+	require.NoError(t, err)
+	for _, lu := range list {
+		assert.NotEqual(t, u.ID, lu.ID, "List must skip soft-deleted")
+	}
+
+	count, err := store.CountUsers(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+
+	admins, err := store.CountAdmins(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), admins)
+
+	// Local api_tokens cascade — token can't authenticate the now-deleted user.
+	userTokens, err := tokenStore.ListByUser(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Empty(t, userTokens, "soft-delete must cascade api_tokens locally")
+}
+
 func TestUserStoreOIDCSubject(t *testing.T) {
 	queries := setupTestDB(t)
 	store := NewUserStore(queries)

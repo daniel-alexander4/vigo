@@ -7,10 +7,11 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const countAdminUsers = `-- name: CountAdminUsers :one
-SELECT COUNT(*) FROM users WHERE role = 'admin'
+SELECT COUNT(*) FROM users WHERE role = 'admin' AND deleted_at IS NULL
 `
 
 func (q *Queries) CountAdminUsers(ctx context.Context) (int64, error) {
@@ -21,7 +22,7 @@ func (q *Queries) CountAdminUsers(ctx context.Context) (int64, error) {
 }
 
 const countUsers = `-- name: CountUsers :one
-SELECT COUNT(*) FROM users
+SELECT COUNT(*) FROM users WHERE deleted_at IS NULL
 `
 
 func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
@@ -31,43 +32,40 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users WHERE id = ?
-`
-
-func (q *Queries) DeleteUser(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deleteUser, id)
-	return err
-}
-
 const disableTOTP = `-- name: DisableTOTP :exec
-UPDATE users SET totp_enabled = 0, totp_recovery = '', updated_at = datetime('now')
+UPDATE users SET totp_enabled = 0, totp_recovery = '', updated_at = datetime('now'), updated_at_ms = ?
 WHERE id = ?
 `
 
-func (q *Queries) DisableTOTP(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, disableTOTP, id)
+type DisableTOTPParams struct {
+	UpdatedAtMs int64  `json:"updated_at_ms"`
+	ID          string `json:"id"`
+}
+
+func (q *Queries) DisableTOTP(ctx context.Context, arg DisableTOTPParams) error {
+	_, err := q.db.ExecContext(ctx, disableTOTP, arg.UpdatedAtMs, arg.ID)
 	return err
 }
 
 const enableTOTP = `-- name: EnableTOTP :exec
-UPDATE users SET totp_enabled = 1, totp_recovery = ?, updated_at = datetime('now')
+UPDATE users SET totp_enabled = 1, totp_recovery = ?, updated_at = datetime('now'), updated_at_ms = ?
 WHERE id = ?
 `
 
 type EnableTOTPParams struct {
 	TotpRecovery string `json:"totp_recovery"`
+	UpdatedAtMs  int64  `json:"updated_at_ms"`
 	ID           string `json:"id"`
 }
 
 func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) error {
-	_, err := q.db.ExecContext(ctx, enableTOTP, arg.TotpRecovery, arg.ID)
+	_, err := q.db.ExecContext(ctx, enableTOTP, arg.TotpRecovery, arg.UpdatedAtMs, arg.ID)
 	return err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
-FROM users WHERE id = ?
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+FROM users WHERE id = ? AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -86,13 +84,17 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UpdatedAtMs,
+		&i.OriginBolt,
+		&i.DeletedAt,
+		&i.Signature,
 	)
 	return i, err
 }
 
 const getUserByOIDCSubject = `-- name: GetUserByOIDCSubject :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
-FROM users WHERE oidc_subject = ?
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+FROM users WHERE oidc_subject = ? AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) (User, error) {
@@ -111,13 +113,17 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UpdatedAtMs,
+		&i.OriginBolt,
+		&i.DeletedAt,
+		&i.Signature,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
-FROM users WHERE username = ?
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+FROM users WHERE username = ? AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -136,12 +142,16 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UpdatedAtMs,
+		&i.OriginBolt,
+		&i.DeletedAt,
+		&i.Signature,
 	)
 	return i, err
 }
 
 const getUserSSHPublicKey = `-- name: GetUserSSHPublicKey :one
-SELECT ssh_public_key FROM users WHERE id = ?
+SELECT ssh_public_key FROM users WHERE id = ? AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserSSHPublicKey(ctx context.Context, id string) (string, error) {
@@ -152,9 +162,9 @@ func (q *Queries) GetUserSSHPublicKey(ctx context.Context, id string) (string, e
 }
 
 const insertUser = `-- name: InsertUser :one
-INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject, updated_at_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
 `
 
 type InsertUserParams struct {
@@ -164,6 +174,7 @@ type InsertUserParams struct {
 	Role         string `json:"role"`
 	SshPublicKey string `json:"ssh_public_key"`
 	OidcSubject  string `json:"oidc_subject"`
+	UpdatedAtMs  int64  `json:"updated_at_ms"`
 }
 
 func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, error) {
@@ -174,6 +185,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		arg.Role,
 		arg.SshPublicKey,
 		arg.OidcSubject,
+		arg.UpdatedAtMs,
 	)
 	var i User
 	err := row.Scan(
@@ -189,13 +201,17 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.TotpRecovery,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UpdatedAtMs,
+		&i.OriginBolt,
+		&i.DeletedAt,
+		&i.Signature,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
-FROM users ORDER BY username
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at, updated_at_ms, origin_bolt, deleted_at, signature
+FROM users WHERE deleted_at IS NULL ORDER BY username
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -220,6 +236,10 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.TotpRecovery,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UpdatedAtMs,
+			&i.OriginBolt,
+			&i.DeletedAt,
+			&i.Signature,
 		); err != nil {
 			return nil, err
 		}
@@ -234,18 +254,110 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const mergeUserLWW = `-- name: MergeUserLWW :execrows
+INSERT INTO users (
+    id, username, display_name, email, role, permissions, ssh_public_key,
+    oidc_subject, totp_enabled, totp_recovery, updated_at, updated_at_ms,
+    origin_bolt, deleted_at, signature
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+    username       = excluded.username,
+    display_name   = excluded.display_name,
+    email          = excluded.email,
+    role           = excluded.role,
+    permissions    = excluded.permissions,
+    ssh_public_key = excluded.ssh_public_key,
+    oidc_subject   = excluded.oidc_subject,
+    totp_enabled   = excluded.totp_enabled,
+    totp_recovery  = excluded.totp_recovery,
+    updated_at     = datetime('now'),
+    updated_at_ms  = excluded.updated_at_ms,
+    origin_bolt    = excluded.origin_bolt,
+    deleted_at     = excluded.deleted_at,
+    signature      = excluded.signature
+WHERE excluded.updated_at_ms > users.updated_at_ms
+   OR (excluded.updated_at_ms = users.updated_at_ms
+       AND excluded.origin_bolt < users.origin_b
+`
+
+type MergeUserLWWParams struct {
+	ID           string        `json:"id"`
+	Username     string        `json:"username"`
+	DisplayName  string        `json:"display_name"`
+	Email        string        `json:"email"`
+	Role         string        `json:"role"`
+	Permissions  string        `json:"permissions"`
+	SshPublicKey string        `json:"ssh_public_key"`
+	OidcSubject  string        `json:"oidc_subject"`
+	TotpEnabled  int64         `json:"totp_enabled"`
+	TotpRecovery string        `json:"totp_recovery"`
+	UpdatedAtMs  int64         `json:"updated_at_ms"`
+	OriginBolt   string        `json:"origin_bolt"`
+	DeletedAt    sql.NullInt64 `json:"deleted_at"`
+	Signature    []byte        `json:"signature"`
+}
+
+// ADR-030 LWW merge: an incoming row wins if its updated_at_ms is
+// strictly newer, or — same-ms tiebreaker — its origin_bolt sorts
+// lex-min against the local row's. Used by Slice 2-iii-d's MergeUsers.
+// All replicatable columns are written; updated_at is set to current
+// wall-clock so the display projection stays meaningful even after a
+// foreign-bolt merge.
+func (q *Queries) MergeUserLWW(ctx context.Context, arg MergeUserLWWParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, mergeUserLWW,
+		arg.ID,
+		arg.Username,
+		arg.DisplayName,
+		arg.Email,
+		arg.Role,
+		arg.Permissions,
+		arg.SshPublicKey,
+		arg.OidcSubject,
+		arg.TotpEnabled,
+		arg.TotpRecovery,
+		arg.UpdatedAtMs,
+		arg.OriginBolt,
+		arg.DeletedAt,
+		arg.Signature,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const softDeleteUser = `-- name: SoftDeleteUser :exec
+UPDATE users SET
+    deleted_at = ?,
+    updated_at_ms = ?,
+    updated_at = datetime('now')
+WHERE id = ? AND deleted_at IS NULL
+`
+
+type SoftDeleteUserParams struct {
+	DeletedAt   sql.NullInt64 `json:"deleted_at"`
+	UpdatedAtMs int64         `json:"updated_at_ms"`
+	ID          string        `json:"id"`
+}
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error {
+	_, err := q.db.ExecContext(ctx, softDeleteUser, arg.DeletedAt, arg.UpdatedAtMs, arg.ID)
+	return err
+}
+
 const updateTOTPRecovery = `-- name: UpdateTOTPRecovery :exec
-UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
+UPDATE users SET totp_recovery = ?, updated_at = datetime('now'), updated_at_ms = ?
 WHERE id = ?
 `
 
 type UpdateTOTPRecoveryParams struct {
 	TotpRecovery string `json:"totp_recovery"`
+	UpdatedAtMs  int64  `json:"updated_at_ms"`
 	ID           string `json:"id"`
 }
 
 func (q *Queries) UpdateTOTPRecovery(ctx context.Context, arg UpdateTOTPRecoveryParams) error {
-	_, err := q.db.ExecContext(ctx, updateTOTPRecovery, arg.TotpRecovery, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateTOTPRecovery, arg.TotpRecovery, arg.UpdatedAtMs, arg.ID)
 	return err
 }
 
@@ -257,7 +369,8 @@ UPDATE users SET
     permissions = ?,
     ssh_public_key = ?,
     oidc_subject = ?,
-    updated_at = datetime('now')
+    updated_at = datetime('now'),
+    updated_at_ms = ?
 WHERE id = ?
 `
 
@@ -268,6 +381,7 @@ type UpdateUserParams struct {
 	Permissions  string `json:"permissions"`
 	SshPublicKey string `json:"ssh_public_key"`
 	OidcSubject  string `json:"oidc_subject"`
+	UpdatedAtMs  int64  `json:"updated_at_ms"`
 	ID           string `json:"id"`
 }
 
@@ -279,6 +393,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 		arg.Permissions,
 		arg.SshPublicKey,
 		arg.OidcSubject,
+		arg.UpdatedAtMs,
 		arg.ID,
 	)
 	return err
