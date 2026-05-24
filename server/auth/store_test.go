@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/testutil"
 )
 
@@ -218,7 +219,7 @@ func TestUserStore_TOTPMutationsDoNotBumpUpdatedAtMs(t *testing.T) {
 func TestUserStoreSoftDelete(t *testing.T) {
 	queries := setupTestDB(t)
 	store := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, "")
+	tokenStore := NewTokenStore(queries, "", metrics.NewTestMetrics())
 	ctx := context.Background()
 
 	u, err := store.Create(ctx, db.InsertUserParams{

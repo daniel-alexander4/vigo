@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/testutil"
 )
 
@@ -25,7 +26,7 @@ func setupIsowebauthProvider(t *testing.T) (*IsowebauthProvider, *SessionManager
 
 	sm := NewSessionManager(sqlDB, 0)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken, metrics.NewTestMetrics())
 
 	alice, err := userStore.Create(context.Background(), db.InsertUserParams{
 		Username: "alice",

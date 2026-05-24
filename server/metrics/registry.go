@@ -156,6 +156,10 @@ type Metrics struct {
 
 	AgentStreamDBErrors      *prometheus.CounterVec
 	AgentStreamHandlerErrors *prometheus.CounterVec
+
+	// --- Auth ---
+
+	APITokenLastUsedUpdateErrors prometheus.Counter
 }
 
 // NewMetrics constructs the collector set, registering each into the
@@ -527,6 +531,13 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_agentstream_handler_errors_total",
 			Help: "Agent-stream RPC handler errors by handler. Stream survives (transient errors shouldn't tear down a working stream); metric exposes structural failure rates.",
 		}, []string{"handler"}),
+
+		// --- Auth ---
+
+		APITokenLastUsedUpdateErrors: f.NewCounter(prometheus.CounterOpts{
+			Name: "vigo_apitoken_lastused_update_errors_total",
+			Help: "API-token last_used_at DB write failures (best-effort; token validation succeeded). Persistent non-zero values indicate DB unhealth on the auth path.",
+		}),
 	}
 }
 

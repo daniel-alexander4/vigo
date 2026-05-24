@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +34,7 @@ func TestGenerateAPIToken(t *testing.T) {
 func TestTokenCreateAndValidate(t *testing.T) {
 	queries := setupTestDB(t)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken, metrics.NewTestMetrics())
 	ctx := context.Background()
 
 	// Create a user first.
@@ -70,7 +71,7 @@ func TestTokenCreateAndValidate(t *testing.T) {
 func TestTokenExpiry(t *testing.T) {
 	queries := setupTestDB(t)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken, metrics.NewTestMetrics())
 	ctx := context.Background()
 
 	u, err := userStore.Create(ctx, db.InsertUserParams{
@@ -93,7 +94,7 @@ func TestTokenExpiry(t *testing.T) {
 func TestTokenListAndDelete(t *testing.T) {
 	queries := setupTestDB(t)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken, metrics.NewTestMetrics())
 	ctx := context.Background()
 
 	u, err := userStore.Create(ctx, db.InsertUserParams{
@@ -137,7 +138,7 @@ func TestValidateAndResolve_LocalAdminToken(t *testing.T) {
 	userStore := NewUserStore(queries)
 	ctx := context.Background()
 
-	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken, metrics.NewTestMetrics())
 
 	// The local-admin token resolves to the synthetic admin — no users row,
 	// admin role, full permissions.
@@ -153,7 +154,7 @@ func TestValidateAndResolve_LocalAdminToken(t *testing.T) {
 	assert.Nil(t, resolved)
 
 	// With no local-admin token configured, even the fixture is rejected.
-	bare := NewTokenStore(queries, "")
+	bare := NewTokenStore(queries, "", metrics.NewTestMetrics())
 	resolved, err = bare.ValidateAndResolve(ctx, testLocalAdminToken, userStore)
 	require.NoError(t, err)
 	assert.Nil(t, resolved)
@@ -167,7 +168,7 @@ func TestValidateAndResolve_LocalAdminToken(t *testing.T) {
 func BenchmarkValidateAndResolve(b *testing.B) {
 	queries := setupTestDB(&testing.T{})
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, "")
+	tokenStore := NewTokenStore(queries, "", metrics.NewTestMetrics())
 	ctx := context.Background()
 
 	u, err := userStore.Create(ctx, db.InsertUserParams{Username: "bench", Role: "viewer"})

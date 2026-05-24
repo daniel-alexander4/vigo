@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/secrets"
 	"git.alexander4.io/vigo/server/testutil"
 )
@@ -46,7 +47,7 @@ func setupBasicProvider(t *testing.T) (*BasicProvider, *SessionManager, *UserSto
 
 	sm := NewSessionManager(sqlDB, 0)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken, metrics.NewTestMetrics())
 
 	// Seed an admin user so the auth middleware has something to authenticate
 	// against. Provider uses NullProvider for secrets.
@@ -246,7 +247,7 @@ func setupBasicProviderWithSecrets(t *testing.T, values map[string]string) *Basi
 
 	sm := NewSessionManager(sqlDB, 0)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken, metrics.NewTestMetrics())
 
 	_, err := userStore.Create(context.Background(), db.InsertUserParams{
 		Username: "alice",

@@ -12,10 +12,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 const (
@@ -54,12 +56,14 @@ type TokenStore struct {
 	// (localadmin.go). A bearer equal to it resolves to localAdminUser —
 	// the server-host admin identity that replaced source-IP peer auth.
 	localAdminToken string
+	metrics         *metrics.Metrics
 }
 
 // NewTokenStore creates a TokenStore. localAdminToken is the boot-minted
-// local-admin token (empty disables it — e.g. in tests).
-func NewTokenStore(queries *db.Queries, localAdminToken string) *TokenStore {
-	return &TokenStore{queries: queries, localAdminToken: localAdminToken}
+// local-admin token (empty disables it — e.g. in tests). metrics carries
+// the per-server counter set; tests pass metrics.NewTestMetrics().
+func NewTokenStore(queries *db.Queries, localAdminToken string, m *metrics.Metrics) *TokenStore {
+	return &TokenStore{queries: queries, localAdminToken: localAdminToken, metrics: m}
 }
 
 // CreateToken generates a new API token for the given user.
@@ -125,7 +129,18 @@ func (ts *TokenStore) ValidateAndResolve(ctx context.Context, plaintext string, 
 		return nil, nil
 	}
 
-	_ = ts.queries.UpdateAPITokenLastUsed(ctx, tok.ID)
+	if err := ts.queries.UpdateAPITokenLastUsed(ctx, tok.ID); err != nil {
+		// Best-effort write: token validation already succeeded; an
+		// audit-side last_used_at update failure shouldn't fail the
+		// request. Surface via slog + counter so persistent DB unhealth
+		// on the auth path doesn't hide behind "this token looks ancient"
+		// in the admin UI / `vigocli tokens list`.
+		slog.WarnContext(ctx, "api token last-used update failed",
+			"token_id", tok.ID,
+			"err", err,
+		)
+		ts.metrics.APITokenLastUsedUpdateErrors.Inc()
+	}
 	return userStore.GetByID(ctx, tok.UserID)
 }
 

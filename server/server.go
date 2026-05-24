@@ -535,7 +535,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// Initialize auth provider.
-	s.authProvider, err = createAuthProvider(ctx, s.cfg, s.db, s.queries, s.provider, s.localAdminToken)
+	s.authProvider, err = createAuthProvider(ctx, s.cfg, s.db, s.queries, s.provider, s.localAdminToken, s.metrics)
 	if err != nil {
 		return nil, fmt.Errorf("initializing auth: %w", err)
 	}
@@ -1174,7 +1174,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// its webusers_replication check. Wired late because doctor is
 	// constructed before userStore (which depends on the auth provider).
 	doctorHandler.SetUserStore(userStore)
-	tokenStore := vigoauth.NewTokenStore(s.queries, s.localAdminToken)
+	tokenStore := vigoauth.NewTokenStore(s.queries, s.localAdminToken, s.metrics)
 	usersHandler := api.NewUsersHandler(userStore, s.authMethod)
 	usersHandler.SetAuditWriter(s.auditWriter)
 	usersHandler.SetSecretsProvider(s.provider)

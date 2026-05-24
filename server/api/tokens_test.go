@@ -15,6 +15,7 @@ import (
 
 	vigoauth "git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 // insertTestUser inserts a user and returns their ID.
@@ -54,7 +55,7 @@ func TestTokens_CreateToken(t *testing.T) {
 	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := vigoauth.NewTokenStore(queries, "")
+	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -86,7 +87,7 @@ func TestTokens_CreateTokenInvalidExpiry(t *testing.T) {
 	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := vigoauth.NewTokenStore(queries, "")
+	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -106,7 +107,7 @@ func TestTokens_ListTokens(t *testing.T) {
 	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := vigoauth.NewTokenStore(queries, "")
+	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -143,7 +144,7 @@ func TestTokens_DeleteToken(t *testing.T) {
 	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
-	tokenStore := vigoauth.NewTokenStore(queries, "")
+	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -184,7 +185,7 @@ func TestTokens_DeleteToken(t *testing.T) {
 func TestTokens_UnauthorizedWithoutUser(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	tokenStore := vigoauth.NewTokenStore(queries, "")
+	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
 	handler := NewTokensHandler(tokenStore, "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
