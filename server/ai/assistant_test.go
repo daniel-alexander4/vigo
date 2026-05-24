@@ -120,10 +120,74 @@ func TestAsk_RateLimit(t *testing.T) {
 }
 
 func TestStripSecrets(t *testing.T) {
-	input := `{"dsn": "secret:vigo/db/dsn", "other": "safe"}`
-	result := stripSecrets(input)
-	assert.NotContains(t, result, "secret:")
-	assert.Contains(t, result, "[REDACTED:")
+	cases := []struct {
+		name        string
+		input       string
+		mustContain []string
+		mustExclude []string
+	}{
+		{
+			// Non-field-context `secret:` ref — only the prefix sub fires.
+			// The `[REDACTED:<key>` shape is preserved so the operator can
+			// still see which key the assistant tried to resolve.
+			name:        "secret_prefix_outside_field_value_still_shows_key",
+			input:       `tool error: failed to resolve secret:vigo/db/dsn for this query`,
+			mustContain: []string{"[REDACTED:vigo/db/dsn"},
+			mustExclude: []string{"secret:"},
+		},
+		{
+			// Same `secret:` ref inside a field value: the field-redact
+			// fires too and supersedes — output drops the key (the field
+			// name already tells the operator what was redacted). Either
+			// transformation alone is correct; the combined output is
+			// strictly more redactive.
+			name:        "secret_ref_inside_dsn_field_gets_full_redact",
+			input:       `{"dsn": "secret:vigo/db/dsn", "other": "safe"}`,
+			mustContain: []string{`"dsn": [REDACTED]`, `"other": "safe"`},
+			mustExclude: []string{"secret:", "vigo/db/dsn"},
+		},
+		{
+			name:        "resolved_dsn_in_yaml_redacted",
+			input:       "dsn: postgres://user:hunter2@host:5432/db\nother: safe",
+			mustContain: []string{"[REDACTED]", "other: safe"},
+			mustExclude: []string{"hunter2"},
+		},
+		{
+			name:        "resolved_password_in_json_redacted",
+			input:       `{"password": "hunter2", "username": "admin"}`,
+			mustContain: []string{"[REDACTED]", `"username": "admin"`},
+			mustExclude: []string{"hunter2"},
+		},
+		{
+			name:        "api_key_in_query_string_or_dump_redacted",
+			input:       `result: {"api_key": "AKIAEXAMPLE", "region": "us-west"}`,
+			mustContain: []string{"[REDACTED]", `"region": "us-west"`},
+			mustExclude: []string{"AKIAEXAMPLE"},
+		},
+		{
+			name:        "bare_word_password_without_value_separator_left_alone",
+			input:       "pq: password authentication failed for user x",
+			mustContain: []string{"password authentication failed"},
+			mustExclude: []string{"[REDACTED]"},
+		},
+		{
+			name:        "non_secret_fields_left_alone",
+			input:       `{"hostname": "web-01", "ip": "10.0.0.1"}`,
+			mustContain: []string{"web-01", "10.0.0.1"},
+			mustExclude: []string{"[REDACTED]"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := stripSecrets(tc.input)
+			for _, want := range tc.mustContain {
+				assert.Contains(t, got, want, "input: %s", tc.input)
+			}
+			for _, forbidden := range tc.mustExclude {
+				assert.NotContains(t, got, forbidden, "input: %s", tc.input)
+			}
+		})
+	}
 }
 
 func TestExtractHostname(t *testing.T) {

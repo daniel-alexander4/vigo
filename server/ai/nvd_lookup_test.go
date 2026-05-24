@@ -57,7 +57,7 @@ func TestFormatCVEDetailMarkdown(t *testing.T) {
 		"CVSS:3.1/AV:N",
 		"**CWE**: CWE-400",
 		"**Published**: 2024-03-15",
-		"**Description**: Memory leak in TLS handshake.",
+		"**Description**:\n\n```text\nMemory leak in TLS handshake.\n```",
 		"**References**:",
 		"https://example.com/advisory",
 		"https://example.com/patch",
@@ -65,6 +65,22 @@ func TestFormatCVEDetailMarkdown(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("formatted markdown missing %q\n--- got ---\n%s", want, got)
 		}
+	}
+}
+
+func TestFormatCVEDetailMarkdown_DescriptionFenced(t *testing.T) {
+	// Vendor-provided text containing markdown punctuation must render
+	// verbatim inside the fence — not as a link, code span, or heading
+	// that breaks the surrounding render or signals the LLM to follow.
+	d := &CVEDetail{
+		CVEID:       "CVE-2099-9999",
+		Description: "Affected by [click here](javascript:alert(1)) and `rm -rf /` with # heading-like text.",
+	}
+	got := formatCVEDetailMarkdown(d)
+	// The whole description appears inside the fenced block.
+	wantFence := "```text\nAffected by [click here](javascript:alert(1)) and `rm -rf /` with # heading-like text.\n```"
+	if !strings.Contains(got, wantFence) {
+		t.Errorf("description not fenced verbatim:\n--- want substring ---\n%s\n--- got ---\n%s", wantFence, got)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -577,8 +578,34 @@ func hasEmptyToolCalls(calls []ToolCall) bool {
 	return false
 }
 
+// secretFieldNames is the deny-list of field names whose values are
+// scrubbed from tool output before the LLM sees it. Catches resolved
+// secret values that flow through error strings, dumps, or upstream
+// API responses — not just the `secret:` reference syntax.
+//
+// Distinct purpose from config/loader.go's `knownSecretFields`: that
+// list enforces "this Vigo config key requires the `secret:` prefix"
+// at load time; this one redacts common-named secret fields in
+// arbitrary tool output. The two overlap on `dsn` by coincidence;
+// they are not the same SoT and should not be folded.
+var secretFieldNames = []string{
+	"password", "passwd", "token", "secret",
+	"api_key", "private_key", "access_key", "secret_access_key",
+	"dsn",
+}
+
+// secretFieldValueRe matches `<field>: <value>` or `<field>=<value>`
+// (case-insensitive) where `<field>` is any of secretFieldNames,
+// possibly wrapped in quotes. The value runs to the end of the line.
+// Anchored to start-of-string or start-of-line so non-secret text like
+// "password authentication failed" (no value separator) doesn't trigger.
+var secretFieldValueRe = regexp.MustCompile(
+	`(?im)((?:^|[\s,{\[])"?\b(?:` + strings.Join(secretFieldNames, "|") + `)\b"?\s*[:=]\s*)("[^"\n]*"|\S[^\n,}\]]*)`,
+)
+
 func stripSecrets(s string) string {
 	s = strings.ReplaceAll(s, "secret:", "[REDACTED:")
+	s = secretFieldValueRe.ReplaceAllString(s, "${1}[REDACTED]")
 	return s
 }
 
