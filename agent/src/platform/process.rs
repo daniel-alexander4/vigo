@@ -9,23 +9,31 @@ use std::time::Duration;
 ///
 /// On Unix: SIGTERM to process group, wait grace period, SIGKILL.
 /// On Windows: taskkill /PID /T /F.
+///
+/// Synchronous on purpose. The work (signal + blocking sleep, or one
+/// `taskkill` exec) is entirely syscall-level; making this async added
+/// nothing except forcing every sync caller (`exec.rs`,
+/// `executors/mod.rs` × 2) to build a throwaway `tokio::runtime` per
+/// invocation. The one async caller (`push::kill_process_group`)
+/// hops to `tokio::task::spawn_blocking` — the canonical bridge for
+/// sync work from an async context — so a 5s SIGTERM-wait doesn't
+/// stall a runtime worker.
 #[cfg(unix)]
-pub async fn kill_process_tree(pid: u32, grace: Duration) {
+pub fn kill_process_tree(pid: u32, grace: Duration) {
     let pgid = nix::unistd::Pid::from_raw(pid as i32);
     if let Err(e) = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGTERM) {
         tracing::warn!(pid = pid, error = %e, "SIGTERM to process group failed");
     }
-    tokio::time::sleep(grace).await;
+    std::thread::sleep(grace);
     let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGKILL);
 }
 
 #[cfg(windows)]
-pub async fn kill_process_tree(pid: u32, _grace: Duration) {
+pub fn kill_process_tree(pid: u32, _grace: Duration) {
     // taskkill /PID <pid> /T /F kills the process tree forcefully.
-    let _ = tokio::process::Command::new("taskkill")
+    let _ = std::process::Command::new("taskkill")
         .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .output()
-        .await;
+        .output();
 }
 
 /// Set up a new process group before exec (Unix only).

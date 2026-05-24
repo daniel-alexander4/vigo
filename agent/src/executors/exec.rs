@@ -482,14 +482,7 @@ fn execute_exec(
                                 // Fire-and-forget kill; the waiter thread above
                                 // drains the zombie once the kernel reaps it.
                                 let grace = std::time::Duration::from_secs(5);
-                                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
-                                    .enable_all()
-                                    .build()
-                                {
-                                    rt.block_on(
-                                        crate::platform::process::kill_process_tree(pid_copy, grace),
-                                    );
-                                }
+                                crate::platform::process::kill_process_tree(pid_copy, grace);
                             }
                         }
                         None => {

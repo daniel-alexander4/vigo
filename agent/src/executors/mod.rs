@@ -420,11 +420,7 @@ pub fn run_command_niced_timeout(
             // above, it will eventually drain the zombie. Logging handled
             // by the caller via the TimedOut error.
             let grace = std::time::Duration::from_secs(5);
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| std::io::Error::other(format!("timeout kill runtime: {}", e)))?;
-            rt.block_on(crate::platform::process::kill_process_tree(pid, grace));
+            crate::platform::process::kill_process_tree(pid, grace);
             Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 format!(
@@ -493,11 +489,7 @@ pub fn run_command_with_stdin_niced_timeout(
         Ok(result) => result,
         Err(_) => {
             let grace = std::time::Duration::from_secs(5);
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| std::io::Error::other(format!("timeout kill runtime: {}", e)))?;
-            rt.block_on(crate::platform::process::kill_process_tree(pid, grace));
+            crate::platform::process::kill_process_tree(pid, grace);
             Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 format!(

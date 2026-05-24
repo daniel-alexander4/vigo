@@ -234,12 +234,17 @@ async fn read_pipe<R: tokio::io::AsyncRead + Unpin>(pipe: Option<R>, max: usize)
     }
 }
 
-/// Kill a process group (platform-specific).
+/// Kill a process group (platform-specific). `kill_process_tree` is
+/// sync (SIGTERM → 5s sleep → SIGKILL on Unix; `taskkill` on Windows);
+/// hop to `spawn_blocking` so the SIGTERM-wait doesn't stall a runtime
+/// worker thread.
 async fn kill_process_group(pid: i32) {
-    crate::platform::process::kill_process_tree(
-        pid as u32,
-        std::time::Duration::from_secs(KILL_GRACE_SECS),
-    )
+    let _ = tokio::task::spawn_blocking(move || {
+        crate::platform::process::kill_process_tree(
+            pid as u32,
+            std::time::Duration::from_secs(KILL_GRACE_SECS),
+        );
+    })
     .await;
 }
 
