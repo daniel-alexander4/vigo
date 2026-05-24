@@ -82,6 +82,7 @@ use super::project_state::{
 };
 use crate::swarm::anchor::peer_uid::peer_uid;
 use crate::swarm::anchor::tokens::{verify_chain, ID_LEN};
+use crate::swarm::HELPER_MAX_CONNECTIONS;
 use crate::update::TlsCerts;
 
 /// System-wide socket path the daemon binds and `git-remote-gitback`
@@ -102,14 +103,6 @@ const MAX_HEADER_BYTES: usize = 4 * 1024;
 /// timeouts are removed because git's pkt-line protocol can sit
 /// idle on huge fetches.
 const NEGOTIATE_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Concurrent client-handler ceiling. The gitback helper is operator-facing
-/// (per-user `git-remote-gitback` and `vigocli swarm gitback` over the local
-/// Unix socket); steady-state volume is a handful of client invocations at a
-/// time. 32 is comfortably above any realistic burst while keeping a runaway
-/// fan-out (CI bulk push, fleet ops script) from spawning unbounded handler
-/// tasks. Mirrors `swarm/server.rs`'s `MAX_CONNECTIONS` shape.
-const HELPER_MAX_CONNECTIONS: usize = 32;
 
 /// Recognized service names. Matches the verb git's smart-HTTP
 /// transport uses, and what `git-receive-pack` / `git-upload-pack`

@@ -13,6 +13,22 @@
 //! split into chunks, and in-progress downloads survive process restarts
 //! via on-disk partial directories.
 
+/// Concurrent client-handler ceiling for every agent-local helper-daemon
+/// accept loop — `swarm/curator/helper.rs`, `swarm/gitback/helper.rs`,
+/// `swarm/puddle/session.rs`, `swarm/puddle/service_session.rs`,
+/// `swarm/lockbox/session.rs`. Each daemon serves a local Unix socket
+/// (root or per-user) with steady-state volume of a handful of client
+/// invocations at a time; 32 is comfortably above any realistic burst
+/// while keeping a runaway fan-out (CI bulk publish, fleet ops script)
+/// from spawning unbounded handler tasks. Mirrors the reject-on-saturation
+/// shape used by the public swarm peer server (`swarm/server.rs`), which
+/// keeps its own larger cap (`MAX_CONNECTIONS = 100`) because the public
+/// peer-mesh load profile is different. The curator HTTP registry shim
+/// (`swarm/curator/registry/listener.rs::MAX_CONNECTIONS`) also stays
+/// local with a distinct name because it's an HTTP server, not a
+/// Unix-socket helper daemon.
+pub(crate) const HELPER_MAX_CONNECTIONS: usize = 32;
+
 pub mod anchor;
 pub mod bandwidth;
 pub mod bitmap;

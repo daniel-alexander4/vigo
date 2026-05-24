@@ -130,7 +130,11 @@ pub async fn open(
 
     // Create dispatch channels.
     let (policy_push_tx, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
-    let (force_push_tx, force_push_rx) = mpsc::channel::<String>(4);
+    // force_push_tx is best-effort: operator-initiated force-pushes are
+    // rare and may drop with a `warn!` if the consumer is mid-converge.
+    // Buffer 16 over-provisions for bursts (deploy-time storms) since
+    // force-push payloads are tiny trace-id strings.
+    let (force_push_tx, force_push_rx) = mpsc::channel::<String>(16);
     let (check_in_resp_tx, check_in_resp_rx) = mpsc::channel::<CheckInResponse>(1);
     let (task_dispatch_tx, task_dispatch_rx) = mpsc::channel::<TaskDispatch>(4);
     let (query_request_tx, query_request_rx) = mpsc::channel::<QueryRequest>(8);

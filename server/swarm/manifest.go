@@ -354,32 +354,6 @@ func (m *ManifestStore) RevokedEntries() []ManifestEntry {
 	return result
 }
 
-// Merge applies a remote manifest entry using LWW semantics. Reserved
-// for future cross-server gossip (currently unused — agents talk to
-// the server, not to each other through the manifest). Kept for
-// proto-level forward compat; callers that received this from an
-// untrusted source MUST validate first.
-func (m *ManifestStore) Merge(entry ManifestEntry) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	existing, ok := m.entries[entry.SHA256]
-	if !ok {
-		m.entries[entry.SHA256] = entry
-		m.version++
-		m.markDirty()
-		return true
-	}
-
-	if entryWins(&entry, &existing) {
-		m.entries[entry.SHA256] = entry
-		m.version++
-		m.markDirty()
-		return true
-	}
-	return false
-}
-
 // Version returns the current manifest version.
 func (m *ManifestStore) Version() uint64 {
 	m.mu.RLock()
@@ -457,15 +431,3 @@ func (m *ManifestStore) ResolvePrefix(prefix string) (string, bool) {
 	return match, match != ""
 }
 
-// entryWins returns true if a should replace b (LWW with revoke-wins).
-func entryWins(a, b *ManifestEntry) bool {
-	if a.UpdatedAt != b.UpdatedAt {
-		return a.UpdatedAt > b.UpdatedAt
-	}
-	// Tie: revoked wins.
-	if a.Status != b.Status {
-		return a.Status == "revoked"
-	}
-	// Same status, same timestamp: higher author wins.
-	return a.UpdatedBy > b.UpdatedBy
-}

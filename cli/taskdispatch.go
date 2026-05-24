@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	isgrpc "git.alexander4.io/vigo/server/grpc"
 )
 
 var taskCmd = &cobra.Command{
@@ -139,7 +141,7 @@ var taskRunCmd = &cobra.Command{
 		}
 
 		// Dry-run: display batch plan and exit.
-		if dispatchResp.Status == "dry_run" {
+		if dispatchResp.Status == isgrpc.StatusDryRun {
 			fmt.Println("Dry-run batch plan:")
 			fmt.Println()
 			for _, b := range dispatchResp.Batches {

@@ -140,6 +140,17 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getUserSSHPublicKey = `-- name: GetUserSSHPublicKey :one
+SELECT ssh_public_key FROM users WHERE id = ?
+`
+
+func (q *Queries) GetUserSSHPublicKey(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserSSHPublicKey, id)
+	var ssh_public_key string
+	err := row.Scan(&ssh_public_key)
+	return ssh_public_key, err
+}
+
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject)
 VALUES (?, ?, ?, ?, ?, ?)

@@ -133,11 +133,10 @@ func (w *Watcher) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			slog.Info("stockpilewatch: stopping")
 			return nil
-		case event, ok := <-watcher.Events:
+		case _, ok := <-watcher.Events:
 			if !ok {
 				return errors.New("stockpilewatch: watcher channel closed")
 			}
-			slog.Debug("stockpilewatch: fs event", "path", event.Name, "op", event.Op.String())
 			if quiesce == nil {
 				quiesce = time.NewTimer(QuiesceDebounce)
 				fireC = quiesce.C

@@ -50,6 +50,12 @@ type DispatchResult struct {
 	Dispatched int `json:"dispatched,omitempty"`
 }
 
+// StatusDryRun is the canonical DispatchResult.Status value emitted when
+// task dispatch ran in dry-run mode (returns the planned batches without
+// executing). Wire-format constant — every producer and consumer of
+// DispatchResult.Status references this so the string can't drift.
+const StatusDryRun = "dry_run"
+
 // DryRunBatch describes a planned batch for dry-run output.
 type DryRunBatch struct {
 	Index     int      `json:"index"`

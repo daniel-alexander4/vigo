@@ -336,7 +336,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 
 	// Dry-run: return batch plan without executing.
 	if params.DryRun {
-		result := &DispatchResult{Status: "dry_run"}
+		result := &DispatchResult{Status: StatusDryRun}
 		for i, batch := range batches {
 			hostnames := make([]string, 0, len(batch))
 			for _, t := range batch {

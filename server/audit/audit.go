@@ -9,7 +9,9 @@ package audit
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -17,6 +19,12 @@ import (
 
 	"git.alexander4.io/vigo/server/db"
 )
+
+// auditLoadTimeout bounds the startup-time DB lookup of the previous
+// chain hash. A wedged SQLite WAL checkpoint or slow-mount NFS path
+// must not pin server boot — chain reset is recoverable (logged at
+// Error level), startup hang is not.
+const auditLoadTimeout = 5 * time.Second
 
 // Writer appends tamper-evident entries to the audit trail. It maintains
 // the hash chain by tracking the previous entry's hash in memory.
@@ -35,16 +43,31 @@ type Writer struct {
 }
 
 // NewWriter creates a Writer and loads the latest hash from the DB
-// to continue the chain.
+// to continue the chain. Bounded by auditLoadTimeout; on timeout or
+// any non-ErrNoRows error, the chain is reset to empty prevHash and
+// the error is logged so audit-trail reviewers see the boundary.
 func NewWriter(queries *db.Queries) *Writer {
 	w := &Writer{queries: queries}
 
-	// Load the last entry's hash to continue the chain.
-	last, err := queries.GetLastAuditEntry(context.Background())
-	if err == nil {
+	ctx, cancel := context.WithTimeout(context.Background(), auditLoadTimeout)
+	defer cancel()
+
+	last, err := queries.GetLastAuditEntry(ctx)
+	switch {
+	case err == nil:
 		w.prevHash = last.Hash
+	case errors.Is(err, sql.ErrNoRows):
+		// First boot — no prior entries; prevHash stays empty.
+	default:
+		// Timeout, DB corruption, schema mismatch, etc. — fail-open with
+		// a fresh chain so server startup isn't pinned, but surface the
+		// boundary loudly so the operator (and future audit-trail review)
+		// can bridge old-chain vs new-chain.
+		slog.Error("audit: failed to load last hash, starting fresh chain",
+			"error", err,
+			"timeout", auditLoadTimeout,
+		)
 	}
-	// If no entries exist (sql.ErrNoRows), prevHash stays empty — that's correct.
 
 	return w
 }

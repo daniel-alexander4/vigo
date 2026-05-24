@@ -17,6 +17,7 @@
 package swarmview
 
 import (
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -132,6 +133,14 @@ func SnapshotStatus(src Sources) Status {
 			if complete {
 				if size, ok := seedSize[sha]; ok {
 					footprint += int64(size)
+				} else {
+					// Trait pipeline desync: Tracker reports a sha
+					// that ManifestStore.ListSeeds didn't surface. The
+					// loop continues (footprint just doesn't include
+					// this sha), but log so the disagreement is
+					// debuggable instead of invisible.
+					slog.Debug("swarmview: seedSize lookup miss (sha not in ListSeeds)",
+						"sha", sha, "envoy_id", envoyID)
 				}
 			}
 		})

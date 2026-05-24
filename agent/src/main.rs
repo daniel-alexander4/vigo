@@ -1139,12 +1139,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let traits_cache_dir = cli.data_dir.join("traits").to_string_lossy().to_string();
     // Create the peer map and manifest early so they can be shared between LoopConfig,
     // the swarm peer server, and multicast discovery.
-    let peers_path = platform::paths::default_blobs_dir()
-        .parent()
-        .unwrap_or(&cli.data_dir)
-        .join("peers.json");
-    let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::load(&peers_path));
-    let shared_manifest = swarm::manifest::Manifest::load(platform::paths::default_blobs_dir().parent().unwrap_or(&cli.data_dir));
+    let swarm_base = platform::paths::default_swarm_base();
+    let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::load(&swarm_base.join("peers.json")));
+    let shared_manifest = swarm::manifest::Manifest::load(&swarm_base);
 
     // Shared announce signal between the download scheduler and the multicast
     // announcer. Lets the scheduler fire an immediate announce on the first
@@ -1672,9 +1669,10 @@ fn main() -> Result<()> {
 
 async fn async_main() -> Result<()> {
     // Install the default TLS crypto provider before any TLS operations.
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("failed to install default CryptoProvider");
+    // install_default returns Err if a provider is already installed —
+    // fine in multicall-binary mode (`git-remote-gitback` re-enters
+    // async_main from a parent invocation that already installed).
+    let _ = rustls::crypto::ring::default_provider().install_default();
 
     let cli = parse_args()?;
     setup_logger(&cli.log_level);
@@ -1684,13 +1682,25 @@ async fn async_main() -> Result<()> {
     // here, before any collect() can fire.
     vigo::traits::agent_self::init_start_marker();
 
-    // Ensure data directory and swarm directories exist.
+    // Ensure data directory and swarm directories exist. data_dir is the
+    // critical path — fail-fast if it can't be created. The swarm subdirs
+    // are sub-feature scaffolding; log on failure and let CM core run.
     std::fs::create_dir_all(&cli.data_dir)
         .with_context(|| format!("create data directory {}", cli.data_dir.display()))?;
-    let _ = std::fs::create_dir_all(platform::paths::default_blobs_dir());
-    let _ = std::fs::create_dir_all(platform::paths::default_seeds_dir());
-    let swarm_base = platform::paths::default_blobs_dir().parent().unwrap_or(std::path::Path::new("/var/lib/vigo/swarm")).to_path_buf();
-    let _ = std::fs::create_dir_all(swarm_base.join("files"));
+    let swarm_base = platform::paths::default_swarm_base();
+    for dir in [
+        platform::paths::default_blobs_dir(),
+        platform::paths::default_seeds_dir(),
+        swarm_base.join("files"),
+    ] {
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            warn!(
+                path = %dir.display(),
+                error = %e,
+                "failed to create swarm directory; swarm features may not work"
+            );
+        }
+    }
 
     match &cli.command {
         Some(Commands::Version) => {

@@ -76,6 +76,21 @@
 </div>
 
 {{template "dashboard-fleet" .}}
+{{template "envoy-filter-bar" dict
+    "TotalEnvoys"           .TotalEnvoys
+    "CountConverged"        .Converged
+    "CountDegraded"         .Degraded
+    "CountNoData"           .NoData
+    "CountChanged"          .Changed
+    "CountDiverged"         .Diverged
+    "CountFailed"           .CompFailed
+    "CountOffline"          .Offline
+    "CountObserving"        .Observing
+    "OfflineThresholdLabel" .OfflineThresholdLabel
+    "ConvFilter"            ""
+    "DriftFilter"           ""
+    "ReachFilter"           ""
+    "Search"                ""}}
 {{template "dashboard-activity" .}}
 {{end}}
 

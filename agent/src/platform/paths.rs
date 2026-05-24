@@ -134,6 +134,22 @@ pub fn default_blobs_dir() -> PathBuf {
     default_data_dir().join("swarm").join(".blobs")
 }
 
+/// Canonical swarm-tree root: the parent directory of [`default_blobs_dir`].
+/// On Linux this is `/var/lib/vigo/swarm`; macOS `/Library/Vigo/swarm`;
+/// Windows `<data>/swarm`. Honors `VIGO_BLOBS_DIR` via the underlying
+/// [`default_blobs_dir`] — operators who override the blob cache get a
+/// consistent swarm-tree root automatically.
+///
+/// Used by every site that needs to derive a sibling of the blob cache
+/// (peers.json, manifest.json, seeds dir, gitback mirrors, etc.) so the
+/// parent-of-blobs derivation lives in exactly one place.
+pub fn default_swarm_base() -> PathBuf {
+    default_blobs_dir()
+        .parent()
+        .expect("default_blobs_dir always has a multi-segment path")
+        .to_path_buf()
+}
+
 /// Default seed directory for envoy-originated swarm distribution.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_seeds_dir() -> PathBuf {
@@ -315,6 +331,32 @@ mod tests {
         assert!(!default_binary_path().as_os_str().is_empty());
         assert!(!hosts_file().as_os_str().is_empty());
         assert!(!ssh_known_hosts().as_os_str().is_empty());
+    }
+
+    #[test]
+    fn default_swarm_base_matches_blobs_parent() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        // The helper's invariant: it returns exactly the parent of
+        // default_blobs_dir(). Pinning it here means a future change to
+        // default_blobs_dir() that makes the path single-segment
+        // (breaking the .parent() invariant) fails at `cargo test` rather
+        // than panicking at agent startup.
+        assert_eq!(
+            default_swarm_base(),
+            default_blobs_dir().parent().unwrap(),
+        );
+    }
+
+    #[test]
+    fn default_swarm_base_honors_env_override() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::set_var("VIGO_BLOBS_DIR", "/tmp/test-override/blobs");
+        assert_eq!(
+            default_swarm_base(),
+            PathBuf::from("/tmp/test-override"),
+        );
+        std::env::remove_var("VIGO_BLOBS_DIR");
     }
 
     #[test]

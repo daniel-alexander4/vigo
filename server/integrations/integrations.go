@@ -80,11 +80,25 @@ const suppressionWindow = 60 * time.Second
 // suppressionThreshold is the number of identical events before suppression kicks in.
 const suppressionThreshold = 10
 
+// dispatcherInflightCap bounds the number of integration-dispatch goroutines
+// in flight at any moment across all targets. The Dispatcher fans an event
+// out one goroutine per accepting target with no caller-side throttle, and
+// the audit log fans through this same dispatcher (every Writer.Record()
+// emits an audit.<eventType> event), so an audit burst × N accepting
+// targets can spawn thousands of goroutines per second.
+//
+// Cap = 256 is well above realistic steady-state (≤30 targets × ~3 in-flight
+// average ≈ 90) but bounds runaway. When saturated, Dispatch drops the
+// per-target attempt with a warn log — caller never blocks (would pin the
+// audit hot path). Matches the swarm/server.rs reject-on-saturation shape.
+const dispatcherInflightCap = 256
+
 // Dispatcher routes events to all configured and enabled integrations.
 type Dispatcher struct {
 	targets    []target
 	client     *http.Client
 	suppressor *eventSuppressor
+	inflight   chan struct{} // bounded semaphore — see dispatcherInflightCap
 }
 
 // eventSuppressor tracks recent events for fleet-wide dedup.
@@ -186,6 +200,7 @@ func New(cfg config.IntegrationsSection) *Dispatcher {
 	d := &Dispatcher{
 		client:     &http.Client{Timeout: 10 * time.Second},
 		suppressor: newEventSuppressor(),
+		inflight:   make(chan struct{}, dispatcherInflightCap),
 	}
 
 	if cfg.Slack != nil && cfg.Slack.Enabled {
@@ -290,7 +305,22 @@ func (d *Dispatcher) Dispatch(event Event) {
 		if !t.Accepts(event) {
 			continue
 		}
+		// Bound in-flight dispatch goroutines. Non-blocking acquire so the
+		// audit hot path can't be pinned by a slow webhook target; the warn
+		// log on saturation is the operator-visible signal.
+		select {
+		case d.inflight <- struct{}{}:
+			// acquired permit
+		default:
+			slog.Warn("integration dispatch capacity exceeded — dropping",
+				"target", t.Name(),
+				"event", event.Name,
+				"inflight_cap", cap(d.inflight),
+			)
+			continue
+		}
 		go func(tgt target) {
+			defer func() { <-d.inflight }()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := tgt.Dispatch(ctx, event); err != nil {

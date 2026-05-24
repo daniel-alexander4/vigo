@@ -1165,6 +1165,18 @@ pub async fn daemon_loop(
                 }
             }
             Err(e) => {
+                // Surface the underlying error before we fall through to
+                // failover/offline. Without this line, every check-in
+                // failure is invisible — the operator sees only the
+                // local-convergence retry log emitted further down and
+                // can't tell whether the server is unreachable, the TLS
+                // handshake is failing, the request signature is being
+                // rejected, or something else entirely.
+                warn!(
+                    error = %e,
+                    server = %client.active_server(),
+                    "check-in failed, attempting failover before offline convergence"
+                );
                 // Attempt failover to a fallback server before going offline.
                 if client.record_failure().await {
                     // Failover occurred — retry immediately on the new server.

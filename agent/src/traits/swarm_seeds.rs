@@ -20,7 +20,7 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Mutex;
 
-use crate::platform::paths::{default_blobs_dir, default_graveyard_dir, default_seeds_dir};
+use crate::platform::paths::{default_blobs_dir, default_graveyard_dir, default_seeds_dir, default_swarm_base};
 
 #[derive(Deserialize)]
 struct SwarmManifest {
@@ -38,7 +38,7 @@ static HASH_CACHE: Mutex<Option<HashCacheMap>> = Mutex::new(None);
 
 /// Disk path for the persistent hash cache.
 fn hash_cache_path() -> std::path::PathBuf {
-    default_blobs_dir().parent().unwrap_or(std::path::Path::new("/var/lib/vigo/swarm")).join(".hash_cache.json")
+    default_swarm_base().join(".hash_cache.json")
 }
 
 pub fn collect() -> Result<Value> {
@@ -248,7 +248,7 @@ fn symlink_into_cache(sha256: &str, seed_path: &Path, label: &str) {
     }
 
     // files/<label> → .blobs/<sha256>
-    let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+    let files_dir = default_swarm_base().join("files");
     let _ = fs::create_dir_all(&files_dir);
     let file_link = files_dir.join(label);
     if file_link.exists() || file_link.symlink_metadata().is_ok() {

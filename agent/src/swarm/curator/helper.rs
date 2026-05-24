@@ -90,6 +90,7 @@ use tracing::{debug, info, warn};
 use crate::swarm::cache::BlobCache;
 use crate::swarm::curator::catalog::{validate_artifact_name, CatalogEntry};
 use crate::swarm::curator::state;
+use crate::swarm::HELPER_MAX_CONNECTIONS;
 use crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
 use crate::swarm::anchor::peer_uid::peer_uid;
 use crate::swarm::manifest::Manifest;
@@ -116,14 +117,6 @@ const MAX_PUSH_HEADER_BYTES: usize = 4 * 1024 * 1024;
 /// stream is bounded by `blob_size`, not a timeout (a 2 GiB image over a slow
 /// link is legitimate).
 const NEGOTIATE_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// Concurrent client-handler ceiling. The curator helper is operator-facing
-/// (`vigocli swarm curator push` over the local Unix socket); steady-state
-/// volume is 1 client at a time, so 32 is comfortably above any realistic
-/// burst while keeping a runaway fan-out (CI bulk publish, fleet ops script)
-/// from spawning unbounded handler tasks. Mirrors `swarm/server.rs`'s
-/// `MAX_CONNECTIONS` shape.
-const HELPER_MAX_CONNECTIONS: usize = 32;
 
 /// `record_seed`'s retention slot for an artifact blob: empty ⇒ never
 /// auto-expired by the retention pruner (which only expires entries with a

@@ -144,7 +144,7 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	// Record tamper-evident audit event (skip dry runs). A forced dispatch
 	// (--force bypassed the server-side guardrail) carries `"forced":true`
 	// in the payload so audit reviewers can find every bypass.
-	if result.Status != "dry_run" {
+	if result.Status != isgrpc.StatusDryRun {
 		payload := ""
 		if req.Force {
 			payload = `{"forced":true}`
@@ -154,7 +154,7 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if result.Status == "dry_run" {
+	if result.Status == isgrpc.StatusDryRun {
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusCreated)

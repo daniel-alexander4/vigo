@@ -33,13 +33,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Semaphore};
 use zeroize::Zeroizing;
 
-/// Concurrent client-handler ceiling for the per-user puddle session
-/// helper's accept loop. Matches the cap shipped in 0.66.59 for the
-/// root-side helpers (`swarm/curator/helper.rs`, `swarm/gitback/helper.rs`)
-/// so the five helper daemons stay uniform; volume here is even smaller
-/// (single-uid, XDG_RUNTIME_DIR socket) so 32 is a runaway-prevention
-/// ceiling, not a load match.
-const HELPER_MAX_CONNECTIONS: usize = 32;
+use crate::swarm::HELPER_MAX_CONNECTIONS;
 
 /// Default idle-timeout for the puddle session helper, in minutes.
 /// The helper re-locks (scrubs the in-RAM key) after this much

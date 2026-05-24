@@ -112,8 +112,16 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 		convPct = float64(summary.Converged) / float64(summary.Total) * 100
 	}
 
-	// Fleet table: worst 50 envoys, triage-ordered.
+	// Fleet table: worst 50 envoys, triage-ordered. Also tally Observing
+	// (observe-only) here in the same walk so the dashboard filter-bar
+	// has the field without a separate iteration.
 	all := ds.envoyRows(baseInterval, offlineThreshold)
+	observing := 0
+	for _, e := range all {
+		if e.ObserveOnly {
+			observing++
+		}
+	}
 	sortByWorstStatus(all)
 	capped := len(all) > 50
 	worst := all
@@ -139,18 +147,22 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 	}
 
 	data := ui.DashboardPageData{
-		PageData:       ui.PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalEnvoys:    summary.Total,
-		ActiveEnvoys:   summary.Total - summary.Offline,
-		RecentFailures: summary.Failed,
-		DriftRate:      driftRate,
-		ConvergencePct: convPct,
-		Converged:      summary.Converged,
-		Degraded:       summary.Degraded,
-		Diverged:       summary.Diverged,
-		CompFailed:     summary.Failed,
-		Offline:        summary.Offline,
-		FleetRows:      fleetRows,
+		PageData:              ui.PageData{Title: "Dashboard", ActiveNav: "dashboard"},
+		TotalEnvoys:           summary.Total,
+		ActiveEnvoys:          summary.Total - summary.Offline,
+		RecentFailures:        summary.Failed,
+		DriftRate:             driftRate,
+		ConvergencePct:        convPct,
+		Converged:             summary.Converged,
+		Degraded:              summary.Degraded,
+		Diverged:              summary.Diverged,
+		CompFailed:            summary.Failed,
+		Offline:               summary.Offline,
+		NoData:                summary.NoData,
+		Changed:               summary.Changed,
+		Observing:             observing,
+		OfflineThresholdLabel: ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold)),
+		FleetRows:             fleetRows,
 	}
 	data.FleetRowsCapped = capped
 	if capped {

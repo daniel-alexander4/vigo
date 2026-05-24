@@ -55,6 +55,8 @@ use sha2::{Digest, Sha256};
 use tokio::sync::{RwLock, Semaphore};
 use zeroize::Zeroizing;
 
+use crate::swarm::HELPER_MAX_CONNECTIONS;
+
 // ---------- wire / on-disk constants (must match server/puddle/wrap.go) ----------
 
 const WRAP_VERSION: u8 = 0x02;
@@ -416,14 +418,6 @@ pub async fn daemon_main(args: Vec<String>) -> Result<()> {
     let _ = std::fs::remove_file(&pidfile);
     result
 }
-
-/// Concurrent client-handler ceiling for the service-account puddle
-/// helper's accept loop. Matches the cap shipped in 0.66.59 for the
-/// root-side helpers (`swarm/curator/helper.rs`, `swarm/gitback/helper.rs`)
-/// so the five helper daemons stay uniform; volume here is even smaller
-/// (single-uid caller: the local vigosrv process) so 32 is a
-/// runaway-prevention ceiling, not a load match.
-const HELPER_MAX_CONNECTIONS: usize = 32;
 
 async fn run_server(
     listener: tokio::net::UnixListener,

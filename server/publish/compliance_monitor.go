@@ -46,16 +46,21 @@ func NewConvergenceMonitor(fleetIndex *fleet.FleetIndex, onRollback func() error
 // Start begins monitoring fleet convergence. If convergence drops below threshold
 // within the window, the most recent config snapshot is restored. Only one
 // monitor runs at a time — calling Start cancels any previous monitor.
+//
+// The mutex is held across the goroutine spawn so cancel-previous + assign-new
+// + launch happens as one atomic operation. Without that, a concurrent second
+// Start() could interleave between the unlock and the `go` statement and
+// briefly leave the "single monitor" invariant unclear at the call site —
+// mirrors Stop()'s Lock + defer Unlock shape.
 func (m *ConvergenceMonitor) Start(threshold int, window time.Duration) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	// Cancel any previous monitor.
 	if m.cancel != nil {
 		m.cancel()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	m.mu.Unlock()
-
 	go m.run(ctx, threshold, window)
 }
 

@@ -172,7 +172,7 @@ fn cmd_post(args: &[String]) -> Result<()> {
             posted_at: now_millis(),
             max_msg_bytes: Some(max_msg_bytes),
         },
-        |canonical| sign_with_session(canonical),
+        sign_with_session,
     )?;
     println!(
         "Posted to {}/{} as seq {} (msg_id {})",

@@ -37,24 +37,32 @@ var webusersCmd = &cobra.Command{
 
 var webusersListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all user accounts with role and creation time",
+	Short: "List all user accounts with role, creation time, and SSH-key fingerprint",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var users []struct {
-			ID          string `json:"id"`
-			Username    string `json:"username"`
-			DisplayName string `json:"display_name"`
-			Email       string `json:"email"`
-			Role        string `json:"role"`
+			ID                      string `json:"id"`
+			Username                string `json:"username"`
+			DisplayName             string `json:"display_name"`
+			Email                   string `json:"email"`
+			Role                    string `json:"role"`
+			SSHPublicKeyFingerprint string `json:"ssh_public_key_fingerprint"`
 		}
 		if err := client.get("/api/v1/users", &users); err != nil {
 			return err
 		}
 
 		w := newAlignedTable(os.Stdout)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("USERNAME"), header("DISPLAY NAME"), header("EMAIL"), header("ROLE"))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			header("ID"), header("USERNAME"), header("DISPLAY NAME"),
+			header("EMAIL"), header("ROLE"), header("SSH KEY"))
 		for _, u := range users {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", dim(u.ID), u.Username, u.DisplayName, u.Email, u.Role)
+			fp := u.SSHPublicKeyFingerprint
+			if fp == "" {
+				fp = dim("—")
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				dim(u.ID), u.Username, u.DisplayName, u.Email, u.Role, fp)
 		}
 		return w.Flush()
 	},
