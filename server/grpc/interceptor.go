@@ -11,7 +11,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log/slog"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -264,7 +263,7 @@ func verifyPayload(payload []byte, timestamp string, sig []byte, pub ed25519.Pub
 // checkTimestamp verifies the timestamp is within the allowed window.
 func checkTimestamp(ts time.Time, window time.Duration) error {
 	diff := time.Since(ts)
-	if math.Abs(float64(diff)) > float64(window) {
+	if diff > window || diff < -window {
 		return status.Errorf(codes.Unauthenticated,
 			"request timestamp too far from server time (diff: %v, window: %v) — ensure NTP is running on both server and agent (e.g. timedatectl set-ntp true)",
 			diff, window)

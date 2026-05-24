@@ -72,6 +72,7 @@ const (
 	statusWaiting    sessionStatus = "waiting"
 	statusConnecting sessionStatus = "connecting"
 	statusReady      sessionStatus = "ready"
+	statusRelaying   sessionStatus = "relaying"
 	statusError      sessionStatus = "error"
 )
 
@@ -765,7 +766,7 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess.setStatus("relaying", "")
+	sess.setStatus(statusRelaying, "")
 
 	// Accept WebSocket — SSH uses no subprotocol, RDP/VNC use "guacamole".
 	opts := &websocket.AcceptOptions{InsecureSkipVerify: true}
