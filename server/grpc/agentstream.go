@@ -150,6 +150,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				resp, err := s.buildCheckInResponse(ctx, envoyID, envoy, m.CheckIn, true)
 				if err != nil {
 					slog.Error("stream check-in error", "envoy_id", envoyID, "trace_id", traceID, "error", err)
+					s.metrics.AgentStreamHandlerErrors.WithLabelValues("check_in").Inc()
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -181,6 +182,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				resp, err := s.ReportResult(ctx, m.ReportResult)
 				if err != nil {
 					slog.Error("stream report-result error", "envoy_id", envoyID, "trace_id", traceID, "error", err)
+					s.metrics.AgentStreamHandlerErrors.WithLabelValues("report_result").Inc()
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -197,6 +199,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				resp, err := s.ReportTraits(ctx, m.ReportTraits)
 				if err != nil {
 					slog.Error("stream report-traits error", "envoy_id", envoyID, "trace_id", traceID, "error", err)
+					s.metrics.AgentStreamHandlerErrors.WithLabelValues("report_traits").Inc()
 					continue
 				}
 				if err := stream.Send(&pb.ServerStreamMessage{
@@ -274,21 +277,35 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 	// Persist to DB (conditional — only writes if changed).
 	if agentVersion != "" {
-		_ = s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
+		if err := s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
 			AgentVersion:   agentVersion,
 			ID:             envoyID,
 			AgentVersion_2: agentVersion,
-		})
+		}); err != nil {
+			slog.Warn("agentstream db write failed",
+				"envoy_id", envoyID,
+				"op", "update_agent_version",
+				"error", err,
+			)
+			s.metrics.AgentStreamDBErrors.WithLabelValues("update_agent_version").Inc()
+		}
 	}
 
 	// Refresh envoy IP (agent reports its outbound IP each check-in).
 	if ipAddr := req.GetIpAddress(); ipAddr != "" && s.fleetIndex != nil {
 		s.fleetIndex.SetIP(envoyID, ipAddr)
-		_ = s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
+		if err := s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
 			IpAddress:   ipAddr,
 			ID:          envoyID,
 			IpAddress_2: ipAddr,
-		})
+		}); err != nil {
+			slog.Warn("agentstream db write failed",
+				"envoy_id", envoyID,
+				"op", "update_envoy_ip",
+				"error", err,
+			)
+			s.metrics.AgentStreamDBErrors.WithLabelValues("update_envoy_ip").Inc()
+		}
 	}
 
 	configVersion := s.configStore.Version()

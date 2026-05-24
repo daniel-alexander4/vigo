@@ -91,11 +91,18 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		if s.fleetIndex != nil {
 			s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
 		}
-		_ = s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
+		if err := s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
 			AgentVersion:   agentVersion,
 			ID:             envoyID,
 			AgentVersion_2: agentVersion,
-		})
+		}); err != nil {
+			slog.Warn("checkin db write failed",
+				"envoy_id", envoyID,
+				"op", "update_agent_version",
+				"error", err,
+			)
+			s.metrics.AgentStreamDBErrors.WithLabelValues("update_agent_version").Inc()
+		}
 	}
 
 	// Refresh envoy IP (agent reports its outbound IP each check-in).
@@ -103,11 +110,18 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		if s.fleetIndex != nil {
 			s.fleetIndex.SetIP(envoyID, ipAddr)
 		}
-		_ = s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
+		if err := s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
 			IpAddress:   ipAddr,
 			ID:          envoyID,
 			IpAddress_2: ipAddr,
-		})
+		}); err != nil {
+			slog.Warn("checkin db write failed",
+				"envoy_id", envoyID,
+				"op", "update_envoy_ip",
+				"error", err,
+			)
+			s.metrics.AgentStreamDBErrors.WithLabelValues("update_envoy_ip").Inc()
+		}
 	}
 
 	// Maintenance mode: return empty policy so envoy skips convergence

@@ -151,6 +151,11 @@ type Metrics struct {
 
 	SpannerBoltsActive  prometheus.Gauge
 	SpannerBoltsRevoked prometheus.Gauge
+
+	// --- AgentStream defensive guards ---
+
+	AgentStreamDBErrors      *prometheus.CounterVec
+	AgentStreamHandlerErrors *prometheus.CounterVec
 }
 
 // NewMetrics constructs the collector set, registering each into the
@@ -511,6 +516,17 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_spanner_bolts_revoked",
 			Help: "Number of revoked bolts retained in the spanner roster.",
 		}),
+
+		// --- AgentStream defensive guards ---
+
+		AgentStreamDBErrors: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_agentstream_db_errors_total",
+			Help: "Agent-stream DB write failures by op (soft fields like agent_version/ip — in-memory FleetIndex stays current; DB rehydrates stale on next restart).",
+		}, []string{"op"}),
+		AgentStreamHandlerErrors: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_agentstream_handler_errors_total",
+			Help: "Agent-stream RPC handler errors by handler. Stream survives (transient errors shouldn't tear down a working stream); metric exposes structural failure rates.",
+		}, []string{"handler"}),
 	}
 }
 
