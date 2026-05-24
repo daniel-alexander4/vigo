@@ -15,11 +15,17 @@
 // Usage:
 //
 //	go run ./test/loadtest \
-//	  --server 192.168.1.2:1530 \
-//	  --api https://192.168.1.2:8443 \
+//	  --server 127.0.0.1:1530 \
+//	  --api https://127.0.0.1:8443 \
+//	  --admin-token "$(sudo cat /srv/vigo/cli-admin-token)" \
 //	  --count 1000 \
 //	  --interval 5s \
 //	  --duration 5m
+//
+// --admin-token is the boot-minted local-admin credential at
+// /srv/vigo/cli-admin-token on the server host; required for the
+// post-test envoy revoke. Omit (or pass --skip-cleanup) to leave the
+// simulated envoys in the DB.
 package main
 
 import (
@@ -119,6 +125,7 @@ func main() {
 	interval := flag.Duration("interval", 5*time.Second, "check-in interval per envoy")
 	duration := flag.Duration("duration", 2*time.Minute, "total test duration")
 	skipCleanup := flag.Bool("skip-cleanup", false, "leave test envoys enrolled after test")
+	adminToken := flag.String("admin-token", "", "admin bearer token for the post-test envoy revoke calls (e.g. $(sudo cat /srv/vigo/cli-admin-token) on the server host); cleanup is skipped if empty")
 	flag.Parse()
 
 	fmt.Printf("Vigo Load Test\n")
@@ -221,15 +228,31 @@ func main() {
 	printStats(ok, fail, lats, elapsed)
 
 	// Phase 3: Cleanup.
-	if !*skipCleanup && len(envoys) > 0 {
+	switch {
+	case *skipCleanup:
+		// Intentional: operator wants to keep the envoys for follow-up inspection.
+	case len(envoys) == 0:
+		// Nothing to do.
+	case *adminToken == "":
+		fmt.Printf("\nSkipping cleanup: --admin-token not provided. To purge, re-run with the token from /srv/vigo/cli-admin-token, or:\n")
+		fmt.Printf("  vigocli envoys list --hostname 'loadtest-*.test' | <iterate> vigocli envoys delete\n")
+	default:
 		fmt.Printf("\nCleaning up %d test envoys...\n", len(envoys))
 		cleaned := 0
+		var firstErr string
 		for _, e := range envoys {
-			if err := revokeEnvoy(httpClient, *apiAddr, e.id); err == nil {
-				cleaned++
+			if err := revokeEnvoy(httpClient, *apiAddr, *adminToken, e.id); err != nil {
+				if firstErr == "" {
+					firstErr = err.Error()
+				}
+				continue
 			}
+			cleaned++
 		}
 		fmt.Printf("  Revoked %d/%d\n", cleaned, len(envoys))
+		if cleaned < len(envoys) && firstErr != "" {
+			fmt.Printf("  first failure: %s\n", firstErr)
+		}
 	}
 }
 
@@ -346,12 +369,17 @@ func runCheckins(ctx context.Context, grpcAddr string, e *testEnvoy, interval ti
 	}
 }
 
-func revokeEnvoy(client *http.Client, apiAddr, envoyID string) error {
+func revokeEnvoy(client *http.Client, apiAddr, adminToken, envoyID string) error {
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/envoys/%s", apiAddr, envoyID), nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("revoke %s: %s — %s", envoyID, resp.Status, string(body))
+	}
 	return nil
 }
