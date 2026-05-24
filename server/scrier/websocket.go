@@ -109,6 +109,28 @@ type scrierSession struct {
 	guacdRW       *bufio.ReadWriter
 	guacdConnID   string
 	sshPrivateKey []byte
+
+	// Lifecycle: who owns teardown — the 60s expiry AfterFunc or the
+	// WebSocket relay handler. The first to claim() wins; the other
+	// no-ops. cleanupOnce makes cleanupSession itself idempotent so
+	// even an accidental second call (defense in depth) is safe.
+	claimed      bool
+	cleanupOnce  sync.Once
+}
+
+// claim atomically marks this session as taken — for relay OR for
+// expiry-time cleanup. Returns true iff this caller is the first to
+// claim; subsequent calls return false. Lets the WS relay handler and
+// the session-expiry timer race safely: whichever lands first owns
+// teardown, the other no-ops.
+func (s *scrierSession) claim() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.claimed {
+		return false
+	}
+	s.claimed = true
+	return true
 }
 
 func (s *scrierSession) setStatus(st sessionStatus, errMsg string) {
@@ -144,9 +166,19 @@ type Handler struct {
 	tmplSSH      *template.Template
 	tmplRDP      *template.Template
 
+	// sessionExpiry is how long a session can sit between setupSession
+	// returning ready and the WebSocket actually connecting. Tests
+	// override this to a few milliseconds so the expiry/claim race is
+	// exercisable without sleeping 60s.
+	sessionExpiry time.Duration
+
 	sessionsMu sync.Mutex
 	sessions   map[string]*scrierSession
 }
+
+// defaultSessionExpiry — production timeout for "session ready but no
+// WebSocket connected." Tests override via Handler.sessionExpiry.
+const defaultSessionExpiry = 60 * time.Second
 
 // NewHandler creates a Scrier handler.
 func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, version string, checkinInterval, offlineThreshold time.Duration) *Handler {
@@ -158,14 +190,15 @@ func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Q
 	waitStr := formatDuration(maxWait)
 
 	return &Handler{
-		tunnelOpener: opener,
-		fleetIndex:   fleetIndex,
-		queries:      queries,
-		version:      version,
-		connectWait:  waitStr,
-		tmplSSH:      tmplSSH,
-		tmplRDP:      tmplRDP,
-		sessions:     make(map[string]*scrierSession),
+		tunnelOpener:  opener,
+		fleetIndex:    fleetIndex,
+		queries:       queries,
+		version:       version,
+		connectWait:   waitStr,
+		tmplSSH:       tmplSSH,
+		tmplRDP:       tmplRDP,
+		sessionExpiry: defaultSessionExpiry,
+		sessions:      make(map[string]*scrierSession),
 	}
 }
 
@@ -463,20 +496,23 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 			fmt.Sprintf("opened %s session to %s (port %d)", sess.protocol, sess.hostname, sess.port), "")
 	}
 
-	// Clean up sessions that never get a WebSocket connection or that failed setup.
-	time.AfterFunc(60*time.Second, func() {
-		st, _ := sess.getStatus()
-		switch st {
-		case statusReady:
-			slog.Info("scrier session expired (no WebSocket connected)", "session_id", sess.id)
-			h.cleanupSession(sess)
-			sess.setStatus(statusError, "session expired")
-			h.removeSession(sess.id)
-		case statusError, statusWaiting, statusConnecting:
-			slog.Info("scrier session expired (setup incomplete)", "session_id", sess.id, "status", string(st))
-			h.cleanupSession(sess)
-			h.removeSession(sess.id)
+	// Clean up sessions that never get a WebSocket connection or that
+	// failed setup. The claim flag is the single SoT for "who owns
+	// teardown": if HandleRelay already claimed, this no-ops; if we
+	// claim, the relay handler will see claimed=true at its entry
+	// check and respond 409 Conflict rather than enter a relay loop
+	// against a session whose underlying resources we're closing.
+	time.AfterFunc(h.sessionExpiry, func() {
+		if !sess.claim() {
+			return
 		}
+		st, _ := sess.getStatus()
+		slog.Info("scrier session expired", "session_id", sess.id, "status", string(st))
+		h.cleanupSession(sess)
+		if st == statusReady {
+			sess.setStatus(statusError, "session expired")
+		}
+		h.removeSession(sess.id)
 	})
 }
 
@@ -720,6 +756,15 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Take ownership of teardown before doing anything user-visible.
+	// If the session-expiry timer fired and claimed first, we'd be
+	// racing into a relay loop against resources it's already closing
+	// — short-circuit with 409 instead.
+	if !sess.claim() {
+		http.Error(w, "session already claimed (expired or in use)", http.StatusConflict)
+		return
+	}
+
 	sess.setStatus("relaying", "")
 
 	// Accept WebSocket — SSH uses no subprotocol, RDP/VNC use "guacamole".
@@ -781,7 +826,15 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 // Binary WebSocket messages carry terminal data; text messages carry JSON
 // control commands (resize).
 func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionID string) {
-	bgCtx := context.Background()
+	// Cancellable context: each goroutine defer-cancels, so whichever
+	// reader exits first wakes the WS-side wsConn.Read(ctx) on the
+	// partner goroutine immediately — no waiting for cleanupSession's
+	// underlying-conn-close to propagate. PTY-side reads can't observe
+	// ctx, so that direction still relies on cleanupSession closing the
+	// SSH client (called by HandleRelay right after this returns).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	wsConn.SetReadLimit(64 * 1024) // terminal data is small
 
 	done := make(chan struct{}, 1)
@@ -789,6 +842,7 @@ func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionI
 	// PTY → WebSocket: read terminal output and send as binary messages.
 	go func() {
 		defer func() {
+			cancel()
 			select {
 			case done <- struct{}{}:
 			default:
@@ -798,9 +852,9 @@ func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionI
 		for {
 			n, err := sess.ptyOut.Read(buf)
 			if n > 0 {
-				wCtx, cancel := context.WithTimeout(bgCtx, 5*time.Second)
+				wCtx, wCancel := context.WithTimeout(ctx, 5*time.Second)
 				wErr := wsConn.Write(wCtx, websocket.MessageBinary, buf[:n])
-				cancel()
+				wCancel()
 				if wErr != nil {
 					slog.Info("scrier ssh ws write error", "session_id", sessionID, "error", wErr)
 					return
@@ -816,13 +870,14 @@ func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionI
 	// WebSocket → PTY: read input and control messages.
 	go func() {
 		defer func() {
+			cancel()
 			select {
 			case done <- struct{}{}:
 			default:
 			}
 		}()
 		for {
-			msgType, data, err := wsConn.Read(bgCtx)
+			msgType, data, err := wsConn.Read(ctx)
 			if err != nil {
 				slog.Info("scrier ssh ws read done", "session_id", sessionID, "error", err)
 				return
@@ -857,7 +912,12 @@ func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionI
 
 // relayGuacd relays Guacamole protocol between the WebSocket and guacd (RDP).
 func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessionID string) {
-	bgCtx := context.Background()
+	// Cancellable context for the same reason as relaySSH — gives the
+	// WS-read side a fast wakeup path independent of cleanupSession's
+	// Close chain. The guacd-side reader can't observe ctx and still
+	// depends on guacdConn.Close from cleanupSession after this returns.
+	bgCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	wsConn.SetReadLimit(1 << 20) // 1 MiB — RDP frames can be large
 
 	// Buffered channel for guacd→ws writes with backpressure.
@@ -866,12 +926,17 @@ func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessio
 	wsWriteDone := make(chan struct{})
 	go func() {
 		defer close(wsWriteDone)
-		for data := range wsCh {
-			wCtx, wCancel := context.WithTimeout(bgCtx, 5*time.Second)
-			err := wsConn.Write(wCtx, websocket.MessageText, data)
-			wCancel()
-			if err != nil {
-				slog.Info("scrier rdp ws write error", "session_id", sessionID, "error", err)
+		for {
+			select {
+			case data := <-wsCh:
+				wCtx, wCancel := context.WithTimeout(bgCtx, 5*time.Second)
+				err := wsConn.Write(wCtx, websocket.MessageText, data)
+				wCancel()
+				if err != nil {
+					slog.Info("scrier rdp ws write error", "session_id", sessionID, "error", err)
+					return
+				}
+			case <-bgCtx.Done():
 				return
 			}
 		}
@@ -882,6 +947,7 @@ func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessio
 		case wsCh <- data:
 		case <-sess.tunnelDone:
 		case <-wsWriteDone:
+		case <-bgCtx.Done():
 		}
 	}
 
@@ -948,6 +1014,7 @@ func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessio
 
 	// WebSocket → guacd: relay input, handle pings.
 	go func() {
+		defer cancel()
 		defer close(wsDone)
 		for {
 			_, data, err := wsConn.Read(bgCtx)
@@ -974,24 +1041,32 @@ func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessio
 	case <-sess.tunnelDone:
 	case <-wsWriteDone:
 	}
-
-	close(wsCh)
+	// No close(wsCh): the WS-writer exits on bgCtx.Done() (via the
+	// deferred cancel above), not on channel close. Closing wsCh while
+	// the guacd-reader might still call enqueueWS was a send-on-closed
+	// panic risk; ctx-driven shutdown side-steps it.
 }
 
 // --- Helpers ---
 
 // cleanupSession closes protocol-specific resources and the tunnel.
+// Idempotent via sess.cleanupOnce — the claim flag prevents the relay
+// handler and the expiry timer from both reaching cleanup, but Once
+// adds a second layer in case a future caller (or a refactor) lands
+// without consulting the claim.
 func (h *Handler) cleanupSession(sess *scrierSession) {
-	if sess.sshSession != nil {
-		sess.sshSession.Close()
-	}
-	if sess.sshClient != nil {
-		sess.sshClient.Close()
-	}
-	if sess.guacdConn != nil {
-		sess.guacdConn.Close()
-	}
-	h.tunnelOpener.CloseTunnel(sess.tunnelID)
+	sess.cleanupOnce.Do(func() {
+		if sess.sshSession != nil {
+			sess.sshSession.Close()
+		}
+		if sess.sshClient != nil {
+			sess.sshClient.Close()
+		}
+		if sess.guacdConn != nil {
+			sess.guacdConn.Close()
+		}
+		h.tunnelOpener.CloseTunnel(sess.tunnelID)
+	})
 }
 
 func (h *Handler) getSession(id string) *scrierSession {
