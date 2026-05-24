@@ -1,0 +1,5 @@
+-- No-op: the UP wipe is irreversible. We don't retain bcrypt
+-- plaintexts to re-hash, and SHA-256 hashes can't be reversed to
+-- plaintexts either. Down-migrating returns the table to its
+-- pre-000012 schema (the UNIQUE INDEX from 000011 stays); the data
+-- isn't coming back.

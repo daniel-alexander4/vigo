@@ -1,0 +1,13 @@
+-- 000011 added a UNIQUE INDEX on api_tokens.token_hash and the auth
+-- layer switched from bcrypt to SHA-256, but pre-existing bcrypt
+-- rows (60-char `$2a$…` envelopes) were intentionally left in place
+-- — they sit inert under the new validation since a SHA-256 hex
+-- digest never collides with a bcrypt envelope. "Inert but present"
+-- is clutter; this migration removes them.
+--
+-- Wholesale DELETE is correct here: at the time 000012 runs, the
+-- only rows that exist are pre-SHA-256 (no SHA-256 token has been
+-- generated yet — that requires the upgraded server binary to be
+-- live). Any caller losing access regenerates via
+-- `vigocli tokens generate` after the upgrade.
+DELETE FROM api_tokens;
