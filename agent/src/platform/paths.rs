@@ -172,81 +172,34 @@ pub fn manifest_dir_for(blobs_dir: &std::path::Path) -> PathBuf {
     blobs_dir.parent().unwrap_or(blobs_dir).to_path_buf()
 }
 
-/// Default seed directory for envoy-originated swarm distribution.
-#[cfg(all(unix, not(target_os = "macos")))]
+/// Default seed directory for envoy-originated swarm distribution. The
+/// per-subsystem env var wins; otherwise falls back to a sibling of the
+/// blob cache so `VIGO_BLOBS_DIR` cascades to the whole swarm tree.
 pub fn default_seeds_dir() -> PathBuf {
     if let Some(p) = env_override("VIGO_SEEDS_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/swarm/seed")
-}
-
-#[cfg(target_os = "macos")]
-pub fn default_seeds_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_SEEDS_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/swarm/seed")
-}
-
-#[cfg(windows)]
-pub fn default_seeds_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_SEEDS_DIR") { return p; }
-    default_data_dir().join("swarm").join("seed")
+    default_swarm_base().join("seed")
 }
 
 /// Default graveyard directory: revoked blobs awaiting hard-delete after the
 /// 7-day grace window. Within the window, a same-SHA reseed can resurrect.
-#[cfg(all(unix, not(target_os = "macos")))]
+/// Cascade: `VIGO_GRAVEYARD_DIR` → `VIGO_BLOBS_DIR`-derived sibling.
 pub fn default_graveyard_dir() -> PathBuf {
     if let Some(p) = env_override("VIGO_GRAVEYARD_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/swarm/graveyard")
-}
-
-#[cfg(target_os = "macos")]
-pub fn default_graveyard_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_GRAVEYARD_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/swarm/graveyard")
-}
-
-#[cfg(windows)]
-pub fn default_graveyard_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_GRAVEYARD_DIR") { return p; }
-    default_data_dir().join("swarm").join("graveyard")
+    default_swarm_base().join("graveyard")
 }
 
 /// Default longdrawer state directory (per-user snapshots + tombstones).
-#[cfg(all(unix, not(target_os = "macos")))]
+/// Cascade: `VIGO_LONGDRAWER_DIR` → `VIGO_BLOBS_DIR`-derived sibling.
 pub fn default_longdrawer_dir() -> PathBuf {
     if let Some(p) = env_override("VIGO_LONGDRAWER_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/swarm/longdrawer")
-}
-
-#[cfg(target_os = "macos")]
-pub fn default_longdrawer_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_LONGDRAWER_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/swarm/longdrawer")
-}
-
-#[cfg(windows)]
-pub fn default_longdrawer_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_LONGDRAWER_DIR") { return p; }
-    default_data_dir().join("swarm").join("longdrawer")
+    default_swarm_base().join("longdrawer")
 }
 
 /// Default gitback state directory (last_seeded_sha, bundle tmp dir).
-#[cfg(all(unix, not(target_os = "macos")))]
+/// Cascade: `VIGO_GITBACK_DIR` → `VIGO_BLOBS_DIR`-derived sibling.
 pub fn default_gitback_dir() -> PathBuf {
     if let Some(p) = env_override("VIGO_GITBACK_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/swarm/gitback")
-}
-
-#[cfg(target_os = "macos")]
-pub fn default_gitback_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_GITBACK_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/swarm/gitback")
-}
-
-#[cfg(windows)]
-pub fn default_gitback_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_GITBACK_DIR") { return p; }
-    default_data_dir().join("swarm").join("gitback")
+    default_swarm_base().join("gitback")
 }
 
 /// Default custom executors directory.
@@ -379,6 +332,81 @@ mod tests {
             PathBuf::from("/tmp/test-override"),
         );
         std::env::remove_var("VIGO_BLOBS_DIR");
+    }
+
+    // The four subordinate swarm-tree helpers (seeds, graveyard, longdrawer,
+    // gitback) each accept their own `VIGO_<SUB>_DIR` override first, then
+    // fall back to a sibling of `default_swarm_base()` so a `VIGO_BLOBS_DIR`
+    // override cascades to the whole swarm tree. One test per subsystem;
+    // each pins all 3 states (default → cascade → specific-wins) so a future
+    // copy-paste mistake in one helper can't go unnoticed.
+
+    #[test]
+    fn default_seeds_dir_cascades_then_specific_wins() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_SEEDS_DIR");
+        assert!(default_seeds_dir().ends_with("seed"));
+
+        std::env::set_var("VIGO_BLOBS_DIR", "/tmp/vigo-cascade-seeds/blobs");
+        assert_eq!(default_seeds_dir(), PathBuf::from("/tmp/vigo-cascade-seeds/seed"));
+
+        std::env::set_var("VIGO_SEEDS_DIR", "/tmp/vigo-specific-seeds");
+        assert_eq!(default_seeds_dir(), PathBuf::from("/tmp/vigo-specific-seeds"));
+
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_SEEDS_DIR");
+    }
+
+    #[test]
+    fn default_graveyard_dir_cascades_then_specific_wins() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_GRAVEYARD_DIR");
+        assert!(default_graveyard_dir().ends_with("graveyard"));
+
+        std::env::set_var("VIGO_BLOBS_DIR", "/tmp/vigo-cascade-graveyard/blobs");
+        assert_eq!(default_graveyard_dir(), PathBuf::from("/tmp/vigo-cascade-graveyard/graveyard"));
+
+        std::env::set_var("VIGO_GRAVEYARD_DIR", "/tmp/vigo-specific-graveyard");
+        assert_eq!(default_graveyard_dir(), PathBuf::from("/tmp/vigo-specific-graveyard"));
+
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_GRAVEYARD_DIR");
+    }
+
+    #[test]
+    fn default_longdrawer_dir_cascades_then_specific_wins() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_LONGDRAWER_DIR");
+        assert!(default_longdrawer_dir().ends_with("longdrawer"));
+
+        std::env::set_var("VIGO_BLOBS_DIR", "/tmp/vigo-cascade-longdrawer/blobs");
+        assert_eq!(default_longdrawer_dir(), PathBuf::from("/tmp/vigo-cascade-longdrawer/longdrawer"));
+
+        std::env::set_var("VIGO_LONGDRAWER_DIR", "/tmp/vigo-specific-longdrawer");
+        assert_eq!(default_longdrawer_dir(), PathBuf::from("/tmp/vigo-specific-longdrawer"));
+
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_LONGDRAWER_DIR");
+    }
+
+    #[test]
+    fn default_gitback_dir_cascades_then_specific_wins() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_GITBACK_DIR");
+        assert!(default_gitback_dir().ends_with("gitback"));
+
+        std::env::set_var("VIGO_BLOBS_DIR", "/tmp/vigo-cascade-gitback/blobs");
+        assert_eq!(default_gitback_dir(), PathBuf::from("/tmp/vigo-cascade-gitback/gitback"));
+
+        std::env::set_var("VIGO_GITBACK_DIR", "/tmp/vigo-specific-gitback");
+        assert_eq!(default_gitback_dir(), PathBuf::from("/tmp/vigo-specific-gitback"));
+
+        std::env::remove_var("VIGO_BLOBS_DIR");
+        std::env::remove_var("VIGO_GITBACK_DIR");
     }
 
     #[test]
