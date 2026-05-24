@@ -6,6 +6,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestParseModuleFile_BasicModule(t *testing.T) {
@@ -163,6 +165,107 @@ func TestParseModuleFile_EmptyDocument(t *testing.T) {
 	_, err := ParseModuleFile([]byte(""))
 	if err == nil {
 		t.Fatal("expected error for empty document")
+	}
+}
+
+// TestParseModuleFile_RetiredTopLevelProvides pins the defensive
+// hard-error from 0.66.72. modlint
+// (rule_module_top_level_provides_bundle) catches this at publish
+// time, but parseModuleYAML is now the parallel rejection point for
+// direct-decode callers that bypass modlint. The matching
+// UnmarshalYAML test below pins the second decode path.
+func TestParseModuleFile_RetiredTopLevelProvides(t *testing.T) {
+	data := []byte(`
+name: legacy
+provides: [time-sync]
+resources:
+  - name: noop
+    type: package
+    package: chrony
+    state: present
+`)
+	_, err := ParseModuleFile(data)
+	if err == nil {
+		t.Fatal("expected error for top-level provides:")
+	}
+	for _, want := range []string{"retired", "0.66.57", "compliance:", "`provides:`"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error, got: %v", want, err)
+		}
+	}
+}
+
+func TestParseModuleFile_RetiredTopLevelBundle(t *testing.T) {
+	data := []byte(`
+name: legacy
+bundle: [cis-ubuntu-access]
+resources:
+  - name: noop
+    type: package
+    package: nginx
+    state: present
+`)
+	_, err := ParseModuleFile(data)
+	if err == nil {
+		t.Fatal("expected error for top-level bundle:")
+	}
+	for _, want := range []string{"retired", "0.66.57", "compliance:", "`bundle:`"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error, got: %v", want, err)
+		}
+	}
+}
+
+// TestParseModuleFile_NestedComplianceShapeAccepted is the happy path:
+// the 0.66.57 nested shape must still load cleanly. Pins that the
+// retired-keys arm doesn't accidentally swallow valid keys.
+func TestParseModuleFile_NestedComplianceShapeAccepted(t *testing.T) {
+	data := []byte(`
+name: chrony
+compliance:
+  provides: [time-sync]
+  bundle: [cis-ubuntu-access]
+resources:
+  - name: install-chrony
+    type: package
+    package: chrony
+    state: present
+`)
+	def, err := ParseModuleFile(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(def.Compliance.Provides) != 1 || def.Compliance.Provides[0] != "time-sync" {
+		t.Errorf("Compliance.Provides = %v, want [time-sync]", def.Compliance.Provides)
+	}
+	if len(def.Compliance.Bundle) != 1 || def.Compliance.Bundle[0] != "cis-ubuntu-access" {
+		t.Errorf("Compliance.Bundle = %v, want [cis-ubuntu-access]", def.Compliance.Bundle)
+	}
+}
+
+// TestModuleDefinition_UnmarshalYAML_RetiredTopLevelProvides pins the
+// second decode path — the yaml.Unmarshaler implementation on
+// ModuleDefinition itself. Both paths must surface the same error so
+// the rejection can't be smuggled past one of them.
+func TestModuleDefinition_UnmarshalYAML_RetiredTopLevelProvides(t *testing.T) {
+	data := []byte(`
+name: legacy
+provides: [time-sync]
+resources:
+  - name: noop
+    type: package
+    package: chrony
+    state: present
+`)
+	var def ModuleDefinition
+	err := yaml.Unmarshal(data, &def)
+	if err == nil {
+		t.Fatal("expected error for top-level provides: via UnmarshalYAML")
+	}
+	for _, want := range []string{"retired", "0.66.57", "compliance:"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected %q in error, got: %v", want, err)
+		}
 	}
 }
 

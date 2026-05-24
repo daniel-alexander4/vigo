@@ -1175,11 +1175,37 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 			if err := val.Decode(&m.Compliance); err != nil {
 				return fmt.Errorf("decoding compliance: %w", err)
 			}
+		case "provides", "bundle":
+			// Defense-in-depth against the 0.66.48-through-0.66.56
+			// authoring shape. modlint catches this at publish-time
+			// via rule_module_top_level_provides_bundle, but the
+			// loader also has direct-decode paths (test fixtures,
+			// hand-rolled callers of parseModuleYAML) that don't
+			// pass through modlint — Go's YAML decoder would silently
+			// drop the unknown keys without this arm.
+			return errRetiredTopLevelComplianceKey(key)
 		}
 	}
 
 	applyDefaults(m.Resources, m.Defaults)
 	return nil
+}
+
+// errRetiredTopLevelComplianceKey is the single source of truth for the
+// error returned when a module YAML declares `provides:` or `bundle:`
+// at the top level — the authoring shape introduced in 0.66.48 and
+// retired in 0.66.57 in favor of a single `compliance:` parent block.
+// Both YAML decode paths (ModuleDefinition.UnmarshalYAML in this file,
+// parseModuleYAML in parse.go) call this so the wording can't drift.
+// Message mirrors modlint/rule_module_top_level_provides_bundle.go so
+// operators see the same diagnostic from either gate.
+func errRetiredTopLevelComplianceKey(key string) error {
+	return fmt.Errorf(
+		"module YAML: top-level `%s:` is retired (0.66.57) — fold under a `compliance:` "+
+			"parent block (e.g. `compliance: { provides: [<tag>], bundle: [<id>] }`). "+
+			"Restores the at-a-glance compliance signal in module YAML without changing the catalog-backed semantics.",
+		key,
+	)
 }
 
 // ModuleRef is a reference to a module in a role or envoy entry. It supports
