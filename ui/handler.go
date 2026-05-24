@@ -62,7 +62,7 @@ type DataSource interface {
 	DashboardData(baseInterval, offlineThreshold time.Duration) DashboardPageData
 	ConvergenceData(baseInterval, offlineThreshold time.Duration) ConvergencePageData
 	DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData
-	EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset, limit int) EnvoysPageData
+	EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir string, offset, limit int) EnvoysPageData
 	EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error)
 	EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, error)
 	EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error)
@@ -1243,6 +1243,20 @@ type EnvoyRow struct {
 	DiskStatus          string // "ok", "warn", "critical"
 	RepoStatus          string // "ok", "degraded", ""
 	BrokenRepos         int    // number of broken package repos
+
+	// Slice-2 envoy-filter axes (ADR-032). All populated by the envoyRow
+	// builder so the canonical row stays the SoT for what every envoys-
+	// view chip can filter on. Tags/OS/Arch come from EnvoyState directly;
+	// Environment/Roles/Modules from ConfigStore.Match's resolved config;
+	// ComplianceFrameworks from ConfigStore.EnvoyFrameworks (union of the
+	// standards whose covered controls intersect the envoy's modules).
+	Tags                 []string
+	OS                   string // Traits["os.distro"]
+	Arch                 string // Traits["arch"]
+	Environment          string
+	Roles                []string
+	Modules              []string
+	ComplianceFrameworks []string
 }
 
 // EnvoysPageData holds data for the envoys list page.
@@ -1257,7 +1271,16 @@ type EnvoysPageData struct {
 	DriftFilter   string
 	ReachFilter   string
 	Search        string
-	SortColumn    string // active sort column (status, hostname, last_seen, last_run, ip)
+	// ADR-032 slice-2 chip axes — case-insensitive substring with
+	// OR-within-axis (comma-separated values), AND across axes.
+	EnvFilter        string
+	TagFilter        string
+	RoleFilter       string
+	OSFilter         string
+	ArchFilter       string
+	ModuleFilter     string
+	ComplianceFilter string
+	SortColumn       string // active sort column (status, hostname, last_seen, last_run, ip)
 	SortDir       string // "asc" or "desc"
 	EnvoyCount    int    // rows on this page after filter+offset
 	MatchingTotal int    // total entries matching filter (across all pages)
@@ -3934,7 +3957,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		ModuleCount int64
 	}
 	var allEnvoys []envoyInfo
-	for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", 0, 0).Envoys {
+	for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", "", "", "", "", "", "", "", 0, 0).Envoys {
 		allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 	}
 
@@ -4104,7 +4127,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fleet inventory CSV
-	envoyData := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", 0, 100000)
+	envoyData := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", "", "", "", "", "", "", "", 0, 100000)
 	if len(envoyData.Envoys) > 0 {
 		if f, err := zw.Create("fleet-inventory.csv"); err == nil {
 			fmt.Fprintln(f, "hostname,id,ip_address,status,enrolled_at,last_seen,last_run")
@@ -4232,17 +4255,25 @@ const (
 // Envoys renders the envoys list page with optional axis filters
 // (?conv=, ?drift=, ?reach=) and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
-	convFilter := r.URL.Query().Get("conv")
-	driftFilter := r.URL.Query().Get("drift")
-	reachFilter := r.URL.Query().Get("reach")
-	search := r.URL.Query().Get("search")
-	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	q := r.URL.Query()
+	convFilter := q.Get("conv")
+	driftFilter := q.Get("drift")
+	reachFilter := q.Get("reach")
+	search := q.Get("search")
+	envFilter := q.Get("env")
+	tagFilter := q.Get("tag")
+	roleFilter := q.Get("role")
+	osFilter := q.Get("os")
+	archFilter := q.Get("arch")
+	moduleFilter := q.Get("module")
+	complianceFilter := q.Get("compliance")
+	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
 	if offset < 0 {
 		offset = 0
 	}
 
-	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir, offset)
+	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir, offset)
 	h.enrichEnvoyRows(data.Envoys)
 
 	h.setCommonWithRequest(&data.PageData, r)
@@ -4276,7 +4307,7 @@ func normalizeEnvoySort(col, dir string) (string, string) {
 // in the pills above it. The hard render cap (envoysRenderedCap) is
 // applied here, handler-side: the request limit is clamped before the
 // data-source call and the load-more sentinel is set after.
-func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset int) EnvoysPageData {
+func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir string, offset int) EnvoysPageData {
 	// Cap the request at the hard render limit. Past envoysRenderedCap
 	// rows we stop emitting load-more triggers and surface a sentinel.
 	limit := envoysPageLimit
@@ -4287,7 +4318,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 		}
 	}
 
-	data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, driftFilter, reachFilter, search, sortCol, sortDir, offset, limit)
+	data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir, offset, limit)
 
 	// Render-cap sentinel: when paging reaches the hard DOM cap, the
 	// footer renders a "refine your filter" notice instead of another
@@ -5241,16 +5272,18 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 // longer auto-polled, since polling at the table boundary wipes any
 // rows the user has already scrolled into.
 func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
-	convFilter := r.URL.Query().Get("conv")
-	driftFilter := r.URL.Query().Get("drift")
-	reachFilter := r.URL.Query().Get("reach")
-	search := r.URL.Query().Get("search")
-	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	q := r.URL.Query()
+	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
 	if offset < 0 {
 		offset = 0
 	}
-	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir, offset)
+	data := h.envoysPageData(
+		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
+		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
+		q.Get("arch"), q.Get("module"), q.Get("compliance"),
+		sortCol, sortDir, offset,
+	)
 	h.enrichEnvoyRows(data.Envoys)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
@@ -5261,12 +5294,14 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 // table itself are outside this region so the operator's typed query
 // and scrolled position survive every refresh tick.
 func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
-	convFilter := r.URL.Query().Get("conv")
-	driftFilter := r.URL.Query().Get("drift")
-	reachFilter := r.URL.Query().Get("reach")
-	search := r.URL.Query().Get("search")
-	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
-	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir, 0)
+	q := r.URL.Query()
+	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
+	data := h.envoysPageData(
+		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
+		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
+		q.Get("arch"), q.Get("module"), q.Get("compliance"),
+		sortCol, sortDir, 0,
+	)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-stats", data)
 }

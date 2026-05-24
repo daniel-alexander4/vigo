@@ -65,6 +65,14 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 	}
 	observedCycle := ts.ObservedCycle()
 	lastSeenLabel, offline := ui.EnvoyFreshness(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
+	// ADR-032 slice 2 axes sourced from EnvoyState — Tags is already a
+	// slice; OS/Arch live in the flat-trait map. Roles/Modules/
+	// Environment/ComplianceFrameworks need a ConfigStore lookup and
+	// get stamped in envoyRows (one pass for the whole snapshot).
+	var tags []string
+	if len(ts.Tags) > 0 {
+		tags = append(tags, ts.Tags...)
+	}
 	return ui.EnvoyRow{
 		ID:                  ts.ID,
 		Hostname:            ts.Hostname,
@@ -85,17 +93,46 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 		ObserveOnly:         ts.ObserveOnly,
 		StaleThresholdLabel: ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, observedCycle, offlineThreshold)),
 		AgentVersion:        ts.AgentVersion,
+		Tags:                tags,
+		OS:                  ts.Traits["os.distro"],
+		Arch:                ts.Traits["arch"],
 	}
 }
 
 // envoyRows builds the full freshness-stamped EnvoyRow set from the live
 // FleetIndex snapshot — the shared basis for the envoys page and the
 // dashboard worst-list.
+//
+// After the per-row build, enriches each row with ConfigStore-derived
+// ADR-032 slice-2 axes (Environment, Roles, Modules, ComplianceFrameworks)
+// in one pass so the row is the canonical SoT for every envoys-view chip.
+// Uses ConfigStore.Match (shared, read-only) rather than MatchClone to
+// keep allocation churn flat at 10k-envoy scale.
 func (ds *DataSource) envoyRows(baseInterval, offlineThreshold time.Duration) []ui.EnvoyRow {
 	states := ds.fleet.SnapshotEnvoys()
 	rows := make([]ui.EnvoyRow, 0, len(states))
 	for i := range states {
 		rows = append(rows, ds.envoyRow(&states[i], baseInterval, offlineThreshold))
+	}
+	if ds.configStore == nil {
+		return rows
+	}
+	for i := range rows {
+		_, cfg := ds.configStore.Match(rows[i].Hostname)
+		if cfg != nil {
+			rows[i].Environment = cfg.Environment
+			if len(cfg.Roles) > 0 {
+				rows[i].Roles = append(rows[i].Roles, cfg.Roles...)
+			}
+			if len(cfg.Modules) > 0 {
+				moduleNames := make([]string, 0, len(cfg.Modules))
+				for _, m := range cfg.Modules {
+					moduleNames = append(moduleNames, m.Name)
+				}
+				rows[i].Modules = moduleNames
+			}
+		}
+		rows[i].ComplianceFrameworks = ds.configStore.EnvoyFrameworks(rows[i].Hostname)
 	}
 	return rows
 }
@@ -262,8 +299,11 @@ func (ds *DataSource) DashboardStatsData(baseInterval, offlineThreshold time.Dur
 
 // EnvoysData builds the envoys-list page data from the live FleetIndex
 // snapshot — the single source of truth for both the table rows and the
-// filter-pill counts above them.
-func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset, limit int) ui.EnvoysPageData {
+// filter-pill counts above them. ADR-032 slice 2 added 7 free-text
+// chip axes (env, tag, role, os, arch, module, compliance); each
+// accepts comma-separated values for OR-within-axis semantics; AND
+// across axes (the existing convFilter/driftFilter/reachFilter behavior).
+func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir string, offset, limit int) ui.EnvoysPageData {
 	all := ds.envoyRows(baseInterval, offlineThreshold)
 
 	// Fleet-wide Module Health + observe-only count over the full set,
@@ -278,7 +318,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 		}
 	}
 
-	filtered := filterEnvoyRows(all, convFilter, driftFilter, reachFilter, search)
+	filtered := filterEnvoyRows(all, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter)
 	total := len(filtered)
 	sortEnvoyRows(filtered, sortCol, sortDir)
 
@@ -298,9 +338,16 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 
 	counts := ds.fleet.ConvergenceSummary()
 	data := ui.EnvoysPageData{
-		PageData:       ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:         page,
-		ConvFilter:     convFilter,
+		PageData:         ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:           page,
+		EnvFilter:        envFilter,
+		TagFilter:        tagFilter,
+		RoleFilter:       roleFilter,
+		OSFilter:         osFilter,
+		ArchFilter:       archFilter,
+		ModuleFilter:     moduleFilter,
+		ComplianceFilter: complianceFilter,
+		ConvFilter:       convFilter,
 		DriftFilter:    driftFilter,
 		ReachFilter:    reachFilter,
 		Search:         search,
@@ -337,26 +384,87 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 }
 
 // filterEnvoyRows returns the subset of rows matching the given axis
-// filters. Filter semantics (combined with AND across axes; empty =
-// match all):
-//   - convFilter: "" / "converged" / "degraded" / "failed" / "no data"
+// filters. Filter semantics (AND across axes; empty axis = match all):
+//   - convFilter: "" / "converged" / "degraded" / "failed" / "no data" (enum, single value)
 //   - driftFilter: "" / "changed" / "diverged" (Diverged ⊆ Changed;
 //     clicking Changed includes Diverged envoys)
 //   - reachFilter: "" / "offline" / "observing"
 //
-// search is a case-insensitive substring match on hostname.
-func filterEnvoyRows(rows []ui.EnvoyRow, convFilter, driftFilter, reachFilter, search string) []ui.EnvoyRow {
-	searchLower := strings.ToLower(search)
+// search and the 7 ADR-032 slice-2 axes (envFilter, tagFilter,
+// roleFilter, osFilter, archFilter, moduleFilter, complianceFilter)
+// are case-insensitive substring matches. Each accepts comma-separated
+// values for OR-within-axis: `?env=prod,staging` matches either; AND
+// holds across axes.
+func filterEnvoyRows(rows []ui.EnvoyRow, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter string) []ui.EnvoyRow {
+	searchLower := splitCommaLower(search)
+	envLower := splitCommaLower(envFilter)
+	tagLower := splitCommaLower(tagFilter)
+	roleLower := splitCommaLower(roleFilter)
+	osLower := splitCommaLower(osFilter)
+	archLower := splitCommaLower(archFilter)
+	moduleLower := splitCommaLower(moduleFilter)
+	complianceLower := splitCommaLower(complianceFilter)
 	out := make([]ui.EnvoyRow, 0, len(rows))
 	for _, e := range rows {
-		if matchesEnvoyFilter(e, convFilter, driftFilter, reachFilter, searchLower) {
+		if matchesEnvoyFilter(e, convFilter, driftFilter, reachFilter, searchLower, envLower, tagLower, roleLower, osLower, archLower, moduleLower, complianceLower) {
 			out = append(out, e)
 		}
 	}
 	return out
 }
 
-func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter, searchLower string) bool {
+// splitCommaLower splits an OR-within-axis chip value into trimmed,
+// lower-cased substring tokens. Empty/whitespace tokens are dropped so
+// `?env=prod,,staging` is equivalent to `?env=prod,staging`.
+func splitCommaLower(v string) []string {
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(strings.ToLower(p))
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// anySubstringMatch returns true if any value in needles is a substring
+// of haystack (case-insensitive; haystack pre-lowered by caller). Empty
+// needles slice means the axis is not filtering — pass-through true.
+func anySubstringMatch(haystackLower string, needles []string) bool {
+	if len(needles) == 0 {
+		return true
+	}
+	for _, n := range needles {
+		if strings.Contains(haystackLower, n) {
+			return true
+		}
+	}
+	return false
+}
+
+// anySubstringMatchInSlice returns true if any needle is a substring of
+// any value in haystacks (each value lowered on the fly). Empty needles
+// = pass-through; empty haystacks with non-empty needles = no match.
+func anySubstringMatchInSlice(haystacks, needles []string) bool {
+	if len(needles) == 0 {
+		return true
+	}
+	for _, h := range haystacks {
+		hl := strings.ToLower(h)
+		for _, n := range needles {
+			if strings.Contains(hl, n) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter string, searchLower, envLower, tagLower, roleLower, osLower, archLower, moduleLower, complianceLower []string) bool {
 	if convFilter != "" && e.Status != convFilter {
 		return false
 	}
@@ -388,10 +496,29 @@ func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter, sea
 			return false
 		}
 	}
-	if searchLower != "" {
-		if !strings.Contains(strings.ToLower(e.Hostname), searchLower) {
-			return false
-		}
+	if !anySubstringMatch(strings.ToLower(e.Hostname), searchLower) {
+		return false
+	}
+	if !anySubstringMatch(strings.ToLower(e.Environment), envLower) {
+		return false
+	}
+	if !anySubstringMatchInSlice(e.Tags, tagLower) {
+		return false
+	}
+	if !anySubstringMatchInSlice(e.Roles, roleLower) {
+		return false
+	}
+	if !anySubstringMatch(strings.ToLower(e.OS), osLower) {
+		return false
+	}
+	if !anySubstringMatch(strings.ToLower(e.Arch), archLower) {
+		return false
+	}
+	if !anySubstringMatchInSlice(e.Modules, moduleLower) {
+		return false
+	}
+	if !anySubstringMatchInSlice(e.ComplianceFrameworks, complianceLower) {
+		return false
 	}
 	return true
 }

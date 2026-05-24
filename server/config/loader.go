@@ -1683,6 +1683,42 @@ func (cs *ConfigStore) EnvoyStandardCoverage(hostname, standard string) *Standar
 	return nil
 }
 
+// EnvoyFrameworks returns the sorted list of standard keys this envoy
+// participates in — every standard whose complianceIndex has at least
+// one control covered by the envoy's resolved modules. Used by the
+// envoys-page filter chip (`?compliance=hipaa,soc2`) and by surfaces
+// that need to display the per-envoy compliance-framework chip set.
+//
+// O(N×M) where N=standards (~10) and M=envoy's covered controls per
+// standard. Bounded; no cache layer in v1 — add one alongside the
+// existing coverageCache if profiling shows it hot.
+func (cs *ConfigStore) EnvoyFrameworks(hostname string) []string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	i := cs.index.Lookup(hostname)
+	if i < 0 {
+		return nil
+	}
+	perStandard, ok := cs.coverageCache[i]
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(perStandard))
+	for standard, sc := range perStandard {
+		if sc == nil {
+			continue
+		}
+		// A non-nil StandardCoverage with at least one covered control
+		// means the envoy participates in this framework.
+		if len(sc.CoveredControls) > 0 {
+			out = append(out, standard)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // computeStandardCoverage walks (entryModules × controlIndex) once to
 // produce a single StandardCoverage. Pure function — used by
 // buildCoverageCache at publish time. Kept exported-ish (lowercase but

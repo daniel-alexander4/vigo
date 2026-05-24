@@ -23,18 +23,26 @@ type EnvoyTreeNode struct {
 
 // EnvoyTreePageData drives templates/pages/envoys-tree.html. Carries the
 // same chip-filter state the flat envoys page uses so the UX is uniform
-// between the two views (ADR-032 § "Filter UX").
+// between the two views (ADR-032 § "Filter UX"). Slice 2 adds 7 axes
+// (env/tag/role/os/arch/module/compliance) on top of the original 4.
 type EnvoyTreePageData struct {
 	PageData
-	Root            *EnvoyTreeNode
-	Unmatched       *EnvoyTreeNode // synthetic node for envoys with no matched hostcrate; nil when empty
-	Missing         bool           // .live/ doesn't exist (no published config yet)
-	TotalEnvoys     int            // total in the fleet (pre-filter)
-	MatchingTotal   int            // surviving the chip filters
-	ConvFilter      string
-	DriftFilter     string
-	ReachFilter     string
-	Search          string
+	Root             *EnvoyTreeNode
+	Unmatched        *EnvoyTreeNode // synthetic node for envoys with no matched hostcrate; nil when empty
+	Missing          bool           // .live/ doesn't exist (no published config yet)
+	TotalEnvoys      int            // total in the fleet (pre-filter)
+	MatchingTotal    int            // surviving the chip filters
+	ConvFilter       string
+	DriftFilter      string
+	ReachFilter      string
+	Search           string
+	EnvFilter        string
+	TagFilter        string
+	RoleFilter       string
+	OSFilter         string
+	ArchFilter       string
+	ModuleFilter     string
+	ComplianceFilter string
 }
 
 // EnvoyTree renders the envoy-tree navigation view at /envoys/tree.
@@ -43,12 +51,20 @@ type EnvoyTreePageData struct {
 // that matched them. Per ADR-032: coexist with the flat /envoys view,
 // reuse the chip filter pattern, click-through to /envoys/{id} for detail.
 func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
 	data := EnvoyTreePageData{
-		PageData:    PageData{Title: "Envoys (tree)", ActiveNav: "envoys"},
-		ConvFilter:  r.URL.Query().Get("conv"),
-		DriftFilter: r.URL.Query().Get("drift"),
-		ReachFilter: r.URL.Query().Get("reach"),
-		Search:      r.URL.Query().Get("search"),
+		PageData:         PageData{Title: "Envoys (tree)", ActiveNav: "envoys"},
+		ConvFilter:       q.Get("conv"),
+		DriftFilter:      q.Get("drift"),
+		ReachFilter:      q.Get("reach"),
+		Search:           q.Get("search"),
+		EnvFilter:        q.Get("env"),
+		TagFilter:        q.Get("tag"),
+		RoleFilter:       q.Get("role"),
+		OSFilter:         q.Get("os"),
+		ArchFilter:       q.Get("arch"),
+		ModuleFilter:     q.Get("module"),
+		ComplianceFilter: q.Get("compliance"),
 	}
 
 	if h.configStore == nil {
@@ -72,6 +88,8 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 	envoyData := h.dataSource.EnvoysData(
 		h.baseInterval, h.offlineThreshold,
 		data.ConvFilter, data.DriftFilter, data.ReachFilter, data.Search,
+		data.EnvFilter, data.TagFilter, data.RoleFilter, data.OSFilter,
+		data.ArchFilter, data.ModuleFilter, data.ComplianceFilter,
 		"", "", 0, 0,
 	)
 	data.TotalEnvoys = envoyData.TotalEnvoys
@@ -112,6 +130,14 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.Root = root
+
+	// ADR-032 slice 2: when any chip is non-empty, prune branches that
+	// have no surviving envoys (filter-active = "show me only what's
+	// relevant"). Baseline (no filter) keeps the full hierarchy so
+	// operators can navigate the entire config tree.
+	if data.anyFilterActive() {
+		pruneEmptyBranches(data.Root)
+	}
 
 	if len(unmatched) > 0 {
 		sort.Slice(unmatched, func(i, j int) bool { return unmatched[i].Hostname < unmatched[j].Hostname })
@@ -168,6 +194,44 @@ func walkEnvoyTree(absDir string, node *EnvoyTreeNode, relPath string, envoysByD
 		node.Children = append(node.Children, child)
 	}
 	return nil
+}
+
+// anyFilterActive reports whether any of the 11 chip axes is non-empty.
+// Drives the prune-empty-branches behavior on tree (ADR-032 slice 2).
+func (d *EnvoyTreePageData) anyFilterActive() bool {
+	return d.ConvFilter != "" ||
+		d.DriftFilter != "" ||
+		d.ReachFilter != "" ||
+		d.Search != "" ||
+		d.EnvFilter != "" ||
+		d.TagFilter != "" ||
+		d.RoleFilter != "" ||
+		d.OSFilter != "" ||
+		d.ArchFilter != "" ||
+		d.ModuleFilter != "" ||
+		d.ComplianceFilter != ""
+}
+
+// pruneEmptyBranches recursively drops Children whose subtree has no
+// envoys at any depth. Mutates node in place. Returns true if node
+// itself has any surviving content (envoys or non-pruned children) —
+// the caller's prune decision keys off the return value of each child.
+//
+// Only invoked when a filter is active (ADR-032 slice 2). Baseline
+// rendering keeps every directory node so operators can navigate the
+// full config hierarchy.
+func pruneEmptyBranches(node *EnvoyTreeNode) bool {
+	if node == nil {
+		return false
+	}
+	kept := node.Children[:0]
+	for _, c := range node.Children {
+		if pruneEmptyBranches(c) {
+			kept = append(kept, c)
+		}
+	}
+	node.Children = kept
+	return len(node.Envoys) > 0 || len(node.Children) > 0
 }
 
 func sortedEnvoys(rows []EnvoyRow) []EnvoyRow {

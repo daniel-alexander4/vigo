@@ -121,6 +121,90 @@ func TestBuildEnvoyTree_IgnoresFilesAtEveryLevel(t *testing.T) {
 	assert.Empty(t, tree.Children[0].Children)
 }
 
+// pruneEmptyBranches is gated on any-filter-active in the production
+// handler; the helper itself is unconditional and recursive. Tests
+// pin the canonical contract — node survives iff it has direct envoys
+// or at least one surviving child after recursive prune.
+
+func TestPruneEmptyBranches_RetainsBranchesWithSurvivingDescendants(t *testing.T) {
+	tree := &EnvoyTreeNode{
+		Name: ".live",
+		Children: []*EnvoyTreeNode{
+			{Name: "dc1", Children: []*EnvoyTreeNode{
+				{Name: "web", Envoys: []EnvoyRow{{Hostname: "web01"}}}, // surviving
+				{Name: "db"},  // empty leaf — drop
+			}},
+			{Name: "dc2"}, // empty branch — drop
+		},
+	}
+	kept := pruneEmptyBranches(tree)
+	assert.True(t, kept, "root with one surviving great-grandchild should survive")
+	require.Len(t, tree.Children, 1, "dc2 (empty) should be pruned; dc1 (has surviving descendant) should stay")
+	assert.Equal(t, "dc1", tree.Children[0].Name)
+	require.Len(t, tree.Children[0].Children, 1, "dc1/db (empty leaf) should be pruned; dc1/web should stay")
+	assert.Equal(t, "web", tree.Children[0].Children[0].Name)
+}
+
+func TestPruneEmptyBranches_DropsFullyEmptyTree(t *testing.T) {
+	tree := &EnvoyTreeNode{
+		Name: ".live",
+		Children: []*EnvoyTreeNode{
+			{Name: "dc1", Children: []*EnvoyTreeNode{{Name: "web"}, {Name: "db"}}},
+			{Name: "dc2"},
+		},
+	}
+	kept := pruneEmptyBranches(tree)
+	assert.False(t, kept, "fully-empty tree should not survive")
+	assert.Empty(t, tree.Children, "all children pruned")
+}
+
+func TestPruneEmptyBranches_KeepsRootEnvoysWithoutChildren(t *testing.T) {
+	// An envoy at the root level (matched a root-level hostcrate) should
+	// survive even when no subdirectories have content.
+	tree := &EnvoyTreeNode{
+		Name:   ".live",
+		Envoys: []EnvoyRow{{Hostname: "root-host"}},
+		Children: []*EnvoyTreeNode{
+			{Name: "empty"},
+		},
+	}
+	kept := pruneEmptyBranches(tree)
+	assert.True(t, kept)
+	assert.Empty(t, tree.Children)
+	require.Len(t, tree.Envoys, 1)
+}
+
+// EnvoyTreePageData.anyFilterActive — pin the 11-axis check so adding
+// or renaming an axis later doesn't silently break the prune trigger.
+func TestAnyFilterActive_DetectsEveryAxis(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(*EnvoyTreePageData)
+	}{
+		{"conv", func(d *EnvoyTreePageData) { d.ConvFilter = "converged" }},
+		{"drift", func(d *EnvoyTreePageData) { d.DriftFilter = "diverged" }},
+		{"reach", func(d *EnvoyTreePageData) { d.ReachFilter = "offline" }},
+		{"search", func(d *EnvoyTreePageData) { d.Search = "web" }},
+		{"env", func(d *EnvoyTreePageData) { d.EnvFilter = "prod" }},
+		{"tag", func(d *EnvoyTreePageData) { d.TagFilter = "canary" }},
+		{"role", func(d *EnvoyTreePageData) { d.RoleFilter = "web" }},
+		{"os", func(d *EnvoyTreePageData) { d.OSFilter = "ubuntu" }},
+		{"arch", func(d *EnvoyTreePageData) { d.ArchFilter = "arm64" }},
+		{"module", func(d *EnvoyTreePageData) { d.ModuleFilter = "nginx" }},
+		{"compliance", func(d *EnvoyTreePageData) { d.ComplianceFilter = "hipaa" }},
+	}
+	// Baseline: empty page data → no axis active.
+	empty := &EnvoyTreePageData{}
+	assert.False(t, empty.anyFilterActive(), "empty data should not report any filter active")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := &EnvoyTreePageData{}
+			tc.mut(d)
+			assert.True(t, d.anyFilterActive(), "%s should mark anyFilterActive true", tc.name)
+		})
+	}
+}
+
 func mustMkdir(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

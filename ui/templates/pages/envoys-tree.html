@@ -18,7 +18,7 @@
 
 <div class="filter-bar">
     <form method="get" action="/envoys/tree" class="filter-bar__form">
-        <input type="search" name="search" value="{{.Search}}" placeholder="hostname contains…" class="filter-bar__search" />
+        <input type="search" name="search" value="{{.Search}}" placeholder="hostname (web,db)" class="filter-bar__search" />
         <select name="conv" class="filter-bar__chip">
             <option value="">all convergence</option>
             <option value="converged" {{if eq .ConvFilter "converged"}}selected{{end}}>converged</option>
@@ -36,8 +36,15 @@
             <option value="offline" {{if eq .ReachFilter "offline"}}selected{{end}}>offline</option>
             <option value="observing" {{if eq .ReachFilter "observing"}}selected{{end}}>observing</option>
         </select>
+        <input type="text" name="env" value="{{.EnvFilter}}" placeholder="env (prod,staging)" class="filter-bar__chip filter-bar__chip--text" />
+        <input type="text" name="tag" value="{{.TagFilter}}" placeholder="tag" class="filter-bar__chip filter-bar__chip--text" />
+        <input type="text" name="role" value="{{.RoleFilter}}" placeholder="role (web,db)" class="filter-bar__chip filter-bar__chip--text" />
+        <input type="text" name="os" value="{{.OSFilter}}" placeholder="os (ubuntu,rhel)" class="filter-bar__chip filter-bar__chip--text" />
+        <input type="text" name="arch" value="{{.ArchFilter}}" placeholder="arch (amd64,arm64)" class="filter-bar__chip filter-bar__chip--text" />
+        <input type="text" name="module" value="{{.ModuleFilter}}" placeholder="module" class="filter-bar__chip filter-bar__chip--text" />
+        <input type="text" name="compliance" value="{{.ComplianceFilter}}" placeholder="compliance (hipaa,soc2)" class="filter-bar__chip filter-bar__chip--text" />
         <button type="submit" class="filter-bar__apply">Apply</button>
-        {{if or .ConvFilter .DriftFilter .ReachFilter .Search}}
+        {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ModuleFilter .ComplianceFilter}}
         <a href="/envoys/tree" class="filter-bar__clear">Clear</a>
         {{end}}
     </form>
