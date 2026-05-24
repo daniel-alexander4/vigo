@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -1145,7 +1146,29 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		case *vigoauth.IsowebauthProvider:
 			p.UserStore().SetSigner(signer)
 		}
+		// ADR-030 Slice 2-iii-f: re-sign legacy unsigned rows so they
+		// become eligible for snapshot replication. Synchronous,
+		// bounded (one UPDATE per legacy live row). updated_at_ms stays
+		// 0 so concurrent multi-bolt re-signs resolve deterministically
+		// via the lex-min-origin tiebreaker (matches ADR-030's promise).
+		ctx := context.Background()
+		if n, err := userStore.ResignLegacyRows(ctx); err != nil {
+			slog.Warn("spanner: re-signing legacy user rows failed", "error", err)
+		} else if n > 0 {
+			slog.Info("spanner: re-signed legacy user rows", "count", n)
+			if s.auditWriter != nil {
+				if aErr := s.auditWriter.Record(ctx, "webusers.legacy_resigned",
+					hex.EncodeToString(s.boltID.PublicKey), "spanner_startup",
+					fmt.Sprintf("re-signed %d legacy user row(s) at startup", n), ""); aErr != nil {
+					slog.Warn("spanner: audit record for legacy_resigned failed", "error", aErr)
+				}
+			}
+		}
 	}
+	// ADR-030 Slice 2-iii-f: doctor handler needs the userStore for
+	// its webusers_replication check. Wired late because doctor is
+	// constructed before userStore (which depends on the auth provider).
+	doctorHandler.SetUserStore(userStore)
 	tokenStore := vigoauth.NewTokenStore(s.queries, s.localAdminToken)
 	usersHandler := api.NewUsersHandler(userStore, s.authMethod)
 	usersHandler.SetAuditWriter(s.auditWriter)

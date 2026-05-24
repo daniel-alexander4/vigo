@@ -106,3 +106,22 @@ ON CONFLICT(id) DO UPDATE SET
 WHERE excluded.updated_at_ms > users.updated_at_ms
    OR (excluded.updated_at_ms = users.updated_at_ms
        AND excluded.origin_bolt < users.origin_bolt);
+
+-- name: CountUnsignedUsers :one
+-- ADR-030 Slice 2-iii-f: count of live user rows that have not yet
+-- been signed by a bolt identity. Used by the doctor check that
+-- surfaces pending first-replication; non-zero only briefly after
+-- a spanner-mode upgrade (the startup re-sign pass clears them).
+SELECT COUNT(*) FROM users WHERE signature IS NULL AND deleted_at IS NULL;
+
+-- name: ResignUserLegacy :exec
+-- ADR-030 Slice 2-iii-f: stamps origin_bolt + signature on a legacy
+-- unsigned row WITHOUT touching updated_at_ms. The flat
+-- updated_at_ms (still 0 from migration 000013's default) means
+-- concurrent re-signs across bolts tie on the LWW comparator and
+-- the lex-min-origin tiebreaker picks a deterministic winner --
+-- exactly what ADR-030's "lex-min-pubkey wins on first-merge
+-- collision" promise needs. The signature IS NULL guard prevents
+-- accidental re-stamp of an already-signed row.
+UPDATE users SET origin_bolt = ?, signature = ?
+WHERE id = ? AND signature IS NULL;

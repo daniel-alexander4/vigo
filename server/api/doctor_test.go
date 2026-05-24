@@ -22,7 +22,9 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/license"
@@ -268,15 +270,16 @@ func TestDoctor_CheckScopes(t *testing.T) {
 	_, checks := handler.RunChecks()
 
 	wantScope := map[string]CheckScope{
-		"database":            ScopeServer,
-		"tls":                 ScopeServer,
-		"secrets":             ScopeServer,
-		"license":             ScopeServer,
-		"spanner":             ScopeServer,
-		"integrations":        ScopeServer,
-		"config":              ScopeServer,
-		"swarm_pattern_order": ScopeServer,
-		"stale_envoys":        ScopeFleet,
+		"database":             ScopeServer,
+		"tls":                  ScopeServer,
+		"secrets":              ScopeServer,
+		"license":              ScopeServer,
+		"spanner":              ScopeServer,
+		"integrations":         ScopeServer,
+		"config":               ScopeServer,
+		"swarm_pattern_order":  ScopeServer,
+		"stale_envoys":         ScopeFleet,
+		"webusers_replication": ScopeServer,
 	}
 	for _, c := range checks {
 		want, ok := wantScope[c.Name]
@@ -377,4 +380,141 @@ func TestDoctor_ConfigReloadFailure(t *testing.T) {
 	if !found {
 		t.Fatal("config check not found in response")
 	}
+}
+
+// TestDoctor_WebusersReplication_FlagsUnsigned pins the ADR-030
+// Slice 2-iii-f doctor check: in spanner mode with unsigned legacy
+// rows present, the check warns with the count.
+func TestDoctor_WebusersReplication_FlagsUnsigned(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	certFile, keyFile := generateTestCerts(t)
+	enforcer := newTestLicenseEnforcer(t)
+	configStore := newDoctorTestConfigStore(t)
+	userStore := auth.NewUserStore(queries)
+
+	// Seed an unsigned legacy user (no signer wired).
+	_, err := userStore.Create(context.Background(), db.InsertUserParams{Username: "legacy-1", Role: "viewer"})
+	require.NoError(t, err)
+
+	handler := NewDoctorHandler(DoctorConfig{
+		SQLDB:       sqlDB,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
+		Enforcer:    enforcer,
+		ConfigStore: configStore,
+		Queries:     queries,
+		Interval:    5 * time.Minute,
+		Mode:        config.ModeSpanner,
+		UserStore:   userStore,
+	})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/doctor", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	var resp DoctorResponse
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+
+	check := findCheck(t, resp.Checks, "webusers_replication")
+	if check.Status != StatusWarn {
+		t.Errorf("expected Warn for unsigned legacy users, got %s: %s", check.Status, check.Message)
+	}
+	if !strings.Contains(check.Message, "awaiting first-replication") {
+		t.Errorf("expected message to mention awaiting first-replication, got: %s", check.Message)
+	}
+}
+
+// TestDoctor_WebusersReplication_AllSigned_Pass pins the happy
+// post-startup state: every row signed, check passes.
+func TestDoctor_WebusersReplication_AllSigned_Pass(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	certFile, keyFile := generateTestCerts(t)
+	enforcer := newTestLicenseEnforcer(t)
+	configStore := newDoctorTestConfigStore(t)
+	userStore := auth.NewUserStore(queries)
+	// No users at all → CountUnsignedUsers = 0 → Pass.
+
+	handler := NewDoctorHandler(DoctorConfig{
+		SQLDB:       sqlDB,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
+		Enforcer:    enforcer,
+		ConfigStore: configStore,
+		Queries:     queries,
+		Interval:    5 * time.Minute,
+		Mode:        config.ModeSpanner,
+		UserStore:   userStore,
+	})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/doctor", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	var resp DoctorResponse
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+
+	check := findCheck(t, resp.Checks, "webusers_replication")
+	if check.Status != StatusPass {
+		t.Errorf("expected Pass when no unsigned users, got %s: %s", check.Status, check.Message)
+	}
+}
+
+// TestDoctor_WebusersReplication_Standalone_Skip pins that the
+// check skips in standalone mode — no signer, every row would
+// always be unsigned, warn would be permanent noise.
+func TestDoctor_WebusersReplication_Standalone_Skip(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	certFile, keyFile := generateTestCerts(t)
+	enforcer := newTestLicenseEnforcer(t)
+	configStore := newDoctorTestConfigStore(t)
+	userStore := auth.NewUserStore(queries)
+
+	// Seed an unsigned legacy user — would Warn in spanner mode but
+	// must be skipped in standalone.
+	_, err := userStore.Create(context.Background(), db.InsertUserParams{Username: "legacy-1", Role: "viewer"})
+	require.NoError(t, err)
+
+	handler := NewDoctorHandler(DoctorConfig{
+		SQLDB:       sqlDB,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
+		Enforcer:    enforcer,
+		ConfigStore: configStore,
+		Queries:     queries,
+		Interval:    5 * time.Minute,
+		Mode:        config.ModeStandalone,
+		UserStore:   userStore,
+	})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/doctor", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	var resp DoctorResponse
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+
+	check := findCheck(t, resp.Checks, "webusers_replication")
+	if check.Status != StatusSkip {
+		t.Errorf("expected Skip in standalone mode, got %s: %s", check.Status, check.Message)
+	}
+}
+
+func findCheck(t *testing.T, checks []DoctorCheck, name string) DoctorCheck {
+	t.Helper()
+	for _, c := range checks {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("check %q not found in response", name)
+	return DoctorCheck{}
 }

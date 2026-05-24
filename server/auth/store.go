@@ -281,3 +281,60 @@ func (s *UserStore) UpdateRecoveryCodes(ctx context.Context, id, recoveryJSON st
 		ID:           id,
 	})
 }
+
+// ResignLegacyRows stamps origin_bolt + signature on every live user
+// row that predates ADR-030 Slice 2-iii-c (signature IS NULL). Called
+// once at server startup in spanner mode so legacy rows become
+// eligible for snapshot replication. No-op without a signer (the
+// standalone path; standalone-mode users stay locally-scoped).
+//
+// updated_at_ms is deliberately preserved as the migration default
+// (0). Concurrent re-signs across bolts then tie on the LWW
+// comparator and the lex-min-origin tiebreaker picks a deterministic
+// winner — exactly the conflict-resolution rule ADR-030 promised.
+// Bumping updated_at_ms to wall-clock would silently substitute
+// "last bolt to boot wins" semantics; don't.
+//
+// Tombstoned legacy rows (deleted_at NOT NULL) are skipped — a
+// local-only soft-delete must not propagate to peers that have a
+// live signed version.
+//
+// Returns the count of rows actually re-signed.
+func (s *UserStore) ResignLegacyRows(ctx context.Context) (int, error) {
+	if s.signer == nil {
+		return 0, nil
+	}
+	rows, err := s.queries.ListUsers(ctx)
+	if err != nil {
+		return 0, err
+	}
+	resigned := 0
+	for _, u := range rows {
+		if len(u.Signature) > 0 {
+			continue // already signed
+		}
+		if u.DeletedAt.Valid {
+			continue // tombstoned; don't propagate stale local delete
+		}
+		row := UserRowFromDB(u)
+		originBolt, sig, sErr := s.signer.Sign(&row)
+		if sErr != nil {
+			return resigned, sErr
+		}
+		if rErr := s.queries.ResignUserLegacy(ctx, db.ResignUserLegacyParams{
+			OriginBolt: originBolt,
+			Signature:  sig,
+			ID:         u.ID,
+		}); rErr != nil {
+			return resigned, rErr
+		}
+		resigned++
+	}
+	return resigned, nil
+}
+
+// CountUnsignedUsers returns the number of live user rows still
+// missing a CRDT signature — the doctor check's input.
+func (s *UserStore) CountUnsignedUsers(ctx context.Context) (int64, error) {
+	return s.queries.CountUnsignedUsers(ctx)
+}

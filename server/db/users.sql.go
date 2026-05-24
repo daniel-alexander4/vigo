@@ -21,6 +21,21 @@ func (q *Queries) CountAdminUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countUnsignedUsers = `-- name: CountUnsignedUsers :one
+SELECT COUNT(*) FROM users WHERE signature IS NULL AND deleted_at IS NULL
+`
+
+// ADR-030 Slice 2-iii-f: count of live user rows that have not yet
+// been signed by a bolt identity. Used by the doctor check that
+// surfaces pending first-replication; non-zero only briefly after
+// a spanner-mode upgrade (the startup re-sign pass clears them).
+func (q *Queries) CountUnsignedUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnsignedUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users WHERE deleted_at IS NULL
 `
@@ -367,6 +382,30 @@ func (q *Queries) MergeUserLWW(ctx context.Context, arg MergeUserLWWParams) (int
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const resignUserLegacy = `-- name: ResignUserLegacy :exec
+UPDATE users SET origin_bolt = ?, signature = ?
+WHERE id = ? AND signature IS NULL
+`
+
+type ResignUserLegacyParams struct {
+	OriginBolt string `json:"origin_bolt"`
+	Signature  []byte `json:"signature"`
+	ID         string `json:"id"`
+}
+
+// ADR-030 Slice 2-iii-f: stamps origin_bolt + signature on a legacy
+// unsigned row WITHOUT touching updated_at_ms. The flat
+// updated_at_ms (still 0 from migration 000013's default) means
+// concurrent re-signs across bolts tie on the LWW comparator and
+// the lex-min-origin tiebreaker picks a deterministic winner --
+// exactly what ADR-030's "lex-min-pubkey wins on first-merge
+// collision" promise needs. The signature IS NULL guard prevents
+// accidental re-stamp of an already-signed row.
+func (q *Queries) ResignUserLegacy(ctx context.Context, arg ResignUserLegacyParams) error {
+	_, err := q.db.ExecContext(ctx, resignUserLegacy, arg.OriginBolt, arg.Signature, arg.ID)
+	return err
 }
 
 const softDeleteUser = `-- name: SoftDeleteUser :exec

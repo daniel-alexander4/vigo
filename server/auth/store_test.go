@@ -262,6 +262,178 @@ func TestUserStoreSoftDelete(t *testing.T) {
 	assert.Empty(t, userTokens, "soft-delete must cascade api_tokens locally")
 }
 
+// TestUserStore_ResignLegacyRows_NoSigner_NoOp pins the standalone-
+// mode contract: without a signer, ResignLegacyRows reports zero and
+// leaves rows untouched. Avoids accidentally signing rows with a
+// nil-signer panic.
+func TestUserStore_ResignLegacyRows_NoSigner_NoOp(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	// Insert a user via the no-signer path -- it'll be unsigned.
+	_, err := store.Create(ctx, db.InsertUserParams{Username: "legacy", Role: "viewer"})
+	require.NoError(t, err)
+
+	n, err := store.ResignLegacyRows(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n, "no signer should produce 0 resigned rows")
+}
+
+// TestUserStore_ResignLegacyRows_SignsUnsigned pins the happy path:
+// with a signer wired late (post-Create), the legacy row picks up
+// origin_bolt + signature.
+func TestUserStore_ResignLegacyRows_SignsUnsigned(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	// Create without a signer -- the row lands legacy-unsigned.
+	u, err := store.Create(ctx, db.InsertUserParams{Username: "alice", Role: "admin"})
+	require.NoError(t, err)
+
+	pre, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	require.Empty(t, pre.Signature, "row must start unsigned")
+
+	// Wire signer + re-sign.
+	signer := &fakeSigner{pubkeyHex: "deadbeefcafebabe"}
+	store.SetSigner(signer)
+
+	n, err := store.ResignLegacyRows(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "exactly one legacy row should be re-signed")
+
+	post, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "deadbeefcafebabe", post.OriginBolt, "origin_bolt must be stamped")
+	assert.NotEmpty(t, post.Signature, "signature must be stamped")
+}
+
+// TestUserStore_ResignLegacyRows_SkipsAlreadySigned pins that
+// already-signed rows aren't re-stamped — defends against accidental
+// double-call wiping origin_bolt on a row whose signature is fresh.
+func TestUserStore_ResignLegacyRows_SkipsAlreadySigned(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	signer := &fakeSigner{pubkeyHex: "originallybolt"}
+	store.SetSigner(signer)
+	ctx := context.Background()
+
+	// Create with a signer -- row is born signed.
+	u, err := store.Create(ctx, db.InsertUserParams{Username: "alice", Role: "admin"})
+	require.NoError(t, err)
+	pre, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	require.Equal(t, "originallybolt", pre.OriginBolt)
+	preSig := pre.Signature
+
+	// Re-sign with a DIFFERENT signer; the already-signed row must
+	// stay untouched.
+	store.SetSigner(&fakeSigner{pubkeyHex: "differentbolt"})
+	n, err := store.ResignLegacyRows(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n, "no rows should be re-signed when all are already signed")
+
+	post, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "originallybolt", post.OriginBolt, "origin_bolt must NOT be overwritten")
+	assert.Equal(t, preSig, post.Signature, "signature must NOT be overwritten")
+}
+
+// TestUserStore_ResignLegacyRows_SkipsTombstoned pins that
+// soft-deleted legacy rows are NOT re-signed — propagating a local-
+// only delete to peers that have a live signed version would erase
+// the user fleet-wide.
+func TestUserStore_ResignLegacyRows_SkipsTombstoned(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	// Create unsigned then soft-delete (also unsigned, since signer
+	// is nil throughout). To set up the tombstoned-legacy condition:
+	// insert directly with both deleted_at set and signature null.
+	_, err := store.Create(ctx, db.InsertUserParams{Username: "ghost", Role: "viewer"})
+	require.NoError(t, err)
+	// Now soft-delete via the store; signer still nil so signature
+	// stays null and deleted_at gets set.
+	u, err := queries.GetUserByUsername(ctx, "ghost")
+	require.NoError(t, err)
+	require.NoError(t, store.Delete(ctx, u.ID))
+
+	// Confirm pre-state: tombstoned AND unsigned.
+	// (GetUserByID filters out tombstoned, so query through ListUsers
+	// won't return it either — need a direct lookup. The cleanest
+	// is to skip the assertion and verify post-resign that the count
+	// stays at 0.)
+
+	signer := &fakeSigner{pubkeyHex: "wouldresign"}
+	store.SetSigner(signer)
+	n, err := store.ResignLegacyRows(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n, "tombstoned legacy rows must NOT be re-signed")
+}
+
+// TestUserStore_ResignLegacyRows_KeepsUpdatedAtMsZero pins the
+// critical detail ADR-030's conflict-resolution rule depends on:
+// re-sign must NOT bump updated_at_ms — concurrent multi-bolt
+// re-signs need to tie on the LWW comparator so the lex-min-origin
+// tiebreaker can fire deterministically.
+func TestUserStore_ResignLegacyRows_KeepsUpdatedAtMsZero(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	// Create unsigned (legacy shape).
+	u, err := store.Create(ctx, db.InsertUserParams{Username: "alice", Role: "admin"})
+	require.NoError(t, err)
+	// Force updated_at_ms to 0 to simulate a true pre-Slice-2-iii-c row
+	// (Create stamps wall-clock; legacy rows from migration 000013 had
+	// the DEFAULT 0).
+	_, err = queries.MergeUserLWW(ctx, db.MergeUserLWWParams{
+		ID:          u.ID,
+		Username:    "alice",
+		Role:        "admin",
+		UpdatedAtMs: 0,
+	})
+	// MergeUserLWW with updated_at_ms=0 won't win against a stamped
+	// row; reset via direct UPDATE through a synthetic resign that
+	// bypasses LWW. Simplest: just inspect what ResignLegacyRows does
+	// to a known-unsigned row whose updated_at_ms is whatever Create
+	// stamped — assert post-resign that the stamp is unchanged.
+	require.NoError(t, err)
+
+	preRow, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	preMs := preRow.UpdatedAtMs
+
+	// Wipe signature to simulate the legacy condition (Create with
+	// signer would have stamped one; we need an unsigned row).
+	// Use direct DB exec since there's no query for this.
+	_, err = queries.MergeUserLWW(ctx, db.MergeUserLWWParams{
+		ID:          u.ID,
+		Username:    "alice",
+		Role:        "admin",
+		UpdatedAtMs: preMs + 1, // win LWW so it overwrites with no signature
+	})
+	require.NoError(t, err)
+	preRow2, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	require.Empty(t, preRow2.Signature)
+	preMs2 := preRow2.UpdatedAtMs
+
+	signer := &fakeSigner{pubkeyHex: "originbolt"}
+	store.SetSigner(signer)
+	n, err := store.ResignLegacyRows(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	postRow, err := queries.GetUserByID(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, preMs2, postRow.UpdatedAtMs, "re-sign must NOT bump updated_at_ms — ADR-030 lex-min-origin tiebreaker depends on the tie")
+	assert.Equal(t, "originbolt", postRow.OriginBolt)
+}
+
 func TestUserStoreOIDCSubject(t *testing.T) {
 	queries := setupTestDB(t)
 	store := NewUserStore(queries)

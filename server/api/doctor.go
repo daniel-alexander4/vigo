@@ -70,6 +70,7 @@ type DoctorConfig struct {
 	Enforcer         *license.Enforcer
 	ConfigStore      *config.ConfigStore
 	Queries          *db.Queries
+	UserStore        *auth.UserStore
 	Interval         time.Duration
 	OfflineThreshold time.Duration
 	Integrations     bool
@@ -89,6 +90,7 @@ type DoctorHandler struct {
 	enforcer         *license.Enforcer
 	configStore      *config.ConfigStore
 	queries          *db.Queries
+	userStore        *auth.UserStore
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
 	integrations     bool
@@ -108,6 +110,14 @@ func (h *DoctorHandler) SetSwarmConfig(s config.SwarmSection) {
 	h.swarmCfgMu.Unlock()
 }
 
+// SetUserStore wires the UserStore late so the webusers_replication
+// check can count unsigned legacy rows. Doctor is constructed before
+// UserStore in server.go (UserStore depends on auth provider), so
+// the wiring runs post-construction (matches SetSwarmConfig pattern).
+func (h *DoctorHandler) SetUserStore(us *auth.UserStore) {
+	h.userStore = us
+}
+
 // NewDoctorHandler creates a doctor handler with the given dependencies.
 func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 	return &DoctorHandler{
@@ -117,6 +127,7 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		enforcer:         cfg.Enforcer,
 		configStore:      cfg.ConfigStore,
 		queries:          cfg.Queries,
+		userStore:        cfg.UserStore,
 		baseInterval:     cfg.Interval,
 		offlineThreshold: cfg.OfflineThreshold,
 		integrations:     cfg.Integrations,
@@ -149,6 +160,7 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 		h.checkConfig(),
 		h.checkSwarmPatterns(),
 		h.checkStaleEnvoys(ctx),
+		h.checkWebusersReplication(ctx),
 	}
 	overall := "healthy"
 	for _, c := range checks {
@@ -176,6 +188,7 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkConfig(),
 		h.checkSwarmPatterns(),
 		h.checkStaleEnvoys(ctx),
+		h.checkWebusersReplication(ctx),
 	}
 
 	overall := "healthy"
@@ -282,6 +295,31 @@ func (h *DoctorHandler) checkConfig() DoctorCheck {
 		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusWarn, Message: "no modules loaded"}
 	}
 	return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusPass, Message: msg}
+}
+
+// checkWebusersReplication surfaces unsigned (pre-ADR-030 Slice
+// 2-iii-c) user rows still awaiting first-startup re-signing. In
+// spanner mode the count should be zero after a normal upgrade
+// cycle — Slice 2-iii-f's startup hook re-signs every legacy row
+// synchronously, so non-zero indicates a re-sign that failed
+// (logged) or new code that mints rows without going through the
+// UserStore signer path. Skipped in standalone mode (no signer,
+// every row would always be "unsigned" — the warn would be noise).
+func (h *DoctorHandler) checkWebusersReplication(ctx context.Context) DoctorCheck {
+	if h.mode == config.ModeStandalone {
+		return DoctorCheck{Name: "webusers_replication", Scope: ScopeServer, Status: StatusSkip, Message: "standalone — replication N/A"}
+	}
+	if h.userStore == nil {
+		return DoctorCheck{Name: "webusers_replication", Scope: ScopeServer, Status: StatusSkip, Message: "user store unavailable"}
+	}
+	count, err := h.userStore.CountUnsignedUsers(ctx)
+	if err != nil {
+		return DoctorCheck{Name: "webusers_replication", Scope: ScopeServer, Status: StatusFail, Message: "counting unsigned users: " + err.Error()}
+	}
+	if count > 0 {
+		return DoctorCheck{Name: "webusers_replication", Scope: ScopeServer, Status: StatusWarn, Message: fmt.Sprintf("%d webuser row(s) awaiting first-replication (legacy unsigned)", count)}
+	}
+	return DoctorCheck{Name: "webusers_replication", Scope: ScopeServer, Status: StatusPass, Message: "all webusers signed"}
 }
 
 // checkSwarmPatterns surfaces unreachable deny entries in the
