@@ -27,8 +27,12 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		return nil, status.Errorf(codes.InvalidArgument, "invalid node_id: %v", err)
 	}
 	envoyID := req.GetEnvoyId()
-	var traceID string
-	ctx, traceID = EnsureTraceID(ctx, req.GetTraceparent())
+	// Unlike CheckIn / ReportResult, this handler doesn't propagate ctx
+	// downstream — traitsBatch.Mark, fleetIndex.UpdateTraits, and the
+	// checkTraitTriggers goroutine are all sync in-memory operations
+	// that don't take ctx. We only need the trace_id for the slog.Info
+	// line below, so discard the trace-bearing ctx.
+	_, traceID := EnsureTraceID(ctx, req.GetTraceparent())
 
 	traitsJSON := req.GetTraitsJson()
 	if len(traitsJSON) == 0 {

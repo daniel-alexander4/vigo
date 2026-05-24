@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // EnvoyInput decouples this package from server/fleet so both the
@@ -121,7 +122,7 @@ type Aggregator struct {
 }
 
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: 30 * time.Second}
+	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
 }
 
 // Snapshot returns cached fleet view or rebuilds.

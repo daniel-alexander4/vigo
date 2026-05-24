@@ -932,15 +932,13 @@ func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration
 	if offset < 0 {
 		offset = 0
 	}
-	page := rows
+	var page []EnvoyRow
 	if offset < total {
 		end := total
 		if limit > 0 && offset+limit < total {
 			end = offset + limit
 		}
 		page = rows[offset:end]
-	} else {
-		page = nil
 	}
 
 	return EnvoysPageData{

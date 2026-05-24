@@ -50,6 +50,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // EnvoyInput is the minimal envoy descriptor the aggregator needs — (ID,
@@ -202,7 +203,7 @@ func NewAggregator(queries *db.Queries, retention time.Duration) *Aggregator {
 	}
 	return &Aggregator{
 		queries:   queries,
-		ttl:       30 * time.Second,
+		ttl:       swarm.MeshCacheTTL,
 		retention: retention,
 		now:       time.Now,
 	}

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // EnvoyInput is the minimal envoy descriptor the aggregator needs
@@ -164,7 +165,7 @@ type Aggregator struct {
 // check-in window closely enough that an operator refreshing the
 // page sees data no more than one check-in stale.
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: 30 * time.Second}
+	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
 }
 
 // Snapshot returns the cached fleet view or rebuilds it from the

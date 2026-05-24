@@ -919,6 +919,14 @@ type DashboardPageData struct {
 	Diverged       int // drift-axis: persistent change loops
 	CompFailed     int
 	Offline        int
+	// Additional fields needed by the envoy-filter-bar partial when
+	// rendered on the dashboard. The partial reads .Count* / .NoData /
+	// .Changed / .Observing / .OfflineThresholdLabel; the dashboard call
+	// site remaps the existing fields via `dict` and supplies these.
+	NoData                int
+	Changed               int // drift-axis: last run had changes (Diverged ⊆ Changed)
+	Observing             int
+	OfflineThresholdLabel string
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
@@ -6600,20 +6608,6 @@ func (h *Handler) AskStream(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		sendSSE(map[string]any{"type": "error", "text": err.Error()})
-	}
-}
-
-// planActionColor maps a plan action to a badge CSS class.
-func planActionColor(action string) string {
-	switch convergence.ClassifyAction(action) {
-	case convergence.ActionCreate:
-		return "success"
-	case convergence.ActionUpdate:
-		return "info"
-	case convergence.ActionDelete:
-		return "danger"
-	default:
-		return "muted"
 	}
 }
 

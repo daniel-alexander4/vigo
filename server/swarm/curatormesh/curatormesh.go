@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // EnvoyInput is the minimal envoy descriptor the aggregator needs from its
@@ -219,7 +220,7 @@ type Aggregator struct {
 // stay below a typical check-in interval so an operator refreshing the UI
 // sees data no more than one cycle stale.
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: 30 * time.Second}
+	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
 }
 
 // SetTTL overrides the cache TTL — for tests + the rare deployment that wants
