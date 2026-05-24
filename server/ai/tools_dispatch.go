@@ -15,13 +15,22 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/freshness"
 )
 
 // toolDeps holds the dependencies needed to execute tool calls.
+//
+// cycleLookup returns the agent's smoothed observed inter-CheckIn
+// cadence for one envoy (0 when unknown). It's a callback rather than
+// a direct *fleet.FleetIndex to keep ai out of fleet's import graph —
+// fleet/datasource.go imports ui, and ui imports ai, so a direct
+// dependency would form an import cycle. Same pattern the doctor
+// handler uses (server.go: CycleLookup).
 type toolDeps struct {
 	queries          *db.Queries
 	configStore      *config.ConfigStore
 	runStore         db.RunStore
+	cycleLookup      func(envoyID string) time.Duration
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
 }
@@ -95,12 +104,7 @@ func (d *toolDeps) listEnvoys(ctx context.Context, args map[string]any) (string,
 
 	var results []envoyInfo
 	for _, t := range envoys {
-		ts := "active"
-		if t.Revoked != 0 {
-			ts = "revoked"
-		} else if t.LastSeen.Valid && time.Since(t.LastSeen.Time) > 2*d.baseInterval {
-			ts = "stale"
-		}
+		ts := d.envoyStatus(t)
 
 		if status != "" && ts != status {
 			continue
@@ -645,6 +649,29 @@ func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]an
 		"count":     len(results),
 		"snapshots": results,
 	})
+}
+
+// envoyStatus is the single classifier the AI tool surface uses to
+// answer "revoked / stale / active" for one envoy. Routes the staleness
+// check through freshness.IsStaleFromCycle so the AI assistant returns
+// the same verdict as /envoys, /doctor, the risk scorer, and the
+// stale-envoy notifier. A nil cycleLookup falls through to observed=0
+// (bootstrap path, same as rehydrate.go / agentstream.go).
+func (d *toolDeps) envoyStatus(t db.Envoy) string {
+	if t.Revoked != 0 {
+		return "revoked"
+	}
+	if !t.LastSeen.Valid {
+		return "active"
+	}
+	var observed time.Duration
+	if d.cycleLookup != nil {
+		observed = d.cycleLookup(t.ID)
+	}
+	if freshness.IsStaleFromCycle(t.LastSeen.Time, d.baseInterval, observed, d.offlineThreshold) {
+		return "stale"
+	}
+	return "active"
 }
 
 // --- helpers ---

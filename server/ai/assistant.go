@@ -64,7 +64,7 @@ type Assistant struct {
 // (controlled by cfg.DocsMode: "full", "condensed", or "off"). The metrics
 // struct is constructed against the server's per-instance prometheus registry
 // so two assistants in one Go test process don't share counter state.
-func NewAssistant(provider Provider, queries *db.Queries, configStore *config.ConfigStore, runStore db.RunStore, baseInterval, offlineThreshold time.Duration, cfg config.AISection, docsDir string, m *Metrics) *Assistant {
+func NewAssistant(provider Provider, queries *db.Queries, configStore *config.ConfigStore, runStore db.RunStore, cycleLookup func(envoyID string) time.Duration, baseInterval, offlineThreshold time.Duration, cfg config.AISection, docsDir string, m *Metrics) *Assistant {
 	cfg = withDefaults(cfg)
 	var rl *rateLimiter
 	if cfg.RateLimit > 0 {
@@ -95,6 +95,7 @@ func NewAssistant(provider Provider, queries *db.Queries, configStore *config.Co
 			queries:          queries,
 			configStore:      configStore,
 			runStore:         runStore,
+			cycleLookup:      cycleLookup,
 			baseInterval:     baseInterval,
 			offlineThreshold: offlineThreshold,
 		},

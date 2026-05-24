@@ -1002,7 +1002,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			slog.Warn("AI assistant disabled: provider init failed", "error", aiErr)
 		} else {
 			s.aiProvider = aiProvider
-			s.assistant = vigoai.NewAssistant(aiProvider, s.queries, s.configStore, s.runStore, s.baseInterval, s.offlineThreshold, s.cfg.AI, s.docsDir, s.aiMetrics)
+			s.assistant = vigoai.NewAssistant(aiProvider, s.queries, s.configStore, s.runStore, func(envoyID string) time.Duration {
+				if s.fleetIndex == nil {
+					return 0
+				}
+				return s.fleetIndex.EnvoyCycle(envoyID)
+			}, s.baseInterval, s.offlineThreshold, s.cfg.AI, s.docsDir, s.aiMetrics)
 			if s.nvdEnricher != nil {
 				s.assistant.SetCVELookup(&cveLookupAdapter{enricher: s.nvdEnricher})
 			}
