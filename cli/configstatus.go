@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -38,7 +39,17 @@ store empty).`,
 			fmt.Printf("Last reload: %s\n", resp.LastReloadAt)
 		}
 		if resp.LastError != "" {
-			fmt.Printf("Last error: %s\n", resp.LastError)
+			// IdempotencyErrors.Format() emits a multi-line block; print the
+			// label on its own line and indent the body so the report stays
+			// scannable instead of collapsing under "Last error: <newline>".
+			fmt.Println("Last error:")
+			for _, line := range strings.Split(strings.TrimSpace(resp.LastError), "\n") {
+				if line == "" {
+					fmt.Println()
+				} else {
+					fmt.Println("  " + line)
+				}
+			}
 		}
 		// Exit 1 on unhealthy without returning an error — a returned error
 		// would prepend cobra's "Error:" line + usage to the report. The
