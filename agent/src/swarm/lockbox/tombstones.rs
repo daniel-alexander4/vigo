@@ -205,7 +205,7 @@ impl TombstoneTable {
     where
         F: FnOnce(&mut Self) -> bool,
     {
-        let lock = super::locks::user_lock("tombstones", user);
+        let lock = super::locks::user_lock(super::locks::LockTable::Tombstones, user);
         let _guard = lock.lock().unwrap_or_else(|p| p.into_inner());
         let mut table = Self::load(user);
         if f(&mut table) {

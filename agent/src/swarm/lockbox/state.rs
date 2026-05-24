@@ -248,7 +248,7 @@ impl PeerTable {
     where
         F: FnOnce(&mut Self) -> Option<&'static str>,
     {
-        let lock = super::locks::user_lock("peers", user);
+        let lock = super::locks::user_lock(super::locks::LockTable::Peers, user);
         let _guard = lock.lock().unwrap_or_else(|p| p.into_inner());
         let mut table = Self::load(user);
         if let Some(reason) = f(&mut table) {
