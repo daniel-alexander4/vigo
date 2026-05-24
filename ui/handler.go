@@ -619,6 +619,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Page routes
 	mux.HandleFunc("GET /{$}", h.Dashboard)
 	mux.HandleFunc("GET /envoys", h.Envoys)
+	mux.HandleFunc("GET /envoys/tree", h.EnvoyTree)
 	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
 	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)

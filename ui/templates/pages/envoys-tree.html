@@ -1,0 +1,87 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Envoys (tree view)</h1>
+    <p>
+        Envoys grouped by the directory of the hostcrate that matched them — the
+        same <code>.live/</code> shape <a href="/fleet/config-tree">Config Tree</a> renders.
+        Use this view to navigate massive fleets; <a href="/envoys">flat view</a> for at-a-glance status.
+    </p>
+</div>
+
+{{if .Missing}}
+<div class="card">
+    <div class="card__body">
+        <p class="text-muted">No published configuration. Run <code>vigocli config publish</code> to publish the editable stockpile to <code>.live/</code>.</p>
+    </div>
+</div>
+{{else}}
+
+<div class="filter-bar">
+    <form method="get" action="/envoys/tree" class="filter-bar__form">
+        <input type="search" name="search" value="{{.Search}}" placeholder="hostname contains…" class="filter-bar__search" />
+        <select name="conv" class="filter-bar__chip">
+            <option value="">all convergence</option>
+            <option value="converged" {{if eq .ConvFilter "converged"}}selected{{end}}>converged</option>
+            <option value="degraded" {{if eq .ConvFilter "degraded"}}selected{{end}}>degraded</option>
+            <option value="failed" {{if eq .ConvFilter "failed"}}selected{{end}}>failed</option>
+            <option value="no data" {{if eq .ConvFilter "no data"}}selected{{end}}>no data</option>
+        </select>
+        <select name="drift" class="filter-bar__chip">
+            <option value="">all drift</option>
+            <option value="changed" {{if eq .DriftFilter "changed"}}selected{{end}}>changed</option>
+            <option value="diverged" {{if eq .DriftFilter "diverged"}}selected{{end}}>diverged</option>
+        </select>
+        <select name="reach" class="filter-bar__chip">
+            <option value="">all reachability</option>
+            <option value="offline" {{if eq .ReachFilter "offline"}}selected{{end}}>offline</option>
+            <option value="observing" {{if eq .ReachFilter "observing"}}selected{{end}}>observing</option>
+        </select>
+        <button type="submit" class="filter-bar__apply">Apply</button>
+        {{if or .ConvFilter .DriftFilter .ReachFilter .Search}}
+        <a href="/envoys/tree" class="filter-bar__clear">Clear</a>
+        {{end}}
+    </form>
+    <div class="filter-bar__counts">
+        <span class="text-muted">{{.MatchingTotal}} of {{.TotalEnvoys}} envoys</span>
+    </div>
+</div>
+
+<div class="envoys-tree">
+    {{template "envoy-tree-node" .Root}}
+    {{if .Unmatched}}
+    {{template "envoy-tree-node" .Unmatched}}
+    {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "envoy-tree-node"}}
+{{$envoyCount := len .Envoys}}
+{{$childCount := len .Children}}
+<details class="envoys-tree__dir" {{if or (eq .Path "") (eq .Name "(unmatched)")}}open{{end}}>
+    <summary class="envoys-tree__summary">
+        <span class="envoys-tree__dir-name">{{.Name}}{{if not (eq .Name "(unmatched)")}}/{{end}}</span>
+        {{if gt $envoyCount 0}}<span class="envoys-tree__count">{{$envoyCount}}{{if gt $childCount 0}} here{{end}}</span>{{end}}
+    </summary>
+    {{if gt $envoyCount 0}}
+    <ul class="envoys-tree__envoys">
+        {{range .Envoys}}
+        <li class="envoys-tree__envoy">
+            <a href="/envoys/{{.ID}}" class="envoys-tree__envoy-link">{{.Hostname}}</a>
+            <span class="envoys-tree__envoy-status envoys-tree__status--{{.Status}}">{{.Status}}</span>
+            {{if .Offline}}<span class="envoys-tree__envoy-flag">offline</span>{{end}}
+            {{if .ObserveOnly}}<span class="envoys-tree__envoy-flag">observing</span>{{end}}
+            {{if ne .DriftLabel "none"}}<span class="envoys-tree__envoy-flag envoys-tree__drift--{{.DriftLabel}}">{{.DriftLabel}}</span>{{end}}
+        </li>
+        {{end}}
+    </ul>
+    {{end}}
+    {{if gt $childCount 0}}
+    <div class="envoys-tree__children">
+        {{range .Children}}
+        {{template "envoy-tree-node" .}}
+        {{end}}
+    </div>
+    {{end}}
+</details>
+{{end}}
