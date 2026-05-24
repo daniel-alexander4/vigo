@@ -1,15 +1,15 @@
 -- name: CreateRun :one
 INSERT INTO runs (envoy_id, status, trigger, module_count)
 VALUES (?, ?, ?, ?)
-RETURNING id, envoy_id, started_at, finished_at, status, trigger, module_count, changed_count, failed_count, skipped_count;
+RETURNING id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger;
 
 -- name: GetRunByID :one
-SELECT id, envoy_id, started_at, finished_at, status, trigger, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE id = ?;
 
 -- name: ListRunsByEnvoy :many
-SELECT id, envoy_id, started_at, finished_at, status, trigger, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE envoy_id = ?1
 ORDER BY started_at DESC
@@ -32,7 +32,7 @@ WHERE run_id = ?
 ORDER BY created_at ASC;
 
 -- name: ListAllRuns :many
-SELECT id, envoy_id, started_at, finished_at, status, trigger, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 ORDER BY started_at DESC
 LIMIT ?;
@@ -68,13 +68,13 @@ WHERE run_id IN (sqlc.slice('run_ids'))
 ORDER BY run_id, created_at ASC;
 
 -- name: ListFailedRunsForDate :many
-SELECT id, envoy_id, started_at, finished_at, status, trigger, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE date(started_at) = ?1 AND status IN ('failure', 'partial')
 ORDER BY started_at ASC;
 
 -- name: GetNextSuccessfulRun :one
-SELECT id, envoy_id, started_at, finished_at, status, trigger, module_count, changed_count, failed_count, skipped_count
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE envoy_id = ?1 AND started_at > ?2 AND status = 'success'
 ORDER BY started_at ASC
