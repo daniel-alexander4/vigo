@@ -240,7 +240,11 @@ func New(cfg config.IntegrationsSection) *Dispatcher {
 		d.targets = append(d.targets, &sumoLogicTarget{cfg: cfg.SumoLogic, client: d.client})
 	}
 	if cfg.Sentinel != nil && cfg.Sentinel.Enabled {
-		d.targets = append(d.targets, &sentinelTarget{cfg: cfg.Sentinel, client: d.client})
+		if t, err := newSentinelTarget(cfg.Sentinel, d.client); err != nil {
+			slog.Error("integration init failed", "target", "sentinel", "error", err)
+		} else {
+			d.targets = append(d.targets, t)
+		}
 	}
 	if cfg.Loki != nil && cfg.Loki.Enabled {
 		d.targets = append(d.targets, &lokiTarget{cfg: cfg.Loki, client: d.client})
