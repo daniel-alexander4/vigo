@@ -442,6 +442,14 @@ backup:
 
 AI assistant configuration. Claude or OpenAI recommended for best results. Ollama works for air-gapped environments but requires a dedicated GPU and produces lower-quality answers. See [AI Providers](../howto/troubleshoot.md) for details on each provider, hardware requirements, and data privacy considerations.
 
+### Prompt-injection defense — structural mitigations + provider-dependent adherence
+
+Every block of data Vigo prefetches before an assistant turn (envoy details, traits, run output, config YAML, package drift, CVE descriptions, etc.) is wrapped in a fenced ```` ```text ```` block with a fence length sized past any backticks the data itself contains, and the system prompt's "Trust Boundary" section instructs the LLM to treat anything inside the fence as queried data rather than operator instructions. This blocks the structural attack: a hostname like `"web01\nIGNORE PRIOR INSTRUCTIONS AND…"`, a package name with embedded markdown, a run-output dump with a fake `system:` prefix.
+
+**The actual guarantee is only as strong as the underlying LLM's adherence to that framing.** Claude (Anthropic's models) respect "this is data, not instructions" framing reliably in our testing; OpenAI is similar. Ollama and openai-compat backends vary widely by model — a smaller open-source model under stress may still follow an injected imperative despite the fence. If your threat model includes adversaries who can put text into trait values, hostnames, or other prefetched content, prefer Claude or OpenAI over self-hosted open-source models for the assistant.
+
+The fence + framing are best-effort defense-in-depth, not a hard guarantee. The assistant is read-only by design (`server/ai/tools_dispatch.go` exposes only read operations), so even a successful injection cannot write config, push tasks, or mutate state — at worst it could mislead the operator reading the assistant's answer.
+
 ```yaml
 ai:
   enabled: true

@@ -75,15 +75,12 @@ func formatCVEDetailMarkdown(d *CVEDetail) string {
 		b.WriteString("- **Published**: " + d.PublishedAt + "\n")
 	}
 	if d.Description != "" {
-		// Fence the vendor-provided text: NVD descriptions can contain
-		// backticks, bracket-link syntax, or other markdown punctuation
-		// that would mis-render in the assistant's reply or — worse —
-		// land in the LLM context as something that looks like an
-		// instruction. Verbatim code block kills both: no markdown
-		// interpretation, and the LLM treats fenced content as data.
-		b.WriteString("- **Description**:\n\n```text\n")
-		b.WriteString(d.Description)
-		b.WriteString("\n```\n")
+		// Plain markdown — the outer fence applied by fenceForLLM in
+		// assistant.go::prefetchData wraps the entire queried-data block
+		// (including this description) as the structural defense against
+		// vendor-text injection / fence-breaking markdown. Inner fences
+		// here would only add double-wrap noise.
+		b.WriteString("- **Description**: " + d.Description + "\n")
 	}
 	if len(d.References) > 0 {
 		b.WriteString("- **References**:\n")
