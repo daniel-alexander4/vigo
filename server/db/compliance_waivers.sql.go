@@ -65,6 +65,28 @@ func (q *Queries) ExpireComplianceWaivers(ctx context.Context) error {
 	return err
 }
 
+const getComplianceWaiver = `-- name: GetComplianceWaiver :one
+SELECT id, framework, control_id, reason, approver, created_at, expires_at, active
+FROM compliance_waivers
+WHERE id = ?1
+`
+
+func (q *Queries) GetComplianceWaiver(ctx context.Context, id string) (ComplianceWaiver, error) {
+	row := q.db.QueryRowContext(ctx, getComplianceWaiver, id)
+	var i ComplianceWaiver
+	err := row.Scan(
+		&i.ID,
+		&i.Framework,
+		&i.ControlID,
+		&i.Reason,
+		&i.Approver,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.Active,
+	)
+	return i, err
+}
+
 const listComplianceWaivers = `-- name: ListComplianceWaivers :many
 SELECT id, framework, control_id, reason, approver, created_at, expires_at, active
 FROM compliance_waivers

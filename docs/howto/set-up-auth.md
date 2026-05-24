@@ -385,6 +385,8 @@ All authentication and user management events are recorded in the tamper-evident
 | `user.role_change` | Role updated (only when role actually changes) | Admin who changed |
 | `token.create` | API token created | Token owner |
 | `token.revoke` | API token revoked | Token owner |
+| `compliance.waiver_created` | Compliance waiver created via `POST /api/v1/compliance/waivers` | Session user (or request-supplied approver) |
+| `compliance.waiver_revoked` | Compliance waiver revoked via `DELETE /api/v1/compliance/waivers/{id}` | Session user (or waiver's original approver) |
 
 Login and failed login events include the client IP address in the payload field (`{"ip":"..."}`) for brute-force detection. Failed login events record the attempted username (not the password).
 

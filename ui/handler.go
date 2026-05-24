@@ -250,6 +250,7 @@ type Handler struct {
 	authEnabled       bool
 	authMethod        string
 	reportBuilder     *ReportBuilder
+	auditWriter       auditRecorder
 	integrationsCfg   config.IntegrationsSection
 	grcCfg            config.GRCSection
 	branding          config.BrandingSection
@@ -537,6 +538,13 @@ func (h *Handler) SetPeerService(svc *peer.Service) {
 // Call after NewHandler to avoid import cycles between ui and server/api.
 func (h *Handler) SetReportBuilder(rb *ReportBuilder) {
 	h.reportBuilder = rb
+}
+
+// SetAuditWriter wires the tamper-evident audit writer so privileged
+// UI handlers (waiver create/delete, etc.) can record events to the
+// hash chain. Nil is a no-op via the recordAudit helper.
+func (h *Handler) SetAuditWriter(w auditRecorder) {
+	h.auditWriter = w
 }
 
 // SetIntegrationsConfig stores the integrations config for dashboard status display.
@@ -4183,6 +4191,9 @@ func (h *Handler) CreateWaiver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "compliance.waiver_created", waiverActor(r, req.Approver), "ui",
+		fmt.Sprintf("created waiver for %s/%s (reason: %s)", waiver.Framework, waiver.ControlID, waiver.Reason), "")
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(waiver)
 }
@@ -4190,11 +4201,37 @@ func (h *Handler) CreateWaiver(w http.ResponseWriter, r *http.Request) {
 // DeleteWaiver deactivates a compliance waiver.
 func (h *Handler) DeleteWaiver(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+
+	// Pre-fetch so the audit row names the framework + control_id the
+	// operator just revoked — an ID-only row is operationally useless.
+	waiver, err := h.queries.GetComplianceWaiver(r.Context(), id)
+	if err != nil {
+		http.Error(w, "waiver not found", http.StatusNotFound)
+		return
+	}
+
 	if err := h.queries.DeactivateComplianceWaiver(r.Context(), id); err != nil {
 		http.Error(w, "failed to delete waiver", http.StatusInternalServerError)
 		return
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "compliance.waiver_revoked", waiverActor(r, waiver.Approver), "ui",
+		fmt.Sprintf("revoked waiver for %s/%s", waiver.Framework, waiver.ControlID), "")
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// waiverActor resolves the audit actor for waiver mutations. Prefers
+// the authenticated session user; falls back to the request-supplied
+// approver (create flow) or "unknown".
+func waiverActor(r *http.Request, fallback string) string {
+	if u := auth.UserFromContext(r.Context()); u != nil && u.Username != "" {
+		return u.Username
+	}
+	if fallback != "" {
+		return fallback
+	}
+	return "unknown"
 }
 
 // ComplianceFrameworksFragment renders the frameworks grid as an HTMX fragment.

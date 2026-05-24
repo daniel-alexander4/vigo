@@ -69,6 +69,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	if peerSvc != nil {
 		uiHandler.SetPeerService(peerSvc)
 	}
+	uiHandler.SetAuditWriter(aw)
 	uiHandler.RegisterRoutes(mux)
 
 	// Mount traits and inventory endpoints (direct handlers, not proxied through grpc-gateway).

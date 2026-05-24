@@ -15,6 +15,11 @@ FROM compliance_waivers
 WHERE framework = ?1 AND active = 1
 ORDER BY control_id;
 
+-- name: GetComplianceWaiver :one
+SELECT id, framework, control_id, reason, approver, created_at, expires_at, active
+FROM compliance_waivers
+WHERE id = ?1;
+
 -- name: DeactivateComplianceWaiver :exec
 UPDATE compliance_waivers SET active = 0 WHERE id = ?1;
 
