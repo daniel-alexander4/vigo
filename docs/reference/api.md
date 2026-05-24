@@ -1160,7 +1160,7 @@ Operator-recorded exceptions to a regulatory framework control — typically for
 
 ### POST /api/v1/compliance/waivers
 
-**Permission:** Authenticated (route-level gate pending — `compliance.docs.write` recommended)
+**Permission:** `compliance.docs.write`
 
 Create a waiver for one control.
 
@@ -1188,7 +1188,7 @@ Create a waiver for one control.
 
 ### DELETE /api/v1/compliance/waivers/{id}
 
-**Permission:** Authenticated (route-level gate pending — `compliance.docs.write` recommended)
+**Permission:** `compliance.docs.write`
 
 Deactivate (revoke) a waiver. The row is marked inactive — the audit chain retains the original create + the revoke event.
 
