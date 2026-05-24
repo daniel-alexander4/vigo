@@ -195,22 +195,33 @@ func FounderPubkey(roster []db.SpannerBolt) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(raw), nil
 }
 
-// RosterDigest returns a hex-encoded sha256 over the roster — the
-// Tier-1 change-detector (Slice 2-i-b). Rows are sorted by pubkey so
-// the digest is independent of DB row order, and each row contributes
-// (pubkey, admitted_at, revoked_at, signature): the fields a CRDT
-// merge can mutate. An unchanged roster always hashes to the same
-// value; any row added, re-admitted (admitted_at moved), revoked, or
-// re-signed changes it. A peer hearing a digest different from its
-// own fires the existing Tier-2 pullAndMerge immediately instead of
-// waiting for the 5m timer.
-func RosterDigest(roster []db.SpannerBolt) string {
-	sorted := make([]db.SpannerBolt, len(roster))
-	copy(sorted, roster)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Pubkey < sorted[j].Pubkey })
+// Tier1Digest returns a hex-encoded sha256 over the spanner's full
+// replicated state — the Tier-1 change-detector that fires Tier-2
+// pulls on mismatch (Slice 2-i-b for admissions; Slice 2-iii-e for
+// webusers). Hash inputs in two sections:
+//
+//  1. Roster — sorted by pubkey, each bolt contributes
+//     (pubkey, admitted_at, revoked_at, signature). Same fields as
+//     the original RosterDigest (Slice 2-i-b).
+//
+//  2. Users — sorted by id, each signed user row contributes
+//     (id, updated_at_ms, origin_bolt, deleted_at, signature).
+//     Unsigned rows (signature NULL — pre-replication legacy data
+//     awaiting Slice 2-iii-f's first-startup re-sign) are skipped
+//     so they don't force Tier-2 pulls that would no-op (the
+//     snapshot endpoint excludes them via the same filter).
+//
+// A peer hearing a digest different from its own fires the existing
+// Tier-2 pullAndMerge immediately instead of waiting for the 5m
+// ticker. Consumed-tokens are NOT in the digest — they're a G-Set
+// FK-bound to admissions and cannot drift independently.
+func Tier1Digest(roster []db.SpannerBolt, users []db.User) string {
+	sortedBolts := make([]db.SpannerBolt, len(roster))
+	copy(sortedBolts, roster)
+	sort.Slice(sortedBolts, func(i, j int) bool { return sortedBolts[i].Pubkey < sortedBolts[j].Pubkey })
 
 	h := sha256.New()
-	for _, b := range sorted {
+	for _, b := range sortedBolts {
 		// Length-prefix every field so concatenation is unambiguous —
 		// no field boundary can be forged by shifting bytes between
 		// adjacent fields.
@@ -222,6 +233,29 @@ func RosterDigest(roster []db.SpannerBolt) string {
 		}
 		writeField(h, []byte(strconv.FormatInt(revokedAt, 10)))
 		writeField(h, b.Signature)
+	}
+
+	// Section 2: signed users only, sorted by id. Pre-allocate to
+	// the upper bound — pre-replication rows get filtered out below.
+	sortedUsers := make([]db.User, 0, len(users))
+	for _, u := range users {
+		if len(u.Signature) == 0 {
+			continue
+		}
+		sortedUsers = append(sortedUsers, u)
+	}
+	sort.Slice(sortedUsers, func(i, j int) bool { return sortedUsers[i].ID < sortedUsers[j].ID })
+
+	for _, u := range sortedUsers {
+		writeField(h, []byte(u.ID))
+		writeField(h, []byte(strconv.FormatInt(u.UpdatedAtMs, 10)))
+		writeField(h, []byte(u.OriginBolt))
+		deletedAt := int64(0)
+		if u.DeletedAt.Valid {
+			deletedAt = u.DeletedAt.Int64
+		}
+		writeField(h, []byte(strconv.FormatInt(deletedAt, 10)))
+		writeField(h, u.Signature)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

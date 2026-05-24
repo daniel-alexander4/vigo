@@ -63,34 +63,34 @@ const multicastReadDeadline = 2 * time.Second
 // /fleet-snapshot pull. The signature already covers the new field
 // because it is part of digestMessageContent below.
 type digestMessage struct {
-	SpannerID    string              `json:"spanner_id"`    // federation anchor; must match the listener's
-	BoltPubkey   string              `json:"bolt_pubkey"`   // sending bolt's pubkey-hex; looked up in the local roster
-	RosterDigest string              `json:"roster_digest"` // RosterDigest of the sender's current roster
-	Convergence  ConvergenceCounters `json:"convergence"`   // sender's fleet-convergence counters (Slice 2-ii-a)
-	SentAt       int64               `json:"sent_at"`       // ms-since-epoch; also the observability LWW key
-	Signature    []byte              `json:"signature"`     // ed25519 over the content fields
+	SpannerID   string              `json:"spanner_id"`   // federation anchor; must match the listener's
+	BoltPubkey  string              `json:"bolt_pubkey"`  // sending bolt's pubkey-hex; looked up in the local roster
+	Tier1Digest string              `json:"tier1_digest"` // Tier1Digest of the sender's roster + signed users (Slice 2-iii-e)
+	Convergence ConvergenceCounters `json:"convergence"`  // sender's fleet-convergence counters (Slice 2-ii-a)
+	SentAt      int64               `json:"sent_at"`      // ms-since-epoch; also the observability LWW key
+	Signature   []byte              `json:"signature"`    // ed25519 over the content fields
 }
 
 // digestMessageContent is the canonical content of a digestMessage —
 // every field except Signature. Marshalled deterministically for
 // sign/verify, mirroring admission.go's inviteBundleContent.
 type digestMessageContent struct {
-	SpannerID    string              `json:"spanner_id"`
-	BoltPubkey   string              `json:"bolt_pubkey"`
-	RosterDigest string              `json:"roster_digest"`
-	Convergence  ConvergenceCounters `json:"convergence"`
-	SentAt       int64               `json:"sent_at"`
+	SpannerID   string              `json:"spanner_id"`
+	BoltPubkey  string              `json:"bolt_pubkey"`
+	Tier1Digest string              `json:"tier1_digest"`
+	Convergence ConvergenceCounters `json:"convergence"`
+	SentAt      int64               `json:"sent_at"`
 }
 
 // marshalDigestContent serializes a digestMessage's content fields
 // (Signature cleared) for signing/verification.
 func marshalDigestContent(m *digestMessage) ([]byte, error) {
 	return json.Marshal(digestMessageContent{
-		SpannerID:    m.SpannerID,
-		BoltPubkey:   m.BoltPubkey,
-		RosterDigest: m.RosterDigest,
-		Convergence:  m.Convergence,
-		SentAt:       m.SentAt,
+		SpannerID:   m.SpannerID,
+		BoltPubkey:  m.BoltPubkey,
+		Tier1Digest: m.Tier1Digest,
+		Convergence: m.Convergence,
+		SentAt:      m.SentAt,
 	})
 }
 
@@ -203,16 +203,24 @@ func (g *Gossiper) sendDigest(ctx context.Context, addr *net.UDPAddr) {
 		slog.Warn("spanner tier-1 sender: listing local roster failed; skipping send", "error", err)
 		return
 	}
+	// Slice 2-iii-e: webusers ride the same Tier-1 digest. A failure
+	// listing users degrades the digest to roster-only — a peer still
+	// picks up user changes via the 5m Tier-2 ticker; just slower.
+	users, uErr := g.queries.ListUsersForReplication(ctx)
+	if uErr != nil {
+		slog.Warn("spanner tier-1 sender: listing local users failed; sending roster-only digest", "error", uErr)
+		users = nil
+	}
 	var counters ConvergenceCounters
 	if g.localCounters != nil {
 		counters = g.localCounters()
 	}
 	msg := &digestMessage{
-		SpannerID:    g.spannerID,
-		BoltPubkey:   g.ownPubkey,
-		RosterDigest: RosterDigest(roster),
-		Convergence:  counters,
-		SentAt:       time.Now().UnixMilli(),
+		SpannerID:   g.spannerID,
+		BoltPubkey:  g.ownPubkey,
+		Tier1Digest: Tier1Digest(roster, users),
+		Convergence: counters,
+		SentAt:      time.Now().UnixMilli(),
 	}
 	if err := signDigestMessage(g.signingKey, msg); err != nil {
 		slog.Warn("spanner tier-1 sender: signing digest failed; skipping send", "error", err)
@@ -234,7 +242,7 @@ func (g *Gossiper) sendDigest(ctx context.Context, addr *net.UDPAddr) {
 		slog.Warn("spanner tier-1 sender: writing datagram failed; skipping send", "error", err)
 		return
 	}
-	slog.Debug("spanner tier-1 sender: digest sent", "digest", msg.RosterDigest)
+	slog.Debug("spanner tier-1 sender: digest sent", "digest", msg.Tier1Digest)
 }
 
 // runTier1Listener joins the Tier-1 multicast group and processes
@@ -315,8 +323,8 @@ func (g *Gossiper) handleTier1Datagram(ctx context.Context, raw []byte, founderP
 //     member — an unknown sender is ignored (no pull).
 //  3. the signature must verify against that member's pubkey — a bad
 //     signature is ignored.
-//  4. the message's RosterDigest is compared to this bolt's own
-//     current RosterDigest; a match is a no-op, a mismatch fires the
+//  4. the message's Tier1Digest is compared to this bolt's own
+//     current Tier1Digest; a match is a no-op, a mismatch fires the
 //     existing Tier-2 pullAndMerge for the sender — using the sender's
 //     hostname from the LOCAL roster row, never a hostname from the
 //     wire.
@@ -381,8 +389,16 @@ func (g *Gossiper) handleTier1Message(ctx context.Context, msg *digestMessage, f
 	}
 
 	// (4) digest comparison — a match needs no pull.
-	if msg.RosterDigest == RosterDigest(roster) {
-		slog.Debug("spanner tier-1: digest matches local roster; no pull", "sender", msg.BoltPubkey)
+	users, uErr := g.queries.ListUsersForReplication(ctx)
+	if uErr != nil {
+		// Same degradation rationale as the sender — degrade to a
+		// roster-only local digest; worst case a user change still
+		// propagates via the 5m Tier-2 ticker.
+		slog.Warn("spanner tier-1: listing local users failed; comparing roster-only digest", "error", uErr)
+		users = nil
+	}
+	if msg.Tier1Digest == Tier1Digest(roster, users) {
+		slog.Debug("spanner tier-1: digest matches local state; no pull", "sender", msg.BoltPubkey)
 		return
 	}
 

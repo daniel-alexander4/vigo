@@ -38,7 +38,7 @@ func TestDigestMessageSignVerifyRoundTrip(t *testing.T) {
 	msg := &digestMessage{
 		SpannerID:    testSpannerID,
 		BoltPubkey:   hex.EncodeToString(pub),
-		RosterDigest: "deadbeef",
+		Tier1Digest: "deadbeef",
 	}
 	if err := signDigestMessage(priv, msg); err != nil {
 		t.Fatalf("signDigestMessage: %v", err)
@@ -57,7 +57,7 @@ func TestDigestMessageVerifyRejectsTamper(t *testing.T) {
 		m := &digestMessage{
 			SpannerID:    testSpannerID,
 			BoltPubkey:   hex.EncodeToString(pub),
-			RosterDigest: "aaaa",
+			Tier1Digest: "aaaa",
 			SentAt:       1234,
 		}
 		if err := signDigestMessage(priv, m); err != nil {
@@ -68,7 +68,7 @@ func TestDigestMessageVerifyRejectsTamper(t *testing.T) {
 
 	t.Run("tampered digest", func(t *testing.T) {
 		m := base()
-		m.RosterDigest = "bbbb"
+		m.Tier1Digest = "bbbb"
 		if err := verifyDigestMessage(pub, m); err == nil {
 			t.Error("verify accepted a message with a tampered roster digest")
 		}
@@ -108,7 +108,7 @@ func TestDatagramEncodeDecodeRoundTrip(t *testing.T) {
 	msg := &digestMessage{
 		SpannerID:    testSpannerID,
 		BoltPubkey:   hex.EncodeToString(pub),
-		RosterDigest: "cafebabe",
+		Tier1Digest: "cafebabe",
 		SentAt:       42,
 	}
 	if err := signDigestMessage(priv, msg); err != nil {
@@ -125,7 +125,7 @@ func TestDatagramEncodeDecodeRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeDatagram: %v", err)
 	}
-	if got.RosterDigest != msg.RosterDigest || got.BoltPubkey != msg.BoltPubkey || got.SpannerID != msg.SpannerID {
+	if got.Tier1Digest != msg.Tier1Digest || got.BoltPubkey != msg.BoltPubkey || got.SpannerID != msg.SpannerID {
 		t.Errorf("round-trip mismatch: got %+v, want %+v", got, msg)
 	}
 	if err := verifyDigestMessage(pub, got); err != nil {
@@ -166,7 +166,7 @@ func boltRow(seed byte, hostname string, admittedAt int64) db.SpannerBolt {
 	}
 }
 
-func TestRosterDigestStable(t *testing.T) {
+func TestTier1DigestStable(t *testing.T) {
 	a := []db.SpannerBolt{
 		boltRow(0x11, "b1", 100),
 		boltRow(0x22, "b2", 200),
@@ -177,7 +177,7 @@ func TestRosterDigestStable(t *testing.T) {
 		boltRow(0x22, "b2", 200),
 		boltRow(0x11, "b1", 100),
 	}
-	if RosterDigest(a) != RosterDigest(b) {
+	if Tier1Digest(a, nil) != Tier1Digest(b, nil) {
 		t.Error("RosterDigest is not order-independent")
 	}
 	// Same rows, same order, separately constructed — the digest must
@@ -186,38 +186,38 @@ func TestRosterDigestStable(t *testing.T) {
 		boltRow(0x11, "b1", 100),
 		boltRow(0x22, "b2", 200),
 	}
-	if RosterDigest(a) != RosterDigest(c) {
+	if Tier1Digest(a, nil) != Tier1Digest(c, nil) {
 		t.Error("RosterDigest is not deterministic for an unchanged roster")
 	}
 }
 
-func TestRosterDigestSensitive(t *testing.T) {
+func TestTier1DigestSensitive(t *testing.T) {
 	base := []db.SpannerBolt{boltRow(0x11, "b1", 100), boltRow(0x22, "b2", 200)}
-	baseDigest := RosterDigest(base)
+	baseDigest := Tier1Digest(base, nil)
 
 	t.Run("added row", func(t *testing.T) {
 		more := append(append([]db.SpannerBolt{}, base...), boltRow(0x33, "b3", 300))
-		if RosterDigest(more) == baseDigest {
+		if Tier1Digest(more, nil) == baseDigest {
 			t.Error("adding a row did not change the digest")
 		}
 	})
 	t.Run("mutated admitted_at", func(t *testing.T) {
 		mut := []db.SpannerBolt{boltRow(0x11, "b1", 999), boltRow(0x22, "b2", 200)}
-		if RosterDigest(mut) == baseDigest {
+		if Tier1Digest(mut, nil) == baseDigest {
 			t.Error("mutating admitted_at did not change the digest")
 		}
 	})
 	t.Run("revoked row", func(t *testing.T) {
 		rev := []db.SpannerBolt{boltRow(0x11, "b1", 100), boltRow(0x22, "b2", 200)}
 		rev[0].RevokedAt = sql.NullInt64{Int64: 500, Valid: true}
-		if RosterDigest(rev) == baseDigest {
+		if Tier1Digest(rev, nil) == baseDigest {
 			t.Error("revoking a row did not change the digest")
 		}
 	})
 	t.Run("re-signed row", func(t *testing.T) {
 		mut := []db.SpannerBolt{boltRow(0x11, "b1", 100), boltRow(0x22, "b2", 200)}
 		mut[0].Signature[0] ^= 0xff
-		if RosterDigest(mut) == baseDigest {
+		if Tier1Digest(mut, nil) == baseDigest {
 			t.Error("changing a signature did not change the digest")
 		}
 	})
@@ -225,10 +225,107 @@ func TestRosterDigestSensitive(t *testing.T) {
 	// signature covers it, and a CRDT hostname change rides admitted_at.
 	t.Run("hostname not in digest", func(t *testing.T) {
 		mut := []db.SpannerBolt{boltRow(0x11, "renamed", 100), boltRow(0x22, "b2", 200)}
-		if RosterDigest(mut) != baseDigest {
+		if Tier1Digest(mut, nil) != baseDigest {
 			t.Error("hostname unexpectedly contributes to the digest")
 		}
 	})
+}
+
+// signedUser builds a minimal db.User row with a non-nil signature so
+// it counts toward the digest. Content is irrelevant — these tests
+// exercise the hash-input shape, not signing semantics.
+func signedUser(id, origin string, updatedAtMs int64, deletedAt int64, sigByte byte) db.User {
+	u := db.User{
+		ID:          id,
+		UpdatedAtMs: updatedAtMs,
+		OriginBolt:  origin,
+		Signature:   []byte{sigByte, sigByte, sigByte, sigByte},
+	}
+	if deletedAt != 0 {
+		u.DeletedAt = sql.NullInt64{Int64: deletedAt, Valid: true}
+	}
+	return u
+}
+
+func TestTier1DigestUsersStableAndSensitive(t *testing.T) {
+	roster := []db.SpannerBolt{boltRow(0x11, "b1", 100)}
+	baseUsers := []db.User{
+		signedUser("u-alice", "ab12", 1000, 0, 0xaa),
+		signedUser("u-bob", "ab12", 2000, 0, 0xbb),
+	}
+	baseDigest := Tier1Digest(roster, baseUsers)
+
+	t.Run("order independent", func(t *testing.T) {
+		swapped := []db.User{baseUsers[1], baseUsers[0]}
+		if Tier1Digest(roster, swapped) != baseDigest {
+			t.Error("digest is not user-order independent")
+		}
+	})
+	t.Run("flipped updated_at_ms changes digest", func(t *testing.T) {
+		mut := []db.User{baseUsers[0], baseUsers[1]}
+		mut[0].UpdatedAtMs = 9999
+		if Tier1Digest(roster, mut) == baseDigest {
+			t.Error("updated_at_ms change did not affect the digest")
+		}
+	})
+	t.Run("flipped tombstone changes digest", func(t *testing.T) {
+		mut := []db.User{baseUsers[0], baseUsers[1]}
+		mut[1].DeletedAt = sql.NullInt64{Int64: 5000, Valid: true}
+		if Tier1Digest(roster, mut) == baseDigest {
+			t.Error("deleted_at flip did not affect the digest")
+		}
+	})
+	t.Run("flipped signature changes digest", func(t *testing.T) {
+		mut := []db.User{baseUsers[0], baseUsers[1]}
+		mut[0].Signature = []byte{0xff}
+		if Tier1Digest(roster, mut) == baseDigest {
+			t.Error("signature change did not affect the digest")
+		}
+	})
+	t.Run("flipped origin_bolt changes digest", func(t *testing.T) {
+		mut := []db.User{baseUsers[0], baseUsers[1]}
+		mut[0].OriginBolt = "ffff"
+		if Tier1Digest(roster, mut) == baseDigest {
+			t.Error("origin_bolt change did not affect the digest")
+		}
+	})
+}
+
+func TestTier1DigestUnsignedUsersIgnored(t *testing.T) {
+	roster := []db.SpannerBolt{boltRow(0x11, "b1", 100)}
+	signed := []db.User{signedUser("u-alice", "ab12", 1000, 0, 0xaa)}
+	baseDigest := Tier1Digest(roster, signed)
+
+	// Add an unsigned (legacy / pre-replication) row. The digest must
+	// be unchanged — those rows don't replicate via the snapshot
+	// endpoint (Slice 2-iii-c filters them out) and shouldn't force
+	// pointless Tier-2 pulls between bolts at different upgrade points.
+	withUnsigned := append([]db.User{}, signed...)
+	withUnsigned = append(withUnsigned, db.User{
+		ID:          "u-legacy",
+		UpdatedAtMs: 0,
+		// OriginBolt = "", Signature = nil → unsigned legacy row
+	})
+	if Tier1Digest(roster, withUnsigned) != baseDigest {
+		t.Error("unsigned user row unexpectedly contributed to digest")
+	}
+}
+
+// TestTier1DigestUsersAndRosterContributeIndependently confirms a
+// change to EITHER section flips the digest — the listener fast-path
+// fires on any state drift, not just admissions drift.
+func TestTier1DigestUsersAndRosterContributeIndependently(t *testing.T) {
+	rosterA := []db.SpannerBolt{boltRow(0x11, "b1", 100)}
+	rosterB := []db.SpannerBolt{boltRow(0x11, "b1", 200)} // different admitted_at
+	users := []db.User{signedUser("u-alice", "ab12", 1000, 0, 0xaa)}
+
+	if Tier1Digest(rosterA, users) == Tier1Digest(rosterB, users) {
+		t.Error("roster change went undetected with same users")
+	}
+	usersB := []db.User{signedUser("u-alice", "ab12", 1000, 0, 0xbb)} // different sig
+	if Tier1Digest(rosterA, users) == Tier1Digest(rosterA, usersB) {
+		t.Error("user change went undetected with same roster")
+	}
 }
 
 // ---------------------------------------------------------------------
@@ -297,7 +394,7 @@ func (f *tier1Fixture) localDigest() string {
 	if err != nil {
 		f.t.Fatalf("ListBolts: %v", err)
 	}
-	return RosterDigest(roster)
+	return Tier1Digest(roster, nil)
 }
 
 // signedDigestFor builds a Tier-1 message from senderKey for the given
@@ -307,7 +404,7 @@ func signedDigestFor(t *testing.T, senderKey ed25519.PrivateKey, senderHex, span
 	m := &digestMessage{
 		SpannerID:    spannerID,
 		BoltPubkey:   senderHex,
-		RosterDigest: digest,
+		Tier1Digest: digest,
 		SentAt:       time.Now().UnixMilli(),
 	}
 	if err := signDigestMessage(senderKey, m); err != nil {
@@ -467,7 +564,7 @@ func TestTier1CountersUpdateObservabilityCache(t *testing.T) {
 	msg := &digestMessage{
 		SpannerID:    testSpannerID,
 		BoltPubkey:   peerHex,
-		RosterDigest: f.localDigest(), // matching digest — no pull, but counters still cache
+		Tier1Digest: f.localDigest(), // matching digest — no pull, but counters still cache
 		Convergence:  counters,
 		SentAt:       time.Now().UnixMilli(),
 	}
@@ -499,7 +596,7 @@ func TestTier1BadSignatureDoesNotCacheCounters(t *testing.T) {
 	msg := &digestMessage{
 		SpannerID:    testSpannerID,
 		BoltPubkey:   peerHex,
-		RosterDigest: "x",
+		Tier1Digest: "x",
 		Convergence:  ConvergenceCounters{Total: 99},
 		SentAt:       time.Now().UnixMilli(),
 	}
@@ -542,7 +639,7 @@ func TestTier1SocketRoundTrip(t *testing.T) {
 	msg := &digestMessage{
 		SpannerID:    testSpannerID,
 		BoltPubkey:   hex.EncodeToString(pub),
-		RosterDigest: "socket-round-trip",
+		Tier1Digest: "socket-round-trip",
 		SentAt:       time.Now().UnixMilli(),
 	}
 	if err := signDigestMessage(priv, msg); err != nil {
@@ -571,8 +668,8 @@ func TestTier1SocketRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeDatagram of the received datagram: %v", err)
 	}
-	if got.RosterDigest != msg.RosterDigest {
-		t.Errorf("round-tripped digest = %q, want %q", got.RosterDigest, msg.RosterDigest)
+	if got.Tier1Digest != msg.Tier1Digest {
+		t.Errorf("round-tripped digest = %q, want %q", got.Tier1Digest, msg.Tier1Digest)
 	}
 	if err := verifyDigestMessage(pub, got); err != nil {
 		t.Errorf("received message fails verification: %v", err)
