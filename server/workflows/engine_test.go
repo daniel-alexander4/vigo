@@ -38,6 +38,7 @@ steps:
 `)
 
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +79,7 @@ steps:
 `)
 
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -96,6 +98,7 @@ description: no steps
 `)
 
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	err := engine.Load(dir)
 	if err == nil {
 		t.Error("expected error for workflow without steps")
@@ -104,6 +107,7 @@ description: no steps
 
 func TestEngine_LoadMissingDir(t *testing.T) {
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	if err := engine.Load("/nonexistent/path"); err != nil {
 		t.Errorf("expected nil error for missing dir, got: %v", err)
 	}
@@ -123,6 +127,7 @@ steps:
 `)
 
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -142,6 +147,7 @@ steps:
 
 func TestEngine_AbortFlag(t *testing.T) {
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 
 	if engine.isAborted("run-1") {
 		t.Error("should not be aborted initially")
@@ -179,6 +185,7 @@ steps:
 `)
 
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -210,6 +217,7 @@ steps:
 `)
 
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	err := engine.Load(dir)
 	if err == nil {
 		t.Fatal("expected Load to fail on dangerous step command")
@@ -236,6 +244,7 @@ steps:
 `)
 
 	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
 	if err := engine.Load(dir); err != nil {
 		t.Fatalf("expected Load to succeed for named-task step, got: %v", err)
 	}

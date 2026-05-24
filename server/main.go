@@ -54,9 +54,13 @@ import (
 	"git.alexander4.io/vigo/ui"
 )
 
-// version is set at build time via -ldflags="-X main.version=1.2.3".
-// The default should match the VERSION file at the repo root.
-var version = "0.1.3"
+// version is set at build time via -ldflags="-X main.version=$(cat VERSION)"
+// (Makefile + Dockerfile.server). The "dev" default surfaces in `--version`
+// output for un-ldflagged builds (`go run ./server`, ad-hoc `go build`) —
+// honest and self-describing instead of a stale literal that drifts from
+// the VERSION file. Matches the Makefile's `VERSION ?= $(shell cat VERSION
+// 2>/dev/null || echo dev)` fallback exactly.
+var version = "dev"
 
 func main() {
 	if err := run(); err != nil {

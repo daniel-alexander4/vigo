@@ -1443,6 +1443,13 @@ func (s *Server) Close() error {
 	if s.manifestStore != nil {
 		s.manifestStore.Stop()
 	}
+	// Workflow engine BEFORE the DB — Close() drains every in-flight
+	// executeWorkflow goroutine, all of which hold *db.Queries handles
+	// onto s.db. If we close s.db first, the still-running goroutine
+	// nil-derefs at the next DispatchPush.
+	if s.workflowEngine != nil {
+		s.workflowEngine.Close()
+	}
 	if s.db != nil {
 		_ = s.db.Close()
 	}

@@ -375,11 +375,19 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	//   CLI path — the request carries the operator's freshly-detected
 	//     pubkey (cli/scrier_ssh.go::resolveOperatorPubkey). We validate
 	//     it and use it for THIS session.
-	//   Browser path — no pubkey in the request; we use the stored
-	//     users.ssh_public_key, which is set canonically by
-	//     `vigocli webusers create --role admin` (new user) or
-	//     `vigocli webusers set-role --role admin` (existing user) —
-	//     both auto-read it from the matching OS user's home dir.
+	//   Browser path — no pubkey in the request; we read the CURRENT
+	//     value of users.ssh_public_key directly from the DB via
+	//     [resolveVerifyPubkey]. NOT the session-cached User.SSHPublicKey:
+	//     the session blob is a gob snapshot at login time, and the SSH
+	//     pubkey has its own write-through lifecycle (`vigocli webusers
+	//     {create,set-role} --role admin` auto-seed it). Reading from the
+	//     session was a stale-read trap — an operator who ran set-role
+	//     mid-session and immediately attempted browser scrier got
+	//     "no SSH pubkey available" until they logged out + back in.
+	//     The pubkey is set canonically by `vigocli webusers create
+	//     --role admin` (new user) or `vigocli webusers set-role --role
+	//     admin` (existing user) — both auto-read from the matching OS
+	//     user's home dir.
 	//
 	// No write-through: persisting per-user state from an opportunistic
 	// runtime side-effect was previously a silent fail for peer-authed
@@ -389,13 +397,10 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	// handler is a consumer only.
 	var sshAuth *SSHPubkeyAuth
 	if sess.protocol == "ssh" {
-		verifyPubkey := user.SSHPublicKey
-		if sess.requestedPubkey != "" {
-			if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(sess.requestedPubkey)); err != nil {
-				sess.setStatus(statusError, "invalid SSH pubkey in connect request: "+err.Error())
-				return
-			}
-			verifyPubkey = sess.requestedPubkey
+		verifyPubkey, err := resolveVerifyPubkey(ctx, h.queries, user.ID, sess.requestedPubkey)
+		if err != nil {
+			sess.setStatus(statusError, err.Error())
+			return
 		}
 		if verifyPubkey == "" {
 			sess.setStatus(statusError,
@@ -514,6 +519,16 @@ func (h *Handler) setupSSH(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID
 	}
 
 	// Connect to the proxy (which tunnels to the agent's localhost:22).
+	//
+	// HostKeyCallback intentionally accepts any server key. The SSH connection
+	// rides through vigosrv into an AgentStream-multiplexed TunnelStream and
+	// terminates at the agent's `127.0.0.1:<sshd-port>` after the agent has
+	// planted a per-session ephemeral ED25519 key in the matched OS user's
+	// `authorized_keys`. There is no network MITM surface: the bytes never
+	// leave the agent-host loopback once they exit the mTLS tunnel, and the
+	// auth is the per-session keypair, not a long-lived host key. A
+	// host-key-pinning callback here would gate nothing and only complicate
+	// the first-session UX.
 	sshConfig := &ssh.ClientConfig{
 		User:            sshUsername,
 		Auth:            authMethods,

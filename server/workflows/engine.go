@@ -59,6 +59,13 @@ type TaskRunner interface {
 }
 
 // Engine executes workflows.
+//
+// Goroutine lifecycle is bound to the Engine: every RunWorkflow spawns
+// an executeWorkflow goroutine under e.ctx and e.wg. Close() cancels
+// e.ctx and waits for all in-flight goroutines to drain before
+// returning — callers (and tests) must Close() before tearing down
+// the DB the Engine reads from, or an orphan executeWorkflow goroutine
+// will race the shutdown and panic on a closed *sql.DB.
 type Engine struct {
 	queries    *db.Queries
 	runner     TaskRunner
@@ -66,17 +73,40 @@ type Engine struct {
 	workflows  map[string]*WorkflowDef
 	mu         sync.RWMutex
 	abortFlags sync.Map // workflowRunID → struct{}
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // NewEngine creates a workflow engine. m owns the workflow-run counters
 // and may be nil in tests that don't observe those metrics.
+//
+// The Engine owns its goroutine context — call Close() (typically via
+// t.Cleanup in tests, graceful shutdown in main) to cancel in-flight
+// executeWorkflow goroutines and wait for them to drain.
 func NewEngine(queries *db.Queries, runner TaskRunner, m *metrics.Metrics) *Engine {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Engine{
 		queries:   queries,
 		runner:    runner,
 		metrics:   m,
 		workflows: make(map[string]*WorkflowDef),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
+}
+
+// Close cancels the Engine's goroutine context and waits for all
+// in-flight executeWorkflow goroutines to drain. Safe to call multiple
+// times — context.CancelFunc is idempotent.
+//
+// Must be called before tearing down the DB the Engine reads from;
+// otherwise an orphan workflow goroutine can race the shutdown and
+// panic on a closed *sql.DB at engine.go:308 (DispatchPush).
+func (e *Engine) Close() {
+	e.cancel()
+	e.wg.Wait()
 }
 
 // Load reads all workflow YAML files from a directory.
@@ -207,7 +237,11 @@ func (e *Engine) RunWorkflow(ctx context.Context, name, operator string) (string
 		return "", fmt.Errorf("creating workflow run: %w", err)
 	}
 
-	go e.executeWorkflow(run.ID, def)
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		e.executeWorkflow(run.ID, def)
+	}()
 	return run.ID, nil
 }
 
@@ -223,8 +257,13 @@ func (e *Engine) isAborted(workflowRunID string) bool {
 }
 
 // executeWorkflow runs the workflow steps sequentially.
+//
+// Uses e.ctx so Close() cancels the goroutine. The DB calls all take
+// ctx, so cancelling mid-step returns sql.ErrConnDone / context.Canceled
+// which the existing persistErr() / explicit-error paths handle cleanly.
+// The top-of-loop ctx.Err() check exits before starting a new step.
 func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
-	ctx := context.Background()
+	ctx := e.ctx
 	defer e.abortFlags.Delete(runID)
 
 	now := sql.NullTime{Time: time.Now(), Valid: true}
@@ -246,6 +285,14 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 	currentIdx := 0
 	for currentIdx < len(def.Steps) {
 		step := def.Steps[currentIdx]
+
+		// Engine.Close() cancellation — exit cleanly before the next
+		// step's DB writes. Without this short-circuit, an Engine that
+		// shuts down mid-workflow keeps executing steps until each
+		// individual DB call fails — wasting work and emitting noise.
+		if ctx.Err() != nil {
+			return
+		}
 
 		// Check abort flag before dispatching.
 		if e.isAborted(runID) {
