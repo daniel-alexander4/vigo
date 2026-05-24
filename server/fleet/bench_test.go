@@ -100,3 +100,22 @@ func BenchmarkFleetIndexConvergenceSummary(b *testing.B) {
 		fi.ConvergenceSummary()
 	}
 }
+
+func BenchmarkFleetIndexUpdateRunStatus(b *testing.B) {
+	const n = 10000
+	fi := populateIndex(n)
+	now := time.Now()
+	// Pre-build IDs so the benchmark measures UpdateRunStatus's own allocations,
+	// not fmt.Sprintf churn from the harness.
+	ids := make([]string, n)
+	runIDs := make([]string, n)
+	for i := 0; i < n; i++ {
+		ids[i] = fmt.Sprintf("t-%d", i)
+		runIDs[i] = fmt.Sprintf("run-%d", i)
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		fi.UpdateRunStatus(ids[i%n], runIDs[i%n], "ok", 0, 0, 12, now)
+	}
+}
