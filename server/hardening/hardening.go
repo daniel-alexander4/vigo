@@ -136,37 +136,58 @@ func DetectInjection() {
 	}
 }
 
+// loadPrivateKey reads an ED25519 private key from disk in either PEM or
+// raw-hex-seed format. Shared by SignBinary and PubkeyFromKey so the
+// accepted formats stay in lock-step.
+func loadPrivateKey(keyPath string) (ed25519.PrivateKey, error) {
+	keyData, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("read key: %w", err)
+	}
+
+	block, _ := pem.Decode(keyData)
+	if block != nil {
+		if len(block.Bytes) == ed25519.SeedSize {
+			return ed25519.NewKeyFromSeed(block.Bytes), nil
+		}
+		if len(block.Bytes) == ed25519.PrivateKeySize {
+			return ed25519.PrivateKey(block.Bytes), nil
+		}
+		return nil, fmt.Errorf("PEM key must be %d (seed) or %d (full) bytes, got %d",
+			ed25519.SeedSize, ed25519.PrivateKeySize, len(block.Bytes))
+	}
+
+	seed, err := hex.DecodeString(strings.TrimSpace(string(keyData)))
+	if err != nil || len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("key must be PEM-encoded or a %d-byte hex seed", ed25519.SeedSize)
+	}
+	return ed25519.NewKeyFromSeed(seed), nil
+}
+
+// PubkeyFromKey returns the hex-encoded ED25519 public key derived from
+// the private key at keyPath. The key file may be PEM-encoded or a raw
+// hex seed (same formats SignBinary accepts).
+//
+// Used by the agent build pipeline: the resulting pubkey is baked into
+// the agent binary at build time as VIGO_AGENT_SIGNING_PUBKEY, so the
+// agent verifies updates against a key it holds out-of-band rather than
+// against a key the server hands it at update time.
+func PubkeyFromKey(keyPath string) (string, error) {
+	privKey, err := loadPrivateKey(keyPath)
+	if err != nil {
+		return "", err
+	}
+	pubKey := privKey.Public().(ed25519.PublicKey)
+	return hex.EncodeToString(pubKey), nil
+}
+
 // SignBinary creates a detached .sig file for a binary using an ED25519 private key.
 // The key can be a raw 64-byte seed or a PEM-encoded PKCS8 key.
 // This is a build-time utility, not called at runtime.
 func SignBinary(binaryPath, keyPath, outputPath string) error {
-	// Read private key.
-	keyData, err := os.ReadFile(keyPath)
+	privKey, err := loadPrivateKey(keyPath)
 	if err != nil {
-		return fmt.Errorf("read key: %w", err)
-	}
-
-	var privKey ed25519.PrivateKey
-
-	// Try PEM first.
-	block, _ := pem.Decode(keyData)
-	if block != nil {
-		// Raw ED25519 seed in PEM.
-		if len(block.Bytes) == ed25519.SeedSize {
-			privKey = ed25519.NewKeyFromSeed(block.Bytes)
-		} else if len(block.Bytes) == ed25519.PrivateKeySize {
-			privKey = ed25519.PrivateKey(block.Bytes)
-		} else {
-			return fmt.Errorf("PEM key must be %d (seed) or %d (full) bytes, got %d",
-				ed25519.SeedSize, ed25519.PrivateKeySize, len(block.Bytes))
-		}
-	} else {
-		// Try raw hex seed.
-		seed, err := hex.DecodeString(strings.TrimSpace(string(keyData)))
-		if err != nil || len(seed) != ed25519.SeedSize {
-			return fmt.Errorf("key must be PEM-encoded or a %d-byte hex seed", ed25519.SeedSize)
-		}
-		privKey = ed25519.NewKeyFromSeed(seed)
+		return err
 	}
 
 	// Hash the binary.

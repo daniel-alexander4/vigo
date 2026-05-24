@@ -153,6 +153,23 @@ fn build_mtls_agent(certs: &TlsCerts) -> Result<ureq::Agent> {
     ))
 }
 
+/// Baked-in ED25519 pubkey used to verify agent self-updates. Injected
+/// at build time from `VIGO_AGENT_SIGNING_PUBKEY` (see agent/build.rs);
+/// the corresponding private key (`SIGN_KEY` in the Makefile) signs the
+/// distributed `.sig` files. Verification uses this constant exclusively
+/// — the agent does NOT trust whatever pubkey the server returns at
+/// update time, because a compromised server hands out its own.
+const SIGNING_PUBKEY_HEX: &str = env!("VIGO_AGENT_SIGNING_PUBKEY");
+
+/// The dev sentinel: an agent built without a real `SIGN_KEY` in scope
+/// (plain `cargo build` / `cargo test`) ships with this all-zero pubkey
+/// baked in. At runtime, `verify_signature_or_bail` refuses to proceed
+/// against the sentinel, with an operator-actionable error pointing at
+/// `make build-agent SIGN_KEY=<path>`. Build succeeds so the wider
+/// cargo workflow isn't broken; safety comes from the runtime refusal.
+const SIGNING_PUBKEY_DEV_SENTINEL: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+
 /// Verify an ED25519 signature over a SHA256 digest.
 ///
 /// The server signs the SHA256 digest of the binary (not the raw binary).
@@ -175,26 +192,18 @@ fn verify_signature(digest: &[u8], signature_hex: &str, pubkey_hex: &str) -> Res
     Ok(())
 }
 
-/// Fetch the server's signing public key from `/api/v1/agent/signing-key`.
-fn fetch_signing_key(agent: &ureq::Agent, api_addr: &str) -> Result<String> {
-    let url = format!("{}/api/v1/agent/signing-key", api_addr);
-    let resp = agent
-        .get(&url)
-        .call()
-        .map_err(|e| anyhow::anyhow!("fetch signing key: {}", e))?;
-
-    if resp.status() != 200 {
-        bail!("signing key endpoint returned status {}", resp.status());
+/// Fail-closed update verification: refuse to install on missing
+/// signature, on the dev-sentinel pubkey, or on signature/pubkey
+/// mismatch. Honors the CLAUDE.md guarantee that the agent self-updates
+/// only from ed25519-signed binaries (ADR-031).
+fn verify_signature_or_bail(digest: &[u8], signature_hex: &str, pubkey_hex: &str) -> Result<()> {
+    if signature_hex.is_empty() {
+        bail!("server response missing ED25519 signature — refusing to install unsigned binary (CLAUDE.md self-update guarantee, ADR-031)");
     }
-
-    let body = resp.into_body().read_to_vec().context("read signing key body")?;
-
-    #[derive(serde::Deserialize)]
-    struct KeyResp {
-        public_key: String,
+    if pubkey_hex == SIGNING_PUBKEY_DEV_SENTINEL {
+        bail!("agent built without signing key (dev sentinel pubkey baked in) — rebuild via `make build-agent SIGN_KEY=<path>` before enabling self-update");
     }
-    let kr: KeyResp = serde_json::from_slice(&body).context("decode signing key response")?;
-    Ok(kr.public_key)
+    verify_signature(digest, signature_hex, pubkey_hex)
 }
 
 /// Check the server's `/api/v1/agent/latest` endpoint for a newer version.
@@ -273,7 +282,7 @@ pub async fn apply(
         client_cert: t.client_cert.clone(),
         client_key: t.client_key.clone(),
     });
-    let api_addr_owned = api_addr.map(|s| s.to_string());
+    let _ = api_addr; // baked-in pubkey replaced fetch_signing_key (ADR-031)
     let signature = info.signature.clone();
 
     let expected_sha = info.sha256.clone();
@@ -332,22 +341,11 @@ pub async fn apply(
             );
         }
 
-        // Verify ED25519 signature if available.
-        if !signature.is_empty() {
-            if let Some(ref addr) = api_addr_owned {
-                match fetch_signing_key(&agent, addr) {
-                    Ok(pubkey_hex) => {
-                        verify_signature(&digest, &signature, &pubkey_hex)?;
-                        info!("ED25519 signature verified");
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "could not fetch signing key, skipping signature verification");
-                    }
-                }
-            }
-        } else {
-            debug!("no signature provided, skipping ED25519 verification");
-        }
+        // Fail-closed ED25519 verification against the baked-in pubkey
+        // (ADR-031). Empty signature, sentinel pubkey, or mismatch all
+        // bail — the agent never installs an unverified binary.
+        verify_signature_or_bail(&digest, &signature, SIGNING_PUBKEY_HEX)?;
+        info!("ED25519 signature verified");
 
         Ok(body)
     })
@@ -712,5 +710,57 @@ mod tests {
         let pubkey_hex = hex::encode(verifying_key.to_bytes());
 
         assert!(verify_signature(&tampered_digest, &sig_hex, &pubkey_hex).is_err());
+    }
+
+    // ADR-031 fail-closed verification (verify_signature_or_bail): empty
+    // signature, the dev sentinel pubkey, and signature/pubkey mismatch
+    // all bail. The wrapper exists so this contract is testable without
+    // mutating the compile-time-const baked-in pubkey.
+
+    #[test]
+    fn verify_signature_or_bail_bails_on_empty_signature() {
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
+        let pubkey_hex = hex::encode(SigningKey::generate(&mut OsRng).verifying_key().to_bytes());
+        let digest = Sha256::digest(b"any binary");
+        let err = verify_signature_or_bail(&digest, "", &pubkey_hex).unwrap_err();
+        assert!(err.to_string().contains("missing ED25519 signature"), "got: {err}");
+    }
+
+    #[test]
+    fn verify_signature_or_bail_bails_on_sentinel_pubkey() {
+        let digest = Sha256::digest(b"any binary");
+        // Any non-empty signature; sentinel-pubkey check fires before
+        // signature parsing.
+        let err = verify_signature_or_bail(&digest, "deadbeef", SIGNING_PUBKEY_DEV_SENTINEL)
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("dev sentinel"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn verify_signature_or_bail_passes_on_valid_signature() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::rngs::OsRng;
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let pubkey_hex = hex::encode(signing_key.verifying_key().to_bytes());
+        let digest = Sha256::digest(b"valid binary");
+        let sig_hex = hex::encode(signing_key.sign(&digest).to_bytes());
+        verify_signature_or_bail(&digest, &sig_hex, &pubkey_hex).unwrap();
+    }
+
+    #[test]
+    fn verify_signature_or_bail_fails_on_wrong_pubkey() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::rngs::OsRng;
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let wrong_pubkey_hex = hex::encode(
+            SigningKey::generate(&mut OsRng).verifying_key().to_bytes(),
+        );
+        let digest = Sha256::digest(b"valid binary");
+        let sig_hex = hex::encode(signing_key.sign(&digest).to_bytes());
+        assert!(verify_signature_or_bail(&digest, &sig_hex, &wrong_pubkey_hex).is_err());
     }
 }

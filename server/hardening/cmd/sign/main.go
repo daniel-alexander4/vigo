@@ -1,12 +1,14 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Command sign creates a detached ED25519 signature file for a binary.
+// Command sign creates a detached ED25519 signature file for a binary,
+// or extracts the public key from an existing signing key.
 //
 // Usage:
 //
 //	go run ./server/hardening/cmd/sign -key signing.key -binary bin/vigosrv
 //	go run ./server/hardening/cmd/sign -genkey -output signing.key
+//	go run ./server/hardening/cmd/sign -key signing.key -pubkey-only
 package main
 
 import (
@@ -26,13 +28,25 @@ func main() {
 		binaryPath string
 		outputPath string
 		genKey     bool
+		pubkeyOnly bool
 	)
 
 	flag.StringVar(&keyPath, "key", "signing.key", "path to ED25519 private key (hex seed)")
 	flag.StringVar(&binaryPath, "binary", "", "path to binary to sign")
 	flag.StringVar(&outputPath, "output", "", "output .sig file path (default: <binary>.sig)")
 	flag.BoolVar(&genKey, "genkey", false, "generate a new ED25519 signing key")
+	flag.BoolVar(&pubkeyOnly, "pubkey-only", false, "print hex-encoded public key for the given -key to stdout (used by the agent build pipeline to derive VIGO_AGENT_SIGNING_PUBKEY)")
 	flag.Parse()
+
+	if pubkeyOnly {
+		pubKey, err := hardening.PubkeyFromKey(keyPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(pubKey)
+		return
+	}
 
 	if genKey {
 		out := outputPath

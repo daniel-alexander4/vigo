@@ -128,3 +128,38 @@ func TestVerifyBinarySignatureNoSigFile(t *testing.T) {
 		t.Fatalf("expected nil with no sig file, got: %v", err)
 	}
 }
+
+// TestPubkeyFromKey covers the agent-pubkey extraction path the Makefile
+// uses to derive VIGO_AGENT_SIGNING_PUBKEY from SIGN_KEY (ADR-031).
+// Pubkey returned MUST match the pubkey of the keypair that signs the
+// .sig files, or every fleet agent update would fail at runtime.
+func TestPubkeyFromKey(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "signing.key")
+	seed := make([]byte, ed25519.SeedSize)
+	if _, err := rand.Read(seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, []byte(hex.EncodeToString(seed)+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := PubkeyFromKey(keyPath)
+	if err != nil {
+		t.Fatalf("PubkeyFromKey: %v", err)
+	}
+
+	// Derive expected pubkey the same way SignBinary does internally —
+	// asserting equality between the two paths is the whole point.
+	want := hex.EncodeToString(ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey))
+	if got != want {
+		t.Fatalf("pubkey mismatch — derived from SIGN_KEY differs from in-process derive\n  got:  %s\n  want: %s", got, want)
+	}
+}
+
+func TestPubkeyFromKeyMissingFile(t *testing.T) {
+	_, err := PubkeyFromKey(filepath.Join(t.TempDir(), "nope.key"))
+	if err == nil {
+		t.Fatal("expected error for missing key file")
+	}
+}

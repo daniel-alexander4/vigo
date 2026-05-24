@@ -749,8 +749,11 @@ func (h *Handler) AgentLatest(w http.ResponseWriter, r *http.Request) {
 }
 
 // SigningKey returns the hex-encoded ED25519 public key from the first available
-// agent .sig file. This lets bootstrap clients and the agent self-update path
-// obtain the signing key for verification.
+// agent .sig file. Served for bootstrap scripts and operator debugging. The
+// agent self-update path no longer consumes this endpoint — per ADR-031 the
+// agent verifies updates against a pubkey baked in at build time
+// (`VIGO_AGENT_SIGNING_PUBKEY`) rather than trusting whatever pubkey the
+// server returns.
 func (h *Handler) SigningKey(w http.ResponseWriter, r *http.Request) {
 	// Walk known platforms to find any .sig file.
 	for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {

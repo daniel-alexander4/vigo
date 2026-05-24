@@ -26,8 +26,15 @@ build: build-agent schemas
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigocli ./cli
 
+# Derive the agent's baked-in update-verification pubkey from the SIGN_KEY
+# private key (ADR-031). When SIGN_KEY is absent — the common dev case —
+# this resolves to empty and build.rs falls back to the all-zero sentinel
+# pubkey; the resulting agent boots fine but refuses to self-update at
+# runtime with an operator-actionable error pointing back here.
+VIGO_AGENT_SIGNING_PUBKEY := $(shell test -f $(SIGN_KEY) && go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -pubkey-only 2>/dev/null)
+
 build-agent:
-	cd agent && cargo build --release
+	cd agent && VIGO_AGENT_SIGNING_PUBKEY="$(VIGO_AGENT_SIGNING_PUBKEY)" cargo build --release
 	cp agent/.build/release/vigo bin/vigo
 
 test:
@@ -107,9 +114,9 @@ dist-sign-agent:
 #   apt install musl-tools gcc-aarch64-linux-gnu
 dist-agent:
 	mkdir -p dist/agent/linux/amd64 dist/agent/linux/arm64
-	cd agent && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
+	cd agent && VIGO_AGENT_SIGNING_PUBKEY="$(VIGO_AGENT_SIGNING_PUBKEY)" CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
 	cp agent/.build/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
-	cd agent && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
+	cd agent && VIGO_AGENT_SIGNING_PUBKEY="$(VIGO_AGENT_SIGNING_PUBKEY)" CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
 	cp agent/.build/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
 	@# Write each binary's .version sidecar from the binary's OWN embedded
 	@# VIGO-BUILD-VERSION marker (agent/src/main.rs) — never from Cargo.toml —
@@ -131,7 +138,7 @@ dist-agent:
 #   Install cross: cargo install cross
 dist-agent-windows:
 	mkdir -p dist/agent/windows/amd64
-	cd agent && cross build --release --target x86_64-pc-windows-msvc
+	cd agent && VIGO_AGENT_SIGNING_PUBKEY="$(VIGO_AGENT_SIGNING_PUBKEY)" cross build --release --target x86_64-pc-windows-msvc
 	cp agent/.build/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
 	@# Sidecar from the binary's own VIGO-BUILD-VERSION marker, not Cargo.toml — see dist-agent.
 	@v=$$(grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' dist/agent/windows/amd64/vigo.exe | head -1 | cut -d= -f2) ; \
@@ -145,9 +152,9 @@ dist-agent-windows:
 #   rustup target add x86_64-apple-darwin aarch64-apple-darwin
 dist-agent-macos:
 	mkdir -p dist/agent/darwin/amd64 dist/agent/darwin/arm64
-	cd agent && cargo build --release --target x86_64-apple-darwin
+	cd agent && VIGO_AGENT_SIGNING_PUBKEY="$(VIGO_AGENT_SIGNING_PUBKEY)" cargo build --release --target x86_64-apple-darwin
 	cp agent/.build/x86_64-apple-darwin/release/vigo dist/agent/darwin/amd64/vigo
-	cd agent && cargo build --release --target aarch64-apple-darwin
+	cd agent && VIGO_AGENT_SIGNING_PUBKEY="$(VIGO_AGENT_SIGNING_PUBKEY)" cargo build --release --target aarch64-apple-darwin
 	cp agent/.build/aarch64-apple-darwin/release/vigo dist/agent/darwin/arm64/vigo
 	@# Sidecars from each binary's VIGO-BUILD-VERSION marker — see dist-agent.
 	@for a in amd64 arm64 ; do \
