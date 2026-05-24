@@ -1,8 +1,23 @@
 (function() {
+    // The script tag rides the body swap on every boosted nav, so without a
+    // module-level guard the IIFE re-runs and each run creates a fresh closure.
+    // window.toggleAIChat / aiDrawerSuggest / aiDrawerSubmit get reassigned to
+    // the latest closure's functions, but listeners registered earlier still
+    // reference the original closure's state — closures alias and state goes
+    // incoherent. Pin to the first execution; later loads no-op. The
+    // afterSettle listener registered below handles re-init for boosted navs.
+    if (window.__vigoAIDrawerLoaded) return;
+    window.__vigoAIDrawerLoaded = true;
+
     var STORAGE_KEY = 'vigo_ai_drawer';
     var busy = false;
     var open = false;
     var history = [];
+    // Server-rendered welcome HTML, captured once from base.html so close+reopen
+    // can restore it without a duplicated copy in this file. The first init()
+    // after page load reads from the freshly-rendered DOM; subsequent boosted
+    // navs see the cached value.
+    var welcomeHTML = '';
 
     // Restore persistent state from sessionStorage.
     try {
@@ -60,6 +75,13 @@
         var panel = document.getElementById('ai-panel');
         if (!panel) return;
 
+        // Cache the server-rendered welcome the first time we see it, so close
+        // can reinject it without this file carrying a duplicate string copy.
+        if (!welcomeHTML) {
+            var w = document.querySelector('.ai-panel__welcome');
+            if (w) welcomeHTML = w.outerHTML;
+        }
+
         // Only restore messages once — not on every HTMX fragment swap.
         if (!initialized) {
             restoreMessages();
@@ -78,14 +100,8 @@
             // Clear history when drawer closes — next open starts fresh.
             history = [];
             var messages = document.getElementById('ai-drawer-messages');
-            if (messages) {
-                messages.innerHTML = '<div class="ai-panel__welcome">' +
-                    '<p>Ask anything about your fleet, convergence, or configuration.</p>' +
-                    '<div class="ai-panel__suggestions">' +
-                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>' +
-                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys have failed convergence and why?">Failed envoys?</button>' +
-                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>' +
-                    '</div></div>';
+            if (messages && welcomeHTML) {
+                messages.innerHTML = welcomeHTML;
             }
         }
         saveState();

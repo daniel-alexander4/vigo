@@ -38,14 +38,13 @@
         {{if .ReachFilter}}<input type="hidden" name="reach" value="{{.ReachFilter}}">{{end}}
         {{if .Search}}<input type="hidden" name="search" value="{{.Search}}">{{end}}
         <label class="envoys-toolbar__label" for="envoys-sort">Sort</label>
-        <select id="envoys-sort" name="sort" onchange="this.form.dir.value=(this.value==='last_run'||this.value==='last_seen')?'desc':'asc'; this.form.submit();" class="input input--sm">
+        <select id="envoys-sort" name="sort" onchange="this.form.submit()" class="input input--sm">
             <option value="status"{{if eq .SortColumn "status"}} selected{{end}}>Worst first</option>
             <option value="last_run"{{if eq .SortColumn "last_run"}} selected{{end}}>Last run (newest)</option>
             <option value="last_seen"{{if eq .SortColumn "last_seen"}} selected{{end}}>Last seen (newest)</option>
             <option value="hostname"{{if eq .SortColumn "hostname"}} selected{{end}}>Hostname (A→Z)</option>
             <option value="ip"{{if eq .SortColumn "ip"}} selected{{end}}>IP address</option>
         </select>
-        <input type="hidden" name="dir" value="{{.SortDir}}">
     </form>
 </div>
 
