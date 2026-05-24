@@ -112,13 +112,38 @@ func TestSignBinaryTamperedFails(t *testing.T) {
 }
 
 func TestDetectDebugger(t *testing.T) {
-	// Should not panic on any platform.
-	DetectDebugger()
+	// Should not panic on any platform; on a clean test run no debugger
+	// is attached, so no findings are returned.
+	findings := DetectDebugger()
+	for _, f := range findings {
+		if f.Kind != "debugger" {
+			t.Errorf("DetectDebugger returned wrong kind %q", f.Kind)
+		}
+		if f.Summary == "" {
+			t.Error("DetectDebugger finding has empty summary")
+		}
+	}
 }
 
 func TestDetectInjection(t *testing.T) {
-	// Should not panic on any platform.
-	DetectInjection()
+	// Should not panic on any platform. May return findings on systems
+	// with LD_LIBRARY_PATH set (containers, dev wrappers) — accept that
+	// and validate the shape rather than the absence.
+	findings := DetectInjection()
+	for _, f := range findings {
+		switch f.Kind {
+		case "ld_preload", "ld_library_path", "suspicious_map":
+			// expected
+		default:
+			t.Errorf("DetectInjection returned unexpected kind %q", f.Kind)
+		}
+		if f.Summary == "" {
+			t.Error("DetectInjection finding has empty summary")
+		}
+		if len(f.Detail) == 0 {
+			t.Errorf("DetectInjection finding %q has empty Detail map", f.Kind)
+		}
+	}
 }
 
 func TestVerifyBinarySignatureNoSigFile(t *testing.T) {

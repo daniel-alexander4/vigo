@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -36,6 +37,7 @@ import (
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/grc"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/hardening"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
@@ -675,6 +677,16 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			},
 		})
 	}
+
+	// --- Defense-in-depth hardening detection ---
+	// Runs once at startup, after the audit writer + integrations
+	// dispatcher are wired so findings fan out to Loki / Splunk /
+	// Sentinel / etc. uniformly with every other audit event. Timing
+	// is observational, not preventive: tracers attach at process
+	// spawn, so a check at boot+200ms sees the same state as a check
+	// at boot+0ms. VerifyBinarySignature stays in main.go as the only
+	// fail-closed gate; these are warn-only forensic checks.
+	s.emitStartupHardeningFindings(ctx)
 
 	// --- Task definitions ---
 	s.taskStore = task.NewStore()
@@ -1474,6 +1486,31 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 // helpers. The split keeps server.go focused on construction
 // (NewServer) + teardown (Close) without bloating past the readable
 // line-count budget.
+
+// emitStartupHardeningFindings runs the defense-in-depth detectors
+// (DetectDebugger, DetectInjection) and records each finding as a
+// `security.hardening_warning` audit event. The audit writer's
+// OnRecord hook fans the event out to the integrations dispatcher
+// (Loki / Splunk / Sentinel / etc.) so operators relying on SIEM
+// forwarding see the same signal journald consumers get from slog.
+//
+// VerifyBinarySignature stays in main.go as the only fail-closed gate
+// — these calls are observational. Errors recording a finding are
+// logged but never block startup (defense in depth must not become a
+// startup gate; that's what the binary signature is for).
+func (s *Server) emitStartupHardeningFindings(ctx context.Context) {
+	findings := append(hardening.DetectDebugger(), hardening.DetectInjection()...)
+	for _, f := range findings {
+		var payload string
+		if len(f.Detail) > 0 {
+			b, _ := json.Marshal(f.Detail)
+			payload = string(b)
+		}
+		if err := s.auditWriter.Record(ctx, "security.hardening_warning", "system", "hardening", f.Summary, payload); err != nil {
+			slog.Error("recording hardening finding", "error", err, "kind", f.Kind)
+		}
+	}
+}
 
 // Close tears down server state in reverse construction order.
 // Idempotent — safe to call even on a partially-constructed *Server

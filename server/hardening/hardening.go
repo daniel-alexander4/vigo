@@ -83,46 +83,72 @@ func VerifyBinarySignature() error {
 	return nil
 }
 
+// Finding describes a single attack indicator surfaced by a Detect* call.
+// Each Detect* function returns a slice (possibly empty) for the caller
+// to route through the audit writer + integrations dispatcher. The same
+// findings are also emitted via slog.Warn so journald-only operators
+// continue to see them without configuring SIEM forwarding.
+type Finding struct {
+	Kind    string            // "debugger" | "ld_preload" | "ld_library_path" | "suspicious_map"
+	Summary string            // one-line human description
+	Detail  map[string]string // structured fields for the audit payload
+}
+
 // DetectDebugger checks for signs of debugging or instrumentation on Linux.
-// Logs a warning but does not block startup — this is defense in depth.
-func DetectDebugger() {
+// Returns findings for caller to route; also emits slog.Warn for journald.
+// Does not block startup — defense in depth.
+func DetectDebugger() []Finding {
 	if runtime.GOOS != "linux" {
-		return
+		return nil
 	}
 
 	// Check /proc/self/status for TracerPid.
 	data, err := os.ReadFile("/proc/self/status")
 	if err != nil {
-		return
+		return nil
 	}
 
+	var findings []Finding
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.HasPrefix(line, "TracerPid:") {
 			pid := strings.TrimSpace(strings.TrimPrefix(line, "TracerPid:"))
 			if pid != "0" {
 				slog.Warn("SECURITY: debugger detected", "tracer_pid", pid)
+				findings = append(findings, Finding{
+					Kind:    "debugger",
+					Summary: "debugger attached (TracerPid=" + pid + ")",
+					Detail:  map[string]string{"tracer_pid": pid},
+				})
 			}
 		}
 	}
+	return findings
 }
 
 // DetectInjection checks for LD_PRELOAD and other injection vectors on Linux.
-// Logs a warning if detected.
-func DetectInjection() {
+// Returns findings for caller to route; also emits slog.Warn for journald.
+// Does not block startup — defense in depth.
+func DetectInjection() []Finding {
 	if runtime.GOOS != "linux" {
-		return
+		return nil
 	}
 
+	var findings []Finding
 	for _, env := range []string{"LD_PRELOAD", "LD_LIBRARY_PATH"} {
 		if val := os.Getenv(env); val != "" {
 			slog.Warn("SECURITY: injection vector detected", "env", env, "value", val)
+			findings = append(findings, Finding{
+				Kind:    strings.ToLower(env),
+				Summary: env + " is set in the server environment",
+				Detail:  map[string]string{"env": env, "value": val},
+			})
 		}
 	}
 
 	// Check /proc/self/maps for injected shared objects.
 	data, err := os.ReadFile("/proc/self/maps")
 	if err != nil {
-		return
+		return findings
 	}
 
 	suspicious := []string{"inject", "hook", "preload", "frida", "xposed"}
@@ -130,10 +156,17 @@ func DetectInjection() {
 		lower := strings.ToLower(line)
 		for _, pattern := range suspicious {
 			if strings.Contains(lower, pattern) {
-				slog.Warn("SECURITY: suspicious memory mapping", "line", strings.TrimSpace(line))
+				mapping := strings.TrimSpace(line)
+				slog.Warn("SECURITY: suspicious memory mapping", "line", mapping)
+				findings = append(findings, Finding{
+					Kind:    "suspicious_map",
+					Summary: "suspicious memory mapping matches /" + pattern + "/",
+					Detail:  map[string]string{"pattern": pattern, "mapping": mapping},
+				})
 			}
 		}
 	}
+	return findings
 }
 
 // loadPrivateKey reads an ED25519 private key from disk in either PEM or

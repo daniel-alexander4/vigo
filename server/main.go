@@ -80,9 +80,12 @@ func run() error {
 		return nil
 	}
 
-	// --- Binary integrity and anti-tamper checks ---
-	hardening.DetectDebugger()
-	hardening.DetectInjection()
+	// --- Binary integrity check (gating) ---
+	// The signature check is the only fail-closed startup gate. The
+	// defense-in-depth detection checks (DetectDebugger, DetectInjection)
+	// run inside NewServer after the audit writer is wired so their
+	// findings reach Loki / Splunk / Sentinel via the integrations
+	// dispatcher, not just stderr.
 	if err := hardening.VerifyBinarySignature(); err != nil {
 		return fmt.Errorf("integrity check failed: %w", err)
 	}
