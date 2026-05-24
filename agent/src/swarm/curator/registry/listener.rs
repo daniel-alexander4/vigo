@@ -23,6 +23,7 @@ use std::time::Duration;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use tokio::net::TcpListener;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -32,6 +33,17 @@ use super::routes::{handle, ShimState};
 /// change. 5 s — fast enough that operator flips become visible within a tick
 /// or two, slow enough that the cost (one RwLock read) is invisible.
 const SUPERVISOR_TICK: Duration = Duration::from_secs(5);
+
+/// Concurrent in-flight HTTP handler ceiling. The registry shim serves
+/// loopback-only Docker-Registry-v2 requests from local container runtimes
+/// (containerd, podman, …); steady-state volume is one image-pull at a
+/// time, so 32 is comfortably above any realistic burst while bounding a
+/// runaway local client. Mirrors the five existing helper-daemon caps
+/// (curator/helper.rs, gitback/helper.rs, puddle/{session,service_session}.rs,
+/// lockbox/session.rs) — same value, same rationale, queue-on-saturation
+/// via `acquire_owned().await` so a flood of pulls back-pressures instead
+/// of crashing the agent.
+const MAX_CONNECTIONS: usize = 32;
 
 /// Spawn-target for `curator::spawn`. Watches
 /// [`crate::swarm::runtime_limits::curator_local_port`] and (re)spawns the
@@ -94,6 +106,7 @@ pub async fn run_supervisor(cancel: CancellationToken) {
 }
 
 async fn serve(listener: TcpListener, state: Arc<ShimState>, cancel: CancellationToken) {
+    let semaphore = Arc::new(Semaphore::new(MAX_CONNECTIONS));
     loop {
         let (stream, _peer) = tokio::select! {
             _ = cancel.cancelled() => return,
@@ -107,9 +120,21 @@ async fn serve(listener: TcpListener, state: Arc<ShimState>, cancel: Cancellatio
             }
         };
 
+        // Bound concurrent in-flight HTTP handlers. `acquire_owned().await`
+        // queues the accept loop at saturation — local-loopback HTTP from
+        // container runtimes prefers queueing over reject-and-retry-storm.
+        let permit = match semaphore.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => {
+                // Semaphore closed — only happens at shutdown.
+                continue;
+            }
+        };
+
         let state = state.clone();
         let conn_cancel = cancel.clone();
         tokio::spawn(async move {
+            let _permit = permit; // held for connection lifetime
             let io = hyper_util::rt::TokioIo::new(stream);
             let svc = service_fn(move |req| {
                 let state = state.clone();
