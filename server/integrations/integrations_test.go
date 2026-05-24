@@ -116,3 +116,77 @@ func TestDispatcher_InflightCap(t *testing.T) {
 	}
 	t.Fatal("hanging goroutines did not drain after release")
 }
+
+// panicTarget panics on every Dispatch call. Used to verify the per-target
+// goroutine's recover defer catches panics without taking the dispatcher
+// down or starving sibling targets.
+type panicTarget struct {
+	name  string
+	calls int64 // atomic — total Dispatch invocations that ran
+}
+
+func (p *panicTarget) Name() string         { return p.name }
+func (p *panicTarget) Accepts(_ Event) bool { return true }
+func (p *panicTarget) Dispatch(_ context.Context, _ Event) error {
+	atomic.AddInt64(&p.calls, 1)
+	panic("synthetic target panic")
+}
+
+// TestDispatcher_RecoversFromTargetPanic registers a panicking target alongside
+// a healthy hanging target, fires N dispatches, and asserts:
+//   - Dispatch() never propagates the panic (test reaches the end).
+//   - The panicking target's Dispatch ran N times (recover catches each one;
+//     the loop in Dispatch isn't broken by an earlier panic).
+//   - The healthy target also ran N times (the panic in a sibling goroutine
+//     didn't starve other targets in the same fan-out).
+//   - The inflight semaphore drains to zero (no slot leak — the inflight
+//     release defer runs even on panic, and stays consistent with recover).
+func TestDispatcher_RecoversFromTargetPanic(t *testing.T) {
+	pt := &panicTarget{name: "panicker"}
+	ht := &hangingTarget{name: "healthy", release: make(chan struct{})}
+	d := &Dispatcher{
+		targets:    []target{pt, ht},
+		suppressor: newEventSuppressor(),
+		inflight:   make(chan struct{}, dispatcherInflightCap),
+	}
+
+	const attempts = 8
+	for i := 0; i < attempts; i++ {
+		d.Dispatch(Event{Name: "test"})
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt64(&pt.calls) >= int64(attempts) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := atomic.LoadInt64(&pt.calls); got < int64(attempts) {
+		t.Fatalf("panicking target ran %d times, expected %d (recover may not be reached)", got, attempts)
+	}
+
+	// Release the healthy target so its goroutines complete; assert the
+	// per-event fan-out reached it for every event. A panic in pt's
+	// goroutine must not prevent ht's sibling goroutine from running.
+	close(ht.release)
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt64(&ht.inflight) == 0 && atomic.LoadInt64(&ht.calls) >= int64(attempts) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := atomic.LoadInt64(&ht.calls); got < int64(attempts) {
+		t.Fatalf("healthy target ran %d times, expected %d — fan-out broken by sibling panic", got, attempts)
+	}
+
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(d.inflight) == 0 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("inflight slot count %d after drain — panic leaked a slot", len(d.inflight))
+}

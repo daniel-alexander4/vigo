@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -321,6 +322,16 @@ func (d *Dispatcher) Dispatch(event Event) {
 		}
 		go func(tgt target) {
 			defer func() { <-d.inflight }()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("integration dispatch panic",
+						"target", tgt.Name(),
+						"event", event.Name,
+						"panic", r,
+						"stack", string(debug.Stack()),
+					)
+				}
+			}()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := tgt.Dispatch(ctx, event); err != nil {
