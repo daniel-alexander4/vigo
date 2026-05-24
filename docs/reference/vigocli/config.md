@@ -16,6 +16,7 @@ Config inspection commands.
 | `config rollback` | Rollback to a previous config version |
 | `config freeze` | Freeze config publishes until a specified time |
 | `config unfreeze` | Remove the config publish freeze |
+| `config status` | Show config-reload health (exit 0 healthy, 1 unhealthy) |
 | `config examples list` | Show available install templates under `stacks/examples/` |
 | `config examples copy <name>` | Copy an install template into `stacks/stockpile/` |
 | `config anti-examples list` | Show available retract templates under `stacks/anti-examples/` |
@@ -464,5 +465,28 @@ Remove the config publish freeze.
 ```bash
 vigocli config unfreeze
 ```
+
+## config status
+
+Show config-reload health. Reports whether the most recent reload succeeded; useful for monitoring hooks and shell scripts.
+
+```bash
+vigocli config status
+```
+
+Output includes the current config version, the timestamp of the last reload attempt, and (when non-empty) the last error. Exit code is `0` when healthy, `1` when the last reload returned an error (e.g., `IdempotencyErrors` that left the store empty).
+
+### Example
+
+```bash
+$ vigocli config status
+Config: healthy
+Version: 42
+Last reload: 2026-05-24T13:14:15Z
+
+$ vigocli config status >/dev/null && echo ok || echo broken
+ok
+```
+
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*
