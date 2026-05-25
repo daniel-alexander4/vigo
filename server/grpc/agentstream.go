@@ -270,30 +270,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Record agent version if reported. Fires the DB write only when the
-	// in-memory value actually changed — same WAL-mutex-contention rationale
-	// as checkin.go. When fleetIndex is nil (some tests), fall back to
-	// firing the write unconditionally.
+	// Record agent version if reported. In-memory only; the flusher's
+	// value-grouped BatchUpdateAgentVersion path persists it. See
+	// checkin.go for the 0.67.28 rationale.
 	agentVersion := req.GetAgentVersion()
-	if agentVersion != "" {
-		changed := true
-		if s.fleetIndex != nil {
-			changed = s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
-		}
-		if changed {
-			if err := s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
-				AgentVersion:   agentVersion,
-				ID:             envoyID,
-				AgentVersion_2: agentVersion,
-			}); err != nil {
-				slog.Warn("agentstream db write failed",
-					"envoy_id", envoyID,
-					"op", "update_agent_version",
-					"error", err,
-				)
-				s.metrics.AgentStreamDBErrors.WithLabelValues("update_agent_version").Inc()
-			}
-		}
+	if agentVersion != "" && s.fleetIndex != nil {
+		s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
 	}
 
 	// Refresh envoy IP (agent reports its outbound IP each check-in).

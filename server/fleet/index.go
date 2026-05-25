@@ -683,7 +683,9 @@ func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
 // Returns true iff the new value differs from the previously stored value,
 // signalling that the DB row needs to be updated. Callers gate the SQL
 // UPDATE on the return so unchanged values don't serialize through the
-// WAL writer mutex once per check-in.
+// WAL writer mutex once per check-in. Also marks the envoy dirty when
+// the value changes so the flusher persists the update on its next tick,
+// even if the caller's path doesn't itself MarkSeen.
 func (f *FleetIndex) SetIP(id, ip string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -696,14 +698,17 @@ func (f *FleetIndex) SetIP(id, ip string) bool {
 		return false
 	}
 	ts.IP = ip
+	f.dirty[id] = true
 	return true
 }
 
 // SetAgentVersion records the agent binary version reported during check-in.
-// Returns true iff the new value differs from the previously stored value,
-// signalling that the DB row needs to be updated. Same WAL-contention
-// rationale as SetIP — the hot per-checkin path was firing this UPDATE
-// every cycle even when the value never changed.
+// Returns true iff the new value differs from the previously stored value;
+// the bool is kept for parity with SetIP but is no longer used by the gRPC
+// hot path — the per-checkin DB UPDATE was retired in favor of the flusher's
+// value-grouped batched persistence, which collapses N single-row UPDATEs
+// during stagger-up into one chunked UPDATE per distinct version. Marks the
+// envoy dirty when the value changes so the next flush picks it up.
 func (f *FleetIndex) SetAgentVersion(id, version string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -716,6 +721,7 @@ func (f *FleetIndex) SetAgentVersion(id, version string) bool {
 		return false
 	}
 	ts.AgentVersion = version
+	f.dirty[id] = true
 	return true
 }
 

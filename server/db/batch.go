@@ -146,3 +146,28 @@ func (q *Queries) BatchClearEnvoyMaintenance(ctx context.Context, ids []string) 
 	_, err := q.db.ExecContext(ctx, query, args...)
 	return err
 }
+
+// BatchUpdateAgentVersion sets agent_version for many envoys that all report
+// the same version. Callers in the flusher group dirty envoys by AgentVersion
+// value so each chunk's UPDATE writes one version across N rows in a single
+// statement — at 10000-envoy stagger-up that's ~20 chunked statements instead
+// of 10000 single-row UPDATEs serialized through the WAL writer mutex. The
+// trailing `AND agent_version != ?` predicate makes the steady-state case
+// (every envoy already has the version) a zero-row no-op.
+func (q *Queries) BatchUpdateAgentVersion(ctx context.Context, ids []string, version string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, 0, len(ids)+2)
+	args = append(args, version) // SET agent_version = ?
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, version) // AND agent_version != ?
+	query := fmt.Sprintf("UPDATE envoys SET agent_version = ? WHERE id IN (%s) AND agent_version != ?",
+		strings.Join(placeholders, ","))
+	_, err := q.db.ExecContext(ctx, query, args...)
+	return err
+}

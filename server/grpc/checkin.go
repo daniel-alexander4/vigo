@@ -86,32 +86,15 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		s.fleetIndex.MarkCycleDuration(envoyID, clampReportedCycle(req.GetLastCheckinDeltaMs()))
 	}
 
-	// Record agent version if reported. The DB write fires only when the
-	// in-memory value actually changed — the SQL's `WHERE agent_version != ?`
-	// would skip the row write either way, but the statement still
-	// serializes through the WAL writer mutex. At 3000+ envoys checking in
-	// every 5s that's ~600 mutex acquisitions/sec contending with the
-	// flusher's batched UPDATEs. When fleetIndex is nil (some tests), we
-	// can't detect change and fall back to firing the write unconditionally.
-	if agentVersion := req.GetAgentVersion(); agentVersion != "" {
-		changed := true
-		if s.fleetIndex != nil {
-			changed = s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
-		}
-		if changed {
-			if err := s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
-				AgentVersion:   agentVersion,
-				ID:             envoyID,
-				AgentVersion_2: agentVersion,
-			}); err != nil {
-				slog.Warn("checkin db write failed",
-					"envoy_id", envoyID,
-					"op", "update_agent_version",
-					"error", err,
-				)
-				s.metrics.AgentStreamDBErrors.WithLabelValues("update_agent_version").Inc()
-			}
-		}
+	// Record agent version if reported. In-memory only; the flusher's
+	// value-grouped BatchUpdateAgentVersion path persists it. The inline
+	// DB UPDATE was retired at 0.67.28 — at 10K-envoy stagger-up it was
+	// 10000 single-row UPDATEs serialized through the WAL writer mutex,
+	// dominating batch_last_seen wall time. Value-grouped batched
+	// persistence collapses that to ~chunkCount statements per distinct
+	// version (typically 1-3 across a real fleet).
+	if agentVersion := req.GetAgentVersion(); agentVersion != "" && s.fleetIndex != nil {
+		s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
 	}
 
 	// Refresh envoy IP (agent reports its outbound IP each check-in).

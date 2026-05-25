@@ -133,6 +133,23 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 			setMaintenanceVals = append(setMaintenanceVals, ts.MaintenanceUntil)
 		}
 	}
+	// Value-grouped agent_version persistence. The per-checkin UpdateAgentVersion
+	// call was retired (server/grpc/checkin.go + agentstream.go) to avoid
+	// serializing N single-row UPDATEs through the WAL writer mutex during
+	// stagger-up. Group dirty envoys by their reported version; most of the
+	// fleet shares a small number of distinct versions at any time so this
+	// collapses 10K statements into ~chunkCount-per-version batched UPDATEs.
+	// The BatchUpdateAgentVersion query carries `AND agent_version != ?` so
+	// no-op rows skip the row write — steady-state ticks pay only WHERE
+	// evaluation, not row IO.
+	agentVersionGroups := make(map[string][]string)
+	for id, ts := range dirty {
+		if ts.AgentVersion == "" {
+			continue
+		}
+		agentVersionGroups[ts.AgentVersion] = append(agentVersionGroups[ts.AgentVersion], id)
+	}
+
 	chunkedBatch := func(ids []string, name string, fn func(context.Context, []string) error) {
 		for i := 0; i < len(ids); i += chunkSize {
 			end := i + chunkSize
@@ -147,6 +164,17 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 	chunkedBatch(clearForcePushIDs, "clear_force_push", sf.queries.BatchClearForcePush)
 	chunkedBatch(clearRotatedSecretsIDs, "clear_rotated_secrets", sf.queries.BatchClearRotatedSecrets)
 	chunkedBatch(clearMaintenanceIDs, "clear_maintenance", sf.queries.BatchClearEnvoyMaintenance)
+	for version, ids := range agentVersionGroups {
+		for i := 0; i < len(ids); i += chunkSize {
+			end := i + chunkSize
+			if end > len(ids) {
+				end = len(ids)
+			}
+			if err := sf.queries.BatchUpdateAgentVersion(ctx, ids[i:end], version); err != nil {
+				slog.Error("state flusher: batch agent_version failed", "version", version, "count", end-i, "error", err)
+			}
+		}
+	}
 	// Operator-set maintenance windows are rare; per-envoy fallback for the
 	// non-NULL case keeps the batched path simple and avoids the CASE-WHEN
 	// gymnastics needed for divergent per-row values.
