@@ -75,9 +75,21 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 
 		start := time.Now()
 		resp, err := handler(ctx, req)
+		dur := time.Since(start)
 		code := status.Code(err)
 		m.GRPCRequestsTotal.WithLabelValues(info.FullMethod, code.String()).Inc()
-		m.GRPCRequestDuration.WithLabelValues(info.FullMethod).Observe(time.Since(start).Seconds())
+		m.GRPCRequestDuration.WithLabelValues(info.FullMethod).Observe(dur.Seconds())
+		// Slow-RPC warn: anything above 100ms is 30× the clean-baseline
+		// p99 — load-test data showed the system collapses by going from
+		// sub-ms to seconds, so a single threshold is enough to catch
+		// the cliff without spamming during steady state.
+		if dur >= 100*time.Millisecond {
+			slog.Warn("slow rpc",
+				"method", info.FullMethod,
+				"duration", dur,
+				"code", code.String(),
+			)
+		}
 		return resp, err
 	}
 }

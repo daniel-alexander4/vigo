@@ -65,8 +65,9 @@ type Metrics struct {
 
 	// --- FleetIndex ---
 
-	FleetIndexFlushDuration prometheus.Histogram
-	FleetIndexDirtyCount    prometheus.Gauge
+	FleetIndexFlushDuration   prometheus.Histogram
+	FleetIndexDirtyCount      prometheus.Gauge
+	FleetIndexDrainDirtyLock  prometheus.Histogram
 
 	// --- Bootstrap ---
 
@@ -309,6 +310,11 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		FleetIndexDirtyCount: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_fleetindex_dirty_count",
 			Help: "Number of dirty envoy entries in the last FleetIndex flush.",
+		}),
+		FleetIndexDrainDirtyLock: f.NewHistogram(prometheus.HistogramOpts{
+			Name:    "vigo_fleetindex_draindirty_lock_seconds",
+			Help:    "Time the FleetIndex write lock was held during DrainDirty (blocks MarkSeen/SetIP/SetAgentVersion from check-in handlers).",
+			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1},
 		}),
 
 		// --- Bootstrap ---

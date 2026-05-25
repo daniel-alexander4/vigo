@@ -63,10 +63,16 @@ func (sf *StateFlusher) Start(ctx context.Context, interval, offset time.Duratio
 
 // Flush drains dirty envoys and writes their state to SQLite in batches.
 func (sf *StateFlusher) Flush(ctx context.Context) {
+	drainStart := time.Now()
 	dirty := sf.fleet.DrainDirty()
+	drainDur := time.Since(drainStart)
 	if len(dirty) == 0 {
 		return
 	}
+	// Observed only on non-empty drains — empty drains complete in <1µs
+	// and aren't a useful signal. Mirrors the existing FlushDuration
+	// pattern which is also conditional on a non-empty set.
+	sf.metrics.FleetIndexDrainDirtyLock.Observe(drainDur.Seconds())
 
 	start := time.Now()
 	sf.metrics.FleetIndexDirtyCount.Set(float64(len(dirty)))
@@ -83,6 +89,7 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 	// Batch update last_seen in chunks of 500.
 	const chunkSize = 500
 	var lastSeenFailed bool
+	batchStart := time.Now()
 	for i := 0; i < len(lastSeenIDs); i += chunkSize {
 		end := i + chunkSize
 		if end > len(lastSeenIDs) {
@@ -93,8 +100,10 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 			lastSeenFailed = true
 		}
 	}
+	batchDur := time.Since(batchStart)
 
 	// Handle per-envoy flag updates.
+	flagsStart := time.Now()
 	for id, ts := range dirty {
 		// Clear force_push if it was consumed (no longer set in index).
 		if !ts.ForcePush {
@@ -123,6 +132,8 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 		}
 	}
 
+	flagsDur := time.Since(flagsStart)
+
 	// Re-mark failed envoys as dirty for next flush.
 	if lastSeenFailed {
 		for _, id := range lastSeenIDs {
@@ -130,5 +141,29 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 		}
 	}
 
-	slog.Debug("state flusher: flushed", "count", len(dirty))
+	// Per-flush breakdown — surfaces the unbatched-per-envoy-UPDATE shape
+	// that dominates wall time at fleet sizes where many envoys are
+	// dirty in the same tick (3× UPDATE per envoy in the flags loop).
+	// Promoted from Debug to Info above a slow-flush threshold so the
+	// signal lands in journald during load events without noise in
+	// steady state.
+	const slowFlushThreshold = 500 * time.Millisecond
+	total := drainDur + batchDur + flagsDur
+	if total >= slowFlushThreshold {
+		slog.Warn("state flusher: slow flush",
+			"count", len(dirty),
+			"total", total,
+			"drain", drainDur,
+			"batch_last_seen", batchDur,
+			"per_envoy_flags", flagsDur,
+		)
+	} else {
+		slog.Debug("state flusher: flushed",
+			"count", len(dirty),
+			"total", total,
+			"drain", drainDur,
+			"batch_last_seen", batchDur,
+			"per_envoy_flags", flagsDur,
+		)
+	}
 }
