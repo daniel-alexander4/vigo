@@ -98,8 +98,8 @@ func TestCreateWaiver_EmitsAuditEvent(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	ev := aw.only()
-	if ev.EventType != "compliance.waiver_created" {
-		t.Errorf("event type: got %q, want compliance.waiver_created", ev.EventType)
+	if ev.EventType != "compliance.waiver.created" {
+		t.Errorf("event type: got %q, want compliance.waiver.created", ev.EventType)
 	}
 	if ev.Actor != "alice" {
 		t.Errorf("actor: got %q, want alice (from request approver, no session user)", ev.Actor)
@@ -154,8 +154,8 @@ func TestDeleteWaiver_EmitsAuditEventWithFrameworkAndControl(t *testing.T) {
 		t.Fatalf("expected 204, got %d: %s", delRec.Code, delRec.Body.String())
 	}
 	ev := aw.only()
-	if ev.EventType != "compliance.waiver_revoked" {
-		t.Errorf("event type: got %q, want compliance.waiver_revoked", ev.EventType)
+	if ev.EventType != "compliance.waiver.revoked" {
+		t.Errorf("event type: got %q, want compliance.waiver.revoked", ev.EventType)
 	}
 	for _, want := range []string{"pci-dss", "2.1"} {
 		if !strings.Contains(ev.Summary, want) {

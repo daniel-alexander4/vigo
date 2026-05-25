@@ -356,7 +356,7 @@ func (h *ComplianceDocsHandler) addLink(w http.ResponseWriter, r *http.Request) 
 		writeError(w, classifyStoreError(err), err.Error())
 		return
 	}
-	recordAudit(r.Context(), h.auditWriter, "compliance.docs.link.add", actorFromRequest(r), "compliance_docs",
+	recordAudit(r.Context(), h.auditWriter, "compliance.docs.link_added", actorFromRequest(r), "compliance_docs",
 		fmt.Sprintf("linked doc %s to %s/%s", id, req.Framework, req.ControlID),
 		fmt.Sprintf(`{"id":%q,"framework":%q,"control_id":%q}`, id, req.Framework, req.ControlID))
 	w.WriteHeader(http.StatusNoContent)
@@ -377,7 +377,7 @@ func (h *ComplianceDocsHandler) removeLink(w http.ResponseWriter, r *http.Reques
 		writeError(w, classifyStoreError(err), err.Error())
 		return
 	}
-	recordAudit(r.Context(), h.auditWriter, "compliance.docs.link.remove", actorFromRequest(r), "compliance_docs",
+	recordAudit(r.Context(), h.auditWriter, "compliance.docs.link_removed", actorFromRequest(r), "compliance_docs",
 		fmt.Sprintf("unlinked doc %s from %s/%s", id, framework, controlID),
 		fmt.Sprintf(`{"id":%q,"framework":%q,"control_id":%q}`, id, framework, controlID))
 	w.WriteHeader(http.StatusNoContent)

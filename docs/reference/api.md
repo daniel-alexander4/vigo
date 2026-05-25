@@ -1060,7 +1060,7 @@ Record an audit trail entry for an unlock-gate lifecycle action. Called automati
 
 ```json
 {
-  "type": "secrets_unlocked"
+  "type": "secrets.unlocked"
 }
 ```
 

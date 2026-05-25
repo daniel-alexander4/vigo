@@ -4192,7 +4192,7 @@ func (h *Handler) CreateWaiver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "compliance.waiver_created", waiverActor(r, req.Approver), "ui",
+	recordAudit(r.Context(), h.auditWriter, "compliance.waiver.created", waiverActor(r, req.Approver), "ui",
 		fmt.Sprintf("created waiver for %s/%s (reason: %s)", waiver.Framework, waiver.ControlID, waiver.Reason), "")
 
 	w.Header().Set("Content-Type", "application/json")
@@ -4216,7 +4216,7 @@ func (h *Handler) DeleteWaiver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "compliance.waiver_revoked", waiverActor(r, waiver.Approver), "ui",
+	recordAudit(r.Context(), h.auditWriter, "compliance.waiver.revoked", waiverActor(r, waiver.Approver), "ui",
 		fmt.Sprintf("revoked waiver for %s/%s", waiver.Framework, waiver.ControlID), "")
 
 	w.WriteHeader(http.StatusNoContent)

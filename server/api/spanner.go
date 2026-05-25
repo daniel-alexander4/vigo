@@ -177,7 +177,7 @@ func (h *SpannerHandler) handlePeerBoltPush(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	recordAudit(r.Context(), h.auditWriter, "spanner_bolt_push", actorFromRequest(r), "rest",
+	recordAudit(r.Context(), h.auditWriter, "spanner.bolt_push", actorFromRequest(r), "rest",
 		fmt.Sprintf("force-pushed bolt %s envoy=%q (%d envoys notified)", id, req.EnvoyID, count), "")
 	writeJSON(w, r, http.StatusOK, map[string]any{"envoys_notified": count})
 }
@@ -223,7 +223,7 @@ func (h *SpannerHandler) handlePeerReassign(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	recordAudit(r.Context(), h.auditWriter, "spanner_peer_reassign", actorFromRequest(r), "rest",
+	recordAudit(r.Context(), h.auditWriter, "spanner.peer_reassign", actorFromRequest(r), "rest",
 		fmt.Sprintf("reassigned envoy %s from bolt %s to bolt %s", req.EnvoyID, req.FromBoltID, req.ToBoltID), "")
 	writeJSON(w, r, http.StatusOK, result)
 }
@@ -264,7 +264,7 @@ func (h *SpannerHandler) handlePeerDrain(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	recordAudit(r.Context(), h.auditWriter, "spanner_bolt_drain", actorFromRequest(r), "rest",
+	recordAudit(r.Context(), h.auditWriter, "spanner.bolt_drain", actorFromRequest(r), "rest",
 		fmt.Sprintf("drained bolt %s onto %s", boltID, req.TargetBoltID), "")
 	writeJSON(w, r, http.StatusOK, result)
 }

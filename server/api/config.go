@@ -264,10 +264,10 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 // /api/v1/secrets/event endpoint. Anything outside this set is rejected so
 // the audit chain can't be polluted by arbitrary client-supplied event names.
 var secretsLifecycleEventTypes = map[string]string{
-	"secrets_unlocked":           "Vault unlocked",
-	"secrets_locked":             "Vault locked",
-	"secrets_passphrase_rotated": "Unlock passphrase rotated",
-	"secrets_passphrase_reset":   "Unlock passphrase reset via break-glass",
+	"secrets.unlocked":           "Vault unlocked",
+	"secrets.locked":             "Vault locked",
+	"secrets.passphrase_rotated": "Unlock passphrase rotated",
+	"secrets.passphrase_reset":   "Unlock passphrase reset via break-glass",
 }
 
 // SecretsLifecycleEvent records an audit-chain entry for an unlock-gate
@@ -314,7 +314,7 @@ func (h *ConfigHandler) SecretAccessed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	recordAudit(r.Context(), h.auditWriter,
-		"secret_accessed", actor, "rest",
+		"secret.accessed", actor, "rest",
 		fmt.Sprintf("Secret revealed: %s", req.Path),
 		fmt.Sprintf(`{"path":%q}`, req.Path),
 	)

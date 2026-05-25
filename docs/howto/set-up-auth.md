@@ -375,6 +375,8 @@ vigocli webusers delete --username alice
 
 All authentication and user management events are recorded in the tamper-evident audit chain (`audit_entries` table). These events support HIPAA 164.312(b) audit controls and intrusion detection.
 
+**Event-type convention.** Every audit event type is `<domain>.<resource>.<action>` (three-level) when the domain has multiple resources worth disambiguating, otherwise `<domain>.<action>` (two-level). Lowercase, dot-separated. Examples below.
+
 | Event Type | Trigger | Actor |
 |------------|---------|-------|
 | `auth.login` | Successful login (basic, OIDC, isowebauth) | Username |
@@ -383,10 +385,26 @@ All authentication and user management events are recorded in the tamper-evident
 | `user.create` | User account created | Admin who created |
 | `user.delete` | User account deleted | Admin who deleted |
 | `user.role_change` | Role updated (only when role actually changes) | Admin who changed |
+| `user.totp_setup` | TOTP secret generated for user (pre-confirm) | Subject username |
+| `user.totp_enable` | TOTP enabled after operator-confirmed code | Subject username |
+| `user.totp_disable` | TOTP disabled | Subject username |
 | `token.create` | API token created | Token owner |
 | `token.revoke` | API token revoked | Token owner |
-| `compliance.waiver_created` | Compliance waiver created via `POST /api/v1/compliance/waivers` | Session user (or request-supplied approver) |
-| `compliance.waiver_revoked` | Compliance waiver revoked via `DELETE /api/v1/compliance/waivers/{id}` | Session user (or waiver's original approver) |
+| `compliance.waiver.created` | Compliance waiver created via `POST /api/v1/compliance/waivers` | Session user (or request-supplied approver) |
+| `compliance.waiver.revoked` | Compliance waiver revoked via `DELETE /api/v1/compliance/waivers/{id}` | Session user (or waiver's original approver) |
+| `secret.accessed` | Secret revealed via `vigocli secrets reveal` | CLI user (via `X-Vigo-User` header) |
+| `secret.rotation_acked` | Server acknowledged a secret rotation reported by `vigocli secrets set` | Session user |
+| `secrets.unlocked` | Secrets vault unlocked | Session user |
+| `secrets.locked` | Secrets vault locked | Session user |
+| `secrets.passphrase_rotated` | Unlock passphrase rotated | Session user |
+| `secrets.passphrase_reset` | Unlock passphrase reset via break-glass | Session user |
+| `spanner.id_initialized` | Founding bolt initialised the spanner | Founder pubkey-hex |
+| `spanner.join_offered` / `.join_accepted` / `.join_rejected` | Joining bolt's request to admit was offered / accepted / rejected | Joiner pubkey-hex |
+| `spanner.bolt_admitted` / `.bolt_invite_issued` / `.bolt_push` / `.bolt_drain` / `.peer_reassign` | Spanner federation control verbs | Operator session user |
+
+Other event domains follow the same convention: `compliance.docs.*` (upload/replace/delete/purge/link_added/link_removed/download), `compliance.bundle.download`, `curator.s3_credential.{create,revoke}`, `db.{vacuum,checkpoint,prune,analyze}`, `envoy.{enroll,delete,revoke,force_update,force_update_all,maintenance_set,maintenance_cleared}`, `config.{reload,publish_recorded,rollback,freeze,unfreeze,retract,published}`, `task.{dispatch,cancel,cancel_running,blocked}`, `workflow.{dispatch,abort}`, `sandgorgon.{commission,decommission,return_to_available,provision,import_csv,image.register,image.remove}`, `swarm.{cleanup,curator.block,curator.unblock,poolq.block,poolq.unblock,filecast.distribute,filecast.revoke,filecast.denied}`, `peer.promote`, `scrier.connect`, `security.hardening_warning`, `webusers.legacy_resigned`, `emergency.access`.
+
+> **Rename notice (2026-05-25).** The audit-event taxonomy was unified to dotted-hierarchical in this release. Chain entries written before the rename keep their original spelling (the SHA-256 hash chain is append-only by design). Historical names you may find in older chain rows: `spanner_id_initialized` → `spanner.id_initialized`, `spanner_join_offered` → `spanner.join_offered`, `spanner_join_accepted` → `spanner.join_accepted`, `spanner_join_rejected` → `spanner.join_rejected`, `spanner_bolt_admitted` → `spanner.bolt_admitted`, `spanner_bolt_push` → `spanner.bolt_push`, `spanner_bolt_drain` → `spanner.bolt_drain`, `spanner_peer_reassign` → `spanner.peer_reassign`, `spanner_bolt_invite_issued` → `spanner.bolt_invite_issued`, `secret_accessed` → `secret.accessed`, `secrets_unlocked` → `secrets.unlocked`, `secrets_locked` → `secrets.locked`, `secrets_passphrase_rotated` → `secrets.passphrase_rotated`, `secrets_passphrase_reset` → `secrets.passphrase_reset`, `compliance.waiver_created` → `compliance.waiver.created`, `compliance.waiver_revoked` → `compliance.waiver.revoked`, `compliance.docs.link.add` → `compliance.docs.link_added`, `compliance.docs.link.remove` → `compliance.docs.link_removed`. `vigocli audit list --type` does not translate — query the original name to find historical entries, the new name for post-rename entries.
 
 Login and failed login events include the client IP address in the payload field (`{"ip":"..."}`) for brute-force detection. Failed login events record the attempted username (not the password).
 

@@ -176,7 +176,7 @@ func (h *SpannerAdmissionHandler) handleInit(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "spanner_id_initialized", ownPubkey, r.RemoteAddr,
+	recordAudit(r.Context(), h.auditWriter, "spanner.id_initialized", ownPubkey, r.RemoteAddr,
 		fmt.Sprintf("spanner %q founded on %s", h.spannerID, h.hostname), "")
 
 	slog.Info("spanner founded", "spanner_id", h.spannerID, "founder_pubkey", ownPubkey, "hostname", h.hostname)
@@ -230,7 +230,7 @@ func (h *SpannerAdmissionHandler) handleInvite(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "spanner_bolt_invite_issued", h.localPubkeyHex(), r.RemoteAddr,
+	recordAudit(r.Context(), h.auditWriter, "spanner.bolt_invite_issued", h.localPubkeyHex(), r.RemoteAddr,
 		fmt.Sprintf("issued spanner-join invite bundle (ttl=%s, expires=%d)", ttl, bundle.ExpiresAt), "")
 
 	writeJSON(w, r, http.StatusOK, map[string]any{
@@ -289,7 +289,7 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := spanner.VerifyBundle(bundle); err != nil {
-		recordAudit(r.Context(), h.auditWriter, "spanner_join_rejected", req.JoinerPubkey, r.RemoteAddr,
+		recordAudit(r.Context(), h.auditWriter, "spanner.join_rejected", req.JoinerPubkey, r.RemoteAddr,
 			"invite bundle rejected: "+err.Error(), "")
 		writeError(w, http.StatusForbidden, "invite bundle rejected: "+err.Error())
 		return
@@ -304,7 +304,7 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if consumed != 0 {
-		recordAudit(r.Context(), h.auditWriter, "spanner_join_rejected", req.JoinerPubkey, r.RemoteAddr,
+		recordAudit(r.Context(), h.auditWriter, "spanner.join_rejected", req.JoinerPubkey, r.RemoteAddr,
 			"invite token already consumed", "")
 		writeError(w, http.StatusConflict, "invite token already consumed — mint a fresh invite")
 		return
@@ -340,9 +340,9 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "spanner_join_accepted", req.JoinerPubkey, r.RemoteAddr,
+	recordAudit(r.Context(), h.auditWriter, "spanner.join_accepted", req.JoinerPubkey, r.RemoteAddr,
 		fmt.Sprintf("bolt %s (%s) admitted to spanner %q", req.JoinerPubkey, req.Hostname, h.spannerID), "")
-	recordAudit(r.Context(), h.auditWriter, "spanner_bolt_admitted", ownPubkey, r.RemoteAddr,
+	recordAudit(r.Context(), h.auditWriter, "spanner.bolt_admitted", ownPubkey, r.RemoteAddr,
 		fmt.Sprintf("admitted bolt %s via invite token %s", req.JoinerPubkey, tokenHash[:16]), "")
 
 	slog.Info("spanner bolt admitted", "joiner", req.JoinerPubkey, "hostname", req.Hostname, "spanner_id", h.spannerID)
@@ -463,7 +463,7 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 
 	ownPubkey := h.localPubkeyHex()
 
-	recordAudit(r.Context(), h.auditWriter, "spanner_join_offered", ownPubkey, r.RemoteAddr,
+	recordAudit(r.Context(), h.auditWriter, "spanner.join_offered", ownPubkey, r.RemoteAddr,
 		fmt.Sprintf("joining spanner via %s", req.FromAddr), "")
 
 	admitBody, err := json.Marshal(admitRequest{
@@ -513,14 +513,14 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 	founderHex := hex.EncodeToString(bundle.FounderPubkey)
 	for _, rr := range admitResp.Roster {
 		if rr.AdmittedBy != founderHex {
-			recordAudit(r.Context(), h.auditWriter, "spanner_join_rejected", ownPubkey, r.RemoteAddr,
+			recordAudit(r.Context(), h.auditWriter, "spanner.join_rejected", ownPubkey, r.RemoteAddr,
 				fmt.Sprintf("roster row %s admitted_by %s is not the founder", rr.Pubkey, rr.AdmittedBy), "")
 			writeError(w, http.StatusBadGateway, "inviter roster rejected: row "+rr.Pubkey+" not admitted by the founder")
 			return
 		}
 		arow := rr.AdmissionRowOf()
 		if err := spanner.VerifyAdmissionRow(ed25519.PublicKey(bundle.FounderPubkey), &arow, rr.Signature); err != nil {
-			recordAudit(r.Context(), h.auditWriter, "spanner_join_rejected", ownPubkey, r.RemoteAddr,
+			recordAudit(r.Context(), h.auditWriter, "spanner.join_rejected", ownPubkey, r.RemoteAddr,
 				fmt.Sprintf("roster row %s failed signature verification: %v", rr.Pubkey, err), "")
 			writeError(w, http.StatusBadGateway, "inviter roster rejected: row "+rr.Pubkey+" signature invalid")
 			return
@@ -539,7 +539,7 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "spanner_join_accepted", ownPubkey, r.RemoteAddr,
+	recordAudit(r.Context(), h.auditWriter, "spanner.join_accepted", ownPubkey, r.RemoteAddr,
 		fmt.Sprintf("joined spanner via %s — roster has %d bolts", req.FromAddr, written), "")
 
 	slog.Info("spanner joined", "from", req.FromAddr, "roster_size", written, "own_pubkey", ownPubkey)

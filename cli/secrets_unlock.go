@@ -350,7 +350,7 @@ explicitly.`,
 			return fmt.Errorf("writing unlock sentinel: %w", err)
 		}
 		fmt.Printf("  Vault unlocked. Idle timeout: %s.\n", idleTTL)
-		recordSecretsEvent("secrets_unlocked", nil)
+		recordSecretsEvent("secrets.unlocked", nil)
 		return nil
 	},
 }
@@ -363,7 +363,7 @@ var secretsLockCmd = &cobra.Command{
 			return fmt.Errorf("removing unlock sentinel: %w", err)
 		}
 		fmt.Println("  Vault locked.")
-		recordSecretsEvent("secrets_locked", nil)
+		recordSecretsEvent("secrets.locked", nil)
 		return nil
 	},
 }
@@ -396,7 +396,7 @@ re-unlock with the new passphrase.`,
 			return fmt.Errorf("clearing unlock sentinel: %w", err)
 		}
 		fmt.Println("  Passphrase rotated. Run `vigocli secrets unlock` with the new passphrase.")
-		recordSecretsEvent("secrets_passphrase_rotated", nil)
+		recordSecretsEvent("secrets.passphrase_rotated", nil)
 		return nil
 	},
 }
@@ -437,7 +437,7 @@ secrets anyway). Typed confirmation required to avoid accidents.`,
 			return fmt.Errorf("clearing unlock sentinel: %w", err)
 		}
 		fmt.Println("  Passphrase reset. Run `vigocli secrets unlock` with the new passphrase.")
-		recordSecretsEvent("secrets_passphrase_reset", nil)
+		recordSecretsEvent("secrets.passphrase_reset", nil)
 		return nil
 	},
 }
