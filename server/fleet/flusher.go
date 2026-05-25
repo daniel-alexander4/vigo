@@ -102,33 +102,60 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 	}
 	batchDur := time.Since(batchStart)
 
-	// Handle per-envoy flag updates.
+	// Collect ids per verb. The old shape issued 3 separate UPDATEs per
+	// dirty envoy unconditionally (9000 statements at 3000 dirty envoys),
+	// which serialized through the SQLite WAL writer mutex — measured at
+	// 78s for a single 3000-envoy flush in the 0.67.22 load test. Batching
+	// each verb into one chunked WHERE-id-IN(...) statement collapses that
+	// to a handful of statements; the trailing `AND <field> != current`
+	// predicate in each batch query (see server/db/batch.go) makes SQLite
+	// skip rows that don't actually need a write, so the common case
+	// (mostly-clean dirty set) becomes a near-instant no-op.
 	flagsStart := time.Now()
+	var (
+		clearForcePushIDs       []string
+		clearRotatedSecretsIDs  []string
+		clearMaintenanceIDs     []string
+		setMaintenanceIDs       []string
+		setMaintenanceVals      []time.Time
+	)
 	for id, ts := range dirty {
-		// Clear force_push if it was consumed (no longer set in index).
 		if !ts.ForcePush {
-			if err := sf.queries.ClearForcePush(ctx, id); err != nil {
-				slog.Error("state flusher: clear force_push failed", "envoy_id", id, "error", err)
-			}
+			clearForcePushIDs = append(clearForcePushIDs, id)
 		}
-
-		// Clear rotated secrets if they were consumed.
 		if len(ts.PendingRotatedSecrets) == 0 {
-			if err := sf.queries.ClearRotatedSecrets(ctx, id); err != nil {
-				slog.Error("state flusher: clear rotated secrets failed", "envoy_id", id, "error", err)
+			clearRotatedSecretsIDs = append(clearRotatedSecretsIDs, id)
+		}
+		if ts.MaintenanceUntil.IsZero() {
+			clearMaintenanceIDs = append(clearMaintenanceIDs, id)
+		} else {
+			setMaintenanceIDs = append(setMaintenanceIDs, id)
+			setMaintenanceVals = append(setMaintenanceVals, ts.MaintenanceUntil)
+		}
+	}
+	chunkedBatch := func(ids []string, name string, fn func(context.Context, []string) error) {
+		for i := 0; i < len(ids); i += chunkSize {
+			end := i + chunkSize
+			if end > len(ids) {
+				end = len(ids)
+			}
+			if err := fn(ctx, ids[i:end]); err != nil {
+				slog.Error("state flusher: batch failed", "op", name, "count", end-i, "error", err)
 			}
 		}
-
-		// Persist maintenance window.
-		var maint sql.NullTime
-		if !ts.MaintenanceUntil.IsZero() {
-			maint = sql.NullTime{Time: ts.MaintenanceUntil, Valid: true}
-		}
+	}
+	chunkedBatch(clearForcePushIDs, "clear_force_push", sf.queries.BatchClearForcePush)
+	chunkedBatch(clearRotatedSecretsIDs, "clear_rotated_secrets", sf.queries.BatchClearRotatedSecrets)
+	chunkedBatch(clearMaintenanceIDs, "clear_maintenance", sf.queries.BatchClearEnvoyMaintenance)
+	// Operator-set maintenance windows are rare; per-envoy fallback for the
+	// non-NULL case keeps the batched path simple and avoids the CASE-WHEN
+	// gymnastics needed for divergent per-row values.
+	for i, id := range setMaintenanceIDs {
 		if err := sf.queries.UpdateEnvoyMaintenance(ctx, db.UpdateEnvoyMaintenanceParams{
-			MaintenanceUntil: maint,
+			MaintenanceUntil: sql.NullTime{Time: setMaintenanceVals[i], Valid: true},
 			ID:               id,
 		}); err != nil {
-			slog.Error("state flusher: update maintenance failed", "envoy_id", id, "error", err)
+			slog.Error("state flusher: set maintenance failed", "envoy_id", id, "error", err)
 		}
 	}
 

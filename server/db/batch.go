@@ -87,3 +87,62 @@ func (q *Queries) BatchUpdateLastSeen(ctx context.Context, ids []string) error {
 	_, err := q.db.ExecContext(ctx, query, args...)
 	return err
 }
+
+// BatchClearForcePush clears force_push=0 across multiple envoys in a single
+// UPDATE ... WHERE id IN (...) AND force_push = 1. The trailing predicate
+// means SQLite only writes rows that actually had it set, turning the common
+// case (no envoys forced) into a zero-row no-op instead of N rewrites.
+func (q *Queries) BatchClearForcePush(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf("UPDATE envoys SET force_push = 0 WHERE id IN (%s) AND force_push = 1",
+		strings.Join(placeholders, ","))
+	_, err := q.db.ExecContext(ctx, query, args...)
+	return err
+}
+
+// BatchClearRotatedSecrets resets pending_rotated_secrets='[]' across multiple
+// envoys, skipping rows whose list is already empty.
+func (q *Queries) BatchClearRotatedSecrets(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf("UPDATE envoys SET pending_rotated_secrets = '[]' WHERE id IN (%s) AND pending_rotated_secrets != '[]'",
+		strings.Join(placeholders, ","))
+	_, err := q.db.ExecContext(ctx, query, args...)
+	return err
+}
+
+// BatchClearEnvoyMaintenance clears maintenance_until=NULL across multiple
+// envoys, skipping rows that are already NULL. Operator-set non-NULL values
+// are written via the per-envoy UpdateEnvoyMaintenance — that set is empirically
+// tiny (admin-driven, rare) so the CASE-WHEN batching for divergent values isn't
+// worth the complexity.
+func (q *Queries) BatchClearEnvoyMaintenance(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf("UPDATE envoys SET maintenance_until = NULL WHERE id IN (%s) AND maintenance_until IS NOT NULL",
+		strings.Join(placeholders, ","))
+	_, err := q.db.ExecContext(ctx, query, args...)
+	return err
+}
