@@ -680,27 +680,43 @@ func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
 }
 
 // SetIP updates the envoy's IP address (refreshed on each check-in).
-func (f *FleetIndex) SetIP(id, ip string) {
+// Returns true iff the new value differs from the previously stored value,
+// signalling that the DB row needs to be updated. Callers gate the SQL
+// UPDATE on the return so unchanged values don't serialize through the
+// WAL writer mutex once per check-in.
+func (f *FleetIndex) SetIP(id, ip string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	ts, ok := f.envoys[id]
 	if !ok {
-		return
+		return false
+	}
+	if ts.IP == ip {
+		return false
 	}
 	ts.IP = ip
+	return true
 }
 
 // SetAgentVersion records the agent binary version reported during check-in.
-func (f *FleetIndex) SetAgentVersion(id, version string) {
+// Returns true iff the new value differs from the previously stored value,
+// signalling that the DB row needs to be updated. Same WAL-contention
+// rationale as SetIP — the hot per-checkin path was firing this UPDATE
+// every cycle even when the value never changed.
+func (f *FleetIndex) SetAgentVersion(id, version string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	ts, ok := f.envoys[id]
 	if !ok {
-		return
+		return false
+	}
+	if ts.AgentVersion == version {
+		return false
 	}
 	ts.AgentVersion = version
+	return true
 }
 
 // SetForcePush sets the ForcePush flag.

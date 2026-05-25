@@ -270,41 +270,52 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Record agent version if reported.
+	// Record agent version if reported. Fires the DB write only when the
+	// in-memory value actually changed — same WAL-mutex-contention rationale
+	// as checkin.go. When fleetIndex is nil (some tests), fall back to
+	// firing the write unconditionally.
 	agentVersion := req.GetAgentVersion()
-	if agentVersion != "" && s.fleetIndex != nil {
-		s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
-	}
-	// Persist to DB (conditional — only writes if changed).
 	if agentVersion != "" {
-		if err := s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
-			AgentVersion:   agentVersion,
-			ID:             envoyID,
-			AgentVersion_2: agentVersion,
-		}); err != nil {
-			slog.Warn("agentstream db write failed",
-				"envoy_id", envoyID,
-				"op", "update_agent_version",
-				"error", err,
-			)
-			s.metrics.AgentStreamDBErrors.WithLabelValues("update_agent_version").Inc()
+		changed := true
+		if s.fleetIndex != nil {
+			changed = s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
+		}
+		if changed {
+			if err := s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
+				AgentVersion:   agentVersion,
+				ID:             envoyID,
+				AgentVersion_2: agentVersion,
+			}); err != nil {
+				slog.Warn("agentstream db write failed",
+					"envoy_id", envoyID,
+					"op", "update_agent_version",
+					"error", err,
+				)
+				s.metrics.AgentStreamDBErrors.WithLabelValues("update_agent_version").Inc()
+			}
 		}
 	}
 
 	// Refresh envoy IP (agent reports its outbound IP each check-in).
-	if ipAddr := req.GetIpAddress(); ipAddr != "" && s.fleetIndex != nil {
-		s.fleetIndex.SetIP(envoyID, ipAddr)
-		if err := s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
-			IpAddress:   ipAddr,
-			ID:          envoyID,
-			IpAddress_2: ipAddr,
-		}); err != nil {
-			slog.Warn("agentstream db write failed",
-				"envoy_id", envoyID,
-				"op", "update_envoy_ip",
-				"error", err,
-			)
-			s.metrics.AgentStreamDBErrors.WithLabelValues("update_envoy_ip").Inc()
+	// Same change-gated path as SetAgentVersion above.
+	if ipAddr := req.GetIpAddress(); ipAddr != "" {
+		changed := true
+		if s.fleetIndex != nil {
+			changed = s.fleetIndex.SetIP(envoyID, ipAddr)
+		}
+		if changed {
+			if err := s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
+				IpAddress:   ipAddr,
+				ID:          envoyID,
+				IpAddress_2: ipAddr,
+			}); err != nil {
+				slog.Warn("agentstream db write failed",
+					"envoy_id", envoyID,
+					"op", "update_envoy_ip",
+					"error", err,
+				)
+				s.metrics.AgentStreamDBErrors.WithLabelValues("update_envoy_ip").Inc()
+			}
 		}
 	}
 
