@@ -68,65 +68,15 @@ var serverAPIWriteRoutesAuditExempt = map[string]string{
 // As gap closures land, entries are removed from this map and the
 // handler grows a recordAudit call in the same commit.
 //
-// 36 entries today (v0.67.18 baseline). Grouped by intended close-out
-// batch — one pending entry per logical batch so each follow-on
-// scrutinize has a concrete, bounded scope.
-var serverAPIWriteRoutesAuditGapPending = map[string]string{
-	// PENDING: server/api/envoys audit-add (4 handlers)
-	"POST /api/v1/envoys/{id}/update":      "PENDING: server/api/envoys audit-add",
-	"POST /api/v1/envoys/update":           "PENDING: server/api/envoys audit-add",
-	"PUT /api/v1/envoys/{id}/maintenance":  "PENDING: server/api/envoys audit-add",
-	"DELETE /api/v1/envoys/{id}/maintenance": "PENDING: server/api/envoys audit-add",
-
-	// PENDING: server/api/database audit-add (4 handlers)
-	"POST /api/v1/db/vacuum":     "PENDING: server/api/database audit-add",
-	"POST /api/v1/db/checkpoint": "PENDING: server/api/database audit-add",
-	"POST /api/v1/db/prune":      "PENDING: server/api/database audit-add",
-	"POST /api/v1/db/analyze":    "PENDING: server/api/database audit-add",
-
-	// PENDING: server/api/config audit-add (6 handlers — publish lifecycle + secret rotation ack)
-	"POST /api/v1/config/publishes":         "PENDING: server/api/config audit-add",
-	"POST /api/v1/config/rollback/{version}": "PENDING: server/api/config audit-add",
-	"POST /api/v1/config/freeze":             "PENDING: server/api/config audit-add",
-	"POST /api/v1/config/unfreeze":           "PENDING: server/api/config audit-add",
-	"POST /api/v1/config/retract":            "PENDING: server/api/config audit-add",
-	"POST /api/v1/secrets/rotated":           "PENDING: server/api/config audit-add",
-
-	// PENDING: server/api/swarm audit-add (7 handlers across 4 files — swarm/curator/poolq/filecast block/unblock + filecast distribute/revoke + swarm cleanup)
-	"POST /api/v1/swarm/cleanup":                       "PENDING: server/api/swarm audit-add",
-	"POST /api/v1/swarm/curator/block/{artifact_id}":   "PENDING: server/api/swarm audit-add",
-	"POST /api/v1/swarm/curator/unblock/{artifact_id}": "PENDING: server/api/swarm audit-add",
-	"POST /api/v1/swarm/poolq/block/{topic_id}":        "PENDING: server/api/swarm audit-add",
-	"POST /api/v1/swarm/poolq/unblock/{topic_id}":      "PENDING: server/api/swarm audit-add",
-	"POST /api/v1/swarm/filecast/distribute":           "PENDING: server/api/swarm audit-add",
-	"DELETE /api/v1/swarm/filecast/{sha256}":           "PENDING: server/api/swarm audit-add",
-
-	// PENDING: server/api/spanner audit-add (4 handlers — federation peer control + invite issuance)
-	"POST /api/v1/spanner/bolts/{id}/push":  "PENDING: server/api/spanner audit-add",
-	"POST /api/v1/spanner/reassign":         "PENDING: server/api/spanner audit-add",
-	"POST /api/v1/spanner/bolts/{id}/drain": "PENDING: server/api/spanner audit-add",
-	"POST /api/v1/spanner/bolt/invite":      "PENDING: server/api/spanner audit-add",
-
-	// PENDING: server/api/task+workflows audit-add (3 handlers — cancel verbs)
-	"POST /api/v1/task/{id}/cancel":    "PENDING: server/api/task+workflows audit-add",
-	"POST /api/v1/task/cancel-running": "PENDING: server/api/task+workflows audit-add",
-	"POST /api/v1/workflows/{id}/abort": "PENDING: server/api/task+workflows audit-add",
-
-	// PENDING: server/api/users.handleTOTPSetup audit-add (1 handler — TOTP secret creation, sibling to handleTOTPConfirm/Disable which already audit)
-	"POST /api/v1/users/totp/setup": "PENDING: server/api/users.handleTOTPSetup audit-add",
-
-	// PENDING: sandgorgon audit-add (post-v1, all 7 sandgorgon mutation routes)
-	// CLAUDE.md explicitly defers the whole sandgorgon subsystem to post-v1;
-	// these handlers don't count toward v1 scoping. Audit-add lands when the
-	// subsystem activates.
-	"POST /api/v1/sandgorgon/commission":                "PENDING: sandgorgon audit-add (post-v1)",
-	"POST /api/v1/sandgorgon/decommission/{id}":         "PENDING: sandgorgon audit-add (post-v1)",
-	"POST /api/v1/sandgorgon/return-to-available/{id}":  "PENDING: sandgorgon audit-add (post-v1)",
-	"POST /api/v1/sandgorgon/provision/{id}":            "PENDING: sandgorgon audit-add (post-v1)",
-	"POST /api/v1/sandgorgon/images":                    "PENDING: sandgorgon audit-add (post-v1)",
-	"DELETE /api/v1/sandgorgon/images/{id}":             "PENDING: sandgorgon audit-add (post-v1)",
-	"POST /api/v1/sandgorgon/import":                    "PENDING: sandgorgon audit-add (post-v1)",
-}
+// Empty as of v0.67.20 — every previously-pending gap was closed in
+// the same scrutinize that landed this test (including the 7
+// sandgorgon handlers; per Dan's instruction, code-level audit gaps
+// get fixed even when the subsystem functionality is post-v1-deferred,
+// because the audit-on-state-mutation invariant is a code-level
+// property not a functional one). Future regressions appear here as
+// new entries via /scrutinize discipline; an empty map is the steady
+// state.
+var serverAPIWriteRoutesAuditGapPending = map[string]string{}
 
 func TestServerAPIWriteRoutesAudit(t *testing.T) {
 	root := repoRoot(t)

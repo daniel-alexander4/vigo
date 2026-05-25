@@ -1042,6 +1042,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	doctorHandler.SetSwarmConfig(s.cfg.Swarm)
 
 	spannerHandler := api.NewSpannerHandler(s.mode, s.cfg.Spanner.SpannerID, formatLocalBoltPubkey(s.boltID))
+	spannerHandler.SetAuditWriter(s.auditWriter)
 	opsPuddleHandler := api.NewSpannerOpsPuddleHandler(s.provider, puddle.OpsDefaultDir, s.auditWriter)
 	// Spanner Slice 2A.2 — membership ceremony (ADR-026). Founds a
 	// spanner, mints join invites, admits joining bolts. Needs the
@@ -1390,6 +1391,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			lodeHandler.RegisterRoutes(gwMux)
 			swarmAPIHandler := api.NewSwarmHandler(peerTracker, manifestStore, s.fleetIndex)
 			swarmAPIHandler.SetCleanupDispatcher(s.agentSvc)
+			swarmAPIHandler.SetAuditWriter(s.auditWriter)
 			swarmAPIHandler.RegisterRoutes(gwMux)
 			uiHandler.SetSwarmAPI(swarmAPIHandler)
 			s.agentSvc.SetSwarm(peerTracker, manifestStore)
@@ -1404,6 +1406,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			// reactor goroutine stays in run() / chunk 5.
 			blobsDir := filepath.Join(filepath.Dir(seedDir), ".blobs")
 			curatorHandler := api.NewCuratorHandler(s.curatorAgg, s.queries, s.fleetIndex, blobsDir)
+			curatorHandler.SetAuditWriter(s.auditWriter)
 			curatorHandler.RegisterRoutes(gwMux)
 			uiHandler.SetCuratorFleet(curatorHandler)
 
@@ -1411,6 +1414,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			// vigocli + admin UI all consume the same routes; per-topic
 			// block/unblock admin moderation lands in Slice 5.
 			poolqHandler := api.NewPoolqHandler(s.poolqAgg, s.queries, s.fleetIndex)
+			poolqHandler.SetAuditWriter(s.auditWriter)
 			poolqHandler.RegisterRoutes(gwMux)
 			uiHandler.SetPoolqFleet(poolqHandler)
 
@@ -1488,6 +1492,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			s.aiHandler.RegisterRoutes(gwMux)
 		}
 		dbHandler := api.NewDatabaseHandler(s.db, s.queries, dbDriver, s.cfg.Database.DSN)
+		dbHandler.SetAuditWriter(s.auditWriter)
 		dbHandler.RegisterRoutes(gwMux)
 		s.authProvider.RegisterRoutes(gwMux)
 		if s.scrierHandler != nil {

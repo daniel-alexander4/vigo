@@ -5,6 +5,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -16,14 +17,18 @@ import (
 // EnvoysHandler provides REST endpoints for envoy management operations
 // that are not covered by grpc-gateway.
 type EnvoysHandler struct {
-	queries    *db.Queries
-	fleetIndex *fleet.FleetIndex
+	queries     *db.Queries
+	fleetIndex  *fleet.FleetIndex
+	auditWriter auditRecorder
 }
 
 // NewEnvoysHandler creates a EnvoysHandler.
 func NewEnvoysHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex) *EnvoysHandler {
 	return &EnvoysHandler{queries: queries, fleetIndex: fleetIndex}
 }
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *EnvoysHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // RegisterRoutes registers envoy management endpoints. Reads
 // (tags/convergence) require fleet.read; writes (maintenance
@@ -82,6 +87,9 @@ func (h *EnvoysHandler) SetMaintenance(w http.ResponseWriter, r *http.Request) {
 		h.fleetIndex.SetMaintenanceUntil(id, until)
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "envoy.maintenance_set", actorFromRequest(r), "rest",
+		"maintenance set for envoy "+id+" until "+until.Format(time.RFC3339), "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"maintenance_until": until.Format(time.RFC3339),
 	})
@@ -94,6 +102,9 @@ func (h *EnvoysHandler) ClearMaintenance(w http.ResponseWriter, r *http.Request)
 	if h.fleetIndex != nil {
 		h.fleetIndex.ClearMaintenance(id)
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "envoy.maintenance_cleared", actorFromRequest(r), "rest",
+		"maintenance cleared for envoy "+id, "")
 
 	writeJSON(w, r, http.StatusOK, map[string]any{"maintenance_until": nil})
 }
@@ -130,6 +141,10 @@ func (h *EnvoysHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.fleetIndex.SetForceUpdate(id, true)
+
+	recordAudit(r.Context(), h.auditWriter, "envoy.force_update", actorFromRequest(r), "rest",
+		"forced update for envoy "+id, "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{"status": "queued"})
 }
 
@@ -141,5 +156,9 @@ func (h *EnvoysHandler) ForceUpdateAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	count := h.fleetIndex.SetForceUpdateAll()
+
+	recordAudit(r.Context(), h.auditWriter, "envoy.force_update_all", actorFromRequest(r), "rest",
+		fmt.Sprintf("forced update on %d envoys", count), "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{"status": "queued", "count": count})
 }

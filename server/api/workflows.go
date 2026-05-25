@@ -236,5 +236,8 @@ func (h *WorkflowHandler) HandleAbort(w http.ResponseWriter, r *http.Request) {
 
 	h.engine.Abort(id)
 
+	recordAudit(r.Context(), h.auditWriter, "workflow.abort", actorFromRequest(r), "rest",
+		"aborted workflow "+id, "")
+
 	writeJSON(w, r, http.StatusOK, map[string]string{"status": "aborting"})
 }

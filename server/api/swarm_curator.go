@@ -31,11 +31,15 @@ import (
 // field on a catalog entry is currently informational; per-recipient gating
 // would pair with the post-v1 encrypted-blob feature.
 type CuratorHandler struct {
-	agg        *curatormesh.Aggregator
-	queries    *db.Queries
-	fleetIndex *fleet.FleetIndex
-	blobsDir   string // server's co-resident envoy's blob cache (bind-mounted)
+	agg         *curatormesh.Aggregator
+	queries     *db.Queries
+	fleetIndex  *fleet.FleetIndex
+	blobsDir    string // server's co-resident envoy's blob cache (bind-mounted)
+	auditWriter auditRecorder
 }
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *CuratorHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // NewCuratorHandler builds the handler. `blobsDir` is the directory the
 // `blob` relay serves from — the swarm blob cache (`/var/lib/vigo/swarm/.blobs`),
@@ -345,10 +349,11 @@ func (h *CuratorHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 	if u := auth.UserFromContext(r.Context()); u != nil {
 		actor = u.Username
 	}
+	reason := strings.TrimSpace(r.URL.Query().Get("reason"))
 	if err := h.queries.BlockArtifact(r.Context(), db.BlockArtifactParams{
 		ArtifactID: id,
 		BlockedBy:  actor,
-		Reason:     strings.TrimSpace(r.URL.Query().Get("reason")),
+		Reason:     reason,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "blocking artifact: "+err.Error())
 		return
@@ -358,6 +363,8 @@ func (h *CuratorHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 	// this blocked?" column on /list / /inspect synchronously consistent with
 	// the block we just wrote.
 	h.agg.InvalidateCache()
+	recordAudit(r.Context(), h.auditWriter, "swarm.curator.block", actor, "rest",
+		"blocked curator artifact "+id+" (reason: "+reason+")", "")
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": true})
 }
 
@@ -372,6 +379,8 @@ func (h *CuratorHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.agg.InvalidateCache()
+	recordAudit(r.Context(), h.auditWriter, "swarm.curator.unblock", actorFromRequest(r), "rest",
+		"unblocked curator artifact "+id, "")
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": false})
 }
 

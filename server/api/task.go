@@ -332,6 +332,9 @@ func (h *TaskHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.queries.CancelTaskRunTargets(ctx, id)
 
+	recordAudit(r.Context(), h.auditWriter, "task.cancel", actorFromRequest(r), "rest",
+		"cancelled task "+id, "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{"status": "cancelled", "id": id})
 }
 
@@ -354,6 +357,9 @@ func (h *TaskHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "failed to cancel running tasks: "+err.Error())
 		return
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "task.cancel_running", actorFromRequest(r), "rest",
+		fmt.Sprintf("cancelled %d running tasks", len(ids)), "")
 
 	writeJSON(w, r, http.StatusOK, map[string]any{"status": "cancelled", "count": len(ids)})
 }

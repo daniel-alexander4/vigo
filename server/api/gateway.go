@@ -100,6 +100,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	// Mount envoy management endpoints (tags, maintenance).
 	envoysHandler := NewEnvoysHandler(queries, fleetIndex)
+	envoysHandler.SetAuditWriter(aw)
 	envoysHandler.RegisterRoutes(mux)
 
 	// Mount audit endpoint.
@@ -118,6 +119,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	// Mount sandgorgon (bare metal lifecycle) endpoints.
 	sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "", serverAddr)
+	sandgorgonHandler.SetAuditWriter(aw)
 	sandgorgonHandler.RegisterRoutes(mux)
 
 	// Mount compliance docs (operator-uploaded artifacts for

@@ -230,6 +230,9 @@ func (h *SpannerAdmissionHandler) handleInvite(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "spanner_bolt_invite_issued", h.localPubkeyHex(), r.RemoteAddr,
+		fmt.Sprintf("issued spanner-join invite bundle (ttl=%s, expires=%d)", ttl, bundle.ExpiresAt), "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"bundle":     bundleStr,
 		"spanner_id": h.spannerID,

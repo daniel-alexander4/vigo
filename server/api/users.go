@@ -420,6 +420,9 @@ func (h *UsersHandler) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "user.totp_setup", u.Username, "rest",
+		fmt.Sprintf("TOTP setup initiated for %s (awaiting confirm)", u.Username), "")
+
 	writeJSON(w, r, http.StatusOK, map[string]string{
 		"secret": secret,
 		"url":    url,

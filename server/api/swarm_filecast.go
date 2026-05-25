@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
@@ -48,7 +47,7 @@ type LodeHandler struct {
 
 	swarmCfgMu  sync.RWMutex
 	swarmCfg    config.SwarmSection
-	auditWriter *audit.Writer
+	auditWriter auditRecorder
 }
 
 // NewLodeHandler creates a new payload handler.
@@ -81,7 +80,7 @@ func (h *LodeHandler) SetSwarmConfig(cfg config.SwarmSection) {
 // SetAuditWriter wires the tamper-evident audit-chain writer so denial
 // events from gated admin operations land in the same chain as every
 // other admin action.
-func (h *LodeHandler) SetAuditWriter(w *audit.Writer) {
+func (h *LodeHandler) SetAuditWriter(w auditRecorder) {
 	h.auditWriter = w
 }
 
@@ -106,13 +105,8 @@ func (h *LodeHandler) payloadGate() (bool, string) {
 }
 
 func (h *LodeHandler) recordPayloadDenial(ctx context.Context, actor, reason string) {
-	if h.auditWriter == nil {
-		return
-	}
 	payload := fmt.Sprintf(`{"endpoint":"/api/v1/swarm/filecast/distribute","reason":%q}`, reason)
-	if err := h.auditWriter.Record(ctx, "swarm.filecast.denied", actor, "api", reason, payload); err != nil {
-		slog.Warn("audit: failed to record payload denial", "error", err)
-	}
+	recordAudit(ctx, h.auditWriter, "swarm.filecast.denied", actor, "api", reason, payload)
 }
 
 // RegisterRoutes registers payload endpoints. Distribute and revoke
@@ -295,6 +289,9 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		h.forcePusher.ForcePush("")
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "swarm.filecast.distribute", actorFromRequest(r), "rest",
+		fmt.Sprintf("distributed filecast %s (%s, %d bytes) to %s", hash[:12], label, size, target), "")
+
 	writeJSON(w, r, http.StatusCreated, map[string]any{
 		"sha256": hash,
 		"label":  label,
@@ -441,6 +438,11 @@ func (h *LodeHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		if h.manifestStore != nil {
 			h.manifestStore.Revoke(hash)
 		}
+	}
+
+	if !alreadyRevoked {
+		recordAudit(r.Context(), h.auditWriter, "swarm.filecast.revoke", actorFromRequest(r), "rest",
+			"revoked filecast "+hash[:12], "")
 	}
 
 	writeJSON(w, r, http.StatusOK, map[string]any{

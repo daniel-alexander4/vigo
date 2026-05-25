@@ -23,11 +23,12 @@ func toNullString(s string) sql.NullString {
 
 // SandgorgonHandler provides REST endpoints for bare metal lifecycle management.
 type SandgorgonHandler struct {
-	mgr        *sandgorgon.Manager
-	queries    *db.Queries
-	fleetIndex *fleet.FleetIndex
-	orgName    string
-	serverAddr string
+	mgr         *sandgorgon.Manager
+	queries     *db.Queries
+	fleetIndex  *fleet.FleetIndex
+	orgName     string
+	serverAddr  string
+	auditWriter auditRecorder
 }
 
 // NewSandgorgonHandler creates a sandgorgon API handler.
@@ -44,6 +45,9 @@ func NewSandgorgonHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, org
 		serverAddr: serverAddr,
 	}
 }
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *SandgorgonHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // SetLifecycleDataSource enables operational data (risk, compliance, convergence) in reports.
 func (h *SandgorgonHandler) SetLifecycleDataSource(ds sandgorgon.LifecycleDataSource) {
@@ -204,6 +208,9 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "sandgorgon.commission", actorFromRequest(r), "rest",
+		"commissioned asset "+asset.ID+" (hostname="+req.Hostname+", state="+state+")", "")
+
 	writeJSON(w, r, http.StatusCreated, asset)
 }
 
@@ -234,6 +241,9 @@ func (h *SandgorgonHandler) decommission(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "sandgorgon.decommission", actorFromRequest(r), "rest",
+		"decommissioned asset "+id+" (technician="+req.Technician+", method="+req.Method+")", "")
 
 	writeJSON(w, r, http.StatusOK, result)
 }
@@ -291,6 +301,9 @@ func (h *SandgorgonHandler) importCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "sandgorgon.import_csv", actorFromRequest(r), "rest",
+		"imported sandgorgon CSV", "")
+
 	writeJSON(w, r, http.StatusOK, result)
 }
 
@@ -313,6 +326,8 @@ func (h *SandgorgonHandler) returnToAvailable(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	recordAudit(r.Context(), h.auditWriter, "sandgorgon.return_to_available", actorFromRequest(r), "rest",
+		"returned asset "+id+" to available pool", "")
 	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok", "lifecycle_state": "available"})
 }
 
@@ -357,6 +372,9 @@ func (h *SandgorgonHandler) provision(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "sandgorgon.provision", actorFromRequest(r), "rest",
+		"provisioned asset "+id+" with image "+req.ImageName+" hostname="+req.Hostname, "")
 
 	writeJSON(w, r, http.StatusOK, result)
 }
@@ -405,6 +423,9 @@ func (h *SandgorgonHandler) registerImage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "sandgorgon.image.register", actorFromRequest(r), "rest",
+		"registered sandgorgon image "+req.Name+" ("+req.OSFamily+" "+req.OSVersion+"/"+req.Arch+")", "")
+
 	writeJSON(w, r, http.StatusCreated, image)
 }
 
@@ -414,6 +435,8 @@ func (h *SandgorgonHandler) removeImage(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	recordAudit(r.Context(), h.auditWriter, "sandgorgon.image.remove", actorFromRequest(r), "rest",
+		"removed sandgorgon image "+id, "")
 	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 }
 

@@ -28,10 +28,14 @@ import (
 // `/api/v1/swarm/curator/resolve`. The `block`/`unblock` admin moderation
 // endpoints land in Slice 5.
 type PoolqHandler struct {
-	agg        *poolqmesh.Aggregator
-	queries    *db.Queries
-	fleetIndex *fleet.FleetIndex
+	agg         *poolqmesh.Aggregator
+	queries     *db.Queries
+	fleetIndex  *fleet.FleetIndex
+	auditWriter auditRecorder
 }
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *PoolqHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // NewPoolqHandler builds the handler.
 func NewPoolqHandler(agg *poolqmesh.Aggregator, queries *db.Queries, fleetIndex *fleet.FleetIndex) *PoolqHandler {
@@ -296,10 +300,11 @@ func (h *PoolqHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 	if u := auth.UserFromContext(r.Context()); u != nil {
 		actor = u.Username
 	}
+	reason := strings.TrimSpace(r.URL.Query().Get("reason"))
 	if err := h.queries.BlockPoolqTopic(r.Context(), db.BlockPoolqTopicParams{
 		TopicID:   id,
 		BlockedBy: actor,
-		Reason:    strings.TrimSpace(r.URL.Query().Get("reason")),
+		Reason:    reason,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "blocking topic: "+err.Error())
 		return
@@ -309,6 +314,8 @@ func (h *PoolqHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 	// blocked?" column on /topics synchronously consistent with the block we
 	// just wrote.
 	h.agg.InvalidateCache()
+	recordAudit(r.Context(), h.auditWriter, "swarm.poolq.block", actor, "rest",
+		"blocked poolq topic "+id+" (reason: "+reason+")", "")
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "topic_id": id, "blocked": true})
 }
 
@@ -324,6 +331,8 @@ func (h *PoolqHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.agg.InvalidateCache()
+	recordAudit(r.Context(), h.auditWriter, "swarm.poolq.unblock", actorFromRequest(r), "rest",
+		"unblocked poolq topic "+id, "")
 	writeJSON(w, r, http.StatusOK, map[string]any{"ok": true, "topic_id": id, "blocked": false})
 }
 

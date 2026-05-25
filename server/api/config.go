@@ -251,6 +251,9 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "secret.rotation_acked", actorFromRequest(r), "rest",
+		fmt.Sprintf("secret rotation acked: %s (%d envoys queued)", req.Path, affected), "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"path":     req.Path,
 		"affected": affected,
@@ -432,6 +435,9 @@ func (h *ConfigHandler) RecordPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	recordAudit(r.Context(), h.auditWriter, "config.publish_recorded", req.Operator, "rest",
+		fmt.Sprintf("publish %s recorded: %d changed, %d removed", p.ID, len(req.ChangedFiles), len(req.RemovedFiles)), "")
+
 	writeJSON(w, r, http.StatusCreated, map[string]any{"id": p.ID})
 }
 
@@ -456,6 +462,10 @@ func (h *ConfigHandler) Freeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.publishState.SetFreezeUntil(t)
+
+	recordAudit(r.Context(), h.auditWriter, "config.freeze", actorFromRequest(r), "rest",
+		"publish frozen until "+t.Format(time.RFC3339), "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{"freeze_until": t.Format(time.RFC3339)})
 }
 
@@ -466,6 +476,10 @@ func (h *ConfigHandler) Unfreeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.publishState.ClearFreeze()
+
+	recordAudit(r.Context(), h.auditWriter, "config.unfreeze", actorFromRequest(r), "rest",
+		"publish freeze cleared", "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{"status": "unfrozen"})
 }
 
@@ -482,6 +496,9 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "config.rollback", actorFromRequest(r), "rest",
+		"rolled back to version "+version, "")
 
 	writeJSON(w, r, http.StatusOK, map[string]any{"status": "rolled back", "version": version})
 }
@@ -547,10 +564,15 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var results []retractModuleResult
+	moduleNames := make([]string, 0, len(req.Modules))
 	for _, mod := range req.Modules {
 		result := h.retractModule(r.Context(), mod)
 		results = append(results, result)
+		moduleNames = append(moduleNames, mod.Name)
 	}
+
+	recordAudit(r.Context(), h.auditWriter, "config.retract", actorFromRequest(r), "rest",
+		fmt.Sprintf("generated retract modules for: %s", strings.Join(moduleNames, ", ")), "")
 
 	writeJSON(w, r, http.StatusOK, retractResponse{
 		Enabled: true,

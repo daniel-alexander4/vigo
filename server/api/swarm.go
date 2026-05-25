@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -28,9 +29,13 @@ type CleanupDispatcher interface {
 }
 
 type SwarmHandler struct {
-	src        swarmview.Sources
-	dispatcher CleanupDispatcher
+	src         swarmview.Sources
+	dispatcher  CleanupDispatcher
+	auditWriter auditRecorder
 }
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *SwarmHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // NewSwarmHandler creates a substrate-overview handler.
 func NewSwarmHandler(tracker *swarm.PeerTracker, manifest *swarm.ManifestStore, fleetIndex *fleet.FleetIndex) *SwarmHandler {
@@ -116,6 +121,8 @@ func (h *SwarmHandler) Cleanup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "cleanup dispatch failed: "+err.Error())
 		return
 	}
+	recordAudit(r.Context(), h.auditWriter, "swarm.cleanup", actorFromRequest(r), "rest",
+		fmt.Sprintf("swarm cleanup dispatched to %s (%d envoys, task=%s)", target, dispatched, taskRunID), "")
 	writeJSON(w, r, http.StatusAccepted, map[string]any{
 		"target":      target,
 		"dispatched":  dispatched,

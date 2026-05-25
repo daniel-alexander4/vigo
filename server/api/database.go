@@ -19,16 +19,20 @@ import (
 
 // DatabaseHandler serves /api/v1/db/* endpoints for database operations.
 type DatabaseHandler struct {
-	sqlDB   *sql.DB
-	queries *db.Queries
-	driver  string // "sqlite" or "postgres"
-	dsn     string // for file size (SQLite only)
+	sqlDB       *sql.DB
+	queries     *db.Queries
+	driver      string // "sqlite" or "postgres"
+	dsn         string // for file size (SQLite only)
+	auditWriter auditRecorder
 }
 
 // NewDatabaseHandler creates a database operations handler.
 func NewDatabaseHandler(sqlDB *sql.DB, queries *db.Queries, driver, dsn string) *DatabaseHandler {
 	return &DatabaseHandler{sqlDB: sqlDB, queries: queries, driver: driver, dsn: dsn}
 }
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *DatabaseHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // RegisterRoutes mounts the database endpoints. All DB-admin verbs
 // require admin role — vacuum/checkpoint mutate WAL state, /db/query
@@ -209,6 +213,8 @@ func (h *DatabaseHandler) handleVacuum(w http.ResponseWriter, r *http.Request) {
 			slog.Info("database VACUUM complete",
 				"before", sizeBefore, "after", sizeAfter, "reclaimed", sizeBefore-sizeAfter,
 				"elapsed", time.Since(startTime))
+			recordAudit(r.Context(), h.auditWriter, "db.vacuum", actorFromRequest(r), "rest",
+				fmt.Sprintf("VACUUM reclaimed %d bytes in %s", sizeBefore-sizeAfter, time.Since(startTime).Truncate(time.Millisecond)), "")
 			_ = enc.Encode(map[string]any{
 				"status":     "done",
 				"before":     sizeBefore,
@@ -263,6 +269,9 @@ func (h *DatabaseHandler) handleCheckpoint(w http.ResponseWriter, r *http.Reques
 
 	slog.Info("WAL checkpoint complete", "pages_total", pagesTotal, "pages_written", pagesWritten)
 
+	recordAudit(r.Context(), h.auditWriter, "db.checkpoint", actorFromRequest(r), "rest",
+		fmt.Sprintf("WAL checkpoint wrote %d of %d pages", pagesWritten, pagesTotal), "")
+
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":        "ok",
 		"pages_total":   pagesTotal,
@@ -282,6 +291,9 @@ func (h *DatabaseHandler) handleAnalyze(w http.ResponseWriter, r *http.Request) 
 	}
 	elapsed := time.Since(start)
 	slog.Info("database ANALYZE complete", "elapsed", elapsed)
+
+	recordAudit(r.Context(), h.auditWriter, "db.analyze", actorFromRequest(r), "rest",
+		fmt.Sprintf("ANALYZE completed in %s", elapsed.Truncate(time.Millisecond)), "")
 
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":     "ok",
@@ -316,6 +328,9 @@ func (h *DatabaseHandler) handlePrune(w http.ResponseWriter, r *http.Request) {
 	pruner := db.NewRetentionPruner(h.queries, h.sqlDB, dur)
 	pruner.SetPostgres(h.driver == "postgres")
 	res := pruner.Prune(r.Context())
+
+	recordAudit(r.Context(), h.auditWriter, "db.prune", actorFromRequest(r), "rest",
+		fmt.Sprintf("pruned %d rows older than %s in %s", res.Total(), req.OlderThan, time.Since(start).Truncate(time.Millisecond)), "")
 
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":     "ok",
