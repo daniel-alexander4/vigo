@@ -24,7 +24,7 @@
 //
 // --admin-token is the boot-minted local-admin credential at
 // /srv/vigo/cli-admin-token on the server host; required for the
-// post-test envoy revoke. Omit (or pass --skip-cleanup) to leave the
+// post-test envoy delete. Omit (or pass --skip-cleanup) to leave the
 // simulated envoys in the DB.
 package main
 
@@ -125,7 +125,7 @@ func main() {
 	interval := flag.Duration("interval", 5*time.Second, "check-in interval per envoy")
 	duration := flag.Duration("duration", 2*time.Minute, "total test duration")
 	skipCleanup := flag.Bool("skip-cleanup", false, "leave test envoys enrolled after test")
-	adminToken := flag.String("admin-token", "", "admin bearer token for the post-test envoy revoke calls (e.g. $(sudo cat /srv/vigo/cli-admin-token) on the server host); cleanup is skipped if empty")
+	adminToken := flag.String("admin-token", "", "admin bearer token for the post-test envoy delete calls (e.g. $(sudo cat /srv/vigo/cli-admin-token) on the server host); cleanup is skipped if empty")
 	flag.Parse()
 
 	fmt.Printf("Vigo Load Test\n")
@@ -238,18 +238,40 @@ func main() {
 		fmt.Printf("  vigocli envoys list --hostname 'loadtest-*.test' | <iterate> vigocli envoys delete\n")
 	default:
 		fmt.Printf("\nCleaning up %d test envoys...\n", len(envoys))
-		cleaned := 0
-		var firstErr string
+		// Bounded-concurrency fan-out: serial DELETEs at full per-call
+		// round-trip latency turn an N=1000 cleanup into 10-50s of wall
+		// time even after the swarm-cleanup dispatch is skipped (below).
+		// Semaphore=16 keeps the server from getting hammered while
+		// cutting wall time by an order of magnitude.
+		const cleanupConcurrency = 16
+		var (
+			mu        sync.Mutex
+			cleaned   int
+			firstErr  string
+			wg        sync.WaitGroup
+			semaphore = make(chan struct{}, cleanupConcurrency)
+		)
 		for _, e := range envoys {
-			if err := revokeEnvoy(httpClient, *apiAddr, *adminToken, e.id); err != nil {
-				if firstErr == "" {
-					firstErr = err.Error()
+			wg.Add(1)
+			semaphore <- struct{}{}
+			go func(envoyID string) {
+				defer wg.Done()
+				defer func() { <-semaphore }()
+				if err := deleteEnvoy(httpClient, *apiAddr, *adminToken, envoyID); err != nil {
+					mu.Lock()
+					if firstErr == "" {
+						firstErr = err.Error()
+					}
+					mu.Unlock()
+					return
 				}
-				continue
-			}
-			cleaned++
+				mu.Lock()
+				cleaned++
+				mu.Unlock()
+			}(e.id)
 		}
-		fmt.Printf("  Revoked %d/%d\n", cleaned, len(envoys))
+		wg.Wait()
+		fmt.Printf("  Deleted %d/%d\n", cleaned, len(envoys))
 		if cleaned < len(envoys) && firstErr != "" {
 			fmt.Printf("  first failure: %s\n", firstErr)
 		}
@@ -369,8 +391,16 @@ func runCheckins(ctx context.Context, grpcAddr string, e *testEnvoy, interval ti
 	}
 }
 
-func revokeEnvoy(client *http.Client, apiAddr, adminToken, envoyID string) error {
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/envoys/%s", apiAddr, envoyID), nil)
+// deleteEnvoy issues `DELETE /api/v1/envoys/{id}?skip_swarm_cleanup=true`
+// — grpc-gateway routes the verb to AdminService.DeleteEnvoy and the
+// query parameter maps to the proto's skip_swarm_cleanup field. Skipping
+// the swarm cleanup is critical for loadtest scale: by default the
+// delete handler fan-outs a lockbox-recipient scrub to every other
+// envoy in the fleet, which at N=1000 deleted envoys is N×fleet-size
+// pointless RPCs (loadtest envoys are bare bootstrap-enrolled with no
+// usercrates, so no lockbox state references them in the first place).
+func deleteEnvoy(client *http.Client, apiAddr, adminToken, envoyID string) error {
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/api/v1/envoys/%s?skip_swarm_cleanup=true", apiAddr, envoyID), nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -379,7 +409,7 @@ func revokeEnvoy(client *http.Client, apiAddr, adminToken, envoyID string) error
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("revoke %s: %s — %s", envoyID, resp.Status, string(body))
+		return fmt.Errorf("delete %s: %s — %s", envoyID, resp.Status, string(body))
 	}
 	return nil
 }
