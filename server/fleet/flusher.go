@@ -15,24 +15,19 @@ import (
 
 // StateFlusher reads dirty envoys from the FleetIndex and batch-writes their
 // state changes (last_seen, force_push, pending_rotated_secrets) to SQLite
-// periodically. All writes for one flush tick run in a single transaction —
-// one COMMIT (one fsync) instead of one per chunked UPDATE — which kept
-// batch_last_seen at 47s for a 10000-envoy dirty set before the wrap.
+// periodically. It replaces the LastSeenBatcher with a more comprehensive
+// flush that covers all mutable envoy fields.
 type StateFlusher struct {
 	fleet   *FleetIndex
-	sqlDB   *sql.DB
 	queries *db.Queries
 	metrics *metrics.Metrics
 }
 
 // NewStateFlusher creates a flusher that writes dirty state from the FleetIndex
-// to SQLite. sqlDB is used to open the per-flush transaction; queries is the
-// non-tx Queries handle (tx-wrapped via WithTx inside each Flush call).
-// m owns the FleetIndex flush gauges/histograms.
-func NewStateFlusher(fleet *FleetIndex, sqlDB *sql.DB, queries *db.Queries, m *metrics.Metrics) *StateFlusher {
+// to SQLite. m owns the FleetIndex flush gauges/histograms.
+func NewStateFlusher(fleet *FleetIndex, queries *db.Queries, m *metrics.Metrics) *StateFlusher {
 	return &StateFlusher{
 		fleet:   fleet,
-		sqlDB:   sqlDB,
 		queries: queries,
 		metrics: m,
 	}
@@ -91,33 +86,18 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 		lastSeenIDs = append(lastSeenIDs, id)
 	}
 
-	// All writes for this flush tick go in one tx. One COMMIT (one fsync)
-	// instead of one per chunked UPDATE. All-or-nothing: any sub-call
-	// failure rolls back, and the deferred re-mark-dirty below puts every
-	// drained id back on the dirty set so the next tick retries.
-	tx, err := sf.sqlDB.BeginTx(ctx, nil)
-	if err != nil {
-		slog.Error("state flusher: begin tx failed", "error", err)
-		for _, id := range lastSeenIDs {
-			sf.fleet.MarkDirty(id)
-		}
-		return
-	}
-	defer tx.Rollback() //nolint:errcheck // rollback after Commit is a no-op
-	qtx := sf.queries.WithTx(tx)
-
 	// Batch update last_seen in chunks of 500.
 	const chunkSize = 500
-	var txFailed bool
+	var lastSeenFailed bool
 	batchStart := time.Now()
 	for i := 0; i < len(lastSeenIDs); i += chunkSize {
 		end := i + chunkSize
 		if end > len(lastSeenIDs) {
 			end = len(lastSeenIDs)
 		}
-		if err := qtx.BatchUpdateLastSeen(ctx, lastSeenIDs[i:end]); err != nil {
+		if err := sf.queries.BatchUpdateLastSeen(ctx, lastSeenIDs[i:end]); err != nil {
 			slog.Error("state flusher: batch last_seen failed", "count", end-i, "error", err)
-			txFailed = true
+			lastSeenFailed = true
 		}
 	}
 	batchDur := time.Since(batchStart)
@@ -161,40 +141,31 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 			}
 			if err := fn(ctx, ids[i:end]); err != nil {
 				slog.Error("state flusher: batch failed", "op", name, "count", end-i, "error", err)
-				txFailed = true
 			}
 		}
 	}
-	chunkedBatch(clearForcePushIDs, "clear_force_push", qtx.BatchClearForcePush)
-	chunkedBatch(clearRotatedSecretsIDs, "clear_rotated_secrets", qtx.BatchClearRotatedSecrets)
-	chunkedBatch(clearMaintenanceIDs, "clear_maintenance", qtx.BatchClearEnvoyMaintenance)
+	chunkedBatch(clearForcePushIDs, "clear_force_push", sf.queries.BatchClearForcePush)
+	chunkedBatch(clearRotatedSecretsIDs, "clear_rotated_secrets", sf.queries.BatchClearRotatedSecrets)
+	chunkedBatch(clearMaintenanceIDs, "clear_maintenance", sf.queries.BatchClearEnvoyMaintenance)
 	// Operator-set maintenance windows are rare; per-envoy fallback for the
 	// non-NULL case keeps the batched path simple and avoids the CASE-WHEN
 	// gymnastics needed for divergent per-row values.
 	for i, id := range setMaintenanceIDs {
-		if err := qtx.UpdateEnvoyMaintenance(ctx, db.UpdateEnvoyMaintenanceParams{
+		if err := sf.queries.UpdateEnvoyMaintenance(ctx, db.UpdateEnvoyMaintenanceParams{
 			MaintenanceUntil: sql.NullTime{Time: setMaintenanceVals[i], Valid: true},
 			ID:               id,
 		}); err != nil {
 			slog.Error("state flusher: set maintenance failed", "envoy_id", id, "error", err)
-			txFailed = true
 		}
 	}
 
 	flagsDur := time.Since(flagsStart)
 
-	// Commit (one fsync) or roll back. On rollback, every drained id goes
-	// back on the dirty set so the next tick retries.
-	if txFailed {
+	// Re-mark failed envoys as dirty for next flush.
+	if lastSeenFailed {
 		for _, id := range lastSeenIDs {
 			sf.fleet.MarkDirty(id)
 		}
-	} else if err := tx.Commit(); err != nil {
-		slog.Error("state flusher: commit failed", "error", err)
-		for _, id := range lastSeenIDs {
-			sf.fleet.MarkDirty(id)
-		}
-		txFailed = true
 	}
 
 	// Per-flush breakdown — surfaces the unbatched-per-envoy-UPDATE shape

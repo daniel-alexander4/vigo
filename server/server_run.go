@@ -109,7 +109,7 @@ func (s *Server) startLicenseEnforcement(ctx context.Context) {
 // Offsets avoid SQLite write-lock contention on the default 10s
 // interval.
 func (s *Server) startAsyncFlushers(ctx context.Context) {
-	stateFlusher := fleet.NewStateFlusher(s.fleetIndex, s.db, s.queries, s.metrics)
+	stateFlusher := fleet.NewStateFlusher(s.fleetIndex, s.queries, s.metrics)
 	go stateFlusher.Start(ctx, s.lastSeenFlush, 0)
 	go s.runBatcher.Start(ctx, s.lastSeenFlush, s.lastSeenFlush/3)
 	go s.traitsBatch.Start(ctx, s.lastSeenFlush, 2*s.lastSeenFlush/3)
