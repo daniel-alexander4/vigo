@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"git.alexander4.io/vigo/server/convergence"
@@ -147,6 +148,17 @@ type FleetIndex struct {
 	convergence        ConvergenceCounters
 	recentRuns         *ringBuffer
 	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
+
+	// convergenceOffline is the count of currently-offline envoys, split out
+	// of the convergence struct because it's the only counter mutated on the
+	// CheckIn hot path (MarkSeen transitions an envoy back online; the
+	// staleness checker marks them offline). Keeping it under f.mu.Lock the
+	// way the other counters are turned the global write lock into the next
+	// scaling wall above ~8 K req/s (see test/loadtest/results/
+	// 2026-05-25-dual-driver/FINDINGS.md). Read paths stitch this value into
+	// the ConvergenceCounters snapshot at ConvergenceSummary time so external
+	// callers don't see a behavior change.
+	convergenceOffline atomic.Int64
 
 	// dirty holds the set of envoy IDs with pending state changes for the
 	// next flusher tick. A sync.Map (not f.mu-protected map) so hot-path
@@ -325,10 +337,14 @@ type TargetInfo struct {
 }
 
 // ConvergenceSummary returns the pre-computed convergence counters.
+// Offline is loaded from the atomic counter and stitched into the snapshot —
+// the struct's Offline field is the public contract; the atomic is internal.
 func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 	f.mu.RLock()
-	defer f.mu.RUnlock()
-	return f.convergence
+	c := f.convergence
+	f.mu.RUnlock()
+	c.Offline = int(f.convergenceOffline.Load())
+	return c
 }
 
 // ConvergenceCounts returns the convergence breakdown as flat values
@@ -342,9 +358,11 @@ func (f *FleetIndex) ConvergenceCounts() (total, converged, degraded, failed, no
 // SnapshotConvergence records a convergence snapshot for the sparkline.
 func (f *FleetIndex) SnapshotConvergence() {
 	f.mu.RLock()
+	c := f.convergence
+	c.Offline = int(f.convergenceOffline.Load())
 	snap := ConvergenceSnapshot{
 		Timestamp: time.Now(),
-		Counters:  f.convergence,
+		Counters:  c,
 	}
 	f.mu.RUnlock()
 
@@ -513,7 +531,7 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 			f.convergence.Total--
 			f.decrementCounter(old.ConvergenceStatus)
 			if old.Offline {
-				f.convergence.Offline--
+				f.convergenceOffline.Add(-1)
 			}
 			oldDrift = old.Drift
 		}
@@ -534,7 +552,7 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		f.convergence.Total++
 		f.incrementCounter(ts.ConvergenceStatus)
 		if ts.Offline {
-			f.convergence.Offline++
+			f.convergenceOffline.Add(1)
 		}
 		newDrift = ts.Drift
 	}
@@ -560,7 +578,7 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 		f.convergence.Total--
 		f.decrementCounter(ts.ConvergenceStatus)
 		if ts.Offline {
-			f.convergence.Offline--
+			f.convergenceOffline.Add(-1)
 		}
 		f.bumpDriftCounters(ts.Drift, convergence.DriftNone)
 	}
@@ -571,7 +589,8 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 // SetOffline updates an envoy's offline state without changing its convergence status.
 // Uses the same RLock + stripe pattern as the hot-path setters so it doesn't race
 // with concurrent MarkSeen / MarkSeenInMemory writes on ts.Offline. The counter
-// update takes f.mu.Lock briefly; only fires on an actual transition.
+// update is a lock-free atomic; the stripe lock guarantees at most one observer
+// of the transition per envoy.
 func (f *FleetIndex) SetOffline(id string, offline bool) {
 	f.mu.RLock()
 	ts := f.envoys[id]
@@ -589,13 +608,11 @@ func (f *FleetIndex) SetOffline(id string, offline bool) {
 	ts.Offline = offline
 	lk.Unlock()
 
-	f.mu.Lock()
 	if offline {
-		f.convergence.Offline++
+		f.convergenceOffline.Add(1)
 	} else {
-		f.convergence.Offline--
+		f.convergenceOffline.Add(-1)
 	}
-	f.mu.Unlock()
 }
 
 // SetRevoked marks a envoy as revoked.
@@ -630,10 +647,11 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 // for async flush to SQLite. Also clears the offline flag if set.
 //
 // Hot path: takes f.mu.RLock for the map lookup, then the per-envoy stripe
-// lock for the field write, so concurrent CheckIns for different envoys
-// don't queue behind each other on a single fleet-wide write lock. The
-// Offline-transition counter update is the rare slow path — it takes
-// f.mu.Lock briefly, but only when an envoy actually comes back online.
+// lock for the field write. Concurrent CheckIns for different envoys do not
+// queue on any shared write lock. The Offline-transition counter update is
+// a lock-free atomic decrement, fired only when an envoy actually comes back
+// online (per-envoy mutex ensures only the first observer of the transition
+// counts it).
 func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 	f.mu.RLock()
 	ts := f.envoys[id]
@@ -652,9 +670,7 @@ func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 	f.dirty.Store(id, struct{}{})
 
 	if wasOffline {
-		f.mu.Lock()
-		f.convergence.Offline--
-		f.mu.Unlock()
+		f.convergenceOffline.Add(-1)
 	}
 }
 
@@ -745,9 +761,7 @@ func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
 	lk.Unlock()
 
 	if wasOffline {
-		f.mu.Lock()
-		f.convergence.Offline--
-		f.mu.Unlock()
+		f.convergenceOffline.Add(-1)
 	}
 }
 
