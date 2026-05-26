@@ -126,6 +126,7 @@ func main() {
 	duration := flag.Duration("duration", 2*time.Minute, "total test duration")
 	skipCleanup := flag.Bool("skip-cleanup", false, "leave test envoys enrolled after test")
 	adminToken := flag.String("admin-token", "", "admin bearer token for the post-test envoy delete calls (e.g. $(sudo cat /srv/vigo/cli-admin-token) on the server host); cleanup is skipped if empty")
+	hostnamePrefix := flag.String("hostname-prefix", "loadtest-", "prefix for simulated-envoy hostnames; set to a per-driver value (e.g. 'loadtest-girl-') when running multiple drivers in parallel to avoid bootstrap hostname-collision rejections")
 	flag.Parse()
 
 	fmt.Printf("Vigo Load Test\n")
@@ -150,7 +151,7 @@ func main() {
 	envoys := make([]testEnvoy, 0, *count)
 	var enrollFailed int
 	for i := range *count {
-		hostname := fmt.Sprintf("loadtest-%05d.test", i)
+		hostname := fmt.Sprintf("%s%05d.test", *hostnamePrefix, i)
 		e, err := enroll(httpClient, *apiAddr, hostname)
 		if err != nil {
 			enrollFailed++
