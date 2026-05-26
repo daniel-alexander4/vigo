@@ -3560,6 +3560,8 @@ func (*RevokeApprovedPatternResponse) Descriptor() ([]byte, []int) {
 type ListEnvoysRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	IncludeRevoked bool                   `protobuf:"varint,1,opt,name=include_revoked,json=includeRevoked,proto3" json:"include_revoked,omitempty"` // if true, include revoked envoys in the response
+	Limit          int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                                         // page size; 0 = server default (500); server clamps to a max
+	Offset         int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`                                       // pagination offset (0-based)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -3601,9 +3603,28 @@ func (x *ListEnvoysRequest) GetIncludeRevoked() bool {
 	return false
 }
 
+func (x *ListEnvoysRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListEnvoysRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
 type ListEnvoysResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Envoys        []*Envoy               `protobuf:"bytes,1,rep,name=envoys,proto3" json:"envoys,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`                             // total envoys matching include_revoked, across all pages
+	Offset        int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`                           // offset of this page
+	Limit         int32                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`                             // effective limit applied (after server default + clamp)
+	HasMore       bool                   `protobuf:"varint,5,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`          // true when offset + len(envoys) < total
+	NextOffset    int32                  `protobuf:"varint,6,opt,name=next_offset,json=nextOffset,proto3" json:"next_offset,omitempty"` // suggested next offset; 0 when !has_more
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3643,6 +3664,41 @@ func (x *ListEnvoysResponse) GetEnvoys() []*Envoy {
 		return x.Envoys
 	}
 	return nil
+}
+
+func (x *ListEnvoysResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ListEnvoysResponse) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ListEnvoysResponse) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListEnvoysResponse) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+func (x *ListEnvoysResponse) GetNextOffset() int32 {
+	if x != nil {
+		return x.NextOffset
+	}
+	return 0
 }
 
 type Envoy struct {
@@ -7691,11 +7747,19 @@ const file_vigo_proto_rawDesc = "" +
 	"\aused_by\x18\x05 \x01(\tR\x06usedBy\".\n" +
 	"\x1cRevokeApprovedPatternRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x1f\n" +
-	"\x1dRevokeApprovedPatternResponse\"<\n" +
+	"\x1dRevokeApprovedPatternResponse\"j\n" +
 	"\x11ListEnvoysRequest\x12'\n" +
-	"\x0finclude_revoked\x18\x01 \x01(\bR\x0eincludeRevoked\"<\n" +
+	"\x0finclude_revoked\x18\x01 \x01(\bR\x0eincludeRevoked\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\"\xbc\x01\n" +
 	"\x12ListEnvoysResponse\x12&\n" +
-	"\x06envoys\x18\x01 \x03(\v2\x0e.vigo.v1.EnvoyR\x06envoys\"\xfa\x02\n" +
+	"\x06envoys\x18\x01 \x03(\v2\x0e.vigo.v1.EnvoyR\x06envoys\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\x12\x14\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x19\n" +
+	"\bhas_more\x18\x05 \x01(\bR\ahasMore\x12\x1f\n" +
+	"\vnext_offset\x18\x06 \x01(\x05R\n" +
+	"nextOffset\"\xfa\x02\n" +
 	"\x05Envoy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1d\n" +

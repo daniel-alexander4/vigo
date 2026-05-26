@@ -124,18 +124,13 @@ func runEnvoyRisk(hostname string) error {
 	client := newAPIClient()
 
 	// First resolve hostname to envoy ID via envoys list.
-	var envoys struct {
-		Envoys []struct {
-			ID       string `json:"id"`
-			Hostname string `json:"hostname"`
-		} `json:"envoys"`
-	}
-	if err := client.get("/api/v1/envoys", &envoys); err != nil {
+	envoys, err := listAllEnvoys(client, false)
+	if err != nil {
 		return fmt.Errorf("listing envoys: %w", err)
 	}
 
 	var envoyID string
-	for _, e := range envoys.Envoys {
+	for _, e := range envoys {
 		if strings.EqualFold(e.Hostname, hostname) {
 			envoyID = e.ID
 			break

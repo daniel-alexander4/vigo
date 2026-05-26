@@ -17,16 +17,12 @@ func completeHostnames(cmd *cobra.Command, args []string, toComplete string) ([]
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	client := newAPIClient()
-	var resp struct {
-		Envoys []struct {
-			Hostname string `json:"hostname"`
-		} `json:"envoys"`
-	}
-	if err := client.get("/api/v1/envoys", &resp); err != nil {
+	envoys, err := listAllEnvoys(client, false)
+	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
 	var names []string
-	for _, e := range resp.Envoys {
+	for _, e := range envoys {
 		names = append(names, e.Hostname)
 	}
 	return names, cobra.ShellCompDirectiveNoFileComp
@@ -38,17 +34,12 @@ func completeEnvoyIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	client := newAPIClient()
-	var resp struct {
-		Envoys []struct {
-			ID       string `json:"id"`
-			Hostname string `json:"hostname"`
-		} `json:"envoys"`
-	}
-	if err := client.get("/api/v1/envoys", &resp); err != nil {
+	envoys, err := listAllEnvoys(client, false)
+	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
 	var completions []string
-	for _, e := range resp.Envoys {
+	for _, e := range envoys {
 		completions = append(completions, e.Hostname)
 		completions = append(completions, e.ID)
 	}

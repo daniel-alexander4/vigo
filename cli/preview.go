@@ -82,17 +82,12 @@ func previewNode(idOrHostname string) error {
 
 func previewMultiple(envFilter string) error {
 	client := newAPIClient()
-	var listResp struct {
-		Envoys []struct {
-			ID       string `json:"id"`
-			Hostname string `json:"hostname"`
-		} `json:"envoys"`
-	}
-	if err := client.get("/api/v1/envoys", &listResp); err != nil {
+	envoys, err := listAllEnvoys(client, false)
+	if err != nil {
 		return err
 	}
 
-	for _, c := range listResp.Envoys {
+	for _, c := range envoys {
 		fmt.Printf("--- %s (%s) ---\n", c.Hostname, c.ID)
 		if err := previewNode(c.ID); err != nil {
 			fmt.Fprintf(os.Stderr, "Error previewing %s: %v\n", c.Hostname, err)

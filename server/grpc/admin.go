@@ -96,39 +96,109 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 
 // ---------- Envoys ----------
 
+// listEnvoysDefaultLimit is the page size when the caller passes limit=0
+// (or omits it). Sized to keep the JSON response well under grpc-gateway's
+// 4 MB max-message — at ~750 bytes per envoy JSON encoding, 500 rows is
+// ~375 KB, comfortably under the limit with plenty of headroom for trait
+// growth.
+const listEnvoysDefaultLimit = 500
+
+// listEnvoysMaxLimit caps the page size operators can request. Above this
+// the response can hit grpc-gateway's 4 MB ceiling depending on per-envoy
+// JSON size (envoys with rich traits encode larger). 5000 is the operator
+// override ceiling — beyond that, walk pages.
+const listEnvoysMaxLimit = 5000
+
+// resolveListEnvoysPaging normalizes the request's limit/offset against
+// the server's defaults and max-cap. Returns the effective limit + offset
+// to use for slicing/querying.
+func resolveListEnvoysPaging(req *pb.ListEnvoysRequest) (limit, offset int) {
+	limit = int(req.GetLimit())
+	if limit <= 0 {
+		limit = listEnvoysDefaultLimit
+	}
+	if limit > listEnvoysMaxLimit {
+		limit = listEnvoysMaxLimit
+	}
+	offset = int(req.GetOffset())
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
+}
+
+// sliceEnvoysPage applies offset + limit to a pre-fetched envoy slice and
+// returns (page, total). Used by the spanner dispatch paths where the
+// full list is already in memory from the aggregation step — pagination
+// across federated bolts is a v2 lever.
+func sliceEnvoysPage(envoys []*pb.Envoy, limit, offset int) ([]*pb.Envoy, int) {
+	total := len(envoys)
+	if offset >= total {
+		return nil, total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return envoys[offset:end], total
+}
+
 func (s *AdminService) ListEnvoys(ctx context.Context, req *pb.ListEnvoysRequest) (*pb.ListEnvoysResponse, error) {
+	limit, offset := resolveListEnvoysPaging(req)
+
 	// Dispatch (Slice 2-ii-a):
 	//   (a) spannerAdmin, fanout → live fan-out to every roster bolt
 	//   (b) spannerAdmin, local  → aggregate from the observability cache
 	//   (c) standalone           → the pure-local path below
+	//
+	// Both spanner paths return aggregated in-memory lists and paginate
+	// in Go (cross-bolt pagination would require coordinated offset
+	// state across peers — out of scope for v1). The standalone path
+	// paginates at the DB.
 	if s.spannerAdmin != nil {
+		var envoys []*pb.Envoy
 		if s.spannerAdmin.Fanout() {
-			envoys, err := s.spannerAdmin.AggregateEnvoysFanout(ctx)
+			fanout, err := s.spannerAdmin.AggregateEnvoysFanout(ctx)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "fanning out envoys to bolts: %v", err)
 			}
-			// Fold in the local bolt's own envoys (fanout queries
-			// peers; the local bolt is not a peer of itself).
-			envoys = append(envoys, s.localEnvoysProto()...)
-			return &pb.ListEnvoysResponse{Envoys: envoys}, nil
+			envoys = append(fanout, s.localEnvoysProto()...)
+		} else {
+			lite, _ := s.spannerAdmin.AggregateEnvoysLocal()
+			envoys = envoyLitesToProto(lite)
 		}
-		// local path: (local fleetIndex) + (every cached peer).
-		lite, _ := s.spannerAdmin.AggregateEnvoysLocal()
-		return &pb.ListEnvoysResponse{Envoys: envoyLitesToProto(lite)}, nil
+		page, total := sliceEnvoysPage(envoys, limit, offset)
+		return buildListEnvoysResponse(page, total, limit, offset), nil
+	}
+
+	var total int64
+	var err error
+	if req.GetIncludeRevoked() {
+		total, err = s.queries.CountEnvoys(ctx)
+	} else {
+		total, err = s.queries.CountActiveEnvoys(ctx)
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "counting envoys: %v", err)
 	}
 
 	var envoys []db.Envoy
-	var err error
 	if req.GetIncludeRevoked() {
-		envoys, err = s.queries.ListEnvoys(ctx)
+		envoys, err = s.queries.ListEnvoysOffset(ctx, db.ListEnvoysOffsetParams{
+			Limit:  int64(limit),
+			Offset: int64(offset),
+		})
 	} else {
-		envoys, err = s.queries.ListActiveEnvoys(ctx)
+		envoys, err = s.queries.ListActiveEnvoysOffset(ctx, db.ListActiveEnvoysOffsetParams{
+			Limit:  int64(limit),
+			Offset: int64(offset),
+		})
 	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing envoys: %v", err)
 	}
 
-	resp := &pb.ListEnvoysResponse{}
+	page := make([]*pb.Envoy, 0, len(envoys))
 	for _, n := range envoys {
 		pt := dbEnvoyToProto(n)
 		if s.fleetIndex != nil {
@@ -136,10 +206,30 @@ func (s *AdminService) ListEnvoys(ctx context.Context, req *pb.ListEnvoysRequest
 				pt.AgentVersion = ts.AgentVersion
 			}
 		}
-		resp.Envoys = append(resp.Envoys, pt)
+		page = append(page, pt)
 	}
 
-	return resp, nil
+	return buildListEnvoysResponse(page, int(total), limit, offset), nil
+}
+
+// buildListEnvoysResponse fills the pagination envelope. has_more is true
+// iff the page didn't reach the end of the matching set; next_offset
+// points to the first row of the next page (0 when there isn't one).
+func buildListEnvoysResponse(page []*pb.Envoy, total, limit, offset int) *pb.ListEnvoysResponse {
+	end := offset + len(page)
+	hasMore := end < total
+	nextOffset := int32(0)
+	if hasMore {
+		nextOffset = int32(end)
+	}
+	return &pb.ListEnvoysResponse{
+		Envoys:     page,
+		Total:      int32(total),
+		Offset:     int32(offset),
+		Limit:      int32(limit),
+		HasMore:    hasMore,
+		NextOffset: nextOffset,
+	}
 }
 
 func (s *AdminService) GetEnvoy(ctx context.Context, req *pb.GetEnvoyRequest) (*pb.GetEnvoyResponse, error) {

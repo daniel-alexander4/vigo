@@ -1085,6 +1085,62 @@ Any other `type` value is rejected with 400 so the audit chain can't be polluted
 
 ---
 
+## Envoys
+
+### GET /api/v1/envoys
+
+**Permission:** `fleet.read` (rides the gRPC gateway; gate enforced by the gRPC interceptor)
+
+Paginated list of envoys. Default page size is 500; the server clamps any `limit` above 5000 down to 5000 so the JSON response stays under grpc-gateway's 4 MB max-message limit. To walk the full fleet, iterate using the `nextOffset` from each response until `hasMore: false`.
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `includeRevoked` | `false` | If true, include revoked envoys in the response. |
+| `limit` | `500` | Page size (1–5000; values outside this range are clamped). |
+| `offset` | `0` | 0-based pagination offset. |
+
+**Response:**
+
+```json
+{
+  "envoys": [
+    {
+      "id": "2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+      "hostname": "web01.example.com",
+      "ipAddress": "10.0.0.10",
+      "enrolledAt": "2026-04-01T12:00:00Z",
+      "lastSeen":   "2026-05-25T09:42:11Z",
+      "revoked": false,
+      "agentVersion": "0.68.4"
+    }
+  ],
+  "total": 12500,
+  "offset": 0,
+  "limit": 500,
+  "hasMore": true,
+  "nextOffset": 500
+}
+```
+
+**Walking the full fleet (curl example):**
+
+```sh
+offset=0
+while :; do
+  page=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+    "https://vigo:8443/api/v1/envoys?limit=5000&offset=$offset")
+  echo "$page" | jq -r '.envoys[].hostname'
+  [ "$(echo "$page" | jq -r '.hasMore')" = "false" ] && break
+  offset=$(echo "$page" | jq -r '.nextOffset')
+done
+```
+
+`vigocli envoys list` already walks pages automatically.
+
+---
+
 ## Envoy Tags
 
 ### PUT /api/v1/envoys/{id}/tags

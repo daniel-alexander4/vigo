@@ -200,3 +200,81 @@ func TestGetConvergenceSummaryStandalone(t *testing.T) {
 		t.Fatal("standalone GetConvergenceSummary returned a nil response")
 	}
 }
+
+func TestResolveListEnvoysPaging_Defaults(t *testing.T) {
+	limit, offset := resolveListEnvoysPaging(&pb.ListEnvoysRequest{})
+	if limit != listEnvoysDefaultLimit {
+		t.Errorf("zero limit should resolve to server default (%d); got %d", listEnvoysDefaultLimit, limit)
+	}
+	if offset != 0 {
+		t.Errorf("zero offset should resolve to 0; got %d", offset)
+	}
+}
+
+func TestResolveListEnvoysPaging_ClampsAboveMax(t *testing.T) {
+	limit, _ := resolveListEnvoysPaging(&pb.ListEnvoysRequest{Limit: 100000})
+	if limit != listEnvoysMaxLimit {
+		t.Errorf("limit above max should clamp to %d; got %d", listEnvoysMaxLimit, limit)
+	}
+}
+
+func TestResolveListEnvoysPaging_NormalizesNegativeOffset(t *testing.T) {
+	_, offset := resolveListEnvoysPaging(&pb.ListEnvoysRequest{Offset: -5})
+	if offset != 0 {
+		t.Errorf("negative offset should normalize to 0; got %d", offset)
+	}
+}
+
+func TestSliceEnvoysPage(t *testing.T) {
+	envoys := make([]*pb.Envoy, 1000)
+	for i := range envoys {
+		envoys[i] = &pb.Envoy{Hostname: "h"}
+	}
+
+	// First page.
+	page, total := sliceEnvoysPage(envoys, 500, 0)
+	if total != 1000 {
+		t.Errorf("total should reflect full input (1000); got %d", total)
+	}
+	if len(page) != 500 {
+		t.Errorf("page should be 500; got %d", len(page))
+	}
+
+	// Last page (partial).
+	page, total = sliceEnvoysPage(envoys, 500, 750)
+	if total != 1000 {
+		t.Errorf("total stays at 1000; got %d", total)
+	}
+	if len(page) != 250 {
+		t.Errorf("partial last page should be 250; got %d", len(page))
+	}
+
+	// Past the end — empty page but accurate total.
+	page, total = sliceEnvoysPage(envoys, 500, 2000)
+	if total != 1000 {
+		t.Errorf("total stays at 1000 past the end; got %d", total)
+	}
+	if len(page) != 0 {
+		t.Errorf("page past the end should be empty; got %d", len(page))
+	}
+}
+
+func TestBuildListEnvoysResponse_HasMoreAndNextOffset(t *testing.T) {
+	page := []*pb.Envoy{{Hostname: "a"}, {Hostname: "b"}}
+	resp := buildListEnvoysResponse(page, 100, 50, 0)
+	if !resp.HasMore {
+		t.Errorf("HasMore should be true when offset+len < total")
+	}
+	if resp.NextOffset != 2 {
+		t.Errorf("NextOffset should be offset+len(page) = 2; got %d", resp.NextOffset)
+	}
+
+	// Final page — HasMore false, NextOffset 0.
+	resp = buildListEnvoysResponse(page, 2, 50, 0)
+	if resp.HasMore {
+		t.Errorf("HasMore should be false on final page")
+	}
+	if resp.NextOffset != 0 {
+		t.Errorf("NextOffset should be 0 on final page; got %d", resp.NextOffset)
+	}
+}

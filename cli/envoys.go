@@ -22,32 +22,20 @@ var envoysListCmd = &cobra.Command{
 	Short: "List all managed nodes with enrollment status and last check-in time",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		var resp struct {
-			Envoys []struct {
-				ID         string `json:"id"`
-				Hostname   string `json:"hostname"`
-				IPAddress  string `json:"ipAddress"`
-				EnrolledAt string `json:"enrolledAt"`
-				LastSeen   string `json:"lastSeen"`
-				Revoked    bool   `json:"revoked"`
-			} `json:"envoys"`
-		}
-		endpoint := "/api/v1/envoys"
-		if all, _ := cmd.Flags().GetBool("all"); all {
-			endpoint += "?includeRevoked=true"
-		}
-		if err := client.get(endpoint, &resp); err != nil {
+		includeRevoked, _ := cmd.Flags().GetBool("all")
+		envoys, err := listAllEnvoys(client, includeRevoked)
+		if err != nil {
 			return err
 		}
 
-		if len(resp.Envoys) == 0 {
+		if len(envoys) == 0 {
 			fmt.Println("No envoys found.")
 			return nil
 		}
 
 		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP"), header("ENROLLED"), header("LAST SEEN"), header("STATUS"))
-		for _, c := range resp.Envoys {
+		for _, c := range envoys {
 			status := "active"
 			if c.Revoked {
 				status = "revoked"

@@ -644,10 +644,17 @@ message RevokeApprovedPatternResponse {}
 
 message ListEnvoysRequest {
   bool include_revoked = 1; // if true, include revoked envoys in the response
+  int32 limit = 2;          // page size; 0 = server default (500); server clamps to a max
+  int32 offset = 3;         // pagination offset (0-based)
 }
 
 message ListEnvoysResponse {
   repeated Envoy envoys = 1;
+  int32 total = 2;       // total envoys matching include_revoked, across all pages
+  int32 offset = 3;      // offset of this page
+  int32 limit = 4;       // effective limit applied (after server default + clamp)
+  bool has_more = 5;     // true when offset + len(envoys) < total
+  int32 next_offset = 6; // suggested next offset; 0 when !has_more
 }
 
 message Envoy {

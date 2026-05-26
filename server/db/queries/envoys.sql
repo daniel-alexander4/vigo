@@ -38,8 +38,28 @@ WHERE revoked = 0
 ORDER BY hostname
 LIMIT sqlc.arg(page_limit);
 
+-- name: ListEnvoysOffset :many
+-- Offset/limit paginated list of every envoy (active + revoked).
+-- Stable ordering: enrolled_at DESC then id ASC.
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+FROM envoys
+ORDER BY enrolled_at DESC, id
+LIMIT ? OFFSET ?;
+
+-- name: ListActiveEnvoysOffset :many
+-- Offset/limit paginated list of envoys with revoked = 0.
+-- Stable ordering: enrolled_at DESC then id ASC.
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+FROM envoys
+WHERE revoked = 0
+ORDER BY enrolled_at DESC, id
+LIMIT ? OFFSET ?;
+
 -- name: CountActiveEnvoys :one
 SELECT count(*) FROM envoys WHERE revoked = 0;
+
+-- name: CountEnvoys :one
+SELECT count(*) FROM envoys;
 
 -- name: RevokeEnvoy :exec
 UPDATE envoys

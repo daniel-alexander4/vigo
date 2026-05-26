@@ -43,6 +43,17 @@ func (q *Queries) CountActiveEnvoys(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countEnvoys = `-- name: CountEnvoys :one
+SELECT count(*) FROM envoys
+`
+
+func (q *Queries) CountEnvoys(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEnvoys)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEnvoy = `-- name: CreateEnvoy :one
 INSERT INTO envoys (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
@@ -206,6 +217,57 @@ func (q *Queries) ListActiveEnvoys(ctx context.Context) ([]Envoy, error) {
 	return items, nil
 }
 
+const listActiveEnvoysOffset = `-- name: ListActiveEnvoysOffset :many
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+FROM envoys
+WHERE revoked = 0
+ORDER BY enrolled_at DESC, id
+LIMIT ? OFFSET ?
+`
+
+type ListActiveEnvoysOffsetParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+// Offset/limit paginated list of envoys with revoked = 0.
+// Stable ordering: enrolled_at DESC then id ASC.
+func (q *Queries) ListActiveEnvoysOffset(ctx context.Context, arg ListActiveEnvoysOffsetParams) ([]Envoy, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveEnvoysOffset, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Envoy{}
+	for rows.Next() {
+		var i Envoy
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hostname,
+			&i.IpAddress,
+			&i.PubkeyPem,
+			&i.EnrolledAt,
+			&i.LastSeen,
+			&i.Revoked,
+			&i.RevokedAt,
+			&i.ForcePush,
+			&i.PendingRotatedSecrets,
+			&i.MaintenanceUntil,
+			&i.AgentVersion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveEnvoysPaged = `-- name: ListActiveEnvoysPaged :many
 SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 FROM envoys
@@ -266,6 +328,56 @@ ORDER BY enrolled_at DESC
 
 func (q *Queries) ListEnvoys(ctx context.Context) ([]Envoy, error) {
 	rows, err := q.db.QueryContext(ctx, listEnvoys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Envoy{}
+	for rows.Next() {
+		var i Envoy
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hostname,
+			&i.IpAddress,
+			&i.PubkeyPem,
+			&i.EnrolledAt,
+			&i.LastSeen,
+			&i.Revoked,
+			&i.RevokedAt,
+			&i.ForcePush,
+			&i.PendingRotatedSecrets,
+			&i.MaintenanceUntil,
+			&i.AgentVersion,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEnvoysOffset = `-- name: ListEnvoysOffset :many
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+FROM envoys
+ORDER BY enrolled_at DESC, id
+LIMIT ? OFFSET ?
+`
+
+type ListEnvoysOffsetParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+// Offset/limit paginated list of every envoy (active + revoked).
+// Stable ordering: enrolled_at DESC then id ASC.
+func (q *Queries) ListEnvoysOffset(ctx context.Context, arg ListEnvoysOffsetParams) ([]Envoy, error) {
+	rows, err := q.db.QueryContext(ctx, listEnvoysOffset, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

@@ -147,17 +147,11 @@ var runsDriftCmd = &cobra.Command{
 			}
 			targets = append(targets, target{id, envoyFlag})
 		} else {
-			var resp struct {
-				Envoys []struct {
-					ID       string `json:"id"`
-					Hostname string `json:"hostname"`
-					Revoked  bool   `json:"revoked"`
-				} `json:"envoys"`
-			}
-			if err := client.get("/api/v1/envoys", &resp); err != nil {
+			envoys, err := listAllEnvoys(client, false)
+			if err != nil {
 				return err
 			}
-			for _, e := range resp.Envoys {
+			for _, e := range envoys {
 				if !e.Revoked {
 					targets = append(targets, target{e.ID, e.Hostname})
 				}
