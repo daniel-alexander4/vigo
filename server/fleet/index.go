@@ -149,30 +149,37 @@ type FleetIndex struct {
 	recentRuns         *ringBuffer
 	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
 
-	// byTraitMu guards byTrait independently of f.mu so UpdateTraits — which
-	// runs under the TraitsBatcher's async flusher — doesn't take the global
-	// write lock and block every hot-path CheckIn's f.mu.RLock. The CheckIn
-	// handler never reads byTrait (verified across server/grpc/checkin.go +
-	// agentstream.go), so the two lock domains are cleanly disjoint.
+	// byTraitMu / byStatusMu / recentRunsMu split out the reverse indexes and
+	// the recent-runs ring from f.mu. Each is mutated on its own hot path
+	// (UpdateTraits, UpdateRunStatus, AppendRecentRun) and at fleet scale
+	// holding f.mu.Lock for those mutations queued every concurrent CheckIn's
+	// f.mu.RLock. Splitting the lock domains made each path independent.
 	//
-	// Lock ordering when both are needed: f.mu first, then byTraitMu. AddEnvoy,
-	// RemoveEnvoy, and SetRevoked acquire both because they mutate envoys map +
-	// reverse-status indexes (under f.mu) and byTrait (under byTraitMu) in one
-	// logical operation. UpdateTraits and ListByTrait acquire only byTraitMu,
-	// optionally followed by f.mu.RLock for envoy-id → state lookup as a
-	// separate phase.
-	byTraitMu sync.RWMutex
+	// Lock ordering when more than one is needed: f.mu → byTraitMu →
+	// byStatusMu → recentRunsMu. AddEnvoy / RemoveEnvoy / SetRevoked acquire
+	// f.mu plus byTraitMu (and byStatusMu when applicable); the hot-path
+	// updaters acquire only their own domain lock, optionally preceded by a
+	// brief f.mu.RLock for the envoy-id → state lookup.
+	byTraitMu     sync.RWMutex
+	byStatusMu    sync.RWMutex
+	recentRunsMu  sync.Mutex
 
-	// convergenceOffline is the count of currently-offline envoys, split out
-	// of the convergence struct because it's the only counter mutated on the
-	// CheckIn hot path (MarkSeen transitions an envoy back online; the
-	// staleness checker marks them offline). Keeping it under f.mu.Lock the
-	// way the other counters are turned the global write lock into the next
-	// scaling wall above ~8 K req/s (see test/loadtest/results/
-	// 2026-05-25-dual-driver/FINDINGS.md). Read paths stitch this value into
-	// the ConvergenceCounters snapshot at ConvergenceSummary time so external
-	// callers don't see a behavior change.
-	convergenceOffline atomic.Int64
+	// Convergence counters split out of the ConvergenceCounters struct because
+	// they're mutated on hot paths — Offline on CheckIn (MarkSeen / SetOffline),
+	// the rest on ReportResult (UpdateRunStatus). The pre-0.68.x design kept
+	// them under f.mu.Lock and turned a single ReportResult into a global write
+	// lock that blocked every concurrent CheckIn's f.mu.RLock. Read paths
+	// (ConvergenceSummary / SnapshotConvergence) stitch the atomic values into
+	// the snapshot struct at read time so external callers don't see a
+	// behavior change. Total stays in the struct under f.mu — it only changes
+	// on enrollment / revocation / removal, never on the run-reporting path.
+	convergenceOffline   atomic.Int64
+	convergenceConverged atomic.Int64
+	convergenceDegraded  atomic.Int64
+	convergenceFailed    atomic.Int64
+	convergenceNoData    atomic.Int64
+	convergenceChanged   atomic.Int64
+	convergenceDiverged  atomic.Int64
 
 	// dirty holds the set of envoy IDs with pending state changes for the
 	// next flusher tick. A sync.Map (not f.mu-protected map) so hot-path
@@ -359,13 +366,22 @@ type TargetInfo struct {
 }
 
 // ConvergenceSummary returns the pre-computed convergence counters.
-// Offline is loaded from the atomic counter and stitched into the snapshot —
-// the struct's Offline field is the public contract; the atomic is internal.
+// Every per-axis counter except Total is loaded from its atomic counterpart
+// and stitched into the snapshot — the ConvergenceCounters struct is the
+// public contract; the atomics are internal. Total is the only field still
+// in the struct (changes only on enrollment / revocation / removal, never
+// on the run-reporting hot path).
 func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 	f.mu.RLock()
 	c := f.convergence
 	f.mu.RUnlock()
 	c.Offline = int(f.convergenceOffline.Load())
+	c.Converged = int(f.convergenceConverged.Load())
+	c.Degraded = int(f.convergenceDegraded.Load())
+	c.Failed = int(f.convergenceFailed.Load())
+	c.NoData = int(f.convergenceNoData.Load())
+	c.Changed = int(f.convergenceChanged.Load())
+	c.Diverged = int(f.convergenceDiverged.Load())
 	return c
 }
 
@@ -382,6 +398,12 @@ func (f *FleetIndex) SnapshotConvergence() {
 	f.mu.RLock()
 	c := f.convergence
 	c.Offline = int(f.convergenceOffline.Load())
+	c.Converged = int(f.convergenceConverged.Load())
+	c.Degraded = int(f.convergenceDegraded.Load())
+	c.Failed = int(f.convergenceFailed.Load())
+	c.NoData = int(f.convergenceNoData.Load())
+	c.Changed = int(f.convergenceChanged.Load())
+	c.Diverged = int(f.convergenceDiverged.Load())
 	snap := ConvergenceSnapshot{
 		Timestamp: time.Now(),
 		Counters:  c,
@@ -481,8 +503,8 @@ func (f *FleetIndex) SnapshotEnvoys() []EnvoyState {
 
 // RecentRuns returns the last n run summaries (most recent first).
 func (f *FleetIndex) RecentRuns(n int) []RunSummary {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
+	f.recentRunsMu.Lock()
+	defer f.recentRunsMu.Unlock()
 	return f.recentRuns.Last(n)
 }
 
@@ -518,11 +540,12 @@ func (f *FleetIndex) IsInMaintenance(id string) bool {
 // ConvergencePercent returns the percentage of non-revoked envoys that have converged.
 func (f *FleetIndex) ConvergencePercent() float64 {
 	f.mu.RLock()
-	defer f.mu.RUnlock()
-	if f.convergence.Total == 0 {
+	total := f.convergence.Total
+	f.mu.RUnlock()
+	if total == 0 {
 		return 100.0
 	}
-	return float64(f.convergence.Converged) / float64(f.convergence.Total) * 100.0
+	return float64(f.convergenceConverged.Load()) / float64(total) * 100.0
 }
 
 // --- Write methods (acquire Lock) ---
@@ -541,11 +564,14 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 	// UpdateRunStatus uses.
 	oldDrift := convergence.DriftNone
 
-	// byTrait operations need byTraitMu (separate from f.mu since 0.68.6
-	// follow-up). Acquired inside the f.mu critical section per the documented
-	// lock ordering: f.mu first, then byTraitMu.
+	// byTrait + byStatus operations need their dedicated mutexes (separate
+	// from f.mu since 0.68.6 / 0.68.8 follow-ups). Acquired inside the
+	// f.mu critical section per the documented lock ordering: f.mu →
+	// byTraitMu → byStatusMu.
 	f.byTraitMu.Lock()
 	defer f.byTraitMu.Unlock()
+	f.byStatusMu.Lock()
+	defer f.byStatusMu.Unlock()
 
 	// Remove old hostname mapping if it changed.
 	if old, ok := f.envoys[ts.ID]; ok {
@@ -591,9 +617,11 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 func (f *FleetIndex) RemoveEnvoy(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	// Lock-ordering: f.mu first, then byTraitMu (see field comment).
+	// Lock-ordering: f.mu → byTraitMu → byStatusMu (see field comment).
 	f.byTraitMu.Lock()
 	defer f.byTraitMu.Unlock()
+	f.byStatusMu.Lock()
+	defer f.byStatusMu.Unlock()
 
 	ts, ok := f.envoys[id]
 	if !ok {
@@ -650,6 +678,9 @@ func (f *FleetIndex) SetOffline(id string, offline bool) {
 func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Lock-ordering: f.mu → byStatusMu (only one acquired beyond f.mu here).
+	f.byStatusMu.Lock()
+	defer f.byStatusMu.Unlock()
 
 	ts, ok := f.envoys[id]
 	if !ok {
@@ -1180,25 +1211,37 @@ func (f *FleetIndex) ClearMaintenance(id string) {
 // [convergence.ComputeConvergence] — the same algorithm used by the
 // historical convergence query, so row status and fleet counts stay
 // in lock-step.
+//
+// Takes f.mu.RLock briefly for envoy lookup, the per-envoy stripe lock
+// for the field writes + RecentRuns slice rebuild, byStatusMu only when
+// the status actually changes (rare), and atomic ops for the failure-
+// and drift-axis counters. No f.mu.Lock at all — at 8K+ combined req/s
+// holding the global write lock per ReportResult queued every concurrent
+// CheckIn's f.mu.RLock and was the dominant remaining mutex contention
+// after the 0.68.6 byTraitMu fix.
 func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount, failedCount, moduleCount int64, runAt time.Time) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
 
+	// Per-envoy state writes under the stripe lock. Capture the
+	// status/drift transitions we need to reflect in the fleet-wide
+	// counters before releasing the stripe — once it's released, the
+	// transition is committed and the counter side can race with
+	// another concurrent UpdateRunStatus for a different envoy
+	// without consistency issues (each call's counter delta is
+	// idempotent and ordered with the per-envoy transition).
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.LastRunID = runID
 	ts.LastRunStatus = runStatus
 	ts.LastRunChangedCount = changedCount
 	ts.LastRunFailedCount = failedCount
 	ts.LastRunModuleCount = moduleCount
 	ts.LastRunAt = runAt
-
-	// Prepend the new run to the trailing history and trim to the bound.
-	// Allocating a fresh slice avoids aliasing with snapshot readers that
-	// may still hold the previous backing array.
 	newRuns := make([]convergence.RunInfo, 0, MaxRecentRuns)
 	newRuns = append(newRuns, convergence.RunInfo{
 		Status:       runStatus,
@@ -1210,32 +1253,47 @@ func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount, 
 		newRuns = append(newRuns, ts.RecentRuns[i])
 	}
 	ts.RecentRuns = newRuns
-
-	if !ts.Revoked {
-		oldStatus := ts.ConvergenceStatus
-		newStatus := convergence.ComputeConvergence(ts.RecentRuns)
+	revoked := ts.Revoked
+	var oldStatus, newStatus string
+	var oldDrift, newDrift convergence.DriftLevel
+	statusChanged := false
+	driftChanged := false
+	if !revoked {
+		oldStatus = ts.ConvergenceStatus
+		newStatus = convergence.ComputeConvergence(ts.RecentRuns)
 		if newStatus != oldStatus {
-			f.removeFromStatus(id, oldStatus)
-			f.decrementCounter(oldStatus)
 			ts.ConvergenceStatus = newStatus
-			f.addToStatus(id, newStatus)
-			f.incrementCounter(newStatus)
+			statusChanged = true
 		}
-
-		oldDrift := ts.Drift
-		newDrift := convergence.ComputeDrift(ts.RecentRuns)
+		oldDrift = ts.Drift
+		newDrift = convergence.ComputeDrift(ts.RecentRuns)
 		if newDrift != oldDrift {
-			f.bumpDriftCounters(oldDrift, newDrift)
 			ts.Drift = newDrift
+			driftChanged = true
 		}
+	}
+	lk.Unlock()
+
+	if statusChanged {
+		f.byStatusMu.Lock()
+		f.removeFromStatus(id, oldStatus)
+		f.addToStatus(id, newStatus)
+		f.byStatusMu.Unlock()
+		f.decrementCounter(oldStatus)
+		f.incrementCounter(newStatus)
+	}
+	if driftChanged {
+		f.bumpDriftCounters(oldDrift, newDrift)
 	}
 }
 
-// AppendRecentRun adds a run summary to the ring buffer.
+// AppendRecentRun adds a run summary to the ring buffer. Takes the
+// dedicated recentRunsMu — the ring buffer is self-contained, no need to
+// hold f.mu and stall every concurrent CheckIn's RLock.
 func (f *FleetIndex) AppendRecentRun(run RunSummary) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	f.recentRunsMu.Lock()
 	f.recentRuns.Push(run)
+	f.recentRunsMu.Unlock()
 }
 
 // MarkDirty marks a envoy for async flush. Lock-free — the sync.Map serves
@@ -1350,48 +1408,51 @@ func (f *FleetIndex) removeFromTags(id string, tags []string) {
 // status string. Unknown vocabularies fall through ClassifyStatus into
 // StatusNoData rather than panicking on the hot path. Drift counters
 // move via bumpDriftCounters; this function is failure-axis only.
+// incrementCounter / decrementCounter atomically bump the failure-axis
+// counter for the given status. Caller does not need any lock — the per-counter
+// atomic.Int64 fields are independent of f.mu.
 func (f *FleetIndex) incrementCounter(status string) {
 	switch convergence.ClassifyStatus(status) {
 	case convergence.StatusConverged:
-		f.convergence.Converged++
+		f.convergenceConverged.Add(1)
 	case convergence.StatusDegraded:
-		f.convergence.Degraded++
+		f.convergenceDegraded.Add(1)
 	case convergence.StatusFailed:
-		f.convergence.Failed++
+		f.convergenceFailed.Add(1)
 	default:
-		f.convergence.NoData++
+		f.convergenceNoData.Add(1)
 	}
 }
 
 func (f *FleetIndex) decrementCounter(status string) {
 	switch convergence.ClassifyStatus(status) {
 	case convergence.StatusConverged:
-		f.convergence.Converged--
+		f.convergenceConverged.Add(-1)
 	case convergence.StatusDegraded:
-		f.convergence.Degraded--
+		f.convergenceDegraded.Add(-1)
 	case convergence.StatusFailed:
-		f.convergence.Failed--
+		f.convergenceFailed.Add(-1)
 	default:
-		f.convergence.NoData--
+		f.convergenceNoData.Add(-1)
 	}
 }
 
 // bumpDriftCounters moves the drift-axis counters when an envoy
 // transitions between drift levels. Diverged is a strict subset of
 // Changed, so an envoy in DriftDiverged contributes to both buckets;
-// transitions touch the right combination.
+// transitions touch the right combination. Atomic — no lock required.
 func (f *FleetIndex) bumpDriftCounters(old, new convergence.DriftLevel) {
 	if old == convergence.DriftChanged || old == convergence.DriftDiverged {
-		f.convergence.Changed--
+		f.convergenceChanged.Add(-1)
 	}
 	if old == convergence.DriftDiverged {
-		f.convergence.Diverged--
+		f.convergenceDiverged.Add(-1)
 	}
 	if new == convergence.DriftChanged || new == convergence.DriftDiverged {
-		f.convergence.Changed++
+		f.convergenceChanged.Add(1)
 	}
 	if new == convergence.DriftDiverged {
-		f.convergence.Diverged++
+		f.convergenceDiverged.Add(1)
 	}
 }
 
