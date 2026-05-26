@@ -15,9 +15,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -92,6 +94,23 @@ func run() error {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// pprof on loopback only — never exposed beyond the container, scraped via
+	// `docker exec vigo curl 127.0.0.1:6060/debug/pprof/...`. vigosrv otherwise
+	// has no DefaultServeMux users, so the pprof-package side-effect registrations
+	// can't collide with application routes.
+	//
+	// Mutex + block profiling are off by default in Go; enable at conservative
+	// sampling rates so contention shows up in profiles without measurable
+	// steady-state overhead (1-in-10 contention events; blocks ≥10µs).
+	runtime.SetMutexProfileFraction(10)
+	runtime.SetBlockProfileRate(10000)
+	go func() {
+		srv := &http.Server{Addr: "127.0.0.1:6060", ReadHeaderTimeout: 5 * time.Second}
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Warn("pprof listener exited", "error", err)
+		}
+	}()
 
 	configFile := envOrDefault("VIGO_CONFIG_FILE", "server.yaml")
 
