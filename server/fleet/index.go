@@ -149,6 +149,20 @@ type FleetIndex struct {
 	recentRuns         *ringBuffer
 	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
 
+	// byTraitMu guards byTrait independently of f.mu so UpdateTraits — which
+	// runs under the TraitsBatcher's async flusher — doesn't take the global
+	// write lock and block every hot-path CheckIn's f.mu.RLock. The CheckIn
+	// handler never reads byTrait (verified across server/grpc/checkin.go +
+	// agentstream.go), so the two lock domains are cleanly disjoint.
+	//
+	// Lock ordering when both are needed: f.mu first, then byTraitMu. AddEnvoy,
+	// RemoveEnvoy, and SetRevoked acquire both because they mutate envoys map +
+	// reverse-status indexes (under f.mu) and byTrait (under byTraitMu) in one
+	// logical operation. UpdateTraits and ListByTrait acquire only byTraitMu,
+	// optionally followed by f.mu.RLock for envoy-id → state lookup as a
+	// separate phase.
+	byTraitMu sync.RWMutex
+
 	// convergenceOffline is the count of currently-offline envoys, split out
 	// of the convergence struct because it's the only counter mutated on the
 	// CheckIn hot path (MarkSeen transitions an envoy back online; the
@@ -309,19 +323,27 @@ func (f *FleetIndex) ListByGlob(pattern string) []TargetInfo {
 }
 
 // ListByTrait returns all non-revoked envoys whose flattened traits contain key=value.
+// Runs in two sequential phases — byTraitMu to collect candidate IDs, then f.mu
+// to resolve each ID to a TargetInfo — so the byTrait-protecting lock is held
+// only across the cheap map lookup. Slight staleness between phases (an envoy
+// could be removed between collect and resolve) is acceptable: the f.mu phase
+// filters out IDs no longer in the index.
 func (f *FleetIndex) ListByTrait(key, value string) []TargetInfo {
+	f.byTraitMu.RLock()
+	idSet := f.byTrait[key][value]
+	candidates := make([]string, 0, len(idSet))
+	for id := range idSet {
+		candidates = append(candidates, id)
+	}
+	f.byTraitMu.RUnlock()
+	if len(candidates) == 0 {
+		return nil
+	}
+
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	valMap, ok := f.byTrait[key]
-	if !ok {
-		return nil
-	}
-	ids, ok := valMap[value]
-	if !ok {
-		return nil
-	}
 	var results []TargetInfo
-	for id := range ids {
+	for _, id := range candidates {
 		ts := f.envoys[id]
 		if ts != nil && !ts.Revoked {
 			results = append(results, TargetInfo{EnvoyID: ts.ID, Hostname: ts.Hostname})
@@ -519,6 +541,12 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 	// UpdateRunStatus uses.
 	oldDrift := convergence.DriftNone
 
+	// byTrait operations need byTraitMu (separate from f.mu since 0.68.6
+	// follow-up). Acquired inside the f.mu critical section per the documented
+	// lock ordering: f.mu first, then byTraitMu.
+	f.byTraitMu.Lock()
+	defer f.byTraitMu.Unlock()
+
 	// Remove old hostname mapping if it changed.
 	if old, ok := f.envoys[ts.ID]; ok {
 		if old.Hostname != ts.Hostname {
@@ -563,6 +591,9 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 func (f *FleetIndex) RemoveEnvoy(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Lock-ordering: f.mu first, then byTraitMu (see field comment).
+	f.byTraitMu.Lock()
+	defer f.byTraitMu.Unlock()
 
 	ts, ok := f.envoys[id]
 	if !ok {
@@ -768,17 +799,34 @@ func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
 // UpdateTraits replaces the traits for an envoy. The caller must provide
 // already-flattened traits (use FlattenJSON). This also updates the
 // byTrait reverse index so trait-based queries stay current.
+//
+// Takes per-envoy stripe lock for the ts.Traits field write and byTraitMu
+// for the byTrait reverse-index mutation — NOT f.mu. The TraitsBatcher
+// async flusher is the dominant caller and at fleet scale held f.mu.Lock
+// long enough to block every hot-path CheckIn's RLock; separating the
+// byTrait domain removes that interaction entirely.
 func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok || ts.Revoked {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
-	f.removeFromTraits(id, ts.Traits)
+
+	lk := f.lockFor(id)
+	lk.Lock()
+	if ts.Revoked {
+		lk.Unlock()
+		return
+	}
+	oldTraits := ts.Traits
 	ts.Traits = traits
+	lk.Unlock()
+
+	f.byTraitMu.Lock()
+	f.removeFromTraits(id, oldTraits)
 	f.addToTraits(id, traits)
+	f.byTraitMu.Unlock()
 }
 
 // SetIP updates the envoy's IP address (refreshed on each check-in).
@@ -1231,7 +1279,9 @@ func (f *FleetIndex) DrainDirty() map[string]*EnvoyState {
 	return result
 }
 
-// --- Internal helpers (caller must hold lock) ---
+// --- Internal helpers (caller must hold the appropriate lock — f.mu.Lock
+// for byStatus/byTag/byHostname/counter helpers; byTraitMu.Lock for
+// addToTraits/removeFromTraits per the byTraitMu doc comment) ---
 
 func (f *FleetIndex) addToStatus(id, status string) {
 	if status == "" {
