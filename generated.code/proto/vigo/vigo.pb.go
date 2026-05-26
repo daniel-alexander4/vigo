@@ -1185,7 +1185,16 @@ type PolicyBundle struct {
 	StreamEditTimeoutSecs  uint32   `protobuf:"varint,14,opt,name=stream_edit_timeout_secs,json=streamEditTimeoutSecs,proto3" json:"stream_edit_timeout_secs,omitempty"`   // per-script timeout (0 = agent default 10s)
 	// Merkle tree root over modules + vars. Agents cache this and send it back
 	// as state_fingerprint — if it matches, the server skips bundle construction.
-	MerkleRoot    string `protobuf:"bytes,15,opt,name=merkle_root,json=merkleRoot,proto3" json:"merkle_root,omitempty"`
+	MerkleRoot string `protobuf:"bytes,15,opt,name=merkle_root,json=merkleRoot,proto3" json:"merkle_root,omitempty"`
+	// secrets_epoch bumps whenever any secret value in the secrets backend
+	// rotates. Agents detect change-by-comparison: when the epoch advances,
+	// any cached secret values resolved against the previous epoch are
+	// considered stale and re-fetched via ResolveSecrets on next apply.
+	// Resource attributes and vars in this bundle carry placeholder strings
+	// (`__VIGO_SECRET__<path>__END_VIGO_SECRET__`) in place of resolved
+	// values — the agent substitutes the placeholders against fresh /
+	// cached values before passing attributes to executors.
+	SecretsEpoch  int64 `protobuf:"varint,16,opt,name=secrets_epoch,json=secretsEpoch,proto3" json:"secrets_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1318,6 +1327,13 @@ func (x *PolicyBundle) GetMerkleRoot() string {
 	return ""
 }
 
+func (x *PolicyBundle) GetSecretsEpoch() int64 {
+	if x != nil {
+		return x.SecretsEpoch
+	}
+	return 0
+}
+
 // PolicyModule is a module definition with raw templates and conditionals.
 // For delta transfer: if stub=true, only name + content_hash are set —
 // the agent fills in resources from its local cache.
@@ -1410,7 +1426,7 @@ type PolicyResource struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Attributes    map[string]string      `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // raw template strings (secrets resolved)
+	Attributes    map[string]string      `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // raw template strings; `secret:` refs travel as `__VIGO_SECRET__<path>__END_VIGO_SECRET__` placeholders that the agent substitutes via ResolveSecrets before applying.
 	When          string                 `protobuf:"bytes,4,opt,name=when,proto3" json:"when,omitempty"`                                                                                       // when expression (unevaluated)
 	Notify        []string               `protobuf:"bytes,5,rep,name=notify,proto3" json:"notify,omitempty"`
 	Subscribes    []string               `protobuf:"bytes,6,rep,name=subscribes,proto3" json:"subscribes,omitempty"`
@@ -7426,6 +7442,128 @@ func (x *WakeResponse) GetReason() string {
 	return ""
 }
 
+type ResolveSecretsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // ED25519 signature over envoy_id + timestamp + sorted(refs).
+	Timestamp     string                 `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // Unix seconds string used in signature.
+	Refs          []string               `protobuf:"bytes,4,rep,name=refs,proto3" json:"refs,omitempty"`           // Secret paths to resolve (e.g. "vigo/db/dsn"). Every ref must appear in the calling envoy's matched pattern's referenced-secrets set; un-entitled refs make the whole call fail PermissionDenied + emit secret.entitlement_denied audit.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveSecretsRequest) Reset() {
+	*x = ResolveSecretsRequest{}
+	mi := &file_vigo_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveSecretsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveSecretsRequest) ProtoMessage() {}
+
+func (x *ResolveSecretsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveSecretsRequest.ProtoReflect.Descriptor instead.
+func (*ResolveSecretsRequest) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{110}
+}
+
+func (x *ResolveSecretsRequest) GetEnvoyId() string {
+	if x != nil {
+		return x.EnvoyId
+	}
+	return ""
+}
+
+func (x *ResolveSecretsRequest) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+func (x *ResolveSecretsRequest) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *ResolveSecretsRequest) GetRefs() []string {
+	if x != nil {
+		return x.Refs
+	}
+	return nil
+}
+
+type ResolveSecretsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Resolved values keyed by the same paths sent in the request.
+	// Resolution is all-or-nothing — partial results aren't returned.
+	Values        map[string]string `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	SecretsEpoch  int64             `protobuf:"varint,2,opt,name=secrets_epoch,json=secretsEpoch,proto3" json:"secrets_epoch,omitempty"` // Echo of the current server-side epoch at resolution time; agent uses it to invalidate the local cache when the next CheckIn carries a higher value.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveSecretsResponse) Reset() {
+	*x = ResolveSecretsResponse{}
+	mi := &file_vigo_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveSecretsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveSecretsResponse) ProtoMessage() {}
+
+func (x *ResolveSecretsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveSecretsResponse.ProtoReflect.Descriptor instead.
+func (*ResolveSecretsResponse) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *ResolveSecretsResponse) GetValues() map[string]string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+func (x *ResolveSecretsResponse) GetSecretsEpoch() int64 {
+	if x != nil {
+		return x.SecretsEpoch
+	}
+	return 0
+}
+
 var File_vigo_proto protoreflect.FileDescriptor
 
 const file_vigo_proto_rawDesc = "" +
@@ -7553,7 +7691,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcc\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf1\x04\n" +
 	"\fPolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x12/\n" +
 	"\amodules\x18\x02 \x03(\v2\x15.vigo.v1.PolicyModuleR\amodules\x12\x1b\n" +
@@ -7570,7 +7708,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x19stream_edit_allowed_paths\x18\r \x03(\tR\x16streamEditAllowedPaths\x127\n" +
 	"\x18stream_edit_timeout_secs\x18\x0e \x01(\rR\x15streamEditTimeoutSecs\x12\x1f\n" +
 	"\vmerkle_root\x18\x0f \x01(\tR\n" +
-	"merkleRootJ\x04\b\x05\x10\x06\"\xc3\x01\n" +
+	"merkleRoot\x12#\n" +
+	"\rsecrets_epoch\x18\x10 \x01(\x03R\fsecretsEpochJ\x04\b\x05\x10\x06\"\xc3\x01\n" +
 	"\fPolicyModule\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
 	"\tresources\x18\x02 \x03(\v2\x17.vigo.v1.PolicyResourceR\tresources\x12\x1d\n" +
@@ -8010,7 +8149,18 @@ const file_vigo_proto_rawDesc = "" +
 	"\tsignature\x18\x02 \x01(\fR\tsignature\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\"&\n" +
 	"\fWakeResponse\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason2\xd9\x04\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\x82\x01\n" +
+	"\x15ResolveSecretsRequest\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\x12\x12\n" +
+	"\x04refs\x18\x04 \x03(\tR\x04refs\"\xbd\x01\n" +
+	"\x16ResolveSecretsResponse\x12C\n" +
+	"\x06values\x18\x01 \x03(\v2+.vigo.v1.ResolveSecretsResponse.ValuesEntryR\x06values\x12#\n" +
+	"\rsecrets_epoch\x18\x02 \x01(\x03R\fsecretsEpoch\x1a9\n" +
+	"\vValuesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xac\x05\n" +
 	"\tVigoAgent\x12?\n" +
 	"\bRegister\x12\x18.vigo.v1.RegisterRequest\x1a\x19.vigo.v1.RegisterResponse\x12<\n" +
 	"\aCheckIn\x12\x17.vigo.v1.CheckInRequest\x1a\x18.vigo.v1.CheckInResponse\x12K\n" +
@@ -8019,7 +8169,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x13DownloadCustomTrait\x12#.vigo.v1.DownloadCustomTraitRequest\x1a$.vigo.v1.DownloadCustomTraitResponse\x12L\n" +
 	"\vAgentStream\x12\x1b.vigo.v1.AgentStreamMessage\x1a\x1c.vigo.v1.ServerStreamMessage(\x010\x01\x12N\n" +
 	"\fTunnelStream\x12\x1c.vigo.v1.TunnelClientMessage\x1a\x1c.vigo.v1.TunnelServerMessage(\x010\x01\x123\n" +
-	"\x04Wake\x12\x14.vigo.v1.WakeRequest\x1a\x15.vigo.v1.WakeResponse2\xbd\x12\n" +
+	"\x04Wake\x12\x14.vigo.v1.WakeRequest\x1a\x15.vigo.v1.WakeResponse\x12Q\n" +
+	"\x0eResolveSecrets\x12\x1e.vigo.v1.ResolveSecretsRequest\x1a\x1f.vigo.v1.ResolveSecretsResponse2\xbd\x12\n" +
 	"\tVigoAdmin\x12z\n" +
 	"\x12AddApprovedPattern\x12\".vigo.v1.AddApprovedPatternRequest\x1a#.vigo.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12}\n" +
 	"\x14ListApprovedPatterns\x12$.vigo.v1.ListApprovedPatternsRequest\x1a%.vigo.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x85\x01\n" +
@@ -8063,7 +8214,7 @@ func file_vigo_proto_rawDescGZIP() []byte {
 	return file_vigo_proto_rawDescData
 }
 
-var file_vigo_proto_msgTypes = make([]protoimpl.MessageInfo, 115)
+var file_vigo_proto_msgTypes = make([]protoimpl.MessageInfo, 118)
 var file_vigo_proto_goTypes = []any{
 	(*RegisterRequest)(nil),               // 0: vigo.v1.RegisterRequest
 	(*RegisterResponse)(nil),              // 1: vigo.v1.RegisterResponse
@@ -8175,16 +8326,19 @@ var file_vigo_proto_goTypes = []any{
 	(*TunnelClose)(nil),                   // 107: vigo.v1.TunnelClose
 	(*WakeRequest)(nil),                   // 108: vigo.v1.WakeRequest
 	(*WakeResponse)(nil),                  // 109: vigo.v1.WakeResponse
-	nil,                                   // 110: vigo.v1.CheckInRequest.CachedModuleHashesEntry
-	nil,                                   // 111: vigo.v1.Resource.ParamsEntry
-	nil,                                   // 112: vigo.v1.PolicyResource.AttributesEntry
-	nil,                                   // 113: vigo.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 114: vigo.v1.TaskDispatch.EnvEntry
-	(*timestamppb.Timestamp)(nil),         // 115: google.protobuf.Timestamp
+	(*ResolveSecretsRequest)(nil),         // 110: vigo.v1.ResolveSecretsRequest
+	(*ResolveSecretsResponse)(nil),        // 111: vigo.v1.ResolveSecretsResponse
+	nil,                                   // 112: vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	nil,                                   // 113: vigo.v1.Resource.ParamsEntry
+	nil,                                   // 114: vigo.v1.PolicyResource.AttributesEntry
+	nil,                                   // 115: vigo.v1.TraitsDelta.ChangedEntry
+	nil,                                   // 116: vigo.v1.TaskDispatch.EnvEntry
+	nil,                                   // 117: vigo.v1.ResolveSecretsResponse.ValuesEntry
+	(*timestamppb.Timestamp)(nil),         // 118: google.protobuf.Timestamp
 }
 var file_vigo_proto_depIdxs = []int32{
-	115, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
-	110, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	118, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
+	112, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
 	31,  // 2: vigo.v1.CheckInRequest.capabilities:type_name -> vigo.v1.StreamCapabilities
 	10,  // 3: vigo.v1.CheckInResponse.modules:type_name -> vigo.v1.Module
 	7,   // 4: vigo.v1.CheckInResponse.custom_traits:type_name -> vigo.v1.CustomTraitEntry
@@ -8194,14 +8348,14 @@ var file_vigo_proto_depIdxs = []int32{
 	4,   // 8: vigo.v1.CheckInResponse.swarm_runtime_limits:type_name -> vigo.v1.SwarmRuntimeLimits
 	12,  // 9: vigo.v1.ProxiedDevice.policy:type_name -> vigo.v1.PolicyBundle
 	11,  // 10: vigo.v1.Module.resources:type_name -> vigo.v1.Resource
-	111, // 11: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
+	113, // 11: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
 	13,  // 12: vigo.v1.PolicyBundle.modules:type_name -> vigo.v1.PolicyModule
 	7,   // 13: vigo.v1.PolicyBundle.custom_traits:type_name -> vigo.v1.CustomTraitEntry
 	14,  // 14: vigo.v1.PolicyModule.resources:type_name -> vigo.v1.PolicyResource
-	112, // 15: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
+	114, // 15: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
 	16,  // 16: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ModuleResult
-	115, // 17: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
-	115, // 18: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	118, // 17: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
+	118, // 18: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	2,   // 19: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
 	15,  // 20: vigo.v1.AgentStreamMessage.report_result:type_name -> vigo.v1.ReportResultRequest
 	18,  // 21: vigo.v1.AgentStreamMessage.report_traits:type_name -> vigo.v1.ReportTraitsRequest
@@ -8224,30 +8378,30 @@ var file_vigo_proto_depIdxs = []int32{
 	28,  // 38: vigo.v1.DeltaEvent.traits:type_name -> vigo.v1.TraitsDelta
 	29,  // 39: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
 	16,  // 40: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ModuleResult
-	113, // 41: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
-	114, // 42: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
-	115, // 43: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
+	115, // 41: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
+	116, // 42: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
+	118, // 43: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
 	41,  // 44: vigo.v1.ListApprovedPatternsResponse.patterns:type_name -> vigo.v1.ApprovedPattern
-	115, // 45: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
+	118, // 45: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
 	46,  // 46: vigo.v1.ListEnvoysResponse.envoys:type_name -> vigo.v1.Envoy
-	115, // 47: vigo.v1.Envoy.enrolled_at:type_name -> google.protobuf.Timestamp
-	115, // 48: vigo.v1.Envoy.last_seen:type_name -> google.protobuf.Timestamp
-	115, // 49: vigo.v1.Envoy.revoked_at:type_name -> google.protobuf.Timestamp
+	118, // 47: vigo.v1.Envoy.enrolled_at:type_name -> google.protobuf.Timestamp
+	118, // 48: vigo.v1.Envoy.last_seen:type_name -> google.protobuf.Timestamp
+	118, // 49: vigo.v1.Envoy.revoked_at:type_name -> google.protobuf.Timestamp
 	46,  // 50: vigo.v1.GetEnvoyResponse.envoy:type_name -> vigo.v1.Envoy
 	57,  // 51: vigo.v1.DryRunResponse.actions:type_name -> vigo.v1.PlannedAction
 	60,  // 52: vigo.v1.ListRunsResponse.runs:type_name -> vigo.v1.Run
-	115, // 53: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	115, // 54: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	118, // 53: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	118, // 54: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
 	60,  // 55: vigo.v1.GetRunResponse.run:type_name -> vigo.v1.Run
 	16,  // 56: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ModuleResult
 	71,  // 57: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
 	71,  // 58: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
-	115, // 59: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
+	118, // 59: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
 	60,  // 60: vigo.v1.GetEnvoyConvergenceResponse.last_run:type_name -> vigo.v1.Run
 	76,  // 61: vigo.v1.GetEnvoyConvergenceResponse.history:type_name -> vigo.v1.ConvergenceSnapshot
 	83,  // 62: vigo.v1.ListPackagesResponse.packages:type_name -> vigo.v1.PackageInfo
 	84,  // 63: vigo.v1.ListPackageDriftResponse.drifts:type_name -> vigo.v1.PackageDrift
-	115, // 64: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
+	118, // 64: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
 	94,  // 65: vigo.v1.PeerSyncMessage.file_change:type_name -> vigo.v1.PeerFileChange
 	95,  // 66: vigo.v1.PeerSyncMessage.ack:type_name -> vigo.v1.PeerSyncAck
 	96,  // 67: vigo.v1.PeerSyncMessage.full_sync:type_name -> vigo.v1.PeerFullSync
@@ -8259,77 +8413,80 @@ var file_vigo_proto_depIdxs = []int32{
 	104, // 73: vigo.v1.TunnelServerMessage.open:type_name -> vigo.v1.TunnelOpen
 	106, // 74: vigo.v1.TunnelServerMessage.data:type_name -> vigo.v1.TunnelData
 	107, // 75: vigo.v1.TunnelServerMessage.close:type_name -> vigo.v1.TunnelClose
-	0,   // 76: vigo.v1.VigoAgent.Register:input_type -> vigo.v1.RegisterRequest
-	2,   // 77: vigo.v1.VigoAgent.CheckIn:input_type -> vigo.v1.CheckInRequest
-	15,  // 78: vigo.v1.VigoAgent.ReportResult:input_type -> vigo.v1.ReportResultRequest
-	18,  // 79: vigo.v1.VigoAgent.ReportTraits:input_type -> vigo.v1.ReportTraitsRequest
-	8,   // 80: vigo.v1.VigoAgent.DownloadCustomTrait:input_type -> vigo.v1.DownloadCustomTraitRequest
-	20,  // 81: vigo.v1.VigoAgent.AgentStream:input_type -> vigo.v1.AgentStreamMessage
-	101, // 82: vigo.v1.VigoAgent.TunnelStream:input_type -> vigo.v1.TunnelClientMessage
-	108, // 83: vigo.v1.VigoAgent.Wake:input_type -> vigo.v1.WakeRequest
-	37,  // 84: vigo.v1.VigoAdmin.AddApprovedPattern:input_type -> vigo.v1.AddApprovedPatternRequest
-	39,  // 85: vigo.v1.VigoAdmin.ListApprovedPatterns:input_type -> vigo.v1.ListApprovedPatternsRequest
-	42,  // 86: vigo.v1.VigoAdmin.RevokeApprovedPattern:input_type -> vigo.v1.RevokeApprovedPatternRequest
-	44,  // 87: vigo.v1.VigoAdmin.ListEnvoys:input_type -> vigo.v1.ListEnvoysRequest
-	47,  // 88: vigo.v1.VigoAdmin.GetEnvoy:input_type -> vigo.v1.GetEnvoyRequest
-	49,  // 89: vigo.v1.VigoAdmin.RevokeEnvoy:input_type -> vigo.v1.RevokeEnvoyRequest
-	51,  // 90: vigo.v1.VigoAdmin.DeleteEnvoy:input_type -> vigo.v1.DeleteEnvoyRequest
-	53,  // 91: vigo.v1.VigoAdmin.ForcePush:input_type -> vigo.v1.ForcePushRequest
-	55,  // 92: vigo.v1.VigoAdmin.DryRun:input_type -> vigo.v1.DryRunRequest
-	58,  // 93: vigo.v1.VigoAdmin.ListRuns:input_type -> vigo.v1.ListRunsRequest
-	61,  // 94: vigo.v1.VigoAdmin.GetRun:input_type -> vigo.v1.GetRunRequest
-	63,  // 95: vigo.v1.VigoAdmin.GenerateToken:input_type -> vigo.v1.GenerateTokenRequest
-	65,  // 96: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
-	67,  // 97: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
-	69,  // 98: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
-	72,  // 99: vigo.v1.VigoAdmin.GetConvergenceSummary:input_type -> vigo.v1.GetConvergenceSummaryRequest
-	74,  // 100: vigo.v1.VigoAdmin.GetEnvoyConvergence:input_type -> vigo.v1.GetEnvoyConvergenceRequest
-	77,  // 101: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
-	79,  // 102: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
-	81,  // 103: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
-	85,  // 104: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
-	87,  // 105: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
-	93,  // 106: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
-	97,  // 107: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
-	99,  // 108: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
-	1,   // 109: vigo.v1.VigoAgent.Register:output_type -> vigo.v1.RegisterResponse
-	3,   // 110: vigo.v1.VigoAgent.CheckIn:output_type -> vigo.v1.CheckInResponse
-	17,  // 111: vigo.v1.VigoAgent.ReportResult:output_type -> vigo.v1.ReportResultResponse
-	19,  // 112: vigo.v1.VigoAgent.ReportTraits:output_type -> vigo.v1.ReportTraitsResponse
-	9,   // 113: vigo.v1.VigoAgent.DownloadCustomTrait:output_type -> vigo.v1.DownloadCustomTraitResponse
-	21,  // 114: vigo.v1.VigoAgent.AgentStream:output_type -> vigo.v1.ServerStreamMessage
-	102, // 115: vigo.v1.VigoAgent.TunnelStream:output_type -> vigo.v1.TunnelServerMessage
-	109, // 116: vigo.v1.VigoAgent.Wake:output_type -> vigo.v1.WakeResponse
-	38,  // 117: vigo.v1.VigoAdmin.AddApprovedPattern:output_type -> vigo.v1.AddApprovedPatternResponse
-	40,  // 118: vigo.v1.VigoAdmin.ListApprovedPatterns:output_type -> vigo.v1.ListApprovedPatternsResponse
-	43,  // 119: vigo.v1.VigoAdmin.RevokeApprovedPattern:output_type -> vigo.v1.RevokeApprovedPatternResponse
-	45,  // 120: vigo.v1.VigoAdmin.ListEnvoys:output_type -> vigo.v1.ListEnvoysResponse
-	48,  // 121: vigo.v1.VigoAdmin.GetEnvoy:output_type -> vigo.v1.GetEnvoyResponse
-	50,  // 122: vigo.v1.VigoAdmin.RevokeEnvoy:output_type -> vigo.v1.RevokeEnvoyResponse
-	52,  // 123: vigo.v1.VigoAdmin.DeleteEnvoy:output_type -> vigo.v1.DeleteEnvoyResponse
-	54,  // 124: vigo.v1.VigoAdmin.ForcePush:output_type -> vigo.v1.ForcePushResponse
-	56,  // 125: vigo.v1.VigoAdmin.DryRun:output_type -> vigo.v1.DryRunResponse
-	59,  // 126: vigo.v1.VigoAdmin.ListRuns:output_type -> vigo.v1.ListRunsResponse
-	62,  // 127: vigo.v1.VigoAdmin.GetRun:output_type -> vigo.v1.GetRunResponse
-	64,  // 128: vigo.v1.VigoAdmin.GenerateToken:output_type -> vigo.v1.GenerateTokenResponse
-	66,  // 129: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
-	68,  // 130: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
-	70,  // 131: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
-	73,  // 132: vigo.v1.VigoAdmin.GetConvergenceSummary:output_type -> vigo.v1.GetConvergenceSummaryResponse
-	75,  // 133: vigo.v1.VigoAdmin.GetEnvoyConvergence:output_type -> vigo.v1.GetEnvoyConvergenceResponse
-	78,  // 134: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
-	80,  // 135: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
-	82,  // 136: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
-	86,  // 137: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
-	88,  // 138: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
-	93,  // 139: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
-	98,  // 140: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
-	100, // 141: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse
-	109, // [109:142] is the sub-list for method output_type
-	76,  // [76:109] is the sub-list for method input_type
-	76,  // [76:76] is the sub-list for extension type_name
-	76,  // [76:76] is the sub-list for extension extendee
-	0,   // [0:76] is the sub-list for field type_name
+	117, // 76: vigo.v1.ResolveSecretsResponse.values:type_name -> vigo.v1.ResolveSecretsResponse.ValuesEntry
+	0,   // 77: vigo.v1.VigoAgent.Register:input_type -> vigo.v1.RegisterRequest
+	2,   // 78: vigo.v1.VigoAgent.CheckIn:input_type -> vigo.v1.CheckInRequest
+	15,  // 79: vigo.v1.VigoAgent.ReportResult:input_type -> vigo.v1.ReportResultRequest
+	18,  // 80: vigo.v1.VigoAgent.ReportTraits:input_type -> vigo.v1.ReportTraitsRequest
+	8,   // 81: vigo.v1.VigoAgent.DownloadCustomTrait:input_type -> vigo.v1.DownloadCustomTraitRequest
+	20,  // 82: vigo.v1.VigoAgent.AgentStream:input_type -> vigo.v1.AgentStreamMessage
+	101, // 83: vigo.v1.VigoAgent.TunnelStream:input_type -> vigo.v1.TunnelClientMessage
+	108, // 84: vigo.v1.VigoAgent.Wake:input_type -> vigo.v1.WakeRequest
+	110, // 85: vigo.v1.VigoAgent.ResolveSecrets:input_type -> vigo.v1.ResolveSecretsRequest
+	37,  // 86: vigo.v1.VigoAdmin.AddApprovedPattern:input_type -> vigo.v1.AddApprovedPatternRequest
+	39,  // 87: vigo.v1.VigoAdmin.ListApprovedPatterns:input_type -> vigo.v1.ListApprovedPatternsRequest
+	42,  // 88: vigo.v1.VigoAdmin.RevokeApprovedPattern:input_type -> vigo.v1.RevokeApprovedPatternRequest
+	44,  // 89: vigo.v1.VigoAdmin.ListEnvoys:input_type -> vigo.v1.ListEnvoysRequest
+	47,  // 90: vigo.v1.VigoAdmin.GetEnvoy:input_type -> vigo.v1.GetEnvoyRequest
+	49,  // 91: vigo.v1.VigoAdmin.RevokeEnvoy:input_type -> vigo.v1.RevokeEnvoyRequest
+	51,  // 92: vigo.v1.VigoAdmin.DeleteEnvoy:input_type -> vigo.v1.DeleteEnvoyRequest
+	53,  // 93: vigo.v1.VigoAdmin.ForcePush:input_type -> vigo.v1.ForcePushRequest
+	55,  // 94: vigo.v1.VigoAdmin.DryRun:input_type -> vigo.v1.DryRunRequest
+	58,  // 95: vigo.v1.VigoAdmin.ListRuns:input_type -> vigo.v1.ListRunsRequest
+	61,  // 96: vigo.v1.VigoAdmin.GetRun:input_type -> vigo.v1.GetRunRequest
+	63,  // 97: vigo.v1.VigoAdmin.GenerateToken:input_type -> vigo.v1.GenerateTokenRequest
+	65,  // 98: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
+	67,  // 99: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
+	69,  // 100: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
+	72,  // 101: vigo.v1.VigoAdmin.GetConvergenceSummary:input_type -> vigo.v1.GetConvergenceSummaryRequest
+	74,  // 102: vigo.v1.VigoAdmin.GetEnvoyConvergence:input_type -> vigo.v1.GetEnvoyConvergenceRequest
+	77,  // 103: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
+	79,  // 104: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
+	81,  // 105: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
+	85,  // 106: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
+	87,  // 107: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
+	93,  // 108: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
+	97,  // 109: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
+	99,  // 110: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
+	1,   // 111: vigo.v1.VigoAgent.Register:output_type -> vigo.v1.RegisterResponse
+	3,   // 112: vigo.v1.VigoAgent.CheckIn:output_type -> vigo.v1.CheckInResponse
+	17,  // 113: vigo.v1.VigoAgent.ReportResult:output_type -> vigo.v1.ReportResultResponse
+	19,  // 114: vigo.v1.VigoAgent.ReportTraits:output_type -> vigo.v1.ReportTraitsResponse
+	9,   // 115: vigo.v1.VigoAgent.DownloadCustomTrait:output_type -> vigo.v1.DownloadCustomTraitResponse
+	21,  // 116: vigo.v1.VigoAgent.AgentStream:output_type -> vigo.v1.ServerStreamMessage
+	102, // 117: vigo.v1.VigoAgent.TunnelStream:output_type -> vigo.v1.TunnelServerMessage
+	109, // 118: vigo.v1.VigoAgent.Wake:output_type -> vigo.v1.WakeResponse
+	111, // 119: vigo.v1.VigoAgent.ResolveSecrets:output_type -> vigo.v1.ResolveSecretsResponse
+	38,  // 120: vigo.v1.VigoAdmin.AddApprovedPattern:output_type -> vigo.v1.AddApprovedPatternResponse
+	40,  // 121: vigo.v1.VigoAdmin.ListApprovedPatterns:output_type -> vigo.v1.ListApprovedPatternsResponse
+	43,  // 122: vigo.v1.VigoAdmin.RevokeApprovedPattern:output_type -> vigo.v1.RevokeApprovedPatternResponse
+	45,  // 123: vigo.v1.VigoAdmin.ListEnvoys:output_type -> vigo.v1.ListEnvoysResponse
+	48,  // 124: vigo.v1.VigoAdmin.GetEnvoy:output_type -> vigo.v1.GetEnvoyResponse
+	50,  // 125: vigo.v1.VigoAdmin.RevokeEnvoy:output_type -> vigo.v1.RevokeEnvoyResponse
+	52,  // 126: vigo.v1.VigoAdmin.DeleteEnvoy:output_type -> vigo.v1.DeleteEnvoyResponse
+	54,  // 127: vigo.v1.VigoAdmin.ForcePush:output_type -> vigo.v1.ForcePushResponse
+	56,  // 128: vigo.v1.VigoAdmin.DryRun:output_type -> vigo.v1.DryRunResponse
+	59,  // 129: vigo.v1.VigoAdmin.ListRuns:output_type -> vigo.v1.ListRunsResponse
+	62,  // 130: vigo.v1.VigoAdmin.GetRun:output_type -> vigo.v1.GetRunResponse
+	64,  // 131: vigo.v1.VigoAdmin.GenerateToken:output_type -> vigo.v1.GenerateTokenResponse
+	66,  // 132: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
+	68,  // 133: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
+	70,  // 134: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
+	73,  // 135: vigo.v1.VigoAdmin.GetConvergenceSummary:output_type -> vigo.v1.GetConvergenceSummaryResponse
+	75,  // 136: vigo.v1.VigoAdmin.GetEnvoyConvergence:output_type -> vigo.v1.GetEnvoyConvergenceResponse
+	78,  // 137: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
+	80,  // 138: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
+	82,  // 139: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
+	86,  // 140: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
+	88,  // 141: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
+	93,  // 142: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
+	98,  // 143: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
+	100, // 144: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse
+	111, // [111:145] is the sub-list for method output_type
+	77,  // [77:111] is the sub-list for method input_type
+	77,  // [77:77] is the sub-list for extension type_name
+	77,  // [77:77] is the sub-list for extension extendee
+	0,   // [0:77] is the sub-list for field type_name
 }
 
 func init() { file_vigo_proto_init() }
@@ -8385,7 +8542,7 @@ func file_vigo_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vigo_proto_rawDesc), len(file_vigo_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   115,
+			NumMessages:   118,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

@@ -27,6 +27,7 @@ const (
 	VigoAgent_AgentStream_FullMethodName         = "/vigo.v1.VigoAgent/AgentStream"
 	VigoAgent_TunnelStream_FullMethodName        = "/vigo.v1.VigoAgent/TunnelStream"
 	VigoAgent_Wake_FullMethodName                = "/vigo.v1.VigoAgent/Wake"
+	VigoAgent_ResolveSecrets_FullMethodName      = "/vigo.v1.VigoAgent/ResolveSecrets"
 )
 
 // VigoAgentClient is the client API for VigoAgent service.
@@ -59,6 +60,15 @@ type VigoAgentClient interface {
 	// Replaces tokio::sleep between check-in cycles — gives the server a way to
 	// wake unary agents instantly without persistent streaming overhead.
 	Wake(ctx context.Context, in *WakeRequest, opts ...grpc.CallOption) (*WakeResponse, error)
+	// ResolveSecrets resolves a batch of secret references to their plaintext
+	// values for the calling envoy. Refs must appear in the envoy's matched
+	// pattern's resolved bundle (server enforces entitlement); unauthorized
+	// refs are rejected with PermissionDenied and an
+	// `secret.entitlement_denied` audit event. The CheckInResponse carries a
+	// `secrets_epoch` that bumps when any secret rotates server-side — agents
+	// re-fetch via this RPC only when the epoch changes or a placeholder ref
+	// misses the local cache.
+	ResolveSecrets(ctx context.Context, in *ResolveSecretsRequest, opts ...grpc.CallOption) (*ResolveSecretsResponse, error)
 }
 
 type vigoAgentClient struct {
@@ -155,6 +165,16 @@ func (c *vigoAgentClient) Wake(ctx context.Context, in *WakeRequest, opts ...grp
 	return out, nil
 }
 
+func (c *vigoAgentClient) ResolveSecrets(ctx context.Context, in *ResolveSecretsRequest, opts ...grpc.CallOption) (*ResolveSecretsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveSecretsResponse)
+	err := c.cc.Invoke(ctx, VigoAgent_ResolveSecrets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VigoAgentServer is the server API for VigoAgent service.
 // All implementations must embed UnimplementedVigoAgentServer
 // for forward compatibility.
@@ -185,6 +205,15 @@ type VigoAgentServer interface {
 	// Replaces tokio::sleep between check-in cycles — gives the server a way to
 	// wake unary agents instantly without persistent streaming overhead.
 	Wake(context.Context, *WakeRequest) (*WakeResponse, error)
+	// ResolveSecrets resolves a batch of secret references to their plaintext
+	// values for the calling envoy. Refs must appear in the envoy's matched
+	// pattern's resolved bundle (server enforces entitlement); unauthorized
+	// refs are rejected with PermissionDenied and an
+	// `secret.entitlement_denied` audit event. The CheckInResponse carries a
+	// `secrets_epoch` that bumps when any secret rotates server-side — agents
+	// re-fetch via this RPC only when the epoch changes or a placeholder ref
+	// misses the local cache.
+	ResolveSecrets(context.Context, *ResolveSecretsRequest) (*ResolveSecretsResponse, error)
 	mustEmbedUnimplementedVigoAgentServer()
 }
 
@@ -218,6 +247,9 @@ func (UnimplementedVigoAgentServer) TunnelStream(grpc.BidiStreamingServer[Tunnel
 }
 func (UnimplementedVigoAgentServer) Wake(context.Context, *WakeRequest) (*WakeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Wake not implemented")
+}
+func (UnimplementedVigoAgentServer) ResolveSecrets(context.Context, *ResolveSecretsRequest) (*ResolveSecretsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveSecrets not implemented")
 }
 func (UnimplementedVigoAgentServer) mustEmbedUnimplementedVigoAgentServer() {}
 func (UnimplementedVigoAgentServer) testEmbeddedByValue()                   {}
@@ -362,6 +394,24 @@ func _VigoAgent_Wake_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VigoAgent_ResolveSecrets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveSecretsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoAgentServer).ResolveSecrets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoAgent_ResolveSecrets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoAgentServer).ResolveSecrets(ctx, req.(*ResolveSecretsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VigoAgent_ServiceDesc is the grpc.ServiceDesc for VigoAgent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -392,6 +442,10 @@ var VigoAgent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Wake",
 			Handler:    _VigoAgent_Wake_Handler,
+		},
+		{
+			MethodName: "ResolveSecrets",
+			Handler:    _VigoAgent_ResolveSecrets_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

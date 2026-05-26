@@ -434,6 +434,40 @@ impl Client {
         Ok(resp.into_inner())
     }
 
+    /// ResolveSecrets fetches the plaintext values of placeholder-bearing
+    /// secret references from the server. The server checks that every ref
+    /// is entitled (i.e. appears as a placeholder in the envoy's resolved
+    /// bundle) and rejects the whole call with PermissionDenied otherwise.
+    ///
+    /// The signed payload is the sorted refs joined with NUL bytes, plus
+    /// the timestamp — matches verifyResolveSecretsCtx on the server.
+    pub async fn resolve_secrets(
+        &mut self,
+        refs: Vec<String>,
+    ) -> Result<crate::proto::ResolveSecretsResponse> {
+        use crate::proto::ResolveSecretsRequest;
+        let ts = Self::timestamp_str();
+        let mut sorted = refs.clone();
+        sorted.sort();
+        let payload = sorted.join("\x00");
+        let sig = signer::sign_payload(payload.as_bytes(), &ts, &self.signing_key);
+
+        let req = ResolveSecretsRequest {
+            envoy_id: self.envoy_id.clone(),
+            signature: sig,
+            timestamp: ts,
+            refs,
+        };
+
+        let resp = self
+            .agent
+            .resolve_secrets(tonic::Request::new(req))
+            .await
+            .context("resolve_secrets RPC")?;
+
+        Ok(resp.into_inner())
+    }
+
     /// Register calls the server's Register RPC.
     pub async fn register(
         &mut self,

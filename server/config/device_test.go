@@ -49,9 +49,16 @@ envoys:
 	if cfg.Gateway != "netmgmt01.example.com" {
 		t.Errorf("Gateway = %q, want netmgmt01.example.com", cfg.Gateway)
 	}
-	// Credential should be resolved (not the secret: reference).
-	if cfg.Credential != "s3cret" {
-		t.Errorf("Credential = %q, want s3cret", cfg.Credential)
+	// Credential ships as a placeholder marker — the resolved plaintext
+	// never lives on the EnvoyConfig (agent resolves via ResolveSecrets
+	// RPC). Validate against the expected marker + assert the plaintext
+	// doesn't leak.
+	wantCred := "__VIGO_SECRET__network/core-sw01/ssh__END_VIGO_SECRET__"
+	if cfg.Credential != wantCred {
+		t.Errorf("Credential = %q, want %q", cfg.Credential, wantCred)
+	}
+	if strings.Contains(cfg.Credential, "s3cret") {
+		t.Errorf("Credential leaks plaintext: %q", cfg.Credential)
 	}
 	if cfg.Username != "admin" {
 		t.Errorf("Username = %q, want admin", cfg.Username)
@@ -343,8 +350,10 @@ envoys:
 	if sw.Port != 2222 {
 		t.Errorf("device[0].Port = %d, want 2222", sw.Port)
 	}
-	if sw.Credential != "pass1" {
-		t.Errorf("device[0].Credential = %q, want pass1", sw.Credential)
+	// Credential ships as a placeholder; plaintext "pass1" must not appear.
+	wantSwCred := "__VIGO_SECRET__net/sw01__END_VIGO_SECRET__"
+	if sw.Credential != wantSwCred {
+		t.Errorf("device[0].Credential = %q, want %q", sw.Credential, wantSwCred)
 	}
 
 	// Check second device.

@@ -368,8 +368,20 @@ envoys:
 	}
 
 	cfg := store.Get("web.example.com")
-	if cfg.Vars["db_dsn"] != "/srv/vigo/db/vigo.db" {
-		t.Errorf("db_dsn = %q, want resolved DSN", cfg.Vars["db_dsn"])
+	// Secret values are NOT resolved into the EnvoyConfig — placeholders
+	// flow through to the agent which fetches actual values via the
+	// ResolveSecrets RPC. Assert the placeholder shape + plaintext leak
+	// absence.
+	wantDSN := "__VIGO_SECRET__vigo/db/dsn__END_VIGO_SECRET__"
+	if cfg.Vars["db_dsn"] != wantDSN {
+		t.Errorf("db_dsn = %q, want placeholder %q", cfg.Vars["db_dsn"], wantDSN)
+	}
+	if dsn, _ := cfg.Vars["db_dsn"].(string); strings.Contains(dsn, "/srv/vigo/db/vigo.db") {
+		t.Errorf("db_dsn leaks plaintext: %q", dsn)
+	}
+	wantContent := "__VIGO_SECRET__myapp/db/config__END_VIGO_SECRET__"
+	if cnt, _ := cfg.Modules[0].Resources[0].Attributes["content"].(string); cnt != wantContent {
+		t.Errorf("content = %q, want %q", cnt, wantContent)
 	}
 }
 
@@ -3725,18 +3737,15 @@ envoys:
 // behavior that isn't implemented yet. They use t.Skip so CI stays green;
 // implementer removes the t.Skip line after wiring the feature.
 
-// TestPending_ResolveModuleSecrets_EmbeddedRefs pins the contract from
-// pending.md "Embedded `secret:` refs inside compound attribute values
-// are not resolved" (Fixes & Testing #2).
-//
-// Today resolveModuleSecrets (loader.go:3715) only resolves attribute
-// values whose entire string starts with "secret:" — embedded refs inside
-// compound k=v strings (env, environment, cron environment, container
-// labels, etc.) pass through verbatim to the agent. Operators reasonably
-// expect substitution given the vault is the canonical secret-management
-// surface post-0.53.0; this test is the fixture that proves it works
-// when the loader walks compound strings token-by-token.
-func TestPending_ResolveModuleSecrets_EmbeddedRefs(t *testing.T) {
+// TestResolveModuleSecrets_EmbeddedRefs_EmitsPlaceholders pins the post-
+// placeholder behavior: embedded `secret:<key>` refs inside compound
+// attribute values (env, environment, cron environment, container
+// labels, etc.) are substituted with `__VIGO_SECRET__<key>__END_VIGO_SECRET__`
+// markers. The provider is consulted to validate that the secret
+// exists at load time, but the resolved plaintext is NOT stored in the
+// EnvoyConfig — the agent fetches the actual value via the
+// VigoAgent.ResolveSecrets RPC at apply time.
+func TestResolveModuleSecrets_EmbeddedRefs_EmitsPlaceholders(t *testing.T) {
 	dir := setupDir(t)
 
 	// container: resource with embedded secret in env; mirrors the
@@ -3773,9 +3782,12 @@ envoys:
 	}
 	envAttr, _ := cfg.Modules[0].Resources[0].Attributes["env"].(string)
 
-	want := "REDIS_PASSWORD=hunter2,REDIS_DB=cache"
+	want := "REDIS_PASSWORD=__VIGO_SECRET__vigo/redis/password__END_VIGO_SECRET__,REDIS_DB=cache"
 	if envAttr != want {
-		t.Errorf("env attribute = %q, want %q (embedded `secret:` ref must be substituted)", envAttr, want)
+		t.Errorf("env attribute = %q, want %q (embedded `secret:` ref must be substituted with placeholder)", envAttr, want)
+	}
+	if strings.Contains(envAttr, "hunter2") {
+		t.Errorf("env attribute leaks plaintext secret value: %q", envAttr)
 	}
 }
 

@@ -497,7 +497,7 @@ pub async fn run_once_with_update(
     _manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
-    let resp = client
+    let mut resp = client
         .check_in(
             state_fingerprint,
             traits_json,
@@ -505,6 +505,40 @@ pub async fn run_once_with_update(
             policy_state.module_cache.hashes(),
         )
         .await?;
+
+    // Resolve placeholder secrets in-place before eval_bundle sees the
+    // strings. Walks vars_json + every module's resource attributes + the
+    // module/resource `when:` strings for `__VIGO_SECRET__<key>__END_VIGO_SECRET__`
+    // markers, fetches missing values via ResolveSecrets, substitutes.
+    // Failure here aborts the apply rather than letting a placeholder
+    // string flow through to an executor — see `secrets::substitute_in_bundle`.
+    if let Some(bundle) = resp.policy_bundle.as_mut() {
+        if let Err(e) = crate::policy::secrets::resolve_and_substitute(
+            bundle,
+            crate::policy::secrets::global_cache(),
+            client,
+        )
+        .await
+        {
+            warn!("secret resolution/substitution failed, skipping convergence: {}", e);
+            return Ok(RunResult {
+                results: vec![],
+                interval: Duration::ZERO,
+                jitter_pct: resp.jitter_percent,
+                no_change: false,
+                response_fingerprint: resp.response_fingerprint.clone(),
+                policy_version: resp.policy_version,
+                policy_bundle: resp.policy_bundle.clone(),
+                stream_requested: resp.stream_requested,
+                tunnel_requested: resp.tunnel_requested,
+                proxied_devices: resp.proxied_devices.clone(),
+                server_pubkey_pem: resp.server_pubkey_pem.clone(),
+                force_update: resp.force_update,
+                swarm_manifest_entries: resp.manifest_entries.clone(),
+                curator_catalog: resp.curator_catalog.clone(),
+            });
+        }
+    }
 
     debug!(
         force_update = resp.force_update,
@@ -851,7 +885,33 @@ fn converge_local(
         "converging bundle v{version} (accepted {age}s ago)"
     );
 
-    // Build a synthetic response from accepted bundle.
+    // Offline-cache limitation (v1): the resolved-secrets cache is
+    // process-lifetime in-memory, so a fresh agent process that hasn't
+    // checked in yet has nothing to substitute placeholders against.
+    // Refuse to apply a placeholder-bearing bundle from the local store
+    // — silently writing `__VIGO_SECRET__…__END_VIGO_SECRET__` into a
+    // config file is the catastrophic failure mode we built this whole
+    // pipeline to prevent. The next successful check-in re-populates
+    // the cache and the next online converge() path applies normally.
+    let refs = crate::policy::secrets::collect_refs_in_bundle_pub(&bundle);
+    let cache = crate::policy::secrets::global_cache();
+    let missing = cache.missing_refs_pub(refs.iter().map(|s| s.as_str()));
+    if !missing.is_empty() {
+        warn!(
+            version = version,
+            missing_count = missing.len(),
+            "offline reconvergence: {} placeholder secrets not in in-memory cache, skipping until next online check-in",
+            missing.len()
+        );
+        return None;
+    }
+    let mut bundle = bundle.clone();
+    if let Err(e) = crate::policy::secrets::substitute_in_bundle_pub(&mut bundle, cache) {
+        warn!(error = %e, "offline reconvergence: secret substitution failed, skipping");
+        return None;
+    }
+
+    // Build a synthetic response from accepted bundle (now substituted).
     let synth_resp = CheckInResponse {
         policy_bundle: Some(bundle.clone()),
         policy_version: version,
@@ -1475,8 +1535,34 @@ async fn stream_loop(
                     info!(version = push.policy_version, "received policy push via stream");
                     let (traits_val, _) = collect_traits_basic(collectors).await;
 
+                    let mut pushed_bundle = push.policy_bundle;
+                    if let Some(bundle) = pushed_bundle.as_mut() {
+                        // Stream-push runs on a &Client (no &mut handle to
+                        // make the ResolveSecrets RPC here); substitute
+                        // from the in-memory cache only. The check-in
+                        // path that runs alongside this stream keeps the
+                        // cache warm. If a placeholder isn't cached yet
+                        // (cold-stream-arrival before any check-in), fail
+                        // loud and let the next check-in fill the cache.
+                        let cache = crate::policy::secrets::global_cache();
+                        cache.invalidate_if_epoch_changed(bundle.secrets_epoch);
+                        let refs = crate::policy::secrets::collect_refs_in_bundle_pub(bundle);
+                        let missing = cache.missing_refs_pub(refs.iter().map(|s| s.as_str()));
+                        if !missing.is_empty() {
+                            warn!(
+                                missing_count = missing.len(),
+                                "stream push: {} placeholder secrets not yet cached, awaiting check-in",
+                                missing.len()
+                            );
+                            continue;
+                        }
+                        if let Err(e) = crate::policy::secrets::substitute_in_bundle_pub(bundle, cache) {
+                            warn!(error = %e, "stream push: secret substitution failed, skipping");
+                            continue;
+                        }
+                    }
                     let synth_resp = CheckInResponse {
-                        policy_bundle: push.policy_bundle,
+                        policy_bundle: pushed_bundle,
                         policy_version: push.policy_version,
                         ..Default::default()
                     };
@@ -1780,14 +1866,30 @@ async fn converge_proxied_devices(
             "converging proxied device"
         );
 
-        // Evaluate the device's policy bundle.
-        let bundle = match &device.policy {
+        // Evaluate the device's policy bundle. The bundle ships with
+        // `__VIGO_SECRET__…__END_VIGO_SECRET__` placeholders wherever a
+        // `secret:` ref appeared (including the device's SSH credential
+        // delivered via ProxiedDevice.Credential, though the credential
+        // itself is consumed below from `device.credential` not from
+        // the bundle); substitute before eval_bundle sees the strings.
+        let mut device_bundle = match device.policy.clone() {
             Some(b) => b,
             None => {
                 warn!(hostname, "proxied device has no policy bundle, skipping");
                 continue;
             }
         };
+        if let Err(e) = crate::policy::secrets::resolve_and_substitute(
+            &mut device_bundle,
+            crate::policy::secrets::global_cache(),
+            client,
+        )
+        .await
+        {
+            warn!(hostname, error = %e, "device secret substitution failed, skipping");
+            continue;
+        }
+        let bundle = &device_bundle;
 
         // Collect device traits over SSH.
         let port = if device.port == 0 { 22 } else { device.port };
@@ -1802,11 +1904,30 @@ async fn converge_proxied_devices(
             &device.ip_address
         };
 
+        // Resolve a placeholder-bearing credential before handing it to
+        // the SSH stack. ProxiedDevice.Credential ships as a placeholder
+        // marker so the wire payload stays plaintext-free; substitute
+        // here against the same cache the bundle's secrets ride on.
+        let resolved_credential = match crate::policy::secrets::resolve_credential(
+            &device.credential,
+            crate::policy::secrets::global_cache(),
+            client,
+            bundle.secrets_epoch,
+        )
+        .await
+        {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(hostname, error = %e, "device credential substitution failed, skipping");
+                continue;
+            }
+        };
+
         let device_traits = match crate::transport::ssh::SshSession::connect(
             ip_for_ssh,
             port as u16,
             username_for_ssh,
-            &device.credential,
+            &resolved_credential,
             None,
         )
         .await
@@ -1861,7 +1982,7 @@ async fn converge_proxied_devices(
                 resource.params.insert("host".to_string(), ip_for_ssh.to_string());
                 resource.params.insert("port".to_string(), port.to_string());
                 resource.params.insert("username".to_string(), username_for_ssh.to_string());
-                resource.params.insert("credential".to_string(), device.credential.clone());
+                resource.params.insert("credential".to_string(), resolved_credential.clone());
                 resource.params.insert("device_type".to_string(), device_type.clone());
             }
         }

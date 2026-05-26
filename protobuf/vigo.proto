@@ -45,6 +45,16 @@ service VigoAgent {
   // Replaces tokio::sleep between check-in cycles — gives the server a way to
   // wake unary agents instantly without persistent streaming overhead.
   rpc Wake(WakeRequest) returns (WakeResponse);
+
+  // ResolveSecrets resolves a batch of secret references to their plaintext
+  // values for the calling envoy. Refs must appear in the envoy's matched
+  // pattern's resolved bundle (server enforces entitlement); unauthorized
+  // refs are rejected with PermissionDenied and an
+  // `secret.entitlement_denied` audit event. The CheckInResponse carries a
+  // `secrets_epoch` that bumps when any secret rotates server-side — agents
+  // re-fetch via this RPC only when the epoch changes or a placeholder ref
+  // misses the local cache.
+  rpc ResolveSecrets(ResolveSecretsRequest) returns (ResolveSecretsResponse);
 }
 
 // =============================================================================
@@ -391,6 +401,16 @@ message PolicyBundle {
   // Merkle tree root over modules + vars. Agents cache this and send it back
   // as state_fingerprint — if it matches, the server skips bundle construction.
   string merkle_root = 15;
+
+  // secrets_epoch bumps whenever any secret value in the secrets backend
+  // rotates. Agents detect change-by-comparison: when the epoch advances,
+  // any cached secret values resolved against the previous epoch are
+  // considered stale and re-fetched via ResolveSecrets on next apply.
+  // Resource attributes and vars in this bundle carry placeholder strings
+  // (`__VIGO_SECRET__<path>__END_VIGO_SECRET__`) in place of resolved
+  // values — the agent substitutes the placeholders against fresh /
+  // cached values before passing attributes to executors.
+  int64 secrets_epoch = 16;
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.
@@ -409,7 +429,7 @@ message PolicyModule {
 message PolicyResource {
   string name = 1;
   string type = 2;
-  map<string, string> attributes = 3;  // raw template strings (secrets resolved)
+  map<string, string> attributes = 3;  // raw template strings; `secret:` refs travel as `__VIGO_SECRET__<path>__END_VIGO_SECRET__` placeholders that the agent substitutes via ResolveSecrets before applying.
   string when = 4;                     // when expression (unevaluated)
   repeated string notify = 5;
   repeated string subscribes = 6;
@@ -1080,4 +1100,18 @@ message WakeRequest {
 
 message WakeResponse {
   string reason = 1;          // why the server woke the agent ("tunnel_requested", "task_dispatch", etc.) — empty for timeout
+}
+
+message ResolveSecretsRequest {
+  string envoy_id = 1;
+  bytes signature = 2;        // ED25519 signature over envoy_id + timestamp + sorted(refs).
+  string timestamp = 3;       // Unix seconds string used in signature.
+  repeated string refs = 4;   // Secret paths to resolve (e.g. "vigo/db/dsn"). Every ref must appear in the calling envoy's matched pattern's referenced-secrets set; un-entitled refs make the whole call fail PermissionDenied + emit secret.entitlement_denied audit.
+}
+
+message ResolveSecretsResponse {
+  // Resolved values keyed by the same paths sent in the request.
+  // Resolution is all-or-nothing — partial results aren't returned.
+  map<string, string> values = 1;
+  int64 secrets_epoch = 2;    // Echo of the current server-side epoch at resolution time; agent uses it to invalidate the local cache when the next CheckIn carries a higher value.
 }

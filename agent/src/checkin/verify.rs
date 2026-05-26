@@ -59,6 +59,10 @@ fn marshal_bundle_content(bundle: &PolicyBundle) -> Vec<u8> {
         max_age_seconds: 0,
         stream_edit_allowed_paths: vec![],
         stream_edit_timeout_secs: 0,
+        // Field 16 (secrets_epoch) is a freshness marker, not signed
+        // content — zeroed in the marshaled payload to stay symmetric
+        // with the server's marshalBundleContent.
+        secrets_epoch: 0,
     };
     content.encode_to_vec()
 }

@@ -689,9 +689,7 @@ async fn run_once(
     let offline = server_result.is_err();
     let (mut maybe_client, collected_traits, modules, bundle_for_trace, force_update);
 
-    if let Ok((client, server_resp, pre_traits)) = server_result {
-        maybe_client = Some(client);
-
+    if let Ok((mut client, mut server_resp, pre_traits)) = server_result {
         for w in &server_resp.warnings {
             warn!("server warning: {}", w);
         }
@@ -705,6 +703,21 @@ async fn run_once(
 
         // Use traits already collected before check-in.
         collected_traits = pre_traits;
+
+        // Resolve placeholder secrets before eval_bundle. See
+        // policy::secrets for the marker convention; without this
+        // substitution, eval_bundle would feed placeholder strings
+        // into executors.
+        if let Some(bundle) = server_resp.policy_bundle.as_mut() {
+            policy::secrets::resolve_and_substitute(
+                bundle,
+                policy::secrets::global_cache(),
+                &mut client,
+            )
+            .await
+            .context("resolving placeholder secrets")?;
+        }
+        maybe_client = Some(client);
 
         // Get modules from either policy bundle (agent-side eval) or compiled modules.
         let (m, b) = if let Some(ref bundle) = server_resp.policy_bundle {
@@ -794,6 +807,23 @@ async fn run_once(
             // No cached traits — collect fresh ones locally.
             traits::collect_all(&traits::default_collectors()).await
         };
+
+        // Offline-cache limitation: substitute placeholder secrets from
+        // the in-memory cache. If the cache doesn't have them (cold
+        // restart with server unreachable), fail with a clear message
+        // rather than writing placeholders into config files.
+        let mut bundle = bundle;
+        let refs = policy::secrets::collect_refs_in_bundle_pub(&bundle);
+        let cache = policy::secrets::global_cache();
+        let missing = cache.missing_refs_pub(refs.iter().map(|s| s.as_str()));
+        if !missing.is_empty() {
+            bail!(
+                "{short_reason} and cached policy references {} unresolved secret(s) (offline cache empty); awaiting server contact before applying",
+                missing.len()
+            );
+        }
+        policy::secrets::substitute_in_bundle_pub(&mut bundle, cache)
+            .context("substituting placeholder secrets in cached bundle")?;
 
         match policy::eval::eval_bundle(Some(&bundle), &collected_traits) {
             Ok(mods) => {

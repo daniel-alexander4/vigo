@@ -11,6 +11,9 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,6 +72,12 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 			if err := verifyReportTraits(ctx, queries, r, sigWindow, fleetIdx, m); err != nil {
 				return nil, err
 			}
+		case *pb.ResolveSecretsRequest:
+			newCtx, err := verifyResolveSecretsCtx(ctx, queries, r, sigWindow, fleetIdx, m)
+			if err != nil {
+				return nil, err
+			}
+			ctx = newCtx
 		default:
 			// Admin RPCs and unknown types pass through without agent signature checks.
 		}
@@ -192,6 +201,46 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.Report
 	}
 
 	return nil
+}
+
+// verifyResolveSecretsCtx validates the signature on a ResolveSecretsRequest
+// and stores the envoy in context for handler reuse. The signed payload is
+// the sorted refs joined by NUL bytes — keeps the signature stable across
+// any caller-side reordering while binding to the exact set of refs being
+// asked for (no reuse of a signature for a different ref set).
+func verifyResolveSecretsCtx(ctx context.Context, queries *db.Queries, req *pb.ResolveSecretsRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (context.Context, error) {
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
+	}
+	envoyID := req.GetEnvoyId()
+
+	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
+	if err != nil {
+		return ctx, err
+	}
+
+	tsStr := req.GetTimestamp()
+	if tsStr == "" {
+		return ctx, status.Error(codes.InvalidArgument, "timestamp is required")
+	}
+	tsUnix, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return ctx, status.Errorf(codes.InvalidArgument, "invalid timestamp: %v", err)
+	}
+	if err := checkTimestamp(time.Unix(tsUnix, 0), sigWindow); err != nil {
+		return ctx, err
+	}
+
+	sortedRefs := append([]string(nil), req.GetRefs()...)
+	sort.Strings(sortedRefs)
+	payload := []byte(strings.Join(sortedRefs, "\x00"))
+
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
+		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
+	}
+
+	return db.ContextWithEnvoy(ctx, envoy), nil
 }
 
 // lookupEnvoyAndPubKey retrieves a envoy and its parsed ED25519 public key.

@@ -577,6 +577,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		bundle = filterBundleByTraits(bundle, traitsMap)
 	}
+	// Stamp the current secrets-epoch on every outgoing bundle so the
+	// agent invalidates cached ResolveSecrets results when this advances.
+	bundle.SecretsEpoch = s.configStore.SecretsEpoch()
 
 	// Inject server-derived per-envoy gates into vars_json. The agent's
 	// `swarm/gates.rs::substrate_active` helper ANDs `swarm_enabled` with

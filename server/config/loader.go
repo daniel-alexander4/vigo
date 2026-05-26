@@ -175,6 +175,24 @@ var knownSecretFields = map[string]bool{
 
 const secretPrefix = "secret:"
 
+// Secret placeholder markers — substituted in for resolved secret values
+// during loader resolution so the resolved config (and the bundle it
+// produces) never carries plaintext secret bytes. The agent recognizes
+// these markers post-template-render and fetches the real values via
+// VigoAgent.ResolveSecrets. Markers are unambiguous in any text context
+// (the literal byte sequence is implausibly rare in operator config).
+const (
+	secretPlaceholderBegin = "__VIGO_SECRET__"
+	secretPlaceholderEnd   = "__END_VIGO_SECRET__"
+)
+
+// formatSecretPlaceholder produces the marker form the agent looks for.
+// Wrapping the key with explicit begin/end sentinels makes mid-string
+// substitution unambiguous (compound `PW=secret:foo,DB=app` → `PW=__VIGO_SECRET__foo__END_VIGO_SECRET__,DB=app`).
+func formatSecretPlaceholder(key string) string {
+	return secretPlaceholderBegin + key + secretPlaceholderEnd
+}
+
 // resolvedEntry pairs a match pattern with a resolved envoy config.
 type resolvedEntry struct {
 	match  string
@@ -212,6 +230,7 @@ type ConfigStore struct {
 	backend                 string          // secrets backend name for diagnostic hints
 	dangerous               bool            // allow non-idempotent resources
 	version                 atomic.Uint64   // incremented on each successful reload
+	secretsEpoch            atomic.Int64    // bumped on each successful reload AND on watcher-detected rotation; lets agents invalidate cached resolved secret values when the marker shifts
 	onReloadFailure         func(err error) // optional callback on reload failure
 	onReloadSuccess         func()          // optional callback after successful reload
 	lastReloadErr           error           // last reload error (nil if last reload succeeded)
@@ -485,6 +504,30 @@ func (cs *ConfigStore) reloadComplianceStandards() {
 // reload, used by the response cache to detect config changes.
 func (cs *ConfigStore) Version() uint64 {
 	return cs.version.Load()
+}
+
+// ResolveSecret fetches the plaintext value of the given secret key from
+// the configured provider. Used by the ResolveSecrets RPC after the
+// caller's entitlement is checked — never call this from a path that
+// hasn't already verified the requester is allowed to see the value.
+func (cs *ConfigStore) ResolveSecret(ctx context.Context, key string) (string, error) {
+	return cs.provider.Get(ctx, key)
+}
+
+// SecretsEpoch returns the current secrets-epoch counter. Bumped on
+// every successful Reload and on watcher-detected rotation. The
+// CheckIn response embeds this so agents invalidate cached resolved-
+// secret values when the value advances.
+func (cs *ConfigStore) SecretsEpoch() int64 {
+	return cs.secretsEpoch.Load()
+}
+
+// BumpSecretsEpoch advances the secrets-epoch by one. Called by the
+// rotation watcher when isopass (or another backend's polling layer)
+// reports a secret value has changed. Reload also bumps the epoch on
+// its own — this is for rotation events that happen between reloads.
+func (cs *ConfigStore) BumpSecretsEpoch() int64 {
+	return cs.secretsEpoch.Add(1)
 }
 
 // LastReloadError returns the error from the most recent config reload,
@@ -2490,13 +2533,19 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	v := cs.version.Add(1)
+	// Bump the secrets epoch on every successful reload. A reload may
+	// have introduced new secret references, retired old ones, or
+	// resolved the same refs against rotated provider values — agents
+	// invalidate any cached resolved-secret values when this advances.
+	se := cs.secretsEpoch.Add(1)
 
 	slog.Info("config loaded",
 		"envoys", len(entries),
 		"modules", len(moduleDefs),
 		"roles", len(roleDefs),
 		"waivers", totalWaivers,
-		"version", v)
+		"version", v,
+		"secrets_epoch", se)
 
 	return nil
 }
@@ -2962,11 +3011,13 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		secretErrs = append(secretErrs, cs.resolveModuleSecrets(entry.Match, &cfg.Modules[i])...)
 	}
 
-	// Resolve the device credential secret if this is a network device entry.
+	// Validate the device credential secret if this is a network device
+	// entry; on success store the placeholder marker (the resolved value
+	// is fetched by the agent via ResolveSecrets when the gateway envoy
+	// applies the proxied-device session).
 	if cfg.Credential != "" && strings.HasPrefix(cfg.Credential, secretPrefix) {
 		key := strings.TrimPrefix(cfg.Credential, secretPrefix)
-		val, err := cs.provider.Get(context.Background(), key)
-		if err != nil {
+		if _, err := cs.provider.Get(context.Background(), key); err != nil {
 			secretErrs = append(secretErrs, &SecretError{
 				Match:   entry.Match,
 				Attr:    "credential",
@@ -2975,7 +3026,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 				Backend: cs.backend,
 			})
 		} else {
-			cfg.Credential = val
+			cfg.Credential = formatSecretPlaceholder(key)
 		}
 	}
 
@@ -4108,8 +4159,14 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 	return allEntries, commons, nil
 }
 
-// resolveVars enforces known-secret fields and resolves secret: prefixes.
-// It collects all failures rather than stopping at the first.
+// resolveVars enforces known-secret fields and substitutes secret: prefixes
+// with placeholder markers. Each `secret:foo` ref is validated against the
+// provider (so a missing-secret error still surfaces at load time, at
+// parity with the pre-placeholder behavior) and then replaced with the
+// `__VIGO_SECRET__foo__END_VIGO_SECRET__` marker — the resolved plaintext
+// value is discarded after the validation lookup, never stored in `vars`.
+// Errors are collected across all keys so the operator can fix everything
+// in one pass.
 func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretError {
 	var errs []*SecretError
 	for k, v := range vars {
@@ -4132,8 +4189,7 @@ func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretE
 		}
 		if strings.HasPrefix(str, secretPrefix) {
 			key := strings.TrimPrefix(str, secretPrefix)
-			resolved, err := cs.provider.Get(context.Background(), key)
-			if err != nil {
+			if _, err := cs.provider.Get(context.Background(), key); err != nil {
 				errs = append(errs, &SecretError{
 					Match:  match,
 					Attr:   k,
@@ -4142,7 +4198,7 @@ func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretE
 				})
 				continue
 			}
-			vars[k] = resolved
+			vars[k] = formatSecretPlaceholder(key)
 		}
 	}
 	return errs
@@ -4193,18 +4249,20 @@ type secretResolveFailure struct {
 }
 
 // resolveSecretsInValue substitutes every `secret:<key>` substring in str
-// with its resolved value. A key runs from immediately after `secret:` up
-// to the next delimiter — comma, semicolon, whitespace, quote, or end of
-// string — so compound k=v values like `PW=secret:vigo/db/pw,DB=app` work
-// the same as whole-value references.
+// with a placeholder marker (`__VIGO_SECRET__<key>__END_VIGO_SECRET__`)
+// after validating that the key resolves against the provider — the
+// resolved plaintext value is discarded after the validation lookup.
+// A key runs from immediately after `secret:` up to the next delimiter
+// (comma, semicolon, whitespace, quote, end of string) so compound k=v
+// values like `PW=secret:vigo/db/pw,DB=app` work the same as whole-value
+// references.
 //
 // Failures don't poison the whole string: any reference that fails to
-// resolve is left in place (as `secret:<key>`) and reported. The caller
+// validate is left in place (as `secret:<key>`) and reported. The caller
 // only commits the substituted value when failures is empty.
 //
-// Resolved values are not re-scanned — a substituted string that happens
-// to contain `secret:...` won't trigger another lookup, matching the
-// "agent stays oblivious" model.
+// Placeholder markers are emitted exactly once per ref — they are not
+// re-scanned for nested `secret:` content.
 func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolveFailure) {
 	if !strings.Contains(str, secretPrefix) {
 		return str, nil
@@ -4232,13 +4290,12 @@ func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolv
 			i = keyStart
 			continue
 		}
-		resolved, err := cs.provider.Get(context.Background(), key)
-		if err != nil {
+		if _, err := cs.provider.Get(context.Background(), key); err != nil {
 			failures = append(failures, secretResolveFailure{key: key, err: err})
 			b.WriteString(secretPrefix)
 			b.WriteString(key)
 		} else {
-			b.WriteString(resolved)
+			b.WriteString(formatSecretPlaceholder(key))
 		}
 		i = keyEnd
 	}
