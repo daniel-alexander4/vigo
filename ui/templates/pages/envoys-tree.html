@@ -67,7 +67,7 @@
 {{$childCount := len .Children}}
 <details class="envoys-tree__dir" {{if .DefaultOpen}}open{{end}}>
     <summary class="envoys-tree__summary">
-        <span class="envoys-tree__chevron" aria-hidden="true"></span>
+        <svg class="envoys-tree__chevron" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 3 10 7 5 11"/></svg>
         <span class="envoys-tree__dir-name">{{.Name}}{{if not (eq .Name "(unmatched)")}}/{{end}}</span>
         {{if gt .Total 0}}
         <span class="envoys-tree__rollup">
@@ -83,6 +83,11 @@
     <ul class="envoys-tree__envoys">
         {{range .Envoys}}
         {{template "envoy-tree-row" .}}
+        {{end}}
+        {{if gt .EnvoyOverflow 0}}
+        <li class="envoys-tree__overflow">
+            <a href="/envoys" class="envoys-tree__overflow-link">+ {{.EnvoyOverflow}} more — view in flat list</a>
+        </li>
         {{end}}
     </ul>
     {{end}}

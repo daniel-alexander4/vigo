@@ -3549,15 +3549,12 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 
 .envoys-tree__chevron {
-    display: inline-block;
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><polyline points='5 3 10 7 5 11'/></svg>");
-    background-repeat: no-repeat;
-    background-position: center;
     transition: transform 0.12s ease;
     opacity: 0.6;
+    color: var(--color-text-muted);
 }
 .envoys-tree__dir[open] > .envoys-tree__summary > .envoys-tree__chevron {
     transform: rotate(90deg);
@@ -3659,6 +3656,20 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .envoys-tree__envoy-flag--observing { color: var(--color-info, var(--color-brand)); }
 .envoys-tree__envoy-flag--drift-changed  { color: var(--color-info, var(--color-brand)); }
 .envoys-tree__envoy-flag--drift-diverged { color: var(--color-warning); }
+
+.envoys-tree__overflow {
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+.envoys-tree__overflow-link {
+    color: var(--color-text-muted);
+    text-decoration: none;
+}
+.envoys-tree__overflow-link:hover {
+    color: var(--color-brand);
+    text-decoration: underline;
+}
 
 .envoys-tree__children {
     padding-left: 16px;

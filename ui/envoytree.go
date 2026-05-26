@@ -37,7 +37,19 @@ type EnvoyTreeNode struct {
 	// True when this node or any descendant has a non-converged envoy
 	// (triage state surfaces by default); also true for the root.
 	DefaultOpen bool
+
+	// EnvoyOverflow is the number of envoys at this node that were
+	// dropped from the rendered list to keep the DOM bounded.
+	// `len(Envoys) + EnvoyOverflow == (envoys before truncation)`.
+	// Template renders a "+ N more" link when EnvoyOverflow > 0.
+	EnvoyOverflow int
 }
+
+// envoyTreeRenderCap is the maximum envoys rendered per directory node.
+// Above this, the template shows "+ N more" pointing at the flat list.
+// Keeps the DOM bounded when the (unmatched) bucket or a busy hostcrate
+// dir holds thousands of envoys at fleet scale.
+const envoyTreeRenderCap = 50
 
 // EnvoyTreePageData drives templates/pages/envoys-tree.html. Carries the
 // same chip-filter state the flat envoys page uses so the UX is uniform
@@ -197,8 +209,14 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 
 	if len(unmatched) > 0 {
 		sort.Slice(unmatched, func(i, j int) bool { return unmatched[i].Hostname < unmatched[j].Hostname })
-		data.Unmatched = &EnvoyTreeNode{Name: "(unmatched)", Envoys: unmatched, DefaultOpen: true}
+		// (unmatched) is a debug bucket (envoys with no matching
+		// hostcrate). At loadtest scale this can hold thousands of
+		// rows — never auto-open it; the operator clicks in when
+		// investigating. computeRollups still wires up counts so the
+		// collapsed summary surfaces "N envoys" + status breakdown.
+		data.Unmatched = &EnvoyTreeNode{Name: "(unmatched)", Envoys: unmatched}
 		computeRollups(data.Unmatched)
+		data.Unmatched.DefaultOpen = false
 	}
 
 	// Roll up envoy counts (per-status) and compute default-open
@@ -238,6 +256,10 @@ func hostcrateDirsAndAncestors(dirByPattern map[string]string) map[string]bool {
 // true when this subtree contains a non-converged envoy at any depth —
 // the caller wires that into DefaultOpen so triage state is visible on
 // first render without expanding every branch.
+//
+// Rollups are computed BEFORE truncating Envoys to envoyTreeRenderCap so
+// the per-node "N envoys" + status breakdown stays accurate even when
+// the rendered list is capped.
 func computeRollups(node *EnvoyTreeNode) bool {
 	hasFailure := false
 	for _, e := range node.Envoys {
@@ -269,6 +291,11 @@ func computeRollups(node *EnvoyTreeNode) bool {
 	}
 	if hasFailure {
 		node.DefaultOpen = true
+	}
+	// Cap the rendered envoy list AFTER rollups so totals stay truthful.
+	if len(node.Envoys) > envoyTreeRenderCap {
+		node.EnvoyOverflow = len(node.Envoys) - envoyTreeRenderCap
+		node.Envoys = node.Envoys[:envoyTreeRenderCap]
 	}
 	return hasFailure
 }

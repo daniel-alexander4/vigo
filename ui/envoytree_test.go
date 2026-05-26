@@ -169,6 +169,22 @@ func TestHostcrateDirsAndAncestors_IncludesEveryAncestorPath(t *testing.T) {
 	assert.False(t, kept["templates"])
 }
 
+func TestComputeRollups_CapsRenderedEnvoysAtTreeRenderCap(t *testing.T) {
+	// The (unmatched) bucket at fleet scale can hold thousands of
+	// rows. Cap the rendered list so the DOM stays bounded; totals
+	// must still be the truth.
+	bigList := make([]EnvoyRow, envoyTreeRenderCap+200)
+	for i := range bigList {
+		bigList[i] = EnvoyRow{Hostname: "h", Status: "no data"}
+	}
+	node := &EnvoyTreeNode{Name: "(unmatched)", Envoys: bigList}
+	computeRollups(node)
+	assert.Equal(t, envoyTreeRenderCap, len(node.Envoys), "rendered list capped at envoyTreeRenderCap")
+	assert.Equal(t, 200, node.EnvoyOverflow, "EnvoyOverflow carries the dropped count")
+	assert.Equal(t, envoyTreeRenderCap+200, node.Total, "Total reflects ALL envoys, not the rendered subset")
+	assert.Equal(t, envoyTreeRenderCap+200, node.CountNoData)
+}
+
 func TestComputeRollups_SumsAcrossSubtreeAndFlagsDefaultOpen(t *testing.T) {
 	tree := &EnvoyTreeNode{
 		Name: ".live",

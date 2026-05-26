@@ -51,8 +51,18 @@
         }
     };
 
-    // Restore open state on initial paint + after every boosted nav.
-    document.addEventListener('DOMContentLoaded', applyOpenClass);
-    document.body.addEventListener('htmx:afterSettle', applyOpenClass);
-    applyOpenClass();
+    // The script tag lives in <head>; defer body-bound listeners until
+    // the body exists. document.addEventListener fires on the document
+    // (always available) and is safe to register immediately.
+    function bindBodyListener() {
+        if (document.body) {
+            document.body.addEventListener('htmx:afterSettle', applyOpenClass);
+        }
+        applyOpenClass();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindBodyListener);
+    } else {
+        bindBodyListener();
+    }
 })();
