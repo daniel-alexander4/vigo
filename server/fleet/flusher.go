@@ -88,6 +88,13 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 
 	// Batch update last_seen in chunks of 500.
 	const chunkSize = 500
+	// Per-chunk SQLite WAL-write timing: log individual chunks that exceed
+	// the threshold so we can see whether the request-tail spikes correlate
+	// with specific slow writes vs. uniformly slow ones (uniform = WAL
+	// queue depth; one specific = a particular statement is the bottleneck).
+	// Threshold deliberately lower than the per-flush slow threshold so a
+	// 200ms chunk shows up even when the flush as a whole is "fast".
+	const slowChunkThreshold = 50 * time.Millisecond
 	var lastSeenFailed bool
 	batchStart := time.Now()
 	for i := 0; i < len(lastSeenIDs); i += chunkSize {
@@ -95,9 +102,13 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 		if end > len(lastSeenIDs) {
 			end = len(lastSeenIDs)
 		}
+		chunkStart := time.Now()
 		if err := sf.queries.BatchUpdateLastSeen(ctx, lastSeenIDs[i:end]); err != nil {
 			slog.Error("state flusher: batch last_seen failed", "count", end-i, "error", err)
 			lastSeenFailed = true
+		}
+		if d := time.Since(chunkStart); d >= slowChunkThreshold {
+			slog.Info("state flusher: slow chunk", "op", "batch_last_seen", "count", end-i, "duration", d)
 		}
 	}
 	batchDur := time.Since(batchStart)
@@ -156,8 +167,12 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 			if end > len(ids) {
 				end = len(ids)
 			}
+			chunkStart := time.Now()
 			if err := fn(ctx, ids[i:end]); err != nil {
 				slog.Error("state flusher: batch failed", "op", name, "count", end-i, "error", err)
+			}
+			if d := time.Since(chunkStart); d >= slowChunkThreshold {
+				slog.Info("state flusher: slow chunk", "op", name, "count", end-i, "duration", d)
 			}
 		}
 	}
@@ -170,8 +185,12 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 			if end > len(ids) {
 				end = len(ids)
 			}
+			chunkStart := time.Now()
 			if err := sf.queries.BatchUpdateAgentVersion(ctx, ids[i:end], version); err != nil {
 				slog.Error("state flusher: batch agent_version failed", "version", version, "count", end-i, "error", err)
+			}
+			if d := time.Since(chunkStart); d >= slowChunkThreshold {
+				slog.Info("state flusher: slow chunk", "op", "batch_agent_version", "version", version, "count", end-i, "duration", d)
 			}
 		}
 	}
@@ -202,7 +221,7 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 	// Promoted from Debug to Info above a slow-flush threshold so the
 	// signal lands in journald during load events without noise in
 	// steady state.
-	const slowFlushThreshold = 500 * time.Millisecond
+	const slowFlushThreshold = 100 * time.Millisecond
 	total := drainDur + batchDur + flagsDur
 	if total >= slowFlushThreshold {
 		slog.Warn("state flusher: slow flush",
