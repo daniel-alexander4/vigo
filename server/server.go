@@ -49,6 +49,7 @@ import (
 	"git.alexander4.io/vigo/server/risk"
 	vigoscrier "git.alexander4.io/vigo/server/scrier"
 	"git.alexander4.io/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/tickets"
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
@@ -107,10 +108,11 @@ type Server struct {
 	licenseGraceDir string
 
 	// --- Identity / secrets ---
-	provider secrets.Provider
-	puddleID *puddle.Identity // non-nil only on local secrets backend
-	boltID   *bolt.Identity   // non-nil only when mode != standalone AND local backend
-	mode     config.SpannerMode
+	provider     secrets.Provider
+	puddleID     *puddle.Identity // non-nil only on local secrets backend
+	boltID       *bolt.Identity   // non-nil only when mode != standalone AND local backend
+	ticketsStore *tickets.Store   // non-nil only on local secrets backend; rotated by Run()
+	mode         config.SpannerMode
 
 	// --- Database ---
 	db          *sql.DB
@@ -320,6 +322,18 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			"pubkey", s.puddleID.PublicKeyText,
 			"dir", puddle.DefaultDir,
 		)
+
+		// Persistent TLS 1.3 session-ticket keys. Without persistence Go's
+		// crypto/tls auto-generates per-process keys, so every vigosrv
+		// restart invalidates every cached PSK ticket in the fleet and
+		// forces a full handshake on the next CheckIn from every envoy.
+		// Same HKDF root as puddle/bolt, distinct purpose so the
+		// derivations don't cross. Keys are rotated daily in Run().
+		s.ticketsStore, err = tickets.EnsureStore(local, tickets.DefaultDir)
+		if err != nil {
+			return nil, fmt.Errorf("tls ticket-key store: %w", err)
+		}
+		slog.Info("tls ticket-key store ready", "dir", tickets.DefaultDir, "keys", len(s.ticketsStore.Keys()))
 	}
 
 	// Load full server config with secret resolution (second pass).
@@ -903,6 +917,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		ServerVersions:       s.agentVersions,
 		GlobalObserveOnly:    s.cfg.CheckIn.ObserveOnly,
 		Metrics:              s.metrics,
+		TicketsStore:         s.ticketsStore,
 		AgentBinAvailable: func() bool {
 			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {
 				for _, goarch := range []string{"amd64", "arm64"} {

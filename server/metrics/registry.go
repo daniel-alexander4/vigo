@@ -36,8 +36,9 @@ type Metrics struct {
 
 	// --- gRPC ---
 
-	GRPCRequestsTotal   *prometheus.CounterVec
-	GRPCRequestDuration *prometheus.HistogramVec
+	GRPCRequestsTotal      *prometheus.CounterVec
+	GRPCRequestDuration    *prometheus.HistogramVec
+	GRPCTLSHandshakesTotal *prometheus.CounterVec
 
 	// --- Orchestration ---
 
@@ -238,6 +239,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Help:    "gRPC request duration in seconds.",
 			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
 		}, []string{"method"}),
+		GRPCTLSHandshakesTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_grpc_tls_handshakes_total",
+			Help: "TLS handshakes completed on the gRPC listener, by outcome. A non-trivial steady-state rate after the fleet has settled indicates connection churn (silent gRPC subchannel reconnects, agent restarts, or enrollment).",
+		}, []string{"status"}),
 
 		// --- Orchestration ---
 

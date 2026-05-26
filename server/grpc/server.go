@@ -24,6 +24,7 @@ import (
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/task"
+	"git.alexander4.io/vigo/server/tickets"
 	"git.alexander4.io/vigo/server/traits"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -98,6 +99,11 @@ type ServerConfig struct {
 	AgentBinAvailable func() bool      // if set, version-mismatch auto-update only fires when at least one binary exists
 	GlobalObserveOnly bool             // global observe-only mode from server.yaml checkin.observe_only
 	Metrics           *metrics.Metrics // per-instance prometheus collectors
+	// TicketsStore, if non-nil, persists TLS 1.3 session-ticket
+	// encryption keys across server restarts so envoys can resume PSK
+	// sessions instead of full-handshaking on every deploy. nil → Go's
+	// default per-process key (correct but expensive on restart).
+	TicketsStore *tickets.Store
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -109,8 +115,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
+	if cfg.TicketsStore != nil {
+		cfg.TicketsStore.Apply(tlsCfg)
+	}
 
-	creds := credentials.NewTLS(tlsCfg)
+	creds := newCountingCreds(credentials.NewTLS(tlsCfg), cfg.Metrics)
 
 	traitsScannerTTL := cfg.TraitsScannerTTL
 	if traitsScannerTTL == 0 {

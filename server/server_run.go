@@ -37,6 +37,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startLicenseEnforcement(ctx)
 	s.startAsyncFlushers(ctx)
 	s.startRetentionAndBackup(ctx)
+	s.startTicketsRotation(ctx)
 
 	if err := s.startGRPCServer(ctx); err != nil {
 		return err
@@ -113,6 +114,33 @@ func (s *Server) startAsyncFlushers(ctx context.Context) {
 	go stateFlusher.Start(ctx, s.lastSeenFlush, 0)
 	go s.runBatcher.Start(ctx, s.lastSeenFlush, s.lastSeenFlush/3)
 	go s.traitsBatch.Start(ctx, s.lastSeenFlush, 2*s.lastSeenFlush/3)
+}
+
+// startTicketsRotation rotates TLS session-ticket keys daily on the
+// gRPC listener. No-op when the store is nil (non-local secrets
+// backend). Rotation persists both keys (active + 1 grace) under the
+// master key, and the next handshake picks up the new keys via the
+// GetConfigForClient callback wired in tickets.Store.Apply.
+func (s *Server) startTicketsRotation(ctx context.Context) {
+	if s.ticketsStore == nil {
+		return
+	}
+	go func() {
+		t := time.NewTicker(24 * time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if err := s.ticketsStore.Rotate(); err != nil {
+					slog.Warn("tls ticket-key rotation failed", "error", err)
+					continue
+				}
+				slog.Info("tls ticket-key rotated", "keys", len(s.ticketsStore.Keys()))
+			}
+		}
+	}()
 }
 
 // startRetentionAndBackup starts the task-run timeout reaper, the
