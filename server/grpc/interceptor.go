@@ -21,6 +21,7 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/metrics"
+	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -129,7 +130,7 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequ
 	payload := []byte(req.GetStateFingerprint())
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
-	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey, envoyID, fleetIdx) {
 		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
@@ -163,7 +164,7 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.Rep
 	payload := []byte(req.GetRunId())
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
-	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey, envoyID, fleetIdx) {
 		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
@@ -195,7 +196,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.Report
 	payload := req.GetTraitsJson()
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
-	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey, envoyID, fleetIdx) {
 		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return status.Error(codes.Unauthenticated, "signature verification failed")
 	}
@@ -235,7 +236,7 @@ func verifyResolveSecretsCtx(ctx context.Context, queries *db.Queries, req *pb.R
 	sort.Strings(sortedRefs)
 	payload := []byte(strings.Join(sortedRefs, "\x00"))
 
-	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey, envoyID, fleetIdx) {
 		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
@@ -314,11 +315,21 @@ func fleetEnvoyToDB(ts *fleet.EnvoyState) db.Envoy {
 }
 
 // verifyPayload verifies an ED25519 signature over payload+timestamp.
-func verifyPayload(payload []byte, timestamp string, sig []byte, pub ed25519.PublicKey) bool {
+// The fast path uses FleetIndex's pre-expanded public key cache (skips
+// the curve-point decompression stdlib ed25519.Verify does on every
+// call). The slow path — envoy not in FleetIndex, e.g. enrolled during
+// a rehydration race — falls back to curve25519-voi's plain Verify on
+// the raw bytes (still AVX2-accelerated, no expansion benefit).
+func verifyPayload(payload []byte, timestamp string, sig []byte, pub ed25519.PublicKey, envoyID string, fleetIdx *fleet.FleetIndex) bool {
 	msg := make([]byte, len(payload)+len(timestamp))
 	copy(msg, payload)
 	copy(msg[len(payload):], timestamp)
-	return ed25519.Verify(pub, msg, sig)
+	if fleetIdx != nil {
+		if ok, found := fleetIdx.Verify(envoyID, msg, sig); found {
+			return ok
+		}
+	}
+	return voied25519.Verify(voied25519.PublicKey(pub), msg, sig)
 }
 
 // checkTimestamp verifies the timestamp is within the allowed window.

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/convergence"
+	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 )
 
 // MaxRecentRuns bounds the per-envoy trailing run slice held in
@@ -141,7 +143,15 @@ type FleetIndex struct {
 	mu                 sync.RWMutex
 	envoys             map[string]*EnvoyState                // ID → state
 	byHostname         map[string]string                     // hostname → ID
-	pubkeys            map[string]ed25519.PublicKey          // ID → parsed key
+	pubkeys            map[string]ed25519.PublicKey          // ID → parsed key (raw bytes, for export via /api/v1/fleet/pubkeys)
+	// expandedPubkeys caches the curve25519-voi pre-expanded form keyed by
+	// envoy ID. Used by the hot-path Verify method below to skip the
+	// curve-point decompression that stdlib ed25519.Verify does on every
+	// call — ed25519 verify was ~26 % of vigosrv CPU at 8.7K req/s before
+	// this cache, dominated by VarTimeDoubleScalarBaseMult. ~1.47 KiB per
+	// envoy (≈ 73 MiB at 50K). nil entry on expansion failure → Verify
+	// returns found=false and the caller falls through to the slow path.
+	expandedPubkeys map[string]*voied25519.ExpandedPublicKey
 	byStatus           map[string]map[string]bool            // status → set of IDs
 	byTrait            map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
 	byTag              map[string]map[string]bool            // tag → set of IDs
@@ -214,6 +224,7 @@ func NewFleetIndex() *FleetIndex {
 		envoys:             make(map[string]*EnvoyState),
 		byHostname:         make(map[string]string),
 		pubkeys:            make(map[string]ed25519.PublicKey),
+		expandedPubkeys:    make(map[string]*voied25519.ExpandedPublicKey),
 		byStatus:           make(map[string]map[string]bool),
 		byTrait:            make(map[string]map[string]map[string]bool),
 		byTag:              make(map[string]map[string]bool),
@@ -292,12 +303,32 @@ func (f *FleetIndex) GetEnvoyLite(id string) (ts *EnvoyState, exists, revoked bo
 	return &cp, true, revoked
 }
 
-// GetPubKey returns the parsed ED25519 public key for the given envoy ID.
-// Returns nil if not found.
+// GetPubKey returns the parsed ED25519 public key for the given envoy ID
+// as raw 32-byte ed25519.PublicKey. Returns nil if not found. Hot-path
+// verification should call Verify instead — this accessor exists for
+// callers that need the raw bytes (e.g. /api/v1/fleet/pubkeys export).
 func (f *FleetIndex) GetPubKey(id string) ed25519.PublicKey {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.pubkeys[id]
+}
+
+// Verify checks sig against msg using the cached expanded public key for
+// envoyID. Returns (verified, found). When found is false the caller
+// should fall through to the slow path (DB lookup + parse + verify) —
+// this happens for envoys not yet in the index (admitted during a
+// rehydration race) or with malformed stored keys that couldn't expand.
+//
+// Uses curve25519-voi's VerifyExpanded which skips the per-call curve-
+// point decompression stdlib ed25519.Verify does on every call.
+func (f *FleetIndex) Verify(envoyID string, msg, sig []byte) (verified, found bool) {
+	f.mu.RLock()
+	pub := f.expandedPubkeys[envoyID]
+	f.mu.RUnlock()
+	if pub == nil {
+		return false, false
+	}
+	return voied25519.VerifyExpanded(pub, msg, sig), true
 }
 
 // GetByHostname returns the envoy ID for the given hostname.
@@ -596,6 +627,15 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 	f.byHostname[ts.Hostname] = ts.ID
 	if pubKey != nil {
 		f.pubkeys[ts.ID] = pubKey
+		// Pre-expand the curve point once; verify hot path reuses it.
+		// Failure (malformed key) is logged but non-fatal — Verify returns
+		// found=false and the interceptor's slow path takes over.
+		if exp, err := voied25519.NewExpandedPublicKey(voied25519.PublicKey(pubKey)); err == nil {
+			f.expandedPubkeys[ts.ID] = exp
+		} else {
+			slog.Warn("fleet: failed to expand envoy pubkey for fast-verify cache; slow-path will be used", "envoy_id", ts.ID, "error", err)
+			delete(f.expandedPubkeys, ts.ID)
+		}
 	}
 
 	newDrift := convergence.DriftNone
@@ -630,6 +670,7 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 
 	delete(f.byHostname, ts.Hostname)
 	delete(f.pubkeys, id)
+	delete(f.expandedPubkeys, id)
 	f.removeFromStatus(id, ts.ConvergenceStatus)
 	f.removeFromTraits(id, ts.Traits)
 	f.removeFromTags(id, ts.Tags)

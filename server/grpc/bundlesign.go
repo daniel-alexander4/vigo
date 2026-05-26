@@ -12,16 +12,23 @@ import (
 	"fmt"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"google.golang.org/protobuf/proto"
 )
 
 // BundleSigner signs PolicyBundle protos using an ED25519 private key.
 // The signature covers fields 1-9 + 15 (policy content + merkle root);
 // fields 10-12 (signature, key ID, max_age) are set after signing.
+//
+// Both keys are held as voi types so Sign and VerifyBundle use voi's
+// AVX2-accelerated implementations on amd64. The aliasing is free —
+// voi.PrivateKey / voi.PublicKey are []byte under the hood, same as
+// stdlib's, so the conversion is a no-op slice reinterpretation.
 type BundleSigner struct {
-	privKey ed25519.PrivateKey
+	privKey ed25519.PrivateKey   // kept for PEM export / Public() interface
 	pubKey  ed25519.PublicKey
-	keyID   string // first 8 bytes of SHA-256(pubkey), hex-encoded
+	voiPriv voied25519.PrivateKey // signing-path alias (no allocation)
+	keyID   string                // first 8 bytes of SHA-256(pubkey), hex-encoded
 }
 
 // NewBundleSigner creates a signer from an ED25519 private key.
@@ -32,6 +39,7 @@ func NewBundleSigner(privKey ed25519.PrivateKey) *BundleSigner {
 	return &BundleSigner{
 		privKey: privKey,
 		pubKey:  pubKey,
+		voiPriv: voied25519.PrivateKey(privKey),
 		keyID:   keyID,
 	}
 }
@@ -43,7 +51,7 @@ func (bs *BundleSigner) Sign(bundle *pb.PolicyBundle, maxAgeSeconds uint32) erro
 	if err != nil {
 		return fmt.Errorf("marshaling bundle content: %w", err)
 	}
-	sig := ed25519.Sign(bs.privKey, contentBytes)
+	sig := voied25519.Sign(bs.voiPriv, contentBytes)
 	bundle.Signature = sig
 	bundle.ServerPubkeyId = bs.keyID
 	bundle.MaxAgeSeconds = maxAgeSeconds
@@ -67,7 +75,7 @@ func VerifyBundle(bundle *pb.PolicyBundle, pubKey ed25519.PublicKey) bool {
 	if err != nil {
 		return false
 	}
-	return ed25519.Verify(pubKey, contentBytes, bundle.Signature)
+	return voied25519.Verify(voied25519.PublicKey(pubKey), contentBytes, bundle.Signature)
 }
 
 // publicKeyToPEM encodes an ED25519 public key to PKIX PEM format.
