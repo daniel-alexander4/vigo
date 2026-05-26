@@ -49,11 +49,19 @@ func NewScanner(dir string, ttl time.Duration) *Scanner {
 // If the directory does not exist, returns nil, nil (custom traits are optional).
 // Results are sorted by name for deterministic ordering.
 // When a TTL is set, returns cached results if the cache is fresh.
+//
+// Cache-validity sentinel is `cachedAt` being non-zero (i.e. ever scanned),
+// NOT `cached != nil`. An empty-or-missing custom-traits directory produces
+// `cached == nil` legitimately; without this distinction the cache would
+// miss on every CheckIn and the slow-path Lock would queue every caller —
+// surfaced at ≥ 8K req/s in the 2026-05-25 mixed-driver loadtest as 93 % of
+// total mutex wait. The slow-path now also stamps cachedAt on the
+// `ErrNotExist` branch so that empty-cache state is itself cached for TTL.
 func (s *Scanner) ScanDir() ([]Entry, error) {
 	// Fast path: return cached results if fresh.
 	if s.ttl > 0 {
 		s.mu.RLock()
-		if s.cached != nil && time.Since(s.cachedAt) < s.ttl {
+		if !s.cachedAt.IsZero() && time.Since(s.cachedAt) < s.ttl {
 			entries := s.cached
 			s.mu.RUnlock()
 			return entries, nil
@@ -67,6 +75,7 @@ func (s *Scanner) ScanDir() ([]Entry, error) {
 			s.mu.Lock()
 			s.nameToFile = nil
 			s.cached = nil
+			s.cachedAt = time.Now()
 			s.mu.Unlock()
 			return nil, nil
 		}
