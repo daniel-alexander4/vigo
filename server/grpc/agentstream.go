@@ -311,6 +311,16 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	streamRequested := false
 	tunnelRequested := false
 	forceUpdate := false
+	// adminSetForceUpdate captures whether the persistent ForceUpdate flag
+	// was set on the envoy (admin POST /api/v1/envoys/{id}/update or
+	// /api/v1/envoys/update). Auto-update detection below can also flip
+	// the *local* forceUpdate to true via a runtime version comparison,
+	// but that path doesn't persist anything — and the SetForceUpdate(false)
+	// "clear" at the end only needs to fire when the flag was actually
+	// persisted. Without this distinction, every check-in from any envoy
+	// running a stale version writes false-to-false through f.mu.Lock on
+	// the hot path and queues every concurrent CheckIn's f.mu.RLock.
+	adminSetForceUpdate := false
 	fastPoll := false
 	if s.fleetIndex != nil {
 		if freshState, ok, _ := s.fleetIndex.GetEnvoyLite(envoyID); ok {
@@ -319,6 +329,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			streamRequested = freshState.StreamRequested
 			tunnelRequested = freshState.TunnelRequested
 			forceUpdate = freshState.ForceUpdate
+			adminSetForceUpdate = freshState.ForceUpdate
 			fastPoll = freshState.FastPoll
 		}
 	}
@@ -356,8 +367,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 	}
-	// Clear the ephemeral flag so it's only sent once.
-	if forceUpdate && s.fleetIndex != nil {
+	// Clear the persistent ForceUpdate flag if and only if it was actually
+	// set in the FleetIndex (admin path). Auto-update-driven forceUpdate is
+	// a per-call decision; the in-memory flag was never touched and there's
+	// nothing to clear. Skipping the write removes f.mu.Lock from every
+	// check-in of every stale-version envoy.
+	if adminSetForceUpdate && s.fleetIndex != nil {
 		s.fleetIndex.SetForceUpdate(envoyID, false)
 	}
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
