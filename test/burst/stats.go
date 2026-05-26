@@ -117,25 +117,55 @@ func fmtMs(ns int64) string {
 	return strconv.FormatFloat(float64(ns)/1e6, 'f', 2, 64)
 }
 
-// serverSample is one server-side resource reading.
+// serverSample is one server-side resource reading. The wait fields
+// are the per-sample DELTA (wait time accumulated since the previous
+// sample), not the cumulative-since-process-start counter the pprof
+// endpoint reports. serverSeries.Append handles the conversion so the
+// CSV row contains the more useful per-sample figure.
 type serverSample struct {
-	elapsedSec   int
-	phase        string
-	rssMB        int64
-	heapMB       int64
-	goroutines   int64
-	mutexWaitMs  int64
-	blockWaitMs  int64
+	elapsedSec  int
+	phase       string
+	rssMB       int64
+	heapMB      int64
+	goroutines  int64
+	mutexWaitMs int64 // delta vs previous sample
+	blockWaitMs int64 // delta vs previous sample
 }
 
 // serverSeries collects server-side samples taken from the pprof
 // endpoint via `docker exec vigo wget`. Cadence is operator-set
-// (--server-sample-interval), defaulting to 5 s.
+// (--server-sample-interval), defaulting to 5 s. The series owns the
+// cumulative→delta conversion for the mutex/block wait counters so
+// callers always see the per-sample figure.
 type serverSeries struct {
-	samples []serverSample
+	samples         []serverSample
+	prevMutexWaitMs int64 // last cumulative reading; -1 = no prior sample
+	prevBlockWaitMs int64
+	primed          bool
 }
 
+// Append records a sample, converting the wait counters from
+// cumulative-since-process-start to per-sample delta. The first sample
+// emits zeros for the deltas (no prior reading to subtract).
 func (s *serverSeries) Append(sample serverSample) {
+	rawMutex := sample.mutexWaitMs
+	rawBlock := sample.blockWaitMs
+	if !s.primed {
+		sample.mutexWaitMs = 0
+		sample.blockWaitMs = 0
+		s.primed = true
+	} else {
+		sample.mutexWaitMs = rawMutex - s.prevMutexWaitMs
+		sample.blockWaitMs = rawBlock - s.prevBlockWaitMs
+		if sample.mutexWaitMs < 0 {
+			sample.mutexWaitMs = 0
+		}
+		if sample.blockWaitMs < 0 {
+			sample.blockWaitMs = 0
+		}
+	}
+	s.prevMutexWaitMs = rawMutex
+	s.prevBlockWaitMs = rawBlock
 	s.samples = append(s.samples, sample)
 }
 

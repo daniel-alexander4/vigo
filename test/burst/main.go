@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	mathrand "math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -38,6 +39,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func mathRandInt63n(n int64) int64 { return mathrand.Int63n(n) }
 
 const toolVersion = "0.1"
 
@@ -247,21 +250,23 @@ type trialOpts struct {
 
 // trialResult captures the headline numbers for one trial. Aggregate
 // reports mean ± stdev across multiple trials so a single trial's
-// percentile isn't quoted in isolation.
+// percentile isn't quoted in isolation. Latency is reported in float
+// milliseconds — sub-ms values (loopback CheckIn typically lands at
+// 0.7-1.5ms) need fractional precision to be meaningful.
 type trialResult struct {
-	BaselineP50Ms   int64           `json:"baseline_p50_ms"`
-	BaselineP95Ms   int64           `json:"baseline_p95_ms"`
-	BaselineP99Ms   int64           `json:"baseline_p99_ms"`
-	BaselineThruput float64         `json:"baseline_throughput"`
-	BaselineFailureRatio float64    `json:"baseline_failure_ratio"`
-	PeakP99Ms       int64           `json:"peak_p99_ms"`
-	PeakP99AtSec    int             `json:"peak_p99_at_sec"`
-	SettleTimeSec   int             `json:"settle_time_sec"`
-	PeakRSSMB       int64           `json:"peak_rss_mb"`
-	PeakGoroutines  int64           `json:"peak_goroutines"`
-	FailureCodes    map[string]int64 `json:"failure_codes"`
-	ReloadStatus    int             `json:"reload_status"`
-	ReloadAtSec     int             `json:"reload_at_sec"`
+	BaselineP50Ms        float64          `json:"baseline_p50_ms"`
+	BaselineP95Ms        float64          `json:"baseline_p95_ms"`
+	BaselineP99Ms        float64          `json:"baseline_p99_ms"`
+	BaselineThruput      float64          `json:"baseline_throughput"`
+	BaselineFailureRatio float64          `json:"baseline_failure_ratio"`
+	PeakP99Ms            float64          `json:"peak_p99_ms"`
+	PeakP99AtSec         int              `json:"peak_p99_at_sec"`
+	SettleTimeSec        int              `json:"settle_time_sec"`
+	PeakRSSMB            int64            `json:"peak_rss_mb"`
+	PeakGoroutines       int64            `json:"peak_goroutines"`
+	FailureCodes         map[string]int64 `json:"failure_codes"`
+	ReloadStatus         int              `json:"reload_status"`
+	ReloadAtSec          int              `json:"reload_at_sec"`
 }
 
 func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult, error) {
@@ -269,6 +274,8 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 		Timeout:   30 * time.Second,
 	}
+
+	res := trialResult{ReloadAtSec: -1}
 
 	// Per-trial histogram for the rolling per-second time series, and
 	// separate histograms accumulating each phase's totals for the
@@ -283,11 +290,21 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 		series        secondSeries
 		serverSeriesV serverSeries
 		throughput    atomic.Int64 // resets each second
+		pprofWG       sync.WaitGroup
 	)
+
+	// Create the trial output directory upfront so pprof captures
+	// (CPU profile spans 30s of the burst phase; mutex/block snapshots
+	// are point-in-time) have a place to land. End-of-trial writes
+	// reuse this same dir for summary.json + CSVs.
+	var trialDir string
+	if opts.outputDir != "" {
+		trialDir = filepath.Join(opts.outputDir, fmt.Sprintf("trial-%02d", opts.trialID))
+		_ = os.MkdirAll(trialDir, 0o755)
+	}
 
 	// Phase clock: total elapsed seconds since trial start. Encodes the
 	// phase boundaries; ticker writes a sample for each second observed.
-	trialStart := time.Now()
 	warmupEnd := opts.warmupSec
 	baselineEnd := warmupEnd + opts.baselineSec
 	burstEnd := baselineEnd + opts.burstSettleSec
@@ -308,30 +325,58 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 		}
 	}
 
-	// Start the CheckIn loops. Each envoy gets its own goroutine + gRPC
-	// connection. Stagger the start so the test doesn't fire a thundering
-	// herd at T=0.
-	ctxTrial, cancelTrial := context.WithTimeout(ctx, time.Duration(cooldownEnd)*time.Second+5*time.Second)
+	// Each envoy: dial in parallel, signal ready, then block until main
+	// releases the start barrier. This way trialStart fires AFTER every
+	// envoy is connected — at 50K envoys with serial-stagger the launch
+	// alone consumed 5+ minutes. Parallel dial + barrier keeps the
+	// "phase clock" honest.
+	ctxTrial, cancelTrial := context.WithTimeout(ctx,
+		time.Duration(cooldownEnd)*time.Second+time.Duration(opts.warmupSec)*time.Second+5*time.Minute)
 	defer cancelTrial()
 
 	var wg sync.WaitGroup
-	stagger := opts.interval / time.Duration(len(opts.envoys))
-	if stagger < 500*time.Microsecond {
-		stagger = 500 * time.Microsecond
-	}
-	if stagger > 50*time.Millisecond {
-		stagger = 50 * time.Millisecond
-	}
+	dialReady := make(chan struct{}, len(opts.envoys))
+	startGate := make(chan struct{})
+	dialStart := time.Now()
+	var dialFailed atomic.Int64
 
+	var trialStart time.Time
+	// 50K parallel goroutines doing trivial setup work is fine — grpc.NewClient
+	// is lazy (no TCP/TLS handshake at construction time; the handshake fires
+	// on the first RPC). No semaphore needed at this stage.
 	for i := range opts.envoys {
 		wg.Add(1)
-		go runCheckinLoop(ctxTrial, opts.grpcAddr, &opts.envoys[i], opts.interval,
-			&perSecond, &baselineHist, &burstHist, &cooldownHist,
-			&failures, &throughput, &wg,
-			phaseFor, trialStart)
-		time.Sleep(stagger)
+		go func(e *testEnvoy) {
+			runCheckinLoopGated(ctxTrial, opts.grpcAddr, e, opts.interval,
+				&perSecond, &baselineHist, &burstHist, &cooldownHist,
+				&failures, &throughput, &wg,
+				phaseFor, &trialStart,
+				dialReady, startGate, &dialFailed)
+		}(&opts.envoys[i])
 	}
-	fmt.Printf("  all envoys launched at %v elapsed\n", time.Since(trialStart).Round(time.Second))
+
+	// Wait for every envoy to either dial or fail. Failures count toward
+	// the barrier so a few stragglers don't deadlock the trial.
+	dialedOK := 0
+	for dialedOK+int(dialFailed.Load()) < len(opts.envoys) {
+		select {
+		case <-ctxTrial.Done():
+			fmt.Fprintf(os.Stderr, "  dial barrier timed out at %d/%d dialed, %d failed\n",
+				dialedOK, len(opts.envoys), dialFailed.Load())
+			close(startGate)
+			wg.Wait()
+			return res, ctxTrial.Err()
+		case <-dialReady:
+			dialedOK++
+			if dialedOK%5000 == 0 {
+				fmt.Printf("  dialed %d/%d (%v elapsed)\n", dialedOK, len(opts.envoys), time.Since(dialStart).Round(time.Second))
+			}
+		}
+	}
+	fmt.Printf("  all envoys dialed (%d ok, %d failed) at %v elapsed; releasing start barrier\n",
+		dialedOK, dialFailed.Load(), time.Since(dialStart).Round(time.Second))
+	trialStart = time.Now()
+	close(startGate)
 
 	// Per-second sampler — runs until trial ends. Captures one
 	// secondSample per real second (driven by a ticker).
@@ -387,8 +432,6 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 	}
 
 	// Wait until baseline ends, then trigger the burst.
-	res := trialResult{ReloadAtSec: -1}
-
 	burstTimer := time.NewTimer(time.Duration(baselineEnd) * time.Second)
 	select {
 	case <-ctxTrial.Done():
@@ -406,15 +449,75 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 		fmt.Fprintf(os.Stderr, "  reload trigger failed: %v\n", err)
 	}
 
-	// Let the test run to completion.
+	// Kick off pprof captures spanning the burst. CPU profile is the
+	// load-bearing one — it's the only way to validate "is ed25519
+	// verify still ~25 % of CPU at fleet scale" or "did the mutex
+	// arc actually shift the contention shape." Mutex/block t0/t1
+	// give a before/after delta over the same window. All async; we
+	// wait at end of trial.
+	if trialDir != "" && opts.serverContainer != "" {
+		pprofWG.Add(5)
+		go capturePprof(&pprofWG, ctxTrial, opts.serverContainer,
+			"/debug/pprof/profile?seconds=30", filepath.Join(trialDir, "cpu.pprof"))
+		go capturePprof(&pprofWG, ctxTrial, opts.serverContainer,
+			"/debug/pprof/mutex", filepath.Join(trialDir, "mutex.t0.pprof"))
+		go capturePprof(&pprofWG, ctxTrial, opts.serverContainer,
+			"/debug/pprof/block", filepath.Join(trialDir, "block.t0.pprof"))
+		// Second mutex/block + heap snapshot taken near end of burst,
+		// so the t0→t1 delta covers the spike window.
+		go func() {
+			defer pprofWG.Done()
+			select {
+			case <-ctxTrial.Done():
+				return
+			case <-time.After(time.Duration(opts.burstSettleSec-5) * time.Second):
+			}
+			subWG := &sync.WaitGroup{}
+			subWG.Add(3)
+			capturePprof(subWG, ctxTrial, opts.serverContainer,
+				"/debug/pprof/mutex", filepath.Join(trialDir, "mutex.t1.pprof"))
+			capturePprof(subWG, ctxTrial, opts.serverContainer,
+				"/debug/pprof/block", filepath.Join(trialDir, "block.t1.pprof"))
+			capturePprof(subWG, ctxTrial, opts.serverContainer,
+				"/debug/pprof/heap", filepath.Join(trialDir, "heap.pprof"))
+			subWG.Wait()
+		}()
+		go func() {
+			defer pprofWG.Done()
+			select {
+			case <-ctxTrial.Done():
+				return
+			case <-time.After(time.Duration(opts.burstSettleSec-5) * time.Second):
+			}
+			subWG := &sync.WaitGroup{}
+			subWG.Add(1)
+			capturePprof(subWG, ctxTrial, opts.serverContainer,
+				"/debug/pprof/goroutine?debug=1", filepath.Join(trialDir, "goroutine.txt"))
+			subWG.Wait()
+		}()
+	}
+
+	// Let the test run to completion. pprofWG.Wait is wrapped in a
+	// belt-and-braces timeout: if a docker exec hangs past every
+	// per-call deadline AND past ctxTrial's deadline (shouldn't
+	// happen, but did once at 50K), the trial still ends cleanly
+	// and writes summary.json from whatever data did land.
 	wg.Wait()
 	<-tickerDone
+	pprofDone := make(chan struct{})
+	go func() { pprofWG.Wait(); close(pprofDone) }()
+	select {
+	case <-pprofDone:
+	case <-time.After(3 * time.Minute):
+		fmt.Fprintf(os.Stderr, "  pprof captures didn't finish within 3min; proceeding to summary\n")
+	}
 
-	// Compute summary numbers.
+	// Compute summary numbers. Keep latency as float ms so sub-ms
+	// loopback percentiles (typically 0.7-1.5 ms) aren't truncated.
 	bsnap := baselineHist.Snapshot()
-	res.BaselineP50Ms = bsnap.Percentile(50) / 1e6
-	res.BaselineP95Ms = bsnap.Percentile(95) / 1e6
-	res.BaselineP99Ms = bsnap.Percentile(99) / 1e6
+	res.BaselineP50Ms = float64(bsnap.Percentile(50)) / 1e6
+	res.BaselineP95Ms = float64(bsnap.Percentile(95)) / 1e6
+	res.BaselineP99Ms = float64(bsnap.Percentile(99)) / 1e6
 	if opts.baselineSec > 0 {
 		res.BaselineThruput = float64(bsnap.Total()) / float64(opts.baselineSec)
 	}
@@ -446,7 +549,7 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 			settleAtSec = smp.elapsedSec - res.ReloadAtSec
 		}
 	}
-	res.PeakP99Ms = peakNS / 1e6
+	res.PeakP99Ms = float64(peakNS) / 1e6
 	res.PeakP99AtSec = peakAtSec
 	res.SettleTimeSec = settleAtSec
 
@@ -459,9 +562,7 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 		}
 	}
 
-	if opts.outputDir != "" {
-		trialDir := filepath.Join(opts.outputDir, fmt.Sprintf("trial-%02d", opts.trialID))
-		_ = os.MkdirAll(trialDir, 0o755)
+	if trialDir != "" {
 		writeJSON(filepath.Join(trialDir, "summary.json"), res)
 		if f, err := os.Create(filepath.Join(trialDir, "latency.csv")); err == nil {
 			_ = series.WriteCSV(f)
@@ -476,6 +577,132 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 	_ = cooldownHist.Snapshot()
 
 	return res, nil
+}
+
+// capturePprof runs `docker exec <container> wget -qO- <pprof-path>` and
+// writes the resulting bytes to outPath. Each call gets its own 90s
+// deadline derived from the trial context — long enough for the 30s CPU
+// profile plus generous transport overhead, short enough that a stuck
+// docker exec can't hold pprofWG open past one capture's share.
+func capturePprof(wg *sync.WaitGroup, ctx context.Context, container, pprofPath, outPath string) {
+	defer wg.Done()
+	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(callCtx, "docker", "exec", container,
+		"wget", "-qO-", "--timeout=60",
+		"http://127.0.0.1:6060"+pprofPath).Output()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  pprof capture failed (%s): %v\n", pprofPath, err)
+		return
+	}
+	if err := os.WriteFile(outPath, out, 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "  pprof write failed (%s): %v\n", outPath, err)
+	}
+}
+
+// runCheckinLoopGated is the dial-then-barrier variant used by runTrial.
+// Each envoy dials its gRPC connection, signals dialReady, then blocks
+// on startGate until the main goroutine releases everyone simultaneously.
+// This makes the trial clock honest: the warmup phase begins after every
+// envoy is connected, not while the launcher is still spawning goroutines.
+func runCheckinLoopGated(
+	ctx context.Context,
+	grpcAddr string,
+	e *testEnvoy,
+	interval time.Duration,
+	perSecond, baselineHist, burstHist, cooldownHist *Histogram,
+	failures *failureBreakdown,
+	throughput *atomic.Int64,
+	wg *sync.WaitGroup,
+	phaseFor func(int) string,
+	trialStart *time.Time,
+	dialReady chan<- struct{},
+	startGate <-chan struct{},
+	dialFailed *atomic.Int64,
+) bool {
+	defer wg.Done()
+
+	cfg, err := newTLSConfigFor(e)
+	if err != nil {
+		failures.Record(err)
+		dialFailed.Add(1)
+		return false
+	}
+	creds := credentials.NewTLS(cfg)
+	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(creds))
+	if err != nil {
+		failures.Record(err)
+		dialFailed.Add(1)
+		return false
+	}
+	defer conn.Close()
+	client := pb.NewVigoAgentClient(conn)
+
+	dialReady <- struct{}{}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-startGate:
+	}
+
+	// Per-envoy random initial delay so the first CheckIn cycle is
+	// spread across the interval window rather than firing 50K tickers
+	// at +0s. Real agents have natural process-start jitter (different
+	// boot times, restart waves, network delays); without simulating
+	// it, loopback at 50K causes a synchronized 50K-RPS connection
+	// burst that overwhelms the server's accept path before any
+	// steady-state CheckIn ever lands. randInitialDelay returns a
+	// uniformly-random sleep in [0, interval).
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(randInitialDelay(interval)):
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	doCheckin := func() {
+		start := time.Now()
+		ts := strconv.FormatInt(time.Now().Unix(), 10)
+		msg := append([]byte(e.stateFingerprint), []byte(ts)...)
+		sig := signWith(e, msg)
+		resp, err := client.CheckIn(ctx, &pb.CheckInRequest{
+			EnvoyId:          e.id,
+			StateFingerprint: e.stateFingerprint,
+			Signature:        sig,
+			Timestamp:        timestamppb.Now(),
+			AgentVersion:     "vigo-burst",
+		})
+		lat := time.Since(start).Nanoseconds()
+		if err != nil {
+			failures.Record(err)
+			return
+		}
+		if rf := resp.GetResponseFingerprint(); rf != "" {
+			e.stateFingerprint = rf
+		}
+		perSecond.Record(lat)
+		throughput.Add(1)
+		elapsed := int(time.Since(*trialStart).Round(time.Second).Seconds())
+		switch phaseFor(elapsed) {
+		case "baseline":
+			baselineHist.Record(lat)
+		case "burst":
+			burstHist.Record(lat)
+		case "cooldown":
+			cooldownHist.Record(lat)
+		}
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return true
+		case <-ticker.C:
+			doCheckin()
+		}
+	}
 }
 
 // runCheckinLoop is one envoy's CheckIn cycle for the trial duration.
@@ -574,19 +801,22 @@ func signWith(e *testEnvoy, msg []byte) []byte {
 // -- reporting --
 
 func printTrialSummary(r trialResult) {
-	fmt.Printf("\n  ┌── trial summary ──────────────────────────────────────┐\n")
-	fmt.Printf("  │ baseline   p50=%5dms  p95=%6dms  p99=%6dms     │\n", r.BaselineP50Ms, r.BaselineP95Ms, r.BaselineP99Ms)
-	fmt.Printf("  │ baseline   throughput=%6.0f/s   failure_ratio=%6.4f %%  │\n", r.BaselineThruput, r.BaselineFailureRatio*100)
+	fmt.Printf("\n  ── trial summary ──\n")
+	fmt.Printf("  baseline   p50=%.2fms  p95=%.2fms  p99=%.2fms\n",
+		r.BaselineP50Ms, r.BaselineP95Ms, r.BaselineP99Ms)
+	fmt.Printf("  baseline   throughput=%.0f/s   failure_ratio=%.4f%%\n",
+		r.BaselineThruput, r.BaselineFailureRatio*100)
 	if r.ReloadAtSec >= 0 {
-		fmt.Printf("  │ burst      reload@%ds → peak p99=%dms at +%ds       │\n", r.ReloadAtSec, r.PeakP99Ms, r.PeakP99AtSec-r.ReloadAtSec)
+		fmt.Printf("  burst      reload@%ds → peak p99=%.2fms at +%ds\n",
+			r.ReloadAtSec, r.PeakP99Ms, r.PeakP99AtSec-r.ReloadAtSec)
 		if r.SettleTimeSec >= 0 {
-			fmt.Printf("  │ burst      settle (p99 ≤ 2× baseline) at +%ds          │\n", r.SettleTimeSec)
+			fmt.Printf("  burst      settle (p99 ≤ 2× baseline) at +%ds\n", r.SettleTimeSec)
 		} else {
-			fmt.Printf("  │ burst      did NOT settle within burst window           │\n")
+			fmt.Printf("  burst      did NOT settle within burst window\n")
 		}
 	}
 	if r.PeakRSSMB > 0 {
-		fmt.Printf("  │ server     peak_rss=%dMB  peak_goroutines=%d         │\n", r.PeakRSSMB, r.PeakGoroutines)
+		fmt.Printf("  server     peak_rss=%dMB  peak_goroutines=%d\n", r.PeakRSSMB, r.PeakGoroutines)
 	}
 	if len(r.FailureCodes) > 0 {
 		var keys []string
@@ -594,12 +824,11 @@ func printTrialSummary(r trialResult) {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		fmt.Printf("  │ failures by code:                                       │\n")
+		fmt.Printf("  failures by code:\n")
 		for _, k := range keys {
-			fmt.Printf("  │   %-22s %8d                       │\n", k, r.FailureCodes[k])
+			fmt.Printf("    %-22s %d\n", k, r.FailureCodes[k])
 		}
 	}
-	fmt.Printf("  └────────────────────────────────────────────────────────┘\n")
 }
 
 func printAggregate(trials []trialResult, outputDir string) {
@@ -650,8 +879,8 @@ func evalSLA(trials []trialResult, p99 time.Duration, settleSec int, failRate fl
 	}
 	var bad bool
 	last := trials[len(trials)-1]
-	if p99 > 0 && last.BaselineP99Ms > p99.Milliseconds() {
-		fmt.Fprintf(os.Stderr, "SLA: baseline_p99 %dms > target %dms\n", last.BaselineP99Ms, p99.Milliseconds())
+	if p99 > 0 && last.BaselineP99Ms > float64(p99.Milliseconds()) {
+		fmt.Fprintf(os.Stderr, "SLA: baseline_p99 %.2fms > target %dms\n", last.BaselineP99Ms, p99.Milliseconds())
 		bad = true
 	}
 	if settleSec > 0 && last.SettleTimeSec > settleSec {
@@ -712,3 +941,15 @@ func writeJSON(path string, v any) {
 }
 
 func sqrt(x float64) float64 { return math.Sqrt(x) }
+
+// randInitialDelay returns a uniformly-random delay in [0, interval).
+// Used to spread the first CheckIn cycle across the interval window so
+// the test doesn't fire a synchronized N-RPS connection-establishment
+// burst at the server. math/rand is fine here — this is test jitter,
+// not security-sensitive.
+func randInitialDelay(interval time.Duration) time.Duration {
+	if interval <= 0 {
+		return 0
+	}
+	return time.Duration(mathRandInt63n(int64(interval)))
+}
