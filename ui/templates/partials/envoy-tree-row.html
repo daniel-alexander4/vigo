@@ -1,0 +1,20 @@
+{{/*
+envoy-tree-row — single envoy row inside the directory-tree view.
+Mirrors the geometry of the /envoys flat-list row (status pill,
+offline/observing/drift flags) so the same datum doesn't render
+differently between the two surfaces. Click navigates to the envoy
+detail page.
+
+Required fields on the data context: standard EnvoyRow.
+*/}}
+{{define "envoy-tree-row"}}
+{{/* "no data" -> "no-data" so the CSS class doesn't carry a space. */}}
+{{$statusClass := .Status}}{{if eq $statusClass "no data"}}{{$statusClass = "no-data"}}{{end}}
+<li class="envoys-tree__envoy">
+    <a href="/envoys/{{.ID}}" class="envoys-tree__envoy-link">{{.Hostname}}</a>
+    <span class="status-pill status-pill--{{$statusClass}} envoys-tree__envoy-status" title="{{.Status}}">{{.Status}}</span>
+    {{if .Offline}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--offline" title="Offline past stale threshold">offline</span>{{end}}
+    {{if .ObserveOnly}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--observing" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}
+    {{if ne .DriftLabel "none"}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--drift envoys-tree__envoy-flag--drift-{{.DriftLabel}}" title="Drift: {{.DriftLabel}}">{{.DriftLabel}}</span>{{end}}
+</li>
+{{end}}

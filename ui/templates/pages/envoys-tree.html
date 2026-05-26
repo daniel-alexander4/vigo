@@ -65,21 +65,24 @@
 {{define "envoy-tree-node"}}
 {{$envoyCount := len .Envoys}}
 {{$childCount := len .Children}}
-<details class="envoys-tree__dir" {{if or (eq .Path "") (eq .Name "(unmatched)")}}open{{end}}>
+<details class="envoys-tree__dir" {{if .DefaultOpen}}open{{end}}>
     <summary class="envoys-tree__summary">
+        <span class="envoys-tree__chevron" aria-hidden="true"></span>
         <span class="envoys-tree__dir-name">{{.Name}}{{if not (eq .Name "(unmatched)")}}/{{end}}</span>
-        {{if gt $envoyCount 0}}<span class="envoys-tree__count">{{$envoyCount}}{{if gt $childCount 0}} here{{end}}</span>{{end}}
+        {{if gt .Total 0}}
+        <span class="envoys-tree__rollup">
+            <span class="envoys-tree__rollup-total" title="Envoys in this branch (this directory and all descendants)">{{.Total}} envoy{{if ne .Total 1}}s{{end}}</span>
+            {{if gt .CountConverged 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--converged" title="Converged">{{.CountConverged}}</span>{{end}}
+            {{if gt .CountDegraded 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--degraded" title="Degraded">{{.CountDegraded}}</span>{{end}}
+            {{if gt .CountFailed 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--failed" title="Failed">{{.CountFailed}}</span>{{end}}
+            {{if gt .CountNoData 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--nodata" title="No data">{{.CountNoData}}</span>{{end}}
+        </span>
+        {{end}}
     </summary>
     {{if gt $envoyCount 0}}
     <ul class="envoys-tree__envoys">
         {{range .Envoys}}
-        <li class="envoys-tree__envoy">
-            <a href="/envoys/{{.ID}}" class="envoys-tree__envoy-link">{{.Hostname}}</a>
-            <span class="envoys-tree__envoy-status envoys-tree__status--{{.Status}}">{{.Status}}</span>
-            {{if .Offline}}<span class="envoys-tree__envoy-flag">offline</span>{{end}}
-            {{if .ObserveOnly}}<span class="envoys-tree__envoy-flag">observing</span>{{end}}
-            {{if ne .DriftLabel "none"}}<span class="envoys-tree__envoy-flag envoys-tree__drift--{{.DriftLabel}}">{{.DriftLabel}}</span>{{end}}
-        </li>
+        {{template "envoy-tree-row" .}}
         {{end}}
     </ul>
     {{end}}

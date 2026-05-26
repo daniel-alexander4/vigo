@@ -905,6 +905,14 @@ a.dash-column--link:focus-visible {
     background: var(--color-success-bg);
     color: var(--color-success);
 }
+.status-pill--degraded {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+}
+.status-pill--no-data {
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+}
 .status-pill--cached {
     background: var(--color-primary-tint-soft);
     color: var(--color-primary);
@@ -3503,6 +3511,159 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 @media (max-width: 768px) {
     .ai-panel--open { width: 100%; min-width: 100%; position: fixed; top: 0; right: 0; z-index: 400; height: 100vh; }
     .ai-toggle { bottom: 16px; right: 16px; }
+}
+
+/* === Envoy tree view ===
+ * /envoys/tree groups envoys by the directory of the hostcrate that
+ * matched them. Native <details>/<summary> for keyboard + screen-reader
+ * support; custom chevron, hover, and rollup chips for visual polish.
+ */
+.envoys-tree {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.envoys-tree__dir {
+    border-radius: 6px;
+}
+
+.envoys-tree__summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    user-select: none;
+    color: var(--color-text);
+}
+.envoys-tree__summary::-webkit-details-marker { display: none; }
+.envoys-tree__summary:hover {
+    background: var(--color-primary-tint-faint);
+}
+.envoys-tree__summary:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 1px;
+}
+
+.envoys-tree__chevron {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none' stroke='currentColor' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><polyline points='5 3 10 7 5 11'/></svg>");
+    background-repeat: no-repeat;
+    background-position: center;
+    transition: transform 0.12s ease;
+    opacity: 0.6;
+}
+.envoys-tree__dir[open] > .envoys-tree__summary > .envoys-tree__chevron {
+    transform: rotate(90deg);
+}
+
+.envoys-tree__dir-name {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.envoys-tree__rollup {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+
+.envoys-tree__rollup-total {
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.envoys-tree__rollup-stat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+.envoys-tree__rollup-stat--converged { background: var(--color-success-bg, rgba(64, 160, 43, 0.12)); color: var(--color-success); }
+.envoys-tree__rollup-stat--degraded  { background: var(--color-warning-bg, rgba(223, 142, 29, 0.12)); color: var(--color-warning); }
+.envoys-tree__rollup-stat--failed    { background: var(--color-danger-bg,  rgba(210, 15, 57, 0.12));  color: var(--color-danger); }
+.envoys-tree__rollup-stat--nodata    { background: var(--color-surface);                              color: var(--color-text-muted); }
+
+.envoys-tree__envoys {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0 4px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.envoys-tree__envoy {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.envoys-tree__envoy:hover {
+    background: var(--color-primary-tint-faint);
+}
+
+.envoys-tree__envoy-link {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    color: var(--color-brand);
+    text-decoration: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.envoys-tree__envoy-link:hover { text-decoration: underline; }
+.envoys-tree__envoy-link:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
+.envoys-tree__envoy-status {
+    flex-shrink: 0;
+}
+
+.envoys-tree__envoy-flag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+.envoys-tree__envoy-flag--offline   { color: var(--color-text-muted); }
+.envoys-tree__envoy-flag--observing { color: var(--color-info, var(--color-brand)); }
+.envoys-tree__envoy-flag--drift-changed  { color: var(--color-info, var(--color-brand)); }
+.envoys-tree__envoy-flag--drift-diverged { color: var(--color-warning); }
+
+.envoys-tree__children {
+    padding-left: 16px;
+    border-left: 1px dashed var(--color-border);
+    margin-left: 14px;
 }
 
 /* === Envoy filter drawer ===

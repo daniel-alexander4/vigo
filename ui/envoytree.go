@@ -14,11 +14,29 @@ import (
 // EnvoyTreeNode is one directory node in the envoy-tree view. Each node
 // carries the envoys whose matched hostcrate's DirPath equals this node's
 // path; nested directories live in Children. The root node has Path="".
+//
+// Rollup counts (Total / Converged / Degraded / Failed / NoData) cover
+// this node's envoys plus every descendant — collapsed branches still
+// surface their state. DefaultOpen is true for the root and for any
+// subtree containing a non-converged envoy (triage-first).
 type EnvoyTreeNode struct {
 	Path     string // directory path relative to .live/ ("" for root, "dc1/web" for nested)
 	Name     string // basename for display ("dc1", "web"); the root displays as ".live"
 	Envoys   []EnvoyRow
 	Children []*EnvoyTreeNode
+
+	// Rollup counts over this node + all descendants. Populated by
+	// computeRollups after the tree is fully built.
+	Total          int
+	CountConverged int
+	CountDegraded  int
+	CountFailed    int
+	CountNoData    int
+
+	// DefaultOpen drives the <details open> attribute on first render.
+	// True when this node or any descendant has a non-converged envoy
+	// (triage state surfaces by default); also true for the root.
+	DefaultOpen bool
 }
 
 // EnvoyTreePageData drives templates/pages/envoys-tree.html. Carries the
@@ -144,14 +162,28 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 		envoysByDir[dir] = append(envoysByDir[dir], e)
 	}
 
+	// Build the set of hostcrate-bearing directories + every ancestor
+	// up to root. Walk-time pruning uses this set to skip directories
+	// that aren't on a path to a hostcrate (modules/, usercrates/,
+	// templates/, tasks/, workflows/, …). The tree mirrors the
+	// hostcrate hierarchy only, not the entire stockpile layout.
+	keptDirs := hostcrateDirsAndAncestors(dirByPattern)
+
 	// Walk .live/ to build the directory skeleton, then inject envoys at
 	// each node from envoysByDir. Sort each node's envoy list by hostname
 	// for deterministic rendering.
-	root, err := buildEnvoyTree(liveDir, envoysByDir)
+	root, err := buildEnvoyTree(liveDir, envoysByDir, keptDirs)
 	if err != nil {
 		slog.Error("walking .live for envoys-tree", "path", liveDir, "error", err)
 		http.Error(w, "envoys tree unavailable", http.StatusInternalServerError)
 		return
+	}
+
+	// Collapse the synthetic ".live/" root when there's exactly one
+	// hostcrate-bearing child and no root-level envoys — operators see
+	// "alexander4/" at the top instead of a noise wrapper.
+	if len(root.Children) == 1 && len(root.Envoys) == 0 {
+		root = root.Children[0]
 	}
 	data.Root = root
 
@@ -165,28 +197,99 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 
 	if len(unmatched) > 0 {
 		sort.Slice(unmatched, func(i, j int) bool { return unmatched[i].Hostname < unmatched[j].Hostname })
-		data.Unmatched = &EnvoyTreeNode{Name: "(unmatched)", Envoys: unmatched}
+		data.Unmatched = &EnvoyTreeNode{Name: "(unmatched)", Envoys: unmatched, DefaultOpen: true}
+		computeRollups(data.Unmatched)
 	}
+
+	// Roll up envoy counts (per-status) and compute default-open
+	// triage state after the tree is final.
+	computeRollups(data.Root)
+	data.Root.DefaultOpen = true // root always opens
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys-tree", data)
 }
 
+// hostcrateDirsAndAncestors returns the set of directory paths that
+// either contain a hostcrate or sit on the path to one. Keys use the
+// same "" → root, "a/b" → nested convention as the rest of the walker.
+// The walker uses this set to skip every directory that isn't load-
+// bearing for envoy placement (modules/, usercrates/, templates/, …).
+func hostcrateDirsAndAncestors(dirByPattern map[string]string) map[string]bool {
+	out := map[string]bool{"": true}
+	for _, dir := range dirByPattern {
+		if dir == "(root)" {
+			continue // root already in the set
+		}
+		for d := dir; d != ""; {
+			out[d] = true
+			idx := strings.LastIndex(d, "/")
+			if idx < 0 {
+				break
+			}
+			d = d[:idx]
+		}
+	}
+	return out
+}
+
+// computeRollups walks the subtree depth-first and populates Total +
+// per-status counts on every node (own envoys + descendants). Returns
+// true when this subtree contains a non-converged envoy at any depth —
+// the caller wires that into DefaultOpen so triage state is visible on
+// first render without expanding every branch.
+func computeRollups(node *EnvoyTreeNode) bool {
+	hasFailure := false
+	for _, e := range node.Envoys {
+		node.Total++
+		switch e.Status {
+		case "converged":
+			node.CountConverged++
+		case "degraded":
+			node.CountDegraded++
+			hasFailure = true
+		case "failed":
+			node.CountFailed++
+			hasFailure = true
+		default:
+			node.CountNoData++
+			hasFailure = true
+		}
+	}
+	for _, c := range node.Children {
+		childHasFailure := computeRollups(c)
+		node.Total += c.Total
+		node.CountConverged += c.CountConverged
+		node.CountDegraded += c.CountDegraded
+		node.CountFailed += c.CountFailed
+		node.CountNoData += c.CountNoData
+		if childHasFailure {
+			hasFailure = true
+		}
+	}
+	if hasFailure {
+		node.DefaultOpen = true
+	}
+	return hasFailure
+}
+
 // buildEnvoyTree walks the .live/ directory and produces a tree whose
-// nodes correspond to directories. At each node, envoys whose matched
-// hostcrate has that DirPath are attached (sorted by hostname).
-// Subdirectories become Children. Files in .live/ are ignored — this
-// view groups by directory, not file (ADR-032 § "Tree definition").
-func buildEnvoyTree(liveDir string, envoysByDir map[string][]EnvoyRow) (*EnvoyTreeNode, error) {
+// nodes correspond to directories that hold a hostcrate or sit on the
+// path to one. keptDirs is the SoT for that filter; directories not in
+// it (modules/, usercrates/, templates/, tasks/, workflows/, …) never
+// appear. Envoys are attached at each node from envoysByDir, sorted
+// by hostname. Files are ignored — this view groups by directory
+// (ADR-032 § "Tree definition").
+func buildEnvoyTree(liveDir string, envoysByDir map[string][]EnvoyRow, keptDirs map[string]bool) (*EnvoyTreeNode, error) {
 	root := &EnvoyTreeNode{Path: "", Name: ".live"}
 	root.Envoys = sortedEnvoys(envoysByDir[""])
-	if err := walkEnvoyTree(liveDir, root, "", envoysByDir); err != nil {
+	if err := walkEnvoyTree(liveDir, root, "", envoysByDir, keptDirs); err != nil {
 		return nil, err
 	}
 	return root, nil
 }
 
-func walkEnvoyTree(absDir string, node *EnvoyTreeNode, relPath string, envoysByDir map[string][]EnvoyRow) error {
+func walkEnvoyTree(absDir string, node *EnvoyTreeNode, relPath string, envoysByDir map[string][]EnvoyRow, keptDirs map[string]bool) error {
 	entries, err := os.ReadDir(absDir)
 	if err != nil {
 		return err
@@ -207,12 +310,19 @@ func walkEnvoyTree(absDir string, node *EnvoyTreeNode, relPath string, envoysByD
 		if relPath != "" {
 			childPath = relPath + "/" + name
 		}
+		// Skip directories that aren't on a path to a hostcrate — the
+		// stockpile's modules/, usercrates/, templates/, tasks/, etc.
+		// are valid stockpile contents but not navigation surfaces for
+		// "which envoys live where."
+		if !keptDirs[childPath] {
+			continue
+		}
 		child := &EnvoyTreeNode{
 			Path:   childPath,
 			Name:   name,
 			Envoys: sortedEnvoys(envoysByDir[childPath]),
 		}
-		if err := walkEnvoyTree(absDir+"/"+name, child, childPath, envoysByDir); err != nil {
+		if err := walkEnvoyTree(absDir+"/"+name, child, childPath, envoysByDir, keptDirs); err != nil {
 			return err
 		}
 		node.Children = append(node.Children, child)

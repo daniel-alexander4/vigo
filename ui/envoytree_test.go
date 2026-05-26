@@ -33,7 +33,8 @@ func TestBuildEnvoyTree_GroupsEnvoysUnderMatchingDirectories(t *testing.T) {
 		"dc2":      {{ID: "x1", Hostname: "dc2-one"}},
 	}
 
-	tree, err := buildEnvoyTree(root, envoysByDir)
+	keptDirs := map[string]bool{"": true, "dc1": true, "dc1/web": true, "dc1/db": true, "dc2": true}
+	tree, err := buildEnvoyTree(root, envoysByDir, keptDirs)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 	assert.Equal(t, ".live", tree.Name)
@@ -72,22 +73,43 @@ func TestBuildEnvoyTree_GroupsEnvoysUnderMatchingDirectories(t *testing.T) {
 	assert.Empty(t, db.Children)
 }
 
-func TestBuildEnvoyTree_EmptyDirectoriesStillRender(t *testing.T) {
-	// A directory with no envoys mapping to it still appears in the tree —
-	// the operator should be able to navigate the full config hierarchy,
-	// not just the populated subset. (Slice 2 will add hide-empty-branches
-	// behavior when a chip filter is active.)
+func TestBuildEnvoyTree_KeptDirectoryWithNoEnvoysStillRenders(t *testing.T) {
+	// A directory on the path to a hostcrate but with no envoys assigned
+	// to it still appears — the operator should see the full hostcrate
+	// hierarchy, not just the populated subset.
 	root := t.TempDir()
 	mustMkdir(t, filepath.Join(root, "empty-branch"))
 	mustMkdir(t, filepath.Join(root, "empty-branch", "deeper"))
 
-	tree, err := buildEnvoyTree(root, map[string][]EnvoyRow{})
+	keptDirs := map[string]bool{"": true, "empty-branch": true, "empty-branch/deeper": true}
+	tree, err := buildEnvoyTree(root, map[string][]EnvoyRow{}, keptDirs)
 	require.NoError(t, err)
 	require.Len(t, tree.Children, 1)
 	assert.Equal(t, "empty-branch", tree.Children[0].Name)
 	assert.Empty(t, tree.Children[0].Envoys)
 	require.Len(t, tree.Children[0].Children, 1)
 	assert.Equal(t, "deeper", tree.Children[0].Children[0].Name)
+}
+
+func TestBuildEnvoyTree_DirsNotInKeptSetAreSkipped(t *testing.T) {
+	// Pin the central contract for this surface: directories that don't
+	// hold a hostcrate and aren't on the path to one are NOT walked.
+	// Without this, the tree surfaces stockpile noise (modules/,
+	// usercrates/, templates/, …) alongside the actual hostcrate dirs.
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, "alexander4"))
+	mustMkdir(t, filepath.Join(root, "alexander4", "site"))
+	mustMkdir(t, filepath.Join(root, "modules"))   // not a hostcrate dir
+	mustMkdir(t, filepath.Join(root, "templates")) // not a hostcrate dir
+
+	keptDirs := map[string]bool{"": true, "alexander4": true, "alexander4/site": true}
+	tree, err := buildEnvoyTree(root, map[string][]EnvoyRow{}, keptDirs)
+	require.NoError(t, err)
+	// modules/ and templates/ are pruned even though they exist on disk.
+	require.Len(t, tree.Children, 1)
+	assert.Equal(t, "alexander4", tree.Children[0].Name)
+	require.Len(t, tree.Children[0].Children, 1)
+	assert.Equal(t, "site", tree.Children[0].Children[0].Name)
 }
 
 func TestBuildEnvoyTree_SkipsHiddenAndSymlinks(t *testing.T) {
@@ -97,8 +119,11 @@ func TestBuildEnvoyTree_SkipsHiddenAndSymlinks(t *testing.T) {
 	// Symlink at root pointing into a real subdir — should be skipped.
 	require.NoError(t, os.Symlink(filepath.Join(root, "visible"), filepath.Join(root, "alias")))
 
-	tree, err := buildEnvoyTree(root, map[string][]EnvoyRow{})
+	keptDirs := map[string]bool{"": true, "visible": true, ".hidden": true, "alias": true}
+	tree, err := buildEnvoyTree(root, map[string][]EnvoyRow{}, keptDirs)
 	require.NoError(t, err)
+	// .hidden is dropped by the dotfile filter; alias by the symlink
+	// filter; only `visible` survives even though keptDirs contains all.
 	require.Len(t, tree.Children, 1)
 	assert.Equal(t, "visible", tree.Children[0].Name)
 }
@@ -112,13 +137,76 @@ func TestBuildEnvoyTree_IgnoresFilesAtEveryLevel(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "common.vgo"), []byte(""), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "dc1", "envoys.vgo"), []byte(""), 0o644))
 
-	tree, err := buildEnvoyTree(root, map[string][]EnvoyRow{})
+	keptDirs := map[string]bool{"": true, "dc1": true}
+	tree, err := buildEnvoyTree(root, map[string][]EnvoyRow{}, keptDirs)
 	require.NoError(t, err)
 	// Root level: only "dc1" (the directory); the common.vgo file is omitted.
 	require.Len(t, tree.Children, 1)
 	assert.Equal(t, "dc1", tree.Children[0].Name)
 	// dc1 level: no children; the envoys.vgo file is omitted.
 	assert.Empty(t, tree.Children[0].Children)
+}
+
+func TestHostcrateDirsAndAncestors_IncludesEveryAncestorPath(t *testing.T) {
+	// MatchDirPaths emits pattern → DirPath. The walker needs every
+	// ancestor of every hostcrate dir in the kept set so it can
+	// traverse down to the deepest leaf.
+	dirByPattern := map[string]string{
+		"web*":  "alexander4/site/web",
+		"db*":   "alexander4/site/db",
+		"edge*": "alexander4/edge",
+		"root*": "(root)",
+	}
+	kept := hostcrateDirsAndAncestors(dirByPattern)
+	assert.True(t, kept[""])
+	assert.True(t, kept["alexander4"])
+	assert.True(t, kept["alexander4/site"])
+	assert.True(t, kept["alexander4/site/web"])
+	assert.True(t, kept["alexander4/site/db"])
+	assert.True(t, kept["alexander4/edge"])
+	// Non-hostcrate siblings are NOT in the set.
+	assert.False(t, kept["modules"])
+	assert.False(t, kept["templates"])
+}
+
+func TestComputeRollups_SumsAcrossSubtreeAndFlagsDefaultOpen(t *testing.T) {
+	tree := &EnvoyTreeNode{
+		Name: ".live",
+		Children: []*EnvoyTreeNode{
+			{
+				Name: "alexander4",
+				Envoys: []EnvoyRow{
+					{Hostname: "x", Status: "converged"},
+				},
+				Children: []*EnvoyTreeNode{
+					{
+						Name: "site",
+						Envoys: []EnvoyRow{
+							{Hostname: "y", Status: "degraded"},
+							{Hostname: "z", Status: "failed"},
+						},
+					},
+					{
+						Name: "edge",
+						Envoys: []EnvoyRow{
+							{Hostname: "q", Status: "converged"},
+						},
+					},
+				},
+			},
+		},
+	}
+	computeRollups(tree)
+	assert.Equal(t, 4, tree.Children[0].Total)
+	assert.Equal(t, 2, tree.Children[0].CountConverged)
+	assert.Equal(t, 1, tree.Children[0].CountDegraded)
+	assert.Equal(t, 1, tree.Children[0].CountFailed)
+	// Default-open propagates: alexander4 has a non-converged descendant.
+	assert.True(t, tree.Children[0].DefaultOpen)
+	// site has its own failure → open.
+	assert.True(t, tree.Children[0].Children[0].DefaultOpen)
+	// edge is fully clean → stays collapsed.
+	assert.False(t, tree.Children[0].Children[1].DefaultOpen)
 }
 
 // pruneEmptyBranches is gated on any-filter-active in the production
