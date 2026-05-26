@@ -1044,10 +1044,27 @@ func (f *FleetIndex) AppendPendingRotatedSecret(id, secretPath string) {
 }
 
 // SetTags replaces the tags for a envoy and updates the inverted tag index.
+//
+// Hot path: buildCheckInResponse calls SetTags on every check-in to sync
+// hostcrate tags into the FleetIndex (the hostcrate is the SoT). Tags
+// almost never change in steady state, so a fast-path no-op gate under
+// f.mu.RLock skips the byTag-mutating slow path entirely; the slow path
+// only acquires f.mu.Lock when tags actually changed.
 func (f *FleetIndex) SetTags(id string, tags []string) {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	if ts == nil {
+		f.mu.RUnlock()
+		return
+	}
+	unchanged := tagsEqual(ts.Tags, tags)
+	f.mu.RUnlock()
+	if unchanged {
+		return
+	}
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
-
 	ts, ok := f.envoys[id]
 	if !ok {
 		return
@@ -1058,6 +1075,21 @@ func (f *FleetIndex) SetTags(id string, tags []string) {
 		f.addToTags(id, tags)
 	}
 	f.dirty.Store(id, struct{}{})
+}
+
+// tagsEqual reports whether two tag slices contain the same set of tags.
+// Order is significant — that matches what hostcrates produce (tags come
+// from the match block as written, never reordered downstream).
+func tagsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // SetMaintenanceUntil sets the maintenance window for a envoy.
