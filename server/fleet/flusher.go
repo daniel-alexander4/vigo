@@ -86,8 +86,12 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 		lastSeenIDs = append(lastSeenIDs, id)
 	}
 
-	// Batch update last_seen in chunks of 500.
-	const chunkSize = 500
+	// Batch update last_seen in chunks of 5000. SQLite's variable-parameter
+	// limit is 32766 (3.32+); 5000 is well under that and collapses 50
+	// SQL statements per 25K-envoy flush into 5, each acquiring the WAL
+	// writer mutex exactly once. The 2026-05-25 loadtest showed 500-row
+	// chunks taking 50–950 ms each — 10× fewer chunks is the easy win.
+	const chunkSize = 5000
 	// Per-chunk SQLite WAL-write timing: log individual chunks that exceed
 	// the threshold so we can see whether the request-tail spikes correlate
 	// with specific slow writes vs. uniformly slow ones (uniform = WAL
