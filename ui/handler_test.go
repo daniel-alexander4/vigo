@@ -208,6 +208,43 @@ func TestEnvoysHandler(t *testing.T) {
 	}
 }
 
+func TestEnvoysHandlerRendersFilterDrawer(t *testing.T) {
+	h := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/envoys", nil)
+	rec := httptest.NewRecorder()
+	h.Envoys(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Envoys returned %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+
+	// Drawer aside is mounted and identifiable by JS for open/close.
+	if !strings.Contains(body, `id="envoy-filter-drawer"`) {
+		t.Error("Envoys page missing the filter drawer aside (id=envoy-filter-drawer)")
+	}
+	// "Filter" toggle button is present and wired to the JS hook.
+	if !strings.Contains(body, "toggleEnvoyFilterDrawer()") {
+		t.Error("Envoys page missing the Filter toggle button")
+	}
+	// At least one mock-supplied pill renders with the page-scoped URL.
+	// BasePath prefixes the path-relative URL the enumerator emits.
+	if !strings.Contains(body, `href="/envoys?env=production"`) {
+		t.Error("Envoys page missing env pill href; drawer didn't wire BasePath into pill URLs")
+	}
+	// Read-only conv/drift/reach chips render as <span> with the
+	// chip-readonly class above the table (filtering now goes through
+	// the drawer). Drawer pills are still <a>'s — that's by design;
+	// this assertion is about the chip bar specifically.
+	if !strings.Contains(body, "filter-bar__chip-readonly") {
+		t.Error("Envoys page chips above the table should carry filter-bar__chip-readonly class")
+	}
+	if !strings.Contains(body, `<span class="btn btn--sm filter-bar__chip-readonly`) {
+		t.Error("Envoys page filter bar should render chips as <span>, not <a>")
+	}
+}
+
 func TestEnvoysHandlerStatusFilter(t *testing.T) {
 	h := newTestHandler(t)
 
@@ -941,23 +978,41 @@ func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration
 		page = rows[offset:end]
 	}
 
+	active := 0
+	for _, v := range []string{convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter} {
+		if v != "" {
+			active++
+		}
+	}
+
 	return EnvoysPageData{
 		PageData: PageData{
 			Title:     "Envoys",
 			ActiveNav: "envoys",
 			Version:   "test",
 		},
-		Envoys:        page,
-		ConvFilter:    convFilter,
-		DriftFilter:   driftFilter,
-		ReachFilter:   reachFilter,
-		Search:        search,
-		SortColumn:    sortCol,
-		SortDir:       sortDir,
-		EnvoyCount:    len(page),
-		MatchingTotal: total,
-		Offset:        offset,
-		Limit:         limit,
+		Envoys:            page,
+		ConvFilter:        convFilter,
+		DriftFilter:       driftFilter,
+		ReachFilter:       reachFilter,
+		Search:            search,
+		SortColumn:        sortCol,
+		SortDir:           sortDir,
+		EnvoyCount:        len(page),
+		MatchingTotal:     total,
+		Offset:            offset,
+		Limit:             limit,
+		BasePath:          "/envoys",
+		ActiveFilterCount: active,
+		FilterAxes: []FilterAxis{
+			{Key: "conv", Label: "Failure", IsEnum: true, Choices: []FilterChoice{
+				{Value: "converged", Count: 1, URL: "?conv=converged"},
+				{Value: "failed", Count: 1, URL: "?conv=failed"},
+			}},
+			{Key: "env", Label: "Env", Choices: []FilterChoice{
+				{Value: "production", Count: 1, URL: "?env=production"},
+			}},
+		},
 	}
 }
 

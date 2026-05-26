@@ -21,28 +21,18 @@
 </div>
 
 <div class="envoys-toolbar mt-2 mb-2">
-    <form action="/envoys" method="get" hx-boost="false" class="envoys-toolbar__form">
-        {{if .ConvFilter}}<input type="hidden" name="conv" value="{{.ConvFilter}}">{{end}}
-        {{if .DriftFilter}}<input type="hidden" name="drift" value="{{.DriftFilter}}">{{end}}
-        {{if .ReachFilter}}<input type="hidden" name="reach" value="{{.ReachFilter}}">{{end}}
-        <input type="hidden" name="sort" value="{{.SortColumn}}">
-        <input type="hidden" name="dir" value="{{.SortDir}}">
-        <input type="text" id="envoy-search" name="search" placeholder="hostname (web,db)"
-               value="{{.Search}}"
-               class="input input--sm envoys-toolbar__search"
-               hx-preserve="true">
-        <input type="text" name="env" value="{{.EnvFilter}}" placeholder="env (prod,staging)" class="input input--sm" />
-        <input type="text" name="tag" value="{{.TagFilter}}" placeholder="tag" class="input input--sm" />
-        <input type="text" name="role" value="{{.RoleFilter}}" placeholder="role (web,db)" class="input input--sm" />
-        <input type="text" name="os" value="{{.OSFilter}}" placeholder="os (ubuntu,rhel)" class="input input--sm" />
-        <input type="text" name="arch" value="{{.ArchFilter}}" placeholder="arch (amd64,arm64)" class="input input--sm" />
-        <input type="text" name="module" value="{{.ModuleFilter}}" placeholder="module" class="input input--sm" />
-        <input type="text" name="compliance" value="{{.ComplianceFilter}}" placeholder="compliance (hipaa,soc2)" class="input input--sm" />
-        <button type="submit" class="btn btn--sm">Apply</button>
-        {{if or .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ModuleFilter .ComplianceFilter .Search}}
-        <a href="/envoys{{if or .ConvFilter .DriftFilter .ReachFilter}}?{{if .ConvFilter}}conv={{.ConvFilter}}{{end}}{{if .DriftFilter}}&drift={{.DriftFilter}}{{end}}{{if .ReachFilter}}&reach={{.ReachFilter}}{{end}}{{end}}" class="btn btn--sm">Clear text filters</a>
+    <div class="envoys-toolbar__filter">
+        <button type="button" class="btn btn--sm envoys-toolbar__filter-button"
+                onclick="toggleEnvoyFilterDrawer()"
+                aria-controls="envoy-filter-drawer"
+                aria-label="Open filter drawer">
+            Filter
+            {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} active</span>{{end}}
+        </button>
+        {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ModuleFilter .ComplianceFilter}}
+        <a href="/envoys" class="btn btn--sm">Clear</a>
         {{end}}
-    </form>
+    </div>
     <form action="/envoys" method="get" hx-boost="false" class="envoys-toolbar__sort">
         {{if .ConvFilter}}<input type="hidden" name="conv" value="{{.ConvFilter}}">{{end}}
         {{if .DriftFilter}}<input type="hidden" name="drift" value="{{.DriftFilter}}">{{end}}
@@ -74,6 +64,8 @@
     {{template "envoys-table" .}}
 </div>
 
+{{template "envoy-filter-drawer" .}}
+
 {{end}}
 
 {{define "envoys-stats"}}
@@ -81,7 +73,22 @@
     {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
     {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" "Envoys that checked in within 2.5× the agent check-in interval (set in server.yaml as checkin.interval)."}}
 </div>
-{{template "envoy-filter-bar" .}}
+{{template "envoy-filter-bar" dict
+    "TotalEnvoys"           .TotalEnvoys
+    "CountConverged"        .CountConverged
+    "CountDegraded"         .CountDegraded
+    "CountNoData"           .CountNoData
+    "CountChanged"          .CountChanged
+    "CountDiverged"         .CountDiverged
+    "CountFailed"           .CountFailed
+    "CountOffline"          .CountOffline
+    "CountObserving"        .CountObserving
+    "OfflineThresholdLabel" .OfflineThresholdLabel
+    "ConvFilter"            .ConvFilter
+    "DriftFilter"           .DriftFilter
+    "ReachFilter"           .ReachFilter
+    "Search"                .Search
+    "ReadOnly"              true}}
 {{end}}
 
 {{define "envoys-table"}}

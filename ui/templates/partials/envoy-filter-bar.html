@@ -1,47 +1,58 @@
 {{/*
-envoy-filter-bar — the three-axis filter strip (Failure / Drift / Reach)
-that paints clickable count pills above the envoys table. Pills always
-link to /envoys?<axis>=<value>; "All" links to bare /envoys. Active-state
-highlighting comes from .ConvFilter / .DriftFilter / .ReachFilter / .Search
-on the data context — pass empty strings from surfaces that aren't a
-filtered view (e.g. the dashboard) and "All" will be the highlighted
-member, which is semantically correct ("you're seeing the unfiltered
-view").
+envoy-filter-bar — the three-axis count strip (Failure / Drift / Reach)
+above the envoys table.
+
+Two render modes, selected by .ReadOnly:
+  - ReadOnly=false (dashboard): clickable count pills that navigate to
+    /envoys?<axis>=<value>. Active state from .ConvFilter etc.
+  - ReadOnly=true (envoys list/tree): static <span> chips. Filtering
+    on these axes goes through the filter drawer; this strip stays as
+    at-a-glance status.
 
 Required fields on the data context:
   .TotalEnvoys, .CountConverged, .CountDegraded, .CountNoData,
   .CountChanged, .CountDiverged, .CountFailed,
   .CountOffline, .CountObserving, .OfflineThresholdLabel,
-  .ConvFilter, .DriftFilter, .ReachFilter, .Search
+  .ConvFilter, .DriftFilter, .ReachFilter, .Search, .ReadOnly
 
 Callers that don't already have these fields on their data should pass
-them via `dict` (see dashboard.html).
+them via `dict` (see dashboard.html, envoys-tree.html).
 */}}
 {{define "envoy-filter-bar"}}
 <div class="filter-bar-group flex flex-wrap items-end gap-2">
     <div class="filter-bar-axis">
         <span class="filter-bar-axis__label">Failure</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            <a href="/envoys" class="btn btn--sm{{if and (eq .ConvFilter "") (eq .DriftFilter "") (eq .ReachFilter "") (eq .Search "")}} btn--primary{{end}}">All <span class="filter-count">{{.TotalEnvoys}}</span></a>
-            <a href="/envoys?conv=converged" class="btn btn--sm{{if eq .ConvFilter "converged"}} btn--primary{{end}}">Converged <span class="filter-count filter-count--success">{{.CountConverged}}</span></a>
-            <a href="/envoys?conv=degraded" class="btn btn--sm{{if eq .ConvFilter "degraded"}} btn--primary{{end}}">Degraded <span class="filter-count filter-count--warning">{{.CountDegraded}}</span></a>
-            <a href="/envoys?conv=no+data" class="btn btn--sm{{if eq .ConvFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys" "Active" (and (eq .ConvFilter "") (eq .DriftFilter "") (eq .ReachFilter "") (eq .Search "")) "Label" "All" "Count" .TotalEnvoys "CountClass" ""}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=converged" "Active" (eq .ConvFilter "converged") "Label" "Converged" "Count" .CountConverged "CountClass" "filter-count--success"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=degraded" "Active" (eq .ConvFilter "degraded") "Label" "Degraded" "Count" .CountDegraded "CountClass" "filter-count--warning"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=no+data" "Active" (eq .ConvFilter "no data") "Label" "No Data" "Count" .CountNoData "CountClass" "filter-count--muted"}}
         </div>
     </div>
     <div class="filter-bar-axis">
         <span class="filter-bar-axis__label" title="Modules that change across recent runs. Diverged ⊆ Changed.">Drift</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            <a href="/envoys?drift=changed" class="btn btn--sm{{if eq .DriftFilter "changed"}} btn--primary{{end}}" title="Last run made changes">Changed <span class="filter-count filter-count--info">{{.CountChanged}}</span></a>
-            <a href="/envoys?drift=diverged" class="btn btn--sm{{if eq .DriftFilter "diverged"}} btn--primary{{end}}" title="5+ consecutive runs with changes">Diverged <span class="filter-count filter-count--peach">{{.CountDiverged}}</span></a>
-            <a href="/envoys?conv=failed" class="btn btn--sm{{if eq .ConvFilter "failed"}} btn--primary{{end}}" title="Latest run failed (≥80% module failures or agent blocked)">Failed <span class="filter-count filter-count--danger">{{.CountFailed}}</span></a>
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=changed" "Active" (eq .DriftFilter "changed") "Label" "Changed" "Count" .CountChanged "CountClass" "filter-count--info" "Tooltip" "Last run made changes"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=diverged" "Active" (eq .DriftFilter "diverged") "Label" "Diverged" "Count" .CountDiverged "CountClass" "filter-count--peach" "Tooltip" "5+ consecutive runs with changes"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=failed" "Active" (eq .ConvFilter "failed") "Label" "Failed" "Count" .CountFailed "CountClass" "filter-count--danger" "Tooltip" "Latest run failed (≥80% module failures or agent blocked)"}}
         </div>
     </div>
     <div class="filter-bar-axis">
         <span class="filter-bar-axis__label">Reach</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            <a href="/envoys?reach=offline" class="btn btn--sm{{if eq .ReachFilter "offline"}} btn--primary{{end}}" title="Envoys silent past their per-envoy stale threshold (2.5× the agent's observed inter-CheckIn cadence; floor of {{.OfflineThresholdLabel}} when no cadence has been reported yet). Tunable via checkin.offline_threshold in server.yaml.">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
-            {{if gt .CountObserving 0}}<a href="/envoys?reach=observing" class="btn btn--sm{{if eq .ReachFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=offline" "Active" (eq .ReachFilter "offline") "Label" "Offline" "Count" .CountOffline "CountClass" "filter-count--muted" "Tooltip" (printf "Envoys silent past their per-envoy stale threshold (2.5× the agent's observed inter-CheckIn cadence; floor of %s when no cadence has been reported yet)." .OfflineThresholdLabel)}}
+            {{if gt .CountObserving 0}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=observing" "Active" (eq .ReachFilter "observing") "Label" "Observing" "Count" .CountObserving "CountClass" "filter-count--info" "Tooltip" "Envoys in observe-only mode (drift reported, no enforcement)"}}
+            {{end}}
         </div>
     </div>
 </div>
+{{end}}
+
+{{define "envoy-filter-bar__pill"}}
+{{if .ReadOnly -}}
+<span class="btn btn--sm filter-bar__chip-readonly{{if .Active}} btn--primary{{end}}"{{if .Tooltip}} title="{{.Tooltip}}"{{end}}>{{.Label}} <span class="filter-count {{.CountClass}}">{{.Count}}</span></span>
+{{- else -}}
+<a href="{{.Href}}" class="btn btn--sm{{if .Active}} btn--primary{{end}}"{{if .Tooltip}} title="{{.Tooltip}}"{{end}}>{{.Label}} <span class="filter-count {{.CountClass}}">{{.Count}}</span></a>
+{{- end}}
 {{end}}

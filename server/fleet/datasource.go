@@ -320,6 +320,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 
 	filtered := filterEnvoyRows(all, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter)
 	total := len(filtered)
+	filterAxes, activeFilterCount := BuildEnvoyFilterAxes(filtered, ds.fleet.ConvergenceSummary(), observing, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter)
 	sortEnvoyRows(filtered, sortCol, sortDir)
 
 	if offset < 0 {
@@ -371,6 +372,9 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 
 		FleetFailedModules: fleetFailed,
 		FleetTotalModules:  fleetTotal,
+		FilterAxes:         filterAxes,
+		ActiveFilterCount:  activeFilterCount,
+		BasePath:           "/envoys",
 	}
 	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
 	if data.TotalEnvoys > 0 {
@@ -462,6 +466,292 @@ func anySubstringMatchInSlice(haystacks, needles []string) bool {
 		}
 	}
 	return false
+}
+
+// envoyFilterAxisMaxPerAxis caps each free-text axis at 50 pills, sorted
+// by count desc. Currently-selected values that fall outside the cap are
+// always preserved so the operator can toggle them off. The 50 is a
+// glance-vs-clutter tradeoff; the axis section also exposes an in-pill
+// search input so high-cardinality cases (modules at fleet scale) stay
+// navigable past the cap.
+const envoyFilterAxisMaxPerAxis = 50
+
+// BuildEnvoyFilterAxes is the envoys-page wrapper around EnumerateFilterAxes:
+// declares the 10 axes the drawer renders (env / tag / role / os / arch /
+// module / compliance free-text, conv / drift / reach enum), wires each
+// axis to the matching EnvoyRow field, and returns the axes + the count
+// of axes with at least one active selection (drives the "Filter (N
+// active)" button label). Conv/drift/reach counts are sourced from the
+// fleet's pre-computed ConvergenceSummary so they match the read-only
+// chip bar above the table; "observing" comes from the caller because
+// it's not part of ConvergenceCounters.
+func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observing int, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter string) ([]ui.FilterAxis, int) {
+	baseQS := map[string]string{}
+	put := func(k, v string) {
+		if v != "" {
+			baseQS[k] = v
+		}
+	}
+	put("conv", convFilter)
+	put("drift", driftFilter)
+	put("reach", reachFilter)
+	put("search", search)
+	put("env", envFilter)
+	put("tag", tagFilter)
+	put("role", roleFilter)
+	put("os", osFilter)
+	put("arch", archFilter)
+	put("module", moduleFilter)
+	put("compliance", complianceFilter)
+
+	specs := []FilterAxisSpec{
+		{
+			Key:       "conv",
+			Label:     "Failure",
+			Selected:  convFilter,
+			EnumOrder: []string{"converged", "degraded", "no data", "failed"},
+			EnumCount: map[string]int{
+				"converged": counts.Converged,
+				"degraded":  counts.Degraded,
+				"no data":   counts.NoData,
+				"failed":    counts.Failed,
+			},
+		},
+		{
+			Key:       "drift",
+			Label:     "Drift",
+			Selected:  driftFilter,
+			EnumOrder: []string{"changed", "diverged"},
+			EnumCount: map[string]int{
+				"changed":  counts.Changed,
+				"diverged": counts.Diverged,
+			},
+		},
+		{
+			Key:       "reach",
+			Label:     "Reach",
+			Selected:  reachFilter,
+			EnumOrder: []string{"offline", "observing"},
+			EnumCount: map[string]int{
+				"offline":   counts.Offline,
+				"observing": observing,
+			},
+		},
+		{Key: "env", Label: "Env", Selected: envFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.Environment) }},
+		{Key: "tag", Label: "Tag", Selected: tagFilter, Extract: func(r ui.EnvoyRow) []string { return r.Tags }},
+		{Key: "role", Label: "Role", Selected: roleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Roles }},
+		{Key: "os", Label: "OS", Selected: osFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.OS) }},
+		{Key: "arch", Label: "Arch", Selected: archFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.Arch) }},
+		{Key: "module", Label: "Module", Selected: moduleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Modules }},
+		{Key: "compliance", Label: "Compliance", Selected: complianceFilter, Extract: func(r ui.EnvoyRow) []string { return r.ComplianceFrameworks }},
+	}
+
+	axes := EnumerateFilterAxes(baseQS, rows, specs, envoyFilterAxisMaxPerAxis)
+
+	active := 0
+	for _, s := range specs {
+		if s.Selected != "" {
+			active++
+		}
+	}
+	if search != "" {
+		active++
+	}
+	return axes, active
+}
+
+// strOrNil returns []string{v} when v is non-empty, nil otherwise — lets
+// the per-row scalar fields (Environment, OS, Arch) reuse the same
+// Extract func shape that slice fields use without a separate code path.
+func strOrNil(v string) []string {
+	if v == "" {
+		return nil
+	}
+	return []string{v}
+}
+
+// FilterAxisSpec defines one axis fed into EnumerateFilterAxes. Free-text
+// axes (Extract != nil) are multi-select (toggle within a CSV value);
+// enum axes (EnumOrder != nil) are single-select (set or clear).
+type FilterAxisSpec struct {
+	Key       string                     // query string param ("env", "conv", etc.)
+	Label     string                     // pill section heading
+	Selected  string                     // current CSV value from the query string (raw)
+	Extract   func(ui.EnvoyRow) []string // free-text axes: per-row values
+	EnumOrder []string                   // enum axes: fixed pill order
+	EnumCount map[string]int             // enum axes: pre-computed counts per enum value
+}
+
+// EnumerateFilterAxes builds the per-axis pill data for the envoy filter
+// drawer. Free-text axis pills are enumerated from rows (the filtered
+// set, so pills narrow as filters are applied) and capped at maxPerAxis
+// by count desc — but currently-selected values are always retained so
+// the user can always toggle them off. Each choice's URL is a path-
+// relative query string ("?env=prod"); the template prepends the page's
+// base path so /envoys and /envoys/tree can share the same axes data.
+// Unrelated query parameters in baseQS are preserved verbatim.
+func EnumerateFilterAxes(baseQS map[string]string, rows []ui.EnvoyRow, specs []FilterAxisSpec, maxPerAxis int) []ui.FilterAxis {
+	axes := make([]ui.FilterAxis, 0, len(specs))
+	for _, spec := range specs {
+		isEnum := spec.EnumOrder != nil
+		selectedSet := map[string]bool{}
+		for _, v := range splitCommaLower(spec.Selected) {
+			selectedSet[v] = true
+		}
+
+		type kv struct {
+			Value string
+			Count int
+		}
+		var ranked []kv
+		if isEnum {
+			ranked = make([]kv, 0, len(spec.EnumOrder))
+			for _, v := range spec.EnumOrder {
+				ranked = append(ranked, kv{Value: v, Count: spec.EnumCount[v]})
+			}
+		} else {
+			// Bucket values case-insensitively, keep the first casing seen
+			// so pills render the way operator data actually spells them.
+			counts := make(map[string]int)
+			display := make(map[string]string)
+			for v := range selectedSet {
+				display[v] = v
+				counts[v] = 0
+			}
+			for _, r := range rows {
+				for _, v := range spec.Extract(r) {
+					if v == "" {
+						continue
+					}
+					k := strings.ToLower(v)
+					if _, seen := display[k]; !seen {
+						display[k] = v
+					}
+					counts[k]++
+				}
+			}
+			ranked = make([]kv, 0, len(counts))
+			for k, c := range counts {
+				ranked = append(ranked, kv{Value: display[k], Count: c})
+			}
+			sort.Slice(ranked, func(i, j int) bool {
+				if ranked[i].Count != ranked[j].Count {
+					return ranked[i].Count > ranked[j].Count
+				}
+				return ranked[i].Value < ranked[j].Value
+			})
+			if maxPerAxis > 0 && len(ranked) > maxPerAxis {
+				kept := ranked[:maxPerAxis]
+				for _, r := range ranked[maxPerAxis:] {
+					if selectedSet[strings.ToLower(r.Value)] {
+						kept = append(kept, r)
+					}
+				}
+				ranked = kept
+			}
+		}
+
+		choices := make([]ui.FilterChoice, 0, len(ranked))
+		for _, r := range ranked {
+			selected := selectedSet[strings.ToLower(r.Value)]
+			choices = append(choices, ui.FilterChoice{
+				Value:    r.Value,
+				Count:    r.Count,
+				Selected: selected,
+				URL:      buildFilterURL(baseQS, spec.Key, isEnum, spec.Selected, r.Value, selected),
+			})
+		}
+		axes = append(axes, ui.FilterAxis{
+			Key:     spec.Key,
+			Label:   spec.Label,
+			IsEnum:  isEnum,
+			Choices: choices,
+		})
+	}
+	return axes
+}
+
+// buildFilterURL composes the path-relative toggle query string for
+// clicking a pill (e.g. "?env=prod,staging"). Multi-select axes add/
+// remove pillValue within the existing CSV; single-select enum axes set
+// or clear. Returns "" when toggling clears every filter (so the
+// template can fall through to the page's base path). Unrelated keys in
+// baseQS are preserved. Commas in axis values stay literal — the OR-
+// within-axis convention depends on them being legible in the URL.
+func buildFilterURL(baseQS map[string]string, key string, isEnum bool, currentValue, pillValue string, isSelected bool) string {
+	q := make(map[string]string, len(baseQS))
+	for k, v := range baseQS {
+		if v != "" && k != key {
+			q[k] = v
+		}
+	}
+	if isEnum {
+		if !isSelected {
+			q[key] = pillValue
+		}
+	} else {
+		current := splitCommaLower(currentValue)
+		pillLower := strings.ToLower(pillValue)
+		next := make([]string, 0, len(current)+1)
+		found := false
+		for _, v := range current {
+			if v == pillLower {
+				found = true
+				continue
+			}
+			next = append(next, v)
+		}
+		if !found {
+			next = append(next, pillLower)
+		}
+		if len(next) > 0 {
+			q[key] = strings.Join(next, ",")
+		}
+	}
+	if len(q) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(q))
+	for k := range q {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var sb strings.Builder
+	sep := "?"
+	for _, k := range keys {
+		sb.WriteString(sep)
+		sb.WriteString(k)
+		sb.WriteString("=")
+		sb.WriteString(urlQueryEscapeKeepingCommas(q[k]))
+		sep = "&"
+	}
+	return sb.String()
+}
+
+// urlQueryEscapeKeepingCommas percent-encodes everything net/url's
+// QueryEscape would, except commas — the OR-within-axis convention
+// depends on them being legible in the URL.
+func urlQueryEscapeKeepingCommas(s string) string {
+	var sb strings.Builder
+	sb.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9',
+			c == '-', c == '_', c == '.', c == '~', c == ',':
+			sb.WriteByte(c)
+		case c == ' ':
+			sb.WriteByte('+')
+		default:
+			const hex = "0123456789ABCDEF"
+			sb.WriteByte('%')
+			sb.WriteByte(hex[c>>4])
+			sb.WriteByte(hex[c&0x0F])
+		}
+	}
+	return sb.String()
 }
 
 func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter string, searchLower, envLower, tagLower, roleLower, osLower, archLower, moduleLower, complianceLower []string) bool {

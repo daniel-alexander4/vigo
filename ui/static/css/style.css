@@ -3505,6 +3505,141 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     .ai-toggle { bottom: 16px; right: 16px; }
 }
 
+/* === Envoy filter drawer ===
+ * Right-side slide-in panel for the envoys/list+tree filter pills.
+ * Mirrors .ai-panel's geometry; sits to the LEFT of the AI panel so
+ * both can theoretically be open at once without overlap.
+ */
+.envoy-filter-drawer {
+    position: fixed;
+    top: 0;
+    right: -440px;
+    width: 440px;
+    max-width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-bg);
+    box-shadow: -4px 0 24px var(--color-shadow-drawer);
+    display: flex;
+    flex-direction: column;
+    z-index: 190;
+    transition: right 0.25s ease;
+}
+.envoy-filter-drawer--open { right: 0; }
+
+.envoy-filter-drawer__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+.envoy-filter-drawer__title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+.envoy-filter-drawer__close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+.envoy-filter-drawer__close:hover { color: var(--color-text); }
+
+.envoy-filter-drawer__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.envoy-filter-drawer__search-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.envoy-filter-drawer__search-input { width: 100%; }
+
+.envoy-filter-drawer__axis {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.envoy-filter-drawer__axis-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.envoy-filter-drawer__section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+}
+
+.envoy-filter-drawer__pill-search {
+    flex: 1;
+    max-width: 180px;
+}
+
+.envoy-filter-drawer__pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.envoy-filter-drawer__pill[hidden] { display: none; }
+
+.envoy-filter-drawer__pill .filter-count {
+    margin-left: 4px;
+}
+
+.envoy-filter-drawer__footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Read-only chip variant of the conv/drift/reach filter bar, used on
+ * /envoys and /envoys/tree where filtering routes through the drawer. */
+.filter-bar__chip-readonly {
+    cursor: default;
+    user-select: none;
+}
+.filter-bar__chip-readonly:hover {
+    background: inherit;
+    color: inherit;
+}
+
+.envoys-toolbar__filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.envoys-toolbar__filter-button .filter-count {
+    margin-left: 6px;
+}
+
+@media (max-width: 768px) {
+    .envoy-filter-drawer { width: 100%; right: -100%; }
+    .envoy-filter-drawer--open { right: 0; }
+}
+
 /* === Login Page === */
 .login-container {
     display: flex;

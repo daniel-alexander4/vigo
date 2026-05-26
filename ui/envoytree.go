@@ -43,6 +43,18 @@ type EnvoyTreePageData struct {
 	ArchFilter       string
 	ModuleFilter     string
 	ComplianceFilter string
+	// Filter drawer state — mirrored from the EnvoysPageData built by
+	// EnvoysData so the tree view shares the same pill enumeration and
+	// active-count logic.
+	FilterAxes        []FilterAxis
+	ActiveFilterCount int
+	BasePath          string // "/envoys/tree" — page path the drawer pills anchor against
+	// Conv/drift/reach counts for the read-only chip bar above the tree.
+	// Same source-of-truth as the flat /envoys page.
+	CountConverged, CountDegraded, CountFailed, CountNoData int
+	CountChanged, CountDiverged                             int
+	CountOffline, CountObserving                            int
+	OfflineThresholdLabel                                   string
 }
 
 // EnvoyTree renders the envoy-tree navigation view at /envoys/tree.
@@ -94,6 +106,18 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 	)
 	data.TotalEnvoys = envoyData.TotalEnvoys
 	data.MatchingTotal = envoyData.MatchingTotal
+	data.FilterAxes = envoyData.FilterAxes
+	data.ActiveFilterCount = envoyData.ActiveFilterCount
+	data.BasePath = "/envoys/tree"
+	data.CountConverged = envoyData.CountConverged
+	data.CountDegraded = envoyData.CountDegraded
+	data.CountFailed = envoyData.CountFailed
+	data.CountNoData = envoyData.CountNoData
+	data.CountChanged = envoyData.CountChanged
+	data.CountDiverged = envoyData.CountDiverged
+	data.CountOffline = envoyData.CountOffline
+	data.CountObserving = envoyData.CountObserving
+	data.OfflineThresholdLabel = envoyData.OfflineThresholdLabel
 
 	// Per-envoy DirPath lookup via the existing MatchDirPaths SoT.
 	// MatchDirPaths returns pattern → DirPath; we look up each envoy's

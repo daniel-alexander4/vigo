@@ -1268,6 +1268,27 @@ type EnvoyRow struct {
 	ComplianceFrameworks []string
 }
 
+// FilterAxis is one section of the envoy filter drawer (env, tag, role,
+// os, arch, module, compliance, conv, drift, reach). Free-text axes are
+// multi-select (CSV toggle); IsEnum axes are single-select (set/clear).
+type FilterAxis struct {
+	Key     string         // query string param ("env", "conv", ...)
+	Label   string         // pill section heading rendered in the drawer
+	IsEnum  bool           // true → single-select; false → multi-select CSV
+	Choices []FilterChoice // ordered: enum follows EnumOrder; free-text is by count desc
+}
+
+// FilterChoice is one selectable pill within a FilterAxis. URL is the
+// pre-composed toggle URL the pill's <a href> emits — selecting an
+// unselected pill adds it (or replaces, for enums); selecting an active
+// pill removes it.
+type FilterChoice struct {
+	Value    string
+	Count    int
+	Selected bool
+	URL      string
+}
+
 // EnvoysPageData holds data for the envoys list page.
 type EnvoysPageData struct {
 	PageData
@@ -1335,6 +1356,13 @@ type EnvoysPageData struct {
 	// have been silent to land in that bucket without consulting
 	// server.yaml.
 	OfflineThresholdLabel string
+	// FilterAxes is the per-axis pill data rendered inside the filter
+	// drawer. Built by fleet.EnumerateFilterAxes from the filtered row
+	// set + the request's query params; drawer template renders each
+	// axis as a pill grid, conv/drift/reach included.
+	FilterAxes        []FilterAxis
+	ActiveFilterCount int    // number of axes with at least one selection (drives the "Filter (N active)" button label)
+	BasePath          string // page path the drawer pills should anchor against ("/envoys"); tree page overrides to "/envoys/tree"
 }
 
 // EnvoyDetailRunRow is a run with its per-module results for the envoy detail page.

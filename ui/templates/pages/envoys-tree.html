@@ -16,42 +16,40 @@
 </div>
 {{else}}
 
-<div class="filter-bar">
-    <form method="get" action="/envoys/tree" class="filter-bar__form">
-        <input type="search" name="search" value="{{.Search}}" placeholder="hostname (web,db)" class="filter-bar__search" />
-        <select name="conv" class="filter-bar__chip">
-            <option value="">all convergence</option>
-            <option value="converged" {{if eq .ConvFilter "converged"}}selected{{end}}>converged</option>
-            <option value="degraded" {{if eq .ConvFilter "degraded"}}selected{{end}}>degraded</option>
-            <option value="failed" {{if eq .ConvFilter "failed"}}selected{{end}}>failed</option>
-            <option value="no data" {{if eq .ConvFilter "no data"}}selected{{end}}>no data</option>
-        </select>
-        <select name="drift" class="filter-bar__chip">
-            <option value="">all drift</option>
-            <option value="changed" {{if eq .DriftFilter "changed"}}selected{{end}}>changed</option>
-            <option value="diverged" {{if eq .DriftFilter "diverged"}}selected{{end}}>diverged</option>
-        </select>
-        <select name="reach" class="filter-bar__chip">
-            <option value="">all reachability</option>
-            <option value="offline" {{if eq .ReachFilter "offline"}}selected{{end}}>offline</option>
-            <option value="observing" {{if eq .ReachFilter "observing"}}selected{{end}}>observing</option>
-        </select>
-        <input type="text" name="env" value="{{.EnvFilter}}" placeholder="env (prod,staging)" class="filter-bar__chip filter-bar__chip--text" />
-        <input type="text" name="tag" value="{{.TagFilter}}" placeholder="tag" class="filter-bar__chip filter-bar__chip--text" />
-        <input type="text" name="role" value="{{.RoleFilter}}" placeholder="role (web,db)" class="filter-bar__chip filter-bar__chip--text" />
-        <input type="text" name="os" value="{{.OSFilter}}" placeholder="os (ubuntu,rhel)" class="filter-bar__chip filter-bar__chip--text" />
-        <input type="text" name="arch" value="{{.ArchFilter}}" placeholder="arch (amd64,arm64)" class="filter-bar__chip filter-bar__chip--text" />
-        <input type="text" name="module" value="{{.ModuleFilter}}" placeholder="module" class="filter-bar__chip filter-bar__chip--text" />
-        <input type="text" name="compliance" value="{{.ComplianceFilter}}" placeholder="compliance (hipaa,soc2)" class="filter-bar__chip filter-bar__chip--text" />
-        <button type="submit" class="filter-bar__apply">Apply</button>
+<div class="envoys-toolbar mt-2 mb-2">
+    <div class="envoys-toolbar__filter">
+        <button type="button" class="btn btn--sm envoys-toolbar__filter-button"
+                onclick="toggleEnvoyFilterDrawer()"
+                aria-controls="envoy-filter-drawer"
+                aria-label="Open filter drawer">
+            Filter
+            {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} active</span>{{end}}
+        </button>
         {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ModuleFilter .ComplianceFilter}}
-        <a href="/envoys/tree" class="filter-bar__clear">Clear</a>
+        <a href="/envoys/tree" class="btn btn--sm">Clear</a>
         {{end}}
-    </form>
-    <div class="filter-bar__counts">
+    </div>
+    <div class="envoys-toolbar__counts">
         <span class="text-muted">{{.MatchingTotal}} of {{.TotalEnvoys}} envoys</span>
     </div>
 </div>
+
+{{template "envoy-filter-bar" dict
+    "TotalEnvoys"           .TotalEnvoys
+    "CountConverged"        .CountConverged
+    "CountDegraded"         .CountDegraded
+    "CountNoData"           .CountNoData
+    "CountChanged"          .CountChanged
+    "CountDiverged"         .CountDiverged
+    "CountFailed"           .CountFailed
+    "CountOffline"          .CountOffline
+    "CountObserving"        .CountObserving
+    "OfflineThresholdLabel" .OfflineThresholdLabel
+    "ConvFilter"            .ConvFilter
+    "DriftFilter"           .DriftFilter
+    "ReachFilter"           .ReachFilter
+    "Search"                .Search
+    "ReadOnly"              true}}
 
 <div class="envoys-tree">
     {{template "envoy-tree-node" .Root}}
@@ -59,6 +57,8 @@
     {{template "envoy-tree-node" .Unmatched}}
     {{end}}
 </div>
+
+{{template "envoy-filter-drawer" .}}
 {{end}}
 {{end}}
 
