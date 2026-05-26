@@ -10,7 +10,7 @@ Required fields on the data context: standard EnvoyRow.
 {{define "envoy-tree-row"}}
 {{/* "no data" -> "no-data" so the CSS class doesn't carry a space. */}}
 {{$statusClass := .Status}}{{if eq $statusClass "no data"}}{{$statusClass = "no-data"}}{{end}}
-<li class="envoys-tree__envoy">
+<li class="envoys-tree__envoy envoys-tree__envoy--{{$statusClass}}">
     <a href="/envoys/{{.ID}}" class="envoys-tree__envoy-link">{{.Hostname}}</a>
     <span class="status-pill status-pill--{{$statusClass}} envoys-tree__envoy-status" title="{{.Status}}">{{.Status}}</span>
     {{if .Offline}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--offline" title="Offline past stale threshold">offline</span>{{end}}
