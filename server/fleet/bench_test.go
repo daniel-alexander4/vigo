@@ -93,6 +93,30 @@ func BenchmarkFleetIndexMarkSeenInMemory(b *testing.B) {
 	}
 }
 
+// BenchmarkFleetIndexMarkSeenParallel measures MarkSeen under writer contention,
+// the load shape that pinned p99 at 14.6s in the 2026-05-25 25K plateau (see
+// test/loadtest/results/2026-05-25-girlslaptop/FINDINGS.md). 25K-envoy index
+// keeps stripe occupancy at the same ≈100-envoys-per-stripe ratio the production
+// fleet sees; ids are pre-built so the harness measures lock-acquire cost, not
+// fmt.Sprintf churn.
+func BenchmarkFleetIndexMarkSeenParallel(b *testing.B) {
+	const n = 25000
+	fi := populateIndex(n)
+	ids := make([]string, n)
+	for i := 0; i < n; i++ {
+		ids[i] = fmt.Sprintf("t-%d", i)
+	}
+	now := time.Now()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			fi.MarkSeen(ids[i%n], now)
+			i++
+		}
+	})
+}
+
 func BenchmarkFleetIndexConvergenceSummary(b *testing.B) {
 	fi := populateIndex(10000)
 	b.ResetTimer()

@@ -11,6 +11,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -28,8 +29,19 @@ import (
 // threshold and leaves room for future drift-detection windows.
 const MaxRecentRuns = 10
 
-// EnvoyState holds the in-memory state of a single envoy. All fields are
-// owned by the FleetIndex and protected by its mutex.
+// envoyStripes is the number of stripes in FleetIndex.envoyLocks. Power
+// of two so id-hash → stripe is a bit mask. 256 stripes spreads per-envoy
+// write contention thinly even at 25K-envoy scale (≈100 envoys per
+// stripe, ≈0.1% stripe utilization at the current per-checkin cost).
+const envoyStripes = 256
+
+// EnvoyState holds the in-memory state of a single envoy. Per-envoy field
+// writes serialize through FleetIndex.lockFor(id) — a stripe lock taken by
+// the hot-path setters (MarkSeen, MarkCycleDuration, SetIP, SetAgentVersion,
+// and the rare-transition slow path of SetOffline) under f.mu.RLock so
+// concurrent CheckIns for different envoys do not serialize through the
+// fleet-wide write lock. Readers that copy more than one field must acquire
+// the same stripe lock for snapshot consistency.
 type EnvoyState struct {
 	ID                string
 	Hostname          string
@@ -135,11 +147,32 @@ type FleetIndex struct {
 	convergence        ConvergenceCounters
 	recentRuns         *ringBuffer
 	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
-	dirty              map[string]bool  // IDs with pending state changes
+
+	// dirty holds the set of envoy IDs with pending state changes for the
+	// next flusher tick. A sync.Map (not f.mu-protected map) so hot-path
+	// setters can mark dirty under f.mu.RLock + stripe lock without
+	// blocking on concurrent CheckIns for other envoys.
+	dirty sync.Map // string id -> struct{}{}
+
+	// envoyLocks stripes per-envoy field writes across 256 mutexes. Two
+	// envoys whose IDs hash to the same stripe serialize on the same lock,
+	// but with 256 stripes false-sharing is negligible at any realistic
+	// fleet size, and the structure stays trivial (no per-envoy
+	// allocation, no growth as enrollment scales).
+	envoyLocks [envoyStripes]sync.Mutex
 
 	// Wake channels — separate mutex so blocking Wake RPCs don't hold the main lock.
 	wakeMu    sync.Mutex
 	wakeChans map[string]chan struct{} // envoy_id → signal channel
+}
+
+// lockFor returns the stripe mutex that guards per-envoy field writes for
+// the given envoy ID. Hash-and-mask is O(len(id)) but the IDs are short
+// fixed-length UUIDs, so this is sub-100ns per call.
+func (f *FleetIndex) lockFor(id string) *sync.Mutex {
+	h := fnv.New32a()
+	h.Write([]byte(id))
+	return &f.envoyLocks[h.Sum32()&(envoyStripes-1)]
 }
 
 // NewFleetIndex creates an empty FleetIndex.
@@ -153,7 +186,6 @@ func NewFleetIndex() *FleetIndex {
 		byTag:              make(map[string]map[string]bool),
 		recentRuns:         newRingBuffer(5000),
 		convergenceHistory: newConvergenceRing(30),
-		dirty:              make(map[string]bool),
 		wakeChans:          make(map[string]chan struct{}),
 	}
 }
@@ -179,6 +211,8 @@ func (f *FleetIndex) GetEnvoy(id string) *EnvoyState {
 	if ts == nil {
 		return nil
 	}
+	lk := f.lockFor(id)
+	lk.Lock()
 	cp := *ts
 	if ts.PendingRotatedSecrets != nil {
 		cp.PendingRotatedSecrets = make([]string, len(ts.PendingRotatedSecrets))
@@ -190,6 +224,7 @@ func (f *FleetIndex) GetEnvoy(id string) *EnvoyState {
 			cp.Traits[k] = v
 		}
 	}
+	lk.Unlock()
 	return &cp
 }
 
@@ -216,8 +251,12 @@ func (f *FleetIndex) GetEnvoyLite(id string) (ts *EnvoyState, exists, revoked bo
 	if src == nil {
 		return nil, false, false
 	}
+	lk := f.lockFor(id)
+	lk.Lock()
 	cp := *src // shallow copy — shares Traits/PendingRotatedSecrets slices
-	return &cp, true, src.Revoked
+	revoked = src.Revoked
+	lk.Unlock()
+	return &cp, true, revoked
 }
 
 // GetPubKey returns the parsed ED25519 public key for the given envoy ID.
@@ -326,8 +365,11 @@ func (f *FleetIndex) AllEnvoys() []EnvoyState {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	result := make([]EnvoyState, 0, len(f.envoys))
-	for _, ts := range f.envoys {
+	for id, ts := range f.envoys {
+		lk := f.lockFor(id)
+		lk.Lock()
 		result = append(result, *ts)
+		lk.Unlock()
 	}
 	return result
 }
@@ -342,22 +384,27 @@ func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilt
 	// Collect matching envoys.
 	searchLower := strings.ToLower(search)
 	var candidates []EnvoyState
-	for _, ts := range f.envoys {
+	for id, ts := range f.envoys {
 		if ts.Revoked {
 			continue
 		}
 		if search != "" && !strings.Contains(strings.ToLower(ts.Hostname), searchLower) {
 			continue
 		}
-		if statusFilter == "offline" && !ts.Offline {
-			continue
-		} else if statusFilter != "" && statusFilter != "offline" && ts.ConvergenceStatus != statusFilter {
+		if statusFilter != "" && statusFilter != "offline" && ts.ConvergenceStatus != statusFilter {
 			continue
 		}
 		if afterHostname != "" && ts.Hostname <= afterHostname {
 			continue
 		}
+		lk := f.lockFor(id)
+		lk.Lock()
+		if statusFilter == "offline" && !ts.Offline {
+			lk.Unlock()
+			continue
+		}
 		candidates = append(candidates, *ts)
+		lk.Unlock()
 	}
 
 	// Sort by hostname.
@@ -380,11 +427,14 @@ func (f *FleetIndex) SnapshotEnvoys() []EnvoyState {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	out := make([]EnvoyState, 0, len(f.envoys))
-	for _, ts := range f.envoys {
+	for id, ts := range f.envoys {
 		if ts.Revoked {
 			continue
 		}
+		lk := f.lockFor(id)
+		lk.Lock()
 		out = append(out, *ts)
+		lk.Unlock()
 	}
 	return out
 }
@@ -515,27 +565,37 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 		f.bumpDriftCounters(ts.Drift, convergence.DriftNone)
 	}
 	delete(f.envoys, id)
-	delete(f.dirty, id)
+	f.dirty.Delete(id)
 }
 
 // SetOffline updates an envoy's offline state without changing its convergence status.
+// Uses the same RLock + stripe pattern as the hot-path setters so it doesn't race
+// with concurrent MarkSeen / MarkSeenInMemory writes on ts.Offline. The counter
+// update takes f.mu.Lock briefly; only fires on an actual transition.
 func (f *FleetIndex) SetOffline(id string, offline bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok || ts.Revoked {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
-	if ts.Offline == offline {
-		return // no change
+
+	lk := f.lockFor(id)
+	lk.Lock()
+	if ts.Revoked || ts.Offline == offline {
+		lk.Unlock()
+		return
 	}
 	ts.Offline = offline
+	lk.Unlock()
+
+	f.mu.Lock()
 	if offline {
 		f.convergence.Offline++
 	} else {
 		f.convergence.Offline--
 	}
+	f.mu.Unlock()
 }
 
 // SetRevoked marks a envoy as revoked.
@@ -568,19 +628,33 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 
 // MarkSeen updates the LastSeen timestamp for a envoy and marks it dirty
 // for async flush to SQLite. Also clears the offline flag if set.
+//
+// Hot path: takes f.mu.RLock for the map lookup, then the per-envoy stripe
+// lock for the field write, so concurrent CheckIns for different envoys
+// don't queue behind each other on a single fleet-wide write lock. The
+// Offline-transition counter update is the rare slow path — it takes
+// f.mu.Lock briefly, but only when an envoy actually comes back online.
 func (f *FleetIndex) MarkSeen(id string, t time.Time) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.LastSeen = t
-	f.dirty[id] = true
-	if ts.Offline {
-		ts.Offline = false
+	wasOffline := ts.Offline
+	ts.Offline = false
+	lk.Unlock()
+
+	f.dirty.Store(id, struct{}{})
+
+	if wasOffline {
+		f.mu.Lock()
 		f.convergence.Offline--
+		f.mu.Unlock()
 	}
 }
 
@@ -594,13 +668,16 @@ func (f *FleetIndex) MarkCycleDuration(id string, deltaMs uint32) {
 	if deltaMs == 0 {
 		return
 	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
+	defer lk.Unlock()
 	idx := ts.recentCheckinDeltasIdx
 	if idx < 0 || idx >= int8(len(ts.recentCheckinDeltasMs)) {
 		idx = 0
@@ -620,13 +697,16 @@ func (f *FleetIndex) MarkCycleDuration(id string, deltaMs uint32) {
 // interval.
 func (f *FleetIndex) EnvoyCycle(id string) time.Duration {
 	f.mu.RLock()
-	defer f.mu.RUnlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return 0
 	}
-	return ts.ObservedCycle()
+	lk := f.lockFor(id)
+	lk.Lock()
+	cycle := ts.ObservedCycle()
+	lk.Unlock()
+	return cycle
 }
 
 // ObservedCycle returns the smoothed observed inter-CheckIn cadence
@@ -646,20 +726,28 @@ func (es *EnvoyState) ObservedCycle() time.Duration {
 
 // MarkSeenInMemory updates the LastSeen timestamp in-memory without marking
 // the envoy dirty. Used for streaming envoys where the open gRPC stream
-// already proves liveness — avoids redundant last_seen DB writes.
-// Also clears the offline flag if set.
+// already proves liveness — avoids redundant last_seen DB writes. Also
+// clears the offline flag if set. Same per-envoy locking pattern as
+// MarkSeen — see there for the rationale.
 func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.LastSeen = t
-	if ts.Offline {
-		ts.Offline = false
+	wasOffline := ts.Offline
+	ts.Offline = false
+	lk.Unlock()
+
+	if wasOffline {
+		f.mu.Lock()
 		f.convergence.Offline--
+		f.mu.Unlock()
 	}
 }
 
@@ -687,18 +775,23 @@ func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
 // the value changes so the flusher persists the update on its next tick,
 // even if the caller's path doesn't itself MarkSeen.
 func (f *FleetIndex) SetIP(id, ip string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return false
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	if ts.IP == ip {
+		lk.Unlock()
 		return false
 	}
 	ts.IP = ip
-	f.dirty[id] = true
+	lk.Unlock()
+
+	f.dirty.Store(id, struct{}{})
 	return true
 }
 
@@ -710,18 +803,23 @@ func (f *FleetIndex) SetIP(id, ip string) bool {
 // during stagger-up into one chunked UPDATE per distinct version. Marks the
 // envoy dirty when the value changes so the next flush picks it up.
 func (f *FleetIndex) SetAgentVersion(id, version string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return false
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	if ts.AgentVersion == version {
+		lk.Unlock()
 		return false
 	}
 	ts.AgentVersion = version
-	f.dirty[id] = true
+	lk.Unlock()
+
+	f.dirty.Store(id, struct{}{})
 	return true
 }
 
@@ -735,7 +833,7 @@ func (f *FleetIndex) SetForcePush(id string, val bool) {
 		return
 	}
 	ts.ForcePush = val
-	f.dirty[id] = true
+	f.dirty.Store(id, struct{}{})
 }
 
 // MarkRunForced records that the bundle just delivered to this envoy
@@ -806,7 +904,7 @@ func (f *FleetIndex) SetForcePushAll() int {
 			continue
 		}
 		ts.ForcePush = true
-		f.dirty[id] = true
+		f.dirty.Store(id, struct{}{})
 		count++
 	}
 	return count
@@ -921,7 +1019,7 @@ func (f *FleetIndex) ClearPendingRotatedSecrets(id string) {
 		return
 	}
 	ts.PendingRotatedSecrets = nil
-	f.dirty[id] = true
+	f.dirty.Store(id, struct{}{})
 }
 
 // AppendPendingRotatedSecret adds a secret path to a envoy's pending rotation
@@ -942,7 +1040,7 @@ func (f *FleetIndex) AppendPendingRotatedSecret(id, secretPath string) {
 	}
 	ts.PendingRotatedSecrets = append(ts.PendingRotatedSecrets, secretPath)
 	ts.ForcePush = true
-	f.dirty[id] = true
+	f.dirty.Store(id, struct{}{})
 }
 
 // SetTags replaces the tags for a envoy and updates the inverted tag index.
@@ -959,7 +1057,7 @@ func (f *FleetIndex) SetTags(id string, tags []string) {
 	if !ts.Revoked {
 		f.addToTags(id, tags)
 	}
-	f.dirty[id] = true
+	f.dirty.Store(id, struct{}{})
 }
 
 // SetMaintenanceUntil sets the maintenance window for a envoy.
@@ -972,7 +1070,7 @@ func (f *FleetIndex) SetMaintenanceUntil(id string, until time.Time) {
 		return
 	}
 	ts.MaintenanceUntil = until
-	f.dirty[id] = true
+	f.dirty.Store(id, struct{}{})
 }
 
 // ClearMaintenance clears the maintenance window for a envoy.
@@ -1046,30 +1144,44 @@ func (f *FleetIndex) AppendRecentRun(run RunSummary) {
 	f.recentRuns.Push(run)
 }
 
-// MarkDirty marks a envoy for async flush.
+// MarkDirty marks a envoy for async flush. Lock-free — the sync.Map serves
+// as the dirty-set so the hot-path setters that mark dirty don't contend on
+// the fleet write lock.
 func (f *FleetIndex) MarkDirty(id string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.dirty[id] = true
+	f.dirty.Store(id, struct{}{})
 }
 
-// DrainDirty returns and clears the set of dirty envoy IDs.
+// DrainDirty atomically removes every entry from the dirty set and returns a
+// snapshot of each entry's EnvoyState. Hot-path setters can continue marking
+// dirty in parallel during the drain — anything they Store after the Range
+// snapshot is captured by the next flusher tick. Snapshots are taken under
+// each envoy's stripe lock so the copy is consistent vs. concurrent field
+// writes.
 func (f *FleetIndex) DrainDirty() map[string]*EnvoyState {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if len(f.dirty) == 0 {
+	var ids []string
+	f.dirty.Range(func(key, _ any) bool {
+		ids = append(ids, key.(string))
+		f.dirty.Delete(key)
+		return true
+	})
+	if len(ids) == 0 {
 		return nil
 	}
 
-	result := make(map[string]*EnvoyState, len(f.dirty))
-	for id := range f.dirty {
-		if ts, ok := f.envoys[id]; ok {
-			cp := *ts
-			result[id] = &cp
+	result := make(map[string]*EnvoyState, len(ids))
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	for _, id := range ids {
+		ts, ok := f.envoys[id]
+		if !ok {
+			continue
 		}
+		lk := f.lockFor(id)
+		lk.Lock()
+		cp := *ts
+		lk.Unlock()
+		result[id] = &cp
 	}
-	f.dirty = make(map[string]bool)
 	return result
 }
 
