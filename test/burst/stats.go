@@ -28,9 +28,19 @@ func jsonEncoder(w io.Writer) *json.Encoder { return json.NewEncoder(w) }
 // the test was bound by network timeouts (DeadlineExceeded), server
 // rejection (ResourceExhausted), or connection breakage (Unavailable).
 // All paths matter for diagnosis but for very different reasons.
+//
+// Per-second deltas (perSec*) are sampled+reset every tick by the
+// driver so latency.csv can show failure-by-code distribution over
+// time. The three buckets — Unauthenticated, DeadlineExceeded, other —
+// are the only distinctions burst-class diagnosis has needed so far;
+// the full code-to-count map still lands in summary.json.
 type failureBreakdown struct {
 	codes [17]atomic.Int64 // indexed by grpc/codes; 17 = highest defined + 1
 	other atomic.Int64     // non-gRPC errors (transport, parse, etc.)
+
+	perSecUnauth   atomic.Int64
+	perSecDeadline atomic.Int64
+	perSecOther    atomic.Int64
 }
 
 func (f *failureBreakdown) Record(err error) {
@@ -40,6 +50,7 @@ func (f *failureBreakdown) Record(err error) {
 	st, ok := status.FromError(err)
 	if !ok {
 		f.other.Add(1)
+		f.perSecOther.Add(1)
 		return
 	}
 	c := st.Code()
@@ -48,6 +59,21 @@ func (f *failureBreakdown) Record(err error) {
 	} else {
 		f.other.Add(1)
 	}
+	switch c {
+	case codes.Unauthenticated:
+		f.perSecUnauth.Add(1)
+	case codes.DeadlineExceeded:
+		f.perSecDeadline.Add(1)
+	default:
+		f.perSecOther.Add(1)
+	}
+}
+
+// SwapPerSecond returns the three per-second deltas and zeros them.
+// Called from the per-second ticker; cumulative counts continue
+// accumulating in the codes[]/other fields untouched.
+func (f *failureBreakdown) SwapPerSecond() (unauth, deadline, other int64) {
+	return f.perSecUnauth.Swap(0), f.perSecDeadline.Swap(0), f.perSecOther.Swap(0)
 }
 
 func (f *failureBreakdown) Snapshot() map[string]int64 {
@@ -63,14 +89,19 @@ func (f *failureBreakdown) Snapshot() map[string]int64 {
 	return out
 }
 
-// secondSample is one row of the per-second time series.
+// secondSample is one row of the per-second time series. The three
+// failure buckets are deltas over the just-elapsed second pulled from
+// failureBreakdown.SwapPerSecond; the cumulative-by-code totals stay
+// in summary.json.
 type secondSample struct {
 	elapsedSec int
 	throughput int64
 	p50, p95, p99, p999 int64 // nanoseconds
-	maxObserved int64        // upper bound of highest non-empty bucket
-	failures   int64
-	phase      string // "warmup", "baseline", "burst", "cooldown"
+	maxObserved  int64        // upper bound of highest non-empty bucket
+	failUnauth   int64
+	failDeadline int64
+	failOther    int64
+	phase        string // "warmup", "baseline", "burst", "cooldown"
 }
 
 // secondSeries is the time-series sink. Each tick the per-second
@@ -86,12 +117,14 @@ func (s *secondSeries) Append(sample secondSample) {
 }
 
 // WriteCSV dumps the series to a writer. Columns:
-//   elapsed_sec, phase, throughput, p50_ms, p95_ms, p99_ms, p999_ms, max_ms, failures
+//   elapsed_sec, phase, throughput, p50_ms, p95_ms, p99_ms, p999_ms,
+//   max_ms, fail_unauth, fail_deadline, fail_other
 func (s *secondSeries) WriteCSV(w io.Writer) error {
 	cw := csv.NewWriter(w)
 	defer cw.Flush()
 	if err := cw.Write([]string{
-		"elapsed_sec", "phase", "throughput", "p50_ms", "p95_ms", "p99_ms", "p999_ms", "max_ms", "failures",
+		"elapsed_sec", "phase", "throughput", "p50_ms", "p95_ms", "p99_ms", "p999_ms", "max_ms",
+		"fail_unauth", "fail_deadline", "fail_other",
 	}); err != nil {
 		return err
 	}
@@ -105,7 +138,9 @@ func (s *secondSeries) WriteCSV(w io.Writer) error {
 			fmtMs(r.p99),
 			fmtMs(r.p999),
 			fmtMs(r.maxObserved),
-			strconv.FormatInt(r.failures, 10),
+			strconv.FormatInt(r.failUnauth, 10),
+			strconv.FormatInt(r.failDeadline, 10),
+			strconv.FormatInt(r.failOther, 10),
 		}); err != nil {
 			return err
 		}

@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math"
 	mathrand "math/rand"
 	"net/http"
@@ -378,6 +379,23 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 	trialStart = time.Now()
 	close(startGate)
 
+	// /metrics scrape at t0 — fires once warmup ends. Pairs with the
+	// t1 scrape at end-of-trial to give a delta covering baseline +
+	// burst + cooldown, excluding the enrollment-ramp noise. Skipped
+	// when no trial dir is set (summary-to-stdout mode).
+	if trialDir != "" {
+		go func() {
+			select {
+			case <-ctxTrial.Done():
+				return
+			case <-time.After(time.Duration(opts.warmupSec) * time.Second):
+			}
+			if err := scrapeMetrics(ctxTrial, tlsClient, opts.apiAddr, filepath.Join(trialDir, "metrics.t0.txt")); err != nil {
+				fmt.Fprintf(os.Stderr, "  metrics t0 scrape failed: %v\n", err)
+			}
+		}()
+	}
+
 	// Per-second sampler — runs until trial ends. Captures one
 	// secondSample per real second (driven by a ticker).
 	tickerDone := make(chan struct{})
@@ -396,16 +414,19 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 				}
 				snap := perSecond.SnapshotAndReset()
 				thru := throughput.Swap(0)
+				fUnauth, fDeadline, fOther := failures.SwapPerSecond()
 				series.Append(secondSample{
-					elapsedSec:  elapsed,
-					throughput:  thru,
-					p50:         snap.Percentile(50),
-					p95:         snap.Percentile(95),
-					p99:         snap.Percentile(99),
-					p999:        snap.Percentile(99.9),
-					maxObserved: snap.Max(),
-					failures:    0, // failures are cumulative in failureBreakdown; per-second delta is below
-					phase:       phaseFor(elapsed),
+					elapsedSec:   elapsed,
+					throughput:   thru,
+					p50:          snap.Percentile(50),
+					p95:          snap.Percentile(95),
+					p99:          snap.Percentile(99),
+					p999:         snap.Percentile(99.9),
+					maxObserved:  snap.Max(),
+					failUnauth:   fUnauth,
+					failDeadline: fDeadline,
+					failOther:    fOther,
+					phase:        phaseFor(elapsed),
 				})
 			}
 		}
@@ -512,6 +533,18 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 		fmt.Fprintf(os.Stderr, "  pprof captures didn't finish within 3min; proceeding to summary\n")
 	}
 
+	// /metrics scrape at t1 — end of cooldown. Counter deltas vs the
+	// t0 scrape isolate post-warmup activity. Uses a fresh context so
+	// a cancelled ctxTrial (SIGINT mid-run) still lets us capture
+	// whatever state the server has at exit time.
+	if trialDir != "" {
+		scrapeCtx, scrapeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := scrapeMetrics(scrapeCtx, tlsClient, opts.apiAddr, filepath.Join(trialDir, "metrics.t1.txt")); err != nil {
+			fmt.Fprintf(os.Stderr, "  metrics t1 scrape failed: %v\n", err)
+		}
+		scrapeCancel()
+	}
+
 	// Compute summary numbers. Keep latency as float ms so sub-ms
 	// loopback percentiles (typically 0.7-1.5 ms) aren't truncated.
 	bsnap := baselineHist.Snapshot()
@@ -577,6 +610,33 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 	_ = cooldownHist.Snapshot()
 
 	return res, nil
+}
+
+// scrapeMetrics GETs /metrics from the vigosrv API listener and writes
+// the raw prometheus exposition to outPath. Called at trial t0 (end of
+// warmup) and t1 (end of cooldown); the t1-t0 delta on counters like
+// vigo_sig_verify_failed_total{reason=...} disambiguates which auth
+// path produced the failures observed in the gRPC failure stream.
+func scrapeMetrics(ctx context.Context, client *http.Client, apiAddr, outPath string) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", apiAddr+"/metrics", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("/metrics: %s", resp.Status)
+	}
+	f, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
 }
 
 // capturePprof runs `docker exec <container> wget -qO- <pprof-path>` and

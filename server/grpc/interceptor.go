@@ -123,6 +123,7 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequ
 	}
 	tsTime := ts.AsTime()
 	if err := checkTimestamp(tsTime, sigWindow); err != nil {
+		m.SigVerifyFailed.WithLabelValues("timestamp_skew").Inc()
 		return ctx, err
 	}
 
@@ -158,6 +159,7 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.Rep
 	}
 	tsTime := ts.AsTime()
 	if err := checkTimestamp(tsTime, sigWindow); err != nil {
+		m.SigVerifyFailed.WithLabelValues("timestamp_skew").Inc()
 		return ctx, err
 	}
 
@@ -190,6 +192,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.Report
 	}
 	tsTime := ts.AsTime()
 	if err := checkTimestamp(tsTime, sigWindow); err != nil {
+		m.SigVerifyFailed.WithLabelValues("timestamp_skew").Inc()
 		return err
 	}
 
@@ -229,6 +232,7 @@ func verifyResolveSecretsCtx(ctx context.Context, queries *db.Queries, req *pb.R
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid timestamp: %v", err)
 	}
 	if err := checkTimestamp(time.Unix(tsUnix, 0), sigWindow); err != nil {
+		m.SigVerifyFailed.WithLabelValues("timestamp_skew").Inc()
 		return ctx, err
 	}
 
