@@ -540,6 +540,28 @@ func funcMap() template.FuncMap {
 				return "text-muted"
 			}
 		},
+		// healthSummary renders the one-line per-axis breakdown for the
+		// agent-health composite — used by the /envoys row hover and
+		// the per-envoy footprint status card. Routes through the same
+		// helper handler.go uses to populate EnvoyRow.HealthSummary so
+		// both surfaces phrase the breakdown identically.
+		"healthSummary": HealthSummary,
+		// severityPillClass maps a fleetpressure.Severity to the
+		// status-pill / badge class used in table cells (e.g. the
+		// /envoys "Agent Health" column). Unknown collapses to the
+		// neutral badge so missing data doesn't look healthy.
+		"severityPillClass": func(s fleetpressure.Severity) string {
+			switch s {
+			case fleetpressure.Fail:
+				return "status-pill status-pill--failed"
+			case fleetpressure.Warn:
+				return "status-pill status-pill--degraded"
+			case fleetpressure.OK:
+				return "status-pill status-pill--converged"
+			default:
+				return "badge badge--unknown"
+			}
+		},
 		// humanFDPct renders a host_self.fd_pct float with one decimal
 		// or "—" for the unset case. Templates can't easily distinguish
 		// PercentMetric.Present from a real zero, so this helper

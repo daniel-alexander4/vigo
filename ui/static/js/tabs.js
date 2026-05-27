@@ -32,3 +32,17 @@ document.addEventListener('DOMContentLoaded', restoreSidebarState);
 // Restore after hx-boost navigation (HTMX replaces body classes from
 // the server response, stripping the client-side sidebar--collapsed class).
 document.addEventListener('htmx:afterSettle', restoreSidebarState);
+
+// activateTabFromHash clicks the tab button matching window.location.hash
+// (e.g. #footprint → #tab-footprint). Lets cross-page drilldowns like
+// /envoys row pills and /agent-health row links land on the right tab
+// instead of the default. No-op when the hash doesn't match a tab button.
+function activateTabFromHash() {
+    var hash = window.location.hash;
+    if (!hash || hash.length < 2) return;
+    var btn = document.getElementById('tab-' + hash.slice(1));
+    if (btn) btn.click();
+}
+
+document.addEventListener('DOMContentLoaded', activateTabFromHash);
+window.addEventListener('hashchange', activateTabFromHash);

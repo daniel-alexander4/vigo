@@ -167,7 +167,7 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 	}
 	fleetRows := make([]ui.FleetRow, 0, len(worst))
 	for _, e := range worst {
-		fleetRows = append(fleetRows, ui.FleetRow{
+		row := ui.FleetRow{
 			ID:           e.ID,
 			Hostname:     e.Hostname,
 			IP:           e.IPAddress,
@@ -180,7 +180,19 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 			ChangedCount: e.ChangedCount,
 			FailedCount:  e.FailedCount,
 			ModuleCount:  e.ModuleCount,
-		})
+		}
+		// Agent Health column: route through the same fleetpressure SoT
+		// the /envoys table and /agent-health page consume. ok=false
+		// (envoy missing from the pressure index) leaves HealthSeverity
+		// at the zero value (Unknown), which the template renders as the
+		// neutral "—" pill — same shape as the /envoys row.
+		if p, ok := ds.EnvoyPressure(e.ID); ok {
+			row.HealthSeverity = p.Health
+			if p.Health != fleetpressure.Unknown {
+				row.HealthSummary = ui.HealthSummary(p)
+			}
+		}
+		fleetRows = append(fleetRows, row)
 	}
 
 	data := ui.DashboardPageData{

@@ -452,8 +452,14 @@
 
 {{define "envoy-footprint-fragment"}}
 {{$p := .Pressure}}
-<div class="mt-1">
-    <p>Agent process footprint, host FD pressure, rootfs / inode usage on <code>/</code>, and package-repo health. Yellow values are warnings; red values are above the failure threshold. Sourced from the <code>agent_self.*</code>, <code>host_self.*</code>, <code>mountpoints.*</code>, and <code>repo_health.*</code> traits the agent emits every check-in; the composite ("Agent Health") and fleet rollup live on <a href="/agent-health">/agent-health</a>.</p>
+
+<div class="card mt-1">
+    <h2 style="margin:0 0 4px;">Agent Health</h2>
+    <p style="color:var(--subtext0);margin:0 0 12px;">Composite status across agent FDs, host FD%, OOM-recent, rootfs %, inode %, and repo-health — the worst signal wins. See <a href="/agent-health">/agent-health</a> for the fleet view.</p>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span class="{{severityPillClass $p.Health}}">{{severityLabel $p.Health}}</span>
+        {{if .HasData}}{{with healthSummary $p}}<span class="text-muted">{{.}}</span>{{end}}{{end}}
+    </div>
 </div>
 
 {{if not .HasData}}
@@ -514,6 +520,29 @@
                 <tr>
                     <td>Recent oom-killer events (kern.log window)</td>
                     <td class="mono"><span class="text-{{severityColor $p.OomRecent.Severity}}">{{humanMetric $p.OomRecent}}</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-2">
+    <h2 style="margin:0 0 4px;">Disk &amp; Repositories</h2>
+    <p style="color:var(--subtext0);margin:0 0 12px;">Root filesystem disk and inode usage on <code>/</code>, plus package-repository health. Sourced from the <code>mountpoints</code> and <code>repo_health</code> trait collectors.</p>
+    <div class="table-container">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td style="width:40%;">Rootfs usage (<code>/</code>)</td>
+                    <td class="mono"><span class="text-{{severityColor $p.RootfsPct.Severity}}">{{humanFDPct $p.RootfsPct}}</span> <span class="text-muted">(warn &gt; 80%, fail &gt; 90%)</span></td>
+                </tr>
+                <tr>
+                    <td>Inode usage (<code>/</code>)</td>
+                    <td class="mono"><span class="text-{{severityColor $p.InodePct.Severity}}">{{humanFDPct $p.InodePct}}</span> <span class="text-muted">(warn &gt; 80%, fail &gt; 90%)</span></td>
+                </tr>
+                <tr>
+                    <td>Package repositories</td>
+                    <td class="mono"><span class="text-{{severityColor $p.RepoHealth.Severity}}">{{severityLabel $p.RepoHealth.Severity}}</span>{{if $p.RepoHealth.Present}} <span class="text-muted">({{$p.RepoHealth.Warnings}} warning(s) · {{$p.RepoHealth.Errors}} error(s))</span>{{end}}</td>
                 </tr>
             </tbody>
         </table>

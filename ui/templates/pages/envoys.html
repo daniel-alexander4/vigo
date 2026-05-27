@@ -101,8 +101,7 @@
             <th>Agent</th>
             {{sortHeader "Last Check-in" "last_seen" .SortColumn .SortDir $base}}
             {{sortHeader "Last Convergence" "last_run" .SortColumn .SortDir $base}}
-            <th title="Root filesystem usage">Root FS</th>
-            <th>Repos</th>
+            <th title="Composite agent-health: FDs, host FD%, OOM-recent, rootfs %, inode %, repo-health. Click a pill to see the fleet breakdown.">Agent Health</th>
             {{sortHeader "Convergence" "status" .SortColumn .SortDir $base}}
         </tr>
     </thead>
@@ -117,14 +116,7 @@
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}{{if .StaleThresholdLabel}} &middot; stale threshold: {{.StaleThresholdLabel}}{{end}}">{{.LastSeenLabel}}</span></td>
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
             <td>
-                {{if .DiskStatus}}
-                <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}degraded{{else}}failed{{end}}" title="{{.DiskPercent}}% available">{{.DiskPercent}}%</span>
-                {{else}}-{{end}}
-            </td>
-            <td>
-                {{if eq .RepoStatus "ok"}}<span class="status-pill status-pill--converged" title="all repos healthy">ok</span>
-                {{else if eq .RepoStatus "degraded"}}<span class="status-pill status-pill--failed" title="{{.BrokenRepos}} broken">{{.BrokenRepos}} broken</span>
-                {{else}}-{{end}}
+                <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}no agent-health traits reported yet{{end}}">{{severityLabel .HealthSeverity}}</span></a>
             </td>
             <td>
                 {{if eq .ModuleCount 0}}
@@ -139,12 +131,12 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="8" class="table__empty-cell">No envoys{{if or $.ConvFilter $.DriftFilter $.ReachFilter}} matching the active filter{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.ConvFilter $.DriftFilter $.ReachFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
+            <td colspan="7" class="table__empty-cell">No envoys{{if or $.ConvFilter $.DriftFilter $.ReachFilter}} matching the active filter{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.ConvFilter $.DriftFilter $.ReachFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
         </tr>
         {{end}}
         {{if .RenderedCap}}
         <tr class="envoys-table__cap-sentinel">
-            <td colspan="8">
+            <td colspan="7">
                 <strong>Showing {{.RenderedCapMax}} of {{.MatchingTotal}}.</strong> The list stops growing here so the page stays responsive — refine your filter or search to see the rest.
             </td>
         </tr>
@@ -154,7 +146,7 @@
             hx-trigger="revealed"
             hx-swap="outerHTML"
             hx-select="tbody > tr">
-            <td colspan="8" class="envoys-table__loadmore-cell">Loading more…</td>
+            <td colspan="7" class="envoys-table__loadmore-cell">Loading more…</td>
         </tr>
         {{end}}
     </tbody>

@@ -323,10 +323,22 @@ func TestEnvoyFootprintFragmentRendersWhenPresent(t *testing.T) {
 		"Host FD usage",
 		"Recent oom-killer",
 		"Resident memory",
+		// Agent Health status card at top (composite pill + drilldown).
+		"Agent Health",
+		`href="/agent-health"`,
+		// Disk & Repositories card showing inodes and repo health.
+		"Disk &amp; Repositories",
+		"Rootfs usage",
+		"Inode usage",
+		"Package repositories",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("EnvoyFootprintFragment body missing %q", want)
 		}
+	}
+	// The retired intro paragraph must not reappear.
+	if strings.Contains(body, "Agent process footprint, host FD pressure") {
+		t.Errorf("EnvoyFootprintFragment body still rendering retired intro paragraph")
 	}
 }
 
@@ -450,6 +462,9 @@ func (m *footprintMock) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bo
 		FDPct:             fleetpressure.PercentMetric{Value: 25.0, Present: true, Severity: fleetpressure.OK},
 		ProcCount:         fleetpressure.Metric{Value: 200, Present: true, Severity: fleetpressure.OK},
 		OomRecent:         fleetpressure.Metric{Value: 0, Present: true, Severity: fleetpressure.OK},
+		RootfsPct:         fleetpressure.PercentMetric{Value: 46.0, Present: true, Severity: fleetpressure.OK},
+		InodePct:          fleetpressure.PercentMetric{Value: 12.0, Present: true, Severity: fleetpressure.OK},
+		RepoHealth:        fleetpressure.RepoHealthMetric{Status: "ok", Present: true, Severity: fleetpressure.OK},
 		Health:            fleetpressure.Fail,
 	}, true
 }
@@ -578,6 +593,22 @@ func TestEnvoysTableFragment(t *testing.T) {
 	// Should contain envoy hostnames
 	if !strings.Contains(body, "web-01.example.com") {
 		t.Error("EnvoysTable fragment missing hostname")
+	}
+
+	// Agent-health column replaces the old Root FS + Repos pair —
+	// one composite pill per row, drilling to /agent-health.
+	if !strings.Contains(body, "Agent Health") {
+		t.Errorf("EnvoysTable fragment missing 'Agent Health' column header; body: %s", body)
+	}
+	// Pill drills into the per-envoy Agent Health tab — landing on the
+	// fleet /agent-health view is one extra click away from the hostname
+	// column. Drilldown target is /envoys/<id>#footprint.
+	if !strings.Contains(body, `#footprint" class="badge-link"`) {
+		t.Errorf("EnvoysTable fragment missing per-envoy #footprint drilldown link; body: %s", body)
+	}
+	// The two folded columns must not reappear.
+	if strings.Contains(body, ">Root FS<") || strings.Contains(body, ">Repos<") {
+		t.Errorf("EnvoysTable fragment still rendering retired Root FS / Repos columns; body: %s", body)
 	}
 }
 

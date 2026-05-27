@@ -1064,6 +1064,15 @@ type FleetRow struct {
 	ChangedCount int64
 	FailedCount  int64
 	ModuleCount  int64
+	// HealthSeverity is the composite fleetpressure.EnvoyPressure.Health
+	// for this row — same SoT the /envoys "Agent Health" column and the
+	// /agent-health fleet page consume. Populated in datasource.go alongside
+	// the rest of the row so the dashboard, envoys, and agent-health
+	// surfaces can never disagree on severity.
+	HealthSeverity fleetpressure.Severity
+	// HealthSummary is the one-line per-axis breakdown shown on the
+	// pill's hover title; empty when HealthSeverity is Unknown.
+	HealthSummary  string
 }
 
 // RunRow is a single run displayed in a table.
@@ -1248,10 +1257,16 @@ type EnvoyRow struct {
 	// OfflineThresholdLabel in that case.
 	StaleThresholdLabel string
 	AgentVersion        string
-	DiskPercent         int    // root filesystem available percentage
-	DiskStatus          string // "ok", "warn", "critical"
-	RepoStatus          string // "ok", "degraded", ""
-	BrokenRepos         int    // number of broken package repos
+	// HealthSeverity is the composite fleetpressure.EnvoyPressure.Health
+	// for this row — the worst severity across FDs, host FD%,
+	// OOM-recent, rootfs %, inode %, and repo-health. Drives the
+	// /envoys "Agent Health" pill color; the pill links to /agent-health.
+	// Unknown when no agent-health trait has been reported yet.
+	HealthSeverity      fleetpressure.Severity
+	// HealthSummary is the one-line per-axis breakdown shown on the
+	// pill's hover title (e.g. "rootfs 19%, repos ok, fd 12%, no OOM").
+	// Empty when HealthSeverity is Unknown.
+	HealthSummary       string
 
 	// Slice-2 envoy-filter axes (ADR-032). All populated by the envoyRow
 	// builder so the canonical row stays the SoT for what every envoys-
@@ -7635,48 +7650,72 @@ func (h *Handler) SetTraitLookup(tl TraitLookup) {
 	h.traitLookup = tl
 }
 
-// enrichEnvoyRows populates disk and repo health fields from traits.
+// enrichEnvoyRows populates the agent-version display field and the
+// row's composite Agent Health pill. The pill is sourced exclusively
+// from the fleetpressure SoT (server/fleetpressure) — never recomputed
+// from raw traits here — so the /envoys "Agent Health" column, the
+// dashboard "Agent Health" card, and the /agent-health table all agree
+// on the same severity classification per envoy.
 func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
-	if h.traitLookup == nil {
-		return
-	}
 	for i := range rows {
 		// Agent version from traits (always available, even if DB column is empty).
-		if rows[i].AgentVersion == "" {
+		if rows[i].AgentVersion == "" && h.traitLookup != nil {
 			if v := h.traitLookup.EnvoyTrait(rows[i].ID, "identity.agent_version"); v != "" {
 				rows[i].AgentVersion = v
 			}
 		}
-		// Root filesystem available.
-		if pct := h.traitLookup.EnvoyTrait(rows[i].ID, "filesystem./.percent"); pct != "" {
-			if v, err := strconv.ParseFloat(pct, 64); err == nil {
-				avail := 100 - int(v)
-				if avail < 0 {
-					avail = 0
-				}
-				rows[i].DiskPercent = avail
-				switch {
-				case avail <= 10:
-					rows[i].DiskStatus = "critical"
-				case avail <= 20:
-					rows[i].DiskStatus = "warn"
-				default:
-					rows[i].DiskStatus = "ok"
+		// Agent Health composite. Routed through fleetpressure — the
+		// canonical per-envoy projection that already covers FDs, host
+		// FD%, OOM-recent, rootfs %, inode %, and repo-health on one
+		// severity axis. The pill color follows Health; the hover
+		// title lists the contributing per-axis values so operators
+		// see the breakdown without leaving the page.
+		if h.dataSource != nil {
+			if p, ok := h.dataSource.EnvoyPressure(rows[i].ID); ok {
+				rows[i].HealthSeverity = p.Health
+				if p.Health != fleetpressure.Unknown {
+					rows[i].HealthSummary = HealthSummary(p)
 				}
 			}
-		}
-		// Package repo health. broken_repo_count is only present when > 0.
-		// If package_updates.count exists, the collector has run.
-		if cnt := h.traitLookup.EnvoyTrait(rows[i].ID, "package_updates.broken_repo_count"); cnt != "" {
-			if v, err := strconv.Atoi(cnt); err == nil {
-				rows[i].BrokenRepos = v
-				rows[i].RepoStatus = "degraded"
-			}
-		} else if h.traitLookup.EnvoyTrait(rows[i].ID, "package_updates.count") != "" {
-			// Collector ran but no broken repos → healthy.
-			rows[i].RepoStatus = "ok"
 		}
 	}
+}
+
+// HealthSummary renders the one-line per-axis breakdown shown on
+// every Agent Health pill hover (envoys table, dashboard fleet table,
+// per-envoy footprint status card). Only axes the agent actually
+// reported (Present) appear; the order matches the /agent-health
+// table columns for operator muscle memory. Exported so the
+// FleetRow builder in server/fleet/datasource.go can populate the
+// hover-title without a parallel formatter.
+func HealthSummary(p fleetpressure.EnvoyPressure) string {
+	var parts []string
+	if p.RootfsPct.Present {
+		parts = append(parts, fmt.Sprintf("rootfs %.0f%%", p.RootfsPct.Value))
+	}
+	if p.InodePct.Present {
+		parts = append(parts, fmt.Sprintf("inode %.0f%%", p.InodePct.Value))
+	}
+	if p.RepoHealth.Present {
+		switch {
+		case p.RepoHealth.Errors > 0:
+			parts = append(parts, fmt.Sprintf("repos %d broken", p.RepoHealth.Errors))
+		case p.RepoHealth.Warnings > 0:
+			parts = append(parts, fmt.Sprintf("repos %d warn", p.RepoHealth.Warnings))
+		default:
+			parts = append(parts, "repos ok")
+		}
+	}
+	if p.OpenFDs.Present {
+		parts = append(parts, fmt.Sprintf("fds %d", p.OpenFDs.Value))
+	}
+	if p.FDPct.Present {
+		parts = append(parts, fmt.Sprintf("host fd %.0f%%", p.FDPct.Value))
+	}
+	if p.OomRecent.Present && p.OomRecent.Value > 0 {
+		parts = append(parts, "recent OOM")
+	}
+	return strings.Join(parts, ", ")
 }
 
 // InventoryFragment returns the fleet inventory table via HTMX, with trait
