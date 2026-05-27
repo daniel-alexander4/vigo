@@ -321,15 +321,15 @@ func TestEnvoyFootprintFragmentRendersWhenPresent(t *testing.T) {
 	for _, want := range []string{
 		"Open file descriptors",
 		"Host FD usage",
-		"Recent oom-killer",
+		"Recent OOM events",
 		"Resident memory",
-		// Agent Health status card at top (composite pill + drilldown).
+		// Agent Health banner at top (composite pill + drilldown).
 		"Agent Health",
 		`href="/agent-health"`,
-		// Disk & Repositories card showing inodes and repo health.
-		"Disk &amp; Repositories",
-		"Rootfs usage",
-		"Inode usage",
+		// Disk & Repos group showing rootfs, inodes, and repo health.
+		"Disk &amp; Repos",
+		"Rootfs",
+		"Inode",
 		"Package repositories",
 	} {
 		if !strings.Contains(body, want) {

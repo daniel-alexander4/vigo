@@ -4892,3 +4892,92 @@ a.server-config-card:hover {
     padding-left: 0;
     background-color: currentColor;
 }
+
+/* === Per-envoy Agent Health card ===
+   Single-card replacement for the four-card stack (composite + Agent
+   Process + Host Pressure + Disk & Repos). Banner at top carries the
+   composite severity colour; grid below packs the 12 underlying
+   metrics into three labeled groups so the whole view fits above the
+   fold on a 1440x900 viewport. */
+.agent-health-card { padding: 0; overflow: hidden; }
+
+.agent-health-banner {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-muted-bg, var(--color-card-bg));
+}
+.agent-health-banner--success { background: var(--color-success-bg); }
+.agent-health-banner--warning { background: var(--color-warning-bg); }
+.agent-health-banner--danger  { background: var(--color-danger-bg); }
+.agent-health-banner--brand   { background: var(--color-muted-bg, var(--color-card-bg)); }
+
+.agent-health-banner__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.agent-health-banner__title { margin: 0; font-size: 18px; }
+.agent-health-banner__summary {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-text);
+}
+.agent-health-banner__hint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.agent-health-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    padding: 0;
+}
+.agent-health-group {
+    padding: 16px 24px;
+    border-right: 1px solid var(--color-border);
+}
+.agent-health-group:last-child { border-right: none; }
+.agent-health-group__title {
+    margin: 0 0 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+.agent-health-kv {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 16px;
+    row-gap: 6px;
+    margin: 0;
+}
+.agent-health-kv dt {
+    font-size: 13px;
+    color: var(--color-text);
+    align-self: baseline;
+}
+.agent-health-kv dt code {
+    font-size: 12px;
+    background: var(--color-muted-bg, transparent);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+.agent-health-kv dd {
+    margin: 0;
+    font-size: 13px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    align-self: baseline;
+}
+
+@media (max-width: 1100px) {
+    .agent-health-grid { grid-template-columns: 1fr; }
+    .agent-health-group { border-right: none; border-bottom: 1px solid var(--color-border); }
+    .agent-health-group:last-child { border-bottom: none; }
+}

@@ -16,7 +16,7 @@
 </div>
 
 <div class="filter-bar mb-2">
-    <button class="btn btn--sm btn--primary" id="tab-runs"
+    <button class="btn btn--sm" id="tab-runs"
             hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
@@ -65,11 +65,8 @@
     {{end}}
 </div>
 
-<div id="envoy-content"
-     hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
-     hx-trigger="load"
-     hx-swap="innerHTML">
-    <div class="loading-skeleton">Loading runs...</div>
+<div id="envoy-content" hx-swap="innerHTML">
+    <div class="loading-skeleton">Loading…</div>
 </div>
 
 {{end}}
@@ -452,102 +449,62 @@
 
 {{define "envoy-footprint-fragment"}}
 {{$p := .Pressure}}
-
-<div class="card mt-1">
-    <h2 style="margin:0 0 4px;">Agent Health</h2>
-    <p style="color:var(--subtext0);margin:0 0 12px;">Composite status across agent FDs, host FD%, OOM-recent, rootfs %, inode %, and repo-health — the worst signal wins. See <a href="/agent-health">/agent-health</a> for the fleet view.</p>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <span class="{{severityPillClass $p.Health}}">{{severityLabel $p.Health}}</span>
-        {{if .HasData}}{{with healthSummary $p}}<span class="text-muted">{{.}}</span>{{end}}{{end}}
+<div class="card agent-health-card">
+    <div class="agent-health-banner agent-health-banner--{{severityColor $p.Health}}">
+        <div class="agent-health-banner__head">
+            <h2 class="agent-health-banner__title">Agent Health</h2>
+            <span class="{{severityPillClass $p.Health}}">{{severityLabel $p.Health}}</span>
+        </div>
+        <p class="agent-health-banner__summary">
+            {{if .HasData}}{{with healthSummary $p}}{{.}}{{else}}All signals healthy.{{end}}{{else}}No agent or host telemetry yet — values appear after the next check-in.{{end}}
+        </p>
+        <p class="agent-health-banner__hint">Composite is the worst signal across agent FDs, host FD%, OOM-recent, rootfs %, inode %, and repo health. See <a href="/agent-health">/agent-health</a> for the fleet view.</p>
     </div>
-</div>
 
-{{if not .HasData}}
-<div class="card mt-2">
-    <p style="color:var(--subtext0);margin:0;">No agent or host telemetry yet — the agent has not reported a check-in for this envoy. Footprint values will appear once the next check-in lands.</p>
-</div>
-{{else}}
+    {{if .HasData}}
+    <div class="agent-health-grid">
+        <section class="agent-health-group">
+            <h3 class="agent-health-group__title">Agent Process</h3>
+            <dl class="agent-health-kv">
+                <dt>Resident memory</dt>
+                <dd class="mono text-{{severityColor $p.RSSBytes.Severity}}">{{humanRSS $p.RSSBytes}}</dd>
+                <dt title="warn > 250 · fail > 500">Open file descriptors</dt>
+                <dd class="mono text-{{severityColor $p.OpenFDs.Severity}}" title="warn > 250 · fail > 500">{{humanMetric $p.OpenFDs}}</dd>
+                <dt>Threads</dt>
+                <dd class="mono">{{humanMetric $p.Threads}}</dd>
+                <dt>Child processes</dt>
+                <dd class="mono">{{humanMetric $p.Descendants}}</dd>
+                <dt title="warn > 200 · fail > 500">FDs across children</dt>
+                <dd class="mono text-{{severityColor $p.DescendantOpenFDs.Severity}}" title="warn > 200 · fail > 500">{{humanMetric $p.DescendantOpenFDs}}</dd>
+                <dt>Agent uptime</dt>
+                <dd class="mono">{{humanUptime $p.UptimeSecs}}</dd>
+            </dl>
+        </section>
 
-<div class="card mt-2">
-    <h2 style="margin:0 0 4px;">Agent Process</h2>
-    <p style="color:var(--subtext0);margin:0 0 12px;">From <code>/proc/self/{status,fd}</code> on Linux; <code>ps</code> fallback on macOS. Sourced from the <code>agent_self</code> trait collector.</p>
-    <div class="table-container">
-        <table class="table">
-            <tbody>
-                <tr>
-                    <td style="width:40%;">Resident memory (RSS)</td>
-                    <td class="mono"><span class="text-{{severityColor $p.RSSBytes.Severity}}">{{humanRSS $p.RSSBytes}}</span></td>
-                </tr>
-                <tr>
-                    <td>Open file descriptors</td>
-                    <td class="mono"><span class="text-{{severityColor $p.OpenFDs.Severity}}">{{humanMetric $p.OpenFDs}}</span> <span class="text-muted">(warn &gt; 250, fail &gt; 500)</span></td>
-                </tr>
-                <tr>
-                    <td>Threads</td>
-                    <td class="mono">{{humanMetric $p.Threads}}</td>
-                </tr>
-                <tr>
-                    <td>Live descendants (child processes)</td>
-                    <td class="mono">{{humanMetric $p.Descendants}}</td>
-                </tr>
-                <tr>
-                    <td>Open FDs across descendants</td>
-                    <td class="mono"><span class="text-{{severityColor $p.DescendantOpenFDs.Severity}}">{{humanMetric $p.DescendantOpenFDs}}</span> <span class="text-muted">(warn &gt; 200, fail &gt; 500)</span></td>
-                </tr>
-                <tr>
-                    <td>Agent uptime</td>
-                    <td class="mono">{{humanUptime $p.UptimeSecs}}</td>
-                </tr>
-            </tbody>
-        </table>
+        <section class="agent-health-group">
+            <h3 class="agent-health-group__title">Host Pressure</h3>
+            <dl class="agent-health-kv">
+                <dt title="warn > 50% · fail > 80%">Host FD usage</dt>
+                <dd class="mono text-{{severityColor $p.FDPct.Severity}}" title="warn > 50% · fail > 80%{{if $p.FDUsed.Present}} · {{$p.FDUsed.Value}}{{if $p.FDMax.Present}} / {{$p.FDMax.Value}}{{end}} fds in use{{end}}">{{humanFDPct $p.FDPct}}</dd>
+                <dt>Total processes</dt>
+                <dd class="mono">{{humanMetric $p.ProcCount}}</dd>
+                <dt title="kern.log oom-killer events in the recent window">Recent OOM events</dt>
+                <dd class="mono text-{{severityColor $p.OomRecent.Severity}}" title="kern.log oom-killer events in the recent window">{{humanMetric $p.OomRecent}}</dd>
+            </dl>
+        </section>
+
+        <section class="agent-health-group">
+            <h3 class="agent-health-group__title">Disk &amp; Repos</h3>
+            <dl class="agent-health-kv">
+                <dt title="warn > 80% · fail > 90%">Rootfs (<code>/</code>)</dt>
+                <dd class="mono text-{{severityColor $p.RootfsPct.Severity}}" title="warn > 80% · fail > 90%">{{humanFDPct $p.RootfsPct}}</dd>
+                <dt title="warn > 80% · fail > 90%">Inode (<code>/</code>)</dt>
+                <dd class="mono text-{{severityColor $p.InodePct.Severity}}" title="warn > 80% · fail > 90%">{{humanFDPct $p.InodePct}}</dd>
+                <dt>Package repositories</dt>
+                <dd class="mono text-{{severityColor $p.RepoHealth.Severity}}"{{if $p.RepoHealth.Present}} title="{{$p.RepoHealth.Warnings}} warning(s) · {{$p.RepoHealth.Errors}} error(s)"{{end}}>{{severityLabel $p.RepoHealth.Severity}}</dd>
+            </dl>
+        </section>
     </div>
+    {{end}}
 </div>
-
-<div class="card mt-2">
-    <h2 style="margin:0 0 4px;">Host Pressure</h2>
-    <p style="color:var(--subtext0);margin:0 0 12px;">Kernel-wide file descriptor and process counts plus oom-killer activity. Sourced from the <code>host_self</code> trait collector (Linux only).</p>
-    <div class="table-container">
-        <table class="table">
-            <tbody>
-                <tr>
-                    <td style="width:40%;">Host FD usage</td>
-                    <td class="mono"><span class="text-{{severityColor $p.FDPct.Severity}}">{{humanFDPct $p.FDPct}}</span> <span class="text-muted">{{if $p.FDUsed.Present}}({{$p.FDUsed.Value}} / {{if $p.FDMax.Present}}{{$p.FDMax.Value}}{{else}}?{{end}}){{end}} (warn &gt; 50%, fail &gt; 80%)</span></td>
-                </tr>
-                <tr>
-                    <td>Total processes on host</td>
-                    <td class="mono">{{humanMetric $p.ProcCount}}</td>
-                </tr>
-                <tr>
-                    <td>Recent oom-killer events (kern.log window)</td>
-                    <td class="mono"><span class="text-{{severityColor $p.OomRecent.Severity}}">{{humanMetric $p.OomRecent}}</span></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="card mt-2">
-    <h2 style="margin:0 0 4px;">Disk &amp; Repositories</h2>
-    <p style="color:var(--subtext0);margin:0 0 12px;">Root filesystem disk and inode usage on <code>/</code>, plus package-repository health. Sourced from the <code>mountpoints</code> and <code>repo_health</code> trait collectors.</p>
-    <div class="table-container">
-        <table class="table">
-            <tbody>
-                <tr>
-                    <td style="width:40%;">Rootfs usage (<code>/</code>)</td>
-                    <td class="mono"><span class="text-{{severityColor $p.RootfsPct.Severity}}">{{humanFDPct $p.RootfsPct}}</span> <span class="text-muted">(warn &gt; 80%, fail &gt; 90%)</span></td>
-                </tr>
-                <tr>
-                    <td>Inode usage (<code>/</code>)</td>
-                    <td class="mono"><span class="text-{{severityColor $p.InodePct.Severity}}">{{humanFDPct $p.InodePct}}</span> <span class="text-muted">(warn &gt; 80%, fail &gt; 90%)</span></td>
-                </tr>
-                <tr>
-                    <td>Package repositories</td>
-                    <td class="mono"><span class="text-{{severityColor $p.RepoHealth.Severity}}">{{severityLabel $p.RepoHealth.Severity}}</span>{{if $p.RepoHealth.Present}} <span class="text-muted">({{$p.RepoHealth.Warnings}} warning(s) · {{$p.RepoHealth.Errors}} error(s))</span>{{end}}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-{{end}}
 {{end}}
