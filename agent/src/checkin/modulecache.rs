@@ -8,7 +8,7 @@
 //! This avoids retransmitting unchanged modules on every check-in.
 
 use crate::proto::PolicyModule;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use tracing::warn;
 
 struct CachedModule {
@@ -29,11 +29,14 @@ impl ModuleCache {
 
     /// Returns module_name → content_hash for all cached modules.
     /// Sent to the server in CheckInRequest.cached_module_hashes.
-    pub fn hashes(&self) -> Option<HashMap<String, String>> {
+    /// Returns a BTreeMap so prost's encode_to_vec iterates in sorted
+    /// key order — required for deterministic proto map encoding that
+    /// matches the server's `MarshalOptions{Deterministic: true}`.
+    pub fn hashes(&self) -> Option<BTreeMap<String, String>> {
         if self.modules.is_empty() {
             return None;
         }
-        let mut h = HashMap::with_capacity(self.modules.len());
+        let mut h = BTreeMap::new();
         for (name, cm) in &self.modules {
             h.insert(name.clone(), cm.hash.clone());
         }

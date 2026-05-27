@@ -263,7 +263,7 @@ fn truncate_vec(mut data: Vec<u8>, max: usize) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     #[test]
     fn truncate_vec_preserves_small() {
@@ -294,7 +294,7 @@ mod tests {
             task_id: "test-1".to_string(),
             command: "echo hello".to_string(),
             timeout_seconds: 10,
-            env: HashMap::new(),
+            env: BTreeMap::new(),
             nice: 0,
             traceparent: String::new(),
         };
@@ -310,7 +310,7 @@ mod tests {
     #[tokio::test]
     async fn execute_with_env() {
         let cancel = CancellationToken::new();
-        let mut env = HashMap::new();
+        let mut env = BTreeMap::new();
         env.insert("MY_VAR".to_string(), "test_value".to_string());
 
         let dispatch = TaskDispatch {
@@ -337,7 +337,7 @@ mod tests {
             task_id: "test-fail".to_string(),
             command: "exit 42".to_string(),
             timeout_seconds: 10,
-            env: HashMap::new(),
+            env: BTreeMap::new(),
             nice: 0,
             traceparent: String::new(),
         };
@@ -354,7 +354,7 @@ mod tests {
             task_id: "test-stderr".to_string(),
             command: "echo error_output >&2".to_string(),
             timeout_seconds: 10,
-            env: HashMap::new(),
+            env: BTreeMap::new(),
             nice: 0,
             traceparent: String::new(),
         };
@@ -374,7 +374,7 @@ mod tests {
             task_id: "test-timeout".to_string(),
             command: "sleep 60".to_string(),
             timeout_seconds: 1,
-            env: HashMap::new(),
+            env: BTreeMap::new(),
             nice: 0,
             traceparent: String::new(),
         };
@@ -391,7 +391,7 @@ mod tests {
             task_id: "test-cancel".to_string(),
             command: "sleep 60".to_string(),
             timeout_seconds: 30,
-            env: HashMap::new(),
+            env: BTreeMap::new(),
             nice: 0,
             traceparent: String::new(),
         };
@@ -414,7 +414,7 @@ mod tests {
             task_id: "test-default-timeout".to_string(),
             command: "echo fast".to_string(),
             timeout_seconds: 0,
-            env: HashMap::new(),
+            env: BTreeMap::new(),
             nice: 0,
             traceparent: String::new(),
         };

@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package vigo.v1;
+
+option go_package = "github.com/vigo/vigo/gen/proto/vigo";
+
+import "google/protobuf/descriptor.proto";
+
+// Vigo custom proto field options.
+//
+// `signed` declares whether a PolicyBundle field participates in the
+// ED25519 signature the server computes and the agent verifies. The
+// default is "true" (every field is signed unless explicitly marked
+// otherwise) so newly-added fields ship secure-by-default; opting out
+// is an explicit operator decision visible at the proto layer.
+//
+// Both the server (Go `protoreflect`) and the agent (`prost-reflect`)
+// read this annotation at process start to derive the field set —
+// neither maintains a hand-listed copy. See
+// `server/grpc/bundlesign.go::marshalBundleContent` and
+// `agent/src/checkin/verify.rs::marshal_bundle_content`.
+//
+// Extension field number 51000 sits inside Vigo's range carved out of
+// the standard proto extension space; it is not used by any external
+// library or Google option.
+extend google.protobuf.FieldOptions {
+  optional bool signed = 51000;
+}

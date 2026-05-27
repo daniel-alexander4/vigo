@@ -42,7 +42,11 @@ pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), S
             let node = ResourceNode {
                 name: res.name.clone(),
                 resource_type: res.r#type.clone(),
-                params: res.params.clone(),
+                // Convert from proto's BTreeMap (sorted, for deterministic
+                // encoding) to ResourceNode's HashMap — executors and
+                // guardrails are all typed against HashMap, and iteration
+                // order doesn't matter past this point.
+                params: res.params.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
                 depends_on: module.depends_on.clone(),
                 notify: module.notify.clone(),
                 subscribes: module.subscribes.clone(),
@@ -234,7 +238,7 @@ mod tests {
         Resource {
             name: name.to_string(),
             r#type: rtype.to_string(),
-            params: HashMap::new(),
+            params: std::collections::BTreeMap::new(),
             when: String::new(),
         }
     }

@@ -1176,8 +1176,13 @@ type PolicyBundle struct {
 	MatchedPattern string   `protobuf:"bytes,7,opt,name=matched_pattern,json=matchedPattern,proto3" json:"matched_pattern,omitempty"` // envoy entry match pattern from envoys.vgo
 	Environment    string   `protobuf:"bytes,8,opt,name=environment,proto3" json:"environment,omitempty"`                             // resolved environment
 	Roles          []string `protobuf:"bytes,9,rep,name=roles,proto3" json:"roles,omitempty"`                                         // role names that were expanded
-	// Bundle signing (compiled promises).
-	Signature      []byte `protobuf:"bytes,10,opt,name=signature,proto3" json:"signature,omitempty"`                                   // ED25519 signature over fields 1-9
+	// Bundle signing (compiled promises). The fields below are excluded
+	// from the signed content — chicken-and-egg for `signature` itself,
+	// server-set-after-sign for `server_pubkey_id` and `max_age_seconds`,
+	// and a deliberate "guardrail/freshness, not bundle content" choice
+	// for stream_edit_* and secrets_epoch. Every other field defaults to
+	// signed; see vigo_options.proto.
+	Signature      []byte `protobuf:"bytes,10,opt,name=signature,proto3" json:"signature,omitempty"`                                   // ED25519 signature over signed fields
 	ServerPubkeyId string `protobuf:"bytes,11,opt,name=server_pubkey_id,json=serverPubkeyId,proto3" json:"server_pubkey_id,omitempty"` // fingerprint of signing key (for key rotation)
 	MaxAgeSeconds  uint32 `protobuf:"varint,12,opt,name=max_age_seconds,json=maxAgeSeconds,proto3" json:"max_age_seconds,omitempty"`   // how long this bundle remains valid (0 = forever)
 	// stream_edit guardrails — sent to agent for defense-in-depth enforcement.
@@ -7569,7 +7574,7 @@ var File_vigo_proto protoreflect.FileDescriptor
 const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
-	"vigo.proto\x12\avigo.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/api/annotations.proto\"\x97\x01\n" +
+	"vigo.proto\x12\avigo.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x12vigo_options.proto\"\x97\x01\n" +
 	"\x0fRegisterRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
@@ -7691,7 +7696,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf1\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x95\x05\n" +
 	"\fPolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x12/\n" +
 	"\amodules\x18\x02 \x03(\v2\x15.vigo.v1.PolicyModuleR\amodules\x12\x1b\n" +
@@ -7700,16 +7705,16 @@ const file_vigo_proto_rawDesc = "" +
 	"\rcustom_traits\x18\x06 \x03(\v2\x19.vigo.v1.CustomTraitEntryR\fcustomTraits\x12'\n" +
 	"\x0fmatched_pattern\x18\a \x01(\tR\x0ematchedPattern\x12 \n" +
 	"\venvironment\x18\b \x01(\tR\venvironment\x12\x14\n" +
-	"\x05roles\x18\t \x03(\tR\x05roles\x12\x1c\n" +
+	"\x05roles\x18\t \x03(\tR\x05roles\x12\"\n" +
 	"\tsignature\x18\n" +
-	" \x01(\fR\tsignature\x12(\n" +
-	"\x10server_pubkey_id\x18\v \x01(\tR\x0eserverPubkeyId\x12&\n" +
-	"\x0fmax_age_seconds\x18\f \x01(\rR\rmaxAgeSeconds\x129\n" +
-	"\x19stream_edit_allowed_paths\x18\r \x03(\tR\x16streamEditAllowedPaths\x127\n" +
-	"\x18stream_edit_timeout_secs\x18\x0e \x01(\rR\x15streamEditTimeoutSecs\x12\x1f\n" +
+	" \x01(\fB\x04\xc0\xf3\x18\x00R\tsignature\x12.\n" +
+	"\x10server_pubkey_id\x18\v \x01(\tB\x04\xc0\xf3\x18\x00R\x0eserverPubkeyId\x12,\n" +
+	"\x0fmax_age_seconds\x18\f \x01(\rB\x04\xc0\xf3\x18\x00R\rmaxAgeSeconds\x12?\n" +
+	"\x19stream_edit_allowed_paths\x18\r \x03(\tB\x04\xc0\xf3\x18\x00R\x16streamEditAllowedPaths\x12=\n" +
+	"\x18stream_edit_timeout_secs\x18\x0e \x01(\rB\x04\xc0\xf3\x18\x00R\x15streamEditTimeoutSecs\x12\x1f\n" +
 	"\vmerkle_root\x18\x0f \x01(\tR\n" +
-	"merkleRoot\x12#\n" +
-	"\rsecrets_epoch\x18\x10 \x01(\x03R\fsecretsEpochJ\x04\b\x05\x10\x06\"\xc3\x01\n" +
+	"merkleRoot\x12)\n" +
+	"\rsecrets_epoch\x18\x10 \x01(\x03B\x04\xc0\xf3\x18\x00R\fsecretsEpochJ\x04\b\x05\x10\x06\"\xc3\x01\n" +
 	"\fPolicyModule\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
 	"\tresources\x18\x02 \x03(\v2\x17.vigo.v1.PolicyResourceR\tresources\x12\x1d\n" +
@@ -8494,6 +8499,7 @@ func file_vigo_proto_init() {
 	if File_vigo_proto != nil {
 		return
 	}
+	file_vigo_options_proto_init()
 	file_vigo_proto_msgTypes[20].OneofWrappers = []any{
 		(*AgentStreamMessage_CheckIn)(nil),
 		(*AgentStreamMessage_ReportResult)(nil),

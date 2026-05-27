@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.68.13"
+version = "0.68.15"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
@@ -10,6 +10,12 @@ license = "LicenseRef-Proprietary"
 tonic = { version = "0.12", features = ["tls"] }
 prost = "0.13"
 prost-types = "0.13"
+# prost-reflect 0.15.x is the latest line that supports prost 0.13.
+# Used by `agent/src/checkin/verify.rs` to read the `(vigo.signed)`
+# field option from `vigo_options.proto` so neither the server nor the
+# agent has to hand-maintain a "which PolicyBundle fields are signed"
+# list — the annotation in the .proto is the single source of truth.
+prost-reflect = "0.15"
 
 # TLS + Crypto
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std"] }

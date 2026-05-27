@@ -10,10 +10,13 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"sync"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 // BundleSigner signs PolicyBundle protos using an ED25519 private key.
@@ -87,20 +90,62 @@ func publicKeyToPEM(pub ed25519.PublicKey) (string, error) {
 	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})), nil
 }
 
-// marshalBundleContent serializes the policy content fields (1-9, 15) for signing.
-// Creates a copy with signing fields zeroed so we sign only content.
+// marshalBundleContent serializes the policy content fields for signing.
+// The set of signed fields is the single source of truth declared in
+// `protobuf/vigo.proto` via the `(vigo.v1.signed)` field option (see
+// `protobuf/vigo_options.proto`): every PolicyBundle field defaults to
+// signed unless explicitly marked `[(vigo.v1.signed) = false]`.
+// `signedFieldDescriptors` reads the annotation once at first call and
+// caches the descriptor list; this function then copies the matching
+// fields onto a fresh PolicyBundle and marshals deterministically.
+//
+// `Deterministic: true` sorts map<…> keys before encoding so the byte
+// output is stable across calls — without it, proto.Marshal iterates
+// PolicyResource.attributes in random order and the agent's re-marshal
+// (which sorts keys via prost's BTreeMap; see agent/build.rs) can't
+// match the signed bytes. Required for cross-language ed25519 verify
+// to succeed end-to-end.
 func marshalBundleContent(bundle *pb.PolicyBundle) ([]byte, error) {
-	content := &pb.PolicyBundle{
-		PolicyVersion:   bundle.PolicyVersion,
-		Modules:         bundle.Modules,
-		VarsJson:        bundle.VarsJson,
-		VarOrder:        bundle.VarOrder,
-		CustomTraits:    bundle.CustomTraits,
-		MatchedPattern:  bundle.MatchedPattern,
-		Environment:     bundle.Environment,
-		Roles:           bundle.Roles,
-		MerkleRoot:      bundle.MerkleRoot,
-		// Fields 10-14 intentionally omitted (zeroed).
+	src := bundle.ProtoReflect()
+	dst := src.Type().New()
+	for _, fd := range signedFieldDescriptors() {
+		if src.Has(fd) {
+			dst.Set(fd, src.Get(fd))
+		}
 	}
-	return proto.Marshal(content)
+	return proto.MarshalOptions{Deterministic: true}.Marshal(dst.Interface())
+}
+
+// signedFieldDescriptors returns the cached list of PolicyBundle field
+// descriptors that participate in the signature, derived from the
+// `(vigo.v1.signed)` annotations in `protobuf/vigo.proto`. The walk
+// runs exactly once per process; the bundle-sign hot path then just
+// copies the cached field set.
+var signedFieldDescriptors = sync.OnceValue(func() []protoreflect.FieldDescriptor {
+	msg := (&pb.PolicyBundle{}).ProtoReflect().Descriptor()
+	fields := msg.Fields()
+	signed := make([]protoreflect.FieldDescriptor, 0, fields.Len())
+	for i := 0; i < fields.Len(); i++ {
+		fd := fields.Get(i)
+		if isSignedField(fd) {
+			signed = append(signed, fd)
+		}
+	}
+	return signed
+})
+
+// isSignedField reads the `(vigo.v1.signed)` extension on a field
+// descriptor. Default is `true` (signed) when the annotation isn't
+// present, matching the proto's secure-by-default semantics — new
+// fields ship signed unless explicitly marked otherwise.
+func isSignedField(fd protoreflect.FieldDescriptor) bool {
+	opts, ok := fd.Options().(*descriptorpb.FieldOptions)
+	if !ok || opts == nil {
+		return true
+	}
+	if !proto.HasExtension(opts, pb.E_Signed) {
+		return true
+	}
+	signed, _ := proto.GetExtension(opts, pb.E_Signed).(bool)
+	return signed
 }

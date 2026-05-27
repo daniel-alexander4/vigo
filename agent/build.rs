@@ -21,12 +21,29 @@ const SENTINEL_PUBKEY: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Emit a file_descriptor_set alongside the generated Rust stubs so
+    // `prost_reflect::DescriptorPool::decode` can load the schema at
+    // runtime (verify.rs uses this to read the `(vigo.signed)` field
+    // option without hand-listing signed fields — see
+    // `agent/src/checkin/verify.rs::marshal_bundle_content`).
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR")?);
+    let descriptor_path = out_dir.join("vigo_descriptor.bin");
+
     tonic_build::configure()
         .build_server(false) // agent is client-only
+        // Generate BTreeMap (sorted iteration) for every proto map<…>
+        // field so encode_to_vec is byte-stable across calls. Matches
+        // the server's `proto.MarshalOptions{Deterministic: true}` (see
+        // server/grpc/bundlesign.go::marshalBundleContent) so that the
+        // bytes the agent re-marshals for ed25519 verify match the
+        // bytes the server signed — without this both sides hash maps
+        // in independent random orders and verify fails end-to-end.
+        .btree_map(["."])
+        .file_descriptor_set_path(&descriptor_path)
         .compile_protos(
-            &["../protobuf/vigo.proto"],
+            &["../protobuf/vigo.proto", "../protobuf/vigo_options.proto"],
             &[
-                "../protobuf", // vigo.proto
+                "../protobuf", // vigo.proto, vigo_options.proto
                 "proto",       // google/api stubs
             ],
         )?;

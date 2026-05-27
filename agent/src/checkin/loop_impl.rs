@@ -117,6 +117,16 @@ pub struct RunResult {
     /// attaches to every check-in; cached agent-side so resolution survives a
     /// server outage. Empty when the server hasn't published one yet.
     pub curator_catalog: Vec<u8>,
+    /// Bundle's ED25519 signature failed verification. Set inside
+    /// `run_once_with_update` before any mutation of the bundle; the
+    /// daemon loop reads this and sleeps the response's interval before
+    /// the next check-in rather than treating the result as a successful
+    /// cycle. Required because `secrets::resolve_and_substitute` mutates
+    /// signed fields (vars_json byte representation, module/resource
+    /// `when:` strings, attribute values) — verifying after substitution
+    /// is unsound, so verify happens before substitute and the rejection
+    /// is signaled back here.
+    pub bundle_verify_failed: bool,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -318,6 +328,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_manifest_entries: resp.manifest_entries.clone(),
             curator_catalog: resp.curator_catalog.clone(),
+            bundle_verify_failed: false,
         });
     } else {
         return Ok(RunResult {
@@ -335,6 +346,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_manifest_entries: resp.manifest_entries.clone(),
             curator_catalog: resp.curator_catalog.clone(),
+            bundle_verify_failed: false,
         });
     };
 
@@ -364,6 +376,7 @@ fn converge(
                 force_update: resp.force_update,
                 swarm_manifest_entries: resp.manifest_entries.clone(),
                 curator_catalog: resp.curator_catalog.clone(),
+                bundle_verify_failed: false,
             });
         }
     };
@@ -391,6 +404,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_manifest_entries: resp.manifest_entries.clone(),
             curator_catalog: resp.curator_catalog.clone(),
+            bundle_verify_failed: false,
         });
     }
 
@@ -414,6 +428,7 @@ fn converge(
                 force_update: resp.force_update,
                 swarm_manifest_entries: resp.manifest_entries.clone(),
                 curator_catalog: resp.curator_catalog.clone(),
+                bundle_verify_failed: false,
             });
         }
         Err(e) => {
@@ -455,6 +470,7 @@ fn converge(
         force_update: resp.force_update,
         swarm_manifest_entries: resp.manifest_entries.clone(),
         curator_catalog: resp.curator_catalog.clone(),
+        bundle_verify_failed: false,
     })
 }
 
@@ -475,12 +491,23 @@ pub async fn run_once(
     run_once_with_update(
         client, executors, traits_val, traits_json, cache, policy_state,
         dry_run, module_filter, state_fingerprint, data_dir, None, None, None, pkg_breaker,
+        "",
     ).await
 }
 
 /// Perform a single check-in cycle with optional pre-convergence self-update.
 /// When update_cfg is provided and the server sets force_update, the agent
 /// downloads the new binary and exec()s BEFORE convergence starts.
+///
+/// `server_pubkey_pem` is the agent's cached bundle-signing pubkey. The
+/// signature on `resp.policy_bundle` is verified against either it or
+/// `resp.server_pubkey_pem` (which the server includes on every response
+/// — preferred when present, falling back to the cache for the empty
+/// case). Verification must happen BEFORE
+/// [`crate::policy::secrets::resolve_and_substitute`] mutates signed
+/// fields (vars_json byte representation, module/resource `when:`
+/// strings, attribute values); verifying afterward would check bytes
+/// the server never signed.
 pub async fn run_once_with_update(
     client: &mut Client,
     executors: &HashMap<String, Box<dyn Executor>>,
@@ -496,6 +523,7 @@ pub async fn run_once_with_update(
     _peer_map: Option<&Arc<PeerMap>>,
     _manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
+    server_pubkey_pem: &str,
 ) -> Result<RunResult> {
     let mut resp = client
         .check_in(
@@ -505,6 +533,49 @@ pub async fn run_once_with_update(
             policy_state.module_cache.hashes(),
         )
         .await?;
+
+    // Verify the bundle signature BEFORE any mutation. Substitute touches
+    // signed fields; verifying after substitution checks bytes the server
+    // never signed. Use the response's pubkey when the server included one
+    // (handles in-band key rotation), else fall back to the cached pubkey
+    // the caller threaded in. On failure, return early with
+    // `bundle_verify_failed: true` so the daemon loop sleeps the response's
+    // interval and tries the next check-in — never accepts a bundle whose
+    // signature didn't match.
+    if let Some(ref bundle) = resp.policy_bundle {
+        let pubkey_for_verify = if !resp.server_pubkey_pem.is_empty() {
+            resp.server_pubkey_pem.as_str()
+        } else {
+            server_pubkey_pem
+        };
+        if !pubkey_for_verify.is_empty() {
+            if let Err(e) = verify::verify_bundle(bundle, pubkey_for_verify) {
+                warn!(error = %e, "bundle signature verification failed, rejecting");
+                let interval = if resp.interval.is_empty() {
+                    Duration::from_secs(300)
+                } else {
+                    parse_go_duration(&resp.interval).unwrap_or(Duration::from_secs(300))
+                };
+                return Ok(RunResult {
+                    results: vec![],
+                    interval,
+                    jitter_pct: resp.jitter_percent,
+                    no_change: false,
+                    response_fingerprint: resp.response_fingerprint.clone(),
+                    policy_version: resp.policy_version,
+                    policy_bundle: None,
+                    stream_requested: false,
+                    tunnel_requested: false,
+                    proxied_devices: vec![],
+                    server_pubkey_pem: resp.server_pubkey_pem.clone(),
+                    force_update: false,
+                    swarm_manifest_entries: vec![],
+                    curator_catalog: vec![],
+                    bundle_verify_failed: true,
+                });
+            }
+        }
+    }
 
     // Resolve placeholder secrets in-place before eval_bundle sees the
     // strings. Walks vars_json + every module's resource attributes + the
@@ -536,6 +607,7 @@ pub async fn run_once_with_update(
                 force_update: resp.force_update,
                 swarm_manifest_entries: resp.manifest_entries.clone(),
                 curator_catalog: resp.curator_catalog.clone(),
+                bundle_verify_failed: false,
             });
         }
     }
@@ -1021,6 +1093,7 @@ pub async fn daemon_loop(
             peer_map.as_ref(),
             manifest.as_ref(),
             &mut pkg_breaker,
+            &server_pubkey_pem,
         )
         .await
         {
@@ -1033,6 +1106,21 @@ pub async fn daemon_loop(
                     client.maybe_probe_primary().await;
                 }
 
+                // Bundle signature rejection: run_once_with_update verified
+                // the bundle BEFORE substitution (the only correct order —
+                // see its doc-comment). It returns here with the flag set so
+                // we sleep the response's interval and try the next cycle
+                // without accepting any bundle state.
+                if rr.bundle_verify_failed {
+                    let sleep_dur = jittered_duration(rr.interval, rr.jitter_pct);
+                    info!(duration = ?sleep_dur, "sleeping until next check-in (bundle rejected)");
+                    tokio::select! {
+                        _ = cancel.cancelled() => return Ok(()),
+                        _ = tokio::time::sleep(sleep_dur) => {}
+                    }
+                    continue;
+                }
+
                 // Update server pubkey if the server sent one.
                 if !rr.server_pubkey_pem.is_empty() && rr.server_pubkey_pem != server_pubkey_pem {
                     info!("updating server bundle-signing public key");
@@ -1040,23 +1128,6 @@ pub async fn daemon_loop(
                     if let Some(dd) = data_dir.as_ref() {
                         let path = dd.join("server_pubkey.pem");
                         let _ = std::fs::write(&path, &server_pubkey_pem);
-                    }
-                }
-
-                // Verify bundle signature before accepting.
-                if let Some(ref bundle) = rr.policy_bundle {
-                    if let Err(e) = verify::verify_bundle(bundle, &server_pubkey_pem) {
-                        warn!(error = %e, "bundle signature verification failed, rejecting");
-                        // Use the server-provided interval (or default) instead of
-                        // tight retry — the bundle will keep failing until the
-                        // server pubkey is configured.
-                        let sleep_dur = jittered_duration(rr.interval, rr.jitter_pct);
-                        info!(duration = ?sleep_dur, "sleeping until next check-in (bundle rejected)");
-                        tokio::select! {
-                            _ = cancel.cancelled() => return Ok(()),
-                            _ = tokio::time::sleep(sleep_dur) => {}
-                        }
-                        continue;
                     }
                 }
 
@@ -2078,7 +2149,7 @@ mod tests {
                     name: "res".into(),
                     r#type: "exec".into(),
                     attributes: {
-                        let mut m = HashMap::new();
+                        let mut m = std::collections::BTreeMap::new();
                         m.insert("_secret_triggered".into(), "true".into());
                         m.insert("command".into(), "echo hi".into());
                         m
@@ -2145,6 +2216,7 @@ mod tests {
             force_update: false,
             swarm_manifest_entries: vec![],
             curator_catalog: vec![],
+            bundle_verify_failed: false,
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -2171,6 +2243,7 @@ mod tests {
             force_update: false,
             swarm_manifest_entries: vec![],
             curator_catalog: vec![],
+            bundle_verify_failed: false,
         };
 
         update_state(&mut ps, &rr, None);
@@ -2193,7 +2266,7 @@ mod tests {
                 name: "conf".into(),
                 r#type: "file".into(),
                 attributes: {
-                    let mut a = std::collections::HashMap::new();
+                    let mut a = std::collections::BTreeMap::new();
                     a.insert("_secret_triggered".into(), "true".into());
                     a
                 },
@@ -2228,6 +2301,7 @@ mod tests {
             force_update: false,
             swarm_manifest_entries: vec![],
             curator_catalog: vec![],
+            bundle_verify_failed: false,
         };
 
         update_state(&mut ps, &rr, None);
@@ -2422,6 +2496,7 @@ mod tests {
             force_update: false,
             swarm_manifest_entries: vec![],
             curator_catalog: vec![],
+            bundle_verify_failed: false,
         };
 
         update_state(&mut ps, &rr, None);

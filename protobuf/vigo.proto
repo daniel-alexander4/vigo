@@ -6,6 +6,7 @@ option go_package = "github.com/vigo/vigo/gen/proto/vigo";
 
 import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
+import "vigo_options.proto";
 
 // =============================================================================
 // Agent-facing service (gRPC-only, port 1530)
@@ -389,14 +390,19 @@ message PolicyBundle {
   string environment = 8;             // resolved environment
   repeated string roles = 9;          // role names that were expanded
 
-  // Bundle signing (compiled promises).
-  bytes signature = 10;               // ED25519 signature over fields 1-9
-  string server_pubkey_id = 11;       // fingerprint of signing key (for key rotation)
-  uint32 max_age_seconds = 12;        // how long this bundle remains valid (0 = forever)
+  // Bundle signing (compiled promises). The fields below are excluded
+  // from the signed content — chicken-and-egg for `signature` itself,
+  // server-set-after-sign for `server_pubkey_id` and `max_age_seconds`,
+  // and a deliberate "guardrail/freshness, not bundle content" choice
+  // for stream_edit_* and secrets_epoch. Every other field defaults to
+  // signed; see vigo_options.proto.
+  bytes signature = 10 [(vigo.v1.signed) = false];               // ED25519 signature over signed fields
+  string server_pubkey_id = 11 [(vigo.v1.signed) = false];       // fingerprint of signing key (for key rotation)
+  uint32 max_age_seconds = 12 [(vigo.v1.signed) = false];        // how long this bundle remains valid (0 = forever)
 
   // stream_edit guardrails — sent to agent for defense-in-depth enforcement.
-  repeated string stream_edit_allowed_paths = 13; // directories where scripts must reside
-  uint32 stream_edit_timeout_secs = 14;           // per-script timeout (0 = agent default 10s)
+  repeated string stream_edit_allowed_paths = 13 [(vigo.v1.signed) = false]; // directories where scripts must reside
+  uint32 stream_edit_timeout_secs = 14 [(vigo.v1.signed) = false];           // per-script timeout (0 = agent default 10s)
 
   // Merkle tree root over modules + vars. Agents cache this and send it back
   // as state_fingerprint — if it matches, the server skips bundle construction.
@@ -410,7 +416,7 @@ message PolicyBundle {
   // (`__VIGO_SECRET__<path>__END_VIGO_SECRET__`) in place of resolved
   // values — the agent substitutes the placeholders against fresh /
   // cached values before passing attributes to executors.
-  int64 secrets_epoch = 16;
+  int64 secrets_epoch = 16 [(vigo.v1.signed) = false];
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.

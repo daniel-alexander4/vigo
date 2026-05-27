@@ -90,7 +90,7 @@ impl SecretCache {
         self.missing_refs(refs)
     }
 
-    fn extend(&self, values: HashMap<String, String>) {
+    fn extend(&self, values: impl IntoIterator<Item = (String, String)>) {
         let mut g = self.inner.lock().unwrap();
         g.values.extend(values);
     }
@@ -324,10 +324,10 @@ fn substitute_in_string(s: &str, cache: &SecretCache) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
 
     fn make_bundle(vars_json: &str, attrs: Vec<(&str, &str)>) -> proto::PolicyBundle {
-        let mut attributes = HashMap::new();
+        let mut attributes = BTreeMap::new();
         for (k, v) in attrs {
             attributes.insert(k.to_string(), v.to_string());
         }
@@ -364,6 +364,82 @@ mod tests {
         assert_eq!(refs.len(), 2);
         assert!(refs.contains("vigo/db/pw"));
         assert!(refs.contains("tls/server.key"));
+    }
+
+    /// Regression guard for the ordering invariant that
+    /// `agent/src/checkin/loop_impl.rs::run_once_with_update` relies on:
+    /// verify_bundle must run on the wire-bundle bytes *before*
+    /// substitute_in_bundle mutates them. Substitution rewrites signed
+    /// fields (vars_json byte representation + module/resource attribute
+    /// values), so a signature computed over the pre-substitution bundle
+    /// will not verify against the post-substitution bundle.
+    ///
+    /// Pre-fix history: 0.68.10 added substitute_in_bundle without moving
+    /// the existing verify_bundle call out of its post-substitute spot in
+    /// the daemon loop. danlap-only bundle-rejection loop on 2026-05-26
+    /// (see tshoot/log.md). This test fails on the broken order and
+    /// passes on the fixed one.
+    #[test]
+    fn substitute_invalidates_bundle_signature() {
+        use crate::checkin::verify::verify_bundle;
+        use ed25519_dalek::{Signer, SigningKey};
+        use spki::EncodePublicKey;
+
+        // Build a bundle with a real placeholder in an attribute (verifies
+        // the substitution actually mutates a signed field).
+        let mut bundle = make_bundle(
+            r#"{"flag":"plain"}"#,
+            vec![("pw", "__VIGO_SECRET__vigo/db/pw__END_VIGO_SECRET__")],
+        );
+
+        // Sign the unmutated bundle. The Rust agent's marshal_bundle_content
+        // is private to checkin::verify; we mirror its shape here for the
+        // signing step. Drift between this helper and the real
+        // marshal_bundle_content would surface as `verify_bundle == Err`
+        // on the pre-substitution assertion below.
+        let signing = SigningKey::generate(&mut rand::rngs::OsRng);
+        let pem = signing
+            .verifying_key()
+            .to_public_key_pem(pkcs8::LineEnding::LF)
+            .unwrap();
+        let content = {
+            use prost::Message;
+            let c = proto::PolicyBundle {
+                policy_version: bundle.policy_version,
+                modules: bundle.modules.clone(),
+                vars_json: bundle.vars_json.clone(),
+                var_order: bundle.var_order.clone(),
+                custom_traits: bundle.custom_traits.clone(),
+                matched_pattern: bundle.matched_pattern.clone(),
+                environment: bundle.environment.clone(),
+                roles: bundle.roles.clone(),
+                merkle_root: bundle.merkle_root.clone(),
+                ..Default::default()
+            };
+            c.encode_to_vec()
+        };
+        bundle.signature = signing.sign(&content).to_bytes().to_vec();
+        bundle.server_pubkey_id = "test".into();
+
+        // Verify succeeds on the pre-substitution bundle.
+        verify_bundle(&bundle, &pem).expect("pre-substitution verify should succeed");
+
+        // Populate the cache and substitute.
+        let cache = SecretCache::new();
+        cache.extend(HashMap::from([(
+            "vigo/db/pw".to_string(),
+            "s3cret".to_string(),
+        )]));
+        substitute_in_bundle(&mut bundle, &cache).unwrap();
+        assert_eq!(
+            bundle.modules[0].resources[0].attributes["pw"],
+            "s3cret",
+            "substitution should have happened"
+        );
+
+        // Verify must now fail — substitute mutated a signed field.
+        verify_bundle(&bundle, &pem)
+            .expect_err("post-substitution verify must fail; otherwise the signed-field set has drifted from what substitute mutates");
     }
 
     #[test]

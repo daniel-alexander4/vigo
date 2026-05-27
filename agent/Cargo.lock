@@ -2501,6 +2501,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-reflect"
+version = "0.15.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37587d5a8a1b3dc9863403d084fc2254b91ab75a702207098837950767e2260b"
+dependencies = [
+ "prost",
+ "prost-types",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3915,7 +3925,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vigo"
-version = "0.68.11"
+version = "0.68.15"
 dependencies = [
  "age",
  "anyhow",
@@ -3940,6 +3950,7 @@ dependencies = [
  "p256",
  "pkcs8",
  "prost",
+ "prost-reflect",
  "prost-types",
  "rand 0.8.5",
  "rcgen",

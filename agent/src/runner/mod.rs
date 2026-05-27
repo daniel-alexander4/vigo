@@ -1510,7 +1510,7 @@ mod tests {
                     name: rname.to_string(),
                     r#type: rtype.to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), rname.to_string());
                         p
                     },
@@ -1738,7 +1738,7 @@ mod tests {
                     name: rname.to_string(),
                     r#type: rtype.to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), rname.to_string());
                         p
                     },
@@ -1765,7 +1765,7 @@ mod tests {
                     name: rname.to_string(),
                     r#type: rtype.to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), rname.to_string());
                         p
                     },
@@ -1998,7 +1998,7 @@ mod tests {
                     name: "config-file".to_string(),
                     r#type: "file".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "config-file".to_string());
                         p
                     },
@@ -2173,7 +2173,7 @@ mod tests {
                     name: "install-nginx".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "install-nginx".to_string());
                         p
                     },
@@ -2190,7 +2190,7 @@ mod tests {
                     name: "nginx-conf".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "nginx-conf".to_string());
                         p
                     },
@@ -2207,7 +2207,7 @@ mod tests {
                     name: "nginx-svc".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "nginx-svc".to_string());
                         p
                     },
@@ -2271,7 +2271,7 @@ mod tests {
                     name: "broken-res".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "broken-res".to_string());
                         p
                     },
@@ -2288,7 +2288,7 @@ mod tests {
                     name: "dep-res".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "dep-res".to_string());
                         p
                     },
@@ -2305,7 +2305,7 @@ mod tests {
                     name: "ok-res".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "ok-res".to_string());
                         p
                     },
@@ -2362,7 +2362,7 @@ mod tests {
                     name: "base-res".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "base-res".to_string());
                         p
                     },
@@ -2379,7 +2379,7 @@ mod tests {
                     name: "app-res".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "app-res".to_string());
                         p
                     },
@@ -2454,7 +2454,7 @@ mod tests {
                     name: "slow-res".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "slow-res".to_string());
                         p.insert("timeout".to_string(), "1".to_string());
                         p
@@ -2501,7 +2501,7 @@ mod tests {
                     name: "fast-res".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "fast-res".to_string());
                         p.insert("timeout".to_string(), "10".to_string());
                         p
@@ -2546,7 +2546,7 @@ mod tests {
                 name: "set-password".to_string(),
                 r#type: "exec".to_string(),
                 params: {
-                    let mut p = HashMap::new();
+                    let mut p = std::collections::BTreeMap::new();
                     p.insert("name".to_string(), "set-password".to_string());
                     p.insert("command".to_string(), "reset-password".to_string());
                     p
@@ -2586,7 +2586,7 @@ mod tests {
                     name: "sshd-config".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "sshd-config".to_string());
                         p
                     },
@@ -2596,7 +2596,7 @@ mod tests {
                     name: "restart-sshd".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "restart-sshd".to_string());
                         p
                     },
@@ -2647,7 +2647,7 @@ mod tests {
                     name: "sshd-config".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "sshd-config".to_string());
                         p
                     },
@@ -2657,7 +2657,7 @@ mod tests {
                     name: "restart-sshd".to_string(),
                     r#type: "mock".to_string(),
                     params: {
-                        let mut p = HashMap::new();
+                        let mut p = std::collections::BTreeMap::new();
                         p.insert("name".to_string(), "restart-sshd".to_string());
                         p
                     },

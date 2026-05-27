@@ -15,7 +15,7 @@ use crate::proto::{
 };
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::time::Duration;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 use tracing::Instrument;
@@ -302,7 +302,7 @@ impl Client {
                     traits_json: Vec::new(),
                     policy_version: 0,
                     policy_mode: true,
-                    cached_module_hashes: HashMap::new(),
+                    cached_module_hashes: BTreeMap::new(),
                     capabilities: None,
                     agent_version: self.agent_version.clone(),
                     ip_address: crate::platform::net::get_outbound_ip(),
@@ -376,7 +376,7 @@ impl Client {
         state_fingerprint: &str,
         traits_json: Option<Vec<u8>>,
         policy_version: u64,
-        cached_module_hashes: Option<HashMap<String, String>>,
+        cached_module_hashes: Option<BTreeMap<String, String>>,
     ) -> Result<CheckInResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
@@ -625,7 +625,7 @@ impl Client {
         state_fingerprint: &str,
         traits_json: Option<Vec<u8>>,
         policy_version: u64,
-        cached_module_hashes: Option<HashMap<String, String>>,
+        cached_module_hashes: Option<BTreeMap<String, String>>,
     ) -> CheckInRequest {
         self.build_check_in_request_with_caps(
             state_fingerprint,
@@ -645,7 +645,7 @@ impl Client {
         state_fingerprint: &str,
         traits_json: Option<Vec<u8>>,
         policy_version: u64,
-        cached_module_hashes: Option<HashMap<String, String>>,
+        cached_module_hashes: Option<BTreeMap<String, String>>,
         capabilities: Option<crate::proto::StreamCapabilities>,
     ) -> CheckInRequest {
         let ts = Self::timestamp_str();

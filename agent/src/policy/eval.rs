@@ -14,7 +14,6 @@ use crate::policy::{template, when};
 use crate::proto;
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::collections::HashMap;
 use tracing::warn;
 
 /// Evaluate a policy bundle using the agent's traits.
@@ -131,7 +130,10 @@ pub fn eval_bundle(
                 traits,
                 vars: &vars_value,
             };
-            let mut params = HashMap::with_capacity(pres.attributes.len());
+            // BTreeMap (not HashMap) because this map flows into
+            // `proto::Resource.params`, which prost generates as
+            // BTreeMap for deterministic encoding (see agent/build.rs).
+            let mut params = std::collections::BTreeMap::new();
             let mut render_failed = false;
             for (k, v) in &pres.attributes {
                 match template::render(v, &ctx) {

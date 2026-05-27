@@ -1660,6 +1660,13 @@ fn main() -> Result<()> {
     // prove it dead and the linker can't gc-section it. Zero runtime cost.
     std::hint::black_box(&VIGO_BUILD_VERSION);
 
+    // Drift guard for bundle-signature verification. The hand-listed
+    // SIGNED_FIELD_TAGS in checkin::verify must agree with
+    // `(vigo.v1.signed)` annotations in protobuf/vigo.proto — if they
+    // ever diverge, every bundle silently fails verify in production.
+    // Catch the divergence here, at boot, with an actionable panic.
+    checkin::verify::assert_signed_field_set_matches_proto();
+
     // ADR-015 multi-call binary dispatch: when invoked under a
     // recognized non-default argv[0] (e.g., as `git-remote-gitback` via
     // a symlink), branch to the corresponding mode without going
