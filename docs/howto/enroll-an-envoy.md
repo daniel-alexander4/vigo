@@ -141,15 +141,17 @@ The bootstrap script verifies the SHA256 checksum of the downloaded agent binary
 
 On Unix systems, the script uses `sha256sum`, `shasum -a 256`, or `digest -a sha256` (whichever is available). On Windows, the PowerShell script uses `Get-FileHash`.
 
-For distribution builds, agent binaries can also be signed with an ED25519 key (`make dist-sign-agent`). The signature and public key are served via the `/api/v1/agent/latest` (signature field) and `/api/v1/agent/signing-key` endpoints. During self-update, the agent:
+For distribution builds, agent binaries are signed with an ED25519 key. The build pipeline (`make dist-agent`, `scripts/upgrade.sh`, and `Dockerfile.server`'s go-builder stage) derives a `VIGO_AGENT_SIGNING_PUBKEY` from `SIGN_KEY` and bakes it into every agent binary at compile time; the same `SIGN_KEY` then signs each cross-compiled binary, producing a `.sig` sidecar served via `/api/v1/agent/latest` (signature field). During self-update, the agent:
 
 1. Compares its compiled-in version against the server's advertised version — if they already match, the update is skipped (circuit breaker to prevent exec-loops)
 2. Downloads the new binary using mTLS (presenting its bootstrap client certificate)
 3. Verifies the SHA256 checksum
-4. If a signature is present, fetches the signing public key from the server and verifies the ED25519 signature over the SHA256 digest
+4. **Fail-closed:** verifies the ED25519 signature against the agent's **baked-in pubkey** — not a pubkey fetched from the server. Empty signature, sentinel pubkey, or mismatch all bail (ADR-031). The agent never installs an unverified binary.
 5. Atomically replaces the binary and exec-restarts
 
-This means even a compromised server cannot push a malicious binary without the offline signing key. Updates can be triggered remotely via `vigocli envoys rebootstrap`.
+Because the verification pubkey is compiled into each agent, a compromised server cannot substitute its own key alongside its own signature — verification anchors at the agent, not the server. Updates can be triggered remotely via `vigocli envoys rebootstrap`.
+
+When `SIGN_KEY` is unset at build time, `build.rs` falls back to a 32-zero-byte sentinel pubkey and the resulting agent refuses self-update at runtime (sentinel-check bail). Set `SIGN_KEY=<path>` before invoking `make` / `scripts/upgrade.sh` to enable self-update for the fleet. The signing private key is operator-side material — back it up; loss means a full fleet re-deploy with a new key.
 
 
 ## Security

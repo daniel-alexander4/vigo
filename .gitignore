@@ -4,6 +4,10 @@ certs/
 # Environment secrets
 .env
 
+# ED25519 signing key for agent self-update (ADR-031). Hex-encoded seed,
+# mode 0600. Loss = full fleet re-deploy with a new key.
+signing.key
+
 # Build output
 bin/
 dist/

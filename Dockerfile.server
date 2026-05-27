@@ -4,6 +4,14 @@ RUN apk add --no-cache musl-dev protobuf-dev
 
 WORKDIR /build
 
+# ADR-031 agent self-update verification pubkey. Threaded through to
+# build.rs via env so the constant baked into the agent matches the
+# private key used to sign .sig files (Makefile and upgrade.sh both
+# derive it from SIGN_KEY). Unset → build.rs falls back to the all-zero
+# sentinel pubkey, agent refuses self-update at runtime.
+ARG VIGO_AGENT_SIGNING_PUBKEY=
+ENV VIGO_AGENT_SIGNING_PUBKEY=$VIGO_AGENT_SIGNING_PUBKEY
+
 # Cache Rust dependencies: copy manifests + proto, build with dummy source.
 COPY agent/Cargo.toml agent/Cargo.lock agent/
 COPY agent/build.rs agent/
@@ -79,6 +87,29 @@ RUN apk add --no-cache file >/dev/null \
         fi; \
     done
 
+# Stage the freshly-built linux/amd64 agent binary + version sidecar from
+# rust-builder, then produce its ED25519 detached signature using the
+# operator's SIGN_KEY supplied as a BuildKit secret (--secret id=signing_key).
+# Pubkey from VIGO_AGENT_SIGNING_PUBKEY (ARG to rust-builder) must derive
+# from the same private key — agents verify the .sig against their baked-in
+# pubkey, so a mismatch fail-closes auto-update.
+# When the secret is absent the build still succeeds; the agent built in
+# this stage carries the sentinel pubkey (ADR-031 dev mode) and refuses
+# self-update at runtime. Use this mode only for dev builds.
+RUN mkdir -p /build/dist/agent/linux/amd64
+COPY --from=rust-builder /build/agent/target/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo
+COPY --from=rust-builder /build/agent/vigo.version /build/dist/agent/linux/amd64/vigo.version
+RUN --mount=type=secret,id=signing_key,target=/run/secrets/signing_key \
+    if [ -s /run/secrets/signing_key ]; then \
+        go run ./server/hardening/cmd/sign \
+            -key /run/secrets/signing_key \
+            -binary /build/dist/agent/linux/amd64/vigo \
+            -output /build/dist/agent/linux/amd64/vigo.sig; \
+        echo "signed /build/dist/agent/linux/amd64/vigo"; \
+    else \
+        echo "WARNING: no SIGN_KEY secret supplied — built unsigned agent binary (ADR-031 agents will refuse auto-update); supply via 'docker build --secret id=signing_key,src=<path>'"; \
+    fi
+
 # The license-manager binary (`tessera`) is an internal vendor-side tool
 # and lives in the separate tessera repo (git.alexander4.io/tessera) —
 # never shipped here.
@@ -102,14 +133,15 @@ COPY --from=go-builder /build/vigocli /usr/local/bin/vigocli
 RUN chmod 0700 /usr/local/bin/vigocli
 COPY --from=go-builder /build/migrations /migrations
 
-# Agent binaries — pre-built cross-compiled binaries first, then the freshly built
-# linux/amd64 binary on top so it always wins over any stale copy in dist/.
+# Agent binaries — host-built cross-compiled platforms first (arm64, freebsd,
+# windows, darwin — each with its .sig if SIGN_KEY was supplied to upgrade.sh),
+# then the in-image-built linux/amd64 set (binary + version + signed .sig) on
+# top so it always wins over any stale copy in dist/.
 # Bootstrap serves /api/v1/agent/download/{os}/{arch}. Missing binaries return 404.
 # Build additional platforms with: make dist-agent dist-agent-macos dist-agent-freebsd etc.
 RUN mkdir -p /dist/agent/linux/amd64
 COPY dist/agent/ /dist/agent/
-COPY --from=rust-builder /build/agent/target/x86_64-unknown-linux-musl/release/vigo /dist/agent/linux/amd64/vigo
-COPY --from=rust-builder /build/agent/vigo.version /dist/agent/linux/amd64/vigo.version
+COPY --from=go-builder /build/dist/agent/linux/amd64/ /dist/agent/linux/amd64/
 
 # License and commercial terms — seeded into /srv/vigo/ and served to agents.
 COPY LICENSE /seed/LICENSE

@@ -111,12 +111,18 @@ wait_for_server() {
 # that arch (safe); with a stale-or-missing one, cross-arch envoys can get
 # stuck in update loops — see tshoot/log-archive-rpi-update-loop-*.md.
 inject_with_sidecar() {
-    # $1 = host path to binary, $2 = container path
+    # $1 = host path to binary, $2 = container path. Also copies .version
+    # sidecar (required: server reads it to advertise per-arch versions)
+    # and .sig sidecar when present (ADR-031: agents won't auto-update
+    # without it — silent omission would re-introduce today's symptom).
     local src="$1"
     local dst="$2"
     docker cp "$src" "vigo:$dst"
     if [ -f "$src.version" ]; then
         docker cp "$src.version" "vigo:$dst.version"
+    fi
+    if [ -f "$src.sig" ]; then
+        docker cp "$src.sig" "vigo:$dst.sig"
     fi
 }
 
@@ -219,6 +225,31 @@ if [ -d "$REPO_DIR" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# ADR-031 signing key detection
+# ---------------------------------------------------------------------------
+#
+# When SIGN_KEY is present, every agent binary built here gets a matching
+# ED25519 .sig and the agent's baked-in verification pubkey derives from
+# the same private key. When the key is absent, build.rs falls back to
+# the all-zero sentinel pubkey and the agent boots in dev mode (refuses
+# auto-update). The build still succeeds in dev mode — operator just
+# can't roll the fleet via auto-update.
+
+SIGN_KEY="${SIGN_KEY:-$REPO_DIR/signing.key}"
+SIGN_PUBKEY=""
+if [ -s "$SIGN_KEY" ]; then
+    SIGN_PUBKEY="$(cd "$REPO_DIR" && go run ./server/hardening/cmd/sign -key "$SIGN_KEY" -pubkey-only 2>/dev/null)"
+    if [ -z "$SIGN_PUBKEY" ]; then
+        echo "ERROR: failed to derive pubkey from SIGN_KEY=$SIGN_KEY" >&2
+        exit 1
+    fi
+    echo "Signing key: $SIGN_KEY (pubkey ${SIGN_PUBKEY:0:16}…)"
+else
+    echo "WARNING: SIGN_KEY=$SIGN_KEY not found — building in ADR-031 dev mode (sentinel pubkey; agents will refuse auto-update)."
+    echo "         Generate one with: go run ./server/hardening/cmd/sign -genkey -output $REPO_DIR/signing.key"
+fi
+
+# ---------------------------------------------------------------------------
 # Cross-compile agent binaries (before the Docker build so dist/ is populated)
 # ---------------------------------------------------------------------------
 
@@ -299,7 +330,9 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
             freebsd)
                 echo "  freebsd: using cargo-cross container"
                 (cd "$REPO_DIR" && \
-                    docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
+                    docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 \
+                    -e VIGO_AGENT_SIGNING_PUBKEY="$SIGN_PUBKEY" \
+                    -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
                     ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
@@ -310,7 +343,9 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
             windows)
                 echo "  windows: using cargo-cross container"
                 (cd "$REPO_DIR" && \
-                    docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
+                    docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 \
+                    -e VIGO_AGENT_SIGNING_PUBKEY="$SIGN_PUBKEY" \
+                    -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
                     ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
@@ -321,7 +356,9 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
             darwin)
                 echo "  darwin: requires osxcross"
                 if command -v x86_64-apple-darwin-gcc > /dev/null 2>&1 || command -v o64-clang > /dev/null 2>&1; then
-                    (cd "$REPO_DIR" && make dist-agent-macos) || echo "  WARN: darwin cross-compile failed"
+                    # `make dist-agent-macos` derives VIGO_AGENT_SIGNING_PUBKEY
+                    # from SIGN_KEY internally; export it so the makefile picks it up.
+                    (cd "$REPO_DIR" && SIGN_KEY="$SIGN_KEY" make dist-agent-macos) || echo "  WARN: darwin cross-compile failed"
                 else
                     echo "  SKIP: osxcross not found"
                 fi
@@ -335,6 +372,7 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
     # Run Linux builds (amd64/arm64) together in a single container.
     if [ -n "$BUILD_SCRIPT" ]; then
         docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 \
+            -e VIGO_AGENT_SIGNING_PUBKEY="$SIGN_PUBKEY" \
             -v "$REPO_DIR/agent:/build/agent" \
             -v "$REPO_DIR/protobuf:/build/protobuf" \
             -v "$REPO_DIR/dist:/build/dist" \
@@ -403,6 +441,38 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
     done
     [ -n "$REPO_VERSION" ] && echo "Agent dist tree verified — all built arches at $REPO_VERSION, sidecars derived from binaries."
     echo ""
+
+    # Sign each cross-compiled binary on the host (the in-image-built
+    # linux/amd64 binary is signed inside go-builder via the BuildKit
+    # secret; here we cover arm64/freebsd/windows/darwin). Writes
+    # <binary>.sig next to each, format = signature hex on line 1,
+    # pubkey hex on line 2. Agents at ADR-031 fail-closed against the
+    # baked-in pubkey on auto-update.
+    if [ -s "$SIGN_KEY" ]; then
+        echo "Signing cross-compiled binaries with $SIGN_KEY..."
+        for t in "${CROSS_TARGETS[@]}"; do
+            case "$t" in
+                amd64)   bins="$REPO_DIR/dist/agent/linux/amd64/vigo" ;;
+                arm64)   bins="$REPO_DIR/dist/agent/linux/arm64/vigo" ;;
+                freebsd) bins="$REPO_DIR/dist/agent/freebsd/amd64/vigo" ;;
+                windows) bins="$REPO_DIR/dist/agent/windows/amd64/vigo.exe" ;;
+                darwin)  bins="$REPO_DIR/dist/agent/darwin/amd64/vigo $REPO_DIR/dist/agent/darwin/arm64/vigo" ;;
+                *)       continue ;;
+            esac
+            for b in $bins; do
+                [ -f "$b" ] || continue
+                (cd "$REPO_DIR" && go run ./server/hardening/cmd/sign \
+                    -key "$SIGN_KEY" \
+                    -binary "$b" \
+                    -output "$b.sig") || { echo "ERROR: sign $b failed" >&2; exit 1; }
+                if [ -n "$SUDO_USER" ]; then
+                    chown "$SUDO_USER:$SUDO_USER" "$b.sig" 2>/dev/null || true
+                fi
+                echo "  signed $b"
+            done
+        done
+        echo ""
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -444,8 +514,14 @@ if $DO_SERVERONLY; then
         exit 1
     fi
     echo "Building vigosrv + vigocli (go-builder stage)..."
+    DOCKER_BUILD_SIGN_ARGS=()
+    if [ -s "$SIGN_KEY" ]; then
+        DOCKER_BUILD_SIGN_ARGS+=(--secret "id=signing_key,src=$SIGN_KEY")
+    fi
     DOCKER_BUILDKIT=1 docker build \
         --target go-builder \
+        --build-arg VIGO_AGENT_SIGNING_PUBKEY="$SIGN_PUBKEY" \
+        "${DOCKER_BUILD_SIGN_ARGS[@]}" \
         -f "$STAGE_DIR/Dockerfile.server" -t vigo-uibuild:latest "$STAGE_DIR"
     cid="$(docker create vigo-uibuild:latest)"
     docker cp "$cid:/build/vigosrv" "$STAGE_DIR/vigosrv"
@@ -497,8 +573,14 @@ if $DO_FULL; then
     fi
 
     echo "Building Docker image from source..."
+    DOCKER_BUILD_SIGN_ARGS=()
+    if [ -s "$SIGN_KEY" ]; then
+        DOCKER_BUILD_SIGN_ARGS+=(--secret "id=signing_key,src=$SIGN_KEY")
+    fi
     DOCKER_BUILDKIT=1 docker build \
         --no-cache \
+        --build-arg VIGO_AGENT_SIGNING_PUBKEY="$SIGN_PUBKEY" \
+        "${DOCKER_BUILD_SIGN_ARGS[@]}" \
         -f "$STAGE_DIR/Dockerfile.server" -t "$IMAGE" "$STAGE_DIR"
 
     if $PUSH; then

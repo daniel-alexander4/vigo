@@ -736,9 +736,17 @@ func (h *Handler) AgentLatest(w http.ResponseWriter, r *http.Request) {
 			"hint", "build pipeline should write '<binary>.version' next to each cross-compiled binary")
 	}
 
-	// Read ED25519 signature from adjacent .sig file (if present).
+	// Read ED25519 signature from adjacent .sig file. Missing or
+	// unreadable .sig means we serve no signature, agents at ADR-031
+	// fail-closed on empty signature, and auto-update silently breaks.
+	// Surface the omission once per request so the diagnostic gap that
+	// turned a missing-.sig deployment into a 2-hour investigation
+	// can't recur.
 	if sig, _, err := ReadSigFile(binPath + ".sig"); err == nil {
 		resp.Signature = sig
+	} else {
+		slog.Warn("agent_latest: serving without signature — ADR-031 agents will refuse auto-update",
+			"os", goos, "arch", goarch, "binary", binPath, "error", err)
 	}
 
 	slog.Info("agent_latest: served",
