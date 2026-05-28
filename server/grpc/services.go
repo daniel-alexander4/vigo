@@ -32,18 +32,18 @@ type auditRecorder interface {
 // AgentService implements the VigoAgent gRPC service.
 type AgentService struct {
 	pb.UnimplementedVigoAgentServer
-	registry         *registry.Registry
-	configStore      *config.ConfigStore
-	queries          *db.Queries
-	runStore         db.RunStore
-	integrations     *integrations.Dispatcher
-	traitsScanner    *traits.Scanner
-	traitsBatch      *db.TraitsBatcher
-	policyCache      *policyCache
-	streamMgr        *streamManager
-	taskRouter       *taskRouter
-	queryRouter      *queryRouter
-	taskStore        *task.Store
+	registry      *registry.Registry
+	configStore   *config.ConfigStore
+	queries       *db.Queries
+	runStore      db.RunStore
+	integrations  *integrations.Dispatcher
+	traitsScanner *traits.Scanner
+	traitsBatch   *db.TraitsBatcher
+	policyCache   *policyCache
+	streamMgr     *streamManager
+	taskRouter    *taskRouter
+	queryRouter   *queryRouter
+	taskStore     *task.Store
 	// spannerAdmin drives the peer-equal enrollment routing (Slice
 	// 2-ii-b). Non-nil when this vigosrv is in a spanner (mode !=
 	// standalone). Register dispatches: spannerAdmin != nil →
@@ -82,6 +82,34 @@ type AgentService struct {
 	// outage. Producer: the feed reactor via SetCuratorCatalog; consumers: the
 	// check-in handler. nil until the first feed cycle (or when swarm is disabled).
 	curatorCatalog atomic.Pointer[[]byte]
+	// checkInSem caps concurrent CheckIn handlers. nil = unbounded (no
+	// shedding). When the buffer is full, arrivals get ResourceExhausted
+	// so the cascading-overload regime (where retries pile on the queue
+	// faster than the server drains it) is prevented.
+	checkInSem chan struct{}
+}
+
+// tryAcquireCheckInSlot returns true when the caller may proceed and is
+// responsible for releaseCheckInSlot. Returns false when the cap is
+// reached — caller should return ResourceExhausted to the client.
+func (s *AgentService) tryAcquireCheckInSlot() bool {
+	if s.checkInSem == nil {
+		return true
+	}
+	select {
+	case s.checkInSem <- struct{}{}:
+		return true
+	default:
+		s.metrics.CheckinsTotal.WithLabelValues("shed").Inc()
+		return false
+	}
+}
+
+func (s *AgentService) releaseCheckInSlot() {
+	if s.checkInSem == nil {
+		return
+	}
+	<-s.checkInSem
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
@@ -231,8 +259,8 @@ type AdminService struct {
 	spannerAdmin  *spanner.SpannerAdmin
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending envoy reassignments (bolt side)
-	auditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
-	integrations     *integrations.Dispatcher
+	auditWriter   auditRecorder     // tamper-evident audit writer (nil-safe)
+	integrations  *integrations.Dispatcher
 	// swarmCleanup, when set, is invoked from RevokeEnvoy / DeleteEnvoy
 	// after the DB update lands and before the response returns. It
 	// dispatches lockbox recipient-list cleanup to every envoy so the

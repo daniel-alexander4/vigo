@@ -81,6 +81,7 @@ checkin:
   # offline_threshold: "15m"                   # override staleness boundary (default: 2.5 × interval)
   # fleet_lookup_ttl: "30s"                    # how long a resolved fleet: cross-node lookup is reused before recomputing
   # observe_only: false                        # global observe-only: all envoys report drift only, no changes applied
+  # max_concurrent: 0                          # cap on concurrent CheckIn handlers (0 = unbounded, the default). Overflow returns ResourceExhausted so clients retry-with-backoff, preventing cascading overload. Watch vigo_grpc_checkin_in_flight to size — set roughly to your host's measured req/s capacity × p99 latency in seconds.
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────

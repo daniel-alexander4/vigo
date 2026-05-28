@@ -54,30 +54,31 @@ func (cc *CertCache) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, e
 
 // ServerConfig holds everything needed to construct the gRPC server.
 type ServerConfig struct {
-	CertFile             string
-	KeyFile              string
-	CAFile               string
-	GRPCPort             string
-	Registry             *registry.Registry
-	ConfigStore          *config.ConfigStore
-	Queries              *db.Queries
-	RunStore             db.RunStore
-	Interval             time.Duration
-	OfflineThreshold     time.Duration
-	JitterPercent        int32
-	Integrations         *integrations.Dispatcher
-	TraitsDir            string
-	SignatureWindow      time.Duration // 0 → default 5m
-	TraitsScannerTTL     time.Duration // 0 → default 30s
-	MaxConcurrentStreams uint32        // 0 → default 5000
-	GRPCReadBuffer       int           // 0 → gRPC default 32 KiB
-	GRPCWriteBuffer      int           // 0 → gRPC default 32 KiB
-	MaxConnectionAge     time.Duration // 0 → no forced reconnect
-	MaxConnectionIdle    time.Duration // 0 → default 15m
-	KeepaliveTime        time.Duration // 0 → default 30s
-	KeepaliveTimeout     time.Duration // 0 → default 10s
-	StreamSendBuffer     int           // 0 → default 8
-	SpannerAdmin         *spanner.SpannerAdmin // non-nil in a spanner (mode != standalone); drives peer-equal admin reads
+	CertFile              string
+	KeyFile               string
+	CAFile                string
+	GRPCPort              string
+	Registry              *registry.Registry
+	ConfigStore           *config.ConfigStore
+	Queries               *db.Queries
+	RunStore              db.RunStore
+	Interval              time.Duration
+	OfflineThreshold      time.Duration
+	JitterPercent         int32
+	MaxConcurrentCheckIns int // 0 → unbounded (no load shedding)
+	Integrations          *integrations.Dispatcher
+	TraitsDir             string
+	SignatureWindow       time.Duration         // 0 → default 5m
+	TraitsScannerTTL      time.Duration         // 0 → default 30s
+	MaxConcurrentStreams  uint32                // 0 → default 5000
+	GRPCReadBuffer        int                   // 0 → gRPC default 32 KiB
+	GRPCWriteBuffer       int                   // 0 → gRPC default 32 KiB
+	MaxConnectionAge      time.Duration         // 0 → no forced reconnect
+	MaxConnectionIdle     time.Duration         // 0 → default 15m
+	KeepaliveTime         time.Duration         // 0 → default 30s
+	KeepaliveTimeout      time.Duration         // 0 → default 10s
+	StreamSendBuffer      int                   // 0 → default 8
+	SpannerAdmin          *spanner.SpannerAdmin // non-nil in a spanner (mode != standalone); drives peer-equal admin reads
 	// SMTPNotifier removed — events route through Integrations dispatcher
 	LicenseEnforcer *license.Enforcer
 	TaskStore       *task.Store
@@ -226,6 +227,9 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		agentBinAvailable: cfg.AgentBinAvailable,
 		globalObserveOnly: cfg.GlobalObserveOnly,
 		metrics:           cfg.Metrics,
+	}
+	if cfg.MaxConcurrentCheckIns > 0 {
+		agentSvc.checkInSem = make(chan struct{}, cfg.MaxConcurrentCheckIns)
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {

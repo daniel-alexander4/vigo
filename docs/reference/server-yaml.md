@@ -121,6 +121,7 @@ checkin:
   interval: "5m"                     # agent poll frequency (stale = 2x this)
   jitter_percent: 20                 # randomize timing by 0-N%
   bundle_max_age: "24h"              # signed bundle TTL on agents (0 = forever)
+  max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = unbounded)
 ```
 
 | Field | Default | Description |
@@ -128,6 +129,15 @@ checkin:
 | `interval` | `5m` | How often agents check in. Stale threshold = 2x this value |
 | `jitter_percent` | `20` | Random jitter to prevent thundering herd |
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
+| `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. Overflow returns `ResourceExhausted` so clients retry-with-backoff, preventing cascading overload. `0` = unbounded |
+
+### Sizing `max_concurrent`
+
+The cap defends against the cascading-overload regime: when offered load exceeds the server's serving rate, queued requests pile up faster than they drain, the client ticker re-fires on top, and throughput collapses (measured: 70 req/s on a 5K-capable host at 10K offered). Bounding concurrency caps throughput at `max_concurrent / latency` ≈ the host's actual capacity, gracefully degrading rather than collapsing.
+
+Watch `vigo_grpc_checkin_in_flight` as the pre-cascade signal — a sustained climb under burst is the leading edge of trouble. Size the cap to roughly your host's measured req/s capacity × p99 latency in seconds (e.g. a 5K req/s host with 100 ms p99 → `max_concurrent: 500`).
+
+Default `0` (disabled) preserves existing behavior; turn it on once the in-flight gauge tells you you're being hit.
 
 ## bootstrap
 

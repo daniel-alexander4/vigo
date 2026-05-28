@@ -49,14 +49,14 @@ import (
 	"git.alexander4.io/vigo/server/risk"
 	vigoscrier "git.alexander4.io/vigo/server/scrier"
 	"git.alexander4.io/vigo/server/secrets"
-	"git.alexander4.io/vigo/server/tickets"
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
-	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
+	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 	"git.alexander4.io/vigo/server/task"
+	"git.alexander4.io/vigo/server/tickets"
 	"git.alexander4.io/vigo/server/workflows"
 	"git.alexander4.io/vigo/ui"
 )
@@ -88,14 +88,14 @@ type Server struct {
 	aiMetrics *vigoai.Metrics
 
 	// --- Config ---
-	configFile string               // path passed to NewServer
-	serverRoot string               // filepath.Dir(configFile)
+	configFile string // path passed to NewServer
+	serverRoot string // filepath.Dir(configFile)
 	// localAdminToken is the root-only credential (serverRoot/cli-admin-token,
 	// 0600) that lets vigocli on the server host authenticate as admin —
 	// minted at boot, see auth.LoadOrCreateLocalAdminToken.
 	localAdminToken string
-	cfg        *config.ServerConfig // full config (second pass with secrets resolved)
-	secretsCfg secrets.Config       // first-pass secrets backend config
+	cfg             *config.ServerConfig // full config (second pass with secrets resolved)
+	secretsCfg      secrets.Config       // first-pass secrets backend config
 
 	// --- Resolved paths (env var > cfg.Paths.* > built-in default) ---
 	migrationsDir   string
@@ -883,41 +883,42 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// (grpcSrv.Serve, traitsBatch.Start, peer primary push, etc.) stay
 	// in run() / chunk 5. ---
 	grpcSrv, certCache, traitsBatch, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
-		CertFile:             s.cfg.Server.TLS.CertFile,
-		KeyFile:              s.cfg.Server.TLS.KeyFile,
-		CAFile:               s.cfg.Server.TLS.CAFile,
-		GRPCPort:             s.cfg.Server.GRPCListen,
-		Registry:             s.reg,
-		ConfigStore:          s.configStore,
-		Queries:              s.queries,
-		RunStore:             s.runStore,
-		Interval:             s.baseInterval,
-		OfflineThreshold:     s.offlineThreshold,
-		JitterPercent:        int32(s.cfg.CheckIn.JitterPercent),
-		Integrations:         s.integrations,
-		TraitsDir:            s.traitsDir,
-		SignatureWindow:      s.sigWindow,
-		TraitsScannerTTL:     s.traitsScannerTTL,
-		MaxConcurrentStreams: s.cfg.Tuning.MaxConcurrentStreams,
-		GRPCReadBuffer:       s.cfg.Tuning.GRPCReadBuffer,
-		GRPCWriteBuffer:      s.cfg.Tuning.GRPCWriteBuffer,
-		MaxConnectionAge:     s.maxConnAge,
-		MaxConnectionIdle:    s.maxConnIdle,
-		KeepaliveTime:        s.kaTime,
-		KeepaliveTimeout:     s.kaTimeout,
-		StreamSendBuffer:     s.cfg.Tuning.StreamSendBuffer,
-		LicenseEnforcer:      s.enforcer,
-		TaskStore:            s.taskStore,
-		FleetIndex:           s.fleetIndex,
-		RunBatcher:           s.runBatcher,
-		BundleSigner:         s.bundleSigner,
-		BundleMaxAge:         s.bundleMaxAge,
-		FallbackServers:      s.fallbackServers,
-		AuditWriter:          s.auditWriter,
-		ServerVersions:       s.agentVersions,
-		GlobalObserveOnly:    s.cfg.CheckIn.ObserveOnly,
-		Metrics:              s.metrics,
-		TicketsStore:         s.ticketsStore,
+		CertFile:              s.cfg.Server.TLS.CertFile,
+		KeyFile:               s.cfg.Server.TLS.KeyFile,
+		CAFile:                s.cfg.Server.TLS.CAFile,
+		GRPCPort:              s.cfg.Server.GRPCListen,
+		Registry:              s.reg,
+		ConfigStore:           s.configStore,
+		Queries:               s.queries,
+		RunStore:              s.runStore,
+		Interval:              s.baseInterval,
+		OfflineThreshold:      s.offlineThreshold,
+		JitterPercent:         int32(s.cfg.CheckIn.JitterPercent),
+		MaxConcurrentCheckIns: s.cfg.CheckIn.MaxConcurrent,
+		Integrations:          s.integrations,
+		TraitsDir:             s.traitsDir,
+		SignatureWindow:       s.sigWindow,
+		TraitsScannerTTL:      s.traitsScannerTTL,
+		MaxConcurrentStreams:  s.cfg.Tuning.MaxConcurrentStreams,
+		GRPCReadBuffer:        s.cfg.Tuning.GRPCReadBuffer,
+		GRPCWriteBuffer:       s.cfg.Tuning.GRPCWriteBuffer,
+		MaxConnectionAge:      s.maxConnAge,
+		MaxConnectionIdle:     s.maxConnIdle,
+		KeepaliveTime:         s.kaTime,
+		KeepaliveTimeout:      s.kaTimeout,
+		StreamSendBuffer:      s.cfg.Tuning.StreamSendBuffer,
+		LicenseEnforcer:       s.enforcer,
+		TaskStore:             s.taskStore,
+		FleetIndex:            s.fleetIndex,
+		RunBatcher:            s.runBatcher,
+		BundleSigner:          s.bundleSigner,
+		BundleMaxAge:          s.bundleMaxAge,
+		FallbackServers:       s.fallbackServers,
+		AuditWriter:           s.auditWriter,
+		ServerVersions:        s.agentVersions,
+		GlobalObserveOnly:     s.cfg.CheckIn.ObserveOnly,
+		Metrics:               s.metrics,
+		TicketsStore:          s.ticketsStore,
 		AgentBinAvailable: func() bool {
 			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {
 				for _, goarch := range []string{"amd64", "arm64"} {

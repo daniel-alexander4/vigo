@@ -964,6 +964,7 @@ type CheckInSection struct {
 	FleetLookupTTL      string `yaml:"fleet_lookup_ttl" doc:"How long a resolved fleet: cross-node config lookup is reused before recomputing from the live fleet. Higher = cheaper, staler." default:"30s" example:"30s (default), 1m, 10s"`
 	ObserveOnly         bool   `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false" example:"true during Salt/Puppet migration"`
 	ComplianceThreshold int    `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables." example:"0-100; 90 for prod alerting, 95 for tight SLOs"`
+	MaxConcurrent       int    `yaml:"max_concurrent" doc:"Maximum concurrent CheckIn handlers. Arrivals beyond this return ResourceExhausted so the gRPC client retries with backoff, preventing cascading overload under burst. Watch vigo_grpc_checkin_in_flight as the pre-cascade signal; size this knob to roughly your host's measured req/s capacity × p99 latency in seconds. 0 (default) disables shedding." default:"0" example:"0 (disabled), 500, 2048"`
 }
 
 // ConditionalBlock groups resources under a shared when expression.
@@ -1077,14 +1078,14 @@ type ComplianceClaims struct {
 // It has a custom UnmarshalYAML that flattens conditional_block entries
 // in the resources list into plain ResourceConfig items.
 type ModuleDefinition struct {
-	Name       string              `yaml:"name"`
-	Kind       ModuleKind          `yaml:"-"` // set by loader: regular module vs usercrate
-	SourceFile string              `yaml:"-"` // stockpile-relative path, set by loader
-	DependsOn  []string            `yaml:"depends_on"`
-	Before     []string            `yaml:"before"`
-	Defaults   map[string]any      `yaml:"defaults"`
-	Resources  []ResourceConfig    `yaml:"resources"`
-	Vars       map[string]any      `yaml:"vars"`
+	Name       string           `yaml:"name"`
+	Kind       ModuleKind       `yaml:"-"` // set by loader: regular module vs usercrate
+	SourceFile string           `yaml:"-"` // stockpile-relative path, set by loader
+	DependsOn  []string         `yaml:"depends_on"`
+	Before     []string         `yaml:"before"`
+	Defaults   map[string]any   `yaml:"defaults"`
+	Resources  []ResourceConfig `yaml:"resources"`
+	Vars       map[string]any   `yaml:"vars"`
 	// Compliance is the per-module compliance attribution block (0.66.57+).
 	// Two sub-keys, both routed through Vigo-curated catalogs:
 	//

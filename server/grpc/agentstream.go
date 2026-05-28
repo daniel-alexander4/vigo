@@ -247,6 +247,15 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 // the open gRPC stream already proves liveness. Unary RPCs set streaming=false to
 // ensure the timestamp is flushed to SQLite.
 func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string, envoy db.Envoy, req *pb.CheckInRequest, streaming bool) (*pb.CheckInResponse, error) {
+	// Load-shed before any bundle-building work. When checkin.max_concurrent
+	// is set and the cap is hit, ResourceExhausted tells the gRPC client to
+	// retry with backoff — preventing the cascading-overload regime where
+	// retries pile on the queue faster than the server drains it.
+	if !s.tryAcquireCheckInSlot() {
+		return nil, status.Error(codes.ResourceExhausted, "server overloaded; retry with backoff")
+	}
+	defer s.releaseCheckInSlot()
+
 	// Update last-seen: streaming envoys skip the DB dirty flag since the open
 	// stream already proves liveness. A final MarkSeen on disconnect persists it.
 	if s.fleetIndex != nil {
