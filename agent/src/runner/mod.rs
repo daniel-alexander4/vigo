@@ -12,9 +12,11 @@ pub mod preempt;
 
 use crate::executors::{Action, Executor, ResourceResult};
 use crate::proto::Module;
+use crate::state::StateStore;
 use cache::ResultCache;
 use dag::{build_dag, needs_topo_sort, topo_sort, ResourceNode};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicI64, Ordering};
 use tracing::{debug, info, warn};
 
 /// Minimum free disk percentage on root filesystem before convergence is skipped.
@@ -80,6 +82,77 @@ fn extract_target_path(node: &ResourceNode) -> Option<String> {
         node.params.get("path").cloned()
     }
     .filter(|s| !s.is_empty())
+}
+
+/// Minimum interval between checksum-cache prune passes. Matches the gitback
+/// reactor's `PRUNE_INTERVAL` cadence — checksum-cache pruning runs in-line
+/// at the end of each successful converge, throttled here so high-frequency
+/// check-ins don't pay the LMDB scan every cycle.
+const CHECKSUMS_PRUNE_INTERVAL_SECS: i64 = 60;
+
+static LAST_CHECKSUMS_PRUNE_AT: AtomicI64 = AtomicI64::new(0);
+
+/// Collect the set of active managed file paths from a slice of modules.
+/// Mirrors [`extract_target_path`] semantics on the raw proto: `file` reads
+/// `target_path`, every other type reads `path`. Used to feed
+/// [`crate::state::ChecksumCache::prune_stale`] after each converge.
+fn active_target_paths(modules: &[Module]) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for m in modules {
+        for r in &m.resources {
+            let key = if r.r#type == "file" { "target_path" } else { "path" };
+            if let Some(p) = r.params.get(key) {
+                if !p.is_empty() {
+                    out.insert(p.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Best-effort: prune stale entries from the checksum cache against the
+/// just-converged active-paths set. Throttled to one pass per
+/// [`CHECKSUMS_PRUNE_INTERVAL_SECS`]. No-op when the state store isn't
+/// available or `modules` is empty — the latter guards against wiping the
+/// entire cache on a pre-policy CheckIn or bundle-eval failure.
+pub fn try_prune_stale_checksums(store: Option<&StateStore>, modules: &[Module]) {
+    let Some(store) = store else { return };
+    if modules.is_empty() {
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let last = LAST_CHECKSUMS_PRUNE_AT.load(Ordering::Relaxed);
+    if now.saturating_sub(last) < CHECKSUMS_PRUNE_INTERVAL_SECS {
+        return;
+    }
+
+    let active = active_target_paths(modules);
+    let active_refs: HashSet<&str> = active.iter().map(String::as_str).collect();
+
+    let mut wtxn = match store.write_txn() {
+        Ok(t) => t,
+        Err(e) => {
+            warn!(error = %e, "checksums prune: open write txn failed");
+            return;
+        }
+    };
+    match store.checksums.prune_stale(&mut wtxn, &active_refs) {
+        Ok(pruned) => {
+            if let Err(e) = wtxn.commit() {
+                warn!(error = %e, "checksums prune: commit failed");
+                return;
+            }
+            if pruned > 0 {
+                info!(target: "state.checksums", pruned, "pruned stale checksum entries");
+            }
+            LAST_CHECKSUMS_PRUNE_AT.store(now, Ordering::Relaxed);
+        }
+        Err(e) => warn!(error = %e, "checksums prune: prune_stale failed"),
+    }
 }
 
 /// Options for a convergence run.
@@ -1521,6 +1594,43 @@ mod tests {
             notify: vec![],
             subscribes: vec![],
         }
+    }
+
+    #[test]
+    fn active_target_paths_picks_correct_param() {
+        let mut file_params = std::collections::BTreeMap::new();
+        file_params.insert("target_path".to_string(), "/etc/nginx/nginx.conf".to_string());
+        let mut svc_params = std::collections::BTreeMap::new();
+        svc_params.insert("path".to_string(), "/usr/lib/systemd/system/nginx.service".to_string());
+        // Empty-string values should NOT count as active paths.
+        let mut empty_params = std::collections::BTreeMap::new();
+        empty_params.insert("target_path".to_string(), String::new());
+        // A resource type other than `file` that happens to have a `target_path`
+        // (e.g. `package` with an irrelevant field) must NOT contribute — the
+        // helper consults `path` for non-file types.
+        let mut pkg_params = std::collections::BTreeMap::new();
+        pkg_params.insert("target_path".to_string(), "/should/not/appear".to_string());
+
+        let modules = vec![Module {
+            name: "m1".to_string(),
+            resource_type: String::new(),
+            resources: vec![
+                Resource { name: "n".into(), r#type: "file".into(), params: file_params, when: String::new() },
+                Resource { name: "s".into(), r#type: "service".into(), params: svc_params, when: String::new() },
+                Resource { name: "e".into(), r#type: "file".into(), params: empty_params, when: String::new() },
+                Resource { name: "p".into(), r#type: "package".into(), params: pkg_params, when: String::new() },
+            ],
+            depends_on: vec![],
+            notify: vec![],
+            subscribes: vec![],
+        }];
+
+        let got = active_target_paths(&modules);
+        assert!(got.contains("/etc/nginx/nginx.conf"));
+        assert!(got.contains("/usr/lib/systemd/system/nginx.service"));
+        assert!(!got.contains(""));
+        assert!(!got.contains("/should/not/appear"));
+        assert_eq!(got.len(), 2);
     }
 
     #[test]

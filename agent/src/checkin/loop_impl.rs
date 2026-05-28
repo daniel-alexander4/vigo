@@ -285,6 +285,7 @@ fn converge(
     dry_run: bool,
     module_filter: Option<&str>,
     data_dir: &std::path::Path,
+    state_store: Option<&StateStore>,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
     for w in &resp.warnings {
@@ -455,6 +456,11 @@ fn converge(
 
     let results = runner::converge(&modules, executors, cache, &opts, traits_val, pkg_breaker);
 
+    // Cache hygiene: drop checksum entries for paths no longer in policy.
+    // Throttled to ~60s inside the helper; no-op on dry/observe runs is OK
+    // because the active-paths set still reflects current policy intent.
+    runner::try_prune_stale_checksums(state_store, &modules);
+
     Ok(RunResult {
         results,
         interval,
@@ -490,7 +496,7 @@ pub async fn run_once(
 ) -> Result<RunResult> {
     run_once_with_update(
         client, executors, traits_val, traits_json, cache, policy_state,
-        dry_run, module_filter, state_fingerprint, data_dir, None, None, None, pkg_breaker,
+        dry_run, module_filter, state_fingerprint, data_dir, None, None, None, None, pkg_breaker,
         "",
     ).await
 }
@@ -522,6 +528,7 @@ pub async fn run_once_with_update(
     update_cfg: Option<&UpdateConfig>,
     _peer_map: Option<&Arc<PeerMap>>,
     _manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
+    state_store: Option<&StateStore>,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
     server_pubkey_pem: &str,
 ) -> Result<RunResult> {
@@ -682,7 +689,7 @@ pub async fn run_once_with_update(
     }
 
     let rr = converge(
-        &resp, executors, traits_val, cache, policy_state, dry_run, module_filter, data_dir, pkg_breaker,
+        &resp, executors, traits_val, cache, policy_state, dry_run, module_filter, data_dir, state_store, pkg_breaker,
     )?;
 
     // Report results back to server (skip in dry-run mode).
@@ -999,6 +1006,7 @@ fn converge_local(
         false,
         None,
         data_dir,
+        Some(store),
         pkg_breaker,
     ) {
         Ok(rr) => {
@@ -1092,6 +1100,7 @@ pub async fn daemon_loop(
             update_cfg.as_ref(),
             peer_map.as_ref(),
             manifest.as_ref(),
+            state_store.as_deref(),
             &mut pkg_breaker,
             &server_pubkey_pem,
         )
@@ -1536,7 +1545,7 @@ async fn stream_loop(
     spawn_swarm(initial_resp);
     try_update!(initial_resp);
     match converge(
-        initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, pkg_breaker,
+        initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker,
     ) {
         Ok(rr) => {
             if !rr.results.is_empty() {
@@ -1638,7 +1647,7 @@ async fn stream_loop(
                         ..Default::default()
                     };
 
-                    match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
+                    match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker) {
                         Ok(rr) => {
                             if !rr.results.is_empty() {
                                 if use_delta {
@@ -1681,7 +1690,7 @@ async fn stream_loop(
                             }
                             spawn_swarm(&resp);
                             try_update!(resp);
-                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
                                         if use_delta {
@@ -1826,7 +1835,7 @@ async fn stream_loop(
                             }
                             spawn_swarm(&resp);
                             try_update!(resp);
-                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
                                         if use_delta {
