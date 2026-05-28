@@ -1373,6 +1373,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         swarm_tls.clone(),
         cancel.clone(),
         gitback_gate.clone(),
+        gitback_pubkey_cache.clone(),
+        gitback_peer_table.clone(),
+        gitback_claims.clone(),
     );
 
     // Curator subsystem — P2P artifact registry (ADR-024). The helper

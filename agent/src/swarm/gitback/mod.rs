@@ -113,6 +113,9 @@ pub fn spawn(
     tls: Option<crate::update::TlsCerts>,
     cancel: CancellationToken,
     gate: Gate,
+    peer_pubkey_cache: std::sync::Arc<peer_pubkey_cache::PeerPubkeyCache>,
+    peer_table: std::sync::Arc<peer_table::PeerTable>,
+    claims: receiver::ClaimsHandle,
 ) {
     info!(
         initial_gate = gate.enabled(),
@@ -151,7 +154,18 @@ pub fn spawn(
     tokio::spawn(run_catchup_reactor(cancel.clone(), tls));
 
     // 90-day reap.
-    tokio::spawn(run_reap_reactor(cancel));
+    tokio::spawn(run_reap_reactor(cancel.clone()));
+
+    // Prune reactor — bounds the four per-peer in-memory caches that
+    // otherwise grow with every unique announcer hostname seen. Each
+    // cache defines its own TTL constant; this reactor just drives
+    // the eviction on a periodic tick.
+    tokio::spawn(run_prune_reactor(
+        cancel,
+        peer_pubkey_cache,
+        peer_table,
+        claims,
+    ));
 }
 
 /// How often the sentinel reactor sweeps every user's
@@ -389,6 +403,64 @@ async fn run_reap_reactor(cancel: CancellationToken) {
                     Ok(0) => {}
                     Ok(n) => tracing::info!(reaped = n, "gitback: reaped expired envelopes"),
                     Err(e) => tracing::warn!(error = %e, "gitback reap reactor: error"),
+                }
+            }
+        }
+    }
+}
+
+/// How often the prune reactor evicts stale entries from the four
+/// per-peer in-memory caches (`PeerPubkeyCache`, `PeerTable`,
+/// `ProjectPeers`, `ClaimsHandle`). 60 s matches the lockbox
+/// `PRUNE_INTERVAL` so operators learn one cadence across all
+/// agent-side periodic batching.
+const PRUNE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Periodic eviction of stale per-peer in-memory state. Each of the
+/// four caches defines its own TTL — this reactor just drives them
+/// on a shared tick. Bounded memory under a peer-flood (e.g. burst
+/// loadtests, post-outage thundering herd) depends entirely on this
+/// running: the pre-fix design defined every prune function but
+/// wired none of them into a periodic task, so a 25K-envoy burst
+/// could leave a 3+ GB heap behind. See `tshoot/log.md` (the
+/// "vigo agent on danlap holds 3.5 GB RSS" investigation).
+async fn run_prune_reactor(
+    cancel: CancellationToken,
+    peer_pubkey_cache: std::sync::Arc<peer_pubkey_cache::PeerPubkeyCache>,
+    peer_table: std::sync::Arc<peer_table::PeerTable>,
+    claims: receiver::ClaimsHandle,
+) {
+    let mut tick = tokio::time::interval(PRUNE_INTERVAL);
+    tick.tick().await;
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => return,
+            _ = tick.tick() => {
+                let now_i64 = unix_seconds_now();
+                let now_u64 = now_i64 as u64;
+
+                let pubkey_cache_evicted =
+                    peer_pubkey_cache.gc(now_i64, peer_pubkey_cache::PUBKEY_CACHE_TTL_SECS);
+                let peer_table_evicted = peer_table.prune_expired_at(now_u64);
+                let project_peers_evicted = match project_peers::global() {
+                    Some(p) => p.prune_stale(now_i64),
+                    None => 0,
+                };
+                let claims_evicted = claims.prune_lan_expired(now_u64);
+
+                if pubkey_cache_evicted
+                    | peer_table_evicted
+                    | project_peers_evicted
+                    | claims_evicted
+                    != 0
+                {
+                    tracing::info!(
+                        peer_pubkeys = pubkey_cache_evicted,
+                        peer_table = peer_table_evicted,
+                        project_peers = project_peers_evicted,
+                        claims = claims_evicted,
+                        "gitback prune: evicted stale per-peer entries",
+                    );
                 }
             }
         }

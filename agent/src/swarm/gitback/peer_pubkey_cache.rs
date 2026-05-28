@@ -37,16 +37,35 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex;
 use tracing::{debug, info, warn};
 
-/// Cache file on disk. Root-owned, 0600. Reload on every startup;
-/// persist on every accepted mutation. Routes through
+/// Cache file on disk. Root-owned, 0600. Reload on every startup; persist
+/// is throttled — see [`PeerPubkeyCache::accept`]. Routes through
 /// [`crate::platform::paths::default_gitback_dir`] so `VIGO_GITBACK_DIR`
 /// is honored.
 pub fn cache_path() -> PathBuf {
     crate::platform::paths::default_gitback_dir().join("peer_pubkeys.json")
 }
+
+/// Minimum seconds between `accept`-triggered disk writes. In-memory
+/// updates are not throttled; only the serialize+write side is. Under
+/// burst peer-announcement load (measured: 135K announcements/day),
+/// per-mutation persist clones+serializes the full cache (~25 MB at
+/// 125K entries) and fragments the glibc heap up to peak usage —
+/// throttling collapses that to ≤1 write/minute. The trade-off is
+/// up-to-60 s of last_seen_unix data lost on crash, which is harmless
+/// against a 90-day [`PUBKEY_CACHE_TTL_SECS`] horizon and a TOFU model
+/// that re-accepts the same pubkey on next sighting anyway.
+const COALESCE_SECS: i64 = 60;
+
+/// Retention window for stale `(hostname → pubkey)` entries. Matches
+/// the lockbox tombstone window for the same "laptop parked for an
+/// extended trip" reasoning — short enough that genuinely-departed
+/// envoys eventually clear, long enough to cover real-world peer
+/// absences without breaking TOFU on return.
+pub const PUBKEY_CACHE_TTL_SECS: i64 = 90 * 24 * 60 * 60;
 
 /// Wire-format for the cache file. One entry per known hostname.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -65,6 +84,11 @@ struct Entry {
 /// In-memory TOFU cache.
 pub struct PeerPubkeyCache {
     inner: Mutex<Disk>,
+    /// Unix seconds of the most recent successful `accept`-triggered
+    /// persist. Read+updated under `Relaxed` ordering — coalescing
+    /// is best-effort; double-persist on a torn read costs at most one
+    /// extra write and never produces inconsistent state.
+    last_persisted_at: AtomicI64,
 }
 
 /// Result of a lookup. Drives the receiver's accept/reject decision.
@@ -87,6 +111,7 @@ impl PeerPubkeyCache {
     pub fn empty() -> Self {
         Self {
             inner: Mutex::new(Disk::default()),
+            last_persisted_at: AtomicI64::new(0),
         }
     }
 
@@ -118,6 +143,7 @@ impl PeerPubkeyCache {
                 );
                 Self {
                     inner: Mutex::new(disk),
+                    last_persisted_at: AtomicI64::new(0),
                 }
             }
             Err(e) => {
@@ -147,7 +173,13 @@ impl PeerPubkeyCache {
     }
 
     /// Record a successful sighting. On first sighting, creates the
-    /// entry; on repeat, refreshes `last_seen_unix`. Persists to disk.
+    /// entry; on repeat, refreshes `last_seen_unix`. In-memory update
+    /// always happens; persist is throttled to once per
+    /// [`COALESCE_SECS`] across all callers — see the constant's
+    /// comment for rationale and trade-off. The crash window applies
+    /// only to `last_seen_unix` refresh and to TOFU first-sightings
+    /// that haven't yet hit the next persist tick; both are recovered
+    /// on the peer's next announcement.
     pub fn accept(&self, hostname: &str, pubkey_hex: &str, now: i64) {
         let mut disk = self.inner.lock().expect("pubkey cache poisoned");
         disk.version = 1;
@@ -160,6 +192,17 @@ impl PeerPubkeyCache {
                 last_seen_unix: now,
             });
         entry.last_seen_unix = now;
+
+        if now - self.last_persisted_at.load(Ordering::Relaxed) < COALESCE_SECS {
+            return;
+        }
+        // Advance at attempt time, not success — under sustained disk
+        // failure (read-only fs, permission flip) advancing only on
+        // success would retry the persist on every mutation,
+        // re-introducing the per-mutation churn this throttle exists
+        // to prevent. The in-memory cache stays correct; disk lag
+        // grows by at most COALESCE_SECS between successful writes.
+        self.last_persisted_at.store(now, Ordering::Relaxed);
         let snapshot = disk.clone();
         drop(disk);
         if let Err(e) = persist(&snapshot) {
@@ -224,6 +267,36 @@ impl PeerPubkeyCache {
             drop(disk);
             let _ = persist(&snapshot);
         }
+    }
+
+    /// Evict entries whose `last_seen_unix` is older than
+    /// `now - retention_secs`. Persists synchronously when any entry
+    /// is removed so the on-disk file reflects the trimmed table
+    /// across restarts. Returns the number of entries removed.
+    ///
+    /// Called from the gitback prune reactor — see
+    /// [`super::run_prune_reactor`]. Sized to match TOFU semantics:
+    /// at [`PUBKEY_CACHE_TTL_SECS`] (90 days) a peer that's been
+    /// silent that long is treated as gone-for-good and its slot is
+    /// reclaimed; the next sighting re-TOFUs.
+    pub fn gc(&self, now: i64, retention_secs: i64) -> usize {
+        let mut disk = self.inner.lock().expect("pubkey cache poisoned");
+        let cutoff = now - retention_secs;
+        let before = disk.entries.len();
+        disk.entries.retain(|_, e| e.last_seen_unix >= cutoff);
+        let removed = before - disk.entries.len();
+        if removed == 0 {
+            return 0;
+        }
+        // Same attempt-time advance semantics as `accept` — see
+        // its comment for the sustained-failure rationale.
+        self.last_persisted_at.store(now, Ordering::Relaxed);
+        let snapshot = disk.clone();
+        drop(disk);
+        if let Err(e) = persist(&snapshot) {
+            debug!(error = %e, "gitback: peer pubkey cache persist after gc failed (continuing)");
+        }
+        removed
     }
 }
 
@@ -321,5 +394,93 @@ mod tests {
             Some(crate::platform::paths::default_gitback_dir()),
         );
         assert_eq!(p.file_name().and_then(|s| s.to_str()), Some("peer_pubkeys.json"));
+    }
+
+    // -----------------------------------------------------------------
+    // gc — evict entries past PUBKEY_CACHE_TTL_SECS.
+    // -----------------------------------------------------------------
+
+    /// Helper: read entries.len() through the public Check API would
+    /// require knowing every hostname, which defeats the test. Cheat
+    /// via the lock — same module, allowed.
+    fn entry_count(c: &PeerPubkeyCache) -> usize {
+        c.inner.lock().unwrap().entries.len()
+    }
+
+    #[test]
+    fn gc_evicts_entries_past_retention() {
+        let c = PeerPubkeyCache::empty();
+        // Three entries, last_seen at t=100. now=t+1d. retention=12h.
+        // All three should evict.
+        c.accept("a.example", "aa", 100);
+        c.accept("b.example", "bb", 100);
+        c.accept("c.example", "cc", 100);
+        assert_eq!(entry_count(&c), 3);
+
+        let removed = c.gc(100 + 86400, 12 * 3600);
+        assert_eq!(removed, 3);
+        assert_eq!(entry_count(&c), 0);
+    }
+
+    #[test]
+    fn gc_keeps_fresh_entries() {
+        let c = PeerPubkeyCache::empty();
+        c.accept("old.example", "aa", 100);
+        c.accept("fresh.example", "bb", 200);
+        // now=300, retention=120 → cutoff=180. only "old" evicts.
+        let removed = c.gc(300, 120);
+        assert_eq!(removed, 1);
+        assert_eq!(entry_count(&c), 1);
+        assert_eq!(c.check("fresh.example", "bb"), CheckOutcome::Match);
+        assert_eq!(c.check("old.example", "aa"), CheckOutcome::FirstSighting);
+    }
+
+    #[test]
+    fn gc_noop_when_all_fresh_returns_zero() {
+        let c = PeerPubkeyCache::empty();
+        c.accept("a.example", "aa", 1000);
+        c.accept("b.example", "bb", 1000);
+        let removed = c.gc(1100, 200);
+        assert_eq!(removed, 0);
+        assert_eq!(entry_count(&c), 2);
+    }
+
+    // -----------------------------------------------------------------
+    // accept persist throttle — in-memory update always fires; disk
+    // write is coalesced to ≤1 per COALESCE_SECS. Verified via the
+    // `last_persisted_at` timestamp it advances on a successful write.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn accept_throttles_persist_within_coalesce_window() {
+        let c = PeerPubkeyCache::empty();
+        // First accept at t=1000 (last_persisted_at starts at 0 →
+        // 1000-0 >= 60 → persists, advances to 1000).
+        c.accept("a.example", "aa", 1000);
+        let after_first = c.last_persisted_at.load(Ordering::Relaxed);
+        assert!(after_first >= 1000, "first persist must advance the timestamp");
+
+        // Two more accepts inside the 60s window — in-memory updates
+        // land but last_persisted_at MUST NOT move.
+        c.accept("b.example", "bb", 1010);
+        c.accept("c.example", "cc", 1059);
+        assert_eq!(c.last_persisted_at.load(Ordering::Relaxed), after_first);
+        // All three entries are in memory regardless.
+        assert_eq!(entry_count(&c), 3);
+        assert_eq!(c.check("b.example", "bb"), CheckOutcome::Match);
+        assert_eq!(c.check("c.example", "cc"), CheckOutcome::Match);
+    }
+
+    #[test]
+    fn accept_persists_after_coalesce_window_elapses() {
+        let c = PeerPubkeyCache::empty();
+        c.accept("a.example", "aa", 1000);
+        let after_first = c.last_persisted_at.load(Ordering::Relaxed);
+        // 60s+ later → persist fires again, timestamp moves.
+        c.accept("b.example", "bb", 1060);
+        assert!(
+            c.last_persisted_at.load(Ordering::Relaxed) > after_first,
+            "second persist past COALESCE_SECS must advance the timestamp",
+        );
     }
 }
