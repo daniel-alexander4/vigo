@@ -87,6 +87,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	// Slice 4).
 	configHandler := NewConfigHandler(queries, configStore, fleetIndex, publishState, publish.DefaultLiveDir, publish.DefaultHistoryDir)
 	configHandler.SetAuditWriter(aw)
+	configHandler.SetMetrics(m)
 	if assistant != nil {
 		configHandler.SetAI(assistant, config.AISection{Enabled: true})
 	}

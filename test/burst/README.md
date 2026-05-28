@@ -91,15 +91,16 @@ go run ./test/burst \
 The default phasing is:
 
 1. **Enroll** (serial; not measured)
-2. **Warmup** (60 s; not measured — cold connections + cold cache)
-3. **Baseline** (60 s; measured — steady-state CheckIn cycle, no-change responses)
-4. **Burst trigger** — REST `POST /api/v1/config/reload` with admin
+2. **Quiesce** (10 s default; `--enrollment-quiesce-sec 0` disables) — sleeps so the server's CSR-signing path settles before the first CheckIn dial. Without it ~80 % of the warmup `Unauthenticated` failures land in the cert-issuance race rather than reflecting a real server-side problem.
+3. **Warmup** (60 s; not measured — cold connections + cold cache)
+4. **Baseline** (60 s; measured — steady-state CheckIn cycle, no-change responses)
+5. **Burst trigger** — REST `POST /api/v1/config/reload` with admin
    token bumps the server's config version + secrets_epoch. Every
    envoy's next CheckIn sees a stale `state_fingerprint` and gets a
    fresh bundle.
-5. **Burst-settle** (180 s; measured per-second) — captures the spike
+6. **Burst-settle** (180 s; measured per-second) — captures the spike
    and the recovery curve.
-6. **Cooldown** (30 s; measured) — confirms steady-state returned.
+7. **Cooldown** (30 s; measured) — confirms steady-state returned.
 
 ## Output
 

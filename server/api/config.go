@@ -18,6 +18,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/publish"
 )
 
@@ -71,8 +72,9 @@ type ConfigHandler struct {
 	assistant          *ai.Assistant  // nil when AI is not enabled
 	auditWriter        auditRecorder  // nil-safe tamper-evident audit writer
 	publishState       *publish.State // freeze deadline owner; required for Freeze/Unfreeze
-	liveDir            string         // .live/ path for rollback
-	historyDir         string         // history dir for rollback / list-versions
+	metrics            *metrics.Metrics
+	liveDir            string // .live/ path for rollback
+	historyDir         string // history dir for rollback / list-versions
 }
 
 // NewConfigHandler creates a ConfigHandler. publishState carries the
@@ -107,6 +109,12 @@ func (h *ConfigHandler) SetConvergenceMonitor(monitor *publish.ConvergenceMonito
 // SetAuditWriter attaches the tamper-evident audit writer.
 func (h *ConfigHandler) SetAuditWriter(w auditRecorder) {
 	h.auditWriter = w
+}
+
+// SetMetrics attaches the per-instance prometheus collectors so publish
+// reloads can be counted for dashboard annotation.
+func (h *ConfigHandler) SetMetrics(m *metrics.Metrics) {
+	h.metrics = m
 }
 
 // SetAI attaches the AI assistant and config for retraction support.
@@ -188,6 +196,9 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	if err := h.configStore.Reload(); err != nil {
 		writeError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
 		return
+	}
+	if h.metrics != nil {
+		h.metrics.ConfigPublishesTotal.Inc()
 	}
 
 	// Start blast-radius compliance monitor if threshold is configured.

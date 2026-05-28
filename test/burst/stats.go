@@ -94,14 +94,14 @@ func (f *failureBreakdown) Snapshot() map[string]int64 {
 // failureBreakdown.SwapPerSecond; the cumulative-by-code totals stay
 // in summary.json.
 type secondSample struct {
-	elapsedSec int
-	throughput int64
+	elapsedSec          int
+	throughput          int64
 	p50, p95, p99, p999 int64 // nanoseconds
-	maxObserved  int64        // upper bound of highest non-empty bucket
-	failUnauth   int64
-	failDeadline int64
-	failOther    int64
-	phase        string // "warmup", "baseline", "burst", "cooldown"
+	maxObserved         int64 // upper bound of highest non-empty bucket
+	failUnauth          int64
+	failDeadline        int64
+	failOther           int64
+	phase               string // "warmup", "baseline", "burst", "cooldown"
 }
 
 // secondSeries is the time-series sink. Each tick the per-second
@@ -117,8 +117,9 @@ func (s *secondSeries) Append(sample secondSample) {
 }
 
 // WriteCSV dumps the series to a writer. Columns:
-//   elapsed_sec, phase, throughput, p50_ms, p95_ms, p99_ms, p999_ms,
-//   max_ms, fail_unauth, fail_deadline, fail_other
+//
+//	elapsed_sec, phase, throughput, p50_ms, p95_ms, p99_ms, p999_ms,
+//	max_ms, fail_unauth, fail_deadline, fail_other
 func (s *secondSeries) WriteCSV(w io.Writer) error {
 	cw := csv.NewWriter(w)
 	defer cw.Flush()
@@ -375,29 +376,30 @@ func writeManifest(path string, m manifest) error {
 }
 
 type manifest struct {
-	ToolVersion         string            `json:"tool_version"`
-	StartedUTC          time.Time         `json:"started_utc"`
-	Hostname            string            `json:"hostname"`
-	OS                  string            `json:"os"`
-	ServerAddr          string            `json:"server_addr"`
-	APIAddr             string            `json:"api_addr"`
-	ServerContainer     string            `json:"server_container,omitempty"`
-	EnvoyCount          int               `json:"envoy_count"`
-	Interval            string            `json:"interval"`
-	WarmupSec           int               `json:"warmup_sec"`
-	BaselineSec         int               `json:"baseline_sec"`
-	BurstSettleSec      int               `json:"burst_settle_sec"`
-	CooldownSec         int               `json:"cooldown_sec"`
-	Trials              int               `json:"trials"`
-	HostnamePrefix      string            `json:"hostname_prefix"`
-	CLIArgs             []string          `json:"cli_args"`
-	ServerYAMLSHA256    string            `json:"server_yaml_sha256,omitempty"`
-	VigoVersion         string            `json:"vigo_version,omitempty"`
-	SLABaselineP99Ms    int64             `json:"sla_baseline_p99_ms,omitempty"`
-	SLASettleSec        int               `json:"sla_settle_sec,omitempty"`
-	SLAFailureRate      float64           `json:"sla_failure_rate,omitempty"`
-	Notes               string            `json:"notes,omitempty"`
-	Extra               map[string]string `json:"extra,omitempty"`
+	ToolVersion          string            `json:"tool_version"`
+	StartedUTC           time.Time         `json:"started_utc"`
+	Hostname             string            `json:"hostname"`
+	OS                   string            `json:"os"`
+	ServerAddr           string            `json:"server_addr"`
+	APIAddr              string            `json:"api_addr"`
+	ServerContainer      string            `json:"server_container,omitempty"`
+	EnvoyCount           int               `json:"envoy_count"`
+	Interval             string            `json:"interval"`
+	EnrollmentQuiesceSec int               `json:"enrollment_quiesce_sec"`
+	WarmupSec            int               `json:"warmup_sec"`
+	BaselineSec          int               `json:"baseline_sec"`
+	BurstSettleSec       int               `json:"burst_settle_sec"`
+	CooldownSec          int               `json:"cooldown_sec"`
+	Trials               int               `json:"trials"`
+	HostnamePrefix       string            `json:"hostname_prefix"`
+	CLIArgs              []string          `json:"cli_args"`
+	ServerYAMLSHA256     string            `json:"server_yaml_sha256,omitempty"`
+	VigoVersion          string            `json:"vigo_version,omitempty"`
+	SLABaselineP99Ms     int64             `json:"sla_baseline_p99_ms,omitempty"`
+	SLASettleSec         int               `json:"sla_settle_sec,omitempty"`
+	SLAFailureRate       float64           `json:"sla_failure_rate,omitempty"`
+	Notes                string            `json:"notes,omitempty"`
+	Extra                map[string]string `json:"extra,omitempty"`
 }
 
 // fmtDuration is a short readable form (e.g. "247ms", "1.4s", "12.7s").

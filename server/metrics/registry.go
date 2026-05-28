@@ -39,6 +39,14 @@ type Metrics struct {
 	GRPCRequestsTotal      *prometheus.CounterVec
 	GRPCRequestDuration    *prometheus.HistogramVec
 	GRPCTLSHandshakesTotal *prometheus.CounterVec
+	GRPCCheckInInFlight    prometheus.Gauge
+
+	// --- Policy delivery ---
+
+	PolicyBundleBytesTotal *prometheus.CounterVec
+	PolicyBundleSizeBytes  *prometheus.HistogramVec
+	ForcePushesTotal       *prometheus.CounterVec
+	ConfigPublishesTotal   prometheus.Counter
 
 	// --- Orchestration ---
 
@@ -66,9 +74,9 @@ type Metrics struct {
 
 	// --- FleetIndex ---
 
-	FleetIndexFlushDuration   prometheus.Histogram
-	FleetIndexDirtyCount      prometheus.Gauge
-	FleetIndexDrainDirtyLock  prometheus.Histogram
+	FleetIndexFlushDuration  prometheus.Histogram
+	FleetIndexDirtyCount     prometheus.Gauge
+	FleetIndexDrainDirtyLock prometheus.Histogram
 
 	// --- Bootstrap ---
 
@@ -243,6 +251,30 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_grpc_tls_handshakes_total",
 			Help: "TLS handshakes completed on the gRPC listener, by outcome. A non-trivial steady-state rate after the fleet has settled indicates connection churn (silent gRPC subchannel reconnects, agent restarts, or enrollment).",
 		}, []string{"status"}),
+		GRPCCheckInInFlight: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_grpc_checkin_in_flight",
+			Help: "Concurrent VigoAgent.CheckIn handlers currently executing. Sustained climb under burst signals queueing past server capacity — the leading edge of cascading overload.",
+		}),
+
+		// --- Policy delivery ---
+
+		PolicyBundleBytesTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_policy_bundle_bytes_total",
+			Help: "Total bytes of policy bundles emitted to agents, by delivery method.",
+		}, []string{"method"}),
+		PolicyBundleSizeBytes: f.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "vigo_policy_bundle_size_bytes",
+			Help:    "Per-response policy bundle size in bytes (proto-encoded), by delivery method.",
+			Buckets: []float64{1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216},
+		}, []string{"method"}),
+		ForcePushesTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_force_pushes_total",
+			Help: "Force-push messages successfully dispatched to connected agent streams, by scope (single|all).",
+		}, []string{"scope"}),
+		ConfigPublishesTotal: f.NewCounter(prometheus.CounterOpts{
+			Name: "vigo_config_publishes_total",
+			Help: "Successful config reloads triggered by a publish. Use as the annotation source for publish-correlated dashboard panels.",
+		}),
 
 		// --- Orchestration ---
 

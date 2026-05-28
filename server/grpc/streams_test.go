@@ -11,6 +11,7 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/metrics"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func testMsg(pushID string) *pb.ServerStreamMessage {
@@ -277,5 +278,46 @@ func TestStreamPromotionTimeoutClearsFlag(t *testing.T) {
 	sm.mu.RUnlock()
 	if len(pending) != 0 {
 		t.Fatalf("expected no pending entries, got %d", len(pending))
+	}
+}
+
+func TestForcePushIncrementsCounterByScope(t *testing.T) {
+	fi := fleet.NewFleetIndex()
+	for _, id := range []string{"e1", "e2", "e3"} {
+		fi.AddEnvoy(fleet.EnvoyState{ID: id, Hostname: id + ".example.com"}, nil)
+	}
+
+	m := metrics.NewTestMetrics()
+	sm := newStreamManager(8, fi, m, 5*time.Second)
+
+	// Register three streams so broadcast has something to land on.
+	for _, id := range []string{"e1", "e2", "e3"} {
+		_, cleanup := sm.register(id, id+".example.com")
+		defer cleanup()
+	}
+
+	// Single-envoy push.
+	if got := sm.forcePush("e1"); got != 1 {
+		t.Fatalf("single forcePush returned %d, want 1", got)
+	}
+	if got := testutil.ToFloat64(m.ForcePushesTotal.WithLabelValues("single")); got != 1 {
+		t.Errorf("ForcePushesTotal{scope=single} = %v, want 1", got)
+	}
+
+	// Broadcast push.
+	if got := sm.forcePush(""); got != 3 {
+		t.Fatalf("broadcast forcePush returned %d, want 3", got)
+	}
+	if got := testutil.ToFloat64(m.ForcePushesTotal.WithLabelValues("all")); got != 3 {
+		t.Errorf("ForcePushesTotal{scope=all} = %v, want 3", got)
+	}
+
+	// Push to an envoy with no registered stream — counter must not move.
+	before := testutil.ToFloat64(m.ForcePushesTotal.WithLabelValues("single"))
+	if got := sm.forcePush("nonexistent"); got != 0 {
+		t.Fatalf("forcePush to unknown returned %d, want 0", got)
+	}
+	if after := testutil.ToFloat64(m.ForcePushesTotal.WithLabelValues("single")); after != before {
+		t.Errorf("counter moved on unsuccessful push: before=%v after=%v", before, after)
 	}
 }

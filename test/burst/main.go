@@ -50,6 +50,7 @@ func main() {
 	apiAddr := flag.String("api", "https://localhost:8443", "REST API base (used for enroll + cleanup + reload trigger)")
 	count := flag.Int("count", 1000, "number of simulated envoys")
 	interval := flag.Duration("interval", 5*time.Second, "per-envoy CheckIn interval")
+	enrollmentQuiesceSec := flag.Int("enrollment-quiesce-sec", 10, "seconds to sleep between enrollment and the first CheckIn dial; lets the server's CSR-signing path settle so loadtest envoys don't race their first CheckIn against cert issuance")
 	warmupSec := flag.Int("warmup", 60, "warmup phase (seconds) — discarded from baseline percentiles")
 	baselineSec := flag.Int("baseline", 60, "baseline phase (seconds) — measured steady-state")
 	burstSettleSec := flag.Int("burst-settle", 180, "post-burst phase (seconds) — captures the spike and recovery")
@@ -82,28 +83,29 @@ func main() {
 
 	cli := append([]string{}, os.Args[1:]...)
 	man := manifest{
-		ToolVersion:      toolVersion,
-		StartedUTC:       time.Now().UTC(),
-		Hostname:         hostnameOrUnknown(),
-		OS:               runtime.GOOS + "/" + runtime.GOARCH,
-		ServerAddr:       *grpcAddr,
-		APIAddr:          *apiAddr,
-		ServerContainer:  *serverContainer,
-		EnvoyCount:       *count,
-		Interval:         interval.String(),
-		WarmupSec:        *warmupSec,
-		BaselineSec:      *baselineSec,
-		BurstSettleSec:   *burstSettleSec,
-		CooldownSec:      *cooldownSec,
-		Trials:           *trials,
-		HostnamePrefix:   *hostnamePrefix,
-		CLIArgs:          cli,
-		ServerYAMLSHA256: serverYAMLHash(ctx, *serverContainer),
-		VigoVersion:      vigoVersion(ctx, *serverContainer),
-		SLABaselineP99Ms: slaBaselineP99.Milliseconds(),
-		SLASettleSec:     *slaSettleSec,
-		SLAFailureRate:   *slaFailureRate,
-		Notes:            *notes,
+		ToolVersion:          toolVersion,
+		StartedUTC:           time.Now().UTC(),
+		Hostname:             hostnameOrUnknown(),
+		OS:                   runtime.GOOS + "/" + runtime.GOARCH,
+		ServerAddr:           *grpcAddr,
+		APIAddr:              *apiAddr,
+		ServerContainer:      *serverContainer,
+		EnvoyCount:           *count,
+		Interval:             interval.String(),
+		EnrollmentQuiesceSec: *enrollmentQuiesceSec,
+		WarmupSec:            *warmupSec,
+		BaselineSec:          *baselineSec,
+		BurstSettleSec:       *burstSettleSec,
+		CooldownSec:          *cooldownSec,
+		Trials:               *trials,
+		HostnamePrefix:       *hostnamePrefix,
+		CLIArgs:              cli,
+		ServerYAMLSHA256:     serverYAMLHash(ctx, *serverContainer),
+		VigoVersion:          vigoVersion(ctx, *serverContainer),
+		SLABaselineP99Ms:     slaBaselineP99.Milliseconds(),
+		SLASettleSec:         *slaSettleSec,
+		SLAFailureRate:       *slaFailureRate,
+		Notes:                *notes,
 	}
 
 	if *outputDir != "" {
@@ -143,6 +145,21 @@ func main() {
 		cleaned := cleanupEnvoys(tlsClient, *apiAddr, *adminToken, envoys)
 		fmt.Printf("  deleted %d/%d\n", cleaned, len(envoys))
 	}()
+
+	// Quiesce the cert/signing race: enrollment returns as soon as Register
+	// records the pubkey, but the CSR-signing path inside the server may
+	// still be settling when the first CheckIn fires. Without this pause
+	// 80%+ of warmup-phase `Unauthenticated` failures land in the cert
+	// issuance gap rather than reflecting a real server-side problem.
+	if *enrollmentQuiesceSec > 0 {
+		quiesce := time.Duration(*enrollmentQuiesceSec) * time.Second
+		fmt.Printf("quiescing %v for CSR signing to settle...\n\n", quiesce)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(quiesce):
+		}
+	}
 
 	var allTrials []trialResult
 	for t := 1; t <= *trials; t++ {

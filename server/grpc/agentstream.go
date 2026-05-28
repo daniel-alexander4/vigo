@@ -24,6 +24,7 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // AgentStream handles a persistent bidirectional stream with an agent.
@@ -710,6 +711,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			slog.Error("failed to sign policy bundle", "envoy_id", envoyID, "error", err)
 		}
 	}
+
+	method := "checkin_unary"
+	if streaming {
+		method = "checkin_stream"
+	}
+	bundleBytes := float64(proto.Size(bundle))
+	s.metrics.PolicyBundleBytesTotal.WithLabelValues(method).Add(bundleBytes)
+	s.metrics.PolicyBundleSizeBytes.WithLabelValues(method).Observe(bundleBytes)
 
 	s.metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
 

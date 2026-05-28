@@ -12,9 +12,11 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/publish"
 )
 
@@ -45,6 +47,35 @@ func TestConfig_GetStatus_Healthy(t *testing.T) {
 		t.Error("expected last_reload_at to be a non-empty RFC3339 timestamp")
 	} else if _, err := time.Parse(time.RFC3339, resp["last_reload_at"].(string)); err != nil {
 		t.Errorf("last_reload_at not RFC3339: %v", err)
+	}
+}
+
+func TestConfig_ReloadConfig_IncrementsPublishCounter(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	configStore := newDoctorTestConfigStore(t)
+
+	handler := NewConfigHandler(queries, configStore, fleet.NewFleetIndex(), &publish.State{}, "", "")
+	m := metrics.NewTestMetrics()
+	handler.SetMetrics(m)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/api/v1/config/reload", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := testutil.ToFloat64(m.ConfigPublishesTotal); got != 1 {
+		t.Errorf("ConfigPublishesTotal = %v, want 1 after one successful reload", got)
+	}
+
+	// Second reload — counter should advance to 2.
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(httptest.NewRequest("POST", "/api/v1/config/reload", nil)))
+	if got := testutil.ToFloat64(m.ConfigPublishesTotal); got != 2 {
+		t.Errorf("ConfigPublishesTotal = %v after second reload, want 2", got)
 	}
 }
 

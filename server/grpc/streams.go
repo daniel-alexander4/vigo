@@ -223,6 +223,7 @@ func (sm *streamManager) forcePush(envoyID string) int {
 		}
 		select {
 		case as.send <- msg:
+			sm.metrics.ForcePushesTotal.WithLabelValues("single").Inc()
 			return 1
 		default:
 			return 0
@@ -238,6 +239,9 @@ func (sm *streamManager) forcePush(envoyID string) int {
 			count++
 		default:
 		}
+	}
+	if count > 0 {
+		sm.metrics.ForcePushesTotal.WithLabelValues("all").Add(float64(count))
 	}
 	return count
 }

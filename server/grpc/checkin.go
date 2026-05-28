@@ -9,11 +9,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/registry"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,6 +36,9 @@ func clampReportedCycle(deltaMs uint32) uint32 {
 // agent-side evaluation. The server never renders templates or evaluates
 // conditionals — the agent does that locally with its own traits.
 func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb.CheckInResponse, error) {
+	s.metrics.GRPCCheckInInFlight.Inc()
+	defer s.metrics.GRPCCheckInInFlight.Dec()
+
 	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}

@@ -23,6 +23,9 @@ func TestAllMetricsRegistered(t *testing.T) {
 	m.SigVerifyFailed.WithLabelValues("test").Add(0)
 	m.GRPCRequestsTotal.WithLabelValues("test", "test").Add(0)
 	m.GRPCRequestDuration.WithLabelValues("test").Observe(0)
+	m.PolicyBundleBytesTotal.WithLabelValues("test").Add(0)
+	m.PolicyBundleSizeBytes.WithLabelValues("test").Observe(0)
+	m.ForcePushesTotal.WithLabelValues("test").Add(0)
 	m.TaskRunsTotal.WithLabelValues("test").Add(0)
 	m.WorkflowRunsTotal.WithLabelValues("test").Add(0)
 	m.WebhookDeliveriesTotal.WithLabelValues("test").Add(0)
@@ -62,6 +65,11 @@ func TestAllMetricsRegistered(t *testing.T) {
 		// New metrics.
 		"vigo_grpc_requests_total",
 		"vigo_grpc_request_duration_seconds",
+		"vigo_grpc_checkin_in_flight",
+		"vigo_policy_bundle_bytes_total",
+		"vigo_policy_bundle_size_bytes",
+		"vigo_force_pushes_total",
+		"vigo_config_publishes_total",
 		"vigo_task_runs_total",
 		"vigo_workflow_runs_total",
 		"vigo_webhook_deliveries_total",
