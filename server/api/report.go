@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/audit"
@@ -30,6 +31,51 @@ type ReportHandler struct {
 	version        string
 	docsResolver   DocsResolver  // nil-safe; flips documented-scope controls to covered when set
 	auditWriterRef auditRecorder // nil-safe; records bundle-download events
+
+	// auditStatusCache memoises audit.Verify results across hot-path
+	// score-computation calls. The verify reads + rehashes every
+	// audit_entries row — O(N) — and was previously called per
+	// framework score (21× per PersistComplianceSnapshot run). Caching
+	// with a short TTL amortises the cost: first caller per window
+	// pays, the rest read from memory. The on-demand
+	// /api/v1/audit/verify REST endpoint (server/api/audit.go) is
+	// unaffected — it calls audit.Verify directly for fresh results.
+	auditStatusCache auditStatusCache
+}
+
+// auditStatusCacheTTL bounds how stale a cached audit-chain status can
+// be before the next access triggers a fresh verify. Five minutes is
+// long enough to amortise across a snapshotter loop or a burst of
+// score requests but short enough that tampering surfaces within an
+// operationally tight window.
+const auditStatusCacheTTL = 5 * time.Minute
+
+type auditStatusCache struct {
+	mu       sync.Mutex
+	status   AuditChainStatus
+	cachedAt time.Time
+}
+
+// cachedAuditStatus returns the most recently verified audit chain
+// status, refreshing in-place when the cached value is older than
+// auditStatusCacheTTL. On verify error the stale value is preserved
+// (stale-but-known beats fresh-but-error for a UI status badge); the
+// next call retries the verify.
+func (h *ReportHandler) cachedAuditStatus(ctx context.Context) AuditChainStatus {
+	h.auditStatusCache.mu.Lock()
+	defer h.auditStatusCache.mu.Unlock()
+	if !h.auditStatusCache.cachedAt.IsZero() && time.Since(h.auditStatusCache.cachedAt) < auditStatusCacheTTL {
+		return h.auditStatusCache.status
+	}
+	if v, err := audit.Verify(ctx, h.queries); err == nil {
+		h.auditStatusCache.status = AuditChainStatus{
+			Valid:      v.Valid,
+			EntryCount: v.EntryCount,
+			Error:      v.Error,
+		}
+		h.auditStatusCache.cachedAt = time.Now()
+	}
+	return h.auditStatusCache.status
 }
 
 // DocsResolver answers questions about operator-uploaded compliance
@@ -564,13 +610,7 @@ func (h *ReportHandler) ComputeFrameworkScore(r *http.Request, slug string) (*Fr
 // an *http.Request (the daily snapshot job in server/main.go). Performs
 // its own audit-chain lookup.
 func (h *ReportHandler) ComputeFrameworkScoreCtx(ctx context.Context, slug string) (*FrameworkScore, bool) {
-	var as AuditChainStatus
-	if v, err := audit.Verify(ctx, h.queries); err == nil {
-		as.Valid = v.Valid
-		as.EntryCount = v.EntryCount
-		as.Error = v.Error
-	}
-	return h.computeFrameworkScore(ctx, as, slug)
+	return h.computeFrameworkScore(ctx, h.cachedAuditStatus(ctx), slug)
 }
 
 func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChainStatus, slug string) (*FrameworkScore, bool) {
@@ -996,14 +1036,10 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		pct = float64(summary.Converged) / float64(total) * 100
 	}
 
-	// Audit chain verification.
-	var auditStatus AuditChainStatus
-	verifyResult, err := audit.Verify(r.Context(), h.queries)
-	if err == nil {
-		auditStatus.Valid = verifyResult.Valid
-		auditStatus.EntryCount = verifyResult.EntryCount
-		auditStatus.Error = verifyResult.Error
-	}
+	// Audit chain verification — cached at the report-handler layer to
+	// avoid re-reading every audit_entries row per render. See
+	// cachedAuditStatus on ReportHandler.
+	auditStatus := h.cachedAuditStatus(r.Context())
 
 	// Build a set of control IDs for this framework to measure coverage.
 	controlSet := make(map[string]bool, len(controls))
@@ -1511,15 +1547,11 @@ func (h *ReportHandler) serveFrameworkReport(w http.ResponseWriter, r *http.Requ
 	enc.Encode(report)
 }
 
-// auditStatusFromRequest verifies the audit chain and returns the status.
+// auditStatusFromRequest returns the cached audit-chain status. Reads
+// from the per-handler 5-minute TTL cache — see cachedAuditStatus on
+// ReportHandler.
 func (h *ReportHandler) auditStatusFromRequest(r *http.Request) AuditChainStatus {
-	var s AuditChainStatus
-	if v, err := audit.Verify(r.Context(), h.queries); err == nil {
-		s.Valid = v.Valid
-		s.EntryCount = v.EntryCount
-		s.Error = v.Error
-	}
-	return s
+	return h.cachedAuditStatus(r.Context())
 }
 
 func (h *ReportHandler) handleHITRUSTReport(w http.ResponseWriter, r *http.Request) {
@@ -4448,4 +4480,71 @@ func renderExecutiveHTML(w http.ResponseWriter, r *ExecutiveReport) {
 	// Footer.
 	fmt.Fprintf(w, `<div class="footer">Vigo Executive Compliance Summary &mdash; Generated %s &mdash; %s</div>
 </body></html>`, r.GeneratedAt, html.EscapeString(r.GeneratedBy))
+}
+
+// PersistComplianceSnapshot writes per-framework standards compliance
+// scores to the compliance_history table through the unified scorer
+// (ComputeFrameworkScoreCtx) so snapshot numbers stay consistent with
+// every live UI page. Called daily by the snapshotter loop and on every
+// successful config publish via ConfigHandler.snapshotCompliance. The
+// (snapshot_date, framework) UPSERT key means multiple invocations on
+// the same day overwrite rather than duplicate — the most recent run
+// wins, which is what the dashboard summary reads.
+func (h *ReportHandler) PersistComplianceSnapshot(ctx context.Context) {
+	if h.configStore == nil {
+		return
+	}
+	type fwEntry struct {
+		name        string
+		slug        string
+		standardKey string
+	}
+	fwDefs := []fwEntry{
+		{"HIPAA", "compliance", "hipaa"},
+		{"HITRUST CSF", "hitrust", "hitrust"},
+		{"SOC 2", "soc2", "soc2"},
+		{"PCI DSS v4.0", "pci", "pci-dss"},
+		{"NIST 800-53", "nist", "nist-800-53"},
+		{"ISO 27001", "iso27001", "iso-27001"},
+		{"GDPR", "gdpr", "gdpr"},
+		{"NERC CIP", "nerccip", "nerc-cip"},
+		{"Cyber Essentials+", "cyberessentials", "cyber-essentials"},
+		{"IEC 62443", "iec62443", "iec-62443"},
+		{"SOX", "sox", "sox"},
+		{"FINRA", "finra", "finra"},
+		{"MiFID II", "mifid2", "mifid2"},
+		{"CCSS", "ccss", "ccss"},
+		{"FDA 21 CFR Part 11", "fda21cfr11", "fda-21cfr11"},
+		{"Gaming Commission", "gaming", "gaming"},
+		{"CIS Windows", "ciswindows", "cis-windows"},
+		{"CIS Ubuntu", "cisubuntu", "cis-ubuntu"},
+		{"CIS RHEL", "cisrhel", "cis-rhel"},
+		{"ABA Cybersecurity", "abacyber", "aba-cyber"},
+		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber", "ny-dfs-cyber"},
+	}
+	recorded := 0
+	for _, fw := range fwDefs {
+		if !h.configStore.IsStandardEnabled(fw.standardKey) {
+			continue
+		}
+		score, ok := h.ComputeFrameworkScoreCtx(ctx, fw.slug)
+		if !ok {
+			slog.Warn("compliance snapshot: scorer returned not-ok", "framework", fw.name, "slug", fw.slug)
+			continue
+		}
+		if err := h.queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
+			Framework:     fw.name,
+			ScorePercent:  score.Fleet.CoveragePercent,
+			Satisfied:     int64(score.Fleet.Covered),
+			Waived:        int64(score.Fleet.Waived),
+			Partial:       int64(score.Fleet.Partial),
+			NotSatisfied:  int64(score.Fleet.Missing),
+			TotalControls: int64(score.Total),
+		}); err != nil {
+			slog.Error("failed to persist compliance snapshot", "framework", fw.name, "error", err)
+			continue
+		}
+		recorded++
+	}
+	slog.Info("compliance snapshot recorded", "frameworks", recorded)
 }
