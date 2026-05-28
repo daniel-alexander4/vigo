@@ -517,11 +517,11 @@ func funcMap() template.FuncMap {
 		"severityLabel": func(s fleetpressure.Severity) string {
 			switch s {
 			case fleetpressure.Fail:
-				return "Fail"
+				return "Failing"
 			case fleetpressure.Warn:
-				return "Warn"
+				return "Degraded"
 			case fleetpressure.OK:
-				return "OK"
+				return "Healthy"
 			default:
 				return "—"
 			}
@@ -560,6 +560,25 @@ func funcMap() template.FuncMap {
 				return "status-pill status-pill--converged"
 			default:
 				return "badge badge--unknown"
+			}
+		},
+		// metricPillClass maps a fleetpressure.Severity to a status-pill
+		// class for inline metric values on the per-envoy Agent Health
+		// card. Unknown collapses to status-pill--no-data (neutral
+		// surface tint) so a missing metric reads as data-absent rather
+		// than an opinion. Always returns a status-pill class (never
+		// falls through to .badge) so every metric pill in the grid
+		// has identical geometry.
+		"metricPillClass": func(s fleetpressure.Severity) string {
+			switch s {
+			case fleetpressure.Fail:
+				return "status-pill status-pill--failed"
+			case fleetpressure.Warn:
+				return "status-pill status-pill--degraded"
+			case fleetpressure.OK:
+				return "status-pill status-pill--converged"
+			default:
+				return "status-pill status-pill--no-data"
 			}
 		},
 		// humanFDPct renders a host_self.fd_pct float with one decimal

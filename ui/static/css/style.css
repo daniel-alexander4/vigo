@@ -4918,66 +4918,99 @@ a.server-config-card:hover {
     flex-wrap: wrap;
     margin-bottom: 6px;
 }
-.agent-health-banner__title { margin: 0; font-size: 18px; }
+.agent-health-banner__title { margin: 0; font-size: 18px; cursor: help; }
 .agent-health-banner__summary {
     margin: 0;
     font-size: 14px;
     color: var(--color-text);
 }
-.agent-health-banner__hint {
-    margin: 4px 0 0;
+.agent-health-banner__link {
+    margin-left: auto;
     font-size: 12px;
-    color: var(--color-text-muted);
+    color: var(--color-text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    white-space: nowrap;
 }
+.agent-health-banner__link:hover { color: var(--color-primary); }
 
-.agent-health-grid {
+/* Three labeled subject groups (Agent Process / Host Pressure / Disk &
+   Repos) laid out side by side at desktop with a vertical separator
+   between adjacent groups. auto-fit + minmax keeps the column count
+   responsive: 3 cols at desktop, 2 at tablet, 1 at narrow. */
+.agent-health-groups {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0;
-    padding: 0;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    padding: 16px 24px;
 }
 .agent-health-group {
-    padding: 16px 24px;
-    border-right: 1px solid var(--color-border);
+    padding: 0 20px;
+    border-left: 1px solid var(--color-border);
+    min-width: 0;
 }
-.agent-health-group:last-child { border-right: none; }
+.agent-health-group:first-child { padding-left: 0; border-left: none; }
+.agent-health-group:last-child  { padding-right: 0; }
+
+/* When the grid wraps onto a second row, the first item of each row
+   would still show a stale left-border. Reset borders inside the wrap
+   by repainting at each viewport step. */
+@media (max-width: 1100px) {
+    .agent-health-group:nth-child(odd)  { padding-left: 0;  border-left: none; }
+    .agent-health-group:nth-child(even) { padding-right: 0; }
+}
+@media (max-width: 700px) {
+    .agent-health-group {
+        padding: 0;
+        border-left: none;
+        border-top: 1px solid var(--color-border);
+        padding-top: 12px;
+        margin-top: 12px;
+    }
+    .agent-health-group:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+}
+
 .agent-health-group__title {
-    margin: 0 0 10px;
-    font-size: 12px;
+    margin: 0 0 8px 0;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.5px;
     color: var(--color-text-muted);
     font-weight: 600;
 }
 
 .agent-health-kv {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    column-gap: 16px;
-    row-gap: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin: 0;
 }
-.agent-health-kv dt {
-    font-size: 13px;
-    color: var(--color-text);
-    align-self: baseline;
+.agent-health-kv__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
 }
-.agent-health-kv dt code {
+.agent-health-kv__row dt {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    min-width: 0;
+}
+.agent-health-kv__row dt code {
     font-size: 12px;
     background: var(--color-muted-bg, transparent);
     padding: 0 4px;
     border-radius: 3px;
 }
-.agent-health-kv dd {
-    margin: 0;
-    font-size: 13px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    align-self: baseline;
-}
+.agent-health-kv__row dd { margin: 0; }
 
-@media (max-width: 1100px) {
-    .agent-health-grid { grid-template-columns: 1fr; }
-    .agent-health-group { border-right: none; border-bottom: 1px solid var(--color-border); }
-    .agent-health-group:last-child { border-bottom: none; }
+/* Inline metric values render as status-pills; the --metric modifier
+   swaps the pill's text to tabular-nums mono so numeric values line
+   up cleanly across rows without breaking the pill's existing weight
+   and capitalization used for "OK" / "Warn" / "Fail" labels. */
+.status-pill--metric {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    text-transform: none;
 }

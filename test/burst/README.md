@@ -48,6 +48,29 @@ narrower than they look:
 - **CheckIn-only** — no `ReportResult` / `ReportTraits` / `Wake` calls
   yet. That's the next pending realism lever.
 
+## Sizing — measured loopback ceiling
+
+Offered rate = `count / interval`. On a single-host colocated-driver
+loopback run, the server's CheckIn capacity is bounded by what the
+host can serve while *also* generating the load.
+
+Measured on dan-desktop (32-core, driver + vigosrv colocated, 0.68.16):
+
+| count × interval | offered rate | result |
+|---|---:|---|
+| 25 000 × 5 s | 5 000 / s | baseline failure 0.7 %, p50 1.5 ms, p99 95 ms — clean |
+| 50 000 × 5 s | 10 000 / s | baseline failure **99.8 %**, throughput collapses to ~70 / s — overload |
+
+The cliff is **not gradual**: at ~2× server capacity, the 5 s ticker
+re-fires before the previous CheckIn returns, retries pile on top of
+the existing queue, offered rate climbs further, and the system enters
+cascading overload (throughput → ~0).
+
+Rule of thumb for this hardware: keep `count / interval ≤ 5 000 / s` for
+clean steady-state. To probe beyond, either lengthen `--interval`
+(50 000 × 10 s = 5 000 / s still fits), reduce `--count`, or move the
+driver off-box.
+
 ## Run
 
 ```bash
