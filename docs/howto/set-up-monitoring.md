@@ -312,6 +312,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](grafana/vigo-convergence.json) |
 | **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](grafana/vigo-risk.json) |
 | **Swarm & Spanner** | 13 panels across 5 rows: substrate footprint, content-subsystem counts (gitback/curator/lockbox/longdrawer), cross-envoy divergence, spanner bolt roster | [vigo-swarm.json](grafana/vigo-swarm.json) |
+| **Publish Bursts** | 13 panels across 4 rows: at-a-glance in-flight CheckIns / active nodes / outbound MB·s / convergence %, gRPC rate + latency + TLS handshakes, bundle bytes/s + size quantiles + force pushes, module actions + drift + sig-verify failures + convergence over time. Vertical annotations mark every config publish. | [vigo-bursts.json](grafana/vigo-bursts.json) |
 
 ## Import
 
@@ -522,6 +523,47 @@ Fleet-wide risk scoring with distribution breakdown and trend tracking.
 |-------|------|--------|
 | Risk Score Over Time | Time series (average + maximum) | `vigo_risk_avg_score`, `vigo_risk_max_score` |
 
+## Publish Bursts Dashboard
+
+[Download vigo-bursts.json](grafana/vigo-bursts.json)
+
+Watch a config publish ripple through the fleet end-to-end. Every panel reads from a metric already exported by vigosrv (see `server/metrics/registry.go`); the dashboard adds vertical annotations at each `vigo_config_publishes_total` increment so every burst-shaped change has a visible cause.
+
+### Row 1 — Burst at a Glance
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| In-flight CheckIns | Stat with sparkline (green < 100, yellow ≥ 100, red ≥ 1000) | `vigo_grpc_checkin_in_flight` |
+| Active Nodes (wave-size proxy) | Stat | `vigo_nodes_active_total` |
+| Outbound Bundle MB/s | Stat with sparkline | `sum(rate(vigo_policy_bundle_bytes_total[1m])) / 1048576` |
+| Convergence % | Gauge (red < 80, yellow < 95, green ≥ 95) | `vigo_convergence_pct * 100` |
+
+### Row 2 — gRPC Behaviour
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| gRPC Request Rate (by method, code) | Time series | `sum by (method, code) (rate(vigo_grpc_requests_total[1m]))` |
+| gRPC Latency (p50 / p95 / p99) | Time series | `histogram_quantile(.., rate(vigo_grpc_request_duration_seconds_bucket[1m]))` |
+| TLS Handshakes (by status) | Time series | `sum by (status) (rate(vigo_grpc_tls_handshakes_total[1m]))` |
+
+### Row 3 — Policy Delivery
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Outbound Bundle Bytes/s | Time series (by method) | `sum by (method) (rate(vigo_policy_bundle_bytes_total[1m]))` |
+| Bundle Size (p50 / p95 / p99) | Time series | `histogram_quantile(.., rate(vigo_policy_bundle_size_bytes_bucket[5m]))` |
+| Force Pushes (by scope) | Time series | `sum by (scope) (rate(vigo_force_pushes_total[1m]))` |
+
+### Row 4 — Convergence & Auth
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Module Actions + Drift Corrections /s | Time series (two series) | `rate(vigo_module_actions_total[1m])`, `rate(vigo_drift_detected_total[1m])` |
+| Signature Verification Failures | Time series (red) | `sum(rate(vigo_sig_verify_failed_total[1m]))` |
+| Convergence % over Time | Time series (0-100) | `vigo_convergence_pct * 100` |
+
+> **Label cardinality.** Every panel here aggregates over `method` / `code` / `status` / `scope` — fixed-cardinality labels. Per-envoy series are never introduced; at fleet scale (25K+ envoys) per-envoy labels would blow Prometheus's series budget.
+
 ## Prometheus Configuration
 
 Add the Vigo server as a scrape target in `prometheus.yml`. `:8443` is HTTPS, so the job needs `scheme: https` plus a `tls_config` for the self-signed certificate:
@@ -546,7 +588,7 @@ A curated alert-rules file ships alongside the Grafana dashboards:
 [grafana/alerts.yaml](grafana/alerts.yaml)
 ```
 
-Fifteen Prometheus rules across convergence (failed / degraded / diverged / offline), runs (p95 duration), security (sig-verify failures, critical CVEs), operability (config reload errors, secret resolution errors), license (enforcement errors, days remaining, stage), and swarm (spanner bolt roster). Every rule references a metric defined in `server/metrics/registry.go`; thresholds are starting points — tune to your fleet.
+Eighteen Prometheus rules across convergence (failed / degraded / diverged / offline), runs (p95 duration), security (sig-verify failures, critical CVEs), operability (config reload errors, secret resolution errors), license (enforcement errors, days remaining, stage), swarm (spanner bolt roster), and bursts (sustained gRPC rate, TLS handshake spike, sig-verify failures, in-flight CheckIn high-water). Every rule references a metric defined in `server/metrics/registry.go`; thresholds are starting points — tune to your fleet.
 
 Load into a stock Prometheus:
 

@@ -143,3 +143,44 @@ groups:
         annotations:
           summary: "Revoked bolts ({{ $value }}) outnumber active bolts in spanner"
           description: "Roster gossip is carrying more tombstones than live bolts — either expected after a rotation, or someone evicted a peer that's still trying to gossip in."
+
+  - name: vigo-bursts
+    # Publish-burst alerts: every rule pairs with a panel on the
+    # vigo-bursts.json Grafana dashboard. Thresholds are starting points
+    # tuned for a small home-lab fleet — multiply for production fleets.
+    rules:
+      - alert: VigoBurstSustainedRPCRate
+        expr: sum(rate(vigo_grpc_requests_total[1m])) > 2000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained gRPC rate {{ $value | printf \"%.0f\" }} req/s for >5m"
+          description: "vigosrv is serving a high rate beyond a brief burst window. Confirm capacity headroom; if `vigo_grpc_checkin_in_flight` climbs alongside, you're approaching the cascading-overload regime."
+
+      - alert: VigoBurstTLSHandshakeSpike
+        expr: sum(rate(vigo_grpc_tls_handshakes_total[1m])) > 200
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS handshake rate {{ $value | printf \"%.0f\" }} /s (>200) for >2m"
+          description: "Sustained handshake churn after a publish burst points at subchannel reconnects under spike pressure — agents dialing simultaneously, or session-resume failing. Cross-check the burst dashboard's status split."
+
+      - alert: VigoBurstSigVerifyFailures
+        expr: rate(vigo_sig_verify_failed_total[1m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Signature verification failing ({{ $value | printf \"%.2f\" }}/s)"
+          description: "Any sustained sig-verify failure is suspicious — could be a misconfigured agent pubkey, a stale enrolment that needs revoking, or an attempted spoof. Inspect /audit for `auth.*` events around this time."
+
+      - alert: VigoBurstInFlightCheckInHighWater
+        expr: vigo_grpc_checkin_in_flight > 1000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} concurrent CheckIns in flight for >2m"
+          description: "Queue depth past the high-water mark — leading edge of cascading overload. Investigate offered load vs server capacity; if a publish triggered this, the wave is still catching up."

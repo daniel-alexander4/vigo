@@ -449,19 +449,16 @@
 
 {{define "envoy-footprint-fragment"}}
 {{$p := .Pressure}}
-<div class="card agent-health-card">
-    <div class="agent-health-banner agent-health-banner--{{severityColor $p.Health}}">
-        <div class="agent-health-banner__head">
-            <h2 class="agent-health-banner__title" title="Composite is the worst signal across agent FDs, host FD%, OOM-recent, rootfs %, inode %, and repo health.">Agent Health</h2>
-            <span class="{{severityPillClass $p.Health}}">{{severityLabel $p.Health}}</span>
-            <a class="agent-health-banner__link" href="/agent-health">Fleet view →</a>
-        </div>
-        <p class="agent-health-banner__summary">
-            {{if .HasData}}{{with healthSummary $p}}{{.}}{{else}}All signals healthy.{{end}}{{else}}No agent or host telemetry yet — values appear after the next check-in.{{end}}
-        </p>
-    </div>
+<a class="stat-card stat-card--{{severityColor $p.Health}} stat-card--link" href="/agent-health" title="Composite is the worst signal across agent FDs, host FD%, OOM-recent, rootfs %, inode %, and repo health. Click for fleet view.">
+    <div class="stat-card__value">{{severityLabel $p.Health}}</div>
+    <div class="stat-card__label">Agent Health</div>
+    {{if not .HasData}}
+    <p class="text-muted" style="margin: 8px 0 0; font-size: 12px;">No agent or host telemetry yet — values appear after the next check-in.</p>
+    {{end}}
+</a>
 
-    {{if .HasData}}
+{{if .HasData}}
+<div class="card">
     <div class="agent-health-groups">
         <section class="agent-health-group">
             <h3 class="agent-health-group__title">Agent Process</h3>
@@ -529,6 +526,6 @@
             </dl>
         </section>
     </div>
-    {{end}}
 </div>
+{{end}}
 {{end}}

@@ -4893,55 +4893,15 @@ a.server-config-card:hover {
     background-color: currentColor;
 }
 
-/* === Per-envoy Agent Health card ===
-   Single-card replacement for the four-card stack (composite + Agent
-   Process + Host Pressure + Disk & Repos). Banner at top carries the
-   composite severity colour; grid below packs the 12 underlying
-   metrics into three labeled groups so the whole view fits above the
-   fold on a 1440x900 viewport. */
-.agent-health-card { padding: 0; overflow: hidden; }
-
-.agent-health-banner {
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-muted-bg, var(--color-card-bg));
-}
-.agent-health-banner--success { background: var(--color-success-bg); }
-.agent-health-banner--warning { background: var(--color-warning-bg); }
-.agent-health-banner--danger  { background: var(--color-danger-bg); }
-.agent-health-banner--brand   { background: var(--color-muted-bg, var(--color-card-bg)); }
-
-.agent-health-banner__head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 6px;
-}
-.agent-health-banner__title { margin: 0; font-size: 18px; cursor: help; }
-.agent-health-banner__summary {
-    margin: 0;
-    font-size: 14px;
-    color: var(--color-text);
-}
-.agent-health-banner__link {
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--color-text);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    white-space: nowrap;
-}
-.agent-health-banner__link:hover { color: var(--color-primary); }
-
-/* Three labeled subject groups (Agent Process / Host Pressure / Disk &
+/* === Per-envoy Agent Health groups ===
+   Three labeled subject groups (Agent Process / Host Pressure / Disk &
    Repos) laid out side by side at desktop with a vertical separator
    between adjacent groups. auto-fit + minmax keeps the column count
-   responsive: 3 cols at desktop, 2 at tablet, 1 at narrow. */
+   responsive: 3 cols at desktop, 2 at tablet, 1 at narrow. The wrapping
+   .card supplies its own padding — this grid is unpadded. */
 .agent-health-groups {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    padding: 16px 24px;
 }
 .agent-health-group {
     padding: 0 20px;

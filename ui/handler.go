@@ -2228,14 +2228,28 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// Per-step timing for slow-dashboard diagnosis. One slog.Info line per
+	// render; each step's elapsed ms is its own attribute so log parsers
+	// can pivot on the slowest sub-step without parsing free-form text.
+	start := time.Now()
+	step := func() func() int64 {
+		t := time.Now()
+		return func() int64 { return time.Since(t).Milliseconds() }
+	}
+
+	doneDashboard := step()
 	data := h.dashboardData()
+	msDashboard := doneDashboard()
 
 	// Enrich with version and platform data.
+	doneAgentPlatforms := step()
 	data.AgentVersion = h.agentVersion
 	if data.AgentVersion == "" {
 		data.AgentVersion = h.version
 	}
 	data.AgentPlatforms = h.agentPlatforms()
+	msAgentPlatforms := doneAgentPlatforms()
 
 	// First-run enrollment command, addressed to the server's configured
 	// hostname so it's deterministic regardless of how the operator
@@ -2247,6 +2261,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.BootstrapCommand = fmt.Sprintf("curl -sSfk https://%s:8443/bootstrap | sudo sh", bootstrapHost)
 
 	// Enrich with security posture data (all CVE counts are unique/deduplicated).
+	doneSecurity := step()
 	sec := h.dataSource.SecurityScanData()
 	data.CVECritical = sec.UniqueCritical
 	data.CVEHigh = sec.UniqueHigh
@@ -2255,8 +2270,10 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RootkitWarnings = sec.RootkitWarning
 	data.MalwareDetected = sec.ClamavInfected
 	data.IntegrityIssues = sec.AideChanged
+	msSecurity := doneSecurity()
 
 	// Enrich with standards compliance data.
+	doneStandards := step()
 	stds := h.computeStandardsSummary()
 	data.StandardsPct = stds.Pct
 	data.SatisfiedControls = stds.Satisfied
@@ -2264,8 +2281,10 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.PartialControls = stds.Partial
 	data.NotSatisfiedControls = stds.NotSatisfied
 	data.TotalControls = stds.Total
+	msStandards := doneStandards()
 
 	// Enrich with risk posture data.
+	doneRisk := step()
 	rsk := h.dataSource.RiskData(h.baseInterval, h.offlineThreshold)
 	data.RiskAvgScore = rsk.AvgScore
 	data.RiskCritical = rsk.Critical
@@ -2273,27 +2292,35 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskMedium = rsk.Medium
 	data.RiskLow = rsk.Low
 	data.RiskTopEnvoys = rsk.TopRisks
+	msRisk := doneRisk()
 
 	// Enrich with swarm distribution data (still populated for /fleet
 	// which shares this data type; the dashboard page no longer renders
 	// the swarm table itself).
+	doneSwarm := step()
 	if h.swarmTracker != nil {
 		data.SwarmFiles = h.swarmFiles()
 	}
+	msSwarm := doneSwarm()
 
 	// Enrich with sparkline history.
+	doneSparklines := step()
 	data.ConvergenceSparklineData, data.ConvergenceSparklineMin, data.ConvergenceSparklineMax = h.convergenceSparkline()
 	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
+	msSparklines := doneSparklines()
 
 	// Certificate expiry summary.
+	doneCerts := step()
 	certs := h.dataSource.CertExpirySummary()
 	data.CertsExpiringSoon = certs.ExpiringSoon
 	data.CertsExpired = certs.Expired
 	data.CertsExpiringIn7 = certs.ExpiringIn7
 	data.CertsExpiringIn30 = certs.ExpiringIn30
 	data.CertHostsAffected = certs.HostsAffected
+	msCerts := doneCerts()
 
 	// Running-CVE fleet aggregates.
+	doneRunningCVEs := step()
 	runCVEs := h.dataSource.RunningCVESummary()
 	data.RunningCVEsTotal = runCVEs.Total
 	data.RunningCVEsCritical = runCVEs.Critical
@@ -2301,9 +2328,26 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RunningCVEsMedium = runCVEs.Medium
 	data.RunningCVEsLow = runCVEs.Low
 	data.RunningCVEHostsAffected = runCVEs.HostsAffected
+	msRunningCVEs := doneRunningCVEs()
 
+	doneRender := step()
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
+	msRender := doneRender()
+
+	slog.Info("dashboard render timing",
+		"total_ms", time.Since(start).Milliseconds(),
+		"dashboard_data_ms", msDashboard,
+		"agent_platforms_ms", msAgentPlatforms,
+		"security_scan_ms", msSecurity,
+		"standards_ms", msStandards,
+		"risk_data_ms", msRisk,
+		"swarm_files_ms", msSwarm,
+		"sparklines_ms", msSparklines,
+		"certs_ms", msCerts,
+		"running_cves_ms", msRunningCVEs,
+		"render_ms", msRender,
+	)
 }
 
 // convergenceSparkline returns the last 30 days of fleet convergence %
