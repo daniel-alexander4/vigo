@@ -43,6 +43,36 @@ document.addEventListener('DOMContentLoaded', restoreSidebarState);
 // the server response, stripping the client-side sidebar--collapsed class).
 document.addEventListener('htmx:afterSettle', restoreSidebarState);
 
+// Preserve sidebar scroll position across hx-boost navigation. With
+// hx-boost on <body>, every menu click does an outerHTML swap of body —
+// the sidebar element gets re-created and its scrollTop zeroes. Stash
+// scroll on every swap-out and restore on every settle; polling
+// fragments are a no-op (save current scroll → restore the same value).
+// requestAnimationFrame defers the restore until after the new sidebar
+// has had its layout computed — setting scrollTop on a not-yet-laid-out
+// element silently no-ops in some browsers.
+// sessionStorage (not localStorage) scopes scroll per-tab and clears
+// on tab close — viewport state, not user preference.
+function saveSidebarScroll() {
+    var sb = document.querySelector('.sidebar');
+    if (sb) {
+        try { sessionStorage.setItem('vigo_sidebar_scroll', sb.scrollTop); } catch (err) {}
+    }
+}
+function restoreSidebarScroll() {
+    try {
+        var pos = sessionStorage.getItem('vigo_sidebar_scroll');
+        if (pos === null) return;
+        var top = parseInt(pos, 10) || 0;
+        requestAnimationFrame(function() {
+            var sb = document.querySelector('.sidebar');
+            if (sb) sb.scrollTop = top;
+        });
+    } catch (err) {}
+}
+document.addEventListener('htmx:beforeSwap', saveSidebarScroll);
+document.addEventListener('htmx:afterSettle', restoreSidebarScroll);
+
 // activateTabFromHash clicks the tab button matching window.location.hash
 // (e.g. #footprint → #tab-footprint) on init. When the hash is absent or
 // doesn't resolve to a tab, clicks the first tab in the bar so the page

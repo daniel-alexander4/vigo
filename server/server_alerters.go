@@ -551,69 +551,11 @@ func (s *Server) runSecurityPostureSnapshot(ctx context.Context) {
 	}
 }
 
-// persistComplianceSnapshot writes per-framework standards compliance
-// scores to the compliance_history table. Runs daily. Routes through
-// the unified scorer (api.ReportHandler.ComputeFrameworkScoreCtx) so the
-// snapshot numbers agree with every live UI page.
-func (s *Server) persistComplianceSnapshot(ctx context.Context) {
-	if s.configStore == nil || s.reportHandler == nil {
-		return
-	}
-
-	type fwEntry struct {
-		name        string
-		slug        string
-		standardKey string
-	}
-	fwDefs := []fwEntry{
-		{"HIPAA", "compliance", "hipaa"},
-		{"HITRUST CSF", "hitrust", "hitrust"},
-		{"SOC 2", "soc2", "soc2"},
-		{"PCI DSS v4.0", "pci", "pci-dss"},
-		{"NIST 800-53", "nist", "nist-800-53"},
-		{"ISO 27001", "iso27001", "iso-27001"},
-		{"GDPR", "gdpr", "gdpr"},
-		{"NERC CIP", "nerccip", "nerc-cip"},
-		{"Cyber Essentials+", "cyberessentials", "cyber-essentials"},
-		{"IEC 62443", "iec62443", "iec-62443"},
-		{"SOX", "sox", "sox"},
-		{"FINRA", "finra", "finra"},
-		{"MiFID II", "mifid2", "mifid2"},
-		{"CCSS", "ccss", "ccss"},
-		{"FDA 21 CFR Part 11", "fda21cfr11", "fda-21cfr11"},
-		{"Gaming Commission", "gaming", "gaming"},
-		{"CIS Windows", "ciswindows", "cis-windows"},
-		{"CIS Ubuntu", "cisubuntu", "cis-ubuntu"},
-		{"CIS RHEL", "cisrhel", "cis-rhel"},
-		{"ABA Cybersecurity", "abacyber", "aba-cyber"},
-		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber", "ny-dfs-cyber"},
-	}
-
-	recorded := 0
-	for _, fw := range fwDefs {
-		if !s.configStore.IsStandardEnabled(fw.standardKey) {
-			continue
-		}
-		score, ok := s.reportHandler.ComputeFrameworkScoreCtx(ctx, fw.slug)
-		if !ok {
-			slog.Warn("compliance snapshot: scorer returned not-ok", "framework", fw.name, "slug", fw.slug)
-			continue
-		}
-		if err := s.queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
-			Framework:     fw.name,
-			ScorePercent:  score.Fleet.CoveragePercent,
-			Satisfied:     int64(score.Fleet.Covered),
-			Partial:       int64(score.Fleet.Partial),
-			NotSatisfied:  int64(score.Fleet.Missing),
-			TotalControls: int64(score.Total),
-		}); err != nil {
-			slog.Error("failed to persist compliance snapshot", "framework", fw.name, "error", err)
-			continue
-		}
-		recorded++
-	}
-	slog.Info("compliance snapshot recorded", "frameworks", recorded)
-}
+// Compliance snapshotting now lives on *api.ReportHandler.PersistComplianceSnapshot
+// — the natural home given it depends only on ReportHandler's existing
+// configStore + queries + ComputeFrameworkScoreCtx. Server's daily
+// snapshotter loop dispatches through that method; ConfigHandler does
+// the same on every successful config publish.
 
 // runCuratorFeed periodically (every `interval`, with a first pass after
 // a short delay) rebuilds the fleet artifact catalog (ADR-024) via

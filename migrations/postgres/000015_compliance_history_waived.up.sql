@@ -1,0 +1,1 @@
+ALTER TABLE compliance_history ADD COLUMN waived INTEGER NOT NULL DEFAULT 0;

@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -718,6 +719,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/envoys-stats", h.EnvoysStats)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-trait-group/{id}", h.EnvoyTraitGroupFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-config/{id}", h.EnvoyConfigFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-trace/{id}", h.EnvoyTraceFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-compliance/{id}", h.EnvoyComplianceFragment)
@@ -784,8 +786,7 @@ type PageData struct {
 	ActiveNav        string
 	BodyClass        string // extra CSS class on <body>
 	Version          string
-	PollInterval     string // HTMX polling interval, e.g. "30s" (2× check-in interval)
-	PollIntervalSlow string // slower poll for less-critical fragments, e.g. "60s"
+	PollInterval     string // HTMX polling interval — min(checkin.base_interval, 5m). Polling faster than check-ins yields no fresh data; the 5m cap keeps long-interval fleets from looking frozen.
 	CheckInInterval  string // configured check-in interval, e.g. "15s", "5m0s"
 	AIEnabled        bool
 	AIProviderName   string // "Claude", "Ollama", "OpenAI", etc.
@@ -1435,14 +1436,37 @@ type EnvoyRunsFragmentData struct {
 // EnvoyTraitsFragmentData holds data for the lazy-loaded traits fragment.
 // Tree carries the original nested trait structure for grouped rendering;
 // Summary surfaces the most-asked host facts as stat-cards; RawJSON gives
-// power users a copy-paste escape hatch.
+// power users a copy-paste escape hatch. EnvoyID is the dotted-path URL
+// segment templates use to construct per-group lazy-load hx-get URLs.
 type EnvoyTraitsFragmentData struct {
+	EnvoyID     string
 	Tree        []TraitNode
 	LeafCount   int
 	CollectedAt time.Time
 	Summary     TraitSummary
 	RawJSON     string
 	HasData     bool
+}
+
+// EnvoyTraitGroupFragmentData is the render shape for one group's lazy-
+// loaded subtree. The fragment renders Children recursively using the
+// existing `trait-node` template — only what's inside this group, never
+// the rest of the tree.
+type EnvoyTraitGroupFragmentData struct {
+	EnvoyID  string
+	Path     string
+	Children []TraitNode
+}
+
+// EnvoyTraitsFilterFragmentData is the render shape for a substring
+// filter response. Matches is a flat list of every leaf whose Path
+// contains the query (case-insensitive substring match); rendered as
+// `.trait-leaf` rows inside `#traits-tree`, replacing the collapsed
+// tree while a query is active.
+type EnvoyTraitsFilterFragmentData struct {
+	Query   string
+	Matches []TraitNode
+	Total   int // total leaves searched, for the "N / M" counter
 }
 
 // TraitNode is one node in the rendered trait tree. A node is either a
@@ -2102,19 +2126,23 @@ func (h *Handler) noEnvoys() bool {
 	return h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold).TotalEnvoys == 0
 }
 
+// formatPollInterval renders the UI's HTMX poll cadence as a duration
+// string. The cadence tracks the configured check-in interval (polling
+// faster yields no fresh data) and caps at 5 minutes so operators on
+// long-interval fleets don't stare at a page that looks frozen. A
+// zero/negative input falls back to the cap.
+func formatPollInterval(checkIn time.Duration) string {
+	const maxPoll = 5 * time.Minute
+	if checkIn <= 0 || checkIn > maxPoll {
+		return fmt.Sprintf("%.0fs", maxPoll.Seconds())
+	}
+	return fmt.Sprintf("%.0fs", checkIn.Seconds())
+}
+
 // setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
-	poll := 30 * time.Second
-	if h.baseInterval < 15*time.Second {
-		poll = 2 * h.baseInterval
-	}
-	pd.PollInterval = fmt.Sprintf("%.0fs", poll.Seconds())
-	slow := 2 * poll
-	if slow < 60*time.Second {
-		slow = 60 * time.Second
-	}
-	pd.PollIntervalSlow = fmt.Sprintf("%.0fs", slow.Seconds())
+	pd.PollInterval = formatPollInterval(h.baseInterval)
 	pd.CheckInInterval = h.baseInterval.String()
 	pd.AIEnabled = h.assistant != nil
 	if h.assistant != nil {
@@ -3325,64 +3353,63 @@ type standardsSummary struct {
 	Total        int
 }
 
+// computeStandardsSummary reads the most-recent per-framework compliance
+// snapshot from `compliance_history` and aggregates it into the six
+// dashboard/`/compliance` headline numbers. The snapshot is written by
+// ReportHandler.PersistComplianceSnapshot — daily plus on every successful
+// config publish — through the same unified scorer the audit report
+// uses, so dashboard numbers stay consistent with /compliance/executive.
+// Off the request hot path: a SQL read + tiny aggregation, no live walk
+// of frameworks × envoys × controls.
 func (h *Handler) computeStandardsSummary() standardsSummary {
-	// Use the executive report builder — it has the authoritative
-	// per-framework satisfied/partial/not_satisfied counts.
-	if h.reportBuilder != nil && h.reportBuilder.Executive != nil {
-		bgReq, _ := http.NewRequest("GET", "/", nil)
-		if report, err := h.reportBuilder.Executive(bgReq); err == nil {
-			return h.standardsFromReport(report)
-		}
+	if h.queries == nil {
+		return standardsSummary{}
 	}
-	return standardsSummary{}
+	ctx := context.Background()
+	snapshotDate, err := h.queries.GetLatestComplianceSnapshotDate(ctx)
+	if err != nil {
+		// sql.ErrNoRows on a fresh server before the first snapshot lands;
+		// callers render an empty-state. Any other error is logged and
+		// also returns empty so the page still renders.
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Warn("standards summary: latest snapshot date query failed", "error", err)
+		}
+		return standardsSummary{}
+	}
+	rows, err := h.queries.ListComplianceSnapshotByDate(ctx, snapshotDate)
+	if err != nil {
+		slog.Warn("standards summary: snapshot rows query failed", "error", err, "date", snapshotDate)
+		return standardsSummary{}
+	}
+	return aggregateStandardsSnapshot(rows)
 }
 
-// standardsFromReport extracts aggregate standards stats from an executive report.
-// Overall percentage is the unweighted mean of per-framework scores — each
-// framework carries equal weight regardless of control count (the ratified
-// semantic, matching what the Executive page shows as its headline score).
-// Display counts sum across frameworks — disjoint buckets from the unified
-// scorer, so no waiver double-counting.
-func (h *Handler) standardsFromReport(report any) standardsSummary {
-	// The report is *api.ExecutiveReport but we can't import it here.
-	// Use the Frameworks field via reflection-free interface assertion.
-	type frameworkLike struct {
-		Name         string  `json:"name"`
-		Satisfied    int     `json:"satisfied"`
-		Waived       int     `json:"waived"`
-		Partial      int     `json:"partial"`
-		NotSatisfied int     `json:"not_satisfied"`
-		ScorePercent float64 `json:"score_percent"`
-	}
-	type reportLike struct {
-		Score struct {
-			Percent float64 `json:"percent"`
-		} `json:"score"`
-		Frameworks []frameworkLike `json:"frameworks"`
-	}
-
-	// Marshal/unmarshal to avoid import cycle.
-	data, err := json.Marshal(report)
-	if err != nil {
-		return standardsSummary{}
-	}
-	var r reportLike
-	if err := json.Unmarshal(data, &r); err != nil {
-		return standardsSummary{}
-	}
-
+// aggregateStandardsSnapshot folds the per-framework rows of a single
+// compliance_history snapshot date into the six headline counts shown
+// on the dashboard / `/compliance`. Pure function — extracted so the
+// unweighted-mean and no-waiver-double-count invariants can be pinned
+// without standing up a real database.
+//
+// Invariants enforced (and tested):
+//   - overall percent is the unweighted mean of per-framework percents,
+//     not a control-count-weighted average
+//   - per-framework buckets are disjoint, so waivers never inflate Total
+//     beyond the framework's real control count
+//   - frameworks with zero controls (disabled / no data) are skipped
+//     entirely — they don't drag the mean toward zero
+func aggregateStandardsSnapshot(rows []db.ListComplianceSnapshotByDateRow) standardsSummary {
 	var s standardsSummary
 	var pctSum float64
 	pctCount := 0
-	for _, fw := range r.Frameworks {
-		fwTotal := fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied
+	for _, fw := range rows {
+		fwTotal := int(fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied)
 		if fwTotal == 0 {
 			continue
 		}
-		s.Satisfied += fw.Satisfied
-		s.Waived += fw.Waived
-		s.Partial += fw.Partial
-		s.NotSatisfied += fw.NotSatisfied
+		s.Satisfied += int(fw.Satisfied)
+		s.Waived += int(fw.Waived)
+		s.Partial += int(fw.Partial)
+		s.NotSatisfied += int(fw.NotSatisfied)
 		s.Total += fwTotal
 		pctSum += fw.ScorePercent
 		pctCount++
@@ -4557,7 +4584,19 @@ func (h *Handler) EnvoyRunsFragment(w http.ResponseWriter, r *http.Request) {
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-runs-fragment", data)
 }
 
-// EnvoyTraitsFragment renders the traits fragment for an envoy (HTMX lazy load).
+// EnvoyTraitsFragment renders the traits tab on the envoy-detail page.
+//
+// Two modes, selected by `?q=`:
+//
+//   - No q: renders the full tab body — stats stat-cards, filter toolbar,
+//     and the trait tree as top-level group shells. Each shell lazy-fetches
+//     its children via EnvoyTraitGroupFragment on first expand. This keeps
+//     the initial payload tiny (~tens of KB even for envoys with thousands
+//     of leaves) so the browser doesn't choke on DOM construction.
+//   - q=<query>: renders just a flat list of matching leaves inside the
+//     #traits-tree wrapper. Substring match on the dotted path. Searches
+//     the WHOLE tree, regardless of which groups are expanded, so a filter
+//     can't miss leaves inside un-expanded groups.
 func (h *Handler) EnvoyTraitsFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -4569,7 +4608,102 @@ func (h *Handler) EnvoyTraitsFragment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
 	}
+	data.EnvoyID = idStr
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+		h.renderer.RenderFragment(w, "envoy-detail", "envoy-traits-filter-fragment", EnvoyTraitsFilterFragmentData{
+			Query:   q,
+			Matches: flattenMatchingLeaves(data.Tree, q),
+			Total:   data.LeafCount,
+		})
+		return
+	}
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-traits-fragment", data)
+}
+
+// EnvoyTraitGroupFragment renders the children of one trait group, used
+// by the lazy `<details>` shells in the traits tab. The `path` query
+// parameter is a dotted path into the tree (e.g. `os.kernel`); the
+// handler walks to that node and renders its Children via the existing
+// `trait-node` template. Invalid path → 404 so a stale URL doesn't
+// silently return an empty body.
+func (h *Handler) EnvoyTraitGroupFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+	path := strings.TrimSpace(r.URL.Query().Get("path"))
+	if path == "" {
+		http.Error(w, "missing path", http.StatusBadRequest)
+		return
+	}
+	data, err := h.dataSource.EnvoyTraitsData(idStr)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+	node, ok := findTraitNode(data.Tree, path)
+	if !ok || len(node.Children) == 0 {
+		http.Error(w, "trait group not found", http.StatusNotFound)
+		return
+	}
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-trait-group-fragment", EnvoyTraitGroupFragmentData{
+		EnvoyID:  idStr,
+		Path:     path,
+		Children: node.Children,
+	})
+}
+
+// findTraitNode walks a trait tree to the node at `path` (dotted notation
+// like `os.kernel`). Returns the node and true if found, or an empty node
+// and false. Linear walk per segment — fine for typical trees; the deepest
+// real trees observed are ~5 levels.
+func findTraitNode(tree []TraitNode, path string) (TraitNode, bool) {
+	if path == "" {
+		return TraitNode{}, false
+	}
+	segments := strings.Split(path, ".")
+	nodes := tree
+	for i, seg := range segments {
+		var found *TraitNode
+		for j := range nodes {
+			if nodes[j].Key == seg {
+				found = &nodes[j]
+				break
+			}
+		}
+		if found == nil {
+			return TraitNode{}, false
+		}
+		if i == len(segments)-1 {
+			return *found, true
+		}
+		nodes = found.Children
+	}
+	return TraitNode{}, false
+}
+
+// flattenMatchingLeaves walks the tree and returns every leaf whose Path
+// contains the query as a case-insensitive substring. Used by the filter
+// endpoint so a search hits leaves regardless of which groups the
+// operator has expanded.
+func flattenMatchingLeaves(tree []TraitNode, query string) []TraitNode {
+	q := strings.ToLower(query)
+	var matches []TraitNode
+	var walk func(nodes []TraitNode)
+	walk = func(nodes []TraitNode) {
+		for _, n := range nodes {
+			if len(n.Children) > 0 {
+				walk(n.Children)
+				continue
+			}
+			if strings.Contains(strings.ToLower(n.Path), q) {
+				matches = append(matches, n)
+			}
+		}
+	}
+	walk(tree)
+	return matches
 }
 
 // EnvoyConfigFragment renders the config YAML inline for an envoy.

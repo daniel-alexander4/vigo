@@ -22,56 +22,72 @@
     <nav class="sidebar__nav">
         {{if not .NoEnvoys}}
         {{if .CurrentUser.HasPermission "fleet.read"}}
-        <a href="/" class="nav-link{{if eq .ActiveNav "dashboard"}} nav-link--active{{end}}">
-            Dashboard
+        <a href="/" class="nav-link{{if eq .ActiveNav "dashboard"}} nav-link--active{{end}}" title="Fleet overview — convergence, compliance, risk, agent health">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            <span class="nav-link__label">Dashboard</span>
         </a>
         {{end}}
 
         {{if .CurrentUser.HasPermission "fleet.read"}}
         <div class="nav-group__label">Fleet</div>
-        <a href="/envoys" class="nav-link{{if eq .ActiveNav "envoys"}} nav-link--active{{end}}">
-            Envoys
+        <a href="/envoys" class="nav-link{{if eq .ActiveNav "envoys"}} nav-link--active{{end}}" title="Per-envoy detail — traits, runs, sessions, attack surface">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><line x1="6" y1="7" x2="6.01" y2="7"/><line x1="6" y1="17" x2="6.01" y2="17"/></svg>
+            <span class="nav-link__label">Envoys</span>
         </a>
-        <a href="/inventory" class="nav-link{{if eq .ActiveNav "inventory"}} nav-link--active{{end}}">
-            Inventory
+        <a href="/inventory" class="nav-link{{if eq .ActiveNav "inventory"}} nav-link--active{{end}}" title="Hardware, OS, package, and service inventory across the fleet">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+            <span class="nav-link__label">Inventory</span>
         </a>
         {{if .SpannerEnabled}}
-        <a href="/spanner" class="nav-link{{if eq .ActiveNav "spanner"}} nav-link--active{{end}}">
-            Spanner
+        <a href="/spanner" class="nav-link{{if eq .ActiveNav "spanner"}} nav-link--active{{end}}" title="Federated control-plane peers — bolt admissions and per-bolt partitions (ADR-026)">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>
+            <span class="nav-link__label">Spanner</span>
         </a>
         {{end}}
-        <a href="/fleet/config-tree" class="nav-link{{if eq .ActiveNav "config-tree"}} nav-link--active{{end}}">
-            Config Tree
+        <a href="/fleet/config-tree" class="nav-link{{if eq .ActiveNav "config-tree"}} nav-link--active{{end}}" title="Browse stockpile — modules, roles, hostcrates, usercrates, environments">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-4.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 13 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3.5a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/><path d="M3 5v14a2 2 0 0 0 2 2h7"/><path d="M3 12h9"/></svg>
+            <span class="nav-link__label">Config Tree</span>
         </a>
 
         <div class="nav-group__label">Operations</div>
-        <a href="/task" class="nav-link{{if eq .ActiveNav "task"}} nav-link--active{{end}}">
-            Tasks
+        <a href="/task" class="nav-link{{if eq .ActiveNav "task"}} nav-link--active{{end}}" title="Ad-hoc commands and live queries against envoys">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+            <span class="nav-link__label">Tasks</span>
         </a>
-        <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
-            Workflows
+        <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}" title="Multi-step orchestration — sequential, conditional, and rolling execution">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            <span class="nav-link__label">Workflows</span>
         </a>
 
         {{if .SwarmEnabled}}
-        <a href="/swarm" class="nav-group__label nav-group__label--link{{if eq .ActiveNav "swarm"}} nav-group__label--active{{end}}">Swarm <span class="nav-group__label-hint">Envoy P2P</span></a>
+        <a href="/swarm" class="nav-group__label nav-group__label--link{{if eq .ActiveNav "swarm"}} nav-group__label--active{{end}}" title="Envoy peer-to-peer substrate — seed, manifest, peer roster across all content subsystems">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            <span class="nav-link__label">Swarm <span class="nav-group__label-hint">Envoy P2P</span></span>
+        </a>
         <a href="/swarm/filecast" class="nav-link{{if eq .ActiveNav "filecast"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
-            Filecast
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+            <span class="nav-link__label">Filecast</span>
         </a>
         {{if .CurrentUser.HasPermission "fleet.write"}}
         <a href="/swarm/longdrawer" class="nav-link{{if eq .ActiveNav "longdrawer"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">
-            Longdrawer
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M20 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3l2 3h9a2 2 0 0 1 2 2z"/><path d="M2 8h20"/></svg>
+            <span class="nav-link__label">Longdrawer</span>
         </a>
         <a href="/swarm/lockbox" class="nav-link{{if eq .ActiveNav "lockbox"}} nav-link--active{{end}}" title="Fully Encrypted P2P Synchronized User Directory">
-            Lockbox
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span class="nav-link__label">Lockbox</span>
         </a>
         <a href="/swarm/gitback" class="nav-link{{if eq .ActiveNav "gitback"}} nav-link--active{{end}}" title="P2P Distributed Source Control Repositories">
-            Gitback
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="22"/></svg>
+            <span class="nav-link__label">Gitback</span>
         </a>
         <a href="/swarm/curator" class="nav-link{{if eq .ActiveNav "curator"}} nav-link--active{{end}}" title="P2P Artifact Registry — Release Binaries, Packages, Container Images (ADR-024)">
-            Curator
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="13" x2="14" y2="13"/></svg>
+            <span class="nav-link__label">Curator</span>
         </a>
         <a href="/swarm/poolq" class="nav-link{{if eq .ActiveNav "poolq"}} nav-link--active{{end}}" title="P2P Ordered-Log Queue — Kafka-Style Signed Messages (ADR-029)">
-            Poolq
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+            <span class="nav-link__label">Poolq</span>
         </a>
         {{end}}
         {{end}}
@@ -80,19 +96,23 @@
         {{if .CurrentUser.HasPermission "compliance.read"}}
         <div class="nav-group__label">Security &amp; Compliance</div>
         {{if .CurrentUser.HasPermission "fleet.read"}}
-        <a href="/security" class="nav-link{{if eq .ActiveNav "security"}} nav-link--active{{end}}">
-            Security
+        <a href="/security" class="nav-link{{if eq .ActiveNav "security"}} nav-link--active{{end}}" title="CVE exposure, attack surface, signed binaries, hardening warnings">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="nav-link__label">Security</span>
         </a>
         {{end}}
-        <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">
-            Compliance
+        <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}" title="Regulatory framework coverage — HIPAA, SOC 2, PCI DSS, ISO 27001, and more">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+            <span class="nav-link__label">Compliance</span>
         </a>
         {{if .CurrentUser.HasPermission "fleet.read"}}
-        <a href="/risk" class="nav-link{{if eq .ActiveNav "risk"}} nav-link--active{{end}}">
-            Risk Posture
+        <a href="/risk" class="nav-link{{if eq .ActiveNav "risk"}} nav-link--active{{end}}" title="Per-envoy risk score (0-100) with factor breakdown and fleet rollup">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span class="nav-link__label">Risk Posture</span>
         </a>
-        <a href="/agent-health" class="nav-link{{if eq .ActiveNav "agent-health"}} nav-link--active{{end}}">
-            Agent Health
+        <a href="/agent-health" class="nav-link{{if eq .ActiveNav "agent-health"}} nav-link--active{{end}}" title="Per-envoy resource pressure — open FDs, host FD%, rootfs/inode usage, repo health">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>
+            <span class="nav-link__label">Agent Health</span>
         </a>
         {{end}}
         <div class="nav-group__divider"></div>
@@ -102,44 +122,52 @@
 
         <div class="nav-group__label nav-group__label--sub">Config</div>
         {{if .CurrentUser.HasPermission "config.publish"}}
-        <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}">
-            Server Config
+        <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}" title="View server.yaml and publish stockpile changes">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>
+            <span class="nav-link__label">Server Config</span>
         </a>
         {{end}}
         {{if .CurrentUser.HasPermission "fleet.read"}}
-        <a href="/integrations" class="nav-link{{if eq .ActiveNav "integrations"}} nav-link--active{{end}}">
-            Integrations
+        <a href="/integrations" class="nav-link{{if eq .ActiveNav "integrations"}} nav-link--active{{end}}" title="Outbound webhooks — Slack, PagerDuty, SIEM, PSA, CMDB, GRC platforms">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M12 22v-5"/><path d="M9 7V2"/><path d="M15 7V2"/><path d="M6 13V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4Z"/></svg>
+            <span class="nav-link__label">Integrations</span>
         </a>
         {{end}}
 
         <div class="nav-group__label nav-group__label--sub">Data</div>
         {{if .CurrentUser.HasPermission "fleet.read"}}
-        <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
-            Vigo Health
+        <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}" title="Server self-diagnostic — doctor checks, database, certs, backup state">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3h6"/><path d="M8 15a6 6 0 1 0 0-12H5v12a6 6 0 0 0 6 6h7a3 3 0 0 0 3-3v-1a3 3 0 0 0-3-3h-2"/><circle cx="20" cy="10" r="2"/></svg>
+            <span class="nav-link__label">Vigo Health</span>
         </a>
         {{end}}
         {{if .CurrentUser.HasPermission "audit.read"}}
-        <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
-            Audit Log
+        <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}" title="Tamper-evident audit log — SHA-256 hash chain over every privileged operation">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></svg>
+            <span class="nav-link__label">Audit Log</span>
         </a>
         {{end}}
         {{if .CurrentUser.HasPermission "compliance.read"}}
         <a href="/platform/compliance" class="nav-link{{if eq .ActiveNav "platform-compliance"}} nav-link--active{{end}}" title="Vigo product-level compliance posture">
-            Platform Compliance
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span class="nav-link__label">Platform Compliance</span>
         </a>
         {{end}}
         {{if .DocsEnabled}}
-        <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
-            Documentation
+        <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}" title="Operator guides, references, how-tos, and architecture decision records">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <span class="nav-link__label">Documentation</span>
         </a>
         {{end}}
         {{if .CurrentUser.HasPermission "fleet.read"}}
-        <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
-            License
+        <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}" title="License tier, node count, expiry, fingerprint binding">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/></svg>
+            <span class="nav-link__label">License</span>
         </a>
         {{end}}
-        <a href="/support" class="nav-link{{if eq .ActiveNav "support"}} nav-link--active{{end}}">
-            Support
+        <a href="/support" class="nav-link{{if eq .ActiveNav "support"}} nav-link--active{{end}}" title="Support channels and contact info">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>
+            <span class="nav-link__label">Support</span>
         </a>
         {{end}}
     </nav>

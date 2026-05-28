@@ -73,8 +73,9 @@ type ConfigHandler struct {
 	auditWriter        auditRecorder  // nil-safe tamper-evident audit writer
 	publishState       *publish.State // freeze deadline owner; required for Freeze/Unfreeze
 	metrics            *metrics.Metrics
-	liveDir            string // .live/ path for rollback
-	historyDir         string // history dir for rollback / list-versions
+	liveDir            string                  // .live/ path for rollback
+	historyDir         string                  // history dir for rollback / list-versions
+	snapshotCompliance func(context.Context)   // optional; fired after a successful reload so dashboard standards-summary refreshes
 }
 
 // NewConfigHandler creates a ConfigHandler. publishState carries the
@@ -121,6 +122,17 @@ func (h *ConfigHandler) SetMetrics(m *metrics.Metrics) {
 func (h *ConfigHandler) SetAI(assistant *ai.Assistant, cfg config.AISection) {
 	h.assistant = assistant
 	h.aiCfg = cfg
+}
+
+// SetComplianceSnapshotter wires the callback that writes a fresh
+// compliance_history row set. Fired in a goroutine after every
+// successful ReloadConfig so the dashboard standards-summary — which
+// reads from that table — reflects operator changes (waivers added,
+// frameworks toggled, scope shifted) within snapshot-runtime seconds
+// of the publish. Independent from the daily background snapshotter
+// that keeps the sparkline series moving.
+func (h *ConfigHandler) SetComplianceSnapshotter(fn func(context.Context)) {
+	h.snapshotCompliance = fn
 }
 
 // RegisterRoutes registers config management endpoints. Mutating
@@ -199,6 +211,14 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.metrics != nil {
 		h.metrics.ConfigPublishesTotal.Inc()
+	}
+	// Refresh the compliance snapshot so the dashboard summary picks up
+	// operator-driven changes (new waivers, framework toggles, scope
+	// shifts) without waiting for the daily background tick. Detached
+	// from the request context — closing the publish HTTP response
+	// shouldn't tear down a snapshot that's already running.
+	if h.snapshotCompliance != nil {
+		go h.snapshotCompliance(context.Background())
 	}
 
 	// Start blast-radius compliance monitor if threshold is configured.

@@ -1,0 +1,31 @@
+name: vigo-prometheus-alerts
+
+# Drops the Vigo alert-rules file into Prometheus's rules dir so the
+# operator gets convergence / runs / security / operability / license /
+# swarm / bursts alerts without hand-pasting them. Pairs with
+# prometheus.vgo.example (the daemon), which already mounts
+# `rule_files: /etc/prometheus/rules/*.yml`. The rule file is a
+# byte-for-byte copy of docs/howto/grafana/alerts.yaml; an audit test
+# (test/audit/) keeps the two trees in sync.
+
+vars:
+  prometheus_rules_dir: "/etc/prometheus/rules"
+
+resources:
+  - name: vigo-alerts-dir
+    type: directory
+    target_path: "{{ .Vars.prometheus_rules_dir }}"
+    owner: prometheus
+    group: prometheus
+    mode: "0755"
+
+  - name: vigo-alerts-yaml
+    type: file
+    # `.yml` to match Prometheus's default `rule_files: *.yml` glob.
+    target_path: "{{ .Vars.prometheus_rules_dir }}/vigo-alerts.yml"
+    source: templates/vigo-prometheus/vigo-alerts.yaml
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+    depends_on: [vigo-alerts-dir]
+    notify: [prometheus-service]

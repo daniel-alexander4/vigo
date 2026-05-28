@@ -41,11 +41,11 @@ import (
 // reg is the per-instance prometheus registry whose collectors the /metrics
 // endpoint exposes; m is the same registry's collector set, threaded into
 // subhandlers (bootstrap, etc.) that emit metrics.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("building gateway TLS: %w", err)
+		return nil, nil, nil, fmt.Errorf("building gateway TLS: %w", err)
 	}
 
 	gwMux := runtime.NewServeMux()
@@ -53,7 +53,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
 
 	if err := pb.RegisterVigoAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
-		return nil, nil, fmt.Errorf("registering admin gateway: %w", err)
+		return nil, nil, nil, fmt.Errorf("registering admin gateway: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -64,7 +64,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	customDS := fleet.NewDataSource(fleetIndex, queries, runStore, configStore)
 	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, offlineThreshold, serverAddr, caFile, agentDir, version, assistant, spannerAdmin, customDS, docsDir, authMethod, enforcer)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating UI handler: %w", err)
+		return nil, nil, nil, fmt.Errorf("creating UI handler: %w", err)
 	}
 	if peerSvc != nil {
 		uiHandler.SetPeerService(peerSvc)
@@ -161,7 +161,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	// grpc-gateway catches /api/ paths (vigocli uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 
-	return mux, uiHandler, nil
+	return mux, uiHandler, configHandler, nil
 }
 
 // GatewayOption configures optional features on the bootstrap handler.

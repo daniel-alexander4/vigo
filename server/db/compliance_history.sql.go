@@ -9,8 +9,22 @@ import (
 	"context"
 )
 
+const getLatestComplianceSnapshotDate = `-- name: GetLatestComplianceSnapshotDate :one
+SELECT snapshot_date
+FROM compliance_history
+ORDER BY snapshot_date DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestComplianceSnapshotDate(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, getLatestComplianceSnapshotDate)
+	var snapshot_date string
+	err := row.Scan(&snapshot_date)
+	return snapshot_date, err
+}
+
 const listComplianceHistory = `-- name: ListComplianceHistory :many
-SELECT id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls
+SELECT id, snapshot_date, framework, score_percent, satisfied, waived, partial, not_satisfied, total_controls
 FROM compliance_history
 WHERE framework = ?1
 ORDER BY snapshot_date DESC
@@ -22,21 +36,34 @@ type ListComplianceHistoryParams struct {
 	Limit     int64  `json:"limit"`
 }
 
-func (q *Queries) ListComplianceHistory(ctx context.Context, arg ListComplianceHistoryParams) ([]ComplianceHistory, error) {
+type ListComplianceHistoryRow struct {
+	ID            string  `json:"id"`
+	SnapshotDate  string  `json:"snapshot_date"`
+	Framework     string  `json:"framework"`
+	ScorePercent  float64 `json:"score_percent"`
+	Satisfied     int64   `json:"satisfied"`
+	Waived        int64   `json:"waived"`
+	Partial       int64   `json:"partial"`
+	NotSatisfied  int64   `json:"not_satisfied"`
+	TotalControls int64   `json:"total_controls"`
+}
+
+func (q *Queries) ListComplianceHistory(ctx context.Context, arg ListComplianceHistoryParams) ([]ListComplianceHistoryRow, error) {
 	rows, err := q.db.QueryContext(ctx, listComplianceHistory, arg.Framework, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ComplianceHistory{}
+	items := []ListComplianceHistoryRow{}
 	for rows.Next() {
-		var i ComplianceHistory
+		var i ListComplianceHistoryRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SnapshotDate,
 			&i.Framework,
 			&i.ScorePercent,
 			&i.Satisfied,
+			&i.Waived,
 			&i.Partial,
 			&i.NotSatisfied,
 			&i.TotalControls,
@@ -55,27 +82,88 @@ func (q *Queries) ListComplianceHistory(ctx context.Context, arg ListComplianceH
 }
 
 const listComplianceHistoryAllFrameworks = `-- name: ListComplianceHistoryAllFrameworks :many
-SELECT id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls
+SELECT id, snapshot_date, framework, score_percent, satisfied, waived, partial, not_satisfied, total_controls
 FROM compliance_history
 ORDER BY snapshot_date DESC, framework
 LIMIT ?
 `
 
-func (q *Queries) ListComplianceHistoryAllFrameworks(ctx context.Context, limit int64) ([]ComplianceHistory, error) {
+type ListComplianceHistoryAllFrameworksRow struct {
+	ID            string  `json:"id"`
+	SnapshotDate  string  `json:"snapshot_date"`
+	Framework     string  `json:"framework"`
+	ScorePercent  float64 `json:"score_percent"`
+	Satisfied     int64   `json:"satisfied"`
+	Waived        int64   `json:"waived"`
+	Partial       int64   `json:"partial"`
+	NotSatisfied  int64   `json:"not_satisfied"`
+	TotalControls int64   `json:"total_controls"`
+}
+
+func (q *Queries) ListComplianceHistoryAllFrameworks(ctx context.Context, limit int64) ([]ListComplianceHistoryAllFrameworksRow, error) {
 	rows, err := q.db.QueryContext(ctx, listComplianceHistoryAllFrameworks, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ComplianceHistory{}
+	items := []ListComplianceHistoryAllFrameworksRow{}
 	for rows.Next() {
-		var i ComplianceHistory
+		var i ListComplianceHistoryAllFrameworksRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SnapshotDate,
 			&i.Framework,
 			&i.ScorePercent,
 			&i.Satisfied,
+			&i.Waived,
+			&i.Partial,
+			&i.NotSatisfied,
+			&i.TotalControls,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listComplianceSnapshotByDate = `-- name: ListComplianceSnapshotByDate :many
+SELECT framework, score_percent, satisfied, waived, partial, not_satisfied, total_controls
+FROM compliance_history
+WHERE snapshot_date = ?
+ORDER BY framework
+`
+
+type ListComplianceSnapshotByDateRow struct {
+	Framework     string  `json:"framework"`
+	ScorePercent  float64 `json:"score_percent"`
+	Satisfied     int64   `json:"satisfied"`
+	Waived        int64   `json:"waived"`
+	Partial       int64   `json:"partial"`
+	NotSatisfied  int64   `json:"not_satisfied"`
+	TotalControls int64   `json:"total_controls"`
+}
+
+func (q *Queries) ListComplianceSnapshotByDate(ctx context.Context, snapshotDate string) ([]ListComplianceSnapshotByDateRow, error) {
+	rows, err := q.db.QueryContext(ctx, listComplianceSnapshotByDate, snapshotDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListComplianceSnapshotByDateRow{}
+	for rows.Next() {
+		var i ListComplianceSnapshotByDateRow
+		if err := rows.Scan(
+			&i.Framework,
+			&i.ScorePercent,
+			&i.Satisfied,
+			&i.Waived,
 			&i.Partial,
 			&i.NotSatisfied,
 			&i.TotalControls,
@@ -107,11 +195,12 @@ func (q *Queries) PruneComplianceHistoryByAge(ctx context.Context, snapshotDate 
 }
 
 const upsertComplianceSnapshot = `-- name: UpsertComplianceSnapshot :exec
-INSERT INTO compliance_history (snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls)
-VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6)
+INSERT INTO compliance_history (snapshot_date, framework, score_percent, satisfied, waived, partial, not_satisfied, total_controls)
+VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
 ON CONFLICT(snapshot_date, framework) DO UPDATE SET
   score_percent  = excluded.score_percent,
   satisfied      = excluded.satisfied,
+  waived         = excluded.waived,
   partial        = excluded.partial,
   not_satisfied  = excluded.not_satisfied,
   total_controls = excluded.total_controls
@@ -121,6 +210,7 @@ type UpsertComplianceSnapshotParams struct {
 	Framework     string  `json:"framework"`
 	ScorePercent  float64 `json:"score_percent"`
 	Satisfied     int64   `json:"satisfied"`
+	Waived        int64   `json:"waived"`
 	Partial       int64   `json:"partial"`
 	NotSatisfied  int64   `json:"not_satisfied"`
 	TotalControls int64   `json:"total_controls"`
@@ -131,6 +221,7 @@ func (q *Queries) UpsertComplianceSnapshot(ctx context.Context, arg UpsertCompli
 		arg.Framework,
 		arg.ScorePercent,
 		arg.Satisfied,
+		arg.Waived,
 		arg.Partial,
 		arg.NotSatisfied,
 		arg.TotalControls,

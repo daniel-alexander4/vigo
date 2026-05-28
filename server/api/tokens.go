@@ -16,6 +16,7 @@ import (
 // TokensHandler provides REST endpoints for API token management.
 type TokensHandler struct {
 	tokenStore  *vigoauth.TokenStore
+	userStore   *vigoauth.UserStore
 	authMethod  string
 	auditWriter auditRecorder
 }
@@ -23,9 +24,10 @@ type TokensHandler struct {
 // SetAuditWriter sets the audit writer for recording token events.
 func (h *TokensHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
-// NewTokensHandler creates a tokens API handler.
-func NewTokensHandler(tokenStore *vigoauth.TokenStore, authMethod string) *TokensHandler {
-	return &TokensHandler{tokenStore: tokenStore, authMethod: authMethod}
+// NewTokensHandler creates a tokens API handler. userStore is required to
+// validate that every minted token is owned by a real web user.
+func NewTokensHandler(tokenStore *vigoauth.TokenStore, userStore *vigoauth.UserStore, authMethod string) *TokensHandler {
+	return &TokensHandler{tokenStore: tokenStore, userStore: userStore, authMethod: authMethod}
 }
 
 // RegisterRoutes mounts token management endpoints.
@@ -39,6 +41,7 @@ func (h *TokensHandler) RegisterRoutes(mux *http.ServeMux) {
 type createTokenRequest struct {
 	Name      string `json:"name"`
 	ExpiresIn string `json:"expires_in"` // duration like "720h" (30 days)
+	User      string `json:"user"`       // owner username; only the local-admin CLI may set it
 }
 
 type createTokenResponse struct {
@@ -80,14 +83,54 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		expiresAt = &t
 	}
 
-	plaintext, token, err := h.tokenStore.CreateToken(r.Context(), u.ID, req.Name, expiresAt)
+	// Resolve the token owner. By default a caller owns the tokens it mints.
+	// The local-admin principal (root on the server host) has no users-table
+	// row, so it MUST name a real owner via --user — otherwise the token is
+	// orphaned and can never authenticate (the owner is resolved at validation
+	// time). Only that principal may mint for another user: this endpoint is
+	// auth-gated, not admin-gated, so letting a real web user set --user would
+	// let a viewer mint an admin-owned token.
+	ownerID := u.ID
+	if req.User != "" {
+		if u.ID != vigoauth.LocalAdminUserID {
+			writeError(w, http.StatusForbidden, "only the server-host admin CLI may set --user")
+			return
+		}
+		target, err := h.userStore.GetByUsername(r.Context(), req.User)
+		if err != nil {
+			slog.Error("resolving token owner", "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if target == nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("no such web user: %s", req.User))
+			return
+		}
+		ownerID = target.ID
+	}
+	// Every token must be owned by a real web user. Catches the local-admin
+	// principal minting with no --user.
+	if owner, err := h.userStore.GetByID(r.Context(), ownerID); err != nil {
+		slog.Error("validating token owner", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	} else if owner == nil {
+		writeError(w, http.StatusBadRequest, "token owner must be a real web user — pass --user <username> when creating from the server host")
+		return
+	}
+
+	plaintext, token, err := h.tokenStore.CreateToken(r.Context(), ownerID, req.Name, expiresAt)
 	if err != nil {
 		slog.Error("creating api token", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create token")
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "token.create", u.Username, "rest", fmt.Sprintf("created token %s", req.Name), "")
+	auditDetail := fmt.Sprintf("created token %s", req.Name)
+	if ownerID != u.ID {
+		auditDetail = fmt.Sprintf("created token %s for user %s", req.Name, req.User)
+	}
+	recordAudit(r.Context(), h.auditWriter, "token.create", u.Username, "rest", auditDetail, "")
 
 	writeJSON(w, r, http.StatusCreated, createTokenResponse{
 		Token: plaintext,

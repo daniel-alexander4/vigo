@@ -46,7 +46,7 @@ vigocli auth clear
 
 ### create-token
 
-Create a new API token on the server. The plaintext token is shown once and cannot be retrieved again.
+Create a new API token on the server. The plaintext token is shown once and cannot be retrieved again. The token belongs to a web user and inherits that user's role and permissions when used.
 
 ```bash
 vigocli auth create-token --name "ci-automation" --expires-in "720h"
@@ -62,12 +62,21 @@ Save this token — it will not be shown again.
 To use it: vigocli auth set-token vgot_abc123...
 ```
 
+**Token ownership.** Normally the token belongs to the web user you are authenticated as. When you run `vigocli` **on the server host**, the CLI authenticates as the local-admin principal (the boot-minted root token), which is not a web user — so you must name the owner explicitly with `--user`:
+
+```bash
+vigocli auth create-token --name "ci-automation" --user dan
+```
+
+Omitting `--user` on the server host fails with `token owner must be a real web user`. `--user` is honored only for the local-admin principal; a token authenticated as a regular web user cannot mint tokens for anyone else.
+
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
 | `--name` | Descriptive name for the token |
 | `--expires-in` | Expiry duration (e.g., `720h` for 30 days). Omit for no expiry. |
+| `--user` | Owner web user (e.g. `dan`). Required when running on the server host. |
 
 ### list-tokens
 

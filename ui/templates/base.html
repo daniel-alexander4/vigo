@@ -35,12 +35,16 @@
     </script>
     <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
     <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
+    <!-- idiomorph: DOM-diff swap so polling fragments don't repaint unchanged
+         nodes every tick. Enabled fleet-wide via hx-ext on <body>; opted into
+         per-fragment by hx-swap="morph:innerHTML" on every hx-trigger="every". -->
+    <script src="/static/js/idiomorph-ext.min.js?v={{.Version}}"></script>
     <script src="/static/js/tabs.js?v={{.Version}}"></script>
     <script src="/static/js/theme.js?v={{.Version}}"></script>
     <script src="/static/js/clipboard.js?v={{.Version}}"></script>
     <script src="/static/js/filter-drawer.js?v={{.Version}}"></script>
 </head>
-<body hx-boost="true" class="{{if .BodyClass}}{{.BodyClass}}{{end}}" data-theme="{{.Theme}}">
+<body hx-boost="true" hx-ext="morph" class="{{if .BodyClass}}{{.BodyClass}}{{end}}" data-theme="{{.Theme}}">
     <div class="layout">
         {{template "nav" .}}
         <main class="content">

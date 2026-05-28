@@ -16,11 +16,11 @@
 </div>
 
 <div class="filter-bar mb-2">
-    <button class="btn btn--sm" id="tab-runs"
-            hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
+    <button class="btn btn--sm" id="tab-footprint"
+            hx-get="/ui/fragments/envoy-footprint/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Recent Runs</button>
+            onclick="setActiveTab(this)">Agent Health</button>
     <button class="btn btn--sm" id="tab-traits"
             hx-get="/ui/fragments/envoy-traits/{{.Envoy.ID}}"
             hx-target="#envoy-content"
@@ -36,26 +36,26 @@
             hx-target="#envoy-content"
             hx-swap="innerHTML"
             onclick="setActiveTab(this)">Config Trace</button>
-    <button class="btn btn--sm" id="tab-compliance"
-            hx-get="/ui/fragments/envoy-compliance/{{.Envoy.ID}}"
+    <button class="btn btn--sm" id="tab-runs"
+            hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Standards Compliance</button>
-    <button class="btn btn--sm" id="tab-attack-surface"
-            hx-get="/ui/fragments/envoy-attack-surface/{{.Envoy.ID}}"
-            hx-target="#envoy-content"
-            hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Attack Surface</button>
+            onclick="setActiveTab(this)">Recent Runs</button>
     <button class="btn btn--sm" id="tab-swarm-load"
             hx-get="/ui/fragments/envoy-swarm-load/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
             onclick="setActiveTab(this)">Swarm</button>
-    <button class="btn btn--sm" id="tab-footprint"
-            hx-get="/ui/fragments/envoy-footprint/{{.Envoy.ID}}"
+    <button class="btn btn--sm" id="tab-attack-surface"
+            hx-get="/ui/fragments/envoy-attack-surface/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Agent Health</button>
+            onclick="setActiveTab(this)">Attack Surface</button>
+    <button class="btn btn--sm" id="tab-compliance"
+            hx-get="/ui/fragments/envoy-compliance/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Standards Compliance</button>
     {{if .ScrierEnabled}}
     <button class="btn btn--sm" id="tab-sessions"
             hx-get="/ui/fragments/envoy-sessions/{{.Envoy.ID}}"
@@ -122,6 +122,7 @@
 <p class="text-muted" style="padding:20px;">No traits collected yet — the agent has not reported a trait payload.</p>
 {{else}}
 {{$s := .Summary}}
+{{$envoyID := .EnvoyID}}
 <div class="stat-cards stat-cards--compact mb-2 traits-summary">
     <div class="stat-card">
         <div class="stat-card__label">OS</div>
@@ -145,13 +146,18 @@
 </div>
 
 <div class="traits-toolbar">
-    <input type="search" class="traits-filter" id="traits-filter" placeholder="Filter by key (e.g. cpu.model, network)" autocomplete="off" spellcheck="false" oninput="filterTraits(this.value)">
-    <span class="traits-toolbar__count text-muted" id="traits-filter-count"></span>
+    <input type="search" class="traits-filter" id="traits-filter" name="q"
+           placeholder="Filter by key (e.g. cpu.model, network)"
+           autocomplete="off" spellcheck="false"
+           hx-get="/ui/fragments/envoy-traits/{{$envoyID}}"
+           hx-trigger="input changed delay:200ms, search"
+           hx-target="#traits-tree"
+           hx-swap="innerHTML">
 </div>
 
 <div class="traits-tree" id="traits-tree">
     {{range .Tree}}
-        {{template "trait-group" .}}
+        {{template "trait-group-shell" dict "Node" . "EnvoyID" $envoyID}}
     {{end}}
 </div>
 
@@ -159,65 +165,64 @@
     <summary>Raw JSON</summary>
     <pre class="traits-raw__pre mono">{{.RawJSON}}</pre>
 </details>
-
-<script>
-(function(){
-    var rows = document.querySelectorAll('#traits-tree [data-trait-leaf]');
-    var groups = document.querySelectorAll('#traits-tree [data-trait-group]');
-    var countEl = document.getElementById('traits-filter-count');
-    var totalLeaves = rows.length;
-    window.filterTraits = function(q){
-        q = (q || '').toLowerCase().trim();
-        var visible = 0;
-        rows.forEach(function(r){
-            var match = !q || r.getAttribute('data-trait-path').toLowerCase().indexOf(q) !== -1;
-            r.style.display = match ? '' : 'none';
-            if (match) visible++;
-        });
-        groups.forEach(function(g){
-            var visibleChild = g.querySelector('[data-trait-leaf]:not([style*="display: none"])');
-            g.style.display = visibleChild ? '' : 'none';
-            if (q && visibleChild) g.setAttribute('open', '');
-        });
-        if (q) {
-            countEl.textContent = visible + ' / ' + totalLeaves + ' leaves';
-        } else {
-            countEl.textContent = '';
-            groups.forEach(function(g){ g.removeAttribute('open'); });
-        }
-    };
-})();
-</script>
 {{end}}
 {{end}}
 
-{{define "trait-group"}}
-{{if .Children}}
-<details class="trait-group" data-trait-group data-trait-path="{{.Path}}">
-    <summary class="trait-group__summary">
-        <span class="trait-group__key mono">{{.Key}}</span>
-        <span class="trait-group__count text-muted">{{.LeafCount}}{{if .IsArray}} entries{{else}} leaves{{end}}</span>
+{{/* trait-group-shell renders one top-level group as a collapsed <details>
+     whose body lazy-loads via hx-get on first expand. Reduces the initial
+     traits-tab payload from ~2 MB (all leaves rendered inline) to ~tens of
+     KB (just the group headers). Each shell carries its own envoy ID so
+     the per-group fragment endpoint knows which envoy to look up. */}}
+{{define "trait-group-shell"}}
+{{$n := .Node}}{{$envoyID := .EnvoyID}}
+{{if $n.Children}}
+<details class="trait-group" data-trait-group data-trait-path="{{$n.Path}}">
+    <summary class="trait-group__summary"
+             hx-get="/ui/fragments/envoy-trait-group/{{$envoyID}}?path={{$n.Path}}"
+             hx-trigger="toggle once from:closest details"
+             hx-target="next .trait-group__body"
+             hx-swap="innerHTML">
+        <span class="trait-group__key mono">{{$n.Key}}</span>
+        <span class="trait-group__count text-muted">{{$n.LeafCount}}{{if $n.IsArray}} entries{{else}} leaves{{end}}</span>
     </summary>
     <div class="trait-group__body">
-    {{if and .IsArray (gt (len .Children) 50)}}
-        <details class="trait-group trait-group--array-overflow">
-            <summary class="trait-group__summary">
-                <span class="text-muted">Show all {{len .Children}} entries</span>
-            </summary>
-            <div class="trait-group__body">
-            {{range .Children}}{{template "trait-node" .}}{{end}}
-            </div>
-        </details>
-    {{else}}
-        {{range .Children}}{{template "trait-node" .}}{{end}}
-    {{end}}
+        <div class="loading-skeleton">Loading…</div>
     </div>
 </details>
 {{else}}
+<div class="trait-leaf" data-trait-leaf data-trait-path="{{$n.Path}}">
+    <span class="trait-leaf__key mono">{{$n.Key}}</span>
+    <span class="trait-leaf__val mono">{{$n.Value}}</span>
+</div>
+{{end}}
+{{end}}
+
+{{/* envoy-trait-group-fragment renders one expanded group's subtree —
+     served by EnvoyTraitGroupFragment when the user opens a lazy
+     <details> for the first time. Nested groups render with the same
+     <details> shape as top-level shells but with the children expanded
+     inline (no further lazy-load) — once a top-level group is opened,
+     the operator typically wants to scan its full subtree without
+     additional round-trips. */}}
+{{define "envoy-trait-group-fragment"}}
+{{range .Children}}{{template "trait-node" .}}{{end}}
+{{end}}
+
+{{/* envoy-traits-filter-fragment renders a flat list of matching leaves
+     for a non-empty filter query. Replaces the contents of #traits-tree
+     while a query is active; clearing the input rehydrates the collapsed
+     shells via the same endpoint with empty q. */}}
+{{define "envoy-traits-filter-fragment"}}
+{{if .Matches}}
+<p class="text-muted traits-filter-count">{{len .Matches}} / {{.Total}} leaves matching "{{.Query}}"</p>
+{{range .Matches}}
 <div class="trait-leaf" data-trait-leaf data-trait-path="{{.Path}}">
-    <span class="trait-leaf__key mono">{{.Key}}</span>
+    <span class="trait-leaf__key mono">{{.Path}}</span>
     <span class="trait-leaf__val mono">{{.Value}}</span>
 </div>
+{{end}}
+{{else}}
+<p class="text-muted" style="padding:20px;">No traits match "{{.Query}}" ({{.Total}} leaves searched).</p>
 {{end}}
 {{end}}
 

@@ -348,7 +348,7 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 
 	// Start daily standards compliance snapshotting through the unified scorer.
 	go func() {
-		s.persistComplianceSnapshot(ctx)
+		s.reportHandler.PersistComplianceSnapshot(ctx)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -356,7 +356,7 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.persistComplianceSnapshot(ctx)
+				s.reportHandler.PersistComplianceSnapshot(ctx)
 			}
 		}
 	}()

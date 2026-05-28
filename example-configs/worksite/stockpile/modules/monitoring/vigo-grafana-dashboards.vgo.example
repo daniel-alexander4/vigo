@@ -1,0 +1,99 @@
+name: vigo-grafana-dashboards
+
+# Drops every Vigo Grafana dashboard into Grafana's filesystem-provisioning
+# tree so the operator gets the full dashboard suite without importing
+# JSON through the UI. Pairs with grafana.vgo.example (the daemon) and
+# vigo-prometheus-alerts (the rule file). The dashboard JSONs themselves
+# are byte-for-byte copies of the canonical files in docs/howto/grafana/;
+# an audit test (test/audit/) keeps the two trees in sync.
+
+vars:
+  grafana_dashboards_dir: "/etc/grafana/provisioning/dashboards"
+
+resources:
+  - name: vigo-dashboards-dir
+    type: directory
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo"
+    owner: grafana
+    group: grafana
+    mode: "0755"
+
+  - name: vigo-dashboards-provider
+    type: file
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo.yaml"
+    content: |
+      # Provisions the Vigo dashboard suite from disk. Grafana watches
+      # this provider every `updateIntervalSeconds`; dropping a new JSON
+      # into the dashboards dir or rewriting one shows up without a
+      # service reload.
+      apiVersion: 1
+      providers:
+        - name: vigo
+          orgId: 1
+          folder: Vigo
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 30
+          allowUiUpdates: false
+          options:
+            path: {{ .Vars.grafana_dashboards_dir }}/vigo
+            foldersFromFilesStructure: false
+    owner: root
+    group: grafana
+    mode: "0640"
+    depends_on: [vigo-dashboards-dir]
+    notify: [grafana-service]
+
+  - name: vigo-overview-dashboard
+    type: file
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-overview.json"
+    source: templates/vigo-dashboards/vigo-overview.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+    depends_on: [vigo-dashboards-dir]
+
+  - name: vigo-convergence-dashboard
+    type: file
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-convergence.json"
+    source: templates/vigo-dashboards/vigo-convergence.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+    depends_on: [vigo-dashboards-dir]
+
+  - name: vigo-bursts-dashboard
+    type: file
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-bursts.json"
+    source: templates/vigo-dashboards/vigo-bursts.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+    depends_on: [vigo-dashboards-dir]
+
+  - name: vigo-risk-dashboard
+    type: file
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-risk.json"
+    source: templates/vigo-dashboards/vigo-risk.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+    depends_on: [vigo-dashboards-dir]
+
+  - name: vigo-security-dashboard
+    type: file
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-security.json"
+    source: templates/vigo-dashboards/vigo-security.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+    depends_on: [vigo-dashboards-dir]
+
+  - name: vigo-swarm-dashboard
+    type: file
+    target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-swarm.json"
+    source: templates/vigo-dashboards/vigo-swarm.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+    depends_on: [vigo-dashboards-dir]

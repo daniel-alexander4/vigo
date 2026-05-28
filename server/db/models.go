@@ -72,6 +72,7 @@ type ComplianceHistory struct {
 	Partial       int64   `json:"partial"`
 	NotSatisfied  int64   `json:"not_satisfied"`
 	TotalControls int64   `json:"total_controls"`
+	Waived        int64   `json:"waived"`
 }
 
 type ComplianceWaiver struct {

@@ -49,12 +49,12 @@
             {{range .Envoys}}
             <tr>
                 <td><a href="/envoys/{{.ID}}#footprint">{{.Hostname}}</a></td>
-                <td class="{{severityTextClass .OpenFDs.Severity}}">{{humanMetric .OpenFDs}}</td>
-                <td class="{{severityTextClass .FDPct.Severity}}">{{humanFDPct .FDPct}}</td>
-                <td class="{{severityTextClass .RootfsPct.Severity}}">{{humanFDPct .RootfsPct}}</td>
-                <td class="{{severityTextClass .InodePct.Severity}}">{{humanFDPct .InodePct}}</td>
-                <td class="{{severityTextClass .RepoHealth.Severity}}"{{if .RepoHealth.Present}} title="{{.RepoHealth.Warnings}} warning(s) · {{.RepoHealth.Errors}} error(s)"{{end}}>{{severityLabel .RepoHealth.Severity}}</td>
-                <td class="{{severityTextClass .Health}}"><strong>{{severityLabel .Health}}</strong></td>
+                <td><span class="{{metricPillClass .OpenFDs.Severity}} status-pill--metric">{{humanMetric .OpenFDs}}</span></td>
+                <td><span class="{{metricPillClass .FDPct.Severity}} status-pill--metric">{{humanFDPct .FDPct}}</span></td>
+                <td><span class="{{metricPillClass .RootfsPct.Severity}} status-pill--metric">{{humanFDPct .RootfsPct}}</span></td>
+                <td><span class="{{metricPillClass .InodePct.Severity}} status-pill--metric">{{humanFDPct .InodePct}}</span></td>
+                <td><span class="{{metricPillClass .RepoHealth.Severity}}"{{if .RepoHealth.Present}} title="{{.RepoHealth.Warnings}} warning(s) · {{.RepoHealth.Errors}} error(s)"{{end}}>{{severityLabel .RepoHealth.Severity}}</span></td>
+                <td><span class="{{severityPillClass .Health}}">{{severityLabel .Health}}</span></td>
             </tr>
             {{end}}
         </tbody>

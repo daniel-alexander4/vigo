@@ -15,7 +15,8 @@
 <div id="envoys-stats-container"
      hx-get="/ui/fragments/envoys-stats?{{$qs}}"
      hx-trigger="every {{.PollInterval}}"
-     hx-swap="innerHTML"
+     hx-swap="morph:innerHTML"
+     hx-disinherit="*"
      aria-live="polite">
     {{template "envoys-stats" .}}
 </div>
@@ -60,7 +61,8 @@
      id="envoys-table-container"
      hx-get="/ui/fragments/envoys-table?{{$qs}}{{if .Search}}&search={{.Search}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
      hx-trigger="every {{.PollInterval}}"
-     hx-swap="innerHTML">
+     hx-swap="morph:innerHTML"
+     hx-disinherit="*">
     {{template "envoys-table" .}}
 </div>
 

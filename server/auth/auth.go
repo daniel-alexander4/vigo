@@ -91,14 +91,14 @@ var publicPrefixes = []string{
 
 // publicPaths are exact URL paths that never require authentication.
 var publicPaths = map[string]bool{
-	"/bootstrap":              true,
-	"/bootstrap/agent":        true,
-	"/bootstrap/cert":         true,
-	"/bootstrap/csr":          true,
-	"/metrics":                true,
-	"/healthz":                true,
-	"/login":                  true,
-	"/totp":                   true,
+	"/bootstrap":        true,
+	"/bootstrap/agent":  true,
+	"/bootstrap/cert":   true,
+	"/bootstrap/csr":    true,
+	"/metrics":          true,
+	"/healthz":          true,
+	"/login":            true,
+	"/totp":             true,
 	"/api/v1/bootstrap": true,
 	// /api/v1/secrets/rotated is INTENTIONALLY NOT public. The route's own
 	// admin() wrapper (server/api/config.go) handles auth. Listing it here
@@ -153,6 +153,12 @@ func isAPIPath(path string) bool {
 	return strings.HasPrefix(path, "/api/")
 }
 
+// LocalAdminUserID is the synthetic principal ID of the local-admin token.
+// It is deliberately not a real users-table row; handlers that must treat
+// the bootstrap principal specially (e.g. requiring an explicit token owner)
+// compare against this rather than re-hardcoding the literal.
+const LocalAdminUserID = "localhost"
+
 // localAdminUser is the synthetic admin identity resolved for a request
 // bearing the local-admin token (see localadmin.go). It is not a row in
 // the users table — it is the runtime identity of "root on the server
@@ -160,8 +166,8 @@ func isAPIPath(path string) bool {
 // the former source-IP "peer auth", which trusted any loopback or
 // Docker-bridge caller and so handed admin to non-root local users.
 var localAdminUser = &User{
-	ID:          "localhost",
-	Username:    "localhost",
+	ID:          LocalAdminUserID,
+	Username:    LocalAdminUserID,
 	Role:        "admin",
 	Permissions: AllPermissions,
 }

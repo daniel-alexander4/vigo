@@ -56,7 +56,7 @@ func TestTokens_CreateToken(t *testing.T) {
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -82,13 +82,67 @@ func TestTokens_CreateToken(t *testing.T) {
 	}
 }
 
+// The local-admin principal (root on the server host) has no users-table
+// row, so it must name a real owner via --user; without it the token would
+// be orphaned and could never authenticate. A real web user may not set
+// --user at all — this endpoint is auth-gated, not admin-gated, so allowing
+// it would let a viewer mint an admin-owned token.
+func TestTokens_CreateTokenOwner(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	aliceID := insertTestUser(t, sqlDB, "alice", "admin")
+	insertTestUser(t, sqlDB, "bob", "viewer")
+
+	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	post := func(body, userID, username, role string) *httptest.ResponseRecorder {
+		req := tokenRequestWithUser("POST", "/api/v1/auth/tokens", []byte(body), userID, username, role)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// Local-admin without --user: orphan owner rejected.
+	if rec := post(`{"name":"t"}`, vigoauth.LocalAdminUserID, "localhost", "admin"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("local-admin no --user: expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Local-admin with a non-existent --user: rejected.
+	if rec := post(`{"name":"t","user":"nobody"}`, vigoauth.LocalAdminUserID, "localhost", "admin"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("local-admin bad --user: expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Local-admin with a valid --user: token minted and owned by that user.
+	rec := post(`{"name":"t","user":"alice"}`, vigoauth.LocalAdminUserID, "localhost", "admin")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("local-admin valid --user: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp createTokenResponse
+	json.NewDecoder(rec.Body).Decode(&resp)
+	var ownerID string
+	if err := sqlDB.QueryRow(`SELECT user_id FROM api_tokens WHERE id = ?`, resp.ID).Scan(&ownerID); err != nil {
+		t.Fatalf("read minted token owner: %v", err)
+	}
+	if ownerID != aliceID {
+		t.Errorf("expected token owned by alice (%s), got %s", aliceID, ownerID)
+	}
+
+	// Real web user setting --user for someone else: forbidden (no escalation).
+	if rec := post(`{"name":"t","user":"alice"}`, insertTestUser(t, sqlDB, "carol", "viewer"), "carol", "viewer"); rec.Code != http.StatusForbidden {
+		t.Fatalf("real user with --user: expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestTokens_CreateTokenInvalidExpiry(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -108,7 +162,7 @@ func TestTokens_ListTokens(t *testing.T) {
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -145,7 +199,7 @@ func TestTokens_DeleteToken(t *testing.T) {
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -186,7 +240,7 @@ func TestTokens_UnauthorizedWithoutUser(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

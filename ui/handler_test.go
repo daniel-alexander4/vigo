@@ -45,8 +45,9 @@ func TestDashboardHandler(t *testing.T) {
 		}
 	}
 
-	// Should have auto-refresh trigger
-	if !strings.Contains(body, `hx-trigger="every 30s"`) {
+	// Should have auto-refresh trigger. With the test handler's baseInterval
+	// of 5m, the new formula min(checkin, 5m) renders as "300s".
+	if !strings.Contains(body, `hx-trigger="every 300s"`) {
 		t.Error("Dashboard missing hx-trigger for auto-refresh")
 	}
 }

@@ -1222,7 +1222,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		}
 		s.spannerGossip.SetAuditWriter(s.auditWriter)
 	}
-	tokensHandler := api.NewTokensHandler(tokenStore, s.authMethod)
+	tokensHandler := api.NewTokensHandler(tokenStore, userStore, s.authMethod)
 	tokensHandler.SetAuditWriter(s.auditWriter)
 	// Curator S3 API (ADR-027) credential management. The store is wired
 	// below only under the `local` secrets backend (SetStore); the routes
@@ -1337,12 +1337,17 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			slog.Info("curator S3 credential store ready")
 		}
 
-		gwMux, uiHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.promReg, s.metrics, gwOpts...)
+		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.promReg, s.metrics, gwOpts...)
 		if gwErr != nil {
 			return nil, fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
 		s.gwMux = gwMux
 		s.uiHandler = uiHandler
+
+		// Wire the compliance snapshotter so successful config publishes
+		// refresh compliance_history alongside the daily background tick —
+		// the dashboard standards-summary reads that table.
+		configHandler.SetComplianceSnapshotter(s.reportHandler.PersistComplianceSnapshot)
 
 		// Wire branding, hostname, observe-only, and CVE searcher into UI handler.
 		uiHandler.SetAgentVersion(s.agentVersion)

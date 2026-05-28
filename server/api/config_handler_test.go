@@ -5,9 +5,11 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,6 +78,55 @@ func TestConfig_ReloadConfig_IncrementsPublishCounter(t *testing.T) {
 	mux.ServeHTTP(rec, adminReq(httptest.NewRequest("POST", "/api/v1/config/reload", nil)))
 	if got := testutil.ToFloat64(m.ConfigPublishesTotal); got != 2 {
 		t.Errorf("ConfigPublishesTotal = %v after second reload, want 2", got)
+	}
+}
+
+// TestConfig_ReloadConfig_TriggersComplianceSnapshot pins the publish-hook
+// → snapshot wiring: every successful reload fires the registered
+// snapshotter exactly once. The dashboard standards-summary reads from
+// compliance_history, so this is how operator changes (new waivers,
+// framework toggles, scope shifts) surface without waiting for the
+// daily background tick.
+func TestConfig_ReloadConfig_TriggersComplianceSnapshot(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	configStore := newDoctorTestConfigStore(t)
+
+	handler := NewConfigHandler(queries, configStore, fleet.NewFleetIndex(), &publish.State{}, "", "")
+	var (
+		mu     sync.Mutex
+		fired  int
+		done   = make(chan struct{}, 4)
+	)
+	handler.SetComplianceSnapshotter(func(ctx context.Context) {
+		mu.Lock()
+		fired++
+		mu.Unlock()
+		done <- struct{}{}
+	})
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Two successful reloads — expect exactly two snapshot fires.
+	for i := 0; i < 2; i++ {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, adminReq(httptest.NewRequest("POST", "/api/v1/config/reload", nil)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("reload %d: expected 200, got %d: %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+
+	// Snapshotter runs in a goroutine; wait for both fires before checking.
+	for i := 0; i < 2; i++ {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("snapshotter fire %d did not arrive within 2s", i+1)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if fired != 2 {
+		t.Errorf("snapshotter fired %d times after two reloads, want 2", fired)
 	}
 }
 

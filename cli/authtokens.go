@@ -17,6 +17,7 @@ var authCreateTokenCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		expiresIn, _ := cmd.Flags().GetString("expires-in")
+		user, _ := cmd.Flags().GetString("user")
 
 		body := map[string]string{}
 		if name != "" {
@@ -24,6 +25,9 @@ var authCreateTokenCmd = &cobra.Command{
 		}
 		if expiresIn != "" {
 			body["expires_in"] = expiresIn
+		}
+		if user != "" {
+			body["user"] = user
 		}
 
 		var resp struct {
@@ -107,6 +111,7 @@ var authRevokeTokenCmd = &cobra.Command{
 func init() {
 	authCreateTokenCmd.Flags().String("name", "", "Descriptive name for the token")
 	authCreateTokenCmd.Flags().String("expires-in", "", "Expiry duration (e.g., 720h for 30 days). Omit for no expiry.")
+	authCreateTokenCmd.Flags().String("user", "", "Owner web-user (e.g. 'dan'). Required when running on the server host, where the CLI authenticates as the local-admin principal rather than a web user.")
 
 	authCmd.AddCommand(authCreateTokenCmd)
 	authCmd.AddCommand(authListTokensCmd)

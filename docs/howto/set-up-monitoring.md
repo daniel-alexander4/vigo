@@ -314,7 +314,25 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | **Swarm & Spanner** | 13 panels across 5 rows: substrate footprint, content-subsystem counts (gitback/curator/lockbox/longdrawer), cross-envoy divergence, spanner bolt roster | [vigo-swarm.json](grafana/vigo-swarm.json) |
 | **Publish Bursts** | 13 panels across 4 rows: at-a-glance in-flight CheckIns / active nodes / outbound MB·s / convergence %, gRPC rate + latency + TLS handshakes, bundle bytes/s + size quantiles + force pushes, module actions + drift + sig-verify failures + convergence over time. Vertical annotations mark every config publish. | [vigo-bursts.json](grafana/vigo-bursts.json) |
 
-## Import
+## Install via Vigo modules (recommended)
+
+For any host that runs Grafana under Vigo management, drop the `vigo-grafana-dashboards` module into the role and converge:
+
+```yaml
+# worksite/stockpile/scaffolding/roles.vgo
+- name: grafana-host
+  modules:
+    - grafana                  # installs the daemon
+    - vigo-grafana-dashboards  # drops all six dashboards into provisioning
+```
+
+The module sources the dashboard JSONs from `worksite/stockpile/templates/vigo-dashboards/` and writes them to `/etc/grafana/provisioning/dashboards/vigo/`. Grafana picks them up on its next provisioning scan (default 30 s) — no UI import, no service restart.
+
+The companion `vigo-prometheus-alerts` module ships [`alerts.yaml`](#alert-rules) to `/etc/prometheus/rules/vigo-alerts.yaml` and notifies the Prometheus service to reload. Pair it with the standard `prometheus` module — which already mounts `rule_files: /etc/prometheus/rules/*.yml`.
+
+## Manual import
+
+For hosts where Vigo isn't managing the monitoring stack, import each dashboard by hand:
 
 1. Download the JSON file using the link in the table above
 2. Open Grafana (typically http://localhost:3000)

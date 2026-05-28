@@ -1554,16 +1554,19 @@ Create and manage API tokens for programmatic access. Tokens use the `vgot_` pre
 
 **Permission:** Authenticated (own account)
 
-Create a new API token. Requires authentication.
+Create a new API token. Requires authentication. The token is owned by a web user and inherits that user's role at validation time.
 
 **Request body:**
 
 ```json
 {
   "name": "ci-pipeline",
-  "expires_in": "720h"
+  "expires_in": "720h",
+  "user": "dan"
 }
 ```
+
+`user` names the owning web user. It is optional and defaults to the caller; it may only be set by the local-admin principal (the server-host CLI), which has no web-user row of its own and must therefore name an owner. A request authenticated as a regular web user that sets `user` to anyone else is rejected `403`. A request whose resolved owner is not a real web user is rejected `400`.
 
 **Response (201 Created):**
 

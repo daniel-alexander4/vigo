@@ -37,7 +37,7 @@
     {{end}}
 </div>
 
-<div class="table-container" hx-get="/audit?{{.QueryString}}" hx-trigger="every {{.PollInterval}}" hx-select=".table-container" hx-swap="outerHTML" aria-live="polite">
+<div class="table-container" hx-get="/audit?{{.QueryString}}" hx-trigger="every {{.PollInterval}}" hx-select=".table-container" hx-swap="morph:outerHTML" hx-disinherit="*" aria-live="polite">
     <table class="table">
         <thead>
             <tr>
