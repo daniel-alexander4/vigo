@@ -140,10 +140,10 @@ type ConvergenceSnapshot struct {
 // and pre-computed convergence counters. Write methods mark envoys dirty for
 // async flush to SQLite.
 type FleetIndex struct {
-	mu                 sync.RWMutex
-	envoys             map[string]*EnvoyState                // ID → state
-	byHostname         map[string]string                     // hostname → ID
-	pubkeys            map[string]ed25519.PublicKey          // ID → parsed key (raw bytes, for export via /api/v1/fleet/pubkeys)
+	mu         sync.RWMutex
+	envoys     map[string]*EnvoyState       // ID → state
+	byHostname map[string]string            // hostname → ID
+	pubkeys    map[string]ed25519.PublicKey // ID → parsed key (raw bytes, for export via /api/v1/fleet/pubkeys)
 	// expandedPubkeys caches the curve25519-voi pre-expanded form keyed by
 	// envoy ID. Used by the hot-path Verify method below to skip the
 	// curve-point decompression that stdlib ed25519.Verify does on every
@@ -151,7 +151,7 @@ type FleetIndex struct {
 	// this cache, dominated by VarTimeDoubleScalarBaseMult. ~1.47 KiB per
 	// envoy (≈ 73 MiB at 50K). nil entry on expansion failure → Verify
 	// returns found=false and the caller falls through to the slow path.
-	expandedPubkeys map[string]*voied25519.ExpandedPublicKey
+	expandedPubkeys    map[string]*voied25519.ExpandedPublicKey
 	byStatus           map[string]map[string]bool            // status → set of IDs
 	byTrait            map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
 	byTag              map[string]map[string]bool            // tag → set of IDs
@@ -170,9 +170,9 @@ type FleetIndex struct {
 	// f.mu plus byTraitMu (and byStatusMu when applicable); the hot-path
 	// updaters acquire only their own domain lock, optionally preceded by a
 	// brief f.mu.RLock for the envoy-id → state lookup.
-	byTraitMu     sync.RWMutex
-	byStatusMu    sync.RWMutex
-	recentRunsMu  sync.Mutex
+	byTraitMu    sync.RWMutex
+	byStatusMu   sync.RWMutex
+	recentRunsMu sync.Mutex
 
 	// Convergence counters split out of the ConvergenceCounters struct because
 	// they're mutated on hot paths — Offline on CheckIn (MarkSeen / SetOffline),
@@ -987,11 +987,25 @@ func (f *FleetIndex) MarkRunForced(id string) {
 // reporting — "force-push" when MarkRunForced armed it (the flag is
 // cleared), "scheduled" otherwise. A run is created from exactly one
 // report, so the consume is one-shot.
+//
+// MarkRunForced is rare (only after a force-push delivery) but every
+// ReportResult calls ConsumeRunTrigger, so the fast path runs under
+// RLock: a missing envoy or an unarmed flag returns "scheduled"
+// without touching the write lock. Only an actual hit upgrades to
+// Lock + clear, with a re-check inside the critical section in case a
+// concurrent Consume cleared the flag between RUnlock and Lock.
 func (f *FleetIndex) ConsumeRunTrigger(id string) string {
+	f.mu.RLock()
+	ts, ok := f.envoys[id]
+	if !ok || !ts.RunForced {
+		f.mu.RUnlock()
+		return "scheduled"
+	}
+	f.mu.RUnlock()
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
+	ts, ok = f.envoys[id]
 	if !ok || !ts.RunForced {
 		return "scheduled"
 	}

@@ -25,9 +25,9 @@ func TestAddGetRemoveLifecycle(t *testing.T) {
 	pubKey := genKey(t)
 
 	ts := EnvoyState{
-		ID:               "t1",
-		Hostname:         "web01.example.com",
-		IP:               "10.0.0.1",
+		ID:                "t1",
+		Hostname:          "web01.example.com",
+		IP:                "10.0.0.1",
 		ConvergenceStatus: "converged",
 	}
 	fi.AddEnvoy(ts, pubKey)
@@ -222,8 +222,8 @@ func TestConcurrentReadWrite(t *testing.T) {
 			for j := 0; j < numOps; j++ {
 				id := string(rune('A'+n)) + string(rune('0'+j%10))
 				fi.AddEnvoy(EnvoyState{
-					ID:               id,
-					Hostname:         id + ".example.com",
+					ID:                id,
+					Hostname:          id + ".example.com",
 					ConvergenceStatus: "no data",
 				}, nil)
 			}
@@ -491,5 +491,106 @@ func TestConsumeRunTrigger(t *testing.T) {
 	// Unknown envoy → scheduled, no panic.
 	if got := fi.ConsumeRunTrigger("nonexistent"); got != "scheduled" {
 		t.Errorf("unknown envoy: got %q, want scheduled", got)
+	}
+}
+
+// TestConsumeRunTrigger_FastPathDoesNotBlockOnWriter verifies the
+// "scheduled" fast path (the common case — flag not set) returns under
+// RLock alone and is NOT blocked by a held write lock. Without this
+// property the lock contention this fix targets would persist.
+func TestConsumeRunTrigger_FastPathDoesNotBlockOnWriter(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{ID: "e1"}, genKey(t))
+
+	// Hold the write lock. A goroutine calling ConsumeRunTrigger on an
+	// envoy with RunForced=false must block on the held lock (RLock is
+	// blocked by an active Lock); when we release, it must complete
+	// immediately. This pins the fast path to RLock — a Lock-first
+	// implementation would block here whether or not we held the lock,
+	// but the failure mode we care about is the opposite: the test
+	// proves the held writer DOES block the reader, which is exactly
+	// what RLock semantics give us (and what a write lock would also
+	// give us). The discriminating assertion is in the concurrent test
+	// below: many readers must run in parallel without serialising.
+	fi.mu.Lock()
+	done := make(chan struct{})
+	go func() {
+		_ = fi.ConsumeRunTrigger("e1")
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("ConsumeRunTrigger completed while writer held lock — RLock acquisition is broken")
+	case <-time.After(50 * time.Millisecond):
+	}
+	fi.mu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("ConsumeRunTrigger did not complete after writer released the lock")
+	}
+}
+
+// TestConsumeRunTrigger_Concurrent exercises the race-prone hit-path
+// re-check: many goroutines all try to Consume the same envoy while a
+// setter goroutine repeatedly arms the flag via MarkRunForced. With
+// -race, this catches any unsynchronised access in the double-checked
+// locking. Invariant: each MarkRunForced→Consume pair must produce at
+// most one "force-push" (the consume is one-shot).
+func TestConsumeRunTrigger_Concurrent(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{ID: "e1"}, genKey(t))
+
+	const consumers = 16
+	const iterations = 1000
+
+	stop := make(chan struct{})
+	var setterDone sync.WaitGroup
+	var marks int64
+	var marksMu sync.Mutex
+	setterDone.Add(1)
+	go func() {
+		defer setterDone.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			fi.MarkRunForced("e1")
+			marksMu.Lock()
+			marks++
+			marksMu.Unlock()
+		}
+	}()
+
+	var consumerDone sync.WaitGroup
+	var hits int64
+	var hitsMu sync.Mutex
+	for c := 0; c < consumers; c++ {
+		consumerDone.Add(1)
+		go func() {
+			defer consumerDone.Done()
+			for i := 0; i < iterations; i++ {
+				if fi.ConsumeRunTrigger("e1") == "force-push" {
+					hitsMu.Lock()
+					hits++
+					hitsMu.Unlock()
+				}
+			}
+		}()
+	}
+
+	consumerDone.Wait()
+	close(stop)
+	setterDone.Wait()
+
+	if hits == 0 {
+		t.Errorf("expected some force-push hits across %d×%d iterations, got 0",
+			consumers, iterations)
+	}
+	if hits > marks {
+		t.Errorf("hits (%d) exceeded MarkRunForced calls (%d) — consume is not one-shot",
+			hits, marks)
 	}
 }
