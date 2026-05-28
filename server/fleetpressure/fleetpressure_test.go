@@ -135,7 +135,7 @@ func TestComputeHealthFoldsRootfsAndInodeAndRepo(t *testing.T) {
 		"agent_self.open_fds":            "100",  // OK
 		"mountpoints.mounts./.used_pct":  "95.0", // Fail (>90)
 		"mountpoints.mounts./.inode_pct": "10.0", // OK
-		"repo_health.status":             "ok",   // OK
+		"package_updates.count":          "12",   // collector ran, no broken repos → OK
 	})
 	p := Compute(state)
 	if p.RootfsPct.Severity != Fail {
@@ -145,33 +145,41 @@ func TestComputeHealthFoldsRootfsAndInodeAndRepo(t *testing.T) {
 		t.Errorf("inode 10%% should be OK; got %v", p.InodePct.Severity)
 	}
 	if p.RepoHealth.Severity != OK {
-		t.Errorf("repo_health=ok should be OK; got %v", p.RepoHealth.Severity)
+		t.Errorf("package_updates.count=12 (no broken) should be OK; got %v", p.RepoHealth.Severity)
 	}
 	if p.Health != Fail {
 		t.Errorf("Health should fold rootfs into composite (Fail); got %v", p.Health)
 	}
 }
 
-func TestRepoHealthStatusMapping(t *testing.T) {
+func TestRepoHealthFromPackageUpdates(t *testing.T) {
 	cases := []struct {
-		status string
-		want   Severity
+		name       string
+		traits     map[string]string
+		wantSev    Severity
+		wantErrors uint64
+		wantPres   bool
 	}{
-		{"ok", OK},
-		{"warn", Warn},
-		{"fail", Fail},
-		{"", Unknown},        // missing trait
-		{"degraded", Unknown}, // unrecognized status — surfaced but not classified
+		{"no collector run", map[string]string{}, Unknown, 0, false},
+		{"unsupported pkg mgr (count=-1)", map[string]string{"package_updates.count": "-1"}, Unknown, 0, false},
+		{"healthy", map[string]string{"package_updates.count": "5"}, OK, 0, true},
+		{"healthy (count=0)", map[string]string{"package_updates.count": "0"}, OK, 0, true},
+		{"broken", map[string]string{
+			"package_updates.count":             "5",
+			"package_updates.broken_repo_count": "3",
+		}, Fail, 3, true},
 	}
 	for _, tc := range cases {
-		t.Run(tc.status, func(t *testing.T) {
-			m := map[string]string{}
-			if tc.status != "" {
-				m["repo_health.status"] = tc.status
+		t.Run(tc.name, func(t *testing.T) {
+			p := Compute(EnvoySource{ID: "e1", Hostname: "h1", Traits: tc.traits})
+			if p.RepoHealth.Severity != tc.wantSev {
+				t.Errorf("severity: want %v, got %v", tc.wantSev, p.RepoHealth.Severity)
 			}
-			p := Compute(EnvoySource{ID: "e1", Hostname: "h1", Traits: m})
-			if p.RepoHealth.Severity != tc.want {
-				t.Errorf("repo_health.status=%q: want %v, got %v", tc.status, tc.want, p.RepoHealth.Severity)
+			if p.RepoHealth.Errors != tc.wantErrors {
+				t.Errorf("errors: want %d, got %d", tc.wantErrors, p.RepoHealth.Errors)
+			}
+			if p.RepoHealth.Present != tc.wantPres {
+				t.Errorf("present: want %v, got %v", tc.wantPres, p.RepoHealth.Present)
 			}
 		})
 	}

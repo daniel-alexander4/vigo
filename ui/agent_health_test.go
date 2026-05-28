@@ -52,7 +52,7 @@ func TestAgentHealthPage_RendersTableAndSummary(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Agent Health", "Worst Level", "Degraded Envoys", "Reporting",
-		"alpha", "750", "95.0%", "warn", "Fail",
+		"alpha", "750", "95.0%", "warn", "Failing",
 		`href="/envoys/00000000-0000-0000-0000-000000000001#footprint"`,
 	} {
 		if !strings.Contains(body, want) {

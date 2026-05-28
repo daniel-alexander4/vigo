@@ -360,42 +360,38 @@ func classifyInodePct(v float64) Severity {
 	}
 }
 
-// repoHealthMetric reads the `repo_health.status` trait (one of
-// "ok" / "warn" / "fail") plus the warning + error counts the agent
-// emits alongside it. Anything else, or a missing status, leaves
-// Severity=Unknown so the composite doesn't get pulled down by an
-// envoy that simply hasn't collected the trait yet (e.g. a non-Linux
-// host, or one running an older agent build).
+// repoHealthMetric derives package-repo health from the agent's
+// `package_updates` trait. The agent emits `package_updates.count` on
+// every platform whose package manager it understands (apt / dnf /
+// yum / brew); on unsupported platforms it emits -1, and the
+// broken_repo_count key is absent. Anything we can't classify
+// confidently leaves Severity=Unknown so the composite isn't tainted
+// by envoys that simply can't report (no collector run yet, or a
+// platform without a matching package-manager probe).
+//
+// No warn middle state exists for this trait — the agent only
+// distinguishes "ok" from "fail" by counting broken repos.
 func repoHealthMetric(traits map[string]string) RepoHealthMetric {
 	if traits == nil {
 		return RepoHealthMetric{Severity: Unknown}
 	}
-	status, ok := traits["repo_health.status"]
-	if !ok || status == "" {
+	count, ok := traits["package_updates.count"]
+	if !ok || count == "" || count == "-1" {
 		return RepoHealthMetric{Severity: Unknown}
 	}
-	var sev Severity
-	switch status {
-	case "ok":
-		sev = OK
-	case "warn":
-		sev = Warn
-	case "fail":
-		sev = Fail
-	default:
-		// Unrecognized status — surface it as Status but classify
-		// Unknown so the composite isn't tainted by an unexpected
-		// value the agent might emit.
-		return RepoHealthMetric{Status: status, Present: true, Severity: Unknown}
+	broken, _ := strconv.ParseUint(traits["package_updates.broken_repo_count"], 10, 64)
+	if broken > 0 {
+		return RepoHealthMetric{
+			Status:   "fail",
+			Errors:   broken,
+			Present:  true,
+			Severity: Fail,
+		}
 	}
-	warnings, _ := strconv.ParseUint(traits["repo_health.warnings"], 10, 64)
-	errors, _ := strconv.ParseUint(traits["repo_health.errors"], 10, 64)
 	return RepoHealthMetric{
-		Status:   status,
-		Warnings: warnings,
-		Errors:   errors,
+		Status:   "ok",
 		Present:  true,
-		Severity: sev,
+		Severity: OK,
 	}
 }
 
