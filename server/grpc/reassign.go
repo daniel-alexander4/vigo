@@ -34,12 +34,30 @@ func (s *ReassignStore) Set(envoyID string, info ReassignInfo) {
 
 // Pop retrieves and removes the reassignment info for a envoy.
 // Returns the info and true if found, or zero value and false if not.
+//
+// Reassignments are rare events but every CheckIn calls Pop, so the
+// fast path runs under RLock: an empty store or a missing key returns
+// without touching the write lock. Only an actual hit upgrades to Lock
+// + delete, with a re-check inside the critical section in case a
+// concurrent Pop/Set raced between RUnlock and Lock.
 func (s *ReassignStore) Pop(envoyID string) (ReassignInfo, bool) {
+	s.mu.RLock()
+	if len(s.m) == 0 {
+		s.mu.RUnlock()
+		return ReassignInfo{}, false
+	}
+	_, present := s.m[envoyID]
+	s.mu.RUnlock()
+	if !present {
+		return ReassignInfo{}, false
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	info, ok := s.m[envoyID]
-	if ok {
-		delete(s.m, envoyID)
+	if !ok {
+		return ReassignInfo{}, false
 	}
-	return info, ok
+	delete(s.m, envoyID)
+	return info, true
 }

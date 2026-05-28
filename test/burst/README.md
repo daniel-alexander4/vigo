@@ -48,28 +48,40 @@ narrower than they look:
 - **CheckIn-only** — no `ReportResult` / `ReportTraits` / `Wake` calls
   yet. That's the next pending realism lever.
 
-## Sizing — measured loopback ceiling
+## Sizing — measured server ceiling
 
-Offered rate = `count / interval`. On a single-host colocated-driver
-loopback run, the server's CheckIn capacity is bounded by what the
-host can serve while *also* generating the load.
+Offered rate = `count / interval`. On dan-desktop (32-core, vigosrv 0.68.16+),
+the server's CheckIn capacity tops out around 5 000 req/s; the cliff above
+that is steep, not gradual.
 
-Measured on dan-desktop (32-core, driver + vigosrv colocated, 0.68.16):
+| count × interval | offered rate | driver | result |
+|---|---:|---|---|
+| 25 000 × 5 s | 5 000 / s | loopback | baseline failure 0.7 %, p50 1.5 ms, p99 95 ms — clean |
+| 50 000 × 5 s | 10 000 / s | loopback | baseline failure **99.8 %**, throughput collapses to ~70 / s — overload |
+| 5 000 × 5 s | 1 000 / s | loopback | baseline p50 0.37 ms, p99 1.48 ms, fail 0.09 % |
+| 5 000 × 5 s | 1 000 / s | LAN (annlap → danlap) | baseline p50 2.97 ms, p99 23.73 ms, fail 0.20 %; throughput identical to loopback |
 
-| count × interval | offered rate | result |
-|---|---:|---|
-| 25 000 × 5 s | 5 000 / s | baseline failure 0.7 %, p50 1.5 ms, p99 95 ms — clean |
-| 50 000 × 5 s | 10 000 / s | baseline failure **99.8 %**, throughput collapses to ~70 / s — overload |
+At ~2× server capacity the 5 s ticker re-fires before the previous CheckIn
+returns, retries pile on top of the still-queued request, offered rate climbs
+further, and the system enters cascading overload (throughput → ~0). The
+0.68.20 `checkin.max_concurrent` knob caps the cascade cleanly when set;
+without it, overload past the cliff collapses.
 
-The cliff is **not gradual**: at ~2× server capacity, the 5 s ticker
-re-fires before the previous CheckIn returns, retries pile on top of
-the existing queue, offered rate climbs further, and the system enters
-cascading overload (throughput → ~0).
+**Loopback vs LAN driver.** The 5 000-envoy LAN run (driver on annlap, server
+on danlap) delivered the same number of policy bundles as the matching
+loopback run — the throughput ceiling is the server's serving rate, not
+driver-colocation contention. LAN does add real latency: p50 8× higher,
+p99 16× higher, plus a longer-tailed bundle-wave spike (peak p99 380 ms at
++30 s vs loopback's 24 ms at +4 s). Real fleets see numbers closer to the
+LAN run than the loopback run. Capacity-wise, moving the driver off-box is
+not a way to probe past the cliff — that requires raising the server's CPU
+ceiling itself (next-bottleneck investigation in `pending.md`).
 
 Rule of thumb for this hardware: keep `count / interval ≤ 5 000 / s` for
-clean steady-state. To probe beyond, either lengthen `--interval`
-(50 000 × 10 s = 5 000 / s still fits), reduce `--count`, or move the
-driver off-box.
+clean steady-state. To probe beyond, lengthen `--interval`
+(50 000 × 10 s = 5 000 / s still fits), reduce `--count`, or enable
+load-shedding via `checkin.max_concurrent` so the cliff is graceful instead
+of cascading.
 
 ## Run
 
