@@ -685,23 +685,85 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         }
     }
 
+    // Load tombstones + resurrects up front so the plaintext-file
+    // section can cross-reference each name and render a specific
+    // reason (tombstoned vs session locked) per file. Both tables
+    // are root-owned canonical at /var/lib/vigo/...; the daemon
+    // mirrors them to ~/.lockbox/ (0600) so we can read without sudo.
+    let username = home
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string();
+    let (tombs, resurrects_table) = if config::is_enrolled(&home) && !username.is_empty() {
+        (
+            tombstones::TombstoneTable::load_user(&username, &home),
+            super::resurrects::ResurrectsTable::load_user(&username, &home),
+        )
+    } else {
+        (
+            tombstones::TombstoneTable::empty(""),
+            super::resurrects::ResurrectsTable::empty(""),
+        )
+    };
+    let now = now_secs();
+
     if content.is_dir() {
         let counts = scan_content_subcounts(&content);
         println!("  files:            {}", counts.total());
         println!("    ciphertext:     {}", counts.ciphertext);
-        if counts.plaintext > 0 {
-            println!(
-                "    plaintext:      {} — still in the clear on disk. Run",
-                counts.plaintext
-            );
-            println!(
-                "                    `vigo swarm lockbox unlock` to encrypt"
-            );
-            println!(
-                "                    them in place and propagate to puddle members."
-            );
-        } else {
+        if counts.plaintext.is_empty() {
             println!("    plaintext:      0");
+        } else {
+            println!(
+                "    plaintext:      {} — still in the clear on disk:",
+                counts.plaintext.len()
+            );
+            // Classify each plaintext file; tombstoned first (more
+            // actionable, harder to discover — until this fix, only
+            // visible in `journalctl -u vigo-envoy`).
+            let mut classified: Vec<(PlaintextEntry, StuckPlaintextReason)> = counts
+                .plaintext
+                .into_iter()
+                .map(|f| {
+                    let reason = classify_stuck_plaintext(&f.name, &tombs, &resurrects_table, now);
+                    (f, reason)
+                })
+                .collect();
+            classified.sort_by_key(|(_, reason)| match reason {
+                StuckPlaintextReason::Tombstoned { .. } => 0,
+                StuckPlaintextReason::SessionLocked => 1,
+            });
+            for (file, reason) in &classified {
+                match reason {
+                    StuckPlaintextReason::Tombstoned {
+                        remaining_days,
+                        source_hostname,
+                    } => {
+                        println!(
+                            "                      {} ({}) — tombstoned ({}d remaining, deleted from {})",
+                            file.name,
+                            fmt_size(file.size),
+                            remaining_days,
+                            source_hostname,
+                        );
+                        println!(
+                            "                        → run `vigo swarm lockbox resurrect {}` to override and encrypt",
+                            file.name,
+                        );
+                    }
+                    StuckPlaintextReason::SessionLocked => {
+                        println!(
+                            "                      {} ({}) — session locked",
+                            file.name,
+                            fmt_size(file.size),
+                        );
+                        println!(
+                            "                        → run `vigo swarm lockbox unlock` to encrypt"
+                        );
+                    }
+                }
+            }
         }
         if counts.failed.is_empty() {
             println!("    failed:         0");
@@ -735,19 +797,32 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         );
     }
 
-    // Tombstone count. The canonical table lives in
-    // /var/lib/vigo/swarm/lockbox/<user>/tombstones.json (root 0600), but the
-    // daemon mirrors every save to ~/.lockbox/tombstones.json (user
-    // 0600). Read the user-side mirror so this works without sudo.
-    if config::is_enrolled(&home) {
-        let username = home
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
-        if !username.is_empty() {
-            let table = tombstones::TombstoneTable::load_user(username, &home);
-            println!("  tombstones:       {}", table.tombstones.len());
+    // Tombstone section. List each filename with remaining retention
+    // and the envoy that originated the delete, sorted by ascending
+    // remaining days (most urgent first). The cross-reference with
+    // plaintext above already handles the "why is my file stuck"
+    // question; this section answers "what other names are blocked
+    // from re-use right now?"
+    if !tombs.tombstones.is_empty() {
+        println!("  tombstones:       {}", tombs.tombstones.len());
+        let retention_secs = tombstones::effective_retention_secs();
+        let mut entries: Vec<(&String, &tombstones::Tombstone, i64)> = tombs
+            .tombstones
+            .iter()
+            .map(|(name, t)| {
+                let remaining_days = ((retention_secs - (now - t.deletion_time)).max(0)) / 86_400;
+                (name, t, remaining_days)
+            })
+            .collect();
+        entries.sort_by_key(|(_, _, remaining_days)| *remaining_days);
+        for (name, t, remaining_days) in entries {
+            println!(
+                "                      {} — {}d remaining (deleted from {})",
+                name, remaining_days, t.source_hostname,
+            );
         }
+    } else if config::is_enrolled(&home) {
+        println!("  tombstones:       0");
     }
 
     let cfg = config::load_config(&home);
@@ -2098,13 +2173,24 @@ fn is_age_ciphertext(bytes: &[u8]) -> bool {
 #[derive(Default)]
 struct ContentSubcounts {
     ciphertext: usize,
-    plaintext: usize,
+    plaintext: Vec<PlaintextEntry>,
     failed: Vec<String>,
+}
+
+/// One plaintext file in `~<user>/lockbox/` — name + size for the
+/// per-file status line. The status command cross-references each
+/// name against the tombstone table to render a specific reason
+/// (tombstoned vs session locked) instead of a generic "Run unlock"
+/// hint that's only correct for one of the two stuck modes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PlaintextEntry {
+    name: String,
+    size: u64,
 }
 
 impl ContentSubcounts {
     fn total(&self) -> usize {
-        self.ciphertext + self.plaintext + self.failed.len()
+        self.ciphertext + self.plaintext.len() + self.failed.len()
     }
 }
 
@@ -2130,13 +2216,69 @@ fn scan_content_subcounts(content: &Path) -> ContentSubcounts {
             out.failed.push(name);
             continue;
         }
+        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
         match crypt::is_age_encrypted(&path) {
             Ok(true) => out.ciphertext += 1,
-            Ok(false) => out.plaintext += 1,
-            Err(_) => out.plaintext += 1, // unreadable counts as not-yet-encrypted
+            Ok(false) => out.plaintext.push(PlaintextEntry { name, size }),
+            Err(_) => out.plaintext.push(PlaintextEntry { name, size }), // unreadable → treat as not-yet-encrypted
         }
     }
     out
+}
+
+/// Why a plaintext file in `~<user>/lockbox/` hasn't been encrypted
+/// yet. Drives the per-file status line and the actionable suggestion.
+///
+/// `Tombstoned` is the one the user has to discover via journal today
+/// (the watcher's WARN goes only to `journalctl -u vigo-envoy`);
+/// surfacing it in `status` is the whole point of this helper.
+/// `SessionLocked` is the case the previous generic
+/// "Run `vigo swarm lockbox unlock`" hint was always right for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StuckPlaintextReason {
+    Tombstoned {
+        remaining_days: i64,
+        source_hostname: String,
+    },
+    SessionLocked,
+}
+
+/// Classify why a plaintext file in `~/lockbox/` is stuck. Pure —
+/// reads only the passed-in tombstone + resurrects tables and `now`
+/// so it's trivially unit-testable.
+///
+/// The tombstone check uses [`tombstones::effective_tombstone`], the
+/// canonical helper that handles resurrect-supersedes-tombstone
+/// tie-breaking — same helper `cmd_unlock` (line ~973) and
+/// `cmd_resurrect` (line ~1127) call, so the three call sites can't
+/// disagree on what "tombstoned" means.
+fn classify_stuck_plaintext(
+    filename: &str,
+    tombs: &tombstones::TombstoneTable,
+    res: &super::resurrects::ResurrectsTable,
+    now: i64,
+) -> StuckPlaintextReason {
+    if let Some(t) = tombstones::effective_tombstone(filename, tombs, res) {
+        let remaining_secs = (tombstones::effective_retention_secs() - (now - t.deletion_time)).max(0);
+        return StuckPlaintextReason::Tombstoned {
+            remaining_days: remaining_secs / 86_400,
+            source_hostname: t.source_hostname,
+        };
+    }
+    StuckPlaintextReason::SessionLocked
+}
+
+/// Pretty-print a file size for status output: bytes for small files,
+/// KiB / MiB for larger. Matches the format `ls -lh` uses so it's
+/// familiar to operators.
+fn fmt_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KiB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
+    }
 }
 
 fn valid_content_name(name: &str) -> bool {
@@ -2555,6 +2697,103 @@ mod tests {
     fn cert_refresh_skips_when_fresh() {
         let cert = test_cert(TEST_NOW + 30 * ONE_DAY);
         assert!(!cert_needs_refresh(Some(&cert), TEST_NOW));
+    }
+
+    // -----------------------------------------------------------------
+    // classify_stuck_plaintext — cross-references a plaintext filename
+    // against the canonical tombstones + resurrects tables so the
+    // status command can render the specific actionable reason
+    // (tombstoned → resurrect, vs session locked → unlock) per file.
+    // -----------------------------------------------------------------
+
+    fn tomb(deletion_time: i64, host: &str) -> tombstones::Tombstone {
+        tombstones::Tombstone {
+            deletion_time,
+            source_hostname: host.into(),
+        }
+    }
+
+    #[test]
+    fn classify_no_tombstone_is_session_locked() {
+        let tombs = tombstones::TombstoneTable::empty("dan");
+        let res = super::super::resurrects::ResurrectsTable::empty("dan");
+        let r = classify_stuck_plaintext("foo.txt", &tombs, &res, TEST_NOW);
+        assert_eq!(r, StuckPlaintextReason::SessionLocked);
+    }
+
+    #[test]
+    fn classify_active_tombstone_reports_remaining_days_and_source() {
+        // Deleted 8 days ago → 90 - 8 = 82 days remaining (at the default).
+        let mut tombs = tombstones::TombstoneTable::empty("dan");
+        tombs.upsert("test.sh", tomb(TEST_NOW - 8 * ONE_DAY, "danlap"));
+        let res = super::super::resurrects::ResurrectsTable::empty("dan");
+
+        let r = classify_stuck_plaintext("test.sh", &tombs, &res, TEST_NOW);
+        match r {
+            StuckPlaintextReason::Tombstoned { remaining_days, source_hostname } => {
+                let expected = tombstones::effective_retention_secs() / ONE_DAY - 8;
+                assert_eq!(remaining_days, expected,
+                    "expected {}d remaining at default retention, got {}d",
+                    expected, remaining_days);
+                assert_eq!(source_hostname, "danlap");
+            }
+            other => panic!("expected Tombstoned, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_expired_tombstone_clamps_remaining_to_zero() {
+        // Deleted longer ago than the retention window. effective_tombstone
+        // still returns the entry (GC is a separate pass); we render 0d
+        // rather than negative.
+        let mut tombs = tombstones::TombstoneTable::empty("dan");
+        tombs.upsert(
+            "old.txt",
+            tomb(TEST_NOW - 365 * ONE_DAY, "danlap"),
+        );
+        let res = super::super::resurrects::ResurrectsTable::empty("dan");
+        let r = classify_stuck_plaintext("old.txt", &tombs, &res, TEST_NOW);
+        match r {
+            StuckPlaintextReason::Tombstoned { remaining_days, .. } => {
+                assert_eq!(remaining_days, 0);
+            }
+            other => panic!("expected Tombstoned, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classify_other_file_unaffected_by_unrelated_tombstone() {
+        // foo.txt has no tombstone of its own — it must classify as
+        // session-locked even when other names ARE tombstoned.
+        let mut tombs = tombstones::TombstoneTable::empty("dan");
+        tombs.upsert("test.sh", tomb(TEST_NOW - ONE_DAY, "danlap"));
+        let res = super::super::resurrects::ResurrectsTable::empty("dan");
+
+        let r = classify_stuck_plaintext("foo.txt", &tombs, &res, TEST_NOW);
+        assert_eq!(r, StuckPlaintextReason::SessionLocked);
+    }
+
+    // -----------------------------------------------------------------
+    // fmt_size — pretty-print bytes for the per-file status line.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn fmt_size_under_kib_uses_bytes() {
+        assert_eq!(fmt_size(0), "0 B");
+        assert_eq!(fmt_size(166), "166 B");
+        assert_eq!(fmt_size(1023), "1023 B");
+    }
+
+    #[test]
+    fn fmt_size_kib_range() {
+        assert_eq!(fmt_size(1024), "1.0 KiB");
+        assert_eq!(fmt_size(1536), "1.5 KiB");
+    }
+
+    #[test]
+    fn fmt_size_mib_range() {
+        assert_eq!(fmt_size(1024 * 1024), "1.0 MiB");
+        assert_eq!(fmt_size(5 * 1024 * 1024 + 512 * 1024), "5.5 MiB");
     }
 
     // -----------------------------------------------------------------
