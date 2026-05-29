@@ -87,31 +87,42 @@ of cascading.
 ### Connection-state memory model
 
 Every connected envoy holds one persistent mTLS gRPC connection (the agent
-keeps the `AgentStream` open continuously). On the server that costs, at
-gRPC's **default 32 KiB read + 32 KiB write buffers**:
+keeps the `AgentStream` open continuously). On the server that costs, per
+connection:
 
-- **3 goroutines per connection** — the HTTP/2 read loop (`HandleStreams`),
-  write loop (`loopyWriter`), and keepalive. This is structural to gRPC's
-  transport; it does not vary with buffer size.
-- **~190 KB RSS per connection** — ~64 KB of read+write buffers, plus TLS
-  record buffers, plus ~3 goroutine stacks.
+- **3 goroutines** — the HTTP/2 read loop (`HandleStreams`), write loop
+  (`loopyWriter`), and keepalive. Structural to gRPC's transport; does not
+  vary with buffer size. Measured exactly: 15,062 goroutines for ~5,020
+  connections.
+- **RSS that scales with the gRPC read/write buffers** — the one tunable
+  lever (`tuning.grpc_read_buffer` / `tuning.grpc_write_buffer` in
+  `server.yaml`; both default to gRPC's 32 KiB, i.e. 64 KiB/conn):
 
-So a 50 000-envoy fleet costs ~150 000 goroutines and ~9.5 GB of RSS *for
-connection state alone*, independent of CheckIn throughput. This is a
-capacity model, not a leak — it all releases on disconnect (a 50K burst
-returned to ~543 MB once drivers stopped). Measured from the 2026-05-27
-dual-50K burst; see the `/tshoot` record.
+  | buffers | per-conn RSS (measured) | 50K idle projection |
+  |---|---:|---:|
+  | 32 KiB (default) | ~100–130 KB/conn | ~5–7 GB |
+  | 8 KiB (tuned)    | ~51 KB clean / ~80 KB w/ runtime | ~2.9–4.3 GB |
 
-The buffer half is the one tunable lever: `tuning.grpc_read_buffer` /
-`tuning.grpc_write_buffer` in `server.yaml` (both default to gRPC's
-32 KiB). Vigo's per-connection throughput is tiny — one CheckIn every
-5–60 s — so dropping these to 4–8 KiB trades a few extra syscalls for
-~2.5 GB reclaimed at 50K connections. **Caveat:** these are server-global
-and also bound the scrier `TunnelStream` (RDP/VNC/SSH byte stream), so the
-floor is whatever still gives interactive scrier sessions enough room. A
-measured tuned figure is pending an overlapped 50K run (see two-driver
-below). The goroutine count (3/conn) is structural and unchanged by buffer
-tuning.
+  Dropping 32 KiB → 8 KiB saves the 48 KB/conn buffer delta — **~2.4 GB
+  reclaimed at 50K**. Vigo's per-connection throughput is tiny (one CheckIn
+  every 5–60 s), so the smaller buffers cost only a few extra syscalls.
+  **Caveat:** these are server-global and also bound the scrier
+  `TunnelStream` (RDP/VNC/SSH byte stream), so the floor is whatever still
+  gives interactive scrier sessions enough room.
+
+This is a capacity model, not a leak — it all releases on disconnect (a 50K
+burst returned to ~543 MB once drivers stopped).
+
+**How these were measured.** Per-connection RSS comes from a clean single
+loopback 5K idle hold (`--count 5000 --interval 10s --trigger-burst=false`):
+the RSS jump as the 5K connected, divided by the count, extrapolates
+linearly. A single box can't establish 25K+ — the cold-connect storm (every
+envoy's first handshake spread across one interval) plus running the driver
+and the server on the same host overloads connection establishment well
+before that. A genuine 50K hold needs the two-driver mode below (loopback +
+LAN, shared `--start-at`) to split the connect storm across hosts; the
+earlier ~9.5 GB figure was the *burst peak* (bundle-rebuild heap included)
+of such a dual-50K run, not idle connection state.
 
 ## Run
 
