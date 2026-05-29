@@ -113,16 +113,23 @@ connection:
 This is a capacity model, not a leak — it all releases on disconnect (a 50K
 burst returned to ~543 MB once drivers stopped).
 
-**How these were measured.** Per-connection RSS comes from a clean single
-loopback 5K idle hold (`--count 5000 --interval 10s --trigger-burst=false`):
-the RSS jump as the 5K connected, divided by the count, extrapolates
-linearly. A single box can't establish 25K+ — the cold-connect storm (every
-envoy's first handshake spread across one interval) plus running the driver
-and the server on the same host overloads connection establishment well
-before that. A genuine 50K hold needs the two-driver mode below (loopback +
-LAN, shared `--start-at`) to split the connect storm across hosts; the
-earlier ~9.5 GB figure was the *burst peak* (bundle-rebuild heap included)
-of such a dual-50K run, not idle connection state.
+**How these were measured.** With **default buffers**, a single loopback
+driver holds 25K cleanly: `--count 25000 --interval 5s` reaches the full
+75,056 goroutines (25K × 3) flat across the run at ~4,999/s and ~2% cold-
+connect-transient failures — the per-conn default figure (~140 KB/conn)
+comes from that run's connection-state RSS delta. The 8 KiB per-conn figure
+(~51 KB) comes from a clean 5K idle hold (`--interval 10s
+--trigger-burst=false`) extrapolated linearly.
+
+**Undersized buffers starve connection establishment.** At 8 KiB, even a
+*gentler* 25K @ 10s connect ramp couldn't bring up the fleet (~15K held, 75%
+failures) while default buffers handle the *harder* 25K @ 5s ramp cleanly.
+So 8 KiB trades RSS for a real establishment ceiling — not a safe default;
+keep `grpc_*_buffer` at the 32 KiB default unless a measured case justifies
+otherwise. A 50K *idle* hold (beyond this box's clean single-driver ceiling)
+needs the two-driver mode below to split the connect storm; the earlier
+~9.5 GB figure was the *burst peak* (bundle-rebuild heap included) of a
+dual-50K run, not idle connection state.
 
 ## Run
 
