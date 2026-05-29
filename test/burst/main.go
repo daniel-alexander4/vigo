@@ -66,11 +66,23 @@ func main() {
 	slaSettleSec := flag.Int("sla-settle-sec", 0, "SLA gate: max post-burst seconds to return within 2× baseline p99; 0 disables")
 	slaFailureRate := flag.Float64("sla-failure-rate", 0, "SLA gate: max baseline failure ratio (0.001 = 0.1%); 0 disables")
 	notes := flag.String("notes", "", "freeform notes embedded in manifest.json (e.g. hardware label)")
+	startAt := flag.String("start-at", "", "RFC3339 wall-clock instant to begin the measured phases (e.g. 2026-05-28T15:30:00Z); empty starts as soon as every envoy is dialed. Pass the SAME value to two driver processes on different hosts so their phase clocks align (NTP-backed) instead of each starting when its own dialing finished. Applies to trial 1 only.")
+	triggerBurst := flag.Bool("trigger-burst", true, "trigger the config-reload burst at end of baseline. Set false on the follower driver in a two-driver run so only the leader publishes — one reload, both measure.")
 	flag.Parse()
 
 	if *adminToken == "" {
 		fmt.Fprintln(os.Stderr, "--admin-token is required (publish-reload + cleanup both need it)")
 		os.Exit(2)
+	}
+
+	var startAtTime time.Time
+	if *startAt != "" {
+		t, err := time.Parse(time.RFC3339, *startAt)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "--start-at: %v (want RFC3339, e.g. 2026-05-28T15:30:00Z)\n", err)
+			os.Exit(2)
+		}
+		startAtTime = t
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -178,6 +190,8 @@ func main() {
 			serverSampleInterval: *serverSampleInterval,
 			trialID:              t,
 			outputDir:            *outputDir,
+			startAt:              startAtTime,
+			triggerBurst:         *triggerBurst,
 		}, tlsClient)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trial %d failed: %v\n", t, err)
@@ -264,6 +278,8 @@ type trialOpts struct {
 	serverSampleInterval time.Duration
 	trialID              int
 	outputDir            string
+	startAt              time.Time // wall-clock barrier for trial 1; zero = release on all-dialed
+	triggerBurst         bool      // false = follower driver: measure only, don't publish
 }
 
 // trialResult captures the headline numbers for one trial. Aggregate
@@ -348,8 +364,17 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 	// envoy is connected — at 50K envoys with serial-stagger the launch
 	// alone consumed 5+ minutes. Parallel dial + barrier keeps the
 	// "phase clock" honest.
+	// When --start-at gates trial 1, the post-dial wait happens inside this
+	// context, so fold the lead into the deadline or a multi-minute barrier
+	// could trip ctxTrial before the measured phases even begin.
+	startLead := time.Duration(0)
+	if opts.trialID == 1 && !opts.startAt.IsZero() {
+		if d := time.Until(opts.startAt); d > 0 {
+			startLead = d
+		}
+	}
 	ctxTrial, cancelTrial := context.WithTimeout(ctx,
-		time.Duration(cooldownEnd)*time.Second+time.Duration(opts.warmupSec)*time.Second+5*time.Minute)
+		time.Duration(cooldownEnd)*time.Second+time.Duration(opts.warmupSec)*time.Second+startLead+5*time.Minute)
 	defer cancelTrial()
 
 	var wg sync.WaitGroup
@@ -391,8 +416,35 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 			}
 		}
 	}
-	fmt.Printf("  all envoys dialed (%d ok, %d failed) at %v elapsed; releasing start barrier\n",
+	fmt.Printf("  all envoys dialed (%d ok, %d failed) at %v elapsed\n",
 		dialedOK, dialFailed.Load(), time.Since(dialStart).Round(time.Second))
+
+	// Cross-process start barrier. With --start-at set, every driver holds
+	// here until the shared wall-clock instant so two driver processes on
+	// different hosts begin their measured phases together (NTP-aligned)
+	// rather than each starting when its own dialing finished — the drift
+	// that made a "10K/s combined" run really two staggered 5K/s windows.
+	// Trial 1 only: a multi-trial run can't re-sync across processes, so
+	// trials 2+ release on all-dialed as usual.
+	if opts.trialID == 1 && !opts.startAt.IsZero() {
+		if wait := time.Until(opts.startAt); wait > 0 {
+			fmt.Printf("  waiting %v until shared start-at %s...\n",
+				wait.Round(time.Second), opts.startAt.Format(time.RFC3339))
+			select {
+			case <-ctxTrial.Done():
+				close(startGate)
+				wg.Wait()
+				return res, ctxTrial.Err()
+			case <-time.After(wait):
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "  WARNING: start-at %s already passed by %v when dialing finished — "+
+				"drivers are NOT synchronized; pick a later --start-at. This run is not comparable across drivers.\n",
+				opts.startAt.Format(time.RFC3339), (-wait).Round(time.Second))
+		}
+	}
+
+	fmt.Printf("  releasing start barrier\n")
 	trialStart = time.Now()
 	close(startGate)
 
@@ -479,12 +531,21 @@ func runTrial(ctx context.Context, opts trialOpts, _ *http.Client) (trialResult,
 	case <-burstTimer.C:
 	}
 
-	fmt.Printf("  triggering reload burst at %v...\n", time.Since(trialStart).Round(time.Second))
-	statusCode, err := triggerConfigReload(tlsClient, opts.apiAddr, opts.adminToken)
-	res.ReloadStatus = statusCode
-	res.ReloadAtSec = int(time.Since(trialStart).Round(time.Second).Seconds())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "  reload trigger failed: %v\n", err)
+	if opts.triggerBurst {
+		fmt.Printf("  triggering reload burst at %v...\n", time.Since(trialStart).Round(time.Second))
+		statusCode, err := triggerConfigReload(tlsClient, opts.apiAddr, opts.adminToken)
+		res.ReloadStatus = statusCode
+		res.ReloadAtSec = int(time.Since(trialStart).Round(time.Second).Seconds())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  reload trigger failed: %v\n", err)
+		}
+	} else {
+		// Follower: the leader published the single reload at this same
+		// elapsed offset. Record the offset (not a publish) so the burst /
+		// settle math below keys off the right second.
+		res.ReloadAtSec = int(time.Since(trialStart).Round(time.Second).Seconds())
+		fmt.Printf("  follower (--trigger-burst=false): not publishing; measuring the leader's burst window from +%ds\n",
+			res.ReloadAtSec)
 	}
 
 	// Kick off pprof captures spanning the burst. CPU profile is the

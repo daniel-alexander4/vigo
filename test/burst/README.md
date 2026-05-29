@@ -42,9 +42,10 @@ narrower than they look:
 
 ## What it doesn't fix (yet)
 
-- **Driver colocation** — the loopback driver still runs on the server
-  host, sharing CPU. A wired-LAN third driver is the right fix and
-  needs hardware that doesn't exist here.
+- **Driver colocation** — a single loopback driver runs on the server
+  host, sharing CPU. The synchronized two-driver mode (see below) moves
+  half the client load to a LAN host, easing this; fully off-box would
+  still want more driver hardware than exists here.
 - **CheckIn-only** — no `ReportResult` / `ReportTraits` / `Wake` calls
   yet. That's the next pending realism lever.
 
@@ -83,6 +84,35 @@ clean steady-state. To probe beyond, lengthen `--interval`
 load-shedding via `checkin.max_concurrent` so the cliff is graceful instead
 of cascading.
 
+### Connection-state memory model
+
+Every connected envoy holds one persistent mTLS gRPC connection (the agent
+keeps the `AgentStream` open continuously). On the server that costs, at
+gRPC's **default 32 KiB read + 32 KiB write buffers**:
+
+- **3 goroutines per connection** — the HTTP/2 read loop (`HandleStreams`),
+  write loop (`loopyWriter`), and keepalive. This is structural to gRPC's
+  transport; it does not vary with buffer size.
+- **~190 KB RSS per connection** — ~64 KB of read+write buffers, plus TLS
+  record buffers, plus ~3 goroutine stacks.
+
+So a 50 000-envoy fleet costs ~150 000 goroutines and ~9.5 GB of RSS *for
+connection state alone*, independent of CheckIn throughput. This is a
+capacity model, not a leak — it all releases on disconnect (a 50K burst
+returned to ~543 MB once drivers stopped). Measured from the 2026-05-27
+dual-50K burst; see the `/tshoot` record.
+
+The buffer half is the one tunable lever: `tuning.grpc_read_buffer` /
+`tuning.grpc_write_buffer` in `server.yaml` (both default to gRPC's
+32 KiB). Vigo's per-connection throughput is tiny — one CheckIn every
+5–60 s — so dropping these to 4–8 KiB trades a few extra syscalls for
+~2.5 GB reclaimed at 50K connections. **Caveat:** these are server-global
+and also bound the scrier `TunnelStream` (RDP/VNC/SSH byte stream), so the
+floor is whatever still gives interactive scrier sessions enough room. A
+measured tuned figure is pending an overlapped 50K run (see two-driver
+below). The goroutine count (3/conn) is structural and unchanged by buffer
+tuning.
+
 ## Run
 
 ```bash
@@ -113,6 +143,61 @@ The default phasing is:
 6. **Burst-settle** (180 s; measured per-second) — captures the spike
    and the recovery curve.
 7. **Cooldown** (30 s; measured) — confirms steady-state returned.
+
+## Two-driver runs (combined load across hosts)
+
+A single driver process can't reach the server's high-connection regime
+without colocating all the client load on one box. Splitting the fleet
+across two driver processes — one on the server host (loopback), one on a
+LAN host — gets to 50K connections with less driver-side CPU contention.
+
+The catch is *synchronization*: each process starts its measured phases
+when **its own** dialing finishes, and a LAN host enrolls slower than
+loopback, so the two phase clocks drift apart (a 2026-05-27 run meant to be
+10K/s combined was really two staggered 5K/s windows). `--start-at` fixes
+this — both processes hold after dialing until a shared wall-clock instant,
+so their phases line up (relies on NTP, which is tight enough against the
+60s+ phase windows).
+
+Pick a `--start-at` a few minutes out — far enough that the slower (LAN)
+driver finishes dialing before it. A driver that reaches the barrier *after*
+the instant has passed prints a loud warning (its run is not comparable).
+
+```bash
+START=$(date -u -d '+3 minutes' +%Y-%m-%dT%H:%M:%SZ)
+
+# Leader — on the server host, drives loopback + publishes the one reload + samples the container.
+go run ./test/burst --server 127.0.0.1:1530 --api https://127.0.0.1:8443 \
+  --admin-token "$(sudo cat /srv/vigo/cli-admin-token)" \
+  --count 25000 --interval 5s --hostname-prefix burst-lo- \
+  --server-container vigo --start-at "$START" \
+  --trials 1 --output ./out/burst-lo-$(date +%Y%m%d-%H%M%S)
+
+# Follower — on a LAN host, drives the other half; no publish, no container sampling.
+go run ./test/burst --server <server-ip>:1530 --api https://<server-ip>:8443 \
+  --admin-token "<token>" \
+  --count 25000 --interval 5s --hostname-prefix burst-lan- \
+  --server-container "" --trigger-burst=false --start-at "$START" \
+  --trials 1 --output ./out/burst-lan-$(date +%Y%m%d-%H%M%S)
+```
+
+Three things keep the two processes from colliding:
+
+- **Distinct `--hostname-prefix`** per driver — both default to `burst-`,
+  which would enroll the same hostnames and collide. Give each its own.
+- **`--trigger-burst=false` on the follower** — only the leader publishes,
+  so the burst is one reload event both drivers measure (not two
+  overlapping waves). The follower keys its burst/settle window off the
+  same elapsed offset.
+- **`--server-container ""` on the follower** — it can't `docker exec` the
+  loopback container anyway; only the leader samples server-side pprof.
+
+Each driver cleans up its own envoys and writes its own output dir. Read
+the leader's `server.csv` for the server-side RSS/goroutine curve and both
+drivers' `latency.csv` for the client-observed spike.
+
+Two-driver runs use `--trials 1` — the shared barrier synchronizes one
+start, not a repeated multi-trial cadence across hosts.
 
 ## Output
 
