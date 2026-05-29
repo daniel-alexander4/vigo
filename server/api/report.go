@@ -32,50 +32,93 @@ type ReportHandler struct {
 	docsResolver   DocsResolver  // nil-safe; flips documented-scope controls to covered when set
 	auditWriterRef auditRecorder // nil-safe; records bundle-download events
 
-	// auditStatusCache memoises audit.Verify results across hot-path
-	// score-computation calls. The verify reads + rehashes every
-	// audit_entries row — O(N) — and was previously called per
-	// framework score (21× per PersistComplianceSnapshot run). Caching
-	// with a short TTL amortises the cost: first caller per window
-	// pays, the rest read from memory. The on-demand
-	// /api/v1/audit/verify REST endpoint (server/api/audit.go) is
-	// unaffected — it calls audit.Verify directly for fresh results.
+	// auditStatusCache memoises audit.Verify results for the hot-path
+	// score/report builders. The verify reads + rehashes every
+	// audit_entries row — O(N), seconds at fleet scale — so it must
+	// never run synchronously on a request or publish. Serve-stale-
+	// while-revalidate (see cachedAuditStatus): the cold first access
+	// verifies once; afterwards callers always get the cached value and
+	// an expired entry triggers a single background re-verify. The
+	// on-demand /api/v1/audit/verify REST endpoint (server/api/audit.go)
+	// is unaffected — it calls audit.Verify directly for a fresh result.
 	auditStatusCache auditStatusCache
 }
 
 // auditStatusCacheTTL bounds how stale a cached audit-chain status can
-// be before the next access triggers a fresh verify. Five minutes is
-// long enough to amortise across a snapshotter loop or a burst of
-// score requests but short enough that tampering surfaces within an
-// operationally tight window.
+// be before the next access serves the cached value and kicks a
+// background re-verify. Five minutes is long enough to amortise across
+// a snapshotter loop or a burst of score requests but short enough that
+// tampering surfaces within an operationally tight window.
 const auditStatusCacheTTL = 5 * time.Minute
 
 type auditStatusCache struct {
-	mu       sync.Mutex
-	status   AuditChainStatus
-	cachedAt time.Time
+	mu         sync.Mutex
+	status     AuditChainStatus
+	cachedAt   time.Time
+	refreshing bool // a background re-verify is in flight (dedup)
 }
 
-// cachedAuditStatus returns the most recently verified audit chain
-// status, refreshing in-place when the cached value is older than
-// auditStatusCacheTTL. On verify error the stale value is preserved
-// (stale-but-known beats fresh-but-error for a UI status badge); the
-// next call retries the verify.
+// store records a fresh verify result. Caller must hold c.mu.
+func (c *auditStatusCache) store(v *audit.VerifyResult) {
+	c.status = AuditChainStatus{Valid: v.Valid, EntryCount: v.EntryCount, Error: v.Error}
+	c.cachedAt = time.Now()
+}
+
+// cachedAuditStatus returns the cached audit-chain status without ever
+// blocking the caller on the O(N) verify — except on the cold first
+// access, which verifies synchronously so the badge starts from a real
+// value. Within auditStatusCacheTTL it returns the memoised value; once
+// expired it returns the stale value immediately and kicks a single
+// background re-verify (serve-stale-while-revalidate). On verify error
+// the stale value is preserved (stale-but-known beats fresh-but-error
+// for a status badge). The on-demand /api/v1/audit/verify endpoint is
+// the surface for an immediate fresh check.
 func (h *ReportHandler) cachedAuditStatus(ctx context.Context) AuditChainStatus {
-	h.auditStatusCache.mu.Lock()
-	defer h.auditStatusCache.mu.Unlock()
-	if !h.auditStatusCache.cachedAt.IsZero() && time.Since(h.auditStatusCache.cachedAt) < auditStatusCacheTTL {
-		return h.auditStatusCache.status
-	}
-	if v, err := audit.Verify(ctx, h.queries); err == nil {
-		h.auditStatusCache.status = AuditChainStatus{
-			Valid:      v.Valid,
-			EntryCount: v.EntryCount,
-			Error:      v.Error,
+	c := &h.auditStatusCache
+	c.mu.Lock()
+	switch {
+	case !c.cachedAt.IsZero() && time.Since(c.cachedAt) < auditStatusCacheTTL:
+		status := c.status
+		c.mu.Unlock()
+		return status
+	case c.cachedAt.IsZero():
+		// Cold first access: verify synchronously (holding the lock, so
+		// concurrent boot-window callers dedupe and all get the result).
+		if v, err := audit.Verify(ctx, h.queries); err == nil {
+			c.store(v)
 		}
-		h.auditStatusCache.cachedAt = time.Now()
+		status := c.status
+		c.mu.Unlock()
+		return status
+	default:
+		// Warm but expired: serve stale now, re-verify in the background.
+		if !c.refreshing {
+			c.refreshing = true
+			go h.refreshAuditStatusAsync()
+		}
+		status := c.status
+		c.mu.Unlock()
+		return status
 	}
-	return h.auditStatusCache.status
+}
+
+// refreshAuditStatusAsync re-runs audit.Verify off the hot path and
+// updates the cache. The O(N) verify runs WITHOUT the cache lock held —
+// so concurrent readers keep getting the stale value instantly — then
+// the lock is taken only to store the result and clear the in-flight
+// flag. Uses a detached, bounded context since it outlives the request
+// that triggered it.
+func (h *ReportHandler) refreshAuditStatusAsync() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	v, err := audit.Verify(ctx, h.queries)
+	c := &h.auditStatusCache
+	c.mu.Lock()
+	if err == nil {
+		c.store(v)
+	}
+	c.refreshing = false
+	c.mu.Unlock()
 }
 
 // DocsResolver answers questions about operator-uploaded compliance

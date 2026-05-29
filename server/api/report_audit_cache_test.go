@@ -17,10 +17,12 @@ import (
 // row — at 1.5M entries that's a multi-hundred-millisecond per-call
 // cost, and it used to fire per-framework-score (21× per
 // PersistComplianceSnapshot). Caching must:
-//   - populate on the first call (cachedAt set, status reflects DB state)
+//   - populate on the first (cold) call (cachedAt set, status reflects DB state)
 //   - return the same value on subsequent calls inside the TTL window
 //     WITHOUT re-running audit.Verify (proven by an unchanged cachedAt)
-//   - refresh when the cache is expired
+//   - once expired, serve the stale value immediately and refresh in the
+//     background (serve-stale-while-revalidate) — the request never blocks
+//     on the O(N) verify
 //
 // Whitebox test (same package) so it can read auditStatusCache.cachedAt
 // directly — the discriminating assertion is "cachedAt did not move".
@@ -73,16 +75,30 @@ func TestReportHandler_CachedAuditStatus(t *testing.T) {
 	h.auditStatusCache.cachedAt = time.Now().Add(-auditStatusCacheTTL - time.Second)
 	h.auditStatusCache.mu.Unlock()
 
-	// Next call refreshes: cachedAt advances + EntryCount reflects the new row.
+	// Expired access serves the STALE value immediately (still count 2) and
+	// kicks a single background re-verify — it must not block on Verify.
 	got4 := h.cachedAuditStatus(ctx)
-	if got4.EntryCount != 3 {
-		// The 3rd entry's prev_hash is wrong (we used got1.Error as a
-		// placeholder), so chain may show Valid=false here — but the
-		// count still reflects the row.
-		t.Errorf("after TTL expiry, refreshed EntryCount = %d, want 3", got4.EntryCount)
+	if got4.EntryCount != 2 {
+		t.Errorf("expired access should serve stale EntryCount=2 immediately, got %d", got4.EntryCount)
 	}
-	if !h.auditStatusCache.cachedAt.After(firstCachedAt) {
-		t.Errorf("cachedAt did not advance after TTL expiry: first=%v new=%v",
-			firstCachedAt, h.auditStatusCache.cachedAt)
+
+	// The background re-verify advances cachedAt and picks up the 3rd row.
+	// (Its prev_hash is a placeholder, so Valid may be false — the count
+	// still reflects the row.) Poll until the refresh lands.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.auditStatusCache.mu.Lock()
+		count := h.auditStatusCache.status.EntryCount
+		advanced := h.auditStatusCache.cachedAt.After(firstCachedAt)
+		refreshing := h.auditStatusCache.refreshing
+		h.auditStatusCache.mu.Unlock()
+		if !refreshing && advanced && count == 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("background re-verify did not refresh within 5s (EntryCount=%d advanced=%v refreshing=%v)",
+				count, advanced, refreshing)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
