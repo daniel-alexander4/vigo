@@ -4252,10 +4252,12 @@ type secretResolveFailure struct {
 // with a placeholder marker (`__VIGO_SECRET__<key>__END_VIGO_SECRET__`)
 // after validating that the key resolves against the provider — the
 // resolved plaintext value is discarded after the validation lookup.
-// A key runs from immediately after `secret:` up to the next delimiter
-// (comma, semicolon, whitespace, quote, end of string) so compound k=v
+// A key runs from immediately after `secret:` up to the first byte that is
+// not a valid secret-key character (see isSecretKeyChar), so compound k=v
 // values like `PW=secret:vigo/db/pw,DB=app` work the same as whole-value
-// references.
+// references. A `secret:` followed immediately by a non-key byte (e.g. the
+// literal text "`secret:`" in a config file's content) yields an empty key
+// and is preserved verbatim, not mistaken for a reference.
 //
 // Failures don't poison the whole string: any reference that fails to
 // validate is left in place (as `secret:<key>`) and reported. The caller
@@ -4280,7 +4282,7 @@ func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolv
 		b.WriteString(str[i : i+rel])
 		keyStart := i + rel + len(secretPrefix)
 		keyEnd := keyStart
-		for keyEnd < len(str) && !isSecretKeyDelim(str[keyEnd]) {
+		for keyEnd < len(str) && isSecretKeyChar(str[keyEnd]) {
 			keyEnd++
 		}
 		key := str[keyStart:keyEnd]
@@ -4302,14 +4304,19 @@ func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolv
 	return b.String(), failures
 }
 
-// isSecretKeyDelim reports whether c terminates a `secret:<key>` reference
-// embedded in a compound attribute value. Conservative on purpose: only
-// characters that show up between fields in real compound strings (comma,
-// semicolon, whitespace, quotes) — keeps path-style keys with `/` `_` `-`
-// `.` intact.
-func isSecretKeyDelim(c byte) bool {
-	switch c {
-	case ',', ';', ' ', '\t', '\n', '\r', '"', '\'':
+// isSecretKeyChar reports whether c is valid inside a secret key. Secret keys
+// are provider paths (e.g. "vigo/db/dsn"): ASCII alphanumerics plus the path
+// punctuation `.` `_` `-` `/`. Any other byte terminates the key. This is an
+// allowlist on purpose — a denylist of separators can't tell a real reference
+// from literal `secret:` text in file content (documentation, comments,
+// the word "secret:" in prose), and would consume trailing punctuation
+// (a backtick, `<`, `*`) into a bogus key. The first non-key byte after
+// `secret:` yields an empty key, preserved verbatim by the caller.
+func isSecretKeyChar(c byte) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	case c == '.', c == '_', c == '-', c == '/':
 		return true
 	}
 	return false

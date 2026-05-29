@@ -3791,6 +3791,65 @@ envoys:
 	}
 }
 
+// TestResolveModuleSecrets_LiteralSecretColonInContent guards the inline
+// secret scanner against literal `secret:` text in a file resource's content.
+// The Prometheus alert-rules file (vigo-prometheus-alerts) ships a description
+// `A `+"`"+`secret:`+"`"+` reference failed to resolve` — the backtick after
+// `secret:` must NOT be parsed as a secret key. A real embedded reference in
+// the same content must still resolve, proving the fix doesn't disable inline
+// resolution.
+func TestResolveModuleSecrets_LiteralSecretColonInContent(t *testing.T) {
+	dir := setupDir(t)
+
+	// `content:` carries both the literal documentation text (must survive
+	// verbatim) and a genuine embedded reference (must become a placeholder).
+	const literal = "A `secret:` reference failed to resolve. Check the secrets provider health."
+	writeFile(t, filepath.Join(dir, "modules", "alerts.vgo"), `
+name: alerts
+resources:
+  - name: alerts-yaml
+    type: file
+    target_path: /etc/prometheus/rules/vigo-alerts.yml
+    content: |
+      description: "`+literal+`"
+      token: "secret:vigo/alertmanager/token"
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "alerts-host"
+    modules: [alerts]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
+		"vigo/alertmanager/token": "tok-123",
+	}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	_, cfg := store.Match("alerts-host")
+	if cfg == nil {
+		t.Fatal("Match(alerts-host) returned nil config")
+	}
+	if len(cfg.Modules) == 0 || len(cfg.Modules[0].Resources) == 0 {
+		t.Fatalf("expected one resource on the alerts module, got %#v", cfg.Modules)
+	}
+	content, _ := cfg.Modules[0].Resources[0].Attributes["content"].(string)
+
+	if !strings.Contains(content, literal) {
+		t.Errorf("literal `secret:` text was not preserved verbatim; content = %q", content)
+	}
+	if !strings.Contains(content, "__VIGO_SECRET__vigo/alertmanager/token__END_VIGO_SECRET__") {
+		t.Errorf("genuine embedded secret ref was not substituted; content = %q", content)
+	}
+	if strings.Contains(content, "secret:vigo/alertmanager/token") {
+		t.Errorf("genuine embedded secret ref left unresolved; content = %q", content)
+	}
+	if strings.Contains(content, "tok-123") {
+		t.Errorf("content leaks plaintext secret value: %q", content)
+	}
+}
+
 // TestTraceInverse covers the four carrier shapes the inverse trace surfaces:
 // (a) modules referenced directly on the envoy entry, (b) modules inherited
 // via common.vgo, (c) modules pulled in via a role, and (d) usercrates

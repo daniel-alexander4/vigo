@@ -95,7 +95,7 @@ groups:
           severity: critical
         annotations:
           summary: "Secret resolution failures in the past 5 minutes"
-          description: "A `secret:` reference failed to resolve. Either the secrets backend is unreachable or a path was removed. Check the secrets provider health."
+          description: "A configured secret reference failed to resolve. Either the secrets backend is unreachable or a path was removed. Check the secrets provider health."
 
       - alert: VigoConfigReloadDurationP99High
         expr: histogram_quantile(0.99, sum by (le) (rate(vigo_config_reload_duration_seconds_bucket[10m]))) > 2.5
