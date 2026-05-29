@@ -262,6 +262,18 @@ func TestComputeNilTraitsSafe(t *testing.T) {
 	}
 }
 
+func TestUptimeMetric(t *testing.T) {
+	if m := UptimeMetric(map[string]string{"agent_self.uptime_secs": "172800"}); !m.Present || m.Value != 172800 {
+		t.Errorf("present uptime: got %+v, want Present=true Value=172800", m)
+	}
+	if m := UptimeMetric(map[string]string{"agent_self.open_fds": "100"}); m.Present {
+		t.Errorf("missing uptime trait should yield Present=false; got %+v", m)
+	}
+	if m := UptimeMetric(nil); m.Present {
+		t.Errorf("nil traits should yield Present=false; got %+v", m)
+	}
+}
+
 func TestAggregateRollupWorstSeverityAndDegradedCount(t *testing.T) {
 	states := []EnvoySource{
 		newState("a", "alpha", map[string]string{"agent_self.open_fds": "100"}),                 // OK

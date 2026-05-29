@@ -195,7 +195,7 @@ func Compute(src EnvoySource) EnvoyPressure {
 	p.Threads = uintMetric(src.Traits, "agent_self.threads", classifyNeutral)
 	p.Descendants = uintMetric(src.Traits, "agent_self.descendants", classifyNeutral)
 	p.DescendantOpenFDs = uintMetric(src.Traits, "agent_self.descendant_open_fds", classifyDescendantFDs)
-	p.UptimeSecs = uintMetric(src.Traits, "agent_self.uptime_secs", classifyNeutral)
+	p.UptimeSecs = UptimeMetric(src.Traits)
 	p.FDUsed = uintMetric(src.Traits, "host_self.fd_used", classifyNeutral)
 	p.FDMax = uintMetric(src.Traits, "host_self.fd_max", classifyNeutral)
 	p.FDPct = floatMetric(src.Traits, "host_self.fd_pct", classifyHostFDPct)
@@ -268,6 +268,14 @@ func Aggregate(sources []EnvoySource) (FleetSummary, []EnvoyPressure) {
 		}
 	}
 	return sum, out
+}
+
+// UptimeMetric extracts the agent's process uptime (the `agent_self.uptime_secs`
+// trait) as a neutral Metric. Exported so surfaces outside the full pressure
+// rollup — e.g. the envoy-detail hero card — read uptime through this one SoT
+// instead of re-parsing the trait inline. nil/missing traits yield Present=false.
+func UptimeMetric(traits map[string]string) Metric {
+	return uintMetric(traits, "agent_self.uptime_secs", classifyNeutral)
 }
 
 // ---------- internal helpers ----------

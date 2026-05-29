@@ -1411,6 +1411,9 @@ type EnvoyDetailPageData struct {
 	Runs          []EnvoyDetailRunRow
 	Traits        map[string]any
 	ScrierEnabled bool
+	// UptimeSecs is the agent's process uptime, surfaced at-a-glance in the
+	// hero card. Read through the fleetpressure SoT; Present=false hides it.
+	UptimeSecs fleetpressure.Metric
 	// Cloud metadata (populated from traits if available).
 	CloudProvider     string // "aws", "gcp", "azure", etc. or "" if not cloud
 	CloudRegion       string

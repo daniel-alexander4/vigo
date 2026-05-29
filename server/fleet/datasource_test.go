@@ -43,6 +43,38 @@ func TestEnvoyDetailData_HeaderRowCarriesConvergence(t *testing.T) {
 	}
 }
 
+// TestEnvoyDetailData_HeroCardCarriesAgentUptime pins that the detail page
+// surfaces the agent's process uptime (the `agent_self.uptime_secs` trait) on
+// the page root so the hero card can render it, routed through the
+// fleetpressure SoT. An envoy with no uptime trait yields Present=false (the
+// hero segment hides).
+func TestEnvoyDetailData_HeroCardCarriesAgentUptime(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{
+		ID:       "e1",
+		Hostname: "host1",
+		Traits:   map[string]string{"agent_self.uptime_secs": "172800"},
+	}, genKey(t))
+
+	ds := NewDataSource(fi, nil, nil, nil)
+	data, err := ds.EnvoyDetailData("e1", time.Minute, 30*time.Minute)
+	if err != nil {
+		t.Fatalf("EnvoyDetailData: %v", err)
+	}
+	if !data.UptimeSecs.Present || data.UptimeSecs.Value != 172800 {
+		t.Errorf("UptimeSecs = %+v, want Present=true Value=172800", data.UptimeSecs)
+	}
+
+	fi.AddEnvoy(EnvoyState{ID: "e2", Hostname: "host2"}, genKey(t))
+	noTraits, err := ds.EnvoyDetailData("e2", time.Minute, 30*time.Minute)
+	if err != nil {
+		t.Fatalf("EnvoyDetailData(e2): %v", err)
+	}
+	if noTraits.UptimeSecs.Present {
+		t.Errorf("UptimeSecs.Present = true for envoy with no uptime trait; want false")
+	}
+}
+
 // TestEnvoyDriftLabel_LookupAndFallback pins that the dataSource exposes
 // the envoy's current drift label as a 1-call helper for the dashboard
 // recent-runs widget (which can't reach FleetIndex directly), and that

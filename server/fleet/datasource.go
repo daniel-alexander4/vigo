@@ -954,8 +954,9 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 	}
 
 	return ui.EnvoyDetailPageData{
-		PageData: ui.PageData{Title: "Envoy: " + ts.Hostname, ActiveNav: "envoys"},
-		Envoy:    ds.envoyRow(ts, baseInterval, offlineThreshold),
+		PageData:   ui.PageData{Title: "Envoy: " + ts.Hostname, ActiveNav: "envoys"},
+		Envoy:      ds.envoyRow(ts, baseInterval, offlineThreshold),
+		UptimeSecs: fleetpressure.UptimeMetric(ts.Traits),
 	}, nil
 }
 
