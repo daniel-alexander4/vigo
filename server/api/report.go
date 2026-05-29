@@ -40,8 +40,14 @@ type ReportHandler struct {
 	// verifies once; afterwards callers always get the cached value and
 	// an expired entry triggers a single background re-verify. The
 	// on-demand /api/v1/audit/verify REST endpoint (server/api/audit.go)
-	// is unaffected — it calls audit.Verify directly for a fresh result.
+	// is unaffected — it calls audit.VerifyFull directly for a fresh result.
 	auditStatusCache auditStatusCache
+
+	// auditVerifier owns the incremental audit-chain verify the cache above
+	// drives (and that the boot/daily re-verify re-anchors). Set by
+	// NewReportHandler; nil only in bare struct-literal test handlers, where
+	// verifyAuditChain falls back to a stateless full verify.
+	auditVerifier *audit.Verifier
 }
 
 // auditStatusCacheTTL bounds how stale a cached audit-chain status can
@@ -84,7 +90,9 @@ func (h *ReportHandler) cachedAuditStatus(ctx context.Context) AuditChainStatus 
 	case c.cachedAt.IsZero():
 		// Cold first access: verify synchronously (holding the lock, so
 		// concurrent boot-window callers dedupe and all get the result).
-		if v, err := audit.Verify(ctx, h.queries); err == nil {
+		// Incremental once the Verifier is warm (boot re-verify); a full
+		// walk only on a truly cold checkpoint.
+		if v, err := h.verifyAuditChain(ctx); err == nil {
 			c.store(v)
 		}
 		status := c.status
@@ -111,7 +119,7 @@ func (h *ReportHandler) cachedAuditStatus(ctx context.Context) AuditChainStatus 
 func (h *ReportHandler) refreshAuditStatusAsync() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	v, err := audit.Verify(ctx, h.queries)
+	v, err := h.verifyAuditChain(ctx)
 	c := &h.auditStatusCache
 	c.mu.Lock()
 	if err == nil {
@@ -120,6 +128,20 @@ func (h *ReportHandler) refreshAuditStatusAsync() {
 	c.refreshing = false
 	c.mu.Unlock()
 }
+
+// verifyAuditChain runs the incremental audit-chain verify via the handler's
+// Verifier. Bare struct-literal handlers (some tests) have no Verifier and
+// fall back to a stateless full verify.
+func (h *ReportHandler) verifyAuditChain(ctx context.Context) (*audit.VerifyResult, error) {
+	if h.auditVerifier != nil {
+		return h.auditVerifier.Verify(ctx)
+	}
+	return audit.VerifyFull(ctx, h.queries)
+}
+
+// AuditVerifier exposes the handler's audit-chain Verifier so the server's
+// boot warm-up + daily re-verify can re-anchor the same checkpoint.
+func (h *ReportHandler) AuditVerifier() *audit.Verifier { return h.auditVerifier }
 
 // DocsResolver answers questions about operator-uploaded compliance
 // documentation for a framework/control pair. Implemented by
@@ -148,10 +170,11 @@ func (h *ReportHandler) SetDocsResolver(d DocsResolver) { h.docsResolver = d }
 // NewReportHandler creates a ReportHandler.
 func NewReportHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, configStore *config.ConfigStore, version string) *ReportHandler {
 	return &ReportHandler{
-		queries:     queries,
-		fleetIndex:  fleetIndex,
-		configStore: configStore,
-		version:     version,
+		queries:       queries,
+		fleetIndex:    fleetIndex,
+		configStore:   configStore,
+		version:       version,
+		auditVerifier: audit.NewVerifier(queries),
 	}
 }
 

@@ -151,6 +151,46 @@ func (q *Queries) ListAuditEntries(ctx context.Context, limit int64) ([]AuditEnt
 	return items, nil
 }
 
+const listAuditEntriesAfterID = `-- name: ListAuditEntriesAfterID :many
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+FROM audit_entries
+WHERE id > ?1
+ORDER BY id ASC
+`
+
+func (q *Queries) ListAuditEntriesAfterID(ctx context.Context, id int64) ([]AuditEntry, error) {
+	rows, err := q.db.QueryContext(ctx, listAuditEntriesAfterID, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditEntry{}
+	for rows.Next() {
+		var i AuditEntry
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrevHash,
+			&i.Hash,
+			&i.Timestamp,
+			&i.EventType,
+			&i.Actor,
+			&i.Source,
+			&i.Summary,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAuditEntriesAsc = `-- name: ListAuditEntriesAsc :many
 SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
 FROM audit_entries

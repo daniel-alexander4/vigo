@@ -181,7 +181,7 @@ func (h *AuditHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 
 // VerifyChain walks the tamper-evident hash chain and returns its integrity status.
 func (h *AuditHandler) VerifyChain(w http.ResponseWriter, r *http.Request) {
-	result, err := audit.Verify(r.Context(), h.queries)
+	result, err := audit.VerifyFull(r.Context(), h.queries)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "verification failed: "+err.Error())
 		return

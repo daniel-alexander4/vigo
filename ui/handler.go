@@ -4163,7 +4163,7 @@ func (h *Handler) EvidenceCoverageFragment(w http.ResponseWriter, r *http.Reques
 
 // EvidenceAuditFragment renders the audit chain verification status.
 func (h *Handler) EvidenceAuditFragment(w http.ResponseWriter, r *http.Request) {
-	result, err := audit.Verify(r.Context(), h.queries)
+	result, err := audit.VerifyFull(r.Context(), h.queries)
 	data := struct {
 		Valid      bool
 		EntryCount int64
@@ -4218,7 +4218,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Audit chain verification
-	if result, err := audit.Verify(r.Context(), h.queries); err == nil {
+	if result, err := audit.VerifyFull(r.Context(), h.queries); err == nil {
 		if f, err := zw.Create("audit-chain.json"); err == nil {
 			json.NewEncoder(f).Encode(result)
 		}
@@ -6201,7 +6201,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 	var chainValid bool
 	var entryCount, firstBroken int64
 	var chainError string
-	result, err := audit.Verify(ctx, h.queries)
+	result, err := audit.VerifyFull(ctx, h.queries)
 	if err != nil {
 		chainError = err.Error()
 	} else {
@@ -6231,7 +6231,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	result, err := audit.Verify(ctx, h.queries)
+	result, err := audit.VerifyFull(ctx, h.queries)
 	if err != nil {
 		fmt.Fprintf(w, `<span class="badge badge--failure">Verification error: %s</span>`, err.Error())
 		return

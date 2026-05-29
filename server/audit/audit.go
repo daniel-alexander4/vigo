@@ -138,50 +138,106 @@ type VerifyResult struct {
 	Error       string `json:"error,omitempty"`
 }
 
-// Verify walks the entire audit chain and recomputes each hash. If any
-// entry's stored hash does not match the recomputed hash, the chain is
-// broken and the first mismatched entry ID is returned.
-func Verify(ctx context.Context, queries *db.Queries) (*VerifyResult, error) {
-	count, err := queries.CountAuditEntries(ctx)
+// verifyChainSegment walks entries in id order, recomputing each hash and
+// checking chain linkage, starting from startPrevHash (the hash the first
+// entry's prev_hash must equal — "" for the head of the chain, or the
+// checkpoint hash for an incremental segment). Returns the last entry's hash
+// and, on the first break, that entry's ID + a message (firstBroken == 0 means
+// the whole segment verified).
+func verifyChainSegment(entries []db.AuditEntry, startPrevHash string) (lastHash string, firstBroken int64, errMsg string) {
+	prevHash := startPrevHash
+	for _, e := range entries {
+		expected := computeHash(prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Source, e.Summary, e.Payload)
+		if e.Hash != expected {
+			return prevHash, e.ID, fmt.Sprintf("hash mismatch at entry %d: expected %s, got %s", e.ID, truncHash(expected), truncHash(e.Hash))
+		}
+		if e.PrevHash != prevHash {
+			return prevHash, e.ID, fmt.Sprintf("chain break at entry %d: prev_hash does not match previous entry", e.ID)
+		}
+		prevHash = e.Hash
+	}
+	return prevHash, 0, ""
+}
+
+// VerifyFull walks the entire audit chain fresh (no checkpoint) and recomputes
+// every hash — the stateless, on-demand integrity check. Equivalent to a
+// throwaway Verifier with no checkpoint.
+func VerifyFull(ctx context.Context, queries *db.Queries) (*VerifyResult, error) {
+	return NewVerifier(queries).VerifyFull(ctx)
+}
+
+// Verifier verifies the audit chain incrementally against an in-memory
+// checkpoint, so a routine re-verify costs O(entries appended since the last
+// check) rather than O(whole log). The checkpoint is deliberately NOT
+// persisted: a process restart rebuilds it with a full walk, which re-verifies
+// the entire chain at the moment integrity matters most (after downtime, when
+// offline tampering is possible). Safe for concurrent use.
+type Verifier struct {
+	queries *db.Queries
+	mu      sync.Mutex
+	// The chain has been verified valid through entry ckptID, whose hash is
+	// ckptHash; ckptCount is the entry count seen then. ckptID == 0 means no
+	// checkpoint yet (cold) → full walk. A count below ckptCount means rows
+	// were deleted → fall back to a full walk to re-establish linkage.
+	ckptID    int64
+	ckptHash  string
+	ckptCount int64
+}
+
+// NewVerifier returns a Verifier with no checkpoint; its first Verify (or any
+// VerifyFull) walks the whole chain and anchors the checkpoint.
+func NewVerifier(queries *db.Queries) *Verifier { return &Verifier{queries: queries} }
+
+// Verify re-verifies the chain incrementally from the checkpoint, walking only
+// entries newer than it. With no checkpoint (cold start) or a shrunken log it
+// falls back to a full walk. A clean verify advances the checkpoint; a detected
+// break leaves it unchanged and reports the break.
+func (v *Verifier) Verify(ctx context.Context) (*VerifyResult, error) {
+	return v.verify(ctx, false)
+}
+
+// VerifyFull forces a whole-chain walk regardless of the checkpoint and
+// re-anchors from the result — used by the periodic re-verify and boot warm-up
+// to catch tampering below the current checkpoint.
+func (v *Verifier) VerifyFull(ctx context.Context) (*VerifyResult, error) {
+	return v.verify(ctx, true)
+}
+
+func (v *Verifier) verify(ctx context.Context, forceFull bool) (*VerifyResult, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	count, err := v.queries.CountAuditEntries(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("counting audit entries: %w", err)
 	}
-
 	if count == 0 {
+		v.ckptID, v.ckptHash, v.ckptCount = 0, "", 0
 		return &VerifyResult{Valid: true, EntryCount: 0}, nil
 	}
 
-	entries, err := queries.ListAuditEntriesAsc(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("listing audit entries: %w", err)
+	var entries []db.AuditEntry
+	startPrev := ""
+	if forceFull || v.ckptID == 0 || count < v.ckptCount {
+		if entries, err = v.queries.ListAuditEntriesAsc(ctx); err != nil {
+			return nil, fmt.Errorf("listing audit entries: %w", err)
+		}
+	} else {
+		if entries, err = v.queries.ListAuditEntriesAfterID(ctx, v.ckptID); err != nil {
+			return nil, fmt.Errorf("listing audit entries: %w", err)
+		}
+		startPrev = v.ckptHash
 	}
 
-	prevHash := ""
-	for _, e := range entries {
-		expected := computeHash(prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Source, e.Summary, e.Payload)
-
-		if e.Hash != expected {
-			return &VerifyResult{
-				Valid:       false,
-				EntryCount:  count,
-				FirstBroken: e.ID,
-				Error:       fmt.Sprintf("hash mismatch at entry %d: expected %s, got %s", e.ID, truncHash(expected), truncHash(e.Hash)),
-			}, nil
-		}
-
-		// Verify chain linkage.
-		if e.PrevHash != prevHash {
-			return &VerifyResult{
-				Valid:       false,
-				EntryCount:  count,
-				FirstBroken: e.ID,
-				Error:       fmt.Sprintf("chain break at entry %d: prev_hash does not match previous entry", e.ID),
-			}, nil
-		}
-
-		prevHash = e.Hash
+	lastHash, firstBroken, errMsg := verifyChainSegment(entries, startPrev)
+	if firstBroken != 0 {
+		return &VerifyResult{Valid: false, EntryCount: count, FirstBroken: firstBroken, Error: errMsg}, nil
 	}
-
+	if len(entries) > 0 {
+		v.ckptID = entries[len(entries)-1].ID
+		v.ckptHash = lastHash
+	}
+	v.ckptCount = count
 	return &VerifyResult{Valid: true, EntryCount: count}, nil
 }
 
@@ -203,4 +259,3 @@ func RecordIfWriter(w *Writer, ctx context.Context, eventType, actor, source, su
 		slog.Error("audit record failed", "type", eventType, "error", err)
 	}
 }
-

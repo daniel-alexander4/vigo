@@ -551,6 +551,47 @@ func (s *Server) runSecurityPostureSnapshot(ctx context.Context) {
 	}
 }
 
+// runAuditReverify warms and periodically re-anchors the audit-chain verifier.
+// The audit-status cache (server/api/report.go) verifies incrementally from an
+// in-memory checkpoint; this loop runs a full-chain VerifyFull at boot — which
+// re-checks the whole chain after any downtime, when offline tampering is
+// possible — and once a day thereafter, catching tampering below the current
+// checkpoint. Off the hot path; a full walk is seconds even at fleet scale.
+func (s *Server) runAuditReverify(ctx context.Context) {
+	if s.reportHandler == nil {
+		return
+	}
+	v := s.reportHandler.AuditVerifier()
+	if v == nil {
+		return
+	}
+	reverify := func() {
+		vctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		switch res, err := v.VerifyFull(vctx); {
+		case err != nil:
+			slog.Warn("audit re-verify failed", "error", err)
+		case !res.Valid:
+			slog.Error("audit chain verification FAILED",
+				"first_broken", res.FirstBroken, "entries", res.EntryCount, "detail", res.Error)
+		default:
+			slog.Info("audit chain re-verified", "entries", res.EntryCount)
+		}
+	}
+
+	reverify() // boot warm-up + post-downtime full re-verify
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			reverify()
+		}
+	}
+}
+
 // Compliance snapshotting now lives on *api.ReportHandler.PersistComplianceSnapshot
 // — the natural home given it depends only on ReportHandler's existing
 // configStore + queries + ComputeFrameworkScoreCtx. Server's daily

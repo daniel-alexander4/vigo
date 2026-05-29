@@ -26,6 +26,12 @@ FROM audit_entries
 WHERE timestamp >= ?1
 ORDER BY id ASC;
 
+-- name: ListAuditEntriesAfterID :many
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+FROM audit_entries
+WHERE id > ?1
+ORDER BY id ASC;
+
 -- name: CountAuditEntries :one
 SELECT count(*) FROM audit_entries;
 

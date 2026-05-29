@@ -281,6 +281,11 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 // threshold checker), but the refactor preserves it byte-for-byte and
 // flags it as a separate follow-up.
 func (s *Server) startConvergenceAlerters(ctx context.Context) {
+	// Warm + periodically re-anchor the audit-chain verifier (boot full
+	// re-verify after any downtime, then daily). Always on — independent of
+	// the compliance threshold below.
+	go s.runAuditReverify(ctx)
+
 	// Start framework-aware drift alerter (background, not hot path).
 	// Scans recent runs every 5 minutes, enriches drift events with framework/control context.
 	go s.runFrameworkDriftAlerter(ctx)
