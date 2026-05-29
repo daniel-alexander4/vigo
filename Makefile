@@ -26,6 +26,16 @@ build: build-agent schemas
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigocli ./cli
 
+# ADR-031 detached-ED25519 signing key. Consumed by two paths:
+#   - `build-agent` / `dist-agent` derive VIGO_AGENT_SIGNING_PUBKEY from
+#     this and bake it into the agent so it can verify auto-update binaries.
+#   - `dist-sign` / `dist-sign-agent` sign the distributables with the
+#     private key after they're built.
+# Declared here (not next to dist-sign) because the `:=` below evaluates
+# immediately at parse time; a `?=` further down would resolve too late.
+# Override with `SIGN_KEY=/path/to/key make ...`.
+SIGN_KEY ?= signing.key
+
 # Derive the agent's baked-in update-verification pubkey from the SIGN_KEY
 # private key (ADR-031). When SIGN_KEY is absent — the common dev case —
 # this resolves to empty and build.rs falls back to the all-zero sentinel
@@ -88,8 +98,7 @@ dist: dist-agent schemas
 	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigocli ./cli
 
 # Sign distribution binaries with ED25519 key for tamper detection.
-# Usage: make dist-sign SIGN_KEY=/path/to/signing.key
-SIGN_KEY ?= signing.key
+# Usage: make dist-sign SIGN_KEY=/path/to/signing.key (default: ./signing.key)
 dist-sign: dist-sign-agent
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
 	@for bin in dist/server/linux/amd64/vigosrv dist/cli/linux/amd64/vigocli; do \
