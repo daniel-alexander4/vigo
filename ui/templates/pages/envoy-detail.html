@@ -456,7 +456,7 @@
 {{$p := .Pressure}}
 <div class="stat-cards stat-cards--compact mb-2">
     <a class="stat-card stat-card--{{severityColor $p.Health}} stat-card--link" href="/agent-health" title="Composite is the worst signal across agent FDs, host FD%, OOM-recent, rootfs %, inode %, battery, and repo health. Click for fleet view.">
-        <div class="stat-card__value">{{severityLabel $p.Health}}</div>
+        <div class="stat-card__value {{severityTextClass $p.Health}}">{{severityLabel $p.Health}}</div>
         <div class="stat-card__label">Agent Health</div>
         {{if not .HasData}}
         <p class="text-muted" style="margin: 8px 0 0; font-size: 12px;">No agent or host telemetry yet — values appear after the next check-in.</p>
@@ -501,10 +501,6 @@
                 <div class="agent-health-kv__row">
                     <dt title="warn > 200 · fail > 500">FDs across children</dt>
                     <dd><span class="{{metricPillClass $p.DescendantOpenFDs.Severity}} status-pill--metric" title="warn > 200 · fail > 500">{{humanMetric $p.DescendantOpenFDs}}</span></dd>
-                </div>
-                <div class="agent-health-kv__row">
-                    <dt>Agent uptime</dt>
-                    <dd><span class="status-pill status-pill--no-data status-pill--metric">{{humanUptime $p.UptimeSecs}}</span></dd>
                 </div>
             </dl>
         </section>
