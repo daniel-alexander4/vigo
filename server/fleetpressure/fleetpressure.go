@@ -35,6 +35,11 @@ const (
 	RootfsPctFail      = 90.0
 	InodePctWarn       = 80.0
 	InodePctFail       = 90.0
+	// Battery wear health is inverted vs the pressure metrics above —
+	// lower is worse. Warn once a cell drops below 80% of its design
+	// capacity, fail below 70% (a battery that won't hold a useful charge).
+	BatteryHealthWarn  = 80.0
+	BatteryHealthFail  = 70.0
 )
 
 // Severity is the threshold-classification result. Higher numeric
@@ -109,6 +114,10 @@ type EnvoyPressure struct {
 	// mountpoints — rootfs (`/`) disk and inode pressure.
 	RootfsPct          PercentMetric
 	InodePct           PercentMetric
+
+	// battery — worst-cell wear health (full ÷ design, %). Absent on
+	// hosts with no `BAT*` node (servers/desktops). Lower is worse.
+	BatteryHealth      PercentMetric
 
 	// repo_health — package-repository health (apt / dnf). Absent
 	// until the agent emits a `repo_health.status` trait; warnings
@@ -207,6 +216,7 @@ func Compute(src EnvoySource) EnvoyPressure {
 	// shape in agent/src/traits/mountpoints.rs.
 	p.RootfsPct = floatMetric(src.Traits, "mountpoints.mounts./.used_pct", classifyDiskPct)
 	p.InodePct = floatMetric(src.Traits, "mountpoints.mounts./.inode_pct", classifyInodePct)
+	p.BatteryHealth = floatMetric(src.Traits, "battery.health_pct", classifyBatteryHealth)
 	p.RepoHealth = repoHealthMetric(src.Traits)
 	if src.Traits == nil {
 		// Distinguish "no data" from "everything OK" — leave
@@ -220,6 +230,7 @@ func Compute(src EnvoySource) EnvoyPressure {
 		p.OomRecent.Severity,
 		p.RootfsPct.Severity,
 		p.InodePct.Severity,
+		p.BatteryHealth.Severity,
 		p.RepoHealth.Severity,
 	)
 	return p
@@ -238,7 +249,8 @@ func Aggregate(sources []EnvoySource) (FleetSummary, []EnvoyPressure) {
 		out = append(out, p)
 		hasAny := p.OpenFDs.Present || p.DescendantOpenFDs.Present ||
 			p.FDPct.Present || p.OomRecent.Present ||
-			p.RootfsPct.Present || p.InodePct.Present || p.RepoHealth.Present
+			p.RootfsPct.Present || p.InodePct.Present ||
+			p.BatteryHealth.Present || p.RepoHealth.Present
 		if hasAny {
 			sum.TotalReporting++
 		}
@@ -362,6 +374,20 @@ func classifyInodePct(v float64) Severity {
 	case v > InodePctFail:
 		return Fail
 	case v > InodePctWarn:
+		return Warn
+	default:
+		return OK
+	}
+}
+
+// classifyBatteryHealth is inverted relative to the disk/FD classifiers —
+// battery wear health is a "higher is better" percentage, so a low value is
+// the bad state.
+func classifyBatteryHealth(v float64) Severity {
+	switch {
+	case v < BatteryHealthFail:
+		return Fail
+	case v < BatteryHealthWarn:
 		return Warn
 	default:
 		return OK

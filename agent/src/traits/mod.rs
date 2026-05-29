@@ -38,6 +38,8 @@ pub(crate) mod security_scan;
 
 // Linux-specific collectors.
 #[cfg(target_os = "linux")]
+mod battery;
+#[cfg(target_os = "linux")]
 mod blockdevices;
 #[cfg(target_os = "linux")]
 mod filesystem;
@@ -320,6 +322,13 @@ pub enum CollectorKind {
     /// answers "am I a *guest*"). Linux-only. Gate `vm:` resources with
     /// `when: "host_is_libvirt"`.
     Hypervisor,
+    /// Laptop battery health — reads `/sys/class/power_supply/{AC,BAT*}` for
+    /// per-battery charge level, wear health (`energy_full` ÷
+    /// `energy_full_design`), cycle count, and status, plus a top-level
+    /// `health_pct` (worst battery) the server classifies onto the Agent
+    /// Health card. Linux-only, sysfs reads only; empty on hosts with no
+    /// `BAT*` node.
+    Battery,
 }
 
 impl CollectorKind {
@@ -374,6 +383,7 @@ impl CollectorKind {
             Self::HostSelf => "host_self",
             Self::HostContainers => "host_containers",
             Self::Hypervisor => "hypervisor",
+            Self::Battery => "battery",
         }
     }
 
@@ -481,6 +491,8 @@ impl CollectorKind {
             Self::Listeners => listeners::collect(),
             #[cfg(target_os = "linux")]
             Self::CveRunningCorrelation => cve_running_correlation::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Battery => battery::collect(),
 
             // macOS implementations.
             #[cfg(target_os = "macos")]
@@ -586,13 +598,13 @@ impl CollectorKind {
             #[cfg(target_os = "illumos")]
             Self::BlockDevices | Self::Timezone | Self::Systemd | Self::SELinux |
             Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners |
-            Self::CveRunningCorrelation | Self::Hypervisor => Ok(Value::Null),
+            Self::CveRunningCorrelation | Self::Hypervisor | Self::Battery => Ok(Value::Null),
 
             // Linux-only concepts — return null on BSD/macOS.
             #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
             Self::Systemd | Self::SELinux |
             Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners |
-            Self::CveRunningCorrelation | Self::Hypervisor => Ok(Value::Null),
+            Self::CveRunningCorrelation | Self::Hypervisor | Self::Battery => Ok(Value::Null),
 
             // Windows implementations.
             #[cfg(windows)]
@@ -630,7 +642,8 @@ impl CollectorKind {
             Self::BlockDevices | Self::Systemd | Self::SELinux |
             Self::Locale | Self::Gpu | Self::CertLifecycle | Self::Ports |
             Self::PackageSourceAudit | Self::KernelModuleAttestation |
-            Self::Listeners | Self::CveRunningCorrelation | Self::Hypervisor => Ok(Value::Null),
+            Self::Listeners | Self::CveRunningCorrelation | Self::Hypervisor |
+            Self::Battery => Ok(Value::Null),
         }
     }
 
@@ -685,6 +698,7 @@ impl CollectorKind {
             "host_self" => Some(Self::HostSelf),
             "host_containers" => Some(Self::HostContainers),
             "hypervisor" => Some(Self::Hypervisor),
+            "battery" => Some(Self::Battery),
             _ => None,
         }
     }
@@ -741,6 +755,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::HostSelf,
         CollectorKind::HostContainers,
         CollectorKind::Hypervisor,
+        CollectorKind::Battery,
     ]
 }
 
@@ -766,6 +781,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,
         CollectorKind::HostContainers,
+        CollectorKind::Battery,
     ]
 }
 
@@ -877,7 +893,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 48);
+        assert_eq!(default_collectors().len(), 49);
     }
 
     #[test]

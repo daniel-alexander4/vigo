@@ -510,6 +510,12 @@
                     <dt title="kern.log oom-killer events in the recent window">Recent OOM events</dt>
                     <dd><span class="{{metricPillClass $p.OomRecent.Severity}} status-pill--metric" title="kern.log oom-killer events in the recent window">{{humanMetric $p.OomRecent}}</span></dd>
                 </div>
+                {{if $p.BatteryHealth.Present}}
+                <div class="agent-health-kv__row">
+                    <dt title="battery wear: full ÷ design capacity · warn < 80% · fail < 70%">Battery health</dt>
+                    <dd><span class="{{metricPillClass $p.BatteryHealth.Severity}} status-pill--metric" title="warn &lt; 80% · fail &lt; 70%">{{humanFDPct $p.BatteryHealth}}</span></dd>
+                </div>
+                {{end}}
             </dl>
         </section>
 

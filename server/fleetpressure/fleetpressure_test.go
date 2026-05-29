@@ -25,6 +25,40 @@ func TestComputeMissingTraitsAreUnknown(t *testing.T) {
 	}
 }
 
+func TestBatteryHealth(t *testing.T) {
+	// Absent on a host with no battery — Unknown, not present, doesn't
+	// poison the composite.
+	p := Compute(newState("e1", "server", map[string]string{}))
+	if p.BatteryHealth.Present {
+		t.Errorf("no battery trait should leave BatteryHealth Present=false")
+	}
+	if p.Health != OK {
+		t.Errorf("absent battery must not taint composite; got Health=%v", p.Health)
+	}
+
+	// Worn battery (girlslaptop: 66.5%) classifies Fail and drives the
+	// composite Health.
+	worn := Compute(newState("e2", "laptop", map[string]string{"battery.health_pct": "66.5"}))
+	if !worn.BatteryHealth.Present || worn.BatteryHealth.Value != 66.5 {
+		t.Errorf("BatteryHealth = %+v, want Present=true Value=66.5", worn.BatteryHealth)
+	}
+	if worn.BatteryHealth.Severity != Fail {
+		t.Errorf("66.5%% health should classify Fail; got %v", worn.BatteryHealth.Severity)
+	}
+	if worn.Health != Fail {
+		t.Errorf("worn battery should drive composite Health to Fail; got %v", worn.Health)
+	}
+
+	// Threshold boundaries.
+	cases := map[string]Severity{"69.9": Fail, "70": Warn, "79.9": Warn, "80": OK, "95": OK}
+	for v, want := range cases {
+		got := Compute(newState("e", "h", map[string]string{"battery.health_pct": v})).BatteryHealth.Severity
+		if got != want {
+			t.Errorf("health %s: classify = %v, want %v", v, got, want)
+		}
+	}
+}
+
 func TestComputeUnparseableTraitTreatedAsMissing(t *testing.T) {
 	state := newState("e1", "h1", map[string]string{
 		"agent_self.open_fds": "not-a-number",
