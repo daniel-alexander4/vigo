@@ -9,6 +9,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -158,6 +159,21 @@ func isAPIPath(path string) bool {
 // the bootstrap principal specially (e.g. requiring an explicit token owner)
 // compare against this rather than re-hardcoding the literal.
 const LocalAdminUserID = "localhost"
+
+// ErrReservedUsername is returned by [UserStore.Create] when the requested
+// username is a reserved synthetic principal identifier (see
+// [IsReservedPrincipal]).
+var ErrReservedUsername = errors.New("username is reserved")
+
+// IsReservedPrincipal reports whether s is an identifier reserved for a
+// synthetic principal — today only the local-admin bootstrap user
+// ([LocalAdminUserID]). No users-table row may take it as id or username, or
+// it would be conflated with that principal: the token-owner orphan guard
+// keys on id == LocalAdminUserID, so a DB row with that id would let an
+// otherwise-orphaned token resolve. Add future reserved ids here.
+func IsReservedPrincipal(s string) bool {
+	return s == LocalAdminUserID
+}
 
 // localAdminUser is the synthetic admin identity resolved for a request
 // bearing the local-admin token (see localadmin.go). It is not a row in

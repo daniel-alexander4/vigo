@@ -120,6 +120,44 @@ func TestMergeUsers_RejectsInvalidSignature(t *testing.T) {
 	}
 }
 
+// TestMergeUsers_RejectsReservedPrincipal pins that a validly-signed row
+// from a known origin is still dropped if it claims a reserved synthetic
+// identifier — by id (the token-owner orphan-guard vector) or by username.
+// A guarded peer can't originate one; this defends against a forged/stale
+// origin.
+func TestMergeUsers_RejectsReservedPrincipal(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		id       string
+		username string
+	}{
+		{"reserved id", vigoauth.LocalAdminUserID, "someuser"},
+		{"reserved username", "user-localhost", vigoauth.LocalAdminUserID},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newCRDTFixture(t)
+			row := vigoauth.UserRow{
+				ID:          tc.id,
+				Username:    tc.username,
+				Role:        "admin",
+				UpdatedAtMs: time.Now().UnixMilli(),
+			}
+			sr := signedUserRow(t, f.founderKey, f.founderHex, row)
+
+			effects, err := MergeUsers(context.Background(), f.q, []UserSnapshotRow{sr}, f.boltMap())
+			if err != nil {
+				t.Fatalf("MergeUsers: %v", err)
+			}
+			if len(effects) != 0 {
+				t.Errorf("reserved-principal row should not emit effect, got %v", effects)
+			}
+			if _, err := f.q.GetUserByID(context.Background(), tc.id); err == nil {
+				t.Error("reserved-principal row reached the DB")
+			}
+		})
+	}
+}
+
 // TestMergeUsers_RejectsUnknownOrigin pins forge-resistance: a row
 // whose origin_bolt is not in the local roster is dropped, no
 // matter how well-signed (signed by an unknown party).

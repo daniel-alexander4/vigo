@@ -111,6 +111,13 @@ func (s *UserStore) GetByOIDCSubject(ctx context.Context, subject string) (*User
 // Create inserts a new user. Stamps updated_at_ms + (if signer present)
 // origin_bolt + signature internally per ADR-030.
 func (s *UserStore) Create(ctx context.Context, params db.InsertUserParams) (*User, error) {
+	// Reserve the synthetic-principal identifiers. The id is server-generated
+	// (SQL DEFAULT), so username is the only attackable field here; the gossip
+	// merge path guards id separately. Covers every local caller — REST,
+	// CLI-via-REST, and OIDC just-in-time provisioning (untrusted IdP claim).
+	if IsReservedPrincipal(params.Username) {
+		return nil, ErrReservedUsername
+	}
 	params.UpdatedAtMs = time.Now().UnixMilli()
 	// Sign over the canonical content. ID is unknown pre-insert (the
 	// SQL DEFAULT generates it server-side), so the signature seals the

@@ -116,6 +116,23 @@ func TestUsers_CreateUserMissingUsername(t *testing.T) {
 	}
 }
 
+func TestUsers_CreateUserReservedUsername(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"localhost","role":"viewer"}`
+	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for reserved username, got %d", rec.Code)
+	}
+}
+
 func TestUsers_CreateUserInvalidRole(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)

@@ -129,6 +129,37 @@ func (f *fakeSigner) Sign(row *UserRow) (string, []byte, error) {
 	return f.pubkeyHex, []byte("fake-sig-" + row.ID), nil
 }
 
+// TestUserStore_Create_RejectsReservedUsername pins that the synthetic
+// local-admin identifier can't be taken by a real users-table row — the
+// guard covers every Create caller (REST, CLI-via-REST, OIDC JIT).
+func TestUserStore_Create_RejectsReservedUsername(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	_, err := store.Create(ctx, db.InsertUserParams{
+		Username: LocalAdminUserID,
+		Role:     "admin",
+	})
+	require.ErrorIs(t, err, ErrReservedUsername)
+
+	// Nothing was inserted.
+	count, err := store.CountUsers(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+
+	// A normal username still works.
+	u, err := store.Create(ctx, db.InsertUserParams{Username: "alice", Role: "viewer"})
+	require.NoError(t, err)
+	assert.Equal(t, "alice", u.Username)
+}
+
+func TestIsReservedPrincipal(t *testing.T) {
+	assert.True(t, IsReservedPrincipal(LocalAdminUserID))
+	assert.False(t, IsReservedPrincipal("alice"))
+	assert.False(t, IsReservedPrincipal(""))
+}
+
 // TestUserStore_Create_WithSigner_StampsOriginAndSignature pins that
 // the ADR-030 signer wiring populates origin_bolt + signature on every
 // row written via Create. The Create path signs twice: once pre-INSERT

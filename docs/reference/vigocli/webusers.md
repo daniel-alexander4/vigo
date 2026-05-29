@@ -23,6 +23,8 @@ f6e5d4c3-b2a1-4f6e-9d8c-7b6a5f4e3d2c  alice       Alice Smith     alice@example.
 
 Create a new user account. **Admin role** is constrained: the username must be a real human OS account on the server host (uid≥1000, real shell), validated against the local agent's `users.human` trait. The pubkey is auto-read from the matching OS user's `~/.ssh/id_ed25519.pub` (fallback `id_rsa.pub`); `--ssh-key-file` is rejected. **Viewer / compliance** roles are unconstrained one-offs — no OS-user requirement, `--ssh-key-file` accepted.
 
+The username `localhost` is reserved (it is the identifier of the server-host local-admin principal) and is rejected for any role.
+
 ```bash
 # Per-operator admin — run from the server host as root. Username must
 # match a real OS account; pubkey is auto-read from that account's home.
@@ -43,7 +45,7 @@ sudo vigocli webusers create --username carol --role compliance \
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--username` | — | Username (required). For `--role admin`, must match a human OS user on the server host. |
+| `--username` | — | Username (required). For `--role admin`, must match a human OS user on the server host. `localhost` is reserved and rejected. |
 | `--role` | `viewer` | Role: `admin`, `viewer`, or `compliance`. `admin` requires OS-user mapping; others are one-offs. |
 | `--display-name` | — | Display name |
 | `--email` | — | Email address |

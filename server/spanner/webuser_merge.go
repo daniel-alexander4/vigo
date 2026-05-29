@@ -93,6 +93,16 @@ func MergeUsers(ctx context.Context, qtx *db.Queries, users []UserSnapshotRow, k
 				"user_id", ur.ID, "origin_bolt", ur.OriginBolt, "error", vErr)
 			continue
 		}
+		// Reject rows claiming a reserved synthetic-principal identifier. A
+		// guarded peer can't originate one (UserStore.Create blocks it), so
+		// this only fires on a forged or stale-version origin — but a row with
+		// id == LocalAdminUserID would defeat the token-owner orphan guard on
+		// every receiving bolt, so drop it here too.
+		if vigoauth.IsReservedPrincipal(content.ID) || vigoauth.IsReservedPrincipal(content.Username) {
+			slog.Warn("spanner crdt: skipping user row with reserved principal id/username",
+				"user_id", ur.ID, "username", ur.Username, "origin_bolt", ur.OriginBolt)
+			continue
+		}
 
 		// Pre-merge read for change detection. NotFound is fine -- a
 		// brand-new user has no prior row.

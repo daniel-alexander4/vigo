@@ -207,6 +207,10 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		SshPublicKey: pubkey,
 	})
 	if err != nil {
+		if errors.Is(err, auth.ErrReservedUsername) {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("username %q is reserved", req.Username))
+			return
+		}
 		slog.Error("creating user", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create user")
 		return
