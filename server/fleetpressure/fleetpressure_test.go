@@ -59,6 +59,24 @@ func TestBatteryHealth(t *testing.T) {
 	}
 }
 
+func TestHostUptime(t *testing.T) {
+	// Present, informational (neutral) — never affects composite Health.
+	p := Compute(newState("e1", "h1", map[string]string{"uptime.seconds": "432000"}))
+	if !p.HostUptimeSecs.Present || p.HostUptimeSecs.Value != 432000 {
+		t.Errorf("HostUptimeSecs = %+v, want Present=true Value=432000", p.HostUptimeSecs)
+	}
+	if p.HostUptimeSecs.Severity != OK {
+		t.Errorf("host uptime is neutral; want Severity=OK, got %v", p.HostUptimeSecs.Severity)
+	}
+	if p.Health != OK {
+		t.Errorf("host uptime must not affect composite; got Health=%v", p.Health)
+	}
+	// Absent on a host that hasn't reported it.
+	if Compute(newState("e2", "h2", map[string]string{})).HostUptimeSecs.Present {
+		t.Errorf("missing uptime.seconds should leave HostUptimeSecs Present=false")
+	}
+}
+
 func TestComputeUnparseableTraitTreatedAsMissing(t *testing.T) {
 	state := newState("e1", "h1", map[string]string{
 		"agent_self.open_fds": "not-a-number",

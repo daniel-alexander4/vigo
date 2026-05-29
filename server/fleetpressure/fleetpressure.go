@@ -119,6 +119,11 @@ type EnvoyPressure struct {
 	// hosts with no `BAT*` node (servers/desktops). Lower is worse.
 	BatteryHealth      PercentMetric
 
+	// uptime — host (system) uptime in seconds (the `uptime.seconds`
+	// trait). Informational, not a health signal — display only, like
+	// the agent's own UptimeSecs.
+	HostUptimeSecs     Metric
+
 	// repo_health — package-repository health (apt / dnf). Absent
 	// until the agent emits a `repo_health.status` trait; warnings
 	// and errors counts surface for the per-envoy detail view.
@@ -217,6 +222,7 @@ func Compute(src EnvoySource) EnvoyPressure {
 	p.RootfsPct = floatMetric(src.Traits, "mountpoints.mounts./.used_pct", classifyDiskPct)
 	p.InodePct = floatMetric(src.Traits, "mountpoints.mounts./.inode_pct", classifyInodePct)
 	p.BatteryHealth = floatMetric(src.Traits, "battery.health_pct", classifyBatteryHealth)
+	p.HostUptimeSecs = uintMetric(src.Traits, "uptime.seconds", classifyNeutral)
 	p.RepoHealth = repoHealthMetric(src.Traits)
 	if src.Traits == nil {
 		// Distinguish "no data" from "everything OK" — leave

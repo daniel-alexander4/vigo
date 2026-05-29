@@ -454,13 +454,27 @@
 
 {{define "envoy-footprint-fragment"}}
 {{$p := .Pressure}}
-<a class="stat-card stat-card--{{severityColor $p.Health}} stat-card--link" href="/agent-health" title="Composite is the worst signal across agent FDs, host FD%, OOM-recent, rootfs %, inode %, and repo health. Click for fleet view.">
-    <div class="stat-card__value">{{severityLabel $p.Health}}</div>
-    <div class="stat-card__label">Agent Health</div>
-    {{if not .HasData}}
-    <p class="text-muted" style="margin: 8px 0 0; font-size: 12px;">No agent or host telemetry yet — values appear after the next check-in.</p>
+<div class="stat-cards stat-cards--compact mb-2">
+    <a class="stat-card stat-card--{{severityColor $p.Health}} stat-card--link" href="/agent-health" title="Composite is the worst signal across agent FDs, host FD%, OOM-recent, rootfs %, inode %, battery, and repo health. Click for fleet view.">
+        <div class="stat-card__value">{{severityLabel $p.Health}}</div>
+        <div class="stat-card__label">Agent Health</div>
+        {{if not .HasData}}
+        <p class="text-muted" style="margin: 8px 0 0; font-size: 12px;">No agent or host telemetry yet — values appear after the next check-in.</p>
+        {{end}}
+    </a>
+    {{if $p.HostUptimeSecs.Present}}
+    <div class="stat-card">
+        <div class="stat-card__value">{{humanUptime $p.HostUptimeSecs}}</div>
+        <div class="stat-card__label">System uptime</div>
+    </div>
     {{end}}
-</a>
+    {{if $p.UptimeSecs.Present}}
+    <div class="stat-card">
+        <div class="stat-card__value">{{humanUptime $p.UptimeSecs}}</div>
+        <div class="stat-card__label">Agent uptime</div>
+    </div>
+    {{end}}
+</div>
 
 {{if .HasData}}
 <div class="card">
