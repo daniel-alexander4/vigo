@@ -217,7 +217,7 @@ func writePrivateFile(path string, data []byte) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	cleanup := func() { _ = os.Remove(tmpName) }
+	cleanup := func() { _ = os.Remove(tmpName) } // best-effort temp cleanup
 	if err := tmp.Chmod(0o600); err != nil {
 		tmp.Close()
 		cleanup()
