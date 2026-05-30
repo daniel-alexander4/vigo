@@ -124,7 +124,6 @@ checkin:
   jitter_percent: 20                 # randomize timing by 0-N%
   bundle_max_age: "24h"              # signed bundle TTL on agents (0 = forever)
   max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = unbounded)
-  report_max_concurrent: 0           # cap on concurrent ReportResult handlers (0 = unbounded)
 ```
 
 | Field | Default | Description |
@@ -133,7 +132,6 @@ checkin:
 | `jitter_percent` | `20` | Random jitter to prevent thundering herd |
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
 | `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. Overflow returns `ResourceExhausted` so clients retry-with-backoff, preventing cascading overload. `0` = unbounded |
-| `report_max_concurrent` | `0` | Cap on concurrent ReportResult handlers. Overflow returns `ResourceExhausted` so agents retry-with-backoff, keeping a convergence-result storm (e.g. fleet-wide reporting after a publish) from saturating the database writer. The result-ingest analogue of `max_concurrent`. `0` = unbounded |
 
 ### Sizing `max_concurrent`
 

@@ -966,7 +966,6 @@ type CheckInSection struct {
 	ObserveOnly         bool   `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false" example:"true during Salt/Puppet migration"`
 	ComplianceThreshold int    `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables." example:"0-100; 90 for prod alerting, 95 for tight SLOs"`
 	MaxConcurrent       int    `yaml:"max_concurrent" doc:"Maximum concurrent CheckIn handlers. Arrivals beyond this return ResourceExhausted so the gRPC client retries with backoff, preventing cascading overload under burst. Watch vigo_grpc_checkin_in_flight as the pre-cascade signal; size this knob to roughly your host's measured req/s capacity × p99 latency in seconds. 0 (default) disables shedding." default:"0" example:"0 (disabled), 500, 2048"`
-	ReportMaxConcurrent int    `yaml:"report_max_concurrent" doc:"Maximum concurrent ReportResult handlers. Arrivals beyond this return ResourceExhausted so the agent retries with backoff, preventing a convergence-result storm (e.g. fleet-wide reporting after a publish) from saturating the database writer. Mirrors max_concurrent for the result-ingest path. 0 (default) disables shedding." default:"0" example:"0 (disabled), 256, 1024"`
 }
 
 // ConditionalBlock groups resources under a shared when expression.
