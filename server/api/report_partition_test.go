@@ -30,7 +30,7 @@ func TestPartitionEnvoyFindings(t *testing.T) {
 		},
 	}
 
-	covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage, nil)
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
 
 	if covered != 3 { // c-mod + c-connwaer + c-dual
 		t.Errorf("covered = %d, want 3", covered)
@@ -59,7 +59,7 @@ func TestPartitionEnvoyFindingsNilCoverage(t *testing.T) {
 		{ControlID: "c-miss", Status: "not_satisfied"},
 	}
 
-	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil, nil)
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil)
 
 	if covered != 1 { // c-connwaer (Connwaer trait escalation)
 		t.Errorf("covered = %d, want 1 (Connwaer trait escalation)", covered)
@@ -87,7 +87,7 @@ func TestPartitionEnvoyFindingsEnvoyOnly(t *testing.T) {
 		{ControlID: "c", Status: "not_satisfied"},
 	}
 
-	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil, nil)
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil)
 
 	if covered != 0 {
 		t.Errorf("covered = %d, want 0 — Vigo's own posture must not inflate envoy scoring", covered)
@@ -97,5 +97,31 @@ func TestPartitionEnvoyFindingsEnvoyOnly(t *testing.T) {
 	}
 	if missing != len(findings) {
 		t.Errorf("missing = %d, want %d (every catalog entry uncovered when no envoy state)", missing, len(findings))
+	}
+}
+
+// TestPartitionEnvoyFindingsDocumentedScope pins the documented-scope
+// coverage path: a ScopeDocumented control flips to covered iff it has
+// at least one attached doc (DocCount > 0), and falls through to missing
+// otherwise. DocCount is stamped once per framework from the batch
+// ActiveDocCountsByControl query in computeFrameworkScore — partition
+// reads it directly, with no per-control docs re-query.
+func TestPartitionEnvoyFindingsDocumentedScope(t *testing.T) {
+	findings := []ControlFinding{
+		{ControlID: "doc-yes", Scope: ScopeDocumented, Status: "not_satisfied", DocCount: 2}, // attached doc → covered
+		{ControlID: "doc-no", Scope: ScopeDocumented, Status: "not_satisfied", DocCount: 0},  // no doc → missing
+		{ControlID: "enforced", Status: "not_satisfied"},                                     // non-documented → missing
+	}
+
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil)
+
+	if covered != 1 { // doc-yes only — DocCount > 0 is the sole documented-coverage signal
+		t.Errorf("covered = %d, want 1 (documented control with an attached doc)", covered)
+	}
+	if waived != 0 || partial != 0 {
+		t.Errorf("waived=%d partial=%d, want 0 0", waived, partial)
+	}
+	if missing != 2 { // doc-no (documented, no doc) + enforced (no module/waiver/doc)
+		t.Errorf("missing = %d, want 2", missing)
 	}
 }

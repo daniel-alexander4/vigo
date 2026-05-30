@@ -148,14 +148,15 @@ func (h *ReportHandler) AuditVerifier() *audit.Verifier { return h.auditVerifier
 // *compliancedocs.Store; kept as an interface in the api package so
 // nothing here imports the store package directly (avoids cycle risk).
 //
-// HasActiveDocForControl is the signal that flips a documented-scope
-// control out of missing in partition logic. ListByControl + Get are
+// ActiveDocCountsByControl is the signal that flips a documented-scope
+// control out of missing in partition logic — its per-control count is
+// stamped onto finding.DocCount once per framework, and partition reads
+// DocCount directly (no per-control re-query). ListByControl + Get are
 // used by the framework report's "Supporting Documentation" section
 // (Phase E) and the audit-bundle export (Phase D) — both need
 // per-control metadata, and the bundle additionally needs the
 // decrypted plaintext.
 type DocsResolver interface {
-	HasActiveDocForControl(ctx context.Context, framework, controlID string) (bool, error)
 	CountActiveDocsForControl(ctx context.Context, framework, controlID string) (int, error)
 	ActiveDocCountsByControl(ctx context.Context, framework string) (map[string]int, error)
 	ListByControl(ctx context.Context, framework, controlID string) ([]db.ComplianceDoc, error)
@@ -445,18 +446,16 @@ func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string,
 //     document attached to (framework, control_id), the control flips
 //     to covered. Without an attached doc, documented-scope controls
 //     fall through to missing. This is the only path documented
-//     controls take to covered: modules don't apply.
+//     controls take to covered: modules don't apply. Doc presence is
+//     read off finding.DocCount, stamped once per framework from the
+//     batch ActiveDocCountsByControl query in computeFrameworkScore —
+//     no per-control re-query here.
 //  5. Partial — Status == "partial" (framework-specific half-credit
 //     or partial Connwaer fleet coverage).
 //  6. Else missing.
 //
-// docCovered (optional) is the set of control IDs satisfied by an
-// attached document for this framework. Build via collectDocCoverage
-// before calling. Pass nil when no docs resolver is wired or when
-// the documented bucket isn't relevant to the caller.
-//
 // Covered + Waived + Partial + Missing = len(findings).
-func partitionEnvoyFindings(findings []ControlFinding, coverage *config.StandardCoverage, docCovered map[string]bool) (covered, waived, partial, missing int) {
+func partitionEnvoyFindings(findings []ControlFinding, coverage *config.StandardCoverage) (covered, waived, partial, missing int) {
 	coveredByModules := make(map[string]bool)
 	if coverage != nil {
 		for _, cc := range coverage.CoveredControls {
@@ -474,7 +473,7 @@ func partitionEnvoyFindings(findings []ControlFinding, coverage *config.Standard
 			covered++
 		case f.Status == "waived":
 			waived++
-		case f.Scope == ScopeDocumented && docCovered[f.ControlID]:
+		case f.Scope == ScopeDocumented && f.DocCount > 0:
 			covered++
 		case f.Status == "partial":
 			partial++
@@ -487,47 +486,15 @@ func partitionEnvoyFindings(findings []ControlFinding, coverage *config.Standard
 
 // partitionFindingsForEnvoy is the canonical per-envoy partition entry
 // point. It resolves the envoy's module coverage from the config store
-// and delegates to partitionEnvoyFindings. docCovered is taken from
-// the caller because fleet-wide loops hoist that lookup once outside
-// the per-envoy iteration; supplying nil is safe when the documented
-// bucket isn't relevant.
-func (h *ReportHandler) partitionFindingsForEnvoy(slug, hostname string, findings []ControlFinding, docCovered map[string]bool) (covered, waived, partial, missing int) {
+// and delegates to partitionEnvoyFindings. Documented-scope coverage is
+// read off each finding's DocCount (stamped in computeFrameworkScore),
+// so no docs lookup is threaded through here.
+func (h *ReportHandler) partitionFindingsForEnvoy(slug, hostname string, findings []ControlFinding) (covered, waived, partial, missing int) {
 	var coverage *config.StandardCoverage
 	if standardKey, keyOK := config.StandardKeyForSlug[slug]; keyOK {
 		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
 	}
-	return partitionEnvoyFindings(findings, coverage, docCovered)
-}
-
-// collectDocCoverage queries the docs resolver for every documented-
-// scope control in findings and returns the set of control IDs that
-// have at least one active document attached. Returns nil when the
-// resolver isn't wired or no entry has Scope == ScopeDocumented.
-func collectDocCoverage(ctx context.Context, resolver DocsResolver, slug string, findings []ControlFinding) map[string]bool {
-	if resolver == nil {
-		return nil
-	}
-	standardKey, ok := config.StandardKeyForSlug[slug]
-	if !ok {
-		standardKey = slug
-	}
-	out := make(map[string]bool)
-	for _, f := range findings {
-		if f.Scope != ScopeDocumented {
-			continue
-		}
-		if out[f.ControlID] {
-			continue
-		}
-		has, err := resolver.HasActiveDocForControl(ctx, standardKey, f.ControlID)
-		if err == nil && has {
-			out[f.ControlID] = true
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return partitionEnvoyFindings(findings, coverage)
 }
 
 // ComputeEnvoyFrameworkStatus returns per-envoy compliance numbers for one
@@ -546,8 +513,7 @@ func (h *ReportHandler) ComputeEnvoyFrameworkStatus(r *http.Request, hostname, s
 	// whatever coverage the config store has. Keeps the drilldown and
 	// envoy-detail usable for envoys that are enrolled but have no
 	// recent activity.
-	docCovered := collectDocCoverage(r.Context(), h.docsResolver, slug, score.Controls)
-	covered, waived, partial, missing := h.partitionFindingsForEnvoy(slug, hostname, score.Controls, docCovered)
+	covered, waived, partial, missing := h.partitionFindingsForEnvoy(slug, hostname, score.Controls)
 	pct := 0.0
 	if score.Total > 0 {
 		pct = float64(covered) / float64(score.Total) * 100
@@ -725,9 +691,8 @@ func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChain
 		}
 	}
 
-	docCovered := collectDocCoverage(ctx, h.docsResolver, slug, findings)
 	for _, hostname := range activeHostnames {
-		covered, waived, partial, missing := h.partitionFindingsForEnvoy(slug, hostname, findings, docCovered)
+		covered, waived, partial, missing := h.partitionFindingsForEnvoy(slug, hostname, findings)
 		pct := 0.0
 		if total > 0 {
 			pct = float64(covered) / float64(total) * 100
