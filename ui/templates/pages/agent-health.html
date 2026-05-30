@@ -42,6 +42,7 @@
                 <th>Rootfs %</th>
                 <th>Inode %</th>
                 <th>Repo Health</th>
+                <th>Battery</th>
                 <th>Composite</th>
             </tr>
         </thead>
@@ -54,6 +55,7 @@
                 <td><span class="{{metricPillClass .RootfsPct.Severity}} status-pill--metric">{{humanFDPct .RootfsPct}}</span></td>
                 <td><span class="{{metricPillClass .InodePct.Severity}} status-pill--metric">{{humanFDPct .InodePct}}</span></td>
                 <td><span class="{{metricPillClass .RepoHealth.Severity}}"{{if .RepoHealth.Present}} title="{{.RepoHealth.Warnings}} warning(s) · {{.RepoHealth.Errors}} error(s)"{{end}}>{{severityLabel .RepoHealth.Severity}}</span></td>
+                <td><span class="{{metricPillClass .BatteryHealth.Severity}} status-pill--metric">{{humanFDPct .BatteryHealth}}</span></td>
                 <td><span class="{{severityPillClass .Health}}">{{severityLabel .Health}}</span></td>
             </tr>
             {{end}}

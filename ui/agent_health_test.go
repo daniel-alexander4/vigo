@@ -29,8 +29,9 @@ func (m *agentHealthMock) FleetPressureDetail() (fleetpressure.FleetSummary, []f
 				FDPct:      fleetpressure.PercentMetric{Value: 60.0, Present: true, Severity: fleetpressure.Warn},
 				RootfsPct:  fleetpressure.PercentMetric{Value: 95.0, Present: true, Severity: fleetpressure.Fail},
 				InodePct:   fleetpressure.PercentMetric{Value: 10.0, Present: true, Severity: fleetpressure.OK},
-				RepoHealth: fleetpressure.RepoHealthMetric{Status: "warn", Warnings: 3, Present: true, Severity: fleetpressure.Warn},
-				Health:     fleetpressure.Fail,
+				RepoHealth:    fleetpressure.RepoHealthMetric{Status: "warn", Warnings: 3, Present: true, Severity: fleetpressure.Warn},
+				BatteryHealth: fleetpressure.PercentMetric{Value: 66.5, Present: true, Severity: fleetpressure.Fail},
+				Health:        fleetpressure.Fail,
 			},
 			{
 				ID: "00000000-0000-0000-0000-000000000002", Hostname: "bravo",
@@ -53,6 +54,7 @@ func TestAgentHealthPage_RendersTableAndSummary(t *testing.T) {
 	for _, want := range []string{
 		"Agent Health", "Worst Level", "Degraded Envoys", "Reporting",
 		"alpha", "750", "95.0%", "warn", "Failing",
+		"Battery", "66.5%",
 		`href="/envoys/00000000-0000-0000-0000-000000000001#footprint"`,
 	} {
 		if !strings.Contains(body, want) {
