@@ -552,9 +552,19 @@ tuning:
   run_store: "database"              # "database" or "memory"
   run_store_capacity: 20             # per-envoy run depth in memory mode
   max_concurrent_streams: 5000       # gRPC concurrent stream limit
+  keepalive_time: "30s"              # how often the server pings each conn to check liveness
+  keepalive_timeout: "30s"           # deadline for the ping ACK before the conn is closed
   gogc: 100                          # Go GC target percentage
   memory_limit: ""                   # GOMEMLIMIT ceiling (e.g. "4GiB")
 ```
+
+### gRPC keepalive — `keepalive_time` + `keepalive_timeout`
+
+The server sends an HTTP/2 PING to every conn every `keepalive_time` (default `30s`). If the PING isn't ACKed within `keepalive_timeout` (default `30s`), gRPC closes the conn with GOAWAY and any in-flight RPC on it returns `Unavailable` to the agent. gRPC also pushes `keepalive_timeout` to the kernel's `TCP_USER_TIMEOUT` for the conn, so kernel-level read timeouts use the same deadline.
+
+The trade-off is dead-client detection latency vs. tolerance for transient Go scheduler queueing delays. At high concurrent connection counts the runqueue depth grows (per `docs/howto/sizing.md`'s measurements, ~16k runnable goroutines at 20k conns), and the deepest tail of waiting goroutines can take ~20s to dispatch — tight `keepalive_timeout` values kill conns under that transient pressure. The `30s` default gives ~50% margin over the observed worst-case dispatch latency at the comfortable conn-count envelope. Operators running large fleets that still see `Unavailable` errors growing should raise to `60s` before chasing other tunables; operators who need faster dead-conn reaping (small fleets where every connection matters) can drop to `20s` — gRPC's own default — without re-introducing the scheduler-queueing failure mode at sub-15k conn counts.
+
+The pre-0.69.20 default was `10s`, which scaling work in 2026-05-29 showed was the actual mechanism behind the matrix's `Unavailable` errors at 20k+ conns regardless of check-in interval. See [How-to: Size a vigosrv host](../howto/sizing.md) for the supporting evidence.
 
 ## paths
 

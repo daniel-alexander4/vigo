@@ -887,7 +887,7 @@ type TuningSection struct {
 	MaxConnectionAge  string `yaml:"max_connection_age" doc:"Force reconnect after this duration. Empty means no age limit." example:"1h, 6h, 24h (forces LB rebalancing)"`
 	MaxConnectionIdle string `yaml:"max_connection_idle" doc:"Close idle connections after this duration." default:"15m" example:"5m, 15m, 1h (accepts s, m, h)"`
 	KeepaliveTime     string `yaml:"keepalive_time" doc:"Interval between server→client keepalive pings." default:"30s" example:"15s, 30s, 1m (accepts s, m)"`
-	KeepaliveTimeout  string `yaml:"keepalive_timeout" doc:"Deadline for a keepalive ACK before the connection is considered dead." default:"10s" example:"5s, 10s, 20s (accepts s, m)"`
+	KeepaliveTimeout  string `yaml:"keepalive_timeout" doc:"Deadline for a keepalive PING ACK before the conn is closed with GOAWAY (next RPC returns Unavailable). gRPC also pushes this to TCP_USER_TIMEOUT at the kernel. Tighter values detect dead clients faster; looser values tolerate transient Go scheduler queueing delays at high conn counts. See docs/howto/sizing.md for the trade-off." default:"30s" example:"20s (aggressive), 30s (default), 60s (large fleets)"`
 	StreamSendBuffer  int    `yaml:"stream_send_buffer" doc:"Per-agent send-channel capacity on the bidirectional stream." default:"8" example:"8 (default), 32 (noisy fleets), 128 (debug)"`
 }
 

@@ -552,7 +552,7 @@ watcher:
 #   # max_connection_age: "1h"
 #   # max_connection_idle: "15m"
 #   # keepalive_time: "30s"
-#   # keepalive_timeout: "10s"
+#   # keepalive_timeout: "30s"                # deadline for a keepalive ACK before the conn is closed (GOAWAY → client sees Unavailable). Default 30s. Looser tolerates transient scheduler queueing at high conn counts; tighter detects dead clients faster. See docs/howto/sizing.md.
 #   # stream_send_buffer: 8
 
 

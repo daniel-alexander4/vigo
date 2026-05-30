@@ -77,7 +77,7 @@ type ServerConfig struct {
 	MaxConnectionAge           time.Duration         // 0 → no forced reconnect
 	MaxConnectionIdle          time.Duration         // 0 → default 15m
 	KeepaliveTime              time.Duration         // 0 → default 30s
-	KeepaliveTimeout           time.Duration         // 0 → default 10s
+	KeepaliveTimeout           time.Duration         // 0 → default 30s
 	StreamSendBuffer           int                   // 0 → default 8
 	SpannerAdmin               *spanner.SpannerAdmin // non-nil in a spanner (mode != standalone); drives peer-equal admin reads
 	// SMTPNotifier removed — events route through Integrations dispatcher
@@ -154,9 +154,19 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	if kaTime == 0 {
 		kaTime = 30 * time.Second
 	}
+	// Keepalive ACK deadline. If a server-side ping isn't ACKed in this
+	// window, gRPC closes the conn with GOAWAY and the next RPC on it
+	// returns Unavailable. gRPC also pushes this to TCP_USER_TIMEOUT at
+	// the kernel. At high conn counts the Go scheduler's runqueue depth
+	// can delay the loopyWriter/transport-reader goroutines on either
+	// side enough to miss tight deadlines — burstwave at 20k+ conns
+	// (2026-05-29) saw deepest-tail goroutine dispatch latencies ~20s,
+	// so 10s (our pre-0.69.20 default) killed conns under transient
+	// pressure. 30s gives ~50% margin and stays well clear of
+	// MaxConnectionIdle (15m). See docs/howto/sizing.md.
 	kaTimeout := cfg.KeepaliveTimeout
 	if kaTimeout == 0 {
-		kaTimeout = 10 * time.Second
+		kaTimeout = 30 * time.Second
 	}
 
 	sigInterceptor := SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex, cfg.Metrics)
