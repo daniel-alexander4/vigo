@@ -143,6 +143,8 @@ Watch `vigo_grpc_checkin_in_flight` as the pre-cascade signal — a sustained cl
 
 Default `0` resolves to a CPU-scaled built-in (`max(128, NumCPU*16)`) — the cap is **always on**. Operators tune the knob; the burstwave test (2026-05-29) showed that an unbounded read path will CPU-cascade under a fleet-wide stale-checkin wave (post-publish, mass re-enroll), so the always-on default is the safety net.
 
+For per-host envoy capacity (how many envoys one vigosrv host can comfortably hold at a given check-in interval, and when to federate via spanner instead of scaling up), see [How-to: Size a vigosrv host](../howto/sizing.md).
+
 ## bootstrap
 
 Agent enrollment configuration. Requires `server.tls.ca_key_file`.
