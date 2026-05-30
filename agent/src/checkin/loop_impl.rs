@@ -1374,7 +1374,7 @@ pub async fn daemon_loop(
                             }
                         }
 
-                        let wait = if reenroll { REENROLL_BACKOFF } else { bo.next_backoff() };
+                        let wait = if reenroll { reenroll_backoff(bo.max()) } else { bo.next_backoff() };
                         info!(backoff = ?wait, "local convergence complete, waiting to retry server");
                         tokio::select! {
                             _ = cancel.cancelled() => return Ok(()),
@@ -1384,7 +1384,7 @@ pub async fn daemon_loop(
                     }
                 }
 
-                let wait = if reenroll { REENROLL_BACKOFF } else { bo.next_backoff() };
+                let wait = if reenroll { reenroll_backoff(bo.max()) } else { bo.next_backoff() };
                 warn!(error = %e, backoff = ?wait, "convergence run failed, backing off");
 
                 tokio::select! {
@@ -1396,12 +1396,22 @@ pub async fn daemon_loop(
     }
 }
 
-/// REENROLL_BACKOFF is the retry interval after the server reports this envoy
-/// as unknown (NotFound). Retrying a dead identity can't succeed without an
-/// operator re-bootstrap, so we wait minutes instead of the normal backoff —
+/// REENROLL_BACKOFF_FLOOR is the *minimum* retry interval after the server
+/// reports this envoy as unknown (NotFound). Retrying a dead identity can't
+/// succeed without an operator re-bootstrap, so we wait at least this long —
 /// enough to keep applying cached policy offline without flooding the agent
 /// log or the server's sig-verify metric.
-const REENROLL_BACKOFF: Duration = Duration::from_secs(300);
+const REENROLL_BACKOFF_FLOOR: Duration = Duration::from_secs(300);
+
+/// reenroll_backoff is how long to wait between check-ins once the server has
+/// disowned this envoy. It's the larger of the 5-minute floor and the normal
+/// backoff ceiling (`bo.max()` = 2× the check-in interval) — so a fleet on a
+/// long interval (e.g. 30m) doesn't get polled every 5 minutes, and a fleet on
+/// a short interval (e.g. 5s) doesn't get hammered. Never faster than a healthy
+/// agent's cadence; for a permanently-orphaned agent, slower.
+fn reenroll_backoff(backoff_max: Duration) -> Duration {
+    REENROLL_BACKOFF_FLOOR.max(backoff_max)
+}
 
 /// is_reenroll_required reports whether a check-in error is the server saying
 /// it doesn't recognize this envoy id (gRPC NotFound). That's the orphaned-
@@ -2174,6 +2184,17 @@ mod tests {
         // Works through a wrapped/context'd error chain.
         let wrapped = anyhow::Error::new(tonic::Status::not_found("x")).context("check-in RPC");
         assert!(is_reenroll_required(&wrapped));
+    }
+
+    #[test]
+    fn reenroll_backoff_floors_at_5min_then_tracks_interval() {
+        // Short interval (bo.max ≈ 10s) → floored at 5 min, not hammered.
+        assert_eq!(reenroll_backoff(Duration::from_secs(10)), Duration::from_secs(300));
+        // Exactly at the floor.
+        assert_eq!(reenroll_backoff(Duration::from_secs(300)), Duration::from_secs(300));
+        // Long interval (bo.max = 2×30m = 60m) → respected; never polls a
+        // disowned envoy faster than a healthy agent's cadence.
+        assert_eq!(reenroll_backoff(Duration::from_secs(3600)), Duration::from_secs(3600));
     }
 
     #[test]

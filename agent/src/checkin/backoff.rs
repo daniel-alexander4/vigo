@@ -38,6 +38,14 @@ impl Backoff {
         self.current = self.initial;
     }
 
+    /// The current backoff ceiling — `set_max_from_interval` keeps this at 2×
+    /// the check-in interval (floor 10s), or the 5-minute default before any
+    /// interval is known. The orphaned-envoy retry path floors against this so
+    /// it never retries more often than ~2 normal cycles.
+    pub fn max(&self) -> Duration {
+        self.max
+    }
+
     /// Update the max backoff based on the server-provided check-in interval.
     /// Caps at 2x the interval so the agent reconnects within two cycles of
     /// the server coming back. Floor of 10s to avoid tight retry loops on
@@ -80,6 +88,14 @@ mod tests {
             let d = b.next_backoff();
             assert!(d <= Duration::from_secs(300));
         }
+    }
+
+    #[test]
+    fn max_getter_reflects_interval() {
+        let mut b = Backoff::new();
+        assert_eq!(b.max(), Duration::from_secs(300)); // default before any interval
+        b.set_max_from_interval(Duration::from_secs(600)); // 10m → 2× = 20m
+        assert_eq!(b.max(), Duration::from_secs(1200));
     }
 
     #[test]
