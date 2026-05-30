@@ -94,6 +94,18 @@ func main() {
 	}
 
 	cli := append([]string{}, os.Args[1:]...)
+	// Redact the admin token before it's persisted to the manifest — it's a
+	// live credential and must never land in a results artifact.
+	for i, a := range cli {
+		switch {
+		case a == "--admin-token" || a == "-admin-token":
+			if i+1 < len(cli) {
+				cli[i+1] = "***"
+			}
+		case strings.HasPrefix(a, "--admin-token=") || strings.HasPrefix(a, "-admin-token="):
+			cli[i] = strings.SplitN(a, "=", 2)[0] + "=***"
+		}
+	}
 	man := manifest{
 		ToolVersion:          toolVersion,
 		StartedUTC:           time.Now().UTC(),
@@ -802,14 +814,19 @@ func runCheckinLoopGated(
 
 	doCheckin := func() {
 		start := time.Now()
-		ts := strconv.FormatInt(time.Now().Unix(), 10)
+		// Derive the signed ts from the same `start` instant as the wire
+		// Timestamp below. The server rebuilds the signed message from the
+		// wire Timestamp, so two separate time.Now() calls that straddle a
+		// unix-second boundary (likely under scheduler/GC pressure at high
+		// throughput) would mismatch → bad_signature.
+		ts := strconv.FormatInt(start.Unix(), 10)
 		msg := append([]byte(e.stateFingerprint), []byte(ts)...)
 		sig := signWith(e, msg)
 		resp, err := client.CheckIn(ctx, &pb.CheckInRequest{
 			EnvoyId:          e.id,
 			StateFingerprint: e.stateFingerprint,
 			Signature:        sig,
-			Timestamp:        timestamppb.Now(),
+			Timestamp:        timestamppb.New(start),
 			AgentVersion:     "vigo-burst",
 		})
 		lat := time.Since(start).Nanoseconds()
@@ -881,17 +898,20 @@ func runCheckinLoop(
 
 	doCheckin := func() {
 		start := time.Now()
-		ts := strconv.FormatInt(time.Now().Unix(), 10)
 		// Payload-and-timestamp signature shape matches the real agent:
 		// the payload byte slice is the state_fingerprint string, the
-		// timestamp string is appended, ed25519-signed.
+		// timestamp string is appended, ed25519-signed. Derive ts from the
+		// same `start` instant as the wire Timestamp below — two separate
+		// time.Now() calls can straddle a unix-second boundary, leaving the
+		// server's reconstructed message mismatched → bad_signature.
+		ts := strconv.FormatInt(start.Unix(), 10)
 		msg := append([]byte(e.stateFingerprint), []byte(ts)...)
 		sig := signWith(e, msg)
 		resp, err := client.CheckIn(ctx, &pb.CheckInRequest{
 			EnvoyId:          e.id,
 			StateFingerprint: e.stateFingerprint,
 			Signature:        sig,
-			Timestamp:        timestamppb.Now(),
+			Timestamp:        timestamppb.New(start),
 			AgentVersion:     "vigo-burst",
 		})
 		lat := time.Since(start).Nanoseconds()
