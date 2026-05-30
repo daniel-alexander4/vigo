@@ -11,11 +11,11 @@ import (
 
 	"fmt"
 
-	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -26,6 +26,15 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
+	// Admission control: shed before doing any work so a result storm
+	// (e.g. fleet-wide reporting after a publish) can't pile unbounded
+	// writes onto the single SQLite writer. ResourceExhausted tells the
+	// agent to back off — it already does.
+	if !s.tryAcquireReportSlot() {
+		return nil, status.Error(codes.ResourceExhausted, "server overloaded; retry with backoff")
+	}
+	defer s.releaseReportSlot()
+
 	envoyID := req.GetEnvoyId()
 	var traceID string
 	ctx, traceID = EnsureTraceID(ctx, req.GetTraceparent())
@@ -38,19 +47,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		trigger = s.fleetIndex.ConsumeRunTrigger(envoyID)
 	}
 
-	// Create the run record (server generates the UUID).
-	run, err := s.runStore.CreateRun(ctx, db.CreateRunParams{
-		EnvoyID:      envoyID,
-		Status:      "running",
-		Trigger:     trigger,
-		ModuleCount: int64(len(req.GetResults())),
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "creating run: %v", err)
-	}
-	runID := run.ID
-
-	// Build batch of results and compute counts in a single pass.
+	// Build batch of results and compute counts in a single pass. RunID is
+	// stamped by RecordRun from the run it creates, so it's left blank here.
 	var changedCount, failedCount, skippedCount, blockedCount int64
 	batch := make([]db.CreateRunResultParams, 0, len(req.GetResults()))
 	for _, result := range req.GetResults() {
@@ -65,7 +63,6 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		}
 
 		batch = append(batch, db.CreateRunResultParams{
-			RunID:        runID,
 			ModuleName:   result.GetModuleName(),
 			ResourceType: result.GetResourceType(),
 			ResourceName: result.GetResourceName(),
@@ -88,17 +85,6 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		}
 	}
 
-	// Insert all results in a single batched operation.
-	if err := s.runStore.BatchCreateRunResults(ctx, batch); err != nil {
-		slog.Error("failed to store run results",
-			"run_id", runID,
-			"trace_id", traceID,
-			"count", len(batch),
-			"error", err,
-		)
-		return nil, status.Errorf(codes.Internal, "storing run results: %v", err)
-	}
-
 	// Compute run status: failures → "failure", blocked-only → "blocked", else "success".
 	runStatus := "success"
 	if failedCount > 0 {
@@ -107,22 +93,33 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		runStatus = "blocked"
 	}
 
-	// Finish the run with computed counts.
-	err = s.runStore.FinishRun(ctx, db.FinishRunParams{
-		ID:           runID,
-		Status:       runStatus,
-		ChangedCount: changedCount,
-		FailedCount:  failedCount,
-		SkippedCount: skippedCount,
+	// Persist the whole run atomically (run row + results + finish) in one
+	// transaction on the single writer — no orphaned "running" row if a write
+	// fails partway, and one write-lock acquisition instead of three.
+	run, err := s.runStore.RecordRun(ctx, db.RecordRunParams{
+		Run: db.CreateRunParams{
+			EnvoyID:     envoyID,
+			Status:      "running",
+			Trigger:     trigger,
+			ModuleCount: int64(len(req.GetResults())),
+		},
+		Results: batch,
+		Finish: db.FinishRunParams{
+			Status:       runStatus,
+			ChangedCount: changedCount,
+			FailedCount:  failedCount,
+			SkippedCount: skippedCount,
+		},
 	})
 	if err != nil {
-		slog.Error("failed to finish run",
-			"run_id", runID,
+		slog.Error("failed to record run",
 			"trace_id", traceID,
+			"count", len(batch),
 			"error", err,
 		)
-		return nil, status.Errorf(codes.Internal, "finishing run: %v", err)
+		return nil, status.Errorf(codes.Internal, "recording run: %v", err)
 	}
+	runID := run.ID
 
 	// Reuse envoy from interceptor context (avoids redundant DB lookup).
 	hostname := envoyID // fallback
@@ -149,7 +146,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		s.fleetIndex.UpdateRunStatus(envoyID, runID, runStatus, changedCount, failedCount, moduleCount, now)
 		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
 			RunID:        runID,
-			EnvoyID:     envoyID,
+			EnvoyID:      envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
 			Trigger:      trigger,
@@ -170,7 +167,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			continue
 		}
 		if err := s.queries.InsertFileSnapshot(ctx, db.InsertFileSnapshotParams{
-			EnvoyID:    envoyID,
+			EnvoyID:     envoyID,
 			FilePath:    result.GetFilePath(),
 			ContentHash: result.GetContentHash(),
 			Content:     result.GetPreviousContent(),

@@ -87,6 +87,10 @@ type AgentService struct {
 	// so the cascading-overload regime (where retries pile on the queue
 	// faster than the server drains it) is prevented.
 	checkInSem chan struct{}
+	// reportResultSem is the same admission control for the ReportResult
+	// write path — it caps how many result reports concurrently hit the
+	// database writer. nil = unbounded.
+	reportResultSem chan struct{}
 }
 
 // tryAcquireCheckInSlot returns true when the caller may proceed and is
@@ -110,6 +114,29 @@ func (s *AgentService) releaseCheckInSlot() {
 		return
 	}
 	<-s.checkInSem
+}
+
+// tryAcquireReportSlot mirrors tryAcquireCheckInSlot for the ReportResult
+// write path. Returns false when the cap is reached — caller returns
+// ResourceExhausted.
+func (s *AgentService) tryAcquireReportSlot() bool {
+	if s.reportResultSem == nil {
+		return true
+	}
+	select {
+	case s.reportResultSem <- struct{}{}:
+		return true
+	default:
+		s.metrics.ReportsTotal.WithLabelValues("shed").Inc()
+		return false
+	}
+}
+
+func (s *AgentService) releaseReportSlot() {
+	if s.reportResultSem == nil {
+		return
+	}
+	<-s.reportResultSem
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.

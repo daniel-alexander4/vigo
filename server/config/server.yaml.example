@@ -31,6 +31,7 @@ server:
 
 database:
   dsn: "secret:vigo/db/dsn"
+  # max_open_conns: 0                          # max concurrent DB connections. SQLite serializes writes on a single dedicated connection; this sizes the concurrent READ pool (and bounds the CGO worker threads each in-flight query pins — an unbounded pool is what lets a write storm exhaust OS threads). 0 = auto (CPU count, min 4).
   retention: "30d"                             # auto-prune runs/tasks/workflows older than this; daily background pruner. Empty disables.
 
 
@@ -82,6 +83,7 @@ checkin:
   # fleet_lookup_ttl: "30s"                    # how long a resolved fleet: cross-node lookup is reused before recomputing
   # observe_only: false                        # global observe-only: all envoys report drift only, no changes applied
   # max_concurrent: 0                          # cap on concurrent CheckIn handlers (0 = unbounded, the default). Overflow returns ResourceExhausted so clients retry-with-backoff, preventing cascading overload. Watch vigo_grpc_checkin_in_flight to size — set roughly to your host's measured req/s capacity × p99 latency in seconds.
+  # report_max_concurrent: 0                   # cap on concurrent ReportResult handlers (0 = unbounded, the default). Overflow returns ResourceExhausted so agents retry-with-backoff — keeps a convergence-result storm (e.g. fleet-wide reporting after a publish) from saturating the DB writer. The result-ingest analogue of max_concurrent.
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────

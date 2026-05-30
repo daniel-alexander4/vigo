@@ -47,6 +47,7 @@ Storage backend. SQLite only — `postgres` is rejected at startup in this relea
 database:
   dsn: "secret:vigo/db/dsn"         # SQLite file path
   driver: sqlite3                    # sqlite3 (default) — only supported driver
+  max_open_conns: 0                  # read-pool size (0 = auto: CPU count, min 4)
   retention: "30d"                   # auto-prune old runs/task runs/workflows
 ```
 
@@ -54,6 +55,7 @@ database:
 |-------|---------|-------------|
 | `dsn` | (required) | SQLite database file path. Supports `secret:` prefix |
 | `driver` | `sqlite3` | Database driver. Only `sqlite3` is supported; the server rejects `postgres` at startup (the Postgres migration set is incomplete). |
+| `max_open_conns` | `0` | Maximum concurrent database connections. SQLite runs two pools: writes always serialize on a dedicated single-writer connection, and this knob sizes the **concurrent read pool** — so it caps reader concurrency and bounds the CGO worker threads the driver pins per in-flight query. An unbounded pool is what lets a write storm exhaust the process's OS threads. `0` = auto (CPU count, min 4). |
 | `retention` | `30d` | Auto-prune data older than this duration. Applies to `runs` (cascades `run_results`), `task_runs`, `workflow_runs`, `file_snapshots`, `convergence_history`, `compliance_history`. `audit_entries` is never trimmed (tamper chain). |
 
 ## secrets
@@ -122,6 +124,7 @@ checkin:
   jitter_percent: 20                 # randomize timing by 0-N%
   bundle_max_age: "24h"              # signed bundle TTL on agents (0 = forever)
   max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = unbounded)
+  report_max_concurrent: 0           # cap on concurrent ReportResult handlers (0 = unbounded)
 ```
 
 | Field | Default | Description |
@@ -130,6 +133,7 @@ checkin:
 | `jitter_percent` | `20` | Random jitter to prevent thundering herd |
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
 | `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. Overflow returns `ResourceExhausted` so clients retry-with-backoff, preventing cascading overload. `0` = unbounded |
+| `report_max_concurrent` | `0` | Cap on concurrent ReportResult handlers. Overflow returns `ResourceExhausted` so agents retry-with-backoff, keeping a convergence-result storm (e.g. fleet-wide reporting after a publish) from saturating the database writer. The result-ingest analogue of `max_concurrent`. `0` = unbounded |
 
 ### Sizing `max_concurrent`
 

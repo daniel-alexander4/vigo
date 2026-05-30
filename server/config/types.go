@@ -950,9 +950,10 @@ type BootstrapConfig struct {
 
 // DatabaseSection holds database config.
 type DatabaseSection struct {
-	DSN       string `yaml:"dsn" doc:"Database DSN — sqlite3 file path or postgres connection URL (supports the secret: prefix)." example:"file:/srv/vigo/vigo.db, postgres://user@host:5432/vigo?sslmode=require, secret:vigo/db/dsn"`
-	Driver    string `yaml:"driver" doc:"Database driver." options:"sqlite|postgres" default:"sqlite" example:"sqlite (single-node), postgres (HA)"`
-	Retention string `yaml:"retention" doc:"Age-based pruning for runs, tasks, and workflows (e.g. 90d, 2160h). Empty disables pruning." example:"2160h (90d), 720h (30d); no d unit — use hours"`
+	DSN          string `yaml:"dsn" doc:"Database DSN — sqlite3 file path or postgres connection URL (supports the secret: prefix)." example:"file:/srv/vigo/vigo.db, postgres://user@host:5432/vigo?sslmode=require, secret:vigo/db/dsn"`
+	Driver       string `yaml:"driver" doc:"Database driver." options:"sqlite|postgres" default:"sqlite" example:"sqlite (single-node), postgres (HA)"`
+	MaxOpenConns int    `yaml:"max_open_conns" doc:"Maximum concurrent database connections. SQLite: sizes the concurrent read pool — writes always serialize on a dedicated single-writer connection, so this caps reader concurrency and bounds CGO worker threads (an unbounded pool is what lets a write storm OS-thread-exhaust the server). Postgres: caps the single pool below the server's max_connections. 0 = auto (SQLite: CPU count, min 4; Postgres: 25)." default:"0" example:"0 (auto), 8, 16, 25"`
+	Retention    string `yaml:"retention" doc:"Age-based pruning for runs, tasks, and workflows (e.g. 90d, 2160h). Empty disables pruning." example:"2160h (90d), 720h (30d); no d unit — use hours"`
 }
 
 // CheckInSection holds check-in interval settings.
@@ -965,6 +966,7 @@ type CheckInSection struct {
 	ObserveOnly         bool   `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false" example:"true during Salt/Puppet migration"`
 	ComplianceThreshold int    `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables." example:"0-100; 90 for prod alerting, 95 for tight SLOs"`
 	MaxConcurrent       int    `yaml:"max_concurrent" doc:"Maximum concurrent CheckIn handlers. Arrivals beyond this return ResourceExhausted so the gRPC client retries with backoff, preventing cascading overload under burst. Watch vigo_grpc_checkin_in_flight as the pre-cascade signal; size this knob to roughly your host's measured req/s capacity × p99 latency in seconds. 0 (default) disables shedding." default:"0" example:"0 (disabled), 500, 2048"`
+	ReportMaxConcurrent int    `yaml:"report_max_concurrent" doc:"Maximum concurrent ReportResult handlers. Arrivals beyond this return ResourceExhausted so the agent retries with backoff, preventing a convergence-result storm (e.g. fleet-wide reporting after a publish) from saturating the database writer. Mirrors max_concurrent for the result-ingest path. 0 (default) disables shedding." default:"0" example:"0 (disabled), 256, 1024"`
 }
 
 // ConditionalBlock groups resources under a shared when expression.

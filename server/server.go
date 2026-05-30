@@ -115,7 +115,8 @@ type Server struct {
 	mode         config.SpannerMode
 
 	// --- Database ---
-	db          *sql.DB
+	db          *sql.DB // SQLite: single-writer pool. Postgres: the pool.
+	readDB      *sql.DB // SQLite read pool (nil for Postgres)
 	isPostgres  bool
 	queries     *db.Queries
 	auditWriter *audit.Writer
@@ -406,31 +407,57 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 	s.isPostgres = dbDriver == "postgres"
 
-	// Open database connection.
+	// Open database connection(s).
 	if s.isPostgres {
 		s.db, err = sql.Open("postgres", s.cfg.Database.DSN)
-	} else {
-		s.db, err = sql.Open("sqlite3", s.cfg.Database.DSN)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("opening database (%s): %w", dbDriver, err)
-	}
-
-	// SQLite-specific tuning.
-	if !s.isPostgres {
-		pragmas := []struct{ sql, desc string }{
-			{"PRAGMA foreign_keys = ON", "enabling foreign keys"},
-			{"PRAGMA journal_mode = WAL", "setting WAL mode"},
-			{"PRAGMA busy_timeout = 5000", "setting busy timeout"},
-			{"PRAGMA synchronous = NORMAL", "setting synchronous mode"},
-			{"PRAGMA cache_size = -64000", "setting cache size"},
-			{"PRAGMA temp_store = MEMORY", "setting temp store"},
-			{"PRAGMA auto_vacuum = INCREMENTAL", "setting auto vacuum"},
+		if err != nil {
+			return nil, fmt.Errorf("opening database (%s): %w", dbDriver, err)
 		}
-		for _, p := range pragmas {
-			if _, err := s.db.ExecContext(ctx, p.sql); err != nil {
-				return nil, fmt.Errorf("%s: %w", p.desc, err)
+		// Bound the pool so a write storm can't overrun Postgres's
+		// server-side max_connections. Pure-Go lib/pq won't OS-thread-exhaust
+		// the way the CGO SQLite driver does, but an unbounded client pool
+		// still exhausts the server.
+		pgN := s.cfg.Database.MaxOpenConns
+		if pgN <= 0 {
+			pgN = 25
+		}
+		s.db.SetMaxOpenConns(pgN)
+		s.db.SetMaxIdleConns(pgN)
+	} else {
+		// SQLite: two pools to the same file. The write pool holds a single
+		// connection so writes serialize on it — no writer-lock collisions and
+		// no CGO thread explosion (excess writers park on the connection queue,
+		// which costs a goroutine, not a pinned OS thread). The read pool is
+		// bounded but concurrent; WAL permits readers alongside the one writer.
+		// Per-connection pragmas travel in the DSN so EVERY pooled connection
+		// gets them — the previous single ExecContext only ever configured one
+		// pooled connection, leaving the rest without busy_timeout/foreign_keys.
+		dsn := sqliteDSN(s.cfg.Database.DSN)
+		s.db, err = sql.Open("sqlite3", dsn) // write pool
+		if err != nil {
+			return nil, fmt.Errorf("opening database (write pool): %w", err)
+		}
+		s.db.SetMaxOpenConns(1)
+		s.db.SetMaxIdleConns(1)
+
+		s.readDB, err = sql.Open("sqlite3", dsn) // read pool
+		if err != nil {
+			return nil, fmt.Errorf("opening database (read pool): %w", err)
+		}
+		readN := s.cfg.Database.MaxOpenConns
+		if readN <= 0 {
+			readN = runtime.NumCPU()
+			if readN < 4 {
+				readN = 4
 			}
+		}
+		s.readDB.SetMaxOpenConns(readN)
+		s.readDB.SetMaxIdleConns(readN)
+
+		// auto_vacuum is a persistent DB-level setting, not per-connection, so
+		// it's applied once on the write handle rather than via the DSN.
+		if _, err := s.db.ExecContext(ctx, "PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
+			return nil, fmt.Errorf("setting auto_vacuum: %w", err)
 		}
 	}
 
@@ -471,11 +498,14 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	slog.Info("migrations complete")
 
 	// Initialize query layer early — needed for license envoy count.
-	// For Postgres, wrap DB with placeholder rewriter so sqlc-generated
-	// queries (which use ?) work with Postgres ($1, $2, ...).
-	var dbtx db.DBTX = s.db
+	// Postgres: wrap the single pool with the placeholder rewriter so
+	// sqlc-generated `?` queries work ($1, $2, ...). SQLite: route reads to
+	// the read pool and writes to the single-writer pool via SplitDB.
+	var dbtx db.DBTX
 	if s.isPostgres {
 		dbtx = &db.PgDBTX{DB: s.db}
+	} else {
+		dbtx = db.NewSplitDB(s.readDB, s.db)
 	}
 	s.queries = db.New(dbtx)
 
@@ -656,7 +686,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		s.runStore = db.NewMemRunStore(s.cfg.Tuning.RunStoreCapacity)
 		slog.Info("run store backend: memory", "capacity", s.cfg.Tuning.RunStoreCapacity)
 	default:
-		s.runStore = db.NewDBRunStore(s.queries)
+		s.runStore = db.NewDBRunStore(s.queries, s.db)
 		slog.Info("run store backend: database")
 	}
 
@@ -883,42 +913,43 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// (grpcSrv.Serve, traitsBatch.Start, peer primary push, etc.) stay
 	// in run() / chunk 5. ---
 	grpcSrv, certCache, traitsBatch, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
-		CertFile:              s.cfg.Server.TLS.CertFile,
-		KeyFile:               s.cfg.Server.TLS.KeyFile,
-		CAFile:                s.cfg.Server.TLS.CAFile,
-		GRPCPort:              s.cfg.Server.GRPCListen,
-		Registry:              s.reg,
-		ConfigStore:           s.configStore,
-		Queries:               s.queries,
-		RunStore:              s.runStore,
-		Interval:              s.baseInterval,
-		OfflineThreshold:      s.offlineThreshold,
-		JitterPercent:         int32(s.cfg.CheckIn.JitterPercent),
-		MaxConcurrentCheckIns: s.cfg.CheckIn.MaxConcurrent,
-		Integrations:          s.integrations,
-		TraitsDir:             s.traitsDir,
-		SignatureWindow:       s.sigWindow,
-		TraitsScannerTTL:      s.traitsScannerTTL,
-		MaxConcurrentStreams:  s.cfg.Tuning.MaxConcurrentStreams,
-		GRPCReadBuffer:        s.cfg.Tuning.GRPCReadBuffer,
-		GRPCWriteBuffer:       s.cfg.Tuning.GRPCWriteBuffer,
-		MaxConnectionAge:      s.maxConnAge,
-		MaxConnectionIdle:     s.maxConnIdle,
-		KeepaliveTime:         s.kaTime,
-		KeepaliveTimeout:      s.kaTimeout,
-		StreamSendBuffer:      s.cfg.Tuning.StreamSendBuffer,
-		LicenseEnforcer:       s.enforcer,
-		TaskStore:             s.taskStore,
-		FleetIndex:            s.fleetIndex,
-		RunBatcher:            s.runBatcher,
-		BundleSigner:          s.bundleSigner,
-		BundleMaxAge:          s.bundleMaxAge,
-		FallbackServers:       s.fallbackServers,
-		AuditWriter:           s.auditWriter,
-		ServerVersions:        s.agentVersions,
-		GlobalObserveOnly:     s.cfg.CheckIn.ObserveOnly,
-		Metrics:               s.metrics,
-		TicketsStore:          s.ticketsStore,
+		CertFile:                   s.cfg.Server.TLS.CertFile,
+		KeyFile:                    s.cfg.Server.TLS.KeyFile,
+		CAFile:                     s.cfg.Server.TLS.CAFile,
+		GRPCPort:                   s.cfg.Server.GRPCListen,
+		Registry:                   s.reg,
+		ConfigStore:                s.configStore,
+		Queries:                    s.queries,
+		RunStore:                   s.runStore,
+		Interval:                   s.baseInterval,
+		OfflineThreshold:           s.offlineThreshold,
+		JitterPercent:              int32(s.cfg.CheckIn.JitterPercent),
+		MaxConcurrentCheckIns:      s.cfg.CheckIn.MaxConcurrent,
+		MaxConcurrentReportResults: s.cfg.CheckIn.ReportMaxConcurrent,
+		Integrations:               s.integrations,
+		TraitsDir:                  s.traitsDir,
+		SignatureWindow:            s.sigWindow,
+		TraitsScannerTTL:           s.traitsScannerTTL,
+		MaxConcurrentStreams:       s.cfg.Tuning.MaxConcurrentStreams,
+		GRPCReadBuffer:             s.cfg.Tuning.GRPCReadBuffer,
+		GRPCWriteBuffer:            s.cfg.Tuning.GRPCWriteBuffer,
+		MaxConnectionAge:           s.maxConnAge,
+		MaxConnectionIdle:          s.maxConnIdle,
+		KeepaliveTime:              s.kaTime,
+		KeepaliveTimeout:           s.kaTimeout,
+		StreamSendBuffer:           s.cfg.Tuning.StreamSendBuffer,
+		LicenseEnforcer:            s.enforcer,
+		TaskStore:                  s.taskStore,
+		FleetIndex:                 s.fleetIndex,
+		RunBatcher:                 s.runBatcher,
+		BundleSigner:               s.bundleSigner,
+		BundleMaxAge:               s.bundleMaxAge,
+		FallbackServers:            s.fallbackServers,
+		AuditWriter:                s.auditWriter,
+		ServerVersions:             s.agentVersions,
+		GlobalObserveOnly:          s.cfg.CheckIn.ObserveOnly,
+		Metrics:                    s.metrics,
+		TicketsStore:               s.ticketsStore,
 		AgentBinAvailable: func() bool {
 			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {
 				for _, goarch := range []string{"amd64", "arm64"} {
@@ -1589,8 +1620,28 @@ func (s *Server) Close() error {
 	if s.db != nil {
 		_ = s.db.Close()
 	}
+	if s.readDB != nil {
+		_ = s.readDB.Close()
+	}
 	if s.provider != nil {
 		_ = s.provider.Close()
 	}
 	return nil
+}
+
+// sqliteDSN appends the per-connection pragmas Vigo requires to a SQLite DSN.
+// mattn/go-sqlite3 applies these to every connection it opens, so both pools
+// get foreign keys, WAL, the 5s busy timeout, etc. — unlike a one-shot
+// `PRAGMA` ExecContext, which only configures whichever pooled connection it
+// happened to run on. auto_vacuum is omitted here (persistent, DB-level —
+// applied once on the write handle).
+func sqliteDSN(base string) string {
+	sep := "?"
+	for i := 0; i < len(base); i++ {
+		if base[i] == '?' {
+			sep = "&"
+			break
+		}
+	}
+	return base + sep + "_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_synchronous=NORMAL&_cache_size=-64000&_temp_store=MEMORY"
 }

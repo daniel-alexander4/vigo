@@ -27,8 +27,8 @@ type MemRunStore struct {
 }
 
 type runShard struct {
-	mu       sync.RWMutex
-	byID     map[string]*memRun          // run UUID string → run + results
+	mu      sync.RWMutex
+	byID    map[string]*memRun         // run UUID string → run + results
 	byEnvoy map[string]*envoyRunBuffer // envoy UUID string → ring of run IDs
 }
 
@@ -51,7 +51,7 @@ func NewMemRunStore(capacity int) *MemRunStore {
 	s := &MemRunStore{capacity: capacity}
 	for i := range s.shards {
 		s.shards[i] = runShard{
-			byID:     make(map[string]*memRun),
+			byID:    make(map[string]*memRun),
 			byEnvoy: make(map[string]*envoyRunBuffer),
 		}
 	}
@@ -89,7 +89,7 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 	}
 	run := Run{
 		ID:          uuid.New().String(),
-		EnvoyID:    arg.EnvoyID,
+		EnvoyID:     arg.EnvoyID,
 		StartedAt:   time.Now(),
 		Status:      arg.Status,
 		Trigger:     trigger,
@@ -198,6 +198,31 @@ func (s *MemRunStore) FinishRun(_ context.Context, arg FinishRunParams) error {
 	mr.run.SkippedCount = arg.SkippedCount
 	mr.run.FinishedAt = sql.NullTime{Time: time.Now(), Valid: true}
 	return nil
+}
+
+// RecordRun composes CreateRun → BatchCreateRunResults → FinishRun. The
+// in-memory store has no transactions, but each step takes the shard lock, so
+// the run lands consistently; the DB backend is the one with true atomicity.
+func (s *MemRunStore) RecordRun(ctx context.Context, arg RecordRunParams) (Run, error) {
+	run, err := s.CreateRun(ctx, arg.Run)
+	if err != nil {
+		return Run{}, err
+	}
+	for i := range arg.Results {
+		arg.Results[i].RunID = run.ID
+	}
+	if err := s.BatchCreateRunResults(ctx, arg.Results); err != nil {
+		return Run{}, err
+	}
+	arg.Finish.ID = run.ID
+	if err := s.FinishRun(ctx, arg.Finish); err != nil {
+		return Run{}, err
+	}
+	run.Status = arg.Finish.Status
+	run.ChangedCount = arg.Finish.ChangedCount
+	run.FailedCount = arg.Finish.FailedCount
+	run.SkippedCount = arg.Finish.SkippedCount
+	return run, nil
 }
 
 func (s *MemRunStore) GetRunByID(_ context.Context, id string) (Run, error) {

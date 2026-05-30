@@ -23,6 +23,7 @@ type Metrics struct {
 	EnvoysTotal          prometheus.Gauge
 	EnvoysActive         prometheus.Gauge
 	CheckinsTotal        *prometheus.CounterVec
+	ReportsTotal         *prometheus.CounterVec
 	RunDuration          *prometheus.HistogramVec
 	DriftDetected        *prometheus.CounterVec
 	ModuleActions        *prometheus.CounterVec
@@ -191,6 +192,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		CheckinsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_checkins_total",
 			Help: "Total number of agent check-ins.",
+		}, []string{"status"}),
+		ReportsTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_reportresults_total",
+			Help: "Total number of agent result reports, by status (e.g. shed).",
 		}, []string{"status"}),
 		RunDuration: f.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "vigo_run_duration_seconds",
