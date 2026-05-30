@@ -35,6 +35,12 @@ The freshness predicate marked the envoy offline despite the agent running. Like
 
 **Fix:** check `vigo status` on the envoy for the observed inter-CheckIn cadence. If it's much higher than the configured `checkin.interval`, the convergence pass is bottlenecked. Bump the interval, or set the `checkin.offline_threshold` override in `server.yaml` (see [reference/server-yaml.md](../reference/server-yaml.md)).
 
+### `server does not recognize this envoy (unknown id) — re-bootstrap required`
+
+The agent's enrolled identity (its client UUID) has no row on the server, so every check-in is rejected with gRPC `NotFound` and the agent backs off (5 min) and keeps applying its last cached policy offline. Cause: the server's DB was reset/rebuilt, or the envoy was deleted (`vigocli envoys delete`) — while the agent kept running with its old UUID. (Distinct from a *revoked* envoy, which is rejected with `PermissionDenied "envoy is revoked"` and must stay rejected.) The server logs the orphan once per 10 min as `WARN check-in from unknown envoy`, and `vigo_sig_verify_failed_total{reason="envoy_not_found"}` climbs.
+
+**Fix:** re-bootstrap the agent on that host to re-enroll it with a fresh identity: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`. (The agent does **not** re-enroll itself — re-enrollment stays a deliberate, gated act.) If the host is decommissioned, stop its agent instead.
+
 ### `vigocli config publish` fails with validation errors
 
 The published config didn't pass one of the validation gates (YAML syntax, cross-reference integrity, circular dependency detection, idempotency, guardrails, URL aliveness).

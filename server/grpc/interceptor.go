@@ -269,8 +269,16 @@ func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID stri
 	envoy, err := queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
 		m.SigVerifyFailed.WithLabelValues("envoy_not_found").Inc()
-		slog.Error("envoy lookup failed", "envoy_id", envoyID, "error", err)
-		return db.Envoy{}, nil, status.Error(codes.Unauthenticated, "envoy not found")
+		// Unknown id = no DB row (never enrolled, deleted, or a server DB
+		// reset left this agent orphaned). NotFound (not Unauthenticated)
+		// so the agent can recognize "re-bootstrap required" specifically
+		// and back off — distinct from bad-signature/clock-skew (also a
+		// client-auth event, so Warn not Error), throttled per envoy.
+		if defaultUnknownEnvoyLog.shouldLog(envoyID, time.Now()) {
+			slog.Warn("check-in from unknown envoy — not enrolled; agent must re-bootstrap",
+				"envoy_id", envoyID, "error", err)
+		}
+		return db.Envoy{}, nil, status.Error(codes.NotFound, "unknown envoy: not enrolled — re-bootstrap this agent")
 	}
 
 	block, _ := pem.Decode([]byte(envoy.PubkeyPem))

@@ -1305,20 +1305,39 @@ pub async fn daemon_loop(
                 }
             }
             Err(e) => {
-                // Surface the underlying error before we fall through to
-                // failover/offline. Without this line, every check-in
-                // failure is invisible — the operator sees only the
-                // local-convergence retry log emitted further down and
-                // can't tell whether the server is unreachable, the TLS
-                // handshake is failing, the request signature is being
-                // rejected, or something else entirely.
-                warn!(
-                    error = %e,
-                    server = %client.active_server(),
-                    "check-in failed, attempting failover before offline convergence"
-                );
-                // Attempt failover to a fallback server before going offline.
-                if client.record_failure().await {
+                // Orphaned identity: the server returns NotFound when this
+                // envoy id has no row (DB reset / deleted). Retrying a dead id
+                // can never succeed without an operator re-bootstrap, so back
+                // off long (REENROLL_BACKOFF) and say so plainly, rather than
+                // hammering every cycle. Keep applying cached policy offline
+                // meanwhile so the node doesn't drift.
+                let reenroll = is_reenroll_required(&e);
+                if reenroll {
+                    warn!(
+                        server = %client.active_server(),
+                        "server does not recognize this envoy (unknown id) — re-bootstrap required: \
+                         re-run the bootstrap install on this host \
+                         (curl -sSfk https://<server>:8443/bootstrap | sudo sh); \
+                         backing off, still applying cached policy offline"
+                    );
+                } else {
+                    // Surface the underlying error before we fall through to
+                    // failover/offline. Without this line, every check-in
+                    // failure is invisible — the operator sees only the
+                    // local-convergence retry log emitted further down and
+                    // can't tell whether the server is unreachable, the TLS
+                    // handshake is failing, the request signature is being
+                    // rejected, or something else entirely.
+                    warn!(
+                        error = %e,
+                        server = %client.active_server(),
+                        "check-in failed, attempting failover before offline convergence"
+                    );
+                }
+                // Failover helps only when the server is unreachable, not when
+                // it affirmatively rejects an unknown id (peers share the same
+                // enrollment state) — skip it for the re-enroll case.
+                if !reenroll && client.record_failure().await {
                     // Failover occurred — retry immediately on the new server.
                     info!(server = %client.active_server(), "retrying on failover server");
                     continue;
@@ -1355,7 +1374,7 @@ pub async fn daemon_loop(
                             }
                         }
 
-                        let wait = bo.next_backoff();
+                        let wait = if reenroll { REENROLL_BACKOFF } else { bo.next_backoff() };
                         info!(backoff = ?wait, "local convergence complete, waiting to retry server");
                         tokio::select! {
                             _ = cancel.cancelled() => return Ok(()),
@@ -1365,7 +1384,7 @@ pub async fn daemon_loop(
                     }
                 }
 
-                let wait = bo.next_backoff();
+                let wait = if reenroll { REENROLL_BACKOFF } else { bo.next_backoff() };
                 warn!(error = %e, backoff = ?wait, "convergence run failed, backing off");
 
                 tokio::select! {
@@ -1375,6 +1394,27 @@ pub async fn daemon_loop(
             }
         }
     }
+}
+
+/// REENROLL_BACKOFF is the retry interval after the server reports this envoy
+/// as unknown (NotFound). Retrying a dead identity can't succeed without an
+/// operator re-bootstrap, so we wait minutes instead of the normal backoff —
+/// enough to keep applying cached policy offline without flooding the agent
+/// log or the server's sig-verify metric.
+const REENROLL_BACKOFF: Duration = Duration::from_secs(300);
+
+/// is_reenroll_required reports whether a check-in error is the server saying
+/// it doesn't recognize this envoy id (gRPC NotFound). That's the orphaned-
+/// identity case (server DB reset, or the row was deleted) — recoverable only
+/// by re-bootstrapping, not by retrying. Distinct from Unauthenticated (bad
+/// signature / clock skew) and transport failures, which a normal retry can
+/// clear.
+fn is_reenroll_required(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<tonic::Status>()
+            .is_some_and(|s| s.code() == tonic::Code::NotFound)
+    })
 }
 
 /// Build a DeltaEvent with RunCompleted from convergence results.
@@ -2115,6 +2155,26 @@ async fn converge_proxied_devices(
 mod tests {
     use super::*;
     use crate::proto::PolicyModule;
+
+    #[test]
+    fn reenroll_required_only_on_notfound() {
+        // NotFound = orphaned identity → re-enroll path.
+        let nf = anyhow::Error::new(tonic::Status::not_found("unknown envoy"));
+        assert!(is_reenroll_required(&nf));
+
+        // Unauthenticated (bad signature / clock skew) is NOT re-enroll —
+        // a normal retry can clear it.
+        let unauth = anyhow::Error::new(tonic::Status::unauthenticated("bad signature"));
+        assert!(!is_reenroll_required(&unauth));
+
+        // A non-status (transport-ish) error is not re-enroll either.
+        let other = anyhow::anyhow!("connection refused");
+        assert!(!is_reenroll_required(&other));
+
+        // Works through a wrapped/context'd error chain.
+        let wrapped = anyhow::Error::new(tonic::Status::not_found("x")).context("check-in RPC");
+        assert!(is_reenroll_required(&wrapped));
+    }
 
     #[test]
     fn jittered_within_range() {

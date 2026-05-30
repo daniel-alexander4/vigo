@@ -164,7 +164,9 @@ func TestInterceptorCheckInValidSignature(t *testing.T) {
 }
 
 // TestInterceptorCheckInUnknownEnvoy verifies that a CheckInRequest with a
-// UUID not in FleetIndex or DB returns Unauthenticated.
+// UUID not in FleetIndex or DB returns NotFound (distinct from the
+// Unauthenticated used for bad-signature/clock-skew) so the agent can
+// recognize "re-bootstrap required" specifically.
 func TestInterceptorCheckInUnknownEnvoy(t *testing.T) {
 	_, priv, _ := genKeyPair(t)
 	unknownID := uuid.New().String()
@@ -186,8 +188,8 @@ func TestInterceptorCheckInUnknownEnvoy(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected gRPC status error, got: %v", err)
 	}
-	if st.Code() != codes.Unauthenticated {
-		t.Errorf("expected Unauthenticated, got %v: %s", st.Code(), st.Message())
+	if st.Code() != codes.NotFound {
+		t.Errorf("expected NotFound, got %v: %s", st.Code(), st.Message())
 	}
 }
 
