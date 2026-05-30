@@ -9,9 +9,18 @@ You'll finish this page knowing **how many envoys one server can comfortably hol
 
 ## The headline
 
-**One vigosrv host comfortably holds ~25,000 envoys at a 5-second check-in interval.** Past ~50,000 connections the gRPC transport layer becomes unstable under bursty load (connections drop, clients reconnect-storm, the request mix degrades into a long-latency tail) — not because CPU runs out, but because the per-connection memory + goroutine state crosses a regime where any transient pressure (GC pause, transport flow-control hiccup, kernel scheduler latency) tips connections off the cliff faster than they can be re-stabilized.
+**The comfortable single-host envelope is two-axis: how many envoys connect, and how often each one checks in.** Both axes feed the same underlying limit (per-connection state — gRPC HTTP/2 buffers, goroutines, GC pressure on the working-set heap). Faster check-ins drive more concurrent in-flight stream activity per connection, so the comfortable conn count drops as the interval shrinks; slower check-ins push the comfortable conn count up almost proportionally.
 
-**Past ~25k envoys on one host, the answer is federation, not bigger boxes.** Vigo's [spanner mode (ADR-026)](../adr/026-spanner-peer-equal-admissions.md) partitions the fleet by hostname pattern across peer-equal bolts; every bolt holds its own slice and they CRDT-gossip the admissions roster. That's the supported path beyond one host's comfortable envelope.
+On this page's hardware (8 logical CPUs, 31 GiB, NVMe):
+
+| Check-in interval | Comfortable | First cracks | Broken |
+|---|---|---|---|
+| **5 s** | ~25,000 envoys | between 25k and 50k *(untested in-band)* | ~50,000 connections under bursty load |
+| **1 s** | ~15,000 envoys | ~20,000 envoys (first non-zero `Unavailable`) | ~25,000 envoys (291k `Unavailable`, disconnect-storm) |
+
+The breaking shape is identical at both intervals: per-connection state crosses a threshold where transient pressure (GC pause, flow-control hiccup, scheduler latency) drops connections faster than they can be re-stabilized, and the resulting reconnect-storm degrades the steady state. CPU is **not** the limiter — peak CPU stayed under 500% (of 800% on 8 cores) in every test, including the broken ones.
+
+**Past the comfortable envelope, the answer is federation, not bigger boxes.** Vigo's [spanner mode (ADR-026)](../adr/026-spanner-peer-equal-admissions.md) partitions the fleet by hostname pattern across peer-equal bolts; every bolt holds its own slice and they CRDT-gossip the admissions roster. That's the supported path beyond one host's comfortable envelope.
 
 ## What "comfortable" looks like, on what hardware
 
@@ -28,34 +37,35 @@ The numbers below are measured live, not extrapolated. The harness is [`test/bur
 | Container | Docker, no CPU or memory limit on the `vigo` container |
 | Vigo version | 0.69.19 |
 
-**25,000 envoys at 5-second check-in (sustained, single-cohort steady state):**
+**Measured matrix (sustained, single-cohort steady state, default config, `--results-per-report 12` so each cycle writes a 12-row report):**
 
-| | |
-|---|---|
-| Check-in `p50` / `p99` | 3–6 ms / 11–24 ms |
-| Check-ins served / sec | ~4,800 |
-| Check-ins shed / sec (`ResourceExhausted`) | ~4,500 (the always-on `checkin.max_concurrent` cap doing its job; agents back off and retry) |
-| ReportResult admitted / sec | ~150 |
-| Server CPU (8-core total = 800%) | ~270% mean, ~415% peak |
-| Server RSS | ~5.6 GB peak |
-| Goroutines | ~77,000 (transport + per-conn handlers — sustained, not growing) |
-| Open FDs | ~28,000 |
-| Crashes / fatal errors | 0 |
+| Envoys × interval | CPU mean / peak | Goroutines (mean / peak) | RSS peak | Checkin `p50` / `p99` | Reports admitted | Transport failures | Verdict |
+|---|---|---|---|---|---|---|---|
+| 5,000 × 1 s | 289% / 396% | 17.1k / 17.1k | 1.97 GB | 1.5 ms / 95 ms | 280–417/s | 0 | clean, lots of headroom |
+| 7,500 × 1 s | 321% / 416% | 24.1k / 24.9k | 2.41 GB | 95 ms / 759 ms | 135–334/s | 0 | clean, cap engaging |
+| 10,000 × 1 s | 312% / 421% | 31.0k / 32.1k | 2.87 GB | 759 ms / 1518 ms | ~150/s | 0 | clean, cap saturated |
+| 15,000 × 1 s | 308% / 455% | 37.8k / 47.1k | 3.70 GB | 759 ms / 3037 ms | ~170/s | 0 | clean, steady shedding |
+| **20,000 × 1 s** | 317% / 499% | 62.1k / 62.1k | 4.77 GB | 1518 ms / 3037 ms | ~190/s | **952** ⚠ | **edge — first cracks** |
+| **25,000 × 1 s** | 279% / 497% | 60 / 32k / **77k swing** | 5.77 GB | 1518 ms / 6074 ms | ~185/s | **290,808** ✗ | **broken — disconnect storm** |
+| 25,000 × 5 s | 266% / 415% | 70k / 77k | 5.57 GB | 3–6 ms / 11–24 ms | 80–150/s | 0 | clean, writer-bottlenecked |
+| **50,000 × 5 s (burst overlap)** | 107% mean | 27–80k swing | 6.55 GB | 95 ms / 97 s | ~70/s | **368k** ✗ | **broken — same shape** |
 
-That's the **comfortable steady state**: every request gets a fast answer or a clean shed; CPU has headroom; RSS holds flat; no connection churn. A 25k-envoy fleet at 5-second check-in on this hardware is a healthy operating point.
+What "comfortable" means in this table: every request gets a fast answer or a clean shed (`ResourceExhausted` → agent backs off), CPU has headroom, RSS holds flat across the measured window, no connection churn, zero transport failures.
 
-## Why ~50k connections is a different regime
+What "broken" means: connections drop *during* the storm (goroutine count actively decreases mid-window), `Unavailable` errors climb into the hundreds of thousands, the CPU *mean* drops while the system thrashes (less useful work gets done), and the harness records a multi-second wall-clock latency tail on whatever survives. The server doesn't crash; it just stops being a good operating point.
 
-Doubling cohort A with an overlapping 25k cohort B (so the server holds 50,000 concurrent envoys) does **not** crash the server — but the steady state collapses. Under burstwave 25k+25k:
+**Two things worth pulling out of the matrix:**
 
-- Server CPU drops to ~110% mean (lower than 25k alone), with peaks ~315% during the cohort-B burst transition.
-- Server RSS climbs to ~6.5 GB.
-- Goroutines briefly hit ~80k, then **the count actively drops mid-storm to 27–38k** — connections are being lost during the run, not at cleanup.
-- The harness records ~368k `Unavailable` errors (transport failures), 154k `DeadlineExceeded`, and a wall-clock latency tail in the 97–194 *second* range on the connections that survive.
+- **Connection count drives writer throughput too, not just memory.** Compare 5k × 1s vs 25k × 5s — same 5,000 checkins/s offered, same 60,000 row-INSERTs/s offered, but the lower-conn-count run admits **2–5× more reports** (280–417/s vs 80–150/s). The single SQLite writer's per-write cost is fixed; what shrinks at higher conn counts is the share of CPU it can hold against verify + interceptor work, *and* the latency it sees between syscalls as the heap working-set grows and GC pauses lengthen.
+- **The cap is always doing its job — it's not the limiter.** Through 20,000 envoys × 1s the always-on `checkin.max_concurrent` (default `max(128, NumCPU*16)` = 128 on this 8-core box) sheds the excess cleanly: `ResourceExhausted` to the agent, agent backs off, no cascade. What breaks at the conn-count ceiling is the transport layer underneath the cap.
 
-Where the heap sits at 50k tells the story: **~80% of `inuse_space` is gRPC per-connection buffers** (`bufWriter` + `bufio.NewReaderSize`), about **30 KB per connection** — gRPC's default 32 KiB read + 32 KiB write buffer × every active stream. That's not a leak; it's a linear per-connection memory cost the server can't avoid without bigger-hammer tuning (see below). At 25k it's manageable. At 50k it crowds against everything else (Go heap working-set, GC pacing, scheduler runqueues), and the resulting transient pressure is what drops connections.
+## Why the connection-count ceiling is the limiter at any interval
 
-**The mental model: vigosrv's ceiling is per-connection state, not request rate.** The 0.69.19 always-on CheckIn admission cap and the policy-bundle cache stopped the *request-rate* cascade we used to have. What's left is connection-count cost, and that's linear with envoy count.
+Both broken rows above (`25k × 1s` and `50k × 5s overlap`) show the same signature: goroutines that had been sustained suddenly start dropping mid-storm, `Unavailable` errors jump from zero to six-figures, CPU mean *decreases* because connections aren't there to drive work, and the harness records seconds-long wall-clock latencies on the survivors. Heap pprof on the broken runs tells you why: **~80% of `inuse_space` is gRPC per-connection buffers** (`bufWriter` + `bufio.NewReaderSize`), about **30 KB per connection on the heap** — gRPC's default 32 KiB read + 32 KiB write buffer × every active stream. Total RSS per connection runs ~80–100 KB once you add transport goroutines and GC headroom.
+
+At the comfortable point (15k × 1s or 25k × 5s) this is annoying but manageable: 1.5–2.5 GB of heap, 4–6 GB RSS, a GC sawtooth the runtime handles without pauses long enough to matter. At the broken point (25k × 1s or 50k × 5s) it crowds Go's working-set + scheduler + HTTP/2 server state hard enough that any transient pressure (a GC pause running long, a flow-control window stalling, a kernel scheduler delay) drops connections before they can be re-stabilized. Once connections start dropping the clients reconnect-storm, which adds new transport-establish work on top of the already-pressured server, and the system is stuck in the degraded regime for the rest of the window.
+
+**The mental model: vigosrv's ceiling is per-connection state — driven by connection count *and* per-connection in-flight stream activity (which is set by check-in interval).** The 0.69.19 always-on CheckIn admission cap and the policy-bundle cache stopped the *request-rate* CPU cascade we used to have. What's left is connection-count cost, and that's linear with envoy count and amplified by faster check-ins.
 
 ## Tunables that move the line
 
@@ -71,8 +81,8 @@ These all live in `server.yaml` (see [server-yaml.md](../reference/server-yaml.m
 
 Federate via spanner when **any** of these is true for the planned fleet:
 
-1. Envoy count on one server-host would exceed ~25k at your chosen check-in interval.
-2. Connection memory at the chosen scale would push the host past ~80% of available RAM (rough rule: `envoy_count × 0.030 GB + 1 GB base`).
+1. Envoy count on one server-host would exceed the comfortable envelope for your check-in interval (~15k at 1s, ~25k at 5s; scale roughly linearly with interval — a 30s interval comfortably holds several × more envoys than a 1s interval at the same conn-state pressure).
+2. Connection memory at the chosen scale would push the host past ~80% of available RAM (rough rule: `envoy_count × 0.08 GB + 1 GB base`).
 3. Fault tolerance matters and you can't lose the one server-host without losing the fleet.
 
 The spanner setup is documented in [Set up spanner](set-up-spanner.md) and the architectural rationale is in [ADR-026](../adr/026-spanner-peer-equal-admissions.md). Operator-visible cost: a small handful of additional moving parts (peer-equal bolts, hostname-pattern partitioning, multicast Tier-1 + REST Tier-2 admissions gossip) in exchange for linear scale-out and survival of any single-host failure.
@@ -85,12 +95,15 @@ The capture wrapper is reusable on any deployment:
 # build the harness once
 go build -o /tmp/burstwave ./test/burstwave
 
-# run it under the capture wrapper — same flags as burstwave, plus --output
+# run it under the capture wrapper — same flags as burstwave, plus --output.
+# --second-count 1 + --second-burst-at 1.0 keeps cohort B effectively disabled
+# (one envoy released at end of A's window), so this is a clean single-cohort
+# steady-state measurement. Drop those two flags to test the overlap regime.
 test/burstwave/capture.sh --output /tmp/sizing-run -- \
   --server 127.0.0.1:1530 --api https://127.0.0.1:8443 \
   --admin-token "$(sudo cat /srv/vigo/cli-admin-token)" \
-  --count 25000 --interval 5s --results-per-report 12 \
-  --warmup 30 --duration 300 \
+  --count 15000 --second-count 1 --interval 1s --results-per-report 12 \
+  --warmup 30 --duration 300 --second-burst-at 1.0 \
   --server-container vigo
 ```
 
