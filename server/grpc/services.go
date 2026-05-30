@@ -6,6 +6,7 @@ package grpc
 import (
 	"context"
 	"log/slog"
+	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -82,10 +83,12 @@ type AgentService struct {
 	// outage. Producer: the feed reactor via SetCuratorCatalog; consumers: the
 	// check-in handler. nil until the first feed cycle (or when swarm is disabled).
 	curatorCatalog atomic.Pointer[[]byte]
-	// checkInSem caps concurrent CheckIn handlers. nil = unbounded (no
-	// shedding). When the buffer is full, arrivals get ResourceExhausted
-	// so the cascading-overload regime (where retries pile on the queue
-	// faster than the server drains it) is prevented.
+	// checkInSem caps concurrent CheckIn handlers. The cap gates the
+	// policy-bundle build (the CPU-heavy work in buildCheckInResponse), so a
+	// fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via
+	// ResourceExhausted → agent backoff instead of CPU-cascading. Always set in
+	// production (checkin.max_concurrent, or defaultCheckInConcurrency() when
+	// unset); nil only in tests that construct the service directly.
 	checkInSem chan struct{}
 	// reportResultSem is admission control for the ReportResult write path —
 	// it caps how many result reports concurrently hit the single SQLite
@@ -94,6 +97,23 @@ type AgentService struct {
 	// production (checkin.report_max_concurrent, or defaultReportResultConcurrency
 	// when unset); nil only in tests that construct the service directly.
 	reportResultSem chan struct{}
+}
+
+// defaultCheckInConcurrency returns the CheckIn admission cap when
+// checkin.max_concurrent is unset (0). Unlike defaultReportResultConcurrency
+// (which bounds a queue in front of a fixed single-writer resource), the
+// CheckIn bottleneck is CPU — each stale-fingerprint CheckIn forces a full
+// policy-bundle build — so the default scales with available cores rather than
+// being a fixed queue depth. Floor 128 so small boxes still tolerate steady-
+// state bursts (typical concurrent CheckIns are double-digits even at large
+// fleet scale; the cap only matters under a wave). Operators can override the
+// knob, but it's never disabled.
+func defaultCheckInConcurrency() int {
+	n := runtime.NumCPU() * 16
+	if n < 128 {
+		n = 128
+	}
+	return n
 }
 
 // tryAcquireCheckInSlot returns true when the caller may proceed and is

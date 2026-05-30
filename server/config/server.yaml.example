@@ -82,7 +82,7 @@ checkin:
   # offline_threshold: "15m"                   # override staleness boundary (default: 2.5 × interval)
   # fleet_lookup_ttl: "30s"                    # how long a resolved fleet: cross-node lookup is reused before recomputing
   # observe_only: false                        # global observe-only: all envoys report drift only, no changes applied
-  # max_concurrent: 0                          # cap on concurrent CheckIn handlers (0 = unbounded, the default). Overflow returns ResourceExhausted so clients retry-with-backoff, preventing cascading overload. Watch vigo_grpc_checkin_in_flight to size — set roughly to your host's measured req/s capacity × p99 latency in seconds.
+  # max_concurrent: 0                          # cap on concurrent CheckIn handlers, gating the policy-bundle build inside the handler (CPU-heavy under a stale-checkin wave). Always on: 0 (default) = CPU-scaled built-in (max(128, NumCPU*16)). Overflow returns ResourceExhausted so clients retry-with-backoff — keeps a fleet-wide stale-checkin wave (post-publish, mass re-enroll) from CPU-cascading. Higher admits more before shedding; lower sheds sooner.
   # report_max_concurrent: 0                   # cap on concurrent ReportResult handlers in front of the single SQLite writer. Always on: 0 (default) = built-in 2048. Higher admits more before shedding (deeper queue, higher tail latency under sustained overload); lower sheds sooner (tighter tail, more ResourceExhausted backoff). Watch vigo_reportresults_total{status="shed"}.
 
 

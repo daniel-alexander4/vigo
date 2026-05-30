@@ -571,9 +571,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Get or build cached base bundle, then customize stubs.
+	// Get or build cached base bundle, then customize stubs. Un-matched
+	// envoys (pattern == "") cache under the "" key — buildPolicyBundle is
+	// envoy-agnostic and the fallback EnvoyConfig is identical for every
+	// un-matched envoy, so they share one entry. Without this, every
+	// un-matched check-in rebuilt an empty bundle (cheap per call, but at
+	// fleet scale this CPU-saturates — surfaced by test/burstwave 2026-05-29).
 	var bundle *pb.PolicyBundle
-	if s.policyCache != nil && pattern != "" && !hasCaseRes && !hasLookups && !hasFleetLookups {
+	if s.policyCache != nil && !hasCaseRes && !hasLookups && !hasFleetLookups {
 		base, err := s.policyCache.GetOrBuild(pattern, cfg, configVersion, s.streamEdit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)

@@ -123,7 +123,7 @@ checkin:
   interval: "5m"                     # agent poll frequency (stale = 2x this)
   jitter_percent: 20                 # randomize timing by 0-N%
   bundle_max_age: "24h"              # signed bundle TTL on agents (0 = forever)
-  max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = unbounded)
+  max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = CPU-scaled default; always on)
   report_max_concurrent: 0           # cap on concurrent ReportResult handlers (0 = built-in 2048; always on)
 ```
 
@@ -132,7 +132,7 @@ checkin:
 | `interval` | `5m` | How often agents check in. Stale threshold = 2x this value |
 | `jitter_percent` | `20` | Random jitter to prevent thundering herd |
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
-| `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. Overflow returns `ResourceExhausted` so clients retry-with-backoff, preventing cascading overload. `0` = unbounded |
+| `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. The cap gates the policy-bundle build (CPU-heavy) inside the handler, so a fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via `ResourceExhausted` → agent backoff instead of CPU-cascading. **Always on** — `0` = a CPU-scaled built-in (`max(128, NumCPU*16)`), not disabled. Higher admits more before shedding (more CPU thrash under a wave); lower sheds sooner. Watch `vigo_checkins_total{status="shed"}` |
 | `report_max_concurrent` | `0` | Cap on concurrent ReportResult handlers in front of the single SQLite writer. Overflow returns `ResourceExhausted` so the agent backs off. **Always on** — `0` = the built-in `2048`, not disabled (unlike `max_concurrent`). Higher admits more before shedding (deeper queue, higher tail latency under sustained overload); lower sheds sooner (tighter tail). Watch `vigo_reportresults_total{status="shed"}` |
 
 ### Sizing `max_concurrent`
@@ -141,7 +141,7 @@ The cap defends against the cascading-overload regime: when offered load exceeds
 
 Watch `vigo_grpc_checkin_in_flight` as the pre-cascade signal — a sustained climb under burst is the leading edge of trouble. Size the cap to roughly your host's measured req/s capacity × p99 latency in seconds (e.g. a 5K req/s host with 100 ms p99 → `max_concurrent: 500`).
 
-Default `0` (disabled) preserves existing behavior; turn it on once the in-flight gauge tells you you're being hit.
+Default `0` resolves to a CPU-scaled built-in (`max(128, NumCPU*16)`) — the cap is **always on**. Operators tune the knob; the burstwave test (2026-05-29) showed that an unbounded read path will CPU-cascade under a fleet-wide stale-checkin wave (post-publish, mass re-enroll), so the always-on default is the safety net.
 
 ## bootstrap
 

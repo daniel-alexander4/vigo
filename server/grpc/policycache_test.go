@@ -251,3 +251,40 @@ func TestPolicyCache_ConcurrentVersionChange(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestPolicyCache_EmptyPattern_CachesFallback pins the fix for the un-matched
+// case: envoys whose hostname matches no hostcrate get the fallback
+// EnvoyConfig with MatchPattern == "", and they all share one cache entry
+// keyed by "". Without this, every un-matched check-in rebuilt the empty
+// bundle (cheap per call but CPU-saturates at fleet scale —
+// surfaced by test/burstwave 2026-05-29).
+func TestPolicyCache_EmptyPattern_CachesFallback(t *testing.T) {
+	pc := newPolicyCache()
+	fallback := &config.EnvoyConfig{Modules: []config.ModuleConfig{}}
+
+	b1, err := pc.GetOrBuild("", fallback, 1)
+	if err != nil {
+		t.Fatalf("GetOrBuild: %v", err)
+	}
+	if b1 == nil {
+		t.Fatal("expected non-nil bundle for empty pattern")
+	}
+	if b1.MatchedPattern != "" {
+		t.Errorf("MatchedPattern = %q, want \"\"", b1.MatchedPattern)
+	}
+
+	// Repeated call must return the same cached pointer.
+	b2, err := pc.GetOrBuild("", fallback, 1)
+	if err != nil {
+		t.Fatalf("GetOrBuild second: %v", err)
+	}
+	if b1 != b2 {
+		t.Error("expected same pointer on cache hit for empty pattern")
+	}
+
+	// Version bump invalidates the empty-pattern entry too.
+	b3, _ := pc.GetOrBuild("", fallback, 2)
+	if b3 == b1 {
+		t.Error("version change should produce a new bundle for empty pattern")
+	}
+}

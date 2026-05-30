@@ -65,7 +65,7 @@ type ServerConfig struct {
 	Interval                   time.Duration
 	OfflineThreshold           time.Duration
 	JitterPercent              int32
-	MaxConcurrentCheckIns      int // 0 → unbounded (no load shedding)
+	MaxConcurrentCheckIns      int // 0 → defaultCheckInConcurrency() (always on)
 	MaxConcurrentReportResults int // 0 → defaultReportResultConcurrency (always on)
 	Integrations               *integrations.Dispatcher
 	TraitsDir                  string
@@ -229,9 +229,16 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		globalObserveOnly: cfg.GlobalObserveOnly,
 		metrics:           cfg.Metrics,
 	}
-	if cfg.MaxConcurrentCheckIns > 0 {
-		agentSvc.checkInSem = make(chan struct{}, cfg.MaxConcurrentCheckIns)
+	// CheckIn is always admission-capped — the cap gates the policy-bundle build
+	// (CPU-heavy) in buildCheckInResponse, so a fleet-wide stale-checkin wave
+	// (post-publish, mass re-enroll) sheds gracefully via ResourceExhausted
+	// instead of CPU-cascading. The cap is tunable (checkin.max_concurrent)
+	// but never off: 0/unset resolves to defaultCheckInConcurrency() (CPU-scaled).
+	checkinCap := cfg.MaxConcurrentCheckIns
+	if checkinCap <= 0 {
+		checkinCap = defaultCheckInConcurrency()
 	}
+	agentSvc.checkInSem = make(chan struct{}, checkinCap)
 	// ReportResult is always admission-capped — a queue-depth bound in front of
 	// the single SQLite writer. The cap is tunable (checkin.report_max_concurrent)
 	// but never off: 0/unset resolves to defaultReportResultConcurrency.
