@@ -7,9 +7,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.server
-    ports:
-      - "1530:1530"
-      - "8443:8443"
+    # Host networking: server binds 1530/8443/1531 directly on the host stack —
+    # no bridge, no per-port docker-proxy byte-pump. Mirrors docker-compose.prod.yml;
+    # guacd is host-networked too so scrier reaches it at 127.0.0.1:4822.
+    network_mode: host
     volumes:
       - /srv/vigo:/srv/vigo
       - /var/lib/vigo/swarm:/var/lib/vigo/swarm
@@ -72,6 +73,9 @@ services:
     container_name: vigo-guacd
     restart: unless-stopped
     command: ["-b", "0.0.0.0", "-L", "debug", "-f"]
+    # Host-networked so the host-networked vigo server reaches it at 127.0.0.1:4822
+    # (no bridge DNS). Mirrors docker-compose.prod.yml.
+    network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
       interval: 10s

@@ -15,9 +15,13 @@ services:
     image: us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
     container_name: vigo
     restart: unless-stopped
-    ports:
-      - "1530:1530"   # gRPC (agent check-in)
-      - "8443:8443"   # REST API + Web UI (HTTPS)
+    # Host networking: the server binds 1530 (gRPC), 8443 (REST/UI), and 1531
+    # (swarm blobs) directly on the host stack — no bridge, no per-port
+    # docker-proxy userland byte-pump between agents and the server. This is the
+    # production-representative path: agents reach the server over the wire, and
+    # at fleet scale docker-proxy is a single-process bottleneck. guacd is also
+    # host-networked (below) so scrier reaches it at 127.0.0.1:4822.
+    network_mode: host
     env_file:
       - /srv/vigo/.env
     volumes:
@@ -82,6 +86,10 @@ services:
     image: guacamole/guacd:1.5.5
     container_name: vigo-guacd
     restart: unless-stopped
+    # Host-networked so the host-networked vigo server can reach it at
+    # 127.0.0.1:4822 (container-name DNS is unavailable without the bridge).
+    # guacd binds 0.0.0.0:4822; only the local vigo server connects to it.
+    network_mode: host
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
       interval: 10s
