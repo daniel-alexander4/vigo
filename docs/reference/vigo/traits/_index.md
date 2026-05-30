@@ -54,7 +54,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | Host Self | `host_self` | Linux-only: kernel-wide FD usage (`/proc/sys/fs/file-nr`), live process count, recent OOM-killer activity from kern.log/journalctl | [host_self.md](host_self.md) |
 | Hypervisor | `hypervisor` | Linux-only: host-side libvirt detection — flips `host_is_libvirt: true` when the libvirt daemon's Unix socket is present. Sibling to `virtual` (which is the guest-side detector); gate `vm:` resources with `when: "host_is_libvirt"`. | [hypervisor.md](hypervisor.md) |
 | Host Containers | `host_containers` | Linux + macOS: per-container state on the local Docker daemon — name, image, image_id, state, health, restart_count, oom_killed. Pairs with the `docker` collector (daemon-level metadata) | [host_containers.md](host_containers.md) |
-| Battery | `battery` | Linux-only: laptop battery charge level, wear health (`energy_full` ÷ `energy_full_design`), cycle count, status, and AC-online. `health_pct` drives the Agent Health card (warn < 80% · fail < 70%); empty on hosts with no `BAT*` node | [battery.md](battery.md) |
+| Battery | `battery` | Linux-only: laptop battery charge level, wear health (`energy_full` ÷ `energy_full_design`), cycle count, status, AC-online, and time-to-empty/full. `health_pct` drives the Agent Health card (warn < 80% · fail < 70%); empty on hosts with no `BAT*` node | [battery.md](battery.md) |
 
 ## Windows Trait Collectors (13)
 

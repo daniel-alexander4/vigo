@@ -122,6 +122,38 @@ fn parse_battery(get: impl Fn(&str) -> Option<String>) -> (serde_json::Map<Strin
         dev.insert("energy_full_design_wh".into(), json!(round1(design_uwh as f64 / 1_000_000.0)));
     }
 
+    // Time-to-empty / time-to-full (seconds), only while actively
+    // (dis)charging. Prefer the energy family (µWh ÷ µW); fall back to the
+    // charge family (µAh ÷ µA) for batteries that don't report energy_*.
+    // Both families divide to hours, so ×3600 → seconds; multiply before
+    // dividing to keep integer precision. Instantaneous-rate estimate — it
+    // jitters with load (display-only, never feeds health classification).
+    let uval = |k: &str| get(k).and_then(|s| s.parse::<u64>().ok());
+    let (now, cap_full, rate) = match (uval("energy_now"), uval("power_now")) {
+        (Some(n), Some(p)) => (Some(n), uval("energy_full"), Some(p)),
+        _ => (uval("charge_now"), uval("charge_full"), uval("current_now")),
+    };
+    if let (Some(now), Some(rate)) = (now, rate) {
+        if rate > 0 {
+            match dev.get("status").and_then(Value::as_str) {
+                Some("Discharging") => {
+                    dev.insert("time_to_empty_secs".into(), json!(now.saturating_mul(3600) / rate));
+                }
+                Some("Charging") => {
+                    if let Some(full) = cap_full {
+                        if full > now {
+                            dev.insert(
+                                "time_to_full_secs".into(),
+                                json!((full - now).saturating_mul(3600) / rate),
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     (dev, health)
 }
 
@@ -171,6 +203,65 @@ mod tests {
         assert_eq!(dev["health_pct"], json!(90.0));
         // No energy_* source, so no Wh display fields.
         assert!(!dev.contains_key("energy_full_wh"));
+    }
+
+    #[test]
+    fn test_parse_battery_time_to_empty_energy() {
+        // Discharging, energy family: 35 Wh remaining at 20 W → 1.75 h = 6300 s.
+        let (dev, _) = parse_battery(getter(&[
+            ("status", "Discharging"),
+            ("energy_now", "35000000"),
+            ("power_now", "20000000"),
+            ("energy_full", "50000000"),
+        ]));
+        assert_eq!(dev["time_to_empty_secs"], json!(6300));
+        assert!(!dev.contains_key("time_to_full_secs"));
+    }
+
+    #[test]
+    fn test_parse_battery_time_to_full_energy() {
+        // Charging, energy family: (50−35) Wh headroom at 20 W → 0.75 h = 2700 s.
+        let (dev, _) = parse_battery(getter(&[
+            ("status", "Charging"),
+            ("energy_now", "35000000"),
+            ("power_now", "20000000"),
+            ("energy_full", "50000000"),
+        ]));
+        assert_eq!(dev["time_to_full_secs"], json!(2700));
+        assert!(!dev.contains_key("time_to_empty_secs"));
+    }
+
+    #[test]
+    fn test_parse_battery_time_charge_fallback() {
+        // Discharging, charge family (no energy_*/power_*): 4 Ah at 2 A → 2 h.
+        let (dev, _) = parse_battery(getter(&[
+            ("status", "Discharging"),
+            ("charge_now", "4000000"),
+            ("current_now", "2000000"),
+            ("charge_full", "5000000"),
+        ]));
+        assert_eq!(dev["time_to_empty_secs"], json!(7200));
+    }
+
+    #[test]
+    fn test_parse_battery_time_skipped_when_idle_or_no_rate() {
+        // Full status → no estimate even with a known rate.
+        let (full_dev, _) = parse_battery(getter(&[
+            ("status", "Full"),
+            ("energy_now", "50000000"),
+            ("power_now", "20000000"),
+            ("energy_full", "50000000"),
+        ]));
+        assert!(!full_dev.contains_key("time_to_empty_secs"));
+        assert!(!full_dev.contains_key("time_to_full_secs"));
+
+        // Discharging but zero rate → no estimate (no div-by-zero).
+        let (zero_dev, _) = parse_battery(getter(&[
+            ("status", "Discharging"),
+            ("energy_now", "50000000"),
+            ("power_now", "0"),
+        ]));
+        assert!(!zero_dev.contains_key("time_to_empty_secs"));
     }
 
     #[test]
