@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -400,19 +399,4 @@ type manifest struct {
 	SLAFailureRate       float64           `json:"sla_failure_rate,omitempty"`
 	Notes                string            `json:"notes,omitempty"`
 	Extra                map[string]string `json:"extra,omitempty"`
-}
-
-// fmtDuration is a short readable form (e.g. "247ms", "1.4s", "12.7s").
-func fmtDuration(ns int64) string {
-	d := time.Duration(ns)
-	switch {
-	case d < time.Microsecond:
-		return fmt.Sprintf("%dns", d.Nanoseconds())
-	case d < time.Millisecond:
-		return fmt.Sprintf("%dµs", d.Microseconds())
-	case d < time.Second:
-		return fmt.Sprintf("%dms", d.Milliseconds())
-	default:
-		return d.Round(10 * time.Millisecond).String()
-	}
 }

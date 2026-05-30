@@ -1206,7 +1206,7 @@ func errRetiredTopLevelComplianceKey(key string) error {
 	return fmt.Errorf(
 		"module YAML: top-level `%s:` is retired (0.66.57) — fold under a `compliance:` "+
 			"parent block (e.g. `compliance: { provides: [<tag>], bundle: [<id>] }`). "+
-			"Restores the at-a-glance compliance signal in module YAML without changing the catalog-backed semantics.",
+			"Restores the at-a-glance compliance signal in module YAML without changing the catalog-backed semantics",
 		key,
 	)
 }

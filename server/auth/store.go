@@ -37,17 +37,6 @@ func (s *UserStore) SetSigner(signer Signer) {
 	s.signer = signer
 }
 
-// signRow returns (origin_bolt, signature) for the given row using the
-// installed signer, or empty/nil if no signer is configured. Mutates
-// row.OriginBolt as a side effect so the canonical content matches
-// what gets stored. Internal helper for Create/Update/Delete.
-func (s *UserStore) signRow(row *UserRow) (string, []byte, error) {
-	if s.signer == nil {
-		return "", nil, nil
-	}
-	return s.signer.Sign(row)
-}
-
 // dbToUser converts a sqlc-generated db.User to an auth.User.
 func dbToUser(u db.User) *User {
 	var perms []string

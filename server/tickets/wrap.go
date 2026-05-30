@@ -21,10 +21,11 @@ import (
 // N is recovered from len(ciphertext) - tagLen, divided by KeyLen.
 // Single version (0x01) for now; future rotation-format changes get
 // their own version byte and a dispatch in unwrap.
+const WrapVersion byte = 0x01
+
 const (
-	WrapVersion byte = 0x01
-	KeyLen           = 32 // each TLS session-ticket key is 32 bytes
-	SaltLen          = 32
+	KeyLen  = 32 // each TLS session-ticket key is 32 bytes
+	SaltLen = 32
 
 	nonceLen    = chacha20poly1305.NonceSizeX
 	tagLen      = chacha20poly1305.Overhead
