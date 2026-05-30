@@ -124,6 +124,7 @@ checkin:
   jitter_percent: 20                 # randomize timing by 0-N%
   bundle_max_age: "24h"              # signed bundle TTL on agents (0 = forever)
   max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = unbounded)
+  report_max_concurrent: 0           # cap on concurrent ReportResult handlers (0 = built-in 2048; always on)
 ```
 
 | Field | Default | Description |
@@ -132,6 +133,7 @@ checkin:
 | `jitter_percent` | `20` | Random jitter to prevent thundering herd |
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
 | `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. Overflow returns `ResourceExhausted` so clients retry-with-backoff, preventing cascading overload. `0` = unbounded |
+| `report_max_concurrent` | `0` | Cap on concurrent ReportResult handlers in front of the single SQLite writer. Overflow returns `ResourceExhausted` so the agent backs off. **Always on** — `0` = the built-in `2048`, not disabled (unlike `max_concurrent`). Higher admits more before shedding (deeper queue, higher tail latency under sustained overload); lower sheds sooner (tighter tail). Watch `vigo_reportresults_total{status="shed"}` |
 
 ### Sizing `max_concurrent`
 

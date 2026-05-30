@@ -91,8 +91,8 @@ type AgentService struct {
 	// it caps how many result reports concurrently hit the single SQLite
 	// writer, so a sustained result storm sheds fast (ResourceExhausted →
 	// agent backs off) instead of growing an unbounded queue. Always set in
-	// production (defaultReportResultConcurrency); nil only in tests that
-	// construct the service directly.
+	// production (checkin.report_max_concurrent, or defaultReportResultConcurrency
+	// when unset); nil only in tests that construct the service directly.
 	reportResultSem chan struct{}
 }
 
@@ -119,12 +119,12 @@ func (s *AgentService) releaseCheckInSlot() {
 	<-s.checkInSem
 }
 
-// defaultReportResultConcurrency caps concurrent ReportResult handlers. It's a
-// queue-depth bound in front of the single SQLite writer (~3.4s worst-case wait
-// at a ~600 commit/s writer — well under the agent's RPC deadline), far above
-// normal in-flight concurrency, so it only trips under sustained overload where
-// shedding is the correct response. Not operator-tunable: it's a property of
-// the single writer, not a preference.
+// defaultReportResultConcurrency is the ReportResult admission cap when
+// checkin.report_max_concurrent is unset (0). It's a queue-depth bound in front
+// of the single SQLite writer, far above normal in-flight concurrency, so it
+// only trips under sustained overload where shedding is the correct response.
+// Operators can override it (higher admits more before shedding — deeper queue,
+// higher tail latency; lower sheds sooner), but it's never disabled.
 const defaultReportResultConcurrency = 2048
 
 // tryAcquireReportSlot mirrors tryAcquireCheckInSlot for the ReportResult
