@@ -1,7 +1,7 @@
 
 # vigocli security
 
-Umbrella command for security-posture operations: CVE search, risk scoring, and audit trail. Subcommands are registered from their own CLI modules:
+Umbrella command for security-posture operations: CVE search, risk scoring, and audit trail. Subcommands are registered from their own CLI configcrates:
 
 | Subcommand | Purpose | Full reference |
 |---|---|---|

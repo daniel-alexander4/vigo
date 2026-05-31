@@ -14,7 +14,7 @@ import (
 // expected per-framework owner list from catalog expansion alone.
 // Module migrations rely on this byte-for-byte equivalence.
 func TestBuildComplianceIndex_ProvidesUnion(t *testing.T) {
-	defs := map[string]*ModuleDefinition{
+	defs := map[string]*ConfigcrateDefinition{
 		"chrony": {Name: "chrony", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},
 	}
 	idx := buildComplianceIndex(defs)
@@ -41,7 +41,7 @@ func TestBuildComplianceIndex_ProvidesUnion(t *testing.T) {
 // exactly once in the per-control owner list. Without dedup the coverage
 // drilldown would credit the module twice.
 func TestBuildComplianceIndex_DedupesAcrossSources(t *testing.T) {
-	defs := map[string]*ModuleDefinition{
+	defs := map[string]*ConfigcrateDefinition{
 		// time-sync expands pci-dss [10.6.1] (among others);
 		// duplicated via the inherited claim that ancestor
 		// compliance.vgo files merge in.
@@ -65,7 +65,7 @@ func TestBuildComplianceIndex_DedupesAcrossSources(t *testing.T) {
 // panics). modlint surfaces typos at module load; the loader stays
 // quiet so a slightly-stale catalog doesn't break the world.
 func TestBuildComplianceIndex_UnknownProvisionNoop(t *testing.T) {
-	defs := map[string]*ModuleDefinition{
+	defs := map[string]*ConfigcrateDefinition{
 		"bogus": {Name: "bogus", Compliance: ComplianceClaims{Provides: []string{"not-a-real-provision-xyz"}}},
 	}
 	idx := buildComplianceIndex(defs)
@@ -80,7 +80,7 @@ func TestBuildComplianceIndex_UnknownProvisionNoop(t *testing.T) {
 // per-control owner list — the original "chrony vs ntp" drift cause
 // is gone by construction.
 func TestBuildComplianceIndex_TwoModulesSameProvision(t *testing.T) {
-	defs := map[string]*ModuleDefinition{
+	defs := map[string]*ConfigcrateDefinition{
 		"chrony": {Name: "chrony", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},
 		"ntp":    {Name: "ntp", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},
 	}
@@ -100,7 +100,7 @@ func TestBuildComplianceIndex_TwoModulesSameProvision(t *testing.T) {
 // signal). `vigocli config trace` keys on this map to label each row.
 func TestTrace_ProvidesAttribution(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "chrony.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "chrony.vgo"), `
 name: chrony
 compliance:
   provides: [time-sync]
@@ -112,7 +112,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [chrony]
+    configcrates: [chrony]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -126,7 +126,7 @@ envoys:
 
 	var found bool
 	for _, ct := range trace.ComplianceTags {
-		if ct.Module != "chrony" {
+		if ct.Configcrate != "chrony" {
 			continue
 		}
 		found = true
@@ -155,7 +155,7 @@ envoys:
 // the signal a future `vigocli config trace` user wants preserved.
 func TestTrace_ExplicitOverridesProvides(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "chrony.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "chrony.vgo"), `
 name: chrony
 compliance:
   provides: [time-sync]
@@ -166,14 +166,14 @@ resources:
 `)
 	// Directory-level compliance.vgo — still the framework→control shape
 	// (a different file kind from module YAML).
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `
 compliance:
   pci-dss: ["10.6.1"]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [chrony]
+    configcrates: [chrony]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -182,7 +182,7 @@ envoys:
 	}
 	trace := store.Trace("any.host")
 	for _, ct := range trace.ComplianceTags {
-		if ct.Module != "chrony" {
+		if ct.Configcrate != "chrony" {
 			continue
 		}
 		// pci-dss/10.6.1 was claimed both ways; attribution

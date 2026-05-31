@@ -52,7 +52,7 @@ func EvaluateResourceWhen(when string, vars map[string]any) (shouldInclude bool,
 
 // ShouldIncludeModule evaluates a module's When expression against the
 // resolved vars map. Returns true if the module should be included.
-func ShouldIncludeModule(mod ModuleConfig, vars map[string]any) bool {
+func ShouldIncludeModule(mod Configcrate, vars map[string]any) bool {
 	if mod.When == "" {
 		return true
 	}

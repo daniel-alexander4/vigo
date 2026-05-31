@@ -18,12 +18,12 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 | Ansible Concept | Vigo Equivalent | Notes |
 |---|---|---|
 | Playbook | `envoys.vgo` + roles | Node-to-role assignment replaces playbook targeting |
-| Role | Module + Role | An Ansible role maps to a Vigo module; a Vigo role groups modules |
+| Role | Configcrate + Role | An Ansible role maps to a Vigo configcrate; a Vigo role groups configcrates |
 | Task | Resource | Declarative, idempotent unit of work |
 | Handler | `notify` / `subscribes` | Same semantics — triggered on change, run at end |
 | Inventory | `envoys.vgo` | Glob patterns instead of host groups |
 | `host_vars` | Node-level `vars:` | Per-host overrides in `envoys.vgo` |
-| `group_vars` | Module `vars:` / Role `vars:` | Default values at module or role level |
+| `group_vars` | Configcrate `vars:` / Role `vars:` | Default values at configcrate or role level |
 | Facts (`ansible_*`) | Traits | Discovered automatically by the agent |
 | `gather_facts` | Always-on trait collection | Traits collected every check-in — no toggle |
 | Template (`.j2`) | `content:` attribute | Inline Go template, no separate file |
@@ -33,8 +33,8 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 | `register:` | No equivalent | Resources don't capture output for later use |
 | Vault | `secret:` prefix | Resolved server-side at bundle compile time |
 | `ansible-pull` | Default mode | Vigo is always pull — this is the primary model |
-| Galaxy role | Module `.vgo` file | No package registry — YAML files in version control |
-| `tags:` | No equivalent | All resources in a module always apply (use `when:` to conditionally skip) |
+| Galaxy role | Configcrate `.vgo` file | No package registry — YAML files in version control |
+| `tags:` | No equivalent | All resources in a configcrate always apply (use `when:` to conditionally skip) |
 | `delegate_to:` | Tasks / Workflows | Cross-node orchestration uses the task system |
 | `--check` mode | Dry-run in check phase | Each resource checks before acting — inherent to the model |
 
@@ -132,7 +132,7 @@ http {
 
 ### Vigo Version
 
-`stockpile/modules/nginx.vgo`:
+`stockpile/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -188,7 +188,7 @@ resources:
 
 ```yaml
 name: webserver
-modules:
+configcrates:
   - nginx
 ```
 
@@ -210,15 +210,15 @@ envoys:
 
 - **Templates inline or in `templates/`.** Small templates go inline in `content:`. Larger files use `source: templates/nginx.conf.tmpl` — the server reads and renders the file from the `templates/` directory. Same concept as Ansible's `templates/`, but no Jinja2.
 - **No handlers directory.** Ansible's handler/notify pattern maps directly to Vigo's `notify:` list on the resource. No separate `handlers/main.yml` file.
-- **No defaults directory.** Module-level `vars:` replaces `defaults/main.yml`. Same concept, inline in the module file.
-- **One file per module.** An Ansible role is 4+ files across multiple directories. A Vigo module is a single `.vgo` file.
+- **No defaults directory.** Configcrate-level `vars:` replaces `defaults/main.yml`. Same concept, inline in the configcrate file.
+- **One file per configcrate.** An Ansible role is 4+ files across multiple directories. A Vigo configcrate is a single `.vgo` file.
 - **Template syntax.** `{{ variable }}` in Jinja2 becomes `{{ .Vars.variable }}` in Go templates. Note the `.Vars.` prefix.
 
 ## Variable and Data Hierarchy
 
 Ansible has a famously complex [variable precedence](https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html#understanding-variable-precedence) with 22 levels. Vigo has three:
 
-1. **Module defaults** — `vars:` in the module `.vgo` file
+1. **Configcrate defaults** — `vars:` in the configcrate `.vgo` file
 2. **Inherited common.vgo vars** — shared across the directory subtree
 3. **Match-block vars** — `vars:` in the `envoys.vgo` entry
 4. **`environments.vgo` vars** — selected by match-block `environment:`
@@ -331,14 +331,14 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 ## Related
 
-- [Config Format](../reference/writing-modules.md) — Modules, roles, envoys.vgo, vars
-- [Resource DAG](../reference/writing-modules.md) — depends_on, notify, subscribes
-- [Templates](../reference/writing-modules.md) — Go template syntax and restrictions
-- [When Expressions](../reference/writing-modules.md) — Conditional expressions and builtins
+- [Config Format](../reference/writing-configcrates.md) — Configcrates, roles, envoys.vgo, vars
+- [Resource DAG](../reference/writing-configcrates.md) — depends_on, notify, subscribes
+- [Templates](../reference/writing-configcrates.md) — Go template syntax and restrictions
+- [When Expressions](../reference/writing-configcrates.md) — Conditional expressions and builtins
 - [Secrets](../reference/server-yaml.md) — Secret providers and the secret: prefix
 - [Executors](../reference/vigo/resources/_index.md) — All resource executors
-- [Nginx Module Example](../examples/nginx-module.md) — Full nginx walkthrough
-- [First Module](../howto/write-your-first-module.md) — Writing your first module
+- [Nginx Configcrate Example](../examples/nginx-module.md) — Full nginx walkthrough
+- [First Configcrate](../howto/write-your-first-module.md) — Writing your first configcrate
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

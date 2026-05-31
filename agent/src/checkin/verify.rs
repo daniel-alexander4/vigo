@@ -71,7 +71,7 @@ pub fn verify_bundle(bundle: &PolicyBundle, server_pubkey_pem: &str) -> Result<(
 fn marshal_bundle_content(bundle: &PolicyBundle) -> Vec<u8> {
     let content = PolicyBundle {
         policy_version: bundle.policy_version,          // tag 1
-        modules: bundle.modules.clone(),                // tag 2
+        configcrates: bundle.configcrates.clone(),                // tag 2
         vars_json: bundle.vars_json.clone(),            // tag 3
         var_order: bundle.var_order.clone(),            // tag 4
         custom_traits: bundle.custom_traits.clone(),    // tag 6
@@ -173,7 +173,7 @@ fn is_signed_per_proto(field: &prost_reflect::FieldDescriptor) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proto::PolicyModule;
+    use crate::proto::PolicyConfigcrate;
 
     /// Helper: generate a keypair, sign a bundle, return (pubkey_pem, signed_bundle).
     fn sign_test_bundle(bundle: &mut PolicyBundle) -> String {
@@ -201,7 +201,7 @@ mod tests {
             matched_pattern: "*.web".into(),
             environment: "production".into(),
             roles: vec!["webserver".into()],
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "nginx".into(),
                 content_hash: "abc".into(),
                 ..Default::default()
@@ -272,7 +272,7 @@ mod tests {
     fn non_signed_fields_do_not_affect_signed_bytes() {
         let baseline = PolicyBundle {
             policy_version: 7,
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "m".into(),
                 content_hash: "h".into(),
                 ..Default::default()

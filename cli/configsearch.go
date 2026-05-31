@@ -75,10 +75,10 @@ type searchEntry struct {
 	Inheritance []struct {
 		Dir     string   `json:"dir"`
 		File    string   `json:"file"`
-		Modules []string `json:"modules"`
+		Configcrates []string `json:"configcrates"`
 		Roles   []string `json:"roles"`
 	} `json:"inheritance"`
-	OwnModules []string       `json:"own_modules"`
+	OwnConfigcrates []string       `json:"own_configcrates"`
 	OwnRoles   []string       `json:"own_roles"`
 	Total      []string       `json:"total"`
 	Excluded   []string       `json:"excluded"`
@@ -101,7 +101,7 @@ func printSearchEntry(e searchEntry) {
 			if dir == "" {
 				dir = "(root)"
 			}
-			modules := strings.Join(level.Modules, ", ")
+			modules := strings.Join(level.Configcrates, ", ")
 			if modules == "" {
 				modules = "(none)"
 			}
@@ -116,8 +116,8 @@ func printSearchEntry(e searchEntry) {
 	}
 
 	// Own modules.
-	if len(e.OwnModules) > 0 {
-		fmt.Printf("  %s %s\n", dim("Own:"), bold(strings.Join(e.OwnModules, ", ")))
+	if len(e.OwnConfigcrates) > 0 {
+		fmt.Printf("  %s %s\n", dim("Own:"), bold(strings.Join(e.OwnConfigcrates, ", ")))
 	}
 	if len(e.OwnRoles) > 0 {
 		fmt.Printf("  %s %s\n", dim("Roles:"), strings.Join(e.OwnRoles, ", "))

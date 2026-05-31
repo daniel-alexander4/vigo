@@ -13,39 +13,39 @@
 roles:
   - name: webserver
     includes: [bastion]
-    modules: [nginx]
+    configcrates: [nginx]
 
   # nginx (singleton: package + service) plus one vhost module instance per
   # entry in the `vhosts` var — supply that var in environments.vgo, a
   # common.vgo, or a match block. Expands to vhost[<server_name>] instances.
   - name: webserver-vhosts
     includes: [bastion]
-    modules:
+    configcrates:
       - nginx
       - name: vhost
         foreach: vhosts
         key: server_name
 
   - name: database
-    modules: [postgresql]
+    configcrates: [postgresql]
 
   - name: monitoring
-    modules: [prometheus, node-exporter, grafana]
+    configcrates: [prometheus, node-exporter, grafana]
 
   - name: bastion
-    modules: [openssh, fail2ban]
+    configcrates: [openssh, fail2ban]
 
   - name: mediaserver
-    modules: [plex]
+    configcrates: [plex]
 
   - name: network-switch
-    modules: [switch-base, switch-vlans]
+    configcrates: [switch-base, switch-vlans]
 
   - name: network-router
-    modules: [router-base]
+    configcrates: [router-base]
 
   - name: disk-hygiene
-    modules: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]
+    configcrates: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]
 
   # ─── Compliance Evidence (T7) ───────────────────────────────────────
   # Typically composed on top of a framework role (hipaa, pci-dss, etc.) to
@@ -54,14 +54,14 @@ roles:
   - name: compliance-evidence
     case:
       linux:
-        modules:
+        configcrates:
           - log-shipping-attestation
           - access-review-export
           - encryption-attestation
           - backup-verification
           - compliance-evidence-toolkit
       windows:
-        modules:
+        configcrates:
           - log-shipping-attestation-windows
           - access-review-export-windows
           - encryption-attestation-windows
@@ -76,7 +76,7 @@ roles:
   - name: security-engineer
     case:
       linux:
-        modules:
+        configcrates:
           - aide
           - auditd-rules
           - apparmor
@@ -93,7 +93,7 @@ roles:
           - ca-anchors
           - security-engineer-toolkit
       windows:
-        modules:
+        configcrates:
           - aide-windows
           - auditd-rules-windows
           - clamav-windows
@@ -110,7 +110,7 @@ roles:
   - name: sysadmin
     case:
       linux:
-        modules:
+        configcrates:
           - restic
           - borg
           - kopia
@@ -140,7 +140,7 @@ roles:
           - unbound
           - sysadmin-toolkit
       windows:
-        modules:
+        configcrates:
           - restic-windows
           - kopia-windows
           - certbot-windows
@@ -164,7 +164,7 @@ roles:
   # push), a local health probe, container-log forwarding, the operator
   # MOTD warning, Docker keepalive, and the diagnostic toolkit.
   - name: vigo-server
-    modules:
+    configcrates:
       - vigo-firewall
       - vigo-secrets-perms
       - vigo-tls-public
@@ -195,27 +195,27 @@ roles:
 
   # ─── Healthcare ───
   - name: hipaa
-    modules:
+    configcrates:
       - hipaa-access-controls
       - hipaa-audit-trail
       - hipaa-encryption
       - hipaa-media-disposal
 
   - name: hitrust
-    modules:
+    configcrates:
       - hitrust-endpoint-protection
       - hitrust-governance
       - hitrust-operations
 
   - name: fda-21cfr11
-    modules:
+    configcrates:
       - fda-access-controls
       - fda-audit-trail
       - fda-system-integrity
 
   # ─── Financial Services ───
   - name: pci-dss
-    modules:
+    configcrates:
       - pci-access-control
       - pci-file-integrity
       - pci-hardening
@@ -223,38 +223,38 @@ roles:
       - pci-network-security
 
   - name: sox
-    modules:
+    configcrates:
       - sox-access-controls
       - sox-change-management
       - sox-system-integrity
 
   - name: finra
-    modules:
+    configcrates:
       - finra-bcp-monitoring
       - finra-infrastructure
       - finra-worm-monitoring
 
   - name: mifid2
-    modules:
+    configcrates:
       - mifid2-capacity
       - mifid2-change-management
       - mifid2-resilience
 
   - name: ccss
-    modules:
+    configcrates:
       - ccss-audit-integrity
       - ccss-key-storage
       - ccss-network-security
 
   # ─── General / Cross-Industry ───
   - name: soc2
-    modules:
+    configcrates:
       - soc2-availability
       - soc2-change-management
       - soc2-governance
 
   - name: nist-800-53
-    modules:
+    configcrates:
       - nist-access-control
       - nist-audit-retention
       - nist-config-management
@@ -263,18 +263,18 @@ roles:
       - nist-system-integrity
 
   - name: iso-27001
-    modules:
+    configcrates:
       - iso-communications-security
       - iso-operations-security
 
   - name: gdpr
-    modules:
+    configcrates:
       - gdpr-breach-notification
       - gdpr-data-protection
       - gdpr-privacy-controls
 
   - name: cyber-essentials
-    modules:
+    configcrates:
       - ce-app-whitelisting
       - ce-firewalls
       - ce-malware
@@ -285,7 +285,7 @@ roles:
 
   # ─── CIS Benchmarks (platform-specific) ───
   - name: cis-ubuntu
-    modules:
+    configcrates:
       - cis-ubuntu-filesystem
       - cis-ubuntu-services
       - cis-ubuntu-network
@@ -294,7 +294,7 @@ roles:
       - cis-ubuntu-maintenance
 
   - name: cis-rhel
-    modules:
+    configcrates:
       - cis-rhel-filesystem
       - cis-rhel-services
       - cis-rhel-network
@@ -303,7 +303,7 @@ roles:
       - cis-rhel-maintenance
 
   - name: cis-windows
-    modules:
+    configcrates:
       - cis-windows-account-policies
       - cis-windows-audit-policies
       - cis-windows-firewall
@@ -315,7 +315,7 @@ roles:
 
   # ─── Industrial / Critical Infrastructure ───
   - name: iec-62443
-    modules:
+    configcrates:
       - iec62443-access-control
       - iec62443-audit-logging
       - iec62443-availability
@@ -323,7 +323,7 @@ roles:
       - iec62443-zone-segmentation
 
   - name: nerc-cip
-    modules:
+    configcrates:
       - nerc-access-security
       - nerc-asset-management
       - nerc-esp
@@ -331,21 +331,21 @@ roles:
 
   # ─── Gaming ───
   - name: gaming
-    modules:
+    configcrates:
       - gaming-availability
       - gaming-rng-monitoring
       - gaming-system-integrity
 
   # ─── Sector-specific ───
   - name: aba-cyber
-    modules:
+    configcrates:
       - aba-endpoint-hardening
       - aba-network-security
       - aba-audit-logging
       - aba-malware-protection
 
   - name: ny-dfs-cyber
-    modules:
+    configcrates:
       - nydfs-access-control
       - nydfs-encryption
       - nydfs-audit-trail

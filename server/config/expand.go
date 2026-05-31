@@ -115,7 +115,7 @@ func ExpandCase(resources []ResourceConfig, traits map[string]any, vars map[stri
 // HasCaseResources returns true if any module in the config has resources
 // with Case expressions, meaning per-envoy expansion is needed at check-in.
 func HasCaseResources(cfg *EnvoyConfig) bool {
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		for _, res := range mod.Resources {
 			if res.Case != "" {
 				return true
@@ -129,7 +129,7 @@ func HasCaseResources(cfg *EnvoyConfig) bool {
 // when: expression. Such modules may be filtered during bundle building based
 // on traits, making the load-time Merkle root unreliable for fast-path comparison.
 func HasModuleWhens(cfg *EnvoyConfig) bool {
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		if mod.When != "" {
 			return true
 		}
@@ -184,13 +184,13 @@ func toSlice(v any) ([]any, error) {
 // agent cache entry on every check-in.
 const foreachModuleExpansionWarnThreshold = 200
 
-// expandForeachModuleRefs replaces any ModuleRef carrying foreach: with one
+// expandForeachConfigcrateRefs replaces any ConfigcrateRef carrying foreach: with one
 // synthetic per-item ref named "<module>[<key>]". The list comes from vars; the
 // item's fields land on the instance as {{ .Each.<field> }} (maps) or
 // {{ .Item }} (scalars) — see expandModuleInstanceResources. A scalar list is
 // keyed by the value itself; a list of maps requires key: on the ref naming
 // which field supplies the suffix. Duplicate resolved keys are an error.
-func expandForeachModuleRefs(refs []ModuleRef, defs map[string]*ModuleDefinition, vars map[string]any) ([]ModuleRef, error) {
+func expandForeachConfigcrateRefs(refs []ConfigcrateRef, defs map[string]*ConfigcrateDefinition, vars map[string]any) ([]ConfigcrateRef, error) {
 	anyForeach := false
 	for _, r := range refs {
 		if r.ForEach != "" {
@@ -202,7 +202,7 @@ func expandForeachModuleRefs(refs []ModuleRef, defs map[string]*ModuleDefinition
 		return refs, nil
 	}
 
-	out := make([]ModuleRef, 0, len(refs))
+	out := make([]ConfigcrateRef, 0, len(refs))
 	for _, r := range refs {
 		if r.ForEach == "" {
 			out = append(out, r)
@@ -226,7 +226,7 @@ func expandForeachModuleRefs(refs []ModuleRef, defs map[string]*ModuleDefinition
 				return nil, fmt.Errorf("module %q foreach %q: two items resolve to the same instance key %q — keys must be unique", r.Name, r.ForEach, key)
 			}
 			seenKeys[key] = true
-			out = append(out, ModuleRef{
+			out = append(out, ConfigcrateRef{
 				Name:        r.Name + "[" + key + "]",
 				When:        r.When,
 				BaseName:    r.Name,

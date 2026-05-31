@@ -114,12 +114,12 @@ func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 func newUnhealthyConfigStore(t *testing.T) *config.ConfigStore {
 	t.Helper()
 	dir := t.TempDir()
-	for _, sub := range []string{"modules", "envoys", "roles"} {
+	for _, sub := range []string{"configcrates", "envoys", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
 	}
-	os.WriteFile(filepath.Join(dir, "modules", "bad.vgo"), []byte(`
+	os.WriteFile(filepath.Join(dir, "configcrates", "bad.vgo"), []byte(`
 name: bad
 resources:
   - name: yolo-exec
@@ -129,7 +129,7 @@ resources:
 	os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte(`
 envoys:
   - match: "test.example.com"
-    modules: [bad]
+    configcrates: [bad]
 `), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())

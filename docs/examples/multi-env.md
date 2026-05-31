@@ -1,11 +1,11 @@
 
 # Multi-Environment Setup
 
-This example shows how to maintain different variable values for production and staging while sharing the same modules. Vigo's canonical mechanism for env-specific values is `environments.vgo` at the appropriate directory level — env is declared on each match block, and env-specific vars are centralized in a sibling file.
+This example shows how to maintain different variable values for production and staging while sharing the same configcrates. Vigo's canonical mechanism for env-specific values is `environments.vgo` at the appropriate directory level — env is declared on each match block, and env-specific vars are centralized in a sibling file.
 
-## Module Definition
+## Configcrate Definition
 
-`stockpile/modules/webapp.vgo`:
+`stockpile/configcrates/webapp.vgo`:
 
 ```yaml
 name: webapp
@@ -87,8 +87,8 @@ env:
 At check-in time the server:
 
 1. Matches the envoy hostname against `envoys.vgo` (first match wins) to determine role + `environment:`.
-2. Expands roles to a module list and loads module defaults.
-3. Applies `common.vgo` inherited vars (parent → child) on top of module defaults.
+2. Expands roles to a configcrate list and loads configcrate defaults.
+3. Applies `common.vgo` inherited vars (parent → child) on top of configcrate defaults.
 4. Applies match-block vars (if any — in this example there are none).
 5. Applies `environments.vgo` vars for the block's `environment:` on top.
 

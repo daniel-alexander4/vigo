@@ -243,11 +243,11 @@ resources:
 	}
 }
 
-// TestModuleDefinition_UnmarshalYAML_RetiredTopLevelProvides pins the
+// TestConfigcrateDefinition_UnmarshalYAML_RetiredTopLevelProvides pins the
 // second decode path — the yaml.Unmarshaler implementation on
-// ModuleDefinition itself. Both paths must surface the same error so
+// ConfigcrateDefinition itself. Both paths must surface the same error so
 // the rejection can't be smuggled past one of them.
-func TestModuleDefinition_UnmarshalYAML_RetiredTopLevelProvides(t *testing.T) {
+func TestConfigcrateDefinition_UnmarshalYAML_RetiredTopLevelProvides(t *testing.T) {
 	data := []byte(`
 name: legacy
 provides: [time-sync]
@@ -257,7 +257,7 @@ resources:
     package: chrony
     state: present
 `)
-	var def ModuleDefinition
+	var def ConfigcrateDefinition
 	err := yaml.Unmarshal(data, &def)
 	if err == nil {
 		t.Fatal("expected error for top-level provides: via UnmarshalYAML")

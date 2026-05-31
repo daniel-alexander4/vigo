@@ -37,8 +37,8 @@ type RetractWarning struct {
 	Message    string // human-readable explanation
 }
 
-// retractModule is a minimal module structure for parsing and generating YAML.
-type retractModule struct {
+// retractConfigcrate is a minimal module structure for parsing and generating YAML.
+type retractConfigcrate struct {
 	Name        string            `yaml:"name"`
 	Description string            `yaml:"description,omitempty"`
 	DependsOn   []string          `yaml:"depends_on,omitempty"`
@@ -73,7 +73,7 @@ func DetectChangedModules(changed []string) []string {
 func filterModulePaths(paths []string) []string {
 	var modules []string
 	for _, rel := range paths {
-		if strings.HasPrefix(rel, "modules"+string(os.PathSeparator)) && strings.HasSuffix(rel, ".vgo") {
+		if strings.HasPrefix(rel, "configcrates"+string(os.PathSeparator)) && strings.HasSuffix(rel, ".vgo") {
 			modules = append(modules, rel)
 		}
 	}
@@ -107,7 +107,7 @@ func readModuleContent(baseDir string, relPaths []string) map[string][]byte {
 // original module content. Each resource is reversed to its absent/stopped state.
 // Returns the generated YAML and a list of warnings for resources that need review.
 func GenerateRetractModule(name string, content []byte) (string, []RetractWarning, error) {
-	var mod retractModule
+	var mod retractConfigcrate
 	if err := yaml.Unmarshal(content, &mod); err != nil {
 		return "", nil, fmt.Errorf("parsing module %s: %w", name, err)
 	}
@@ -136,7 +136,7 @@ func GenerateRetractModule(name string, content []byte) (string, []RetractWarnin
 		return "", warnings, fmt.Errorf("module %s: no resources could be reversed", name)
 	}
 
-	retractMod := retractModule{
+	retractMod := retractConfigcrate{
 		Name:        name + "-retract",
 		Description: fmt.Sprintf("Auto-generated retract module for %s. Review before activating.", name),
 		Resources:   reversed,

@@ -11,7 +11,7 @@ pub mod pkg_breaker;
 pub mod preempt;
 
 use crate::executors::{Action, Executor, ResourceResult};
-use crate::proto::Module;
+use crate::proto::Configcrate;
 use crate::state::StateStore;
 use cache::ResultCache;
 use dag::{build_dag, needs_topo_sort, topo_sort, ResourceNode};
@@ -96,7 +96,7 @@ static LAST_CHECKSUMS_PRUNE_AT: AtomicI64 = AtomicI64::new(0);
 /// Mirrors [`extract_target_path`] semantics on the raw proto: `file` reads
 /// `target_path`, every other type reads `path`. Used to feed
 /// [`crate::state::ChecksumCache::prune_stale`] after each converge.
-fn active_target_paths(modules: &[Module]) -> HashSet<String> {
+fn active_target_paths(modules: &[Configcrate]) -> HashSet<String> {
     let mut out = HashSet::new();
     for m in modules {
         for r in &m.resources {
@@ -116,7 +116,7 @@ fn active_target_paths(modules: &[Module]) -> HashSet<String> {
 /// [`CHECKSUMS_PRUNE_INTERVAL_SECS`]. No-op when the state store isn't
 /// available or `modules` is empty — the latter guards against wiping the
 /// entire cache on a pre-policy CheckIn or bundle-eval failure.
-pub fn try_prune_stale_checksums(store: Option<&StateStore>, modules: &[Module]) {
+pub fn try_prune_stale_checksums(store: Option<&StateStore>, modules: &[Configcrate]) {
     let Some(store) = store else { return };
     if modules.is_empty() {
         return;
@@ -174,7 +174,7 @@ pub struct RunOptions {
 ///
 /// Returns the list of resource results for reporting back to the server.
 pub fn converge(
-    modules: &[Module],
+    modules: &[Configcrate],
     executors: &HashMap<String, Box<dyn Executor>>,
     cache: &mut ResultCache,
     opts: &RunOptions,
@@ -196,7 +196,7 @@ pub fn converge(
                     "SAFETY: skipping convergence — disk space critically low"
                 );
                 return vec![ResourceResult {
-                    module_name: String::new(),
+                    configcrate_name: String::new(),
                     resource_type: String::new(),
                     resource_name: "_safety_disk_space".into(),
                     action: Action::None,
@@ -213,7 +213,7 @@ pub fn converge(
     }
 
     // Filter to single module if requested.
-    let filtered: Vec<Module>;
+    let filtered: Vec<Configcrate>;
     let modules = if let Some(ref filter) = opts.module_filter {
         filtered = modules
             .iter()
@@ -235,7 +235,7 @@ pub fn converge(
         Err(e) => {
             warn!(error = %e, "failed to build DAG");
             return vec![ResourceResult {
-                module_name: String::new(),
+                configcrate_name: String::new(),
                 resource_type: String::new(),
                 resource_name: String::new(),
                 action: Action::None,
@@ -254,7 +254,7 @@ pub fn converge(
             Err(e) => {
                 warn!(error = %e, "topological sort failed");
                 return vec![ResourceResult {
-                    module_name: String::new(),
+                    configcrate_name: String::new(),
                     resource_type: String::new(),
                     resource_name: String::new(),
                     action: Action::None,
@@ -291,7 +291,7 @@ pub fn converge(
             if preempt::is_requested(dir) {
                 warn!("preempted by manual run — aborting convergence");
                 results.push(ResourceResult {
-                    module_name: node.module_name.clone(),
+                    configcrate_name: node.configcrate_name.clone(),
                     resource_type: String::new(),
                     resource_name: "_preempted".into(),
                     action: Action::Skipped,
@@ -308,7 +308,7 @@ pub fn converge(
         // SAFETY: Circuit breaker — stop applying if too many consecutive failures.
         if circuit_broken {
             results.push(ResourceResult {
-                module_name: node.module_name.clone(),
+                configcrate_name: node.configcrate_name.clone(),
                 resource_type: node.resource_type.clone(),
                 resource_name: node.name.clone(),
                 action: Action::Skipped,
@@ -329,7 +329,7 @@ pub fn converge(
             );
             failed_resources.insert(node.name.clone());
             results.push(ResourceResult {
-                module_name: node.module_name.clone(),
+                configcrate_name: node.configcrate_name.clone(),
                 resource_type: node.resource_type.clone(),
                 resource_name: node.name.clone(),
                 action: Action::Skipped,
@@ -368,7 +368,7 @@ pub fn converge(
         };
 
         let is_pkg_resource = is_package_type(&node.resource_type);
-        let breaker_key = format!("{}:{}", node.module_name, node.name);
+        let breaker_key = format!("{}:{}", node.configcrate_name, node.name);
 
         // --- Package pre-flight checks ---
         if is_pkg_resource && !opts.dry_run {
@@ -376,7 +376,7 @@ pub fn converge(
             if let pkg_breaker::BreakerCheck::Blocked(msg) = pkg_breaker.check(&breaker_key) {
                 warn!(resource = %node.name, "package circuit breaker: blocked");
                 results.push(ResourceResult {
-                    module_name: node.module_name.clone(),
+                    configcrate_name: node.configcrate_name.clone(),
                     resource_type: node.resource_type.clone(),
                     resource_name: node.name.clone(),
                     action: Action::Blocked,
@@ -406,7 +406,7 @@ pub fn converge(
                                 warn!(resource = %node.name, free_mb, req_mb, "disk space too low for package install");
                                 pkg_breaker.record_failure(&breaker_key, &crate::executors::pkgmgr::errors::ErrorClass::DiskFull, &msg);
                                 results.push(ResourceResult {
-                                    module_name: node.module_name.clone(),
+                                    configcrate_name: node.configcrate_name.clone(),
                                     resource_type: node.resource_type.clone(),
                                     resource_name: node.name.clone(),
                                     action: Action::Blocked,
@@ -424,7 +424,7 @@ pub fn converge(
         }
 
         let mut result = execute_resource(node_ref, executors, cache, opts, traits);
-        result.module_name = node.module_name.clone();
+        result.configcrate_name = node.configcrate_name.clone();
         // Force the result's resource_name to come from the DAG node,
         // not from whatever the executor seeded internally. The user
         // executor in particular initialized its result name from the
@@ -525,7 +525,7 @@ pub fn converge(
             };
 
             let mut result = execute_resource(&triggered_node, executors, cache, opts, traits);
-            result.module_name = node.module_name.clone();
+            result.configcrate_name = node.configcrate_name.clone();
             // Same canonicalization as the first pass — see comment
             // there for the rationale (user executor seeds name from
             // username, two resources for the same user collide).
@@ -533,7 +533,7 @@ pub fn converge(
 
             // Update the result for this resource in the results vec.
             if let Some(existing) = results.iter_mut().find(|r| {
-                r.resource_name == node.name && r.module_name == node.module_name
+                r.resource_name == node.name && r.configcrate_name == node.configcrate_name
             }) {
                 *existing = result;
             } else {
@@ -560,7 +560,7 @@ fn execute_resource(
     let triggered = node.params.get("_triggered").map(|s| s == "true").unwrap_or(false);
     if node.when.contains("changed") && !triggered {
         return ResourceResult {
-            module_name: String::new(),
+            configcrate_name: String::new(),
             resource_type: node.resource_type.clone(),
             resource_name: node.name.clone(),
             action: Action::Skipped,
@@ -587,7 +587,7 @@ fn execute_resource(
                 match crate::policy::when::eval_with_funcs(&expr, &var_fn, Some(&func_fn)) {
                     Ok(false) => {
                         return ResourceResult {
-                            module_name: String::new(),
+                            configcrate_name: String::new(),
                             resource_type: node.resource_type.clone(),
                             resource_name: node.name.clone(),
                             action: Action::Skipped,
@@ -607,7 +607,7 @@ fn execute_resource(
                             "when expression eval error, skipping resource (fail-safe)"
                         );
                         return ResourceResult {
-                            module_name: String::new(),
+                            configcrate_name: String::new(),
                             resource_type: node.resource_type.clone(),
                             resource_name: node.name.clone(),
                             action: Action::Skipped,
@@ -629,7 +629,7 @@ fn execute_resource(
                     "when expression parse error, skipping resource (fail-safe)"
                 );
                 return ResourceResult {
-                    module_name: String::new(),
+                    configcrate_name: String::new(),
                     resource_type: node.resource_type.clone(),
                     resource_name: node.name.clone(),
                     action: Action::Skipped,
@@ -656,7 +656,7 @@ fn execute_resource(
             "GUARDRAIL BLOCKED resource execution"
         );
         return ResourceResult {
-            module_name: String::new(),
+            configcrate_name: String::new(),
             resource_type: node.resource_type.clone(),
             resource_name: node.name.clone(),
             action: Action::None,
@@ -680,7 +680,7 @@ fn execute_resource(
         Some(e) => e,
         None => {
             return ResourceResult {
-                module_name: String::new(),
+                configcrate_name: String::new(),
                 resource_type: node.resource_type.clone(),
                 resource_name: node.name.clone(),
                 action: Action::None,
@@ -749,7 +749,7 @@ fn execute_resource(
             match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
                 Ok(r) => r,
                 Err(_) => ResourceResult {
-                    module_name: String::new(),
+                    configcrate_name: String::new(),
                     resource_type: node.resource_type.clone(),
                     resource_name: node.name.clone(),
                     action: Action::None,
@@ -1546,7 +1546,7 @@ fn disk_free_bytes(path: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proto::{Module, Resource};
+    use crate::proto::{Configcrate, Resource};
 
     struct MockExecutor {
         action: Action,
@@ -1561,7 +1561,7 @@ mod tests {
         ) -> ResourceResult {
             let name = params.get("name").map(|s| s.as_str()).unwrap_or("mock");
             ResourceResult {
-                module_name: String::new(),
+                configcrate_name: String::new(),
                 resource_type: "mock".to_string(),
                 resource_name: name.to_string(),
                 action: self.action.clone(),
@@ -1573,8 +1573,8 @@ mod tests {
         }
     }
 
-    fn make_module(name: &str, resources: Vec<(&str, &str)>) -> Module {
-        Module {
+    fn make_module(name: &str, resources: Vec<(&str, &str)>) -> Configcrate {
+        Configcrate {
             name: name.to_string(),
             resource_type: String::new(),
             resources: resources
@@ -1611,7 +1611,7 @@ mod tests {
         let mut pkg_params = std::collections::BTreeMap::new();
         pkg_params.insert("target_path".to_string(), "/should/not/appear".to_string());
 
-        let modules = vec![Module {
+        let modules = vec![Configcrate {
             name: "m1".to_string(),
             resource_type: String::new(),
             resources: vec![
@@ -1728,7 +1728,7 @@ mod tests {
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].module_name, "keep");
+        assert_eq!(results[0].configcrate_name, "keep");
     }
 
     // ── Notify/subscribe trigger chain tests ──────────────────────────
@@ -1781,7 +1781,7 @@ mod tests {
                 .cloned()
                 .unwrap_or((Action::None, false));
             ResourceResult {
-                module_name: String::new(),
+                configcrate_name: String::new(),
                 resource_type: "mock".to_string(),
                 resource_name: name.to_string(),
                 action,
@@ -1822,7 +1822,7 @@ mod tests {
                 .push((name.to_string(), dry_run));
 
             ResourceResult {
-                module_name: String::new(),
+                configcrate_name: String::new(),
                 resource_type: "mock".to_string(),
                 resource_name: name.to_string(),
                 action: Action::None,
@@ -1838,8 +1838,8 @@ mod tests {
         name: &str,
         resources: Vec<(&str, &str)>,
         notify: Vec<&str>,
-    ) -> Module {
-        Module {
+    ) -> Configcrate {
+        Configcrate {
             name: name.to_string(),
             resource_type: String::new(),
             resources: resources
@@ -1865,8 +1865,8 @@ mod tests {
         name: &str,
         resources: Vec<(&str, &str)>,
         subscribes: Vec<&str>,
-    ) -> Module {
-        Module {
+    ) -> Configcrate {
+        Configcrate {
             name: name.to_string(),
             resource_type: String::new(),
             resources: resources
@@ -1935,7 +1935,7 @@ mod tests {
         assert!(config_result.changed);
     }
 
-    /// Module A does NOT change -> Module B should NOT be re-run.
+    /// Module A does NOT change -> Configcrate B should NOT be re-run.
     #[test]
     fn converge_no_change_no_notify() {
         let exec = TrackingExecutor::new(vec![
@@ -2101,7 +2101,7 @@ mod tests {
         executors.insert("file".to_string(), Box::new(exec));
 
         let modules = vec![{
-            Module {
+            Configcrate {
                 name: "cache-test".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2242,7 +2242,7 @@ mod tests {
 
             if self.fail_names.contains(name) {
                 ResourceResult {
-                    module_name: String::new(),
+                    configcrate_name: String::new(),
                     resource_type: "mock".to_string(),
                     resource_name: name.to_string(),
                     action: Action::None,
@@ -2253,7 +2253,7 @@ mod tests {
                 }
             } else {
                 ResourceResult {
-                    module_name: String::new(),
+                    configcrate_name: String::new(),
                     resource_type: "mock".to_string(),
                     resource_name: name.to_string(),
                     action: Action::Created,
@@ -2276,7 +2276,7 @@ mod tests {
         executors.insert("mock".to_string(), Box::new(exec));
 
         let modules = vec![
-            Module {
+            Configcrate {
                 name: "pkg".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2293,7 +2293,7 @@ mod tests {
                 notify: vec![],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "config".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2310,7 +2310,7 @@ mod tests {
                 notify: vec![],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "svc".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2374,7 +2374,7 @@ mod tests {
         executors.insert("mock".to_string(), Box::new(exec));
 
         let modules = vec![
-            Module {
+            Configcrate {
                 name: "broken".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2391,7 +2391,7 @@ mod tests {
                 notify: vec![],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "dependent".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2408,7 +2408,7 @@ mod tests {
                 notify: vec![],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "independent".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2465,7 +2465,7 @@ mod tests {
         executors.insert("mock".to_string(), Box::new(exec));
 
         let modules = vec![
-            Module {
+            Configcrate {
                 name: "base".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2482,7 +2482,7 @@ mod tests {
                 notify: vec![],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "app".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2538,7 +2538,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(self.sleep_ms));
             let name = params.get("name").map(|s| s.as_str()).unwrap_or("slow");
             ResourceResult {
-                module_name: String::new(),
+                configcrate_name: String::new(),
                 resource_type: "mock".to_string(),
                 resource_name: name.to_string(),
                 action: Action::None,
@@ -2557,7 +2557,7 @@ mod tests {
         executors.insert("mock".to_string(), Box::new(SlowExecutor { sleep_ms: 5000 }));
 
         let modules = vec![{
-            Module {
+            Configcrate {
                 name: "slow-mod".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2604,7 +2604,7 @@ mod tests {
         executors.insert("mock".to_string(), Box::new(SlowExecutor { sleep_ms: 10 }));
 
         let modules = vec![{
-            Module {
+            Configcrate {
                 name: "fast-mod".to_string(),
                 resource_type: String::new(),
                 resources: vec![Resource {
@@ -2649,7 +2649,7 @@ mod tests {
         }));
 
         // A resource with when: "changed" and no trigger should be skipped.
-        let modules = vec![Module {
+        let modules = vec![Configcrate {
             name: "app".to_string(),
             resource_type: String::new(),
             resources: vec![Resource {
@@ -2688,7 +2688,7 @@ mod tests {
         executors.insert("mock".to_string(), Box::new(exec));
 
         // Single module with notify: [restart-sshd] (resource name, not module name).
-        let modules = vec![Module {
+        let modules = vec![Configcrate {
             name: "ssh-hardening".to_string(),
             resource_type: String::new(),
             resources: vec![
@@ -2749,7 +2749,7 @@ mod tests {
         executors.insert("mock".to_string(), Box::new(exec));
 
         // Single module with subscribes: [sshd-config] (resource name, not module name).
-        let modules = vec![Module {
+        let modules = vec![Configcrate {
             name: "ssh-hardening".to_string(),
             resource_type: String::new(),
             resources: vec![

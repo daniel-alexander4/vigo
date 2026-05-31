@@ -294,7 +294,7 @@ func TestAnyFilterActive_DetectsEveryAxis(t *testing.T) {
 		{"role", func(d *EnvoyTreePageData) { d.RoleFilter = "web" }},
 		{"os", func(d *EnvoyTreePageData) { d.OSFilter = "ubuntu" }},
 		{"arch", func(d *EnvoyTreePageData) { d.ArchFilter = "arm64" }},
-		{"module", func(d *EnvoyTreePageData) { d.ModuleFilter = "nginx" }},
+		{"module", func(d *EnvoyTreePageData) { d.ConfigcrateFilter = "nginx" }},
 		{"compliance", func(d *EnvoyTreePageData) { d.ComplianceFilter = "hipaa" }},
 	}
 	// Baseline: empty page data → no axis active.

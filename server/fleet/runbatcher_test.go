@@ -22,20 +22,20 @@ func TestRunBatcherSubmitAndFlush(t *testing.T) {
 			EnvoyID:     "envoy-1",
 			Hostname:     "web-1",
 			Status:       "success",
-			ModuleCount:  2,
+			ConfigcrateCount:  2,
 			ChangedCount: 1,
 			FailedCount:  0,
 			SkippedCount: 1,
 			DBResults: []RunBatchResultParam{
 				{
-					ModuleName:   "nginx",
+					ConfigcrateName:   "nginx",
 					ResourceType: "package",
 					ResourceName: "nginx",
 					ActionTaken:  "none",
 					Changed:      false,
 				},
 				{
-					ModuleName:   "nginx",
+					ConfigcrateName:   "nginx",
 					ResourceType: "file",
 					ResourceName: "/etc/nginx.conf",
 					ActionTaken:  "updated",
@@ -90,7 +90,7 @@ func TestRunBatcherShutdown(t *testing.T) {
 		EnvoyID:    "envoy-1",
 		Hostname:    "web-1",
 		Status:      "success",
-		ModuleCount: 1,
+		ConfigcrateCount: 1,
 	})
 
 	// Start with a context that we cancel immediately.
@@ -123,7 +123,7 @@ func TestRunBatcherConcurrent(t *testing.T) {
 					EnvoyID:    "envoy-1",
 					Hostname:    "web-1",
 					Status:      "success",
-					ModuleCount: int64(g*10 + i),
+					ConfigcrateCount: int64(g*10 + i),
 				})
 			}
 		}(g)

@@ -75,7 +75,7 @@ type environmentsFile struct {
 }
 
 var environmentKnownKeys = map[string]bool{
-	"modules": true, "vars": true, "exclude_modules": true,
+	"configcrates": true, "vars": true, "exclude_configcrates": true,
 }
 
 func parseEnvironmentsFile(data []byte) (*environmentsFile, error) {
@@ -120,12 +120,12 @@ func parseEnvironmentsFile(data []byte) (*environmentsFile, error) {
 				key := envValNode.Content[k].Value
 				v := envValNode.Content[k+1]
 				switch key {
-				case "modules":
+				case "configcrates":
 					entry.HasModules = true
 					if v.Kind == yaml.SequenceNode {
 						entry.NumModules = len(v.Content)
 					}
-				case "exclude_modules":
+				case "exclude_configcrates":
 					entry.HasExcludes = true
 					if v.Kind == yaml.SequenceNode {
 						entry.NumExcludes = len(v.Content)

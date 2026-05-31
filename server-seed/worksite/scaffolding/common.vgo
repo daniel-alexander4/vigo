@@ -9,4 +9,4 @@
 #
 # See: https://vigo.dev/docs/concepts/config-format#directory-inheritance
 
-modules: []
+configcrates: []

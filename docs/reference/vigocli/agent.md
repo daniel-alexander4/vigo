@@ -96,12 +96,12 @@ In practice, the bootstrap shell script from `curl -sSfk https://<server>:8443/b
 Run a single convergence cycle: check in, apply resources, report results, then exit.
 
 ```bash
-vigo run [--module <name>] [--dry-run]
+vigo run [--configcrate <name>] [--dry-run]
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--module <name>` | Only apply resources from this module |
+| `--configcrate <name>` | Only apply resources from this configcrate |
 | `--dry-run` | Preview mode -- check state but do not apply changes |
 
 Produces a color-coded trace to stderr showing each resource's status (created, updated, deleted, skipped, none, or error).
@@ -131,7 +131,7 @@ Displays:
 - **Fallback servers** -- configured failover server addresses
 - **Data directory** -- path to the agent's config and key material
 - **State store** -- path to the LMDB state directory
-- **Policy** -- cached policy bundle details: version, matched pattern, environment, roles, module/resource counts, max age, and a per-module resource listing
+- **Policy** -- cached policy bundle details: version, matched pattern, environment, roles, configcrate/resource counts, max age, and a per-configcrate resource listing
 - **Traits** -- cached trait collector count and cache age
 - **Pending results** -- number of convergence results queued for reporting (drains when the server is reachable)
 - **Server pubkey** -- whether the server's bundle-signing public key is stored locally
@@ -151,7 +151,7 @@ Policy:
   Match:          web-01.example.com
   Environment:    production
   Roles:          webserver, monitoring
-  Modules:        3 (nginx, node_exporter, logrotate)
+  Configcrates:        3 (nginx, node_exporter, logrotate)
   Resources:      12
   Max age:        86400s
   [nginx]
@@ -218,7 +218,7 @@ vigo version
 ## Related
 
 - [Bootstrap](../../howto/enroll-an-envoy.md) -- Agent enrollment workflow
-- [Compiled Promises](../../reference/writing-modules.md) -- Offline convergence and LMDB state store
+- [Compiled Promises](../../reference/writing-configcrates.md) -- Offline convergence and LMDB state store
 - [Guardrails](../../howto/troubleshoot.md) -- Self-protection for agent paths
 - [Troubleshooting](../../howto/troubleshoot.md) -- Common issues and diagnostics
 ---

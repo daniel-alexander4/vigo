@@ -35,7 +35,7 @@ Detects whether the machine has a graphical display server available.
 
 ## When Expression
 
-Use the `has_display()` builtin to conditionally apply GUI application modules:
+Use the `has_display()` builtin to conditionally apply GUI application configcrates:
 
 ```yaml
 when: "has_display() and os_family('debian')"

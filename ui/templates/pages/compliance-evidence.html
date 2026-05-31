@@ -176,8 +176,8 @@
             {{range .Envoys}}
             <tr>
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
-                <td class="mono">{{.Module}}</td>
-                <td>{{if gt .ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
+                <td class="mono">{{.Configcrate}}</td>
+                <td>{{if gt .ConfigcrateCount 0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ConfigcrateCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
                 <td>{{.RunCount}}</td>
                 <td>{{if gt .FailureCount 0}}<span class="text-danger">{{.FailureCount}}</span>{{else}}<span class="text-success">0</span>{{end}}</td>
                 <td class="text-muted">{{.LastRun}}</td>

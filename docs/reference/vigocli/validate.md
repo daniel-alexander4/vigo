@@ -24,26 +24,26 @@ Accepts `.vgo`, `.yaml`, and `.yml` file extensions.
 
 ## Examples
 
-### Validate a single module
+### Validate a single configcrate
 
 ```bash
-vigocli validate stockpile/modules/nginx.vgo
+vigocli validate stockpile/configcrates/nginx.vgo
 ```
 
 ```
-stockpile/modules/nginx.vgo: OK
+stockpile/configcrates/nginx.vgo: OK
 ```
 
 ### Validate multiple files
 
 ```bash
-vigocli validate stockpile/modules/*.vgo
+vigocli validate stockpile/configcrates/*.vgo
 ```
 
 ```
-stockpile/modules/nginx.vgo: OK
-stockpile/modules/postgres.vgo: OK
-stockpile/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempotency guard (add onlyif or unless)
+stockpile/configcrates/nginx.vgo: OK
+stockpile/configcrates/postgres.vgo: OK
+stockpile/configcrates/app.vgo: [error] app: resource "deploy" (exec) missing idempotency guard (add onlyif or unless)
 ```
 
 ### Exit codes
@@ -53,7 +53,7 @@ stockpile/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempot
 
 ## Relationship to Config Publish
 
-`vigocli validate` checks individual files in isolation. `vigocli config publish` runs a more comprehensive pipeline that includes the **module linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
+`vigocli validate` checks individual files in isolation. `vigocli config publish` runs a more comprehensive pipeline that includes the **configcrate linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
 
 ## Related
 

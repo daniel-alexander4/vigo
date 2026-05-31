@@ -24,8 +24,8 @@ resources:
     state: present
 `
 	findings := LintFleet([]FleetFile{
-		{Path: "modules/web/web.vgo", Data: []byte(a)},
-		{Path: "modules/web/webserver-base.vgo", Data: []byte(b)},
+		{Path: "configcrates/web/web.vgo", Data: []byte(a)},
+		{Path: "configcrates/web/webserver-base.vgo", Data: []byte(b)},
 	})
 	hit := false
 	for _, f := range findings {
@@ -37,7 +37,7 @@ resources:
 			if !strings.Contains(f.Message, "nginx") {
 				t.Errorf("message should mention 'nginx'; got %q", f.Message)
 			}
-			if !strings.Contains(f.Message, "modules/web/web.vgo") {
+			if !strings.Contains(f.Message, "configcrates/web/web.vgo") {
 				t.Errorf("message should reference both module paths; got %q", f.Message)
 			}
 		}
@@ -69,8 +69,8 @@ resources:
     mode: '0644'
 `
 	findings := LintFleet([]FleetFile{
-		{Path: "modules/web/nginx.vgo", Data: []byte(a)},
-		{Path: "modules/web/nginx-override.vgo", Data: []byte(b)},
+		{Path: "configcrates/web/nginx.vgo", Data: []byte(a)},
+		{Path: "configcrates/web/nginx-override.vgo", Data: []byte(b)},
 	})
 	hit := false
 	for _, f := range findings {
@@ -107,8 +107,8 @@ resources:
     state: absent
 `
 	findings := LintFleet([]FleetFile{
-		{Path: "modules/a.vgo", Data: []byte(a)},
-		{Path: "modules/b.vgo", Data: []byte(b)},
+		{Path: "configcrates/a.vgo", Data: []byte(a)},
+		{Path: "configcrates/b.vgo", Data: []byte(b)},
 	})
 	for _, f := range findings {
 		if f.RuleID == "fleet-duplicate-package" {
@@ -132,7 +132,7 @@ resources:
     state: present
 `
 	findings := LintFleet([]FleetFile{
-		{Path: "modules/a.vgo", Data: []byte(a)},
+		{Path: "configcrates/a.vgo", Data: []byte(a)},
 	})
 	for _, f := range findings {
 		if f.RuleID == "fleet-duplicate-package" {
@@ -147,14 +147,14 @@ func TestLintFleet_DeterministicOrder(t *testing.T) {
 	// publish output.
 	mk := func() []FleetFile {
 		return []FleetFile{
-			{Path: "modules/a.vgo", Data: []byte(`name: a
+			{Path: "configcrates/a.vgo", Data: []byte(`name: a
 resources:
   - name: pkg
     type: package
     package: nginx
     state: present
 `)},
-			{Path: "modules/b.vgo", Data: []byte(`name: b
+			{Path: "configcrates/b.vgo", Data: []byte(`name: b
 resources:
   - name: pkg
     type: package

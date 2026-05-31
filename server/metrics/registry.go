@@ -26,7 +26,7 @@ type Metrics struct {
 	ReportsTotal         *prometheus.CounterVec
 	RunDuration          *prometheus.HistogramVec
 	DriftDetected        *prometheus.CounterVec
-	ModuleActions        *prometheus.CounterVec
+	ConfigcrateActions   *prometheus.CounterVec
 	ConvergenceStatus    *prometheus.GaugeVec
 	ConvergencePct       prometheus.Gauge
 	CheckinAgeDist       prometheus.Histogram
@@ -208,10 +208,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		DriftDetected: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_drift_detected_total",
 			Help: "Total number of drift detection events.",
-		}, []string{"envoy", "module"}),
-		ModuleActions: f.NewCounterVec(prometheus.CounterOpts{
-			Name: "vigo_module_actions_total",
-			Help: "Total number of module actions taken.",
+		}, []string{"envoy", "configcrate"}),
+		ConfigcrateActions: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_configcrate_actions_total",
+			Help: "Total number of configcrate actions taken.",
 		}, []string{"type", "action"}),
 		ConvergenceStatus: f.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "vigo_convergence_status",
@@ -462,15 +462,15 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 		ConvergenceConverged: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_converged",
-			Help: "Number of envoys in converged state (0 failed modules in last run).",
+			Help: "Number of envoys in converged state (0 failed configcrates in last run).",
 		}),
 		ConvergenceDegraded: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_degraded",
-			Help: "Number of envoys with 1-79% of modules failing in last run.",
+			Help: "Number of envoys with 1-79% of configcrates failing in last run.",
 		}),
 		ConvergenceFailed: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_failed",
-			Help: "Number of envoys with >=80% modules failing or status=blocked.",
+			Help: "Number of envoys with >=80% configcrates failing or status=blocked.",
 		}),
 		ConvergenceNoData: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_no_data",
@@ -485,7 +485,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		}),
 		ConvergenceDiverged: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_diverged",
-			Help: "Number of envoys with 5+ consecutive runs of module changes (persistent drift).",
+			Help: "Number of envoys with 5+ consecutive runs of configcrate changes (persistent drift).",
 		}),
 
 		// --- Reachability ---

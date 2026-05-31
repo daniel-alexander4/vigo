@@ -19,9 +19,9 @@ Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Per-platform init syst
 
 ## Mental model
 
-1. **Declare state in YAML files** under `/srv/vigo/stacks/stockpile/`. Hostname patterns match envoys to roles, roles aggregate modules, modules describe resources (files, packages, services, users, repositories, exec actions). Per-host overrides, environment splits, and conditional logic compose on top.
+1. **Declare state in YAML files** under `/srv/vigo/stacks/stockpile/`. Hostname patterns match envoys to roles, roles aggregate configcrates, configcrates describe resources (files, packages, services, users, repositories, exec actions). Per-host overrides, environment splits, and conditional logic compose on top.
 2. **Publish.** `vigocli config publish` validates the tree, syncs it to `/srv/vigo/stacks/.live/`, and triggers a server reload.
-3. **Agents converge.** Every check-in interval — default 5 minutes; configurable shorter on capable hardware — each envoy pulls the modules matching its hostname, applies any drift idempotently, and reports per-resource outcomes. Drift from manual changes, package upgrades, or external automation is corrected within one interval. (Per-fleet capacity at low intervals is workload-dependent; see your own benchmarks rather than relying on a static "X seconds works" claim.)
+3. **Agents converge.** Every check-in interval — default 5 minutes; configurable shorter on capable hardware — each envoy pulls the configcrates matching its hostname, applies any drift idempotently, and reports per-resource outcomes. Drift from manual changes, package upgrades, or external automation is corrected within one interval. (Per-fleet capacity at low intervals is workload-dependent; see your own benchmarks rather than relying on a static "X seconds works" claim.)
 4. **Observe.** The Web UI shows fleet convergence, drift, compliance posture, risk scoring, audit history, and a per-envoy detail view. The CLI gives you the same data plus orchestration verbs (task dispatch, workflow execution, ad-hoc query, Scrier shells).
 
 ## Key properties you'll encounter
@@ -33,9 +33,9 @@ Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Per-platform init syst
 - **Mandatory mTLS, mandatory signing.** Every gRPC call rides mTLS. Every agent request is ed25519-signed against the stored pubkey for that envoy. No plaintext mode, no signature-skip mode.
 - **Secrets stay out of every visible surface.** A `secret:` prefix in YAML is resolved at config load; the value never appears in config files, environment variables, logs, the database, gRPC payloads, or run results. Provider plug-ins resolve the prefix (`local` file-backed by default, `isopass` HTTP-backed in production).
 - **Tamper-evident audit log.** Every auditable event lands in a SHA-256-hash-chained log; modifying or deleting a row is cryptographically detectable.
-- **Self-protection guardrails.** The agent refuses to touch its own binary, the server's binary, the config directory, or the agent's service unit, regardless of what a module declares. These checks aren't overridable.
+- **Self-protection guardrails.** The agent refuses to touch its own binary, the server's binary, the config directory, or the agent's service unit, regardless of what a configcrate declares. These checks aren't overridable.
 - **Scrier remote access without inbound ports.** SSH, RDP, and VNC sessions to any enrolled envoy ride the same outbound gRPC connection the agent uses for check-in. No port-22 exposure, no bastion, no VPN. See [Set up Scrier](howto/set-up-scrier.md).
-- **Compliance matrix derived from modules.** Modules carry `compliance:` tags; the server produces per-framework coverage reports (HIPAA, SOC 2, PCI-DSS, NIST 800-53, ISO 27001, more). See [Compliance reporting](howto/compliance-reporting.md).
+- **Compliance matrix derived from configcrates.** Configcrates carry `compliance:` tags; the server produces per-framework coverage reports (HIPAA, SOC 2, PCI-DSS, NIST 800-53, ISO 27001, more). See [Compliance reporting](howto/compliance-reporting.md).
 - **P2P content distribution.** A swarm substrate moves files, container images, git repos, and per-user encrypted directories between envoys directly. See [Set up Swarm](howto/set-up-swarm.md).
 
 ## Limits to know up front
@@ -51,9 +51,9 @@ Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Per-platform init syst
 
 ## Where to go next
 
-- **First-time setup:** [Quickstart](quickstart.md) walks install → enroll → first module.
-- **A specific task:** [How-to guides](howto/) covers install, enrollment, writing modules, publishing, Scrier, swarm, auth, monitoring, backup/DR, compliance, troubleshooting, and migrating from Puppet/Chef/Ansible/Salt/CFEngine.
-- **Looking something up:** [Reference](reference/) holds `vigocli` command pages, agent resource and trait pages, the REST API, the server.yaml schema, the module-writing guide, and the compliance-framework matrix.
+- **First-time setup:** [Quickstart](quickstart.md) walks install → enroll → first configcrate.
+- **A specific task:** [How-to guides](howto/) covers install, enrollment, writing configcrates, publishing, Scrier, swarm, auth, monitoring, backup/DR, compliance, troubleshooting, and migrating from Puppet/Chef/Ansible/Salt/CFEngine.
+- **Looking something up:** [Reference](reference/) holds `vigocli` command pages, agent resource and trait pages, the REST API, the server.yaml schema, the configcrate-writing guide, and the compliance-framework matrix.
 - **What things mean:** [Glossary](glossary.md).
 - **Why decisions were made:** [ADRs](adr/) — historical decision archive, not operator docs.
 

@@ -69,9 +69,9 @@ type hostcrate struct {
 // `envoys: - ...` block. Mirrors EnvoyEntry in server/config/types.go.
 // Extending the loader requires adding the new key here too.
 var hostcrateKnownKeys = map[string]bool{
-	"match": true, "environment": true, "roles": true, "modules": true,
+	"match": true, "environment": true, "roles": true, "configcrates": true,
 	"usercrates": true, "vars": true, "tags": true,
-	"exclude_modules": true, "exclude_resources": true,
+	"exclude_configcrates": true, "exclude_resources": true,
 	"observe_only": true, "when": true,
 	"gateway": true, "device_type": true, "credential": true,
 	"username": true, "port": true, "ip_address": true,

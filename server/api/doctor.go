@@ -289,9 +289,9 @@ func (h *DoctorHandler) checkConfig() DoctorCheck {
 		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusFail, Message: "reload failed: " + err.Error()}
 	}
 	stats := h.configStore.Stats()
-	msg := fmt.Sprintf("%d modules, %d entries", stats.Modules, stats.Entries)
+	msg := fmt.Sprintf("%d modules, %d entries", stats.Configcrates, stats.Entries)
 
-	if stats.Modules == 0 {
+	if stats.Configcrates == 0 {
 		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusWarn, Message: "no modules loaded"}
 	}
 	return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusPass, Message: msg}

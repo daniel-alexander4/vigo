@@ -500,7 +500,7 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 
 	if containsAny(lower, "module", "modules") {
 		if data, err := a.tools.listModules(); err == nil {
-			parts = append(parts, "## Modules\n"+data)
+			parts = append(parts, "## Configcrates\n"+data)
 		}
 	}
 	if containsAny(lower, "role", "roles") {

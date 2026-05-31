@@ -1,13 +1,13 @@
 
 # Example Walkthroughs
 
-These examples demonstrate real-world Vigo configurations using `.vgo` YAML modules, roles, and node assignments.
+These examples demonstrate real-world Vigo configurations using `.vgo` YAML configcrates, roles, and node assignments.
 
 Each example is a complete walkthrough with ready-to-use config snippets. Adapt the variable values and paths for your environment.
 
 ## Available Examples
 
-- [Nginx Module](nginx-module.md) -- Package, config file, and service with notify chain
+- [Nginx Configcrate](nginx-module.md) -- Package, config file, and service with notify chain
 - [Multi-Environment Setup](multi-env.md) -- Production/staging with `environments.vgo`
 - [Docker Stack Management](docker-stack.md) -- Container lifecycle with the `container` executor
 - [Security Hardening](security-hardening.md) -- Firewall, fail2ban, SSH, and sudo with `depends_on`
@@ -16,14 +16,14 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 - [Kubernetes Nodes](kubernetes-nodes.md) -- OS-level k8s node config with rolling drain-and-reboot workflow
 - [Brown Noise Generator](brownnoise.md) -- Docker container with PulseAudio passthrough using `exec` resources
 - [Disk Hygiene](disk-hygiene.md) -- Prevent disk exhaustion with journal caps, tmp aging, package cache cleanup, and Docker pruning
-- [Multi-Cloud Configuration](multi-cloud.md) -- Cloud-aware modules using IMDS traits across AWS, GCP, and Azure
+- [Multi-Cloud Configuration](multi-cloud.md) -- Cloud-aware configcrates using IMDS traits across AWS, GCP, and Azure
 
 ## Migration Guides
 
 - [Migration Overview](../howto/_index.md#coming-from-another-config-management-system) -- Comparison table and guide index
 - [From Puppet](../howto/migrate-from-puppet.md) -- Pull-based, catalog, resources, Facter
 - [From Ansible](../howto/migrate-from-ansible.md) -- Push-to-pull shift, handlers to notify
-- [From Chef](../howto/migrate-from-chef.md) -- Ruby DSL to YAML, cookbooks to modules
+- [From Chef](../howto/migrate-from-chef.md) -- Ruby DSL to YAML, cookbooks to configcrates
 - [From Salt](../howto/migrate-from-salt.md) -- Both YAML, Pillar to vars, Grains to Traits
 - [From CFEngine](../howto/migrate-from-cfengine.md) -- Promise theory, classes to when:
 
@@ -31,7 +31,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 All examples follow these patterns:
 
-- Modules live in `stockpile/modules/`
+- Configcrates live in `stockpile/configcrates/`
 - Roles live in `stockpile/roles/`
 - Node assignments live in `stockpile/envoys/envoys.vgo`
 - Go templates (`{{ }}`) are only used in `content:` attributes

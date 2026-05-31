@@ -70,7 +70,7 @@ func (v *Violation) Error() string {
 // ValidateSelfProtection checks a module's resources for guardrail violations.
 // Returns findings with SeverityError for any resource that would be blocked
 // by the agent's hardcoded guardrails.
-func ValidateSelfProtection(mod Module) []Finding {
+func ValidateSelfProtection(mod Configcrate) []Finding {
 	var findings []Finding
 	for _, res := range mod.Resources {
 		findings = append(findings, checkSelfProtection(mod.Name, res)...)
@@ -100,7 +100,7 @@ func ValidatePushCommand(command string) error {
 
 func checkSelfProtection(moduleName string, res Resource) []Finding {
 	base := Finding{
-		Module:       moduleName,
+		Configcrate:       moduleName,
 		ResourceName: res.Name,
 		ResourceType: res.Type,
 		Severity:     SeverityError,

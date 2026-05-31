@@ -56,7 +56,7 @@ func previewNode(idOrHostname string) error {
 	}
 	var resp struct {
 		Actions []struct {
-			ModuleName    string `json:"moduleName"`
+			ConfigcrateName    string `json:"moduleName"`
 			ResourceType  string `json:"resourceType"`
 			ResourceName  string `json:"resourceName"`
 			PlannedAction string `json:"plannedAction"`
@@ -75,7 +75,7 @@ func previewNode(idOrHostname string) error {
 	fmt.Fprintf(w, "MODULE\tTYPE\tRESOURCE\tACTION\n")
 	for _, a := range resp.Actions {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			a.ModuleName, a.ResourceType, a.ResourceName, colorAction(a.PlannedAction))
+			a.ConfigcrateName, a.ResourceType, a.ResourceName, colorAction(a.PlannedAction))
 	}
 	return w.Flush()
 }

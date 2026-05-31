@@ -7,7 +7,7 @@ import (
 	vigovalidate "git.alexander4.io/vigo/server/validate"
 )
 
-// validateAdapterRule wraps `server/validate.ValidateModule` so its
+// validateAdapterRule wraps `server/validate.ValidateConfigcrate` so its
 // type-specific and cross-reference findings (unknown types, missing
 // required attrs, depends_on cycles, idempotency anti-patterns the
 // canonical validator already knows about) flow through modlint's
@@ -28,7 +28,7 @@ func (validateAdapterRule) id() string { return "validate-adapter" }
 
 func (validateAdapterRule) apply(mod *module, _ Options) []Finding {
 	vm := toValidateModule(mod)
-	findings := vigovalidate.ValidateModule(vm)
+	findings := vigovalidate.ValidateConfigcrate(vm)
 
 	// Build a name → line index once for O(1) lookup.
 	resLine := make(map[string]int, len(mod.Resources))

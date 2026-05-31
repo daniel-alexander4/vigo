@@ -21,9 +21,9 @@ use tracing::warn;
 pub fn eval_bundle(
     bundle: Option<&proto::PolicyBundle>,
     traits: &Value,
-) -> Result<Vec<proto::Module>> {
+) -> Result<Vec<proto::Configcrate>> {
     let bundle = match bundle {
-        Some(b) if !b.modules.is_empty() => b,
+        Some(b) if !b.configcrates.is_empty() => b,
         _ => return Ok(Vec::new()),
     };
 
@@ -46,9 +46,9 @@ pub fn eval_bundle(
 
     // 4. Convert policy modules to compiled proto modules.
     let vars_value = Value::Object(vars.clone());
-    let mut modules = Vec::with_capacity(bundle.modules.len());
+    let mut modules = Vec::with_capacity(bundle.configcrates.len());
 
-    for pmod in &bundle.modules {
+    for pmod in &bundle.configcrates {
         // Render templates in module-level when before evaluating.
         let mod_when = if pmod.when.contains("{{") {
             let mod_ctx = template::TemplateContext { traits, vars: &vars_value };
@@ -74,7 +74,7 @@ pub fn eval_bundle(
             }
         }
 
-        let mut pb_mod = proto::Module {
+        let mut pb_mod = proto::Configcrate {
             name: pmod.name.clone(),
             depends_on: pmod.depends_on.clone(),
             ..Default::default()
@@ -231,7 +231,7 @@ fn evaluate_resource_when(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proto::{PolicyBundle, PolicyModule, PolicyResource};
+    use crate::proto::{PolicyBundle, PolicyConfigcrate, PolicyResource};
     use serde_json::json;
 
     fn must_marshal_vars(vars: &Value) -> Vec<u8> {
@@ -242,7 +242,7 @@ mod tests {
     fn test_eval_bundle_basic_module() {
         let bundle = PolicyBundle {
             policy_version: 1,
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "nginx".to_string(),
                 resources: vec![PolicyResource {
                     name: "nginx-pkg".to_string(),
@@ -272,7 +272,7 @@ mod tests {
             policy_version: 1,
             vars_json: must_marshal_vars(&json!({"app_name": "myapp"})),
             var_order: vec!["app_name".to_string()],
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "app-config".to_string(),
                 resources: vec![PolicyResource {
                     name: "config-file".to_string(),
@@ -310,7 +310,7 @@ mod tests {
             policy_version: 1,
             vars_json: must_marshal_vars(&json!({"enable_ssl": "true"})),
             var_order: vec!["enable_ssl".to_string()],
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "web".to_string(),
                 resources: vec![
                     PolicyResource {
@@ -349,8 +349,8 @@ mod tests {
     fn test_eval_bundle_depends_on_and_notify() {
         let bundle = PolicyBundle {
             policy_version: 1,
-            modules: vec![
-                PolicyModule {
+            configcrates: vec![
+                PolicyConfigcrate {
                     name: "config".to_string(),
                     resources: vec![PolicyResource {
                         name: "app-config".to_string(),
@@ -361,7 +361,7 @@ mod tests {
                     }],
                     ..Default::default()
                 },
-                PolicyModule {
+                PolicyConfigcrate {
                     name: "svc".to_string(),
                     depends_on: vec!["config".to_string()],
                     resources: vec![PolicyResource {
@@ -391,7 +391,7 @@ mod tests {
                 "fqdn": "{{ .Vars.host }}.example.com"
             })),
             var_order: vec!["host".to_string(), "fqdn".to_string()],
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "dns".to_string(),
                 resources: vec![PolicyResource {
                     name: "hosts-entry".to_string(),
@@ -419,7 +419,7 @@ mod tests {
         // A resource with an unparseable when expression should be skipped.
         let bundle = PolicyBundle {
             policy_version: 1,
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "mixed".to_string(),
                 resources: vec![
                     PolicyResource {
@@ -452,8 +452,8 @@ mod tests {
         // A module with an unparseable when expression should be skipped.
         let bundle = PolicyBundle {
             policy_version: 1,
-            modules: vec![
-                PolicyModule {
+            configcrates: vec![
+                PolicyConfigcrate {
                     name: "bad-module".to_string(),
                     when: "!@#$invalid".to_string(),
                     resources: vec![PolicyResource {
@@ -464,7 +464,7 @@ mod tests {
                     }],
                     ..Default::default()
                 },
-                PolicyModule {
+                PolicyConfigcrate {
                     name: "good-module".to_string(),
                     resources: vec![PolicyResource {
                         name: "res".to_string(),
@@ -488,7 +488,7 @@ mod tests {
         // A resource with a broken template should be skipped, not abort the bundle.
         let bundle = PolicyBundle {
             policy_version: 1,
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "mixed".to_string(),
                 resources: vec![
                     PolicyResource {
@@ -539,7 +539,7 @@ mod tests {
             policy_version: 1,
             vars_json: must_marshal_vars(&json!({"enabled": "true"})),
             var_order: vec!["enabled".to_string()],
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "app".to_string(),
                 resources: vec![PolicyResource {
                     name: "guarded-file".to_string(),

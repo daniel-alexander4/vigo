@@ -1,7 +1,7 @@
 
 # Quickstart
 
-Stand up the Vigo server, enroll your first envoy, and apply your first module.
+Stand up the Vigo server, enroll your first envoy, and apply your first configcrate.
 
 ## 1. Start the server
 
@@ -50,10 +50,10 @@ The bootstrap script also installs the per-OS service (systemd / launchd / rc.d 
 
 After enrollment each envoy appears in the dashboard at `https://localhost:8443/envoys` and begins checking in every 5 minutes.
 
-## 3. Write a module
+## 3. Write a configcrate
 
 ```yaml
-# /srv/vigo/stacks/stockpile/modules/motd.vgo
+# /srv/vigo/stacks/stockpile/configcrates/motd.vgo
 name: motd
 resources:
   - name: motd-file
@@ -70,13 +70,13 @@ resources:
     mode: "0644"
 ```
 
-## 4. Assign the module to envoys
+## 4. Assign the configcrate to envoys
 
 The simplest assignment — every envoy gets it:
 
 ```yaml
 # /srv/vigo/stacks/stockpile/common.vgo
-modules: [motd]
+configcrates: [motd]
 ```
 
 For per-host assignment use a hostcrate:
@@ -85,11 +85,11 @@ For per-host assignment use a hostcrate:
 # /srv/vigo/stacks/stockpile/envoys.vgo
 envoys:
   - match: "web*.prod"
-    modules: [motd, nginx]
+    configcrates: [motd, nginx]
   - match: "db*.prod"
-    modules: [motd, postgres]
+    configcrates: [motd, postgres]
   - match: "*"
-    modules: [motd]
+    configcrates: [motd]
 ```
 
 ## 5. Publish
@@ -116,10 +116,10 @@ Or the Web UI at `https://localhost:8443/runs`. You should see `motd` applied su
 
 ## Where to go next
 
-- [Write your first real module](howto/write-your-first-module.md) — packages, services, dependencies, conditionals
+- [Write your first real configcrate](howto/write-your-first-module.md) — packages, services, dependencies, conditionals
 - [Set up Scrier](howto/set-up-scrier.md) — admin remote-access (SSH / RDP / VNC) without inbound ports
-- [Compliance reporting](howto/compliance-reporting.md) — turn module tags into HIPAA / SOC 2 / PCI / NIST coverage reports
-- [Reference / writing modules](reference/writing-modules.md) — the full module-authoring guide
+- [Compliance reporting](howto/compliance-reporting.md) — turn configcrate tags into HIPAA / SOC 2 / PCI / NIST coverage reports
+- [Reference / writing configcrates](reference/writing-configcrates.md) — the full configcrate-authoring guide
 - [Reference / vigocli](reference/vigocli/) — every CLI command
 - [Reference / agent resources](reference/vigo/resources/) — every executor type
 - [Reference / agent traits](reference/vigo/traits/) — every trait collector

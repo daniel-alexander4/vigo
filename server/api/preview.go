@@ -32,7 +32,7 @@ func (h *PreviewHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // Preview returns the list of envoys that would be affected by changes to a module.
 func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
-	moduleName := r.URL.Query().Get("module")
+	moduleName := r.URL.Query().Get("configcrate")
 	if moduleName == "" {
 		writeError(w, http.StatusBadRequest, "module parameter is required")
 		return
@@ -61,7 +61,7 @@ func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		if cfg == nil {
 			continue
 		}
-		for _, mod := range cfg.Modules {
+		for _, mod := range cfg.Configcrates {
 			if mod.Name == moduleName {
 				affected = append(affected, affectedEnvoy{
 					Hostname: ts.Hostname,
@@ -73,7 +73,7 @@ func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, r, http.StatusOK, map[string]any{
-		"module":   moduleName,
+		"configcrate": moduleName,
 		"affected": affected,
 		"count":    len(affected),
 	})

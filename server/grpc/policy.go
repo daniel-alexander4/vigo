@@ -52,10 +52,10 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 	bundle.VarOrder = cfg.VarOrder
 
 	// Convert modules to proto. Content hashes are pre-computed at config
-	// load time (ModuleConfig.ContentHash) to avoid per-check-in SHA256.
+	// load time (Configcrate.ContentHash) to avoid per-check-in SHA256.
 	seEnabled := se.StreamEditEnabled()
 	seAllowed := se.StreamEditAllowedPaths()
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		// Evaluate module-level when: server-side using traits.
 		// Builtin functions (os_family, distro, arch, etc.) are resolved
 		// here so the agent doesn't need to support them.
@@ -66,7 +66,7 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 			}
 		}
 
-		pbMod := buildPolicyModule(mod, seEnabled, seAllowed, traits)
+		pbMod := buildPolicyConfigcrate(mod, seEnabled, seAllowed, traits)
 		pbMod.ContentHash = mod.ContentHash
 
 		// If agent has this module cached with the same hash, send a stub.
@@ -77,21 +77,21 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 			}
 		}
 
-		bundle.Modules = append(bundle.Modules, pbMod)
+		bundle.Configcrates = append(bundle.Configcrates, pbMod)
 	}
 
 	// Compute Merkle root from the finalized bundle content after module
 	// filtering.
-	bundle.MerkleRoot = config.MerkleRoot(cfg.Modules, cfg.Vars, cfg.VarOrder)
+	bundle.MerkleRoot = config.MerkleRoot(cfg.Configcrates, cfg.Vars, cfg.VarOrder)
 
 	return bundle, nil
 }
 
-// buildPolicyModule converts a config ModuleConfig to a PolicyModule proto.
+// buildPolicyConfigcrate converts a config Configcrate to a PolicyConfigcrate proto.
 // If stream_edit is disabled, strips the attribute from all file resources.
 // If allowed paths are set, strips stream_edit scripts outside those directories.
-func buildPolicyModule(mod config.ModuleConfig, seEnabled bool, seAllowed []string, traits map[string]any) *pb.PolicyModule {
-	pbMod := &pb.PolicyModule{
+func buildPolicyConfigcrate(mod config.Configcrate, seEnabled bool, seAllowed []string, traits map[string]any) *pb.PolicyConfigcrate {
+	pbMod := &pb.PolicyConfigcrate{
 		Name:      mod.Name,
 		DependsOn: mod.DependsOn,
 		When:      mod.When,
@@ -209,7 +209,7 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 		PolicyVersion: bundle.PolicyVersion,
 	}
 
-	for _, mod := range bundle.Modules {
+	for _, mod := range bundle.Configcrates {
 		// Module-level when: filtering.
 		if mod.When != "" {
 			include, remaining := config.EvalModuleWhenServerSide(mod.When, traits)
@@ -240,14 +240,14 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 			mod.Resources = kept
 		}
 
-		filtered.Modules = append(filtered.Modules, mod)
+		filtered.Configcrates = append(filtered.Configcrates, mod)
 	}
 
 	return filtered
 }
 
-func shallowCopyModule(m *pb.PolicyModule) *pb.PolicyModule {
-	return proto.Clone(m).(*pb.PolicyModule)
+func shallowCopyModule(m *pb.PolicyConfigcrate) *pb.PolicyConfigcrate {
+	return proto.Clone(m).(*pb.PolicyConfigcrate)
 }
 
 func shallowCopyResource(r *pb.PolicyResource) *pb.PolicyResource {
@@ -308,11 +308,11 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 		rotatedSet[p] = true
 	}
 	// Copy the modules slice so writes don't corrupt the shared policy cache.
-	modules := make([]*pb.PolicyModule, len(bundle.Modules))
-	copy(modules, bundle.Modules)
-	bundle.Modules = modules
+	modules := make([]*pb.PolicyConfigcrate, len(bundle.Configcrates))
+	copy(modules, bundle.Configcrates)
+	bundle.Configcrates = modules
 
-	for mi, mod := range bundle.Modules {
+	for mi, mod := range bundle.Configcrates {
 		if mod.Stub {
 			continue
 		}
@@ -320,13 +320,13 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 			for _, sp := range res.WatchSecret {
 				if rotatedSet[sp] {
 					// Clone module + resource so the cache entry stays clean.
-					clonedMod := proto.Clone(mod).(*pb.PolicyModule)
+					clonedMod := proto.Clone(mod).(*pb.PolicyConfigcrate)
 					clonedRes := clonedMod.Resources[ri]
 					if clonedRes.Attributes == nil {
 						clonedRes.Attributes = make(map[string]string, 1)
 					}
 					clonedRes.Attributes["_secret_triggered"] = "true"
-					bundle.Modules[mi] = clonedMod
+					bundle.Configcrates[mi] = clonedMod
 					break
 				}
 			}
@@ -334,12 +334,12 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 	}
 }
 
-// hashPolicyModule computes a content hash from a PolicyModule proto.
-// Delegates to config.HashModuleContent after converting to ModuleConfig.
+// hashPolicyConfigcrate computes a content hash from a PolicyConfigcrate proto.
+// Delegates to config.HashModuleContent after converting to Configcrate.
 // Kept for backward compatibility with tests; production code uses
-// pre-computed ModuleConfig.ContentHash instead.
-func hashPolicyModule(mod *pb.PolicyModule) string {
-	cfg := config.ModuleConfig{
+// pre-computed Configcrate.ContentHash instead.
+func hashPolicyConfigcrate(mod *pb.PolicyConfigcrate) string {
+	cfg := config.Configcrate{
 		When:      mod.When,
 		DependsOn: mod.DependsOn,
 	}

@@ -5,8 +5,8 @@ package compliance
 
 import "sort"
 
-// ModuleBundle is one framework-scope-cut a module implements. Bundles
-// are the sibling concept to ModuleProvision — provisions name what a
+// ConfigcrateBundle is one framework-scope-cut a module implements. Bundles
+// are the sibling concept to ConfigcrateProvision — provisions name what a
 // module *does* (functional capability that may satisfy controls across
 // many frameworks); bundles name *which framework section* a module
 // satisfies (e.g. CIS-Ubuntu §5 access controls, Cyber Essentials Plus
@@ -23,11 +23,11 @@ import "sort"
 // able to tell at a glance which mental model the module is operating
 // under.
 //
-// Structurally a ModuleBundle is identical to a ModuleProvision for
+// Structurally a ConfigcrateBundle is identical to a ConfigcrateProvision for
 // v1. Bundles get their own type so they can grow bundle-specific
 // fields (baseline version pin, primary framework slug, last-reviewed
 // date) without touching provisions.
-type ModuleBundle struct {
+type ConfigcrateBundle struct {
 	// ID is the kebab-case tag operators write in YAML. Matches the
 	// map key. Bundle IDs carry the framework prefix so the operator
 	// can scan a module header and see which framework section it
@@ -52,13 +52,13 @@ type ModuleBundle struct {
 	Frameworks map[string][]string
 }
 
-// ModuleBundles is the source-of-truth catalog. Keys are the
+// ConfigcrateBundles is the source-of-truth catalog. Keys are the
 // kebab-case bundle IDs that operators reference under `bundle:`.
 // Authored by collapsing each framework-bundle module under
 // example-configs/worksite/stockpile/modules/compliance/ into a single
 // catalog entry whose Frameworks map captures the module's historical
 // claim verbatim.
-var ModuleBundles = map[string]ModuleBundle{
+var ConfigcrateBundles = map[string]ConfigcrateBundle{
 	"aba-audit-logging": {
 		ID:          "aba-audit-logging",
 		Title:       "ABA — Audit Logging",
@@ -1109,7 +1109,7 @@ var ModuleBundles = map[string]ModuleBundle{
 // bundles at module load; the loader treats nil as zero contribution,
 // parallel to ResolveProvision).
 func ResolveBundle(id string) map[string][]string {
-	b, ok := ModuleBundles[id]
+	b, ok := ConfigcrateBundles[id]
 	if !ok {
 		return nil
 	}
@@ -1119,8 +1119,8 @@ func ResolveBundle(id string) map[string][]string {
 // KnownBundleIDs returns every catalog ID in alphabetical order.
 // Used by modlint's did-you-mean and by `vigocli compliance bundles`.
 func KnownBundleIDs() []string {
-	ids := make([]string, 0, len(ModuleBundles))
-	for id := range ModuleBundles {
+	ids := make([]string, 0, len(ConfigcrateBundles))
+	for id := range ConfigcrateBundles {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)

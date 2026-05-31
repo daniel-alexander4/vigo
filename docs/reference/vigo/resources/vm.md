@@ -9,7 +9,7 @@ Manages libvirt KVM virtual machines idempotently. Defines the domain, builds a 
 
 | Parameter | Description |
 |-----------|-------------|
-| `vm_name` | libvirt domain name. Also the idempotency key — two modules can't manage the same domain. |
+| `vm_name` | libvirt domain name. Also the idempotency key — two configcrates can't manage the same domain. |
 | `memory_mib` | RAM in MiB. Positive integer. |
 | `vcpu` | vCPU count. Positive integer. |
 | `disk_path` *or* `artifact` | Base disk source. `disk_path:` is a local file (qcow2/raw) or `pool:volume`. `artifact:` references a [curator](../../../howto/set-up-curator.md) artifact of `kind: generic` (a published qcow2/raw disk image). Mutually exclusive. |
@@ -24,7 +24,7 @@ Manages libvirt KVM virtual machines idempotently. Defines the domain, builds a 
 
 | Parameter | Description |
 |-----------|-------------|
-| `disk_size_gib` | Cap the qcow2 overlay at this size (uses `qemu-img create … <N>G`). cloud-init's `growpart` module expands the partition + filesystem to fill it at first boot. Omit to let the overlay grow to the base image's max. |
+| `disk_size_gib` | Cap the qcow2 overlay at this size (uses `qemu-img create … <N>G`). cloud-init's `growpart` configcrate expands the partition + filesystem to fill it at first boot. Omit to let the overlay grow to the base image's max. |
 | `network_bridge` | Host bridge for the single virtio NIC (e.g. `br0`, `virbr0`). Omit for a no-NIC VM. |
 
 ### Cloud-init
@@ -112,7 +112,7 @@ resources:
 
 ### Curator-sourced fleet with cloud-init
 
-One module pinned to a curator-published base. Each VM gets an overlay + cloud-init seed; the base is fetched once and shared.
+One configcrate pinned to a curator-published base. Each VM gets an overlay + cloud-init seed; the base is fetched once and shared.
 
 ```yaml
 name: vm-web-fleet
@@ -168,7 +168,7 @@ State changes don't lose data — the overlay is preserved. Switching back to `s
 
 ## Host requirements
 
-- A working libvirt installation (the agent looks for `/var/run/libvirt/libvirt-sock` or `/run/libvirt/libvirt-sock`). The `hypervisor` trait collector flips `host_is_libvirt: true` when one is present — gate VM modules with `when: "host_is_libvirt"`.
+- A working libvirt installation (the agent looks for `/var/run/libvirt/libvirt-sock` or `/run/libvirt/libvirt-sock`). The `hypervisor` trait collector flips `host_is_libvirt: true` when one is present — gate VM configcrates with `when: "host_is_libvirt"`.
 - `qemu-img` on PATH (for overlay build + `qemu-img info`).
 - `mkisofs` or `genisoimage` on PATH if `cloud_init_user_data` is used.
 - The agent process must have permission to read the libvirt socket — typically root, or a user in the `libvirt` / `kvm` groups.

@@ -14,7 +14,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 	historyDir := t.TempDir()
 
 	// Create some content in live.
-	modDir := filepath.Join(liveDir, "modules")
+	modDir := filepath.Join(liveDir, "configcrates")
 	os.MkdirAll(modDir, 0755)
 	os.WriteFile(filepath.Join(modDir, "nginx.vgo"), []byte("name: nginx\nresources: []\n"), 0644)
 
@@ -48,7 +48,7 @@ func TestSnapshotAndRollback(t *testing.T) {
 	}
 
 	// Verify content is restored.
-	data, err := os.ReadFile(filepath.Join(liveDir, "modules", "nginx.vgo"))
+	data, err := os.ReadFile(filepath.Join(liveDir, "configcrates", "nginx.vgo"))
 	if err != nil {
 		t.Fatalf("reading restored file: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestSnapshotPruning(t *testing.T) {
 	liveDir := t.TempDir()
 	historyDir := t.TempDir()
 
-	modDir := filepath.Join(liveDir, "modules")
+	modDir := filepath.Join(liveDir, "configcrates")
 	os.MkdirAll(modDir, 0755)
 	os.WriteFile(filepath.Join(modDir, "test.vgo"), []byte("test"), 0644)
 

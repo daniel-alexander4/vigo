@@ -1,7 +1,7 @@
 
 # Back up and recover
 
-You'll finish this page with three independent recovery paths in place: **Litestream** continuously replicating the SQLite WAL off-host (near-zero RPO), the **`backups` module** producing daily hardlink-deduped snapshots of `/srv/vigo`, and the `vigocli backup create / restore` CLI for point-in-time tarballs you can ship anywhere. The three are complementary — Litestream catches the live database, the module covers the filesystem state Litestream doesn't, the CLI covers ad-hoc snapshots before risky changes.
+You'll finish this page with three independent recovery paths in place: **Litestream** continuously replicating the SQLite WAL off-host (near-zero RPO), the **`backups` configcrate** producing daily hardlink-deduped snapshots of `/srv/vigo`, and the `vigocli backup create / restore` CLI for point-in-time tarballs you can ship anywhere. The three are complementary — Litestream catches the live database, the configcrate covers the filesystem state Litestream doesn't, the CLI covers ad-hoc snapshots before risky changes.
 
 **When you'd use this:** any production deployment. Even a single-server fleet should have at least one of these on; a real production deployment should have all three.
 
@@ -182,7 +182,7 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 ├── db/
 │   └── vigo.db
 ├── stockpile/
-│   ├── modules/
+│   ├── configcrates/
 │   ├── roles/
 │   ├── envoys/
 │   └── vars/
@@ -197,30 +197,30 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 
 Snapshots live on disk under `paths.snapshots` (default `/srv/vigo/snapshots`). Listing, download, and restore are all CLI operations via `vigocli backup`. Restore requires stopping the server first.
 
-### Module-Based Snapshots
+### Configcrate-Based Snapshots
 
-The recommended approach is the `vigo-server-backup` module, which creates incremental hardlink-based snapshots. Assign it to the node running the Vigo server:
+The recommended approach is the `vigo-server-backup` configcrate, which creates incremental hardlink-based snapshots. Assign it to the node running the Vigo server:
 
 ```yaml
 - match: "vigoserver.example.com"
-  modules: [vigo-server-backup]
+  configcrates: [vigo-server-backup]
   vars:
     backup_retain: "90"
 ```
 
-The module uses the agent's `backup` executor to create dated snapshot directories with hardlink dedup. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Snapshots run nightly (configurable) and appear automatically in the web UI.
+The configcrate uses the agent's `backup` executor to create dated snapshot directories with hardlink dedup. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Snapshots run nightly (configurable) and appear automatically in the web UI.
 
-See `example-configs/stockpile/modules/system/vigo-server-backup.vgo.example` for the full module and all configurable vars.
+See `example-configs/stockpile/configcrates/system/vigo-server-backup.vgo.example` for the full configcrate and all configurable vars.
 
 For one-off backups before risky changes, `vigocli backup create` is still available. See [Disaster Recovery](disaster-recovery.md) for full server failure recovery procedures.
 
 ## Built-in Filesystem Backup
 
-Vigo ships a `backups` module that uses the native `backup` executor to create daily hardlink-based incremental snapshots of `/srv/vigo`. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Only changed or new files are copied.
+Vigo ships a `backups` configcrate that uses the native `backup` executor to create daily hardlink-based incremental snapshots of `/srv/vigo`. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Only changed or new files are copied.
 
 ### How it works
 
-When the server host is enrolled as an envoy and the `backups` module is assigned to its hostname in your envoy mappings, the agent on the server host will:
+When the server host is enrolled as an envoy and the `backups` configcrate is assigned to its hostname in your envoy mappings, the agent on the server host will:
 
 1. Create dated snapshot directories under `target_path` (format: `YYYY.JJJ.HH.MM`)
 2. Hardlink unchanged files from the previous snapshot (zero-copy dedup)
@@ -231,15 +231,15 @@ The schedule check is built into the executor — if a snapshot already exists f
 
 ### Setup
 
-Add the `backups` module to your server's envoy mapping:
+Add the `backups` configcrate to your server's envoy mapping:
 
 ```yaml
 envoys:
   - match: "my-vigo-server"
-    modules: [backups]
+    configcrates: [backups]
 ```
 
-The `backups` module backs up `/srv/vigo` to `/var/backups/vigo` daily with 14-day retention. Databases are backed up separately using the `db_backup` executor, which dumps via `sqlite3 .dump` so the output is a deterministic SQL file that hardlinks effectively:
+The `backups` configcrate backs up `/srv/vigo` to `/var/backups/vigo` daily with 14-day retention. Databases are backed up separately using the `db_backup` executor, which dumps via `sqlite3 .dump` so the output is a deterministic SQL file that hardlinks effectively:
 
 ```yaml
 name: backups
@@ -288,11 +288,11 @@ Hardlink snapshots are space-efficient but share inodes — deleting a file from
 
 ## Additional Backup Recommendations
 
-Litestream covers the SQLite database with near-real-time replication. The built-in `backups` module covers the full filesystem. For maximum protection:
+Litestream covers the SQLite database with near-real-time replication. The built-in `backups` configcrate covers the full filesystem. For maximum protection:
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
-| `stockpile/` | Modules, roles, envoy mappings, vars | High — your entire policy |
+| `stockpile/` | Configcrates, roles, envoy mappings, vars | High — your entire policy |
 | `secrets/` | AES-256-GCM encrypted files + `.master.key` | Critical — unrecoverable without master key |
 | `tls/` | CA cert/key, server cert/key | High — agents authenticate against these |
 | `server.yaml` | Server configuration | Medium — can be recreated |
@@ -300,7 +300,7 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 1. **Keep `stockpile/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
-2. **Use the `backups` module** for daily hardlink snapshots to `/var/backups/vigo/`. Use `db_backup` resources for databases — raw DB files change every transaction, defeating hardlink dedup. The `db_backup` executor dumps to compressed SQL that hardlinks effectively.
+2. **Use the `backups` configcrate** for daily hardlink snapshots to `/var/backups/vigo/`. Use `db_backup` resources for databases — raw DB files change every transaction, defeating hardlink dedup. The `db_backup` executor dumps to compressed SQL that hardlinks effectively.
 
 3. **Configure Litestream for near-zero database RPO.** The daily rsync provides a recovery point but Litestream replicates WAL changes within seconds.
 

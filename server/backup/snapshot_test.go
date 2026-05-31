@@ -138,7 +138,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stockpileDir := filepath.Join(serverRoot, "worksite", "stockpile", "modules")
+	stockpileDir := filepath.Join(serverRoot, "worksite", "stockpile", "configcrates")
 	os.MkdirAll(stockpileDir, 0700)
 	os.WriteFile(filepath.Join(stockpileDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
@@ -173,7 +173,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 
 	expectedFiles := map[string]bool{
 		"db/vigo.db":                  false,
-		"worksite/stockpile/modules/nginx.vgo": false,
+		"worksite/stockpile/configcrates/nginx.vgo": false,
 		"secrets/db_pass":               false,
 		"tls/cert":                      false,
 		"server.yaml":                   false,
@@ -242,7 +242,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stockpileDir := filepath.Join(serverRoot, "worksite", "stockpile", "modules")
+	stockpileDir := filepath.Join(serverRoot, "worksite", "stockpile", "configcrates")
 	os.MkdirAll(stockpileDir, 0700)
 	os.WriteFile(filepath.Join(stockpileDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
@@ -298,7 +298,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	}
 
 	// Verify config was restored.
-	data, err := os.ReadFile(filepath.Join(restoreDir, "worksite", "stockpile", "modules", "nginx.vgo"))
+	data, err := os.ReadFile(filepath.Join(restoreDir, "worksite", "stockpile", "configcrates", "nginx.vgo"))
 	if err != nil {
 		t.Fatal(err)
 	}

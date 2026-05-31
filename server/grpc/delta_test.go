@@ -45,9 +45,9 @@ func TestHandleRunDelta(t *testing.T) {
 				FailedCount:   0,
 				SkippedCount:  3,
 				BundleVersion: 7,
-				Results: []*pb.ModuleResult{
+				Results: []*pb.ConfigcrateResult{
 					{
-						ModuleName:   "nginx",
+						ConfigcrateName:   "nginx",
 						ResourceType: "file",
 						ResourceName: "/etc/nginx.conf",
 						ActionTaken:  "updated",
@@ -55,7 +55,7 @@ func TestHandleRunDelta(t *testing.T) {
 						DurationMs:   42,
 					},
 					{
-						ModuleName:   "nginx",
+						ConfigcrateName:   "nginx",
 						ResourceType: "service",
 						ResourceName: "nginx",
 						ActionTaken:  "restarted",
@@ -167,9 +167,9 @@ func TestDeltaRunFailure(t *testing.T) {
 				ChangedCount: 1,
 				FailedCount:  1,
 				SkippedCount: 1,
-				Results: []*pb.ModuleResult{
+				Results: []*pb.ConfigcrateResult{
 					{
-						ModuleName:   "apt",
+						ConfigcrateName:   "apt",
 						ResourceType: "package",
 						ResourceName: "broken-pkg",
 						ActionTaken:  "install",

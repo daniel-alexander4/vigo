@@ -7,7 +7,7 @@
     <h1>Run {{truncUUID .Run.ID}}</h1>
     <p>
         Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Run.Hostname}}</a>
-        &middot; {{if gt .Run.ModuleCount 0}}<span class="badge {{convergenceBadgeClass .Run.Outcome .Run.EnvoyDriftLabel}}" title="{{convergenceHover .Run.ChangedCount .Run.FailedCount .Run.ModuleCount}}">{{convergenceRatio .Run.ChangedCount .Run.FailedCount .Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
+        &middot; {{if gt .Run.ConfigcrateCount 0}}<span class="badge {{convergenceBadgeClass .Run.Outcome .Run.EnvoyDriftLabel}}" title="{{convergenceHover .Run.ChangedCount .Run.FailedCount .Run.ConfigcrateCount}}">{{convergenceRatio .Run.ChangedCount .Run.FailedCount .Run.ConfigcrateCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
         &middot; {{formatTime .Run.StartedAt}}
         &middot; {{if eq .Run.Trigger "force-push"}}<span class="badge">force-push</span>{{else}}<span class="text-muted">scheduled</span>{{end}}
     </p>
@@ -15,7 +15,7 @@
 
 <div class="stat-cards mb-2">
     <div class="stat-card stat-card--brand">
-        <div class="stat-card__value">{{.Run.ModuleCount}}</div>
+        <div class="stat-card__value">{{.Run.ConfigcrateCount}}</div>
         <div class="stat-card__label">Modules</div>
     </div>
     <div class="stat-card stat-card--success">
@@ -45,7 +45,7 @@
         <tbody>
             {{range .Results}}
             <tr>
-                <td>{{.ModuleName}}</td>
+                <td>{{.ConfigcrateName}}</td>
                 <td class="mono">{{.ResourceType}}</td>
                 <td class="mono">{{.ResourceName}}</td>
                 <td>
@@ -84,7 +84,7 @@
     <tbody>
         {{range .Results}}
         <tr>
-            <td>{{.ModuleName}}</td>
+            <td>{{.ConfigcrateName}}</td>
             <td class="mono">{{.ResourceType}}</td>
             <td class="mono">{{.ResourceName}}</td>
             <td>

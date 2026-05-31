@@ -28,7 +28,7 @@ func sortFrameworkClaims(m map[string][]string) {
 func TestCompliance_EnvoysTreeRoot_WaiversMerge(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -38,7 +38,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base]
+    configcrates: [base]
 `)
 	writeFile(t, filepath.Join(dir, "waivers.vgo"), `
 waivers:
@@ -67,7 +67,7 @@ waivers:
 func TestCompliance_EnvoysTreeSubdir_WaiversInherit(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -77,7 +77,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base]
+    configcrates: [base]
 `)
 	writeFile(t, filepath.Join(dir, "default", "waivers.vgo"), `
 waivers:
@@ -105,7 +105,7 @@ waivers:
 func TestCompliance_EnvoysTree_ComplianceKeyIgnored(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -115,7 +115,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base]
+    configcrates: [base]
 `)
 	writeFile(t, filepath.Join(dir, "waivers.vgo"), `
 compliance:
@@ -137,7 +137,7 @@ waivers:
 }
 
 // ============================================================================
-// Modules-tree — new capability
+// Configcrates-tree — new capability
 // ============================================================================
 
 // Case 4: modules/compliance.vgo with fleet-wide claims — every module
@@ -145,18 +145,18 @@ waivers:
 func TestCompliance_ModulesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
@@ -166,7 +166,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base, users/dan]
+    configcrates: [base, users/dan]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -175,7 +175,7 @@ envoys:
 	}
 
 	cfg := store.Get("any.host")
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		claims, ok := mod.Compliance["cis"]
 		if !ok || !reflect.DeepEqual(claims, []string{"1.1.1"}) {
 			t.Errorf("module %s: cis claims = %v, want [1.1.1]", mod.Name, claims)
@@ -189,18 +189,18 @@ envoys:
 func TestCompliance_ModulesTreeSubdir_ClaimsScopedToSubtree(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "compliance.vgo"), `
 compliance:
   cis-ubuntu: ["5.4.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
@@ -210,7 +210,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base, users/dan]
+    configcrates: [base, users/dan]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -220,7 +220,7 @@ envoys:
 
 	cfg := store.Get("any.host")
 	var baseFound, danFound bool
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		switch mod.Name {
 		case "base":
 			baseFound = true
@@ -247,21 +247,21 @@ envoys:
 func TestCompliance_ModulesTree_UnionWithModuleOwnBlock(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "compliance.vgo"), `
 compliance:
   cis: ["1.1.2"]
   nist: ["AC-3"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "dan", "compliance.vgo"), `
 compliance:
   cis: ["1.1.3"]
   soc2: ["CC6.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "dan", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
@@ -271,7 +271,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [users/dan]
+    configcrates: [users/dan]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -280,10 +280,10 @@ envoys:
 	}
 
 	cfg := store.Get("any.host")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Configcrates))
 	}
-	got := cfg.Modules[0].Compliance
+	got := cfg.Configcrates[0].Compliance
 	sortFrameworkClaims(got)
 
 	want := map[string][]string{
@@ -307,7 +307,7 @@ envoys:
 func TestCompliance_ModulesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 waivers:
@@ -316,7 +316,7 @@ waivers:
       reason: "should not take effect"
       approved_by: "dan"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -326,7 +326,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base]
+    configcrates: [base]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -346,7 +346,7 @@ envoys:
 func TestCompliance_UnknownTopLevelKey_Rejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -356,7 +356,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base]
+    configcrates: [base]
 `)
 	writeFile(t, filepath.Join(dir, "waivers.vgo"), `
 vars:
@@ -385,15 +385,15 @@ vars:
 func TestCompliance_MultiFramework_UnionAcrossLevels(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `
 compliance:
   cis: ["5.4.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "compliance.vgo"), `
 compliance:
   nist-800-53: ["AC-3", "AC-6"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
@@ -403,7 +403,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [users/dan]
+    configcrates: [users/dan]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -411,7 +411,7 @@ envoys:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 
-	got := store.Get("any.host").Modules[0].Compliance
+	got := store.Get("any.host").Configcrates[0].Compliance
 	sortFrameworkClaims(got)
 
 	wantCis := []string{"5.4.1"}
@@ -432,7 +432,7 @@ envoys:
 func TestCompliance_WaiverExpiry_StillWorks(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -442,7 +442,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: [base]
+    configcrates: [base]
 `)
 	writeFile(t, filepath.Join(dir, "waivers.vgo"), `
 waivers:
@@ -513,7 +513,7 @@ envoys:
 
 	cfg := store.Get("any.host")
 	var danFound, aliceFound bool
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		switch mod.Name {
 		case "dan":
 			danFound = true
@@ -531,7 +531,7 @@ envoys:
 		}
 	}
 	if !danFound || !aliceFound {
-		t.Errorf("expected both dan (defaulted name) and alice in resolved config; got modules = %v", moduleNames(cfg.Modules))
+		t.Errorf("expected both dan (defaulted name) and alice in resolved config; got modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -581,7 +581,7 @@ envoys:
 	// a01 sees customerA's alice with the PCI claim AND globaladmin (no claim).
 	cfgA := store.Get("a01")
 	var aliceFound, rootAdminInA bool
-	for _, mod := range cfgA.Modules {
+	for _, mod := range cfgA.Configcrates {
 		switch mod.Name {
 		case "alice":
 			aliceFound = true
@@ -596,14 +596,14 @@ envoys:
 		}
 	}
 	if !aliceFound || !rootAdminInA {
-		t.Errorf("a01 should have both alice and globaladmin; got %v", moduleNames(cfgA.Modules))
+		t.Errorf("a01 should have both alice and globaladmin; got %v", moduleNames(cfgA.Configcrates))
 	}
 
 	// root01 sees only globaladmin (no claim), NOT alice.
 	cfgR := store.Get("root01")
-	for _, mod := range cfgR.Modules {
+	for _, mod := range cfgR.Configcrates {
 		if mod.Name == "alice" {
-			t.Errorf("root01 must not see customerA's alice; got modules = %v", moduleNames(cfgR.Modules))
+			t.Errorf("root01 must not see customerA's alice; got modules = %v", moduleNames(cfgR.Configcrates))
 		}
 		if mod.Name == "globaladmin" {
 			if _, ok := mod.Compliance["pci-dss"]; ok {
@@ -671,9 +671,9 @@ envoys:
 
 	// No usercrates registered — compliance.vgo must not count.
 	cfg := store.Get("any.host")
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		if mod.Name == "compliance" {
-			t.Errorf("compliance.vgo was parsed as a usercrate named 'compliance'; modules = %v", moduleNames(cfg.Modules))
+			t.Errorf("compliance.vgo was parsed as a usercrate named 'compliance'; modules = %v", moduleNames(cfg.Configcrates))
 		}
 	}
 }
@@ -710,12 +710,12 @@ envoys:
 
 	trace := store.Trace("any.host")
 	count := 0
-	for _, mcf := range trace.ModuleComplianceFiles {
+	for _, mcf := range trace.ConfigcrateComplianceFiles {
 		if mcf.SourceFile == "usercrates/compliance.vgo" {
 			count++
 		}
 	}
 	if count != 1 {
-		t.Errorf("usercrates/compliance.vgo appears %d times in trace.ModuleComplianceFiles, want exactly 1", count)
+		t.Errorf("usercrates/compliance.vgo appears %d times in trace.ConfigcrateComplianceFiles, want exactly 1", count)
 	}
 }

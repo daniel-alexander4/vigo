@@ -89,7 +89,7 @@ func referencedSecretsForConfig(cfg *config.EnvoyConfig) map[string]bool {
 			collectSecretRefsFromString(str, out)
 		}
 	}
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		for _, res := range mod.Resources {
 			for _, av := range res.Attributes {
 				if str, ok := av.(string); ok {

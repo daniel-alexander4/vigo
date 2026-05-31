@@ -17,10 +17,10 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 
 | Salt Concept | Vigo Equivalent | Notes |
 |---|---|---|
-| State file (`.sls`) | Module (`.vgo` file) | Both YAML, different rendering rules |
-| `top.sls` | `envoys.vgo` | Glob matching → role/module assignment |
-| Formula | Module | Reusable state set — same concept |
-| Pillar | `vars` / `common.vgo` / `environments.vgo` | Server-side data for nodes, layered via module → inheritance → match → env |
+| State file (`.sls`) | Configcrate (`.vgo` file) | Both YAML, different rendering rules |
+| `top.sls` | `envoys.vgo` | Glob matching → role/configcrate assignment |
+| Formula | Configcrate | Reusable state set — same concept |
+| Pillar | `vars` / `common.vgo` / `environments.vgo` | Server-side data for nodes, layered via configcrate → inheritance → match → env |
 | Grains | Traits | System facts discovered by the agent |
 | Mine | No equivalent | No agent-to-agent data sharing |
 | Requisite (`require`) | `depends_on` | DAG ordering |
@@ -128,7 +128,7 @@ http {
 
 ### Vigo Version
 
-`stockpile/modules/nginx.vgo`:
+`stockpile/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -185,7 +185,7 @@ resources:
 
 ```yaml
 name: webserver
-modules:
+configcrates:
   - nginx
 ```
 
@@ -208,7 +208,7 @@ envoys:
 - **No Jinja2 in YAML structure.** Salt's biggest power and biggest footgun is Jinja2 rendering the YAML itself. Vigo keeps YAML structure static — templates only work inside `content:` values.
 - **No `salt://` file server.** Salt serves templates and files via `salt://` URIs. Vigo uses `content:` for inline templates or `source: templates/app.conf.tmpl` for external template files — no file server needed.
 - **Requisites map directly.** Salt's `require`/`watch`/`listen`/`require_in` map cleanly to Vigo's `depends_on`/`subscribes`/`notify`/`before`. The semantics are nearly identical.
-- **No pillar.get() lookups.** Variables are accessed directly via `{{ .Vars.name }}` in templates or defined as module defaults — no lookup function needed.
+- **No pillar.get() lookups.** Variables are accessed directly via `{{ .Vars.name }}` in templates or defined as configcrate defaults — no lookup function needed.
 
 ## Variable and Data Hierarchy
 
@@ -216,7 +216,7 @@ Salt's pillar data is hierarchical and can be merged across multiple sources. Vi
 
 | Salt Level | Vigo Equivalent |
 |---|---|
-| Pillar (formula defaults) | Module `vars:` |
+| Pillar (formula defaults) | Configcrate `vars:` |
 | Pillar (shared across nodes) | `common.vgo` at ancestor directories (inherited down the tree) |
 | Pillar (per-environment) | `environments.vgo` keyed by match-block `environment:` |
 | Pillar (per-minion) | Match-block `vars:` in `envoys.vgo` |
@@ -313,7 +313,7 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 2. **No execution modules.** Salt's `salt['cmd.run']()` or `salt['file.read']()` in Jinja2 has no equivalent. Vigo does not execute arbitrary code during config compilation. Use traits for system facts, directory-level `common.vgo` for shared data, or pre-populate vars.
 
 
-3. **No pillar merging.** Salt can merge pillar data from multiple sources and environments. Vigo uses a simple three-level override: module defaults → role vars → node vars. Last writer wins at each level.
+3. **No pillar merging.** Salt can merge pillar data from multiple sources and environments. Vigo uses a simple three-level override: configcrate defaults → role vars → node vars. Last writer wins at each level.
 
 4. **No `salt://` file URIs.** Salt serves files from the file_roots via `salt://`. Vigo inlines templates in `content:` or uses `sourcepath:` for agent-local files. There is no file server.
 
@@ -327,14 +327,14 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 
 ## Related
 
-- [Config Format](../reference/writing-modules.md) — Modules, roles, envoys.vgo, vars
-- [Resource DAG](../reference/writing-modules.md) — depends_on, notify, subscribes
-- [Templates](../reference/writing-modules.md) — Go template syntax and restrictions
-- [When Expressions](../reference/writing-modules.md) — Conditional expressions and builtins
+- [Config Format](../reference/writing-configcrates.md) — Configcrates, roles, envoys.vgo, vars
+- [Resource DAG](../reference/writing-configcrates.md) — depends_on, notify, subscribes
+- [Templates](../reference/writing-configcrates.md) — Go template syntax and restrictions
+- [When Expressions](../reference/writing-configcrates.md) — Conditional expressions and builtins
 - [Secrets](../reference/server-yaml.md) — Secret providers and the secret: prefix
 - [Executors](../reference/vigo/resources/_index.md) — All resource executors
-- [Nginx Module Example](../examples/nginx-module.md) — Full nginx walkthrough
-- [First Module](../howto/write-your-first-module.md) — Writing your first module
+- [Nginx Configcrate Example](../examples/nginx-module.md) — Full nginx walkthrough
+- [First Configcrate](../howto/write-your-first-module.md) — Writing your first configcrate
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

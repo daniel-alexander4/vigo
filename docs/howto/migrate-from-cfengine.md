@@ -1,7 +1,7 @@
 
 # Migrating from CFEngine
 
-CFEngine and Vigo both model desired state as declarative units that agents evaluate and converge locally. Vigo's resource model maps onto CFEngine promises, modules onto bundles, and `when:` expressions onto the class system. The shift is mostly notational (CFEngine policy language → YAML) plus a different identity model on the server side (hostcrates + roles + environments).
+CFEngine and Vigo both model desired state as declarative units that agents evaluate and converge locally. Vigo's resource model maps onto CFEngine promises, configcrates onto bundles, and `when:` expressions onto the class system. The shift is mostly notational (CFEngine policy language → YAML) plus a different identity model on the server side (hostcrates + roles + environments).
 
 ## Architecture Differences
 
@@ -18,9 +18,9 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | CFEngine Concept | Vigo Equivalent | Notes |
 |---|---|---|
 | Promise | Resource | Declarative desired-state unit |
-| Bundle | Module (`.vgo` file) | Named collection of resources |
+| Bundle | Configcrate (`.vgo` file) | Named collection of resources |
 | Body | Defaults / attributes | Resource-level attribute values |
-| Namespace | Module name prefix | Flat namespace — prefix to avoid collisions |
+| Namespace | Configcrate name prefix | Flat namespace — prefix to avoid collisions |
 | `promises.cf` / `update.cf` | `envoys.vgo` | Policy hub configuration → node classification |
 | Hard class (e.g., `debian`) | Trait-based `when:` | `when: "os_family('debian')"` |
 | Soft class (defined) | `when:` with `has_trait()` | Boolean conditions on system state |
@@ -120,7 +120,7 @@ http {
 ### Vigo Version
 
 
-`stockpile/modules/nginx.vgo`:
+`stockpile/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -176,7 +176,7 @@ resources:
 
 ```yaml
 name: webserver
-modules:
+configcrates:
   - nginx
 ```
 
@@ -208,7 +208,7 @@ CFEngine variables live in bundle scope and can be set via augments (`def.json`)
 
 | CFEngine Level | Vigo Equivalent |
 |---|---|
-| Bundle `vars:` | Module `vars:` (defaults) |
+| Bundle `vars:` | Configcrate `vars:` (defaults) |
 | Augments (`def.json`) | `common.vgo` vars at ancestor directories (inherited) |
 | Hard classes | Traits (available in `when:` and templates) |
 | `host_specific_data/` | Match-block `vars:` in `envoys.vgo` |
@@ -319,7 +319,7 @@ The secrets provider resolves references at bundle compile time. No key manageme
 
 4. **Templates only in `content:`.** CFEngine allows Mustache in any file promise. Vigo restricts Go templates to `content:`. Use `when:` for conditional logic in resource attributes.
 
-5. **Flat variable namespace.** CFEngine scopes variables to bundles. Vigo vars are flat strings — prefix with the module name to avoid collisions.
+5. **Flat variable namespace.** CFEngine scopes variables to bundles. Vigo vars are flat strings — prefix with the configcrate name to avoid collisions.
 
 6. **No `meta:` or `reports:`.** CFEngine's metadata and reporting promise types don't exist. Use the audit log, webhooks, or the REST API for observability.
 
@@ -329,15 +329,15 @@ The secrets provider resolves references at bundle compile time. No key manageme
 
 ## Related
 
-- [Config Format](../reference/writing-modules.md) — Modules, roles, envoys.vgo, vars
-- [Resource DAG](../reference/writing-modules.md) — depends_on, notify, subscribes
-- [Templates](../reference/writing-modules.md) — Go template syntax and restrictions
-- [When Expressions](../reference/writing-modules.md) — Conditional expressions and builtins
+- [Config Format](../reference/writing-configcrates.md) — Configcrates, roles, envoys.vgo, vars
+- [Resource DAG](../reference/writing-configcrates.md) — depends_on, notify, subscribes
+- [Templates](../reference/writing-configcrates.md) — Go template syntax and restrictions
+- [When Expressions](../reference/writing-configcrates.md) — Conditional expressions and builtins
 - [Secrets](../reference/server-yaml.md) — Secret providers and the secret: prefix
-- [Custom Executors](../reference/writing-modules.md) — JSON protocol for extensions
+- [Custom Executors](../reference/writing-configcrates.md) — JSON protocol for extensions
 - [Executors](../reference/vigo/resources/_index.md) — All resource executors
-- [Nginx Module Example](../examples/nginx-module.md) — Full nginx walkthrough
-- [First Module](../howto/write-your-first-module.md) — Writing your first module
+- [Nginx Configcrate Example](../examples/nginx-module.md) — Full nginx walkthrough
+- [First Configcrate](../howto/write-your-first-module.md) — Writing your first configcrate
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

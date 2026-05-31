@@ -20,14 +20,14 @@ envoys:
       type: cisco_ios
       ssh_user: "secret:vigo/net/ssh-user"
       ssh_password: "secret:vigo/net/ssh-pass"
-    modules: [switch-baseline]
+    configcrates: [switch-baseline]
 ```
 
 The gateway envoy itself needs the matching `network_device` capability enabled in `server.yaml` (or via the gateway envoy's role).
 
 ## Use it
 
-Once the hostcrate lands and the gateway envoy has converged, the network devices appear in `vigocli envoys list` like any other envoy. Modules targeting them run their resources via the gateway: e.g., a `cisco_vlan` resource declares "VLAN 100 should exist on this switch"; the gateway SSHs in, checks current state, applies the diff, reports back.
+Once the hostcrate lands and the gateway envoy has converged, the network devices appear in `vigocli envoys list` like any other envoy. Configcrates targeting them run their resources via the gateway: e.g., a `cisco_vlan` resource declares "VLAN 100 should exist on this switch"; the gateway SSHs in, checks current state, applies the diff, reports back.
 
 ## Architecture
 
@@ -68,7 +68,7 @@ envoys:
     credential: "secret:network/core-sw01/ssh"
     username: admin
     ip_address: "10.0.1.1"
-    modules: [switch-base, switch-vlans]
+    configcrates: [switch-base, switch-vlans]
 
   # Juniper edge router
   - match: "edge-rtr01.example.com"
@@ -77,7 +77,7 @@ envoys:
     credential: "secret:network/edge-rtr01/ssh"
     username: admin
     ip_address: "10.0.1.2"
-    modules: [router-base, bgp-peering]
+    configcrates: [router-base, bgp-peering]
 ```
 
 ### Device Entry Fields
@@ -92,7 +92,7 @@ envoys:
 | `username` | No | `admin` | SSH username |
 | `port` | No | `22` | SSH port |
 | `ip_address` | No | -- | Management IP (if different from DNS hostname) |
-| `modules` | No | -- | List of modules to apply |
+| `configcrates` | No | -- | List of configcrates to apply |
 | `roles` | No | -- | List of roles to apply |
 
 ### Validation Rules
@@ -168,10 +168,10 @@ The gateway collects traits from each device over SSH and reports them under the
 
 Traits are available in templates (`{{ .Traits.device.model }}`) and `when:` expressions (`when: "trait('device.firmware', '>= 16.12')"`).
 
-## Example Module
+## Example Configcrate
 
 ```yaml
-# stockpile/modules/switch-base.vgo
+# stockpile/configcrates/switch-base.vgo
 name: switch-base
 resources:
   - name: login-banner
@@ -205,7 +205,7 @@ Network devices participate fully in Vigo's compliance system:
 
 ## What's next
 
-- **Write modules against the device executors** → see `cisco_vlan`, `network_ntp`, `network_syslog`, `network_user` in the resource reference. Cross-platform executors abstract the device-type differences where possible.
+- **Write configcrates against the device executors** → see `cisco_vlan`, `network_ntp`, `network_syslog`, `network_user` in the resource reference. Cross-platform executors abstract the device-type differences where possible.
 - **A device's SSH host key changed** → the TOFU cache hard-errors; investigate before clearing. If the change is legitimate, remove the cached key on the gateway and re-converge.
 - **The gateway can't reach a device** → [Troubleshoot common issues](troubleshoot.md) covers the gateway-proxy connectivity matrix.
 

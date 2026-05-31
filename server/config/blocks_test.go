@@ -254,7 +254,7 @@ func TestFlattenBlockWhenExpression(t *testing.T) {
 }
 
 // TestConditionalBlockYAMLUnmarshalIntegration verifies that a full module
-// YAML with conditional_block parses correctly via ModuleDefinition's custom
+// YAML with conditional_block parses correctly via ConfigcrateDefinition's custom
 // UnmarshalYAML (Test 10).
 func TestConditionalBlockYAMLUnmarshalIntegration(t *testing.T) {
 	moduleYAML := `
@@ -281,7 +281,7 @@ resources:
     service: nginx
     state: running
 `
-	var def ModuleDefinition
+	var def ConfigcrateDefinition
 	if err := yaml.Unmarshal([]byte(moduleYAML), &def); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}

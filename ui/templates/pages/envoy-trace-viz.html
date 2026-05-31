@@ -18,7 +18,7 @@
     <p style="font-size:0.85em;color:var(--subtext0);margin-bottom:12px;">
         Pattern: <code>{{.Trace.MatchPattern}}</code> ({{.Trace.PatternType}})
         {{if .Trace.Environment}}&middot; Environment: <strong>{{.Trace.Environment}}</strong>{{end}}
-        &middot; {{.Trace.ResourceCount}} resources from {{len .Trace.Modules}} modules
+        &middot; {{.Trace.ResourceCount}} resources from {{len .Trace.Configcrates}} modules
     </p>
     <div style="overflow-x:auto;">
         <svg viewBox="{{.TreeViewBox}}" style="width:100%;max-height:600px;" preserveAspectRatio="xMidYMin meet">
@@ -35,14 +35,14 @@
             <text x="70" y="{{add $lvl.Y 18}}" font-size="12" font-weight="600"
                   fill="{{$lvl.Color}}" font-family="monospace">{{$lvl.Label}}</text>
             {{/* Modules */}}
-            {{if $lvl.Modules}}
+            {{if $lvl.Configcrates}}
             <text x="70" y="{{add $lvl.Y 34}}" font-size="10" fill="var(--color-text)" font-family="monospace">
-                modules: {{joinStrings $lvl.Modules ", "}}
+                modules: {{joinStrings $lvl.Configcrates ", "}}
             </text>
             {{end}}
             {{/* Roles */}}
             {{if $lvl.Roles}}
-            <text x="70" y="{{add $lvl.Y (mul (len $lvl.Modules) 16) 34}}" font-size="10" fill="var(--color-text)" font-family="monospace">
+            <text x="70" y="{{add $lvl.Y (mul (len $lvl.Configcrates) 16) 34}}" font-size="10" fill="var(--color-text)" font-family="monospace">
                 roles: {{joinStrings $lvl.Roles ", "}}
             </text>
             {{end}}

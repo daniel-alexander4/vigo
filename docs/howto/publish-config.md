@@ -3,7 +3,7 @@
 
 You'll finish this page knowing how to ship a config change to the fleet safely: edit under `stockpile/`, validate without applying, publish atomically to `.live/`, and (when something's wrong post-publish) roll back to the previous live version with one command.
 
-**When you'd use this:** every time you add or change a module, role, hostcrate, usercrate, environment override, waiver, or compliance claim. Validation runs locally before anything touches the fleet, so this is also how you sanity-check changes before pushing them through a CI gate.
+**When you'd use this:** every time you add or change a configcrate, role, hostcrate, usercrate, environment override, waiver, or compliance claim. Validation runs locally before anything touches the fleet, so this is also how you sanity-check changes before pushing them through a CI gate.
 
 **When you'd skip this:** never, if you're authoring config. There's no other path; the server only reads `.live/`.
 
@@ -14,15 +14,15 @@ Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command
 
 Both modes share the same operator-visible verb (`vigocli config publish`) and the same validation pipeline. The mode is auto-detected via `GET /api/v1/spanner/status`.
 
-![Per-envoy config-resolution view — which hostcrate + role + module + environment override resolved which value](../img/screenshots/vigo.envoy-config.png)
+![Per-envoy config-resolution view — which hostcrate + role + configcrate + environment override resolved which value](../img/screenshots/vigo.envoy-config.png)
 
 ## Directory Layout
 
 ```
 /srv/vigo/stacks/
 ├── stockpile/                    ← operators edit here
-│   ├── modules/                  # Module definitions
-│   ├── usercrates/               # Per-user modules (inert until included via `usercrates:`)
+│   ├── configcrates/             # Configcrate definitions
+│   ├── usercrates/               # Per-user configcrates (inert until included via `usercrates:`)
 │   ├── templates/                # Go template files for source: references
 │   ├── tasks/                    # Reusable task definitions
 │   ├── workflows/                # Workflow definitions
@@ -36,11 +36,11 @@ Both modes share the same operator-visible verb (`vigocli config publish`) and t
 │       ├── envoys.vgo            # Per-customer hostcrate
 │       └── web/web.vgo           # Per-host hostcrate
 ├── examples/                     ← read-only install templates (image-seeded)
-├── anti-examples/                ← read-only retract templates (mirrors examples/modules)
+├── anti-examples/                ← read-only retract templates (mirrors examples/configcrates)
 └── .live/                        ← server reads here (locked, do not edit) — mirrors stockpile/ contents directly
 ```
 
-The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../reference/writing-modules.md#directory-inheritance) for details.
+The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../reference/writing-configcrates.md#directory-inheritance) for details.
 
 Publish only walks `stockpile/`. Sibling subtrees (`examples/`, `anti-examples/`, `.live/`) are outside the walk and never appear in the diff or sync.
 
@@ -100,19 +100,19 @@ flowchart LR
 
 1. Normalizes whitespace in all `.vgo` files (strip trailing spaces, fix line endings, replace tabs in YAML indentation, drop UTF-8 BOM). Templates (`.tmpl`) are not normalized — operators may rely on whitespace inside Go template directives.
 2. Diffs `stockpile/` against `.live/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stockpile is invisible to publish.
-3. Runs the **module linter** on changed/new module files (see below)
-4. Loads all `.vgo` files from a staging copy of stockpile using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and envoy entries cross-reference each other.
-5. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
+3. Runs the **configcrate linter** on changed/new configcrate files (see below)
+4. Loads all `.vgo` files from a staging copy of stockpile using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because configcrates, roles, and envoy entries cross-reference each other.
+5. HTTP/HTTPS URLs in **changed configcrates only** are probed for aliveness (HEAD with GET fallback). Unchanged configcrates are skipped.
 6. The CLI calls `GET /api/v1/spanner/status` to detect mode. Standalone vigosrvs go through step 7a; spanner-mode vigosrvs go through step 7b.
-7. **(7a, standalone)** Prunes the staging tree of any module / usercrate / template no carrier references (unless `--no-prune` is set), then atomically syncs it into `.live/` (see [Atomic sync — standalone mode](#atomic-sync--standalone-mode) below), and calls `POST /api/v1/config/reload` to trigger a server-side reload.
+7. **(7a, standalone)** Prunes the staging tree of any configcrate / usercrate / template no carrier references (unless `--no-prune` is set), then atomically syncs it into `.live/` (see [Atomic sync — standalone mode](#atomic-sync--standalone-mode) below), and calls `POST /api/v1/config/reload` to trigger a server-side reload.
    **(7b, spanner)** Commits the staging tree to the local clone of the ops-puddle's stockpile gitback project and pushes to the bare repo at `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` via `file://`. The local `stockpilewatch` goroutine sees the new ref, archives `HEAD` into `.live/`, and reloads. The CLI polls `GET /api/v1/config/version` until it increments (30s timeout) before declaring success. Other vigosrvs in the spanner receive the bytes via the gitback substrate's peer-pull on the next reactor cycle and run the same watcher path locally.
 8. Sibling subtrees of stockpile (`examples/`, `anti-examples/`) are never read by the publisher.
 9. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`.
 
-## Module Linter
+## Configcrate Linter
 
 
-Every changed or new module file is run through the module linter (`server/modlint`) before validation. The linter is a four-stage pipeline:
+Every changed or new configcrate file is run through the configcrate linter (`server/modlint`) before validation. The linter is a four-stage pipeline:
 
 ### 1. YAML Repair
 
@@ -142,7 +142,7 @@ Fixes common syntax issues at the text level:
 
 The linter adds `#~` prefixed auto-generated comments:
 
-- **Module-level**: A block comment at the top describing what the module manages
+- **Configcrate-level**: A block comment at the top describing what the configcrate manages
 - **Resource-level**: A single-line comment above each resource describing its action
 
 ```yaml
@@ -206,7 +206,7 @@ Failed validation in spanner mode leaves the previous `.live/` content in place 
 ### Structural (via `NewConfigStore`)
 
 - YAML syntax
-- Module and role references (no dangling refs)
+- Configcrate and role references (no dangling refs)
 - Circular dependency detection
 - Resource idempotency (exec resources need `onlyif` or `unless`)
 - Cross-resource references (`depends_on`, `notify`, `subscribes`, `before` must reference existing resource names)
@@ -223,7 +223,7 @@ Failed validation in spanner mode leaves the previous `.live/` content in place 
 - Service state enum (`running`, `stopped`, `restarted`, `reloaded`)
 - Required fields: source_package (`url`), git (`repo`, `path`), mount (`path`)
 
-### URL Aliveness (changed modules only)
+### URL Aliveness (changed configcrates only)
 
 - HTTP HEAD probe for all http/https URLs in: `source_package.url`, `repository.key_url`, `git.repo`
 - Falls back to GET with Range header if HEAD returns 405
@@ -278,35 +278,35 @@ Unknown resource types are blocked by default. If a resource uses a custom execu
 
 If the server starts with invalid config in `.live/`, the behavior depends on the error type:
 
-- **Idempotency errors** (unguarded exec, reboot without subscribes, etc.) — **non-fatal**. The server starts with zero modules loaded. The error is logged at ERROR level and stored in `LastReloadError()`, surfaced via `vigocli doctor` and the web dashboard. The REST API, UI, and gRPC remain available so you can diagnose and fix the config. Envoys get empty policy (no changes applied) until the config is repaired and republished.
-- **Structural errors** (invalid YAML, dangling role→module references, secret resolution failures) — **fatal**. The server refuses to start. These indicate a fundamentally broken config tree.
+- **Idempotency errors** (unguarded exec, reboot without subscribes, etc.) — **non-fatal**. The server starts with zero configcrates loaded. The error is logged at ERROR level and stored in `LastReloadError()`, surfaced via `vigocli doctor` and the web dashboard. The REST API, UI, and gRPC remain available so you can diagnose and fix the config. Envoys get empty policy (no changes applied) until the config is repaired and republished.
+- **Structural errors** (invalid YAML, dangling role→configcrate references, secret resolution failures) — **fatal**. The server refuses to start. These indicate a fundamentally broken config tree.
 
-Since `config publish` runs the module linter before syncing, most idempotency errors are caught before they reach `.live/`. The non-fatal startup behavior is a safety net for configs that bypass publish (e.g., placed directly in `.live/`).
+Since `config publish` runs the configcrate linter before syncing, most idempotency errors are caught before they reach `.live/`. The non-fatal startup behavior is a safety net for configs that bypass publish (e.g., placed directly in `.live/`).
 
 ## First-Time Setup
 
-On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero envoy entries. Place your configs in `stage/` and run `vigocli config publish` to populate `.live/` for the first time.
+On a fresh install, `.live/` is empty. The server starts gracefully with zero configcrates and zero envoy entries. Place your configs in `stage/` and run `vigocli config publish` to populate `.live/` for the first time.
 
 ## Output
 
 ```bash
 $ vigocli config publish --dry-run
-Validation passed: 12 modules, 3 roles, 8 envoy entries
-  + modules/nginx.vgo
-  + modules/sshd.vgo
+Validation passed: 12 configcrates, 3 roles, 8 envoy entries
+  + configcrates/nginx.vgo
+  + configcrates/sshd.vgo
   + envoys/web.vgo
 
 $ vigocli config publish
-Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
-  + modules/nginx.vgo
-  + modules/sshd.vgo
+Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
+  + configcrates/nginx.vgo
+  + configcrates/sshd.vgo
   + envoys/web.vgo
 ```
 
 ## What's next
 
-- **A publish failed validation** → read the AI-streamed fix suggestions in your terminal; if you need the full validation rules, see [the module-writing reference](../reference/writing-modules.md).
-- **You want to trace why a particular envoy got a particular value** → `vigocli config trace <envoy> <module>` walks the resolution chain.
+- **A publish failed validation** → read the AI-streamed fix suggestions in your terminal; if you need the full validation rules, see [the configcrate-writing reference](../reference/writing-configcrates.md).
+- **You want to trace why a particular envoy got a particular value** → `vigocli config trace <envoy> <configcrate>` walks the resolution chain.
 - **A publish landed but rolled itself back** → the convergence-rollback monitor caught it; inspect the audit log via `vigocli config history`.
 - **You need to verify what's live** → `vigocli config tree` shows the entire resolved tree as the server sees it.
 - **You published in spanner mode and one bolt's `config_version` is lagging** → check that bolt's `journalctl -u vigosrv` for `stockpilewatch` lines. The watcher uses a 250ms quiesce-debounce per ref-change, so brief skew is normal; persistent lag points at a stale ops-puddle gitback fetch (the peer-pull reactor hasn't run) or an unresponsive puddle helper daemon (`/var/run/vigo/puddle.sock`).

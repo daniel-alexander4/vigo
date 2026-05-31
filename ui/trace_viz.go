@@ -28,7 +28,7 @@ type TraceVizPageData struct {
 // InheritanceVizLevel is one level in the inheritance tree SVG.
 type InheritanceVizLevel struct {
 	Label     string // file path (dir/file)
-	Modules   []string
+	Configcrates   []string
 	Roles     []string
 	VarCount  int
 	Overrides int
@@ -112,7 +112,7 @@ func (data *TraceVizPageData) buildInheritanceTree(trace *config.ConfigTrace) {
 
 		// Content lines: label + modules line + roles line = base height.
 		lines := 1 // label
-		if len(lvl.Modules) > 0 {
+		if len(lvl.Configcrates) > 0 {
 			lines++
 		}
 		if len(lvl.Roles) > 0 {
@@ -129,7 +129,7 @@ func (data *TraceVizPageData) buildInheritanceTree(trace *config.ConfigTrace) {
 
 		vizLevels[i] = InheritanceVizLevel{
 			Label:     label,
-			Modules:   lvl.Modules,
+			Configcrates:   lvl.Configcrates,
 			Roles:     lvl.Roles,
 			VarCount:  len(lvl.Vars),
 			Overrides: len(lvl.Overrides),

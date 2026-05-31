@@ -17,10 +17,10 @@ A self-contained git repository archive produced by `git bundle create`, used as
 
 Standards-framework coverage. Splits into two surfaces, kept separate as of 0.32.0:
 
-- **Envoy compliance** — whether a managed node's modules satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, NIST 800-53, ISO 27001, etc.). Measured as coverage percentage per framework. A control counts as covered iff (a) the envoy has a module tagged with that control via `compliance:`, (b) a [Connwaer](#connwaer) trait check on the envoy escalates it, or (c) a [waiver](#waiver) applies. This is the surface framework reports under `/api/v1/report/<slug>` measure.
+- **Envoy compliance** — whether a managed node's configcrates satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, NIST 800-53, ISO 27001, etc.). Measured as coverage percentage per framework. A control counts as covered iff (a) the envoy has a configcrate tagged with that control via `compliance:`, (b) a [Connwaer](#connwaer) trait check on the envoy escalates it, or (c) a [waiver](#waiver) applies. This is the surface framework reports under `/api/v1/report/<slug>` measure.
 - **Vigo product compliance** — what the Vigo server and agent satisfy by construction (mTLS, RBAC, audit hash chain, secret encryption, etc.). Lives in `server/compliance/AppControls` and is surfaced separately at `/platform/compliance` (Platform → Data). Useful for vendor questionnaires; never folded into framework scoring.
 
-Distinct from [convergence](#convergence): convergence is "did my modules apply successfully," compliance is "do my modules satisfy framework X." See [scope](#scope) for how each framework control is classified, and [Compliance](reference/compliance-matrix.md) for the full overview.
+Distinct from [convergence](#convergence): convergence is "did my configcrates apply successfully," compliance is "do my configcrates satisfy framework X." See [scope](#scope) for how each framework control is classified, and [Compliance](reference/compliance-matrix.md) for the full overview.
 
 ## connwaer
 
@@ -28,16 +28,16 @@ A standalone Rust agent for active compliance verification — checking things V
 
 ## convergence
 
-Module-convergence state for an envoy, evaluated on two orthogonal axes:
+Configcrate-convergence state for an envoy, evaluated on two orthogonal axes:
 
-- **Failure axis** — `converged`, `degraded`, `failed`, `no_data`. Mutually exclusive; sums to fleet total. Any non-zero failure clears the threshold; zero failures is `converged` regardless of how many modules made changes.
-- **Drift axis** — `none`, `changed`, `diverged`. `changed` fires when the latest run has `ChangedCount > 0`; `diverged` fires after `DivergedThreshold` consecutive runs with changes (default 5). Diverged is a strict subset of changed. Independent of the failure axis — an envoy can be `converged` AND `diverged` simultaneously (zero failures, but persistent module churn).
+- **Failure axis** — `converged`, `degraded`, `failed`, `no_data`. Mutually exclusive; sums to fleet total. Any non-zero failure clears the threshold; zero failures is `converged` regardless of how many configcrates made changes.
+- **Drift axis** — `none`, `changed`, `diverged`. `changed` fires when the latest run has `ChangedCount > 0`; `diverged` fires after `DivergedThreshold` consecutive runs with changes (default 5). Diverged is a strict subset of changed. Independent of the failure axis — an envoy can be `converged` AND `diverged` simultaneously (zero failures, but persistent configcrate churn).
 
-Reachability (online / offline) is a third orthogonal axis tracked by `server/freshness`. See the [Convergence Walkthrough](reference/writing-modules.md).
+Reachability (online / offline) is a third orthogonal axis tracked by `server/freshness`. See the [Convergence Walkthrough](reference/writing-configcrates.md).
 
 ## drift
 
-The drift axis of convergence (above). Computed by `convergence.ComputeDrift` over an envoy's recent run history, expressed as a `DriftLevel` (`none` / `changed` / `diverged`). Drift is purely about *whether modules keep mutating* — it says nothing about whether mutations succeed. A non-idempotent module that recreates the same file every run produces persistent `Created` results and lands the envoy in `diverged` even though every run technically succeeds.
+The drift axis of convergence (above). Computed by `convergence.ComputeDrift` over an envoy's recent run history, expressed as a `DriftLevel` (`none` / `changed` / `diverged`). Drift is purely about *whether configcrates keep mutating* — it says nothing about whether mutations succeed. A non-idempotent configcrate that recreates the same file every run produces persistent `Created` results and lands the envoy in `diverged` even though every run technically succeeds.
 
 ## envoy
 
@@ -68,23 +68,23 @@ The LWW-CRDT metadata store for swarm blobs, gossiped between envoys. Tracks whi
 
 ## hostcrate
 
-Any `.vgo` file containing an `envoys:` block with `- match:` entries. Maps hostname patterns/globs to roles, modules, and vars. First-match-wins. Conventionally named `envoys.vgo` but the loader walks all `.vgo` files, so per-host filenames (`plex.vgo`, `web01.vgo`) also work. See [Multi-Axis Config](reference/writing-modules.md).
+Any `.vgo` file containing an `envoys:` block with `- match:` entries. Maps hostname patterns/globs to roles, configcrates, and vars. First-match-wins. Conventionally named `envoys.vgo` but the loader walks all `.vgo` files, so per-host filenames (`plex.vgo`, `web01.vgo`) also work. See [Multi-Axis Config](reference/writing-configcrates.md).
 
-## module
+## configcrate
 
-A reusable resource set in `stockpile/modules/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [hostcrates](#hostcrate) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](reference/writing-modules.md) and [Resource Language](reference/writing-modules.md).
+A reusable resource set in `stockpile/configcrates/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [hostcrates](#hostcrate) or directory-level `common.vgo` inheritance. Configcrates are the primary composition unit for envoy-wide config. See [Config Format](reference/writing-configcrates.md) and [Resource Language](reference/writing-configcrates.md).
 
 ## resource
 
-A single idempotent state declaration inside a module — one file, one package, one service, one user account, etc. Resources declare a `type:` (mapping to an [executor](#executor)), parameters, and optional `depends_on` / `notify` / `when:` attributes. See [Resource Language](reference/writing-modules.md).
+A single idempotent state declaration inside a configcrate — one file, one package, one service, one user account, etc. Resources declare a `type:` (mapping to an [executor](#executor)), parameters, and optional `depends_on` / `notify` / `when:` attributes. See [Resource Language](reference/writing-configcrates.md).
 
 ## retract
 
-An auto-generated inverse of a module — file resources flipped to `state: absent`, services to `stopped`+`enabled: false`, packages to `absent`, etc. Used for clean module removal. Generated by `vigocli config publish` when retraction is enabled; the resulting `.retract` file is inert until renamed and applied. See [Module Retraction](reference/writing-modules.md).
+An auto-generated inverse of a configcrate — file resources flipped to `state: absent`, services to `stopped`+`enabled: false`, packages to `absent`, etc. Used for clean configcrate removal. Generated by `vigocli config publish` when retraction is enabled; the resulting `.retract` file is inert until renamed and applied. See [Configcrate Retraction](reference/writing-configcrates.md).
 
 ## role
 
-A named grouping of modules and vars defined in `roles.vgo` (or the legacy `roles/` directory). Supports `when:` (role-wide conditional), `case:` (per-platform module groups), and `includes:` (single-level role composition). Assigned to envoys via [hostcrates](#hostcrate). See [Config Format](reference/writing-modules.md).
+A named grouping of configcrates and vars defined in `roles.vgo` (or the legacy `roles/` directory). Supports `when:` (role-wide conditional), `case:` (per-platform configcrate groups), and `includes:` (single-level role composition). Assigned to envoys via [hostcrates](#hostcrate). See [Config Format](reference/writing-configcrates.md).
 
 ## sandgorgon
 
@@ -108,11 +108,11 @@ One `vigosrv` participating in a [spanner](#spanner) federation. Owns a hostname
 
 ## stockpile
 
-The single operator-edited tree under [stacks](#stacks), at `/srv/vigo/stacks/stockpile/`. Holds every config primitive: [modules](#stone) (module definitions), [usercrates](#usercrate), `templates/` (Go template files referenced by `source:`), `tasks/`, `workflows/`, plus the assignment files `envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`, and `compliance.vgo` claim-inheritance files. The 0.33.1 collapse merged the prior `stockpile/` subtree into stockpile — there is one tree now, and `vigocli config publish` syncs only this one to [.live](#live).
+The single operator-edited tree under [stacks](#stacks), at `/srv/vigo/stacks/stockpile/`. Holds every config primitive: [configcrates](#stone) (configcrate definitions), [usercrates](#usercrate), `templates/` (Go template files referenced by `source:`), `tasks/`, `workflows/`, plus the assignment files `envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`, and `compliance.vgo` claim-inheritance files. The 0.33.1 collapse merged the prior `stockpile/` subtree into stockpile — there is one tree now, and `vigocli config publish` syncs only this one to [.live](#live).
 
 ## stone
 
-A module definition file in `stockpile/modules/**/*.vgo`. The directory name `modules/` is the filesystem-level construction metaphor for what the YAML + code call a [module](#module) — the YAML key (`modules:`) and Go/Rust identifiers (`ModuleDefinition`) still use "module" for industry-standard recognition. Operators writing `modules: [nginx]` in a role are referencing the stone at `stockpile/modules/nginx.vgo`. Filesystem rename shipped 0.29.0.
+A configcrate definition file in `stockpile/configcrates/**/*.vgo`. The directory name `configcrates/` is the filesystem-level construction metaphor for what the YAML calls a [configcrate](#configcrate) — the YAML key is `configcrates:`, and the Go/Rust identifier is `ConfigcrateDefinition`. Operators writing `configcrates: [nginx]` in a role are referencing the stone at `stockpile/configcrates/nginx.vgo`.
 
 ## swarm
 
@@ -124,9 +124,9 @@ A collected fact about an envoy, reported at check-in — OS, hardware, installe
 
 ## usercrate
 
-A config module scoped to one or more users' environments (account creation, home-dir files, dotfiles, personal cron jobs), analogous to a regular [module](#module) but organized around human and service-account identity. Usercrates live in `stockpile/**/usercrates/*.vgo` — any directory level — but the directory is a library: as of 0.54.0 a usercrate is **inert until positively included** via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo per-env block — the same four carriers `modules:` lives on). The module-level `name:` field is optional and defaults to the filename stem (`dan.vgo` → `dan`). Distinct from the `user:` [resource](#resource) type, which is one primitive inside a usercrate; the shape rule requires exactly one `type: user` resource, with additional non-user resources (file for authorized_keys/dotfiles, exec for post-create setup) permitted. See [User Management](reference/writing-modules.md).
+A config configcrate scoped to one or more users' environments (account creation, home-dir files, dotfiles, personal cron jobs), analogous to a regular [configcrate](#configcrate) but organized around human and service-account identity. Usercrates live in `stockpile/**/usercrates/*.vgo` — any directory level — but the directory is a library: as of 0.54.0 a usercrate is **inert until positively included** via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo per-env block — the same four carriers `configcrates:` lives on). The configcrate-level `name:` field is optional and defaults to the filename stem (`dan.vgo` → `dan`). Distinct from the `user:` [resource](#resource) type, which is one primitive inside a usercrate; the shape rule requires exactly one `type: user` resource, with additional non-user resources (file for authorized_keys/dotfiles, exec for post-create setup) permitted. See [User Management](reference/writing-configcrates.md).
 
-**Usage:** drop `stockpile/usercrates/alice.vgo` to define alice, then add `usercrates: [alice]` to wherever she should apply — typically `stockpile/common.vgo` (fleet-wide) or a per-site `common.vgo` (scoped to that branch). Name collisions with regular modules are fatal at load time; usercrates and modules share one namespace, and `modules:` vs `usercrates:` reference disjoint sets (cross-kind misuse fails to load with the corrected field hint). Unreferenced usercrates emit a publish-time warning.
+**Usage:** drop `stockpile/usercrates/alice.vgo` to define alice, then add `usercrates: [alice]` to wherever she should apply — typically `stockpile/common.vgo` (fleet-wide) or a per-site `common.vgo` (scoped to that branch). Name collisions with regular configcrates are fatal at load time; usercrates and configcrates share one namespace, and `configcrates:` vs `usercrates:` reference disjoint sets (cross-kind misuse fails to load with the corrected field hint). Unreferenced usercrates emit a publish-time warning.
 
 ## secret
 
@@ -154,22 +154,22 @@ Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/longd
 
 ## audit bundle
 
-A self-contained zip a Vigo operator can hand directly to an external auditor. Generated per-framework via [`GET /api/v1/report/audit-bundle/{slug}`](reference/api.md#audit-bundle-export) or `vigocli report audit-bundle <framework>`. Contains `manifest.json` (SHA-256 of every other artifact), `report.pdf` (WeasyPrint-rendered) + `report.html` (auditor-readable fallback), `evidence.json` (structured per-control: scope, status, modules, attached docs), `docs/<id>__<filename>` (decrypted copies of every operator-uploaded compliance document linked to the framework's controls), `audit-log.csv` (audit-chain entries within the lookback window), and `convergence.csv` (daily fleet convergence in the same window). Default period is 365 days; configurable per request. Verify integrity after extraction with `jq -r '.artifacts[] | "\(.sha256)  \(.path)"' manifest.json | sha256sum -c`. Shipped 0.32.5.
+A self-contained zip a Vigo operator can hand directly to an external auditor. Generated per-framework via [`GET /api/v1/report/audit-bundle/{slug}`](reference/api.md#audit-bundle-export) or `vigocli report audit-bundle <framework>`. Contains `manifest.json` (SHA-256 of every other artifact), `report.pdf` (WeasyPrint-rendered) + `report.html` (auditor-readable fallback), `evidence.json` (structured per-control: scope, status, configcrates, attached docs), `docs/<id>__<filename>` (decrypted copies of every operator-uploaded compliance document linked to the framework's controls), `audit-log.csv` (audit-chain entries within the lookback window), and `convergence.csv` (daily fleet convergence in the same window). Default period is 365 days; configurable per request. Verify integrity after extraction with `jq -r '.artifacts[] | "\(.sha256)  \(.path)"' manifest.json | sha256sum -c`. Shipped 0.32.5.
 
 ## scope
 
 A per-control classification on every framework catalog entry that captures who is responsible for satisfying it. Shipped 0.32.3 alongside the catalog completion in 0.32.2.
 
-- **enforced** — Vigo modules apply the technical control (firewall rules, package state, file mode, sysctl, user management, SSH config, AppArmor profiles, etc.). Coverage flips when an envoy's modules carry the matching `compliance:` tag.
+- **enforced** — Vigo configcrates apply the technical control (firewall rules, package state, file mode, sysctl, user management, SSH config, AppArmor profiles, etc.). Coverage flips when an envoy's configcrates carry the matching `compliance:` tag.
 - **attested** — Vigo collects evidence but doesn't enforce. Drift detection, [security_scan](reference/vigo/traits/) trait, audit-chain integrity, [Connwaer](#connwaer) fleet checks. Coverage requires the relevant signal to be present and healthy.
 - **documented** — operator satisfies via uploaded artifact (BAA, IR plan, risk assessment, training records, signed contracts). Coverage flips when at least one active [compliance doc](#compliance-docs) is linked to the (framework, control_id). Without an attached doc, documented-scope controls render as "missing — requires uploaded documentation".
 - **not_applicable** — control is out of deployment scope (e.g., HIPAA "Isolating Health Care Clearinghouse Functions" for a non-clearinghouse). Excluded from the framework denominator.
 
-Surfaced as the Scope column on per-envoy compliance detail pages so a "missing" control tells the operator whether to assign a module or upload a document. See [Compliance](reference/compliance-matrix.md).
+Surfaced as the Scope column on per-envoy compliance detail pages so a "missing" control tells the operator whether to assign a configcrate or upload a document. See [Compliance](reference/compliance-matrix.md).
 
 ## compliance role
 
-The third web-UI role added 0.34.2, sitting between admin and viewer. Default permissions: `compliance.read` + `compliance.docs.write` only — every framework page is visible, supporting documentation can be uploaded, and the per-framework audit-bundle export downloads (it's classified as `compliance.read` because the bundle is an evidence artifact, not the raw audit-log stream). The role deliberately excludes `audit.read`, `fleet.read`, and every mutation permission, so a holder can't see envoys/modules/config/secrets/scrier/payload, can't publish or dispatch tasks, and can't read the hash-chained audit log directly. Intended for GRC staff and compliance-document uploaders, **not** auditors — auditors should be assigned `admin` or `viewer` depending on the depth of evidence access required. Stored as `role: 'compliance'` in `users.role`; the DB CHECK constraint enumerates the three valid values. See [Authentication](howto/set-up-auth.md#roles-and-permissions).
+The third web-UI role added 0.34.2, sitting between admin and viewer. Default permissions: `compliance.read` + `compliance.docs.write` only — every framework page is visible, supporting documentation can be uploaded, and the per-framework audit-bundle export downloads (it's classified as `compliance.read` because the bundle is an evidence artifact, not the raw audit-log stream). The role deliberately excludes `audit.read`, `fleet.read`, and every mutation permission, so a holder can't see envoys/configcrates/config/secrets/scrier/payload, can't publish or dispatch tasks, and can't read the hash-chained audit log directly. Intended for GRC staff and compliance-document uploaders, **not** auditors — auditors should be assigned `admin` or `viewer` depending on the depth of evidence access required. Stored as `role: 'compliance'` in `users.role`; the DB CHECK constraint enumerates the three valid values. See [Authentication](howto/set-up-auth.md#roles-and-permissions).
 
 ## compliance docs
 
@@ -185,7 +185,7 @@ Available only on the `local` secrets backend today; under any other backend the
 
 ## waiver
 
-A per-envoy compliance exception — "accept this control as satisfied despite the non-enforcement." Waivers live in `stockpile/**/waivers.vgo` (single-tree as of 0.33.1) and inherit through the directory chain: root applies fleet-wide, subdirectory waivers apply only to envoys under that subtree. Each waiver carries a `control` ID, `reason`, `approved_by`, and optional `expires:` date. Waived controls count as "accepted" in compliance scoring and render with a distinct Lavender "waived" badge on dashboards — not hidden. Distinct from [compliance claim](#compliance), which declares what a module satisfies; a waiver declares what an envoy is excused from. See [Compliance Waivers + Claims](reference/writing-modules.md#compliance-waivers--claims).
+A per-envoy compliance exception — "accept this control as satisfied despite the non-enforcement." Waivers live in `stockpile/**/waivers.vgo` (single-tree as of 0.33.1) and inherit through the directory chain: root applies fleet-wide, subdirectory waivers apply only to envoys under that subtree. Each waiver carries a `control` ID, `reason`, `approved_by`, and optional `expires:` date. Waived controls count as "accepted" in compliance scoring and render with a distinct Lavender "waived" badge on dashboards — not hidden. Distinct from [compliance claim](#compliance), which declares what a configcrate satisfies; a waiver declares what an envoy is excused from. See [Compliance Waivers + Claims](reference/writing-configcrates.md#compliance-waivers--claims).
 
 ## stacks
 
@@ -193,11 +193,11 @@ The parent directory for the whole Vigo config operation, at `/srv/vigo/stacks/`
 
 ## examples
 
-The read-only install-template tree under [stacks](#stacks), at `/srv/vigo/stacks/examples/`. Seeded from the image at container start with `*.vgo.example` templates the operator can adapt. Materialized into [stockpile](#stockpile) via `vigocli config examples copy <name>`, which strips the `.example` suffix and preserves the source subpath. Never read by the server, never published — it's a parts catalog. Pair with [anti-examples](#anti-examples), which holds the retract template for every module example.
+The read-only install-template tree under [stacks](#stacks), at `/srv/vigo/stacks/examples/`. Seeded from the image at container start with `*.vgo.example` templates the operator can adapt. Materialized into [stockpile](#stockpile) via `vigocli config examples copy <name>`, which strips the `.example` suffix and preserves the source subpath. Never read by the server, never published — it's a parts catalog. Pair with [anti-examples](#anti-examples), which holds the retract template for every configcrate example.
 
 ## anti-examples
 
-The read-only retract-template tree under [stacks](#stacks), at `/srv/vigo/stacks/anti-examples/`. Mirrors the directory layout of `examples/modules/` so every install template at `examples/modules/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/modules/<cat>/<name>-retract.vgo.example`. Materialized into [stockpile](#stockpile) via `vigocli config anti-examples copy <name>` — the retract drops in alongside its install module without colliding because of the `-retract` suffix. `vigocli config anti-examples mirror-check` walks both trees and reports module examples missing a paired retract (or orphan retracts). Shipped 0.33.1.
+The read-only retract-template tree under [stacks](#stacks), at `/srv/vigo/stacks/anti-examples/`. Mirrors the directory layout of `examples/configcrates/` so every install template at `examples/configcrates/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/configcrates/<cat>/<name>-retract.vgo.example`. Materialized into [stockpile](#stockpile) via `vigocli config anti-examples copy <name>` — the retract drops in alongside its install configcrate without colliding because of the `-retract` suffix. `vigocli config anti-examples mirror-check` walks both trees and reports configcrate examples missing a paired retract (or orphan retracts). Shipped 0.33.1.
 
 ## live
 

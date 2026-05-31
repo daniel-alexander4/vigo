@@ -58,8 +58,8 @@ Checks performed in pre-start mode:
 | `secrets_provider` | Initialize the secrets provider |
 | `secret_resolution` | Resolve `secret:` references in config |
 | `tls_certs` | Check cert files exist, parse, and verify expiry |
-| `config_dir` | Verify `stockpile/` exists with `modules/`, `roles/`, `envoys/` subdirs |
-| `config_validation` | Load and validate all `.vgo` module files |
+| `config_dir` | Verify `stockpile/` exists with `configcrates/`, `roles/`, `envoys/` subdirs |
+| `config_validation` | Load and validate all `.vgo` configcrate files |
 | `spanner` | Validate spanner (hub-spoke federation) configuration |
 
 ### Example pre-start output
@@ -75,7 +75,7 @@ vigocli doctor --pre-start --config /srv/vigo/server.yaml
   secret_resolution .... OK
   tls_certs ............ WARN (expires in 28 days (2026-04-10))
   config_dir ........... OK (.live)
-  config_validation .... OK (12 modules)
+  config_validation .... OK (12 configcrates)
   spanner ............ OK (standalone)
 
   Status: degraded

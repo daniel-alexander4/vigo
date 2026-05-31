@@ -1,7 +1,7 @@
 
 # Disk Hygiene
 
-Prevent disk and inode exhaustion with a role that bundles five focused modules. Each module enforces one cleanup policy — assign the whole role or pick individual modules.
+Prevent disk and inode exhaustion with a role that bundles five focused configcrates. Each configcrate enforces one cleanup policy — assign the whole role or pick individual configcrates.
 
 ## The Role
 
@@ -9,7 +9,7 @@ Prevent disk and inode exhaustion with a role that bundles five focused modules.
 # stockpile/roles.vgo
 roles:
   - name: disk-hygiene
-    modules: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]
+    configcrates: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]
 ```
 
 Assign it to a node:
@@ -20,11 +20,11 @@ match:
     roles: [bastion, disk-hygiene]
 ```
 
-## Modules
+## Configcrates
 
 ### logrotate (already exists)
 
-Installs logrotate and enforces rotation for `/var/log/*.log` and `/var/log/*/*.log`. Many service modules (nginx, postgresql, haproxy, etc.) ship their own logrotate resources — this module covers the system-wide catch-all.
+Installs logrotate and enforces rotation for `/var/log/*.log` and `/var/log/*/*.log`. Many service configcrates (nginx, postgresql, haproxy, etc.) ship their own logrotate resources — this configcrate covers the system-wide catch-all.
 
 ### journal-cap
 
@@ -67,7 +67,7 @@ vars:
   prune_schedule: "weekly"  # systemd OnCalendar value
 ```
 
-All resources are gated with `when: "has_command('docker')"` — the module is a no-op on machines without Docker.
+All resources are gated with `when: "has_command('docker')"` — the configcrate is a no-op on machines without Docker.
 
 ## Per-node overrides
 
@@ -90,7 +90,7 @@ This role enforces **preventive policies** — it configures the system so disk 
 
 - **Scan for and delete arbitrary large files.** Use `vigocli query` to find large files across the fleet when an alert fires.
 - **Alert on disk/inode thresholds.** That's the job of the disk trait collector + server-side alerting (webhooks/SMTP).
-- **Replace service-specific logrotate configs.** Service modules (nginx, postgres, etc.) manage their own log rotation. This role handles system-wide defaults.
+- **Replace service-specific logrotate configs.** Service configcrates (nginx, postgres, etc.) manage their own log rotation. This role handles system-wide defaults.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

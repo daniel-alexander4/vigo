@@ -58,7 +58,7 @@ type SIEMEvent struct {
 	Hostname     string `json:"hostname"`
 	EnvoyID      string `json:"envoy_id"`
 	RunID        string `json:"run_id"`
-	ModuleName   string `json:"module_name"`
+	ConfigcrateName   string `json:"configcrate_name"`
 	ResourceName string `json:"resource_name"`
 	ResourceType string `json:"resource_type"`
 	Action       string `json:"action"`
@@ -163,7 +163,7 @@ func siemEventFromRow(row db.ListRunResultsSinceRow) SIEMEvent {
 		Hostname:     row.Hostname,
 		EnvoyID:      row.EnvoyID,
 		RunID:        row.RunID,
-		ModuleName:   row.ModuleName,
+		ConfigcrateName:   row.ConfigcrateName,
 		ResourceName: row.ResourceName,
 		ResourceType: row.ResourceType,
 		Action:       row.ActionTaken,
@@ -184,7 +184,7 @@ func siemEventFromByEnvoyRow(row db.ListRunResultsSinceByEnvoyRow) SIEMEvent {
 		Hostname:     row.Hostname,
 		EnvoyID:      row.EnvoyID,
 		RunID:        row.RunID,
-		ModuleName:   row.ModuleName,
+		ConfigcrateName:   row.ConfigcrateName,
 		ResourceName: row.ResourceName,
 		ResourceType: row.ResourceType,
 		Action:       row.ActionTaken,

@@ -36,17 +36,17 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 	roleModules := make(map[string]map[string]bool)
 	for name, role := range cs.roleDefs {
 		mods := make(map[string]bool)
-		for _, ref := range role.Modules {
+		for _, ref := range role.Configcrates {
 			mods[ref.Name] = true
 		}
 		for _, c := range role.Case {
-			for _, ref := range c.Modules {
+			for _, ref := range c.Configcrates {
 				mods[ref.Name] = true
 			}
 		}
 		for _, incName := range role.Includes {
 			if inc, ok := cs.roleDefs[incName]; ok {
-				for _, ref := range inc.Modules {
+				for _, ref := range inc.Configcrates {
 					mods[ref.Name] = true
 				}
 			}
@@ -68,13 +68,13 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 				src = cc.DirPath + "/common.vgo"
 			}
 
-			for _, ref := range cc.Modules {
+			for _, ref := range cc.Configcrates {
 				if _, exists := inheritedModules[ref.Name]; !exists {
 					inheritedModules[ref.Name] = src
 				}
 			}
 
-			// Modules from roles in common.vgo.
+			// Configcrates from roles in common.vgo.
 			for _, roleRef := range cc.Roles {
 				if mods, ok := roleModules[roleRef.Name]; ok {
 					for mod := range mods {
@@ -99,7 +99,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 		}
 
 		// Check entry's own modules for redundancy.
-		for _, ref := range entry.OwnModules {
+		for _, ref := range entry.OwnConfigcrates {
 			if src, ok := inheritedModules[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
 					Type:          "module",
@@ -120,7 +120,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 				}
 			}
 		}
-		for _, ref := range entry.OwnModules {
+		for _, ref := range entry.OwnConfigcrates {
 			if roleName, ok := entryRoleModules[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
 					Type:          "module",
@@ -166,7 +166,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 			if parent.DirPath != "" {
 				src = parent.DirPath + "/common.vgo"
 			}
-			for _, ref := range parent.Modules {
+			for _, ref := range parent.Configcrates {
 				if _, exists := parentModules[ref.Name]; !exists {
 					parentModules[ref.Name] = src
 				}
@@ -178,7 +178,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 
 		childFile := dirPath + "/common.vgo"
 
-		for _, ref := range cc.Modules {
+		for _, ref := range cc.Configcrates {
 			if src, ok := parentModules[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
 					Type:          "module",

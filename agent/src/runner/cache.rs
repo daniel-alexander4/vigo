@@ -145,7 +145,7 @@ mod tests {
 
     fn noop_result() -> ResourceResult {
         ResourceResult {
-            module_name: String::new(),
+            configcrate_name: String::new(),
             resource_type: "file".to_string(),
             resource_name: "test".to_string(),
             action: Action::None,

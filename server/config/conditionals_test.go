@@ -178,14 +178,14 @@ func TestEvaluateResourceWhen_BuiltinShortCircuitFalse(t *testing.T) {
 // --- ShouldIncludeModule tests ---
 
 func TestShouldIncludeModule_NoConditionals(t *testing.T) {
-	mod := ModuleConfig{Name: "basic"}
+	mod := Configcrate{Name: "basic"}
 	if !ShouldIncludeModule(mod, map[string]any{}) {
 		t.Error("expected true when no when expression set")
 	}
 }
 
 func TestShouldIncludeModule_WhenFalse(t *testing.T) {
-	mod := ModuleConfig{Name: "nginx", When: "is_debian"}
+	mod := Configcrate{Name: "nginx", When: "is_debian"}
 	vars := map[string]any{"is_debian": "false"}
 	if ShouldIncludeModule(mod, vars) {
 		t.Error("expected false when when var is false")
@@ -193,7 +193,7 @@ func TestShouldIncludeModule_WhenFalse(t *testing.T) {
 }
 
 func TestShouldIncludeModule_WhenTrue(t *testing.T) {
-	mod := ModuleConfig{Name: "nginx", When: "is_debian"}
+	mod := Configcrate{Name: "nginx", When: "is_debian"}
 	vars := map[string]any{"is_debian": "true"}
 	if !ShouldIncludeModule(mod, vars) {
 		t.Error("expected true when when var is true")
@@ -201,7 +201,7 @@ func TestShouldIncludeModule_WhenTrue(t *testing.T) {
 }
 
 func TestShouldIncludeModule_WhenNotTrue(t *testing.T) {
-	mod := ModuleConfig{Name: "desktop-tools", When: "not is_container"}
+	mod := Configcrate{Name: "desktop-tools", When: "not is_container"}
 	vars := map[string]any{"is_container": "true"}
 	if ShouldIncludeModule(mod, vars) {
 		t.Error("expected false when not condition triggers")
@@ -209,7 +209,7 @@ func TestShouldIncludeModule_WhenNotTrue(t *testing.T) {
 }
 
 func TestShouldIncludeModule_WhenNotFalse(t *testing.T) {
-	mod := ModuleConfig{Name: "desktop-tools", When: "not is_container"}
+	mod := Configcrate{Name: "desktop-tools", When: "not is_container"}
 	vars := map[string]any{"is_container": "false"}
 	if !ShouldIncludeModule(mod, vars) {
 		t.Error("expected true when not condition doesn't trigger")
@@ -217,7 +217,7 @@ func TestShouldIncludeModule_WhenNotFalse(t *testing.T) {
 }
 
 func TestShouldIncludeModule_WhenOrNoneTrue(t *testing.T) {
-	mod := ModuleConfig{Name: "tool", When: "is_debian or is_ubuntu"}
+	mod := Configcrate{Name: "tool", When: "is_debian or is_ubuntu"}
 	vars := map[string]any{"is_debian": "false", "is_ubuntu": "false"}
 	if ShouldIncludeModule(mod, vars) {
 		t.Error("expected false when no OR vars are true")
@@ -225,103 +225,103 @@ func TestShouldIncludeModule_WhenOrNoneTrue(t *testing.T) {
 }
 
 func TestShouldIncludeModule_WhenAndNotAll(t *testing.T) {
-	mod := ModuleConfig{Name: "tool", When: "not (is_legacy and is_deprecated)"}
+	mod := Configcrate{Name: "tool", When: "not (is_legacy and is_deprecated)"}
 	vars := map[string]any{"is_legacy": "true", "is_deprecated": "true"}
 	if ShouldIncludeModule(mod, vars) {
 		t.Error("expected false when all conditions in NOT(AND) are true")
 	}
 }
 
-// --- ModuleRef YAML unmarshal tests ---
+// --- ConfigcrateRef YAML unmarshal tests ---
 
-func TestModuleRef_PlainString(t *testing.T) {
-	yamlData := `modules: [nginx]`
+func TestConfigcrateRef_PlainString(t *testing.T) {
+	yamlData := `configcrates: [nginx]`
 	var out struct {
-		Modules []ModuleRef `yaml:"modules"`
+		Configcrates []ConfigcrateRef `yaml:"configcrates"`
 	}
 	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(out.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(out.Modules))
+	if len(out.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(out.Configcrates))
 	}
-	if out.Modules[0].Name != "nginx" {
-		t.Errorf("Name = %q, want nginx", out.Modules[0].Name)
+	if out.Configcrates[0].Name != "nginx" {
+		t.Errorf("Name = %q, want nginx", out.Configcrates[0].Name)
 	}
-	if out.Modules[0].When != "" {
-		t.Errorf("When = %q, want empty", out.Modules[0].When)
+	if out.Configcrates[0].When != "" {
+		t.Errorf("When = %q, want empty", out.Configcrates[0].When)
 	}
 }
 
-func TestModuleRef_ObjectWithWhen(t *testing.T) {
+func TestConfigcrateRef_ObjectWithWhen(t *testing.T) {
 	yamlData := `
-modules:
+configcrates:
   - name: nginx
     when: "is_debian"
 `
 	var out struct {
-		Modules []ModuleRef `yaml:"modules"`
+		Configcrates []ConfigcrateRef `yaml:"configcrates"`
 	}
 	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(out.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(out.Modules))
+	if len(out.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(out.Configcrates))
 	}
-	if out.Modules[0].Name != "nginx" {
-		t.Errorf("Name = %q, want nginx", out.Modules[0].Name)
+	if out.Configcrates[0].Name != "nginx" {
+		t.Errorf("Name = %q, want nginx", out.Configcrates[0].Name)
 	}
-	if out.Modules[0].When != "is_debian" {
-		t.Errorf("When = %q, want is_debian", out.Modules[0].When)
+	if out.Configcrates[0].When != "is_debian" {
+		t.Errorf("When = %q, want is_debian", out.Configcrates[0].When)
 	}
 }
 
-func TestModuleRef_ObjectWithWhenExpression(t *testing.T) {
+func TestConfigcrateRef_ObjectWithWhenExpression(t *testing.T) {
 	yamlData := `
-modules:
+configcrates:
   - name: nginx
     when: "not is_container and not is_vm"
 `
 	var out struct {
-		Modules []ModuleRef `yaml:"modules"`
+		Configcrates []ConfigcrateRef `yaml:"configcrates"`
 	}
 	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(out.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(out.Modules))
+	if len(out.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(out.Configcrates))
 	}
-	if out.Modules[0].When != "not is_container and not is_vm" {
-		t.Errorf("When = %q, want 'not is_container and not is_vm'", out.Modules[0].When)
+	if out.Configcrates[0].When != "not is_container and not is_vm" {
+		t.Errorf("When = %q, want 'not is_container and not is_vm'", out.Configcrates[0].When)
 	}
 }
 
-func TestModuleRef_MixedPlainAndObject(t *testing.T) {
+func TestConfigcrateRef_MixedPlainAndObject(t *testing.T) {
 	yamlData := `
-modules:
+configcrates:
   - nginx
   - name: redis
     when: "is_debian"
 `
 	var out struct {
-		Modules []ModuleRef `yaml:"modules"`
+		Configcrates []ConfigcrateRef `yaml:"configcrates"`
 	}
 	if err := yaml.Unmarshal([]byte(yamlData), &out); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(out.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(out.Modules))
+	if len(out.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(out.Configcrates))
 	}
-	if out.Modules[0].Name != "nginx" {
-		t.Errorf("Modules[0].Name = %q, want nginx", out.Modules[0].Name)
+	if out.Configcrates[0].Name != "nginx" {
+		t.Errorf("Configcrates[0].Name = %q, want nginx", out.Configcrates[0].Name)
 	}
-	if out.Modules[0].When != "" {
-		t.Errorf("Modules[0].When = %q, want empty", out.Modules[0].When)
+	if out.Configcrates[0].When != "" {
+		t.Errorf("Configcrates[0].When = %q, want empty", out.Configcrates[0].When)
 	}
-	if out.Modules[1].Name != "redis" {
-		t.Errorf("Modules[1].Name = %q, want redis", out.Modules[1].Name)
+	if out.Configcrates[1].Name != "redis" {
+		t.Errorf("Configcrates[1].Name = %q, want redis", out.Configcrates[1].Name)
 	}
-	if out.Modules[1].When != "is_debian" {
-		t.Errorf("Modules[1].When = %q, want is_debian", out.Modules[1].When)
+	if out.Configcrates[1].When != "is_debian" {
+		t.Errorf("Configcrates[1].When = %q, want is_debian", out.Configcrates[1].When)
 	}
 }

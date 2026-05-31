@@ -23,7 +23,7 @@ resources:
     group: root
     mode: "0644"
     content: |
-      modules:
+      configcrates:
         http_2xx:
           prober: http
           timeout: 5s

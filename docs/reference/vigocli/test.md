@@ -1,7 +1,7 @@
 
 # vigocli test
 
-Run config tests that validate resolved policy against expected outcomes. Tests verify that the config tree (modules, roles, envoys) produces the expected resources, vars, and module assignments for a given hostname — without connecting to the server.
+Run config tests that validate resolved policy against expected outcomes. Tests verify that the config tree (configcrates, roles, envoys) produces the expected resources, vars, and configcrate assignments for a given hostname — without connecting to the server.
 
 Equivalent to rspec-puppet or ChefSpec: test the config compilation, not the execution.
 
@@ -12,7 +12,7 @@ Equivalent to rspec-puppet or ChefSpec: test the config compilation, not the exe
 vigocli test
 
 # Run a single test file
-vigocli test tests/nginx-module.test.vgo
+vigocli test tests/nginx-configcrate.test.vgo
 
 # Run all tests in a directory
 vigocli test tests/
@@ -45,9 +45,9 @@ traits:
 
 # Assertions
 expect:
-  module_count: 3
+  configcrate_count: 3
   resource_count: 12
-  modules:
+  configcrates:
     - nginx
     - monitoring
   vars:
@@ -74,9 +74,9 @@ expect:
 | `name` | No | Test name (defaults to filename) |
 | `envoy` | Yes | Hostname to simulate check-in for |
 | `traits` | No | Mock traits map for template rendering |
-| `expect.module_count` | No | Expected number of modules |
-| `expect.resource_count` | No | Expected total resource count across all modules |
-| `expect.modules` | No | List of module names that must be present |
+| `expect.configcrate_count` | No | Expected number of configcrates |
+| `expect.resource_count` | No | Expected total resource count across all configcrates |
+| `expect.configcrates` | No | List of configcrate names that must be present |
 | `expect.vars` | No | Map of var name → expected string value |
 | `expect.resources` | No | List of resource assertions (see below) |
 
@@ -88,7 +88,7 @@ Each entry in `expect.resources` can check any combination of:
 |-------|-------------|
 | `resource` | Resource name (required) |
 | `type` | Expected resource type (file, package, service, etc.) |
-| `module` | Expected module name containing this resource |
+| `configcrate` | Expected configcrate name containing this resource |
 | `targetpath` | Expected targetpath attribute |
 | `package` | Expected package attribute |
 | `service` | Expected service attribute |
@@ -98,14 +98,14 @@ Each entry in `expect.resources` can check any combination of:
 
 ## Examples
 
-### Test a module produces the right resources
+### Test a configcrate produces the right resources
 
 ```yaml
-name: nginx module installs package and manages service
+name: nginx configcrate installs package and manages service
 envoy: web01.prod.example.com
 
 expect:
-  modules: [nginx]
+  configcrates: [nginx]
   resources:
     - resource: nginx-package
       type: package
@@ -150,34 +150,34 @@ name: webserver role includes base security
 envoy: web01.prod.example.com
 
 expect:
-  modules:
+  configcrates:
     - sshd-config     # from base role (included by webserver)
     - ntp             # from base role
     - nginx           # from webserver role directly
     - logrotate       # from webserver role directly
 ```
 
-### Test conditional modules
+### Test conditional configcrates
 
 ```yaml
 name: container envoys skip monitoring agent
 envoy: container01.example.com
 
 expect:
-  modules:
+  configcrates:
     - nginx
   # node-exporter should NOT be in the list (when: "!is_container")
-  module_count: 2
+  configcrate_count: 2
 ```
 
 ## Output
 
 ```
 $ vigocli test
-  PASS   nginx module installs package and manages service
+  PASS   nginx configcrate installs package and manages service
   PASS   production web servers get 443 and 16 workers
   FAIL   container envoys skip monitoring agent
-           module_count: got 3, want 2
+           configcrate_count: got 3, want 2
   PASS   webserver role includes base security
 
 3 passed, 1 failed, 0 errors (4 total)
@@ -187,10 +187,10 @@ Exit code is 1 if any tests fail.
 
 ## How It Works
 
-1. Loads the full config tree from `--config-dir` (modules, roles, envoys, vars)
+1. Loads the full config tree from `--config-dir` (configcrates, roles, envoys, vars)
 2. For each test file, simulates a check-in for the given `envoy` hostname
-3. Resolves config using the same code path as the server (role expansion, module ordering, var merging, `environments.vgo`)
-4. Compares resolved modules, resources, and vars against `expect` assertions
+3. Resolves config using the same code path as the server (role expansion, configcrate ordering, var merging, `environments.vgo`)
+4. Compares resolved configcrates, resources, and vars against `expect` assertions
 5. If `traits` are provided, renders `content:` templates before checking `content_contains`
 
 Secrets are not resolved during tests (a null provider is used). Resources with `secret:` values will have empty strings.
@@ -201,6 +201,6 @@ Secrets are not resolved during tests (a null provider is used). Resources with 
 
 - [validate](validate.md) — check YAML syntax and idempotency
 - [preview](preview.md) — preview planned changes against live envoys
-- [Composition Patterns](../../reference/writing-modules.md) — config reuse patterns
+- [Composition Patterns](../../reference/writing-configcrates.md) — config reuse patterns
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

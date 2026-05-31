@@ -125,7 +125,7 @@ Envoy:     a1b2c3d4
 Started:  2026-03-13 12:30
 Finished: 2026-03-13 12:31
 Status:   success
-Modules:  5 total, 3 changed, 0 failed, 0 skipped
+Configcrates:  5 total, 3 changed, 0 failed, 0 skipped
 
 MODULE      TYPE       RESOURCE           ACTION    CHANGED  ERROR
 nginx       package    nginx              install   true     -

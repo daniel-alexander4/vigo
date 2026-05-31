@@ -19,7 +19,7 @@ func TestMemRunStore_CreateAndGet(t *testing.T) {
 	run, err := s.CreateRun(ctx, CreateRunParams{
 		EnvoyID:      envoyID,
 		Status:      "running",
-		ModuleCount: 3,
+		ConfigcrateCount: 3,
 	})
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
@@ -50,12 +50,12 @@ func TestMemRunStore_CreateRunResult(t *testing.T) {
 	run, _ := s.CreateRun(ctx, CreateRunParams{
 		EnvoyID:      uuid.New().String(),
 		Status:      "running",
-		ModuleCount: 1,
+		ConfigcrateCount: 1,
 	})
 
 	result, err := s.CreateRunResult(ctx, CreateRunResultParams{
 		RunID:        run.ID,
-		ModuleName:   "nginx",
+		ConfigcrateName:   "nginx",
 		ResourceType: "package",
 		ResourceName: "nginx",
 		ActionTaken:  "created",
@@ -66,8 +66,8 @@ func TestMemRunStore_CreateRunResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRunResult: %v", err)
 	}
-	if result.ModuleName != "nginx" {
-		t.Fatalf("expected module nginx, got %s", result.ModuleName)
+	if result.ConfigcrateName != "nginx" {
+		t.Fatalf("expected module nginx, got %s", result.ConfigcrateName)
 	}
 
 	results, err := s.ListRunResults(ctx, run.ID)
@@ -86,7 +86,7 @@ func TestMemRunStore_FinishRun(t *testing.T) {
 	run, _ := s.CreateRun(ctx, CreateRunParams{
 		EnvoyID:      uuid.New().String(),
 		Status:      "running",
-		ModuleCount: 2,
+		ConfigcrateCount: 2,
 	})
 
 	err := s.FinishRun(ctx, FinishRunParams{
@@ -126,7 +126,7 @@ func TestMemRunStore_ListRunsByEnvoy(t *testing.T) {
 	envoyID := uuid.New().String()
 
 	for i := 0; i < 5; i++ {
-		s.CreateRun(ctx, CreateRunParams{EnvoyID: envoyID, Status: "success", ModuleCount: 1})
+		s.CreateRun(ctx, CreateRunParams{EnvoyID: envoyID, Status: "success", ConfigcrateCount: 1})
 	}
 
 	runs, err := s.ListRunsByEnvoy(ctx, ListRunsByEnvoyParams{EnvoyID: envoyID, Limit: 3})
@@ -154,7 +154,7 @@ func TestMemRunStore_ListAllRuns(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		s.CreateRun(ctx, CreateRunParams{EnvoyID: uuid.New().String(), Status: "success", ModuleCount: 1})
+		s.CreateRun(ctx, CreateRunParams{EnvoyID: uuid.New().String(), Status: "success", ConfigcrateCount: 1})
 	}
 
 	runs, err := s.ListAllRuns(ctx, 3)
@@ -174,7 +174,7 @@ func TestMemRunStore_Eviction(t *testing.T) {
 
 	var firstRunID string
 	for i := 0; i < 5; i++ {
-		run, _ := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoyID, Status: "success", ModuleCount: 1})
+		run, _ := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoyID, Status: "success", ConfigcrateCount: 1})
 		if i == 0 {
 			firstRunID = run.ID
 		}
@@ -200,9 +200,9 @@ func TestMemRunStore_LatestRunPerEnvoy(t *testing.T) {
 	envoy1, envoy2, envoy3 := uuid.New().String(), uuid.New().String(), uuid.New().String()
 
 	// Create runs for envoy1 and envoy2 only.
-	s.CreateRun(ctx, CreateRunParams{EnvoyID: envoy1, Status: "success", ModuleCount: 1})
-	run1b, _ := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoy1, Status: "failure", ModuleCount: 2})
-	run2, _ := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoy2, Status: "success", ModuleCount: 1})
+	s.CreateRun(ctx, CreateRunParams{EnvoyID: envoy1, Status: "success", ConfigcrateCount: 1})
+	run1b, _ := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoy1, Status: "failure", ConfigcrateCount: 2})
+	run2, _ := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoy2, Status: "success", ConfigcrateCount: 1})
 
 	result, err := s.LatestRunPerEnvoy(ctx, []string{envoy1, envoy2, envoy3})
 	if err != nil {
@@ -260,7 +260,7 @@ func TestMemRunStore_Trigger(t *testing.T) {
 		EnvoyID:     envoyID,
 		Status:      "running",
 		Trigger:     "force-push",
-		ModuleCount: 1,
+		ConfigcrateCount: 1,
 	})
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
@@ -277,7 +277,7 @@ func TestMemRunStore_Trigger(t *testing.T) {
 	}
 
 	// An empty trigger defaults to "scheduled" — mirrors the DB DEFAULT.
-	def, err := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoyID, Status: "running", ModuleCount: 1})
+	def, err := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoyID, Status: "running", ConfigcrateCount: 1})
 	if err != nil {
 		t.Fatalf("CreateRun (default): %v", err)
 	}

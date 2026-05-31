@@ -93,7 +93,7 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 		StartedAt:   time.Now(),
 		Status:      arg.Status,
 		Trigger:     trigger,
-		ModuleCount: arg.ModuleCount,
+		ConfigcrateCount: arg.ConfigcrateCount,
 	}
 
 	sh := s.shard(arg.EnvoyID)
@@ -121,7 +121,7 @@ func (s *MemRunStore) CreateRunResult(_ context.Context, arg CreateRunResultPara
 	result := RunResult{
 		ID:           uuid.New().String(),
 		RunID:        arg.RunID,
-		ModuleName:   arg.ModuleName,
+		ConfigcrateName:   arg.ConfigcrateName,
 		ResourceType: arg.ResourceType,
 		ResourceName: arg.ResourceName,
 		ActionTaken:  arg.ActionTaken,
@@ -155,7 +155,7 @@ func (s *MemRunStore) BatchCreateRunResults(_ context.Context, args []CreateRunR
 		byRun[a.RunID] = append(byRun[a.RunID], RunResult{
 			ID:           uuid.New().String(),
 			RunID:        a.RunID,
-			ModuleName:   a.ModuleName,
+			ConfigcrateName:   a.ConfigcrateName,
 			ResourceType: a.ResourceType,
 			ResourceName: a.ResourceName,
 			ActionTaken:  a.ActionTaken,

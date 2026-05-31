@@ -24,7 +24,7 @@ func TestBundleSigner_SignAndVerify(t *testing.T) {
 		MatchedPattern: "*.web",
 		Environment:    "production",
 		Roles:          []string{"webserver"},
-		Modules: []*pb.PolicyModule{
+		Configcrates: []*pb.PolicyConfigcrate{
 			{Name: "nginx", ContentHash: "abc123"},
 		},
 	}

@@ -1,11 +1,11 @@
 
-# Nginx Module
+# Nginx Configcrate
 
-A complete nginx module demonstrating the package-config-service pattern with `notify` chains.
+A complete nginx configcrate demonstrating the package-config-service pattern with `notify` chains.
 
-## Module Definition
+## Configcrate Definition
 
-`stockpile/modules/nginx.vgo`:
+`stockpile/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -72,7 +72,7 @@ resources:
 
 ```yaml
 name: webserver
-modules:
+configcrates:
   - nginx
 ```
 
@@ -94,11 +94,11 @@ envoys:
 
 ## Overriding Variables
 
-Node-level vars override module defaults. In this example, the module defaults to `auto` worker processes and `localhost` server name, but the production web servers get `4` workers and the real domain name.
+Node-level vars override configcrate defaults. In this example, the configcrate defaults to `auto` worker processes and `localhost` server name, but the production web servers get `4` workers and the real domain name.
 
 ## Adding SSL
 
-Extend the module with an SSL vhost:
+Extend the configcrate with an SSL vhost:
 
 ```yaml
   - name: nginx-ssl-cert

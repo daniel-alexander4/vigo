@@ -19,7 +19,7 @@ Resolved secret values never cross the agent gRPC wire as plaintext.
 4. Server-side, `ResolveSecrets` enforces per-envoy entitlement: an envoy can only resolve refs whose placeholder appears in its own resolved bundle. Un-entitled requests fail with `PermissionDenied` and emit a `secret.entitlement_denied` audit event. Successful resolutions emit `secret.epoch_resolved`. Audit log records refs only, never values.
 5. The agent caches resolved values in memory for the lifetime of the process; the cache invalidates whenever `secrets_epoch` advances. A persistent at-rest cache (encrypted under a key derived from the agent's enrollment ed25519 identity) is a follow-up; until it lands, a cold agent restart with the server unreachable cannot apply secret-bearing resources — convergence fails loud and resumes once contact returns.
 
-Operators don't need to change anything in their modules: `secret:<path>` keeps working the same way it always has. The placeholder pipeline is internal to vigosrv and the agent.
+Operators don't need to change anything in their configcrates: `secret:<path>` keeps working the same way it always has. The placeholder pipeline is internal to vigosrv and the agent.
 
 ## Subcommands
 

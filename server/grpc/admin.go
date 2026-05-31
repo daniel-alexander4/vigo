@@ -490,10 +490,10 @@ func (s *AdminService) GetRun(ctx context.Context, req *pb.GetRunRequest) (*pb.G
 		return nil, status.Errorf(codes.Internal, "listing run results: %v", err)
 	}
 
-	protoResults := make([]*pb.ModuleResult, 0, len(results))
+	protoResults := make([]*pb.ConfigcrateResult, 0, len(results))
 	for _, r := range results {
-		mr := &pb.ModuleResult{
-			ModuleName:   r.ModuleName,
+		mr := &pb.ConfigcrateResult{
+			ConfigcrateName:   r.ConfigcrateName,
 			ResourceType: r.ResourceType,
 			ResourceName: r.ResourceName,
 			ActionTaken:  r.ActionTaken,
@@ -541,19 +541,19 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	}
 
 	cfg := s.configStore.Get(envoy.Hostname)
-	if len(cfg.Modules) == 0 {
+	if len(cfg.Configcrates) == 0 {
 		return &pb.DryRunResponse{}, nil
 	}
 
 	// Serialize modules to JSON for plan storage.
-	modulesJSON, err := json.Marshal(cfg.Modules)
+	modulesJSON, err := json.Marshal(cfg.Configcrates)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "marshaling modules: %v", err)
 	}
 
 	plan, err := s.queries.CreatePlan(ctx, db.CreatePlanParams{
 		EnvoyID: envoyID,
-		Modules: string(modulesJSON),
+		Configcrates: string(modulesJSON),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating plan: %v", err)
@@ -561,12 +561,12 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 
 	// Build planned actions from config modules.
 	var actions []*pb.PlannedAction
-	for _, mod := range cfg.Modules {
+	for _, mod := range cfg.Configcrates {
 		for _, res := range mod.Resources {
 			action := "create" // default action for dry-run
 			pr, err := s.queries.CreatePlanResult(ctx, db.CreatePlanResultParams{
 				PlanID:        plan.ID,
-				ModuleName:    mod.Name,
+				ConfigcrateName:    mod.Name,
 				ResourceType:  res.Type,
 				ResourceName:  res.Name,
 				PlannedAction: action,
@@ -575,7 +575,7 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 				return nil, status.Errorf(codes.Internal, "creating plan result: %v", err)
 			}
 			actions = append(actions, &pb.PlannedAction{
-				ModuleName:    pr.ModuleName,
+				ConfigcrateName:    pr.ConfigcrateName,
 				ResourceType:  pr.ResourceType,
 				ResourceName:  pr.ResourceName,
 				PlannedAction: pr.PlannedAction,
@@ -654,7 +654,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 	var recent []convergence.RunInfo
 	if err == nil && len(runs) > 0 {
 		for _, r := range runs {
-			recent = append(recent, convergence.RunInfo{Status: r.Status, ChangedCount: r.ChangedCount, FailedCount: r.FailedCount, ModuleCount: r.ModuleCount})
+			recent = append(recent, convergence.RunInfo{Status: r.Status, ChangedCount: r.ChangedCount, FailedCount: r.FailedCount, ConfigcrateCount: r.ConfigcrateCount})
 		}
 		lastRunProto = dbRunToProto(runs[0])
 	}
@@ -970,7 +970,7 @@ func dbRunToProto(r db.Run) *pb.Run {
 		EnvoyId:      r.EnvoyID,
 		StartedAt:    timestamppb.New(r.StartedAt),
 		Status:       r.Status,
-		ModuleCount:  int32(r.ModuleCount),
+		ConfigcrateCount:  int32(r.ConfigcrateCount),
 		ChangedCount: int32(r.ChangedCount),
 		FailedCount:  int32(r.FailedCount),
 		SkippedCount: int32(r.SkippedCount),

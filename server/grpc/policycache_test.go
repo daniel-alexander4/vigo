@@ -11,7 +11,7 @@ import (
 )
 
 func makeTestConfig() *config.EnvoyConfig {
-	nginx := config.ModuleConfig{
+	nginx := config.Configcrate{
 		Name: "nginx",
 		Resources: []config.ResourceConfig{
 			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "server {}"}},
@@ -20,7 +20,7 @@ func makeTestConfig() *config.EnvoyConfig {
 	}
 	nginx.ContentHash = config.HashModuleContent(nginx)
 
-	postgres := config.ModuleConfig{
+	postgres := config.Configcrate{
 		Name: "postgres",
 		Resources: []config.ResourceConfig{
 			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "listen = *"}},
@@ -32,7 +32,7 @@ func makeTestConfig() *config.EnvoyConfig {
 		MatchPattern: "*.web.example.com",
 		Environment:  "production",
 		Roles:        []string{"webserver"},
-		Modules:      []config.ModuleConfig{nginx, postgres},
+		Configcrates:      []config.Configcrate{nginx, postgres},
 		Vars:         map[string]any{"port": 8080},
 		VarOrder:     []string{"port"},
 	}
@@ -49,8 +49,8 @@ func TestPolicyCache_GetOrBuild_CachesBundle(t *testing.T) {
 	if b1 == nil {
 		t.Fatal("expected non-nil bundle")
 	}
-	if len(b1.Modules) != 2 {
-		t.Fatalf("modules = %d, want 2", len(b1.Modules))
+	if len(b1.Configcrates) != 2 {
+		t.Fatalf("modules = %d, want 2", len(b1.Configcrates))
 	}
 
 	// Second call should return same pointer (cached).
@@ -81,7 +81,7 @@ func TestPolicyCache_DifferentPatterns(t *testing.T) {
 	cfg1 := makeTestConfig()
 	cfg2 := &config.EnvoyConfig{
 		MatchPattern: "*.db.example.com",
-		Modules: []config.ModuleConfig{
+		Configcrates: []config.Configcrate{
 			{Name: "pg", Resources: []config.ResourceConfig{{Name: "conf", Type: "file"}}},
 		},
 	}
@@ -102,11 +102,11 @@ func TestCustomizeStubs_NoHashes_SharesModules(t *testing.T) {
 	result := customizeStubs(base, nil)
 
 	// Should share the modules slice.
-	if len(result.Modules) != 2 {
-		t.Fatalf("modules = %d, want 2", len(result.Modules))
+	if len(result.Configcrates) != 2 {
+		t.Fatalf("modules = %d, want 2", len(result.Configcrates))
 	}
-	for i := range result.Modules {
-		if result.Modules[i].Stub {
+	for i := range result.Configcrates {
+		if result.Configcrates[i].Stub {
 			t.Errorf("module %d should not be a stub", i)
 		}
 	}
@@ -124,26 +124,26 @@ func TestCustomizeStubs_MatchingHash_CreatesStub(t *testing.T) {
 
 	// Agent has nginx cached.
 	hashes := map[string]string{
-		"nginx": base.Modules[0].ContentHash,
+		"nginx": base.Configcrates[0].ContentHash,
 	}
 	result := customizeStubs(base, hashes)
 
 	// nginx should be a stub.
-	if !result.Modules[0].Stub {
+	if !result.Configcrates[0].Stub {
 		t.Error("nginx should be a stub")
 	}
-	if result.Modules[0].Resources != nil {
+	if result.Configcrates[0].Resources != nil {
 		t.Error("stub should have nil resources")
 	}
-	if result.Modules[0].ContentHash == "" {
+	if result.Configcrates[0].ContentHash == "" {
 		t.Error("stub should preserve content hash")
 	}
 
 	// postgres should be full.
-	if result.Modules[1].Stub {
+	if result.Configcrates[1].Stub {
 		t.Error("postgres should not be a stub")
 	}
-	if len(result.Modules[1].Resources) == 0 {
+	if len(result.Configcrates[1].Resources) == 0 {
 		t.Error("postgres should have resources")
 	}
 }
@@ -159,7 +159,7 @@ func TestCustomizeStubs_MismatchedHash_SendsFull(t *testing.T) {
 	}
 	result := customizeStubs(base, hashes)
 
-	if result.Modules[0].Stub {
+	if result.Configcrates[0].Stub {
 		t.Error("mismatched hash should not produce a stub")
 	}
 }
@@ -169,21 +169,21 @@ func TestCustomizeStubs_DoesNotMutateBase(t *testing.T) {
 	cfg := makeTestConfig()
 
 	base, _ := pc.GetOrBuild("*.web.example.com", cfg, 1)
-	originalHash := base.Modules[0].ContentHash
-	originalResCount := len(base.Modules[0].Resources)
+	originalHash := base.Configcrates[0].ContentHash
+	originalResCount := len(base.Configcrates[0].Resources)
 
 	// Customize with stubs.
-	hashes := map[string]string{"nginx": base.Modules[0].ContentHash}
+	hashes := map[string]string{"nginx": base.Configcrates[0].ContentHash}
 	_ = customizeStubs(base, hashes)
 
 	// Base should be unchanged.
-	if base.Modules[0].ContentHash != originalHash {
+	if base.Configcrates[0].ContentHash != originalHash {
 		t.Error("base module hash was mutated")
 	}
-	if len(base.Modules[0].Resources) != originalResCount {
+	if len(base.Configcrates[0].Resources) != originalResCount {
 		t.Error("base module resources were mutated")
 	}
-	if base.Modules[0].Stub {
+	if base.Configcrates[0].Stub {
 		t.Error("base module stub flag was mutated")
 	}
 }
@@ -203,7 +203,7 @@ func BenchmarkCustomizeStubs(b *testing.B) {
 	pc := newPolicyCache()
 	cfg := makeTestConfig()
 	base, _ := pc.GetOrBuild("*.web.example.com", cfg, 1)
-	hashes := map[string]string{"nginx": base.Modules[0].ContentHash}
+	hashes := map[string]string{"nginx": base.Configcrates[0].ContentHash}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -260,7 +260,7 @@ func TestPolicyCache_ConcurrentVersionChange(t *testing.T) {
 // surfaced by test/burstwave 2026-05-29).
 func TestPolicyCache_EmptyPattern_CachesFallback(t *testing.T) {
 	pc := newPolicyCache()
-	fallback := &config.EnvoyConfig{Modules: []config.ModuleConfig{}}
+	fallback := &config.EnvoyConfig{Configcrates: []config.Configcrate{}}
 
 	b1, err := pc.GetOrBuild("", fallback, 1)
 	if err != nil {

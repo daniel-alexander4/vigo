@@ -65,7 +65,7 @@ func TestCatalogConsistency(t *testing.T) {
 		"nerc-cip": true, "nist-800-53": true, "ny-dfs-cyber": true,
 		"pci-dss": true, "soc2": true, "sox": true,
 	}
-	for id, prov := range ModuleProvisions {
+	for id, prov := range ConfigcrateProvisions {
 		if prov.ID != id {
 			t.Errorf("provision map key %q != entry ID %q", id, prov.ID)
 		}

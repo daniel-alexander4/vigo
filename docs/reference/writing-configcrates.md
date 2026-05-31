@@ -1,7 +1,7 @@
 
-# Writing modules
+# Writing configcrates
 
-This is the canonical reference for operators authoring Vigo modules. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, hostcrates, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first module](../howto/write-your-first-module.md) first; come back here when you need the full surface.
+This is the canonical reference for operators authoring Vigo configcrates. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, hostcrates, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first configcrate](../howto/write-your-first-module.md) first; come back here when you need the full surface.
 
 ---
 ## Config Format
@@ -10,21 +10,21 @@ All Vigo configuration lives in YAML files with the `.vgo` extension under `stoc
 
 ## Directory Structure
 
-The config directory doubles as a envoy hierarchy. Subdirectories define inheritance — `common.vgo` at any level defines modules, roles, and vars inherited by all entries in subdirectories below it.
+The config directory doubles as a envoy hierarchy. Subdirectories define inheritance — `common.vgo` at any level defines configcrates, roles, and vars inherited by all entries in subdirectories below it.
 
 ```
 stockpile/
-├── modules/                     # Module definitions (unchanged)
+├── configcrates/                     # Configcrate definitions (unchanged)
 │   ├── nginx.vgo
 │   ├── postgres.vgo
-│   ├── compliance.vgo           # Module-tree: fleet-wide claims inherited by every module
+│   ├── compliance.vgo           # Configcrate-tree: fleet-wide claims inherited by every configcrate
 │   ├── monitoring.vgo
 │   └── users/
-│       ├── compliance.vgo       # Module-tree: claims inherited by modules/users/*.vgo
+│       ├── compliance.vgo       # Configcrate-tree: claims inherited by configcrates/users/*.vgo
 │       └── dan.vgo
 ├── templates/                   # Template files for source: references
 ├── roles.vgo                    # All role definitions in one file
-├── common.vgo                   # Modules/roles/vars inherited by ALL subdirs
+├── common.vgo                   # Configcrates/roles/vars inherited by ALL subdirs
 ├── compliance.vgo               # Envoys-tree: compliance waivers (optional, inherits like common.vgo)
 ├── production/
 │   ├── common.vgo               # Inherited by all production subdirs
@@ -36,25 +36,25 @@ stockpile/
 
 **Key conventions:**
 - `common.vgo` at any directory level = inheritance definition (no `match:`). Applies only to subdirectories.
-- `compliance.vgo` at any directory level = compliance configuration. **Location determines semantics:** files in the envoys tree (outside `modules/`) contribute waivers; files in the modules tree contribute per-module compliance claims inherited by every module in the same subtree. See [Compliance Waivers + Claims](#compliance-waivers--claims) below and the [Lookup Tables concept](#lookups) for per-envoy resource variation.
-- Any other `.vgo` file outside `modules/` = leaf entry with `match:` patterns mapping hostnames to modules.
+- `compliance.vgo` at any directory level = compliance configuration. **Location determines semantics:** files in the envoys tree (outside `configcrates/`) contribute waivers; files in the configcrates tree contribute per-configcrate compliance claims inherited by every configcrate in the same subtree. See [Compliance Waivers + Claims](#compliance-waivers--claims) below and the [Lookup Tables concept](#lookups) for per-envoy resource variation.
+- Any other `.vgo` file outside `configcrates/` = leaf entry with `match:` patterns mapping hostnames to configcrates.
 - `roles.vgo` at root = single file containing all role definitions.
-- `modules/` holds a flat library of module definitions. **One exception:** `compliance.vgo` files under `modules/` are not module definitions — they are directory-level compliance claim declarations (see below). The loader recognizes the filename and routes it through a separate walker; you can drop a `compliance.vgo` at any depth under `modules/` without the file being mistaken for a module. Every other `.vgo` file under `modules/` is treated as a module definition and must have `name:` and `resources:` fields.
-- `templates/` = unchanged (templates are referenced by explicit `source:` path from within modules).
+- `configcrates/` holds a flat library of configcrate definitions. **One exception:** `compliance.vgo` files under `configcrates/` are not configcrate definitions — they are directory-level compliance claim declarations (see below). The loader recognizes the filename and routes it through a separate walker; you can drop a `compliance.vgo` at any depth under `configcrates/` without the file being mistaken for a configcrate. Every other `.vgo` file under `configcrates/` is treated as a configcrate definition and must have `name:` and `resources:` fields.
+- `templates/` = unchanged (templates are referenced by explicit `source:` path from within configcrates).
 
-### Why `compliance.vgo` under `modules/` is a special case
+### Why `compliance.vgo` under `configcrates/` is a special case
 
-Vigo's module loader walks every `.vgo` file under `modules/` and parses it as a module definition. A module needs a `name:` field and (usually) a `resources:` block. A directory-level compliance claim declaration has neither — it only holds `compliance:` and optionally `waivers:` — so if the loader tried to parse it as a module it would reject the file with "missing required name field" or "module has no resources".
+Vigo's configcrate loader walks every `.vgo` file under `configcrates/` and parses it as a configcrate definition. A configcrate needs a `name:` field and (usually) a `resources:` block. A directory-level compliance claim declaration has neither — it only holds `compliance:` and optionally `waivers:` — so if the loader tried to parse it as a configcrate it would reject the file with "missing required name field" or "configcrate has no resources".
 
-Rather than force operators to put compliance claim files in a sibling directory (which would break the "claims live next to the modules they apply to" ergonomics we wanted), the loader knows that any file literally named `compliance.vgo` under `modules/` is skipped by the module walker and picked up by a separate directory-level walker that unions its claims into every module in the same subtree. Publish-time lint knows about the same exception — it won't run modlint against `compliance.vgo` files — and so does the secret-scanner.
+Rather than force operators to put compliance claim files in a sibling directory (which would break the "claims live next to the configcrates they apply to" ergonomics we wanted), the loader knows that any file literally named `compliance.vgo` under `configcrates/` is skipped by the configcrate walker and picked up by a separate directory-level walker that unions its claims into every configcrate in the same subtree. Publish-time lint knows about the same exception — it won't run modlint against `compliance.vgo` files — and so does the secret-scanner.
 
-This is the only file-name special case in the module library today. If you ever introduce a `compliance.vgo` under `modules/` and see a lint error about missing `name:` or empty `resources:`, it means you're running against a vigo build older than 0.21.3 and need to rebuild. No other file name under `modules/` gets this treatment — everything else is parsed as a module.
+This is the only file-name special case in the configcrate library today. If you ever introduce a `compliance.vgo` under `configcrates/` and see a lint error about missing `name:` or empty `resources:`, it means you're running against a vigo build older than 0.21.3 and need to rebuild. No other file name under `configcrates/` gets this treatment — everything else is parsed as a configcrate.
 
 The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still supported for backward compatibility.
 
-## Modules
+## Configcrates
 
-A module is a reusable set of resources. It defines packages to install, files to manage, services to run, etc.
+A configcrate is a reusable set of resources. It defines packages to install, files to manage, services to run, etc.
 
 ```yaml
 name: nginx
@@ -89,28 +89,28 @@ resources:
     when: "changed"
 ```
 
-### Module Fields
+### Configcrate Fields
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | yes | Unique module name |
+| `name` | yes | Unique configcrate name |
 | `vars` | no | Default variable values (overridden by envoy-level vars) |
-| `defaults` | no | Default attributes applied to all resources in this module |
-| `depends_on` | no | Other modules this module depends on (module-level ordering) |
-| `before` | no | Modules that must run after this module |
+| `defaults` | no | Default attributes applied to all resources in this configcrate |
+| `depends_on` | no | Other configcrates this configcrate depends on (configcrate-level ordering) |
+| `before` | no | Configcrates that must run after this configcrate |
 | `resources` | yes | List of resources to manage |
-| `compliance` | no | Per-module compliance attribution block — two sub-keys, both routed through Vigo-curated catalogs (see [Compliance authoring](#compliance-authoring) below): `compliance.provides:` (functional capability tags) and `compliance.bundle:` (framework-scope-cut tags). |
+| `compliance` | no | Per-configcrate compliance attribution block — two sub-keys, both routed through Vigo-curated catalogs (see [Compliance authoring](#compliance-authoring) below): `compliance.provides:` (functional capability tags) and `compliance.bundle:` (framework-scope-cut tags). |
 
-> **Shape history.** Pre-0.66.48 `compliance:` carried inline framework→control lists; that shape was retired when the catalogs landed. 0.66.48-through-0.66.56 parked the replacement keys at top level (`provides:` / `bundle:`). 0.66.57 re-folded them under a `compliance:` parent block — same catalog semantics, but the at-a-glance compliance signal is restored in module YAML. Modlint hard-errors on both retired shapes with migration pointers (`module-compliance-key-retired` for the framework→control shape; `module-top-level-provides-bundle` for the 0.66.48 top-level keys). Directory-level `compliance.vgo` files keep the framework→control shape — that's a different file kind (inheritance, not module attribution).
+> **Shape history.** Pre-0.66.48 `compliance:` carried inline framework→control lists; that shape was retired when the catalogs landed. 0.66.48-through-0.66.56 parked the replacement keys at top level (`provides:` / `bundle:`). 0.66.57 re-folded them under a `compliance:` parent block — same catalog semantics, but the at-a-glance compliance signal is restored in configcrate YAML. Modlint hard-errors on both retired shapes with migration pointers (`configcrate-compliance-key-retired` for the framework→control shape; `configcrate-top-level-provides-bundle` for the 0.66.48 top-level keys). Directory-level `compliance.vgo` files keep the framework→control shape — that's a different file kind (inheritance, not configcrate attribution).
 
 ### Compliance authoring
 
-The `compliance:` block carries two parallel catalog-backed lists. Each tag in either list is resolved through a Vigo-curated catalog into the (framework → control IDs) it satisfies, and the loader unions the results into the module's effective coverage.
+The `compliance:` block carries two parallel catalog-backed lists. Each tag in either list is resolved through a Vigo-curated catalog into the (framework → control IDs) it satisfies, and the loader unions the results into the configcrate's effective coverage.
 
-- **`compliance.provides:`** — functional capability tags. The module ships a chrony daemon ⇒ `compliance: { provides: [time-sync] }`. The catalog (`server/compliance/provisions.go`) maps each tag to controls it satisfies across multiple frameworks; the module doesn't care which frameworks. Use this for cross-framework functional claims.
-- **`compliance.bundle:`** — framework-scope-cut tags. The module exists to implement CIS-Ubuntu §5 access controls ⇒ `compliance: { bundle: [cis-ubuntu-access] }`. The catalog (`server/compliance/bundles.go`) carries the framework's published cross-walks for that scope. Use this when the module is authored against a specific framework section.
+- **`compliance.provides:`** — functional capability tags. The configcrate ships a chrony daemon ⇒ `compliance: { provides: [time-sync] }`. The catalog (`server/compliance/provisions.go`) maps each tag to controls it satisfies across multiple frameworks; the configcrate doesn't care which frameworks. Use this for cross-framework functional claims.
+- **`compliance.bundle:`** — framework-scope-cut tags. The configcrate exists to implement CIS-Ubuntu §5 access controls ⇒ `compliance: { bundle: [cis-ubuntu-access] }`. The catalog (`server/compliance/bundles.go`) carries the framework's published cross-walks for that scope. Use this when the configcrate is authored against a specific framework section.
 
-A module may declare both:
+A configcrate may declare both:
 
 ```yaml
 name: openssh
@@ -137,7 +137,7 @@ resources:
     state: present
 ```
 
-That `compliance.provides: [time-sync]` is equivalent to the hand-rolled framework→control block this module used to carry — `cis-ubuntu [2.1.1.1, 2.1.1.2]`, `cis-rhel [2.1.1.1, 2.1.1.2]`, `iso-27001 [A.12.4.4]`, `nist-800-53 [AU-8]`, `pci-dss [10.6.1, 10.6.2, 10.6.3]` — captured once in the catalog instead of repeated in every time-sync module.
+That `compliance.provides: [time-sync]` is equivalent to the hand-rolled framework→control block this configcrate used to carry — `cis-ubuntu [2.1.1.1, 2.1.1.2]`, `cis-rhel [2.1.1.1, 2.1.1.2]`, `iso-27001 [A.12.4.4]`, `nist-800-53 [AU-8]`, `pci-dss [10.6.1, 10.6.2, 10.6.3]` — captured once in the catalog instead of repeated in every time-sync configcrate.
 
 Minimal `bundle:`-only example:
 
@@ -158,58 +158,58 @@ Operator surface:
 - `vigocli compliance bundles` — list bundles (`--show <name>` for one tag's full framework → controls).
 - `vigocli config trace <hostname>` — per-control source attribution. Each row carries `(via <provision>)` or `(via bundle:<id>)` so an audit reviewer can walk every claim back to its catalog entry.
 
-Unknown tags in either field are caught at module load (modlint Error with did-you-mean suggestion) and contribute nothing to coverage. Extending either catalog is a code change — propose a PR with the new tag + its framework cross-walks.
+Unknown tags in either field are caught at configcrate load (modlint Error with did-you-mean suggestion) and contribute nothing to coverage. Extending either catalog is a code change — propose a PR with the new tag + its framework cross-walks.
 
 ## Roles
 
-A role is a named list of modules. Roles provide a layer of abstraction — assign a role to an envoy instead of listing individual modules.
+A role is a named list of configcrates. Roles provide a layer of abstraction — assign a role to an envoy instead of listing individual configcrates.
 
 ```yaml
 name: webserver
-modules:
+configcrates:
   - nginx
   - logrotate
   - name: monitoring
     when: "!is_container"
 ```
 
-Modules in a role can be plain strings or objects with a `when:` expression for conditional inclusion.
+Configcrates in a role can be plain strings or objects with a `when:` expression for conditional inclusion.
 
-A module object can also carry `foreach:` (a list var) and, for a list of maps, `key:` (the item field naming each instance) — the module is instantiated once per list item as `<module>[<key>]`, with each item's fields available inside as `{{ .Each.<field> }}`. This works wherever a module reference appears (role `modules:`/`case:`, `common.vgo`, `environments.vgo`, a match block). See [Module-level `foreach:`](#module-level-foreach--stamp-out-a-module-per-item).
+A configcrate object can also carry `foreach:` (a list var) and, for a list of maps, `key:` (the item field naming each instance) — the configcrate is instantiated once per list item as `<configcrate>[<key>]`, with each item's fields available inside as `{{ .Each.<field> }}`. This works wherever a configcrate reference appears (role `configcrates:`/`case:`, `common.vgo`, `environments.vgo`, a match block). See [Configcrate-level `foreach:`](#module-level-foreach--stamp-out-a-module-per-item).
 
 ### Role-Level When
 
-A role definition can have its own `when:` expression. All modules in the role inherit the condition unless they have their own:
+A role definition can have its own `when:` expression. All configcrates in the role inherit the condition unless they have their own:
 
 ```yaml
 - name: cis-ubuntu
   when: "distro('ubuntu')"
-  modules: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
+  configcrates: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
 ```
 
 ### Conditional Case
 
-For roles that need different modules per OS or platform, use `case:`. Each branch has a `when:` and its own module list. All matching cases contribute modules:
+For roles that need different configcrates per OS or platform, use `case:`. Each branch has a `when:` and its own configcrate list. All matching cases contribute configcrates:
 
 ```yaml
 - name: remote-access
   case:
     - when: "os_family('linux')"
-      modules: [x11vnc, xrdp]
+      configcrates: [x11vnc, xrdp]
     - when: "os_family('windows')"
-      modules: [tightvnc]
+      configcrates: [tightvnc]
 ```
 
-A role can have unconditional `modules:` and `case:` together — the unconditional modules always apply, cases apply conditionally:
+A role can have unconditional `configcrates:` and `case:` together — the unconditional configcrates always apply, cases apply conditionally:
 
 ```yaml
 - name: monitoring
-  modules: [node-exporter]        # always applied
+  configcrates: [node-exporter]        # always applied
   case:
     - when: "os_family('linux')"
-      modules: [collectd]
+      configcrates: [collectd]
     - when: "os_family('windows')"
-      modules: [windows-exporter]
+      configcrates: [windows-exporter]
 ```
 
 ### Conditional Role References
@@ -228,35 +228,35 @@ envoys:
         when: "os_family('windows')"
 ```
 
-When a role ref has a `when:` condition, all modules from that role inherit the condition (unless the module already has its own `when:`, which takes precedence). This lets you write one match block that works across your entire fleet.
+When a role ref has a `when:` condition, all configcrates from that role inherit the condition (unless the configcrate already has its own `when:`, which takes precedence). This lets you write one match block that works across your entire fleet.
 
 ### When Inheritance
 
 When expressions are inherited with most-specific-wins precedence:
 
-1. Module's own `when:` (highest priority)
+1. Configcrate's own `when:` (highest priority)
 2. Case `when:`
 3. Role definition `when:`
 4. Role ref `when:` (at the match block level)
 
 ### Role Includes
 
-Roles can include other roles using `includes:` to compose shared module sets:
+Roles can include other roles using `includes:` to compose shared configcrate sets:
 
 ```yaml
 name: webserver
 includes:
   - base-security
-modules:
+configcrates:
   - nginx
   - logrotate
 ```
 
-Included role modules are prepended before the role's own modules. Includes are **single level only** — an included role cannot itself have `includes:`. Duplicate modules across includes and the role's own list are automatically deduplicated (first occurrence wins).
+Included role configcrates are prepended before the role's own configcrates. Includes are **single level only** — an included role cannot itself have `includes:`. Duplicate configcrates across includes and the role's own list are automatically deduplicated (first occurrence wins).
 
 ## Hostcrate (envoys.vgo)
 
-The `envoys.vgo` file maps envoy hostnames to roles and modules. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the envoy's hostname.
+The `envoys.vgo` file maps envoy hostnames to roles and configcrates. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the envoy's hostname.
 
 ```yaml
 envoys:
@@ -277,10 +277,10 @@ envoys:
   - match: "db*.example.com"
     roles: [database]
     tags: [database]
-    modules: [monitoring]
+    configcrates: [monitoring]
 
   - match: "*"
-    modules: [base, monitoring]
+    configcrates: [base, monitoring]
 ```
 
 ### Node Entry Fields
@@ -290,10 +290,10 @@ envoys:
 | `match` | yes | Hostname glob pattern (e.g., `web*.example.com`, `*`) |
 | `environment` | no | Environment name used to select the matching block in `environments.vgo` |
 | `roles` | no | List of role names to assign |
-| `modules` | no | Additional modules (beyond those from roles) |
+| `configcrates` | no | Additional configcrates (beyond those from roles) |
 | `usercrates` | no | Positive include of usercrates (e.g., `[alice, dan]`); usercrates are inert until listed |
-| `vars` | no | Variable overrides (override module defaults and inherited `common.vgo` vars) |
-| `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
+| `vars` | no | Variable overrides (override configcrate defaults and inherited `common.vgo` vars) |
+| `exclude_configcrates` | no | Opt out of specific inherited configcrates (e.g., `[monitoring]`) |
 | `tags` | no | Static tags for targeting — referenced by `vigocli` as `tag:<name>` and by [lookup tables](#lookups) in resource attributes |
 
 ### Tags
@@ -309,18 +309,18 @@ Because the hostcrate is the only writer, tagging is deterministic and reproduci
 
 ## Directory Inheritance
 
-Instead of listing every module on every envoy entry, define shared modules in `common.vgo` files at directory levels. Everything in subdirectories inherits automatically.
+Instead of listing every configcrate on every envoy entry, define shared configcrates in `common.vgo` files at directory levels. Everything in subdirectories inherits automatically.
 
 ```yaml
 # common.vgo (at root) — all subdirs get these
-modules: [sshd, ntp, monitoring]
+configcrates: [sshd, ntp, monitoring]
 vars:
   dns_server: "1.1.1.1"
 ```
 
 ```yaml
 # production/common.vgo — production subdirs also get these
-modules: [log-shipping, auditd]
+configcrates: [log-shipping, auditd]
 vars:
   log_level: warn
 ```
@@ -329,31 +329,31 @@ vars:
 # production/web/web.vgo — leaf entry
 envoys:
   - match: "web*.prod.example.com"
-    modules: [nginx, certbot]
+    configcrates: [nginx, certbot]
     vars:
       nginx_port: 443
 ```
 
-Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot` with vars `dns_server=1.1.1.1, log_level=warn, nginx_port=443`.
+Result for `web01.prod.example.com`: configcrates `sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot` with vars `dns_server=1.1.1.1, log_level=warn, nginx_port=443`.
 
 **Rules:**
-- Parent modules come **before** child modules in the DAG (foundation first).
+- Parent configcrates come **before** child configcrates in the DAG (foundation first).
 - Child vars **override** parent vars of the same name.
-- `exclude_modules:` on a leaf entry removes specific inherited modules:
+- `exclude_configcrates:` on a leaf entry removes specific inherited configcrates:
   ```yaml
   envoys:
     - match: "docker*.example.com"
-      modules: [docker]
-      exclude_modules: [ntp]  # containers use host clock
+      configcrates: [docker]
+      exclude_configcrates: [ntp]  # containers use host clock
   ```
 - Root-level `common.vgo` applies only to subdirectories — leaf entries at the root level are self-contained.
 - Use `vigocli config trace <hostname>` to see the full inheritance chain for a specific host.
 - Use `vigocli config tree` to see the entire directory hierarchy at a glance.
-- Use `vigocli config search --module <name>` to find which entries use a specific module.
+- Use `vigocli config search --configcrate <name>` to find which entries use a specific configcrate.
 
 ## Usercrates
 
-Usercrates are per-user modules (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class. As of 0.54.0, **a usercrate is inert until it is positively included** by a carrier's `usercrates:` field — exactly like a regular module. The directory is a library, not an auto-apply zone. See the [Glossary](../glossary.md#usercrate) for why the kind is distinct from a regular module.
+Usercrates are per-user configcrates (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class. As of 0.54.0, **a usercrate is inert until it is positively included** by a carrier's `usercrates:` field — exactly like a regular configcrate. The directory is a library, not an auto-apply zone. See the [Glossary](../glossary.md#usercrate) for why the kind is distinct from a regular configcrate.
 
 ```
 stockpile/
@@ -368,7 +368,7 @@ stockpile/
 
 ### Positive include — four sites
 
-`usercrates:` is a positive include list. It lives on the same four carriers `modules:` lives on:
+`usercrates:` is a positive include list. It lives on the same four carriers `configcrates:` lives on:
 
 | Carrier | YAML location | Scope |
 |---|---|---|
@@ -393,26 +393,26 @@ usercrates: [anja, ann, dan, elena]
 # stockpile/roles.vgo — bundle usercrates with a role
 roles:
   - name: ops
-    modules: [sshd, ntp]
+    configcrates: [sshd, ntp]
     usercrates: [admin, oncall]
 ```
 
 ### Shape rule — exactly one `type: user` resource
 
-A usercrate file must declare **exactly one** `type: user` resource. Additional non-user resources (a `file` for `authorized_keys` or dotfiles, an `exec` for post-create setup) are permitted. A file with zero or multiple `user` resources fails to load with: `usercrate must declare exactly one type: user resource — found N. Move it to modules/ or restructure.`
+A usercrate file must declare **exactly one** `type: user` resource. Additional non-user resources (a `file` for `authorized_keys` or dotfiles, an `exec` for post-create setup) are permitted. A file with zero or multiple `user` resources fails to load with: `usercrate must declare exactly one type: user resource — found N. Move it to configcrates/ or restructure.`
 
 ### Cross-kind validation
 
-`modules:` and `usercrates:` reference disjoint sets:
+`configcrates:` and `usercrates:` reference disjoint sets:
 
-- A `modules:` entry that names a usercrate fails to load with: `modules: references "alice" — that name is a usercrate defined at usercrates/alice.vgo; use \`usercrates:\` instead of \`modules:\``.
-- A `usercrates:` entry that names a regular module fails to load with the mirrored error.
+- A `configcrates:` entry that names a usercrate fails to load with: `configcrates: references "alice" — that name is a usercrate defined at usercrates/alice.vgo; use \`usercrates:\` instead of \`configcrates:\``.
+- A `usercrates:` entry that names a regular configcrate fails to load with the mirrored error.
 
 This is enforced at every reference site (envoy own, common.vgo chain, role expansion, role-include expansion, per-env override). All mismatches are surfaced in one publish attempt so operators can fix the whole stack in one pass.
 
 ### Name namespace
 
-Usercrates and regular modules share one namespace — the `name:` field in a usercrate must be globally unique across all modules and usercrates. Load-time collision is a fatal error with both source paths reported. The cross-kind validation above ensures each reference site can only land on the right kind.
+Usercrates and regular configcrates share one namespace — the `name:` field in a usercrate must be globally unique across all configcrates and usercrates. Load-time collision is a fatal error with both source paths reported. The cross-kind validation above ensures each reference site can only land on the right kind.
 
 The `name:` field is optional; when omitted, it defaults to the filename stem (`dan.vgo` → `dan`).
 
@@ -422,7 +422,7 @@ If a usercrate is defined in `stockpile/**/usercrates/` but no carrier includes 
 
 ### Migration from <0.54.0
 
-The pre-0.54.0 auto-apply rule and the `exclude_usercrates:` opt-out field are removed. A hostcrate, common.vgo, or environments.vgo containing `exclude_usercrates:` on an envoy entry fails to load with: ``exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-modules.md)``. To migrate: delete the field and add a positive `usercrates:` list to each carrier (hostcrate, common.vgo, role, or environments.vgo) that should pick up the usercrates that used to auto-apply.
+The pre-0.54.0 auto-apply rule and the `exclude_usercrates:` opt-out field are removed. A hostcrate, common.vgo, or environments.vgo containing `exclude_usercrates:` on an envoy entry fails to load with: ``exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-configcrates.md)``. To migrate: delete the field and add a positive `usercrates:` list to each carrier (hostcrate, common.vgo, role, or environments.vgo) that should pick up the usercrates that used to auto-apply.
 
 ### User management specifically
 
@@ -434,12 +434,12 @@ Compliance claims and waivers use **distinct filenames in distinct trees** — f
 
 | Filename | Tree | Top-level key | What it does |
 |---|---|---|---|
-| `compliance.vgo` | `stockpile/` | `compliance:` | Per-module compliance claims. Claims are unioned into every module and usercrate in the same subtree. |
+| `compliance.vgo` | `stockpile/` | `compliance:` | Per-configcrate compliance claims. Claims are unioned into every configcrate and usercrate in the same subtree. |
 | `waivers.vgo` | `stockpile/` | `waivers:` | Per-envoy compliance exceptions. Waivers follow the same inheritance pattern as `common.vgo` — root applies fleet-wide, subdirs apply only to their subtree. |
 
 **Mixed keys are a hard error.** A `waivers:` block inside `stockpile/compliance.vgo`, or a `compliance:` block inside `stockpile/waivers.vgo` — both rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `.live/`.
 
-**Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A usercrate at `stockpile/usercrates/dan.vgo` inherits claims from `stockpile/usercrates/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the usercrate itself declares in its own inline `compliance:` block. All sources union with dedupe.
+**Claims** from a `stockpile/**/compliance.vgo` are unioned into every configcrate defined anywhere beneath that file. A usercrate at `stockpile/usercrates/dan.vgo` inherits claims from `stockpile/usercrates/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the usercrate itself declares in its own inline `compliance:` block. All sources union with dedupe.
 
 **Waivers** apply only to envoys whose hostcrate lives under the same directory subtree. `stockpile/customerA/waivers.vgo` waivers don't cross into `stockpile/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
 
@@ -475,14 +475,14 @@ waivers:
 ```
 
 **Waiver fields:**
-- `control` — control ID matching the compliance tag in the module (required)
+- `control` — control ID matching the compliance tag in the configcrate (required)
 - `reason` — justification (required)
 - `approved_by` — who approved (required)
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
-### Why compliance.vgo is a special filename under stockpile/modules/
+### Why compliance.vgo is a special filename under stockpile/configcrates/
 
-The module loader walks every `.vgo` file under `stockpile/modules/` and parses it as a module definition (requires `name:` and `resources:`). `compliance.vgo` has neither — it's a directory-level claim declaration with a `compliance:` block only. The loader and the publish-time linter both key off the literal filename `compliance.vgo` under `stockpile/` and route it to a separate claim-inheritance walker instead of the module parser. This is the only named exception in the module library.
+The configcrate loader walks every `.vgo` file under `stockpile/configcrates/` and parses it as a configcrate definition (requires `name:` and `resources:`). `compliance.vgo` has neither — it's a directory-level claim declaration with a `compliance:` block only. The loader and the publish-time linter both key off the literal filename `compliance.vgo` under `stockpile/` and route it to a separate claim-inheritance walker instead of the configcrate parser. This is the only named exception in the configcrate library.
 
 ### Rationale for the filename split
 
@@ -498,7 +498,7 @@ The only valid top-level keys in either file are `compliance:` and `waivers:`. A
 Existing deployments migrate automatically on first boot via `entrypoint.sh`:
 
 - `/srv/vigo/stockpile/` → `/srv/vigo/stacks/stockpile/` (if old layout exists)
-- `stockpile/modules/` → `stockpile/modules/`
+- `stockpile/configcrates/` → `stockpile/configcrates/`
 - `stockpile/.live/` → `.live/`
 - `stockpile/envoys.vgo`, `stockpile/roles.vgo`, `stockpile/common.vgo` → `stockpile/`
 - `stockpile/compliance.vgo` containing a `waivers:` block → `stockpile/waivers.vgo` (waivers side)
@@ -510,7 +510,7 @@ The migration is idempotent — safe to re-run after upgrades.
 Variables are resolved in three layers (last wins):
 
 ```
-Module vars (defaults)
+Configcrate vars (defaults)
     ↓ overridden by
 Inherited common.vgo vars (parent → child)
     ↓ overridden by
@@ -519,7 +519,7 @@ Match-block vars
 environments.vgo vars (for the match block's environment:)
 ```
 
-Tag-keyed and platform-keyed lookup tables inside module fields then resolve final field values based on the envoy's tags and traits. See [Lookup Tables](#lookups) for the per-trait/per-tag variation mechanism.
+Tag-keyed and platform-keyed lookup tables inside configcrate fields then resolve final field values based on the envoy's tags and traits. See [Lookup Tables](#lookups) for the per-trait/per-tag variation mechanism.
 
 For environment-specific values, use `environments.vgo` at the appropriate directory level — not per-match-block overrides. See [Multi-Axis Config](#multi-axis-config) for the canonical model and why earlier mechanisms (`environment_overrides:`, `vars_from:`, conditional vars) were removed in 0.27.0.
 
@@ -529,21 +529,21 @@ Every resource has these common fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | yes | Unique name within the module |
+| `name` | yes | Unique name within the configcrate |
 | `type` | yes | Executor type (file, package, service, etc.) |
 | `state` | no | Target state, usually `present` (default) or `absent` |
 | `when` | no | Conditional expression — skip if false |
 | `depends_on` | no | Resources that must succeed before this one |
 | `before` | no | Resources that must run after this one |
-| `notify` | no | Resources (or modules) to trigger when this one changes |
-| `subscribes` | no | Resources (or modules) to watch — re-apply self when they change |
+| `notify` | no | Resources (or configcrates) to trigger when this one changes |
+| `subscribes` | no | Resources (or configcrates) to watch — re-apply self when they change |
 | `watch_secret` | no | Secret paths to watch — re-apply when rotated |
 
 Plus type-specific attributes (see [Executors](../reference/vigo/resources/_index.md)).
 
 ## Auto-Comments (`#~`)
 
-When you run `vigocli config publish`, the module linter automatically adds `#~` prefixed comments to changed modules:
+When you run `vigocli config publish`, the configcrate linter automatically adds `#~` prefixed comments to changed configcrates:
 
 ```yaml
 #~ Manages package, file, service
@@ -587,7 +587,7 @@ resources:
 
 After `vigocli config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:
 1. Re-parses the entire config tree
-2. Rebuilds module definitions, role definitions, and match blocks
+2. Rebuilds configcrate definitions, role definitions, and match blocks
 3. The next agent check-in gets the updated config
 
 No server restart needed. Config parse errors are logged and trigger an SMTP notification if configured.
@@ -602,7 +602,7 @@ Beyond basic resource definitions, Vigo supports several advanced config pattern
 
 ## defaults
 
-Apply default attributes to all resources in a module:
+Apply default attributes to all resources in a configcrate:
 
 ```yaml
 name: web-configs
@@ -695,18 +695,18 @@ vars:
       comment: App server
 ```
 
-Empty lists produce zero resources — canonical modules stay untouched.
+Empty lists produce zero resources — canonical configcrates stay untouched.
 
-To instantiate a *whole module* per item (not just one resource), put `foreach:` on the module reference instead — see [Module-level `foreach:`](#module-level-foreach--stamp-out-a-module-per-item).
+To instantiate a *whole configcrate* per item (not just one resource), put `foreach:` on the configcrate reference instead — see [Configcrate-level `foreach:`](#module-level-foreach--stamp-out-a-module-per-item).
 
-### Module-level `foreach:` — Stamp Out a Module Per Item
+### Configcrate-level `foreach:` — Stamp Out a Configcrate Per Item
 
 **Problem:** A "vhost" isn't one resource — it's a docroot directory *plus* a config file *plus* a logrotate stanza *plus* a service reload. You have 8 of them, each with a different `server_name` and a couple of per-vhost knobs. Resource-level `foreach:` (Layer 4) only multiplies *one* resource at a time; you want to multiply the whole bundle.
 
-**Solution:** Write the bundle once as a module, then reference it with `foreach:` — the module is instantiated once per item in a list var. Each item's fields are available throughout the module's resources as `{{ .Each.<field> }}` (or `{{ .Item }}` for a list of scalars).
+**Solution:** Write the bundle once as a configcrate, then reference it with `foreach:` — the configcrate is instantiated once per item in a list var. Each item's fields are available throughout the configcrate's resources as `{{ .Each.<field> }}` (or `{{ .Item }}` for a list of scalars).
 
 ```yaml
-# modules/vhost.vgo — the "vhost type", written once
+# configcrates/vhost.vgo — the "vhost type", written once
 name: vhost
 vars:
   doc_root_base: "/var/www"
@@ -721,7 +721,7 @@ resources:
     target_path: "/etc/nginx/sites-enabled/{{ .Each.server_name }}.conf"
     source: templates/nginx-vhost.tmpl     # the template sees .Each, .Vars, .Traits
     depends_on: [vhost-docroot]
-    notify: [nginx-reload]                 # a resource in the (singleton) nginx module
+    notify: [nginx-reload]                 # a resource in the (singleton) nginx configcrate
   - name: vhost-logrotate
     type: file
     target_path: "/etc/logrotate.d/nginx-{{ .Each.server_name }}"
@@ -730,9 +730,9 @@ resources:
 ```
 
 ```yaml
-# roles/webserver.vgo — reference the module with foreach: + key:
+# roles/webserver.vgo — reference the configcrate with foreach: + key:
 name: webserver
-modules:
+configcrates:
   - nginx                       # singleton: package + service (defines nginx-reload)
   - name: vhost
     foreach: vhosts             # the var list to iterate
@@ -750,21 +750,21 @@ env:
         - server_name: shop.example.com
 ```
 
-On a production web host this expands to module instances **`vhost[www.example.com]`** and **`vhost[shop.example.com]`**, each carrying its three resources with `{{ .Each.server_name }}` baked in. The module is written once; every host's set of vhosts is pure data, and it can live at whatever layer fits — a `common.vgo` for "every host in this subtree", `environments.vgo` for "prod vs. staging", or the match block for one host.
+On a production web host this expands to configcrate instances **`vhost[www.example.com]`** and **`vhost[shop.example.com]`**, each carrying its three resources with `{{ .Each.server_name }}` baked in. The configcrate is written once; every host's set of vhosts is pure data, and it can live at whatever layer fits — a `common.vgo` for "every host in this subtree", `environments.vgo` for "prod vs. staging", or the match block for one host.
 
-**Naming.** A foreach instance and its resources are suffixed with `[<key>]` — module `vhost[www.example.com]`, resource `vhost-conf[www.example.com]` — so instances never collide. You write plain resource names in the module; the loader does the suffixing, and rewrites intra-module `depends_on`/`notify`/`subscribes`/`before` references to match (so `depends_on: [vhost-docroot]` becomes `depends_on: [vhost-docroot[www.example.com]]` inside that instance, while a reference to a resource in another module — `notify: [nginx-reload]` — is left alone).
+**Naming.** A foreach instance and its resources are suffixed with `[<key>]` — configcrate `vhost[www.example.com]`, resource `vhost-conf[www.example.com]` — so instances never collide. You write plain resource names in the configcrate; the loader does the suffixing, and rewrites intra-configcrate `depends_on`/`notify`/`subscribes`/`before` references to match (so `depends_on: [vhost-docroot]` becomes `depends_on: [vhost-docroot[www.example.com]]` inside that instance, while a reference to a resource in another configcrate — `notify: [nginx-reload]` — is left alone).
 
 **Keys.**
 
 - A list of **scalars** (`foreach: cache_kinds` over `[nginx, redis]`) is keyed by the value: instances `cache[nginx]`, `cache[redis]`. Omit `key:`.
 - A list of **maps** requires `key:` on the ref naming which field supplies the suffix. It's a load-time error to omit it, to point `key:` at a field an item lacks, or for two items to resolve to the same key.
 
-**Var defaults.** A foreach instance still gets the module's `vars:` defaults (`doc_root_base` above), merged with the envoy's vars as usual. The `{{ .Each.<field> }}` values come from the list item and are substituted at config-load time; `{{ .Vars.<field> }}` and `{{ .Traits.<field> }}` resolve at check-in like any other module. Because `.Each` is substituted by name at load time, **every item must provide every `.Each` field the module references** — a leftover `{{ .Each.something }}` is a load error, not a silent skip.
+**Var defaults.** A foreach instance still gets the configcrate's `vars:` defaults (`doc_root_base` above), merged with the envoy's vars as usual. The `{{ .Each.<field> }}` values come from the list item and are substituted at config-load time; `{{ .Vars.<field> }}` and `{{ .Traits.<field> }}` resolve at check-in like any other configcrate. Because `.Each` is substituted by name at load time, **every item must provide every `.Each` field the configcrate references** — a leftover `{{ .Each.something }}` is a load error, not a silent skip.
 
-**Per-instance variation** is interpolation (`{{ .Each.port }}`) plus, for "this instance also gets an extra resource", a resource in the module gated on `when:` against an item field:
+**Per-instance variation** is interpolation (`{{ .Each.port }}`) plus, for "this instance also gets an extra resource", a resource in the configcrate gated on `when:` against an item field:
 
 ```yaml
-  # in modules/vhost.vgo
+  # in configcrates/vhost.vgo
   - name: vhost-extra-locations
     type: blockinfile
     when: "'{{ .Each.has_extra }}' == 'yes'"        # items set has_extra: yes / no
@@ -772,9 +772,9 @@ On a production web host this expands to module instances **`vhost[www.example.c
     content: "{{ .Each.extra_locations }}"
 ```
 
-Items then carry `has_extra: yes` (and `extra_locations:`) or `has_extra: no`. Vigo's template language is interpolation-only — there is no `{{ if }}`/`{{ range }}` *inside* a `content:` body — so per-instance structural differences are expressed as separate `when:`-gated resources (or, for a clean split, a second module `foreach:`-ed over a filtered sub-list). This is by design: config stays data, readable at a glance, and statically lintable.
+Items then carry `has_extra: yes` (and `extra_locations:`) or `has_extra: no`. Vigo's template language is interpolation-only — there is no `{{ if }}`/`{{ range }}` *inside* a `content:` body — so per-instance structural differences are expressed as separate `when:`-gated resources (or, for a clean split, a second configcrate `foreach:`-ed over a filtered sub-list). This is by design: config stays data, readable at a glance, and statically lintable.
 
-**Limitations.** A module can be `foreach:`-ed under one name at most (the same name used both plainly and with `foreach:`, or two `foreach:` refs of the same module, is collapsed by the first-ref-wins rule — put everything in one list). A resource *inside* a foreach'd module that carries its own resource-level `foreach:` iterates a global var, not the module item — nested data-dependent iteration isn't supported.
+**Limitations.** A configcrate can be `foreach:`-ed under one name at most (the same name used both plainly and with `foreach:`, or two `foreach:` refs of the same configcrate, is collapsed by the first-ref-wins rule — put everything in one list). A resource *inside* a foreach'd configcrate that carries its own resource-level `foreach:` iterates a global var, not the configcrate item — nested data-dependent iteration isn't supported.
 
 
 
@@ -956,7 +956,7 @@ Default timeouts by resource type:
 ---
 ## When Expressions
 
-The `when:` attribute on resources and modules controls conditional execution. Expressions evaluate to true or false — the resource is skipped when false.
+The `when:` attribute on resources and configcrates controls conditional execution. Expressions evaluate to true or false — the resource is skipped when false.
 
 ## Syntax
 
@@ -1150,13 +1150,13 @@ If the expression is fully resolved after variable substitution (e.g., `true && 
 
 If the expression contains builtin function calls, it's passed to the agent for local evaluation.
 
-## Module-Level When
+## Configcrate-Level When
 
-Apply a `when:` to an entire module reference:
+Apply a `when:` to an entire configcrate reference:
 
 ```yaml
 # In a role definition
-modules:
+configcrates:
   - name: monitoring
     when: "!is_container"
 ```
@@ -1166,39 +1166,39 @@ Or in envoys.vgo:
 ```yaml
 envoys:
   - match: "*"
-    modules:
+    configcrates:
       - name: monitoring
         when: "!is_container"
 ```
 
 ## Role-Level When
 
-Apply a `when:` to an entire role definition. All modules inherit the condition:
+Apply a `when:` to an entire role definition. All configcrates inherit the condition:
 
 ```yaml
 - name: cis-ubuntu
   when: "distro('ubuntu')"
-  modules: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
+  configcrates: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
 ```
 
 ## Role Case
 
-Use `case:` for roles that need different modules per platform:
+Use `case:` for roles that need different configcrates per platform:
 
 ```yaml
 - name: remote-access
   case:
     - when: "os_family('linux')"
-      modules: [x11vnc, xrdp]
+      configcrates: [x11vnc, xrdp]
     - when: "os_family('windows')"
-      modules: [tightvnc]
+      configcrates: [tightvnc]
 ```
 
-All matching cases contribute modules. A module with its own `when:` keeps it regardless of the case condition.
+All matching cases contribute configcrates. A configcrate with its own `when:` keeps it regardless of the case condition.
 
 ### Inheritance Precedence
 
-1. Module's own `when:` (highest priority)
+1. Configcrate's own `when:` (highest priority)
 2. Case `when:`
 3. Role definition `when:`
 4. Role ref `when:` (at the match block)
@@ -1235,7 +1235,7 @@ Templates have access to two namespaces:
 
 ### .Vars
 
-Module variables (after resolution):
+Configcrate variables (after resolution):
 
 ```yaml
 vars:
@@ -1408,30 +1408,30 @@ Vigo composes an envoy's effective config from **a small number of orthogonal ax
 
 The whole config operation lives under a single parent directory, **stacks** (`/srv/vigo/stacks/`). Inside it, three subtrees have distinct roles:
 
-- **`stockpile/`** — the operator's working tree. Holds *every* config primitive: `modules/` (definitions), `usercrates/`, `templates/`, `tasks/`, `workflows/`, plus the assignment files themselves (`envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`) and directory-inherited `compliance.vgo` claims. **There is one operator-edited tree.**
+- **`stockpile/`** — the operator's working tree. Holds *every* config primitive: `configcrates/` (definitions), `usercrates/`, `templates/`, `tasks/`, `workflows/`, plus the assignment files themselves (`envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`) and directory-inherited `compliance.vgo` claims. **There is one operator-edited tree.**
 - **`examples/`** — read-only install-template tree seeded by the image. Operators copy from here into stockpile via `vigocli config examples copy <name>`.
-- **`anti-examples/`** — read-only retract-template tree, mirroring `examples/modules/` one-for-one. Each install template `examples/modules/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/modules/<cat>/<name>-retract.vgo.example`. Copy with `vigocli config anti-examples copy <name>`; verify completeness with `vigocli config anti-examples mirror-check`. Never read by the server, never published.
+- **`anti-examples/`** — read-only retract-template tree, mirroring `examples/configcrates/` one-for-one. Each install template `examples/configcrates/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/configcrates/<cat>/<name>-retract.vgo.example`. Copy with `vigocli config anti-examples copy <name>`; verify completeness with `vigocli config anti-examples mirror-check`. Never read by the server, never published.
 - **`.live/`** — the validated published output. `vigocli config publish` lints stockpile and atomically syncs it here; the server reads `.live/` on every reload.
 
 Operators edit `stockpile/`. Never `.live/`. Never edit `examples/` directly — copy first, then edit your stockpile copy.
 
-> The 0.33.1 collapse merged the prior `worksite/{stockpile,scaffolding,structure}/` layout into the `stacks/{stockpile,examples,.live}/` shape. Existing installs migrate automatically on first boot. The `scaffolding/` tree is gone — its contents (hostcrates, roles, common.vgo, waivers, environments.vgo) live in stockpile alongside modules and usercrates.
+> The 0.33.1 collapse merged the prior `worksite/{stockpile,scaffolding,structure}/` layout into the `stacks/{stockpile,examples,.live}/` shape. Existing installs migrate automatically on first boot. The `scaffolding/` tree is gone — its contents (hostcrates, roles, common.vgo, waivers, environments.vgo) live in stockpile alongside configcrates and usercrates.
 
 ## The axes
 
 | Axis | Where | What it does |
 |---|---|---|
 | **Directory structure** | `stockpile/<org>/<site>/` | Organizes by business axis (customer, site, tenant). Inheritance via `common.vgo`. **Not used for env.** |
-| **Hostcrates** | `stockpile/**/envoys.vgo` (or any `.vgo` with an `envoys:` block, anywhere outside `modules/`/`templates/`/`tasks/`/`workflows/`/`usercrates/`) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
-| **Roles** | `stockpile/roles.vgo` | Named groupings of modules. Supports `when:` (role-wide) and `case:` (per-platform module groups). Single fleet-wide file at the stockpile root. |
-| **Modules** | `stockpile/modules/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `modules/` on disk; YAML keys and identifiers stay `module`. |
-| **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user modules. Inert until positively included via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo). |
-| **Common defaults** | `stockpile/**/common.vgo` | Directory-inherited modules/usercrates/roles/vars + `exclude_modules`. |
+| **Hostcrates** | `stockpile/**/envoys.vgo` (or any `.vgo` with an `envoys:` block, anywhere outside `configcrates/`/`templates/`/`tasks/`/`workflows/`/`usercrates/`) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
+| **Roles** | `stockpile/roles.vgo` | Named groupings of configcrates. Supports `when:` (role-wide) and `case:` (per-platform configcrate groups). Single fleet-wide file at the stockpile root. |
+| **Configcrates** | `stockpile/configcrates/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `configcrates/` on disk; YAML keys and identifiers stay `configcrate`. |
+| **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user configcrates. Inert until positively included via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo). |
+| **Common defaults** | `stockpile/**/common.vgo` | Directory-inherited configcrates/usercrates/roles/vars + `exclude_configcrates`. |
 | **Environment** | `environment:` field on match block | Cross-cutting env declaration. Orthogonal to directory structure. |
-| **Per-env overrides** | `stockpile/**/environments.vgo` | Env-specific module sets + vars. Scope follows ancestor chain. |
-| **Lookup tables** | Inside module fields (`tag:...`, `os_family:...`) | Per-trait or per-tag field variation. |
+| **Per-env overrides** | `stockpile/**/environments.vgo` | Env-specific configcrate sets + vars. Scope follows ancestor chain. |
+| **Lookup tables** | Inside configcrate fields (`tag:...`, `os_family:...`) | Per-trait or per-tag field variation. |
 | **Conditional resources** | `when:` on individual resources | Skip a resource based on traits or vars. |
-| **Compliance claims** | `stockpile/**/compliance.vgo` | Directory-level claim inheritance for modules + usercrates. |
+| **Compliance claims** | `stockpile/**/compliance.vgo` | Directory-level claim inheritance for configcrates + usercrates. |
 | **Waivers** | `stockpile/**/waivers.vgo` | Per-envoy compliance exceptions. |
 
 ### Canonical filename rule
@@ -1446,7 +1446,7 @@ Two file shapes are protected by name. Both live in stockpile:
 Mixing the keys inside a file (e.g., `compliance.vgo` carrying a `waivers:` block) is rejected at publish and reload with a move hint. The validator also rejects:
 
 - Any `.vgo` file with a top-level `waivers:` block but not named `waivers.vgo` — the loader globs the exact filename, so a stray `corp-waivers.vgo` would silently not load. Rename to `waivers.vgo`.
-- Any "claims-only" `.vgo` file (top-level `compliance:` with no `resources:`/`name:`/`vars:`) not named `compliance.vgo` — same trap. Rename to `compliance.vgo`. Module definitions carrying their own `compliance:` block are unaffected (the validator looks at presence of `resources:`/`name:` to distinguish modules from claim files).
+- Any "claims-only" `.vgo` file (top-level `compliance:` with no `resources:`/`name:`/`vars:`) not named `compliance.vgo` — same trap. Rename to `compliance.vgo`. Configcrate definitions carrying their own `compliance:` block are unaffected (the validator looks at presence of `resources:`/`name:` to distinguish configcrates from claim files).
 
 ## Resolution order — one diagram
 
@@ -1466,16 +1466,16 @@ For an envoy `web01.customerA.example.com` checking in:
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  Compose module list (in order)                                  │
+│  Compose configcrate list (in order)                                  │
 │                                                                  │
-│  1. Inherited common.vgo modules (parent → child)                │
+│  1. Inherited common.vgo configcrates (parent → child)                │
 │       stockpile/common.vgo              → [baseline, monitoring] │
 │       stockpile/customerA/common.vgo    → [customerA-baseline]   │
 │                                                                  │
-│  2. Role modules (expand via roles.vgo; case: applied per OS)    │
+│  2. Role configcrates (expand via roles.vgo; case: applied per OS)    │
 │       web-server → [nginx, php, tls]                             │
 │                                                                  │
-│  3. Usercrates (positive include — same 4 carriers as modules)   │
+│  3. Usercrates (positive include — same 4 carriers as configcrates)   │
 │       common.vgo `usercrates: [dan]`            → users/dan      │
 │       match block `usercrates: [alice]`         → users/alice    │
 │                                                                  │
@@ -1488,15 +1488,15 @@ For an envoy `web01.customerA.example.com` checking in:
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Apply exclusions                                                │
-│    match block:  exclude_modules                                 │
-│    per_env:      exclude_modules per env                         │
+│    match block:  exclude_configcrates                                 │
+│    per_env:      exclude_configcrates per env                         │
 └──────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Attach compliance claims (from stockpile/**/compliance.vgo)     │
-│  to each module in the list, walking up the directory ancestor   │
-│  chain of each module's source file.                             │
+│  to each configcrate in the list, walking up the directory ancestor   │
+│  chain of each configcrate's source file.                             │
 └──────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -1508,12 +1508,12 @@ For an envoy `web01.customerA.example.com` checking in:
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Var resolution (3-layer, low → high)                            │
-│    module defaults                                               │
+│    configcrate defaults                                               │
 │      < common.vgo inherited vars (parent → child)                │
 │      < match-block vars                                          │
 │      < environments.vgo vars (env == "prod")                     │
 │                                                                  │
-│  Tag-keyed and platform-keyed lookup tables inside modules       │
+│  Tag-keyed and platform-keyed lookup tables inside configcrates       │
 │  resolve final field values based on the envoy's tags + traits.  │
 └──────────────────────────────────────────────────────────────────┘
                               │
@@ -1532,16 +1532,16 @@ For an envoy `web01.customerA.example.com` checking in:
 
 | Question | Canonical answer |
 |---|---|
-| How does a module get assigned to an envoy? | Via a **role** (defined in `stockpile/roles.vgo`) that the hostcrate assigns, OR via inheritance from `stockpile/**/common.vgo`. Inline `modules:` on a match block is allowed but warns at >4 entries — that's the signal you should define a role. |
-| How does a host get per-host config? | Tag the host in its match block; use tag-keyed lookup tables inside modules to vary field values. Separate match blocks only for genuinely bespoke hosts. |
-| How does config differ per env? | Declare `environment:` on the match block. Declare env-specific modules/vars in `stockpile/**/environments.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
-| How does a module branch per OS / platform? | `case:` on the role (when whole modules differ per platform) OR platform-keyed lookup tables inside module fields (when only values differ). Never inline `when:` on a resource when the axis is platform — that's harder to read. |
-| How do vars resolve? | 3 layers, low-to-high: module defaults < common.vgo inherited vars < envoy match-block vars < environments.vgo vars. |
+| How does a configcrate get assigned to an envoy? | Via a **role** (defined in `stockpile/roles.vgo`) that the hostcrate assigns, OR via inheritance from `stockpile/**/common.vgo`. Inline `configcrates:` on a match block is allowed but warns at >4 entries — that's the signal you should define a role. |
+| How does a host get per-host config? | Tag the host in its match block; use tag-keyed lookup tables inside configcrates to vary field values. Separate match blocks only for genuinely bespoke hosts. |
+| How does config differ per env? | Declare `environment:` on the match block. Declare env-specific configcrates/vars in `stockpile/**/environments.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
+| How does a configcrate branch per OS / platform? | `case:` on the role (when whole configcrates differ per platform) OR platform-keyed lookup tables inside configcrate fields (when only values differ). Never inline `when:` on a resource when the axis is platform — that's harder to read. |
+| How do vars resolve? | 3 layers, low-to-high: configcrate defaults < common.vgo inherited vars < envoy match-block vars < environments.vgo vars. |
 | How is a user account configured? | A **usercrate** in `stockpile/usercrates/` (fleet-wide) or `stockpile/<scope>/usercrates/` (scoped). The directory is a library — positively include via a `usercrates:` field on a carrier (match block, common.vgo, role, or environments.vgo). See [User Management](#usercrates). |
-| Where do compliance claims live? | `stockpile/**/compliance.vgo` — directory-level, inherited by every module and usercrate in the subtree. Inline `compliance:` on a module definition for module-specific exceptions. |
+| Where do compliance claims live? | `stockpile/**/compliance.vgo` — directory-level, inherited by every configcrate and usercrate in the subtree. Inline `compliance:` on a configcrate definition for configcrate-specific exceptions. |
 | Where do waivers live? | `stockpile/**/waivers.vgo` — at any directory level, scoped by directory. Distinct filename from compliance claims. |
 | Where do I copy an example from? | `vigocli config examples list` to browse, then `vigocli config examples copy <name>` to materialize one into stockpile. |
-| Where does a module example's retract come from? | `vigocli config anti-examples copy <name>` materializes the paired retract from `anti-examples/modules/<cat>/<name>-retract.vgo.example` into stockpile alongside the install module. `vigocli config anti-examples mirror-check` reports any module example missing a paired retract. |
+| Where does a configcrate example's retract come from? | `vigocli config anti-examples copy <name>` materializes the paired retract from `anti-examples/configcrates/<cat>/<name>-retract.vgo.example` into stockpile alongside the install configcrate. `vigocli config anti-examples mirror-check` reports any configcrate example missing a paired retract. |
 
 ## Directory layout — reference
 
@@ -1550,18 +1550,18 @@ For an envoy `web01.customerA.example.com` checking in:
 ├── stockpile/                    ← operator-edited working tree
 │   ├── compliance.vgo            ← fleet-wide claims
 │   ├── waivers.vgo               ← fleet-wide waivers
-│   ├── common.vgo                ← fleet-wide defaults (modules, roles, vars)
+│   ├── common.vgo                ← fleet-wide defaults (configcrates, roles, vars)
 │   ├── environments.vgo          ← fleet-wide env overrides (optional)
 │   ├── roles.vgo                 ← role definitions (single, fleet-wide)
 │   │
-│   ├── modules/                  ← module definitions (any depth)
+│   ├── configcrates/                  ← configcrate definitions (any depth)
 │   │   ├── nginx.vgo
 │   │   ├── postgres.vgo
-│   │   └── compliance.vgo        ← claims inherited by every module beneath
+│   │   └── compliance.vgo        ← claims inherited by every configcrate beneath
 │   ├── usercrates/               ← user-scoped library (include via `usercrates:` on a carrier)
 │   │   ├── dan.vgo
 │   │   └── compliance.vgo        ← claims inherited by every usercrate here
-│   ├── templates/                ← Go template files referenced by source: in modules
+│   ├── templates/                ← Go template files referenced by source: in configcrates
 │   ├── tasks/                    ← reusable task definitions for `vigocli task dispatch`
 │   ├── workflows/                ← workflow definitions
 │   │
@@ -1574,12 +1574,12 @@ For an envoy `web01.customerA.example.com` checking in:
 │           └── alice.vgo         ← customerA-only usercrate
 │
 ├── examples/                     ← read-only install templates (image-seeded)
-│   ├── modules/<cat>/<name>.vgo.example
+│   ├── configcrates/<cat>/<name>.vgo.example
 │   ├── usercrates/<name>.vgo.example
 │   └── ...
 │
-├── anti-examples/                ← read-only retract templates (mirrors examples/modules)
-│   └── modules/<cat>/<name>-retract.vgo.example
+├── anti-examples/                ← read-only retract templates (mirrors examples/configcrates)
+│   └── configcrates/<cat>/<name>-retract.vgo.example
 │
 └── .live/                        ← validated published output (server reads here;
                                     locked read-only between publishes)
@@ -1591,7 +1591,7 @@ Key rules:
 - **Operators only edit `stockpile/`.** `.live/` is locked between publishes; `examples/` is image-managed.
 - **No env in directory paths.** No `prod/` or `staging/` directories. Env is a field on the match block.
 - **Roles live once.** `stockpile/roles.vgo`, fleet-wide.
-- **Modules live under `stockpile/modules/`.** Walked recursively.
+- **Configcrates live under `stockpile/configcrates/`.** Walked recursively.
 - **Usercrates live at any scope within stockpile.** Root for fleet-wide, customer subdir for customer-scoped.
 - **Organization axes** (customer, site, tenant, region, cloud) mirror your business, not your infrastructure. `aws/` or `gcp/` also works if cloud is your organizing axis.
 
@@ -1603,7 +1603,7 @@ User accounts also vary per-envoy more than any other resource (per-host shell, 
 
 ### Retirement two-phase (do not skip)
 
-When a person leaves, the user resource must be **`state: absent` in the config for at least one convergence cycle** so the agent actually runs `userdel`. Deleting the usercrate file directly stops the module from being applied but never tells the agent to delete the account.
+When a person leaves, the user resource must be **`state: absent` in the config for at least one convergence cycle** so the agent actually runs `userdel`. Deleting the usercrate file directly stops the configcrate from being applied but never tells the agent to delete the account.
 
 The convention:
 
@@ -1614,7 +1614,7 @@ The convention:
 
 ### Things that look right but aren't
 
-- **User resources in general-purpose modules.** Don't put `type: user` in `modules/base.vgo`. Git blame becomes useless and per-person audit is impossible. Put it in a usercrate.
+- **User resources in general-purpose configcrates.** Don't put `type: user` in `configcrates/base.vgo`. Git blame becomes useless and per-person audit is impossible. Put it in a usercrate.
 - **Dropping a file into `usercrates/` and assuming it applies.** As of 0.54.0 the directory is a library; a usercrate is inert until positively included via a carrier's `usercrates:` field. Include fleet-wide users in `stockpile/common.vgo`; scope-restricted users in the scoped carrier (subdir `common.vgo`, match block, role, or per-env override).
 - **One human across multiple files.** Splitting a human's config across files makes history noisier without benefit. The opposite — multiple humans per file (a team / role / on-call rotation crate) — is supported when the group genuinely moves together; drop the bundle from a carrier's `usercrates:` list to remove it cleanly.
 
@@ -1736,9 +1736,9 @@ Use `default: []` for list fields that should be empty when no arm matches, `def
 At config load time, vigo scans every resource attribute and sets `HasLookups=true` on the `EnvoyConfig` if any attribute is a lookup table. At check-in time, configs with `HasLookups=true` bypass the pattern-level policy cache and get a freshly resolved bundle per envoy — the same mechanism that `case:` conditional resources already use. The cost is a bundle rebuild per check-in for affected envoys; for configs without lookups, nothing changes.
 
 ---
-## Module Retraction
+## Configcrate Retraction
 
-Module retraction automatically generates `.retract` files --- the reverse of each module --- so you always have a clean undo ready. When enabled, `vigocli config publish` generates a retract module for every new or changed module, and shows affected envoys when a module is removed.
+Configcrate retraction automatically generates `.retract` files --- the reverse of each configcrate --- so you always have a clean undo ready. When enabled, `vigocli config publish` generates a retract configcrate for every new or changed configcrate, and shows affected envoys when a configcrate is removed.
 
 ## Requirements
 
@@ -1756,26 +1756,26 @@ publish:
 
 ## How It Works
 
-### On new or changed modules
+### On new or changed configcrates
 
-1. Run `vigocli config publish` after adding or modifying a module in `stockpile/modules/`
-2. The publish pipeline detects new/changed modules and reads their content
-3. The server generates a deterministic retract module (flipping each resource to its absent state)
+1. Run `vigocli config publish` after adding or modifying a configcrate in `stockpile/configcrates/`
+2. The publish pipeline detects new/changed configcrates and reads their content
+3. The server generates a deterministic retract configcrate (flipping each resource to its absent state)
 4. The AI reviews and improves the draft, especially for `exec` resources where reversal requires reasoning
-5. A `.retract` file is written alongside the module in `stockpile/modules/`
+5. A `.retract` file is written alongside the configcrate in `stockpile/configcrates/`
 
-### On removed modules
+### On removed configcrates
 
-1. Run `vigocli config publish` after removing a module from `stockpile/modules/`
-2. The publish pipeline detects the removal and reads the module content from the previous config
-3. The server generates the retract module and looks up which envoys previously ran it
-4. A `.retract` file is written to `stockpile/modules/` with a detailed summary of affected envoys and per-resource confidence levels
+1. Run `vigocli config publish` after removing a configcrate from `stockpile/configcrates/`
+2. The publish pipeline detects the removal and reads the configcrate content from the previous config
+3. The server generates the retract configcrate and looks up which envoys previously ran it
+4. A `.retract` file is written to `stockpile/configcrates/` with a detailed summary of affected envoys and per-resource confidence levels
 
 ## Generated Output
 
-The generated `.retract` file is inert --- it won't be loaded by the config system until renamed to `.vgo`. For removed modules, the CLI also prints:
+The generated `.retract` file is inert --- it won't be loaded by the config system until renamed to `.vgo`. For removed configcrates, the CLI also prints:
 
-- Which envoys previously ran the module
+- Which envoys previously ran the configcrate
 - Per-resource confidence levels (high for package/file/service, low for exec)
 - Step-by-step instructions for applying the retraction
 
@@ -1797,13 +1797,13 @@ The generated `.retract` file is inert --- it won't be loaded by the config syst
 
 ## Applying a Retraction
 
-1. Review the generated file: `stockpile/modules/<name>.retract`
+1. Review the generated file: `stockpile/configcrates/<name>.retract`
 2. Rename to `<name>-retract.vgo`
-3. Add module `<name>-retract` to the relevant match blocks or roles
+3. Add configcrate `<name>-retract` to the relevant match blocks or roles
 4. Run `vigocli config publish`
-5. After all affected envoys converge, remove the retract module and its match block
+5. After all affected envoys converge, remove the retract configcrate and its match block
 
-The retract module is idempotent --- it's safe to leave in the config for multiple convergence cycles while all envoys catch up. Remove it once cleanup is confirmed.
+The retract configcrate is idempotent --- it's safe to leave in the config for multiple convergence cycles while all envoys catch up. Remove it once cleanup is confirmed.
 
 ## API
 
@@ -1813,29 +1813,29 @@ Called automatically by `vigocli config publish`. Can also be called directly:
 
 ```json
 {
-  "modules": [
+  "configcrates": [
     {"name": "nginx", "content": "name: nginx\nresources:\n  ..."}
   ]
 }
 ```
 
-Returns generated retract YAML, warnings, and affected envoy list for each module.
+Returns generated retract YAML, warnings, and affected envoy list for each configcrate.
 
 ## Example Retractions
 
-Every example module in `example-configs/stockpile/modules/` has a pre-built retraction counterpart in `example-configs/retractions/modules/`. These follow the same reversal rules documented above and serve as reference implementations.
+Every example configcrate in `example-configs/stockpile/configcrates/` has a pre-built retraction counterpart in `example-configs/retractions/configcrates/`. These follow the same reversal rules documented above and serve as reference implementations.
 
 To use an example retraction:
 
 1. Copy the retraction to your stockpile:
    ```bash
-   cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
-      /srv/vigo/stacks/stockpile/modules/nginx-retract.vgo
+   cp example-configs/retractions/configcrates/web/nginx-retract.vgo.example \
+      /srv/vigo/stacks/stockpile/configcrates/nginx-retract.vgo
    ```
 2. Review the file, especially any `# REVIEW:` or `# WARNING:` comments
 3. Add `nginx-retract` to the relevant match blocks or roles
 4. Publish: `vigocli config publish`
-5. After all affected envoys converge, remove the retract module and its match block
+5. After all affected envoys converge, remove the retract configcrate and its match block
 
 ---
 ## Stream-Edit
@@ -1877,7 +1877,7 @@ stream_edit:
   enabled: false
 ```
 
-Modules that reference `stream_edit:` against a disabled server receive a resource-level error at check-in and the file won't be written.
+Configcrates that reference `stream_edit:` against a disabled server receive a resource-level error at check-in and the file won't be written.
 
 ### `stream_edit.allowed_paths`
 

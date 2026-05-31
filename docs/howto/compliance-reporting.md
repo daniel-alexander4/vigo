@@ -1,18 +1,18 @@
 
 # Compliance reporting
 
-You'll finish this page with module-level `compliance:` tags rolled up into per-framework coverage that auditors can read directly — produced as JSON or HTML on the CLI, or browsed on the `/compliance` Web UI. The numbers come from one place: modules declare what controls they satisfy, the server unions that across the fleet (plus Connwaer trait checks and `waivers.vgo`), and every surface reads from the same join. No spreadsheets, no per-control bookkeeping outside the module file itself.
+You'll finish this page with configcrate-level `compliance:` tags rolled up into per-framework coverage that auditors can read directly — produced as JSON or HTML on the CLI, or browsed on the `/compliance` Web UI. The numbers come from one place: configcrates declare what controls they satisfy, the server unions that across the fleet (plus Connwaer trait checks and `waivers.vgo`), and every surface reads from the same join. No spreadsheets, no per-control bookkeeping outside the configcrate file itself.
 
 **When you'd use this:** any time you need an artifact for an external auditor (HIPAA, SOC 2, PCI, HITRUST, CIS), feed evidence into a GRC platform (Vanta / Drata / Secureframe / Laika / Thoropass / ServiceNow), or answer "what controls is our fleet satisfying?" from a single command.
 
-**When you'd skip this:** controls Vigo can't honestly attest (physical security, BAA paperwork, vendor reviews) — declare those in `waivers.vgo` and document the rationale; don't tag a module that can't actually prove the control.
+**When you'd skip this:** controls Vigo can't honestly attest (physical security, BAA paperwork, vendor reviews) — declare those in `waivers.vgo` and document the rationale; don't tag a configcrate that can't actually prove the control.
 
-## Tag your modules
+## Tag your configcrates
 
-Every module that satisfies a control gets a `compliance:` block. Use the framework's actual control IDs:
+Every configcrate that satisfies a control gets a `compliance:` block. Use the framework's actual control IDs:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/modules/openvpn.vgo
+# /srv/vigo/stacks/stockpile/configcrates/openvpn.vgo
 name: openvpn
 compliance:
   hipaa:       ["164.312(e)(1)", "164.312(e)(2)(ii)"]
@@ -24,11 +24,11 @@ resources:
   - …
 ```
 
-See the [compliance matrix](../reference/compliance-matrix.md) for the canonical control → Vigo-coverage table; use it to figure out which modules satisfy what.
+See the [compliance matrix](../reference/compliance-matrix.md) for the canonical control → Vigo-coverage table; use it to figure out which configcrates satisfy what.
 
 A control counts as covered for an envoy when **any** of the following is true:
 
-1. The envoy has a module tagged with that control.
+1. The envoy has a configcrate tagged with that control.
 2. A Connwaer trait check escalates it to satisfied.
 3. A waiver applies (declared in `waivers.vgo`).
 
@@ -67,7 +67,7 @@ vigocli compliance report audit-bundle hipaa --output hipaa-audit-2026-Q2.zip
 HTML reports render server-side; JSON reports give you the same data shaped for ingestion. Output includes:
 
 - Executive summary with overall coverage % per framework.
-- Per-control table: control ID, description, status (covered / partial / uncovered / waived), satisfying modules, attesting envoys, last-converged timestamp.
+- Per-control table: control ID, description, status (covered / partial / uncovered / waived), satisfying configcrates, attesting envoys, last-converged timestamp.
 - For `audit-bundle`: a hash-chained audit-log extract over the report window.
 
 ## Feed a GRC platform
@@ -125,22 +125,22 @@ Waivers show up in the per-control attribution as the reason for coverage. Expir
 
 ## Per-framework regulatory checklists
 
-The framework matrix tells you what controls each framework requires and which Vigo modules satisfy them. The checklists below are operator-side preparation work — what evidence to gather, what waivers to file, what conversations to have with the auditor — that goes beyond what Vigo enforces directly.
+The framework matrix tells you what controls each framework requires and which Vigo configcrates satisfy them. The checklists below are operator-side preparation work — what evidence to gather, what waivers to file, what conversations to have with the auditor — that goes beyond what Vigo enforces directly.
 
 ### HIPAA Security Rule checklist
 
 1. **Inventory PHI flows.** List every envoy that touches PHI; tag them with a `phi: true` hostcrate label. Vigo doesn't infer PHI scope — you declare it.
-2. **§164.312(a)(1) access control.** Run the `user` and `sudo` modules; tag them with the relevant HIPAA control. Verify with `vigocli compliance report compliance --format html --output verify.html` and drill into the per-envoy section.
+2. **§164.312(a)(1) access control.** Run the `user` and `sudo` configcrates; tag them with the relevant HIPAA control. Verify with `vigocli compliance report compliance --format html --output verify.html` and drill into the per-envoy section.
 3. **§164.312(b) audit controls.** Vigo's hash-chained audit log satisfies the "audit mechanisms" requirement; export with `vigocli audit export --since 2026-01-01 --to 2026-03-31 --format pdf`.
-4. **§164.312(c) integrity controls.** File-integrity-monitoring modules; pair with Connwaer's WORM verification if you're using it.
+4. **§164.312(c) integrity controls.** File-integrity-monitoring configcrates; pair with Connwaer's WORM verification if you're using it.
 5. **§164.312(e)(1) transmission security.** mTLS is enforced by construction; document with `vigocli compliance report compliance`.
 6. **Business Associate Agreement.** Outside Vigo's scope. Maintain in your contract repository; link from the compliance report.
 7. **Annual risk assessment.** Vigo's `/risk` page produces fleet-wide scoring; export with `vigocli risk report --format pdf`.
 
 ### SOC 2 Type II checklist
 
-1. **Define your trust services criteria scope.** Security, Availability, Processing Integrity, Confidentiality, Privacy — pick the ones in scope and tag modules accordingly.
-2. **Common Criteria (CC) controls.** Most CC controls map to platform hardening (`security-hardening` module set), monitoring (`set-up-monitoring`), and audit (the built-in audit log). Tag and export.
+1. **Define your trust services criteria scope.** Security, Availability, Processing Integrity, Confidentiality, Privacy — pick the ones in scope and tag configcrates accordingly.
+2. **Common Criteria (CC) controls.** Most CC controls map to platform hardening (`security-hardening` configcrate set), monitoring (`set-up-monitoring`), and audit (the built-in audit log). Tag and export.
 3. **Continuous monitoring requirement.** Vigo's 15-second-to-5-minute convergence interval IS your continuous monitoring; document the interval and drift-correction behavior in your SOC 2 narrative.
 4. **Change management.** `vigocli config publish` produces a hash-chained audit trail; export it for the auditor's change-management sample.
 5. **Subservice organizations.** Outside Vigo's scope.
@@ -148,9 +148,9 @@ The framework matrix tells you what controls each framework requires and which V
 
 ### PCI-DSS checklist
 
-1. **CDE scoping.** Tag every envoy in the cardholder-data environment (`cde: true`). Modules that target CDE envoys carry the `pci-dss:` compliance tag.
+1. **CDE scoping.** Tag every envoy in the cardholder-data environment (`cde: true`). Configcrates that target CDE envoys carry the `pci-dss:` compliance tag.
 2. **Requirement 1 — firewall.** Vigo doesn't replace your firewall; it can verify host-firewall state via the `firewall` executor or Connwaer's network-segmentation check.
-3. **Requirement 2 — defaults.** The `security-hardening` module disables default accounts and changes default passwords; cross-reference with `vigocli compliance report pci` and drill into the per-envoy section.
+3. **Requirement 2 — defaults.** The `security-hardening` configcrate disables default accounts and changes default passwords; cross-reference with `vigocli compliance report pci` and drill into the per-envoy section.
 4. **Requirement 6 — secure dev.** Vigo's build provenance (binary signatures, supply-chain attestations) is captured in the audit log.
 5. **Requirement 10 — logging.** mTLS-secured audit shipping to a SIEM; the `integrations` config covers Splunk, Datadog, generic syslog.
 6. **Quarterly ASV scans.** Outside Vigo's scope.
@@ -182,7 +182,7 @@ The framework matrix tells you what controls each framework requires and which V
 
 ## What's next
 
-- **Tag a module** → see the [compliance matrix](../reference/compliance-matrix.md) for which controls each framework expects and which Vigo executors / Connwaer checks satisfy them.
+- **Tag a configcrate** → see the [compliance matrix](../reference/compliance-matrix.md) for which controls each framework expects and which Vigo executors / Connwaer checks satisfy them.
 - **Push evidence to a GRC platform on a schedule** → wire the GRC section in [`server.yaml`](../reference/server-yaml.md).
 - **A control can't be satisfied by automation** → file a waiver in `waivers.vgo` with a rationale and an expiry; the report still labels it covered-by-waiver rather than uncovered.
 - **A report verb fails or the numbers look wrong** → [Troubleshoot common issues](troubleshoot.md).

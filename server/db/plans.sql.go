@@ -10,46 +10,46 @@ import (
 )
 
 const createPlan = `-- name: CreatePlan :one
-INSERT INTO plans (envoy_id, modules)
+INSERT INTO plans (envoy_id, configcrates)
 VALUES (?, ?)
-RETURNING id, envoy_id, created_at, modules
+RETURNING id, envoy_id, created_at, configcrates
 `
 
 type CreatePlanParams struct {
-	EnvoyID string `json:"envoy_id"`
-	Modules string `json:"modules"`
+	EnvoyID      string `json:"envoy_id"`
+	Configcrates string `json:"configcrates"`
 }
 
 func (q *Queries) CreatePlan(ctx context.Context, arg CreatePlanParams) (Plan, error) {
-	row := q.db.QueryRowContext(ctx, createPlan, arg.EnvoyID, arg.Modules)
+	row := q.db.QueryRowContext(ctx, createPlan, arg.EnvoyID, arg.Configcrates)
 	var i Plan
 	err := row.Scan(
 		&i.ID,
 		&i.EnvoyID,
 		&i.CreatedAt,
-		&i.Modules,
+		&i.Configcrates,
 	)
 	return i, err
 }
 
 const createPlanResult = `-- name: CreatePlanResult :one
-INSERT INTO plan_results (plan_id, module_name, resource_type, resource_name, planned_action)
+INSERT INTO plan_results (plan_id, configcrate_name, resource_type, resource_name, planned_action)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, plan_id, module_name, resource_type, resource_name, planned_action
+RETURNING id, plan_id, configcrate_name, resource_type, resource_name, planned_action
 `
 
 type CreatePlanResultParams struct {
-	PlanID        string `json:"plan_id"`
-	ModuleName    string `json:"module_name"`
-	ResourceType  string `json:"resource_type"`
-	ResourceName  string `json:"resource_name"`
-	PlannedAction string `json:"planned_action"`
+	PlanID          string `json:"plan_id"`
+	ConfigcrateName string `json:"configcrate_name"`
+	ResourceType    string `json:"resource_type"`
+	ResourceName    string `json:"resource_name"`
+	PlannedAction   string `json:"planned_action"`
 }
 
 func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultParams) (PlanResult, error) {
 	row := q.db.QueryRowContext(ctx, createPlanResult,
 		arg.PlanID,
-		arg.ModuleName,
+		arg.ConfigcrateName,
 		arg.ResourceType,
 		arg.ResourceName,
 		arg.PlannedAction,
@@ -58,7 +58,7 @@ func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultPara
 	err := row.Scan(
 		&i.ID,
 		&i.PlanID,
-		&i.ModuleName,
+		&i.ConfigcrateName,
 		&i.ResourceType,
 		&i.ResourceName,
 		&i.PlannedAction,
@@ -67,7 +67,7 @@ func (q *Queries) CreatePlanResult(ctx context.Context, arg CreatePlanResultPara
 }
 
 const getPlanByID = `-- name: GetPlanByID :one
-SELECT id, envoy_id, created_at, modules
+SELECT id, envoy_id, created_at, configcrates
 FROM plans
 WHERE id = ?
 `
@@ -79,13 +79,13 @@ func (q *Queries) GetPlanByID(ctx context.Context, id string) (Plan, error) {
 		&i.ID,
 		&i.EnvoyID,
 		&i.CreatedAt,
-		&i.Modules,
+		&i.Configcrates,
 	)
 	return i, err
 }
 
 const listPlanResults = `-- name: ListPlanResults :many
-SELECT id, plan_id, module_name, resource_type, resource_name, planned_action
+SELECT id, plan_id, configcrate_name, resource_type, resource_name, planned_action
 FROM plan_results
 WHERE plan_id = ?
 ORDER BY id ASC
@@ -103,7 +103,7 @@ func (q *Queries) ListPlanResults(ctx context.Context, planID string) ([]PlanRes
 		if err := rows.Scan(
 			&i.ID,
 			&i.PlanID,
-			&i.ModuleName,
+			&i.ConfigcrateName,
 			&i.ResourceType,
 			&i.ResourceName,
 			&i.PlannedAction,

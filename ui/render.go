@@ -1285,7 +1285,7 @@ type usercrateScope struct {
 func traceUsercrates(levels []config.InheritanceLevel) []usercrateScope {
 	var scopes []usercrateScope
 	for _, lvl := range levels {
-		if lvl.File != "usercrates/" || len(lvl.Modules) == 0 {
+		if lvl.File != "usercrates/" || len(lvl.Configcrates) == 0 {
 			continue
 		}
 		scope := lvl.Dir
@@ -1298,7 +1298,7 @@ func traceUsercrates(levels []config.InheritanceLevel) []usercrateScope {
 		scopes = append(scopes, usercrateScope{
 			Scope: scope,
 			Path:  path,
-			Names: append([]string(nil), lvl.Modules...),
+			Names: append([]string(nil), lvl.Configcrates...),
 		})
 	}
 	return scopes

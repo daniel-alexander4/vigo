@@ -47,7 +47,7 @@ func runComplianceBundles(cmd *cobra.Command, _ []string) error {
 	show, _ := cmd.Flags().GetString("show")
 
 	if show != "" {
-		b, ok := compliance.ModuleBundles[show]
+		b, ok := compliance.ConfigcrateBundles[show]
 		if !ok {
 			return fmt.Errorf("unknown bundle %q (run `vigocli compliance bundles` to list)", show)
 		}
@@ -76,7 +76,7 @@ func runComplianceBundles(cmd *cobra.Command, _ []string) error {
 
 	shown := 0
 	for _, id := range ids {
-		b := compliance.ModuleBundles[id]
+		b := compliance.ConfigcrateBundles[id]
 
 		if framework != "" {
 			if _, ok := b.Frameworks[framework]; !ok {

@@ -162,7 +162,7 @@ func TestConfig_RecordPublish(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	body := `{"operator":"alice","changed_files":["modules/nginx.vgo"],"removed_files":[],"diff_summary":"updated nginx module"}`
+	body := `{"operator":"alice","changed_files":["configcrates/nginx.vgo"],"removed_files":[],"diff_summary":"updated nginx module"}`
 	req := httptest.NewRequest("POST", "/api/v1/config/publishes", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -222,7 +222,7 @@ func TestConfig_GetPublish(t *testing.T) {
 	var publishID string
 	err := sqlDB.QueryRow(
 		`INSERT INTO config_publishes (operator, changed_files, removed_files, diff_summary) VALUES (?, ?, ?, ?) RETURNING id`,
-		"alice", `["modules/nginx.vgo"]`, `["modules/old.vgo"]`, "updated nginx",
+		"alice", `["configcrates/nginx.vgo"]`, `["configcrates/old.vgo"]`, "updated nginx",
 	).Scan(&publishID)
 	if err != nil {
 		t.Fatalf("insert publish: %v", err)

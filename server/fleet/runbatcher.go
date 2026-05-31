@@ -15,7 +15,7 @@ import (
 
 // RunBatchResultParam holds per-resource result fields for deferred DB writes.
 type RunBatchResultParam struct {
-	ModuleName   string
+	ConfigcrateName   string
 	ResourceType string
 	ResourceName string
 	ActionTaken  string
@@ -31,7 +31,7 @@ type RunBatchEntry struct {
 	Hostname     string
 	Status       string
 	Trigger      string // "scheduled" | "force-push"; empty defaults to "scheduled"
-	ModuleCount  int64
+	ConfigcrateCount  int64
 	ChangedCount int64
 	FailedCount  int64
 	SkippedCount int64
@@ -123,7 +123,7 @@ func (rb *RunBatcher) persistEntry(ctx context.Context, entry RunBatchEntry) err
 		EnvoyID:     entry.EnvoyID,
 		Status:      "running",
 		Trigger:     trigger,
-		ModuleCount: entry.ModuleCount,
+		ConfigcrateCount: entry.ConfigcrateCount,
 	})
 	if err != nil {
 		return err
@@ -142,7 +142,7 @@ func (rb *RunBatcher) persistEntry(ctx context.Context, entry RunBatchEntry) err
 			}
 			batch = append(batch, db.CreateRunResultParams{
 				RunID:        run.ID,
-				ModuleName:   r.ModuleName,
+				ConfigcrateName:   r.ConfigcrateName,
 				ResourceType: r.ResourceType,
 				ResourceName: r.ResourceName,
 				ActionTaken:  r.ActionTaken,

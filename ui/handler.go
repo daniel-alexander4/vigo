@@ -240,7 +240,7 @@ type ControlStatusRow struct {
 	Title              string
 	Status             string
 	Scope              string
-	Modules            []string // present when Status == "covered"
+	Configcrates            []string // present when Status == "covered"
 	Evidence           string
 	RecommendedModules []string // present when Status == "missing"
 }
@@ -1080,7 +1080,7 @@ type FleetRow struct {
 	FailurePct   float64
 	ChangedCount int64
 	FailedCount  int64
-	ModuleCount  int64
+	ConfigcrateCount  int64
 	// HealthSeverity is the composite fleetpressure.EnvoyPressure.Health
 	// for this row — same SoT the /envoys "Agent Health" column and the
 	// /agent-health fleet page consume. Populated in datasource.go alongside
@@ -1104,7 +1104,7 @@ type RunRow struct {
 	// or "force-push" (operator-initiated). Lets the dashboard pick
 	// operator actions out of the scheduled heartbeat.
 	Trigger      string
-	ModuleCount  int64
+	ConfigcrateCount  int64
 	ChangedCount int64
 	FailedCount  int64
 	FailurePct   float64 // 0-100: failed_count / module_count * 100
@@ -1121,11 +1121,11 @@ type RunRow struct {
 	// expectation is that a Diverged envoy's runs visually link to its
 	// header — see ui/render.go's convergenceBadgeClass.
 	EnvoyDriftLabel string
-	// TopFailedModule is the first module that produced a non-empty
+	// TopFailedConfigcrate is the first module that produced a non-empty
 	// error in this run, or empty when nothing failed. Populated by
 	// db.ListRunsWithHostname's subquery; lets operators triage from
 	// the dashboard without clicking into run-detail.
-	TopFailedModule string
+	TopFailedConfigcrate string
 	// DurationLabel is StartedAt → FinishedAt rendered as a compact
 	// human-readable string ("47s", "2m13s"); empty when still running.
 	DurationLabel string
@@ -1262,7 +1262,7 @@ type EnvoyRow struct {
 	Drift        convergence.DriftLevel
 	DriftLabel   string
 	FailurePct   float64 // 0-100: failed_count / module_count * 100
-	ModuleCount  int64
+	ConfigcrateCount  int64
 	FailedCount  int64
 	ChangedCount int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
 	Offline      bool
@@ -1288,7 +1288,7 @@ type EnvoyRow struct {
 	// Slice-2 envoy-filter axes (ADR-032). All populated by the envoyRow
 	// builder so the canonical row stays the SoT for what every envoys-
 	// view chip can filter on. Tags/OS/Arch come from EnvoyState directly;
-	// Environment/Roles/Modules from ConfigStore.Match's resolved config;
+	// Environment/Roles/Configcrates from ConfigStore.Match's resolved config;
 	// ComplianceFrameworks from ConfigStore.EnvoyFrameworks (union of the
 	// standards whose covered controls intersect the envoy's modules).
 	Tags                 []string
@@ -1296,7 +1296,7 @@ type EnvoyRow struct {
 	Arch                 string // Traits["arch"]
 	Environment          string
 	Roles                []string
-	Modules              []string
+	Configcrates              []string
 	ComplianceFrameworks []string
 }
 
@@ -1340,7 +1340,7 @@ type EnvoysPageData struct {
 	RoleFilter       string
 	OSFilter         string
 	ArchFilter       string
-	ModuleFilter     string
+	ConfigcrateFilter     string
 	ComplianceFilter string
 	SortColumn       string // active sort column (status, hostname, last_seen, last_run, ip)
 	SortDir          string // "asc" or "desc"
@@ -1378,10 +1378,10 @@ type EnvoysPageData struct {
 	// envoy's most-recent run. Drives the "MODULES FAILING" stat card
 	// at the top of the page — gives the operator the absolute "is
 	// anything actually broken" reading independent of how envoys
-	// bucket. ModuleHealthPct = 100 * Failed / Total (0 when Total==0).
-	FleetFailedModules int64
-	FleetTotalModules  int64
-	ModuleHealthPct    float64
+	// bucket. ConfigcrateHealthPct = 100 * Failed / Total (0 when Total==0).
+	FleetFailedConfigcrates int64
+	FleetTotalConfigcrates  int64
+	ConfigcrateHealthPct    float64
 	// OfflineThresholdLabel is the resolved staleness threshold
 	// rendered as a human-friendly duration ("75s", "15m"). Drives the
 	// Offline pill's title so operators can see how long an envoy must
@@ -1405,7 +1405,7 @@ type EnvoyDetailRunRow struct {
 
 // RunResultRow is a single run result (per-module) displayed in a table.
 type RunResultRow struct {
-	ModuleName   string
+	ConfigcrateName   string
 	ResourceType string
 	ResourceName string
 	ActionTaken  string
@@ -1599,7 +1599,7 @@ type ServerConfigSectionPageData struct {
 
 // PlanResultRow is a single plan result displayed in the plans page.
 type PlanResultRow struct {
-	ModuleName    string
+	ConfigcrateName    string
 	ResourceType  string
 	ResourceName  string
 	PlannedAction string
@@ -2558,8 +2558,8 @@ func (h *Handler) dashboardData() DashboardPageData {
 	data.RecentRuns = make([]RunRow, 0, len(allRuns))
 	for _, r := range allRuns {
 		var failPct float64
-		if r.ModuleCount > 0 {
-			failPct = float64(r.FailedCount) / float64(r.ModuleCount) * 100
+		if r.ConfigcrateCount > 0 {
+			failPct = float64(r.FailedCount) / float64(r.ConfigcrateCount) * 100
 		}
 		var finished time.Time
 		if r.FinishedAt.Valid {
@@ -2573,7 +2573,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 			Status:       r.Status,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
-			ModuleCount:  r.ModuleCount,
+			ConfigcrateCount:  r.ConfigcrateCount,
 		}).String()
 		data.RecentRuns = append(data.RecentRuns, RunRow{
 			ID:              r.ID,
@@ -2583,13 +2583,13 @@ func (h *Handler) dashboardData() DashboardPageData {
 			FinishedAt:      finished,
 			Status:          r.Status,
 			Trigger:         r.Trigger,
-			ModuleCount:     r.ModuleCount,
+			ConfigcrateCount:     r.ConfigcrateCount,
 			ChangedCount:    r.ChangedCount,
 			FailedCount:     r.FailedCount,
 			FailurePct:      failPct,
 			Outcome:         outcome,
 			EnvoyDriftLabel: h.dataSource.EnvoyDriftLabel(r.EnvoyID),
-			TopFailedModule: r.TopFailedModule,
+			TopFailedConfigcrate: r.TopFailedConfigcrate,
 			DurationLabel:   dur,
 		})
 	}
@@ -3813,7 +3813,7 @@ type EvidenceControlEnvoy struct {
 	Status       string
 	FailurePct   float64
 	FailedCount  int64
-	ModuleCount  int64
+	ConfigcrateCount  int64
 	RunCount     int
 	FailureCount int
 	LastRun      string
@@ -4130,11 +4130,11 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		Status      string
 		FailurePct  float64
 		FailedCount int64
-		ModuleCount int64
+		ConfigcrateCount int64
 	}
 	var allEnvoys []envoyInfo
 	for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", "", "", "", "", "", "", "", 0, 0).Envoys {
-		allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
+		allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ConfigcrateCount: e.ConfigcrateCount})
 	}
 
 	for _, t := range allEnvoys {
@@ -4149,11 +4149,11 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 						matches = append(matches, envoyModule{
 							envoyID:     t.ID,
 							hostname:    t.Hostname,
-							module:      ct.Module,
+							module:      ct.Configcrate,
 							status:      t.Status,
 							failurePct:  t.FailurePct,
 							failedCount: t.FailedCount,
-							moduleCount: t.ModuleCount,
+							moduleCount: t.ConfigcrateCount,
 						})
 					}
 				}
@@ -4170,7 +4170,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 			Status:      m.status,
 			FailurePct:  m.failurePct,
 			FailedCount: m.failedCount,
-			ModuleCount: m.moduleCount,
+			ConfigcrateCount: m.moduleCount,
 		})
 	}
 
@@ -4473,7 +4473,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	roleFilter := q.Get("role")
 	osFilter := q.Get("os")
 	archFilter := q.Get("arch")
-	moduleFilter := q.Get("module")
+	moduleFilter := q.Get("configcrate")
 	complianceFilter := q.Get("compliance")
 	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
@@ -4852,8 +4852,8 @@ type EnvoyStandardCoverageData struct {
 	FrameworkTitle    string
 	Status            EnvoyFrameworkStatus
 	Controls          []ControlStatusRow
-	ModuleConvergence string  // envoy convergence status (converged, failed, etc.)
-	ModulePct         float64 // module convergence percentage (100 = all modules converged)
+	ConfigcrateConvergence string  // envoy convergence status (converged, failed, etc.)
+	ConfigcratePct         float64 // module convergence percentage (100 = all modules converged)
 	Unavailable       bool    // true when no findings could be produced (framework disabled, slug unknown, etc.)
 }
 
@@ -5247,8 +5247,8 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		EnvoyID:           idStr,
 		Hostname:          detail.Envoy.Hostname,
 		FrameworkTitle:    standardDisplayNameFromSlug(fw),
-		ModuleConvergence: detail.Envoy.Status,
-		ModulePct:         modPct,
+		ConfigcrateConvergence: detail.Envoy.Status,
+		ConfigcratePct:         modPct,
 	}
 
 	if h.reportBuilder != nil && h.reportBuilder.EnvoyFrameworkDetail != nil {
@@ -5596,7 +5596,7 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	data := h.envoysPageData(
 		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
 		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
-		q.Get("arch"), q.Get("module"), q.Get("compliance"),
+		q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
 		sortCol, sortDir, offset,
 	)
 	h.enrichEnvoyRows(data.Envoys)
@@ -5614,7 +5614,7 @@ func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
 	data := h.envoysPageData(
 		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
 		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
-		q.Get("arch"), q.Get("module"), q.Get("compliance"),
+		q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
 		sortCol, sortDir, 0,
 	)
 	h.setCommonWithRequest(&data.PageData, r)

@@ -1,51 +1,51 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Module cache for delta policy transfer.
+//! Configcrate cache for delta policy transfer.
 //!
-//! Stores PolicyModules by name with content hashes. When the server sends a
+//! Stores PolicyConfigcrates by name with content hashes. When the server sends a
 //! stub module (content_hash only, no resources), the agent fills it from cache.
 //! This avoids retransmitting unchanged modules on every check-in.
 
-use crate::proto::PolicyModule;
+use crate::proto::PolicyConfigcrate;
 use std::collections::{BTreeMap, HashMap};
 use tracing::warn;
 
 struct CachedModule {
     hash: String,
-    module: PolicyModule,
+    module: PolicyConfigcrate,
 }
 
-pub struct ModuleCache {
-    modules: HashMap<String, CachedModule>,
+pub struct ConfigcrateCache {
+    configcrates: HashMap<String, CachedModule>,
 }
 
-impl ModuleCache {
+impl ConfigcrateCache {
     pub fn new() -> Self {
         Self {
-            modules: HashMap::new(),
+            configcrates: HashMap::new(),
         }
     }
 
-    /// Returns module_name → content_hash for all cached modules.
-    /// Sent to the server in CheckInRequest.cached_module_hashes.
+    /// Returns configcrate_name → content_hash for all cached modules.
+    /// Sent to the server in CheckInRequest.cached_configcrate_hashes.
     /// Returns a BTreeMap so prost's encode_to_vec iterates in sorted
     /// key order — required for deterministic proto map encoding that
     /// matches the server's `MarshalOptions{Deterministic: true}`.
     pub fn hashes(&self) -> Option<BTreeMap<String, String>> {
-        if self.modules.is_empty() {
+        if self.configcrates.is_empty() {
             return None;
         }
         let mut h = BTreeMap::new();
-        for (name, cm) in &self.modules {
+        for (name, cm) in &self.configcrates {
             h.insert(name.clone(), cm.hash.clone());
         }
         Some(h)
     }
 
     /// Get a cached module if name and hash match.
-    pub fn get(&self, name: &str, hash: &str) -> Option<&PolicyModule> {
-        let cm = self.modules.get(name)?;
+    pub fn get(&self, name: &str, hash: &str) -> Option<&PolicyConfigcrate> {
+        let cm = self.configcrates.get(name)?;
         if cm.hash == hash {
             Some(&cm.module)
         } else {
@@ -58,7 +58,7 @@ impl ModuleCache {
     ///
     /// Stub modules (`m.stub == true`, no resources) are **never cached** —
     /// only modules carrying real content. Caching a stub would make the
-    /// agent report its hash in `cached_module_hashes` on the next check-in,
+    /// agent report its hash in `cached_configcrate_hashes` on the next check-in,
     /// the server would reply with a stub again ("you already have it"),
     /// `merge_stubs` would "fill" the stub from the cached stub, and the
     /// envoy would be permanently stuck applying zero resources. Skipping
@@ -66,14 +66,14 @@ impl ModuleCache {
     /// the cache, so the next check-in omits its hash and the server sends
     /// it full. (A module that reappears as a stub keeps its prior full
     /// copy in the cache — the stub doesn't overwrite it.)
-    pub fn update(&mut self, modules: &[PolicyModule]) {
+    pub fn update(&mut self, modules: &[PolicyConfigcrate]) {
         let mut active: std::collections::HashSet<&str> =
             std::collections::HashSet::with_capacity(modules.len());
 
         for m in modules {
             active.insert(&m.name);
             if !m.content_hash.is_empty() && !m.stub {
-                self.modules.insert(
+                self.configcrates.insert(
                     m.name.clone(),
                     CachedModule {
                         hash: m.content_hash.clone(),
@@ -83,7 +83,7 @@ impl ModuleCache {
             }
         }
 
-        self.modules.retain(|name, _| active.contains(name.as_str()));
+        self.configcrates.retain(|name, _| active.contains(name.as_str()));
     }
 }
 
@@ -93,7 +93,7 @@ impl ModuleCache {
 /// its hash and the server re-sends it full, closing the gap within two
 /// cycles. (Only ever fills a stub from a *full* cached module — `update`
 /// never caches stubs, so `cache.get` can't return one.)
-pub fn merge_stubs(modules: Vec<PolicyModule>, cache: &ModuleCache) -> Vec<PolicyModule> {
+pub fn merge_stubs(modules: Vec<PolicyConfigcrate>, cache: &ConfigcrateCache) -> Vec<PolicyConfigcrate> {
     modules
         .into_iter()
         .map(|m| {
@@ -116,8 +116,8 @@ pub fn merge_stubs(modules: Vec<PolicyModule>, cache: &ModuleCache) -> Vec<Polic
 mod tests {
     use super::*;
 
-    fn make_module(name: &str, hash: &str, stub: bool) -> PolicyModule {
-        PolicyModule {
+    fn make_module(name: &str, hash: &str, stub: bool) -> PolicyConfigcrate {
+        PolicyConfigcrate {
             name: name.to_string(),
             content_hash: hash.to_string(),
             stub,
@@ -137,13 +137,13 @@ mod tests {
 
     #[test]
     fn empty_cache_returns_none_hashes() {
-        let c = ModuleCache::new();
+        let c = ConfigcrateCache::new();
         assert!(c.hashes().is_none());
     }
 
     #[test]
     fn update_and_hashes() {
-        let mut c = ModuleCache::new();
+        let mut c = ConfigcrateCache::new();
         let modules = vec![make_module("nginx", "abc123", false)];
         c.update(&modules);
 
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn get_hit_and_miss() {
-        let mut c = ModuleCache::new();
+        let mut c = ConfigcrateCache::new();
         c.update(&[make_module("nginx", "abc", false)]);
 
         assert!(c.get("nginx", "abc").is_some());
@@ -163,22 +163,22 @@ mod tests {
 
     #[test]
     fn evicts_removed_modules() {
-        let mut c = ModuleCache::new();
+        let mut c = ConfigcrateCache::new();
         c.update(&[
             make_module("nginx", "a", false),
             make_module("redis", "b", false),
         ]);
-        assert_eq!(c.modules.len(), 2);
+        assert_eq!(c.configcrates.len(), 2);
 
         // Update with only nginx — redis should be evicted.
         c.update(&[make_module("nginx", "a", false)]);
-        assert_eq!(c.modules.len(), 1);
+        assert_eq!(c.configcrates.len(), 1);
         assert!(c.get("redis", "b").is_none());
     }
 
     #[test]
     fn merge_stubs_fills_from_cache() {
-        let mut c = ModuleCache::new();
+        let mut c = ConfigcrateCache::new();
         let full = make_module("nginx", "abc", false);
         c.update(std::slice::from_ref(&full));
 
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn merge_stubs_cache_miss() {
-        let c = ModuleCache::new();
+        let c = ConfigcrateCache::new();
         let stub = make_module("nginx", "abc", true);
         let merged = merge_stubs(vec![stub], &c);
 
@@ -205,7 +205,7 @@ mod tests {
         // A stub carries a content_hash but no resources. Caching it would
         // poison the delta-transfer loop (server sends stub → "fill" with
         // cached stub → 0 resources, forever). It must not be cached.
-        let mut c = ModuleCache::new();
+        let mut c = ConfigcrateCache::new();
         c.update(&[make_module("nginx", "abc", true)]);
         assert!(c.hashes().is_none(), "stub must not appear in cached hashes");
         assert!(c.get("nginx", "abc").is_none(), "stub must not be cached");
@@ -216,7 +216,7 @@ mod tests {
         // First cycle: full module, cached. Next cycle the server sends a
         // stub for it (delta transfer). update() with that stub must leave
         // the prior full copy in place so merge_stubs can still fill it.
-        let mut c = ModuleCache::new();
+        let mut c = ConfigcrateCache::new();
         c.update(&[make_module("nginx", "abc", false)]);
         c.update(&[make_module("nginx", "abc", true)]);
 

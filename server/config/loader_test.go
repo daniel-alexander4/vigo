@@ -43,7 +43,7 @@ func (m *mockProvider) Close() error { return nil }
 func setupDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "examples", "stockpile")
-	for _, sub := range []string{"modules", "usercrates", "templates", "default"} {
+	for _, sub := range []string{"configcrates", "usercrates", "templates", "default"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +81,7 @@ func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
 func TestLookupsInResourceAttributes(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "users.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "users.vgo"), `
 name: users
 resources:
   - name: dan
@@ -99,13 +99,13 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "danlap"
-    modules: [users]
+    configcrates: [users]
     tags: [workstation]
   - match: "plex.home"
-    modules: [users]
+    configcrates: [users]
     tags: [mediaserver]
   - match: "nginx.home"
-    modules: [users]
+    configcrates: [users]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -133,7 +133,7 @@ envoys:
 	}
 
 	danlap := resolve("danlap")
-	danRes := danlap.Modules[0].Resources[0]
+	danRes := danlap.Configcrates[0].Resources[0]
 	if got := danRes.Attributes["shell"]; got != "/bin/fish" {
 		t.Errorf("danlap shell = %v, want /bin/fish", got)
 	}
@@ -143,7 +143,7 @@ envoys:
 	}
 
 	plex := resolve("plex.home")
-	plexRes := plex.Modules[0].Resources[0]
+	plexRes := plex.Configcrates[0].Resources[0]
 	if got := plexRes.Attributes["shell"]; got != "/bin/bash" {
 		t.Errorf("plex.home shell = %v, want /bin/bash", got)
 	}
@@ -153,7 +153,7 @@ envoys:
 	}
 
 	nginx := resolve("nginx.home")
-	nginxRes := nginx.Modules[0].Resources[0]
+	nginxRes := nginx.Configcrates[0].Resources[0]
 	if got := nginxRes.Attributes["shell"]; got != "/bin/bash" {
 		t.Errorf("nginx.home shell = %v, want /bin/bash", got)
 	}
@@ -166,7 +166,7 @@ envoys:
 func TestMatchBlockTagsPopulateEnvoyConfig(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -177,13 +177,13 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "workstation.example.com"
-    modules: [base]
+    configcrates: [base]
     tags: [workstation, dev]
   - match: "*.media.example.com"
-    modules: [base]
+    configcrates: [base]
     tags: [mediaserver]
   - match: "plain.example.com"
-    modules: [base]
+    configcrates: [base]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -222,7 +222,7 @@ func equalStrings(a, b []string) bool {
 func TestLoadModuleAndResolve(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -235,7 +235,7 @@ resources:
 envoys:
   - match: "test.example.com"
     environment: production
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -247,18 +247,18 @@ envoys:
 	if cfg.Envoy != "test.example.com" {
 		t.Errorf("Envoy = %q, want test.example.com", cfg.Envoy)
 	}
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(cfg.Configcrates))
 	}
-	if cfg.Modules[0].Name != "nginx" {
-		t.Errorf("Module name = %q, want nginx", cfg.Modules[0].Name)
+	if cfg.Configcrates[0].Name != "nginx" {
+		t.Errorf("Module name = %q, want nginx", cfg.Configcrates[0].Name)
 	}
 }
 
 func TestRoleResolution(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -266,7 +266,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -276,7 +276,7 @@ resources:
 `)
 	writeRoles(t, dir, `
 - name: webserver
-  modules: [nginx, certbot]
+  configcrates: [nginx, certbot]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
@@ -291,21 +291,21 @@ envoys:
 	}
 
 	cfg := store.Get("web01.example.com")
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(cfg.Configcrates))
 	}
-	if cfg.Modules[0].Name != "nginx" {
-		t.Errorf("Module[0] = %q, want nginx", cfg.Modules[0].Name)
+	if cfg.Configcrates[0].Name != "nginx" {
+		t.Errorf("Module[0] = %q, want nginx", cfg.Configcrates[0].Name)
 	}
-	if cfg.Modules[1].Name != "certbot" {
-		t.Errorf("Module[1] = %q, want certbot", cfg.Modules[1].Name)
+	if cfg.Configcrates[1].Name != "certbot" {
+		t.Errorf("Module[1] = %q, want certbot", cfg.Configcrates[1].Name)
 	}
 }
 
 func TestModuleDefaultVarsOverriddenByClient(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -320,7 +320,7 @@ resources:
 envoys:
   - match: "web01.example.com"
     environment: production
-    modules: [nginx]
+    configcrates: [nginx]
     vars:
       worker_processes: "4"
 `)
@@ -342,7 +342,7 @@ envoys:
 func TestSecretResolution(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: config
@@ -354,7 +354,7 @@ resources:
 envoys:
   - match: "web.example.com"
     environment: production
-    modules: [app]
+    configcrates: [app]
     vars:
       db_dsn: "secret:vigo/db/dsn"
 `)
@@ -381,7 +381,7 @@ envoys:
 		t.Errorf("db_dsn leaks plaintext: %q", dsn)
 	}
 	wantContent := "__VIGO_SECRET__myapp/db/config__END_VIGO_SECRET__"
-	if cnt, _ := cfg.Modules[0].Resources[0].Attributes["content"].(string); cnt != wantContent {
+	if cnt, _ := cfg.Configcrates[0].Resources[0].Attributes["content"].(string); cnt != wantContent {
 		t.Errorf("content = %q, want %q", cnt, wantContent)
 	}
 }
@@ -389,7 +389,7 @@ envoys:
 func TestKnownSecretEnforcement(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -397,7 +397,7 @@ resources: []
 envoys:
   - match: "bad.example.com"
     environment: production
-    modules: [app]
+    configcrates: [app]
     vars:
       dsn: "plaintext-vigo.db"
 `)
@@ -411,7 +411,7 @@ envoys:
 func TestHardFailUnresolvable(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -419,7 +419,7 @@ resources: []
 envoys:
   - match: "fail.example.com"
     environment: production
-    modules: [app]
+    configcrates: [app]
     vars:
       db_conn: "secret:nonexistent/key"
 `)
@@ -433,7 +433,7 @@ envoys:
 func TestMultipleSecretErrorsCollected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: config-file
@@ -445,13 +445,13 @@ resources:
 envoys:
   - match: "web-*.prod.example.com"
     environment: production
-    modules: [app]
+    configcrates: [app]
     vars:
       db_conn: "secret:missing/db/conn"
       api_key: "secret:missing/api/key"
   - match: "db-*.prod.example.com"
     environment: production
-    modules: [app]
+    configcrates: [app]
     vars:
       db_conn: "secret:missing/db/conn2"
 `)
@@ -523,11 +523,11 @@ func TestSecretErrorHintCategories(t *testing.T) {
 func TestPatternMatching(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
@@ -535,10 +535,10 @@ resources: []
 envoys:
   - match: "*.prod.example.com"
     environment: production
-    modules: [base, nginx]
+    configcrates: [base, nginx]
   - match: "*.staging.example.com"
     environment: staging
-    modules: [base]
+    configcrates: [base]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -550,8 +550,8 @@ envoys:
 	if cfg.Environment != "production" {
 		t.Errorf("Environment = %q, want production", cfg.Environment)
 	}
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(cfg.Configcrates))
 	}
 
 	cfg2 := store.Get("app.staging.example.com")
@@ -563,11 +563,11 @@ envoys:
 func TestFirstMatchWins(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "explicit.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "explicit.vgo"), `
 name: explicit
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "pattern.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "pattern.vgo"), `
 name: pattern
 resources: []
 `)
@@ -575,10 +575,10 @@ resources: []
 envoys:
   - match: "web01.prod.example.com"
     environment: staging
-    modules: [explicit]
+    configcrates: [explicit]
   - match: "*.prod.example.com"
     environment: production
-    modules: [pattern]
+    configcrates: [pattern]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -587,8 +587,8 @@ envoys:
 	}
 
 	cfg := store.Get("web01.prod.example.com")
-	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "explicit" {
-		t.Errorf("expected explicit module, got %v", cfg.Modules)
+	if len(cfg.Configcrates) != 1 || cfg.Configcrates[0].Name != "explicit" {
+		t.Errorf("expected explicit module, got %v", cfg.Configcrates)
 	}
 	if cfg.Environment != "staging" {
 		t.Errorf("Environment = %q, want staging (first match)", cfg.Environment)
@@ -598,11 +598,11 @@ envoys:
 func TestMultipleClientFiles(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "postgres.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "postgres.vgo"), `
 name: postgres
 resources: []
 `)
@@ -611,13 +611,13 @@ resources: []
 envoys:
   - match: "web-*"
     environment: production
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 	writeFile(t, filepath.Join(dir, "default", "databases.vgo"), `
 envoys:
   - match: "db-*"
     environment: production
-    modules: [postgres]
+    configcrates: [postgres]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -626,13 +626,13 @@ envoys:
 	}
 
 	web := store.Get("web-01")
-	if len(web.Modules) != 1 || web.Modules[0].Name != "nginx" {
-		t.Errorf("web-01: expected nginx, got %v", web.Modules)
+	if len(web.Configcrates) != 1 || web.Configcrates[0].Name != "nginx" {
+		t.Errorf("web-01: expected nginx, got %v", web.Configcrates)
 	}
 
 	db := store.Get("db-01")
-	if len(db.Modules) != 1 || db.Modules[0].Name != "postgres" {
-		t.Errorf("db-01: expected postgres, got %v", db.Modules)
+	if len(db.Configcrates) != 1 || db.Configcrates[0].Name != "postgres" {
+		t.Errorf("db-01: expected postgres, got %v", db.Configcrates)
 	}
 }
 
@@ -648,15 +648,15 @@ func TestUnconfiguredClient(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("expected non-nil config")
 	}
-	if len(cfg.Modules) != 0 {
-		t.Errorf("expected empty modules, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 0 {
+		t.Errorf("expected empty modules, got %d", len(cfg.Configcrates))
 	}
 }
 
 func TestConfigReload(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -676,7 +676,7 @@ resources: []
 envoys:
   - match: "new.example.com"
     environment: staging
-    modules: [app]
+    configcrates: [app]
 `)
 
 	if err := store.Reload(); err != nil {
@@ -692,7 +692,7 @@ envoys:
 func TestBadConfigKeepsOld(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -700,7 +700,7 @@ resources: []
 envoys:
   - match: "good.example.com"
     environment: production
-    modules: [app]
+    configcrates: [app]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -735,7 +735,7 @@ func TestUnknownModuleError(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
-    modules: [nonexistent]
+    configcrates: [nonexistent]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -764,7 +764,7 @@ func TestRoleReferencesUnknownModule(t *testing.T) {
 
 	writeRoles(t, dir, `
 - name: bad
-  modules: [nonexistent]
+  configcrates: [nonexistent]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -776,19 +776,19 @@ func TestRoleReferencesUnknownModule(t *testing.T) {
 func TestDedupModules(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
 	writeRoles(t, dir, `
 - name: web
-  modules: [nginx]
+  configcrates: [nginx]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "dup.example.com"
     roles: [web]
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -797,15 +797,15 @@ envoys:
 	}
 
 	cfg := store.Get("dup.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Errorf("expected 1 module (deduped), got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Errorf("expected 1 module (deduped), got %d", len(cfg.Configcrates))
 	}
 }
 
 func TestNodesReferencingSecret(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: config
@@ -813,16 +813,16 @@ resources:
     target_path: /etc/app/config
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "other.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "other.vgo"), `
 name: other
 resources: []
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web-*"
-    modules: [app]
+    configcrates: [app]
   - match: "db-*"
-    modules: [other]
+    configcrates: [other]
 `)
 
 	mp := &mockProvider{secrets: map[string]string{
@@ -854,7 +854,7 @@ func TestSourceFileLoading(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(tmplDir, "nginx.conf.tmpl"), `worker_processes {{ .Vars.worker_processes }};`)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -869,7 +869,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -878,11 +878,11 @@ envoys:
 	}
 
 	cfg := store.Get("web.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Configcrates))
 	}
 
-	res := cfg.Modules[0].Resources[0]
+	res := cfg.Configcrates[0].Resources[0]
 	content, ok := res.Attributes["content"]
 	if !ok {
 		t.Fatal("expected 'content' attribute after source resolution")
@@ -904,7 +904,7 @@ func TestSourceAndContentMutuallyExclusive(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(tmplDir, "test.tmpl"), "template content")
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "bad.vgo"), `
 name: bad
 resources:
   - name: both-set
@@ -916,7 +916,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
-    modules: [bad]
+    configcrates: [bad]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -932,7 +932,7 @@ envoys:
 func TestSourceFileMissing(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "bad.vgo"), `
 name: bad
 resources:
   - name: missing-source
@@ -943,7 +943,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
-    modules: [bad]
+    configcrates: [bad]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -965,7 +965,7 @@ func TestSourceFileNestedTemplatesDir(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(nestedDir, "default.conf.tmpl"), `server { listen {{ .Vars.port }}; }`)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 vars:
   port: "80"
@@ -979,7 +979,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -988,7 +988,7 @@ envoys:
 	}
 
 	cfg := store.Get("web.example.com")
-	res := cfg.Modules[0].Resources[0]
+	res := cfg.Configcrates[0].Resources[0]
 	content, ok := res.Attributes["content"]
 	if !ok {
 		t.Fatal("expected 'content' attribute after source resolution")
@@ -1139,7 +1139,7 @@ func TestRenderVars(t *testing.T) {
 func TestLoadModuleConditionalBlockLoadsCorrectly(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "debian-tools.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "debian-tools.vgo"), `
 name: debian-tools
 resources:
   - conditional_block:
@@ -1157,7 +1157,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "deb.example.com"
-    modules: [debian-tools]
+    configcrates: [debian-tools]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -1166,10 +1166,10 @@ envoys:
 	}
 
 	cfg := store.Get("deb.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(cfg.Configcrates))
 	}
-	mod := cfg.Modules[0]
+	mod := cfg.Configcrates[0]
 	if len(mod.Resources) != 2 {
 		t.Fatalf("len(Resources) = %d, want 2 (flattened from block)", len(mod.Resources))
 	}
@@ -1190,7 +1190,7 @@ envoys:
 func TestLoadModuleMixedPlainAndConditionalBlock(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "mixed.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "mixed.vgo"), `
 name: mixed
 resources:
   - name: always-run
@@ -1214,7 +1214,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "mix.example.com"
-    modules: [mixed]
+    configcrates: [mixed]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -1223,10 +1223,10 @@ envoys:
 	}
 
 	cfg := store.Get("mix.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(cfg.Configcrates))
 	}
-	mod := cfg.Modules[0]
+	mod := cfg.Configcrates[0]
 	if len(mod.Resources) != 3 {
 		t.Fatalf("len(Resources) = %d, want 3", len(mod.Resources))
 	}
@@ -1252,7 +1252,7 @@ envoys:
 func TestLoadModuleConditionalBlockDependsOnAcrossBoundary(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "cross-dep.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "cross-dep.vgo"), `
 name: cross-dep
 resources:
   - name: setup-repo
@@ -1272,7 +1272,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "dep.example.com"
-    modules: [cross-dep]
+    configcrates: [cross-dep]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -1281,7 +1281,7 @@ envoys:
 	}
 
 	cfg := store.Get("dep.example.com")
-	mod := cfg.Modules[0]
+	mod := cfg.Configcrates[0]
 	if len(mod.Resources) != 2 {
 		t.Fatalf("len(Resources) = %d, want 2", len(mod.Resources))
 	}
@@ -1301,7 +1301,7 @@ envoys:
 func TestLoadModuleConditionalBlockWithResourceLevelConditionals(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "dual-cond.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "dual-cond.vgo"), `
 name: dual-cond
 resources:
   - conditional_block:
@@ -1317,7 +1317,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "dual.example.com"
-    modules: [dual-cond]
+    configcrates: [dual-cond]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -1326,7 +1326,7 @@ envoys:
 	}
 
 	cfg := store.Get("dual.example.com")
-	mod := cfg.Modules[0]
+	mod := cfg.Configcrates[0]
 	if len(mod.Resources) != 1 {
 		t.Fatalf("len(Resources) = %d, want 1", len(mod.Resources))
 	}
@@ -1341,7 +1341,7 @@ envoys:
 func TestLoadModuleConditionalBlockEmptyResourcesError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad-block.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "bad-block.vgo"), `
 name: bad-block
 resources:
   - conditional_block:
@@ -1352,7 +1352,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
-    modules: [bad-block]
+    configcrates: [bad-block]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -1366,10 +1366,10 @@ envoys:
 
 // --- Module Conditional Ref Loader Tests ---
 
-func TestRoleWithConditionalModuleRef(t *testing.T) {
+func TestRoleWithConditionalConfigcrateRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1377,7 +1377,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -1387,7 +1387,7 @@ resources:
 `)
 	writeRoles(t, dir, `
 - name: webserver
-  modules:
+  configcrates:
     - name: nginx
       when: "is_debian"
     - certbot
@@ -1404,25 +1404,25 @@ envoys:
 	}
 
 	cfg := store.Get("web.example.com")
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(cfg.Configcrates))
 	}
 
 	// nginx should have When from the role ref.
-	if cfg.Modules[0].When != "is_debian" {
-		t.Errorf("nginx.When = %q, want \"is_debian\"", cfg.Modules[0].When)
+	if cfg.Configcrates[0].When != "is_debian" {
+		t.Errorf("nginx.When = %q, want \"is_debian\"", cfg.Configcrates[0].When)
 	}
 
 	// certbot should have no conditionals.
-	if cfg.Modules[1].When != "" {
-		t.Errorf("certbot.When = %q, want empty", cfg.Modules[1].When)
+	if cfg.Configcrates[1].When != "" {
+		t.Errorf("certbot.When = %q, want empty", cfg.Configcrates[1].When)
 	}
 }
 
-func TestClientWithConditionalModuleRef(t *testing.T) {
+func TestClientWithConditionalConfigcrateRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "redis.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "redis.vgo"), `
 name: redis
 resources:
   - name: install-redis
@@ -1433,7 +1433,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "db.example.com"
-    modules:
+    configcrates:
       - name: redis
         when: "not is_container"
 `)
@@ -1444,28 +1444,28 @@ envoys:
 	}
 
 	cfg := store.Get("db.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(cfg.Configcrates))
 	}
-	if cfg.Modules[0].When != "not is_container" {
-		t.Errorf("redis.When = %q, want \"not is_container\"", cfg.Modules[0].When)
+	if cfg.Configcrates[0].When != "not is_container" {
+		t.Errorf("redis.When = %q, want \"not is_container\"", cfg.Configcrates[0].When)
 	}
 }
 
-func TestMixedPlainAndConditionalModuleRefsInRole(t *testing.T) {
+func TestMixedPlainAndConditionalConfigcrateRefsInRole(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "certbot.vgo"), `
 name: certbot
 resources: []
 `)
 	writeRoles(t, dir, `
 - name: web
-  modules:
+  configcrates:
     - nginx
     - name: certbot
       when: "is_debian or is_ubuntu"
@@ -1482,23 +1482,23 @@ envoys:
 	}
 
 	cfg := store.Get("mix.example.com")
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(cfg.Configcrates))
 	}
 	// nginx: plain string, no conditionals
-	if cfg.Modules[0].When != "" {
-		t.Errorf("nginx should have no conditionals, got When=%q", cfg.Modules[0].When)
+	if cfg.Configcrates[0].When != "" {
+		t.Errorf("nginx should have no conditionals, got When=%q", cfg.Configcrates[0].When)
 	}
 	// certbot: object with when expression
-	if cfg.Modules[1].When != "is_debian or is_ubuntu" {
-		t.Errorf("certbot.When = %q, want \"is_debian or is_ubuntu\"", cfg.Modules[1].When)
+	if cfg.Configcrates[1].When != "is_debian or is_ubuntu" {
+		t.Errorf("certbot.When = %q, want \"is_debian or is_ubuntu\"", cfg.Configcrates[1].When)
 	}
 }
 
 func TestExcludeResources(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "hardening.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "hardening.vgo"), `
 name: hardening
 resources:
   - name: disable-xserver
@@ -1518,7 +1518,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "desktop.example.com"
-    modules: [hardening]
+    configcrates: [hardening]
     exclude_resources:
       - disable-xserver
       - disable-avahi
@@ -1530,39 +1530,39 @@ envoys:
 	}
 
 	cfg := store.Get("desktop.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(cfg.Configcrates))
 	}
 	// Only kernel-aslr should remain.
-	if len(cfg.Modules[0].Resources) != 1 {
-		t.Fatalf("len(Resources) = %d, want 1", len(cfg.Modules[0].Resources))
+	if len(cfg.Configcrates[0].Resources) != 1 {
+		t.Fatalf("len(Resources) = %d, want 1", len(cfg.Configcrates[0].Resources))
 	}
-	if cfg.Modules[0].Resources[0].Name != "kernel-aslr" {
-		t.Errorf("remaining resource = %q, want kernel-aslr", cfg.Modules[0].Resources[0].Name)
+	if cfg.Configcrates[0].Resources[0].Name != "kernel-aslr" {
+		t.Errorf("remaining resource = %q, want kernel-aslr", cfg.Configcrates[0].Resources[0].Name)
 	}
 }
 
 func TestConditionalRoleRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
 name: sshd
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "iis.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "iis.vgo"), `
 name: iis
 resources: []
 `)
 	writeRoles(t, dir, `
 - name: linux-web
-  modules: [nginx, sshd]
+  configcrates: [nginx, sshd]
 `, `
 - name: windows-web
-  modules: [iis]
+  configcrates: [iis]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
@@ -1580,19 +1580,19 @@ envoys:
 	}
 
 	cfg := store.Get("web.example.com")
-	if len(cfg.Modules) != 3 {
-		t.Fatalf("len(Modules) = %d, want 3", len(cfg.Modules))
+	if len(cfg.Configcrates) != 3 {
+		t.Fatalf("len(Configcrates) = %d, want 3", len(cfg.Configcrates))
 	}
 	// nginx and sshd should inherit the role's when condition.
-	if cfg.Modules[0].When != "os_family('linux')" {
-		t.Errorf("nginx.When = %q, want \"os_family('linux')\"", cfg.Modules[0].When)
+	if cfg.Configcrates[0].When != "os_family('linux')" {
+		t.Errorf("nginx.When = %q, want \"os_family('linux')\"", cfg.Configcrates[0].When)
 	}
-	if cfg.Modules[1].When != "os_family('linux')" {
-		t.Errorf("sshd.When = %q, want \"os_family('linux')\"", cfg.Modules[1].When)
+	if cfg.Configcrates[1].When != "os_family('linux')" {
+		t.Errorf("sshd.When = %q, want \"os_family('linux')\"", cfg.Configcrates[1].When)
 	}
 	// iis should inherit the windows role's when condition.
-	if cfg.Modules[2].When != "os_family('windows')" {
-		t.Errorf("iis.When = %q, want \"os_family('windows')\"", cfg.Modules[2].When)
+	if cfg.Configcrates[2].When != "os_family('windows')" {
+		t.Errorf("iis.When = %q, want \"os_family('windows')\"", cfg.Configcrates[2].When)
 	}
 	// EnvoyConfig.Roles should list all role names.
 	if len(cfg.Roles) != 2 || cfg.Roles[0] != "linux-web" || cfg.Roles[1] != "windows-web" {
@@ -1605,17 +1605,17 @@ func TestConditionalRoleRefPreservesModuleWhen(t *testing.T) {
 	// the module's own condition should take precedence.
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "certbot.vgo"), `
 name: certbot
 resources: []
 `)
 	writeRoles(t, dir, `
 - name: web
-  modules:
+  configcrates:
     - nginx
     - name: certbot
       when: "file_exists('/usr/bin/certbot')"
@@ -1634,16 +1634,16 @@ envoys:
 	}
 
 	cfg := store.Get("web.example.com")
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(cfg.Configcrates))
 	}
 	// nginx has no module-level when, so it inherits the role's condition.
-	if cfg.Modules[0].When != "os_family('linux')" {
-		t.Errorf("nginx.When = %q, want \"os_family('linux')\"", cfg.Modules[0].When)
+	if cfg.Configcrates[0].When != "os_family('linux')" {
+		t.Errorf("nginx.When = %q, want \"os_family('linux')\"", cfg.Configcrates[0].When)
 	}
 	// certbot has its own when: condition, so role's condition should NOT override it.
-	if cfg.Modules[1].When != "file_exists('/usr/bin/certbot')" {
-		t.Errorf("certbot.When = %q, want \"file_exists('/usr/bin/certbot')\"", cfg.Modules[1].When)
+	if cfg.Configcrates[1].When != "file_exists('/usr/bin/certbot')" {
+		t.Errorf("certbot.When = %q, want \"file_exists('/usr/bin/certbot')\"", cfg.Configcrates[1].When)
 	}
 }
 
@@ -1652,7 +1652,7 @@ func TestBackwardCompatPlainStringModulesStillWork(t *testing.T) {
 	// string module references continues to load without any changes.
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1660,7 +1660,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -1670,14 +1670,14 @@ resources:
 `)
 	writeRoles(t, dir, `
 - name: webserver
-  modules: [nginx, certbot]
+  configcrates: [nginx, certbot]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     roles: [webserver]
   - match: "web02.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -1686,26 +1686,26 @@ envoys:
 	}
 
 	cfg1 := store.Get("web01.example.com")
-	if len(cfg1.Modules) != 2 {
-		t.Fatalf("web01: len(Modules) = %d, want 2", len(cfg1.Modules))
+	if len(cfg1.Configcrates) != 2 {
+		t.Fatalf("web01: len(Configcrates) = %d, want 2", len(cfg1.Configcrates))
 	}
-	if cfg1.Modules[0].Name != "nginx" || cfg1.Modules[1].Name != "certbot" {
-		t.Errorf("web01: modules = [%s, %s], want [nginx, certbot]", cfg1.Modules[0].Name, cfg1.Modules[1].Name)
+	if cfg1.Configcrates[0].Name != "nginx" || cfg1.Configcrates[1].Name != "certbot" {
+		t.Errorf("web01: modules = [%s, %s], want [nginx, certbot]", cfg1.Configcrates[0].Name, cfg1.Configcrates[1].Name)
 	}
 
 	cfg2 := store.Get("web02.example.com")
-	if len(cfg2.Modules) != 1 {
-		t.Fatalf("web02: len(Modules) = %d, want 1", len(cfg2.Modules))
+	if len(cfg2.Configcrates) != 1 {
+		t.Fatalf("web02: len(Configcrates) = %d, want 1", len(cfg2.Configcrates))
 	}
-	if cfg2.Modules[0].Name != "nginx" {
-		t.Errorf("web02: module = %q, want nginx", cfg2.Modules[0].Name)
+	if cfg2.Configcrates[0].Name != "nginx" {
+		t.Errorf("web02: module = %q, want nginx", cfg2.Configcrates[0].Name)
 	}
 }
 
 func TestIdempotencyValidation_BlocksUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "bad.vgo"), `
 name: bad
 resources:
   - name: yolo-exec
@@ -1715,7 +1715,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
-    modules: [bad]
+    configcrates: [bad]
 `)
 
 	// Idempotency errors are non-fatal at startup — the store starts with
@@ -1732,15 +1732,15 @@ envoys:
 	}
 	// Store should have zero modules loaded.
 	stats := cs.Stats()
-	if stats.Modules != 0 {
-		t.Errorf("expected 0 modules loaded, got %d", stats.Modules)
+	if stats.Configcrates != 0 {
+		t.Errorf("expected 0 modules loaded, got %d", stats.Configcrates)
 	}
 }
 
 func TestIdempotencyValidation_DangerousModeAllowsUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "bad.vgo"), `
 name: bad
 resources:
   - name: yolo-exec
@@ -1750,7 +1750,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
-    modules: [bad]
+    configcrates: [bad]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -1758,15 +1758,15 @@ envoys:
 		t.Fatalf("dangerous mode should allow unguarded exec, got: %v", err)
 	}
 	cfg := store.Get("test.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Configcrates))
 	}
 }
 
 func TestIdempotencyValidation_GuardedExecPasses(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "good.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "good.vgo"), `
 name: good
 resources:
   - name: guarded-exec
@@ -1777,7 +1777,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
-    modules: [good]
+    configcrates: [good]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -1789,7 +1789,7 @@ envoys:
 func TestVgoFileExtension_LoadedByConfigStore(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1799,7 +1799,7 @@ resources:
 `)
 	writeRoles(t, dir, `
 - name: web
-  modules: [nginx]
+  configcrates: [nginx]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
@@ -1813,25 +1813,25 @@ envoys:
 	}
 
 	cfg := store.Get("test.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Configcrates))
 	}
-	if cfg.Modules[0].Name != "nginx" {
-		t.Errorf("expected module nginx, got %q", cfg.Modules[0].Name)
+	if cfg.Configcrates[0].Name != "nginx" {
+		t.Errorf("expected module nginx, got %q", cfg.Configcrates[0].Name)
 	}
 }
 
 func TestMultipleIdempotencyErrorsCollected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad1.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "bad1.vgo"), `
 name: bad1
 resources:
   - name: yolo-exec
     type: exec
     command: "longdrawer one"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "bad2.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "bad2.vgo"), `
 name: bad2
 resources:
   - name: another-yolo
@@ -1844,7 +1844,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
-    modules: [bad1, bad2]
+    configcrates: [bad1, bad2]
 `)
 
 	// Idempotency errors are non-fatal — store starts with empty config.
@@ -1864,13 +1864,13 @@ envoys:
 	}
 
 	// Should collect errors from both modules.
-	if len(ie.Modules) != 2 {
-		t.Errorf("expected 2 modules with errors, got %d", len(ie.Modules))
+	if len(ie.Configcrates) != 2 {
+		t.Errorf("expected 2 modules with errors, got %d", len(ie.Configcrates))
 	}
 
 	// bad2 has 2 unguarded execs.
 	totalFindings := 0
-	for _, m := range ie.Modules {
+	for _, m := range ie.Configcrates {
 		totalFindings += len(m.Findings)
 	}
 	if totalFindings != 3 {
@@ -1891,8 +1891,8 @@ envoys:
 
 	// Store should have zero modules loaded.
 	stats := cs.Stats()
-	if stats.Modules != 0 {
-		t.Errorf("expected 0 modules loaded, got %d", stats.Modules)
+	if stats.Configcrates != 0 {
+		t.Errorf("expected 0 modules loaded, got %d", stats.Configcrates)
 	}
 }
 
@@ -1900,7 +1900,7 @@ func TestDuplicateModulesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
 	for _, name := range []string{"docker", "grafana", "envoy-exporter"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "configcrates", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -1909,14 +1909,14 @@ resources:
     state: present
 `, name, name, name))
 	}
-	// Duplicate modules: keys — should merge, not overwrite.
+	// Duplicate configcrates: keys — should merge, not overwrite.
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "danlap"
     environment: production
-    modules: [docker]
-    modules: [grafana]
-    modules: [envoy-exporter]
+    configcrates: [docker]
+    configcrates: [grafana]
+    configcrates: [envoy-exporter]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -1925,16 +1925,16 @@ envoys:
 	}
 
 	cfg := store.Get("danlap")
-	if len(cfg.Modules) != 3 {
-		names := make([]string, len(cfg.Modules))
-		for i, m := range cfg.Modules {
+	if len(cfg.Configcrates) != 3 {
+		names := make([]string, len(cfg.Configcrates))
+		for i, m := range cfg.Configcrates {
 			names[i] = m.Name
 		}
-		t.Fatalf("expected 3 modules, got %d: %v", len(cfg.Modules), names)
+		t.Fatalf("expected 3 modules, got %d: %v", len(cfg.Configcrates), names)
 	}
 
 	want := []string{"docker", "grafana", "envoy-exporter"}
-	for i, m := range cfg.Modules {
+	for i, m := range cfg.Configcrates {
 		if m.Name != want[i] {
 			t.Errorf("module %d: got %q, want %q", i, m.Name, want[i])
 		}
@@ -1953,7 +1953,7 @@ func TestDuplicateRolesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
 	for _, name := range []string{"nginx", "redis"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "configcrates", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -1964,10 +1964,10 @@ resources:
 	}
 	writeRoles(t, dir, `
 - name: web
-  modules: [nginx]
+  configcrates: [nginx]
 `, `
 - name: cache
-  modules: [redis]
+  configcrates: [redis]
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
@@ -1982,8 +1982,8 @@ envoys:
 	}
 
 	cfg := store.Get("test")
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("expected 2 modules, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("expected 2 modules, got %d", len(cfg.Configcrates))
 	}
 	if cfg.Roles[0] != "web" || cfg.Roles[1] != "cache" {
 		t.Errorf("Roles: got %v, want [web cache]", cfg.Roles)
@@ -2010,7 +2010,7 @@ func TestTemplateRendering(t *testing.T) {
 func TestBeforeResolvesToDependsOn(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base-packages
 before: [app-config]
 resources:
@@ -2019,7 +2019,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app-config
 resources:
   - name: app-conf
@@ -2031,7 +2031,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
-    modules: [base-packages, app-config]
+    configcrates: [base-packages, app-config]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2040,13 +2040,13 @@ envoys:
 	}
 
 	cfg := store.Get("app.example.com")
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(cfg.Configcrates))
 	}
 
 	// base-packages has before: [app-config], so app-config should have
 	// depends_on: [base-packages] after resolution.
-	appMod := cfg.Modules[1]
+	appMod := cfg.Configcrates[1]
 	if appMod.Name != "app-config" {
 		t.Fatalf("Module[1] = %q, want app-config", appMod.Name)
 	}
@@ -2055,7 +2055,7 @@ envoys:
 	}
 
 	// base-packages should have no depends_on.
-	baseMod := cfg.Modules[0]
+	baseMod := cfg.Configcrates[0]
 	if len(baseMod.DependsOn) != 0 {
 		t.Errorf("base-packages DependsOn = %v, want []", baseMod.DependsOn)
 	}
@@ -2064,7 +2064,7 @@ envoys:
 func TestBeforeUnknownTargetErrors(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base-packages
 before: [missing-module]
 resources:
@@ -2076,7 +2076,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
-    modules: [base-packages]
+    configcrates: [base-packages]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2093,7 +2093,7 @@ func TestBeforeNoDuplicateDependsOn(t *testing.T) {
 
 	// app-config already depends_on base-packages, and base-packages also
 	// declares before: [app-config]. Should not duplicate the dependency.
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base-packages
 before: [app-config]
 resources:
@@ -2102,7 +2102,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app-config
 depends_on: [base-packages]
 resources:
@@ -2115,7 +2115,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
-    modules: [base-packages, app-config]
+    configcrates: [base-packages, app-config]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2124,7 +2124,7 @@ envoys:
 	}
 
 	cfg := store.Get("app.example.com")
-	appMod := cfg.Modules[1]
+	appMod := cfg.Configcrates[1]
 	if len(appMod.DependsOn) != 1 {
 		t.Errorf("expected 1 dependency, got %d: %v", len(appMod.DependsOn), appMod.DependsOn)
 	}
@@ -2135,7 +2135,7 @@ envoys:
 func TestOverlappingGlobFirstWins(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2143,7 +2143,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "apache.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "apache.vgo"), `
 name: apache
 resources:
   - name: install
@@ -2156,9 +2156,9 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web*.prod.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
   - match: "*.prod.example.com"
-    modules: [apache]
+    configcrates: [apache]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2167,20 +2167,20 @@ envoys:
 	}
 
 	cfg := store.Get("web01.prod.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("len(Configcrates) = %d, want 1", len(cfg.Configcrates))
 	}
-	if cfg.Modules[0].Name != "nginx" {
-		t.Errorf("Module = %q, want nginx (first glob should win)", cfg.Modules[0].Name)
+	if cfg.Configcrates[0].Name != "nginx" {
+		t.Errorf("Module = %q, want nginx (first glob should win)", cfg.Configcrates[0].Name)
 	}
 
 	// db01 should match the second pattern.
 	cfg2 := store.Get("db01.prod.example.com")
-	if len(cfg2.Modules) != 1 {
-		t.Fatalf("db01: len(Modules) = %d, want 1", len(cfg2.Modules))
+	if len(cfg2.Configcrates) != 1 {
+		t.Fatalf("db01: len(Configcrates) = %d, want 1", len(cfg2.Configcrates))
 	}
-	if cfg2.Modules[0].Name != "apache" {
-		t.Errorf("db01 Module = %q, want apache", cfg2.Modules[0].Name)
+	if cfg2.Configcrates[0].Name != "apache" {
+		t.Errorf("db01 Module = %q, want apache", cfg2.Configcrates[0].Name)
 	}
 }
 
@@ -2194,15 +2194,15 @@ func TestEmptyEnvoysDir(t *testing.T) {
 	}
 
 	cfg := store.Get("anything.example.com")
-	if len(cfg.Modules) != 0 {
-		t.Errorf("expected 0 modules for empty config, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 0 {
+		t.Errorf("expected 0 modules for empty config, got %d", len(cfg.Configcrates))
 	}
 }
 
 func TestNodeVarsOverrideModuleDefaults(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "webserver.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "webserver.vgo"), `
 name: webserver
 vars:
   port: "80"
@@ -2216,7 +2216,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
-    modules: [webserver]
+    configcrates: [webserver]
     vars:
       port: "9090"
 `)
@@ -2238,7 +2238,7 @@ envoys:
 func TestSourcePathTraversalDotDot(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: conf
@@ -2249,7 +2249,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
-    modules: [app]
+    configcrates: [app]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2264,7 +2264,7 @@ envoys:
 func TestSourcePathAbsoluteRejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: conf
@@ -2275,7 +2275,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
-    modules: [app]
+    configcrates: [app]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2287,7 +2287,7 @@ envoys:
 func TestConcurrentGetDuringReload(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2298,7 +2298,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2340,7 +2340,7 @@ envoys:
 func TestReloadBumpsVersion(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2351,7 +2351,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2401,7 +2401,7 @@ func TestVersionMintedAtHorizon(t *testing.T) {
 func TestReloadFailureKeepsOldConfig(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2412,7 +2412,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2421,15 +2421,15 @@ envoys:
 	}
 
 	cfg := store.Get("web01.example.com")
-	if len(cfg.Modules) != 1 {
-		t.Fatalf("expected 1 module, got %d", len(cfg.Modules))
+	if len(cfg.Configcrates) != 1 {
+		t.Fatalf("expected 1 module, got %d", len(cfg.Configcrates))
 	}
 
 	// Write invalid module reference.
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [nonexistent_module_xyz]
+    configcrates: [nonexistent_module_xyz]
 `)
 
 	// Reload should fail but old config preserved.
@@ -2441,7 +2441,7 @@ envoys:
 
 	// After failed reload, Get() should still return the old valid config.
 	cfg = store.Get("web01.example.com")
-	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "nginx" {
+	if len(cfg.Configcrates) != 1 || cfg.Configcrates[0].Name != "nginx" {
 		t.Error("expected old config to be preserved after failed reload")
 	}
 }
@@ -2466,7 +2466,7 @@ func TestSourceSymlinkEscapeRejected(t *testing.T) {
 	}
 
 	// Write a module that references the symlink as source.
-	writeFile(t, filepath.Join(dir, "modules", "evil.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "evil.vgo"), `
 name: evil
 resources:
   - name: evil-file
@@ -2477,7 +2477,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
-    modules: [evil]
+    configcrates: [evil]
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -2494,21 +2494,21 @@ envoys:
 func TestRoleIncludes(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "firewall.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "firewall.vgo"), `
 name: firewall
 resources:
   - name: fw-rules
     type: file
     target_path: /etc/iptables/rules.v4
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -2518,14 +2518,14 @@ resources:
 `)
 	writeRoles(t, dir, `
 - name: base-security
-  modules:
+  configcrates:
     - firewall
     - sshd
 `, `
 - name: webserver
   includes:
     - base-security
-  modules:
+  configcrates:
     - nginx
 `)
 	writeFile(t, filepath.Join(dir, "default", "web.vgo"), `
@@ -2540,24 +2540,24 @@ envoys:
 	}
 
 	cfg := store.Get("web01.example.com")
-	if len(cfg.Modules) != 3 {
-		t.Fatalf("len(Modules) = %d, want 3", len(cfg.Modules))
+	if len(cfg.Configcrates) != 3 {
+		t.Fatalf("len(Configcrates) = %d, want 3", len(cfg.Configcrates))
 	}
-	if cfg.Modules[0].Name != "firewall" {
-		t.Errorf("Modules[0] = %q, want firewall", cfg.Modules[0].Name)
+	if cfg.Configcrates[0].Name != "firewall" {
+		t.Errorf("Configcrates[0] = %q, want firewall", cfg.Configcrates[0].Name)
 	}
-	if cfg.Modules[1].Name != "sshd" {
-		t.Errorf("Modules[1] = %q, want sshd", cfg.Modules[1].Name)
+	if cfg.Configcrates[1].Name != "sshd" {
+		t.Errorf("Configcrates[1] = %q, want sshd", cfg.Configcrates[1].Name)
 	}
-	if cfg.Modules[2].Name != "nginx" {
-		t.Errorf("Modules[2] = %q, want nginx", cfg.Modules[2].Name)
+	if cfg.Configcrates[2].Name != "nginx" {
+		t.Errorf("Configcrates[2] = %q, want nginx", cfg.Configcrates[2].Name)
 	}
 }
 
 func TestRoleIncludesNestedRejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "a.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "a.vgo"), `
 name: a
 resources:
   - name: r
@@ -2568,13 +2568,13 @@ resources:
 - name: inner
   includes:
     - outer
-  modules:
+  configcrates:
     - a
 `, `
 - name: outer
   includes:
     - inner
-  modules:
+  configcrates:
     - a
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
@@ -2595,14 +2595,14 @@ envoys:
 func TestRoleIncludesDedup(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "shared.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "shared.vgo"), `
 name: shared
 resources:
   - name: r
     type: file
     target_path: /tmp/shared
 `)
-	writeFile(t, filepath.Join(dir, "modules", "web.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "web.vgo"), `
 name: web
 resources:
   - name: r
@@ -2611,13 +2611,13 @@ resources:
 `)
 	writeRoles(t, dir, `
 - name: base
-  modules:
+  configcrates:
     - shared
 `, `
 - name: webserver
   includes:
     - base
-  modules:
+  configcrates:
     - shared
     - web
 `)
@@ -2633,14 +2633,14 @@ envoys:
 	}
 
 	cfg := store.Get("x")
-	if len(cfg.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	if len(cfg.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(cfg.Configcrates))
 	}
-	if cfg.Modules[0].Name != "shared" {
-		t.Errorf("Modules[0] = %q, want shared", cfg.Modules[0].Name)
+	if cfg.Configcrates[0].Name != "shared" {
+		t.Errorf("Configcrates[0] = %q, want shared", cfg.Configcrates[0].Name)
 	}
-	if cfg.Modules[1].Name != "web" {
-		t.Errorf("Modules[1] = %q, want web", cfg.Modules[1].Name)
+	if cfg.Configcrates[1].Name != "web" {
+		t.Errorf("Configcrates[1] = %q, want web", cfg.Configcrates[1].Name)
 	}
 }
 
@@ -2651,7 +2651,7 @@ envoys:
 func TestConfigTrace(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -2664,7 +2664,7 @@ resources:
     type: file
     target_path: /etc/nginx/nginx.conf
 `)
-	writeFile(t, filepath.Join(dir, "modules", "firewall.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "firewall.vgo"), `
 name: firewall
 resources:
   - name: fw
@@ -2673,13 +2673,13 @@ resources:
 `)
 	writeRoles(t, dir, `
 - name: base
-  modules:
+  configcrates:
     - firewall
 `, `
 - name: web
   includes:
     - base
-  modules:
+  configcrates:
     - nginx
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
@@ -2709,11 +2709,11 @@ envoys:
 	if trace.Environment != "production" {
 		t.Errorf("Environment = %q, want production", trace.Environment)
 	}
-	if len(trace.Modules) != 2 {
-		t.Fatalf("len(Modules) = %d, want 2", len(trace.Modules))
+	if len(trace.Configcrates) != 2 {
+		t.Fatalf("len(Configcrates) = %d, want 2", len(trace.Configcrates))
 	}
-	if trace.Modules[0] != "firewall" || trace.Modules[1] != "nginx" {
-		t.Errorf("Modules = %v, want [firewall nginx]", trace.Modules)
+	if trace.Configcrates[0] != "firewall" || trace.Configcrates[1] != "nginx" {
+		t.Errorf("Configcrates = %v, want [firewall nginx]", trace.Configcrates)
 	}
 	if trace.ResourceCount != 3 {
 		t.Errorf("ResourceCount = %d, want 3", trace.ResourceCount)
@@ -2740,7 +2740,7 @@ envoys:
 
 func TestConfigTraceNoMatch(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "a.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "a.vgo"), `
 name: a
 resources:
   - name: r
@@ -2750,7 +2750,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "other"
-    modules: [a]
+    configcrates: [a]
 `)
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
@@ -2766,7 +2766,7 @@ envoys:
 func TestConfigTraceGlobPattern(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: r
@@ -2776,7 +2776,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web-*.example.com"
-    modules: [app]
+    configcrates: [app]
 `)
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err != nil {
@@ -2802,7 +2802,7 @@ envoys:
 func setupInheritanceDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "config", "stockpile")
-	for _, sub := range []string{"modules", "usercrates", ""} {
+	for _, sub := range []string{"configcrates", "usercrates", ""} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -2813,21 +2813,21 @@ func setupInheritanceDir(t *testing.T) string {
 func TestInheritance_BasicModules(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
     type: package
     package: openssh-server
 `)
-	writeFile(t, filepath.Join(dir, "modules", "monitoring.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "monitoring.vgo"), `
 name: monitoring
 resources:
   - name: install-monitoring
     type: package
     package: prometheus-node-exporter
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -2837,7 +2837,7 @@ resources:
 
 	// Root common.vgo — inherited by all subdirs.
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
-modules: [sshd, monitoring]
+configcrates: [sshd, monitoring]
 `)
 
 	// Leaf entry in a subdirectory.
@@ -2845,7 +2845,7 @@ modules: [sshd, monitoring]
 	writeFile(t, filepath.Join(dir, "web", "web.vgo"), `
 envoys:
   - match: "web*.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -2860,7 +2860,7 @@ envoys:
 
 	// Should have inherited sshd + monitoring, plus own nginx.
 	var moduleNames []string
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		moduleNames = append(moduleNames, m.Name)
 	}
 
@@ -2883,7 +2883,7 @@ func TestInheritance_MultiLevel(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "logging", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "configcrates", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -2893,19 +2893,19 @@ resources:
 	}
 
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
-modules: [sshd]
+configcrates: [sshd]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "production"), 0o755)
 	writeFile(t, filepath.Join(dir, "production", "common.vgo"), `
-modules: [logging]
+configcrates: [logging]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "production", "web"), 0o755)
 	writeFile(t, filepath.Join(dir, "production", "web", "web.vgo"), `
 envoys:
   - match: "web*.prod.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -2919,7 +2919,7 @@ envoys:
 	}
 
 	var names []string
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		names = append(names, m.Name)
 	}
 	// root(sshd) → production(logging) → web(nginx)
@@ -2938,7 +2938,7 @@ func TestInheritance_ExcludeModules(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "monitoring", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "configcrates", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -2948,15 +2948,15 @@ resources:
 	}
 
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
-modules: [sshd, monitoring]
+configcrates: [sshd, monitoring]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "containers"), 0o755)
 	writeFile(t, filepath.Join(dir, "containers", "containers.vgo"), `
 envoys:
   - match: "docker*.example.com"
-    modules: [nginx]
-    exclude_modules: [monitoring]
+    configcrates: [nginx]
+    exclude_configcrates: [monitoring]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -2970,7 +2970,7 @@ envoys:
 	}
 
 	var names []string
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		names = append(names, m.Name)
 	}
 	// sshd inherited, monitoring excluded, nginx own.
@@ -2988,7 +2988,7 @@ envoys:
 func TestInheritance_VarsOverride(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: install-app
@@ -2997,7 +2997,7 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
-modules: [app]
+configcrates: [app]
 vars:
   log_level: info
   dns_server: "1.1.1.1"
@@ -3035,14 +3035,14 @@ func TestInheritance_SubdirInheritsFromRoot(t *testing.T) {
 	// Entries in any subdirectory (including one named "envoys") inherit.
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
     type: package
     package: openssh-server
 `)
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: install-app
@@ -3051,14 +3051,14 @@ resources:
 `)
 
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
-modules: [sshd]
+configcrates: [sshd]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "servers"), 0o755)
 	writeFile(t, filepath.Join(dir, "servers", "all.vgo"), `
 envoys:
   - match: "srv*.example.com"
-    modules: [app]
+    configcrates: [app]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -3072,7 +3072,7 @@ envoys:
 	}
 
 	var names []string
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		names = append(names, m.Name)
 	}
 	// Should have inherited sshd + own app.
@@ -3091,7 +3091,7 @@ func TestInheritance_TraceShowsChain(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "configcrates", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3101,14 +3101,14 @@ resources:
 	}
 
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
-modules: [sshd]
+configcrates: [sshd]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
 	writeFile(t, filepath.Join(dir, "web", "web.vgo"), `
 envoys:
   - match: "web*.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -3127,8 +3127,8 @@ envoys:
 	if trace.Inheritance[0].File != "common.vgo" {
 		t.Errorf("inheritance[0].File = %q, want common.vgo", trace.Inheritance[0].File)
 	}
-	if len(trace.Inheritance[0].Modules) != 1 || trace.Inheritance[0].Modules[0] != "sshd" {
-		t.Errorf("inheritance[0].Modules = %v, want [sshd]", trace.Inheritance[0].Modules)
+	if len(trace.Inheritance[0].Configcrates) != 1 || trace.Inheritance[0].Configcrates[0] != "sshd" {
+		t.Errorf("inheritance[0].Configcrates = %v, want [sshd]", trace.Inheritance[0].Configcrates)
 	}
 	// Leaf entry level shows the source file.
 	if trace.Inheritance[1].File != "web.vgo" {
@@ -3137,8 +3137,8 @@ envoys:
 	if trace.Inheritance[1].Dir != "web" {
 		t.Errorf("inheritance[1].Dir = %q, want web", trace.Inheritance[1].Dir)
 	}
-	if len(trace.Inheritance[1].Modules) != 1 || trace.Inheritance[1].Modules[0] != "nginx" {
-		t.Errorf("inheritance[1].Modules = %v, want [nginx]", trace.Inheritance[1].Modules)
+	if len(trace.Inheritance[1].Configcrates) != 1 || trace.Inheritance[1].Configcrates[0] != "nginx" {
+		t.Errorf("inheritance[1].Configcrates = %v, want [nginx]", trace.Inheritance[1].Configcrates)
 	}
 }
 
@@ -3146,7 +3146,7 @@ func TestInheritance_InheritedRoles(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "monitoring", "nginx"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "configcrates", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3159,19 +3159,19 @@ resources:
 	writeFile(t, filepath.Join(dir, "roles.vgo"), `
 roles:
   - name: base-security
-    modules: [sshd]
+    configcrates: [sshd]
 `)
 
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
 roles: [base-security]
-modules: [monitoring]
+configcrates: [monitoring]
 `)
 
 	os.MkdirAll(filepath.Join(dir, "web"), 0o755)
 	writeFile(t, filepath.Join(dir, "web", "web.vgo"), `
 envoys:
   - match: "web*.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -3185,7 +3185,7 @@ envoys:
 	}
 
 	var names []string
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		names = append(names, m.Name)
 	}
 	// Inherited role base-security(sshd) + inherited module monitoring + own nginx.
@@ -3203,7 +3203,7 @@ envoys:
 // --- New function tests: compliance index, when display, var priority ---
 
 func TestBuildComplianceIndex(t *testing.T) {
-	mods := map[string]*ModuleDefinition{
+	mods := map[string]*ConfigcrateDefinition{
 		"sshd": {
 			Name: "sshd",
 			InheritedCompliance: map[string][]string{
@@ -3252,19 +3252,19 @@ func TestEnvoyStandardCoverage(t *testing.T) {
 	// to a single module (per-module `compliance:` carries the catalog-
 	// tag shape only; the inheritance file keeps the framework→control
 	// map shape).
-	writeFile(t, filepath.Join(dir, "modules", "sshd", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "compliance.vgo"), `
 compliance:
   hipaa: [AC-1, SC-8]
   pci-dss: ["2.2.1", "8.3.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -3272,16 +3272,16 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx", "compliance.vgo"), `
 compliance:
   pci-dss: ["6.5.1"]
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
-    modules: [sshd, nginx]
+    configcrates: [sshd, nginx]
   - match: "db01"
-    modules: [sshd]
+    configcrates: [sshd]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -3423,7 +3423,7 @@ func TestResolveWhenDisplay(t *testing.T) {
 func TestTraceSecretRefs(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "db.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "db.vgo"), `
 name: db
 vars:
   dsn: "secret:vigo/db/dsn"
@@ -3436,7 +3436,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "db01"
-    modules: [db]
+    configcrates: [db]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
@@ -3457,7 +3457,7 @@ envoys:
 	// Should find the secret var reference.
 	found := false
 	for _, sr := range trace.SecretRefs {
-		if sr.Key == "dsn" && sr.Path == "vigo/db/dsn" && sr.Module == "db" {
+		if sr.Key == "dsn" && sr.Path == "vigo/db/dsn" && sr.Configcrate == "db" {
 			found = true
 		}
 	}
@@ -3469,7 +3469,7 @@ envoys:
 func TestTraceDependencies(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 depends_on: [sshd]
 resources:
@@ -3487,7 +3487,7 @@ resources:
     state: running
     depends_on: [install-nginx]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
@@ -3497,7 +3497,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
-    modules: [sshd, nginx]
+    configcrates: [sshd, nginx]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -3539,14 +3539,14 @@ envoys:
 func TestTraceComplianceTags(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "compliance.vgo"), `
 compliance:
   hipaa: [AC-1, SC-8]
   pci-dss: ["2.2.1"]
@@ -3554,7 +3554,7 @@ compliance:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
-    modules: [sshd]
+    configcrates: [sshd]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -3567,8 +3567,8 @@ envoys:
 		t.Fatalf("ComplianceTags = %d, want 1", len(trace.ComplianceTags))
 	}
 	ct := trace.ComplianceTags[0]
-	if ct.Module != "sshd" {
-		t.Errorf("Module = %q, want sshd", ct.Module)
+	if ct.Configcrate != "sshd" {
+		t.Errorf("Module = %q, want sshd", ct.Configcrate)
 	}
 	if len(ct.Frameworks["hipaa"]) != 2 {
 		t.Errorf("hipaa controls = %d, want 2", len(ct.Frameworks["hipaa"]))
@@ -3581,7 +3581,7 @@ envoys:
 func TestTraceConditionals(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "scanner.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "scanner.vgo"), `
 name: scanner
 resources:
   - name: run-scan
@@ -3596,7 +3596,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
-    modules: [scanner]
+    configcrates: [scanner]
     vars:
       is_enabled: true
 `)
@@ -3633,7 +3633,7 @@ envoys:
 func TestTraceVarSourceOrdering(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -3646,7 +3646,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
-    modules: [app]
+    configcrates: [app]
     environment: production
     vars:
       port: "9090"
@@ -3680,10 +3680,10 @@ envoys:
 	}
 }
 
-func TestFilterByModuleFiltersNewSections(t *testing.T) {
+func TestFilterByConfigcrateFiltersNewSections(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
@@ -3691,11 +3691,11 @@ resources:
     target_path: /etc/ssh/sshd_config
     when: "is_enabled"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "compliance.vgo"), `
 compliance:
   hipaa: [AC-1]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -3704,14 +3704,14 @@ resources:
     state: present
     when: "os_family('debian')"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx", "compliance.vgo"), `
 compliance:
   pci-dss: ["6.5.1"]
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
-    modules: [sshd, nginx]
+    configcrates: [sshd, nginx]
     vars:
       is_enabled: true
 `)
@@ -3725,14 +3725,14 @@ envoys:
 	filtered := trace.FilterByModule("nginx")
 
 	// Compliance should only include nginx.
-	if len(filtered.ComplianceTags) != 1 || filtered.ComplianceTags[0].Module != "nginx" {
+	if len(filtered.ComplianceTags) != 1 || filtered.ComplianceTags[0].Configcrate != "nginx" {
 		t.Errorf("filtered ComplianceTags = %v, want [nginx]", filtered.ComplianceTags)
 	}
 
 	// Conditionals should only include nginx resources.
 	for _, c := range filtered.Conditionals {
-		if c.Module != "nginx" {
-			t.Errorf("filtered Conditional module = %q, want nginx", c.Module)
+		if c.Configcrate != "nginx" {
+			t.Errorf("filtered Conditional module = %q, want nginx", c.Configcrate)
 		}
 	}
 }
@@ -3756,7 +3756,7 @@ func TestResolveModuleSecrets_EmbeddedRefs_EmitsPlaceholders(t *testing.T) {
 
 	// container: resource with embedded secret in env; mirrors the
 	// pattern the docs example shows.
-	writeFile(t, filepath.Join(dir, "modules", "redis.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "redis.vgo"), `
 name: redis
 resources:
   - name: redis-cache
@@ -3769,7 +3769,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "redis-host"
-    modules: [redis]
+    configcrates: [redis]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
@@ -3783,10 +3783,10 @@ envoys:
 	if cfg == nil {
 		t.Fatal("Match(redis-host) returned nil config")
 	}
-	if len(cfg.Modules) == 0 || len(cfg.Modules[0].Resources) == 0 {
-		t.Fatalf("expected one resource on the redis module, got %#v", cfg.Modules)
+	if len(cfg.Configcrates) == 0 || len(cfg.Configcrates[0].Resources) == 0 {
+		t.Fatalf("expected one resource on the redis module, got %#v", cfg.Configcrates)
 	}
-	envAttr, _ := cfg.Modules[0].Resources[0].Attributes["env"].(string)
+	envAttr, _ := cfg.Configcrates[0].Resources[0].Attributes["env"].(string)
 
 	want := "REDIS_PASSWORD=__VIGO_SECRET__vigo/redis/password__END_VIGO_SECRET__,REDIS_DB=cache"
 	if envAttr != want {
@@ -3810,7 +3810,7 @@ func TestResolveModuleSecrets_LiteralSecretColonInContent(t *testing.T) {
 	// `content:` carries both the literal documentation text (must survive
 	// verbatim) and a genuine embedded reference (must become a placeholder).
 	const literal = "A `secret:` reference failed to resolve. Check the secrets provider health."
-	writeFile(t, filepath.Join(dir, "modules", "alerts.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "alerts.vgo"), `
 name: alerts
 resources:
   - name: alerts-yaml
@@ -3823,7 +3823,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "alerts-host"
-    modules: [alerts]
+    configcrates: [alerts]
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
@@ -3837,10 +3837,10 @@ envoys:
 	if cfg == nil {
 		t.Fatal("Match(alerts-host) returned nil config")
 	}
-	if len(cfg.Modules) == 0 || len(cfg.Modules[0].Resources) == 0 {
-		t.Fatalf("expected one resource on the alerts module, got %#v", cfg.Modules)
+	if len(cfg.Configcrates) == 0 || len(cfg.Configcrates[0].Resources) == 0 {
+		t.Fatalf("expected one resource on the alerts module, got %#v", cfg.Configcrates)
 	}
-	content, _ := cfg.Modules[0].Resources[0].Attributes["content"].(string)
+	content, _ := cfg.Configcrates[0].Resources[0].Attributes["content"].(string)
 
 	if !strings.Contains(content, literal) {
 		t.Errorf("literal `secret:` text was not preserved verbatim; content = %q", content)
@@ -3864,9 +3864,9 @@ envoys:
 func TestTraceInverse(t *testing.T) {
 	dir := setupDir(t)
 
-	// Modules.
+	// Configcrates.
 	for _, name := range []string{"nginx", "tlsbase", "chrony"} {
-		writeFile(t, filepath.Join(dir, "modules", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "configcrates", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3888,12 +3888,12 @@ resources:
 	// Role pulls in chrony.
 	writeRoles(t, dir, `
 - name: webserver
-  modules: [chrony]
+  configcrates: [chrony]
 `)
 
 	// Root common.vgo contributes tlsbase to every entry.
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
-modules: [tlsbase]
+configcrates: [tlsbase]
 `)
 
 	// Two leaf entries:
@@ -3902,11 +3902,11 @@ modules: [tlsbase]
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
     roles: [webserver]
     usercrates: [alex]
   - match: "staging-only.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)

@@ -66,7 +66,7 @@ func (pc *policyCache) GetOrBuild(pattern string, cfg *config.EnvoyConfig, versi
 
 // buildBasePolicyBundle creates a PolicyBundle with all modules fully
 // populated (no stubs). Module content hashes are taken from the
-// pre-computed ContentHash on each ModuleConfig.
+// pre-computed ContentHash on each Configcrate.
 func buildBasePolicyBundle(cfg *config.EnvoyConfig, version uint64, streamEdit ...config.StreamEditSection) (*pb.PolicyBundle, error) {
 	bundle, err := buildPolicyBundle(cfg, version, nil, nil, streamEdit...)
 	if err != nil {
@@ -76,7 +76,7 @@ func buildBasePolicyBundle(cfg *config.EnvoyConfig, version uint64, streamEdit .
 }
 
 // customizeStubs creates a lightweight copy of a base PolicyBundle with
-// stub modules for any that match the agent's cached hashes. Modules
+// stub modules for any that match the agent's cached hashes. Configcrates
 // that don't match are shared (read-only) from the base bundle.
 // Always returns a new bundle safe for caller mutation (e.g., appending
 // custom traits).
@@ -92,15 +92,15 @@ func customizeStubs(base *pb.PolicyBundle, cachedHashes map[string]string) *pb.P
 
 	if len(cachedHashes) == 0 {
 		// No stubs needed — share all modules from base.
-		bundle.Modules = base.Modules
+		bundle.Configcrates = base.Configcrates
 		return bundle
 	}
 
-	bundle.Modules = make([]*pb.PolicyModule, len(base.Modules))
-	for i, mod := range base.Modules {
+	bundle.Configcrates = make([]*pb.PolicyConfigcrate, len(base.Configcrates))
+	for i, mod := range base.Configcrates {
 		if agentHash, ok := cachedHashes[mod.Name]; ok && agentHash == mod.ContentHash {
 			// Agent has this module cached — send stub.
-			bundle.Modules[i] = &pb.PolicyModule{
+			bundle.Configcrates[i] = &pb.PolicyConfigcrate{
 				Name:        mod.Name,
 				DependsOn:   mod.DependsOn,
 				When:        mod.When,
@@ -109,7 +109,7 @@ func customizeStubs(base *pb.PolicyBundle, cachedHashes map[string]string) *pb.P
 			}
 		} else {
 			// Share the full module from the base bundle (read-only).
-			bundle.Modules[i] = mod
+			bundle.Configcrates[i] = mod
 		}
 	}
 

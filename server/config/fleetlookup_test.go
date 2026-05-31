@@ -213,9 +213,9 @@ func TestResolveFleetLookup_Empty(t *testing.T) {
 func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
 	cs := &ConfigStore{
 		index:           buildPatternIndex(nil),
-		rawModules:      make(map[string]*ModuleDefinition),
+		rawModules:      make(map[string]*ConfigcrateDefinition),
 		roleDefs:        make(map[string]*RoleDefinition),
-		moduleDefs:      make(map[string]*ModuleDefinition),
+		moduleDefs:      make(map[string]*ConfigcrateDefinition),
 		complianceIndex: make(map[string]map[string][]string),
 		commonConfigs:   make(map[string]*CommonConfig),
 		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
@@ -274,7 +274,7 @@ func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
 
 func TestForeachOverFleetVar_DeferredExpansion(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "allow.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "allow.vgo"), `
 name: allow
 resources:
   - name: "allow-{{ .Item }}"
@@ -286,7 +286,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "fw01"
-    modules: [allow]
+    configcrates: [allow]
     vars:
       web_ips:
         fleet:
@@ -305,8 +305,8 @@ envoys:
 	if _, ok := cfg.Vars["web_ips"].(*FleetLookup); !ok {
 		t.Fatalf("web_ips not a *FleetLookup: %#v", cfg.Vars["web_ips"])
 	}
-	if len(cfg.Modules[0].Resources) != 1 || cfg.Modules[0].Resources[0].ForEach != "web_ips" {
-		t.Fatalf("foreach resource should be unexpanded at load: %#v", cfg.Modules[0].Resources)
+	if len(cfg.Configcrates[0].Resources) != 1 || cfg.Configcrates[0].Resources[0].ForEach != "web_ips" {
+		t.Fatalf("foreach resource should be unexpanded at load: %#v", cfg.Configcrates[0].Resources)
 	}
 
 	// Simulate the clone path: resolve the fleet lookup, then re-run ExpandForEach.
@@ -318,15 +318,15 @@ envoys:
 	if err := store.ResolveFleetLookupsInConfig(cloned, members, nil, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	for i := range cloned.Modules {
-		expanded, err := ExpandForEach(cloned.Modules[i].Resources, cloned.Vars)
+	for i := range cloned.Configcrates {
+		expanded, err := ExpandForEach(cloned.Configcrates[i].Resources, cloned.Vars)
 		if err != nil {
 			t.Fatal(err)
 		}
-		cloned.Modules[i].Resources = expanded
+		cloned.Configcrates[i].Resources = expanded
 	}
 	got := map[string]bool{}
-	for _, r := range cloned.Modules[0].Resources {
+	for _, r := range cloned.Configcrates[0].Resources {
 		got[r.Name] = true
 	}
 	for _, want := range []string{"allow-10.0.0.1", "allow-10.0.0.2"} {
@@ -339,13 +339,13 @@ envoys:
 	}
 }
 
-func TestForeachModule_FleetLoadError(t *testing.T) {
+func TestForeachConfigcrate_FleetLoadError(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "m.vgo"), "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n")
+	writeFile(t, filepath.Join(dir, "configcrates", "m.vgo"), "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n")
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "h"
-    modules: [m]
+    configcrates: [m]
     vars:
       backends:
         fleet:

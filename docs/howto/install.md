@@ -33,8 +33,8 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── secrets/                 # encrypted secret files
 ├── stacks/                  # config operation root
 │   ├── stockpile/           # operator-edited working tree
-│   │   ├── modules/         # reusable module definitions
-│   │   ├── usercrates/      # user-scoped modules (inert until included via `usercrates:`)
+│   │   ├── configcrates/    # reusable configcrate definitions
+│   │   ├── usercrates/      # user-scoped configcrates (inert until included via `usercrates:`)
 │   │   ├── templates/       # Go template fragments
 │   │   ├── tasks/           # reusable task definitions
 │   │   ├── workflows/       # workflow definitions
@@ -42,12 +42,12 @@ This populates `/srv/vigo/` with everything needed to run the server:
 │   │   ├── roles.vgo        # role definitions (single, fleet-wide)
 │   │   ├── common.vgo       # directory-inherited defaults
 │   │   ├── waivers.vgo      # compliance waivers (any depth)
-│   │   ├── environments.vgo # per-env module/var overrides
+│   │   ├── environments.vgo # per-env configcrate/var overrides
 │   │   └── compliance.vgo   # directory-inherited claims
 │   ├── examples/            # read-only install templates
 │   │                        #   (rebuilt from image on every container start;
 │   │                        #    vigocli config examples copy)
-│   ├── anti-examples/       # read-only retract templates (mirrors examples/modules)
+│   ├── anti-examples/       # read-only retract templates (mirrors examples/configcrates)
 │   │                        #   (rebuilt from image on every container start;
 │   │                        #    vigocli config anti-examples copy / mirror-check)
 │   └── .live/               # published config (locked between publishes)
@@ -245,7 +245,7 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
   license ................. OK (Compliant, 5/100 envoys)
   spanner .................. SKIP (standalone)
   integrations ............ SKIP (no integrations configured)
-  config .................. OK (43 modules, 5 entries)
+  config .................. OK (43 configcrates, 5 entries)
   swarm_pattern_order ..... OK (all swarm.*.enabled pattern lists well-ordered)
   stale_envoys ............ OK
   Status: healthy
@@ -256,7 +256,7 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
 ## What's next
 
 - **Add a managed node** → [Enroll an envoy](enroll-an-envoy.md).
-- **Write your first declarative config** → [Write your first module](write-your-first-module.md).
+- **Write your first declarative config** → [Write your first configcrate](write-your-first-module.md).
 - **If the server didn't come up clean** → [Troubleshoot common issues](troubleshoot.md).
 
 ---

@@ -724,7 +724,7 @@ async fn run_once(
             info!(
                 source = "server",
                 policy_version = bundle.policy_version,
-                modules = bundle.modules.len(),
+                modules = bundle.configcrates.len(),
                 "applying policy"
             );
 
@@ -732,16 +732,16 @@ async fn run_once(
                 Ok(mods) => (mods, Some(bundle.clone())),
                 Err(e) => {
                     warn!("policy evaluation failed, running with compiled modules: {}", e);
-                    (server_resp.modules.clone(), server_resp.policy_bundle.clone())
+                    (server_resp.configcrates.clone(), server_resp.policy_bundle.clone())
                 }
             }
         } else {
             info!(
                 source = "server",
-                modules = server_resp.modules.len(),
+                modules = server_resp.configcrates.len(),
                 "applying compiled modules"
             );
-            (server_resp.modules, server_resp.policy_bundle)
+            (server_resp.configcrates, server_resp.policy_bundle)
         };
         modules = m;
         bundle_for_trace = b;
@@ -937,10 +937,10 @@ async fn run_once(
     // Report results back to server (only if connected).
     if !dry_run && !offline {
         if let Some(ref mut client) = maybe_client {
-            let proto_results: Vec<proto::ModuleResult> = results
+            let proto_results: Vec<proto::ConfigcrateResult> = results
                 .iter()
-                .map(|r| proto::ModuleResult {
-                    module_name: r.module_name.clone(),
+                .map(|r| proto::ConfigcrateResult {
+                    configcrate_name: r.configcrate_name.clone(),
                     resource_type: r.resource_type.clone(),
                     resource_name: r.resource_name.clone(),
                     action_taken: r.action.to_string(),
@@ -1007,7 +1007,7 @@ fn print_trace(
         if !b.roles.is_empty() {
             let _ = writeln!(out, "{BOLD}Roles:{RESET}       {}", b.roles.join(", "));
         }
-        let mod_names: Vec<&str> = b.modules.iter().map(|m| m.name.as_str()).collect();
+        let mod_names: Vec<&str> = b.configcrates.iter().map(|m| m.name.as_str()).collect();
         if !mod_names.is_empty() {
             let _ = writeln!(out, "{BOLD}Modules:{RESET}     {}", mod_names.join(", "));
         }
@@ -1017,8 +1017,8 @@ fn print_trace(
     // Print results grouped by module.
     let mut cur_module = "";
     for r in results {
-        if r.module_name != cur_module {
-            cur_module = &r.module_name;
+        if r.configcrate_name != cur_module {
+            cur_module = &r.configcrate_name;
             let _ = writeln!(out, "  {BOLD}Module: {cur_module}{RESET}");
         }
 
@@ -1549,9 +1549,9 @@ fn run_status(cli: &Cli) -> Result<()> {
     println!();
     match store.policy.load(&rtxn) {
         Ok(Some((version, bundle))) => {
-            let mod_count = bundle.modules.len();
-            let mod_names: Vec<&str> = bundle.modules.iter().map(|m| m.name.as_str()).collect();
-            let resource_count: usize = bundle.modules.iter().map(|m| m.resources.len()).sum();
+            let mod_count = bundle.configcrates.len();
+            let mod_names: Vec<&str> = bundle.configcrates.iter().map(|m| m.name.as_str()).collect();
+            let resource_count: usize = bundle.configcrates.iter().map(|m| m.resources.len()).sum();
 
             println!("Policy:");
             println!("  Cached:         yes");
@@ -1576,7 +1576,7 @@ fn run_status(cli: &Cli) -> Result<()> {
             }
 
             // List resources by module (type: name only, no secrets).
-            for m in &bundle.modules {
+            for m in &bundle.configcrates {
                 if m.resources.is_empty() {
                     continue;
                 }

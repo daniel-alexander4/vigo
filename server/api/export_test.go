@@ -40,7 +40,7 @@ func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTi
 	}
 
 	_, err = sqlDB.Exec(
-		`INSERT INTO runs (id, envoy_id, status, module_count) VALUES (?, ?, 'success', 2)`,
+		`INSERT INTO runs (id, envoy_id, status, configcrate_count) VALUES (?, ?, 'success', 2)`,
 		runID, envoyID,
 	)
 	if err != nil {
@@ -49,7 +49,7 @@ func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTi
 
 	ts := resultTime.Format("2006-01-02 15:04:05")
 	_, err = sqlDB.Exec(
-		`INSERT INTO run_results (id, run_id, module_name, resource_type, resource_name, action_taken, changed, duration_ms, created_at)
+		`INSERT INTO run_results (id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, duration_ms, created_at)
 		 VALUES (?, ?, 'nginx', 'package', 'nginx-pkg', 'install', 1, 150, ?)`,
 		uuid.New().String(), runID, ts,
 	)
@@ -58,7 +58,7 @@ func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTi
 	}
 
 	_, err = sqlDB.Exec(
-		`INSERT INTO run_results (id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at)
+		`INSERT INTO run_results (id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at)
 		 VALUES (?, ?, 'nginx', 'file', 'nginx-conf', 'create', 0, 'permission denied', 45, ?)`,
 		uuid.New().String(), runID, ts,
 	)
@@ -427,7 +427,7 @@ func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigSt
 	dir := t.TempDir()
 
 	// ConfigStore expects envoys/, modules/, and roles/ subdirectories.
-	for _, sub := range []string{"modules", "envoys", "roles"} {
+	for _, sub := range []string{"configcrates", "envoys", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}

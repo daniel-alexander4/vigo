@@ -12,24 +12,24 @@ You'll finish this page with one host in your fleet mirroring an upstream packag
 
 ## How it fits
 
-Each `<pm>-mirror` module is a self-contained stockpile recipe: install the upstream mirror tool, write its config, run it on cron, serve the resulting tree over HTTP via nginx. The same shape repeats across package managers — only the tooling, the upstream URL, and the on-disk layout change.
+Each `<pm>-mirror` configcrate is a self-contained stockpile recipe: install the upstream mirror tool, write its config, run it on cron, serve the resulting tree over HTTP via nginx. The same shape repeats across package managers — only the tooling, the upstream URL, and the on-disk layout change.
 
-Not curator. Not the swarm. **One host runs the upstream mirror; the rest of the fleet points its package manager at that host's nginx.** That's the whole architecture. The reason to use a stockpile module here rather than curator's P2P substrate is that when one host already has the bytes from upstream, there's no reason to also P2P-distribute them across the fleet — the bandwidth-save story is "fetch once from the internet, serve N times on the LAN."
+Not curator. Not the swarm. **One host runs the upstream mirror; the rest of the fleet points its package manager at that host's nginx.** That's the whole architecture. The reason to use a stockpile configcrate here rather than curator's P2P substrate is that when one host already has the bytes from upstream, there's no reason to also P2P-distribute them across the fleet — the bandwidth-save story is "fetch once from the internet, serve N times on the LAN."
 
-Pair the mirror module with the [nginx module](../reference/vigo/resources/file.md) on the same host. The mirror module drops a `server` block into `/etc/nginx/conf.d/` and notifies the nginx service for reload — it does not install nginx itself.
+Pair the mirror configcrate with the [nginx configcrate](../reference/vigo/resources/file.md) on the same host. The mirror configcrate drops a `server` block into `/etc/nginx/conf.d/` and notifies the nginx service for reload — it does not install nginx itself.
 
 ## Shipped recipes
 
-Each example lives at `example-configs/worksite/stockpile/modules/system/<pm>-mirror.vgo.example`. Copy into your stockpile, set vars to match your upstream of choice, publish.
+Each example lives at `example-configs/worksite/stockpile/configcrates/system/<pm>-mirror.vgo.example`. Copy into your stockpile, set vars to match your upstream of choice, publish.
 
-| Module | OS family | Tooling | Upstream | Client-side config |
+| Configcrate | OS family | Tooling | Upstream | Client-side config |
 |---|---|---|---|---|
-| [`apt-mirror`](../../example-configs/worksite/stockpile/modules/system/apt-mirror.vgo.example) | Debian / Ubuntu | `apt-mirror` (package) + cron + nginx | `archive.ubuntu.com/ubuntu` (or any Debian archive) | `deb http://<mirror>/<upstream-host>/<path> <distribution> <components>` in `/etc/apt/sources.list` |
-| [`dnf-mirror`](../../example-configs/worksite/stockpile/modules/system/dnf-mirror.vgo.example) | RHEL / Fedora / Rocky / AlmaLinux / Amazon Linux | `reposync` (dnf-utils) + `createrepo_c` + cron + nginx | configured `dnf` source on the mirror host | `baseurl=http://<mirror>/<repoid>/` in a `.repo` file |
-| [`apk-mirror`](../../example-configs/worksite/stockpile/modules/system/apk-mirror.vgo.example) | Alpine | `rsync` from `rsync://rsync.alpinelinux.org/alpine/` + nginx | Alpine official | `http://<mirror>/alpine/<version>/main` in `/etc/apk/repositories` |
-| [`zypper-mirror`](../../example-configs/worksite/stockpile/modules/system/zypper-mirror.vgo.example) | openSUSE / SLES | `dnf reposync` + `createrepo_c` (rpm-md, same shape as dnf) | openSUSE / SLES mirror | `baseurl=http://<mirror>/<repoid>/` in `/etc/zypp/repos.d/<repo>.repo` |
-| [`pacman-mirror`](../../example-configs/worksite/stockpile/modules/system/pacman-mirror.vgo.example) | Arch Linux | `rsync` from a tier-1 Arch mirror + nginx | configured tier-1 mirror | `Server = http://<mirror>/archlinux/$repo/os/$arch` in `/etc/pacman.d/mirrorlist` |
-| [`brew-bottle-mirror`](../../example-configs/worksite/stockpile/modules/system/brew-bottle-mirror.vgo.example) | macOS | nginx `proxy_cache` fronting `ghcr.io/v2/homebrew/core/` | GitHub Container Registry (Homebrew's bottle store) | `export HOMEBREW_BOTTLE_DOMAIN=http://<mirror>` on each client |
+| [`apt-mirror`](../../example-configs/worksite/stockpile/configcrates/system/apt-mirror.vgo.example) | Debian / Ubuntu | `apt-mirror` (package) + cron + nginx | `archive.ubuntu.com/ubuntu` (or any Debian archive) | `deb http://<mirror>/<upstream-host>/<path> <distribution> <components>` in `/etc/apt/sources.list` |
+| [`dnf-mirror`](../../example-configs/worksite/stockpile/configcrates/system/dnf-mirror.vgo.example) | RHEL / Fedora / Rocky / AlmaLinux / Amazon Linux | `reposync` (dnf-utils) + `createrepo_c` + cron + nginx | configured `dnf` source on the mirror host | `baseurl=http://<mirror>/<repoid>/` in a `.repo` file |
+| [`apk-mirror`](../../example-configs/worksite/stockpile/configcrates/system/apk-mirror.vgo.example) | Alpine | `rsync` from `rsync://rsync.alpinelinux.org/alpine/` + nginx | Alpine official | `http://<mirror>/alpine/<version>/main` in `/etc/apk/repositories` |
+| [`zypper-mirror`](../../example-configs/worksite/stockpile/configcrates/system/zypper-mirror.vgo.example) | openSUSE / SLES | `dnf reposync` + `createrepo_c` (rpm-md, same shape as dnf) | openSUSE / SLES mirror | `baseurl=http://<mirror>/<repoid>/` in `/etc/zypp/repos.d/<repo>.repo` |
+| [`pacman-mirror`](../../example-configs/worksite/stockpile/configcrates/system/pacman-mirror.vgo.example) | Arch Linux | `rsync` from a tier-1 Arch mirror + nginx | configured tier-1 mirror | `Server = http://<mirror>/archlinux/$repo/os/$arch` in `/etc/pacman.d/mirrorlist` |
+| [`brew-bottle-mirror`](../../example-configs/worksite/stockpile/configcrates/system/brew-bottle-mirror.vgo.example) | macOS | nginx `proxy_cache` fronting `ghcr.io/v2/homebrew/core/` | GitHub Container Registry (Homebrew's bottle store) | `export HOMEBREW_BOTTLE_DOMAIN=http://<mirror>` on each client |
 
 ## Different shape: `brew-bottle-mirror`
 
@@ -39,7 +39,7 @@ The trade-offs: no offline-from-day-one (the first miss must reach upstream), bu
 
 ## Deferred recipes — pattern is documented, the example isn't shipped
 
-These ecosystems are workable in principle but aren't included in the current shipping set. Each entry lists *what tooling you'd use* if you wrote the module yourself; the pattern is identical to the shipped examples (install tool, cron, nginx).
+These ecosystems are workable in principle but aren't included in the current shipping set. Each entry lists *what tooling you'd use* if you wrote the configcrate yourself; the pattern is identical to the shipped examples (install tool, cron, nginx).
 
 ### Windows
 
@@ -66,16 +66,16 @@ These are a different category — "language package index mirrors" rather than 
 
 ### Container images
 
-Already covered by curator's Docker Registry v2 shim — see [Set up curator](set-up-curator.md). Not a package-mirror module concern.
+Already covered by curator's Docker Registry v2 shim — see [Set up curator](set-up-curator.md). Not a package-mirror configcrate concern.
 
 ## Operational notes
 
-- **One mirror host per family** is the v1 shape. A single Vigo-managed mirror host can run several of these modules at once (one per family) — `apt-mirror` for the Ubuntu envoys, `dnf-mirror` for the Rocky envoys, `apk-mirror` for the Alpine envoys, etc. They serve under non-conflicting `location` blocks of the same nginx instance and disk paths.
+- **One mirror host per family** is the v1 shape. A single Vigo-managed mirror host can run several of these configcrates at once (one per family) — `apt-mirror` for the Ubuntu envoys, `dnf-mirror` for the Rocky envoys, `apk-mirror` for the Alpine envoys, etc. They serve under non-conflicting `location` blocks of the same nginx instance and disk paths.
 - **Disk usage** is significant. A full mirror of Ubuntu main + restricted + universe + multiverse for one release runs around 250–400 GiB. Plan disk before publishing. The `apt-mirror`'s `clean` directive will trim deleted upstream packages, but the working set is the working set.
 - **Cron schedule** defaults to nightly in each example (`0 4 * * *`). On a slow uplink, stretch this to weekly — fleet convergence isn't blocked on the mirror being fresh, only on it being up.
 - **Sources of truth.** If the mirror falls behind (cron failed, disk full, upstream changed), client envoys can still upgrade — apt/dnf/apk will retry from the upstream URLs in the source list. Add the mirror as the FIRST source and keep the upstream as a fallback. The examples set this up.
 - **First-run convergence.** The initial rsync/reposync takes hours and Vigo's per-resource convergence timeout (default 300s for `exec` / `package` / `repository` resources, per `agent/src/runner/mod.rs`) will kill an inline sync. The examples deliberately set up cron and let the first sync happen out-of-band — operator runs it once by hand or waits for the first cron tick.
-- **Retraction.** Each module has a paired retract file at `example-configs/retractions/modules/system/<pm>-mirror-retract.vgo.example`. Retract removes the cron entry, the nginx site, and (where applicable) the mirror tool package, but **leaves the mirrored tree on disk** — operators delete that manually after confirming the fleet has flipped back to upstream. The disk delete isn't reversible and shouldn't be a convergence-cycle side-effect.
+- **Retraction.** Each configcrate has a paired retract file at `example-configs/retractions/configcrates/system/<pm>-mirror-retract.vgo.example`. Retract removes the cron entry, the nginx site, and (where applicable) the mirror tool package, but **leaves the mirrored tree on disk** — operators delete that manually after confirming the fleet has flipped back to upstream. The disk delete isn't reversible and shouldn't be a convergence-cycle side-effect.
 
 ## When something goes wrong
 

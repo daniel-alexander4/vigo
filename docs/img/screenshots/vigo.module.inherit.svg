@@ -26,7 +26,7 @@
   <rect x="24" y="70" width="472" height="6" fill="#1e1e2e"/>
   <text x="36" y="68" fill="#a6e3a1" font-size="11" font-weight="700">common.vgo</text>
   <!-- Modules -->
-  <text x="36" y="92" fill="#f9e2af" font-size="10" font-weight="600">modules:</text>
+  <text x="36" y="92" fill="#f9e2af" font-size="10" font-weight="600">configcrates:</text>
   <text x="104" y="92" fill="#cdd6f4" font-size="10">node-exporter, motd, diag-tools, security-scanning, base-firewall</text>
   <!-- Role -->
   <text x="36" y="112" fill="#89dceb" font-size="10" font-weight="600">roles:</text>
@@ -47,7 +47,7 @@
   <rect x="24" y="202" width="472" height="24" rx="6" fill="#94e2d5" opacity="0.12"/>
   <rect x="24" y="220" width="472" height="6" fill="#1e1e2e"/>
   <text x="36" y="218" fill="#94e2d5" font-size="11" font-weight="700">alexander4/common.vgo</text>
-  <text x="36" y="238" fill="#f9e2af" font-size="10" font-weight="600">modules:</text>
+  <text x="36" y="238" fill="#f9e2af" font-size="10" font-weight="600">configcrates:</text>
   <text x="104" y="238" fill="#cdd6f4" font-size="10">timezone, motd, logrotate</text>
 
   <!-- Arrow 2 -->
@@ -59,7 +59,7 @@
   <rect x="24" y="278" width="472" height="24" rx="6" fill="#89dceb" opacity="0.12"/>
   <rect x="24" y="296" width="472" height="6" fill="#1e1e2e"/>
   <text x="36" y="294" fill="#89dceb" font-size="11" font-weight="700">alexander4/us-west1/common.vgo</text>
-  <text x="36" y="314" fill="#f9e2af" font-size="10" font-weight="600">modules:</text>
+  <text x="36" y="314" fill="#f9e2af" font-size="10" font-weight="600">configcrates:</text>
   <text x="104" y="314" fill="#cdd6f4" font-size="10">editor</text>
 
   <!-- Arrow 3 (skip us-west1-a/common.vgo — no modules) -->
@@ -73,7 +73,7 @@
   <text x="36" y="370" fill="#f5c2e7" font-size="11" font-weight="700">alexander4/us-west1/us-west1-a/danlap.vgo</text>
   <text x="36" y="392" fill="#f5c2e7" font-size="10" font-weight="600">match:</text>
   <text x="84" y="392" fill="#f5c2e7" font-size="10">danlap</text>
-  <text x="170" y="392" fill="#f9e2af" font-size="10" font-weight="600">modules:</text>
+  <text x="170" y="392" fill="#f9e2af" font-size="10" font-weight="600">configcrates:</text>
   <text x="238" y="392" fill="#cdd6f4" font-size="10">node-exporter</text>
 
   <!-- Resolved modules summary -->

@@ -67,7 +67,7 @@ func (d *toolDeps) dispatchTool(ctx context.Context, name, argsJSON string) (str
 	case "list_package_drift":
 		return d.listPackageDrift(ctx, args)
 	case "get_module_definition":
-		return d.getModuleDefinition(args)
+		return d.getConfigcrateDefinition(args)
 	case "list_modules":
 		return d.listModules()
 	case "list_roles":
@@ -221,7 +221,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 		StartedAt string `json:"started_at"`
 		Changed   int64  `json:"changed"`
 		Failed    int64  `json:"failed"`
-		Modules   int64  `json:"modules"`
+		Configcrates   int64  `json:"configcrates"`
 	}
 
 	results := make([]runInfo, 0, len(runs))
@@ -233,7 +233,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 			StartedAt: r.StartedAt.Format(time.RFC3339),
 			Changed:   r.ChangedCount,
 			Failed:    r.FailedCount,
-			Modules:   r.ModuleCount,
+			Configcrates:   r.ConfigcrateCount,
 		})
 	}
 
@@ -263,7 +263,7 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 	}
 
 	type resultInfo struct {
-		Module     string `json:"module"`
+		Configcrate     string `json:"configcrate"`
 		Type       string `json:"type"`
 		Name       string `json:"name"`
 		Action     string `json:"action"`
@@ -275,7 +275,7 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 	rr := make([]resultInfo, 0, len(results))
 	for _, r := range results {
 		ri := resultInfo{
-			Module:     r.ModuleName,
+			Configcrate:     r.ConfigcrateName,
 			Type:       r.ResourceType,
 			Name:       r.ResourceName,
 			Action:     r.ActionTaken,
@@ -293,7 +293,7 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 		"envoy_id":   run.EnvoyID,
 		"status":     run.Status,
 		"started_at": run.StartedAt.Format(time.RFC3339),
-		"modules":    run.ModuleCount,
+		"configcrates":    run.ConfigcrateCount,
 		"changed":    run.ChangedCount,
 		"failed":     run.FailedCount,
 		"skipped":    run.SkippedCount,
@@ -320,7 +320,7 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[t.ID]; ok {
-			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ModuleCount: run.ModuleCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ConfigcrateCount: run.ConfigcrateCount}}
 		}
 		status := convergence.ComputeConvergence(recent)
 
@@ -357,7 +357,7 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 	for _, id := range ids {
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[id]; ok {
-			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ModuleCount: run.ModuleCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ConfigcrateCount: run.ConfigcrateCount}}
 		}
 		statuses = append(statuses, convergence.ComputeConvergence(recent))
 	}
@@ -489,7 +489,7 @@ func (d *toolDeps) listPackageDrift(ctx context.Context, _ map[string]any) (stri
 	})
 }
 
-func (d *toolDeps) getModuleDefinition(args map[string]any) (string, error) {
+func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error) {
 	if d.configStore == nil {
 		return "", fmt.Errorf("config store not available")
 	}
@@ -543,12 +543,12 @@ func (d *toolDeps) getModuleDefinition(args map[string]any) (string, error) {
 
 func (d *toolDeps) listModules() (string, error) {
 	if d.configStore == nil {
-		return marshalResult(map[string]any{"count": 0, "modules": []string{}})
+		return marshalResult(map[string]any{"count": 0, "configcrates": []string{}})
 	}
 	names := d.configStore.ListModuleNames()
 	return marshalResult(map[string]any{
 		"count":   len(names),
-		"modules": names,
+		"configcrates": names,
 	})
 }
 
@@ -573,10 +573,10 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 	}
 
 	cfg := d.configStore.Get(hostname)
-	if cfg == nil || len(cfg.Modules) == 0 {
+	if cfg == nil || len(cfg.Configcrates) == 0 {
 		return marshalResult(map[string]any{
 			"hostname": hostname,
-			"modules":  0,
+			"configcrates":  0,
 			"message":  "no config found for this envoy",
 		})
 	}
@@ -587,8 +587,8 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 		DependsOn []string `json:"depends_on,omitempty"`
 	}
 
-	modules := make([]moduleInfo, 0, len(cfg.Modules))
-	for _, m := range cfg.Modules {
+	modules := make([]moduleInfo, 0, len(cfg.Configcrates))
+	for _, m := range cfg.Configcrates {
 		modules = append(modules, moduleInfo{
 			Name:      m.Name,
 			Resources: len(m.Resources),
@@ -599,7 +599,7 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 	return marshalResult(map[string]any{
 		"hostname":        hostname,
 		"environment":     cfg.Environment,
-		"modules":         modules,
+		"configcrates":         modules,
 		"total_resources": countResources(cfg),
 	})
 }
@@ -718,7 +718,7 @@ func intArg(args map[string]any, key string, def int) int {
 
 func countResources(cfg *config.EnvoyConfig) int {
 	n := 0
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		n += len(m.Resources)
 	}
 	return n

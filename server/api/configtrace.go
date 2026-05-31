@@ -46,11 +46,11 @@ func (h *ConfigTraceHandler) HandleTree(w http.ResponseWriter, r *http.Request) 
 // HandleSearch finds envoy entries matching the given criteria.
 func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("match")
-	module := r.URL.Query().Get("module")
+	module := r.URL.Query().Get("configcrate")
 	varName := r.URL.Query().Get("var")
 
 	if query == "" && module == "" && varName == "" {
-		writeError(w, http.StatusBadRequest, "at least one of ?match=, ?module=, or ?var= is required")
+		writeError(w, http.StatusBadRequest, "at least one of ?match=, ?configcrate=, or ?var= is required")
 		return
 	}
 
@@ -61,9 +61,9 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 // HandleTrace serves both forward (host-rooted) and inverse (subject-rooted)
 // config trace queries.
 //
-//   - ?hostname=H            → forward trace for H. ?module=M filters the
+//   - ?hostname=H            → forward trace for H. ?configcrate=M filters the
 //     output to M's branch (existing behavior).
-//   - ?module=M              → inverse: enrolled envoys whose resolved config
+//   - ?configcrate=M              → inverse: enrolled envoys whose resolved config
 //     includes module M, plus the carrier that pulled
 //     it in.
 //   - ?usercrate=U           → inverse: same for usercrate U.
@@ -77,17 +77,17 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	hostname := q.Get("hostname")
-	module := q.Get("module")
+	module := q.Get("configcrate")
 	usercrate := q.Get("usercrate")
 
 	if hostname == "" {
 		// Inverse mode — module XOR usercrate.
 		if module == "" && usercrate == "" {
-			writeError(w, http.StatusBadRequest, "specify one of ?hostname=, ?module=, or ?usercrate=")
+			writeError(w, http.StatusBadRequest, "specify one of ?hostname=, ?configcrate=, or ?usercrate=")
 			return
 		}
 		if module != "" && usercrate != "" {
-			writeError(w, http.StatusBadRequest, "?module= and ?usercrate= are mutually exclusive")
+			writeError(w, http.StatusBadRequest, "?configcrate= and ?usercrate= are mutually exclusive")
 			return
 		}
 		subject, value := "module", module

@@ -17,12 +17,12 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 
 | Puppet Concept | Vigo Equivalent | Notes |
 |---|---|---|
-| Manifest (`.pp` file) | Module (`.vgo` file) | YAML instead of Puppet DSL |
-| Class / Defined Type | Module | One module = one `.vgo` file with resources |
-| Profile | Module | Same level of abstraction |
-| Role | Role | Named list of modules |
+| Manifest (`.pp` file) | Configcrate (`.vgo` file) | YAML instead of Puppet DSL |
+| Class / Defined Type | Configcrate | One configcrate = one `.vgo` file with resources |
+| Profile | Configcrate | Same level of abstraction |
+| Role | Role | Named list of configcrates |
 | `site.pp` / ENC | `envoys.vgo` | First-match-wins glob patterns |
-| Hiera | `vars` / `common.vgo` / `environments.vgo` | 4 layers: module defaults → inherited common.vgo → match-block → per-env |
+| Hiera | `vars` / `common.vgo` / `environments.vgo` | 4 layers: configcrate defaults → inherited common.vgo → match-block → per-env |
 | Facter fact | Trait | Collected automatically, available in `when:` and templates |
 | Catalog | Bundle | Server-compiled desired state sent to agent |
 | Resource | Resource | Same concept — idempotent, declarative |
@@ -30,7 +30,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | `notify` | `notify` | Trigger downstream resource re-application |
 | `subscribe` | `subscribes` | Pull-based trigger |
 | `ensure => absent` | `state: absent` | Same semantics |
-| Puppet Forge module | Module `.vgo` file | No package manager — just YAML files |
+| Puppet Forge module | Configcrate `.vgo` file | No package manager — just YAML files |
 | PuppetDB | FleetIndex + SQLite | In-memory index, no external database |
 | hiera-eyaml | `secret:` prefix | Resolved at bundle compile time |
 | ERB template | Go template in `content:` | Templates only in `content:` — never in `target_path:`, `package:`, etc. |
@@ -58,7 +58,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | `sysctl` | `sysctl` | `key:`, `value:` |
 | `host` | `host` | `hostname:`, `ip:` |
 
-## Walkthrough: Converting an Nginx Module
+## Walkthrough: Converting an Nginx Configcrate
 
 
 ### Puppet Version
@@ -118,7 +118,7 @@ http {
 
 ### Vigo Version
 
-`stockpile/modules/nginx.vgo`:
+`stockpile/configcrates/nginx.vgo`:
 
 
 ```yaml
@@ -175,7 +175,7 @@ resources:
 
 ```yaml
 name: webserver
-modules:
+configcrates:
   - nginx
 ```
 
@@ -198,14 +198,14 @@ envoys:
 
 - **Templates inline or in `templates/`.** Small templates go inline in `content:`. Larger files use `source: templates/nginx.conf.tmpl` — the server reads and renders the file from the `templates/` directory. No ERB — Go template syntax only.
 - **No `require =>`** needed for the package → config ordering. Vigo uses `notify:` from config to service, and the resource DAG handles the rest. You can add explicit `depends_on: [nginx-package]` if you prefer.
-- **Variables are flat.** Puppet class parameters become `vars:` entries. No scope hierarchy — module defaults, then envoy-level overrides. That's it.
+- **Variables are flat.** Puppet class parameters become `vars:` entries. No scope hierarchy — configcrate defaults, then envoy-level overrides. That's it.
 - **No catalog compilation.** The YAML is interpreted directly. No parser, no AST, no compilation errors to debug.
 
 ## Variable and Data Hierarchy
 
 Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family → environment → datacenter → FQDN). Vigo deliberately has four:
 
-1. **Module defaults** — `vars:` in the module `.vgo` file
+1. **Configcrate defaults** — `vars:` in the configcrate `.vgo` file
 2. **Inherited `common.vgo` vars** — set at any ancestor directory, cascade to subdirectories
 3. **Match-block vars** — `vars:` on the `envoys.vgo` entry
 4. **`environments.vgo` vars** — selected by the match block's `environment:` value
@@ -303,26 +303,26 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 
 3. **No exported resources.** Puppet's `@@` exported resources and PuppetDB collectors don't have a direct equivalent. Share data via directory-level `common.vgo` inheritance, or coordinate through task/workflow orchestration.
 
-4. **Flat variable namespace.** There's no `$module::param` scoping. All vars are flat strings in a single namespace. Prefix var names with the module name (e.g., `nginx_worker_processes`) to avoid collisions.
+4. **Flat variable namespace.** There's no `$module::param` scoping. All vars are flat strings in a single namespace. Prefix var names with the configcrate name (e.g., `nginx_worker_processes`) to avoid collisions.
 
 5. **No `ensure => absent` for everything.** Not all executors support `state: absent`. Check the executor documentation for available states.
 
 6. **First-match-wins.** Puppet's node classification can merge multiple matching entries. Vigo's `envoys.vgo` uses first-match-wins — only the first matching glob applies. Order your entries from most specific to least specific.
 
-7. **No Puppet Forge.** There's no package manager for modules. Modules are plain `.vgo` YAML files in your config directory. Copy, adapt, and version-control them directly.
+7. **No Puppet Forge.** There's no package manager for configcrates. Configcrates are plain `.vgo` YAML files in your config directory. Copy, adapt, and version-control them directly.
 
 8. **Exec refresh.** Puppet's `exec` resources use `refreshonly => true` to only run on notification. Vigo uses `when: "changed"` — the resource is skipped on normal check-ins and only runs when triggered by `notify`, `subscribes`, or `watch_secret`.
 
 ## Related
 
-- [Config Format](../reference/writing-modules.md) — Modules, roles, envoys.vgo, vars
-- [Resource DAG](../reference/writing-modules.md) — depends_on, notify, subscribes
-- [Templates](../reference/writing-modules.md) — Go template syntax and restrictions
-- [When Expressions](../reference/writing-modules.md) — Conditional expressions and builtins
+- [Config Format](../reference/writing-configcrates.md) — Configcrates, roles, envoys.vgo, vars
+- [Resource DAG](../reference/writing-configcrates.md) — depends_on, notify, subscribes
+- [Templates](../reference/writing-configcrates.md) — Go template syntax and restrictions
+- [When Expressions](../reference/writing-configcrates.md) — Conditional expressions and builtins
 - [Secrets](../reference/server-yaml.md) — Secret providers and the secret: prefix
 - [Executors](../reference/vigo/resources/_index.md) — All resource executors
-- [Nginx Module Example](../examples/nginx-module.md) — Full nginx walkthrough
-- [First Module](../howto/write-your-first-module.md) — Writing your first module
+- [Nginx Configcrate Example](../examples/nginx-module.md) — Full nginx walkthrough
+- [First Configcrate](../howto/write-your-first-module.md) — Writing your first configcrate
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

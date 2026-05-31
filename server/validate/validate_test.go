@@ -9,14 +9,14 @@ import (
 )
 
 func TestExecWithoutGuard_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "run-thing", Type: "exec", Attributes: map[string]any{"command": "longdrawer hello"}},
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for exec without guard")
 	}
@@ -26,7 +26,7 @@ func TestExecWithoutGuard_IsError(t *testing.T) {
 }
 
 func TestExecWithOnlyIf_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "run-thing", Type: "exec", Attributes: map[string]any{
@@ -36,14 +36,14 @@ func TestExecWithOnlyIf_IsClean(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("expected no errors, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestExecWithUnless_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "run-thing", Type: "exec", Attributes: map[string]any{
@@ -53,14 +53,14 @@ func TestExecWithUnless_IsClean(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("expected no errors, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestServiceRestarted_WithoutSubscribes_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
@@ -70,14 +70,14 @@ func TestServiceRestarted_WithoutSubscribes_IsError(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("restarted service without subscribes should be an error")
 	}
 }
 
 func TestServiceRestarted_WithSubscribes_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "nginx-conf", Type: "file", Attributes: map[string]any{
@@ -90,14 +90,14 @@ func TestServiceRestarted_WithSubscribes_IsClean(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if len(findings) > 0 {
 		t.Errorf("expected no findings, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestServiceRunning_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
@@ -107,7 +107,7 @@ func TestServiceRunning_IsClean(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if len(findings) > 0 {
 		t.Errorf("expected no findings, got: %s", FormatFindings(findings))
 	}
@@ -127,13 +127,13 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 	}
 
 	for _, tt := range types {
-		mod := Module{
+		mod := Configcrate{
 			Name: "test-mod",
 			Resources: []Resource{
 				{Name: "test-" + tt.typ, Type: tt.typ, Attributes: tt.attrs},
 			},
 		}
-		findings := ValidateModule(mod)
+		findings := ValidateConfigcrate(mod)
 		if HasErrors(findings) {
 			t.Errorf("type %q should be inherently idempotent, got: %s", tt.typ, FormatFindings(findings))
 		}
@@ -141,13 +141,13 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 }
 
 func TestFileValidation_MissingRequiredFields(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bare-file", Type: "file", Attributes: map[string]any{}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for bare file resource")
 	}
@@ -164,7 +164,7 @@ func TestFileValidation_MissingRequiredFields(t *testing.T) {
 }
 
 func TestFileValidation_AbsentSkipsContent(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "rm-file", Type: "file", Attributes: map[string]any{
@@ -172,14 +172,14 @@ func TestFileValidation_AbsentSkipsContent(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("state=absent should not require content, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestFileValidation_SourceSatisfiesContent(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "tmpl-file", Type: "file", Attributes: map[string]any{
@@ -188,28 +188,28 @@ func TestFileValidation_SourceSatisfiesContent(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("source should satisfy content requirement, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestUnknownType_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "wat", Type: "magic", Attributes: map[string]any{}},
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("unknown type without custom: true should be an error")
 	}
 }
 
 func TestUnknownType_WithSkipValidation_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "deploy", Type: "capistrano", Attributes: map[string]any{
@@ -219,7 +219,7 @@ func TestUnknownType_WithSkipValidation_IsClean(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("unknown type with skip_validation: true should pass, got: %s", FormatFindings(findings))
 	}
@@ -231,13 +231,13 @@ func TestProcessAndFileLineTypes_AreClean(t *testing.T) {
 		"file_line": {"target_path": "/etc/hosts", "line": "127.0.0.1 myhost"},
 	}
 	for typ, attrs := range fixtures {
-		mod := Module{
+		mod := Configcrate{
 			Name: "test-mod",
 			Resources: []Resource{
 				{Name: "test-" + typ, Type: typ, Attributes: attrs},
 			},
 		}
-		findings := ValidateModule(mod)
+		findings := ValidateConfigcrate(mod)
 		if HasErrors(findings) {
 			t.Errorf("type %q should be known, got: %s", typ, FormatFindings(findings))
 		}
@@ -245,35 +245,35 @@ func TestProcessAndFileLineTypes_AreClean(t *testing.T) {
 }
 
 func TestMissingType_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "oops", Attributes: map[string]any{}},
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for missing type")
 	}
 }
 
 func TestMissingName_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Type: "file", Attributes: map[string]any{"target_path": "/etc/foo"}},
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for missing name")
 	}
 }
 
 func TestMultipleResources_AllValidated(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-file", Type: "file", Attributes: map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
@@ -282,7 +282,7 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for bad-exec")
 	}
@@ -299,7 +299,7 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 }
 
 func TestExecWithWatchSecret_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{
@@ -311,14 +311,14 @@ func TestExecWithWatchSecret_IsClean(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("exec with watch_secret should pass validation, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestCronValidation_MissingScheduleAndUser(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-cron", Type: "cron", Attributes: map[string]any{
@@ -326,14 +326,14 @@ func TestCronValidation_MissingScheduleAndUser(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for cron without schedule and user")
 	}
 }
 
 func TestCronValidation_WithSchedule_MissingUser(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "no-user-cron", Type: "cron", Attributes: map[string]any{
@@ -342,14 +342,14 @@ func TestCronValidation_WithSchedule_MissingUser(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for cron without user")
 	}
 }
 
 func TestCronValidation_IndividualFields_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "fields-cron", Type: "cron", Attributes: map[string]any{
@@ -363,14 +363,14 @@ func TestCronValidation_IndividualFields_IsClean(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("cron with all individual fields + user should pass, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestCronValidation_PartialFields_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "partial-cron", Type: "cron", Attributes: map[string]any{
@@ -382,14 +382,14 @@ func TestCronValidation_PartialFields_IsError(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for cron with only some individual fields")
 	}
 }
 
 func TestCronValidation_Absent_SkipsChecks(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "rm-cron", Type: "cron", Attributes: map[string]any{
@@ -399,7 +399,7 @@ func TestCronValidation_Absent_SkipsChecks(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("state=absent should skip schedule/user checks, got: %s", FormatFindings(findings))
 	}
@@ -408,7 +408,7 @@ func TestCronValidation_Absent_SkipsChecks(t *testing.T) {
 // ── Replace validation tests ─────────────────────────────────────
 
 func TestReplaceValidation_MissingPath(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-replace", Type: "replace", Attributes: map[string]any{
@@ -416,14 +416,14 @@ func TestReplaceValidation_MissingPath(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for replace without path")
 	}
 }
 
 func TestReplaceValidation_MissingMatch(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-replace", Type: "replace", Attributes: map[string]any{
@@ -431,14 +431,14 @@ func TestReplaceValidation_MissingMatch(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for replace without match")
 	}
 }
 
 func TestReplaceValidation_ValidConfig(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-replace", Type: "replace", Attributes: map[string]any{
@@ -446,7 +446,7 @@ func TestReplaceValidation_ValidConfig(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("expected no errors, got: %s", FormatFindings(findings))
 	}
@@ -455,13 +455,13 @@ func TestReplaceValidation_ValidConfig(t *testing.T) {
 // ── FieldEdit validation tests ───────────────────────────────────
 
 func TestFieldEditValidation_MissingRequired(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-fe", Type: "field_edit", Attributes: map[string]any{}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for field_edit without required fields")
 	}
@@ -478,7 +478,7 @@ func TestFieldEditValidation_MissingRequired(t *testing.T) {
 }
 
 func TestFieldEditValidation_MissingFieldValue(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "no-value-fe", Type: "field_edit", Attributes: map[string]any{
@@ -486,14 +486,14 @@ func TestFieldEditValidation_MissingFieldValue(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for field_edit without field_value")
 	}
 }
 
 func TestFieldEditValidation_ValidConfig(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-fe", Type: "field_edit", Attributes: map[string]any{
@@ -502,14 +502,14 @@ func TestFieldEditValidation_ValidConfig(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("expected no errors, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestFileWithoutContent_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "config", Type: "file", Attributes: map[string]any{
@@ -521,14 +521,14 @@ func TestFileWithoutContent_IsError(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for file without content")
 	}
 }
 
 func TestDirectoryType_NoContentRequired(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "datadir", Type: "directory", Attributes: map[string]any{
@@ -540,14 +540,14 @@ func TestDirectoryType_NoContentRequired(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("expected no errors for directory, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestDirectoryType_MissingTargetpath(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "baddir", Type: "directory", Attributes: map[string]any{
@@ -557,14 +557,14 @@ func TestDirectoryType_MissingTargetpath(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for directory without target_path")
 	}
 }
 
 func TestSymlinkType_Valid(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "enable-site", Type: "symlink", Attributes: map[string]any{
@@ -574,14 +574,14 @@ func TestSymlinkType_Valid(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("expected no errors for valid symlink, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestSymlinkType_MissingTo(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-link", Type: "symlink", Attributes: map[string]any{
@@ -590,14 +590,14 @@ func TestSymlinkType_MissingTo(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for symlink without to")
 	}
 }
 
 func TestSymlinkType_AbsentSkipsTo(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "rm-link", Type: "symlink", Attributes: map[string]any{
@@ -607,7 +607,7 @@ func TestSymlinkType_AbsentSkipsTo(t *testing.T) {
 		},
 	}
 
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("expected no errors for absent symlink without to, got: %s", FormatFindings(findings))
 	}
@@ -616,7 +616,7 @@ func TestSymlinkType_AbsentSkipsTo(t *testing.T) {
 func TestFindingString_Format(t *testing.T) {
 	f := Finding{
 		Severity:     SeverityError,
-		Module:       "nginx",
+		Configcrate:       "nginx",
 		ResourceName: "run-setup",
 		ResourceType: "exec",
 		Message:      "exec resource has no idempotency guard — add creates, onlyif, or unless",
@@ -634,14 +634,14 @@ func TestDependsOn_UnknownResource_IsWarning(t *testing.T) {
 	// lint can't see resources defined in sibling modules. Whole-stockpile
 	// resolution happens at publish time. Self-references are still Error
 	// (covered by other tests).
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"nonexistent-pkg"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Fatalf("expected only warnings for cross-module reference, got errors: %s", FormatFindings(findings))
 	}
@@ -657,7 +657,7 @@ func TestDependsOn_UnknownResource_IsWarning(t *testing.T) {
 }
 
 func TestDependsOn_ValidReference_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
@@ -665,21 +665,21 @@ func TestDependsOn_ValidReference_IsClean(t *testing.T) {
 				DependsOn: []string{"pkg"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("valid depends_on should pass, got: %s", FormatFindings(findings))
 	}
 }
 
 func TestDependsOn_SelfReference_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"svc"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	found := false
 	for _, f := range findings {
 		if f.Severity == SeverityError && f.Message == "depends_on references itself" {
@@ -695,7 +695,7 @@ func TestNotify_UnknownResource_IsWarning(t *testing.T) {
 	// Cross-module references are the dominant pattern (vhost → nginx's
 	// reload-nginx); single-file validation can't tell a typo from a
 	// cross-module hop. Whole-stockpile resolution happens at publish.
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "conf", Type: "file", Attributes: map[string]any{
@@ -703,7 +703,7 @@ func TestNotify_UnknownResource_IsWarning(t *testing.T) {
 			}, Notify: []string{"nonexistent-svc"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Fatalf("expected only warnings, got errors: %s", FormatFindings(findings))
 	}
@@ -719,14 +719,14 @@ func TestNotify_UnknownResource_IsWarning(t *testing.T) {
 }
 
 func TestSubscribes_UnknownResource_IsWarning(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				Subscribes: []string{"nonexistent-conf"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Fatalf("expected only warnings, got errors: %s", FormatFindings(findings))
 	}
@@ -742,14 +742,14 @@ func TestSubscribes_UnknownResource_IsWarning(t *testing.T) {
 }
 
 func TestBefore_UnknownResource_IsWarning(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"},
 				Before: []string{"nonexistent-svc"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Fatalf("expected only warnings, got errors: %s", FormatFindings(findings))
 	}
@@ -765,7 +765,7 @@ func TestBefore_UnknownResource_IsWarning(t *testing.T) {
 }
 
 func TestRedundantNotifySubscribes_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "conf", Type: "file", Attributes: map[string]any{
@@ -775,7 +775,7 @@ func TestRedundantNotifySubscribes_IsError(t *testing.T) {
 				Subscribes: []string{"conf"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("redundant trigger should be an error")
 	}
@@ -791,7 +791,7 @@ func TestRedundantNotifySubscribes_IsError(t *testing.T) {
 }
 
 func TestFileStateDirectory_IsError(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "mydir", Type: "file", Attributes: map[string]any{
@@ -799,14 +799,14 @@ func TestFileStateDirectory_IsError(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("file with state: directory should be an error")
 	}
 }
 
 func TestAllReferencesValid_IsClean(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "nginx",
 		Resources: []Resource{
 			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
@@ -817,7 +817,7 @@ func TestAllReferencesValid_IsClean(t *testing.T) {
 				DependsOn: []string{"pkg"}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("all references valid, expected no errors, got: %s", FormatFindings(findings))
 	}
@@ -832,7 +832,7 @@ func TestAllKnownTypesHaveSchema(t *testing.T) {
 }
 
 func TestSchemaRejectsUnknownAttribute(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-backup", Type: "db_backup", Attributes: map[string]any{
@@ -840,7 +840,7 @@ func TestSchemaRejectsUnknownAttribute(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected error for unknown attribute db_name on db_backup")
 	}
@@ -856,7 +856,7 @@ func TestSchemaRejectsUnknownAttribute(t *testing.T) {
 }
 
 func TestSchemaRequiresDatabase(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "missing-db", Type: "db_backup", Attributes: map[string]any{
@@ -864,7 +864,7 @@ func TestSchemaRequiresDatabase(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	found := false
 	for _, f := range findings {
 		if f.Severity == SeverityError && f.Message == `db_backup resource missing required attribute "source_db"` {
@@ -877,7 +877,7 @@ func TestSchemaRequiresDatabase(t *testing.T) {
 }
 
 func TestSchemaAcceptsValidBackup(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-backup", Type: "backup", Attributes: map[string]any{
@@ -890,7 +890,7 @@ func TestSchemaAcceptsValidBackup(t *testing.T) {
 			}},
 		},
 	}
-	findings := ValidateModule(mod)
+	findings := ValidateConfigcrate(mod)
 	if HasErrors(findings) {
 		t.Errorf("valid backup module should have no errors, got: %s", FormatFindings(findings))
 	}

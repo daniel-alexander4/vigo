@@ -4,7 +4,7 @@
 pub mod backoff;
 pub mod client;
 pub mod loop_impl;
-pub mod modulecache;
+pub mod configcratecache;
 pub mod stream;
 pub mod traceparent;
 pub mod verify;

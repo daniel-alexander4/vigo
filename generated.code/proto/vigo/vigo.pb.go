@@ -184,22 +184,22 @@ func (x *RegisterResponse) GetFallbackServers() []string {
 }
 
 type CheckInRequest struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	EnvoyId            string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	StateFingerprint   string                 `protobuf:"bytes,2,opt,name=state_fingerprint,json=stateFingerprint,proto3" json:"state_fingerprint,omitempty"`
-	Signature          []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
-	Timestamp          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	TraitsJson         []byte                 `protobuf:"bytes,5,opt,name=traits_json,json=traitsJson,proto3" json:"traits_json,omitempty"`                                                                                                     // inline traits (avoids separate ReportTraits RPC)
-	PolicyVersion      uint64                 `protobuf:"varint,6,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`                                                                                           // agent's cached policy version (0 = no cache, send full bundle)
-	PolicyMode         bool                   `protobuf:"varint,7,opt,name=policy_mode,json=policyMode,proto3" json:"policy_mode,omitempty"`                                                                                                    // true = agent supports policy bundles
-	CachedModuleHashes map[string]string      `protobuf:"bytes,8,rep,name=cached_module_hashes,json=cachedModuleHashes,proto3" json:"cached_module_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // module name → content hash for delta transfer
-	Capabilities       *StreamCapabilities    `protobuf:"bytes,9,opt,name=capabilities,proto3" json:"capabilities,omitempty"`                                                                                                                   // agent protocol capabilities (delta streaming)
-	AgentVersion       string                 `protobuf:"bytes,10,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                                                                                              // agent binary version (e.g. "1.2.0" or "dev")
-	IpAddress          string                 `protobuf:"bytes,11,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                                                                                                       // agent's preferred outbound IP (refreshed each check-in)
-	LastCheckinDeltaMs uint32                 `protobuf:"varint,12,opt,name=last_checkin_delta_ms,json=lastCheckinDeltaMs,proto3" json:"last_checkin_delta_ms,omitempty"`                                                                       // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
-	Traceparent        string                 `protobuf:"bytes,13,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                                                                                                                    // W3C traceparent (ADR-028); 55-char format "00-<trace_id>-<span_id>-<flags>"; empty/malformed → server generates
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	EnvoyId                 string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
+	StateFingerprint        string                 `protobuf:"bytes,2,opt,name=state_fingerprint,json=stateFingerprint,proto3" json:"state_fingerprint,omitempty"`
+	Signature               []byte                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	Timestamp               *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	TraitsJson              []byte                 `protobuf:"bytes,5,opt,name=traits_json,json=traitsJson,proto3" json:"traits_json,omitempty"`                                                                                                                    // inline traits (avoids separate ReportTraits RPC)
+	PolicyVersion           uint64                 `protobuf:"varint,6,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`                                                                                                          // agent's cached policy version (0 = no cache, send full bundle)
+	PolicyMode              bool                   `protobuf:"varint,7,opt,name=policy_mode,json=policyMode,proto3" json:"policy_mode,omitempty"`                                                                                                                   // true = agent supports policy bundles
+	CachedConfigcrateHashes map[string]string      `protobuf:"bytes,8,rep,name=cached_configcrate_hashes,json=cachedConfigcrateHashes,proto3" json:"cached_configcrate_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // module name → content hash for delta transfer
+	Capabilities            *StreamCapabilities    `protobuf:"bytes,9,opt,name=capabilities,proto3" json:"capabilities,omitempty"`                                                                                                                                  // agent protocol capabilities (delta streaming)
+	AgentVersion            string                 `protobuf:"bytes,10,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                                                                                                             // agent binary version (e.g. "1.2.0" or "dev")
+	IpAddress               string                 `protobuf:"bytes,11,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                                                                                                                      // agent's preferred outbound IP (refreshed each check-in)
+	LastCheckinDeltaMs      uint32                 `protobuf:"varint,12,opt,name=last_checkin_delta_ms,json=lastCheckinDeltaMs,proto3" json:"last_checkin_delta_ms,omitempty"`                                                                                      // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
+	Traceparent             string                 `protobuf:"bytes,13,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                                                                                                                                   // W3C traceparent (ADR-028); 55-char format "00-<trace_id>-<span_id>-<flags>"; empty/malformed → server generates
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *CheckInRequest) Reset() {
@@ -281,9 +281,9 @@ func (x *CheckInRequest) GetPolicyMode() bool {
 	return false
 }
 
-func (x *CheckInRequest) GetCachedModuleHashes() map[string]string {
+func (x *CheckInRequest) GetCachedConfigcrateHashes() map[string]string {
 	if x != nil {
-		return x.CachedModuleHashes
+		return x.CachedConfigcrateHashes
 	}
 	return nil
 }
@@ -325,7 +325,7 @@ func (x *CheckInRequest) GetTraceparent() string {
 
 type CheckInResponse struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
-	Modules             []*Module              `protobuf:"bytes,1,rep,name=modules,proto3" json:"modules,omitempty"`
+	Configcrates        []*Configcrate         `protobuf:"bytes,1,rep,name=configcrates,proto3" json:"configcrates,omitempty"`
 	Interval            string                 `protobuf:"bytes,2,opt,name=interval,proto3" json:"interval,omitempty"` // e.g. "5m"
 	JitterPercent       int32                  `protobuf:"varint,3,opt,name=jitter_percent,json=jitterPercent,proto3" json:"jitter_percent,omitempty"`
 	CustomTraits        []*CustomTraitEntry    `protobuf:"bytes,4,rep,name=custom_traits,json=customTraits,proto3" json:"custom_traits,omitempty"`
@@ -379,9 +379,9 @@ func (*CheckInResponse) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *CheckInResponse) GetModules() []*Module {
+func (x *CheckInResponse) GetConfigcrates() []*Configcrate {
 	if x != nil {
-		return x.Modules
+		return x.Configcrates
 	}
 	return nil
 }
@@ -1010,7 +1010,7 @@ func (x *DownloadCustomTraitResponse) GetData() []byte {
 	return nil
 }
 
-type Module struct {
+type Configcrate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	ResourceType  string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"` // file, package, service, user
@@ -1022,20 +1022,20 @@ type Module struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Module) Reset() {
-	*x = Module{}
+func (x *Configcrate) Reset() {
+	*x = Configcrate{}
 	mi := &file_vigo_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Module) String() string {
+func (x *Configcrate) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Module) ProtoMessage() {}
+func (*Configcrate) ProtoMessage() {}
 
-func (x *Module) ProtoReflect() protoreflect.Message {
+func (x *Configcrate) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1047,47 +1047,47 @@ func (x *Module) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Module.ProtoReflect.Descriptor instead.
-func (*Module) Descriptor() ([]byte, []int) {
+// Deprecated: Use Configcrate.ProtoReflect.Descriptor instead.
+func (*Configcrate) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *Module) GetName() string {
+func (x *Configcrate) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *Module) GetResourceType() string {
+func (x *Configcrate) GetResourceType() string {
 	if x != nil {
 		return x.ResourceType
 	}
 	return ""
 }
 
-func (x *Module) GetResources() []*Resource {
+func (x *Configcrate) GetResources() []*Resource {
 	if x != nil {
 		return x.Resources
 	}
 	return nil
 }
 
-func (x *Module) GetDependsOn() []string {
+func (x *Configcrate) GetDependsOn() []string {
 	if x != nil {
 		return x.DependsOn
 	}
 	return nil
 }
 
-func (x *Module) GetNotify() []string {
+func (x *Configcrate) GetNotify() []string {
 	if x != nil {
 		return x.Notify
 	}
 	return nil
 }
 
-func (x *Module) GetSubscribes() []string {
+func (x *Configcrate) GetSubscribes() []string {
 	if x != nil {
 		return x.Subscribes
 	}
@@ -1168,7 +1168,7 @@ func (x *Resource) GetWhen() string {
 type PolicyBundle struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PolicyVersion uint64                 `protobuf:"varint,1,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
-	Modules       []*PolicyModule        `protobuf:"bytes,2,rep,name=modules,proto3" json:"modules,omitempty"`
+	Configcrates  []*PolicyConfigcrate   `protobuf:"bytes,2,rep,name=configcrates,proto3" json:"configcrates,omitempty"`
 	VarsJson      []byte                 `protobuf:"bytes,3,opt,name=vars_json,json=varsJson,proto3" json:"vars_json,omitempty"` // JSON-encoded merged vars map[string]any
 	VarOrder      []string               `protobuf:"bytes,4,rep,name=var_order,json=varOrder,proto3" json:"var_order,omitempty"` // deterministic rendering order
 	CustomTraits  []*CustomTraitEntry    `protobuf:"bytes,6,rep,name=custom_traits,json=customTraits,proto3" json:"custom_traits,omitempty"`
@@ -1241,9 +1241,9 @@ func (x *PolicyBundle) GetPolicyVersion() uint64 {
 	return 0
 }
 
-func (x *PolicyBundle) GetModules() []*PolicyModule {
+func (x *PolicyBundle) GetConfigcrates() []*PolicyConfigcrate {
 	if x != nil {
-		return x.Modules
+		return x.Configcrates
 	}
 	return nil
 }
@@ -1339,10 +1339,10 @@ func (x *PolicyBundle) GetSecretsEpoch() int64 {
 	return 0
 }
 
-// PolicyModule is a module definition with raw templates and conditionals.
+// PolicyConfigcrate is a module definition with raw templates and conditionals.
 // For delta transfer: if stub=true, only name + content_hash are set —
 // the agent fills in resources from its local cache.
-type PolicyModule struct {
+type PolicyConfigcrate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Resources     []*PolicyResource      `protobuf:"bytes,2,rep,name=resources,proto3" json:"resources,omitempty"`
@@ -1354,20 +1354,20 @@ type PolicyModule struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PolicyModule) Reset() {
-	*x = PolicyModule{}
+func (x *PolicyConfigcrate) Reset() {
+	*x = PolicyConfigcrate{}
 	mi := &file_vigo_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PolicyModule) String() string {
+func (x *PolicyConfigcrate) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PolicyModule) ProtoMessage() {}
+func (*PolicyConfigcrate) ProtoMessage() {}
 
-func (x *PolicyModule) ProtoReflect() protoreflect.Message {
+func (x *PolicyConfigcrate) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1379,47 +1379,47 @@ func (x *PolicyModule) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PolicyModule.ProtoReflect.Descriptor instead.
-func (*PolicyModule) Descriptor() ([]byte, []int) {
+// Deprecated: Use PolicyConfigcrate.ProtoReflect.Descriptor instead.
+func (*PolicyConfigcrate) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *PolicyModule) GetName() string {
+func (x *PolicyConfigcrate) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *PolicyModule) GetResources() []*PolicyResource {
+func (x *PolicyConfigcrate) GetResources() []*PolicyResource {
 	if x != nil {
 		return x.Resources
 	}
 	return nil
 }
 
-func (x *PolicyModule) GetDependsOn() []string {
+func (x *PolicyConfigcrate) GetDependsOn() []string {
 	if x != nil {
 		return x.DependsOn
 	}
 	return nil
 }
 
-func (x *PolicyModule) GetWhen() string {
+func (x *PolicyConfigcrate) GetWhen() string {
 	if x != nil {
 		return x.When
 	}
 	return ""
 }
 
-func (x *PolicyModule) GetContentHash() string {
+func (x *PolicyConfigcrate) GetContentHash() string {
 	if x != nil {
 		return x.ContentHash
 	}
 	return ""
 }
 
-func (x *PolicyModule) GetStub() bool {
+func (x *PolicyConfigcrate) GetStub() bool {
 	if x != nil {
 		return x.Stub
 	}
@@ -1523,7 +1523,7 @@ type ReportResultRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	EnvoyId       string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	Results       []*ModuleResult        `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
+	Results       []*ConfigcrateResult   `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	Signature     []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Traceparent   string                 `protobuf:"bytes,6,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
@@ -1575,7 +1575,7 @@ func (x *ReportResultRequest) GetEnvoyId() string {
 	return ""
 }
 
-func (x *ReportResultRequest) GetResults() []*ModuleResult {
+func (x *ReportResultRequest) GetResults() []*ConfigcrateResult {
 	if x != nil {
 		return x.Results
 	}
@@ -1603,9 +1603,9 @@ func (x *ReportResultRequest) GetTraceparent() string {
 	return ""
 }
 
-type ModuleResult struct {
+type ConfigcrateResult struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	ModuleName      string                 `protobuf:"bytes,1,opt,name=module_name,json=moduleName,proto3" json:"module_name,omitempty"`
+	ConfigcrateName string                 `protobuf:"bytes,1,opt,name=configcrate_name,json=configcrateName,proto3" json:"configcrate_name,omitempty"`
 	ResourceType    string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
 	ResourceName    string                 `protobuf:"bytes,3,opt,name=resource_name,json=resourceName,proto3" json:"resource_name,omitempty"`
 	ActionTaken     string                 `protobuf:"bytes,4,opt,name=action_taken,json=actionTaken,proto3" json:"action_taken,omitempty"` // none, created, updated, deleted, blocked
@@ -1619,20 +1619,20 @@ type ModuleResult struct {
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *ModuleResult) Reset() {
-	*x = ModuleResult{}
+func (x *ConfigcrateResult) Reset() {
+	*x = ConfigcrateResult{}
 	mi := &file_vigo_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ModuleResult) String() string {
+func (x *ConfigcrateResult) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ModuleResult) ProtoMessage() {}
+func (*ConfigcrateResult) ProtoMessage() {}
 
-func (x *ModuleResult) ProtoReflect() protoreflect.Message {
+func (x *ConfigcrateResult) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1644,75 +1644,75 @@ func (x *ModuleResult) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ModuleResult.ProtoReflect.Descriptor instead.
-func (*ModuleResult) Descriptor() ([]byte, []int) {
+// Deprecated: Use ConfigcrateResult.ProtoReflect.Descriptor instead.
+func (*ConfigcrateResult) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ModuleResult) GetModuleName() string {
+func (x *ConfigcrateResult) GetConfigcrateName() string {
 	if x != nil {
-		return x.ModuleName
+		return x.ConfigcrateName
 	}
 	return ""
 }
 
-func (x *ModuleResult) GetResourceType() string {
+func (x *ConfigcrateResult) GetResourceType() string {
 	if x != nil {
 		return x.ResourceType
 	}
 	return ""
 }
 
-func (x *ModuleResult) GetResourceName() string {
+func (x *ConfigcrateResult) GetResourceName() string {
 	if x != nil {
 		return x.ResourceName
 	}
 	return ""
 }
 
-func (x *ModuleResult) GetActionTaken() string {
+func (x *ConfigcrateResult) GetActionTaken() string {
 	if x != nil {
 		return x.ActionTaken
 	}
 	return ""
 }
 
-func (x *ModuleResult) GetChanged() bool {
+func (x *ConfigcrateResult) GetChanged() bool {
 	if x != nil {
 		return x.Changed
 	}
 	return false
 }
 
-func (x *ModuleResult) GetErrorMessage() string {
+func (x *ConfigcrateResult) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
 	}
 	return ""
 }
 
-func (x *ModuleResult) GetDurationMs() int32 {
+func (x *ConfigcrateResult) GetDurationMs() int32 {
 	if x != nil {
 		return x.DurationMs
 	}
 	return 0
 }
 
-func (x *ModuleResult) GetPreviousContent() []byte {
+func (x *ConfigcrateResult) GetPreviousContent() []byte {
 	if x != nil {
 		return x.PreviousContent
 	}
 	return nil
 }
 
-func (x *ModuleResult) GetContentHash() string {
+func (x *ConfigcrateResult) GetContentHash() string {
 	if x != nil {
 		return x.ContentHash
 	}
 	return ""
 }
 
-func (x *ModuleResult) GetFilePath() string {
+func (x *ConfigcrateResult) GetFilePath() string {
 	if x != nil {
 		return x.FilePath
 	}
@@ -2573,7 +2573,7 @@ type RunCompleted struct {
 	ChangedCount  int32                  `protobuf:"varint,4,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
 	FailedCount   int32                  `protobuf:"varint,5,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
 	SkippedCount  int32                  `protobuf:"varint,6,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
-	Results       []*ModuleResult        `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // only changed/failed (no-ops omitted)
+	Results       []*ConfigcrateResult   `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // only changed/failed (no-ops omitted)
 	BundleVersion uint64                 `protobuf:"varint,8,opt,name=bundle_version,json=bundleVersion,proto3" json:"bundle_version,omitempty"` // policy bundle version used for this run
 	Traceparent   string                 `protobuf:"bytes,9,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                           // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
@@ -2652,7 +2652,7 @@ func (x *RunCompleted) GetSkippedCount() int32 {
 	return 0
 }
 
-func (x *RunCompleted) GetResults() []*ModuleResult {
+func (x *RunCompleted) GetResults() []*ConfigcrateResult {
 	if x != nil {
 		return x.Results
 	}
@@ -4279,13 +4279,13 @@ func (x *DryRunResponse) GetActions() []*PlannedAction {
 }
 
 type PlannedAction struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ModuleName    string                 `protobuf:"bytes,1,opt,name=module_name,json=moduleName,proto3" json:"module_name,omitempty"`
-	ResourceType  string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
-	ResourceName  string                 `protobuf:"bytes,3,opt,name=resource_name,json=resourceName,proto3" json:"resource_name,omitempty"`
-	PlannedAction string                 `protobuf:"bytes,4,opt,name=planned_action,json=plannedAction,proto3" json:"planned_action,omitempty"` // create, update, delete, none
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ConfigcrateName string                 `protobuf:"bytes,1,opt,name=configcrate_name,json=configcrateName,proto3" json:"configcrate_name,omitempty"`
+	ResourceType    string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	ResourceName    string                 `protobuf:"bytes,3,opt,name=resource_name,json=resourceName,proto3" json:"resource_name,omitempty"`
+	PlannedAction   string                 `protobuf:"bytes,4,opt,name=planned_action,json=plannedAction,proto3" json:"planned_action,omitempty"` // create, update, delete, none
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *PlannedAction) Reset() {
@@ -4318,9 +4318,9 @@ func (*PlannedAction) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{57}
 }
 
-func (x *PlannedAction) GetModuleName() string {
+func (x *PlannedAction) GetConfigcrateName() string {
 	if x != nil {
-		return x.ModuleName
+		return x.ConfigcrateName
 	}
 	return ""
 }
@@ -4443,18 +4443,18 @@ func (x *ListRunsResponse) GetRuns() []*Run {
 }
 
 type Run struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	EnvoyId       string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
-	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // running, success, failure, partial
-	ModuleCount   int32                  `protobuf:"varint,6,opt,name=module_count,json=moduleCount,proto3" json:"module_count,omitempty"`
-	ChangedCount  int32                  `protobuf:"varint,7,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
-	FailedCount   int32                  `protobuf:"varint,8,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
-	SkippedCount  int32                  `protobuf:"varint,9,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	EnvoyId          string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
+	StartedAt        *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Status           string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // running, success, failure, partial
+	ConfigcrateCount int32                  `protobuf:"varint,6,opt,name=configcrate_count,json=configcrateCount,proto3" json:"configcrate_count,omitempty"`
+	ChangedCount     int32                  `protobuf:"varint,7,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
+	FailedCount      int32                  `protobuf:"varint,8,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
+	SkippedCount     int32                  `protobuf:"varint,9,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Run) Reset() {
@@ -4522,9 +4522,9 @@ func (x *Run) GetStatus() string {
 	return ""
 }
 
-func (x *Run) GetModuleCount() int32 {
+func (x *Run) GetConfigcrateCount() int32 {
 	if x != nil {
-		return x.ModuleCount
+		return x.ConfigcrateCount
 	}
 	return 0
 }
@@ -4597,7 +4597,7 @@ func (x *GetRunRequest) GetId() string {
 type GetRunResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Run           *Run                   `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
-	Results       []*ModuleResult        `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"`
+	Results       []*ConfigcrateResult   `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4639,7 +4639,7 @@ func (x *GetRunResponse) GetRun() *Run {
 	return nil
 }
 
-func (x *GetRunResponse) GetResults() []*ModuleResult {
+func (x *GetRunResponse) GetResults() []*ConfigcrateResult {
 	if x != nil {
 		return x.Results
 	}
@@ -7589,7 +7589,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1b\n" +
 	"\tbolt_addr\x18\x04 \x01(\tR\bboltAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\x9d\x05\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xb1\x05\n" +
 	"\x0eCheckInRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -7599,20 +7599,20 @@ const file_vigo_proto_rawDesc = "" +
 	"traitsJson\x12%\n" +
 	"\x0epolicy_version\x18\x06 \x01(\x04R\rpolicyVersion\x12\x1f\n" +
 	"\vpolicy_mode\x18\a \x01(\bR\n" +
-	"policyMode\x12a\n" +
-	"\x14cached_module_hashes\x18\b \x03(\v2/.vigo.v1.CheckInRequest.CachedModuleHashesEntryR\x12cachedModuleHashes\x12?\n" +
+	"policyMode\x12p\n" +
+	"\x19cached_configcrate_hashes\x18\b \x03(\v24.vigo.v1.CheckInRequest.CachedConfigcrateHashesEntryR\x17cachedConfigcrateHashes\x12?\n" +
 	"\fcapabilities\x18\t \x01(\v2\x1b.vigo.v1.StreamCapabilitiesR\fcapabilities\x12#\n" +
 	"\ragent_version\x18\n" +
 	" \x01(\tR\fagentVersion\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x121\n" +
 	"\x15last_checkin_delta_ms\x18\f \x01(\rR\x12lastCheckinDeltaMs\x12 \n" +
-	"\vtraceparent\x18\r \x01(\tR\vtraceparent\x1aE\n" +
-	"\x17CachedModuleHashesEntry\x12\x10\n" +
+	"\vtraceparent\x18\r \x01(\tR\vtraceparent\x1aJ\n" +
+	"\x1cCachedConfigcrateHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\a\n" +
-	"\x0fCheckInResponse\x12)\n" +
-	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd6\a\n" +
+	"\x0fCheckInResponse\x128\n" +
+	"\fconfigcrates\x18\x01 \x03(\v2\x14.vigo.v1.ConfigcrateR\fconfigcrates\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
 	"\x0ejitter_percent\x18\x03 \x01(\x05R\rjitterPercent\x12>\n" +
 	"\rcustom_traits\x18\x04 \x03(\v2\x19.vigo.v1.CustomTraitEntryR\fcustomTraits\x12\x1b\n" +
@@ -7678,8 +7678,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x1aDownloadCustomTraitRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"1\n" +
 	"\x1bDownloadCustomTraitResponse\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"\xc9\x01\n" +
-	"\x06Module\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"\xce\x01\n" +
+	"\vConfigcrate\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12/\n" +
 	"\tresources\x18\x03 \x03(\v2\x11.vigo.v1.ResourceR\tresources\x12\x1d\n" +
@@ -7696,10 +7696,10 @@ const file_vigo_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x95\x05\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa4\x05\n" +
 	"\fPolicyBundle\x12%\n" +
-	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x12/\n" +
-	"\amodules\x18\x02 \x03(\v2\x15.vigo.v1.PolicyModuleR\amodules\x12\x1b\n" +
+	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x12>\n" +
+	"\fconfigcrates\x18\x02 \x03(\v2\x1a.vigo.v1.PolicyConfigcrateR\fconfigcrates\x12\x1b\n" +
 	"\tvars_json\x18\x03 \x01(\fR\bvarsJson\x12\x1b\n" +
 	"\tvar_order\x18\x04 \x03(\tR\bvarOrder\x12>\n" +
 	"\rcustom_traits\x18\x06 \x03(\v2\x19.vigo.v1.CustomTraitEntryR\fcustomTraits\x12'\n" +
@@ -7714,8 +7714,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x18stream_edit_timeout_secs\x18\x0e \x01(\rB\x04\xc0\xf3\x18\x00R\x15streamEditTimeoutSecs\x12\x1f\n" +
 	"\vmerkle_root\x18\x0f \x01(\tR\n" +
 	"merkleRoot\x12)\n" +
-	"\rsecrets_epoch\x18\x10 \x01(\x03B\x04\xc0\xf3\x18\x00R\fsecretsEpochJ\x04\b\x05\x10\x06\"\xc3\x01\n" +
-	"\fPolicyModule\x12\x12\n" +
+	"\rsecrets_epoch\x18\x10 \x01(\x03B\x04\xc0\xf3\x18\x00R\fsecretsEpochJ\x04\b\x05\x10\x06\"\xc8\x01\n" +
+	"\x11PolicyConfigcrate\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
 	"\tresources\x18\x02 \x03(\v2\x17.vigo.v1.PolicyResourceR\tresources\x12\x1d\n" +
 	"\n" +
@@ -7737,17 +7737,16 @@ const file_vigo_proto_rawDesc = "" +
 	"\fwatch_secret\x18\a \x03(\tR\vwatchSecret\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf2\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf7\x01\n" +
 	"\x13ReportResultRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x19\n" +
-	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x12/\n" +
-	"\aresults\x18\x03 \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\x12\x1c\n" +
+	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x124\n" +
+	"\aresults\x18\x03 \x03(\v2\x1a.vigo.v1.ConfigcrateResultR\aresults\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12 \n" +
-	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\"\xe7\x02\n" +
-	"\fModuleResult\x12\x1f\n" +
-	"\vmodule_name\x18\x01 \x01(\tR\n" +
-	"moduleName\x12#\n" +
+	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\"\xf6\x02\n" +
+	"\x11ConfigcrateResult\x12)\n" +
+	"\x10configcrate_name\x18\x01 \x01(\tR\x0fconfigcrateName\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12#\n" +
 	"\rresource_name\x18\x03 \x01(\tR\fresourceName\x12!\n" +
 	"\faction_taken\x18\x04 \x01(\tR\vactionTaken\x12\x18\n" +
@@ -7812,7 +7811,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x03run\x18\x02 \x01(\v2\x15.vigo.v1.RunCompletedH\x00R\x03run\x12.\n" +
 	"\x06traits\x18\x03 \x01(\v2\x14.vigo.v1.TraitsDeltaH\x00R\x06traits\x127\n" +
 	"\theartbeat\x18\x04 \x01(\v2\x17.vigo.v1.HeartbeatDeltaH\x00R\theartbeatB\a\n" +
-	"\x05event\"\xc5\x02\n" +
+	"\x05event\"\xca\x02\n" +
 	"\fRunCompleted\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
@@ -7820,8 +7819,8 @@ const file_vigo_proto_rawDesc = "" +
 	"totalCount\x12#\n" +
 	"\rchanged_count\x18\x04 \x01(\x05R\fchangedCount\x12!\n" +
 	"\ffailed_count\x18\x05 \x01(\x05R\vfailedCount\x12#\n" +
-	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x12/\n" +
-	"\aresults\x18\a \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\x12%\n" +
+	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x124\n" +
+	"\aresults\x18\a \x03(\v2\x1a.vigo.v1.ConfigcrateResultR\aresults\x12%\n" +
 	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\x12 \n" +
 	"\vtraceparent\x18\t \x01(\tR\vtraceparent\"\xa0\x01\n" +
 	"\vTraitsDelta\x12;\n" +
@@ -7936,10 +7935,9 @@ const file_vigo_proto_rawDesc = "" +
 	"\rDryRunRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\"B\n" +
 	"\x0eDryRunResponse\x120\n" +
-	"\aactions\x18\x01 \x03(\v2\x16.vigo.v1.PlannedActionR\aactions\"\xa1\x01\n" +
-	"\rPlannedAction\x12\x1f\n" +
-	"\vmodule_name\x18\x01 \x01(\tR\n" +
-	"moduleName\x12#\n" +
+	"\aactions\x18\x01 \x03(\v2\x16.vigo.v1.PlannedActionR\aactions\"\xab\x01\n" +
+	"\rPlannedAction\x12)\n" +
+	"\x10configcrate_name\x18\x01 \x01(\tR\x0fconfigcrateName\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12#\n" +
 	"\rresource_name\x18\x03 \x01(\tR\fresourceName\x12%\n" +
 	"\x0eplanned_action\x18\x04 \x01(\tR\rplannedAction\"B\n" +
@@ -7947,7 +7945,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"4\n" +
 	"\x10ListRunsResponse\x12 \n" +
-	"\x04runs\x18\x01 \x03(\v2\f.vigo.v1.RunR\x04runs\"\xd0\x02\n" +
+	"\x04runs\x18\x01 \x03(\v2\f.vigo.v1.RunR\x04runs\"\xda\x02\n" +
 	"\x03Run\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x129\n" +
@@ -7955,16 +7953,16 @@ const file_vigo_proto_rawDesc = "" +
 	"started_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06status\x12!\n" +
-	"\fmodule_count\x18\x06 \x01(\x05R\vmoduleCount\x12#\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12+\n" +
+	"\x11configcrate_count\x18\x06 \x01(\x05R\x10configcrateCount\x12#\n" +
 	"\rchanged_count\x18\a \x01(\x05R\fchangedCount\x12!\n" +
 	"\ffailed_count\x18\b \x01(\x05R\vfailedCount\x12#\n" +
 	"\rskipped_count\x18\t \x01(\x05R\fskippedCount\"\x1f\n" +
 	"\rGetRunRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"a\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"f\n" +
 	"\x0eGetRunResponse\x12\x1e\n" +
-	"\x03run\x18\x01 \x01(\v2\f.vigo.v1.RunR\x03run\x12/\n" +
-	"\aresults\x18\x02 \x03(\v2\x15.vigo.v1.ModuleResultR\aresults\"\x16\n" +
+	"\x03run\x18\x01 \x01(\v2\f.vigo.v1.RunR\x03run\x124\n" +
+	"\aresults\x18\x02 \x03(\v2\x1a.vigo.v1.ConfigcrateResultR\aresults\"\x16\n" +
 	"\x14GenerateTokenRequest\"-\n" +
 	"\x15GenerateTokenResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"U\n" +
@@ -8231,13 +8229,13 @@ var file_vigo_proto_goTypes = []any{
 	(*CustomTraitEntry)(nil),              // 7: vigo.v1.CustomTraitEntry
 	(*DownloadCustomTraitRequest)(nil),    // 8: vigo.v1.DownloadCustomTraitRequest
 	(*DownloadCustomTraitResponse)(nil),   // 9: vigo.v1.DownloadCustomTraitResponse
-	(*Module)(nil),                        // 10: vigo.v1.Module
+	(*Configcrate)(nil),                   // 10: vigo.v1.Configcrate
 	(*Resource)(nil),                      // 11: vigo.v1.Resource
 	(*PolicyBundle)(nil),                  // 12: vigo.v1.PolicyBundle
-	(*PolicyModule)(nil),                  // 13: vigo.v1.PolicyModule
+	(*PolicyConfigcrate)(nil),             // 13: vigo.v1.PolicyConfigcrate
 	(*PolicyResource)(nil),                // 14: vigo.v1.PolicyResource
 	(*ReportResultRequest)(nil),           // 15: vigo.v1.ReportResultRequest
-	(*ModuleResult)(nil),                  // 16: vigo.v1.ModuleResult
+	(*ConfigcrateResult)(nil),             // 16: vigo.v1.ConfigcrateResult
 	(*ReportResultResponse)(nil),          // 17: vigo.v1.ReportResultResponse
 	(*ReportTraitsRequest)(nil),           // 18: vigo.v1.ReportTraitsRequest
 	(*ReportTraitsResponse)(nil),          // 19: vigo.v1.ReportTraitsResponse
@@ -8333,7 +8331,7 @@ var file_vigo_proto_goTypes = []any{
 	(*WakeResponse)(nil),                  // 109: vigo.v1.WakeResponse
 	(*ResolveSecretsRequest)(nil),         // 110: vigo.v1.ResolveSecretsRequest
 	(*ResolveSecretsResponse)(nil),        // 111: vigo.v1.ResolveSecretsResponse
-	nil,                                   // 112: vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	nil,                                   // 112: vigo.v1.CheckInRequest.CachedConfigcrateHashesEntry
 	nil,                                   // 113: vigo.v1.Resource.ParamsEntry
 	nil,                                   // 114: vigo.v1.PolicyResource.AttributesEntry
 	nil,                                   // 115: vigo.v1.TraitsDelta.ChangedEntry
@@ -8343,22 +8341,22 @@ var file_vigo_proto_goTypes = []any{
 }
 var file_vigo_proto_depIdxs = []int32{
 	118, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
-	112, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	112, // 1: vigo.v1.CheckInRequest.cached_configcrate_hashes:type_name -> vigo.v1.CheckInRequest.CachedConfigcrateHashesEntry
 	31,  // 2: vigo.v1.CheckInRequest.capabilities:type_name -> vigo.v1.StreamCapabilities
-	10,  // 3: vigo.v1.CheckInResponse.modules:type_name -> vigo.v1.Module
+	10,  // 3: vigo.v1.CheckInResponse.configcrates:type_name -> vigo.v1.Configcrate
 	7,   // 4: vigo.v1.CheckInResponse.custom_traits:type_name -> vigo.v1.CustomTraitEntry
 	12,  // 5: vigo.v1.CheckInResponse.policy_bundle:type_name -> vigo.v1.PolicyBundle
 	6,   // 6: vigo.v1.CheckInResponse.proxied_devices:type_name -> vigo.v1.ProxiedDevice
 	5,   // 7: vigo.v1.CheckInResponse.manifest_entries:type_name -> vigo.v1.SwarmManifestEntry
 	4,   // 8: vigo.v1.CheckInResponse.swarm_runtime_limits:type_name -> vigo.v1.SwarmRuntimeLimits
 	12,  // 9: vigo.v1.ProxiedDevice.policy:type_name -> vigo.v1.PolicyBundle
-	11,  // 10: vigo.v1.Module.resources:type_name -> vigo.v1.Resource
+	11,  // 10: vigo.v1.Configcrate.resources:type_name -> vigo.v1.Resource
 	113, // 11: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
-	13,  // 12: vigo.v1.PolicyBundle.modules:type_name -> vigo.v1.PolicyModule
+	13,  // 12: vigo.v1.PolicyBundle.configcrates:type_name -> vigo.v1.PolicyConfigcrate
 	7,   // 13: vigo.v1.PolicyBundle.custom_traits:type_name -> vigo.v1.CustomTraitEntry
-	14,  // 14: vigo.v1.PolicyModule.resources:type_name -> vigo.v1.PolicyResource
+	14,  // 14: vigo.v1.PolicyConfigcrate.resources:type_name -> vigo.v1.PolicyResource
 	114, // 15: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
-	16,  // 16: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ModuleResult
+	16,  // 16: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ConfigcrateResult
 	118, // 17: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
 	118, // 18: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	2,   // 19: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
@@ -8382,7 +8380,7 @@ var file_vigo_proto_depIdxs = []int32{
 	27,  // 37: vigo.v1.DeltaEvent.run:type_name -> vigo.v1.RunCompleted
 	28,  // 38: vigo.v1.DeltaEvent.traits:type_name -> vigo.v1.TraitsDelta
 	29,  // 39: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
-	16,  // 40: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ModuleResult
+	16,  // 40: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ConfigcrateResult
 	115, // 41: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
 	116, // 42: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
 	118, // 43: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
@@ -8398,7 +8396,7 @@ var file_vigo_proto_depIdxs = []int32{
 	118, // 53: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
 	118, // 54: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
 	60,  // 55: vigo.v1.GetRunResponse.run:type_name -> vigo.v1.Run
-	16,  // 56: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ModuleResult
+	16,  // 56: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ConfigcrateResult
 	71,  // 57: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
 	71,  // 58: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
 	118, // 59: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp

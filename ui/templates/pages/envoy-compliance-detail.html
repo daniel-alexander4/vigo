@@ -23,9 +23,9 @@
 <!-- Summary cards: partition buckets from the unified scorer -->
 <div class="stat-cards" style="margin-bottom:24px;">
     <div class="stat-card">
-        <div class="stat-card__value {{if ge .ModulePct 95.0}}text-success{{else if ge .ModulePct 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .ModulePct}}%</div>
+        <div class="stat-card__value {{if ge .ConfigcratePct 95.0}}text-success{{else if ge .ConfigcratePct 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .ConfigcratePct}}%</div>
         <div class="stat-card__label">Convergence</div>
-        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.ModuleConvergence}}</div>
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.ConfigcrateConvergence}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value {{if ge .Status.CoveragePercent 95.0}}text-success{{else if ge .Status.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Status.CoveragePercent}}%</div>
@@ -78,7 +78,7 @@
                     {{else}}<span class="badge badge--failed">missing</span>{{end}}
                 </td>
                 <td>
-                    {{if eq .Status "covered"}}{{if .Modules}}{{joinStrings .Modules ", "}}{{else}}<span class="text-muted">{{.Evidence}}</span>{{end}}
+                    {{if eq .Status "covered"}}{{if .Configcrates}}{{joinStrings .Configcrates ", "}}{{else}}<span class="text-muted">{{.Evidence}}</span>{{end}}
                     {{else if eq .Status "waived"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Status "partial"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Scope "documented"}}<span class="text-warning">requires uploaded documentation</span>

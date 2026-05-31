@@ -65,9 +65,9 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 
 	// Record metrics.
 	for _, result := range run.Results {
-		s.metrics.ModuleActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
+		s.metrics.ConfigcrateActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
 		if result.GetChanged() {
-			s.metrics.DriftDetected.WithLabelValues(hostname, result.GetModuleName()).Inc()
+			s.metrics.DriftDetected.WithLabelValues(hostname, result.GetConfigcrateName()).Inc()
 		}
 	}
 	s.metrics.RunDuration.WithLabelValues(hostname).Observe(0) // delta doesn't carry duration
@@ -90,7 +90,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 		var dbResults []fleet.RunBatchResultParam
 		for _, r := range run.Results {
 			dbResults = append(dbResults, fleet.RunBatchResultParam{
-				ModuleName:   r.GetModuleName(),
+				ConfigcrateName:   r.GetConfigcrateName(),
 				ResourceType: r.GetResourceType(),
 				ResourceName: r.GetResourceName(),
 				ActionTaken:  r.GetActionTaken(),
@@ -106,7 +106,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 			Hostname:     hostname,
 			Status:       runStatus,
 			Trigger:      trigger,
-			ModuleCount:  int64(run.TotalCount),
+			ConfigcrateCount:  int64(run.TotalCount),
 			ChangedCount: changedCount,
 			FailedCount:  failedCount,
 			SkippedCount: skippedCount,

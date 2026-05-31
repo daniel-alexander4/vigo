@@ -20,7 +20,7 @@ var configTreeCmd = &cobra.Command{
 		var tree struct {
 			Dir      string `json:"dir"`
 			File     string `json:"file"`
-			Modules  []string `json:"modules"`
+			Configcrates  []string `json:"configcrates"`
 			Roles    []string `json:"roles"`
 			Match    string `json:"match"`
 			Total    []string `json:"total"`
@@ -43,7 +43,7 @@ var configTreeCmd = &cobra.Command{
 type treeNode struct {
 	Dir      string     `json:"dir"`
 	File     string     `json:"file"`
-	Modules  []string   `json:"modules"`
+	Configcrates  []string   `json:"configcrates"`
 	Roles    []string   `json:"roles"`
 	Match    string     `json:"match"`
 	Total    []string   `json:"total"`
@@ -54,7 +54,7 @@ type treeNode struct {
 func printTreeRoot(node *treeNode) {
 	// Root level.
 	if node.File != "" {
-		modules := formatModuleList(node.Modules, true)
+		modules := formatModuleList(node.Configcrates, true)
 		roles := ""
 		if len(node.Roles) > 0 {
 			roles = " roles:" + dim("["+strings.Join(node.Roles, ", ")+"]")
@@ -82,7 +82,7 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 			prefix, connector,
 			leafFileName(node),
 			yellow(node.Match),
-			formatModuleList(node.Modules, false))
+			formatModuleList(node.Configcrates, false))
 
 		// Total line.
 		if len(node.Total) > 0 {
@@ -103,7 +103,7 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 		// Directory with optional common.vgo.
 		dirName := blue(lastSegment(node.Dir) + "/")
 		if node.File != "" {
-			modules := formatModuleList(node.Modules, true)
+			modules := formatModuleList(node.Configcrates, true)
 			roles := ""
 			if len(node.Roles) > 0 {
 				roles = " roles:" + dim("["+strings.Join(node.Roles, ", ")+"]")

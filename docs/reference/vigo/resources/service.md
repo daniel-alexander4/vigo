@@ -50,7 +50,7 @@ resources:
     enabled: "false"
 ```
 
-### Restart on config change (intra-module)
+### Restart on config change (intra-configcrate)
 
 The config file declares `notify`, the service gates on `when: "changed"`:
 
@@ -73,12 +73,12 @@ resources:
     when: "changed"
 ```
 
-### Restart on cross-module change
+### Restart on cross-configcrate change
 
-The service module watches config modules with `subscribes`:
+The service configcrate watches config configcrates with `subscribes`:
 
 ```yaml
-# modules/nginx-service.vgo
+# configcrates/nginx-service.vgo
 name: nginx-service
 subscribes: [nginx-config, nginx-ssl]
 resources:

@@ -9,7 +9,7 @@ import (
 )
 
 func TestSelfProtect_FileTargetingAgentBinary(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "overwrite-agent",
@@ -27,7 +27,7 @@ func TestSelfProtect_FileTargetingAgentBinary(t *testing.T) {
 }
 
 func TestSelfProtect_FileTargetingServerBinary(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "overwrite-server",
@@ -45,7 +45,7 @@ func TestSelfProtect_FileTargetingServerBinary(t *testing.T) {
 }
 
 func TestSelfProtect_FileTargetingServerConfigDir(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "overwrite-config",
@@ -63,7 +63,7 @@ func TestSelfProtect_FileTargetingServerConfigDir(t *testing.T) {
 }
 
 func TestSelfProtect_FileTargetingAgentState(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "overwrite-lmdb",
@@ -81,7 +81,7 @@ func TestSelfProtect_FileTargetingAgentState(t *testing.T) {
 }
 
 func TestSelfProtect_FileSafePathAllowed(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "good-mod",
 		Resources: []Resource{{
 			Name: "nginx-conf",
@@ -99,7 +99,7 @@ func TestSelfProtect_FileSafePathAllowed(t *testing.T) {
 }
 
 func TestSelfProtect_ServiceStopAgent(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "kill-agent",
@@ -117,7 +117,7 @@ func TestSelfProtect_ServiceStopAgent(t *testing.T) {
 }
 
 func TestSelfProtect_ServiceDisableServer(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "disable-server",
@@ -135,7 +135,7 @@ func TestSelfProtect_ServiceDisableServer(t *testing.T) {
 }
 
 func TestSelfProtect_ServiceRestartAgentAllowed(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "good-mod",
 		Resources: []Resource{{
 			Name: "restart-agent",
@@ -153,7 +153,7 @@ func TestSelfProtect_ServiceRestartAgentAllowed(t *testing.T) {
 }
 
 func TestSelfProtect_ServiceStopUnrelatedAllowed(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "good-mod",
 		Resources: []Resource{{
 			Name: "stop-nginx",
@@ -171,7 +171,7 @@ func TestSelfProtect_ServiceStopUnrelatedAllowed(t *testing.T) {
 }
 
 func TestSelfProtect_PackageRemoveVigo(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "rm-vigo",
@@ -189,7 +189,7 @@ func TestSelfProtect_PackageRemoveVigo(t *testing.T) {
 }
 
 func TestSelfProtect_PackageInstallAllowed(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "good-mod",
 		Resources: []Resource{{
 			Name: "install-vigo",
@@ -207,7 +207,7 @@ func TestSelfProtect_PackageInstallAllowed(t *testing.T) {
 }
 
 func TestSelfProtect_ExecStopAgent(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "exec-kill",
@@ -225,7 +225,7 @@ func TestSelfProtect_ExecStopAgent(t *testing.T) {
 }
 
 func TestSelfProtect_ExecStopServer(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "exec-kill-server",
@@ -243,7 +243,7 @@ func TestSelfProtect_ExecStopServer(t *testing.T) {
 }
 
 func TestSelfProtect_ExecSafeCommandAllowed(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "good-mod",
 		Resources: []Resource{{
 			Name: "restart-nginx",
@@ -261,7 +261,7 @@ func TestSelfProtect_ExecSafeCommandAllowed(t *testing.T) {
 }
 
 func TestSelfProtect_FileLineTargetingAgentConfig(t *testing.T) {
-	mod := Module{
+	mod := Configcrate{
 		Name: "bad-mod",
 		Resources: []Resource{{
 			Name: "edit-agent-config",

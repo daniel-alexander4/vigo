@@ -14,9 +14,9 @@ import (
 
 func TestRetractRelFromExampleRel(t *testing.T) {
 	cases := map[string]string{
-		"modules/databases/postgres.vgo.example": "modules/databases/postgres-retract.vgo.example",
-		"modules/web/nginx.vgo.example":          "modules/web/nginx-retract.vgo.example",
-		"modules/foo.vgo.example":                "modules/foo-retract.vgo.example",
+		"configcrates/databases/postgres.vgo.example": "configcrates/databases/postgres-retract.vgo.example",
+		"configcrates/web/nginx.vgo.example":          "configcrates/web/nginx-retract.vgo.example",
+		"configcrates/foo.vgo.example":                "configcrates/foo-retract.vgo.example",
 	}
 	for in, want := range cases {
 		if got := retractRelFromExampleRel(in); got != want {
@@ -27,9 +27,9 @@ func TestRetractRelFromExampleRel(t *testing.T) {
 
 func TestExampleRelFromRetractRel(t *testing.T) {
 	cases := map[string]string{
-		"modules/databases/postgres-retract.vgo.example": "modules/databases/postgres.vgo.example",
-		"modules/web/nginx-retract.vgo.example":          "modules/web/nginx.vgo.example",
-		"modules/foo-retract.vgo.example":                "modules/foo.vgo.example",
+		"configcrates/databases/postgres-retract.vgo.example": "configcrates/databases/postgres.vgo.example",
+		"configcrates/web/nginx-retract.vgo.example":          "configcrates/web/nginx.vgo.example",
+		"configcrates/foo-retract.vgo.example":                "configcrates/foo.vgo.example",
 	}
 	for in, want := range cases {
 		if got := exampleRelFromRetractRel(in); got != want {
@@ -41,9 +41,9 @@ func TestExampleRelFromRetractRel(t *testing.T) {
 func TestPairMappingRoundTrip(t *testing.T) {
 	// Round-trip: example → retract → example must be the identity.
 	for _, ex := range []string{
-		"modules/databases/postgres.vgo.example",
-		"modules/networking/router-base.vgo.example",
-		"modules/foo.vgo.example",
+		"configcrates/databases/postgres.vgo.example",
+		"configcrates/networking/router-base.vgo.example",
+		"configcrates/foo.vgo.example",
 	} {
 		round := exampleRelFromRetractRel(retractRelFromExampleRel(ex))
 		if round != ex {
@@ -56,19 +56,19 @@ func TestPairMappingRoundTrip(t *testing.T) {
 
 func TestCollectModuleExamples_SkipsRetractsAndNonExamples(t *testing.T) {
 	dir := t.TempDir()
-	mustWrite(t, filepath.Join(dir, "modules", "web", "nginx.vgo.example"), "")
-	mustWrite(t, filepath.Join(dir, "modules", "databases", "postgres.vgo.example"), "")
+	mustWrite(t, filepath.Join(dir, "configcrates", "web", "nginx.vgo.example"), "")
+	mustWrite(t, filepath.Join(dir, "configcrates", "databases", "postgres.vgo.example"), "")
 	// A leaked retract under examples/ — must NOT count as an example.
-	mustWrite(t, filepath.Join(dir, "modules", "web", "nginx-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(dir, "configcrates", "web", "nginx-retract.vgo.example"), "")
 	// Non-example file — must be ignored.
-	mustWrite(t, filepath.Join(dir, "modules", "web", "README.md"), "x")
+	mustWrite(t, filepath.Join(dir, "configcrates", "web", "README.md"), "x")
 	// Outside modules/ — must be ignored.
 	mustWrite(t, filepath.Join(dir, "usercrates", "alice.vgo.example"), "")
 
 	got := collectModuleExamples(dir)
 	want := map[string]struct{}{
-		"modules/web/nginx.vgo.example":          {},
-		"modules/databases/postgres.vgo.example": {},
+		"configcrates/web/nginx.vgo.example":          {},
+		"configcrates/databases/postgres.vgo.example": {},
 	}
 	if !mapsEqual(got, want) {
 		t.Errorf("collectModuleExamples = %v, want %v", got, want)
@@ -77,17 +77,17 @@ func TestCollectModuleExamples_SkipsRetractsAndNonExamples(t *testing.T) {
 
 func TestCollectModuleAntiExamples_OnlyRetractFiles(t *testing.T) {
 	dir := t.TempDir()
-	mustWrite(t, filepath.Join(dir, "modules", "web", "nginx-retract.vgo.example"), "")
-	mustWrite(t, filepath.Join(dir, "modules", "databases", "postgres-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(dir, "configcrates", "web", "nginx-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(dir, "configcrates", "databases", "postgres-retract.vgo.example"), "")
 	// A non-retract example leaked into anti-examples — must NOT count.
-	mustWrite(t, filepath.Join(dir, "modules", "web", "stray.vgo.example"), "")
+	mustWrite(t, filepath.Join(dir, "configcrates", "web", "stray.vgo.example"), "")
 	// Non-example file.
-	mustWrite(t, filepath.Join(dir, "modules", "web", "notes.txt"), "")
+	mustWrite(t, filepath.Join(dir, "configcrates", "web", "notes.txt"), "")
 
 	got := collectModuleAntiExamples(dir)
 	want := map[string]struct{}{
-		"modules/web/nginx-retract.vgo.example":          {},
-		"modules/databases/postgres-retract.vgo.example": {},
+		"configcrates/web/nginx-retract.vgo.example":          {},
+		"configcrates/databases/postgres-retract.vgo.example": {},
 	}
 	if !mapsEqual(got, want) {
 		t.Errorf("collectModuleAntiExamples = %v, want %v", got, want)
@@ -109,8 +109,8 @@ func TestCollectModuleExamples_MissingDirReturnsEmpty(t *testing.T) {
 
 func TestRunMirrorCheck_PairedTreePasses(t *testing.T) {
 	exDir, antiDir := t.TempDir(), t.TempDir()
-	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")
-	mustWrite(t, filepath.Join(antiDir, "modules", "web", "nginx-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "configcrates", "web", "nginx.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "configcrates", "web", "nginx-retract.vgo.example"), "")
 
 	if err := runMirrorCheck(exDir, antiDir); err != nil {
 		t.Errorf("expected nil for fully-paired tree, got: %v", err)
@@ -119,9 +119,9 @@ func TestRunMirrorCheck_PairedTreePasses(t *testing.T) {
 
 func TestRunMirrorCheck_MissingRetractFails(t *testing.T) {
 	exDir, antiDir := t.TempDir(), t.TempDir()
-	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")
-	mustWrite(t, filepath.Join(exDir, "modules", "databases", "mysql.vgo.example"), "")
-	mustWrite(t, filepath.Join(antiDir, "modules", "web", "nginx-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "configcrates", "web", "nginx.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "configcrates", "databases", "mysql.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "configcrates", "web", "nginx-retract.vgo.example"), "")
 	// mysql has no matching retract.
 
 	err := runMirrorCheck(exDir, antiDir)
@@ -135,9 +135,9 @@ func TestRunMirrorCheck_MissingRetractFails(t *testing.T) {
 
 func TestRunMirrorCheck_OrphanRetractFails(t *testing.T) {
 	exDir, antiDir := t.TempDir(), t.TempDir()
-	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")
-	mustWrite(t, filepath.Join(antiDir, "modules", "web", "nginx-retract.vgo.example"), "")
-	mustWrite(t, filepath.Join(antiDir, "modules", "deprecated", "old-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "configcrates", "web", "nginx.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "configcrates", "web", "nginx-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "configcrates", "deprecated", "old-retract.vgo.example"), "")
 	// deprecated/old has a retract but no source example.
 
 	err := runMirrorCheck(exDir, antiDir)
@@ -151,9 +151,9 @@ func TestRunMirrorCheck_OrphanRetractFails(t *testing.T) {
 
 func TestRunMirrorCheck_BothMissingAndOrphan(t *testing.T) {
 	exDir, antiDir := t.TempDir(), t.TempDir()
-	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")          // missing retract
-	mustWrite(t, filepath.Join(exDir, "modules", "databases", "mysql.vgo.example"), "")    // missing retract
-	mustWrite(t, filepath.Join(antiDir, "modules", "deprecated", "old-retract.vgo.example"), "") // orphan
+	mustWrite(t, filepath.Join(exDir, "configcrates", "web", "nginx.vgo.example"), "")          // missing retract
+	mustWrite(t, filepath.Join(exDir, "configcrates", "databases", "mysql.vgo.example"), "")    // missing retract
+	mustWrite(t, filepath.Join(antiDir, "configcrates", "deprecated", "old-retract.vgo.example"), "") // orphan
 
 	err := runMirrorCheck(exDir, antiDir)
 	if err == nil {
@@ -179,10 +179,10 @@ func TestFindExamples_WalksMultipleTrees(t *testing.T) {
 	// retracts surface from one command.
 	exDir := t.TempDir()
 	antiDir := t.TempDir()
-	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")
-	mustWrite(t, filepath.Join(exDir, "modules", "databases", "postgres.vgo.example"), "")
-	mustWrite(t, filepath.Join(antiDir, "modules", "web", "nginx-retract.vgo.example"), "")
-	mustWrite(t, filepath.Join(antiDir, "modules", "databases", "postgres-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "configcrates", "web", "nginx.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "configcrates", "databases", "postgres.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "configcrates", "web", "nginx-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "configcrates", "databases", "postgres-retract.vgo.example"), "")
 
 	got, err := findExamples(exDir, antiDir)
 	if err != nil {
@@ -194,10 +194,10 @@ func TestFindExamples_WalksMultipleTrees(t *testing.T) {
 	// Each tree contributes paths relative to its own root, so the
 	// rel paths line up cleanly when used to compute stockpile dests.
 	wantRels := map[string]struct{}{
-		"modules/databases/postgres.vgo.example":         {},
-		"modules/databases/postgres-retract.vgo.example": {},
-		"modules/web/nginx.vgo.example":                  {},
-		"modules/web/nginx-retract.vgo.example":          {},
+		"configcrates/databases/postgres.vgo.example":         {},
+		"configcrates/databases/postgres-retract.vgo.example": {},
+		"configcrates/web/nginx.vgo.example":                  {},
+		"configcrates/web/nginx-retract.vgo.example":          {},
 	}
 	for _, ex := range got {
 		if _, ok := wantRels[ex.rel]; !ok {
@@ -208,7 +208,7 @@ func TestFindExamples_WalksMultipleTrees(t *testing.T) {
 
 func TestFindExamples_SkipsMissingDirsButRequiresAtLeastOne(t *testing.T) {
 	exDir := t.TempDir()
-	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "configcrates", "web", "nginx.vgo.example"), "")
 	// One real dir, one nonexistent — should succeed with the real one.
 	got, err := findExamples(exDir, filepath.Join(t.TempDir(), "nope"))
 	if err != nil {

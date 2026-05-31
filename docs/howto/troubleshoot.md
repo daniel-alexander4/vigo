@@ -53,11 +53,11 @@ The published config tree at `/srv/vigo/stacks/.live/` has a structural error (t
 
 **Fix:** repair the source under `/srv/vigo/stacks/stockpile/`, then `vigocli config publish` (the file ops run even when the server is down), then restart vigosrv. The startup error message names the failing rule.
 
-### Module convergence loop — same resource changes every cycle
+### Configcrate convergence loop — same resource changes every cycle
 
 A resource declares state that some external process keeps reverting (a package manager auto-rolls back the version, another tool rewrites the file, the OS updates a value).
 
-**Fix:** `vigocli config trace <envoy> <module>` shows the resolution chain. Inspect what's writing the file outside of Vigo. The drift-counter on the envoy's detail page distinguishes `Diverged` (≥5 consecutive runs of changes — that's this case) from `Changed` (one-off).
+**Fix:** `vigocli config trace <envoy> <configcrate>` shows the resolution chain. Inspect what's writing the file outside of Vigo. The drift-counter on the envoy's detail page distinguishes `Diverged` (≥5 consecutive runs of changes — that's this case) from `Changed` (one-off).
 
 ### Convergence rollback fired mid-publish
 
@@ -87,7 +87,7 @@ Run on any envoy to inspect the agent's local state without contacting the serve
 sudo vigo status
 ```
 
-This shows the envoy UUID, server address, cached policy details (version, modules, resources), cached traits age, pending result queue depth, and server pubkey status. It reads from the config file and LMDB state store only -- no network required.
+This shows the envoy UUID, server address, cached policy details (version, configcrates, resources), cached traits age, pending result queue depth, and server pubkey status. It reads from the config file and LMDB state store only -- no network required.
 
 Useful for verifying:
 - Whether the agent is registered (`Envoy ID` vs `(not registered)`)
@@ -213,15 +213,15 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 - Agent re-enrolled with a new key pair but old UUID
 - Envoy was revoked
 
-### Server Started with Zero Modules
+### Server Started with Zero Configcrates
 
 **Symptoms:** Server is running but envoys get empty policy (no resources applied). Logs show `config loaded with validation errors — starting with empty config`.
 
-**Cause:** Idempotency validation errors in `.live/` modules. The server treats these as non-fatal — it starts with empty config so the REST API, UI, and gRPC remain available for diagnosis.
+**Cause:** Idempotency validation errors in `.live/` configcrates. The server treats these as non-fatal — it starts with empty config so the REST API, UI, and gRPC remain available for diagnosis.
 
 **Fix:**
 1. Check the error details: `vigocli doctor` or look at the server logs
-2. Fix the module in `stockpile/` (the module linter will catch and repair most issues)
+2. Fix the configcrate in `stockpile/` (the configcrate linter will catch and repair most issues)
 3. Republish: `vigocli config publish`
 
 ### Config Reload Errors
@@ -244,11 +244,11 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
    - Duplicate keys in the same mapping
    - Invalid `when:` expressions
    - Circular `depends_on` references
-   - Missing module definitions referenced by roles
+   - Missing configcrate definitions referenced by roles
 
 **Common causes:**
 - YAML syntax errors
-- Module referenced in a role but not defined in `modules/`
+- Configcrate referenced in a role but not defined in `configcrates/`
 - Circular dependency in `depends_on`
 
 ### Envoy Reports Compliant but Resources Not Applied
@@ -270,7 +270,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
    ```bash
    vigocli config trace <hostname>
    ```
-   If the module is listed but resources aren't being applied, it's an agent version mismatch.
+   If the configcrate is listed but resources aren't being applied, it's an agent version mismatch.
 
 3. Check the run result for the specific envoy:
    ```bash

@@ -7,10 +7,10 @@
         <a href="/runs" class="btn btn--sm">Fleet-wide Runs</a>
         <a href="/api/v1/export/cmdb" class="btn btn--sm" target="_blank" rel="noopener">CMDB Export</a>
     </div>
-    <p>Managed nodes reporting to this server{{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ModuleFilter .ComplianceFilter}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
+    <p>Managed nodes reporting to this server{{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
 </div>
 
-{{$qs := ""}}{{if .ConvFilter}}{{$qs = printf "%s&conv=%s" $qs .ConvFilter}}{{end}}{{if .DriftFilter}}{{$qs = printf "%s&drift=%s" $qs .DriftFilter}}{{end}}{{if .ReachFilter}}{{$qs = printf "%s&reach=%s" $qs .ReachFilter}}{{end}}{{if .EnvFilter}}{{$qs = printf "%s&env=%s" $qs .EnvFilter}}{{end}}{{if .TagFilter}}{{$qs = printf "%s&tag=%s" $qs .TagFilter}}{{end}}{{if .RoleFilter}}{{$qs = printf "%s&role=%s" $qs .RoleFilter}}{{end}}{{if .OSFilter}}{{$qs = printf "%s&os=%s" $qs .OSFilter}}{{end}}{{if .ArchFilter}}{{$qs = printf "%s&arch=%s" $qs .ArchFilter}}{{end}}{{if .ModuleFilter}}{{$qs = printf "%s&module=%s" $qs .ModuleFilter}}{{end}}{{if .ComplianceFilter}}{{$qs = printf "%s&compliance=%s" $qs .ComplianceFilter}}{{end}}
+{{$qs := ""}}{{if .ConvFilter}}{{$qs = printf "%s&conv=%s" $qs .ConvFilter}}{{end}}{{if .DriftFilter}}{{$qs = printf "%s&drift=%s" $qs .DriftFilter}}{{end}}{{if .ReachFilter}}{{$qs = printf "%s&reach=%s" $qs .ReachFilter}}{{end}}{{if .EnvFilter}}{{$qs = printf "%s&env=%s" $qs .EnvFilter}}{{end}}{{if .TagFilter}}{{$qs = printf "%s&tag=%s" $qs .TagFilter}}{{end}}{{if .RoleFilter}}{{$qs = printf "%s&role=%s" $qs .RoleFilter}}{{end}}{{if .OSFilter}}{{$qs = printf "%s&os=%s" $qs .OSFilter}}{{end}}{{if .ArchFilter}}{{$qs = printf "%s&arch=%s" $qs .ArchFilter}}{{end}}{{if .ConfigcrateFilter}}{{$qs = printf "%s&configcrate=%s" $qs .ConfigcrateFilter}}{{end}}{{if .ComplianceFilter}}{{$qs = printf "%s&compliance=%s" $qs .ComplianceFilter}}{{end}}
 
 <div id="envoys-stats-container"
      hx-get="/ui/fragments/envoys-stats?{{$qs}}"
@@ -30,7 +30,7 @@
             Filter
             {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} active</span>{{end}}
         </button>
-        {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ModuleFilter .ComplianceFilter}}
+        {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}}
         <a href="/envoys" class="btn btn--sm">Clear</a>
         {{end}}
     </div>
@@ -44,7 +44,7 @@
         {{if .RoleFilter}}<input type="hidden" name="role" value="{{.RoleFilter}}">{{end}}
         {{if .OSFilter}}<input type="hidden" name="os" value="{{.OSFilter}}">{{end}}
         {{if .ArchFilter}}<input type="hidden" name="arch" value="{{.ArchFilter}}">{{end}}
-        {{if .ModuleFilter}}<input type="hidden" name="module" value="{{.ModuleFilter}}">{{end}}
+        {{if .ConfigcrateFilter}}<input type="hidden" name="configcrate" value="{{.ConfigcrateFilter}}">{{end}}
         {{if .ComplianceFilter}}<input type="hidden" name="compliance" value="{{.ComplianceFilter}}">{{end}}
         <label class="envoys-toolbar__label" for="envoys-sort">Sort</label>
         <select id="envoys-sort" name="sort" data-change="submit-form" class="input input--sm">
@@ -121,12 +121,12 @@
                 <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}no agent-health traits reported yet{{end}}">{{severityLabel .HealthSeverity}}</span></a>
             </td>
             <td>
-                {{if eq .ModuleCount 0}}
+                {{if eq .ConfigcrateCount 0}}
                 <span class="badge badge--unknown" title="No run data yet">0/0/0</span>
                 {{else if .LastRunID}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ConfigcrateCount}}">{{convergenceRatio .ChangedCount .FailedCount .ConfigcrateCount}}</span></a>
                 {{else}}
-                <span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>
+                <span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ConfigcrateCount}}">{{convergenceRatio .ChangedCount .FailedCount .ConfigcrateCount}}</span>
                 {{end}}
             </td>
         </tr>
@@ -144,7 +144,7 @@
         </tr>
         {{else if .HasMore}}
         <tr class="envoys-table__loadmore-trigger"
-            hx-get="/ui/fragments/envoys-table?offset={{.NextOffset}}{{if .ConvFilter}}&conv={{.ConvFilter}}{{end}}{{if .DriftFilter}}&drift={{.DriftFilter}}{{end}}{{if .ReachFilter}}&reach={{.ReachFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}{{if .EnvFilter}}&env={{.EnvFilter}}{{end}}{{if .TagFilter}}&tag={{.TagFilter}}{{end}}{{if .RoleFilter}}&role={{.RoleFilter}}{{end}}{{if .OSFilter}}&os={{.OSFilter}}{{end}}{{if .ArchFilter}}&arch={{.ArchFilter}}{{end}}{{if .ModuleFilter}}&module={{.ModuleFilter}}{{end}}{{if .ComplianceFilter}}&compliance={{.ComplianceFilter}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
+            hx-get="/ui/fragments/envoys-table?offset={{.NextOffset}}{{if .ConvFilter}}&conv={{.ConvFilter}}{{end}}{{if .DriftFilter}}&drift={{.DriftFilter}}{{end}}{{if .ReachFilter}}&reach={{.ReachFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}{{if .EnvFilter}}&env={{.EnvFilter}}{{end}}{{if .TagFilter}}&tag={{.TagFilter}}{{end}}{{if .RoleFilter}}&role={{.RoleFilter}}{{end}}{{if .OSFilter}}&os={{.OSFilter}}{{end}}{{if .ArchFilter}}&arch={{.ArchFilter}}{{end}}{{if .ConfigcrateFilter}}&configcrate={{.ConfigcrateFilter}}{{end}}{{if .ComplianceFilter}}&compliance={{.ComplianceFilter}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
             hx-trigger="revealed"
             hx-swap="outerHTML"
             hx-select="tbody > tr">

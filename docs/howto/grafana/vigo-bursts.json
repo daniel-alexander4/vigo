@@ -183,7 +183,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "sum(rate(vigo_module_actions_total[1m]))", "legendFormat": "module actions" },
+        { "expr": "sum(rate(vigo_configcrate_actions_total[1m]))", "legendFormat": "configcrate actions" },
         { "expr": "sum(rate(vigo_drift_detected_total[1m]))", "legendFormat": "drift corrections" }
       ]
     },

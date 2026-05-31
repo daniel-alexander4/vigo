@@ -1,7 +1,7 @@
 
 # vigocli compliance
 
-Umbrella command for compliance reporting, evidence export, and remediation workflows. The actual work is done by subcommands registered from their own CLI modules:
+Umbrella command for compliance reporting, evidence export, and remediation workflows. The actual work is done by subcommands registered from their own CLI configcrates:
 
 | Subcommand | Purpose | Full reference |
 |---|---|---|

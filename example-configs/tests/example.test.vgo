@@ -6,6 +6,6 @@ name: danlap gets monitoring role modules
 envoy: danlap
 
 expect:
-  modules:
+  configcrates:
     - node-exporter
     - prometheus

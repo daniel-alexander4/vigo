@@ -22,18 +22,18 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
 	t.Helper()
 	dir := t.TempDir()
 
-	os.MkdirAll(filepath.Join(dir, "modules"), 0755)
+	os.MkdirAll(filepath.Join(dir, "configcrates"), 0755)
 
 	// Write envoys.vgo with entries (not common.vgo, which is for inheritance).
 	nodesYAML := `envoys:
   - match: "web01.prod"
-    modules:
+    configcrates:
       - nginx
   - match: "web02.prod"
-    modules:
+    configcrates:
       - nginx
   - match: "db01.prod"
-    modules:
+    configcrates:
       - postgres
 `
 	os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(nodesYAML), 0644)
@@ -45,7 +45,7 @@ resources:
     type: package
     package: nginx
 `
-	os.WriteFile(filepath.Join(dir, "modules", "nginx.vgo"), []byte(moduleYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "configcrates", "nginx.vgo"), []byte(moduleYAML), 0644)
 
 	pgYAML := `name: postgres
 
@@ -54,7 +54,7 @@ resources:
     type: package
     package: postgresql
 `
-	os.WriteFile(filepath.Join(dir, "modules", "postgres.vgo"), []byte(pgYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "configcrates", "postgres.vgo"), []byte(pgYAML), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {
@@ -90,7 +90,7 @@ func TestPreview_AffectedEnvoys(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/preview?module=nginx", nil)
+	req := httptest.NewRequest("GET", "/api/v1/preview?configcrate=nginx", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 
@@ -99,7 +99,7 @@ func TestPreview_AffectedEnvoys(t *testing.T) {
 	}
 
 	var resp struct {
-		Module   string `json:"module"`
+		Configcrate   string `json:"configcrate"`
 		Affected []struct {
 			Hostname string `json:"hostname"`
 			EnvoyID  string `json:"envoy_id"`
@@ -108,8 +108,8 @@ func TestPreview_AffectedEnvoys(t *testing.T) {
 	}
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	if resp.Module != "nginx" {
-		t.Errorf("expected module nginx, got %s", resp.Module)
+	if resp.Configcrate != "nginx" {
+		t.Errorf("expected module nginx, got %s", resp.Configcrate)
 	}
 	if resp.Count != 2 {
 		t.Errorf("expected 2 affected envoys for nginx, got %d", resp.Count)
@@ -123,7 +123,7 @@ func TestPreview_NoAffectedEnvoys(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/preview?module=nonexistent", nil)
+	req := httptest.NewRequest("GET", "/api/v1/preview?configcrate=nonexistent", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 
@@ -164,7 +164,7 @@ func TestPreview_NilFleetIndex(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/preview?module=nginx", nil)
+	req := httptest.NewRequest("GET", "/api/v1/preview?configcrate=nginx", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 

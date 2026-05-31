@@ -329,16 +329,16 @@ func ResolveLookupsInAttributes(attrs map[string]any, hostname string, tags []st
 // Mutates the passed config — callers must pass a Clone, not the shared
 // store entry.
 func ResolveLookupsInConfig(cfg *EnvoyConfig, hostname string, traits map[string]string) error {
-	for mi := range cfg.Modules {
-		for ri := range cfg.Modules[mi].Resources {
-			attrs := cfg.Modules[mi].Resources[ri].Attributes
+	for mi := range cfg.Configcrates {
+		for ri := range cfg.Configcrates[mi].Resources {
+			attrs := cfg.Configcrates[mi].Resources[ri].Attributes
 			if attrs == nil {
 				continue
 			}
 			if err := ResolveLookupsInAttributes(attrs, hostname, cfg.Tags, traits); err != nil {
 				return fmt.Errorf("module %q resource %q: %w",
-					cfg.Modules[mi].Name,
-					cfg.Modules[mi].Resources[ri].Name,
+					cfg.Configcrates[mi].Name,
+					cfg.Configcrates[mi].Resources[ri].Name,
 					err)
 			}
 		}

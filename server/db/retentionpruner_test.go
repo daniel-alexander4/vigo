@@ -101,7 +101,7 @@ func TestRetentionPruner_CascadeDeletesRunResults(t *testing.T) {
 
 	old := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02 15:04:05")
 	sqlDB.Exec(`INSERT INTO runs (id, envoy_id, started_at, status) VALUES (1, 't1', ?, 'success')`, old)
-	sqlDB.Exec(`INSERT INTO run_results (run_id, module_name, resource_type, resource_name, action_taken) VALUES (1, 'mod', 'file', 'conf', 'updated')`)
+	sqlDB.Exec(`INSERT INTO run_results (run_id, configcrate_name, resource_type, resource_name, action_taken) VALUES (1, 'mod', 'file', 'conf', 'updated')`)
 
 	var resultsBefore int
 	sqlDB.QueryRow("SELECT COUNT(*) FROM run_results").Scan(&resultsBefore)

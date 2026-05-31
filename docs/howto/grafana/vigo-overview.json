@@ -322,7 +322,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(vigo_module_actions_total[5m]) * 60", "legendFormat": "{{action}}" }]
+      "targets": [{ "expr": "rate(vigo_configcrate_actions_total[5m]) * 60", "legendFormat": "{{action}}" }]
     },
     {
       "title": "Operations",

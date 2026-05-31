@@ -181,7 +181,7 @@ type module struct {
 	Bundle   []string
 	// ComplianceUnknownSubKeys captures any direct-children keys of
 	// `compliance:` that are NOT `provides` or `bundle` — the pre-0.66.48
-	// framework→control list shape. rule_module_compliance_key_retired
+	// framework→control list shape. rule_configcrate_compliance_key_retired
 	// uses this to fire the retire-error on the old shape.
 	ComplianceUnknownSubKeys []string
 	// TopLevelProvidesLine / TopLevelBundleLine record the YAML line of
@@ -476,7 +476,7 @@ func parse(data []byte) (*module, error) {
 			// 0.66.57+ shape: { provides: [...], bundle: [...] }.
 			// Walk the mapping manually so we can distinguish the new
 			// sub-keys from pre-0.66.48 framework→control entries;
-			// rule_module_compliance_key_retired fires on the latter.
+			// rule_configcrate_compliance_key_retired fires on the latter.
 			if val.Kind != yaml.MappingNode {
 				return nil, fmt.Errorf("compliance: expected mapping, got %v", val.Kind)
 			}
@@ -630,9 +630,9 @@ func extractKeyOrder(node *yaml.Node) []string {
 // rule in order and aggregates findings; adding a new check is a
 // matter of dropping in a new rule_*.go that calls register() in init().
 
-// toValidateModule converts a modlint module to a validate.Module.
-func toValidateModule(mod *module) vigovalidate.Module {
-	vm := vigovalidate.Module{Name: mod.Name}
+// toValidateModule converts a modlint module to a validate.Configcrate.
+func toValidateModule(mod *module) vigovalidate.Configcrate {
+	vm := vigovalidate.Configcrate{Name: mod.Name}
 	for _, res := range mod.Resources {
 		vm.Resources = append(vm.Resources, vigovalidate.Resource{
 			Name:       res.Name,

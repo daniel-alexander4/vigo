@@ -20,7 +20,7 @@
                 <th>Run</th>
                 {{sortHeader "Hostname" "hostname" .SortColumn .SortDir $base}}
                 {{sortHeader "Status" "status" .SortColumn .SortDir $base}}
-                <th>Modules</th>
+                <th>Configcrates</th>
                 {{sortHeader "Changed" "changed" .SortColumn .SortDir $base}}
                 {{sortHeader "Failed" "failed" .SortColumn .SortDir $base}}
                 {{sortHeader "Time" "time" .SortColumn .SortDir $base}}
@@ -31,8 +31,8 @@
             <tr>
                 <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-                <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>{{end}}</td>
-                <td>{{.ModuleCount}}</td>
+                <td>{{if eq .ConfigcrateCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ConfigcrateCount}}">{{convergenceRatio .ChangedCount .FailedCount .ConfigcrateCount}}</span>{{end}}</td>
+                <td>{{.ConfigcrateCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>
                 <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>

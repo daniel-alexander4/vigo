@@ -74,7 +74,7 @@ swap, tmpfile, ini, json_file, logrotate, git, reboot, alternatives, pip, gem, n
 blockinfile, container, custom
 
 ## .vgo Config Structure
-Modules (YAML with .vgo extension):
+Configcrates (YAML with .vgo extension):
   name: module-name
   vars:
     key: value

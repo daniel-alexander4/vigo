@@ -4,7 +4,7 @@
 # Subdirectories can have their own common.vgo to add environment-specific
 # inheritance (e.g., production/common.vgo adds monitoring to all prod hosts).
 
-modules: [os-users, diag-tools, motd]
+configcrates: [os-users, diag-tools, motd]
 
 vars:
   org_name: "ACME Corp"

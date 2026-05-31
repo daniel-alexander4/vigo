@@ -12,7 +12,7 @@ vigocli vi <file.vgo>
 Files must be within `/srv/vigo/`. Relative paths are resolved against `/srv/vigo/stacks/stockpile/`, so you can use short names:
 
 ```bash
-vigocli vi modules/nginx.vgo           # opens /srv/vigo/stacks/stockpile/modules/nginx.vgo
+vigocli vi configcrates/nginx.vgo           # opens /srv/vigo/stacks/stockpile/configcrates/nginx.vgo
 vigocli vi envoys/web-servers.vgo     # opens /srv/vigo/stacks/stockpile/envoys/web-servers.vgo
 ```
 
@@ -22,7 +22,7 @@ vigocli vi envoys/web-servers.vgo     # opens /srv/vigo/stacks/stockpile/envoys/
 
 The editor provides YAML-based syntax highlighting with Vigo-specific enhancements:
 
-- **Top-level keys** (`name`, `vars`, `resources`, `modules`, `usercrates`, `roles`, `envoys`, `depends_on`, `when`, `environment`, `match`, `exclude_modules`) -- bold blue
+- **Top-level keys** (`name`, `vars`, `resources`, `configcrates`, `usercrates`, `roles`, `envoys`, `depends_on`, `when`, `environment`, `match`, `exclude_configcrates`) -- bold blue
 - **Resource attributes** (`type`, `state`, `targetpath`, `content`, `package`, `service`, `command`, etc.) -- blue
 - **Resource type values** (`file`, `package`, `nonrepo_package`, `service`, `user`, `exec`, `repository`, `source_package`, `cron`) -- bold orange
 - **State values** (`present`, `absent`, `running`, `stopped`, `restarted`, `reloaded`, `directory`) -- green
@@ -52,16 +52,16 @@ The editor is pre-configured with:
 
 ## Examples
 
-### Edit a module file
+### Edit a configcrate file
 
 ```bash
-vigocli vi modules/nginx.vgo
+vigocli vi configcrates/nginx.vgo
 ```
 
 ### Edit with full path
 
 ```bash
-vigocli vi /srv/vigo/stacks/stockpile/modules/nginx.vgo
+vigocli vi /srv/vigo/stacks/stockpile/configcrates/nginx.vgo
 ```
 
 ## Related

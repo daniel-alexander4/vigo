@@ -25,7 +25,7 @@ resources:
 	envoys := `
 envoys:
   - match: "*.integ.test"
-    modules: [testmod]
+    configcrates: [testmod]
 `
 	env := startServer(t, modules, envoys)
 	defer env.Cleanup()
@@ -60,7 +60,7 @@ resources:
 	envoys := `
 envoys:
   - match: "*.integ.test"
-    modules: [testmod]
+    configcrates: [testmod]
 `
 	env := startServer(t, modules, envoys)
 	defer env.Cleanup()
@@ -151,7 +151,7 @@ resources:
 	envoys := `
 envoys:
   - match: "*.integ.test"
-    modules: [base, web]
+    configcrates: [base, web]
 `
 	env := startServer(t, modules, envoys)
 	defer env.Cleanup()
@@ -185,7 +185,7 @@ resources:
 	envoys := `
 envoys:
   - match: "*.integ.test"
-    modules: [testmod]
+    configcrates: [testmod]
 `
 	env := startServer(t, modules, envoys)
 	defer env.Cleanup()

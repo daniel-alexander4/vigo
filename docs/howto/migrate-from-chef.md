@@ -1,7 +1,7 @@
 
 # Migrating from Chef
 
-Chef and Vigo share the pull-based model and converge-on-interval pattern. The biggest practical shifts: Ruby DSL → plain YAML; Chef's 15-level attribute precedence → Vigo's three levels (match-block vars > inherited vars > module defaults, with `environments.vgo` overrides at the top). The resource shape — declarative, idempotent, with `notify` / `subscribes` triggers — maps closely.
+Chef and Vigo share the pull-based model and converge-on-interval pattern. The biggest practical shifts: Ruby DSL → plain YAML; Chef's 15-level attribute precedence → Vigo's three levels (match-block vars > inherited vars > configcrate defaults, with `environments.vgo` overrides at the top). The resource shape — declarative, idempotent, with `notify` / `subscribes` triggers — maps closely.
 
 ## Architecture Differences
 
@@ -11,19 +11,19 @@ Chef's infrastructure includes a Chef Server (or Chef Automate), client nodes ru
 
 Chef stores node objects and search indexes on the server (PostgreSQL + Elasticsearch in Chef Server). Vigo uses an in-memory FleetIndex backed by SQLite — no external database.
 
-Chef's attribute system has 15 precedence levels (default, force_default, normal, override, force_override, automatic — each at role, environment, cookbook, and recipe levels). Vigo has three levels: module defaults, role vars, node vars.
+Chef's attribute system has 15 precedence levels (default, force_default, normal, override, force_override, automatic — each at role, environment, cookbook, and recipe levels). Vigo has three levels: configcrate defaults, role vars, node vars.
 
 ## Concept Mapping
 
 | Chef Concept | Vigo Equivalent | Notes |
 |---|---|---|
-| Cookbook | Module (`.vgo` file) | Single YAML file replaces the cookbook directory tree |
-| Recipe | Module resources | Resources listed in the module — no separate recipe files |
-| Role | Role | Named list of modules — same concept |
-| Run list | Module list in `envoys.vgo` | Roles and modules assigned to matching envoys |
+| Cookbook | Configcrate (`.vgo` file) | Single YAML file replaces the cookbook directory tree |
+| Recipe | Configcrate resources | Resources listed in the configcrate — no separate recipe files |
+| Role | Role | Named list of configcrates — same concept |
+| Run list | Configcrate list in `envoys.vgo` | Roles and configcrates assigned to matching envoys |
 | Node object | FleetIndex entry + Traits | In-memory, not stored server-side as a document |
 | Ohai | Traits | System facts collected by the agent |
-| Attributes (default) | Module `vars:` | Default values in the module |
+| Attributes (default) | Configcrate `vars:` | Default values in the configcrate |
 | Attributes (override) | Match-block `vars:` in `envoys.vgo` | Match-level overrides |
 | Data bag | `common.vgo` at any directory level | Directory-inherited shared vars replace external YAML data files |
 | Chef Vault | `secret:` prefix | Resolved server-side, never in plaintext |
@@ -31,10 +31,10 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | `notifies` | `notify` | Trigger downstream resource on change |
 | `subscribes` | `subscribes` | Same keyword, same semantics |
 | `only_if` / `not_if` | `when:` | Resource conditionals |
-| `include_recipe` | Module dependencies | Modules listed in roles or `depends_on` |
+| `include_recipe` | Configcrate dependencies | Configcrates listed in roles or `depends_on` |
 | `knife` | `vigocli` | CLI for server administration |
-| Chef Supermarket | No equivalent | Modules are plain YAML files — no registry |
-| Policyfile | `envoys.vgo` | Pin module versions at the node level |
+| Chef Supermarket | No equivalent | Configcrates are plain YAML files — no registry |
+| Policyfile | `envoys.vgo` | Pin configcrate versions at the node level |
 | `chef-client` | `vigo` agent | Rust binary, LMDB state, offline convergence |
 | `chef-server` | `vigosrv` | Go binary, gRPC + REST + Web UI |
 | ERB template | Go template in `content:` | Templates only in `content:` attribute |
@@ -126,7 +126,7 @@ http {
 
 ### Vigo Version
 
-`stockpile/modules/nginx.vgo`:
+`stockpile/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -183,7 +183,7 @@ resources:
 
 ```yaml
 name: webserver
-modules:
+configcrates:
   - nginx
 ```
 
@@ -204,8 +204,8 @@ envoys:
 ### Key Differences
 
 - **No Ruby.** Chef's entire stack runs on Ruby — cookbooks, recipes, attributes, templates. Vigo is pure YAML with Go templates in `content:` only.
-- **One file per module.** A Chef cookbook is a directory tree (`recipes/`, `templates/`, `attributes/`, `metadata.rb`, etc.). A Vigo module is a single `.vgo` file.
-- **No attribute levels.** Chef's `default`/`normal`/`override`/`force_override`/`automatic` at cookbook/role/environment/node levels gives 15 precedence tiers. Vigo has three: module defaults → role vars → node vars.
+- **One file per configcrate.** A Chef cookbook is a directory tree (`recipes/`, `templates/`, `attributes/`, `metadata.rb`, etc.). A Vigo configcrate is a single `.vgo` file.
+- **No attribute levels.** Chef's `default`/`normal`/`override`/`force_override`/`automatic` at cookbook/role/environment/node levels gives 15 precedence tiers. Vigo has three: configcrate defaults → role vars → node vars.
 - **Templates inline or in `templates/`.** Small templates go directly in `content:`. For larger files, use `source: templates/nginx.conf.tmpl` — the server reads the file from the `templates/` directory and renders it with the same Go template engine. No `templates/default/` subdirectory convention.
 
 ## Variable and Data Hierarchy
@@ -214,7 +214,7 @@ Chef attributes have 15 precedence levels. In practice, most teams use `default`
 
 | Chef Level | Vigo Equivalent |
 |---|---|
-| `default` (cookbook) | Module `vars:` |
+| `default` (cookbook) | Configcrate `vars:` |
 | `default` (role) | Role `vars:` |
 | `default` (environment) | `common.vgo` vars at ancestor directories |
 | `override` (node) | Match-block `vars:` |
@@ -306,26 +306,26 @@ The secrets provider resolves references at bundle compile time. No Ruby code, n
 
 3. **Templates only in `content:`.** Chef lets you use ERB in any string and template helper methods everywhere. Vigo restricts Go templates to `content:`. Use `when:` and separate resources for conditional logic.
 
-4. **Flat variable namespace.** Chef attributes are nested hashes (`node['nginx']['port']`). Vigo vars are flat strings (`nginx_port`). Prefix with the module name to avoid collisions.
+4. **Flat variable namespace.** Chef attributes are nested hashes (`node['nginx']['port']`). Vigo vars are flat strings (`nginx_port`). Prefix with the configcrate name to avoid collisions.
 
 5. **No search.** Chef Server's search API (`search(:node, 'role:webserver')`) has no direct equivalent. For cross-node coordination, use directory-level `common.vgo` inheritance or the task/query system.
 
-6. **No `run_list` manipulation.** Chef can dynamically include recipes. Vigo's module list is static — defined in `envoys.vgo` role assignments. Use `when:` to conditionally skip entire modules.
+6. **No `run_list` manipulation.** Chef can dynamically include recipes. Vigo's configcrate list is static — defined in `envoys.vgo` role assignments. Use `when:` to conditionally skip entire configcrates.
 
-7. **No Berkshelf/Policyfile dependency resolution.** Modules don't declare dependencies on other modules. Include all required modules in the role definition.
+7. **No Berkshelf/Policyfile dependency resolution.** Configcrates don't declare dependencies on other configcrates. Include all required configcrates in the role definition.
 
 8. **First-match-wins node classification.** Chef can merge multiple roles and environments. Vigo's `envoys.vgo` uses first-match-wins — only the first matching glob applies.
 
 ## Related
 
-- [Config Format](../reference/writing-modules.md) — Modules, roles, envoys.vgo, vars
-- [Resource DAG](../reference/writing-modules.md) — depends_on, notify, subscribes
-- [Templates](../reference/writing-modules.md) — Go template syntax and restrictions
-- [When Expressions](../reference/writing-modules.md) — Conditional expressions and builtins
+- [Config Format](../reference/writing-configcrates.md) — Configcrates, roles, envoys.vgo, vars
+- [Resource DAG](../reference/writing-configcrates.md) — depends_on, notify, subscribes
+- [Templates](../reference/writing-configcrates.md) — Go template syntax and restrictions
+- [When Expressions](../reference/writing-configcrates.md) — Conditional expressions and builtins
 - [Secrets](../reference/server-yaml.md) — Secret providers and the secret: prefix
 - [Executors](../reference/vigo/resources/_index.md) — All resource executors
-- [Nginx Module Example](../examples/nginx-module.md) — Full nginx walkthrough
-- [First Module](../howto/write-your-first-module.md) — Writing your first module
+- [Nginx Configcrate Example](../examples/nginx-module.md) — Full nginx walkthrough
+- [First Configcrate](../howto/write-your-first-module.md) — Writing your first configcrate
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

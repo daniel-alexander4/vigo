@@ -9,14 +9,14 @@ import (
 	"testing"
 )
 
-// --- unit tests: expandForeachModuleRefs / foreachInstanceKey ---
+// --- unit tests: expandForeachConfigcrateRefs / foreachInstanceKey ---
 
-func TestExpandForeachModuleRefs_ScalarList(t *testing.T) {
-	defs := map[string]*ModuleDefinition{"cache": {Name: "cache"}}
-	refs := []ModuleRef{{Name: "cache", ForEach: "kinds"}}
+func TestExpandForeachConfigcrateRefs_ScalarList(t *testing.T) {
+	defs := map[string]*ConfigcrateDefinition{"cache": {Name: "cache"}}
+	refs := []ConfigcrateRef{{Name: "cache", ForEach: "kinds"}}
 	vars := map[string]any{"kinds": []any{"nginx", "redis"}}
 
-	out, err := expandForeachModuleRefs(refs, defs, vars)
+	out, err := expandForeachConfigcrateRefs(refs, defs, vars)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -31,15 +31,15 @@ func TestExpandForeachModuleRefs_ScalarList(t *testing.T) {
 	}
 }
 
-func TestExpandForeachModuleRefs_MapList(t *testing.T) {
-	defs := map[string]*ModuleDefinition{"vhost": {Name: "vhost"}}
-	refs := []ModuleRef{{Name: "vhost", ForEach: "vhosts", Key: "server_name"}}
+func TestExpandForeachConfigcrateRefs_MapList(t *testing.T) {
+	defs := map[string]*ConfigcrateDefinition{"vhost": {Name: "vhost"}}
+	refs := []ConfigcrateRef{{Name: "vhost", ForEach: "vhosts", Key: "server_name"}}
 	vars := map[string]any{"vhosts": []any{
 		map[string]any{"server_name": "www.example.com", "port": "443"},
 		map[string]any{"server_name": "blog.example.com"},
 	}}
 
-	out, err := expandForeachModuleRefs(refs, defs, vars)
+	out, err := expandForeachConfigcrateRefs(refs, defs, vars)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -52,25 +52,25 @@ func TestExpandForeachModuleRefs_MapList(t *testing.T) {
 	}
 }
 
-func TestExpandForeachModuleRefs_Errors(t *testing.T) {
-	defs := map[string]*ModuleDefinition{"vhost": {Name: "vhost"}}
+func TestExpandForeachConfigcrateRefs_Errors(t *testing.T) {
+	defs := map[string]*ConfigcrateDefinition{"vhost": {Name: "vhost"}}
 
 	cases := []struct {
 		name string
-		ref  ModuleRef
+		ref  ConfigcrateRef
 		vars map[string]any
 		want string
 	}{
-		{"var not found", ModuleRef{Name: "vhost", ForEach: "missing"}, map[string]any{}, "foreach var \"missing\" not found"},
-		{"not a list", ModuleRef{Name: "vhost", ForEach: "x"}, map[string]any{"x": "scalar"}, "expected a list"},
-		{"map list needs key", ModuleRef{Name: "vhost", ForEach: "vhosts"}, map[string]any{"vhosts": []any{map[string]any{"server_name": "a"}}}, "add key:"},
-		{"key on scalar list", ModuleRef{Name: "vhost", ForEach: "vhosts", Key: "x"}, map[string]any{"vhosts": []any{"a", "b"}}, "drop key:"},
-		{"missing key field", ModuleRef{Name: "vhost", ForEach: "vhosts", Key: "server_name"}, map[string]any{"vhosts": []any{map[string]any{"other": "a"}}}, "missing the \"server_name\" field"},
-		{"duplicate keys", ModuleRef{Name: "vhost", ForEach: "vhosts", Key: "server_name"}, map[string]any{"vhosts": []any{map[string]any{"server_name": "a"}, map[string]any{"server_name": "a"}}}, "same instance key \"a\""},
+		{"var not found", ConfigcrateRef{Name: "vhost", ForEach: "missing"}, map[string]any{}, "foreach var \"missing\" not found"},
+		{"not a list", ConfigcrateRef{Name: "vhost", ForEach: "x"}, map[string]any{"x": "scalar"}, "expected a list"},
+		{"map list needs key", ConfigcrateRef{Name: "vhost", ForEach: "vhosts"}, map[string]any{"vhosts": []any{map[string]any{"server_name": "a"}}}, "add key:"},
+		{"key on scalar list", ConfigcrateRef{Name: "vhost", ForEach: "vhosts", Key: "x"}, map[string]any{"vhosts": []any{"a", "b"}}, "drop key:"},
+		{"missing key field", ConfigcrateRef{Name: "vhost", ForEach: "vhosts", Key: "server_name"}, map[string]any{"vhosts": []any{map[string]any{"other": "a"}}}, "missing the \"server_name\" field"},
+		{"duplicate keys", ConfigcrateRef{Name: "vhost", ForEach: "vhosts", Key: "server_name"}, map[string]any{"vhosts": []any{map[string]any{"server_name": "a"}, map[string]any{"server_name": "a"}}}, "same instance key \"a\""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := expandForeachModuleRefs([]ModuleRef{tc.ref}, defs, tc.vars)
+			_, err := expandForeachConfigcrateRefs([]ConfigcrateRef{tc.ref}, defs, tc.vars)
 			if err == nil {
 				t.Fatalf("expected error")
 			}
@@ -81,9 +81,9 @@ func TestExpandForeachModuleRefs_Errors(t *testing.T) {
 	}
 }
 
-func TestExpandForeachModuleRefs_NoForeachPassthrough(t *testing.T) {
-	refs := []ModuleRef{{Name: "nginx"}, {Name: "firewall", When: "is_debian"}}
-	out, err := expandForeachModuleRefs(refs, nil, nil)
+func TestExpandForeachConfigcrateRefs_NoForeachPassthrough(t *testing.T) {
+	refs := []ConfigcrateRef{{Name: "nginx"}, {Name: "firewall", When: "is_debian"}}
+	out, err := expandForeachConfigcrateRefs(refs, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestExpandModuleInstanceResources_NestedForeachSkipped(t *testing.T) {
 
 func writeVhostModule(t *testing.T, dir string) {
 	t.Helper()
-	writeFile(t, filepath.Join(dir, "modules", "vhost.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "vhost.vgo"), `
 name: vhost
 vars:
   doc_root_base: "/var/www"
@@ -207,13 +207,13 @@ func storeFromDir(t *testing.T, dir string) *ConfigStore {
 	return store
 }
 
-func TestForeachModule_FromMatchBlock(t *testing.T) {
+func TestForeachConfigcrate_FromMatchBlock(t *testing.T) {
 	dir := setupDir(t)
 	writeVhostModule(t, dir)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01"
-    modules:
+    configcrates:
       - name: vhost
         foreach: vhosts
         key: server_name
@@ -229,8 +229,8 @@ envoys:
 	}
 
 	var names []string
-	byName := map[string]ModuleConfig{}
-	for _, m := range cfg.Modules {
+	byName := map[string]Configcrate{}
+	for _, m := range cfg.Configcrates {
 		names = append(names, m.Name)
 		byName[m.Name] = m
 	}
@@ -278,12 +278,12 @@ envoys:
 	}
 }
 
-func TestForeachModule_FromRoleAndCommon(t *testing.T) {
+func TestForeachConfigcrate_FromRoleAndCommon(t *testing.T) {
 	dir := setupDir(t)
 	writeVhostModule(t, dir)
 	writeRoles(t, dir, `
 - name: webserver
-  modules:
+  configcrates:
     - name: vhost
       foreach: vhosts
       key: server_name
@@ -306,7 +306,7 @@ envoys:
 		t.Fatal("no config")
 	}
 	got := map[string]bool{}
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		got[m.Name] = true
 	}
 	for _, want := range []string{"vhost[a.example.com]", "vhost[b.example.com]"} {
@@ -316,9 +316,9 @@ envoys:
 	}
 }
 
-func TestForeachModule_FromEnvironments(t *testing.T) {
+func TestForeachConfigcrate_FromEnvironments(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "site.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "site.vgo"), `
 name: site
 resources:
   - name: site-file
@@ -329,7 +329,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "environments.vgo"), `
 env:
   production:
-    modules:
+    configcrates:
       - name: site
         foreach: sites
         key: name
@@ -349,7 +349,7 @@ envoys:
 		t.Fatal("no config")
 	}
 	got := map[string]bool{}
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		got[m.Name] = true
 	}
 	for _, want := range []string{"site[one]", "site[two]"} {
@@ -359,7 +359,7 @@ envoys:
 	}
 }
 
-func TestForeachModule_LoadErrors(t *testing.T) {
+func TestForeachConfigcrate_LoadErrors(t *testing.T) {
 	cases := []struct {
 		name      string
 		moduleVgo string
@@ -369,32 +369,32 @@ func TestForeachModule_LoadErrors(t *testing.T) {
 		{
 			name:      "missing var",
 			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    modules:\n      - name: m\n        foreach: nope\n",
+			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: nope\n",
 			want:      "foreach var \"nope\" not found",
 		},
 		{
 			name:      "map list without key",
 			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    modules:\n      - name: m\n        foreach: items\n    vars:\n      items:\n        - {a: 1}\n        - {a: 2}\n",
+			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n    vars:\n      items:\n        - {a: 1}\n        - {a: 2}\n",
 			want:      "add key:",
 		},
 		{
 			name:      "duplicate keys",
 			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    modules:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: dup}\n        - {id: dup}\n",
+			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: dup}\n        - {id: dup}\n",
 			want:      "same instance key",
 		},
 		{
 			name:      "unresolved .Each in resource",
 			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x/{{ .Each.missing }}\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    modules:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: a}\n",
+			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: a}\n",
 			want:      "doesn't provide",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := setupDir(t)
-			writeFile(t, filepath.Join(dir, "modules", "m.vgo"), tc.moduleVgo)
+			writeFile(t, filepath.Join(dir, "configcrates", "m.vgo"), tc.moduleVgo)
 			writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), tc.envoysVgo)
 			_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 			if err == nil {
@@ -407,9 +407,9 @@ func TestForeachModule_LoadErrors(t *testing.T) {
 	}
 }
 
-func TestForeachModule_BeforeFansOut(t *testing.T) {
+func TestForeachConfigcrate_BeforeFansOut(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 before: [app]
 resources:
@@ -418,7 +418,7 @@ resources:
     target_path: /etc/base
     content: ok
 `)
-	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
 name: app
 resources:
   - name: app-r
@@ -429,7 +429,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: h
-    modules:
+    configcrates:
       - base
       - name: app
         foreach: apps
@@ -445,7 +445,7 @@ envoys:
 		t.Fatal("no config")
 	}
 	// base before: [app] -> every app[*] instance gets depends_on: [base].
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		if strings.HasPrefix(m.Name, "app[") {
 			found := false
 			for _, d := range m.DependsOn {

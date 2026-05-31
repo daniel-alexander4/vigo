@@ -25,7 +25,7 @@
             Filter
             {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} active</span>{{end}}
         </button>
-        {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ModuleFilter .ComplianceFilter}}
+        {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}}
         <a href="/envoys/tree" class="btn btn--sm">Clear</a>
         {{end}}
     </div>

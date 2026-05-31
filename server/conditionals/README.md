@@ -102,7 +102,7 @@ is_cloud:
 
 ## Integration with Config System
 
-Conditional vars are separated from regular vars during module loading. They are stored on the `ModuleDefinition` and `NodeConfig` types and evaluated at check-in time when the node's traits are available.
+Conditional vars are separated from regular vars during module loading. They are stored on the `ConfigcrateDefinition` and `NodeConfig` types and evaluated at check-in time when the node's traits are available.
 
 ```yaml
 name: webserver

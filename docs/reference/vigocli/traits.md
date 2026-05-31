@@ -1,7 +1,7 @@
 
 # vigocli traits
 
-Search and explore the trait dot-paths available for use in templates (`.Traits.<key>`) and `when:` expressions. Useful when writing modules and you want to know what facts the agent exposes.
+Search and explore the trait dot-paths available for use in templates (`.Traits.<key>`) and `when:` expressions. Useful when writing configcrates and you want to know what facts the agent exposes.
 
 ## Subcommands
 
@@ -14,8 +14,8 @@ Run `vigocli traits --help` for current flags.
 ## Related
 
 - [Trait Collectors](../vigo/traits/_index.md) — per-collector schema reference
-- [When Expressions](../../reference/writing-modules.md) — how traits flow into condition evaluation
-- [Templates](../../reference/writing-modules.md) — how traits flow into `content:` rendering
+- [When Expressions](../../reference/writing-configcrates.md) — how traits flow into condition evaluation
+- [Templates](../../reference/writing-configcrates.md) — how traits flow into `content:` rendering
 
 ## Note on `vigo traits`
 

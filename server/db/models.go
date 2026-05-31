@@ -135,12 +135,12 @@ type CveCvssCache struct {
 }
 
 type EnvPromotion struct {
-	ID         string    `json:"id"`
-	ModuleName string    `json:"module_name"`
-	FromEnv    string    `json:"from_env"`
-	ToEnv      string    `json:"to_env"`
-	Diff       string    `json:"diff"`
-	PromotedAt time.Time `json:"promoted_at"`
+	ID              string    `json:"id"`
+	ConfigcrateName string    `json:"configcrate_name"`
+	FromEnv         string    `json:"from_env"`
+	ToEnv           string    `json:"to_env"`
+	Diff            string    `json:"diff"`
+	PromotedAt      time.Time `json:"promoted_at"`
 }
 
 type Envoy struct {
@@ -196,19 +196,19 @@ type PackageAudit struct {
 }
 
 type Plan struct {
-	ID        string    `json:"id"`
-	EnvoyID   string    `json:"envoy_id"`
-	CreatedAt time.Time `json:"created_at"`
-	Modules   string    `json:"modules"`
+	ID           string    `json:"id"`
+	EnvoyID      string    `json:"envoy_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	Configcrates string    `json:"configcrates"`
 }
 
 type PlanResult struct {
-	ID            string `json:"id"`
-	PlanID        string `json:"plan_id"`
-	ModuleName    string `json:"module_name"`
-	ResourceType  string `json:"resource_type"`
-	ResourceName  string `json:"resource_name"`
-	PlannedAction string `json:"planned_action"`
+	ID              string `json:"id"`
+	PlanID          string `json:"plan_id"`
+	ConfigcrateName string `json:"configcrate_name"`
+	ResourceType    string `json:"resource_type"`
+	ResourceName    string `json:"resource_name"`
+	PlannedAction   string `json:"planned_action"`
 }
 
 type PoolqBlockedTopic struct {
@@ -232,29 +232,29 @@ type RiskPostureHistory struct {
 }
 
 type Run struct {
-	ID           string       `json:"id"`
-	EnvoyID      string       `json:"envoy_id"`
-	StartedAt    time.Time    `json:"started_at"`
-	FinishedAt   sql.NullTime `json:"finished_at"`
-	Status       string       `json:"status"`
-	ModuleCount  int64        `json:"module_count"`
-	ChangedCount int64        `json:"changed_count"`
-	FailedCount  int64        `json:"failed_count"`
-	SkippedCount int64        `json:"skipped_count"`
-	Trigger      string       `json:"trigger"`
+	ID               string       `json:"id"`
+	EnvoyID          string       `json:"envoy_id"`
+	StartedAt        time.Time    `json:"started_at"`
+	FinishedAt       sql.NullTime `json:"finished_at"`
+	Status           string       `json:"status"`
+	ConfigcrateCount int64        `json:"configcrate_count"`
+	ChangedCount     int64        `json:"changed_count"`
+	FailedCount      int64        `json:"failed_count"`
+	SkippedCount     int64        `json:"skipped_count"`
+	Trigger          string       `json:"trigger"`
 }
 
 type RunResult struct {
-	ID           string         `json:"id"`
-	RunID        string         `json:"run_id"`
-	ModuleName   string         `json:"module_name"`
-	ResourceType string         `json:"resource_type"`
-	ResourceName string         `json:"resource_name"`
-	ActionTaken  string         `json:"action_taken"`
-	Changed      int64          `json:"changed"`
-	ErrorMessage sql.NullString `json:"error_message"`
-	DurationMs   int64          `json:"duration_ms"`
-	CreatedAt    time.Time      `json:"created_at"`
+	ID              string         `json:"id"`
+	RunID           string         `json:"run_id"`
+	ConfigcrateName string         `json:"configcrate_name"`
+	ResourceType    string         `json:"resource_type"`
+	ResourceName    string         `json:"resource_name"`
+	ActionTaken     string         `json:"action_taken"`
+	Changed         int64          `json:"changed"`
+	ErrorMessage    sql.NullString `json:"error_message"`
+	DurationMs      int64          `json:"duration_ms"`
+	CreatedAt       time.Time      `json:"created_at"`
 }
 
 type SandgorgonAsset struct {

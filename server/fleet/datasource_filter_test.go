@@ -69,7 +69,7 @@ func TestMatchesEnvoyFilter_Arch(t *testing.T) {
 }
 
 func TestMatchesEnvoyFilter_Module(t *testing.T) {
-	row := ui.EnvoyRow{Hostname: "x", Modules: []string{"nginx-hardened", "rsyslog"}}
+	row := ui.EnvoyRow{Hostname: "x", Configcrates: []string{"nginx-hardened", "rsyslog"}}
 	assert.True(t, matchesEnvoyFilter(row, "", "", "", nil, nil, nil, nil, nil, nil, splitCommaLower("nginx"), nil))
 	assert.True(t, matchesEnvoyFilter(row, "", "", "", nil, nil, nil, nil, nil, nil, splitCommaLower("apache,sys"), nil))
 	assert.False(t, matchesEnvoyFilter(row, "", "", "", nil, nil, nil, nil, nil, nil, splitCommaLower("apache"), nil))
@@ -152,13 +152,13 @@ func TestEnumerateFilterAxes_FreeTextBucketsAndSortsByCountDesc(t *testing.T) {
 
 func TestEnumerateFilterAxes_TopNCapPreservesSelected(t *testing.T) {
 	rows := []ui.EnvoyRow{
-		{Modules: []string{"a"}}, {Modules: []string{"a"}},
-		{Modules: []string{"b"}}, {Modules: []string{"b"}},
-		{Modules: []string{"c"}}, {Modules: []string{"d"}},
-		{Modules: []string{"e"}},
+		{Configcrates: []string{"a"}}, {Configcrates: []string{"a"}},
+		{Configcrates: []string{"b"}}, {Configcrates: []string{"b"}},
+		{Configcrates: []string{"c"}}, {Configcrates: []string{"d"}},
+		{Configcrates: []string{"e"}},
 	}
 	specs := []FilterAxisSpec{
-		{Key: "module", Label: "Module", Selected: "e", Extract: func(r ui.EnvoyRow) []string { return r.Modules }},
+		{Key: "module", Label: "Module", Selected: "e", Extract: func(r ui.EnvoyRow) []string { return r.Configcrates }},
 	}
 	axes := EnumerateFilterAxes(nil, rows, specs, 2) // top-2 by count
 	axis := axes[0]

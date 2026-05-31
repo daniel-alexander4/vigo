@@ -7,14 +7,14 @@
 
 use crate::checkin::backoff::Backoff;
 use crate::checkin::client::Client;
-use crate::checkin::modulecache::{merge_stubs, ModuleCache};
+use crate::checkin::configcratecache::{merge_stubs, ConfigcrateCache};
 use crate::checkin::stream;
 use crate::checkin::verify;
 use crate::customtraits;
 use crate::executors::{Executor, ResourceResult};
 use crate::proto::{
     agent_stream_message, delta_event, AgentStreamMessage, CheckInResponse, CustomTraitEntry,
-    DeltaEvent, HeartbeatDelta, ModuleResult, PolicyBundle, ProxiedDevice, RunCompleted,
+    DeltaEvent, HeartbeatDelta, ConfigcrateResult, PolicyBundle, ProxiedDevice, RunCompleted,
     StreamCapabilities,
 };
 use crate::runner::{self, cache::ResultCache, RunOptions};
@@ -133,7 +133,7 @@ pub struct RunResult {
 pub struct PolicyState {
     pub version: u64,
     pub accepted_bundle: Option<PolicyBundle>,
-    pub module_cache: ModuleCache,
+    pub module_cache: ConfigcrateCache,
     pub custom_traits: Vec<CustomTraitEntry>,
     /// When the current bundle was accepted (Unix seconds).
     pub accepted_at: u64,
@@ -144,7 +144,7 @@ impl PolicyState {
         Self {
             version: 0,
             accepted_bundle: None,
-            module_cache: ModuleCache::new(),
+            module_cache: ConfigcrateCache::new(),
             custom_traits: Vec::new(),
             accepted_at: 0,
         }
@@ -222,12 +222,12 @@ async fn wake_or_sleep(client: &mut Client, timeout: Duration) {
     }
 }
 
-/// Convert agent ResourceResults to protobuf ModuleResults.
-fn results_to_proto(results: &[ResourceResult]) -> Vec<ModuleResult> {
+/// Convert agent ResourceResults to protobuf ConfigcrateResults.
+fn results_to_proto(results: &[ResourceResult]) -> Vec<ConfigcrateResult> {
     results
         .iter()
-        .map(|r| ModuleResult {
-            module_name: r.module_name.clone(),
+        .map(|r| ConfigcrateResult {
+            configcrate_name: r.configcrate_name.clone(),
             resource_type: r.resource_type.clone(),
             resource_name: r.resource_name.clone(),
             action_taken: r.action.to_string(),
@@ -244,7 +244,7 @@ fn results_to_proto(results: &[ResourceResult]) -> Vec<ModuleResult> {
 /// Strip _secret_triggered from cached bundle to prevent re-firing on
 /// subsequent no-change cycles.
 fn strip_secret_triggers(bundle: &mut PolicyBundle) {
-    for m in &mut bundle.modules {
+    for m in &mut bundle.configcrates {
         if m.stub {
             continue;
         }
@@ -352,10 +352,10 @@ fn converge(
     };
 
     // Delta transfer: fill stub modules from cache.
-    bundle.modules = merge_stubs(bundle.modules, &policy_state.module_cache);
+    bundle.configcrates = merge_stubs(bundle.configcrates, &policy_state.module_cache);
 
     // Update module cache with fully resolved modules.
-    policy_state.module_cache.update(&bundle.modules);
+    policy_state.module_cache.update(&bundle.configcrates);
 
     // Evaluate the policy bundle with traits.
     let modules = match crate::policy::eval::eval_bundle(Some(&bundle), traits_val) {
@@ -734,7 +734,7 @@ fn update_state(
         // `converge`), one-shot secret triggers stripped. Keep these two
         // transforms in sync with `converge`'s `merge_stubs` + `strip_secret_triggers`.
         let mut resolved = wire.clone();
-        resolved.modules = merge_stubs(resolved.modules, &ps.module_cache);
+        resolved.configcrates = merge_stubs(resolved.configcrates, &ps.module_cache);
         strip_secret_triggers(&mut resolved);
         ps.accepted_bundle = Some(resolved);
         ps.accepted_at = SystemTime::now()
@@ -1436,11 +1436,11 @@ fn build_run_delta(results: &[ResourceResult], seq: i64, bundle_version: u64) ->
     let mut skipped_count: i32 = 0;
 
     // Filter to only changed/failed results (no-ops omitted).
-    let filtered: Vec<ModuleResult> = results
+    let filtered: Vec<ConfigcrateResult> = results
         .iter()
         .filter(|r| r.changed || r.error.is_some())
-        .map(|r| ModuleResult {
-            module_name: r.module_name.clone(),
+        .map(|r| ConfigcrateResult {
+            configcrate_name: r.configcrate_name.clone(),
             resource_type: r.resource_type.clone(),
             resource_name: r.resource_name.clone(),
             action_taken: r.action.to_string(),
@@ -2164,7 +2164,7 @@ async fn converge_proxied_devices(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proto::PolicyModule;
+    use crate::proto::PolicyConfigcrate;
 
     #[test]
     fn reenroll_required_only_on_notfound() {
@@ -2232,7 +2232,7 @@ mod tests {
     #[test]
     fn strip_secret_triggers_removes_key() {
         let mut bundle = PolicyBundle {
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "test".into(),
                 stub: false,
                 resources: vec![crate::proto::PolicyResource {
@@ -2253,10 +2253,10 @@ mod tests {
 
         strip_secret_triggers(&mut bundle);
 
-        assert!(!bundle.modules[0].resources[0]
+        assert!(!bundle.configcrates[0].resources[0]
             .attributes
             .contains_key("_secret_triggered"));
-        assert!(bundle.modules[0].resources[0]
+        assert!(bundle.configcrates[0].resources[0]
             .attributes
             .contains_key("command"));
     }
@@ -2265,7 +2265,7 @@ mod tests {
     fn results_to_proto_converts() {
         use crate::executors::Action;
         let results = vec![ResourceResult {
-            module_name: "nginx".into(),
+            configcrate_name: "nginx".into(),
             resource_type: "file".into(),
             resource_name: "/etc/nginx.conf".into(),
             action: Action::Updated,
@@ -2277,7 +2277,7 @@ mod tests {
 
         let proto = results_to_proto(&results);
         assert_eq!(proto.len(), 1);
-        assert_eq!(proto[0].module_name, "nginx");
+        assert_eq!(proto[0].configcrate_name, "nginx");
         assert_eq!(proto[0].action_taken, "updated");
         assert!(proto[0].changed);
         assert!(proto[0].error_message.is_empty());
@@ -2349,7 +2349,7 @@ mod tests {
         // cached policy ends up with zero resources.
         let mut ps = PolicyState::new();
         // converge() warms the cache with this cycle's resolved modules.
-        ps.module_cache.update(&[PolicyModule {
+        ps.module_cache.update(&[PolicyConfigcrate {
             name: "nginx".into(),
             content_hash: "h1".into(),
             resources: vec![crate::proto::PolicyResource {
@@ -2375,7 +2375,7 @@ mod tests {
             // The wire bundle as transmitted: nginx is a stub.
             policy_bundle: Some(PolicyBundle {
                 policy_version: 5,
-                modules: vec![PolicyModule {
+                configcrates: vec![PolicyConfigcrate {
                     name: "nginx".into(),
                     content_hash: "h1".into(),
                     stub: true,
@@ -2397,21 +2397,21 @@ mod tests {
         update_state(&mut ps, &rr, None);
 
         let accepted = ps.accepted_bundle.expect("bundle accepted");
-        assert_eq!(accepted.modules.len(), 1);
-        assert!(!accepted.modules[0].stub, "stub replaced with full module");
+        assert_eq!(accepted.configcrates.len(), 1);
+        assert!(!accepted.configcrates[0].stub, "stub replaced with full module");
         assert_eq!(
-            accepted.modules[0].resources.len(),
+            accepted.configcrates[0].resources.len(),
             1,
             "resources restored from the module cache"
         );
         assert!(
-            !accepted.modules[0].resources[0]
+            !accepted.configcrates[0].resources[0]
                 .attributes
                 .contains_key("_secret_triggered"),
             "one-shot secret trigger stripped before persisting"
         );
         // The wire bundle itself is left untouched (verify_bundle relies on it).
-        assert!(rr.policy_bundle.as_ref().unwrap().modules[0].stub);
+        assert!(rr.policy_bundle.as_ref().unwrap().configcrates[0].stub);
     }
 
     #[test]
@@ -2423,7 +2423,7 @@ mod tests {
             policy_version: 7,
             matched_pattern: "*.web".into(),
             environment: "staging".into(),
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "nginx".into(),
                 ..Default::default()
             }],
@@ -2442,7 +2442,7 @@ mod tests {
         let (ver, loaded) = store.policy.load(&rtxn).unwrap().unwrap();
         assert_eq!(ver, 7);
         assert_eq!(loaded.matched_pattern, "*.web");
-        assert_eq!(loaded.modules.len(), 1);
+        assert_eq!(loaded.configcrates.len(), 1);
 
         // Verify traits were persisted.
         let traits = store
@@ -2461,7 +2461,7 @@ mod tests {
         // Pre-populate LMDB with a bundle and traits.
         let bundle = PolicyBundle {
             policy_version: 5,
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "test_mod".into(),
                 ..Default::default()
             }],
@@ -2505,7 +2505,7 @@ mod tests {
         let bundle = PolicyBundle {
             policy_version: 3,
             max_age_seconds: 1, // 1 second max age
-            modules: vec![PolicyModule {
+            configcrates: vec![PolicyConfigcrate {
                 name: "test".into(),
                 ..Default::default()
             }],
@@ -2540,7 +2540,7 @@ mod tests {
         use crate::executors::Action;
 
         let results = vec![ResourceResult {
-            module_name: "nginx".into(),
+            configcrate_name: "nginx".into(),
             resource_type: "file".into(),
             resource_name: "/etc/nginx.conf".into(),
             action: Action::Updated,

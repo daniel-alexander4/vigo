@@ -799,6 +799,47 @@
         }
       }
     },
+    "v1ConfigcrateResult": {
+      "type": "object",
+      "properties": {
+        "configcrateName": {
+          "type": "string"
+        },
+        "resourceType": {
+          "type": "string"
+        },
+        "resourceName": {
+          "type": "string"
+        },
+        "actionTaken": {
+          "type": "string",
+          "title": "none, created, updated, deleted, blocked"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "errorMessage": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "previousContent": {
+          "type": "string",
+          "format": "byte",
+          "title": "file executor: content before overwrite (for snapshots)"
+        },
+        "contentHash": {
+          "type": "string",
+          "title": "file executor: SHA-256 of the new content"
+        },
+        "filePath": {
+          "type": "string",
+          "title": "file executor: absolute path of the managed file"
+        }
+      }
+    },
     "v1ConvergenceSnapshot": {
       "type": "object",
       "properties": {
@@ -1012,7 +1053,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1ModuleResult"
+            "$ref": "#/definitions/v1ConfigcrateResult"
           }
         }
       }
@@ -1113,47 +1154,6 @@
         }
       }
     },
-    "v1ModuleResult": {
-      "type": "object",
-      "properties": {
-        "moduleName": {
-          "type": "string"
-        },
-        "resourceType": {
-          "type": "string"
-        },
-        "resourceName": {
-          "type": "string"
-        },
-        "actionTaken": {
-          "type": "string",
-          "title": "none, created, updated, deleted, blocked"
-        },
-        "changed": {
-          "type": "boolean"
-        },
-        "errorMessage": {
-          "type": "string"
-        },
-        "durationMs": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "previousContent": {
-          "type": "string",
-          "format": "byte",
-          "title": "file executor: content before overwrite (for snapshots)"
-        },
-        "contentHash": {
-          "type": "string",
-          "title": "file executor: SHA-256 of the new content"
-        },
-        "filePath": {
-          "type": "string",
-          "title": "file executor: absolute path of the managed file"
-        }
-      }
-    },
     "v1PackageDrift": {
       "type": "object",
       "properties": {
@@ -1201,7 +1201,7 @@
     "v1PlannedAction": {
       "type": "object",
       "properties": {
-        "moduleName": {
+        "configcrateName": {
           "type": "string"
         },
         "resourceType": {
@@ -1254,7 +1254,7 @@
           "type": "string",
           "title": "running, success, failure, partial"
         },
-        "moduleCount": {
+        "configcrateCount": {
           "type": "integer",
           "format": "int32"
         },

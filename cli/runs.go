@@ -79,13 +79,13 @@ var runsShowCmd = &cobra.Command{
 				StartedAt    string `json:"startedAt"`
 				FinishedAt   string `json:"finishedAt"`
 				Status       string `json:"status"`
-				ModuleCount  int32  `json:"moduleCount"`
+				ConfigcrateCount  int32  `json:"moduleCount"`
 				ChangedCount int32  `json:"changedCount"`
 				FailedCount  int32  `json:"failedCount"`
 				SkippedCount int32  `json:"skippedCount"`
 			} `json:"run"`
 			Results []struct {
-				ModuleName   string `json:"moduleName"`
+				ConfigcrateName   string `json:"moduleName"`
 				ResourceType string `json:"resourceType"`
 				ResourceName string `json:"resourceName"`
 				ActionTaken  string `json:"actionTaken"`
@@ -104,20 +104,20 @@ var runsShowCmd = &cobra.Command{
 		fmt.Printf("Started:  %s\n", formatTimestamp(r.StartedAt))
 		fmt.Printf("Finished: %s\n", formatTimestamp(r.FinishedAt))
 		fmt.Printf("Status:   %s\n", colorStatus(r.Status))
-		fmt.Printf("Modules:  %d total, %s changed, %s failed, %s skipped\n",
-			r.ModuleCount, yellow(fmt.Sprintf("%d", r.ChangedCount)), red(fmt.Sprintf("%d", r.FailedCount)), dim(fmt.Sprintf("%d", r.SkippedCount)))
+		fmt.Printf("Configcrates:  %d total, %s changed, %s failed, %s skipped\n",
+			r.ConfigcrateCount, yellow(fmt.Sprintf("%d", r.ChangedCount)), red(fmt.Sprintf("%d", r.FailedCount)), dim(fmt.Sprintf("%d", r.SkippedCount)))
 
 		if len(resp.Results) > 0 {
 			fmt.Println()
 			w := newAlignedTable(os.Stdout)
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("MODULE"), header("TYPE"), header("RESOURCE"), header("ACTION"), header("CHANGED"), header("ERROR"))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("CONFIGCRATE"), header("TYPE"), header("RESOURCE"), header("ACTION"), header("CHANGED"), header("ERROR"))
 			for _, res := range resp.Results {
 				errStr := dim("-")
 				if res.ErrorMessage != "" {
 					errStr = red(res.ErrorMessage)
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%s\n",
-					res.ModuleName, dim(res.ResourceType), res.ResourceName,
+					res.ConfigcrateName, dim(res.ResourceType), res.ResourceName,
 					colorAction(res.ActionTaken), res.Changed, errStr)
 			}
 			w.Flush()
@@ -204,7 +204,7 @@ var runsDriftCmd = &cobra.Command{
 					Status    string `json:"status"`
 				} `json:"run"`
 				Results []struct {
-					ModuleName   string `json:"moduleName"`
+					ConfigcrateName   string `json:"moduleName"`
 					ResourceType string `json:"resourceType"`
 					ResourceName string `json:"resourceName"`
 					ActionTaken  string `json:"actionTaken"`
@@ -224,7 +224,7 @@ var runsDriftCmd = &cobra.Command{
 				envoyHadDrift = true
 				rows = append(rows, driftRow{
 					hostname:     t.hostname,
-					moduleName:   res.ModuleName,
+					moduleName:   res.ConfigcrateName,
 					resourceType: res.ResourceType,
 					resourceName: res.ResourceName,
 					actionTaken:  res.ActionTaken,
@@ -243,7 +243,7 @@ var runsDriftCmd = &cobra.Command{
 
 		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			header("HOSTNAME"), header("MODULE"), header("TYPE"),
+			header("HOSTNAME"), header("CONFIGCRATE"), header("TYPE"),
 			header("RESOURCE"), header("ACTION"), header("ERROR"))
 		for _, r := range rows {
 			errStr := dim("-")

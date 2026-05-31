@@ -66,7 +66,7 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 	observedCycle := ts.ObservedCycle()
 	lastSeenLabel, offline := ui.EnvoyFreshness(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
 	// ADR-032 slice 2 axes sourced from EnvoyState — Tags is already a
-	// slice; OS/Arch live in the flat-trait map. Roles/Modules/
+	// slice; OS/Arch live in the flat-trait map. Roles/Configcrates/
 	// Environment/ComplianceFrameworks need a ConfigStore lookup and
 	// get stamped in envoyRows (one pass for the whole snapshot).
 	var tags []string
@@ -87,7 +87,7 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 		Drift:               ts.Drift,
 		DriftLabel:          ts.Drift.String(),
 		FailurePct:          failurePct,
-		ModuleCount:         ts.LastRunModuleCount,
+		ConfigcrateCount:         ts.LastRunModuleCount,
 		FailedCount:         ts.LastRunFailedCount,
 		ChangedCount:        ts.LastRunChangedCount,
 		ObserveOnly:         ts.ObserveOnly,
@@ -104,7 +104,7 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 // dashboard worst-list.
 //
 // After the per-row build, enriches each row with ConfigStore-derived
-// ADR-032 slice-2 axes (Environment, Roles, Modules, ComplianceFrameworks)
+// ADR-032 slice-2 axes (Environment, Roles, Configcrates, ComplianceFrameworks)
 // in one pass so the row is the canonical SoT for every envoys-view chip.
 // Uses ConfigStore.Match (shared, read-only) rather than MatchClone to
 // keep allocation churn flat at 10k-envoy scale.
@@ -124,12 +124,12 @@ func (ds *DataSource) envoyRows(baseInterval, offlineThreshold time.Duration) []
 			if len(cfg.Roles) > 0 {
 				rows[i].Roles = append(rows[i].Roles, cfg.Roles...)
 			}
-			if len(cfg.Modules) > 0 {
-				moduleNames := make([]string, 0, len(cfg.Modules))
-				for _, m := range cfg.Modules {
+			if len(cfg.Configcrates) > 0 {
+				moduleNames := make([]string, 0, len(cfg.Configcrates))
+				for _, m := range cfg.Configcrates {
 					moduleNames = append(moduleNames, m.Name)
 				}
-				rows[i].Modules = moduleNames
+				rows[i].Configcrates = moduleNames
 			}
 		}
 		rows[i].ComplianceFrameworks = ds.configStore.EnvoyFrameworks(rows[i].Hostname)
@@ -179,7 +179,7 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 			FailurePct:   e.FailurePct,
 			ChangedCount: e.ChangedCount,
 			FailedCount:  e.FailedCount,
-			ModuleCount:  e.ModuleCount,
+			ConfigcrateCount:  e.ConfigcrateCount,
 		}
 		// Agent Health column: route through the same fleetpressure SoT
 		// the /envoys table and /agent-health page consume. ok=false
@@ -324,7 +324,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 	var observing int
 	for _, e := range all {
 		fleetFailed += e.FailedCount
-		fleetTotal += e.ModuleCount
+		fleetTotal += e.ConfigcrateCount
 		if e.ObserveOnly {
 			observing++
 		}
@@ -358,7 +358,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 		RoleFilter:       roleFilter,
 		OSFilter:         osFilter,
 		ArchFilter:       archFilter,
-		ModuleFilter:     moduleFilter,
+		ConfigcrateFilter:     moduleFilter,
 		ComplianceFilter: complianceFilter,
 		ConvFilter:       convFilter,
 		DriftFilter:    driftFilter,
@@ -382,8 +382,8 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 		CountOffline:   counts.Offline,
 		CountObserving: observing,
 
-		FleetFailedModules: fleetFailed,
-		FleetTotalModules:  fleetTotal,
+		FleetFailedConfigcrates: fleetFailed,
+		FleetTotalConfigcrates:  fleetTotal,
 		FilterAxes:         filterAxes,
 		ActiveFilterCount:  activeFilterCount,
 		BasePath:           "/envoys",
@@ -392,8 +392,8 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 	if data.TotalEnvoys > 0 {
 		data.DriftRate = float64(data.CountDiverged) / float64(data.TotalEnvoys) * 100
 	}
-	if data.FleetTotalModules > 0 {
-		data.ModuleHealthPct = float64(data.FleetFailedModules) / float64(data.FleetTotalModules) * 100
+	if data.FleetTotalConfigcrates > 0 {
+		data.ConfigcrateHealthPct = float64(data.FleetFailedConfigcrates) / float64(data.FleetTotalConfigcrates) * 100
 	}
 	data.OfflineThresholdLabel = ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold))
 	return data
@@ -554,7 +554,7 @@ func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observ
 		{Key: "role", Label: "Role", Selected: roleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Roles }},
 		{Key: "os", Label: "OS", Selected: osFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.OS) }},
 		{Key: "arch", Label: "Arch", Selected: archFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.Arch) }},
-		{Key: "module", Label: "Module", Selected: moduleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Modules }},
+		{Key: "module", Label: "Module", Selected: moduleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Configcrates }},
 		{Key: "compliance", Label: "Compliance", Selected: complianceFilter, Extract: func(r ui.EnvoyRow) []string { return r.ComplianceFrameworks }},
 	}
 
@@ -816,7 +816,7 @@ func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter stri
 	if !anySubstringMatch(strings.ToLower(e.Arch), archLower) {
 		return false
 	}
-	if !anySubstringMatchInSlice(e.Modules, moduleLower) {
+	if !anySubstringMatchInSlice(e.Configcrates, moduleLower) {
 		return false
 	}
 	if !anySubstringMatchInSlice(e.ComplianceFrameworks, complianceLower) {
@@ -928,7 +928,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 		var recent []convergence.RunInfo
 		runs, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{EnvoyID: envoyID, Limit: 1})
 		if err == nil && len(runs) > 0 {
-			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount, FailedCount: runs[0].FailedCount, ModuleCount: runs[0].ModuleCount}}
+			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount, FailedCount: runs[0].FailedCount, ConfigcrateCount: runs[0].ConfigcrateCount}}
 		}
 		convStatus := convergence.ComputeConvergence(recent)
 		ts = &EnvoyState{
@@ -947,7 +947,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 		if len(runs) > 0 {
 			ts.LastRunID = runs[0].ID
 			ts.LastRunAt = runs[0].StartedAt
-			ts.LastRunModuleCount = runs[0].ModuleCount
+			ts.LastRunModuleCount = runs[0].ConfigcrateCount
 			ts.LastRunChangedCount = runs[0].ChangedCount
 			ts.LastRunFailedCount = runs[0].FailedCount
 		}
@@ -996,7 +996,7 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 			errMsg = res.ErrorMessage.String
 		}
 		resultsByRun[res.RunID] = append(resultsByRun[res.RunID], ui.RunResultRow{
-			ModuleName:   res.ModuleName,
+			ConfigcrateName:   res.ConfigcrateName,
 			ResourceType: res.ResourceType,
 			ResourceName: res.ResourceName,
 			ActionTaken:  res.ActionTaken,
@@ -1015,14 +1015,14 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 				Hostname:     hostname,
 				StartedAt:    r.StartedAt,
 				Status:       r.Status,
-				ModuleCount:  r.ModuleCount,
+				ConfigcrateCount:  r.ConfigcrateCount,
 				ChangedCount: r.ChangedCount,
 				FailedCount:  r.FailedCount,
 				Outcome: convergence.ComputeStatus(convergence.RunInfo{
 					Status:       r.Status,
 					ChangedCount: r.ChangedCount,
 					FailedCount:  r.FailedCount,
-					ModuleCount:  r.ModuleCount,
+					ConfigcrateCount:  r.ConfigcrateCount,
 				}).String(),
 				EnvoyDriftLabel: driftLabel,
 			},
@@ -1069,15 +1069,15 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 			Hostname:     hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
-			ModuleCount:  r.ModuleCount,
+			ConfigcrateCount:  r.ConfigcrateCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
-			FailurePct:   convergence.FailurePct(r.FailedCount, r.ModuleCount),
+			FailurePct:   convergence.FailurePct(r.FailedCount, r.ConfigcrateCount),
 			Outcome: convergence.ComputeStatus(convergence.RunInfo{
 				Status:       r.Status,
 				ChangedCount: r.ChangedCount,
 				FailedCount:  r.FailedCount,
-				ModuleCount:  r.ModuleCount,
+				ConfigcrateCount:  r.ConfigcrateCount,
 			}).String(),
 			EnvoyDriftLabel: driftLabel,
 		})
@@ -1125,7 +1125,7 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 			errMsg = res.ErrorMessage.String
 		}
 		results = append(results, ui.RunResultRow{
-			ModuleName:   res.ModuleName,
+			ConfigcrateName:   res.ConfigcrateName,
 			ResourceType: res.ResourceType,
 			ResourceName: res.ResourceName,
 			ActionTaken:  res.ActionTaken,
@@ -1145,7 +1145,7 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 			StartedAt:       r.StartedAt,
 			Status:          r.Status,
 			Trigger:         r.Trigger,
-			ModuleCount:     r.ModuleCount,
+			ConfigcrateCount:     r.ConfigcrateCount,
 			ChangedCount:    r.ChangedCount,
 			FailedCount:     r.FailedCount,
 			EnvoyDriftLabel: driftLabel,
@@ -1200,7 +1200,7 @@ func (ds *DataSource) PlanDetailData(planID string) (ui.PlanDetailPageData, erro
 	for _, r := range dbResults {
 		color := planActionColor(r.PlannedAction)
 		results = append(results, ui.PlanResultRow{
-			ModuleName:    r.ModuleName,
+			ConfigcrateName:    r.ConfigcrateName,
 			ResourceType:  r.ResourceType,
 			ResourceName:  r.ResourceName,
 			PlannedAction: r.PlannedAction,

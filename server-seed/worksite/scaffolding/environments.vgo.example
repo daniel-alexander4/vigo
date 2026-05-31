@@ -6,19 +6,19 @@
 
 env:
   production:
-    modules: [hardening, audit-logging]
+    configcrates: [hardening, audit-logging]
     vars:
       log_level: "warn"
       backup_schedule: "0 */4 * * *"
 
   staging:
-    modules: [debug-tools]
-    exclude_modules: [hardening]
+    configcrates: [debug-tools]
+    exclude_configcrates: [hardening]
     vars:
       log_level: "debug"
 
   dev:
-    modules: [debug-tools, mock-services]
-    exclude_modules: [hardening, audit-logging]
+    configcrates: [debug-tools, mock-services]
+    exclude_configcrates: [hardening, audit-logging]
     vars:
       log_level: "debug"

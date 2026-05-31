@@ -25,11 +25,11 @@ func sanitizeYAML(data []byte) []byte {
 	return bytes.Join(lines, []byte("\n"))
 }
 
-// ParseModuleFile parses raw YAML bytes into a ModuleDefinition, using the
+// ParseModuleFile parses raw YAML bytes into a ConfigcrateDefinition, using the
 // same tolerant node-based parsing as the config loader. This handles cases
 // where resources have duplicate YAML keys (e.g., "name" as both resource
 // identifier and type-specific attribute) by manually walking the YAML nodes.
-func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
+func ParseModuleFile(data []byte) (*ConfigcrateDefinition, error) {
 	data = sanitizeYAML(data)
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
@@ -45,7 +45,7 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 		return nil, fmt.Errorf("expected mapping at root, got %v", root.Kind)
 	}
 
-	var def ModuleDefinition
+	var def ConfigcrateDefinition
 	for i := 0; i < len(root.Content)-1; i += 2 {
 		key := root.Content[i].Value
 		val := root.Content[i+1]
@@ -81,7 +81,7 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 		case "compliance":
 			// 0.66.57+ shape: { provides: [...], bundle: [...] }.
 			// Pre-0.66.48 framework→control lists decode as empty;
-			// modlint's rule_module_compliance_key_retired is the
+			// modlint's rule_configcrate_compliance_key_retired is the
 			// gate that errors on the old shape.
 			if err := val.Decode(&def.Compliance); err != nil {
 				return nil, fmt.Errorf("decoding compliance: %w", err)

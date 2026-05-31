@@ -385,8 +385,8 @@ func TestCheckInSuccess(t *testing.T) {
 		t.Fatalf("CheckIn failed: %v", err)
 	}
 	// No config set up, so modules should be empty.
-	if len(resp.GetModules()) != 0 {
-		t.Errorf("expected 0 modules for unconfigured client, got %d", len(resp.GetModules()))
+	if len(resp.GetConfigcrates()) != 0 {
+		t.Errorf("expected 0 modules for unconfigured client, got %d", len(resp.GetConfigcrates()))
 	}
 }
 

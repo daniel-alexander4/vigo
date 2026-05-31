@@ -1309,7 +1309,7 @@ func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount, 
 		Status:       runStatus,
 		ChangedCount: changedCount,
 		FailedCount:  failedCount,
-		ModuleCount:  moduleCount,
+		ConfigcrateCount:  moduleCount,
 	})
 	for i := 0; i < len(ts.RecentRuns) && len(newRuns) < MaxRecentRuns; i++ {
 		newRuns = append(newRuns, ts.RecentRuns[i])

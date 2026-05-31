@@ -40,10 +40,10 @@ func (q *Queries) ListEnvoysWithLatestRun(ctx context.Context) ([]EnvoyWithLates
 SELECT n.id, n.hostname, n.ip_address, n.pubkey_pem, n.enrolled_at,
        n.last_seen, n.revoked, n.revoked_at, n.force_push, n.pending_rotated_secrets,
        n.maintenance_until,
-       lr.id, lr.status, lr.changed_count, lr.failed_count, lr.module_count
+       lr.id, lr.status, lr.changed_count, lr.failed_count, lr.configcrate_count
 FROM envoys n
 LEFT JOIN (
-  SELECT id, envoy_id, status, changed_count, failed_count, module_count,
+  SELECT id, envoy_id, status, changed_count, failed_count, configcrate_count,
          ROW_NUMBER() OVER (PARTITION BY envoy_id ORDER BY started_at DESC) AS rn
   FROM runs
 ) lr ON lr.envoy_id = n.id AND lr.rn = 1

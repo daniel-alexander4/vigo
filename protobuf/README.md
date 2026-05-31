@@ -68,7 +68,7 @@ Admin-facing service with grpc-gateway REST annotations.
 - `CheckInRequest` -- includes `traits_json` (inline traits), `policy_version` (caching), `cached_module_hashes` (delta transfer)
 - `CheckInResponse` -- includes `PolicyBundle` (raw policy for agent evaluation), `policy_version`, `no_change` flag
 - `PolicyBundle` -- vars_json, conditional_vars, modules with content hashes
-- `PolicyModule` -- `stub` flag enables delta transfer (agent uses cached version)
+- `PolicyConfigcrate` -- `stub` flag enables delta transfer (agent uses cached version)
 
 ### Conditional Vars
 

@@ -8,7 +8,7 @@ import (
 )
 
 func TestMerkleRootDeterministic(t *testing.T) {
-	modules := []ModuleConfig{
+	modules := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 		{Name: "b", ContentHash: "bbb"},
 	}
@@ -33,12 +33,12 @@ func TestMerkleRootChangesOnModuleChange(t *testing.T) {
 	vars := map[string]any{"k": "v"}
 	varOrder := []string{"k"}
 
-	before := MerkleRoot([]ModuleConfig{
+	before := MerkleRoot([]Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 		{Name: "b", ContentHash: "bbb"},
 	}, vars, varOrder)
 
-	after := MerkleRoot([]ModuleConfig{
+	after := MerkleRoot([]Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 		{Name: "b", ContentHash: "ccc"}, // changed
 	}, vars, varOrder)
@@ -49,7 +49,7 @@ func TestMerkleRootChangesOnModuleChange(t *testing.T) {
 }
 
 func TestMerkleRootStableWhenUnchanged(t *testing.T) {
-	modules := []ModuleConfig{
+	modules := []Configcrate{
 		{Name: "x", ContentHash: "xxx"},
 		{Name: "y", ContentHash: "yyy"},
 		{Name: "z", ContentHash: "zzz"},
@@ -65,7 +65,7 @@ func TestMerkleRootStableWhenUnchanged(t *testing.T) {
 }
 
 func TestMerkleRootChangesOnVarsChange(t *testing.T) {
-	modules := []ModuleConfig{
+	modules := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 	}
 
@@ -78,7 +78,7 @@ func TestMerkleRootChangesOnVarsChange(t *testing.T) {
 }
 
 func TestMerkleRootVarsOnlyDiffers(t *testing.T) {
-	modules := []ModuleConfig{
+	modules := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 	}
 	varOrder := []string{"k"}
@@ -102,7 +102,7 @@ func TestMerkleRootEmptyInputs(t *testing.T) {
 }
 
 func TestMerkleRootSingleModule(t *testing.T) {
-	root := MerkleRoot([]ModuleConfig{
+	root := MerkleRoot([]Configcrate{
 		{Name: "only", ContentHash: "abc123"},
 	}, nil, nil)
 	if root == "" || len(root) != 64 {
@@ -112,7 +112,7 @@ func TestMerkleRootSingleModule(t *testing.T) {
 
 func TestMerkleRootOddModuleCount(t *testing.T) {
 	// Odd number of modules — the tree must handle the unpaired node.
-	modules := []ModuleConfig{
+	modules := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 		{Name: "b", ContentHash: "bbb"},
 		{Name: "c", ContentHash: "ccc"},
@@ -127,12 +127,12 @@ func TestMerkleRootModuleOrderMatters(t *testing.T) {
 	vars := map[string]any{"k": "v"}
 	varOrder := []string{"k"}
 
-	root1 := MerkleRoot([]ModuleConfig{
+	root1 := MerkleRoot([]Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 		{Name: "b", ContentHash: "bbb"},
 	}, vars, varOrder)
 
-	root2 := MerkleRoot([]ModuleConfig{
+	root2 := MerkleRoot([]Configcrate{
 		{Name: "b", ContentHash: "bbb"},
 		{Name: "a", ContentHash: "aaa"},
 	}, vars, varOrder)

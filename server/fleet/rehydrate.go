@@ -63,7 +63,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 				Status:       r.Status,
 				ChangedCount: r.ChangedCount,
 				FailedCount:  r.FailedCount,
-				ModuleCount:  r.ModuleCount,
+				ConfigcrateCount:  r.ConfigcrateCount,
 			})
 		}
 		runsByEnvoy[fr.ID] = runs
@@ -99,7 +99,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 				Status:       twr.LatestRunStatus.String,
 				ChangedCount: twr.LatestRunChangedCount.Int64,
 				FailedCount:  twr.LatestRunFailedCount.Int64,
-				ModuleCount:  twr.LatestRunModuleCount.Int64,
+				ConfigcrateCount:  twr.LatestRunModuleCount.Int64,
 			}}
 		}
 		convStatus := convergence.ComputeConvergence(recent)
@@ -145,7 +145,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		var lastFailed, lastModules int64
 		if len(recent) > 0 {
 			lastFailed = recent[0].FailedCount
-			lastModules = recent[0].ModuleCount
+			lastModules = recent[0].ConfigcrateCount
 		}
 
 		ts := EnvoyState{

@@ -11,7 +11,7 @@ import "fmt"
 // `compliance:` parent block.
 //
 // The 0.66.48 fold-down retired the per-module framework→control list
-// shape (handled by rule_module_compliance_key_retired) but parked
+// shape (handled by rule_configcrate_compliance_key_retired) but parked
 // the replacement keys at top level, which stripped the at-a-glance
 // "this is a compliance attribution claim" signal from module YAML.
 // 0.66.57 puts them back under `compliance:` to restore that signal

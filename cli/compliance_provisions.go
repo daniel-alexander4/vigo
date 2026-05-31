@@ -45,7 +45,7 @@ func runComplianceProvisions(cmd *cobra.Command, _ []string) error {
 	show, _ := cmd.Flags().GetString("show")
 
 	if show != "" {
-		p, ok := compliance.ModuleProvisions[show]
+		p, ok := compliance.ConfigcrateProvisions[show]
 		if !ok {
 			return fmt.Errorf("unknown provision %q (run `vigocli compliance provisions` to list)", show)
 		}
@@ -70,7 +70,7 @@ func runComplianceProvisions(cmd *cobra.Command, _ []string) error {
 
 	shown := 0
 	for _, id := range ids {
-		p := compliance.ModuleProvisions[id]
+		p := compliance.ConfigcrateProvisions[id]
 
 		if framework != "" {
 			if _, ok := p.Frameworks[framework]; !ok {

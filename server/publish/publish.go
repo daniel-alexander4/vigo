@@ -121,7 +121,7 @@ type FileError struct {
 }
 
 type Result struct {
-	Modules     int
+	Configcrates     int
 	Roles       int
 	Entries     int
 	Files       int      // total files synced (0 for validate-only)
@@ -225,7 +225,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// linted bytes WITHOUT writing to stockpile. Paths are
 	// stockpile-relative now (e.g., "modules/nginx.vgo").
 	candidateLintable := append(
-		filterBySubdir(candidateChanged, "modules"),
+		filterBySubdir(candidateChanged, "configcrates"),
 		filterUsercrates(candidateChanged)...,
 	)
 	candidateLintable = append(candidateLintable, filterScaffoldingFiles(candidateChanged)...)
@@ -277,7 +277,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	if reloadErr := store.LastReloadError(); reloadErr != nil {
 		var ie *config.IdempotencyErrors
 		if errors.As(reloadErr, &ie) {
-			for _, m := range ie.Modules {
+			for _, m := range ie.Configcrates {
 				fe := FileError{Path: rewriteStagingPath(m.Path, stagingDir, opts.StockpileDir)}
 				for _, f := range m.Findings {
 					fe.Messages = append(fe.Messages, fmt.Sprintf("%s (%s): %s", f.ResourceName, f.ResourceType, f.Message))
@@ -338,7 +338,7 @@ func ValidateSource(opts Options) (*Result, error) {
 
 	stats := store.Stats()
 	return &Result{
-		Modules:          stats.Modules,
+		Configcrates:          stats.Configcrates,
 		Roles:            len(store.ListRoleNames()),
 		Entries:          stats.Entries,
 		AllFiles:         allFiles,
@@ -1001,7 +1001,7 @@ func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
 
 	stats := store.Stats()
 	return &Result{
-		Modules:  stats.Modules,
+		Configcrates:  stats.Configcrates,
 		Roles:    len(store.ListRoleNames()),
 		Entries:  stats.Entries,
 		Files:    1,
@@ -1186,7 +1186,7 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 		}
 
 		// Dispatch to the right modlint entry point by filename.
-		// Modules and usercrates share the same entry point with
+		// Configcrates and usercrates share the same entry point with
 		// IsUsercrate gating one rule; the four scaffolding file
 		// types each have their own parser + rule set.
 		opts := modlint.Options{IsUsercrate: isUsercratePath(rel)}
@@ -1229,7 +1229,7 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 // fleetFindings runs the fleet-level cross-module checks and returns
 // any findings — the caller logs them; they never block publish.
 //
-// Modules and usercrates that no carrier can route to a real envoy
+// Configcrates and usercrates that no carrier can route to a real envoy
 // are dropped via the unreachable set (built from ConfigStore.Unused,
 // the same reachability the .live/ prune uses). A collision among
 // files none of which can reach an envoy can't physically happen, so

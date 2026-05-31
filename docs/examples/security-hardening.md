@@ -1,11 +1,11 @@
 
 # Security Hardening
 
-This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo configuration using multiple modules with `depends_on` ordering.
+This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo configuration using multiple configcrates with `depends_on` ordering.
 
-## Firewall Module
+## Firewall Configcrate
 
-`stockpile/modules/firewall.vgo`:
+`stockpile/configcrates/firewall.vgo`:
 
 ```yaml
 name: firewall
@@ -57,7 +57,7 @@ resources:
     depends_on: [ufw-enable]
 ```
 
-Override `extra_allow` in `common.vgo` to open additional ports without editing the module:
+Override `extra_allow` in `common.vgo` to open additional ports without editing the configcrate:
 
 
 ```yaml
@@ -74,9 +74,9 @@ vars:
       comment: HTTPS
 ```
 
-## SSH Hardening Module
+## SSH Hardening Configcrate
 
-`stockpile/modules/ssh-hardening.vgo`:
+`stockpile/configcrates/ssh-hardening.vgo`:
 
 ```yaml
 name: ssh-hardening
@@ -113,9 +113,9 @@ resources:
     enabled: true
 ```
 
-## Fail2ban Module
+## Fail2ban Configcrate
 
-`stockpile/modules/fail2ban.vgo`:
+`stockpile/configcrates/fail2ban.vgo`:
 
 ```yaml
 name: fail2ban
@@ -155,9 +155,9 @@ resources:
     enabled: true
 ```
 
-## Sudo Module
+## Sudo Configcrate
 
-`stockpile/modules/sudo-config.vgo`:
+`stockpile/configcrates/sudo-config.vgo`:
 
 ```yaml
 name: sudo-config
@@ -189,7 +189,7 @@ resources:
 
 ```yaml
 name: hardened
-modules:
+configcrates:
   - firewall
   - ssh-hardening
   - fail2ban

@@ -71,6 +71,30 @@ TOKENS=(
   '\bswarmreg\b'
   '\bSwarmreg\b'
   '\bSWARMREG\b'
+  # --- 0.71.0 module -> configcrate rename (the reusable resource-set
+  #     config-kind; usercrate/hostcrate keep their names; kernel_module
+  #     is the unrelated Linux kernel-module executor/trait, NOT retired).
+  #     Distinctive identifiers only — the lowercase `modules:` /
+  #     `exclude_modules:` YAML keys and `module_name`/`module_count` DB
+  #     columns are guarded at runtime (loader hard-error + the 000016
+  #     migration) and legitimately appear in those messages, so they are
+  #     intentionally not static-checked here.
+  '\bModuleConfig\b'
+  '\bModuleDefinition\b'
+  '\bModuleKind\b'
+  '\bModuleRef\b'
+  '\bPolicyModule\b'
+  '\bModuleResult\b'
+  '\bModuleCache\b'
+  '\bModuleActions\b'
+  '\bModuleComplianceFiles\b'
+  '\bModuleProvisions\b'
+  '\bModuleBundles\b'
+  '\bModuleSources\b'
+  '\bModuleHealthPct\b'
+  '\bModuleFilter\b'
+  '\bTopFailedModule\b'
+  '\bvigo_module_actions\b'
 )
 
 # Legacy paths. These would silently break runtime because the new

@@ -550,7 +550,7 @@ func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, s
 	coveredByModules := make(map[string][]string)
 	if coverage != nil {
 		for _, cc := range coverage.CoveredControls {
-			coveredByModules[cc.ControlID] = cc.Modules
+			coveredByModules[cc.ControlID] = cc.Configcrates
 		}
 	}
 
@@ -565,7 +565,7 @@ func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, s
 		switch {
 		case len(coveredByModules[f.ControlID]) > 0:
 			row.Status = "covered"
-			row.Modules = coveredByModules[f.ControlID]
+			row.Configcrates = coveredByModules[f.ControlID]
 		case f.Status == "satisfied":
 			// Reached only via Connwaer trait-driven escalation. Framework
 			// builders ship every catalog entry as not_satisfied; only a
@@ -813,7 +813,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 			mods := make(map[string]bool)
 			if coverage != nil {
 				for _, cc := range coverage.CoveredControls {
-					for _, m := range cc.Modules {
+					for _, m := range cc.Configcrates {
 						mods[m] = true
 					}
 				}
@@ -4245,7 +4245,7 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditS
 	if summary.Diverged > 0 {
 		issues = append(issues, ExecutiveIssue{
 			Severity:    "warning",
-			Description: fmt.Sprintf("%d node(s) are experiencing persistent configuration drift. Modules keep applying changes across many consecutive runs, indicating an external process may be conflicting or a module may be non-idempotent.", summary.Diverged),
+			Description: fmt.Sprintf("%d node(s) are experiencing persistent configuration drift. Configcrates keep applying changes across many consecutive runs, indicating an external process may be conflicting or a module may be non-idempotent.", summary.Diverged),
 		})
 	}
 

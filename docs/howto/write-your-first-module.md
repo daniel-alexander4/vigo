@@ -1,20 +1,20 @@
 
-# Write your first module
+# Write your first configcrate
 
-You'll finish this page with a working nginx module published to your fleet — nginx installed, a config file rendered with traits, and the service started — applied idempotently on every envoy in scope. The same shape generalizes to every module you'll write afterward: package, file, service, dependency chain.
+You'll finish this page with a working nginx configcrate published to your fleet — nginx installed, a config file rendered with traits, and the service started — applied idempotently on every envoy in scope. The same shape generalizes to every configcrate you'll write afterward: package, file, service, dependency chain.
 
-**When you'd use this:** every operator writing their first Vigo module. The example is nginx because it exercises the five most common resource types in one go (`package`, `file`, `service`, `directory`, `exec`); swap the package and config and you have a template for postgres, redis, prometheus, anything.
+**When you'd use this:** every operator writing their first Vigo configcrate. The example is nginx because it exercises the five most common resource types in one go (`package`, `file`, `service`, `directory`, `exec`); swap the package and config and you have a template for postgres, redis, prometheus, anything.
 
-**When you'd skip this:** you've already shipped modules for a different service; jump straight to the [module-writing reference](../reference/writing-modules.md).
+**When you'd skip this:** you've already shipped configcrates for a different service; jump straight to the [configcrate-writing reference](../reference/writing-configcrates.md).
 
-This walkthrough builds a complete nginx module with package installation, config file management, and service control — demonstrating the core patterns you'll use in every Vigo module.
+This walkthrough builds a complete nginx configcrate with package installation, config file management, and service control — demonstrating the core patterns you'll use in every Vigo configcrate.
 
-## Module Structure
+## Configcrate Structure
 
-A module is a YAML file with a `.vgo` extension in `stockpile/modules/`. It contains:
+A configcrate is a YAML file with a `.vgo` extension in `stockpile/configcrates/`. It contains:
 
 ```yaml
-name: module-name
+name: configcrate-name
 vars:
   key: default_value
 resources:
@@ -23,9 +23,9 @@ resources:
     # type-specific attributes
 ```
 
-## Step 1: Create the Module
+## Step 1: Create the Configcrate
 
-Create `stockpile/modules/nginx.vgo`:
+Create `stockpile/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -72,7 +72,7 @@ resources:
 
 ## Step 2: Understand the Resource Chain
 
-This module demonstrates three key patterns:
+This configcrate demonstrates three key patterns:
 
 **depends_on** — Ordering guarantee. `nginx-config` won't run until `nginx-package` succeeds. `nginx-service` also waits for `nginx-package`.
 
@@ -96,24 +96,24 @@ mkdir -p stockpile/web
 # stockpile/web/web.vgo
 envoys:
   - match: "web*.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
     vars:
       nginx_port: 8080
       server_name: "web.example.com"
 ```
 
-Node-level `vars` override the module's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
+Node-level `vars` override the configcrate's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../reference/writing-modules.md#directory-inheritance).
+**Tip:** If you have configcrates that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../reference/writing-configcrates.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
-For multiple modules, group them into a role. Create `stockpile/roles.vgo`:
+For multiple configcrates, group them into a role. Create `stockpile/roles.vgo`:
 
 ```yaml
 roles:
   - name: webserver
-    modules:
+    configcrates:
       - nginx
       - logrotate-nginx
       - monitoring-node-exporter
@@ -184,13 +184,13 @@ Publish the config to make it active:
 vigocli config publish
 ```
 
-The publish command runs your module through the **module linter**, which:
+The publish command runs your configcrate through the **configcrate linter**, which:
 - Fixes common YAML issues (tabs, trailing whitespace, unquoted booleans)
 - Normalizes key ordering and indentation
 - Validates required fields, cross-references, and idempotency
 - Adds `#~` auto-comments describing each resource
 
-After publishing, your module file will have `#~` comments like:
+After publishing, your configcrate file will have `#~` comments like:
 
 
 ```yaml
@@ -225,15 +225,15 @@ vigocli envoys show web1.example.com
 
 ## What's Next
 
-- [Config Format](../reference/writing-modules.md) — Full reference for modules, roles, vars, environments.vgo
-- [Resource DAG](../reference/writing-modules.md) — depends_on, notify, subscribes in depth
-- [When Expressions](../reference/writing-modules.md) — Conditional logic reference
-- [Templates](../reference/writing-modules.md) — Go template syntax for content: attributes
+- [Config Format](../reference/writing-configcrates.md) — Full reference for configcrates, roles, vars, environments.vgo
+- [Resource DAG](../reference/writing-configcrates.md) — depends_on, notify, subscribes in depth
+- [When Expressions](../reference/writing-configcrates.md) — Conditional logic reference
+- [Templates](../reference/writing-configcrates.md) — Go template syntax for content: attributes
 - [File Executor: stream_edit](../reference/vigo/resources/file.md#stream-edit) — Pipe file content through transform scripts before writing
 
 ## What success looks like
 
-After `vigocli config publish` and a check-in cycle, the module applies cleanly across the fleet:
+After `vigocli config publish` and a check-in cycle, the configcrate applies cleanly across the fleet:
 
 ```text
 $ docker exec vigo /usr/local/bin/vigocli runs list --limit 5
@@ -243,15 +243,15 @@ be3f86c5-c809-4989-a014-20a9d9647b2b  cb4acb1f-f995-4026-a01e-f5390283ca6c  2026
 4f732d0f-c442-4c0c-81fc-b3352514de7c  d1f86266-139f-419a-b760-902c0616f586  2026-05-14 00:20  success  0        0
 ```
 
-`CHANGED=0` after the first cycle means the module has converged and the next cycle is a no-op — that's idempotency working. A non-zero `FAILED` count means an envoy's run had at least one resource refuse to converge; drill in via the envoy's detail page or `vigocli runs show <run_id>`.
+`CHANGED=0` after the first cycle means the configcrate has converged and the next cycle is a no-op — that's idempotency working. A non-zero `FAILED` count means an envoy's run had at least one resource refuse to converge; drill in via the envoy's detail page or `vigocli runs show <run_id>`.
 
-![Per-envoy detail page — modules, last run, drift indicator](../img/screenshots/vigo.envoy-detail.png)
+![Per-envoy detail page — configcrates, last run, drift indicator](../img/screenshots/vigo.envoy-detail.png)
 
 ## What's next
 
-- **Add more modules** → assign by hostname pattern or role, see [Publish your config](publish-config.md).
-- **Make modules vary by host / OS / environment** → [the module-writing reference](../reference/writing-modules.md) covers conditionals, lookups, foreach, and per-environment overrides.
-- **A resource didn't apply** → [Troubleshoot common issues](troubleshoot.md#module-convergence-loop--same-resource-changes-every-cycle).
+- **Add more configcrates** → assign by hostname pattern or role, see [Publish your config](publish-config.md).
+- **Make configcrates vary by host / OS / environment** → [the configcrate-writing reference](../reference/writing-configcrates.md) covers conditionals, lookups, foreach, and per-environment overrides.
+- **A resource didn't apply** → [Troubleshoot common issues](troubleshoot.md#configcrate-convergence-loop--same-resource-changes-every-cycle).
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

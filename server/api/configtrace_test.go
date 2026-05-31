@@ -21,18 +21,18 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
 	t.Helper()
 	dir := t.TempDir()
 
-	if err := os.MkdirAll(filepath.Join(dir, "modules"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "configcrates"), 0755); err != nil {
 		t.Fatalf("mkdir modules: %v", err)
 	}
 
 	// Write envoys.vgo with envoy entries (not common.vgo, which is for inheritance).
 	nodesYAML := `envoys:
   - match: "web01.prod"
-    modules:
+    configcrates:
       - nginx
     environment: production
   - match: "app01.staging"
-    modules:
+    configcrates:
       - nginx
     environment: staging
 `
@@ -48,7 +48,7 @@ resources:
     type: package
     package: nginx
 `
-	if err := os.WriteFile(filepath.Join(dir, "modules", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "configcrates", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
 		t.Fatalf("write nginx.vgo: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestConfigTrace_SearchByModule(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/config/search?module=nginx", nil)
+	req := httptest.NewRequest("GET", "/api/v1/config/search?configcrate=nginx", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 
@@ -220,7 +220,7 @@ func TestConfigTrace_TraceNoSubject(t *testing.T) {
 }
 
 // TestConfigTrace_InverseModule exercises the inverse (subject-rooted) branch:
-// ?module= without a hostname returns an InverseTraceResult rather than a
+// ?configcrate= without a hostname returns an InverseTraceResult rather than a
 // forward ConfigTrace.
 func TestConfigTrace_InverseModule(t *testing.T) {
 	store := newConfigTraceTestStore(t)
@@ -229,7 +229,7 @@ func TestConfigTrace_InverseModule(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/config/trace?module=nginx", nil)
+	req := httptest.NewRequest("GET", "/api/v1/config/trace?configcrate=nginx", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 
@@ -281,7 +281,7 @@ func TestConfigTrace_InverseIncludeTree(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/config/trace?module=nginx&include_tree=true", nil)
+	req := httptest.NewRequest("GET", "/api/v1/config/trace?configcrate=nginx&include_tree=true", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 
@@ -300,7 +300,7 @@ func TestConfigTrace_InverseIncludeTree(t *testing.T) {
 	}
 }
 
-// TestConfigTrace_InverseModuleUsercrateConflict confirms ?module= and
+// TestConfigTrace_InverseModuleUsercrateConflict confirms ?configcrate= and
 // ?usercrate= together are rejected — they each select a different subject.
 func TestConfigTrace_InverseModuleUsercrateConflict(t *testing.T) {
 	store := newConfigTraceTestStore(t)
@@ -309,7 +309,7 @@ func TestConfigTrace_InverseModuleUsercrateConflict(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/config/trace?module=nginx&usercrate=alexander4", nil)
+	req := httptest.NewRequest("GET", "/api/v1/config/trace?configcrate=nginx&usercrate=alexander4", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 

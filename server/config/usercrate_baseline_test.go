@@ -41,7 +41,7 @@ func (permissiveSecrets) Close() error { return nil }
 //
 // Output JSON: { "<match-pattern>": ["<usercrate-name>", ...sorted], ... }.
 //
-// Detection: ConfigTrace.ModuleSources[name] contains the "usercrates/"
+// Detection: ConfigTrace.ConfigcrateSources[name] contains the "usercrates/"
 // substring — the same predicate the trace UI uses.
 func TestBaselineUsercrateSnapshot(t *testing.T) {
 	base := os.Getenv("STOCKPILE_BASE")
@@ -67,7 +67,7 @@ func TestBaselineUsercrateSnapshot(t *testing.T) {
 			continue
 		}
 		var crates []string
-		for name, src := range trace.ModuleSources {
+		for name, src := range trace.ConfigcrateSources {
 			if strings.Contains(src, "usercrates/") {
 				crates = append(crates, name)
 			}

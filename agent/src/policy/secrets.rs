@@ -190,7 +190,7 @@ fn collect_refs_in_bundle(bundle: &proto::PolicyBundle) -> HashSet<String> {
             scan_value(&v, &mut refs);
         }
     }
-    for m in &bundle.modules {
+    for m in &bundle.configcrates {
         scan_into(&m.when, &mut refs);
         for r in &m.resources {
             scan_into(&r.when, &mut refs);
@@ -216,7 +216,7 @@ fn substitute_in_bundle(bundle: &mut proto::PolicyBundle, cache: &SecretCache) -
             bail!("placeholder survived substitution in vars_json — refusing to apply");
         }
     }
-    for m in bundle.modules.iter_mut() {
+    for m in bundle.configcrates.iter_mut() {
         if m.when.contains(PLACEHOLDER_BEGIN) {
             m.when = substitute_in_string(&m.when, cache)?;
             if m.when.contains(PLACEHOLDER_BEGIN) {
@@ -342,7 +342,7 @@ mod tests {
         proto::PolicyBundle {
             secrets_epoch: 1,
             vars_json: vars_json.as_bytes().to_vec(),
-            modules: vec![proto::PolicyModule {
+            configcrates: vec![proto::PolicyConfigcrate {
                 name: "m".to_string(),
                 resources: vec![proto::PolicyResource {
                     name: "r".to_string(),
@@ -414,7 +414,7 @@ mod tests {
             use prost::Message;
             let c = proto::PolicyBundle {
                 policy_version: bundle.policy_version,
-                modules: bundle.modules.clone(),
+                configcrates: bundle.configcrates.clone(),
                 vars_json: bundle.vars_json.clone(),
                 var_order: bundle.var_order.clone(),
                 custom_traits: bundle.custom_traits.clone(),
@@ -440,7 +440,7 @@ mod tests {
         )]));
         substitute_in_bundle(&mut bundle, &cache).unwrap();
         assert_eq!(
-            bundle.modules[0].resources[0].attributes["pw"],
+            bundle.configcrates[0].resources[0].attributes["pw"],
             "s3cret",
             "substitution should have happened"
         );
@@ -468,7 +468,7 @@ mod tests {
         let vars: Value = serde_json::from_slice(&bundle.vars_json).unwrap();
         assert_eq!(vars["dbPass"], "s3cret");
         assert_eq!(
-            bundle.modules[0].resources[0].attributes["content"],
+            bundle.configcrates[0].resources[0].attributes["content"],
             "cert=KEY-BYTES"
         );
     }

@@ -8,9 +8,9 @@ Config inspection commands.
 | Command | Description |
 |---------|-------------|
 | `config edit` | Open a .vgo file in an editor with validation on save |
-| `config trace` | Trace config resolution for a host, or find where a module/usercrate is applied |
+| `config trace` | Trace config resolution for a host, or find where a configcrate/usercrate is applied |
 | `config tree` | Show the directory inheritance hierarchy |
-| `config search` | Search envoy entries by match pattern, module, or var |
+| `config search` | Search envoy entries by match pattern, configcrate, or var |
 | `config publish` | Validate and publish config from stage to live |
 | `config history` | View config publish history |
 | `config rollback` | Rollback to a previous config version |
@@ -21,11 +21,11 @@ Config inspection commands.
 | `config examples copy <name>` | Copy an install template into `stacks/stockpile/` |
 | `config anti-examples list` | Show available retract templates under `stacks/anti-examples/` |
 | `config anti-examples copy <name>` | Copy a retract template into `stacks/stockpile/` |
-| `config anti-examples mirror-check` | Verify every module example has a paired retract (and vice versa) |
+| `config anti-examples mirror-check` | Verify every configcrate example has a paired retract (and vice versa) |
 
 ## config edit
 
-Open a `.vgo` config file in an editor with YAML validation on save. Accepts a module name, relative path, or absolute path. Module names are searched recursively in `stockpile/modules/`.
+Open a `.vgo` config file in an editor with YAML validation on save. Accepts a configcrate name, relative path, or absolute path. Configcrate names are searched recursively in `stockpile/configcrates/`.
 
 ### Usage
 
@@ -40,8 +40,8 @@ vigocli config edit <name-or-path> [--editor <editor>]
 ### Examples
 
 ```bash
-vigocli config edit nginx                    # finds stockpile/modules/.../nginx.vgo
-vigocli config edit modules/nginx.vgo        # relative to stockpile/
+vigocli config edit nginx                    # finds stockpile/configcrates/.../nginx.vgo
+vigocli config edit configcrates/nginx.vgo        # relative to stockpile/
 vigocli config edit danlap.vgo               # finds by name anywhere in stockpile/
 vigocli config edit --editor nano nginx      # use nano instead of vim
 ```
@@ -54,22 +54,22 @@ See [vi](vi.md) for syntax highlighting and validation details.
 
 Two directions, one command.
 
-**Forward (hostname-rooted).** Shows the full directory inheritance chain for a hostname with colored output: which `common.vgo` files contributed modules and vars at each level, which vars override parent values, and where each module originated.
+**Forward (hostname-rooted).** Shows the full directory inheritance chain for a hostname with colored output: which `common.vgo` files contributed configcrates and vars at each level, which vars override parent values, and where each configcrate originated.
 
-**Inverse (subject-rooted).** Answers "where is module/usercrate X applied?" — enumerates every enrolled envoy whose resolved config includes the subject, with the carrier (file path / role / environment override) that pulled it in. With `--include-tree`, additionally lists config-tree patterns that reference the subject but match no currently-enrolled envoy.
+**Inverse (subject-rooted).** Answers "where is configcrate/usercrate X applied?" — enumerates every enrolled envoy whose resolved config includes the subject, with the carrier (file path / role / environment override) that pulled it in. With `--include-tree`, additionally lists config-tree patterns that reference the subject but match no currently-enrolled envoy.
 
 ### Usage
 
 ```bash
 # Forward
 vigocli config trace <hostname>
-vigocli config trace <hostname> --module <module-name>
+vigocli config trace <hostname> --configcrate <configcrate-name>
 vigocli config trace --host <hostname>
 
 # Inverse
-vigocli config trace --module <module-name>
+vigocli config trace --configcrate <configcrate-name>
 vigocli config trace --usercrate <usercrate-name>
-vigocli config trace --module <module-name> --include-tree
+vigocli config trace --configcrate <configcrate-name> --include-tree
 ```
 
 ### Flags
@@ -77,11 +77,11 @@ vigocli config trace --module <module-name> --include-tree
 | Flag | Description |
 |------|-------------|
 | `--host` | Hostname to trace (alias for the positional argument) |
-| `--module` | With a hostname: filter to that module's branch. Without a hostname: find where the module is applied across the fleet. |
+| `--configcrate` | With a hostname: filter to that configcrate's branch. Without a hostname: find where the configcrate is applied across the fleet. |
 | `--usercrate` | Find where this usercrate is applied across the fleet (inverse mode only — cannot be combined with a hostname). |
 | `--include-tree` | Inverse mode only: also surface config-tree patterns that reference the subject but match no enrolled envoy. |
 
-Exactly one subject must be specified per invocation: the positional `<hostname>`, `--host`, `--module` (alone), or `--usercrate`.
+Exactly one subject must be specified per invocation: the positional `<hostname>`, `--host`, `--configcrate` (alone), or `--usercrate`.
 
 ### Example
 
@@ -104,14 +104,14 @@ Path Inheritance:
 
   ─────────────────────────────────────────
 
-Module Inheritance:
+Configcrate Inheritance:
   ┌─ common.vgo ───────────────────────────┐
-  │ modules: sshd, monitoring              │
+  │ configcrates: sshd, monitoring              │
   └────────────────────────────────────────┘
               │
               ▼
   ┌─ production/common.vgo ────────────────┐
-  │ modules: log-shipping, auditd          │
+  │ configcrates: log-shipping, auditd          │
   └────────────────────────────────────────┘
               │
               ▼
@@ -137,7 +137,7 @@ Variable Inheritance:
   └────────────────────────────────────────┘
 
   Variable Final Resolution:
-    dns_server = 1.1.1.1  module:sshd
+    dns_server = 1.1.1.1  configcrate:sshd
     worker_procs = 4  common.vgo:production/
     db_password = secret:****  match-block
     nginx_port = 443  environments.vgo:production
@@ -160,7 +160,7 @@ Password Inheritance:
 Dependency Inheritance:
 
   depends_on:
-    nginx ──▶ sshd (module)
+    nginx ──▶ sshd (configcrate)
     nginx/nginx-config ──▶ nginx/nginx-pkg (resource)
 
   notify:
@@ -190,28 +190,28 @@ Conditional vars: is_debian, has_enough_ram
 The trace output has 8 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
 
 1. **Path Inheritance** — directory tree showing which config files apply
-2. **Usercrates** — auto-applied per-user modules from `stockpile/**/usercrates/`, listed with the scope directory where each one lives. Only rendered when any usercrates apply. See [Usercrates](../../reference/writing-modules.md#usercrates).
-3. **Module Inheritance** — modules and roles contributed at each level (usercrates excluded — they show in section 2)
+2. **Usercrates** — auto-applied per-user configcrates from `stockpile/**/usercrates/`, listed with the scope directory where each one lives. Only rendered when any usercrates apply. See [Usercrates](../../reference/writing-configcrates.md#usercrates).
+3. **Configcrate Inheritance** — configcrates and roles contributed at each level (usercrates excluded — they show in section 2)
 4. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
-5. **Password Inheritance** — all `secret:` references with masked values, secret paths, source module, and provider
-6. **Dependency Inheritance** — module and resource dependency DAG (depends_on, before, notify, subscribes, watch_secret)
-7. **Compliance Inheritance** — compliance framework tags on each module (e.g., hipaa, pci-dss with control IDs)
+5. **Password Inheritance** — all `secret:` references with masked values, secret paths, source configcrate, and provider
+6. **Dependency Inheritance** — configcrate and resource dependency DAG (depends_on, before, notify, subscribes, watch_secret)
+7. **Compliance Inheritance** — compliance framework tags on each configcrate (e.g., hipaa, pci-dss with control IDs)
 8. **Conditional Inheritance** — `when:` expressions with server vs agent evaluation classification
 
-### Filtering by module
+### Filtering by configcrate
 
 ```
-$ vigocli config trace web01.prod.example.com --module log-shipping
+$ vigocli config trace web01.prod.example.com --configcrate log-shipping
 ```
 
-When `--module` is specified alongside a hostname, only inheritance levels that contribute that module are shown, along with the relevant role expansion.
+When `--configcrate` is specified alongside a hostname, only inheritance levels that contribute that configcrate are shown, along with the relevant role expansion.
 
 ### Inverse mode — "where is this applied?"
 
 ```
-$ vigocli config trace --module nginx
+$ vigocli config trace --configcrate nginx
 
-module: nginx
+configcrate: nginx
 
 Enrolled envoys:
 
@@ -225,9 +225,9 @@ Enrolled envoys:
 `--include-tree` widens the inverse search to surface configured patterns that no enrolled envoy currently matches — useful for catching wiring you've authored but haven't deployed yet:
 
 ```
-$ vigocli config trace --module nginx --include-tree
+$ vigocli config trace --configcrate nginx --include-tree
 
-module: nginx
+configcrate: nginx
 
 Enrolled envoys:
     HOSTNAME              MATCH               ENV         CARRIER
@@ -256,13 +256,13 @@ $ vigocli config trace unknown.example.com
 ### Notes
 
 - Secret values (prefixed with `secret:`) are always masked as `secret:****` in both CLI and web UI — the secret path is shown but never the resolved value
-- The source column shows where each variable was set (module defaults, inherited `common.vgo`, match-block vars, or `environments.vgo`)
+- The source column shows where each variable was set (configcrate defaults, inherited `common.vgo`, match-block vars, or `environments.vgo`)
 - The inheritance chain shows vars contributed at each `common.vgo` level with override markers
 - Conditional expressions are classified as `server` (pure variable refs) or `agent` (contains function calls like `os_family()`) based on whether they require agent-side trait evaluation
 
 ## config tree
 
-Displays the directory inheritance hierarchy as a colored tree. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated module totals.
+Displays the directory inheritance hierarchy as a colored tree. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated configcrate totals.
 
 ### Usage
 
@@ -292,20 +292,20 @@ common.vgo → [sshd, ntp, monitoring]
 **Colors** (in terminal):
 - Directories: blue
 - Match patterns: yellow
-- Inherited modules: dim gray
-- Own modules: bold white
-- Excluded modules: red strikethrough
+- Inherited configcrates: dim gray
+- Own configcrates: bold white
+- Excluded configcrates: red strikethrough
 - Total line: green
 
 ## config search
 
-Search envoy entries by match pattern, module name, or var name. Shows the full inheritance chain, own modules, and accumulated totals.
+Search envoy entries by match pattern, configcrate name, or var name. Shows the full inheritance chain, own configcrates, and accumulated totals.
 
 ### Usage
 
 ```bash
 vigocli config search --match <glob>
-vigocli config search --module <name>
+vigocli config search --configcrate <name>
 vigocli config search --var <name>
 ```
 
@@ -316,7 +316,7 @@ At least one flag is required. Flags can be combined.
 | Flag | Description |
 |------|-------------|
 | `--match` | Glob pattern to match against envoy `match:` patterns (e.g., `*web*`) |
-| `--module` | Find entries that use this module (inherited or direct) |
+| `--configcrate` | Find entries that use this configcrate (inherited or direct) |
 | `--var` | Find entries that define this var |
 
 ### Examples
@@ -331,8 +331,8 @@ $ vigocli config search --match "*web*"
   Own: nginx, certbot
   Total: sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot
 
-# Find every entry using the nginx module
-$ vigocli config search --module nginx
+# Find every entry using the nginx configcrate
+$ vigocli config search --configcrate nginx
   web*.prod.example.com  production/web
   ...
 
@@ -344,9 +344,9 @@ $ vigocli config search --var log_level
 
 ## config publish
 
-Validates `.vgo` files in `/srv/vigo/stacks/stockpile/` then atomically syncs to `/srv/vigo/stacks/.live/` (the directory the server reads). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../howto/publish-config.md) for full details.
+Validates `.vgo` files in `/srv/vigo/stacks/stockpile/` then atomically syncs to `/srv/vigo/stacks/.live/` (the directory the server reads). Changed configcrate files are automatically run through the configcrate linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../howto/publish-config.md) for full details.
 
-Publish carries forward only files some carrier — a role, role `case:` branch, role `includes:` chain, match block, `common.vgo`, or `environments.vgo` — can actually reach. Modules and usercrates with no inbound reference, and template files no module names via `source:`, are dropped from `.live/`. Structural files (hostcrates, `common.vgo`, `roles.vgo`, `environments.vgo`, `waivers.vgo`, task / workflow definitions) are always preserved. Use `--no-prune` to fall back to a verbatim mirror.
+Publish carries forward only files some carrier — a role, role `case:` branch, role `includes:` chain, match block, `common.vgo`, or `environments.vgo` — can actually reach. Configcrates and usercrates with no inbound reference, and template files no configcrate names via `source:`, are dropped from `.live/`. Structural files (hostcrates, `common.vgo`, `roles.vgo`, `environments.vgo`, `waivers.vgo`, task / workflow definitions) are always preserved. Use `--no-prune` to fall back to a verbatim mirror.
 
 ### Usage
 
@@ -371,14 +371,14 @@ vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 ```bash
 # Validate without publishing
 $ vigocli config publish --dry-run
-Validation passed: 12 modules, 3 roles, 8 envoy entries
-  + modules/nginx.vgo
+Validation passed: 12 configcrates, 3 roles, 8 envoy entries
+  + configcrates/nginx.vgo
   + envoys/web.vgo
 
 # Publish
 $ vigocli config publish
-Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
-  + modules/nginx.vgo
+Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
+  + configcrates/nginx.vgo
   + envoys/web.vgo
 
 # Nothing changed
@@ -386,9 +386,9 @@ $ vigocli config publish
 Nothing to publish — stage matches live.
 ```
 
-### Module Retraction
+### Configcrate Retraction
 
-When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml`, every `config publish` automatically generates `.retract` files for new and changed modules. When a module is removed, the CLI also prints which envoys are affected and per-resource reversal confidence. The `.retract` file is inert until renamed to `.vgo`. See [Module Retraction](../../reference/writing-modules.md) for the full workflow.
+When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml`, every `config publish` automatically generates `.retract` files for new and changed configcrates. When a configcrate is removed, the CLI also prints which envoys are affected and per-resource reversal confidence. The `.retract` file is inert until renamed to `.vgo`. See [Configcrate Retraction](../../reference/writing-configcrates.md) for the full workflow.
 
 ## config history
 

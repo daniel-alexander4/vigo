@@ -447,7 +447,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if cfg == nil {
 		cfg = &config.EnvoyConfig{
 			Envoy:   envoy.Hostname,
-			Modules: []config.ModuleConfig{},
+			Configcrates: []config.Configcrate{},
 		}
 		pattern = ""
 	}
@@ -516,12 +516,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		// Clone config so we don't mutate the shared ConfigStore entry.
 		cloned := cfg.Clone()
 		if hasCaseRes {
-			for i := range cloned.Modules {
-				expanded, err := config.ExpandCase(cloned.Modules[i].Resources, traits, cloned.Vars)
+			for i := range cloned.Configcrates {
+				expanded, err := config.ExpandCase(cloned.Configcrates[i].Resources, traits, cloned.Vars)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "expanding case for module %q: %v", cloned.Modules[i].Name, err)
+					return nil, status.Errorf(codes.Internal, "expanding case for module %q: %v", cloned.Configcrates[i].Name, err)
 				}
-				cloned.Modules[i].Resources = expanded
+				cloned.Configcrates[i].Resources = expanded
 			}
 		}
 		if hasLookups {
@@ -558,12 +558,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				return nil, status.Errorf(codes.Internal, "resolving fleet lookups: %v", err)
 			}
 			// foreach: over a now-resolved fleet: var (a list) expands here.
-			for i := range cloned.Modules {
-				expanded, err := config.ExpandForEach(cloned.Modules[i].Resources, cloned.Vars)
+			for i := range cloned.Configcrates {
+				expanded, err := config.ExpandForEach(cloned.Configcrates[i].Resources, cloned.Vars)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "expanding foreach for module %q: %v", cloned.Modules[i].Name, err)
+					return nil, status.Errorf(codes.Internal, "expanding foreach for module %q: %v", cloned.Configcrates[i].Name, err)
 				}
-				cloned.Modules[i].Resources = expanded
+				cloned.Configcrates[i].Resources = expanded
 			}
 		}
 		cfg = cloned
@@ -589,10 +589,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
-		bundle = filterBundleByTraits(customizeStubs(base, req.GetCachedModuleHashes()), traitsMap)
+		bundle = filterBundleByTraits(customizeStubs(base, req.GetCachedConfigcrateHashes()), traitsMap)
 	} else {
 		var err error
-		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes(), traitsMap, s.streamEdit)
+		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedConfigcrateHashes(), traitsMap, s.streamEdit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}

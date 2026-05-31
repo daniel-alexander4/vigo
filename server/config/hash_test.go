@@ -6,7 +6,7 @@ package config
 import "testing"
 
 func TestHashModuleContent_Deterministic(t *testing.T) {
-	mod := ModuleConfig{
+	mod := Configcrate{
 		Name:      "nginx",
 		DependsOn: []string{"base"},
 		When:      "is_web",
@@ -35,11 +35,11 @@ func TestHashModuleContent_Deterministic(t *testing.T) {
 }
 
 func TestHashModuleContent_DifferentContent(t *testing.T) {
-	mod1 := ModuleConfig{
+	mod1 := Configcrate{
 		Name:      "nginx",
 		Resources: []ResourceConfig{{Name: "conf", Type: "file", Attributes: map[string]any{"content": "v1"}}},
 	}
-	mod2 := ModuleConfig{
+	mod2 := Configcrate{
 		Name:      "nginx",
 		Resources: []ResourceConfig{{Name: "conf", Type: "file", Attributes: map[string]any{"content": "v2"}}},
 	}
@@ -50,7 +50,7 @@ func TestHashModuleContent_DifferentContent(t *testing.T) {
 }
 
 func TestHashModuleContent_AttributeOrderIrrelevant(t *testing.T) {
-	mod := ModuleConfig{
+	mod := Configcrate{
 		Name: "test",
 		Resources: []ResourceConfig{
 			{
@@ -74,7 +74,7 @@ func TestHashModuleContent_AttributeOrderIrrelevant(t *testing.T) {
 }
 
 func TestHashModuleContent_WhenAffectsHash(t *testing.T) {
-	base := ModuleConfig{
+	base := Configcrate{
 		Name:      "test",
 		Resources: []ResourceConfig{{Name: "r", Type: "file", Attributes: map[string]any{"content": "x"}}},
 	}
@@ -88,7 +88,7 @@ func TestHashModuleContent_WhenAffectsHash(t *testing.T) {
 }
 
 func TestHashModuleContent_DepsAffectHash(t *testing.T) {
-	base := ModuleConfig{
+	base := Configcrate{
 		Name:      "test",
 		Resources: []ResourceConfig{{Name: "r", Type: "file", Attributes: map[string]any{"content": "x"}}},
 	}
@@ -102,14 +102,14 @@ func TestHashModuleContent_DepsAffectHash(t *testing.T) {
 }
 
 func TestHashModuleContent_WatchSecretAffectsHash(t *testing.T) {
-	base := ModuleConfig{
+	base := Configcrate{
 		Name: "test",
 		Resources: []ResourceConfig{
 			{Name: "r", Type: "exec", Attributes: map[string]any{"command": "reset-pw"}},
 		},
 	}
 
-	withSecret := ModuleConfig{
+	withSecret := Configcrate{
 		Name: "test",
 		Resources: []ResourceConfig{
 			{

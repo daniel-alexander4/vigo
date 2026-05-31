@@ -109,14 +109,14 @@ func batchInsertRunResults(ctx context.Context, exec sqlExecer, args []CreateRun
 
 func batchInsertRunResultsChunk(ctx context.Context, exec sqlExecer, args []CreateRunResultParams) error {
 	var sb strings.Builder
-	sb.WriteString("INSERT INTO run_results (run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms) VALUES ")
+	sb.WriteString("INSERT INTO run_results (run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms) VALUES ")
 	params := make([]interface{}, 0, len(args)*8)
 	for i, a := range args {
 		if i > 0 {
 			sb.WriteByte(',')
 		}
 		sb.WriteString("(?,?,?,?,?,?,?,?)")
-		params = append(params, a.RunID, a.ModuleName, a.ResourceType, a.ResourceName, a.ActionTaken, a.Changed, a.ErrorMessage, a.DurationMs)
+		params = append(params, a.RunID, a.ConfigcrateName, a.ResourceType, a.ResourceName, a.ActionTaken, a.Changed, a.ErrorMessage, a.DurationMs)
 	}
 	if _, err := exec.ExecContext(ctx, sb.String(), params...); err != nil {
 		return fmt.Errorf("batch insert run results: %w", err)
@@ -158,7 +158,7 @@ func (s *DBRunStore) LatestRunPerEnvoy(ctx context.Context, envoyIDs []string) (
 				Status:       r.LatestRunStatus.String,
 				ChangedCount: r.LatestRunChangedCount.Int64,
 				FailedCount:  r.LatestRunFailedCount.Int64,
-				ModuleCount:  r.LatestRunModuleCount.Int64,
+				ConfigcrateCount:  r.LatestRunModuleCount.Int64,
 			}
 			result[r.ID] = &run
 		}

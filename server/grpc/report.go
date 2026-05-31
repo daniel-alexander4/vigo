@@ -63,7 +63,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		}
 
 		batch = append(batch, db.CreateRunResultParams{
-			ModuleName:   result.GetModuleName(),
+			ConfigcrateName:   result.GetConfigcrateName(),
 			ResourceType: result.GetResourceType(),
 			ResourceName: result.GetResourceName(),
 			ActionTaken:  result.GetActionTaken(),
@@ -101,7 +101,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			EnvoyID:     envoyID,
 			Status:      "running",
 			Trigger:     trigger,
-			ModuleCount: int64(len(req.GetResults())),
+			ConfigcrateCount: int64(len(req.GetResults())),
 		},
 		Results: batch,
 		Finish: db.FinishRunParams{
@@ -129,9 +129,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 
 	// Record metrics for each result.
 	for _, result := range req.GetResults() {
-		s.metrics.ModuleActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
+		s.metrics.ConfigcrateActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
 		if result.GetChanged() {
-			s.metrics.DriftDetected.WithLabelValues(hostname, result.GetModuleName()).Inc()
+			s.metrics.DriftDetected.WithLabelValues(hostname, result.GetConfigcrateName()).Inc()
 		}
 	}
 
@@ -231,9 +231,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 						Timestamp: time.Now(),
 						Hostname:  hostname,
 						EnvoyID:   envoyID,
-						Summary:   fmt.Sprintf("%s/%s blocked: %s", result.GetModuleName(), result.GetResourceName(), result.GetErrorMessage()),
+						Summary:   fmt.Sprintf("%s/%s blocked: %s", result.GetConfigcrateName(), result.GetResourceName(), result.GetErrorMessage()),
 						Details: map[string]any{
-							"module":   result.GetModuleName(),
+							"module":   result.GetConfigcrateName(),
 							"resource": result.GetResourceName(),
 							"trace_id": traceID,
 							"error":    result.GetErrorMessage(),

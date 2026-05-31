@@ -32,8 +32,8 @@ type testEnv struct {
 // further customized) to ValidateSource/Publish/PublishFile.
 //
 // The returned "stacks" is the stacks root — tests write files via
-// shorthand symlinks (modules/, envoys/, roles/) which all resolve to
-// stockpile/modules/, stockpile/envoys/, stockpile/roles/ post-0.33.0
+// shorthand symlinks (configcrates/, envoys/, roles/) which all resolve to
+// stockpile/configcrates/, stockpile/envoys/, stockpile/roles/ post-0.33.0
 // collapse.
 func withTestDirs(t *testing.T) testEnv {
 	t.Helper()
@@ -45,15 +45,15 @@ func withTestDirs(t *testing.T) testEnv {
 		unlockLiveDir(live) // ensure temp dir cleanup can remove read-only files
 	})
 
-	for _, sub := range []string{"stockpile/modules", "stockpile/templates", "stockpile/usercrates", "stockpile/envoys", "stockpile/roles"} {
+	for _, sub := range []string{"stockpile/configcrates", "stockpile/templates", "stockpile/usercrates", "stockpile/envoys", "stockpile/roles"} {
 		if err := os.MkdirAll(filepath.Join(stacks, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Compat symlinks so existing tests writing to filepath.Join(stacks,
-	// "modules", ...) still land in stockpile/modules/.
+	// Shorthand symlinks so tests can write to filepath.Join(stacks,
+	// "configcrates", ...) and have files land in stockpile/configcrates/.
 	for _, link := range []struct{ name, target string }{
-		{"modules", "stockpile/modules"},
+		{"configcrates", "stockpile/configcrates"},
 		{"envoys", "stockpile/envoys"},
 		{"roles", "stockpile/roles"},
 	} {
@@ -81,7 +81,7 @@ func writeFile(t *testing.T, path, content string) {
 
 func writeValidConfig(t *testing.T, dir string) {
 	t.Helper()
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -92,7 +92,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "envoys", "web.vgo"), `
 envoys:
   - match: "web.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `)
 }
 
@@ -115,17 +115,17 @@ func TestValidateSource_Valid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected valid config, got error: %v", err)
 	}
-	if res.Modules != 1 {
-		t.Errorf("expected 1 module, got %d", res.Modules)
+	if res.Configcrates != 1 {
+		t.Errorf("expected 1 module, got %d", res.Configcrates)
 	}
 	if res.Entries != 1 {
 		t.Errorf("expected 1 entry, got %d", res.Entries)
 	}
 }
 
-func TestValidateSource_MissingModuleRef(t *testing.T) {
+func TestValidateSource_MissingConfigcrateRef(t *testing.T) {
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -136,7 +136,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "web.vgo"), `
 envoys:
   - match: "web.example.com"
-    modules: [nginx, nonexistent]
+    configcrates: [nginx, nonexistent]
 `)
 
 	_, err := ValidateSource(noURLOpts(env))
@@ -147,7 +147,7 @@ envoys:
 
 func TestValidateSource_IdempotencyError(t *testing.T) {
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "risky.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "risky.vgo"), `
 name: risky
 resources:
   - name: run-something
@@ -157,7 +157,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [risky]
+    configcrates: [risky]
 `)
 
 	_, err := ValidateSource(noURLOpts(env))
@@ -178,7 +178,7 @@ func TestPublish_SyncsFiles(t *testing.T) {
 		t.Error("expected files to be synced")
 	}
 
-	if _, err := os.Stat(filepath.Join(env.live, "modules", "nginx.vgo")); err != nil {
+	if _, err := os.Stat(filepath.Join(env.live, "configcrates", "nginx.vgo")); err != nil {
 		t.Error("nginx.vgo not synced to live modules/")
 	}
 	if _, err := os.Stat(filepath.Join(env.live, "envoys", "web.vgo")); err != nil {
@@ -221,7 +221,7 @@ resources:
     shell: /bin/bash
     state: present
 `
-	srcPath := filepath.Join(env.stacks, "modules", "users", "dan.vgo")
+	srcPath := filepath.Join(env.stacks, "configcrates", "users", "dan.vgo")
 	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "girlslaptop.vgo"), `
 envoys:
   - match: "girlslaptop"
-    modules: [users/dan]
+    configcrates: [users/dan]
 `)
 
 	res, err := Publish(noURLOpts(env), nil)
@@ -252,7 +252,7 @@ envoys:
 	// .live must contain the linted bytes — at minimum, the canonical
 	// Lint output. Round-trip stability is enough: if we lint the
 	// stockpile source ourselves and compare, .live should match.
-	livePath := filepath.Join(env.live, "modules", "users", "dan.vgo")
+	livePath := filepath.Join(env.live, "configcrates", "users", "dan.vgo")
 	liveBytes, err := os.ReadFile(livePath)
 	if err != nil {
 		t.Fatalf(".live dan.vgo missing: %v", err)
@@ -274,15 +274,15 @@ envoys:
 // includes hidden dirs — would surface here.
 func TestHashTree_SkipsNestedLiveDir(t *testing.T) {
 	stockpile := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(stockpile, "modules"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(stockpile, "configcrates"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(stockpile, "modules", "nginx.vgo"), "name: nginx\nresources: []\n")
+	writeFile(t, filepath.Join(stockpile, "configcrates", "nginx.vgo"), "name: nginx\nresources: []\n")
 
 	// Simulate the post-publish layout: .live sits inside stockpile and
 	// holds a mirror of the modules. These files must NOT appear in the
 	// stockpile hash.
-	liveModules := filepath.Join(stockpile, ".live", "modules")
+	liveModules := filepath.Join(stockpile, ".live", "configcrates")
 	if err := os.MkdirAll(liveModules, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestHashTree_SkipsNestedLiveDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hashTree: %v", err)
 	}
-	if _, ok := hashes[filepath.Join("modules", "nginx.vgo")]; !ok {
+	if _, ok := hashes[filepath.Join("configcrates", "nginx.vgo")]; !ok {
 		t.Error("stockpile nginx.vgo missing from hash — walker is broken")
 	}
 	for rel := range hashes {
@@ -322,15 +322,15 @@ func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 	writeValidConfig(t, env.stacks)
 
 	// Pre-populate live with an extra file.
-	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "modules", "old.vgo"), "old content")
+	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
+	writeFile(t, filepath.Join(env.live, "configcrates", "old.vgo"), "old content")
 
 	_, err := Publish(noURLOpts(env), nil)
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(env.live, "modules", "old.vgo")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(env.live, "configcrates", "old.vgo")); !os.IsNotExist(err) {
 		t.Error("old.vgo should have been removed from live")
 	}
 }
@@ -340,17 +340,17 @@ func TestPublish_LeavesLiveOnValidationFailure(t *testing.T) {
 	writeFile(t, filepath.Join(env.stacks, "envoys", "bad.vgo"), `
 envoys:
   - match: "bad.example.com"
-    modules: [nonexistent]
+    configcrates: [nonexistent]
 `)
-	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "modules", "existing.vgo"), "keep me")
+	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
+	writeFile(t, filepath.Join(env.live, "configcrates", "existing.vgo"), "keep me")
 
 	_, err := Publish(noURLOpts(env), nil)
 	if err == nil {
 		t.Fatal("expected validation failure")
 	}
 
-	data, readErr := os.ReadFile(filepath.Join(env.live, "modules", "existing.vgo"))
+	data, readErr := os.ReadFile(filepath.Join(env.live, "configcrates", "existing.vgo"))
 	if readErr != nil {
 		t.Fatal("live file should still exist")
 	}
@@ -361,7 +361,7 @@ envoys:
 
 func TestPublish_SkipValidationAllowsCustomType(t *testing.T) {
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "custom.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "custom.vgo"), `
 name: custom
 resources:
   - name: deploy-app
@@ -372,7 +372,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [custom]
+    configcrates: [custom]
 `)
 
 	res, err := Publish(env.opts, nil)
@@ -429,10 +429,10 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	writeValidConfig(t, env.stacks)
 
 	// Populate live with different content.
-	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "modules", "nginx.vgo"), "old content")
-	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "modules", "deleted.vgo"), "will be removed")
+	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
+	writeFile(t, filepath.Join(env.live, "configcrates", "nginx.vgo"), "old content")
+	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
+	writeFile(t, filepath.Join(env.live, "configcrates", "deleted.vgo"), "will be removed")
 
 	_, changed, removed, err := diffTrees(env.opts.StockpileDir, env.live)
 	if err != nil {
@@ -482,7 +482,7 @@ func TestCheckURLs_ReachableURL(t *testing.T) {
 	defer srv.Close()
 
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "download.vgo"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -493,7 +493,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [download]
+    configcrates: [download]
 `)
 
 	_, err := ValidateSource(urlCheckOpts(env))
@@ -509,7 +509,7 @@ func TestCheckURLs_404Fails(t *testing.T) {
 	defer srv.Close()
 
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "download.vgo"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -520,7 +520,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [download]
+    configcrates: [download]
 `)
 
 	res, err := ValidateSource(urlCheckOpts(env))
@@ -534,7 +534,7 @@ envoys:
 
 func TestCheckURLs_SkipsNonHTTPURLs(t *testing.T) {
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "gitmod.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "gitmod.vgo"), `
 name: gitmod
 resources:
   - name: clone-repo
@@ -545,7 +545,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [gitmod]
+    configcrates: [gitmod]
 `)
 
 	_, err := ValidateSource(urlCheckOpts(env))
@@ -556,7 +556,7 @@ envoys:
 
 func TestCheckURLs_SkippedWhenDisabled(t *testing.T) {
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "download.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "download.vgo"), `
 name: download
 resources:
   - name: get-archive
@@ -567,7 +567,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [download]
+    configcrates: [download]
 `)
 
 	_, err := ValidateSource(noURLOpts(env))
@@ -587,7 +587,7 @@ func TestCheckURLs_HEAD405FallsBackToGET(t *testing.T) {
 	defer srv.Close()
 
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "download.vgo"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -598,7 +598,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [download]
+    configcrates: [download]
 `)
 
 	_, err := ValidateSource(urlCheckOpts(env))
@@ -614,7 +614,7 @@ func TestCheckURLs_KeyURLChecked(t *testing.T) {
 	defer srv.Close()
 
 	env := withTestDirs(t)
-	writeFile(t, filepath.Join(env.stacks, "modules", "repo.vgo"), fmt.Sprintf(`
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "repo.vgo"), fmt.Sprintf(`
 name: repo
 resources:
   - name: add-repo
@@ -625,7 +625,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [repo]
+    configcrates: [repo]
 `)
 
 	res, err := ValidateSource(urlCheckOpts(env))
@@ -654,20 +654,20 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL)
-	writeFile(t, filepath.Join(env.stacks, "modules", "download.vgo"), badModule)
-	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "modules", "download.vgo"), badModule) // same content
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "download.vgo"), badModule)
+	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
+	writeFile(t, filepath.Join(env.live, "configcrates", "download.vgo"), badModule) // same content
 
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [download]
+    configcrates: [download]
 `)
 	os.MkdirAll(filepath.Join(env.live, "envoys"), 0o755)
 	writeFile(t, filepath.Join(env.live, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
-    modules: [download]
+    configcrates: [download]
 `)
 
 	// URL check enabled but module hasn't changed — should pass.
@@ -686,7 +686,7 @@ func writePruneFixture(t *testing.T, env testEnv) {
 	t.Helper()
 
 	// Referenced module → kept.
-	writeFile(t, filepath.Join(env.stacks, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "nginx.vgo"), `
 name: nginx
 resources:
   - name: site
@@ -698,7 +698,7 @@ resources:
     source: templates/nginx-site.tmpl
 `)
 	// Unreferenced module → pruned.
-	writeFile(t, filepath.Join(env.stacks, "modules", "orphan.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "orphan.vgo"), `
 name: orphan
 resources:
   - name: noop
@@ -734,7 +734,7 @@ resources:
 	writeFile(t, filepath.Join(env.stacks, "envoys", "web.vgo"), `
 envoys:
   - match: "web.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
     usercrates: [alice]
 `)
 }
@@ -753,7 +753,7 @@ func TestPublish_PrunesUnreferenced(t *testing.T) {
 
 	// Referenced files present.
 	for _, rel := range []string{
-		"modules/nginx.vgo",
+		"configcrates/nginx.vgo",
 		"usercrates/alice.vgo",
 		"templates/nginx-site.tmpl",
 	} {
@@ -764,7 +764,7 @@ func TestPublish_PrunesUnreferenced(t *testing.T) {
 
 	// Unreferenced files pruned.
 	for _, rel := range []string{
-		"modules/orphan.vgo",
+		"configcrates/orphan.vgo",
 		"usercrates/bob.vgo",
 		"templates/orphan.tmpl",
 	} {
@@ -775,7 +775,7 @@ func TestPublish_PrunesUnreferenced(t *testing.T) {
 
 	// Stockpile untouched — the operator's library stays whole.
 	for _, rel := range []string{
-		"modules/orphan.vgo",
+		"configcrates/orphan.vgo",
 		"stockpile/usercrates/bob.vgo",
 		"stockpile/templates/orphan.tmpl",
 	} {
@@ -797,8 +797,8 @@ func TestPublish_NoPrunePreservesEverything(t *testing.T) {
 
 	// Every fixture file lands in .live/.
 	for _, rel := range []string{
-		"modules/nginx.vgo",
-		"modules/orphan.vgo",
+		"configcrates/nginx.vgo",
+		"configcrates/orphan.vgo",
 		"usercrates/alice.vgo",
 		"usercrates/bob.vgo",
 		"templates/nginx-site.tmpl",
@@ -814,7 +814,7 @@ func TestPublish_PrunePreservesStructuralFiles(t *testing.T) {
 	env := withTestDirs(t)
 
 	// One unreferenced module so the prune logic does something.
-	writeFile(t, filepath.Join(env.stacks, "modules", "lonely.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "lonely.vgo"), `
 name: lonely
 resources:
   - name: noop
@@ -826,14 +826,14 @@ resources:
 	// Structural files at the stockpile top level — every one of these
 	// must survive prune even though they're not "referenced" in the
 	// modules/usercrates sense.
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "common.vgo"), "modules: []\n")
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "common.vgo"), "configcrates: []\n")
 	writeFile(t, filepath.Join(env.stacks, "stockpile", "environments.vgo"), "environments:\n  prod: {}\n")
 	writeFile(t, filepath.Join(env.stacks, "stockpile", "waivers.vgo"), "waivers: {}\n")
 	writeFile(t, filepath.Join(env.stacks, "roles", "roles.vgo"), "roles: []\n")
 	writeFile(t, filepath.Join(env.stacks, "envoys", "envoys.vgo"), `
 envoys:
   - match: "*"
-    modules: []
+    configcrates: []
 `)
 
 	if _, err := Publish(noURLOpts(env), nil); err != nil {
@@ -854,7 +854,7 @@ envoys:
 	}
 
 	// Unreferenced module pruned even on a structurals-only run.
-	if _, err := os.Stat(filepath.Join(env.live, "modules", "lonely.vgo")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(env.live, "configcrates", "lonely.vgo")); !os.IsNotExist(err) {
 		t.Errorf("unreferenced module should be pruned, still present (err=%v)", err)
 	}
 }
@@ -879,25 +879,25 @@ func TestFleetFindings_SkipsUnreachableModules(t *testing.T) {
 	}
 
 	// redis: two reachable modules collide — must warn.
-	mod("modules/reach-a.vgo", "redis")
-	mod("modules/reach-b.vgo", "redis")
+	mod("configcrates/reach-a.vgo", "redis")
+	mod("configcrates/reach-b.vgo", "redis")
 	// nginx: two unreachable modules collide — must NOT warn.
-	mod("modules/lib-a.vgo", "nginx")
-	mod("modules/lib-b.vgo", "nginx")
+	mod("configcrates/lib-a.vgo", "nginx")
+	mod("configcrates/lib-b.vgo", "nginx")
 	// mysql: one reachable + one unreachable — must NOT warn; with only
 	// one envoy-reachable side the clash can't physically happen.
-	mod("modules/reach-c.vgo", "mysql")
-	mod("modules/lib-c.vgo", "mysql")
+	mod("configcrates/reach-c.vgo", "mysql")
+	mod("configcrates/lib-c.vgo", "mysql")
 
 	relPaths := []string{
-		"modules/reach-a.vgo", "modules/reach-b.vgo",
-		"modules/lib-a.vgo", "modules/lib-b.vgo",
-		"modules/reach-c.vgo", "modules/lib-c.vgo",
+		"configcrates/reach-a.vgo", "configcrates/reach-b.vgo",
+		"configcrates/lib-a.vgo", "configcrates/lib-b.vgo",
+		"configcrates/reach-c.vgo", "configcrates/lib-c.vgo",
 	}
 	unreachable := map[string]bool{
-		"modules/lib-a.vgo": true,
-		"modules/lib-b.vgo": true,
-		"modules/lib-c.vgo": true,
+		"configcrates/lib-a.vgo": true,
+		"configcrates/lib-b.vgo": true,
+		"configcrates/lib-c.vgo": true,
 	}
 
 	findings := fleetFindings(dir, relPaths, unreachable)

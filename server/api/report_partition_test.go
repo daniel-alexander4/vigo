@@ -25,8 +25,8 @@ func TestPartitionEnvoyFindings(t *testing.T) {
 	}
 	coverage := &config.StandardCoverage{
 		CoveredControls: []config.ControlCoverage{
-			{ControlID: "c-mod", Modules: []string{"mod-a"}},
-			{ControlID: "c-dual", Modules: []string{"mod-b"}},
+			{ControlID: "c-mod", Configcrates: []string{"mod-a"}},
+			{ControlID: "c-dual", Configcrates: []string{"mod-b"}},
 		},
 	}
 

@@ -26,7 +26,7 @@ var envPromoteCmd = &cobra.Command{
 			Diff        map[string]string `json:"diff"`
 		}
 		err := client.post("/api/v1/env/promote", map[string]string{
-			"module_name": args[0],
+			"configcrate_name": args[0],
 			"from_env":    from,
 			"to_env":      to,
 		}, &resp)

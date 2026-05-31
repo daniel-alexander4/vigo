@@ -1,7 +1,7 @@
 
 # vigocli ask
 
-Ask the AI assistant a natural language question about your fleet. The assistant can query envoys, runs, traits, compliance, configs, modules, and packages to answer questions.
+Ask the AI assistant a natural language question about your fleet. The assistant can query envoys, runs, traits, compliance, configs, configcrates, and packages to answer questions.
 
 ## Usage
 
@@ -41,23 +41,23 @@ vigocli ask --envoy web-03 "why is it failing?"
 ```
 web-03.example.com is failing because the nginx package resource
 returned an error during the last run: "apt-get install failed:
-E: Unable to locate package nginx-extras". The module specifies
+E: Unable to locate package nginx-extras". The configcrate specifies
 package "nginx-extras" but the available package on Ubuntu 24.04
 is "nginx-extra" (without the 's').
 
 [tools: envoy_detail, recent_runs | tokens: 412]
 ```
 
-### Ask for module generation
+### Ask for configcrate generation
 
 ```bash
-vigocli ask "write a module for nginx with TLS"
+vigocli ask "write a configcrate for nginx with TLS"
 ```
 
 ### Pipe a config file for review
 
 ```bash
-vigocli ask < stockpile/modules/nginx.vgo
+vigocli ask < stockpile/configcrates/nginx.vgo
 ```
 
 The piped content is automatically prefixed with "Review this configuration:" before being sent to the AI.

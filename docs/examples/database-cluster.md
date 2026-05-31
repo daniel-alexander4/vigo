@@ -3,9 +3,9 @@
 
 This example sets up PostgreSQL with managed credentials using `secret:` references, directory-level `common.vgo` for shared configuration, and `environments.vgo` for environment-specific tuning.
 
-## PostgreSQL Module
+## PostgreSQL Configcrate
 
-`stockpile/modules/postgresql.vgo`:
+`stockpile/configcrates/postgresql.vgo`:
 
 ```yaml
 name: postgresql
@@ -76,7 +76,7 @@ resources:
 
 ## Application Database Setup
 
-`stockpile/modules/app-database.vgo`:
+`stockpile/configcrates/app-database.vgo`:
 
 ```yaml
 name: app-database
@@ -130,7 +130,7 @@ Any match block under `stockpile/db/` inherits these vars; match-block vars over
 
 ```yaml
 name: database-server
-modules:
+configcrates:
   - postgresql
   - app-database
 ```
@@ -203,6 +203,6 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 - `environments.vgo` — vars that differ per tier (`environment:`)
 - `secret:` prefix — credentials resolved server-side at check-in
 
-See [Multi-Axis Config](../reference/writing-modules.md) for the full canonical model.
+See [Multi-Axis Config](../reference/writing-configcrates.md) for the full canonical model.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

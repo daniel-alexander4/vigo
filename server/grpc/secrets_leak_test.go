@@ -40,7 +40,7 @@ func TestPolicyBundle_NoPlaintextSecretLeak(t *testing.T) {
 
 	// Module references the sentinel via every shape the loader resolves:
 	// whole-attribute, compound-attribute, and a templated var.
-	mustWrite("modules/secrets.vgo", `
+	mustWrite("configcrates/secrets.vgo", `
 name: secrets
 resources:
   - name: dsn-file
@@ -55,7 +55,7 @@ resources:
 	mustWrite("default/envoys.vgo", `
 envoys:
   - match: "leak-test.example.com"
-    modules: [secrets]
+    configcrates: [secrets]
     vars:
       app_pw: "secret:vigo/dsn"
 `)

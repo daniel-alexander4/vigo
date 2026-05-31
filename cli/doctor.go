@@ -301,7 +301,7 @@ func checkConfigValidation(dir string) preStartCheck {
 		}
 		totalModules++
 
-		mod := validate.Module{Name: def.Name}
+		mod := validate.Configcrate{Name: def.Name}
 		for _, r := range def.Resources {
 			mod.Resources = append(mod.Resources, validate.Resource{
 				Name:        r.Name,
@@ -313,7 +313,7 @@ func checkConfigValidation(dir string) preStartCheck {
 			})
 		}
 
-		findings := validate.ValidateModule(mod)
+		findings := validate.ValidateConfigcrate(mod)
 		for _, f := range findings {
 			if f.Severity == validate.SeverityError {
 				totalErrors++

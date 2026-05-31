@@ -84,7 +84,7 @@ Examples:
 
 		apiURL := fmt.Sprintf("/api/v1/config/trace?hostname=%s", url.QueryEscape(host))
 		if traceModuleFlag != "" {
-			apiURL += "&module=" + url.QueryEscape(traceModuleFlag)
+			apiURL += "&configcrate=" + url.QueryEscape(traceModuleFlag)
 		}
 
 		if err := client.get(apiURL, &trace); err != nil {
@@ -128,12 +128,12 @@ Examples:
 			fmt.Println()
 		}
 
-		// Section 2: Module Inheritance (boxes with modules and roles, no vars).
+		// Section 2: Configcrate Inheritance (boxes with modules and roles, no vars).
 		// Usercrates already have their own section above — skip them here so
 		// they don't render twice as both a "Usercrates" row and a module box.
 		moduleLevels := levelsExcludingUsercrates(trace.Inheritance)
 		if len(moduleLevels) > 0 {
-			fmt.Println(bold("Module Inheritance:"))
+			fmt.Println(bold("Configcrate Inheritance:"))
 			fmt.Println()
 			renderModuleCards(moduleLevels, trace.RoleExpansion, trace.MatchPattern)
 		}
@@ -178,13 +178,13 @@ Examples:
 			renderComplianceInheritance(trace.ComplianceTags)
 		}
 
-		// Section 6a: Modules-tree compliance.vgo provenance
-		if len(trace.ModuleComplianceFiles) > 0 {
+		// Section 6a: Configcrates-tree compliance.vgo provenance
+		if len(trace.ConfigcrateComplianceFiles) > 0 {
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 			fmt.Println(bold("Compliance Sources:"))
 			fmt.Println()
-			renderModuleComplianceSources(trace.ModuleComplianceFiles)
+			renderModuleComplianceSources(trace.ConfigcrateComplianceFiles)
 		}
 
 		// Section 7: Waivers Inheritance
@@ -224,8 +224,8 @@ type traceResult struct {
 	Roles         []string             `json:"roles"`
 	RoleExpansion []roleExpansionEntry `json:"role_expansion"`
 	Inheritance   []inheritanceLevel   `json:"inheritance"`
-	Modules       []string             `json:"modules"`
-	ModuleSources map[string]string    `json:"module_sources"`
+	Configcrates       []string             `json:"configcrates"`
+	ConfigcrateSources map[string]string    `json:"configcrate_sources"`
 	VarSources    []struct {
 		Key    string `json:"key"`
 		Value  any    `json:"value"`
@@ -238,7 +238,7 @@ type traceResult struct {
 	SecretsProvider       string                      `json:"secrets_provider"`
 	Dependencies          []dependencyTraceEntry      `json:"dependencies"`
 	ComplianceTags        []complianceTraceEntry      `json:"compliance_tags"`
-	ModuleComplianceFiles []moduleComplianceFileEntry `json:"module_compliance_files"`
+	ConfigcrateComplianceFiles []moduleComplianceFileEntry `json:"configcrate_compliance_files"`
 	EnvoyWaiverFiles      []string                    `json:"envoy_waiver_files"`
 	EnvoyWaivers          []envoyWaiverTraceEntry     `json:"envoy_waivers"`
 	Conditionals          []conditionalTraceEntry     `json:"conditionals"`
@@ -254,7 +254,7 @@ type secretTraceEntry = struct {
 	Key    string `json:"key"`
 	Path   string `json:"path"`
 	Source string `json:"source"`
-	Module string `json:"module"`
+	Configcrate string `json:"configcrate"`
 }
 
 type dependencyTraceEntry = struct {
@@ -265,7 +265,7 @@ type dependencyTraceEntry = struct {
 }
 
 type complianceTraceEntry = struct {
-	Module         string                       `json:"module"`
+	Configcrate         string                       `json:"configcrate"`
 	Provides       []string                     `json:"provides,omitempty"`
 	Bundle         []string                     `json:"bundle,omitempty"`
 	Frameworks     map[string][]string          `json:"frameworks"`
@@ -282,7 +282,7 @@ type envoyWaiverTraceEntry = struct {
 }
 
 type conditionalTraceEntry = struct {
-	Module       string `json:"module"`
+	Configcrate       string `json:"configcrate"`
 	Resource     string `json:"resource"`
 	When         string `json:"when"`
 	ResolvedWhen string `json:"resolved_when"`
@@ -320,7 +320,7 @@ func greenRampBold(depth, total int) string {
 type inheritanceLevel = struct {
 	Dir       string         `json:"dir"`
 	File      string         `json:"file"`
-	Modules   []string       `json:"modules"`
+	Configcrates   []string       `json:"configcrates"`
 	Roles     []string       `json:"roles"`
 	Vars      map[string]any `json:"vars"`
 	Overrides []string       `json:"overrides"`
@@ -329,7 +329,7 @@ type inheritanceLevel = struct {
 type roleExpansionEntry = struct {
 	Role     string   `json:"role"`
 	Includes []string `json:"includes"`
-	Modules  []string `json:"modules"`
+	Configcrates  []string `json:"configcrates"`
 }
 
 // renderInheritanceTree draws Section 1: the directory tree structure.
@@ -445,13 +445,13 @@ func renderModuleCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 	roleModules := make(map[string][]string)
 	roleIncludes := make(map[string][]string)
 	for _, re := range roleExpansion {
-		roleModules[re.Role] = re.Modules
+		roleModules[re.Role] = re.Configcrates
 		roleIncludes[re.Role] = re.Includes
 	}
 
 	for i, lvl := range levels {
 		// Skip levels that contribute no modules or roles.
-		if len(lvl.Modules) == 0 && len(lvl.Roles) == 0 && !(i == total-1 && matchPattern != "") {
+		if len(lvl.Configcrates) == 0 && len(lvl.Roles) == 0 && !(i == total-1 && matchPattern != "") {
 			continue
 		}
 
@@ -481,9 +481,9 @@ func renderModuleCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 			fmt.Printf("  %s│%s %s %s\n", color, rst, magenta("match:"), matchPattern)
 		}
 
-		// Modules.
-		if len(lvl.Modules) > 0 {
-			fmt.Printf("  %s│%s %s %s\n", color, rst, amber("modules:"), strings.Join(lvl.Modules, ", "))
+		// Configcrates.
+		if len(lvl.Configcrates) > 0 {
+			fmt.Printf("  %s│%s %s %s\n", color, rst, amber("modules:"), strings.Join(lvl.Configcrates, ", "))
 		}
 
 		// Roles with inline expansion.
@@ -619,7 +619,7 @@ func renderPasswordInheritance(refs []secretTraceEntry, provider string) {
 	order := []string{}
 	byModule := map[string][]secretTraceEntry{}
 	for _, ref := range refs {
-		mod := ref.Module
+		mod := ref.Configcrate
 		if mod == "" {
 			mod = "(envoy-level)"
 		}
@@ -668,7 +668,7 @@ func renderDependencyInheritance(deps []dependencyTraceEntry) {
 // reading the expanded controls.
 func renderComplianceInheritance(tags []complianceTraceEntry) {
 	for _, ct := range tags {
-		header := amber(ct.Module)
+		header := amber(ct.Configcrate)
 		if len(ct.Provides) > 0 {
 			header = header + dim("  provides: ["+strings.Join(ct.Provides, ", ")+"]")
 		}
@@ -832,7 +832,7 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "    RESOURCE\tWHEN\n")
 		for _, c := range group {
-			scope := c.Module
+			scope := c.Configcrate
 			if c.Resource != "" {
 				scope += "/" + c.Resource
 			}
@@ -854,7 +854,7 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 // separator + heading don't render for stockpiles without usercrates.
 func hasUsercrates(levels []inheritanceLevel) bool {
 	for _, lvl := range levels {
-		if lvl.File == "usercrates/" && len(lvl.Modules) > 0 {
+		if lvl.File == "usercrates/" && len(lvl.Configcrates) > 0 {
 			return true
 		}
 	}
@@ -896,7 +896,7 @@ func renderUsercrates(levels []inheritanceLevel) {
 		if scope == "" {
 			scope = "(fleet-wide)"
 		}
-		for _, name := range lvl.Modules {
+		for _, name := range lvl.Configcrates {
 			rows = append(rows, usercrateRow{scope: scope, name: name})
 		}
 	}

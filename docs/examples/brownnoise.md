@@ -5,7 +5,7 @@ This example builds and runs a brown noise Docker container on a managed node, w
 
 ## Module Definition
 
-`stockpile/modules/brownnoise.vgo`:
+`stockpile/configcrates/brownnoise.vgo`:
 
 ```yaml
 name: brownnoise
@@ -80,7 +80,7 @@ resources:
 envoys:
   - match: "workstation.home.example.com"
     roles: []
-    modules:
+    configcrates:
       - brownnoise
     vars:
       brownnoise_pulse_uid: "1000"
@@ -89,7 +89,7 @@ envoys:
 
 ## Template
 
-Place your `brownnoise.sh` script at `stockpile/modules/templates/brownnoise.sh.tmpl`. You can optionally template the parameters:
+Place your `brownnoise.sh` script at `stockpile/configcrates/templates/brownnoise.sh.tmpl`. You can optionally template the parameters:
 
 ```bash
 minutes=${1:-'{{ .Vars.brownnoise_minutes }}'}

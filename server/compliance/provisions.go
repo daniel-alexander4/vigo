@@ -5,9 +5,9 @@ package compliance
 
 import "sort"
 
-// ModuleProvision is one functional capability a module makes available
-// for compliance attribution. Modules declare `provides: [time-sync]`;
-// the loader resolves each tag through ModuleProvisions and unions the
+// ConfigcrateProvision is one functional capability a module makes available
+// for compliance attribution. Configcrates declare `provides: [time-sync]`;
+// the loader resolves each tag through ConfigcrateProvisions and unions the
 // resulting (framework, control) pairs with the module's explicit
 // `compliance:` block.
 //
@@ -22,10 +22,10 @@ import "sort"
 // This is orthogonal to ConnwaerCapabilityByControl in
 // server/api/report.go — that map exists to *escalate* a framework
 // control when a Connwaer trait proves it's enforced, whereas
-// ModuleProvisions exists to *attribute* a framework control to the
+// ConfigcrateProvisions exists to *attribute* a framework control to the
 // module that provides it. The two layers compose but never overlap;
 // the renaming is deliberate.
-type ModuleProvision struct {
+type ConfigcrateProvision struct {
 	// ID is the kebab-case tag operators write in YAML. Matches the
 	// map key.
 	ID string
@@ -46,7 +46,7 @@ type ModuleProvision struct {
 	Frameworks map[string][]string
 }
 
-// ModuleProvisions is the source-of-truth catalog. Keys are the
+// ConfigcrateProvisions is the source-of-truth catalog. Keys are the
 // kebab-case provision IDs that operators reference under `provides:`.
 //
 // Authoring note: every entry's framework → control list is
@@ -55,7 +55,7 @@ type ModuleProvision struct {
 // hand-rolled the same cross-walk in its `compliance:` block — the
 // catalog is grounded in actual usage, not aspirational benchmark
 // categories.
-var ModuleProvisions = map[string]ModuleProvision{
+var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 	"time-sync": {
 		ID:          "time-sync",
 		Title:       "System time synchronization",
@@ -130,7 +130,7 @@ var ModuleProvisions = map[string]ModuleProvision{
 	"log-shipping": {
 		ID:          "log-shipping",
 		Title:       "Log forwarding to a central collector",
-		Description: "Forwards host logs (rsyslog, fluent-bit, promtail, …) to a central aggregation point so logs survive host loss and become correlatable. Narrow claim: forwarding only. Modules that also parse/filter (fluent-bit, vector) layer extra controls via an explicit `compliance:` block.",
+		Description: "Forwards host logs (rsyslog, fluent-bit, promtail, …) to a central aggregation point so logs survive host loss and become correlatable. Narrow claim: forwarding only. Configcrates that also parse/filter (fluent-bit, vector) layer extra controls via an explicit `compliance:` block.",
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.12.4.1"},
 			"nist-800-53": {"AU-2", "AU-3", "AU-9"},
@@ -232,7 +232,7 @@ var ModuleProvisions = map[string]ModuleProvision{
 	"host-backup": {
 		ID:          "host-backup",
 		Title:       "Host file backup",
-		Description: "Backs up host data on a schedule to a remote target. Narrow claim: scheduled backups exist and the backup plan is documented. Modules that also assert encryption at rest declare `host-backup-encrypted` instead.",
+		Description: "Backs up host data on a schedule to a remote target. Narrow claim: scheduled backups exist and the backup plan is documented. Configcrates that also assert encryption at rest declare `host-backup-encrypted` instead.",
 		Frameworks: map[string][]string{
 			"hipaa":       {"164.308(a)(7)(ii)(A)"},
 			"iso-27001":   {"A.12.3.1"},
@@ -336,7 +336,7 @@ var ModuleProvisions = map[string]ModuleProvision{
 	"password-policy": {
 		ID:          "password-policy",
 		Title:       "Password complexity policy (pwquality)",
-		Description: "Configures password-strength rules via pwquality / PAM. Narrow claim: complexity rules. Modules that also assert aging / lockout / history layer `password-policy-comprehensive` instead.",
+		Description: "Configures password-strength rules via pwquality / PAM. Narrow claim: complexity rules. Configcrates that also assert aging / lockout / history layer `password-policy-comprehensive` instead.",
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.9.4.3"},
 			"nist-800-53": {"IA-5(1)"},
@@ -740,7 +740,7 @@ var ModuleProvisions = map[string]ModuleProvision{
 // provision ID. Returns nil for an unknown ID (modlint catches unknown
 // provisions at module-load; the loader treats nil as zero contribution).
 func ResolveProvision(id string) map[string][]string {
-	p, ok := ModuleProvisions[id]
+	p, ok := ConfigcrateProvisions[id]
 	if !ok {
 		return nil
 	}
@@ -750,8 +750,8 @@ func ResolveProvision(id string) map[string][]string {
 // KnownProvisionIDs returns every catalog ID in alphabetical order.
 // Used by modlint's did-you-mean and by `vigocli compliance provisions`.
 func KnownProvisionIDs() []string {
-	ids := make([]string, 0, len(ModuleProvisions))
-	for id := range ModuleProvisions {
+	ids := make([]string, 0, len(ConfigcrateProvisions))
+	for id := range ConfigcrateProvisions {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)

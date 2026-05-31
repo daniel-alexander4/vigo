@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Anti-examples mirror the examples/ tree with retract templates —
-// every module example at stacks/examples/modules/<cat>/<name>.vgo.example
-// has a paired retract at stacks/anti-examples/modules/<cat>/<name>-retract.vgo.example.
+// every module example at stacks/examples/configcrates/<cat>/<name>.vgo.example
+// has a paired retract at stacks/anti-examples/configcrates/<cat>/<name>-retract.vgo.example.
 // The mirror-by-construction makes it structurally obvious if a retract
 // is missing for a given install template.
 
@@ -29,7 +29,7 @@ var configAntiExamplesCmd = &cobra.Command{
 	Use:   "anti-examples",
 	Short: "Browse, copy, and verify retract templates that mirror examples/",
 	Long: `Anti-examples are retract templates paired with each module example.
-The directory tree mirrors examples/modules/ so a missing retract is
+The directory tree mirrors examples/configcrates/ so a missing retract is
 visually obvious. Use mirror-check to scan for examples without
 matching anti-examples.`,
 }
@@ -85,7 +85,7 @@ Examples:
 var antiExamplesMirrorCheckCmd = &cobra.Command{
 	Use:   "mirror-check",
 	Short: "Report module examples without a matching anti-example (and vice versa)",
-	Long: `Walk examples/modules/ and anti-examples/modules/ and report
+	Long: `Walk examples/configcrates/ and anti-examples/configcrates/ and report
 mismatches: install templates without a paired retract, or retracts
 referencing a module example that no longer exists. The /tidy
 contract requires every module example to ship with a matching
@@ -98,10 +98,10 @@ retract; this check makes the missing pieces visible.`,
 	},
 }
 
-// runMirrorCheck pairs every example under examples/modules/ with a
-// retract under anti-examples/modules/ and reports gaps in either
-// direction. Pair logic: an example at examples/modules/<sub>/<name>.vgo.example
-// pairs with anti-examples/modules/<sub>/<name>-retract.vgo.example.
+// runMirrorCheck pairs every example under examples/configcrates/ with a
+// retract under anti-examples/configcrates/ and reports gaps in either
+// direction. Pair logic: an example at examples/configcrates/<sub>/<name>.vgo.example
+// pairs with anti-examples/configcrates/<sub>/<name>-retract.vgo.example.
 // Returns a non-nil error when any gap exists so the command can be
 // wired into CI.
 func runMirrorCheck(exampleDir, antiExampleDir string) error {
@@ -155,12 +155,12 @@ func runMirrorCheck(exampleDir, antiExampleDir string) error {
 		len(missingRetracts), len(orphanRetracts))
 }
 
-// collectModuleExamples walks examples/modules/ and returns rel paths
+// collectModuleExamples walks examples/configcrates/ and returns rel paths
 // (relative to examples/) of every *.vgo.example file. Empty map if
 // the dir doesn't exist.
 func collectModuleExamples(exampleDir string) map[string]struct{} {
 	out := make(map[string]struct{})
-	root := filepath.Join(exampleDir, "modules")
+	root := filepath.Join(exampleDir, "configcrates")
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
@@ -180,11 +180,11 @@ func collectModuleExamples(exampleDir string) map[string]struct{} {
 }
 
 // collectModuleAntiExamples is the symmetric walker for the
-// anti-examples/modules/ tree. Only counts files ending in
+// anti-examples/configcrates/ tree. Only counts files ending in
 // -retract.vgo.example.
 func collectModuleAntiExamples(antiExampleDir string) map[string]struct{} {
 	out := make(map[string]struct{})
-	root := filepath.Join(antiExampleDir, "modules")
+	root := filepath.Join(antiExampleDir, "configcrates")
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil

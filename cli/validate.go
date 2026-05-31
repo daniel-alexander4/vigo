@@ -91,7 +91,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 			if entry.Match == "" {
 				findings = append(findings, validate.Finding{
 					Severity: validate.SeverityError,
-					Module:   filepath.Base(path),
+					Configcrate:   filepath.Base(path),
 					Message:  fmt.Sprintf("entry %d: missing required 'match' field", i),
 				})
 			}
@@ -99,7 +99,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 		if len(cfg.Envoys) == 0 {
 			findings = append(findings, validate.Finding{
 				Severity: validate.SeverityWarning,
-				Module:   filepath.Base(path),
+				Configcrate:   filepath.Base(path),
 				Message:  "no envoy entries defined",
 			})
 		}
@@ -118,7 +118,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 	if def.Name == "" {
 		findings = append(findings, validate.Finding{
 			Severity: validate.SeverityError,
-			Module:   filepath.Base(path),
+			Configcrate:   filepath.Base(path),
 			Message:  "missing required 'name' field",
 		})
 	}
@@ -132,7 +132,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 		if r.Name == "" {
 			findings = append(findings, validate.Finding{
 				Severity:     validate.SeverityError,
-				Module:       moduleName,
+				Configcrate:       moduleName,
 				ResourceType: r.Type,
 				Message:      "resource missing 'name' field",
 			})
@@ -140,7 +140,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 		if r.Type == "" {
 			findings = append(findings, validate.Finding{
 				Severity:     validate.SeverityError,
-				Module:       moduleName,
+				Configcrate:       moduleName,
 				ResourceName: r.Name,
 				Message:      "resource missing 'type' field",
 			})
@@ -148,7 +148,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 	}
 
 	// Phase 4: idempotency validation.
-	mod := validate.Module{Name: moduleName}
+	mod := validate.Configcrate{Name: moduleName}
 	for _, r := range def.Resources {
 		mod.Resources = append(mod.Resources, validate.Resource{
 			Name:        r.Name,
@@ -159,9 +159,9 @@ func validateFile(path string) ([]validate.Finding, error) {
 			WatchSecret: r.WatchSecret,
 		})
 	}
-	findings = append(findings, validate.ValidateModule(mod)...)
+	findings = append(findings, validate.ValidateConfigcrate(mod)...)
 
-	// Deduplicate (structural checks may overlap with validate.ValidateModule).
+	// Deduplicate (structural checks may overlap with validate.ValidateConfigcrate).
 	return dedup(findings), nil
 }
 

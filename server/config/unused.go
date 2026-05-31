@@ -59,13 +59,13 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 
 	// --- Unused modules + usercrates ---
 
-	// Split definitions by kind. Modules and usercrates share cs.moduleDefs
+	// Split definitions by kind. Configcrates and usercrates share cs.moduleDefs
 	// but each kind has its own ref set; reporting them separately matches
 	// the carrier-field shape (modules: vs usercrates:).
 	definedModules := make(map[string]bool)
 	definedUsercrates := make(map[string]bool)
 	for name, def := range cs.moduleDefs {
-		if def.Kind == ModuleKindUsercrate {
+		if def.Kind == ConfigcrateKindUsercrate {
 			definedUsercrates[name] = true
 		} else {
 			definedModules[name] = true
@@ -77,20 +77,20 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 
 	// From roles: direct, case branches, and 1-level includes.
 	for _, role := range cs.roleDefs {
-		for _, r := range role.Modules {
+		for _, r := range role.Configcrates {
 			refModules[r.Name] = true
 		}
 		for _, r := range role.Usercrates {
 			refUsercrates[r.Name] = true
 		}
 		for _, c := range role.Case {
-			for _, r := range c.Modules {
+			for _, r := range c.Configcrates {
 				refModules[r.Name] = true
 			}
 		}
 		for _, incName := range role.Includes {
 			if inc, ok := cs.roleDefs[incName]; ok {
-				for _, r := range inc.Modules {
+				for _, r := range inc.Configcrates {
 					refModules[r.Name] = true
 				}
 				for _, r := range inc.Usercrates {
@@ -102,7 +102,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 
 	// From envoy entries (post-inheritance — includes common.vgo-inherited refs).
 	for _, entry := range cs.envoyEntries {
-		for _, r := range entry.Modules {
+		for _, r := range entry.Configcrates {
 			refModules[r.Name] = true
 		}
 		for _, r := range entry.Usercrates {
@@ -112,7 +112,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 
 	// From common.vgo files.
 	for _, cc := range cs.commonConfigs {
-		for _, r := range cc.Modules {
+		for _, r := range cc.Configcrates {
 			refModules[r.Name] = true
 		}
 		for _, r := range cc.Usercrates {
@@ -123,7 +123,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 	// From environments.vgo per-env blocks.
 	for _, envMap := range cs.perEnvOverrides {
 		for _, block := range envMap {
-			for _, r := range block.Modules {
+			for _, r := range block.Configcrates {
 				refModules[r.Name] = true
 			}
 			for _, r := range block.Usercrates {
@@ -224,7 +224,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 // unusedTemplates lists every file under templates/ that no module
 // references via a `source:` attribute. References are captured by
 // resolveSourceFiles at load time and stashed on
-// ModuleDefinition.TemplateSources; dynamic source paths cannot occur
+// ConfigcrateDefinition.TemplateSources; dynamic source paths cannot occur
 // because resolveSourceFiles rejects non-literal values (it reads the
 // declared path off disk during validation).
 func (cs *ConfigStore) unusedTemplates() []UnusedTemplate {

@@ -7,7 +7,7 @@ This example sets up Prometheus node_exporter, Prometheus server, and Grafana us
 
 Deployed to every envoy for metrics collection.
 
-`stockpile/modules/node-exporter.vgo`:
+`stockpile/configcrates/node-exporter.vgo`:
 
 ```yaml
 name: node-exporter
@@ -48,7 +48,7 @@ resources:
 
 Deployed to monitoring servers.
 
-`stockpile/modules/prometheus.vgo`:
+`stockpile/configcrates/prometheus.vgo`:
 
 ```yaml
 name: prometheus
@@ -106,7 +106,7 @@ resources:
 
 ## Grafana Module
 
-`stockpile/modules/grafana.vgo`:
+`stockpile/configcrates/grafana.vgo`:
 
 ```yaml
 name: grafana
@@ -169,7 +169,7 @@ resources:
 
 ```yaml
 name: monitoring
-modules:
+configcrates:
   - node-exporter
   - prometheus
   - grafana
@@ -184,7 +184,7 @@ modules:
 envoys:
   # All servers get node_exporter
   - match: "*.example.com"
-    modules:
+    configcrates:
       - node-exporter
 
   # Monitoring servers get the full stack

@@ -49,7 +49,7 @@ func LintRolesFile(input []byte, _ Options) *Result {
 
 type roleCase struct {
 	When    string
-	Modules []string
+	Configcrates []string
 	Line    int
 	Column  int
 }
@@ -108,7 +108,7 @@ func parseRolesFile(data []byte) (*rolesFile, error) {
 							role.Includes = append(role.Includes, item.Value)
 						}
 					}
-				case "modules":
+				case "configcrates":
 					role.HasModules = true
 					if v.Kind == yaml.SequenceNode {
 						role.NumModules = len(v.Content)
@@ -128,10 +128,10 @@ func parseRolesFile(data []byte) (*rolesFile, error) {
 							switch ck {
 							case "when":
 								rc.When = cv.Value
-							case "modules":
+							case "configcrates":
 								if cv.Kind == yaml.SequenceNode {
 									for _, m := range cv.Content {
-										rc.Modules = append(rc.Modules, m.Value)
+										rc.Configcrates = append(rc.Configcrates, m.Value)
 									}
 								}
 							}

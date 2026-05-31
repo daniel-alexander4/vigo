@@ -1,13 +1,13 @@
 
 # Compliance matrix
 
-This is the canonical reference for **which Vigo modules and Connwaer trait checks satisfy which controls in which frameworks**. Use it to answer "what do I tag this module with?" and "what's left to satisfy framework X?"
+This is the canonical reference for **which Vigo configcrates and Connwaer trait checks satisfy which controls in which frameworks**. Use it to answer "what do I tag this configcrate with?" and "what's left to satisfy framework X?"
 
-For *how* to tag modules and run reports, see [howto/compliance-reporting.md](../howto/compliance-reporting.md). For per-framework regulatory checklists (HIPAA, SOC 2, PCI-DSS, NY DFS Cyber, decommissioning, incident response), see the appendix on that same page.
+For *how* to tag configcrates and run reports, see [howto/compliance-reporting.md](../howto/compliance-reporting.md). For per-framework regulatory checklists (HIPAA, SOC 2, PCI-DSS, NY DFS Cyber, decommissioning, incident response), see the appendix on that same page.
 
 ## How to read this
 
-Every row is a Vigo capability — a thing one or more modules can do, or a thing Connwaer can verify. Columns are frameworks. A cell holds the control IDs that capability satisfies in that framework. Empty cell means the capability doesn't map to that framework (or hasn't been mapped yet — file an issue).
+Every row is a Vigo capability — a thing one or more configcrates can do, or a thing Connwaer can verify. Columns are frameworks. A cell holds the control IDs that capability satisfies in that framework. Empty cell means the capability doesn't map to that framework (or hasn't been mapped yet — file an issue).
 
 Frameworks tracked. The version label is the **currently-mapped baseline** — i.e., the revision Vigo's control IDs are aligned to. The labels below are the authoritative source: they live in `server/compliance/appcontrols.go` and the `/platform/compliance` page renders the same string. If you're auditing against a different revision than what's listed, cross-check the control IDs in your auditor's authoritative copy.
 
@@ -40,31 +40,31 @@ For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the und
 | **Identity & access** | | | | | | | | |
 | Centralized user management (`user` resource + usercrates) | 164.308(a)(4), 164.312(a)(1) | CC6.1, CC6.2 | 7.1, 8.1 | AC-2, AC-2(1), IA-2 | A.5.16, A.5.17 | 5.4, 5.4.1 | 01.b, 01.q | Art.32(1)(b) |
 | Sudo-policy management (`sudoers` resource) | 164.312(a)(2)(ii) | CC6.1 | 7.2.1, 8.2.2 | AC-6, AC-6(1), AC-6(2) | A.8.2 | 5.2.x | 01.c | |
-| Password-policy enforcement (`pam_pwquality` module) | 164.308(a)(5)(ii)(D) | CC6.1 | 8.3, 8.3.1 | IA-5, IA-5(1) | A.5.17 | 5.4.x | 01.d | Art.32(1)(b) |
-| SSH-pubkey-only auth (`ssh-hardening` module) | 164.312(d) | CC6.6, CC6.7 | 8.3.1, 8.3.4 | IA-2(1), IA-5(2) | A.5.17 | 5.2.x | 01.q | Art.32(1)(b) |
-| Session timeout (`/etc/profile.d/timeout` module) | 164.312(a)(2)(iii) | CC6.7 | 8.2.8 | AC-12 | A.8.2 | 5.5.x | 01.h | |
+| Password-policy enforcement (`pam_pwquality` configcrate) | 164.308(a)(5)(ii)(D) | CC6.1 | 8.3, 8.3.1 | IA-5, IA-5(1) | A.5.17 | 5.4.x | 01.d | Art.32(1)(b) |
+| SSH-pubkey-only auth (`ssh-hardening` configcrate) | 164.312(d) | CC6.6, CC6.7 | 8.3.1, 8.3.4 | IA-2(1), IA-5(2) | A.5.17 | 5.2.x | 01.q | Art.32(1)(b) |
+| Session timeout (`/etc/profile.d/timeout` configcrate) | 164.312(a)(2)(iii) | CC6.7 | 8.2.8 | AC-12 | A.8.2 | 5.5.x | 01.h | |
 | **Cryptography & confidentiality** | | | | | | | | |
 | TLS-only transport (Vigo's mTLS is enforced by construction) | 164.312(e)(1) | CC6.7 | 4.1, 4.2.1 | SC-8, SC-8(1), SC-13 | A.8.20, A.8.24 | | 09.s, 10.f | Art.32(1)(a) |
-| Encryption at rest (`luks-disk` / `zfs-encryption` modules) | 164.312(a)(2)(iv) | CC6.1 | 3.4, 3.5 | SC-28, SC-28(1) | A.8.24 | | 10.f | Art.32(1)(a) |
-| Database encryption (SQLite encrypted-volume mount; `db-encryption` module) | 164.312(a)(2)(iv) | CC6.7, C1.1 | 3.4 | SC-28, SC-28(1) | A.8.24 | | 06.d, 10.f | Art.32(1)(a) |
+| Encryption at rest (`luks-disk` / `zfs-encryption` configcrates) | 164.312(a)(2)(iv) | CC6.1 | 3.4, 3.5 | SC-28, SC-28(1) | A.8.24 | | 10.f | Art.32(1)(a) |
+| Database encryption (SQLite encrypted-volume mount; `db-encryption` configcrate) | 164.312(a)(2)(iv) | CC6.7, C1.1 | 3.4 | SC-28, SC-28(1) | A.8.24 | | 06.d, 10.f | Art.32(1)(a) |
 | Secrets management (`secret:` prefix; never in DB/config/logs) | 164.312(e)(1) | CC6.1, CC6.7 | 8.6 | IA-5(7), SC-12 | A.8.24 | | 01.q, 09.s | Art.32(1)(a) |
 | WORM verification (Connwaer trait: `connwaer.worm`) | 164.312(c)(1) | A1.3 | 9.4.4, 10.5.5 | AU-9, AU-9(2) | A.5.33 | | 09.s, 10.k | Art.32(1)(b) |
 | **Audit & integrity** | | | | | | | | |
 | Hash-chained audit log (Vigo built-in) | 164.312(b), 164.312(c)(1) | CC4.1, CC7.2 | 10.2, 10.3, 10.5 | AU-2, AU-3, AU-9, AU-10, AU-12 | A.8.15, A.8.16 | 4.x | 09.aa, 09.ab | Art.5(2), Art.32(1)(b) |
-| File-integrity monitoring (`aide` module; Connwaer `connwaer.fim`) | 164.312(c)(1) | CC6.7, CC7.1 | 11.5, 11.6 | SI-7, SI-7(1), SI-7(7) | A.8.34 | 6.1 | 10.k | |
-| Time synchronization (`chrony` / `ntp` modules) | 164.312(b) | CC4.1 | 10.4, 10.4.1, 10.4.3 | AU-8, AU-8(1) | A.12.4.4 | 2.1.1 | 09.aa | |
+| File-integrity monitoring (`aide` configcrate; Connwaer `connwaer.fim`) | 164.312(c)(1) | CC6.7, CC7.1 | 11.5, 11.6 | SI-7, SI-7(1), SI-7(7) | A.8.34 | 6.1 | 10.k | |
+| Time synchronization (`chrony` / `ntp` configcrates) | 164.312(b) | CC4.1 | 10.4, 10.4.1, 10.4.3 | AU-8, AU-8(1) | A.12.4.4 | 2.1.1 | 09.aa | |
 | SIEM/log shipping integration (Splunk / Datadog / generic syslog) | 164.312(b) | CC4.1, CC7.2 | 10.5.3, 10.5.4 | AU-6, AU-6(1), AU-6(3) | A.8.15, A.8.16 | 4.2 | 09.aa, 09.ad | Art.32(1)(d) |
 | **System hardening** | | | | | | | | |
-| OS-baseline hardening (`security-hardening` module set) | 164.308(a)(1)(ii)(B), 164.312(a)(1) | CC6.6, CC6.8 | 1.1.x, 2.1, 2.2 | CM-2, CM-6, CM-7 | A.8.9, A.8.32 | 1.x, 2.x | 09.a, 10.h | Art.32(1)(b) |
+| OS-baseline hardening (`security-hardening` configcrate set) | 164.308(a)(1)(ii)(B), 164.312(a)(1) | CC6.6, CC6.8 | 1.1.x, 2.1, 2.2 | CM-2, CM-6, CM-7 | A.8.9, A.8.32 | 1.x, 2.x | 09.a, 10.h | Art.32(1)(b) |
 | Service-state enforcement (`service` resource, idempotent) | 164.308(a)(1)(ii)(B) | CC6.6 | 1.4, 2.2.1 | CM-7, CM-7(1) | A.8.9 | 2.2.x | 09.j | Art.32(1)(b) |
 | Package-state enforcement (`package` resource; CVE-scan integration) | 164.308(a)(5)(ii)(B) | CC6.6, CC7.1 | 6.3, 6.3.3 | SI-2, SI-2(2) | A.8.8 | 1.6.x | 10.h, 10.k | Art.32(1)(b) |
-| Patch / dist-upgrade orchestration (`dist-upgrade` module; rolling exec) | 164.308(a)(5)(ii)(B) | CC7.1 | 6.3, 6.3.3 | SI-2, SI-2(2), SI-2(5) | A.8.8 | 1.6.x | 10.h | Art.32(1)(b) |
+| Patch / dist-upgrade orchestration (`dist-upgrade` configcrate; rolling exec) | 164.308(a)(5)(ii)(B) | CC7.1 | 6.3, 6.3.3 | SI-2, SI-2(2), SI-2(5) | A.8.8 | 1.6.x | 10.h | Art.32(1)(b) |
 | Self-protection guardrails (built-in: blocks targeting agent/server/config) | 164.312(c)(1) | CC6.7 | 6.4.1, 6.4.2 | CM-5, CM-5(1) | A.8.32 | | 09.a | Art.32(1)(b) |
 | **Network** | | | | | | | | |
-| Host firewall (`firewalld` / `nftables` / `ufw` modules) | 164.308(a)(4) | CC6.1, CC6.6 | 1.2.x, 1.4 | SC-7, SC-7(5), SC-7(8) | A.8.20, A.8.22 | 3.5.x | 09.m | |
+| Host firewall (`firewalld` / `nftables` / `ufw` configcrates) | 164.308(a)(4) | CC6.1, CC6.6 | 1.2.x, 1.4 | SC-7, SC-7(5), SC-7(8) | A.8.20, A.8.22 | 3.5.x | 09.m | |
 | Network-segmentation verification (Connwaer trait) | 164.308(a)(4) | CC6.1 | 1.2.5, 1.3 | SC-7 | A.8.22 | | 09.m | |
 | Inbound-port-free remote access (Scrier) | 164.312(e)(1) | CC6.6, CC6.7 | 1.2.x, 8.2 | AC-17, AC-17(1), AC-17(2) | A.6.7 | | 01.j | Art.32(1)(a) |
-| DNS-resolution policy (`unbound` / `systemd-resolved` modules) | | CC6.1 | 1.4.4 | SC-20, SC-21 | A.8.20 | 3.4.x | | |
+| DNS-resolution policy (`unbound` / `systemd-resolved` configcrates) | | CC6.1 | 1.4.4 | SC-20, SC-21 | A.8.20 | 3.4.x | | |
 | **Operations** | | | | | | | | |
 | Backup with WAL replication (Litestream → S3) | 164.308(a)(7)(ii)(A) | A1.2 | 9.4, 12.10.1 | CP-9, CP-9(1), CP-9(5) | A.8.13 | | 09.l, 12.b | Art.32(1)(c) |
 | Disaster recovery (server-migration playbook) | 164.308(a)(7) | A1.3 | 12.10 | CP-2, CP-10 | A.5.29, A.5.30 | | 12.b, 12.c | Art.32(1)(c) |
@@ -80,7 +80,7 @@ For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the und
 
 ## Connwaer trait additions
 
-Connwaer is a separate Alexander4 compliance-verification agent. Its docs are currently archived ahead of a dedicated location; once Connwaer ships independently, the canonical reference will live there. Connwaer adds **trait-driven escalation**: a control that a Vigo module can't directly enforce gets satisfied if Connwaer's runtime check confirms it. Examples:
+Connwaer is a separate Alexander4 compliance-verification agent. Its docs are currently archived ahead of a dedicated location; once Connwaer ships independently, the canonical reference will live there. Connwaer adds **trait-driven escalation**: a control that a Vigo configcrate can't directly enforce gets satisfied if Connwaer's runtime check confirms it. Examples:
 
 - `connwaer.app-allowlisting` — verifies application-allowlist enforcement (only approved binaries can execute). Satisfies NIST CM-7(5), CIS 2.5.x, HIPAA 164.312(a)(2)(ii).
 - `connwaer.backup-restore` — verifies the *restore* half of backup discipline by exercising it on a schedule (a backup that can't be restored isn't a backup). Satisfies NIST CP-9(1) / CP-10, ISO A.8.13, HIPAA 164.308(a)(7)(ii)(B).
@@ -102,7 +102,7 @@ Connwaer is a separate Alexander4 compliance-verification agent. Its docs are cu
 - `connwaer.time-sync` — verifies NTP/chrony health, peer reachability, drift bounds. Satisfies PCI-DSS 10.4, NIST AU-8 / AU-8(1), ISO A.12.4.4.
 - `connwaer.worm-verify` — verifies WORM storage (immutable backups, tamper-evident archives) is actually immutable. Satisfies HIPAA 164.312(c)(1), NIST AU-9 / AU-9(2), FINRA SEC-17a-4.
 
-Connwaer's trait outputs feed Vigo's compliance index via the same `compliance:` mechanism modules use — to an auditor reading the framework report, a control satisfied by a Vigo module and a control satisfied by a Connwaer trait check are indistinguishable.
+Connwaer's trait outputs feed Vigo's compliance index via the same `compliance:` mechanism configcrates use — to an auditor reading the framework report, a control satisfied by a Vigo configcrate and a control satisfied by a Connwaer trait check are indistinguishable.
 
 ## What's deliberately not claimed
 

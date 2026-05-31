@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// TestModuleProvisions_KnownTagPasses pins the happy path: a module
+// TestConfigcrateProvisions_KnownTagPasses pins the happy path: a configcrate
 // declaring a provision the catalog knows about produces no findings.
-func TestModuleProvisions_KnownTagPasses(t *testing.T) {
+func TestConfigcrateProvisions_KnownTagPasses(t *testing.T) {
 	mod := &module{
 		Name:     "chrony",
 		Provides: []string{"time-sync"},
@@ -21,13 +21,13 @@ func TestModuleProvisions_KnownTagPasses(t *testing.T) {
 	}
 }
 
-// TestModuleProvisions_UnknownTagWithDidYouMean catches the failure
+// TestConfigcrateProvisions_UnknownTagWithDidYouMean catches the failure
 // mode the rule exists to prevent: a typo'd provision tag silently
 // resolves to nil at runtime (loader treats unknowns as zero
 // contribution) — coverage drops, audit catches it months later. The
 // rule produces an Error with a did-you-mean suggestion when the typo
 // is close to a known tag.
-func TestModuleProvisions_UnknownTagWithDidYouMean(t *testing.T) {
+func TestConfigcrateProvisions_UnknownTagWithDidYouMean(t *testing.T) {
 	mod := &module{
 		Name:     "chrony",
 		Provides: []string{"time-syc"}, // typo: missing 'n'
@@ -49,14 +49,14 @@ func TestModuleProvisions_UnknownTagWithDidYouMean(t *testing.T) {
 // moduleComplianceKeyRetiredRule is the single error path now, and
 // `provides:` no longer interacts with an explicit `compliance:` block
 // at the module level (only at the directory-inheritance level via
-// `compliance.vgo`, which isn't a module YAML and doesn't go through
+// `compliance.vgo`, which isn't a configcrate YAML and doesn't go through
 // this rule).
 
-// TestModuleProvisions_NoProvidesNoFindings pins that the rule is a
+// TestConfigcrateProvisions_NoProvidesNoFindings pins that the rule is a
 // no-op for modules with no `compliance.provides:` claim — modules that
 // only declare a `compliance.bundle:` (or no compliance at all) aren't
 // disturbed by the provisions rule.
-func TestModuleProvisions_NoProvidesNoFindings(t *testing.T) {
+func TestConfigcrateProvisions_NoProvidesNoFindings(t *testing.T) {
 	mod := &module{
 		Name:   "bundle-only-module",
 		Bundle: []string{"cis-ubuntu-access"},

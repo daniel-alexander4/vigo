@@ -13,16 +13,16 @@ import (
 )
 
 const createRun = `-- name: CreateRun :one
-INSERT INTO runs (envoy_id, status, trigger, module_count)
+INSERT INTO runs (envoy_id, status, trigger, configcrate_count)
 VALUES (?, ?, ?, ?)
-RETURNING id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
+RETURNING id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
 `
 
 type CreateRunParams struct {
-	EnvoyID     string `json:"envoy_id"`
-	Status      string `json:"status"`
-	Trigger     string `json:"trigger"`
-	ModuleCount int64  `json:"module_count"`
+	EnvoyID          string `json:"envoy_id"`
+	Status           string `json:"status"`
+	Trigger          string `json:"trigger"`
+	ConfigcrateCount int64  `json:"configcrate_count"`
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
@@ -30,7 +30,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		arg.EnvoyID,
 		arg.Status,
 		arg.Trigger,
-		arg.ModuleCount,
+		arg.ConfigcrateCount,
 	)
 	var i Run
 	err := row.Scan(
@@ -39,7 +39,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
-		&i.ModuleCount,
+		&i.ConfigcrateCount,
 		&i.ChangedCount,
 		&i.FailedCount,
 		&i.SkippedCount,
@@ -49,26 +49,26 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 }
 
 const createRunResult = `-- name: CreateRunResult :one
-INSERT INTO run_results (run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms)
+INSERT INTO run_results (run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
+RETURNING id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
 `
 
 type CreateRunResultParams struct {
-	RunID        string         `json:"run_id"`
-	ModuleName   string         `json:"module_name"`
-	ResourceType string         `json:"resource_type"`
-	ResourceName string         `json:"resource_name"`
-	ActionTaken  string         `json:"action_taken"`
-	Changed      int64          `json:"changed"`
-	ErrorMessage sql.NullString `json:"error_message"`
-	DurationMs   int64          `json:"duration_ms"`
+	RunID           string         `json:"run_id"`
+	ConfigcrateName string         `json:"configcrate_name"`
+	ResourceType    string         `json:"resource_type"`
+	ResourceName    string         `json:"resource_name"`
+	ActionTaken     string         `json:"action_taken"`
+	Changed         int64          `json:"changed"`
+	ErrorMessage    sql.NullString `json:"error_message"`
+	DurationMs      int64          `json:"duration_ms"`
 }
 
 func (q *Queries) CreateRunResult(ctx context.Context, arg CreateRunResultParams) (RunResult, error) {
 	row := q.db.QueryRowContext(ctx, createRunResult,
 		arg.RunID,
-		arg.ModuleName,
+		arg.ConfigcrateName,
 		arg.ResourceType,
 		arg.ResourceName,
 		arg.ActionTaken,
@@ -80,7 +80,7 @@ func (q *Queries) CreateRunResult(ctx context.Context, arg CreateRunResultParams
 	err := row.Scan(
 		&i.ID,
 		&i.RunID,
-		&i.ModuleName,
+		&i.ConfigcrateName,
 		&i.ResourceType,
 		&i.ResourceName,
 		&i.ActionTaken,
@@ -97,7 +97,7 @@ SELECT e.id, e.hostname, MAX(r.started_at) AS last_run
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
 JOIN envoys e ON e.id = r.envoy_id
-WHERE rr.module_name = ?1
+WHERE rr.configcrate_name = ?1
   AND r.status IN ('success', 'partial')
   AND e.revoked = 0
 GROUP BY e.id, e.hostname
@@ -112,8 +112,8 @@ type EnvoysWithModuleRow struct {
 
 // Find active envoys that have run a specific module, with the most recent run time.
 // Used by module retraction to show which envoys are affected when a module is removed.
-func (q *Queries) EnvoysWithModule(ctx context.Context, moduleName string) ([]EnvoysWithModuleRow, error) {
-	rows, err := q.db.QueryContext(ctx, envoysWithModule, moduleName)
+func (q *Queries) EnvoysWithModule(ctx context.Context, configcrateName string) ([]EnvoysWithModuleRow, error) {
+	rows, err := q.db.QueryContext(ctx, envoysWithModule, configcrateName)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 }
 
 const getNextSuccessfulRun = `-- name: GetNextSuccessfulRun :one
-SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE envoy_id = ?1 AND started_at > ?2 AND status = 'success'
 ORDER BY started_at ASC
@@ -182,7 +182,7 @@ func (q *Queries) GetNextSuccessfulRun(ctx context.Context, arg GetNextSuccessfu
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
-		&i.ModuleCount,
+		&i.ConfigcrateCount,
 		&i.ChangedCount,
 		&i.FailedCount,
 		&i.SkippedCount,
@@ -192,7 +192,7 @@ func (q *Queries) GetNextSuccessfulRun(ctx context.Context, arg GetNextSuccessfu
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE id = ?
 `
@@ -206,7 +206,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id string) (Run, error) {
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
-		&i.ModuleCount,
+		&i.ConfigcrateCount,
 		&i.ChangedCount,
 		&i.FailedCount,
 		&i.SkippedCount,
@@ -216,7 +216,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id string) (Run, error) {
 }
 
 const listAllRuns = `-- name: ListAllRuns :many
-SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 ORDER BY started_at DESC
 LIMIT ?
@@ -237,7 +237,7 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
-			&i.ModuleCount,
+			&i.ConfigcrateCount,
 			&i.ChangedCount,
 			&i.FailedCount,
 			&i.SkippedCount,
@@ -257,7 +257,7 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 }
 
 const listFailedRunsForDate = `-- name: ListFailedRunsForDate :many
-SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE date(started_at) = ?1 AND status IN ('failure', 'partial')
 ORDER BY started_at ASC
@@ -278,7 +278,7 @@ func (q *Queries) ListFailedRunsForDate(ctx context.Context, startedAt time.Time
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
-			&i.ModuleCount,
+			&i.ConfigcrateCount,
 			&i.ChangedCount,
 			&i.FailedCount,
 			&i.SkippedCount,
@@ -298,7 +298,7 @@ func (q *Queries) ListFailedRunsForDate(ctx context.Context, startedAt time.Time
 }
 
 const listRunResults = `-- name: ListRunResults :many
-SELECT id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
+SELECT id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
 FROM run_results
 WHERE run_id = ?
 ORDER BY created_at ASC
@@ -316,7 +316,7 @@ func (q *Queries) ListRunResults(ctx context.Context, runID string) ([]RunResult
 		if err := rows.Scan(
 			&i.ID,
 			&i.RunID,
-			&i.ModuleName,
+			&i.ConfigcrateName,
 			&i.ResourceType,
 			&i.ResourceName,
 			&i.ActionTaken,
@@ -339,7 +339,7 @@ func (q *Queries) ListRunResults(ctx context.Context, runID string) ([]RunResult
 }
 
 const listRunResultsByRunIDs = `-- name: ListRunResultsByRunIDs :many
-SELECT id, run_id, module_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
+SELECT id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at
 FROM run_results
 WHERE run_id IN (/*SLICE:run_ids*/?)
 ORDER BY run_id, created_at ASC
@@ -367,7 +367,7 @@ func (q *Queries) ListRunResultsByRunIDs(ctx context.Context, runIds []string) (
 		if err := rows.Scan(
 			&i.ID,
 			&i.RunID,
-			&i.ModuleName,
+			&i.ConfigcrateName,
 			&i.ResourceType,
 			&i.ResourceName,
 			&i.ActionTaken,
@@ -390,7 +390,7 @@ func (q *Queries) ListRunResultsByRunIDs(ctx context.Context, runIds []string) (
 }
 
 const listRunResultsSince = `-- name: ListRunResultsSince :many
-SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
+SELECT rr.id, rr.run_id, rr.configcrate_name, rr.resource_type, rr.resource_name,
        rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
        r.envoy_id, r.status AS run_status, r.started_at AS run_started_at,
        t.hostname
@@ -408,20 +408,20 @@ type ListRunResultsSinceParams struct {
 }
 
 type ListRunResultsSinceRow struct {
-	ID           string         `json:"id"`
-	RunID        string         `json:"run_id"`
-	ModuleName   string         `json:"module_name"`
-	ResourceType string         `json:"resource_type"`
-	ResourceName string         `json:"resource_name"`
-	ActionTaken  string         `json:"action_taken"`
-	Changed      int64          `json:"changed"`
-	ErrorMessage sql.NullString `json:"error_message"`
-	DurationMs   int64          `json:"duration_ms"`
-	CreatedAt    time.Time      `json:"created_at"`
-	EnvoyID      string         `json:"envoy_id"`
-	RunStatus    string         `json:"run_status"`
-	RunStartedAt time.Time      `json:"run_started_at"`
-	Hostname     string         `json:"hostname"`
+	ID              string         `json:"id"`
+	RunID           string         `json:"run_id"`
+	ConfigcrateName string         `json:"configcrate_name"`
+	ResourceType    string         `json:"resource_type"`
+	ResourceName    string         `json:"resource_name"`
+	ActionTaken     string         `json:"action_taken"`
+	Changed         int64          `json:"changed"`
+	ErrorMessage    sql.NullString `json:"error_message"`
+	DurationMs      int64          `json:"duration_ms"`
+	CreatedAt       time.Time      `json:"created_at"`
+	EnvoyID         string         `json:"envoy_id"`
+	RunStatus       string         `json:"run_status"`
+	RunStartedAt    time.Time      `json:"run_started_at"`
+	Hostname        string         `json:"hostname"`
 }
 
 func (q *Queries) ListRunResultsSince(ctx context.Context, arg ListRunResultsSinceParams) ([]ListRunResultsSinceRow, error) {
@@ -436,7 +436,7 @@ func (q *Queries) ListRunResultsSince(ctx context.Context, arg ListRunResultsSin
 		if err := rows.Scan(
 			&i.ID,
 			&i.RunID,
-			&i.ModuleName,
+			&i.ConfigcrateName,
 			&i.ResourceType,
 			&i.ResourceName,
 			&i.ActionTaken,
@@ -463,7 +463,7 @@ func (q *Queries) ListRunResultsSince(ctx context.Context, arg ListRunResultsSin
 }
 
 const listRunResultsSinceByEnvoy = `-- name: ListRunResultsSinceByEnvoy :many
-SELECT rr.id, rr.run_id, rr.module_name, rr.resource_type, rr.resource_name,
+SELECT rr.id, rr.run_id, rr.configcrate_name, rr.resource_type, rr.resource_name,
        rr.action_taken, rr.changed, rr.error_message, rr.duration_ms, rr.created_at,
        r.envoy_id, r.status AS run_status, r.started_at AS run_started_at,
        t.hostname
@@ -482,20 +482,20 @@ type ListRunResultsSinceByEnvoyParams struct {
 }
 
 type ListRunResultsSinceByEnvoyRow struct {
-	ID           string         `json:"id"`
-	RunID        string         `json:"run_id"`
-	ModuleName   string         `json:"module_name"`
-	ResourceType string         `json:"resource_type"`
-	ResourceName string         `json:"resource_name"`
-	ActionTaken  string         `json:"action_taken"`
-	Changed      int64          `json:"changed"`
-	ErrorMessage sql.NullString `json:"error_message"`
-	DurationMs   int64          `json:"duration_ms"`
-	CreatedAt    time.Time      `json:"created_at"`
-	EnvoyID      string         `json:"envoy_id"`
-	RunStatus    string         `json:"run_status"`
-	RunStartedAt time.Time      `json:"run_started_at"`
-	Hostname     string         `json:"hostname"`
+	ID              string         `json:"id"`
+	RunID           string         `json:"run_id"`
+	ConfigcrateName string         `json:"configcrate_name"`
+	ResourceType    string         `json:"resource_type"`
+	ResourceName    string         `json:"resource_name"`
+	ActionTaken     string         `json:"action_taken"`
+	Changed         int64          `json:"changed"`
+	ErrorMessage    sql.NullString `json:"error_message"`
+	DurationMs      int64          `json:"duration_ms"`
+	CreatedAt       time.Time      `json:"created_at"`
+	EnvoyID         string         `json:"envoy_id"`
+	RunStatus       string         `json:"run_status"`
+	RunStartedAt    time.Time      `json:"run_started_at"`
+	Hostname        string         `json:"hostname"`
 }
 
 func (q *Queries) ListRunResultsSinceByEnvoy(ctx context.Context, arg ListRunResultsSinceByEnvoyParams) ([]ListRunResultsSinceByEnvoyRow, error) {
@@ -510,7 +510,7 @@ func (q *Queries) ListRunResultsSinceByEnvoy(ctx context.Context, arg ListRunRes
 		if err := rows.Scan(
 			&i.ID,
 			&i.RunID,
-			&i.ModuleName,
+			&i.ConfigcrateName,
 			&i.ResourceType,
 			&i.ResourceName,
 			&i.ActionTaken,
@@ -537,7 +537,7 @@ func (q *Queries) ListRunResultsSinceByEnvoy(ctx context.Context, arg ListRunRes
 }
 
 const listRunsByEnvoy = `-- name: ListRunsByEnvoy :many
-SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE envoy_id = ?1
 ORDER BY started_at DESC
@@ -564,7 +564,7 @@ func (q *Queries) ListRunsByEnvoy(ctx context.Context, arg ListRunsByEnvoyParams
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
-			&i.ModuleCount,
+			&i.ConfigcrateCount,
 			&i.ChangedCount,
 			&i.FailedCount,
 			&i.SkippedCount,

@@ -33,7 +33,7 @@ const (
 // Finding describes a single validation issue.
 type Finding struct {
 	Severity     Severity
-	Module       string
+	Configcrate       string
 	ResourceName string
 	ResourceType string
 	Message      string
@@ -44,7 +44,7 @@ func (f Finding) String() string {
 	if f.Severity == SeverityWarning {
 		sev = "WARN"
 	}
-	loc := f.Module
+	loc := f.Configcrate
 	if f.ResourceName != "" {
 		loc += "/" + f.ResourceName
 	}
@@ -65,8 +65,8 @@ type Resource struct {
 	WatchSecret []string
 }
 
-// Module mirrors config.ModuleDefinition for validation purposes.
-type Module struct {
+// Configcrate mirrors config.ConfigcrateDefinition for validation purposes.
+type Configcrate struct {
 	Name      string
 	Resources []Resource
 }
@@ -239,10 +239,10 @@ func init() {
 	}
 }
 
-// ValidateModule checks all resources in a module for idempotency.
+// ValidateConfigcrate checks all resources in a module for idempotency.
 // Returns a slice of findings (errors and warnings). A module with any
 // SeverityError findings must not be loaded unless dangerous mode is on.
-func ValidateModule(mod Module) []Finding {
+func ValidateConfigcrate(mod Configcrate) []Finding {
 	var findings []Finding
 	for _, res := range mod.Resources {
 		findings = append(findings, validateResource(mod.Name, res)...)
@@ -254,7 +254,7 @@ func ValidateModule(mod Module) []Finding {
 // validateCrossReferences checks that depends_on, notify, subscribes, and
 // before all reference resource names that exist within the same module.
 // Also detects redundant notify+subscribes pairs.
-func validateCrossReferences(mod Module) []Finding {
+func validateCrossReferences(mod Configcrate) []Finding {
 	var findings []Finding
 
 	// Build set of known resource names.
@@ -268,7 +268,7 @@ func validateCrossReferences(mod Module) []Finding {
 	// Check all reference lists.
 	for _, res := range mod.Resources {
 		base := Finding{
-			Module:       mod.Name,
+			Configcrate:       mod.Name,
 			ResourceName: res.Name,
 			ResourceType: res.Type,
 		}
@@ -359,7 +359,7 @@ func validateCrossReferences(mod Module) []Finding {
 		for _, sub := range res.Subscribes {
 			if targets, ok := notifyMap[sub]; ok && targets[res.Name] {
 				f := Finding{
-					Module:       mod.Name,
+					Configcrate:       mod.Name,
 					ResourceName: res.Name,
 					ResourceType: res.Type,
 					Severity:     SeverityError,
@@ -373,7 +373,7 @@ func validateCrossReferences(mod Module) []Finding {
 	// DAG cycle detection on depends_on + before edges.
 	if err := detectCycles(mod.Resources); err != nil {
 		findings = append(findings, Finding{
-			Module:   mod.Name,
+			Configcrate:   mod.Name,
 			Severity: SeverityError,
 			Message:  err.Error(),
 		})
@@ -455,7 +455,7 @@ func validateResource(moduleName string, res Resource) []Finding {
 	var findings []Finding
 
 	base := Finding{
-		Module:       moduleName,
+		Configcrate:       moduleName,
 		ResourceName: res.Name,
 		ResourceType: res.Type,
 	}

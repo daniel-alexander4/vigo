@@ -50,9 +50,9 @@ type testDef struct {
 }
 
 type testExpectations struct {
-	ModuleCount   *int              `yaml:"module_count"`
+	ConfigcrateCount   *int              `yaml:"configcrate_count"`
 	ResourceCount *int              `yaml:"resource_count"`
-	Modules       []string          `yaml:"modules"`
+	Configcrates       []string          `yaml:"configcrates"`
 	Resources     []expectResource  `yaml:"resources"`
 	Vars          map[string]string `yaml:"vars"`
 }
@@ -60,7 +60,7 @@ type testExpectations struct {
 type expectResource struct {
 	Resource        string `yaml:"resource"`
 	Type            string `yaml:"type"`
-	Module          string `yaml:"module"`
+	Configcrate     string `yaml:"configcrate"`
 	ContentContains string `yaml:"content_contains"`
 	Targetpath      string `yaml:"targetpath"`
 	Package         string `yaml:"package"`
@@ -201,15 +201,15 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 	}
 
 	// Check module count.
-	if td.Expect.ModuleCount != nil {
-		if len(cfg.Modules) != *td.Expect.ModuleCount {
-			failures = append(failures, fmt.Sprintf("module_count: got %d, want %d", len(cfg.Modules), *td.Expect.ModuleCount))
+	if td.Expect.ConfigcrateCount != nil {
+		if len(cfg.Configcrates) != *td.Expect.ConfigcrateCount {
+			failures = append(failures, fmt.Sprintf("configcrate_count: got %d, want %d", len(cfg.Configcrates), *td.Expect.ConfigcrateCount))
 		}
 	}
 
 	// Check resource count.
 	totalResources := 0
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		totalResources += len(m.Resources)
 	}
 	if td.Expect.ResourceCount != nil {
@@ -220,10 +220,10 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 
 	// Check expected modules.
 	moduleNames := make(map[string]bool)
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		moduleNames[m.Name] = true
 	}
-	for _, want := range td.Expect.Modules {
+	for _, want := range td.Expect.Configcrates {
 		if !moduleNames[want] {
 			failures = append(failures, fmt.Sprintf("module %q not found (have: %s)", want, joinKeys(moduleNames)))
 		}
@@ -243,7 +243,7 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 		res        config.ResourceConfig
 	}
 	resourceIndex := make(map[string]resolvedResource)
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Configcrates {
 		for _, r := range m.Resources {
 			resourceIndex[r.Name] = resolvedResource{moduleName: m.Name, res: r}
 		}
@@ -259,8 +259,8 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 		if er.Type != "" && rr.res.Type != er.Type {
 			failures = append(failures, fmt.Sprintf("resource %q type: got %q, want %q", er.Resource, rr.res.Type, er.Type))
 		}
-		if er.Module != "" && rr.moduleName != er.Module {
-			failures = append(failures, fmt.Sprintf("resource %q module: got %q, want %q", er.Resource, rr.moduleName, er.Module))
+		if er.Configcrate != "" && rr.moduleName != er.Configcrate {
+			failures = append(failures, fmt.Sprintf("resource %q configcrate: got %q, want %q", er.Resource, rr.moduleName, er.Configcrate))
 		}
 		if er.When != "" && rr.res.When != er.When {
 			failures = append(failures, fmt.Sprintf("resource %q when: got %q, want %q", er.Resource, rr.res.When, er.When))
@@ -304,7 +304,7 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 
 	if verbose && len(failures) == 0 {
 		fmt.Printf("           envoy=%s modules=%d resources=%d vars=%d\n",
-			td.Envoy, len(cfg.Modules), totalResources, len(cfg.Vars))
+			td.Envoy, len(cfg.Configcrates), totalResources, len(cfg.Vars))
 	}
 
 	return failures

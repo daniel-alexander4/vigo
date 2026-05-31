@@ -985,7 +985,7 @@ type EnvoyConfig struct {
 	MatchPattern    string         `yaml:"-"` // original match pattern from envoys.vgo
 	Environment     string         `yaml:"environment"`
 	Roles           []string       `yaml:"-"` // role names that were expanded
-	Modules         []ModuleConfig `yaml:"modules"`
+	Configcrates         []Configcrate `yaml:"configcrates"`
 	Vars            map[string]any `yaml:"vars"`
 	VarOrder        []string       `yaml:"-"`
 	Tags            []string       `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
@@ -1007,12 +1007,12 @@ type EnvoyConfig struct {
 // modules and vars without affecting the original.
 func (c *EnvoyConfig) Clone() *EnvoyConfig {
 	clone := *c
-	clone.Modules = make([]ModuleConfig, len(c.Modules))
-	for i, mod := range c.Modules {
-		clone.Modules[i] = mod
-		clone.Modules[i].Resources = cloneResources(mod.Resources)
+	clone.Configcrates = make([]Configcrate, len(c.Configcrates))
+	for i, mod := range c.Configcrates {
+		clone.Configcrates[i] = mod
+		clone.Configcrates[i].Resources = cloneResources(mod.Resources)
 		if mod.DependsOn != nil {
-			clone.Modules[i].DependsOn = append([]string(nil), mod.DependsOn...)
+			clone.Configcrates[i].DependsOn = append([]string(nil), mod.DependsOn...)
 		}
 	}
 	clone.Vars = make(map[string]any, len(c.Vars))
@@ -1024,8 +1024,8 @@ func (c *EnvoyConfig) Clone() *EnvoyConfig {
 	return &clone
 }
 
-// ModuleConfig describes a module assigned to a envoy.
-type ModuleConfig struct {
+// Configcrate describes a module assigned to a envoy.
+type Configcrate struct {
 	Name        string              `yaml:"name"`
 	DependsOn   []string            `yaml:"depends_on"`
 	When        string              `yaml:"when,omitempty"`
@@ -1051,15 +1051,15 @@ type ResourceConfig struct {
 	CaseMatch   map[string]map[string]any `yaml:"-"` // case branch → attribute overrides
 }
 
-// ModuleKind distinguishes a regular module definition from a usercrate.
+// ConfigcrateKind distinguishes a regular module definition from a usercrate.
 // Both share one namespace and one map (moduleDefs); Kind is how the
 // resolver enforces that `modules:` only takes Module-kind defs and
 // `usercrates:` only takes Usercrate-kind defs.
-type ModuleKind string
+type ConfigcrateKind string
 
 const (
-	ModuleKindModule    ModuleKind = ""          // zero value — regular module from stockpile/modules/
-	ModuleKindUsercrate ModuleKind = "usercrate" // loaded from a stockpile/**/usercrates/ dir
+	ConfigcrateKindConfigcrate    ConfigcrateKind = ""          // zero value — regular module from stockpile/modules/
+	ConfigcrateKindUsercrate ConfigcrateKind = "usercrate" // loaded from a stockpile/**/usercrates/ dir
 )
 
 // ComplianceClaims is a module's per-module compliance attribution block.
@@ -1078,12 +1078,12 @@ type ComplianceClaims struct {
 	Bundle   []string `yaml:"bundle"`
 }
 
-// ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
+// ConfigcrateDefinition is a reusable module loaded from config/modules/*.yaml.
 // It has a custom UnmarshalYAML that flattens conditional_block entries
 // in the resources list into plain ResourceConfig items.
-type ModuleDefinition struct {
+type ConfigcrateDefinition struct {
 	Name       string           `yaml:"name"`
-	Kind       ModuleKind       `yaml:"-"` // set by loader: regular module vs usercrate
+	Kind       ConfigcrateKind       `yaml:"-"` // set by loader: regular module vs usercrate
 	SourceFile string           `yaml:"-"` // stockpile-relative path, set by loader
 	DependsOn  []string         `yaml:"depends_on"`
 	Before     []string         `yaml:"before"`
@@ -1104,7 +1104,7 @@ type ModuleDefinition struct {
 	// (server/compliance/provisions.go + bundles.go), not inline.
 	//
 	// modlint enforces the shape:
-	//   - rule_module_compliance_key_retired errors when `compliance:`
+	//   - rule_configcrate_compliance_key_retired errors when `compliance:`
 	//     carries the pre-0.66.48 framework→control list shape.
 	//   - rule_module_top_level_provides_bundle errors when the
 	//     0.66.48-style top-level `provides:` / `bundle:` keys appear
@@ -1127,13 +1127,13 @@ type ModuleDefinition struct {
 	TemplateSources []string `yaml:"-"`
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler for ModuleDefinition.
+// UnmarshalYAML implements yaml.Unmarshaler for ConfigcrateDefinition.
 // It handles the "resources" key specially by passing its child nodes
 // through FlattenResourceNodes to support conditional_block entries.
 // All other keys are decoded via the default YAML decoder.
-func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
+func (m *ConfigcrateDefinition) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("ModuleDefinition: expected mapping, got %v", value.Kind)
+		return fmt.Errorf("ConfigcrateDefinition: expected mapping, got %v", value.Kind)
 	}
 
 	// Walk key-value pairs in the mapping.
@@ -1175,7 +1175,7 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 			// 0.66.57+ shape: { provides: [...], bundle: [...] }.
 			// ComplianceClaims silently ignores any other sub-key,
 			// so pre-0.66.48 framework→control lists decode as
-			// empty here; modlint (rule_module_compliance_key_retired)
+			// empty here; modlint (rule_configcrate_compliance_key_retired)
 			// is the gate that errors on the old shape.
 			if err := val.Decode(&m.Compliance); err != nil {
 				return fmt.Errorf("decoding compliance: %w", err)
@@ -1200,7 +1200,7 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 // error returned when a module YAML declares `provides:` or `bundle:`
 // at the top level — the authoring shape introduced in 0.66.48 and
 // retired in 0.66.57 in favor of a single `compliance:` parent block.
-// Both YAML decode paths (ModuleDefinition.UnmarshalYAML in this file,
+// Both YAML decode paths (ConfigcrateDefinition.UnmarshalYAML in this file,
 // parseModuleYAML in parse.go) call this so the wording can't drift.
 // Message mirrors modlint/rule_module_top_level_provides_bundle.go so
 // operators see the same diagnostic from either gate.
@@ -1213,10 +1213,10 @@ func errRetiredTopLevelComplianceKey(key string) error {
 	)
 }
 
-// ModuleRef is a reference to a module in a role or envoy entry. It supports
+// ConfigcrateRef is a reference to a module in a role or envoy entry. It supports
 // two YAML forms:
 //
-//	modules: [nginx]               # plain string -> ModuleRef{Name: "nginx"}
+//	modules: [nginx]               # plain string -> ConfigcrateRef{Name: "nginx"}
 //	modules:
 //	  - name: nginx                # object form with optional when expression
 //	    when: "is_debian"
@@ -1226,13 +1226,13 @@ func errRetiredTopLevelComplianceKey(key string) error {
 //	                               # key: names the item field that supplies the
 //	                               # instance suffix → modules vhost[<server_name>].
 //	                               # (scalar lists: omit key:, the value is the key)
-type ModuleRef struct {
+type ConfigcrateRef struct {
 	Name    string `yaml:"name"`
 	When    string `yaml:"when,omitempty"`
 	ForEach string `yaml:"foreach,omitempty"` // var name (a list) — instantiate once per item
 	Key     string `yaml:"key,omitempty"`     // item field providing the instance suffix (map lists)
 
-	// Set by expandForeachModuleRefs when a foreach: ref is expanded into
+	// Set by expandForeachConfigcrateRefs when a foreach: ref is expanded into
 	// per-item instances. BaseName is the original module name (for moduleDefs
 	// lookup); EachItem is this instance's list item; InstanceKey is the
 	// resolved suffix. Empty/nil for an ordinary ref.
@@ -1241,25 +1241,25 @@ type ModuleRef struct {
 	InstanceKey string `yaml:"-"`
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler for ModuleRef. It handles two forms:
-//   - Scalar string: "nginx" -> ModuleRef{Name: "nginx"}
+// UnmarshalYAML implements yaml.Unmarshaler for ConfigcrateRef. It handles two forms:
+//   - Scalar string: "nginx" -> ConfigcrateRef{Name: "nginx"}
 //   - Mapping: {name: nginx, when: "is_debian"} -> decoded normally
-func (m *ModuleRef) UnmarshalYAML(value *yaml.Node) error {
+func (m *ConfigcrateRef) UnmarshalYAML(value *yaml.Node) error {
 	switch value.Kind {
 	case yaml.ScalarNode:
 		m.Name = value.Value
 		return nil
 	case yaml.MappingNode:
 		// Use an alias to avoid infinite recursion in UnmarshalYAML.
-		type moduleRefAlias ModuleRef
+		type moduleRefAlias ConfigcrateRef
 		var alias moduleRefAlias
 		if err := value.Decode(&alias); err != nil {
 			return err
 		}
-		*m = ModuleRef(alias)
+		*m = ConfigcrateRef(alias)
 		return nil
 	default:
-		return fmt.Errorf("ModuleRef: expected string or mapping, got %v", value.Kind)
+		return fmt.Errorf("ConfigcrateRef: expected string or mapping, got %v", value.Kind)
 	}
 }
 
@@ -1301,8 +1301,8 @@ type RoleDefinition struct {
 	Name       string      `yaml:"name"`
 	When       string      `yaml:"when,omitempty"`
 	Includes   []string    `yaml:"includes"`       // other role names to include (single level)
-	Modules    []ModuleRef `yaml:"modules"`        // unconditional modules
-	Usercrates []ModuleRef `yaml:"usercrates"`     // positive include of usercrates (Kind == Usercrate); cross-kind enforced at resolve time
+	Configcrates    []ConfigcrateRef `yaml:"configcrates"`        // unconditional modules
+	Usercrates []ConfigcrateRef `yaml:"usercrates"`     // positive include of usercrates (Kind == Usercrate); cross-kind enforced at resolve time
 	Case       []RoleCase  `yaml:"case,omitempty"` // conditional module groups
 }
 
@@ -1310,7 +1310,7 @@ type RoleDefinition struct {
 // All cases whose when: expression matches contribute their modules.
 type RoleCase struct {
 	When    string      `yaml:"when"`
-	Modules []ModuleRef `yaml:"modules"`
+	Configcrates []ConfigcrateRef `yaml:"configcrates"`
 }
 
 // ValidDeviceTypes lists the supported network device types for gateway proxy management.
@@ -1329,11 +1329,11 @@ type EnvoyEntry struct {
 	Match            string         `yaml:"match"`
 	Environment      string         `yaml:"environment"`
 	Roles            []RoleRef      `yaml:"roles"`
-	Modules          []ModuleRef    `yaml:"modules"`
-	Usercrates       []ModuleRef    `yaml:"usercrates"` // positive include of usercrates (Kind == Usercrate)
+	Configcrates          []ConfigcrateRef    `yaml:"configcrates"`
+	Usercrates       []ConfigcrateRef    `yaml:"usercrates"` // positive include of usercrates (Kind == Usercrate)
 	Vars             map[string]any `yaml:"vars"`
 	Tags             []string       `yaml:"tags"`              // static tags for targeting
-	ExcludeModules   []string       `yaml:"exclude_modules"`   // opt out of inherited modules
+	ExcludeConfigcrates   []string       `yaml:"exclude_configcrates"`   // opt out of inherited modules
 	ExcludeResources []string       `yaml:"exclude_resources"` // opt out of specific resources by name
 	ObserveOnly      bool           `yaml:"observe_only"`      // observe-only mode: report drift only, don't enforce
 
@@ -1345,11 +1345,11 @@ type EnvoyEntry struct {
 	// that defined this entry. Set by the loader for trace display.
 	SourceFile string `yaml:"-"`
 
-	// OwnModules/OwnRoles/OwnUsercrates/OwnVars hold the entry's original
+	// OwnConfigcrates/OwnRoles/OwnUsercrates/OwnVars hold the entry's original
 	// values before inheritance merging. Set by applyInheritance for trace.
-	OwnModules    []ModuleRef    `yaml:"-"`
+	OwnConfigcrates    []ConfigcrateRef    `yaml:"-"`
 	OwnRoles      []RoleRef      `yaml:"-"`
-	OwnUsercrates []ModuleRef    `yaml:"-"`
+	OwnUsercrates []ConfigcrateRef    `yaml:"-"`
 	OwnVars       map[string]any `yaml:"-"`
 
 	// Network device fields — set when this entry is a virtual envoy managed
@@ -1391,8 +1391,8 @@ type ComplianceConfig struct {
 // entries in subdirectories. Loaded from common.vgo files at each directory
 // level. Files without match: entries are treated as common configs.
 type CommonConfig struct {
-	Modules    []ModuleRef    `yaml:"modules"`
-	Usercrates []ModuleRef    `yaml:"usercrates"` // positive include of usercrates for every entry at this dir and below
+	Configcrates    []ConfigcrateRef    `yaml:"configcrates"`
+	Usercrates []ConfigcrateRef    `yaml:"usercrates"` // positive include of usercrates for every entry at this dir and below
 	Roles      []RoleRef      `yaml:"roles"`
 	Vars       map[string]any `yaml:"vars"`
 	DirPath    string         `yaml:"-"` // relative dir path (e.g., "production/web")
@@ -1401,9 +1401,9 @@ type CommonConfig struct {
 // PerEnvOverrideBlock holds modules, vars, and exclusions for a single
 // environment within a environments.vgo file.
 type PerEnvOverrideBlock struct {
-	Modules        []ModuleRef    `yaml:"modules"`
-	Usercrates     []ModuleRef    `yaml:"usercrates"` // positive include of usercrates in this environment
-	ExcludeModules []string       `yaml:"exclude_modules"`
+	Configcrates        []ConfigcrateRef    `yaml:"configcrates"`
+	Usercrates     []ConfigcrateRef    `yaml:"usercrates"` // positive include of usercrates in this environment
+	ExcludeConfigcrates []string       `yaml:"exclude_configcrates"`
 	Vars           map[string]any `yaml:"vars"`
 }
 
@@ -1438,14 +1438,16 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("decoding roles: %w", err)
 			}
 			n.Roles = append(n.Roles, extra...)
-		case "modules":
-			var extra []ModuleRef
+		case "configcrates":
+			var extra []ConfigcrateRef
 			if err := val.Decode(&extra); err != nil {
-				return fmt.Errorf("decoding modules: %w", err)
+				return fmt.Errorf("decoding configcrates: %w", err)
 			}
-			n.Modules = append(n.Modules, extra...)
+			n.Configcrates = append(n.Configcrates, extra...)
+		case "modules":
+			return fmt.Errorf("`modules:` was renamed to `configcrates:` — update the match block (see docs/reference/writing-configcrates.md)")
 		case "usercrates":
-			var extra []ModuleRef
+			var extra []ConfigcrateRef
 			if err := val.Decode(&extra); err != nil {
 				return fmt.Errorf("decoding usercrates: %w", err)
 			}
@@ -1478,10 +1480,12 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 			if err := val.Decode(&n.IPAddress); err != nil {
 				return fmt.Errorf("decoding ip_address: %w", err)
 			}
-		case "exclude_modules":
-			if err := val.Decode(&n.ExcludeModules); err != nil {
-				return fmt.Errorf("decoding exclude_modules: %w", err)
+		case "exclude_configcrates":
+			if err := val.Decode(&n.ExcludeConfigcrates); err != nil {
+				return fmt.Errorf("decoding exclude_configcrates: %w", err)
 			}
+		case "exclude_modules":
+			return fmt.Errorf("`exclude_modules:` was renamed to `exclude_configcrates:` — update the match block (see docs/reference/writing-configcrates.md)")
 		case "exclude_usercrates":
 			return fmt.Errorf("`exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-modules.md)")
 		case "exclude_resources":
@@ -1514,5 +1518,5 @@ type StandardCoverage struct {
 // ControlCoverage describes an envoy's coverage of a single control.
 type ControlCoverage struct {
 	ControlID string   `json:"control_id"`
-	Modules   []string `json:"modules"`
+	Configcrates   []string `json:"configcrates"`
 }

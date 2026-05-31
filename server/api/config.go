@@ -538,10 +538,10 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 
 // retractRequest is the input to the retract endpoint.
 type retractRequest struct {
-	Modules []retractModuleInput `json:"modules"`
+	Configcrates []retractConfigcrateInput `json:"configcrates"`
 }
 
-type retractModuleInput struct {
+type retractConfigcrateInput struct {
 	Name    string `json:"name"`
 	Content string `json:"content"`
 }
@@ -550,10 +550,10 @@ type retractModuleInput struct {
 type retractResponse struct {
 	Enabled bool                  `json:"enabled"`
 	Reason  string                `json:"reason,omitempty"`
-	Results []retractModuleResult `json:"results,omitempty"`
+	Results []retractConfigcrateResult `json:"results,omitempty"`
 }
 
-type retractModuleResult struct {
+type retractConfigcrateResult struct {
 	Name        string                   `json:"name"`
 	RetractYAML string                   `json:"retract_yaml"`
 	Warnings    []publish.RetractWarning `json:"warnings"`
@@ -589,15 +589,15 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.Modules) == 0 {
+	if len(req.Configcrates) == 0 {
 		writeJSON(w, r, http.StatusOK, retractResponse{Enabled: true})
 		return
 	}
 
-	var results []retractModuleResult
-	moduleNames := make([]string, 0, len(req.Modules))
-	for _, mod := range req.Modules {
-		result := h.retractModule(r.Context(), mod)
+	var results []retractConfigcrateResult
+	moduleNames := make([]string, 0, len(req.Configcrates))
+	for _, mod := range req.Configcrates {
+		result := h.retractConfigcrate(r.Context(), mod)
 		results = append(results, result)
 		moduleNames = append(moduleNames, mod.Name)
 	}
@@ -611,8 +611,8 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *ConfigHandler) retractModule(ctx context.Context, mod retractModuleInput) retractModuleResult {
-	result := retractModuleResult{Name: mod.Name}
+func (h *ConfigHandler) retractConfigcrate(ctx context.Context, mod retractConfigcrateInput) retractConfigcrateResult {
+	result := retractConfigcrateResult{Name: mod.Name}
 
 	// Step 1: Deterministic reversal.
 	draft, warnings, err := publish.GenerateRetractModule(mod.Name, []byte(mod.Content))

@@ -12,7 +12,7 @@ import (
 func TestConfigLoadDeviceEntry(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "switch-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "switch-base.vgo"), `
 name: switch-base
 resources:
   - name: set-hostname
@@ -23,7 +23,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "netmgmt01.example.com"
-    modules: []
+    configcrates: []
 
   - match: "core-sw01.example.com"
     device_type: cisco_ios
@@ -31,7 +31,7 @@ envoys:
     credential: "secret:network/core-sw01/ssh"
     username: admin
     ip_address: "10.0.1.1"
-    modules: [switch-base]
+    configcrates: [switch-base]
 `)
 
 	prov := &mockProvider{secrets: map[string]string{
@@ -66,15 +66,15 @@ envoys:
 	if cfg.IPAddress != "10.0.1.1" {
 		t.Errorf("IPAddress = %q, want 10.0.1.1", cfg.IPAddress)
 	}
-	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "switch-base" {
-		t.Errorf("Modules = %v, want [switch-base]", cfg.Modules)
+	if len(cfg.Configcrates) != 1 || cfg.Configcrates[0].Name != "switch-base" {
+		t.Errorf("Configcrates = %v, want [switch-base]", cfg.Configcrates)
 	}
 }
 
 func TestConfigLoadDeviceEntryDefaultPort(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -85,13 +85,13 @@ resources:
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
-    modules: []
+    configcrates: []
   - match: "sw01.example.com"
     device_type: cisco_ios
     gateway: "gw.example.com"
     credential: "secret:net/sw01"
     ip_address: "10.0.1.1"
-    modules: [base]
+    configcrates: [base]
 `)
 
 	prov := &mockProvider{secrets: map[string]string{"net/sw01": "pass"}}
@@ -115,7 +115,7 @@ envoys:
 func TestConfigValidateGatewayExists(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -130,7 +130,7 @@ envoys:
     gateway: "nonexistent.example.com"
     credential: "secret:net/sw01"
     ip_address: "10.0.1.1"
-    modules: [base]
+    configcrates: [base]
 `)
 
 	prov := &mockProvider{secrets: map[string]string{"net/sw01": "pass"}}
@@ -146,7 +146,7 @@ envoys:
 func TestConfigValidateGatewayCycle(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -161,13 +161,13 @@ envoys:
     gateway: "sw02.example.com"
     credential: "secret:net/sw01"
     ip_address: "10.0.1.1"
-    modules: [base]
+    configcrates: [base]
   - match: "sw02.example.com"
     device_type: cisco_nxos
     gateway: "sw01.example.com"
     credential: "secret:net/sw02"
     ip_address: "10.0.1.2"
-    modules: [base]
+    configcrates: [base]
 `)
 
 	prov := &mockProvider{secrets: map[string]string{"net/sw01": "pass", "net/sw02": "pass"}}
@@ -186,7 +186,7 @@ func TestConfigValidateDeviceTypeMissing(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
-    modules: []
+    configcrates: []
   - match: "sw01.example.com"
     gateway: "gw.example.com"
     credential: "secret:net/sw01"
@@ -209,7 +209,7 @@ func TestConfigValidateUnsupportedDeviceType(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
-    modules: []
+    configcrates: []
   - match: "sw01.example.com"
     device_type: huawei_vrp
     gateway: "gw.example.com"
@@ -233,7 +233,7 @@ func TestConfigValidateCredentialRequired(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
-    modules: []
+    configcrates: []
   - match: "sw01.example.com"
     device_type: cisco_ios
     gateway: "gw.example.com"
@@ -256,7 +256,7 @@ func TestConfigValidateCredentialSecretPrefix(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
-    modules: []
+    configcrates: []
   - match: "sw01.example.com"
     device_type: cisco_ios
     gateway: "gw.example.com"
@@ -277,14 +277,14 @@ envoys:
 func TestDevicesForGateway(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "switch-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "switch-base.vgo"), `
 name: switch-base
 resources:
   - name: set-hostname
     type: ssh_exec
     command: "hostname test"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "router-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "router-base.vgo"), `
 name: router-base
 resources:
   - name: set-hostname
@@ -295,7 +295,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "netmgmt01.example.com"
-    modules: []
+    configcrates: []
 
   - match: "core-sw01.example.com"
     device_type: cisco_ios
@@ -304,7 +304,7 @@ envoys:
     username: admin
     port: 2222
     ip_address: "10.0.1.1"
-    modules: [switch-base]
+    configcrates: [switch-base]
 
   - match: "edge-rtr01.example.com"
     device_type: juniper_junos
@@ -312,7 +312,7 @@ envoys:
     credential: "secret:net/rtr01"
     username: netops
     ip_address: "10.0.1.2"
-    modules: [router-base]
+    configcrates: [router-base]
 
   - match: "other-sw.example.com"
     device_type: cisco_nxos
@@ -321,7 +321,7 @@ envoys:
     ip_address: "10.0.2.1"
 
   - match: "other-gw.example.com"
-    modules: []
+    configcrates: []
 `)
 
 	prov := &mockProvider{secrets: map[string]string{
@@ -384,7 +384,7 @@ envoys:
 func TestAllDeviceEntries(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -395,21 +395,21 @@ resources:
 	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
-    modules: []
+    configcrates: []
   - match: "sw01.example.com"
     device_type: cisco_ios
     gateway: "gw.example.com"
     credential: "secret:net/sw01"
     ip_address: "10.0.1.1"
-    modules: [base]
+    configcrates: [base]
   - match: "rtr01.example.com"
     device_type: juniper_junos
     gateway: "gw.example.com"
     credential: "secret:net/rtr01"
     ip_address: "10.0.1.2"
-    modules: [base]
+    configcrates: [base]
   - match: "normal.example.com"
-    modules: [base]
+    configcrates: [base]
 `)
 
 	prov := &mockProvider{secrets: map[string]string{"net/sw01": "p1", "net/rtr01": "p2"}}

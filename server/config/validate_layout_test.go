@@ -99,7 +99,7 @@ func TestValidate_StrayClaimsFilename_Rejected(t *testing.T) {
 // claims, and must NOT be rejected.
 func TestValidate_ModuleWithComplianceBlock_NotRejected(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "modules")
+	stockpileDir := filepath.Join(dir, "configcrates")
 	_ = os.MkdirAll(stockpileDir, 0o755)
 	_ = os.WriteFile(filepath.Join(stockpileDir, "openssh.vgo"),
 		[]byte("name: openssh\ncompliance:\n  cis-ubuntu: [\"5.4.1\"]\nresources:\n  - name: foo\n    type: package\n    package: openssh-server\n"), 0o644)
@@ -112,7 +112,7 @@ func TestValidate_ModuleWithComplianceBlock_NotRejected(t *testing.T) {
 func TestValidate_CleanLayout_Passes(t *testing.T) {
 	dir := t.TempDir()
 	stockpileDir := filepath.Join(dir, "stockpile")
-	_ = os.MkdirAll(filepath.Join(stockpileDir, "modules"), 0o755)
+	_ = os.MkdirAll(filepath.Join(stockpileDir, "configcrates"), 0o755)
 	_ = os.WriteFile(filepath.Join(stockpileDir, "compliance.vgo"),
 		[]byte("compliance:\n  cis-ubuntu: [\"1.1.1\"]\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(stockpileDir, "waivers.vgo"),

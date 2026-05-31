@@ -74,13 +74,13 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "examples", "stockpile")
-	for _, sub := range []string{"modules", "envoys", "roles"} {
+	for _, sub := range []string{"configcrates", "envoys", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for name, content := range modules {
-		if err := os.WriteFile(filepath.Join(dir, "modules", name+".vgo"), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "configcrates", name+".vgo"), []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -161,7 +161,7 @@ resources:
 	envoys := `
 envoys:
   - match: "*.test.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `
 	configDir := setupE2EConfig(t, modules, envoys)
 	addr, _, cleanup := startTestServerWithConfig(t, configDir)
@@ -178,11 +178,11 @@ envoys:
 	if bundle == nil {
 		t.Fatal("expected non-nil PolicyBundle")
 	}
-	if len(bundle.GetModules()) != 1 {
-		t.Fatalf("expected 1 module in bundle, got %d", len(bundle.GetModules()))
+	if len(bundle.GetConfigcrates()) != 1 {
+		t.Fatalf("expected 1 module in bundle, got %d", len(bundle.GetConfigcrates()))
 	}
-	if bundle.GetModules()[0].GetName() != "nginx" {
-		t.Errorf("module name = %q, want nginx", bundle.GetModules()[0].GetName())
+	if bundle.GetConfigcrates()[0].GetName() != "nginx" {
+		t.Errorf("module name = %q, want nginx", bundle.GetConfigcrates()[0].GetName())
 	}
 }
 
@@ -202,7 +202,7 @@ resources:
 	envoys := `
 envoys:
   - match: "*.test.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `
 	configDir := setupE2EConfig(t, modules, envoys)
 	addr, configStore, cleanup := startTestServerWithConfig(t, configDir)
@@ -217,12 +217,12 @@ envoys:
 	}
 	v1 := resp1.GetPolicyVersion()
 	bundle1 := resp1.GetPolicyBundle()
-	if bundle1 == nil || len(bundle1.GetModules()) != 1 {
+	if bundle1 == nil || len(bundle1.GetConfigcrates()) != 1 {
 		t.Fatalf("v1: expected 1 module in bundle, got %v", bundle1)
 	}
 
 	// Add a new module and update envoy config.
-	if err := os.WriteFile(filepath.Join(configDir, "modules", "certbot.vgo"), []byte(`
+	if err := os.WriteFile(filepath.Join(configDir, "configcrates", "certbot.vgo"), []byte(`
 name: certbot
 resources:
   - name: install-certbot
@@ -235,7 +235,7 @@ resources:
 	if err := os.WriteFile(filepath.Join(configDir, "envoys", "envoys.vgo"), []byte(`
 envoys:
   - match: "*.test.example.com"
-    modules: [nginx, certbot]
+    configcrates: [nginx, certbot]
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ envoys:
 	}
 
 	bundle2 := resp2.GetPolicyBundle()
-	if bundle2 == nil || len(bundle2.GetModules()) != 2 {
+	if bundle2 == nil || len(bundle2.GetConfigcrates()) != 2 {
 		t.Fatalf("v2: expected 2 modules in bundle, got %v", bundle2)
 	}
 	if resp2.GetPolicyVersion() <= v1 {
@@ -277,7 +277,7 @@ resources:
 	envoys := `
 envoys:
   - match: "*.test.example.com"
-    modules: [nginx]
+    configcrates: [nginx]
 `
 	configDir := setupE2EConfig(t, modules, envoys)
 	addr, _, cleanup := startTestServerWithConfig(t, configDir)

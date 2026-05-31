@@ -352,7 +352,7 @@ Health check endpoint that validates server subsystems.
     {"name": "license", "scope": "server", "status": "pass", "message": "compliant, 42/100 envoys"},
     {"name": "spanner", "scope": "server", "status": "skip", "message": "standalone"},
     {"name": "integrations", "scope": "server", "status": "skip", "message": "no integrations configured"},
-    {"name": "config", "scope": "server", "status": "pass", "message": "15 modules, 8 entries"},
+    {"name": "config", "scope": "server", "status": "pass", "message": "15 configcrates, 8 entries"},
     {"name": "stale_envoys", "scope": "fleet", "status": "pass"}
   ]
 }
@@ -623,26 +623,26 @@ Emits the `spanner.ops_puddle.member_added` audit event on success.
 
 Two-direction config trace.
 
-**Forward (hostname-rooted)** — trace config resolution for one host. Shows the full directory inheritance chain with vars and override markers at each level, which modules came from which files or roles, how roles expanded, and where each variable's final value originated.
+**Forward (hostname-rooted)** — trace config resolution for one host. Shows the full directory inheritance chain with vars and override markers at each level, which configcrates came from which files or roles, how roles expanded, and where each variable's final value originated.
 
-**Inverse (subject-rooted)** — given a `?module=` or `?usercrate=` without a `?hostname=`, returns every enrolled envoy whose resolved config includes that subject, plus the carrier (file path / role / environment) that pulled it in. With `?include_tree=true`, additionally lists config-tree patterns that reference the subject but match no enrolled envoy. The response shape is `InverseTraceResult` (below) — distinct from the forward-mode `ConfigTrace`.
+**Inverse (subject-rooted)** — given a `?configcrate=` or `?usercrate=` without a `?hostname=`, returns every enrolled envoy whose resolved config includes that subject, plus the carrier (file path / role / environment) that pulled it in. With `?include_tree=true`, additionally lists config-tree patterns that reference the subject but match no enrolled envoy. The response shape is `InverseTraceResult` (below) — distinct from the forward-mode `ConfigTrace`.
 
 **Query parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
 | `hostname` | Forward mode: the hostname to trace. |
-| `module` | With `hostname`: filter the forward trace to this module's branch. Without `hostname`: inverse subject — find where this module is applied. |
-| `usercrate` | Inverse subject (cannot be combined with `hostname` or `module`) — find where this usercrate is applied. |
+| `configcrate` | With `hostname`: filter the forward trace to this configcrate's branch. Without `hostname`: inverse subject — find where this configcrate is applied. |
+| `usercrate` | Inverse subject (cannot be combined with `hostname` or `configcrate`) — find where this usercrate is applied. |
 | `include_tree` | Inverse mode only. `true` widens the result to include config-tree patterns no enrolled envoy currently matches. |
 
-Exactly one subject must be specified: `hostname`, `module` alone, or `usercrate`. Combining `module` and `usercrate` is rejected with `400`.
+Exactly one subject must be specified: `hostname`, `configcrate` alone, or `usercrate`. Combining `configcrate` and `usercrate` is rejected with `400`.
 
 **Inverse response (`InverseTraceResult`):**
 
 ```json
 {
-  "subject": "module",
+  "subject": "configcrate",
   "value": "nginx",
   "include_tree": false,
   "envoys": [
@@ -682,26 +682,26 @@ Exactly one subject must be specified: `hostname`, `module` alone, or `usercrate
     {
       "role": "webserver",
       "includes": ["base-security"],
-      "modules": ["firewall", "sshd", "nginx", "logrotate"]
+      "configcrates": ["firewall", "sshd", "nginx", "logrotate"]
     }
   ],
   "inheritance": [
     {
       "dir": "",
       "file": "common.vgo",
-      "modules": ["monitoring"],
+      "configcrates": ["monitoring"],
       "vars": {"dns_server": "1.1.1.1"}
     },
     {
       "dir": "production",
       "file": "common.vgo",
-      "modules": ["log-shipping"],
+      "configcrates": ["log-shipping"],
       "vars": {"dns_server": "10.0.0.1", "log_level": "warn"},
       "overrides": ["dns_server"]
     }
   ],
-  "modules": ["monitoring", "log-shipping", "firewall", "sshd", "nginx", "logrotate"],
-  "module_sources": {
+  "configcrates": ["monitoring", "log-shipping", "firewall", "sshd", "nginx", "logrotate"],
+  "configcrate_sources": {
     "monitoring": "common.vgo",
     "log-shipping": "production/common.vgo",
     "firewall": "role:webserver",
@@ -717,7 +717,7 @@ Exactly one subject must be specified: `hostname`, `module` alone, or `usercrate
 }
 ```
 
-When `?module=` is provided, the `inheritance`, `modules`, and `role_expansion` fields are filtered to only entries relevant to that module. Vars are kept unfiltered.
+When `?configcrate=` is provided, the `inheritance`, `configcrates`, and `role_expansion` fields are filtered to only entries relevant to that configcrate. Vars are kept unfiltered.
 
 If no entry matches, `matched` is `false` and other fields are omitted.
 
@@ -725,22 +725,22 @@ If no entry matches, `matched` is `false` and other fields are omitted.
 
 **Permission:** `fleet.read`
 
-Returns the directory inheritance structure for visualization. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated module totals.
+Returns the directory inheritance structure for visualization. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated configcrate totals.
 
-**Response:** A tree of nodes with `dir`, `file`, `modules`, `roles`, `match`, `total`, `excluded`, and `children` fields.
+**Response:** A tree of nodes with `dir`, `file`, `configcrates`, `roles`, `match`, `total`, `excluded`, and `children` fields.
 
 ### GET /api/v1/config/search
 
 **Permission:** `fleet.read`
 
-Search envoy entries by match pattern, module name, or var name. Returns matching entries with their full inheritance chain and accumulated modules.
+Search envoy entries by match pattern, configcrate name, or var name. Returns matching entries with their full inheritance chain and accumulated configcrates.
 
 **Query parameters:**
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `match` | No | Glob pattern to match against envoy `match:` patterns (e.g., `*web*`) |
-| `module` | No | Module name — find entries that use this module (inherited or direct) |
+| `configcrate` | No | Configcrate name — find entries that use this configcrate (inherited or direct) |
 | `var` | No | Var name — find entries that define this var |
 
 At least one parameter is required.
@@ -754,10 +754,10 @@ At least one parameter is required.
       "match": "web*.prod.example.com",
       "dir": "production/web",
       "inheritance": [
-        {"dir": "", "file": "common.vgo", "modules": ["sshd", "monitoring"]},
-        {"dir": "production", "file": "common.vgo", "modules": ["log-shipping"]}
+        {"dir": "", "file": "common.vgo", "configcrates": ["sshd", "monitoring"]},
+        {"dir": "production", "file": "common.vgo", "configcrates": ["log-shipping"]}
       ],
-      "own_modules": ["nginx"],
+      "own_configcrates": ["nginx"],
       "total": ["sshd", "monitoring", "log-shipping", "nginx"],
       "vars": {"log_level": "warn", "nginx_port": 443}
     }
@@ -881,9 +881,9 @@ Record a config publish for audit trail.
 ```json
 {
   "operator": "admin",
-  "changed_files": ["modules/nginx.vgo"],
+  "changed_files": ["configcrates/nginx.vgo"],
   "removed_files": [],
-  "diff_summary": "--- modules/nginx.vgo\n+++ modules/nginx.vgo\n..."
+  "diff_summary": "--- configcrates/nginx.vgo\n+++ configcrates/nginx.vgo\n..."
 }
 ```
 
@@ -971,13 +971,13 @@ Re-read all config files from disk. Called automatically by `vigocli config publ
 
 **Permission:** `config.publish`
 
-Generate retract modules for removed modules. Called automatically by `vigocli config publish` when `publish.retraction.enabled` and `ai.enabled` are both true. Can also be called directly.
+Generate retract configcrates for removed configcrates. Called automatically by `vigocli config publish` when `publish.retraction.enabled` and `ai.enabled` are both true. Can also be called directly.
 
 **Request body:**
 
 ```json
 {
-  "modules": [
+  "configcrates": [
     {"name": "nginx", "content": "name: nginx\nresources:\n  - name: install\n    type: package\n    package: nginx"}
   ]
 }
@@ -999,7 +999,7 @@ Generate retract modules for removed modules. Called automatically by `vigocli c
 }
 ```
 
-When retraction or AI is disabled, returns `{"enabled": false, "reason": "..."}`. See [Module Retraction](writing-modules.md).
+When retraction or AI is disabled, returns `{"enabled": false, "reason": "..."}`. See [Configcrate Retraction](writing-configcrates.md).
 
 ---
 
@@ -1396,7 +1396,7 @@ Stream the zip.
 | `manifest.json` | Framework, period, generated-at, list of artifacts with their plaintext SHA-256 digests. Auditors verify integrity by extracting the zip and `sha256sum`-ing each path. |
 | `report.pdf` | WeasyPrint-rendered compliance report. Omitted with a `warnings` entry in `manifest.json` if the container lacks `weasyprint`. |
 | `report.html` | Same content as text/html, always present so the bundle is readable without a PDF viewer. |
-| `evidence.json` | Per-control structured evidence: scope, status, modules, traits, attached doc IDs + filenames + SHA-256 (when `compliance.read` is held). |
+| `evidence.json` | Per-control structured evidence: scope, status, configcrates, traits, attached doc IDs + filenames + SHA-256 (when `compliance.read` is held). |
 | `docs/<doc-id>__<filename>` | Decrypted copies of every active compliance doc linked to the framework's controls. Filename sanitized — path separators stripped so docs/ is flat. Only present with `compliance.read`. |
 | `audit-log.csv` | Audit-chain entries with timestamps within the period. Columns: id, timestamp, event_type, actor, source, summary, payload, prev_hash, hash. |
 | `convergence.csv` | Daily fleet convergence snapshots within the period. Columns: recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline. |
@@ -1601,19 +1601,19 @@ Revoke an API token.
 
 **Permission:** `fleet.read`
 
-Multi-node impact analysis showing which envoys would be affected by changes to a module.
+Multi-node impact analysis showing which envoys would be affected by changes to a configcrate.
 
 **Query parameters:**
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `module` | Yes | Module name to analyze |
+| `configcrate` | Yes | Configcrate name to analyze |
 
 **Response:**
 
 ```json
 {
-  "module": "nginx",
+  "configcrate": "nginx",
   "affected": [
     {"hostname": "web-01.example.com", "envoy_id": "a1b2c3d4"},
     {"hostname": "web-02.example.com", "envoy_id": "e5f6g7h8"}
@@ -1804,7 +1804,7 @@ Returns a JSON array of SIEM events derived from run results.
     "hostname": "web-01.example.com",
     "envoy_id": "a1b2c3d4",
     "run_id": "run-5678",
-    "module_name": "nginx",
+    "configcrate_name": "nginx",
     "resource_name": "nginx.conf",
     "resource_type": "file",
     "action": "updated",
@@ -1822,8 +1822,8 @@ Returns a JSON array of SIEM events derived from run results.
 | `hostname` | string | Envoy hostname |
 | `envoy_id` | string | Envoy UUID |
 | `run_id` | string | Convergence run ID |
-| `module_name` | string | Module that owns the resource |
-| `resource_name` | string | Resource name within the module |
+| `configcrate_name` | string | Configcrate that owns the resource |
+| `resource_name` | string | Resource name within the configcrate |
 | `resource_type` | string | Resource type (file, package, service, etc.) |
 | `action` | string | Action taken (created, updated, removed, noop, failed) |
 | `changed` | bool | Whether the resource was modified |

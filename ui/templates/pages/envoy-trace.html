@@ -44,7 +44,7 @@
     </div>
     <div class="trace-summary__item">
         <span class="trace-summary__label">Modules:</span>
-        <span class="trace-summary__value">{{len .Modules}}</span>
+        <span class="trace-summary__value">{{len .Configcrates}}</span>
     </div>
 </div>
 
@@ -91,7 +91,7 @@
     <h3 class="trace-group__title">Module Inheritance</h3>
     <div class="trace-chain">
     {{range $i, $lvl := $moduleLevels}}
-        {{if or $lvl.Modules $lvl.Roles (isLastIndex $i $mTotal)}}
+        {{if or $lvl.Configcrates $lvl.Roles (isLastIndex $i $mTotal)}}
         {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
         <div class="trace-card" style="{{traceGreenBord $i $mTotal}};">
             <div class="trace-card__header">
@@ -103,10 +103,10 @@
                 <span class="trace-card__match">{{$.Trace.MatchPattern}}</span>
             </div>
             {{end}}
-            {{if $lvl.Modules}}
+            {{if $lvl.Configcrates}}
             <div class="trace-card__row">
                 <span class="trace-card__label">modules:</span>
-                <span class="trace-card__modules">{{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</span>
+                <span class="trace-card__modules">{{range $j, $m := $lvl.Configcrates}}{{if $j}}, {{end}}{{$m}}{{end}}</span>
             </div>
             {{end}}
             {{if $lvl.Roles}}
@@ -116,7 +116,7 @@
             </div>
             {{end}}
         </div>
-        {{$hasMore := false}}{{range $j, $later := $moduleLevels}}{{if and (gt $j $i) (or $later.Modules $later.Roles (isLastIndex $j $mTotal))}}{{$hasMore = true}}{{end}}{{end}}
+        {{$hasMore := false}}{{range $j, $later := $moduleLevels}}{{if and (gt $j $i) (or $later.Configcrates $later.Roles (isLastIndex $j $mTotal))}}{{$hasMore = true}}{{end}}{{end}}
         {{if $hasMore}}
         <div class="trace-arrow" style="{{traceGreenBord $i $mTotal}};">&#9474;<br>&#9660;</div>
         {{end}}
@@ -197,7 +197,7 @@
                 <td><span class="trace-secret">secret:****</span></td>
                 <td><span class="trace-source">{{.Path}}</span></td>
                 <td><span class="trace-source">{{.Source}}</span></td>
-                <td><span class="trace-card__modules">{{if .Module}}{{.Module}}{{else}}(envoy){{end}}</span></td>
+                <td><span class="trace-card__modules">{{if .Configcrate}}{{.Configcrate}}{{else}}(envoy){{end}}</span></td>
             </tr>
             {{end}}
         </table>
@@ -212,7 +212,7 @@
     <div class="trace-section__body">
         {{range $ct := .ComplianceTags}}
         <div style="margin-bottom:10px;">
-            <div class="trace-comp-module">{{$ct.Module}}</div>
+            <div class="trace-comp-module">{{$ct.Configcrate}}</div>
             {{range $fw := sortedKeys $ct.Frameworks}}
             <div style="margin-left:12px;">
                 <span class="trace-comp-fw">{{$fw}}:</span>
@@ -226,12 +226,12 @@
 {{end}}
 
 <!-- Compliance Sources (modules-tree compliance.vgo provenance) -->
-{{if .ModuleComplianceFiles}}
+{{if .ConfigcrateComplianceFiles}}
 <div class="trace-group">
     <h3 class="trace-group__title">Compliance Sources</h3>
     <div class="trace-chain">
-        {{$mcTotal := len .ModuleComplianceFiles}}
-        {{range $i, $mcf := .ModuleComplianceFiles}}
+        {{$mcTotal := len .ConfigcrateComplianceFiles}}
+        {{range $i, $mcf := .ConfigcrateComplianceFiles}}
         <div class="trace-card" style="{{traceGreenBord $i $mcTotal}};">
             <div class="trace-card__header">
                 <span class="trace-card__file" style="{{traceGreenText $i $mcTotal}};">{{$mcf.SourceFile}}</span>

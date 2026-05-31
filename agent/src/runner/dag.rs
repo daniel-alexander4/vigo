@@ -6,7 +6,7 @@
 //! Flattens proto modules into [`ResourceNode`]s, normalizes subscribes into
 //! notify relationships, and produces a topologically sorted execution order.
 
-use crate::proto::Module;
+use crate::proto::Configcrate;
 use std::collections::{HashMap, HashSet};
 
 /// A single resource in the execution DAG.
@@ -18,7 +18,7 @@ pub struct ResourceNode {
     pub depends_on: Vec<String>,
     pub notify: Vec<String>,
     pub subscribes: Vec<String>,
-    pub module_name: String,
+    pub configcrate_name: String,
     pub when: String,
 }
 
@@ -29,7 +29,7 @@ pub type NotifyMap = HashMap<String, Vec<String>>;
 ///
 /// Returns (resource_nodes, notify_map) where notify_map maps resource name →
 /// list of resource names to notify when it changes.
-pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), String> {
+pub fn build_dag(modules: &[Configcrate]) -> Result<(Vec<ResourceNode>, NotifyMap), String> {
     if modules.is_empty() {
         return Ok((Vec::new(), HashMap::new()));
     }
@@ -50,7 +50,7 @@ pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), S
                 depends_on: module.depends_on.clone(),
                 notify: module.notify.clone(),
                 subscribes: module.subscribes.clone(),
-                module_name: module.name.clone(),
+                configcrate_name: module.name.clone(),
                 when: res.when.clone(),
             };
             nodes.push(node);
@@ -86,7 +86,7 @@ pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), S
         for target in &node.notify {
             if let Some(target_resources) = module_resources.get(target) {
                 // Module-level: all resources in this module notify all resources in target module.
-                if let Some(source_resources) = module_resources.get(&node.module_name) {
+                if let Some(source_resources) = module_resources.get(&node.configcrate_name) {
                     for src in source_resources {
                         append_unique(
                             notify_map.entry(src.clone()).or_default(),
@@ -96,7 +96,7 @@ pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), S
                 }
             } else if all_resource_names.contains(target) {
                 // Resource-level: this resource's module resources notify the target resource.
-                if let Some(source_resources) = module_resources.get(&node.module_name) {
+                if let Some(source_resources) = module_resources.get(&node.configcrate_name) {
                     let target_vec = vec![target.clone()];
                     for src in source_resources {
                         append_unique(
@@ -114,7 +114,7 @@ pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), S
         for sub in &node.subscribes {
             if let Some(sub_resources) = module_resources.get(sub) {
                 // Module-level: all resources in subscribed module notify all resources in this module.
-                if let Some(subscriber_resources) = module_resources.get(&node.module_name) {
+                if let Some(subscriber_resources) = module_resources.get(&node.configcrate_name) {
                     for sub_res in sub_resources {
                         append_unique(
                             notify_map.entry(sub_res.clone()).or_default(),
@@ -124,7 +124,7 @@ pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), S
                 }
             } else if all_resource_names.contains(sub) {
                 // Resource-level: the subscribed resource notifies all resources in this module.
-                if let Some(subscriber_resources) = module_resources.get(&node.module_name) {
+                if let Some(subscriber_resources) = module_resources.get(&node.configcrate_name) {
                     append_unique(
                         notify_map.entry(sub.clone()).or_default(),
                         subscriber_resources,
@@ -232,7 +232,7 @@ fn append_unique(target: &mut Vec<String>, values: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proto::{Module, Resource};
+    use crate::proto::{Configcrate, Resource};
 
     fn make_resource(name: &str, rtype: &str) -> Resource {
         Resource {
@@ -253,7 +253,7 @@ mod tests {
                 depends_on: vec![],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -263,7 +263,7 @@ mod tests {
                 depends_on: vec![],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -273,7 +273,7 @@ mod tests {
                 depends_on: vec![],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
         ];
@@ -295,7 +295,7 @@ mod tests {
                 depends_on: vec!["b".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -305,7 +305,7 @@ mod tests {
                 depends_on: vec![],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -315,7 +315,7 @@ mod tests {
                 depends_on: vec!["a".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
         ];
@@ -335,7 +335,7 @@ mod tests {
                 depends_on: vec!["b".into(), "c".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -345,7 +345,7 @@ mod tests {
                 depends_on: vec!["a".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -355,7 +355,7 @@ mod tests {
                 depends_on: vec!["a".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -365,7 +365,7 @@ mod tests {
                 depends_on: vec![],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
         ];
@@ -393,7 +393,7 @@ mod tests {
                 depends_on: vec!["c".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -403,7 +403,7 @@ mod tests {
                 depends_on: vec!["a".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -413,7 +413,7 @@ mod tests {
                 depends_on: vec!["b".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
         ];
@@ -434,7 +434,7 @@ mod tests {
             depends_on: vec!["x".into()],
             notify: vec![],
             subscribes: vec![],
-            module_name: "m".into(),
+            configcrate_name: "m".into(),
             when: String::new(),
         }];
 
@@ -446,7 +446,7 @@ mod tests {
     #[test]
     fn build_dag_subscribes_normalization() {
         let modules = vec![
-            Module {
+            Configcrate {
                 name: "a".into(),
                 resource_type: "file".into(),
                 resources: vec![make_resource("config-file", "file")],
@@ -454,7 +454,7 @@ mod tests {
                 notify: vec![],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "b".into(),
                 resource_type: "service".into(),
                 resources: vec![make_resource("app-service", "service")],
@@ -475,7 +475,7 @@ mod tests {
     #[test]
     fn build_dag_module_level_notify() {
         let modules = vec![
-            Module {
+            Configcrate {
                 name: "base".into(),
                 resource_type: "file".into(),
                 resources: vec![make_resource("base-config", "file")],
@@ -483,7 +483,7 @@ mod tests {
                 notify: vec![],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "app".into(),
                 resource_type: "file".into(),
                 resources: vec![make_resource("app-config", "file")],
@@ -491,7 +491,7 @@ mod tests {
                 notify: vec!["svc".into()],
                 subscribes: vec![],
             },
-            Module {
+            Configcrate {
                 name: "svc".into(),
                 resource_type: "service".into(),
                 resources: vec![make_resource("app-svc", "service")],
@@ -512,7 +512,7 @@ mod tests {
     #[test]
     fn build_dag_intra_module_notify() {
         // notify: [restart-sshd] on the module — "restart-sshd" is a resource, not a module.
-        let modules = vec![Module {
+        let modules = vec![Configcrate {
             name: "ssh-hardening".into(),
             resource_type: "file".into(),
             resources: vec![
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn build_dag_intra_module_subscribes() {
         // subscribes: [sshd-config] on the module — "sshd-config" is a resource, not a module.
-        let modules = vec![Module {
+        let modules = vec![Configcrate {
             name: "ssh-hardening".into(),
             resource_type: "file".into(),
             resources: vec![
@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     fn build_dag_multiple_resources_per_module() {
-        let modules = vec![Module {
+        let modules = vec![Configcrate {
             name: "configs".into(),
             resource_type: "file".into(),
             resources: vec![
@@ -576,7 +576,7 @@ mod tests {
 
         let (nodes, _) = build_dag(&modules).unwrap();
         assert_eq!(nodes.len(), 2);
-        assert!(nodes.iter().all(|n| n.module_name == "configs"));
+        assert!(nodes.iter().all(|n| n.configcrate_name == "configs"));
     }
 
     #[test]
@@ -589,7 +589,7 @@ mod tests {
                 depends_on: vec![],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
         ];
@@ -606,7 +606,7 @@ mod tests {
                 depends_on: vec![],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
             ResourceNode {
@@ -616,7 +616,7 @@ mod tests {
                 depends_on: vec!["a".into()],
                 notify: vec![],
                 subscribes: vec![],
-                module_name: "m".into(),
+                configcrate_name: "m".into(),
                 when: String::new(),
             },
         ];

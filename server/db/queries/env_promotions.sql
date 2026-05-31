@@ -1,4 +1,4 @@
 -- name: CreateEnvPromotion :one
-INSERT INTO env_promotions (module_name, from_env, to_env, diff)
+INSERT INTO env_promotions (configcrate_name, from_env, to_env, diff)
 VALUES (?, ?, ?, ?)
-RETURNING id, module_name, from_env, to_env, diff, promoted_at;
+RETURNING id, configcrate_name, from_env, to_env, diff, promoted_at;

@@ -10,21 +10,21 @@ import (
 )
 
 const createEnvPromotion = `-- name: CreateEnvPromotion :one
-INSERT INTO env_promotions (module_name, from_env, to_env, diff)
+INSERT INTO env_promotions (configcrate_name, from_env, to_env, diff)
 VALUES (?, ?, ?, ?)
-RETURNING id, module_name, from_env, to_env, diff, promoted_at
+RETURNING id, configcrate_name, from_env, to_env, diff, promoted_at
 `
 
 type CreateEnvPromotionParams struct {
-	ModuleName string `json:"module_name"`
-	FromEnv    string `json:"from_env"`
-	ToEnv      string `json:"to_env"`
-	Diff       string `json:"diff"`
+	ConfigcrateName string `json:"configcrate_name"`
+	FromEnv         string `json:"from_env"`
+	ToEnv           string `json:"to_env"`
+	Diff            string `json:"diff"`
 }
 
 func (q *Queries) CreateEnvPromotion(ctx context.Context, arg CreateEnvPromotionParams) (EnvPromotion, error) {
 	row := q.db.QueryRowContext(ctx, createEnvPromotion,
-		arg.ModuleName,
+		arg.ConfigcrateName,
 		arg.FromEnv,
 		arg.ToEnv,
 		arg.Diff,
@@ -32,7 +32,7 @@ func (q *Queries) CreateEnvPromotion(ctx context.Context, arg CreateEnvPromotion
 	var i EnvPromotion
 	err := row.Scan(
 		&i.ID,
-		&i.ModuleName,
+		&i.ConfigcrateName,
 		&i.FromEnv,
 		&i.ToEnv,
 		&i.Diff,

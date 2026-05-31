@@ -71,7 +71,7 @@ type EnvoyTreePageData struct {
 	RoleFilter       string
 	OSFilter         string
 	ArchFilter       string
-	ModuleFilter     string
+	ConfigcrateFilter     string
 	ComplianceFilter string
 	// Filter drawer state — mirrored from the EnvoysPageData built by
 	// EnvoysData so the tree view shares the same pill enumeration and
@@ -105,7 +105,7 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 		RoleFilter:       q.Get("role"),
 		OSFilter:         q.Get("os"),
 		ArchFilter:       q.Get("arch"),
-		ModuleFilter:     q.Get("module"),
+		ConfigcrateFilter:     q.Get("configcrate"),
 		ComplianceFilter: q.Get("compliance"),
 	}
 
@@ -131,7 +131,7 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 		h.baseInterval, h.offlineThreshold,
 		data.ConvFilter, data.DriftFilter, data.ReachFilter, data.Search,
 		data.EnvFilter, data.TagFilter, data.RoleFilter, data.OSFilter,
-		data.ArchFilter, data.ModuleFilter, data.ComplianceFilter,
+		data.ArchFilter, data.ConfigcrateFilter, data.ComplianceFilter,
 		"", "", 0, 0,
 	)
 	data.TotalEnvoys = envoyData.TotalEnvoys
@@ -369,7 +369,7 @@ func (d *EnvoyTreePageData) anyFilterActive() bool {
 		d.RoleFilter != "" ||
 		d.OSFilter != "" ||
 		d.ArchFilter != "" ||
-		d.ModuleFilter != "" ||
+		d.ConfigcrateFilter != "" ||
 		d.ComplianceFilter != ""
 }
 

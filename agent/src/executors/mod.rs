@@ -236,7 +236,7 @@ impl Action {
 /// not failed"); see `Action::Blocked`.
 #[derive(Debug, Clone, Default)]
 pub struct ResourceResult {
-    pub module_name: String,
+    pub configcrate_name: String,
     pub resource_type: String,
     pub resource_name: String,
     pub action: Action,
@@ -257,7 +257,7 @@ impl ResourceResult {
     /// Create a new result pre-filled with resource metadata.
     pub fn new(resource_type: &str, resource_name: &str) -> Self {
         Self {
-            module_name: String::new(),
+            configcrate_name: String::new(),
             resource_type: resource_type.to_string(),
             resource_name: resource_name.to_string(),
             action: Action::None,

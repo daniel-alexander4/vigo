@@ -105,15 +105,15 @@ func TestLintRolesFile_Valid(t *testing.T) {
 	input := `roles:
   - name: webserver
     includes: [bastion]
-    modules: [nginx, certbot]
+    configcrates: [nginx, certbot]
     when: "is_root"
   - name: bastion
-    modules: [openssh, fail2ban]
+    configcrates: [openssh, fail2ban]
     case:
       - when: "os_family('debian')"
-        modules: [debian-bastion-extras]
+        configcrates: [debian-bastion-extras]
       - when: "os_family('rhel')"
-        modules: [rhel-bastion-extras]
+        configcrates: [rhel-bastion-extras]
 `
 	r := LintRolesFile([]byte(input), Options{})
 	if !r.OK() {
@@ -134,9 +134,9 @@ func TestLintRolesFile_MissingName(t *testing.T) {
 func TestLintRolesFile_DuplicateName(t *testing.T) {
 	input := `roles:
   - name: web
-    modules: [nginx]
+    configcrates: [nginx]
   - name: web
-    modules: [apache]
+    configcrates: [apache]
 `
 	r := LintRolesFile([]byte(input), Options{})
 	if findFinding(r, "rolesfile-duplicate-name") == nil {
@@ -147,7 +147,7 @@ func TestLintRolesFile_DuplicateName(t *testing.T) {
 func TestLintRolesFile_MalformedWhen(t *testing.T) {
 	input := `roles:
   - name: web
-    modules: [nginx]
+    configcrates: [nginx]
     when: "is_root and"
 `
 	r := LintRolesFile([]byte(input), Options{})
@@ -304,11 +304,11 @@ func TestLintWaiversFile_ExpiredInfo(t *testing.T) {
 func TestLintEnvironmentsFile_Valid(t *testing.T) {
 	input := `environments:
   prod:
-    modules: [monitoring, alerting]
+    configcrates: [monitoring, alerting]
     vars:
       log_level: warn
   staging:
-    exclude_modules: [debug-noise]
+    exclude_configcrates: [debug-noise]
     vars:
       log_level: debug
 `
@@ -341,7 +341,7 @@ func TestLintEnvironmentsFile_UnknownKey(t *testing.T) {
 	// `vasr` is one transposition from `vars`.
 	input := `environments:
   prod:
-    modules: [a]
+    configcrates: [a]
     vasr:
       x: y
 `

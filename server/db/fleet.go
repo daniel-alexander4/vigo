@@ -34,7 +34,7 @@ type RecentRun struct {
 	Status       string
 	ChangedCount int64
 	FailedCount  int64
-	ModuleCount  int64
+	ConfigcrateCount  int64
 	StartedAt    time.Time
 }
 
@@ -47,7 +47,7 @@ type RecentRun struct {
 var fleetConvergenceQuery = fmt.Sprintf(`
 SELECT
     e.id, e.hostname, e.ip_address, e.last_seen, e.agent_version,
-    r.id, r.status, r.changed_count, r.failed_count, r.module_count, r.started_at
+    r.id, r.status, r.changed_count, r.failed_count, r.configcrate_count, r.started_at
 FROM envoys e
 LEFT JOIN runs r ON r.envoy_id = e.id
     AND r.id IN (
@@ -107,7 +107,7 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 				Status:       runStatus.String,
 				ChangedCount: runChanged.Int64,
 				FailedCount:  runFailed.Int64,
-				ModuleCount:  runModules.Int64,
+				ConfigcrateCount:  runModules.Int64,
 				StartedAt:    runStarted.Time,
 			})
 		}
@@ -123,15 +123,15 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 	return result, nil
 }
 
-// ModuleRunChange is a single (module, run) pair telling whether that
+// ConfigcrateRunChange is a single (module, run) pair telling whether that
 // module had ANY resource that the agent reported `changed: true` for
 // during that run. The run-detail page feeds slices of these — one per
 // module, newest run first — into convergence.ComputeDrift to decide
 // whether the module is in DriftDiverged. Surfacing drift at the
 // module grain (not the envoy grain) lets the page paint a "Diverged"
 // pill on the right rows.
-type ModuleRunChange struct {
-	ModuleName string
+type ConfigcrateRunChange struct {
+	ConfigcrateName string
 	RunID      string
 	StartedAt  time.Time
 	AnyChanged bool
@@ -144,7 +144,7 @@ type ModuleRunChange struct {
 // `changed: true`. Joins so we can pull started_at without an extra
 // lookup; SQLite's MAX over an INTEGER column returns 0 or 1.
 var moduleChangesQuery = fmt.Sprintf(`
-SELECT rr.module_name, rr.run_id, r.started_at, MAX(rr.changed) AS any_changed
+SELECT rr.configcrate_name, rr.run_id, r.started_at, MAX(rr.changed) AS any_changed
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
 WHERE r.id IN (
@@ -154,8 +154,8 @@ WHERE r.id IN (
     ORDER BY started_at DESC
     LIMIT %d
 )
-GROUP BY rr.module_name, rr.run_id, r.started_at
-ORDER BY rr.module_name, r.started_at DESC
+GROUP BY rr.configcrate_name, rr.run_id, r.started_at
+ORDER BY rr.configcrate_name, r.started_at DESC
 `, convergence.DivergedThreshold)
 
 // ListEnvoyModuleChangesRecent returns the module-change matrix for the
@@ -163,18 +163,18 @@ ORDER BY rr.module_name, r.started_at DESC
 // run whose `startedAt` is supplied (inclusive). Rows are ordered so
 // each module's runs appear newest-first — directly feedable to
 // convergence.ComputeDrift without another sort.
-func (q *Queries) ListEnvoyModuleChangesRecent(ctx context.Context, envoyID string, startedAt time.Time) ([]ModuleRunChange, error) {
+func (q *Queries) ListEnvoyModuleChangesRecent(ctx context.Context, envoyID string, startedAt time.Time) ([]ConfigcrateRunChange, error) {
 	rows, err := q.db.QueryContext(ctx, moduleChangesQuery, envoyID, startedAt)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []ModuleRunChange
+	var out []ConfigcrateRunChange
 	for rows.Next() {
-		var mc ModuleRunChange
+		var mc ConfigcrateRunChange
 		var anyChanged int64
-		if err := rows.Scan(&mc.ModuleName, &mc.RunID, &mc.StartedAt, &anyChanged); err != nil {
+		if err := rows.Scan(&mc.ConfigcrateName, &mc.RunID, &mc.StartedAt, &anyChanged); err != nil {
 			return nil, err
 		}
 		mc.AnyChanged = anyChanged != 0
@@ -206,7 +206,7 @@ type EnvoyPagedRow struct {
 const listEnvoysPagedWithRun = `
 SELECT
     e.id, e.hostname, e.ip_address, e.enrolled_at, e.last_seen, e.agent_version,
-    lr.id, lr.started_at, lr.status, lr.changed_count, lr.failed_count, lr.module_count
+    lr.id, lr.started_at, lr.status, lr.changed_count, lr.failed_count, lr.configcrate_count
 FROM envoys e
 LEFT JOIN runs lr ON lr.envoy_id = e.id
     AND lr.started_at = (
@@ -253,18 +253,18 @@ type RunWithHostname struct {
 	FinishedAt      sql.NullTime
 	Status          string
 	Trigger         string
-	ModuleCount     int64
+	ConfigcrateCount     int64
 	ChangedCount    int64
 	FailedCount     int64
 	SkippedCount    int64
-	TopFailedModule string
+	TopFailedConfigcrate string
 }
 
 const listRunsWithHostname = `
 SELECT r.id, r.envoy_id, e.hostname, r.started_at, r.finished_at,
-       r.status, r.trigger, r.module_count, r.changed_count, r.failed_count, r.skipped_count,
+       r.status, r.trigger, r.configcrate_count, r.changed_count, r.failed_count, r.skipped_count,
        COALESCE((
-         SELECT rr.module_name FROM run_results rr
+         SELECT rr.configcrate_name FROM run_results rr
          WHERE rr.run_id = r.id
            AND rr.error_message IS NOT NULL
            AND rr.error_message <> ''
@@ -291,8 +291,8 @@ func (q *Queries) ListRunsWithHostname(ctx context.Context, limit int64) ([]RunW
 	for rows.Next() {
 		var r RunWithHostname
 		if err := rows.Scan(&r.ID, &r.EnvoyID, &r.Hostname, &r.StartedAt, &r.FinishedAt,
-			&r.Status, &r.Trigger, &r.ModuleCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount,
-			&r.TopFailedModule); err != nil {
+			&r.Status, &r.Trigger, &r.ConfigcrateCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount,
+			&r.TopFailedConfigcrate); err != nil {
 			return nil, err
 		}
 		result = append(result, r)

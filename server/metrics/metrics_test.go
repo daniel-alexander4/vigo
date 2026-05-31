@@ -16,7 +16,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	// Initialize all label-based metrics so they appear in Gather().
 	m.CheckinsTotal.WithLabelValues("test").Add(0)
 	m.DriftDetected.WithLabelValues("test", "test").Add(0)
-	m.ModuleActions.WithLabelValues("test", "test").Add(0)
+	m.ConfigcrateActions.WithLabelValues("test", "test").Add(0)
 	m.ConvergenceStatus.WithLabelValues("test", "test").Set(0)
 	m.CheckinAgeDist.Observe(0)
 	m.RunDuration.WithLabelValues("test").Observe(0)
@@ -55,7 +55,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"vigo_checkins_total",
 		"vigo_run_duration_seconds",
 		"vigo_drift_detected_total",
-		"vigo_module_actions_total",
+		"vigo_configcrate_actions_total",
 		"vigo_convergence_status",
 		"vigo_convergence_pct",
 		"vigo_checkin_age_seconds",
@@ -105,7 +105,7 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	// Verify counters can be incremented without panic.
 	m.CheckinsTotal.WithLabelValues("success").Inc()
 	m.DriftDetected.WithLabelValues("testnode", "testmodule").Inc()
-	m.ModuleActions.WithLabelValues("file", "create").Inc()
+	m.ConfigcrateActions.WithLabelValues("file", "create").Inc()
 	m.GRPCRequestsTotal.WithLabelValues("/vigo.VigoAgent/CheckIn", "OK").Inc()
 	m.TaskRunsTotal.WithLabelValues("complete").Inc()
 	m.WorkflowRunsTotal.WithLabelValues("complete").Inc()

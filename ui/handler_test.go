@@ -522,7 +522,7 @@ func TestRunsHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Table should have expected column headers
-	for _, col := range []string{"Run", "Hostname", "Status", "Modules"} {
+	for _, col := range []string{"Run", "Hostname", "Status", "Configcrates"} {
 		if !strings.Contains(body, col) {
 			t.Errorf("Runs page missing column header %q", col)
 		}
@@ -783,7 +783,7 @@ func defaultTestData() *testData {
 
 	// Create a temp config dir with test YAML
 	configDir, _ := os.MkdirTemp("", "vigo-config-test")
-	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("envoy: web-01.example.com\nvars:\n  dsn: \"secret:vigo/db/dsn\"\nmodules:\n  - name: test\n    type: file\n"), 0644)
+	os.WriteFile(filepath.Join(configDir, "web-01.example.com.yaml"), []byte("envoy: web-01.example.com\nvars:\n  dsn: \"secret:vigo/db/dsn\"\nconfigcrates:\n  - name: test\n    type: file\n"), 0644)
 
 	return &testData{
 		envoys: []testEnvoy{
@@ -916,7 +916,7 @@ func (m *mockDataSource) DashboardData(baseInterval, offlineThreshold time.Durat
 			Hostname:     r.hostname,
 			StartedAt:    r.startedAt,
 			Status:       r.status,
-			ModuleCount:  r.moduleCount,
+			ConfigcrateCount:  r.moduleCount,
 			ChangedCount: r.changedCount,
 			FailedCount:  r.failedCount,
 		})
@@ -1106,7 +1106,7 @@ func (m *mockDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, e
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
-					ModuleName:   res.moduleName,
+					ConfigcrateName:   res.moduleName,
 					ResourceType: res.resourceType,
 					ResourceName: res.resourceName,
 					ActionTaken:  res.actionTaken,
@@ -1121,7 +1121,7 @@ func (m *mockDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, e
 					Hostname:     r.hostname,
 					StartedAt:    r.startedAt,
 					Status:       r.status,
-					ModuleCount:  r.moduleCount,
+					ConfigcrateCount:  r.moduleCount,
 					ChangedCount: r.changedCount,
 					FailedCount:  r.failedCount,
 				},
@@ -1156,7 +1156,7 @@ func (m *mockDataSource) RunsData(statusFilter string) RunsPageData {
 			Hostname:     r.hostname,
 			StartedAt:    r.startedAt,
 			Status:       r.status,
-			ModuleCount:  r.moduleCount,
+			ConfigcrateCount:  r.moduleCount,
 			ChangedCount: r.changedCount,
 			FailedCount:  r.failedCount,
 		})
@@ -1180,7 +1180,7 @@ func (m *mockDataSource) RunDetailData(runID string) (RunDetailPageData, error) 
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
-					ModuleName:   res.moduleName,
+					ConfigcrateName:   res.moduleName,
 					ResourceType: res.resourceType,
 					ResourceName: res.resourceName,
 					ActionTaken:  res.actionTaken,
@@ -1201,7 +1201,7 @@ func (m *mockDataSource) RunDetailData(runID string) (RunDetailPageData, error) 
 					Hostname:     r.hostname,
 					StartedAt:    r.startedAt,
 					Status:       r.status,
-					ModuleCount:  r.moduleCount,
+					ConfigcrateCount:  r.moduleCount,
 					ChangedCount: r.changedCount,
 					FailedCount:  r.failedCount,
 				},
@@ -1244,7 +1244,7 @@ func (m *mockDataSource) PlanDetailData(planID string) (PlanDetailPageData, erro
 			for _, r := range p.results {
 				color := actionColor(r.plannedAction)
 				results = append(results, PlanResultRow{
-					ModuleName:    r.moduleName,
+					ConfigcrateName:    r.moduleName,
 					ResourceType:  r.resourceType,
 					ResourceName:  r.resourceName,
 					PlannedAction: r.plannedAction,

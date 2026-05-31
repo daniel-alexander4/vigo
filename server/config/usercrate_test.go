@@ -67,8 +67,8 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if hasModule(cfg.Modules, "admin") {
-		t.Errorf("usercrate admin should NOT auto-apply; modules = %v", moduleNames(cfg.Modules))
+	if hasModule(cfg.Configcrates, "admin") {
+		t.Errorf("usercrate admin should NOT auto-apply; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -91,8 +91,8 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Modules, "admin") {
-		t.Errorf("usercrate admin should be included via match-block usercrates:; modules = %v", moduleNames(cfg.Modules))
+	if !hasModule(cfg.Configcrates, "admin") {
+		t.Errorf("usercrate admin should be included via match-block usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -121,8 +121,8 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config for a01")
 	}
-	if !hasModule(cfg.Modules, "admin") {
-		t.Errorf("usercrate admin should be inherited via common.vgo usercrates:; modules = %v", moduleNames(cfg.Modules))
+	if !hasModule(cfg.Configcrates, "admin") {
+		t.Errorf("usercrate admin should be inherited via common.vgo usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -150,8 +150,8 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Modules, "admin") {
-		t.Errorf("usercrate admin should be added by environments.vgo usercrates:; modules = %v", moduleNames(cfg.Modules))
+	if !hasModule(cfg.Configcrates, "admin") {
+		t.Errorf("usercrate admin should be added by environments.vgo usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -179,8 +179,8 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Modules, "admin") {
-		t.Errorf("usercrate admin should be included via role usercrates:; modules = %v", moduleNames(cfg.Modules))
+	if !hasModule(cfg.Configcrates, "admin") {
+		t.Errorf("usercrate admin should be included via role usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -193,23 +193,23 @@ func TestUsercrate_RejectsModulesRefToUsercrate(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
-    modules:
+    configcrates:
       - admin
 `)
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
 	if err == nil {
-		t.Fatal("expected cross-kind error for `modules: [admin]` referencing a usercrate, got nil")
+		t.Fatal("expected cross-kind error for `configcrates: [admin]` referencing a usercrate, got nil")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "modules:") || !strings.Contains(msg, "usercrate") || !strings.Contains(msg, "admin") {
+	if !strings.Contains(msg, "configcrates:") || !strings.Contains(msg, "usercrate") || !strings.Contains(msg, "admin") {
 		t.Errorf("error should name the field, the kind, and the offending ref; got: %v", err)
 	}
 }
 
 func TestUsercrate_RejectsUsercratesRefToModule(t *testing.T) {
 	dir := setupInheritanceDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
@@ -227,10 +227,10 @@ envoys:
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
 	if err == nil {
-		t.Fatal("expected cross-kind error for `usercrates: [sshd]` referencing a module, got nil")
+		t.Fatal("expected cross-kind error for `usercrates: [sshd]` referencing a configcrate, got nil")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "usercrates:") || !strings.Contains(msg, "module") || !strings.Contains(msg, "sshd") {
+	if !strings.Contains(msg, "usercrates:") || !strings.Contains(msg, "configcrate") || !strings.Contains(msg, "sshd") {
 		t.Errorf("error should name the field, the kind, and the offending ref; got: %v", err)
 	}
 }
@@ -297,8 +297,8 @@ envoys:
 		t.Fatalf("usercrate with user+file+exec should load; got: %v", err)
 	}
 	cfg := cs.Get("plex")
-	if cfg == nil || !hasModule(cfg.Modules, "dan") {
-		t.Errorf("usercrate dan should apply; modules = %v", moduleNames(cfg.Modules))
+	if cfg == nil || !hasModule(cfg.Configcrates, "dan") {
+		t.Errorf("usercrate dan should apply; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -346,8 +346,8 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Modules, "alice") {
-		t.Errorf("usercrate with defaulted name `alice` should resolve when included; modules = %v", moduleNames(cfg.Modules))
+	if !hasModule(cfg.Configcrates, "alice") {
+		t.Errorf("usercrate with defaulted name `alice` should resolve when included; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
@@ -355,7 +355,7 @@ func TestUsercrate_NameCollisionWithModule(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	// Both a regular module and a usercrate named "dan" — must fail to
 	// load with a clear error message.
-	writeFile(t, filepath.Join(dir, "modules", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "configcrates", "dan.vgo"), `
 name: dan
 resources:
   - name: placeholder
@@ -398,11 +398,11 @@ envoys:
 	}
 	trace := cs.Trace("a01")
 
-	// ModuleSources should point at the def's usercrates/<file>.vgo path
+	// ConfigcrateSources should point at the def's usercrates/<file>.vgo path
 	// (the canonical SourceFile), not at the carrier that included it.
-	src, ok := trace.ModuleSources["alice"]
+	src, ok := trace.ConfigcrateSources["alice"]
 	if !ok {
-		t.Fatalf("trace.ModuleSources missing entry for alice; keys = %v", mapKeys(trace.ModuleSources))
+		t.Fatalf("trace.ConfigcrateSources missing entry for alice; keys = %v", mapKeys(trace.ConfigcrateSources))
 	}
 	if !strings.Contains(src, "usercrates/alice.vgo") {
 		t.Errorf("alice source should point at the def's usercrates/<file>.vgo; got %q", src)
@@ -427,7 +427,7 @@ envoys:
 
 // --- helpers ---
 
-func hasModule(mods []ModuleConfig, name string) bool {
+func hasModule(mods []Configcrate, name string) bool {
 	for _, m := range mods {
 		if m.Name == name {
 			return true
@@ -436,7 +436,7 @@ func hasModule(mods []ModuleConfig, name string) bool {
 	return false
 }
 
-func moduleNames(mods []ModuleConfig) []string {
+func moduleNames(mods []Configcrate) []string {
 	out := make([]string, 0, len(mods))
 	for _, m := range mods {
 		out = append(out, m.Name)

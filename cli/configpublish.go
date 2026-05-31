@@ -92,7 +92,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, pub
 				fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 			}
 			fmt.Printf("\n%s Validation passed: %d modules, %d roles, %d envoy entries\n",
-				green("✓"), res.Modules, res.Roles, res.Entries)
+				green("✓"), res.Configcrates, res.Roles, res.Entries)
 			return nil
 		}
 
@@ -182,9 +182,9 @@ func printPublishSummary(res *publish.Result) {
 	if errCount > 0 {
 		fmt.Printf("  %s  %d module(s) with validation errors\n", red("✗"), errCount)
 	}
-	if res.Modules > 0 || res.Roles > 0 || res.Entries > 0 {
+	if res.Configcrates > 0 || res.Roles > 0 || res.Entries > 0 {
 		fmt.Printf("  %s  %d modules, %d roles, %d envoy entries\n",
-			bold("Summary"), res.Modules, res.Roles, res.Entries)
+			bold("Summary"), res.Configcrates, res.Roles, res.Entries)
 	}
 	if ok > 0 {
 		fmt.Printf("  %s  %d unchanged\n", green("✓"), ok)
@@ -225,7 +225,7 @@ func suggestFixes(err error, disabled bool) {
 		b.WriteString("For each error below, show the corrected YAML for just the failing resource.\n")
 		b.WriteString("Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
 
-		for _, m := range ie.Modules {
+		for _, m := range ie.Configcrates {
 			fmt.Fprintf(&b, "File: %s\n", m.Path)
 			for _, f := range m.Findings {
 				fmt.Fprintf(&b, "  Error: %s (%s): %s\n", f.ResourceName, f.ResourceType, f.Message)
@@ -641,7 +641,7 @@ func handleRetraction(res *publish.Result) {
 
 	client := newAPIClient()
 	var resp retractAPIResponse
-	err := client.post("/api/v1/config/retract", map[string]any{"modules": modules}, &resp)
+	err := client.post("/api/v1/config/retract", map[string]any{"configcrates": modules}, &resp)
 	if err != nil {
 		// Server unreachable or error — not fatal, just skip retraction.
 		return
@@ -678,7 +678,7 @@ func handleRetractionPregen(res *publish.Result) {
 
 	client := newAPIClient()
 	var resp retractAPIResponse
-	if err := client.post("/api/v1/config/retract", map[string]any{"modules": modules}, &resp); err != nil {
+	if err := client.post("/api/v1/config/retract", map[string]any{"configcrates": modules}, &resp); err != nil {
 		return
 	}
 	if !resp.Enabled || len(resp.Results) == 0 {

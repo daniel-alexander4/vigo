@@ -23,7 +23,7 @@ import (
 // plus a vars leaf (SHA256 of the deterministic vars JSON). The root is a single
 // hash representing the entire envoy config — if it matches the agent's cached
 // root, the config hasn't changed and the server can skip bundle construction.
-func MerkleRoot(modules []ModuleConfig, vars map[string]any, varOrder []string) string {
+func MerkleRoot(modules []Configcrate, vars map[string]any, varOrder []string) string {
 	varsHash := hashVars(vars, varOrder)
 	modulesHash := hashModules(modules)
 	return combinePair(varsHash, modulesHash)
@@ -74,8 +74,8 @@ type kv struct {
 }
 
 // hashModules builds a binary Merkle tree from module content hashes.
-// Modules are processed in their DAG order (as stored in the slice).
-func hashModules(modules []ModuleConfig) string {
+// Configcrates are processed in their DAG order (as stored in the slice).
+func hashModules(modules []Configcrate) string {
 	if len(modules) == 0 {
 		return emptyHash()
 	}

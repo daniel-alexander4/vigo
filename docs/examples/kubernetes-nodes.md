@@ -5,11 +5,11 @@ This example manages the OS-level configuration of machines running Kubernetes �
 
 Vigo manages the OS layer underneath Kubernetes. It does not manage Kubernetes resources (deployments, configmaps, services) — that's the domain of kubectl apply and GitOps tools like ArgoCD or Flux.
 
-## Containerd Module
+## Containerd Configcrate
 
 Installs and configures the container runtime.
 
-`stockpile/modules/k8s/containerd.vgo`:
+`stockpile/configcrates/k8s/containerd.vgo`:
 
 ```yaml
 name: k8s-containerd
@@ -56,12 +56,12 @@ resources:
       - containerd-package
 ```
 
-## Kubelet Module
+## Kubelet Configcrate
 
 
 Configures the kubelet daemon and its systemd unit.
 
-`stockpile/modules/k8s/kubelet.vgo`:
+`stockpile/configcrates/k8s/kubelet.vgo`:
 
 ```yaml
 name: k8s-kubelet
@@ -135,11 +135,11 @@ resources:
     enabled: true
 ```
 
-## Kernel Tuning Module
+## Kernel Tuning Configcrate
 
 Required kernel parameters and modules for Kubernetes networking and performance.
 
-`stockpile/modules/k8s/kernel-tuning.vgo`:
+`stockpile/configcrates/k8s/kernel-tuning.vgo`:
 
 ```yaml
 name: k8s-kernel-tuning
@@ -196,11 +196,11 @@ resources:
     value: "524288"
 ```
 
-## CNI Module
+## CNI Configcrate
 
 Drops CNI configuration files. The actual CNI plugin (Calico, Cilium, Flannel) is typically deployed via a DaemonSet, but the host-level config directory and any bridge config must exist.
 
-`stockpile/modules/k8s/cni.vgo`:
+`stockpile/configcrates/k8s/cni.vgo`:
 
 ```yaml
 name: k8s-cni
@@ -235,12 +235,12 @@ resources:
       }
 ```
 
-## Firewall Module
+## Firewall Configcrate
 
 Opens the ports required by Kubernetes components.
 
 
-`stockpile/modules/k8s/firewall.vgo`:
+`stockpile/configcrates/k8s/firewall.vgo`:
 
 ```yaml
 name: k8s-firewall
@@ -289,7 +289,7 @@ resources:
 
 ```yaml
 name: k8s-node
-modules:
+configcrates:
   - k8s-kernel-tuning
   - k8s-containerd
   - k8s-cni
@@ -416,7 +416,7 @@ vigocli workflow run k8s-rolling-reboot --target "k8s-worker-0[1-3].example.com"
 
 ## Execution Order
 
-The module DAG ensures correct ordering:
+The configcrate DAG ensures correct ordering:
 
 1. **k8s-kernel-tuning** — kernel modules and sysctl params (no dependencies)
 2. **k8s-containerd** — container runtime (no dependencies)

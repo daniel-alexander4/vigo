@@ -25,7 +25,7 @@ type RunInfo struct {
 	Status       string // agent's overall flag: "success" / "partial" / "failure" / "blocked" / ""
 	ChangedCount int64
 	FailedCount  int64
-	ModuleCount  int64
+	ConfigcrateCount  int64
 }
 
 const (
@@ -87,15 +87,15 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 
 	// Failure percentage classification. Any FailedCount > 0 is at
 	// least Degraded; >= DegradedMaxPct upgrades to Failed.
-	if last.ModuleCount > 0 {
-		pct := float64(last.FailedCount) / float64(last.ModuleCount) * 100
+	if last.ConfigcrateCount > 0 {
+		pct := float64(last.FailedCount) / float64(last.ConfigcrateCount) * 100
 		if pct >= DegradedMaxPct {
 			return "failed"
 		}
 		return "degraded"
 	}
 
-	// FailedCount > 0 but ModuleCount == 0 — degenerate input; treat
+	// FailedCount > 0 but ConfigcrateCount == 0 — degenerate input; treat
 	// as a real failure rather than ignoring the non-zero failure count.
 	return "failed"
 }
@@ -126,7 +126,7 @@ func ComputeDrift(recentRuns []RunInfo) DriftLevel {
 }
 
 // FailurePct computes the failure percentage for a run (0-100).
-// Returns 0 if ModuleCount is 0.
+// Returns 0 if ConfigcrateCount is 0.
 func FailurePct(failedCount, moduleCount int64) float64 {
 	if moduleCount <= 0 {
 		return 0

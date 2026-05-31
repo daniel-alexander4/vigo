@@ -250,7 +250,7 @@ message CheckInRequest {
   bytes traits_json = 5;           // inline traits (avoids separate ReportTraits RPC)
   uint64 policy_version = 6;     // agent's cached policy version (0 = no cache, send full bundle)
   bool policy_mode = 7;          // true = agent supports policy bundles
-  map<string, string> cached_module_hashes = 8;  // module name → content hash for delta transfer
+  map<string, string> cached_configcrate_hashes = 8;  // module name → content hash for delta transfer
   StreamCapabilities capabilities = 9;  // agent protocol capabilities (delta streaming)
   string agent_version = 10;             // agent binary version (e.g. "1.2.0" or "dev")
   string ip_address = 11;                // agent's preferred outbound IP (refreshed each check-in)
@@ -259,7 +259,7 @@ message CheckInRequest {
 }
 
 message CheckInResponse {
-  repeated Module modules = 1;
+  repeated Configcrate configcrates = 1;
   string interval = 2;   // e.g. "5m"
   int32 jitter_percent = 3;
   repeated CustomTraitEntry custom_traits = 4;
@@ -358,7 +358,7 @@ message DownloadCustomTraitResponse {
   bytes data = 1;
 }
 
-message Module {
+message Configcrate {
   string name = 1;
   string resource_type = 2;   // file, package, service, user
   repeated Resource resources = 3;
@@ -379,7 +379,7 @@ message Resource {
 // conditionals are NOT evaluated — the agent does that locally with its traits.
 message PolicyBundle {
   uint64 policy_version = 1;
-  repeated PolicyModule modules = 2;
+  repeated PolicyConfigcrate configcrates = 2;
   bytes vars_json = 3;                 // JSON-encoded merged vars map[string]any
   repeated string var_order = 4;       // deterministic rendering order
   reserved 5;                          // removed in 0.27.0: conditional_vars
@@ -419,10 +419,10 @@ message PolicyBundle {
   int64 secrets_epoch = 16 [(vigo.v1.signed) = false];
 }
 
-// PolicyModule is a module definition with raw templates and conditionals.
+// PolicyConfigcrate is a module definition with raw templates and conditionals.
 // For delta transfer: if stub=true, only name + content_hash are set —
 // the agent fills in resources from its local cache.
-message PolicyModule {
+message PolicyConfigcrate {
   string name = 1;
   repeated PolicyResource resources = 2;
   repeated string depends_on = 3;
@@ -445,14 +445,14 @@ message PolicyResource {
 message ReportResultRequest {
   string run_id = 1;
   string envoy_id = 2;
-  repeated ModuleResult results = 3;
+  repeated ConfigcrateResult results = 3;
   bytes signature = 4;
   google.protobuf.Timestamp timestamp = 5;
   string traceparent = 6;  // W3C traceparent (ADR-028)
 }
 
-message ModuleResult {
-  string module_name = 1;
+message ConfigcrateResult {
+  string configcrate_name = 1;
   string resource_type = 2;
   string resource_name = 3;
   string action_taken = 4;     // none, created, updated, deleted, blocked
@@ -561,7 +561,7 @@ message RunCompleted {
   int32 changed_count = 4;
   int32 failed_count = 5;
   int32 skipped_count = 6;
-  repeated ModuleResult results = 7;  // only changed/failed (no-ops omitted)
+  repeated ConfigcrateResult results = 7;  // only changed/failed (no-ops omitted)
   uint64 bundle_version = 8;         // policy bundle version used for this run
   string traceparent = 9;            // W3C traceparent (ADR-028)
 }
@@ -742,7 +742,7 @@ message DryRunResponse {
 }
 
 message PlannedAction {
-  string module_name = 1;
+  string configcrate_name = 1;
   string resource_type = 2;
   string resource_name = 3;
   string planned_action = 4;   // create, update, delete, none
@@ -763,7 +763,7 @@ message Run {
   google.protobuf.Timestamp started_at = 3;
   google.protobuf.Timestamp finished_at = 4;
   string status = 5;          // running, success, failure, partial
-  int32 module_count = 6;
+  int32 configcrate_count = 6;
   int32 changed_count = 7;
   int32 failed_count = 8;
   int32 skipped_count = 9;
@@ -775,7 +775,7 @@ message GetRunRequest {
 
 message GetRunResponse {
   Run run = 1;
-  repeated ModuleResult results = 2;
+  repeated ConfigcrateResult results = 2;
 }
 
 message GenerateTokenRequest {}

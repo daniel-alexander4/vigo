@@ -9,7 +9,7 @@
 use crate::auth::signer;
 use crate::proto::{
     vigo_agent_client::VigoAgentClient, CheckInRequest, CheckInResponse,
-    DownloadCustomTraitRequest, ModuleResult, RegisterRequest, RegisterResponse,
+    DownloadCustomTraitRequest, ConfigcrateResult, RegisterRequest, RegisterResponse,
     ReportResultRequest, ReportResultResponse, ReportTraitsRequest, WakeRequest,
     WakeResponse,
 };
@@ -302,7 +302,7 @@ impl Client {
                     traits_json: Vec::new(),
                     policy_version: 0,
                     policy_mode: true,
-                    cached_module_hashes: BTreeMap::new(),
+                    cached_configcrate_hashes: BTreeMap::new(),
                     capabilities: None,
                     agent_version: self.agent_version.clone(),
                     ip_address: crate::platform::net::get_outbound_ip(),
@@ -376,7 +376,7 @@ impl Client {
         state_fingerprint: &str,
         traits_json: Option<Vec<u8>>,
         policy_version: u64,
-        cached_module_hashes: Option<BTreeMap<String, String>>,
+        cached_configcrate_hashes: Option<BTreeMap<String, String>>,
     ) -> Result<CheckInResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
@@ -390,7 +390,7 @@ impl Client {
             traits_json: traits_json.unwrap_or_default(),
             policy_version,
             policy_mode: true,
-            cached_module_hashes: cached_module_hashes.unwrap_or_default(),
+            cached_configcrate_hashes: cached_configcrate_hashes.unwrap_or_default(),
             capabilities: None,
             agent_version: self.agent_version.clone(),
             ip_address: crate::platform::net::get_outbound_ip(),
@@ -498,7 +498,7 @@ impl Client {
     pub async fn report_result(
         &mut self,
         run_id: &str,
-        results: Vec<ModuleResult>,
+        results: Vec<ConfigcrateResult>,
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
@@ -529,7 +529,7 @@ impl Client {
         &mut self,
         run_id: &str,
         envoy_id: &str,
-        results: Vec<ModuleResult>,
+        results: Vec<ConfigcrateResult>,
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
@@ -625,13 +625,13 @@ impl Client {
         state_fingerprint: &str,
         traits_json: Option<Vec<u8>>,
         policy_version: u64,
-        cached_module_hashes: Option<BTreeMap<String, String>>,
+        cached_configcrate_hashes: Option<BTreeMap<String, String>>,
     ) -> CheckInRequest {
         self.build_check_in_request_with_caps(
             state_fingerprint,
             traits_json,
             policy_version,
-            cached_module_hashes,
+            cached_configcrate_hashes,
             None,
         )
     }
@@ -645,7 +645,7 @@ impl Client {
         state_fingerprint: &str,
         traits_json: Option<Vec<u8>>,
         policy_version: u64,
-        cached_module_hashes: Option<BTreeMap<String, String>>,
+        cached_configcrate_hashes: Option<BTreeMap<String, String>>,
         capabilities: Option<crate::proto::StreamCapabilities>,
     ) -> CheckInRequest {
         let ts = Self::timestamp_str();
@@ -660,7 +660,7 @@ impl Client {
             traits_json: traits_json.unwrap_or_default(),
             policy_version,
             policy_mode: true,
-            cached_module_hashes: cached_module_hashes.unwrap_or_default(),
+            cached_configcrate_hashes: cached_configcrate_hashes.unwrap_or_default(),
             capabilities,
             agent_version: self.agent_version.clone(),
             ip_address: crate::platform::net::get_outbound_ip(),
@@ -673,7 +673,7 @@ impl Client {
     pub fn build_report_result_request(
         &self,
         run_id: &str,
-        results: Vec<ModuleResult>,
+        results: Vec<ConfigcrateResult>,
     ) -> ReportResultRequest {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
