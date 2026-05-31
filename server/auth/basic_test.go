@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/httpsec"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/secrets"
 	"git.alexander4.io/vigo/server/testutil"
@@ -310,5 +311,33 @@ func TestBasicLogin_NoPasswordStored_Fails(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	for _, c := range rec.Result().Cookies() {
 		assert.NotEqual(t, "session", c.Name)
+	}
+}
+
+// TestLoginPages_CSPAndNoInlineStyles pins the login-page hardening (0.71.x):
+// both the basic-auth login and TOTP pages must carry the locked CSP (no
+// 'unsafe-inline') and contain zero inline style= attributes — they style
+// exclusively via the shared stylesheet + classes.
+func TestLoginPages_CSPAndNoInlineStyles(t *testing.T) {
+	pages := map[string]func(http.ResponseWriter, string){
+		"login": serveLoginPage,
+		"totp":  serveTOTPPage,
+	}
+	for name, serve := range pages {
+		t.Run(name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			serve(rec, "an error message") // exercise the error branch too
+			res := rec.Result()
+
+			csp := res.Header.Get("Content-Security-Policy")
+			assert.Equal(t, httpsec.CSP, csp, "login page must carry the canonical locked CSP")
+			assert.NotContains(t, csp, "unsafe-inline")
+			assert.Equal(t, "SAMEORIGIN", res.Header.Get("X-Frame-Options"))
+			assert.Equal(t, "nosniff", res.Header.Get("X-Content-Type-Options"))
+
+			body := rec.Body.String()
+			assert.NotContains(t, body, "style=", "no inline style attributes (de-inlined to classes)")
+			assert.Contains(t, body, `href="/static/css/style.css"`, "styles via the shared stylesheet")
+		})
 	}
 }

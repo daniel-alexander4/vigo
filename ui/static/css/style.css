@@ -3889,10 +3889,16 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     font-size: 0.875rem;
 }
 
+.login-logo {
+    height: 36px;
+    margin-bottom: 0.5rem;
+}
+
 .login-error {
     color: var(--color-danger);
     font-size: 0.813rem;
     margin-top: 0.75rem;
+    margin-bottom: 1rem;
     text-align: center;
 }
 

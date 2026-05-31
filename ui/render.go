@@ -21,6 +21,7 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/freshness"
+	"git.alexander4.io/vigo/server/httpsec"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/swarm/poolqmesh"
@@ -850,17 +851,7 @@ func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	// Fully locked: no 'unsafe-inline', no nonce, anywhere. All inline scripts
-	// /handlers moved to /static/js (delegated via ui-actions.js); all inline
-	// style= attributes moved to u-* utility classes + the dynamic-support
-	// classes (w-pct-*, pct-*, cc-*, tgb-*/tgt-*) in style.css, and htmx's
-	// indicator-style injection is disabled (includeIndicatorStyles:false in
-	// base.html). CSP nonces don't cover style attributes, so de-inlining was
-	// the only way to drop 'unsafe-inline' for style-src.
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'")
+	httpsec.Headers(w)
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
 		slog.Error("template execution error", "name", name, "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -879,7 +870,7 @@ func (r *Renderer) RenderFragment(w http.ResponseWriter, page, fragment string, 
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	httpsec.Headers(w)
 	if err := tmpl.ExecuteTemplate(w, fragment, data); err != nil {
 		slog.Error("fragment execution error", "page", page, "fragment", fragment, "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)

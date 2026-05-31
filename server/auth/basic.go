@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/httpsec"
 	"git.alexander4.io/vigo/server/secrets"
 )
 
@@ -309,6 +310,7 @@ func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 // serveLoginPage renders the login form with an optional error message.
 func serveLoginPage(w http.ResponseWriter, errMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	httpsec.Headers(w)
 	w.Write([]byte(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -320,10 +322,10 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
 <body>
     <div class="login-container">
         <div class="login-card">
-            <img src="/static/img/logo.svg" alt="Vigo" style="height:36px;margin-bottom:0.5rem">
+            <img src="/static/img/logo.svg" alt="Vigo" class="login-logo">
             <p class="login-subtitle">Sign in to continue</p>`))
 	if errMsg != "" {
-		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + html.EscapeString(errMsg) + `</p>`))
+		w.Write([]byte(`<p class="login-error">` + html.EscapeString(errMsg) + `</p>`))
 	}
 	w.Write([]byte(`
             <form method="POST" action="/login">
@@ -348,6 +350,7 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
 // serveTOTPPage renders the TOTP challenge form.
 func serveTOTPPage(w http.ResponseWriter, errMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	httpsec.Headers(w)
 	w.Write([]byte(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -359,10 +362,10 @@ func serveTOTPPage(w http.ResponseWriter, errMsg string) {
 <body>
     <div class="login-container">
         <div class="login-card">
-            <img src="/static/img/logo.svg" alt="Vigo" style="height:36px;margin-bottom:0.5rem">
+            <img src="/static/img/logo.svg" alt="Vigo" class="login-logo">
             <p class="login-subtitle">Two-factor authentication</p>`))
 	if errMsg != "" {
-		w.Write([]byte(`<p class="login-error" style="color:#e74c3c;margin-bottom:1rem;text-align:center">` + html.EscapeString(errMsg) + `</p>`))
+		w.Write([]byte(`<p class="login-error">` + html.EscapeString(errMsg) + `</p>`))
 	}
 	w.Write([]byte(`
             <form method="POST" action="/totp">
@@ -374,7 +377,7 @@ func serveTOTPPage(w http.ResponseWriter, errMsg string) {
                 </div>
                 <button type="submit" class="btn btn--primary btn--full">Verify</button>
             </form>
-            <p style="color:#6c757d;text-align:center;font-size:0.85rem;margin-top:1rem">
+            <p class="login-hint">
                 Enter the code from your authenticator app, or a recovery code.
             </p>
         </div>
@@ -382,4 +385,3 @@ func serveTOTPPage(w http.ResponseWriter, errMsg string) {
 </body>
 </html>`))
 }
-
