@@ -14,18 +14,18 @@
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Serial Number</div>
-        <div class="stat-card__value" style="font-size:1em;">{{.Asset.SerialNumber}}</div>
+        <div class="stat-card__value u-fs-1em">{{.Asset.SerialNumber}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Model</div>
-        <div class="stat-card__value" style="font-size:1em;">{{.Asset.Model}}</div>
+        <div class="stat-card__value u-fs-1em">{{.Asset.Model}}</div>
     </div>
 </div>
 
 <div class="card mt-2">
     <h2>Hardware Details</h2>
     <table class="table">
-        <tr><th style="width:200px;">BMC Address</th><td>{{.Asset.BmcAddress}}</td></tr>
+        <tr><th class="u-w-200px">BMC Address</th><td>{{.Asset.BmcAddress}}</td></tr>
         <tr><th>Asset Tag</th><td>{{.Asset.AssetTag}}</td></tr>
         <tr><th>Rack Location</th><td>{{.Asset.RackLocation}}</td></tr>
         {{if .Asset.EnvoyID.Valid}}<tr><th>Linked Envoy</th><td><a href="/envoys/{{.Asset.EnvoyID.String}}">{{.Asset.EnvoyID.String}}</a></td></tr>{{end}}

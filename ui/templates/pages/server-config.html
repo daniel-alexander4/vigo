@@ -4,7 +4,7 @@
     <p>Top-level sections of <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> — enabled sections are present in the live file and not explicitly disabled.</p>
 </div>
 
-<div class="stat-cards" style="margin-bottom:24px;">
+<div class="stat-cards u-mb-24px">
     <div class="stat-card stat-card--success">
         <div class="stat-card__value">{{.Enabled}}</div>
         <div class="stat-card__label">Enabled</div>
@@ -16,7 +16,7 @@
 </div>
 
 <div class="card">
-    <p style="color:var(--color-text-muted);margin:0 0 16px;">Click a section to see its current values (when enabled) and every option it supports. The server runs the copy of <code>server.yaml</code> loaded at startup — edits to the file are not active until the server is restarted.</p>
+    <p class="u-c-var-color-text-muted-m-0-0-16px">Click a section to see its current values (when enabled) and every option it supports. The server runs the copy of <code>server.yaml</code> loaded at startup — edits to the file are not active until the server is restarted.</p>
 
     <div class="server-config-grid">
         {{range .Cards}}

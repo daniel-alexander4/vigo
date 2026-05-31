@@ -11,14 +11,14 @@
 {{if .Groups}}
 <div class="trait-groups">
     {{range .Groups}}
-    <div class="card" style="margin-bottom:16px;">
-        <h3 style="margin-bottom:8px;">{{.Name}}</h3>
+    <div class="card u-mb-16px">
+        <h3 class="u-mb-8px">{{.Name}}</h3>
         <table class="table">
             <thead><tr><th>Trait</th><th>Value</th></tr></thead>
             <tbody>
             {{range .Traits}}
             <tr>
-                <td class="mono" style="width:40%;">{{.Key}}</td>
+                <td class="mono u-w-40">{{.Key}}</td>
                 <td class="mono">{{.Value}}</td>
             </tr>
             {{end}}
@@ -28,6 +28,6 @@
     {{end}}
 </div>
 {{else}}
-<p class="text-muted" style="padding:20px;">No traits collected for this envoy yet.</p>
+<p class="text-muted u-p-20px">No traits collected for this envoy yet.</p>
 {{end}}
 {{end}}

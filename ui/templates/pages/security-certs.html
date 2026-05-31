@@ -9,19 +9,19 @@
 </div>
 
 <div class="stat-cards mb-2">
-    <a href="/security/certs/{{.EnvoyID}}?bucket=expired" class="stat-card stat-card--danger{{if eq .Bucket "expired"}} stat-card--active{{end}}" style="text-decoration:none;">
+    <a href="/security/certs/{{.EnvoyID}}?bucket=expired" class="stat-card stat-card--danger{{if eq .Bucket "expired"}} stat-card--active{{end}} u-td-none">
         <div class="stat-card__label">Expired</div>
         <div class="stat-card__value {{if .Expired}}text-danger{{end}}">{{.Expired}}</div>
     </a>
-    <a href="/security/certs/{{.EnvoyID}}?bucket=7d" class="stat-card stat-card--warning{{if eq .Bucket "7d"}} stat-card--active{{end}}" style="text-decoration:none;">
+    <a href="/security/certs/{{.EnvoyID}}?bucket=7d" class="stat-card stat-card--warning{{if eq .Bucket "7d"}} stat-card--active{{end}} u-td-none">
         <div class="stat-card__label">≤ 7 days</div>
         <div class="stat-card__value {{if .ExpiringIn7}}text-warning{{end}}">{{.ExpiringIn7}}</div>
     </a>
-    <a href="/security/certs/{{.EnvoyID}}?bucket=30d" class="stat-card{{if eq .Bucket "30d"}} stat-card--active{{end}}" style="text-decoration:none;">
+    <a href="/security/certs/{{.EnvoyID}}?bucket=30d" class="stat-card{{if eq .Bucket "30d"}} stat-card--active{{end}} u-td-none">
         <div class="stat-card__label">≤ 30 days</div>
         <div class="stat-card__value">{{.ExpiringIn30}}</div>
     </a>
-    <a href="/security/certs/{{.EnvoyID}}" class="stat-card stat-card--brand{{if eq .Bucket ""}} stat-card--active{{end}}" style="text-decoration:none;">
+    <a href="/security/certs/{{.EnvoyID}}" class="stat-card stat-card--brand{{if eq .Bucket ""}} stat-card--active{{end}} u-td-none">
         <div class="stat-card__label">All &lt; 30 days</div>
         <div class="stat-card__value">{{len .AllCerts}}</div>
     </a>
@@ -29,7 +29,7 @@
 
 <div class="card">
     <div class="card-heading-row">
-        <h3 style="margin:0;">
+        <h3 class="u-m-0">
             {{if eq .Bucket "expired"}}Expired certificates ({{len .Certs}})
             {{else if eq .Bucket "7d"}}Expiring within 7 days ({{len .Certs}})
             {{else if eq .Bucket "30d"}}Expiring within 30 days ({{len .Certs}})
@@ -67,9 +67,9 @@
                         {{if gt (len .SANs) 3}} <span class="text-muted">+{{sub (len .SANs) 3}} more</span>{{end}}
                     {{else}}<span class="text-muted">&mdash;</span>{{end}}
                 </td>
-                <td><span class="text-muted" style="font-size:0.9em;">{{.Issuer}}</span></td>
-                <td style="white-space:nowrap;">{{.NotAfter}}</td>
-                <td style="white-space:nowrap;">
+                <td><span class="text-muted u-fs-0-9em">{{.Issuer}}</span></td>
+                <td class="u-ws-nowrap">{{.NotAfter}}</td>
+                <td class="u-ws-nowrap">
                     {{if lt .DaysRemaining 0}}
                     <span class="badge badge--danger">{{.DaysRemaining}}d (expired)</span>
                     {{else if lt .DaysRemaining 7}}

@@ -9,19 +9,19 @@
 
 <div class="card">
     <div class="card-heading-row">
-        <h2 style="margin:0;">{{.Artifact.Name}}{{if .Artifact.Blocked}} <span class="badge badge--warn">blocked</span>{{end}}</h2>
+        <h2 class="u-m-0">{{.Artifact.Name}}{{if .Artifact.Blocked}} <span class="badge badge--warn">blocked</span>{{end}}</h2>
         <a href="/swarm/curator" class="btn btn--sm">Back to list</a>
     </div>
 
-    <div class="table-container" style="margin-bottom:24px;">
+    <div class="table-container u-mb-24px">
         <table class="table">
             <tbody>
-                <tr><td style="font-weight:600;width:200px;">Artifact ID</td><td><code>{{.Artifact.ArtifactID}}</code></td></tr>
-                <tr><td style="font-weight:600;">Kind</td><td><code>{{.Artifact.Kind}}</code> <span class="muted">— which consume facade this artifact targets</span></td></tr>
-                <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Artifact.FounderPuddlePubkey}}</code></td></tr>
+                <tr><td class="u-fw-600-w-200px">Artifact ID</td><td><code>{{.Artifact.ArtifactID}}</code></td></tr>
+                <tr><td class="u-fw-600">Kind</td><td><code>{{.Artifact.Kind}}</code> <span class="muted">— which consume facade this artifact targets</span></td></tr>
+                <tr><td class="u-fw-600">Founder puddle</td><td><code>ed25519:{{.Artifact.FounderPuddlePubkey}}</code></td></tr>
                 {{if .Artifact.Rekeyed}}
                 <tr>
-                    <td style="font-weight:600;">Signing puddle</td>
+                    <td class="u-fw-600">Signing puddle</td>
                     <td>
                         <code>ed25519:{{.Artifact.SigningPuddlePubkey}}</code>
                         <span class="badge badge--ok" title="The founder has rekeyed (ADR-019); the per-artifact delegation chain bridges the genesis pubkey baked into the artifact_id to the current signer.">rekeyed</span>
@@ -29,7 +29,7 @@
                 </tr>
                 {{end}}
                 <tr>
-                    <td style="font-weight:600;">Target</td>
+                    <td class="u-fw-600">Target</td>
                     <td>
                         <code>{{.Artifact.Target}}</code>
                         {{if .Artifact.TargetEnvoys}}
@@ -43,7 +43,7 @@
                     </td>
                 </tr>
                 <tr>
-                    <td style="font-weight:600;">Recipients</td>
+                    <td class="u-fw-600">Recipients</td>
                     <td>
                         {{range $i, $r := .Artifact.Recipients}}{{if $i}}, {{end}}<code>{{$r}}</code>{{end}}
                         <br>
@@ -56,9 +56,9 @@
                         </span>
                     </td>
                 </tr>
-                <tr><td style="font-weight:600;">Issued at</td><td>{{if gt .Artifact.IssuedAt 0}}{{formatUnixTime (div .Artifact.IssuedAt 1000)}}{{else}}&mdash;{{end}}</td></tr>
+                <tr><td class="u-fw-600">Issued at</td><td>{{if gt .Artifact.IssuedAt 0}}{{formatUnixTime (div .Artifact.IssuedAt 1000)}}{{else}}&mdash;{{end}}</td></tr>
                 <tr>
-                    <td style="font-weight:600;">Status</td>
+                    <td class="u-fw-600">Status</td>
                     <td>
                         {{if .Artifact.Blocked}}
                             <span class="badge badge--warn">blocked by the operator</span>
@@ -72,7 +72,7 @@
         </table>
     </div>
 
-    <h3 style="margin:0 0 12px;">Versions &amp; Platforms</h3>
+    <h3 class="u-m-0-0-12px">Versions &amp; Platforms</h3>
     {{if .Artifact.Versions}}
     <table class="table">
         <thead>
@@ -118,7 +118,7 @@
     {{end}}
 
     {{if .Artifact.DanglingTags}}
-    <h3 style="margin:24px 0 12px;">Dangling tags</h3>
+    <h3 class="u-m-24px-0-12px">Dangling tags</h3>
     <p class="muted">These tags point at a version string that doesn't exist in the catalog. Consumers resolving <code>{{$.Artifact.Name}}:&lt;tag&gt;</code> get a 404. Re-bind with <code>vigo swarm curator tag &lt;ref&gt; &lt;tag&gt;=&lt;real-version&gt;</code> or drop the tag with <code>vigo swarm curator untag &lt;ref&gt; &lt;tag&gt;</code>.</p>
     <table class="table">
         <thead>
@@ -165,7 +165,7 @@
     </div>
 
     <div class="card">
-        <h3 style="margin:0 0 12px;">Artifacts</h3>
+        <h3 class="u-m-0-0-12px">Artifacts</h3>
         <table class="table">
             <thead>
                 <tr>
@@ -184,7 +184,7 @@
                 {{range .Catalog.Artifacts}}
                 {{$aid := curatorArtifactID .}}
                 {{$isBlocked := curatorIsBlocked $aid $blocked}}
-                <tr data-action="nav" data-href="/swarm/curator/{{$aid}}" style="cursor:pointer;">
+                <tr class="u-cur-pointer" data-action="nav" data-href="/swarm/curator/{{$aid}}">
                     <td><strong>{{.Body.Name}}</strong></td>
                     <td><code>{{.Body.Kind}}</code></td>
                     <td>{{len .Body.Versions}}</td>
@@ -203,7 +203,7 @@
     {{$orphans := curatorOrphanBlocks .Catalog .Blocked}}
     {{if $orphans}}
     <div class="card mt-2">
-        <h3 style="margin:0 0 12px;">Operator blocks without a current catalog entry</h3>
+        <h3 class="u-m-0-0-12px">Operator blocks without a current catalog entry</h3>
         <p class="muted">These artifact_ids are in the block table but no envoy currently advertises a catalog entry for them — likely the publisher ran <code>vigo swarm curator rm</code> after the block landed. The block stays in effect: if anyone re-publishes under the same artifact_id, the server will still refuse.</p>
         <table class="table">
             <thead>

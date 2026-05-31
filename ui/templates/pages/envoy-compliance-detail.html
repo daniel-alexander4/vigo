@@ -17,20 +17,20 @@
 
 {{define "envoy-standard-coverage-fragment"}}
 {{if .Unavailable}}
-<p class="text-muted" style="padding:20px;">No compliance data available for {{.FrameworkTitle}}.</p>
+<p class="text-muted u-p-20px">No compliance data available for {{.FrameworkTitle}}.</p>
 {{else}}
 
 <!-- Summary cards: partition buckets from the unified scorer -->
-<div class="stat-cards" style="margin-bottom:24px;">
+<div class="stat-cards u-mb-24px">
     <div class="stat-card">
         <div class="stat-card__value {{if ge .ConfigcratePct 95.0}}text-success{{else if ge .ConfigcratePct 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .ConfigcratePct}}%</div>
         <div class="stat-card__label">Convergence</div>
-        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.ConfigcrateConvergence}}</div>
+        <div class="text-muted u-fs-11px-mt-4px">{{.ConfigcrateConvergence}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value {{if ge .Status.CoveragePercent 95.0}}text-success{{else if ge .Status.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Status.CoveragePercent}}%</div>
         <div class="stat-card__label">{{.FrameworkTitle}}</div>
-        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.Status.Covered}}/{{.Status.Total}} controls</div>
+        <div class="text-muted u-fs-11px-mt-4px">{{.Status.Covered}}/{{.Status.Total}} controls</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-success">{{.Status.Covered}}</div>

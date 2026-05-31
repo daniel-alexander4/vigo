@@ -10,21 +10,21 @@
 </div>
 
 <form class="filter-bar mb-2" action="/compliance/evidence" method="get">
-    <div class="form-group" style="margin:0;">
-        <label for="ev-framework" style="font-size:12px;">Framework</label>
-        <select id="ev-framework" name="framework" class="form-input" style="width:auto;">
+    <div class="form-group u-m-0">
+        <label class="u-fs-12px" for="ev-framework">Framework</label>
+        <select id="ev-framework" name="framework" class="form-input u-w-auto">
             {{range .Frameworks}}
             <option value="{{.Slug}}"{{if eq .Slug $.FrameworkSlug}} selected{{end}}>{{.Name}}</option>
             {{end}}
         </select>
     </div>
-    <div class="form-group" style="margin:0;">
-        <label for="ev-from" style="font-size:12px;">From</label>
-        <input type="date" id="ev-from" name="from" class="form-input" value="{{.DateFrom}}" style="width:auto;">
+    <div class="form-group u-m-0">
+        <label class="u-fs-12px" for="ev-from">From</label>
+        <input type="date" id="ev-from" name="from" class="form-input u-w-auto" value="{{.DateFrom}}">
     </div>
-    <div class="form-group" style="margin:0;">
-        <label for="ev-to" style="font-size:12px;">To</label>
-        <input type="date" id="ev-to" name="to" class="form-input" value="{{.DateTo}}" style="width:auto;">
+    <div class="form-group u-m-0">
+        <label class="u-fs-12px" for="ev-to">To</label>
+        <input type="date" id="ev-to" name="to" class="form-input u-w-auto" value="{{.DateTo}}">
     </div>
     <button type="submit" class="btn btn--sm btn--primary">Apply</button>
 </form>
@@ -67,7 +67,7 @@
 
 {{define "evidence-snapshot"}}
 {{if or .Converged .Relapsed .Diverged .Failed .Offline .NoData}}
-<div class="compliance-gauge" style="margin-bottom:16px;">
+<div class="compliance-gauge u-mb-16px">
     <div class="compliance-gauge__header">
         <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}">
             {{printf "%.0f" .ConvergencePct}}%
@@ -159,7 +159,7 @@
                 </td>
             </tr>
             <tr>
-                <td colspan="6" id="drill-{{.ControlID | cssClass}}" style="padding:0;"></td>
+                <td class="u-p-0" colspan="6" id="drill-{{.ControlID | cssClass}}"></td>
             </tr>
             {{end}}
         </tbody>
@@ -169,8 +169,8 @@
 
 {{define "evidence-control-drill"}}
 {{if .Envoys}}
-<div style="padding:8px 16px;background:var(--color-bg);">
-    <table class="table" style="font-size:12px;">
+<div class="u-p-8px-16px-bg-var-color-bg">
+    <table class="table u-fs-12px">
         <thead><tr><th>Hostname</th><th>Module</th><th>Module Status</th><th>Runs (period)</th><th>Failures</th><th>Last Run</th></tr></thead>
         <tbody>
             {{range .Envoys}}
@@ -187,14 +187,14 @@
     </table>
 </div>
 {{else}}
-<div style="padding:12px 16px;background:var(--color-bg);">
-    <p class="text-muted" style="margin:0;">No envoys enforce modules mapped to this control.</p>
+<div class="u-p-12px-16px-bg-var-color-bg">
+    <p class="text-muted u-m-0">No envoys enforce modules mapped to this control.</p>
 </div>
 {{end}}
-<div style="padding:8px 16px 12px;background:var(--color-bg);">
-    <h4 style="margin:0 0 6px;font-size:13px;font-weight:600;">Supporting Documentation</h4>
+<div class="u-p-8px-16px-12px-bg-var-color-bg">
+    <h4 class="u-blk8">Supporting Documentation</h4>
     {{if .Docs}}
-    <table class="table" style="font-size:12px;">
+    <table class="table u-fs-12px">
         <thead><tr><th>Filename</th><th>Type</th><th>MIME</th><th>Size</th><th>SHA-256</th><th>Uploaded By</th><th>Uploaded</th><th></th></tr></thead>
         <tbody>
             {{range .Docs}}
@@ -212,14 +212,14 @@
         </tbody>
     </table>
     {{else}}
-    <p class="text-muted" style="margin:0 0 8px;font-size:12px;">No documents attached. Upload a policy, contract, plan, or other artifact below to satisfy this control.</p>
+    <p class="text-muted u-m-0-0-8px-fs-12px">No documents attached. Upload a policy, contract, plan, or other artifact below to satisfy this control.</p>
     {{end}}
-    <form method="POST" action="/api/v1/compliance/docs" enctype="multipart/form-data" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+    <form class="u-blk9" method="POST" action="/api/v1/compliance/docs" enctype="multipart/form-data">
         <input type="file" name="file" required>
-        <input type="text" name="doc_type" placeholder="Doc type (e.g. BAA, IR Plan)" style="font-size:12px;">
+        <input class="u-fs-12px" type="text" name="doc_type" placeholder="Doc type (e.g. BAA, IR Plan)">
         <input type="hidden" name="links" value='[{"framework":"{{.Slug}}","control_id":"{{.ControlID}}"}]'>
         <button type="submit" class="btn btn--sm">Upload</button>
-        <span class="text-muted" style="font-size:11px;">PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG up to 50 MiB</span>
+        <span class="text-muted u-fs-11px">PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG up to 50 MiB</span>
     </form>
 </div>
 {{end}}
@@ -254,12 +254,12 @@
 <h3 class="section-heading">Audit Chain</h3>
 {{if .Valid}}
   {{if eq .EntryCount 0}}
-<div class="audit-banner" style="background:var(--color-muted-bg);"><strong>Audit Chain:</strong> No audit entries recorded.</div>
+<div class="audit-banner u-bg-var-color-muted-bg"><strong>Audit Chain:</strong> No audit entries recorded.</div>
   {{else}}
 <div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; {{.EntryCount}} entries, integrity intact.</div>
   {{end}}
 {{else if eq .Error ""}}
-<div class="audit-banner" style="background:var(--color-muted-bg);"><strong>Audit Chain:</strong> Verifying&hellip; (chain check in progress)</div>
+<div class="audit-banner u-bg-var-color-muted-bg"><strong>Audit Chain:</strong> Verifying&hellip; (chain check in progress)</div>
 {{else}}
 <div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED{{if .Error}} &mdash; {{.Error}}{{end}}</div>
 {{end}}

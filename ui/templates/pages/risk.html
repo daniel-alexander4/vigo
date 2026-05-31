@@ -41,15 +41,15 @@
 <div class="card mb-2">
     <div class="card-body">
         <strong>{{.SparklineDays}}-Day Risk Trend</strong>
-        <span class="text-muted" style="margin-left:12px;font-size:0.85em;">{{.SparklineStart}} &mdash; {{.SparklineEnd}}</span>
-        <div style="display:flex;align-items:center;margin-top:8px;gap:8px;">
-            <div style="display:flex;flex-direction:column;justify-content:space-between;height:80px;font-size:0.8em;color:var(--color-text-muted);min-width:24px;text-align:right;">
+        <span class="text-muted u-ml-12px-fs-0-85em">{{.SparklineStart}} &mdash; {{.SparklineEnd}}</span>
+        <div class="u-blk23">
+            <div class="u-blk24">
                 <span>100</span>
                 <span>0</span>
             </div>
-            <div style="flex:1;">{{sparklineSVGBounded .SparklineData 600 80 "var(--color-danger)" 0 100}}</div>
+            <div class="u-flex-1">{{sparklineSVGBounded .SparklineData 600 80 "var(--color-danger)" 0 100}}</div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-left:32px;font-size:0.8em;color:var(--color-text-muted);">
+        <div class="u-blk25">
             <span>{{.SparklineStart}}</span>
             <span>{{.SparklineEnd}}</span>
         </div>
@@ -110,6 +110,6 @@
     </table>
 </div>
 {{else}}
-<p class="text-muted" style="text-align:center;padding:40px;">No envoys scored.</p>
+<p class="text-muted u-ta-center-p-40px">No envoys scored.</p>
 {{end}}
 {{end}}

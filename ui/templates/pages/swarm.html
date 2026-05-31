@@ -8,7 +8,7 @@
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__label">Envoys Online</div>
-        <div class="stat-card__value">{{.Status.EnvoysOnline}}<span style="font-size:14px;color:var(--subtext0);"> / {{.Status.EnvoysTotal}}</span></div>
+        <div class="stat-card__value">{{.Status.EnvoysOnline}}<span class="u-fs-14px-c-var-subtext0"> / {{.Status.EnvoysTotal}}</span></div>
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Substrate Active</div>
@@ -25,8 +25,8 @@
 </div>
 
 <div class="card mt-2">
-    <h2 style="margin:0 0 16px;">Content Subsystems</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Active blobs by subsystem, counted server-side from the manifest CRDT. Longdrawer and Lockbox are per-user content and don't surface as blob counts here — use their dedicated pages for user-level detail.</p>
+    <h2 class="u-m-0-0-16px">Content Subsystems</h2>
+    <p class="u-c-var-subtext0-mb-12px">Active blobs by subsystem, counted server-side from the manifest CRDT. Longdrawer and Lockbox are per-user content and don't surface as blob counts here — use their dedicated pages for user-level detail.</p>
     <div class="table-container">
         <table class="table">
             <thead>
@@ -38,35 +38,35 @@
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Filecast</strong> <span style="color:var(--subtext0);">— admin-pushed file fan-out</span></td>
+                    <td><strong>Filecast</strong> <span class="u-c-var-subtext0">— admin-pushed file fan-out</span></td>
                     <td>{{.Status.BlobsByKind.Filecast}}</td>
                     <td><a href="/swarm/filecast">/filecast</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Gitback</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
+                    <td><strong>Gitback</strong> <span class="u-c-var-subtext0">— personal-DR repo mirrors</span></td>
                     <td>{{.Status.BlobsByKind.Gitback}}</td>
                     <td><a href="/swarm/gitback">/gitback</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Longdrawer</strong> <span style="color:var(--subtext0);">— per-user plaintext sync</span></td>
+                    <td><strong>Longdrawer</strong> <span class="u-c-var-subtext0">— per-user plaintext sync</span></td>
                     <td>—</td>
                     <td><a href="/swarm/longdrawer">/longdrawer</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Lockbox</strong> <span style="color:var(--subtext0);">— per-user encrypted sync</span></td>
+                    <td><strong>Lockbox</strong> <span class="u-c-var-subtext0">— per-user encrypted sync</span></td>
                     <td>—</td>
                     <td><a href="/swarm/lockbox">/lockbox</a></td>
                 </tr>
             </tbody>
         </table>
     </div>
-    <p style="color:var(--subtext0);margin-top:12px;">Manifest entries: {{.Status.ManifestEntriesActive}} active, {{.Status.ManifestEntriesRevoked}} revoked.</p>
+    <p class="u-c-var-subtext0-mt-12px">Manifest entries: {{.Status.ManifestEntriesActive}} active, {{.Status.ManifestEntriesRevoked}} revoked.</p>
 </div>
 
 <div class="card mt-2">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
-        <h2 style="margin:0;">Peers</h2>
-        <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--subtext0);">
+    <div class="u-blk15">
+        <h2 class="u-m-0">Peers</h2>
+        <div class="u-blk16">
             <span>Sort:</span>
             <a href="/swarm?sort=footprint&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "footprint"}} btn--active{{end}}">Footprint</a>
             <a href="/swarm?sort=blobs&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "blobs"}} btn--active{{end}}">Blobs</a>
@@ -101,16 +101,16 @@
                 </tr>
                 {{else}}
                 <tr>
-                    <td colspan="8" style="color:var(--subtext0);">No envoys reporting on the substrate yet.</td>
+                    <td class="u-c-var-subtext0" colspan="8">No envoys reporting on the substrate yet.</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
     </div>
     {{if .Truncated}}
-    <p style="color:var(--subtext0);margin-top:12px;font-size:13px;">Showing top {{.ReturnedPeers}} of {{.TotalPeers}} envoys (sorted by {{.Sort}}). Use <code>?limit=</code> to show more.</p>
+    <p class="u-blk17">Showing top {{.ReturnedPeers}} of {{.TotalPeers}} envoys (sorted by {{.Sort}}). Use <code>?limit=</code> to show more.</p>
     {{else}}
-    <p style="color:var(--subtext0);margin-top:12px;font-size:13px;">{{.ReturnedPeers}} envoys.</p>
+    <p class="u-blk17">{{.ReturnedPeers}} envoys.</p>
     {{end}}
 </div>
 {{else}}

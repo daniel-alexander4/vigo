@@ -28,7 +28,7 @@
     <table class="table">
         <tbody>
             {{if .CustomerName}}
-            <tr><td class="text-muted" style="width:200px">Customer</td><td>{{.CustomerName}}</td></tr>
+            <tr><td class="text-muted u-w-200px">Customer</td><td>{{.CustomerName}}</td></tr>
             {{end}}
             <tr><td class="text-muted">License ID</td><td><code>{{.LicenseID}}</code></td></tr>
             <tr><td class="text-muted">Tier</td><td>{{.Tier}}{{if .IsFreeTier}} <span class="badge badge--info">built-in</span>{{end}}</td></tr>

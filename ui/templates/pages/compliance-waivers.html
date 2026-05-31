@@ -8,9 +8,9 @@
 </div>
 
 <div class="card mb-2">
-    <div class="card-body" style="font-size:0.9em;">
+    <div class="card-body u-fs-0-9em">
         <strong>Enforcement types:</strong>
-        <ul style="margin:6px 0 0 0;padding-left:18px;">
+        <ul class="u-m-6px-0-0-0-pl-18px">
             <li><span class="badge badge--compliant">enforced + waived</span> &mdash; A module actively enforces this control <em>and</em> a waiver is in place. The control is covered by policy regardless of the waiver. If the waiver expires, compliance scoring is unaffected.</li>
             <li><span class="badge badge--info">waived only</span> &mdash; No module enforces this control. The waiver is the only reason it counts as accepted. If the waiver expires, this control becomes a gap in compliance scoring.</li>
         </ul>
@@ -23,7 +23,7 @@
     {{range .Frameworks}}
     <a href="/compliance/waivers?framework={{.}}" class="btn btn--sm{{if eq $.FwFilter .}} btn--primary{{end}}">{{.}}</a>
     {{end}}
-    <span style="margin-left:12px;"></span>
+    <span class="u-ml-12px"></span>
     <a href="/compliance/waivers?type=enforced{{if $.FwFilter}}&framework={{$.FwFilter}}{{end}}" class="btn btn--sm{{if eq .TypeFilter "enforced"}} btn--primary{{end}}">Enforced + Waived</a>
     <a href="/compliance/waivers?type=waived-only{{if $.FwFilter}}&framework={{$.FwFilter}}{{end}}" class="btn btn--sm{{if eq .TypeFilter "waived-only"}} btn--primary{{end}}">Waived Only</a>
 </div>

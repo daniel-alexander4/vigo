@@ -14,14 +14,14 @@
 {{/* Inheritance Tree */}}
 {{if .TreeLevels}}
 <div class="card mt-2">
-    <h3 style="margin-bottom:12px;">Inheritance Tree</h3>
-    <p style="font-size:0.85em;color:var(--subtext0);margin-bottom:12px;">
+    <h3 class="u-mb-12px">Inheritance Tree</h3>
+    <p class="u-blk21">
         Pattern: <code>{{.Trace.MatchPattern}}</code> ({{.Trace.PatternType}})
         {{if .Trace.Environment}}&middot; Environment: <strong>{{.Trace.Environment}}</strong>{{end}}
         &middot; {{.Trace.ResourceCount}} resources from {{len .Trace.Configcrates}} modules
     </p>
-    <div style="overflow-x:auto;">
-        <svg viewBox="{{.TreeViewBox}}" style="width:100%;max-height:600px;" preserveAspectRatio="xMidYMin meet">
+    <div class="u-ovx-auto">
+        <svg class="u-w-100-maxh-600px" viewBox="{{.TreeViewBox}}" preserveAspectRatio="xMidYMin meet">
             <defs>
                 <marker id="tree-arrow" viewBox="0 -5 10 10" refX="10" refY="0" markerWidth="6" markerHeight="6" orient="auto">
                     <path d="M0,-4L10,0L0,4" fill="#9399b2"/>
@@ -60,14 +60,14 @@
 {{/* Module Dependency DAG */}}
 {{if .HasDeps}}
 <div class="card mt-2">
-    <h3 style="margin-bottom:12px;">Module Dependencies</h3>
-    <div id="dependency-dag-container" style="height:400px;border:1px solid var(--color-border);border-radius:8px;"></div>
+    <h3 class="u-mb-12px">Module Dependencies</h3>
+    <div class="u-blk22" id="dependency-dag-container"></div>
     <script id="dependency-dag-data" type="application/json">{{.DependencyJSON}}</script>
-    <div class="swarm-legend" style="margin-top:8px;">
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#89b4fa;"></div> depends_on</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#cba6f7;border-style:dashed;"></div> before</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#a6e3a1;border-style:dotted;"></div> notify</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#f9e2af;border-style:dotted;"></div> subscribes</div>
+    <div class="swarm-legend u-mt-8px">
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-89b4fa"></div> depends_on</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-cba6f7-border-style-dashed"></div> before</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-a6e3a1-border-style-dotted"></div> notify</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-f9e2af-border-style-dotted"></div> subscribes</div>
     </div>
 </div>
 <script src="/static/js/d3.v7.min.js?v={{.Version}}" defer></script>
@@ -76,7 +76,7 @@
 
 {{else}}
 <div class="card mt-2">
-    <p style="text-align:center;padding:40px;" class="text-muted">
+    <p class="text-muted u-ta-center-p-40px">
         {{if .Trace}}No config match for <strong>{{.Hostname}}</strong>.{{else}}Trace data unavailable.{{end}}
     </p>
 </div>

@@ -6,14 +6,14 @@
 
 <!-- Fleet health alerts -->
 {{if .Alerts}}
-<div style="margin-bottom:16px;">
+<div class="u-mb-16px">
     {{range .Alerts}}
     <details class="card" style="margin-bottom:8px; border-left:3px solid {{if eq .Level "danger"}}var(--color-danger){{else}}var(--color-warning){{end}}; padding:12px 16px;">
-        <summary style="cursor:pointer; font-weight:600;">
+        <summary class="u-cur-pointer-fw-600">
             {{if eq .Level "danger"}}&#x26A0;{{else}}&#x26A0;{{end}}
             {{.Title}} &mdash; <strong>{{.Count}}</strong> machine{{if ne .Count 1}}s{{end}}
         </summary>
-        <ul style="margin:8px 0 0 16px; font-size:13px; color:var(--color-muted);">
+        <ul class="u-blk18">
             {{range .Hosts}}<li>{{.}}</li>{{end}}
         </ul>
     </details>
@@ -22,7 +22,7 @@
 {{end}}
 
 <!-- Summary cards -->
-<div class="stat-cards" style="margin-bottom:24px;">
+<div class="stat-cards u-mb-24px">
     <div class="stat-card">
         <div class="stat-card__value">{{.Total}}</div>
         <div class="stat-card__label">Envoys</div>
@@ -44,8 +44,8 @@
 </div>
 
 <!-- Trait search -->
-<div class="card" style="margin-bottom:24px;">
-    <h2 style="margin:0 0 8px;">Trait Search</h2>
+<div class="card u-mb-24px">
+    <h2 class="u-m-0-0-8px">Trait Search</h2>
     <button class="btn btn--sm"
             hx-get="/ui/fragments/inventory-trait-index"
             hx-target="#trait-index-modal"
@@ -55,7 +55,7 @@
 <div id="trait-index-modal"></div>
 
 <!-- Export -->
-<div style="text-align:right;">
+<div class="u-ta-right">
     <a href="/ui/export/inventory.csv" class="btn btn--sm btn--primary">Export CSV (Audit)</a>
     <a href="/api/v1/inventory" class="btn btn--sm" download="fleet-inventory.json">Export JSON</a>
 </div>

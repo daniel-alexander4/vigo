@@ -43,9 +43,9 @@
         {{/* CVE Impact Analysis */}}
         <div class="security-section">
             <h3>CVE Impact Analysis</h3>
-            <form hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML" style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-                <input type="text" name="cve" placeholder="CVE-2024-..." class="input input--sm" style="width:220px;">
-                <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--color-text-muted);cursor:pointer;">
+            <form class="u-blk2" hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML">
+                <input type="text" name="cve" placeholder="CVE-2024-..." class="input input--sm u-w-220px">
+                <label class="u-blk3">
                     <input type="checkbox" name="running_only" value="true">
                     Running only
                     <span class="text-muted" title="Restrict results to hosts where the CVE affects a currently-executing binary (requires cve_running_correlation trait).">ⓘ</span>
@@ -60,14 +60,14 @@
         <div class="security-section">
             <h3>Security Posture Trends (30 days)</h3>
             {{if .CVETrend}}
-            <div style="margin-bottom:16px;">
-                <h4 style="font-size:13px;color:var(--color-text-muted);margin:0 0 4px;">Critical + High CVEs</h4>
+            <div class="u-mb-16px">
+                <h4 class="u-blk4">Critical + High CVEs</h4>
                 {{sparklineSVG .CVETrend 400 50}}
             </div>
             {{end}}
             {{if .HardeningTrend}}
             <div>
-                <h4 style="font-size:13px;color:var(--color-text-muted);margin:0 0 4px;">Avg Hardening Score</h4>
+                <h4 class="u-blk4">Avg Hardening Score</h4>
                 {{sparklineSVGBounded .HardeningTrend 400 50 "var(--color-success)" 0 100}}
             </div>
             {{end}}
@@ -109,7 +109,7 @@
             </div>
 
             {{if .Security.ScapScanned}}
-            <p class="text-muted" style="font-size:12px;margin:4px 0 0;">SCAP / STIG: {{.Security.ScapScanned}} scanned &middot; <span class="text-success">{{.Security.ScapClean}} clean</span> &middot; <span class="{{if .Security.ScapHighFail}}text-danger{{end}}">{{.Security.ScapHighFail}} with high-severity failures</span></p>
+            <p class="text-muted u-fs-12px-m-4px-0-0">SCAP / STIG: {{.Security.ScapScanned}} scanned &middot; <span class="text-success">{{.Security.ScapClean}} clean</span> &middot; <span class="{{if .Security.ScapHighFail}}text-danger{{end}}">{{.Security.ScapHighFail}} with high-severity failures</span></p>
             {{end}}
 
             {{/* ── Unique CVEs by Host panel ──
@@ -121,7 +121,7 @@
             <div class="sec-detail" id="sec-panel-high">
                 <h4>Unique CVEs by Host</h4>
                 {{if .Security.AnyTruncated}}
-                <p class="alert alert--warn" style="font-size:12px;margin-bottom:8px;">One or more hosts have more CVEs than the agent's per-host wire cap (200). Per-host columns below remain agent-authoritative full counts; only the fleet-wide "Unique CVEs" stat may undercount the long tail. Raise <code>MAX_CVES</code> in <code>agent/src/traits/security_scan.rs</code> if you need wider coverage.</p>
+                <p class="alert alert--warn u-fs-12px-mb-8px">One or more hosts have more CVEs than the agent's per-host wire cap (200). Per-host columns below remain agent-authoritative full counts; only the fleet-wide "Unique CVEs" stat may undercount the long tail. Raise <code>MAX_CVES</code> in <code>agent/src/traits/security_scan.rs</code> if you need wider coverage.</p>
                 {{end}}
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
@@ -218,7 +218,7 @@
             <div class="sec-detail" id="sec-panel-certs">
                 <h4>Certificates Expiring Soon</h4>
                 {{if .Certs.PerHost}}
-                <p class="text-muted" style="font-size:13px;margin-bottom:8px;">
+                <p class="text-muted u-fs-13px-mb-8px">
                     {{.Certs.HostsAffected}} host{{if ne .Certs.HostsAffected 1}}s{{end}} with expiring or expired certs.
                     Counts are per-cert (a host can hold multiple). Click a hostname or count to see which certs.
                 </p>
@@ -295,7 +295,7 @@
 <div class="sec-drawer__header">
     <span class="sec-drawer__title">{{if .Hostname}}{{.Hostname}}{{else}}Security Details{{end}}</span>
     <div>
-        {{if .EnvoyID}}<a href="/envoys/{{.EnvoyID}}" class="btn btn--sm" style="margin-right:8px">View Envoy</a>{{end}}
+        {{if .EnvoyID}}<a href="/envoys/{{.EnvoyID}}" class="btn btn--sm u-mr-8px">View Envoy</a>{{end}}
         <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="Close drawer">&times;</button>
     </div>
 </div>
@@ -306,13 +306,13 @@
 <div class="sec-drawer__header">
     <span class="sec-drawer__title">{{.Hostname}} — Security Details</span>
     <div>
-        <a href="/envoys/{{.EnvoyID}}" class="btn btn--sm" style="margin-right:8px">View Envoy</a>
+        <a href="/envoys/{{.EnvoyID}}" class="btn btn--sm u-mr-8px">View Envoy</a>
         <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="Close drawer">&times;</button>
     </div>
 </div>
 
 {{if .Error}}
-<div class="alert alert--warn" style="margin-bottom:12px;">{{.Error}}</div>
+<div class="alert alert--warn u-mb-12px">{{.Error}}</div>
 {{end}}
 
 {{/* One drawer view — no cached-vs-live fork. Tabs come from .Sections:
@@ -328,17 +328,17 @@
      tab you were on. */}}
 <div class="sec-cached-summary">
     {{if not .EnvoyResponsive}}
-    <div class="alert alert--warn" style="margin-bottom:8px;font-size:12px;">
+    <div class="alert alert--warn u-mb-8px-fs-12px">
         Envoy hasn't checked in for {{timeAgo .EnvoyLastSeen}}. Live fetch will likely fail — it returns when the agent next checks in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).
     </div>
     {{end}}
     {{if .LiveNoData}}
-    <div class="alert alert--warn" style="margin-bottom:8px;font-size:12px;">
+    <div class="alert alert--warn u-mb-8px-fs-12px">
         Agent has no security scan data — install scanners (trivy / lynis / chkrootkit / rkhunter / clamav / aide / debsecan) and arrange a periodic run so their output lands in <code>/var/lib/vigo/security/</code>.
     </div>
     {{end}}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <h4 style="margin:0;">{{if .Live}}Live Scanner Detail{{else}}Scanner Findings{{end}}</h4>
+    <div class="u-blk5">
+        <h4 class="u-m-0">{{if .Live}}Live Scanner Detail{{else}}Scanner Findings{{end}}</h4>
         <button class="btn btn--sm btn--outline"
                 hx-get="/ui/fragments/security-envoy/{{.EnvoyID}}?live=true"
                 hx-target="#sec-drawer-content"
@@ -349,10 +349,10 @@
         </button>
     </div>
     <div id="sec-live-spinner" class="sec-live-spinner htmx-indicator">
-        <p class="text-muted" style="font-size:11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).</p>
+        <p class="text-muted u-fs-11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).</p>
         <div class="sec-spinner" aria-hidden="true"></div>
     </div>
-    {{if .Live}}<p class="text-muted" style="font-size:11px;margin:0 0 8px;">Live detail{{if .LiveFromCache}} from {{timeAgo .LiveFetchedAt}} — "Refresh Live Detail" re-runs the scan query{{else}} — fetched just now{{end}}.</p>{{end}}
+    {{if .Live}}<p class="text-muted u-fs-11px-m-0-0-8px">Live detail{{if .LiveFromCache}} from {{timeAgo .LiveFetchedAt}} — "Refresh Live Detail" re-runs the scan query{{else}} — fetched just now{{end}}.</p>{{end}}
 
     {{if not .Sections}}
     <p class="text-muted">No security scan data for this host.</p>
@@ -390,7 +390,7 @@
      and debsecan per-package vulns live in their own tabs. */}}
 {{define "sec-pane-cves"}}
 {{with .Cached.Unique}}
-<p class="text-muted" style="font-size:11px;margin:0 0 4px;">Distinct CVE IDs, deduplicated across all scanners.</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">Distinct CVE IDs, deduplicated across all scanners.</p>
 <table class="security-drift-table">
     <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
     <tbody><tr>
@@ -403,7 +403,7 @@
 </table>
 {{end}}
 {{if .Cached.CVEs}}
-<h4 style="margin-top:12px;">{{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique CVE{{if ne (len .Cached.CVEs) 1}}s{{end}}{{if .Cached.CVEsTruncated}} — showing first {{len .Cached.CVEs}}{{end}}</h4>
+<h4 class="u-mt-12px">{{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique CVE{{if ne (len .Cached.CVEs) 1}}s{{end}}{{if .Cached.CVEsTruncated}} — showing first {{len .Cached.CVEs}}{{end}}</h4>
 {{range .Cached.CVEs}}
 <div class="sec-card {{secSeverityClass .Severity}}">
     <div class="sec-card__header">
@@ -424,7 +424,7 @@
 </div>
 {{end}}
 {{else}}
-<p class="text-muted" style="margin-top:8px;">No CVEs reported.</p>
+<p class="text-muted u-mt-8px">No CVEs reported.</p>
 {{end}}
 {{end}}
 
@@ -433,7 +433,7 @@
      30 days (the same scope as /security's cert panel). Always present. */}}
 {{define "sec-pane-certs"}}
 {{if .Certs}}
-<p class="text-muted" style="font-size:11px;margin:0 0 4px;">{{len .Certs}} certificate{{if ne (len .Certs) 1}}s{{end}} expiring or expired within 30 days.</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">{{len .Certs}} certificate{{if ne (len .Certs) 1}}s{{end}} expiring or expired within 30 days.</p>
 <table class="security-drift-table">
     <thead><tr><th>Certificate</th><th>Days left</th><th>Expires</th><th>Issuer</th></tr></thead>
     <tbody>
@@ -448,7 +448,7 @@
     </tbody>
 </table>
 {{else}}
-<p class="text-success" style="margin-top:8px;">No certificates expiring within 30 days.</p>
+<p class="text-success u-mt-8px">No certificates expiring within 30 days.</p>
 {{end}}
 {{end}}
 
@@ -458,7 +458,7 @@
      Arg: dict "Slug" <slug> "Cached" <SecurityDrawerCached> "Hostname" <h>. */}}
 {{define "sec-pane-cached-scanner"}}
 {{if eq .Slug "trivy"}}{{with .Cached.Trivy}}
-<p class="text-muted" style="font-size:11px;margin:0 0 4px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
 <table class="security-drift-table">
     <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
     <tbody><tr>
@@ -470,7 +470,7 @@
 </table>
 {{end}}
 {{else if eq .Slug "debsecan"}}{{with .Cached.Debsecan}}
-<p class="text-muted" style="font-size:11px;margin:0 0 4px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
 <table class="security-drift-table">
     <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
     <tbody><tr>
@@ -503,7 +503,7 @@
         {{.TotalRules}} total rule{{if ne .TotalRules 1}}s{{end}}
     </div>
     {{if .Fail}}<div class="sec-card__body">Failures by severity &mdash; High: <span class="text-danger">{{.HighFail}}</span> &middot; Medium: <span class="text-warning">{{.MediumFail}}</span> &middot; Low: {{.LowFail}}</div>{{end}}
-    {{if .LastScan}}<div class="sec-card__body text-muted" style="font-size:11px;">Last scan: {{.LastScan}}</div>{{end}}
+    {{if .LastScan}}<div class="sec-card__body text-muted u-fs-11px">Last scan: {{.LastScan}}</div>{{end}}
 </div>
 {{end}}
 {{else if eq .Slug "chkrootkit"}}{{with .Cached.Chkrootkit}}
@@ -543,7 +543,7 @@
 </div>
 {{end}}
 {{end}}
-<p class="text-muted" style="font-size:11px;margin-top:8px;">Fetch Live Detail above for individual findings — official-page links and Ask AI.</p>
+<p class="text-muted u-fs-11px-mt-8px">Fetch Live Detail above for individual findings — official-page links and Ask AI.</p>
 {{end}}
 
 

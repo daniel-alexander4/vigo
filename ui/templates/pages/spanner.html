@@ -67,15 +67,15 @@
 {{end}}
 
 {{if .PeerEnabled}}
-<h3 style="margin-top:24px;">HA Replication</h3>
-<div class="stat-cards" style="margin-bottom:16px;">
+<h3 class="u-mt-24px">HA Replication</h3>
+<div class="stat-cards u-mb-16px">
     <div class="stat-card">
         <div class="stat-card__value">{{.PeerRole}}</div>
         <div class="stat-card__label">Role</div>
     </div>
     {{if .PeerPrimaryAddr}}
     <div class="stat-card">
-        <div class="stat-card__value text-muted" style="font-size:13px;">{{.PeerPrimaryAddr}}</div>
+        <div class="stat-card__value text-muted u-fs-13px">{{.PeerPrimaryAddr}}</div>
         <div class="stat-card__label">Primary Address</div>
     </div>
     {{end}}
@@ -84,7 +84,7 @@
         <div class="stat-card__label">Files Synced</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-muted" style="font-size:13px;">{{.PeerLastSync}}</div>
+        <div class="stat-card__value text-muted u-fs-13px">{{.PeerLastSync}}</div>
         <div class="stat-card__label">Last Sync</div>
     </div>
     <div class="stat-card">

@@ -3,15 +3,15 @@
 <div class="page-header">
     <h1>{{.Envoy.Hostname}}</h1>
     {{if .ScrierEnabled}}
-    <div class="scrier-actions" style="display:flex; justify-content:flex-start; gap:8px; margin:4px 0 8px 0;">
-        <a href="/scrier/{{.Envoy.ID}}?protocol=ssh" target="_blank" class="btn btn--sm" style="font-size:12px;">SSH</a>
-        <a href="/scrier/{{.Envoy.ID}}?protocol=rdp&port=3389" target="_blank" class="btn btn--sm" style="font-size:12px;">RDP</a>
-        <a href="/scrier/{{.Envoy.ID}}?protocol=vnc" target="_blank" class="btn btn--sm" style="font-size:12px;">Shadow</a>
+    <div class="scrier-actions u-blk19">
+        <a href="/scrier/{{.Envoy.ID}}?protocol=ssh" target="_blank" class="btn btn--sm u-fs-12px">SSH</a>
+        <a href="/scrier/{{.Envoy.ID}}?protocol=rdp&port=3389" target="_blank" class="btn btn--sm u-fs-12px">RDP</a>
+        <a href="/scrier/{{.Envoy.ID}}?protocol=vnc" target="_blank" class="btn btn--sm u-fs-12px">Shadow</a>
     </div>
     {{end}}
     <p class="mono">{{.Envoy.IPAddress}} &middot; {{if eq .Envoy.ConfigcrateCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else if .Envoy.LastRunID}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Envoy.Status .Envoy.DriftLabel}}" title="{{convergenceHover .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ConfigcrateCount}}">{{convergenceRatio .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ConfigcrateCount}}</span></a>{{else}}<span class="badge {{convergenceBadgeClass .Envoy.Status .Envoy.DriftLabel}}" title="{{convergenceHover .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ConfigcrateCount}}">{{convergenceRatio .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ConfigcrateCount}}</span>{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen <span class="time-relative" title="{{formatTime .Envoy.LastSeen}}">{{timeAgo .Envoy.LastSeen}}</span>{{if .UptimeSecs.Present}} &middot; Agent up {{humanUptime .UptimeSecs}}{{end}}</p>
     {{if .CloudProvider}}
-    <p class="mono" style="margin-top:4px;">{{.CloudProvider}}{{if .CloudRegion}} &middot; {{.CloudRegion}}{{end}}{{if .CloudZone}} ({{.CloudZone}}){{end}}{{if .CloudInstanceType}} &middot; {{.CloudInstanceType}}{{end}}{{if .CloudInstanceID}} &middot; {{.CloudInstanceID}}{{end}}{{if .CloudAccountID}} &middot; Account {{.CloudAccountID}}{{end}}</p>
+    <p class="mono u-mt-4px">{{.CloudProvider}}{{if .CloudRegion}} &middot; {{.CloudRegion}}{{end}}{{if .CloudZone}} ({{.CloudZone}}){{end}}{{if .CloudInstanceType}} &middot; {{.CloudInstanceType}}{{end}}{{if .CloudInstanceID}} &middot; {{.CloudInstanceID}}{{end}}{{if .CloudAccountID}} &middot; Account {{.CloudAccountID}}{{end}}</p>
     {{end}}
 </div>
 
@@ -73,8 +73,8 @@
 
 {{define "envoy-runs-fragment"}}
 <div class="table-container">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <h3 style="margin:0;">Recent Runs</h3>
+    <div class="u-blk20">
+        <h3 class="u-m-0">Recent Runs</h3>
         <a href="/runs" class="btn btn--sm">View fleet-wide runs</a>
     </div>
     <table class="table">
@@ -104,12 +104,12 @@
                 </td>
             </tr>
             <tr class="run-results-row">
-                <td colspan="7" class="run-results" style="padding:0;"></td>
+                <td colspan="7" class="run-results u-p-0"></td>
             </tr>
             {{end}}
             {{if not .Runs}}
             <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs recorded for this envoy.</td>
+                <td colspan="7" class="text-muted u-ta-center-p-40px">No runs recorded for this envoy.</td>
             </tr>
             {{end}}
         </tbody>
@@ -119,7 +119,7 @@
 
 {{define "envoy-traits-fragment"}}
 {{if not .HasData}}
-<p class="text-muted" style="padding:20px;">No traits collected yet — the agent has not reported a trait payload.</p>
+<p class="text-muted u-p-20px">No traits collected yet — the agent has not reported a trait payload.</p>
 {{else}}
 {{$s := .Summary}}
 {{$envoyID := .EnvoyID}}
@@ -222,7 +222,7 @@
 </div>
 {{end}}
 {{else}}
-<p class="text-muted" style="padding:20px;">No traits match "{{.Query}}" ({{.Total}} leaves searched).</p>
+<p class="text-muted u-p-20px">No traits match "{{.Query}}" ({{.Total}} leaves searched).</p>
 {{end}}
 {{end}}
 
@@ -261,11 +261,11 @@
 <div class="code-block">
     {{highlightYAML .RawYAML}}
 </div>
-<p class="text-muted" style="font-size:12px;">
+<p class="text-muted u-fs-12px">
     Secret references (<code>secret:...</code>) are not resolved for security.
 </p>
 {{else}}
-<p class="text-muted" style="padding:20px;">No configuration found for <strong>{{.Hostname}}</strong>.</p>
+<p class="text-muted u-p-20px">No configuration found for <strong>{{.Hostname}}</strong>.</p>
 {{end}}
 {{end}}
 
@@ -295,12 +295,12 @@
     {{end}}
 </div>
 {{else}}
-<p class="text-muted" style="padding:20px;">Compliance data not available.</p>
+<p class="text-muted u-p-20px">Compliance data not available.</p>
 {{end}}
 {{end}}
 
 {{define "envoy-attack-surface-fragment"}}
-<div class="stat-cards stat-cards--linkable" style="margin-bottom:20px;">
+<div class="stat-cards stat-cards--linkable u-mb-20px">
     <a href="{{.RiskURL}}" class="stat-card stat-card--link" title="See other envoys at this risk level">
         <div class="stat-card__value {{if eq .RiskLevel "critical"}}text-danger{{else if eq .RiskLevel "high"}}text-warning{{else}}text-success{{end}}">{{.RiskLevel}}</div>
         <div class="stat-card__label">Risk Level</div>
@@ -325,7 +325,7 @@
 
 {{if .Factors}}
 <h3 class="section-heading">Risk Factors</h3>
-<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Same breakdown that drives this envoy's row on <a href="/risk">/risk</a>. Points sum to the score above. Each factor links to the page where the supporting evidence lives.</p>
+<p class="text-muted u-fs-12px-mb-8px">Same breakdown that drives this envoy's row on <a href="/risk">/risk</a>. Points sum to the score above. Each factor links to the page where the supporting evidence lives.</p>
 <div class="table-container">
     <table class="table">
         <thead><tr><th>Factor</th><th>Points</th><th>Detail</th></tr></thead>
@@ -344,7 +344,7 @@
 
 {{if .Ports}}
 <h3 class="section-heading" id="attack-surface-ports">Listening Ports</h3>
-<p class="text-muted" style="font-size:12px;margin-bottom:8px;">From the agent's <code>ports.listening</code> trait — same source counted by the Open Ports risk factor.</p>
+<p class="text-muted u-fs-12px-mb-8px">From the agent's <code>ports.listening</code> trait — same source counted by the Open Ports risk factor.</p>
 <div class="table-container">
     <table class="table">
         <thead><tr><th>Port</th></tr></thead>
@@ -361,7 +361,7 @@
 
 {{if .Vulnerabilities}}
 <h3 class="section-heading">Vulnerability Summary</h3>
-<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Unique CVE counts after cross-scanner dedup — the same numbers consumed by the Critical / High / Medium CVE risk factors above. Severities with a fleet-wide drill-down on <a href="/security">/security</a> are linked.</p>
+<p class="text-muted u-fs-12px-mb-8px">Unique CVE counts after cross-scanner dedup — the same numbers consumed by the Critical / High / Medium CVE risk factors above. Severities with a fleet-wide drill-down on <a href="/security">/security</a> are linked.</p>
 <div class="table-container">
     <table class="table">
         <thead><tr><th>Severity</th><th>Unique CVEs</th></tr></thead>
@@ -376,7 +376,7 @@
 {{end}}
 
 {{if not .HasData}}
-<p class="text-muted" style="padding:20px;">No security scan data available for this envoy.</p>
+<p class="text-muted u-p-20px">No security scan data available for this envoy.</p>
 {{end}}
 {{end}}
 
@@ -416,8 +416,8 @@
 
 {{define "swarm-load-section"}}
 <div class="card mt-2">
-    <h2 style="margin:0 0 4px;">{{.Title}}</h2>
-    <p style="color:var(--subtext0);margin:0 0 12px;">{{.Subtitle}}</p>
+    <h2 class="u-m-0-0-4px">{{.Title}}</h2>
+    <p class="u-c-var-subtext0-m-0-0-12px">{{.Subtitle}}</p>
     {{if .Rows}}
     <div class="table-container">
         <table class="table">
@@ -435,19 +435,19 @@
                 <tr>
                     <td>
                         {{if .Link}}<a href="{{.Link}}"><code>{{.Name}}</code></a>{{else}}<code>{{.Name}}</code>{{end}}
-                        {{if .Detail}}<div style="color:var(--subtext0);font-size:0.9em;">{{.Detail}}</div>{{end}}
+                        {{if .Detail}}<div class="u-c-var-subtext0-fs-0-9em">{{.Detail}}</div>{{end}}
                     </td>
-                    <td style="white-space:nowrap;">{{.SizeHuman}}</td>
+                    <td class="u-ws-nowrap">{{.SizeHuman}}</td>
                     <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
                     <td>{{if .Progress}}{{.Progress}}{{else}}—{{end}}</td>
-                    <td style="white-space:nowrap;">{{.When}}</td>
+                    <td class="u-ws-nowrap">{{.When}}</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
     </div>
     {{else}}
-    <p style="color:var(--subtext0);">Nothing on this envoy.</p>
+    <p class="u-c-var-subtext0">Nothing on this envoy.</p>
     {{end}}
 </div>
 {{end}}
@@ -459,7 +459,7 @@
         <div class="stat-card__value {{severityTextClass $p.Health}}">{{severityLabel $p.Health}}</div>
         <div class="stat-card__label">Agent Health</div>
         {{if not .HasData}}
-        <p class="text-muted" style="margin: 8px 0 0; font-size: 12px;">No agent or host telemetry yet — values appear after the next check-in.</p>
+        <p class="text-muted u-m-8px-0-0-fs-12px">No agent or host telemetry yet — values appear after the next check-in.</p>
         {{end}}
     </a>
     {{if $p.HostUptimeSecs.Present}}

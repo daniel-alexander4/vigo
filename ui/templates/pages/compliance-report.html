@@ -36,7 +36,7 @@
         </span>
         <span class="compliance-gauge__label">fleet average coverage &middot; {{$total}} controls &middot; {{.Satisfied}} covered{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} missing</span>
     </div>
-    <div class="fw-card__bar" style="height:12px;">
+    <div class="fw-card__bar u-h-12px">
         {{if gt $satPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $satPct}}%"></div>{{end}}
         {{if gt $waivPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $waivPct}}%"></div>{{end}}
         {{if gt $parPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $parPct}}%"></div>{{end}}
@@ -73,7 +73,7 @@
                     <span class="badge {{if eq .Status "waived"}}badge--info{{else if ge .FleetPercent 95.0}}badge--compliant{{else if ge .FleetPercent 50.0}}badge--relapsed{{else}}badge--failed{{end}}">
                         {{if eq .Status "waived"}}waived{{else}}{{printf "%.1f" .FleetPercent}}%{{end}}
                     </span>
-                    <span class="text-muted" style="font-size:0.85em;">{{.FleetCovered}}/{{.FleetTotal}}</span>
+                    <span class="text-muted u-fs-0-85em">{{.FleetCovered}}/{{.FleetTotal}}</span>
                     {{else}}
                     <span class="badge badge--failed">0%</span>
                     {{end}}
@@ -105,8 +105,8 @@
                 <td class="text-muted">{{.Evidence}}</td>
             </tr>
             {{if or (gt .DocCount 0) (eq .Scope "documented")}}
-            <tr style="display:none;">
-                <td colspan="6" style="padding:0;background:var(--color-bg);">
+            <tr class="u-d-none">
+                <td class="u-p-0-bg-var-color-bg" colspan="6">
                     <div id="docs-row-{{cssClass .ControlID}}"></div>
                 </td>
             </tr>

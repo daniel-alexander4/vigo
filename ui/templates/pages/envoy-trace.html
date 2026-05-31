@@ -54,7 +54,7 @@
 <!-- Path Inheritance -->
 <div class="trace-group">
     <h3 class="trace-group__title">Path Inheritance</h3>
-    <div class="trace-section__body" style="line-height:1.9;font-family:var(--font-mono);font-size:13px;">
+    <div class="trace-section__body u-blk14">
         {{tracePathTree .Inheritance .EnvoyWaiverFiles}}
     </div>
 </div>
@@ -157,8 +157,8 @@
     </div>
 
     {{if .VarSources}}
-    <div style="margin-top:12px;">
-        <h4 style="margin-bottom:8px;">Variable Final Resolution</h4>
+    <div class="u-mt-12px">
+        <h4 class="u-mb-8px">Variable Final Resolution</h4>
         <table class="table">
             <thead><tr><th>Variable</th><th>Value</th><th>Source</th></tr></thead>
             <tbody>
@@ -181,7 +181,7 @@
 <!-- Password Inheritance -->
 {{if .SecretRefs}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Password Inheritance{{if .SecretsProvider}} <span class="trace-source" style="font-weight:400;font-size:12px;">provider: {{.SecretsProvider}}</span>{{end}}</h3>
+    <h3 class="trace-group__title">Password Inheritance{{if .SecretsProvider}} <span class="trace-source u-fw-400-fs-12px">provider: {{.SecretsProvider}}</span>{{end}}</h3>
     <div class="trace-section__body">
         <table>
             <tr>
@@ -211,10 +211,10 @@
     <h3 class="trace-group__title">Compliance Inheritance</h3>
     <div class="trace-section__body">
         {{range $ct := .ComplianceTags}}
-        <div style="margin-bottom:10px;">
+        <div class="u-mb-10px">
             <div class="trace-comp-module">{{$ct.Configcrate}}</div>
             {{range $fw := sortedKeys $ct.Frameworks}}
-            <div style="margin-left:12px;">
+            <div class="u-ml-12px">
                 <span class="trace-comp-fw">{{$fw}}:</span>
                 <span class="trace-comp-ids">{{joinStrings (index $ct.Frameworks $fw) ", "}}</span>
             </div>
@@ -243,9 +243,9 @@
             </div>
             {{end}}
             {{if $mcf.CoveredModules}}
-            <div class="trace-card__row" style="padding-left:0;">
+            <div class="trace-card__row u-pl-0">
                 <span class="text-muted">modules:</span>
-                <span style="margin-left:8px;">{{joinStrings $mcf.CoveredModules ", "}}</span>
+                <span class="u-ml-8px">{{joinStrings $mcf.CoveredModules ", "}}</span>
             </div>
             {{end}}
         </div>
@@ -272,10 +272,10 @@
             {{range $wf.Entries}}
             <div class="trace-card__row">
                 <span class="trace-comp-fw">{{.Framework}}/{{.Control}}</span>
-                <span class="text-muted" style="margin-left:8px;">{{.Reason}}</span>
-                {{if .Expires}}<span class="trace-source" style="margin-left:8px;">expires {{.Expires}}</span>{{end}}
+                <span class="text-muted u-ml-8px">{{.Reason}}</span>
+                {{if .Expires}}<span class="trace-source u-ml-8px">expires {{.Expires}}</span>{{end}}
             </div>
-            <div class="trace-card__row" style="padding-left:12px;">
+            <div class="trace-card__row u-pl-12px">
                 <span class="trace-source">approved by: {{.ApprovedBy}}</span>
             </div>
             {{end}}

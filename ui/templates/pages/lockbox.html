@@ -47,7 +47,7 @@
     </div>
 
     <div class="card">
-        <h3 style="margin:0 0 12px;">Users</h3>
+        <h3 class="u-m-0-0-12px">Users</h3>
         <table class="table">
             <thead>
                 <tr>
@@ -62,7 +62,7 @@
             </thead>
             <tbody>
                 {{range .Crypt.Users}}
-                <tr hx-get="/ui/fragments/swarm-lockbox-user/{{.User}}" hx-target="#lockbox-drilldown" hx-swap="innerHTML" style="cursor:pointer;">
+                <tr class="u-cur-pointer" hx-get="/ui/fragments/swarm-lockbox-user/{{.User}}" hx-target="#lockbox-drilldown" hx-swap="innerHTML">
                     <td><strong>{{.User}}</strong></td>
                     <td>{{.FileCount}}</td>
                     <td>{{len .Tombstones}}</td>
@@ -94,7 +94,7 @@
 
 {{define "lockbox-user-fragment"}}
 <div class="card">
-    <h3 style="margin-top:0;">Lockbox — {{.User.User}}</h3>
+    <h3 class="u-mt-0">Lockbox — {{.User.User}}</h3>
 
     {{if .User.RecipientDrift}}
     <div class="alert alert--warn mb-2">
@@ -129,8 +129,8 @@
                 <td>{{.FileCount}}</td>
                 <td>{{.TombstoneCount}}</td>
                 <td>{{if .SessionUnlocked}}<span class="badge badge--info">unlocked</span>{{else}}—{{end}}</td>
-                <td><code style="font-size:0.85em;">{{.FilesDigest}}</code></td>
-                <td><code style="font-size:0.85em;">{{.RecipientsDigest}}</code></td>
+                <td><code class="u-fs-0-85em">{{.FilesDigest}}</code></td>
+                <td><code class="u-fs-0-85em">{{.RecipientsDigest}}</code></td>
             </tr>
             {{end}}
         </tbody>
@@ -159,9 +159,9 @@
                 </td>
                 <td>
                     {{range .PerEnvoy}}
-                        {{if eq .State "live"}}<span style="color:var(--ok);">{{.Hostname}}</span>
-                        {{else if eq .State "tombstoned"}}<span style="color:var(--lavender);">{{.Hostname}}</span>
-                        {{else}}<span style="color:var(--err);">{{.Hostname}}</span>{{end}}
+                        {{if eq .State "live"}}<span class="u-c-var-ok">{{.Hostname}}</span>
+                        {{else if eq .State "tombstoned"}}<span class="u-c-var-lavender">{{.Hostname}}</span>
+                        {{else}}<span class="u-c-var-err">{{.Hostname}}</span>{{end}}
                     {{end}}
                 </td>
             </tr>

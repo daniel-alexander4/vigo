@@ -157,7 +157,7 @@ func TestServerConfig_DetailEnabledSection(t *testing.T) {
 	if !strings.Contains(body, "server-config-yaml") {
 		t.Error("detail page should render a pretty-printed YAML block for the current config")
 	}
-	if !strings.Contains(body, `<h2 style="margin:0 0 12px;">Options</h2>`) {
+	if !strings.Contains(body, `<h2 class="u-m-0-0-12px">Options</h2>`) {
 		t.Error("detail page should always show an Options table")
 	}
 
@@ -204,7 +204,7 @@ func TestServerConfig_DetailDisabledSection(t *testing.T) {
 	if !strings.Contains(body, "(not configured") {
 		t.Error("disabled section detail page should show the \"(not configured…)\" placeholder")
 	}
-	if !strings.Contains(body, `<h2 style="margin:0 0 12px;">Options</h2>`) {
+	if !strings.Contains(body, `<h2 class="u-m-0-0-12px">Options</h2>`) {
 		t.Error("disabled section detail page should still show the Options table")
 	}
 }

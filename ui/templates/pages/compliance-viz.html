@@ -11,10 +11,10 @@
 </div>
 
 {{if .DonutSegments}}
-<div class="card mt-2" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+<div class="card mt-2 u-blk6">
     <div>
-        <h3 style="margin-bottom:8px;">Control Status</h3>
-        <svg viewBox="0 0 140 140" style="width:140px;height:140px;">
+        <h3 class="u-mb-8px">Control Status</h3>
+        <svg class="u-w-140px-h-140px" viewBox="0 0 140 140">
             {{range .DonutSegments}}
             <path d="{{donutArc 70 70 60 .StartAngle .EndAngle}}" fill="{{.Color}}">
                 <title>{{.Label}}: {{.Count}}</title>
@@ -22,7 +22,7 @@
             {{end}}
         </svg>
     </div>
-    <div class="swarm-legend" style="flex-direction:column;">
+    <div class="swarm-legend u-flex-direction-column">
         {{range .DonutSegments}}
         <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{.Color}};"></div> {{.Label}} ({{.Count}})</div>
         {{end}}
@@ -32,12 +32,12 @@
 
 {{if .HeatmapRows}}
 <div class="card mt-2">
-    <h3 style="margin-bottom:12px;">Fleet Coverage Heatmap</h3>
+    <h3 class="u-mb-12px">Fleet Coverage Heatmap</h3>
     {{if .VizCapped}}
-    <p style="font-size:0.85em;color:var(--subtext0);margin-bottom:8px;">Showing {{len .HeatmapRows}} of {{.VizTotal}} envoys (worst coverage first)</p>
+    <p class="u-blk7">Showing {{len .HeatmapRows}} of {{.VizTotal}} envoys (worst coverage first)</p>
     {{end}}
-    <div style="overflow-x:auto;">
-        <svg viewBox="0 0 {{add (mul .HeatmapColMax 5) 130}} {{add (mul (len .HeatmapRows) 18) 4}}" style="width:100%;max-height:600px;" preserveAspectRatio="xMinYMin meet">
+    <div class="u-ovx-auto">
+        <svg class="u-w-100-maxh-600px" viewBox="0 0 {{add (mul .HeatmapColMax 5) 130}} {{add (mul (len .HeatmapRows) 18) 4}}" preserveAspectRatio="xMinYMin meet">
             {{range $row, $envoy := .HeatmapRows}}
             <text x="0" y="{{add (mul $row 18) 13}}" font-size="11" fill="var(--color-text)" font-family="monospace">{{$envoy.Hostname}}</text>
             {{range $col, $cell := $envoy.Cells}}
@@ -48,18 +48,18 @@
             {{end}}
         </svg>
     </div>
-    <div class="swarm-legend" style="margin-top:8px;">
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#a6e3a1;"></div> Satisfied (&ge;95%)</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#f9e2af;"></div> Partial (50-95%)</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#f38ba8;"></div> Not Satisfied (&lt;50%)</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#45475a;"></div> No Coverage</div>
+    <div class="swarm-legend u-mt-8px">
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-a6e3a1"></div> Satisfied (&ge;95%)</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-f9e2af"></div> Partial (50-95%)</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-f38ba8"></div> Not Satisfied (&lt;50%)</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-45475a"></div> No Coverage</div>
     </div>
 </div>
 {{end}}
 
 {{if not .HeatmapRows}}{{if not .DonutSegments}}
 <div class="card mt-2">
-    <p style="text-align:center;padding:40px;" class="text-muted">No compliance data available for this framework.</p>
+    <p class="text-muted u-ta-center-p-40px">No compliance data available for this framework.</p>
 </div>
 {{end}}{{end}}
 {{end}}

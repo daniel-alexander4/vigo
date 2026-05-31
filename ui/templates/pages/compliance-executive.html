@@ -36,7 +36,7 @@
 {{end}}
 
 {{with .Fleet}}
-<h3 class="section-heading" style="margin-top:16px;">Fleet Convergence</h3>
+<h3 class="section-heading u-mt-16px">Fleet Convergence</h3>
 <div class="breakdown">
     <div class="breakdown__item"><div class="breakdown__count">{{.Total}}</div><div class="breakdown__status">Total Nodes</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-success">{{.FullyConverged}}</div><div class="breakdown__status">Converged</div></div>
@@ -69,7 +69,7 @@
 <h3 class="section-heading">Framework Coverage</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Framework</th><th>Score</th><th style="width:35%">Controls</th><th>Satisfied</th><th>Waived</th><th>Partial</th><th>Not Met</th></tr></thead>
+        <thead><tr><th>Framework</th><th>Score</th><th class="u-w-35">Controls</th><th>Satisfied</th><th>Waived</th><th>Partial</th><th>Not Met</th></tr></thead>
         <tbody>
             {{range .Frameworks}}
             {{$slug := fwSlug .Name}}

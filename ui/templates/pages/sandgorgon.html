@@ -32,9 +32,9 @@
 
 <div class="card mt-2">
     <div class="card-heading-row">
-        <h2 style="margin:0;">Hardware Assets</h2>
+        <h2 class="u-m-0">Hardware Assets</h2>
         <input type="text" name="q" placeholder="Search hostname, serial, tag..."
-               class="input" style="max-width:300px;"
+               class="input u-maxw-300px"
                hx-get="/ui/fragments/sandgorgon-assets"
                hx-trigger="input changed delay:200ms"
                hx-target="#sandgorgon-asset-table"
@@ -42,7 +42,7 @@
                hx-include="[name='state']"
                autocomplete="off"
                value="{{.Search}}">
-        <div class="btn-group" style="gap:4px;">
+        <div class="btn-group u-gap-4px">
             <a href="/sandgorgon" class="btn btn--sm{{if eq .StateFilter ""}} btn--active{{end}}">All</a>
             <a href="/sandgorgon?state=available" class="btn btn--sm{{if eq .StateFilter "available"}} btn--active{{end}}">Available</a>
             <a href="/sandgorgon?state=commissioned" class="btn btn--sm{{if eq .StateFilter "commissioned"}} btn--active{{end}}">Commissioned</a>

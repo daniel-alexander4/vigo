@@ -1,8 +1,8 @@
 {{define "page-content"}}
 <div class="page-header">
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div class="u-blk26">
         <a href="/server/config" class="btn btn--sm">← All sections</a>
-        <h1 style="margin:0;"><code>{{.Section}}</code></h1>
+        <h1 class="u-m-0"><code>{{.Section}}</code></h1>
         {{if .Enabled}}
         <span class="status-pill status-pill--converged">enabled</span>
         {{else if .Present}}
@@ -12,32 +12,32 @@
         {{end}}
     </div>
     {{if .Description}}
-    <p style="margin-top:8px;">{{.Description}}{{if .DocsURL}} <a href="/docs/{{.DocsURL}}">Read the documentation →</a>{{end}}</p>
+    <p class="u-mt-8px">{{.Description}}{{if .DocsURL}} <a href="/docs/{{.DocsURL}}">Read the documentation →</a>{{end}}</p>
     {{else if .DocsURL}}
-    <p style="margin-top:8px;"><a href="/docs/{{.DocsURL}}">Read the documentation →</a></p>
+    <p class="u-mt-8px"><a href="/docs/{{.DocsURL}}">Read the documentation →</a></p>
     {{end}}
 </div>
 
-<div class="card" style="background:var(--color-surface-muted);margin-bottom:16px;">
-    <p style="margin:0;color:var(--color-text-muted);">
+<div class="card u-bg-var-color-surface-muted-mb-16px">
+    <p class="u-m-0-c-var-color-text-muted">
         Values are read from the live <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> on every page load. The running server uses the copy it loaded at startup — edits here are not active until you restart <code>vigosrv</code>.
         <code>secret:</code> references are shown as the literal reference string and never resolved.
     </p>
 </div>
 
 <div class="card mt-2">
-    <h2 style="margin:0 0 12px;">Current Config</h2>
+    <h2 class="u-m-0-0-12px">Current Config</h2>
     {{if .CurrentYAML}}
     <pre class="server-config-yaml"><code>{{.CurrentYAML}}</code></pre>
     {{else}}
-    <p class="text-muted" style="margin:0;"><em>(not configured — this section is absent or explicitly disabled in the live file)</em></p>
+    <p class="text-muted u-m-0"><em>(not configured — this section is absent or explicitly disabled in the live file)</em></p>
     {{end}}
 </div>
 
 {{if and (not .CurrentYAML) .ExampleYAML}}
 <div class="card mt-2">
-    <h2 style="margin:0 0 6px;">Example Config</h2>
-    <p style="color:var(--color-text-muted);margin:0 0 12px;">Annotated starter template. Lines with defaults are commented out; uncomment to override. Sub-sections (opt-in feature blocks) are commented out as a whole; uncomment the block to enable.</p>
+    <h2 class="u-m-0-0-6px">Example Config</h2>
+    <p class="u-c-var-color-text-muted-m-0-0-12px">Annotated starter template. Lines with defaults are commented out; uncomment to override. Sub-sections (opt-in feature blocks) are commented out as a whole; uncomment the block to enable.</p>
     <div class="yaml-block">
         <button type="button" class="btn btn--sm yaml-block__copy" data-copy-target="example-yaml-main">Copy</button>
         <pre class="server-config-yaml"><code id="example-yaml-main">{{.ExampleYAML}}</code></pre>
@@ -47,8 +47,8 @@
 
 {{if .Available}}
 <div class="card mt-2">
-    <h2 style="margin:0 0 12px;">Options</h2>
-    <p style="color:var(--color-text-muted);margin:0 0 16px;">Every field this section accepts. Add them to <code>server.yaml</code> under <code>{{.Section}}:</code> to customize.</p>
+    <h2 class="u-m-0-0-12px">Options</h2>
+    <p class="u-c-var-color-text-muted-m-0-0-16px">Every field this section accepts. Add them to <code>server.yaml</code> under <code>{{.Section}}:</code> to customize.</p>
     <div class="config-option-list">
         {{range .Available}}
         <div class="config-option">
@@ -72,11 +72,11 @@
 
 {{if .Subsections}}
 <div class="card mt-2">
-    <h2 style="margin:0 0 16px;">Sub-sections</h2>
+    <h2 class="u-m-0-0-16px">Sub-sections</h2>
     {{range .Subsections}}
     <div class="server-config-subsection">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-            <h3 style="margin:0;"><code>{{$.Section}}.{{.Name}}</code></h3>
+        <div class="u-blk27">
+            <h3 class="u-m-0"><code>{{$.Section}}.{{.Name}}</code></h3>
             {{if .Enabled}}
             <span class="status-pill status-pill--converged">enabled</span>
             {{else if .Present}}
@@ -86,7 +86,7 @@
             {{end}}
         </div>
         {{if .Description}}
-        <p style="margin:0 0 12px;color:var(--color-text-muted);">{{.Description}}</p>
+        <p class="u-m-0-0-12px-c-var-color-text-muted">{{.Description}}</p>
         {{end}}
         {{if .CurrentYAML}}
         <pre class="server-config-yaml server-config-yaml--sub"><code>{{.CurrentYAML}}</code></pre>

@@ -18,14 +18,14 @@
     {{- end -}}
 {{- end -}}
 
-<div class="card" style="padding:1.75rem 1.5rem;">
-    <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Your plan</div>
-    <div style="display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.5rem;">
-        <h2 style="font-size:1.8rem;margin:0;">{{if $active}}{{$active}}{{else}}Unlicensed{{end}}</h2>
+<div class="card u-p-1-75rem-1-5rem">
+    <div class="u-blk11">Your plan</div>
+    <div class="u-blk12">
+        <h2 class="u-fs-1-8rem-m-0">{{if $active}}{{$active}}{{else}}Unlicensed{{end}}</h2>
         {{if $level}}<span class="badge badge--info">{{$level}} support</span>{{end}}
     </div>
-    {{if $response}}<div style="font-size:1.05rem;margin-bottom:1rem;">{{$response}} via {{$channel}}</div>{{end}}
-    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.95rem;">
+    {{if $response}}<div class="u-fs-1-05rem-mb-1rem">{{$response}} via {{$channel}}</div>{{end}}
+    <div class="u-blk13">
         <div><a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a></div>
         {{if .LicenseID}}<div><code>{{.LicenseID}}</code></div>{{end}}
         {{if .CustomerName}}<div>{{.CustomerName}}</div>{{end}}

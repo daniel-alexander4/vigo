@@ -9,27 +9,27 @@
 
 <div class="card">
     <div class="card-heading-row">
-        <h2 style="margin:0;">{{.Project.Handle}}</h2>
+        <h2 class="u-m-0">{{.Project.Handle}}</h2>
         <a href="/swarm/gitback" class="btn btn--sm">Back to list</a>
     </div>
 
-    <div class="table-container" style="margin-bottom:24px;">
+    <div class="table-container u-mb-24px">
         <table class="table">
             <tbody>
                 {{if .Project.FriendlyName}}
-                <tr><td style="font-weight:600;width:200px;">URL</td><td><code>gitback://{{.Project.FriendlyName}}/{{.Project.Handle}}</code></td></tr>
-                <tr><td style="font-weight:600;">Canonical URL</td><td><code>gitback://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
+                <tr><td class="u-fw-600-w-200px">URL</td><td><code>gitback://{{.Project.FriendlyName}}/{{.Project.Handle}}</code></td></tr>
+                <tr><td class="u-fw-600">Canonical URL</td><td><code>gitback://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
                 {{else}}
-                <tr><td style="font-weight:600;width:200px;">URL</td><td><code>gitback://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
+                <tr><td class="u-fw-600-w-200px">URL</td><td><code>gitback://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
                 {{end}}
-                <tr><td style="font-weight:600;">Project ID</td><td><code>{{.Project.ProjectID}}</code></td></tr>
-                <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Project.FounderPuddlePubkey}}</code></td></tr>
-                <tr><td style="font-weight:600;">Scope</td><td>{{.Project.DrScope}}</td></tr>
-                <tr><td style="font-weight:600;">Member fleets</td><td>{{.Project.MemberFleetCount}}{{range .Project.Members}}<br><code>ed25519:{{.}}</code>{{end}}</td></tr>
-                <tr><td style="font-weight:600;">Hosts holding repo</td><td>{{.Project.HostCount}}</td></tr>
-                <tr><td style="font-weight:600;">Last updated</td><td>{{if gt .Project.LastUpdated 0}}{{formatUnixTime .Project.LastUpdated}}{{else}}&mdash;{{end}}</td></tr>
+                <tr><td class="u-fw-600">Project ID</td><td><code>{{.Project.ProjectID}}</code></td></tr>
+                <tr><td class="u-fw-600">Founder puddle</td><td><code>ed25519:{{.Project.FounderPuddlePubkey}}</code></td></tr>
+                <tr><td class="u-fw-600">Scope</td><td>{{.Project.DrScope}}</td></tr>
+                <tr><td class="u-fw-600">Member fleets</td><td>{{.Project.MemberFleetCount}}{{range .Project.Members}}<br><code>ed25519:{{.}}</code>{{end}}</td></tr>
+                <tr><td class="u-fw-600">Hosts holding repo</td><td>{{.Project.HostCount}}</td></tr>
+                <tr><td class="u-fw-600">Last updated</td><td>{{if gt .Project.LastUpdated 0}}{{formatUnixTime .Project.LastUpdated}}{{else}}&mdash;{{end}}</td></tr>
                 <tr>
-                    <td style="font-weight:600;">Envelope digest</td>
+                    <td class="u-fw-600">Envelope digest</td>
                     <td>
                         {{if .Project.DigestUnanimous}}
                             <span class="badge badge--ok">unanimous</span>
@@ -44,7 +44,7 @@
         </table>
     </div>
 
-    <h3 style="margin:0 0 12px;">Refs</h3>
+    <h3 class="u-m-0-0-12px">Refs</h3>
     {{if .Project.HeadRefs}}
     <table class="table">
         <thead>
@@ -70,7 +70,7 @@
     <p><em>No refs reported &mdash; bare repos may be empty (initialized but no pushes yet).</em></p>
     {{end}}
 
-    <h3 style="margin:24px 0 12px;">Hosts</h3>
+    <h3 class="u-m-24px-0-12px">Hosts</h3>
     {{if .Project.Hosts}}
     <table class="table">
         <thead>
@@ -138,7 +138,7 @@
     </div>
 
     <div class="card">
-        <h3 style="margin:0 0 12px;">Projects</h3>
+        <h3 class="u-m-0-0-12px">Projects</h3>
         <table class="table">
             <thead>
                 <tr>
@@ -153,7 +153,7 @@
             </thead>
             <tbody>
                 {{range .Fleet.Projects}}
-                <tr data-action="nav" data-href="/swarm/gitback/{{.ProjectID}}" style="cursor:pointer;">
+                <tr class="u-cur-pointer" data-action="nav" data-href="/swarm/gitback/{{.ProjectID}}">
                     <td><strong>{{.Handle}}</strong>{{if .FriendlyName}}<br><code>gitback://{{.FriendlyName}}/{{.Handle}}</code>{{end}}</td>
                     <td>{{.DrScope}}</td>
                     <td>{{.MemberFleetCount}}</td>

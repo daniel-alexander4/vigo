@@ -27,19 +27,19 @@
 {{/* Blob detail view — visualizations rendered inline. */}}
 <div class="card mt-2">
     <div class="card-heading-row">
-        <h2 style="margin:0;">{{if .BlobDetail.Label}}{{labelDisplayName .BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
+        <h2 class="u-m-0">{{if .BlobDetail.Label}}{{labelDisplayName .BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
         <a href="/swarm/filecast" class="btn btn--sm">Back to list</a>
     </div>
 
-    <div class="table-container" style="margin-bottom:24px;">
+    <div class="table-container u-mb-24px">
         <table class="table">
             <tbody>
-                <tr><td style="font-weight:600;width:180px;">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
-                <tr><td style="font-weight:600;">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "server"}}converged{{else}}relapsed{{end}}">{{.BlobDetail.Source}}</span></td></tr>
-                {{if .BlobDetail.Retention}}<tr><td style="font-weight:600;">Retention</td><td>{{.BlobDetail.Retention}}</td></tr>{{end}}
-                <tr><td style="font-weight:600;">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
-                <tr><td style="font-weight:600;">Chunks</td><td>{{.BlobDetail.Chunks}} (1 MiB each)</td></tr>
-                <tr><td style="font-weight:600;">Created</td><td>{{formatTime .BlobDetail.CreatedAt}}</td></tr>
+                <tr><td class="u-fw-600-w-180px">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
+                <tr><td class="u-fw-600">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "server"}}converged{{else}}relapsed{{end}}">{{.BlobDetail.Source}}</span></td></tr>
+                {{if .BlobDetail.Retention}}<tr><td class="u-fw-600">Retention</td><td>{{.BlobDetail.Retention}}</td></tr>{{end}}
+                <tr><td class="u-fw-600">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
+                <tr><td class="u-fw-600">Chunks</td><td>{{.BlobDetail.Chunks}} (1 MiB each)</td></tr>
+                <tr><td class="u-fw-600">Created</td><td>{{formatTime .BlobDetail.CreatedAt}}</td></tr>
             </tbody>
         </table>
     </div>
@@ -56,8 +56,8 @@
 {{else}}
 {{/* Blob list view */}}
 <div class="card mt-2">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <h2 style="margin:0;">Files</h2>
+    <div class="u-blk10">
+        <h2 class="u-m-0">Files</h2>
     </div>
 
     {{if .Blobs}}
@@ -74,20 +74,20 @@
             </thead>
             <tbody>
                 {{range .Blobs}}
-                <tr{{if .Revoked}} style="opacity:0.5;"{{end}}>
+                <tr class="u-op-0-5"{{if .Revoked}}{{end}}>
                     <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
                     <td>
                         <a href="/swarm/filecast/{{.SHA256}}"><strong>{{if .Label}}{{labelDisplayName .Label}}{{else}}<em>unlabeled</em>{{end}}</strong></a>
-                        <div style="color:var(--subtext0);font-size:0.9em;"><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code> · seeded by {{.Source}} · {{.Chunks}} chunk{{if ne .Chunks 1}}s{{end}}</div>
+                        <div class="u-c-var-subtext0-fs-0-9em"><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code> · seeded by {{.Source}} · {{.Chunks}} chunk{{if ne .Chunks 1}}s{{end}}</div>
                     </td>
-                    <td style="white-space:nowrap;">{{.SizeHuman}}</td>
+                    <td class="u-ws-nowrap">{{.SizeHuman}}</td>
                     <td>
                         {{if gt .Summary.Total 0}}
                         {{if .Revoked}}
                         {{/* Post-revoke: only revoking/revoked are meaningful. */}}
                         <span class="status-pill status-pill--relapsed" title="envoys still holding the blob after revoke">{{.Summary.Revoking}}</span>
                         <span class="status-pill status-pill--converged" title="envoys that have finished evicting">{{.Summary.Revoked}}</span>
-                        <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
+                        <span class="u-ml-4px">/ {{.Summary.Total}}</span>
                         {{else}}
                         {{if gt .Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.Summary.Source}}</span>{{end}}
                         {{if gt .Summary.Complete 0}}<span class="status-pill status-pill--converged" title="envoys that finished downloading the blob">{{.Summary.Complete}}</span>{{end}}
@@ -95,7 +95,7 @@
                         {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed" title="envoys currently transferring chunks">{{.Summary.Downloading}}</span>{{end}}
                         {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data" title="envoys assigned the blob but haven't started downloading yet">{{.Summary.Pending}}</span>{{end}}
                         {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed" title="envoys that matched the target but couldn't receive (e.g. out of disk, unreachable)">{{.Summary.Skipped}}</span>{{end}}
-                        <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
+                        <span class="u-ml-4px">/ {{.Summary.Total}}</span>
                         {{end}}
                         {{else}}
                         {{if not .Revoked}}
@@ -103,7 +103,7 @@
                         {{else}}<span>—</span>{{end}}
                         {{end}}
                     </td>
-                    <td style="white-space:nowrap;">{{formatTime .CreatedAt}}</td>
+                    <td class="u-ws-nowrap">{{formatTime .CreatedAt}}</td>
                 </tr>
                 {{end}}
             </tbody>
@@ -119,8 +119,8 @@
 {{define "filecast-envoys-fragment"}}
 {{/* ── Summary Pills ── */}}
 <div class="card-heading-row">
-    <h3 style="margin:0;">Distribution Status</h3>
-    <div class="btn-group" style="gap:4px;">
+    <h3 class="u-m-0">Distribution Status</h3>
+    <div class="btn-group u-gap-4px">
         {{if .BlobDetail.Revoked}}
         <span class="status-pill status-pill--relapsed" title="envoys still holding the blob after revoke">{{.BlobDetail.Summary.Revoking}}</span>
         <span class="status-pill status-pill--converged" title="envoys that have finished evicting">{{.BlobDetail.Summary.Revoked}}</span>
@@ -143,7 +143,7 @@
 {{/* ── Chunk Flow Matrix ── */}}
 {{if .Matrix}}
 <div class="card mt-2">
-    <h3 style="margin-bottom:12px;">Chunk Flow</h3>
+    <h3 class="u-mb-12px">Chunk Flow</h3>
     {{if .Matrix.Empty}}
     <p>No peer-to-peer transfers yet.</p>
     {{else}}
