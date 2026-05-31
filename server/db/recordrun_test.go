@@ -127,3 +127,39 @@ func TestMemRunStore_RecordRun(t *testing.T) {
 		}
 	}
 }
+
+// TestLatestRunPerEnvoy_CarriesFailureCounts proves the fix for the
+// compliance-alerter miscount: ListEnvoysWithLatestRun (and thus
+// LatestRunPerEnvoy) must surface failed_count + module_count, or a
+// Status:"failure" run with those counts dropped is misclassified as
+// "converged" by convergence.ComputeConvergence (which keys off FailedCount).
+func TestLatestRunPerEnvoy_CarriesFailureCounts(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := testutil.OpenMigratedTestDB(t)
+	if _, err := sqlDB.ExecContext(ctx,
+		"INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?,?,?,?)",
+		"env-1", "host-1", "10.0.0.1", "pk"); err != nil {
+		t.Fatalf("seed envoy: %v", err)
+	}
+	store := NewDBRunStore(New(sqlDB), sqlDB)
+
+	// A genuinely-failed run: 1 of 3 modules failed.
+	if _, err := store.RecordRun(ctx, RecordRunParams{
+		Run:    CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ModuleCount: 3},
+		Finish: FinishRunParams{Status: "failure", ChangedCount: 0, FailedCount: 1},
+	}); err != nil {
+		t.Fatalf("RecordRun: %v", err)
+	}
+
+	latest, err := store.LatestRunPerEnvoy(ctx, []string{"env-1"})
+	if err != nil {
+		t.Fatalf("LatestRunPerEnvoy: %v", err)
+	}
+	run, ok := latest["env-1"]
+	if !ok {
+		t.Fatal("no latest run for env-1")
+	}
+	if run.FailedCount != 1 || run.ModuleCount != 3 {
+		t.Errorf("LatestRunPerEnvoy dropped counts: FailedCount=%d ModuleCount=%d, want 1 and 3", run.FailedCount, run.ModuleCount)
+	}
+}

@@ -654,7 +654,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 	var recent []convergence.RunInfo
 	if err == nil && len(runs) > 0 {
 		for _, r := range runs {
-			recent = append(recent, convergence.RunInfo{Status: r.Status, ChangedCount: r.ChangedCount})
+			recent = append(recent, convergence.RunInfo{Status: r.Status, ChangedCount: r.ChangedCount, FailedCount: r.FailedCount, ModuleCount: r.ModuleCount})
 		}
 		lastRunProto = dbRunToProto(runs[0])
 	}

@@ -434,6 +434,8 @@ func (s *Server) runComplianceChecker(ctx context.Context, threshold int) {
 				ri := convergence.RunInfo{
 					Status:       run.Status,
 					ChangedCount: int64(run.ChangedCount),
+					FailedCount:  int64(run.FailedCount),
+					ModuleCount:  int64(run.ModuleCount),
 				}
 				if convergence.ComputeStatus(ri) == convergence.StatusConverged {
 					compliantCount++

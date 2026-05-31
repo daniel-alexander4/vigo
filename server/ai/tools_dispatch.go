@@ -320,7 +320,7 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[t.ID]; ok {
-			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ModuleCount: run.ModuleCount}}
 		}
 		status := convergence.ComputeConvergence(recent)
 
@@ -360,7 +360,7 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 		_ = envoyMap[id]
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[id]; ok {
-			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ModuleCount: run.ModuleCount}}
 		}
 		statuses = append(statuses, convergence.ComputeConvergence(recent))
 	}

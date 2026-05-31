@@ -98,6 +98,8 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			recent = []convergence.RunInfo{{
 				Status:       twr.LatestRunStatus.String,
 				ChangedCount: twr.LatestRunChangedCount.Int64,
+				FailedCount:  twr.LatestRunFailedCount.Int64,
+				ModuleCount:  twr.LatestRunModuleCount.Int64,
 			}}
 		}
 		convStatus := convergence.ComputeConvergence(recent)
@@ -137,8 +139,9 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			maintenanceUntil = t.MaintenanceUntil.Time
 		}
 
-		// Prefer counts from the trailing run window if available, since
-		// ListEnvoysWithLatestRun doesn't carry failed/module counts.
+		// Failed/module counts come from recent[0] — the trailing run window
+		// when present, else the latest-run fallback synthesised above (both
+		// now carry the counts).
 		var lastFailed, lastModules int64
 		if len(recent) > 0 {
 			lastFailed = recent[0].FailedCount

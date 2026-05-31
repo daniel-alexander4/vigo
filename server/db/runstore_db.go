@@ -157,6 +157,8 @@ func (s *DBRunStore) LatestRunPerEnvoy(ctx context.Context, envoyIDs []string) (
 				EnvoyID:      r.ID,
 				Status:       r.LatestRunStatus.String,
 				ChangedCount: r.LatestRunChangedCount.Int64,
+				FailedCount:  r.LatestRunFailedCount.Int64,
+				ModuleCount:  r.LatestRunModuleCount.Int64,
 			}
 			result[r.ID] = &run
 		}

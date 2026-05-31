@@ -928,7 +928,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 		var recent []convergence.RunInfo
 		runs, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{EnvoyID: envoyID, Limit: 1})
 		if err == nil && len(runs) > 0 {
-			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount}}
+			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount, FailedCount: runs[0].FailedCount, ModuleCount: runs[0].ModuleCount}}
 		}
 		convStatus := convergence.ComputeConvergence(recent)
 		ts = &EnvoyState{
