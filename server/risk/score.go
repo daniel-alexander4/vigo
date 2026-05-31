@@ -287,15 +287,9 @@ func Classify(score int) Level {
 
 // traitInt parses a trait value as an int64, returning 0 if absent or unparseable.
 func traitInt(traits map[string]string, key string) int64 {
-	v, ok := traits[key]
-	if !ok {
+	n, err := strconv.ParseInt(strings.TrimSpace(traits[key]), 10, 64)
+	if err != nil {
 		return 0
-	}
-	var n int64
-	for _, c := range v {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int64(c-'0')
-		}
 	}
 	return n
 }

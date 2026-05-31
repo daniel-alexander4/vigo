@@ -31,7 +31,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	// writes onto the single SQLite writer. ResourceExhausted tells the
 	// agent to back off — it already does.
 	if !s.tryAcquireReportSlot() {
-		return nil, status.Error(codes.ResourceExhausted, "server overloaded; retry with backoff")
+		return nil, status.Errorf(codes.ResourceExhausted, "server overloaded (report admission cap %d reached); retry with backoff", cap(s.reportResultSem))
 	}
 	defer s.releaseReportSlot()
 

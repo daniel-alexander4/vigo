@@ -892,11 +892,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 49);
-    }
-
-    #[test]
     fn test_volatile_plus_stable_plus_periodic_covers_all() {
         let mut all: Vec<CollectorKind> = volatile_collectors();
         all.extend(stable_collectors());

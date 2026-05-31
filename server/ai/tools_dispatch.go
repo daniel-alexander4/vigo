@@ -337,13 +337,11 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 	}
 
 	var ids []string
-	envoyMap := make(map[string]db.Envoy)
 	for _, t := range envoys {
 		if t.Revoked != 0 {
 			continue
 		}
 		ids = append(ids, t.ID)
-		envoyMap[t.ID] = t
 	}
 
 	if len(ids) == 0 {
@@ -357,7 +355,6 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 
 	var statuses []string
 	for _, id := range ids {
-		_ = envoyMap[id]
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[id]; ok {
 			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ModuleCount: run.ModuleCount}}
