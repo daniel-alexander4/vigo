@@ -208,6 +208,19 @@
         }
       },
       "targets": [{ "expr": "vigo_convergence_pct * 100", "legendFormat": "convergence %" }]
+    },
+    {
+      "title": "Time to Converge after Publish (p50 / p95 / p99)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+      "description": "Seconds from a config version becoming current to each envoy first applying it (vigo_publish_convergence_seconds). One sample per envoy per forward version adoption — routine re-converges are excluded. The tail tracks the check-in cadence: long-interval fleets converge slower because envoys only notice at their next check-in.",
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 5 } } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(vigo_publish_convergence_seconds_bucket[10m])))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(vigo_publish_convergence_seconds_bucket[10m])))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(vigo_publish_convergence_seconds_bucket[10m])))", "legendFormat": "p99" }
+      ]
     }
   ],
   "refresh": "10s",
