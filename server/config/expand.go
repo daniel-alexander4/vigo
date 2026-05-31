@@ -210,20 +210,20 @@ func expandForeachConfigcrateRefs(refs []ConfigcrateRef, defs map[string]*Config
 		}
 		raw, ok := vars[r.ForEach]
 		if !ok {
-			return nil, fmt.Errorf("module %q: foreach var %q not found", r.Name, r.ForEach)
+			return nil, fmt.Errorf("configcrate %q: foreach var %q not found", r.Name, r.ForEach)
 		}
 		items, err := toSlice(raw)
 		if err != nil {
-			return nil, fmt.Errorf("module %q: foreach var %q: %w", r.Name, r.ForEach, err)
+			return nil, fmt.Errorf("configcrate %q: foreach var %q: %w", r.Name, r.ForEach, err)
 		}
 		seenKeys := make(map[string]bool, len(items))
 		for _, item := range items {
 			key, kerr := foreachInstanceKey(item, r.Key)
 			if kerr != nil {
-				return nil, fmt.Errorf("module %q foreach %q: %w", r.Name, r.ForEach, kerr)
+				return nil, fmt.Errorf("configcrate %q foreach %q: %w", r.Name, r.ForEach, kerr)
 			}
 			if seenKeys[key] {
-				return nil, fmt.Errorf("module %q foreach %q: two items resolve to the same instance key %q — keys must be unique", r.Name, r.ForEach, key)
+				return nil, fmt.Errorf("configcrate %q foreach %q: two items resolve to the same instance key %q — keys must be unique", r.Name, r.ForEach, key)
 			}
 			seenKeys[key] = true
 			out = append(out, ConfigcrateRef{
@@ -247,7 +247,7 @@ func foreachInstanceKey(item any, keyField string) (string, error) {
 	switch v := item.(type) {
 	case map[string]any:
 		if keyField == "" {
-			return "", fmt.Errorf("the list contains maps — add key: <field> on the module ref to name which item field supplies the instance suffix")
+			return "", fmt.Errorf("the list contains maps — add key: <field> on the configcrate ref to name which item field supplies the instance suffix")
 		}
 		kv, ok := v[keyField]
 		if !ok {

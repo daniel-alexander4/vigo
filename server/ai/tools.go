@@ -73,7 +73,7 @@ func toolDefs() []ToolDef {
 		},
 		{
 			Name:        "get_config",
-			Description: "Get the effective resolved configuration for a envoy (secrets redacted). Shows modules, resources, vars.",
+			Description: "Get the effective resolved configuration for a envoy (secrets redacted). Shows configcrates, resources, vars.",
 			Parameters: jsonSchema(map[string]any{
 				"type":     "object",
 				"properties": map[string]any{
@@ -110,8 +110,8 @@ func toolDefs() []ToolDef {
 			}),
 		},
 		{
-			Name:        "get_module_definition",
-			Description: "Read the raw .vgo definition of a module (resources, vars, depends_on).",
+			Name:        "get_configcrate_definition",
+			Description: "Read the raw .vgo definition of a configcrate (resources, vars, depends_on).",
 			Parameters: jsonSchema(map[string]any{
 				"type":     "object",
 				"properties": map[string]any{
@@ -121,8 +121,8 @@ func toolDefs() []ToolDef {
 			}),
 		},
 		{
-			Name:        "list_modules",
-			Description: "List all available module names.",
+			Name:        "list_configcrates",
+			Description: "List all available configcrate names.",
 			Parameters: jsonSchema(map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},

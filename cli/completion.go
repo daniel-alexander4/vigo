@@ -72,7 +72,7 @@ func completeModuleNames(cmd *cobra.Command, args []string, toComplete string) (
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	modulesDir := filepath.Join(vigoConfigRoot, "worksite", "stockpile", "modules")
+	modulesDir := filepath.Join(vigoConfigRoot, "worksite", "stockpile", "configcrates")
 	var names []string
 	_ = filepath.WalkDir(modulesDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {

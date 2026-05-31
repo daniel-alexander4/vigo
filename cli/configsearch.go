@@ -19,9 +19,9 @@ var (
 
 var configSearchCmd = &cobra.Command{
 	Use:   "search",
-	Short: "Search envoy entries by match pattern, module, or var",
+	Short: "Search envoy entries by match pattern, configcrate, or var",
 	Long: `Find envoy entries matching the given criteria and show their
-inheritance chain, modules, and vars.
+inheritance chain, configcrates, and vars.
 
 Examples:
   vigocli config search --match "*web*"
@@ -29,7 +29,7 @@ Examples:
   vigocli config search --var log_level`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if searchMatch == "" && searchModule == "" && searchVar == "" {
-			return fmt.Errorf("at least one of --match, --module, or --var is required")
+			return fmt.Errorf("at least one of --match, --configcrate, or --var is required")
 		}
 
 		client := newAPIClient()
@@ -39,7 +39,7 @@ Examples:
 			params.Set("match", searchMatch)
 		}
 		if searchModule != "" {
-			params.Set("module", searchModule)
+			params.Set("configcrate", searchModule)
 		}
 		if searchVar != "" {
 			params.Set("var", searchVar)
@@ -147,7 +147,7 @@ func printSearchEntry(e searchEntry) {
 
 func init() {
 	configSearchCmd.Flags().StringVar(&searchMatch, "match", "", "Glob pattern to match against envoy match: patterns")
-	configSearchCmd.Flags().StringVar(&searchModule, "module", "", "Find entries using this module (inherited or direct)")
+	configSearchCmd.Flags().StringVar(&searchModule, "configcrate", "", "Find entries using this configcrate (inherited or direct)")
 	configSearchCmd.Flags().StringVar(&searchVar, "var", "", "Find entries that define this var")
 
 	configCmd.AddCommand(configSearchCmd)

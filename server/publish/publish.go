@@ -223,7 +223,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// scaffolding files (envoys.vgo / roles.vgo / waivers.vgo /
 	// environments.vgo at any depth). Returns a map of rel-path →
 	// linted bytes WITHOUT writing to stockpile. Paths are
-	// stockpile-relative now (e.g., "modules/nginx.vgo").
+	// stockpile-relative now (e.g., "configcrates/nginx.vgo").
 	candidateLintable := append(
 		filterBySubdir(candidateChanged, "configcrates"),
 		filterUsercrates(candidateChanged)...,
@@ -233,7 +233,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	if len(candidateLintable) > 0 {
 		lintedOverrides, err = lintModules(opts.StockpileDir, candidateLintable)
 		if err != nil {
-			return nil, fmt.Errorf("linting modules: %w", err)
+			return nil, fmt.Errorf("linting configcrates: %w", err)
 		}
 	}
 
@@ -714,7 +714,7 @@ type moduleFile struct {
 }
 
 // extractURLsFromFiles parses the given module files (relative paths like
-// "modules/nginx.vgo") and returns all http/https URLs found.
+// "configcrates/nginx.vgo") and returns all http/https URLs found.
 func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error) {
 	urlFields := map[string][]string{
 		"source_package":  {"url"},
@@ -952,7 +952,7 @@ func unlockLiveDir(live string) {
 
 // PublishFile copies a single .vgo file into stockpile/, validates the full
 // config tree, and syncs only that file to .live/. The file path must be
-// relative to the stockpile directory (e.g., "modules/nginx.vgo").
+// relative to the stockpile directory (e.g., "configcrates/nginx.vgo").
 //
 // The state parameter holds operator-controlled mutable publish state
 // (freeze deadline). A nil state bypasses the freeze check — see Publish.
@@ -964,7 +964,7 @@ func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
 	opts = opts.resolvePaths()
 
 	// Determine the relative path within the stockpile content tree.
-	// Accept either an absolute path or a relative path like "modules/nginx.vgo".
+	// Accept either an absolute path or a relative path like "configcrates/nginx.vgo".
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
 		if rel, err := filepath.Rel(opts.StockpileDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
@@ -1152,7 +1152,7 @@ func normalizeWhitespace(dir string) error {
 var _ secrets.Provider = (*stubProvider)(nil)
 
 // lintModules runs the modlint pipeline on the given module files (relative
-// paths like "modules/nginx.vgo") and returns the linted bytes for each file
+// paths like "configcrates/nginx.vgo") and returns the linted bytes for each file
 // whose content differs from the source. It does NOT modify any file under
 // baseDir — stockpile is operator territory and must stay byte-stable across
 // publishes. Callers feed the returned overrides into a staging directory
@@ -1168,7 +1168,7 @@ var _ secrets.Provider = (*stubProvider)(nil)
 //     auto-fix; the operator must fix the source. Errors are accumulated
 //     across all files so the caller can report them in one pass.
 //
-// compliance.vgo files under modules/ are directory-level compliance claim
+// compliance.vgo files under configcrates/ are directory-level compliance claim
 // declarations, not module definitions — they are validated by the config
 // loader instead and must be skipped here.
 func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
@@ -1220,7 +1220,7 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 	}
 
 	if len(lintErrors) > 0 {
-		return nil, fmt.Errorf("module validation failed:\n%s", strings.Join(lintErrors, "\n"))
+		return nil, fmt.Errorf("configcrate validation failed:\n%s", strings.Join(lintErrors, "\n"))
 	}
 
 	return overrides, nil
@@ -1244,7 +1244,7 @@ func fleetFindings(baseDir string, relPaths []string, unreachable map[string]boo
 		if filepath.Base(rel) == "compliance.vgo" {
 			continue
 		}
-		// Skip modules/usercrates no carrier can reach — the prune
+		// Skip configcrates/usercrates no carrier can reach — the prune
 		// drops them from .live anyway, so they can never collide on a
 		// real envoy.
 		if unreachable[rel] {

@@ -27,12 +27,12 @@ var (
 
 var configTraceCmd = &cobra.Command{
 	Use:               "trace [hostname]",
-	Short:             "Show config resolution for a hostname, or where a module/usercrate is applied across the fleet",
+	Short:             "Show config resolution for a hostname, or where a configcrate/usercrate is applied across the fleet",
 	ValidArgsFunction: completeHostnames,
 	Long: `Forward (hostname-rooted):
-  Traces config resolution for one hostname — directory inheritance, module
+  Traces config resolution for one hostname — directory inheritance, configcrate
   sources, var resolution, secret references, dependencies, compliance, and
-  conditional evaluation. Use --module to filter to a single module's branch.
+  conditional evaluation. Use --configcrate to filter to a single configcrate's branch.
 
 Inverse (subject-rooted):
   Use --module or --usercrate (without a hostname) to find every enrolled
@@ -43,8 +43,8 @@ Inverse (subject-rooted):
 
 Examples:
   vigocli config trace danlap
-  vigocli config trace --host danlap --module nginx
-  vigocli config trace --module nginx
+  vigocli config trace --host danlap --configcrate nginx
+  vigocli config trace --configcrate nginx
   vigocli config trace --usercrate alexander4 --include-tree`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -64,11 +64,11 @@ Examples:
 
 		switch {
 		case host == "" && traceModuleFlag == "" && traceUsercrateFlag == "":
-			return fmt.Errorf("specify one of: <hostname>, --host, --module, --usercrate")
+			return fmt.Errorf("specify one of: <hostname>, --host, --configcrate, --usercrate")
 		case host != "" && traceUsercrateFlag != "":
 			return fmt.Errorf("--usercrate is an inverse subject; remove the hostname to query it")
 		case inverseModule && inverseUsercrate:
-			return fmt.Errorf("--module and --usercrate are mutually exclusive in inverse mode")
+			return fmt.Errorf("--configcrate and --usercrate are mutually exclusive in inverse mode")
 		case traceIncludeTreeFlag && host != "":
 			return fmt.Errorf("--include-tree only applies to inverse mode (no hostname)")
 		}
@@ -247,7 +247,7 @@ type traceResult struct {
 type moduleComplianceFileEntry = struct {
 	SourceFile     string              `json:"source_file"`
 	Compliance     map[string][]string `json:"compliance"`
-	CoveredModules []string            `json:"covered_modules"`
+	CoveredConfigcrates []string            `json:"covered_configcrates"`
 }
 
 type secretTraceEntry = struct {
@@ -743,8 +743,8 @@ func renderModuleComplianceSources(files []moduleComplianceFileEntry) {
 			fmt.Printf("  %s│%s %s %s\n", color, rst, teal(fw+":"), strings.Join(controls, ", "))
 		}
 
-		if len(f.CoveredModules) > 0 {
-			fmt.Printf("  %s│%s %s %s\n", color, rst, medGray("modules:"), strings.Join(f.CoveredModules, ", "))
+		if len(f.CoveredConfigcrates) > 0 {
+			fmt.Printf("  %s│%s %s %s\n", color, rst, medGray("configcrates:"), strings.Join(f.CoveredConfigcrates, ", "))
 		}
 
 		fmt.Printf("  %s%s%s\n", color, botLine, rst)
@@ -947,7 +947,7 @@ type inverseTreeRef struct {
 // runInverseTrace fetches and renders an inverse trace — answers
 // "where is this module/usercrate applied?" across the fleet.
 func runInverseTrace(asModule, asUsercrate bool) error {
-	subject := "module"
+	subject := "configcrate"
 	value := traceModuleFlag
 	if asUsercrate {
 		subject = "usercrate"
@@ -1028,7 +1028,7 @@ func runInverseTrace(asModule, asUsercrate bool) error {
 }
 
 func init() {
-	configTraceCmd.Flags().StringVar(&traceModuleFlag, "module", "", "With <hostname>: filter trace to this module's branch. Without <hostname>: find where this module is applied.")
+	configTraceCmd.Flags().StringVar(&traceModuleFlag, "configcrate", "", "With <hostname>: filter trace to this configcrate's branch. Without <hostname>: find where this configcrate is applied.")
 	configTraceCmd.Flags().StringVar(&traceHostFlag, "host", "", "Hostname to trace (alias for the positional argument)")
 	configTraceCmd.Flags().StringVar(&traceUsercrateFlag, "usercrate", "", "Find where this usercrate is applied across the fleet")
 	configTraceCmd.Flags().BoolVar(&traceIncludeTreeFlag, "include-tree", false, "Inverse mode only: also include config-tree patterns no enrolled envoy matches")

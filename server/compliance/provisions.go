@@ -5,16 +5,16 @@ package compliance
 
 import "sort"
 
-// ConfigcrateProvision is one functional capability a module makes available
+// ConfigcrateProvision is one functional capability a configcrate makes available
 // for compliance attribution. Configcrates declare `provides: [time-sync]`;
 // the loader resolves each tag through ConfigcrateProvisions and unions the
-// resulting (framework, control) pairs with the module's explicit
+// resulting (framework, control) pairs with the configcrate's explicit
 // `compliance:` block.
 //
 // The value of provisions IS the cross-walk maintenance — moving each
 // framework's cross-walk into one Vigo-curated place so adding a
-// framework touches one file instead of every module, and so two
-// modules that solve the same problem (chrony vs ntpd, rsyslog vs
+// framework touches one file instead of every configcrate, and so two
+// configcrates that solve the same problem (chrony vs ntpd, rsyslog vs
 // fluent-bit) can't drift apart silently. The catalog is therefore
 // code-curated: adding or revising a provision is a PR, not an
 // operator-editable file.
@@ -23,7 +23,7 @@ import "sort"
 // server/api/report.go — that map exists to *escalate* a framework
 // control when a Connwaer trait proves it's enforced, whereas
 // ConfigcrateProvisions exists to *attribute* a framework control to the
-// module that provides it. The two layers compose but never overlap;
+// configcrate that provides it. The two layers compose but never overlap;
 // the renaming is deliberate.
 type ConfigcrateProvision struct {
 	// ID is the kebab-case tag operators write in YAML. Matches the
@@ -33,9 +33,9 @@ type ConfigcrateProvision struct {
 	// Title is the human label shown by `vigocli compliance provisions`.
 	Title string
 
-	// Description is one or two sentences explaining what a module
+	// Description is one or two sentences explaining what a configcrate
 	// claiming this provision delivers — operators read this to decide
-	// whether their module actually satisfies it.
+	// whether their configcrate actually satisfies it.
 	Description string
 
 	// Frameworks maps each framework slug (matching
@@ -50,8 +50,8 @@ type ConfigcrateProvision struct {
 // kebab-case provision IDs that operators reference under `provides:`.
 //
 // Authoring note: every entry's framework → control list is
-// cross-checked against at least one real-world module under
-// example-configs/worksite/stockpile/modules/ that historically
+// cross-checked against at least one real-world configcrate under
+// example-configs/worksite/stockpile/configcrates/ that historically
 // hand-rolled the same cross-walk in its `compliance:` block — the
 // catalog is grounded in actual usage, not aspirational benchmark
 // categories.
@@ -163,7 +163,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 	"host-firewall": {
 		ID:          "host-firewall",
 		Title:       "Host-level firewall",
-		Description: "Installs and configures a host firewall (ufw, firewalld, nftables, iptables, Windows Firewall) with a default-deny stance. Covers both the firewall-installed + default-deny base case and modules that assert specific allow/deny rule sets — a host firewall with any rule set satisfies the same broad control set.",
+		Description: "Installs and configures a host firewall (ufw, firewalld, nftables, iptables, Windows Firewall) with a default-deny stance. Covers both the firewall-installed + default-deny base case and configcrates that assert specific allow/deny rule sets — a host firewall with any rule set satisfies the same broad control set.",
 		Frameworks: map[string][]string{
 			"cis-ubuntu":  {"3.4.1.1", "3.4.1.2"},
 			"iso-27001":   {"A.13.1.1"},
@@ -183,7 +183,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 	"central-identity": {
 		ID:          "central-identity",
 		Title:       "Central identity / directory integration",
-		Description: "Joins the host to a central identity service (FreeIPA, AD, LDAP, sssd) so account and authorization decisions are centrally managed. Covers basic directory join + credential resolution; modules that add MFA layer it via the `multi-factor-auth` provision.",
+		Description: "Joins the host to a central identity service (FreeIPA, AD, LDAP, sssd) so account and authorization decisions are centrally managed. Covers basic directory join + credential resolution; configcrates that add MFA layer it via the `multi-factor-auth` provision.",
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.9.2.1", "A.9.4.2"},
 			"nist-800-53": {"IA-2", "IA-5"},
@@ -201,7 +201,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 	"vpn": {
 		ID:          "vpn",
 		Title:       "Encrypted remote access (VPN)",
-		Description: "Runs a VPN endpoint (WireGuard, Tailscale, etc.) that encrypts traffic in transit between hosts or sites with a strong cipher suite. Covers tunnel transport + cryptographic-control posture; modules that ride a PKI-based bidirectional auth (OpenVPN-style) declare `vpn-with-pki` instead.",
+		Description: "Runs a VPN endpoint (WireGuard, Tailscale, etc.) that encrypts traffic in transit between hosts or sites with a strong cipher suite. Covers tunnel transport + cryptographic-control posture; configcrates that ride a PKI-based bidirectional auth (OpenVPN-style) declare `vpn-with-pki` instead.",
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.13.1.1", "A.13.2.1"},
 			"nist-800-53": {"AC-17", "SC-8", "SC-13"},
@@ -243,7 +243,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 	"host-backup-encrypted": {
 		ID:          "host-backup-encrypted",
 		Title:       "Encrypted host file backup",
-		Description: "Backs up host data to a remote target with at-rest encryption (repository key, passphrase, or KMS). Adds cryptographic-protection + key-management claims on top of `host-backup`; modules use one or the other, not both.",
+		Description: "Backs up host data to a remote target with at-rest encryption (repository key, passphrase, or KMS). Adds cryptographic-protection + key-management claims on top of `host-backup`; configcrates use one or the other, not both.",
 		Frameworks: map[string][]string{
 			"hipaa":       {"164.308(a)(7)(ii)(A)", "164.310(d)(2)(iv)"},
 			"iso-27001":   {"A.12.3.1", "A.10.1.1"},
@@ -738,7 +738,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 
 // ResolveProvision returns the framework → control IDs map for a given
 // provision ID. Returns nil for an unknown ID (modlint catches unknown
-// provisions at module-load; the loader treats nil as zero contribution).
+// provisions at configcrate-load; the loader treats nil as zero contribution).
 func ResolveProvision(id string) map[string][]string {
 	p, ok := ConfigcrateProvisions[id]
 	if !ok {

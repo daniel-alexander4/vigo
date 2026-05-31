@@ -90,7 +90,7 @@ func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusBadRequest, "?configcrate= and ?usercrate= are mutually exclusive")
 			return
 		}
-		subject, value := "module", module
+		subject, value := "configcrate", module
 		if usercrate != "" {
 			subject, value = "usercrate", usercrate
 		}

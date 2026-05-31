@@ -28,7 +28,7 @@ const defaultAntiExampleDir = "/srv/vigo/stacks/anti-examples"
 var configAntiExamplesCmd = &cobra.Command{
 	Use:   "anti-examples",
 	Short: "Browse, copy, and verify retract templates that mirror examples/",
-	Long: `Anti-examples are retract templates paired with each module example.
+	Long: `Anti-examples are retract templates paired with each configcrate example.
 The directory tree mirrors examples/configcrates/ so a missing retract is
 visually obvious. Use mirror-check to scan for examples without
 matching anti-examples.`,
@@ -61,11 +61,11 @@ var antiExamplesListCmd = &cobra.Command{
 
 var antiExamplesCopyCmd = &cobra.Command{
 	Use:   "copy <retract-name|directory-name|all>",
-	Short: "Copy retract templates into stockpile alongside their modules",
+	Short: "Copy retract templates into stockpile alongside their configcrates",
 	Long: `Copy retract .vgo.example files from stacks/anti-examples/ into
 stacks/stockpile/, preserving the directory structure and stripping
 the .example suffix. Filenames keep their -retract suffix so a
-retract drops in alongside its install module without colliding
+retract drops in alongside its install configcrate without colliding
 (e.g., postgres.vgo + postgres-retract.vgo in the same directory).
 
 Examples:
@@ -84,11 +84,11 @@ Examples:
 
 var antiExamplesMirrorCheckCmd = &cobra.Command{
 	Use:   "mirror-check",
-	Short: "Report module examples without a matching anti-example (and vice versa)",
+	Short: "Report configcrate examples without a matching anti-example (and vice versa)",
 	Long: `Walk examples/configcrates/ and anti-examples/configcrates/ and report
 mismatches: install templates without a paired retract, or retracts
-referencing a module example that no longer exists. The /tidy
-contract requires every module example to ship with a matching
+referencing a configcrate example that no longer exists. The /tidy
+contract requires every configcrate example to ship with a matching
 retract; this check makes the missing pieces visible.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -127,13 +127,13 @@ func runMirrorCheck(exampleDir, antiExampleDir string) error {
 	sort.Strings(orphanRetracts)
 
 	if len(missingRetracts) == 0 && len(orphanRetracts) == 0 {
-		fmt.Printf("%s %d module examples, all paired with anti-examples.\n",
+		fmt.Printf("%s %d configcrate examples, all paired with anti-examples.\n",
 			green("OK"), len(exMods))
 		return nil
 	}
 
 	if len(missingRetracts) > 0 {
-		fmt.Printf("%s module examples without a matching anti-example (%d):\n",
+		fmt.Printf("%s configcrate examples without a matching anti-example (%d):\n",
 			yellow("MISSING"), len(missingRetracts))
 		for _, p := range missingRetracts {
 			expected := retractRelFromExampleRel(p)
@@ -144,7 +144,7 @@ func runMirrorCheck(exampleDir, antiExampleDir string) error {
 		if len(missingRetracts) > 0 {
 			fmt.Println()
 		}
-		fmt.Printf("%s anti-examples without a matching module example (%d):\n",
+		fmt.Printf("%s anti-examples without a matching configcrate example (%d):\n",
 			yellow("ORPHAN"), len(orphanRetracts))
 		for _, p := range orphanRetracts {
 			expected := exampleRelFromRetractRel(p)
@@ -200,8 +200,8 @@ func collectModuleAntiExamples(antiExampleDir string) map[string]struct{} {
 }
 
 // retractRelFromExampleRel maps an examples/-relative rel like
-// "modules/databases/postgres.vgo.example" to its expected
-// anti-examples/-relative rel "modules/databases/postgres-retract.vgo.example".
+// "configcrates/databases/postgres.vgo.example" to its expected
+// anti-examples/-relative rel "configcrates/databases/postgres-retract.vgo.example".
 func retractRelFromExampleRel(rel string) string {
 	return strings.TrimSuffix(rel, ".vgo.example") + "-retract.vgo.example"
 }

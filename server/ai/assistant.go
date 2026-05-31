@@ -498,7 +498,7 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 		}
 	}
 
-	if containsAny(lower, "module", "modules") {
+	if containsAny(lower, "configcrate", "configcrates", "module", "modules") {
 		if data, err := a.tools.listModules(); err == nil {
 			parts = append(parts, "## Configcrates\n"+data)
 		}

@@ -249,7 +249,7 @@ func checkTLSCerts(certFile, keyFile string) preStartCheck {
 }
 
 func checkConfigDir(dir string) preStartCheck {
-	subdirs := []string{"modules", "roles", "envoys"}
+	subdirs := []string{"configcrates", "roles", "envoys"}
 	var missing []string
 	for _, sub := range subdirs {
 		path := filepath.Join(dir, sub)
@@ -270,9 +270,9 @@ func checkConfigDir(dir string) preStartCheck {
 }
 
 func checkConfigValidation(dir string) preStartCheck {
-	modulesDir := filepath.Join(dir, "stockpile", "modules")
+	modulesDir := filepath.Join(dir, "stockpile", "configcrates")
 	if _, err := os.Stat(modulesDir); err != nil {
-		return preStartCheck{"config_validation", "skip", "modules dir not found"}
+		return preStartCheck{"config_validation", "skip", "configcrates dir not found"}
 	}
 
 	var totalModules, totalErrors, totalWarnings int
@@ -328,7 +328,7 @@ func checkConfigValidation(dir string) preStartCheck {
 		return preStartCheck{"config_validation", "fail", err.Error()}
 	}
 
-	msg := fmt.Sprintf("%d modules", totalModules)
+	msg := fmt.Sprintf("%d configcrates", totalModules)
 	if totalErrors > 0 {
 		msg += fmt.Sprintf(", %d errors", totalErrors)
 	}

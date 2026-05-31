@@ -12,14 +12,14 @@ import (
 
 var configDedupCmd = &cobra.Command{
 	Use:   "dedup",
-	Short: "Find redundant modules and variables in the config tree",
-	Long: `Scans the config tree for redundant module references and variable
-definitions. Reports modules that are already inherited from a parent
+	Short: "Find redundant configcrates and variables in the config tree",
+	Long: `Scans the config tree for redundant configcrate references and variable
+definitions. Reports configcrates that are already inherited from a parent
 common.vgo and variables that repeat the same value as an ancestor.
 
 Examples:
   vigocli config dedup
-  vigocli config dedup --module nginx
+  vigocli config dedup --configcrate nginx
   vigocli config dedup --var ssh_port`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -39,7 +39,7 @@ Examples:
 		}
 
 		// Apply filters.
-		moduleFilter, _ := cmd.Flags().GetString("module")
+		moduleFilter, _ := cmd.Flags().GetString("configcrate")
 		varFilter, _ := cmd.Flags().GetString("var")
 
 		var filtered []struct {
@@ -51,7 +51,7 @@ Examples:
 		}
 
 		for _, f := range result.Findings {
-			if moduleFilter != "" && (f.Type != "module" || f.Name != moduleFilter) {
+			if moduleFilter != "" && (f.Type != "configcrate" || f.Name != moduleFilter) {
 				continue
 			}
 			if varFilter != "" && (f.Type != "var" || f.Name != varFilter) {
@@ -71,8 +71,8 @@ Examples:
 		fmt.Fprintf(w, "  TYPE\tNAME\tFILE\tREASON\n")
 		for _, f := range filtered {
 			var typeLabel string
-			if f.Type == "module" {
-				typeLabel = amber("module")
+			if f.Type == "configcrate" {
+				typeLabel = amber("configcrate")
 			} else {
 				typeLabel = slateBlue("var")
 			}
@@ -85,7 +85,7 @@ Examples:
 }
 
 func init() {
-	configDedupCmd.Flags().String("module", "", "filter to a specific module name")
+	configDedupCmd.Flags().String("configcrate", "", "filter to a specific configcrate name")
 	configDedupCmd.Flags().String("var", "", "filter to a specific variable name")
 	configCmd.AddCommand(configDedupCmd)
 }

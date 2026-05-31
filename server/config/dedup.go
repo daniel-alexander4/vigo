@@ -10,7 +10,7 @@ import (
 
 // DedupFinding describes a single redundancy in the config tree.
 type DedupFinding struct {
-	Type    string `json:"type"`    // "module" or "var"
+	Type    string `json:"type"`    // "configcrate" or "var"
 	Name    string `json:"name"`    // module name or var key
 	File    string `json:"file"`    // file where the redundancy appears
 	Reason  string `json:"reason"`  // human-readable explanation
@@ -102,10 +102,10 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 		for _, ref := range entry.OwnConfigcrates {
 			if src, ok := inheritedModules[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
-					Type:          "module",
+					Type:          "configcrate",
 					Name:          ref.Name,
 					File:          entryFile,
-					Reason:        fmt.Sprintf("module %q already inherited from %s", ref.Name, src),
+					Reason:        fmt.Sprintf("configcrate %q already inherited from %s", ref.Name, src),
 					InheritedFrom: src,
 				})
 			}
@@ -123,10 +123,10 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 		for _, ref := range entry.OwnConfigcrates {
 			if roleName, ok := entryRoleModules[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
-					Type:          "module",
+					Type:          "configcrate",
 					Name:          ref.Name,
 					File:          entryFile,
-					Reason:        fmt.Sprintf("module %q listed directly but already included by role %q", ref.Name, roleName),
+					Reason:        fmt.Sprintf("configcrate %q listed directly but already included by role %q", ref.Name, roleName),
 					InheritedFrom: "role " + roleName,
 				})
 			}
@@ -181,10 +181,10 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 		for _, ref := range cc.Configcrates {
 			if src, ok := parentModules[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
-					Type:          "module",
+					Type:          "configcrate",
 					Name:          ref.Name,
 					File:          childFile,
-					Reason:        fmt.Sprintf("module %q already inherited from %s", ref.Name, src),
+					Reason:        fmt.Sprintf("configcrate %q already inherited from %s", ref.Name, src),
 					InheritedFrom: src,
 				})
 			}

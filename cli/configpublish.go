@@ -31,7 +31,7 @@ var configPublishCmd = &cobra.Command{
 	Long: fmt.Sprintf(`Validates all .vgo config files in %s using the same
 logic as the server's config loader. If valid, atomically syncs to %s.
 
-By default, all http/https URLs in changed modules are checked for aliveness.
+By default, all http/https URLs in changed configcrates are checked for aliveness.
 Use --skip-url-check to disable (e.g., in air-gapped environments).
 
 Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, publish.DefaultLiveDir),
@@ -91,7 +91,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, pub
 			if res.URLWarning != "" {
 				fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 			}
-			fmt.Printf("\n%s Validation passed: %d modules, %d roles, %d envoy entries\n",
+			fmt.Printf("\n%s Validation passed: %d configcrates, %d roles, %d envoy entries\n",
 				green("✓"), res.Configcrates, res.Roles, res.Entries)
 			return nil
 		}
@@ -180,10 +180,10 @@ func printPublishSummary(res *publish.Result) {
 	ok := len(res.AllFiles) - len(res.Changed) - errCount
 
 	if errCount > 0 {
-		fmt.Printf("  %s  %d module(s) with validation errors\n", red("✗"), errCount)
+		fmt.Printf("  %s  %d configcrate(s) with validation errors\n", red("✗"), errCount)
 	}
 	if res.Configcrates > 0 || res.Roles > 0 || res.Entries > 0 {
-		fmt.Printf("  %s  %d modules, %d roles, %d envoy entries\n",
+		fmt.Printf("  %s  %d configcrates, %d roles, %d envoy entries\n",
 			bold("Summary"), res.Configcrates, res.Roles, res.Entries)
 	}
 	if ok > 0 {
@@ -633,7 +633,7 @@ func handleRetraction(res *publish.Result) {
 	}
 	var modules []modInput
 	for rel, content := range res.RemovedModuleContent {
-		// Extract module name from path: "modules/nginx.vgo" → "nginx"
+		// Extract configcrate name from path: "configcrates/nginx.vgo" → "nginx"
 		base := filepath.Base(rel)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
 		modules = append(modules, modInput{Name: name, Content: string(content)})
@@ -690,7 +690,7 @@ func handleRetractionPregen(res *publish.Result) {
 		if result.RetractYAML == "" {
 			continue
 		}
-		retractPath := filepath.Join(publish.DefaultStockpileDir, "modules", result.Name+".retract")
+		retractPath := filepath.Join(publish.DefaultStockpileDir, "configcrates", result.Name+".retract")
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
 			continue
@@ -698,14 +698,14 @@ func handleRetractionPregen(res *publish.Result) {
 		generated++
 	}
 	if generated > 0 {
-		fmt.Printf("\n%s Generated %d retract module(s) in stockpile/modules/\n",
+		fmt.Printf("\n%s Generated %d retract configcrate(s) in stockpile/configcrates/\n",
 			green("✓"), generated)
 	}
 }
 
 func printRetractionResult(result retractAPIResult) {
 	// Write the .retract file to stockpile/modules/.
-	retractPath := filepath.Join(publish.DefaultStockpileDir, "modules", result.Name+".retract")
+	retractPath := filepath.Join(publish.DefaultStockpileDir, "configcrates", result.Name+".retract")
 	if result.RetractYAML != "" {
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
@@ -713,7 +713,7 @@ func printRetractionResult(result retractAPIResult) {
 		}
 	}
 
-	fmt.Printf("%s Module removed: %s%s\n", yellow("⚠"), bold(result.Name), cReset())
+	fmt.Printf("%s Configcrate removed: %s%s\n", yellow("⚠"), bold(result.Name), cReset())
 
 	// Show affected envoys.
 	if len(result.Envoys) > 0 {
@@ -728,7 +728,7 @@ func printRetractionResult(result retractAPIResult) {
 			fmt.Printf("    %s %s %s\n", green("•"), e.Hostname, dim("(last converged "+lastRun+")"))
 		}
 	} else {
-		fmt.Printf("  %s\n", dim("No envoys found with this module in run history."))
+		fmt.Printf("  %s\n", dim("No envoys found with this configcrate in run history."))
 	}
 
 	// Show generated file.
@@ -771,9 +771,9 @@ func printRetractionResult(result retractAPIResult) {
 	fmt.Println("  To retract:")
 	fmt.Printf("    1. Review %s\n", retractPath)
 	fmt.Printf("    2. Rename to %s\n", green(result.Name+"-retract.vgo"))
-	fmt.Printf("    3. Add module %s to the relevant match blocks\n", bold("\""+result.Name+"-retract\""))
+	fmt.Printf("    3. Add configcrate %s to the relevant match blocks\n", bold("\""+result.Name+"-retract\""))
 	fmt.Println("    4. Run: vigocli config publish")
-	fmt.Println("    5. After all envoys converge, remove the module and entry")
+	fmt.Println("    5. After all envoys converge, remove the configcrate and entry")
 	fmt.Println()
 }
 
@@ -799,7 +799,7 @@ func init() {
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
 	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stockpile/)")
-	configPublishCmd.Flags().Bool("no-prune", false, "publish every file in stockpile/ verbatim — skip the reachability prune that drops modules, usercrates, and templates no carrier references")
+	configPublishCmd.Flags().Bool("no-prune", false, "publish every file in stockpile/ verbatim — skip the reachability prune that drops configcrates, usercrates, and templates no carrier references")
 
 	configCmd.AddCommand(configPublishCmd)
 }

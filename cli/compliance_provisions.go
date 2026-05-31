@@ -21,12 +21,12 @@ import (
 // untouched server.
 var complianceProvisionsCmd = &cobra.Command{
 	Use:   "provisions",
-	Short: "List the Vigo-curated provision catalog (module capability tags for compliance attribution)",
-	Long: `List the Vigo-curated provision catalog used by modules' "provides:" field.
+	Short: "List the Vigo-curated provision catalog (configcrate capability tags for compliance attribution)",
+	Long: `List the Vigo-curated provision catalog used by configcrates' "provides:" field.
 
 Each provision is a kebab-case tag (e.g. "time-sync", "audit-trail") that
 the loader expands into framework -> control coverage. Adding "provides:
-[time-sync]" to a module's header replaces a hand-rolled compliance: block
+[time-sync]" to a configcrate's header replaces a hand-rolled compliance: block
 listing the same controls across HIPAA / PCI / NIST / ISO / CIS — the
 cross-walk lives once, in this catalog.
 

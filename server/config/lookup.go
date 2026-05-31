@@ -336,7 +336,7 @@ func ResolveLookupsInConfig(cfg *EnvoyConfig, hostname string, traits map[string
 				continue
 			}
 			if err := ResolveLookupsInAttributes(attrs, hostname, cfg.Tags, traits); err != nil {
-				return fmt.Errorf("module %q resource %q: %w",
+				return fmt.Errorf("configcrate %q resource %q: %w",
 					cfg.Configcrates[mi].Name,
 					cfg.Configcrates[mi].Resources[ri].Name,
 					err)

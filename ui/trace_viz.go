@@ -40,7 +40,7 @@ type InheritanceVizLevel struct {
 // DepNode is a node in the dependency graph (D3).
 type DepNode struct {
 	ID   string `json:"id"`
-	Type string `json:"type"` // "module" or "resource"
+	Type string `json:"type"` // "configcrate" or "resource"
 }
 
 // DepEdge is an edge in the dependency graph (D3).

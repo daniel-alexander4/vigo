@@ -233,7 +233,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 						EnvoyID:   envoyID,
 						Summary:   fmt.Sprintf("%s/%s blocked: %s", result.GetConfigcrateName(), result.GetResourceName(), result.GetErrorMessage()),
 						Details: map[string]any{
-							"module":   result.GetConfigcrateName(),
+							"configcrate": result.GetConfigcrateName(),
 							"resource": result.GetResourceName(),
 							"trace_id": traceID,
 							"error":    result.GetErrorMessage(),

@@ -107,7 +107,7 @@ func LintFleet(files []FleetFile) []Finding {
 			Severity: Warning,
 			RuleID:   "fleet-duplicate-package",
 			Message: fmt.Sprintf(
-				"package %q (state=%q) is managed by %d modules: %s — if multiple modules end up assigned to the same envoy, convergence order is undefined",
+				"package %q (state=%q) is managed by %d configcrates: %s — if multiple configcrates end up assigned to the same envoy, convergence order is undefined",
 				k.pkgName, defaultStr(k.state, "present"), len(owners),
 				renderOriginList(owners),
 			),
@@ -126,7 +126,7 @@ func LintFleet(files []FleetFile) []Finding {
 			Severity: Warning,
 			RuleID:   "fleet-duplicate-file",
 			Message: fmt.Sprintf(
-				"target_path %q is written by %d modules: %s — if multiple modules end up assigned to the same envoy, convergence order is undefined and the on-disk content is whichever wrote last",
+				"target_path %q is written by %d modules: %s — if multiple configcrates end up assigned to the same envoy, convergence order is undefined and the on-disk content is whichever wrote last",
 				k.targetPath, len(owners), renderOriginList(owners),
 			),
 		})

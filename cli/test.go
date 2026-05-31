@@ -23,7 +23,7 @@ var testCmd = &cobra.Command{
 	Long: `Validate .vgo config files against expected outcomes using test definitions.
 
 Test files (*.test.vgo) declare a hostname, optional mock traits, and
-expected resources/modules. The test runner loads the full config tree,
+expected resources/configcrates. The test runner loads the full config tree,
 resolves config as if the hostname checked in, and verifies the result
 matches expectations.
 
@@ -225,7 +225,7 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 	}
 	for _, want := range td.Expect.Configcrates {
 		if !moduleNames[want] {
-			failures = append(failures, fmt.Sprintf("module %q not found (have: %s)", want, joinKeys(moduleNames)))
+			failures = append(failures, fmt.Sprintf("configcrate %q not found (have: %s)", want, joinKeys(moduleNames)))
 		}
 	}
 
@@ -303,7 +303,7 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 	}
 
 	if verbose && len(failures) == 0 {
-		fmt.Printf("           envoy=%s modules=%d resources=%d vars=%d\n",
+		fmt.Printf("           envoy=%s configcrates=%d resources=%d vars=%d\n",
 			td.Envoy, len(cfg.Configcrates), totalResources, len(cfg.Vars))
 	}
 

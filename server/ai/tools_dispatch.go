@@ -66,9 +66,9 @@ func (d *toolDeps) dispatchTool(ctx context.Context, name, argsJSON string) (str
 		return d.queryInventory(ctx, args)
 	case "list_package_drift":
 		return d.listPackageDrift(ctx, args)
-	case "get_module_definition":
+	case "get_configcrate_definition":
 		return d.getConfigcrateDefinition(args)
-	case "list_modules":
+	case "list_configcrates":
 		return d.listModules()
 	case "list_roles":
 		return d.listRoles()
@@ -499,10 +499,10 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 	}
 	// Reject path traversal attempts.
 	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
-		return "", fmt.Errorf("invalid module name %q", name)
+		return "", fmt.Errorf("invalid configcrate name %q", name)
 	}
 
-	modulesDir := filepath.Join(d.configStore.Dir(), "modules")
+	modulesDir := filepath.Join(d.configStore.Dir(), "configcrates")
 	var found string
 	for _, ext := range []string{".vgo", ".yaml", ".yml"} {
 		candidate := filepath.Join(modulesDir, name+ext)
@@ -531,7 +531,7 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 	}
 
 	if found == "" {
-		return "", fmt.Errorf("module %q not found", name)
+		return "", fmt.Errorf("configcrate %q not found", name)
 	}
 
 	data, err := os.ReadFile(found)

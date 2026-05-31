@@ -477,7 +477,7 @@ func (p *pagerdutyTarget) Dispatch(ctx context.Context, e Event) error {
 func pagerdutyDedupKey(e Event) string {
 	// For resource.blocked events, group by error class (not per-envoy).
 	if e.Name == "resource.blocked" {
-		module, _ := e.Details["module"].(string)
+		module, _ := e.Details["configcrate"].(string)
 		resource, _ := e.Details["resource"].(string)
 		return fmt.Sprintf("vigo:%s:%s:%s", e.Name, module, resource)
 	}

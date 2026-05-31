@@ -284,7 +284,7 @@ func validateCrossReferences(mod Configcrate) []Finding {
 			if !names[ref] {
 				f := base
 				f.Severity = SeverityWarning
-				f.Message = fmt.Sprintf("depends_on references unknown resource %q (may resolve cross-module at publish)", ref)
+				f.Message = fmt.Sprintf("depends_on references unknown resource %q (may resolve cross-configcrate at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {
@@ -299,7 +299,7 @@ func validateCrossReferences(mod Configcrate) []Finding {
 			if !names[ref] {
 				f := base
 				f.Severity = SeverityWarning
-				f.Message = fmt.Sprintf("before references unknown resource %q (may resolve cross-module at publish)", ref)
+				f.Message = fmt.Sprintf("before references unknown resource %q (may resolve cross-configcrate at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {
@@ -314,7 +314,7 @@ func validateCrossReferences(mod Configcrate) []Finding {
 			if !names[ref] {
 				f := base
 				f.Severity = SeverityWarning
-				f.Message = fmt.Sprintf("notify references unknown resource %q (may resolve cross-module at publish)", ref)
+				f.Message = fmt.Sprintf("notify references unknown resource %q (may resolve cross-configcrate at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {
@@ -329,7 +329,7 @@ func validateCrossReferences(mod Configcrate) []Finding {
 			if !names[ref] {
 				f := base
 				f.Severity = SeverityWarning
-				f.Message = fmt.Sprintf("subscribes references unknown resource %q (may resolve cross-module at publish)", ref)
+				f.Message = fmt.Sprintf("subscribes references unknown resource %q (may resolve cross-configcrate at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {

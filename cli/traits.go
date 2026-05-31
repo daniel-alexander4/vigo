@@ -20,7 +20,7 @@ var traitsSearchCmd = &cobra.Command{
 	Long: `Search all known trait dot-paths for a keyword match.
 Matches against both key names and sample values. Use this to find
 the correct trait path for .Traits references in templates or
-when: expressions in modules.
+when: expressions in configcrates.
 
 Examples:
   vigocli traits search version

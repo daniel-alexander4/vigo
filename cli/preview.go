@@ -72,7 +72,7 @@ func previewNode(idOrHostname string) error {
 	}
 
 	w := newAlignedTable(os.Stdout)
-	fmt.Fprintf(w, "MODULE\tTYPE\tRESOURCE\tACTION\n")
+	fmt.Fprintf(w, "CONFIGCRATE\tTYPE\tRESOURCE\tACTION\n")
 	for _, a := range resp.Actions {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 			a.ConfigcrateName, a.ResourceType, a.ResourceName, colorAction(a.PlannedAction))

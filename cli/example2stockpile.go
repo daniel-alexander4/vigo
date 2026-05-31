@@ -19,17 +19,17 @@ const defaultExampleDir = "/srv/vigo/stacks/examples"
 
 var configExamplesCmd = &cobra.Command{
 	Use:   "examples",
-	Short: "Browse, copy, and organize example modules",
+	Short: "Browse, copy, and organize example configcrates",
 }
 
 var examplesCopyCmd = &cobra.Command{
-	Use:   "copy <module-name|directory-name|all>",
-	Short: "Copy example modules into stockpile for publishing",
+	Use:   "copy <configcrate-name|directory-name|all>",
+	Short: "Copy example configcrates into stockpile for publishing",
 	Long: `Copy example .vgo files from stacks/examples/ into stacks/stockpile/,
 preserving directory structure and stripping the .example suffix.
 
-Accepts a module name (copies one file) or a directory name (copies all
-modules in that directory). Use "all" to copy every available example.
+Accepts a configcrate name (copies one file) or a directory name (copies all
+configcrates in that directory). Use "all" to copy every available example.
 
 Examples:
   vigocli config examples copy nginx
@@ -50,7 +50,7 @@ Examples:
 
 var examplesListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "Show available example modules and retract templates",
+	Short: "Show available example configcrates and retract templates",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		exampleDir, _ := cmd.Flags().GetString("example-dir")
@@ -134,7 +134,7 @@ func runCopyOne(name, stockpileDir string, exampleDirs ...string) error {
 	if len(matches) == 0 {
 		for _, ex := range examples {
 			dir := filepath.Dir(ex.rel)
-			// Match against any path component: "cis-ubuntu" matches "modules/compliance/cis-ubuntu/"
+			// Match against any path component: "cis-ubuntu" matches "configcrates/compliance/cis-ubuntu/"
 			if filepath.Base(dir) == name || strings.Contains(dir, "/"+name+"/") || strings.HasPrefix(dir, name+"/") || dir == name {
 				matches = append(matches, ex)
 			}
@@ -209,18 +209,18 @@ func runOrganize(stockpileDir string, exampleDirs ...string) error {
 		return err
 	}
 
-	examplePaths := make(map[string]string) // "ssh-hardening" → "modules/system/ssh-hardening.vgo"
+	examplePaths := make(map[string]string) // "ssh-hardening" → "configcrates/system/ssh-hardening.vgo"
 	for _, ex := range examples {
 		name := strings.TrimSuffix(filepath.Base(ex.rel), ".vgo.example")
 		destRel := strings.TrimSuffix(ex.rel, ".example")
 		examplePaths[name] = destRel
 	}
 
-	modulesDir := filepath.Join(stockpileDir, "modules")
+	modulesDir := filepath.Join(stockpileDir, "configcrates")
 	entries, err := os.ReadDir(modulesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Println("No modules directory found.")
+			fmt.Println("No configcrates directory found.")
 			return nil
 		}
 		return err
@@ -238,13 +238,13 @@ func runOrganize(stockpileDir string, exampleDirs ...string) error {
 			continue
 		}
 
-		currentRel := filepath.Join("modules", entry.Name())
+		currentRel := filepath.Join("configcrates", entry.Name())
 		if currentRel == exDest {
 			continue
 		}
 
 		exDir := filepath.Dir(exDest)
-		if exDir == "modules" {
+		if exDir == "configcrates" {
 			continue
 		}
 
@@ -267,9 +267,9 @@ func runOrganize(stockpileDir string, exampleDirs ...string) error {
 	}
 
 	if moved == 0 {
-		fmt.Println("All modules are already properly organized.")
+		fmt.Println("All configcrates are already properly organized.")
 	} else {
-		fmt.Printf("\n%d module(s) moved. Run 'vigocli config publish' to sync.\n", moved)
+		fmt.Printf("\n%d configcrate(s) moved. Run 'vigocli config publish' to sync.\n", moved)
 	}
 	return nil
 }
@@ -277,7 +277,7 @@ func runOrganize(stockpileDir string, exampleDirs ...string) error {
 // exampleFile represents a discovered .vgo.example file.
 type exampleFile struct {
 	abs string // absolute path
-	rel string // relative to example dir (e.g., "modules/system/ssh-hardening.vgo.example")
+	rel string // relative to example dir (e.g., "configcrates/system/ssh-hardening.vgo.example")
 }
 
 // findExamples walks one or more *.vgo.example trees and returns a unified

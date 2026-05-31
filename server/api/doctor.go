@@ -284,7 +284,7 @@ func (h *DoctorHandler) checkConfig() DoctorCheck {
 	if err := h.configStore.LastReloadError(); err != nil {
 		// IdempotencyErrors at startup leave the store empty with the
 		// error stashed in lastReloadErr. Without this, an empty store
-		// would surface as a "no modules loaded" WARN with no hint that
+		// would surface as a "no configcrates loaded" WARN with no hint that
 		// reload actually failed.
 		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusFail, Message: "reload failed: " + err.Error()}
 	}
@@ -292,7 +292,7 @@ func (h *DoctorHandler) checkConfig() DoctorCheck {
 	msg := fmt.Sprintf("%d modules, %d entries", stats.Configcrates, stats.Entries)
 
 	if stats.Configcrates == 0 {
-		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusWarn, Message: "no modules loaded"}
+		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusWarn, Message: "no configcrates loaded"}
 	}
 	return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusPass, Message: msg}
 }

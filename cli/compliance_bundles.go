@@ -16,13 +16,13 @@ import (
 
 // vigocli compliance bundles — lists the Vigo-curated framework-bundle
 // catalog. Bundles are the sibling concept to provisions: provisions
-// name what a module *does* (functional, cross-framework); bundles
-// name *which framework section* a module satisfies. Two catalogs, two
+// name what a configcrate *does* (functional, cross-framework); bundles
+// name *which framework section* a configcrate satisfies. Two catalogs, two
 // CLI verbs, two operator mental models.
 var complianceBundlesCmd = &cobra.Command{
 	Use:   "bundles",
-	Short: "List the Vigo-curated framework-bundle catalog (module bundle: tags for framework-scope-cut attribution)",
-	Long: `List the Vigo-curated framework-bundle catalog used by modules' "bundle:" field.
+	Short: "List the Vigo-curated framework-bundle catalog (configcrate bundle: tags for framework-scope-cut attribution)",
+	Long: `List the Vigo-curated framework-bundle catalog used by configcrates' "bundle:" field.
 
 Each bundle is a kebab-case tag tied to a specific framework section
 (e.g. "cis-ubuntu-access-baseline", "ce-firewalls", "aba-audit-logging")

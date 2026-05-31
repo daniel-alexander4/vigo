@@ -10,8 +10,8 @@ import (
 )
 
 var envPromoteCmd = &cobra.Command{
-	Use:   "promote <module>",
-	Short: "Copy a module's environment_overrides from one tier to another",
+	Use:   "promote <configcrate>",
+	Short: "Copy a configcrate's environment_overrides from one tier to another",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		from, _ := cmd.Flags().GetString("from")

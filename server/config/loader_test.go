@@ -3515,7 +3515,7 @@ envoys:
 	foundResNotify := false
 	foundResDep := false
 	for _, d := range trace.Dependencies {
-		if d.From == "nginx" && d.To == "sshd" && d.Type == "depends_on" && d.Level == "module" {
+		if d.From == "nginx" && d.To == "sshd" && d.Type == "depends_on" && d.Level == "configcrate" {
 			foundModDep = true
 		}
 		if d.From == "nginx/nginx-config" && d.To == "nginx/nginx-service" && d.Type == "notify" {
@@ -3931,21 +3931,21 @@ envoys:
 	}{
 		{
 			name:        "module direct on entry",
-			subject:     "module",
+			subject:     "configcrate",
 			value:       "nginx",
 			wantHosts:   []string{"web01.example.com"},
 			wantCarrier: "envoys.vgo",
 		},
 		{
 			name:        "module inherited via common.vgo",
-			subject:     "module",
+			subject:     "configcrate",
 			value:       "tlsbase",
 			wantHosts:   []string{"web01.example.com"},
 			wantCarrier: "common.vgo",
 		},
 		{
 			name:        "module pulled in by role",
-			subject:     "module",
+			subject:     "configcrate",
 			value:       "chrony",
 			wantHosts:   []string{"web01.example.com"},
 			wantCarrier: "role:webserver",
@@ -3959,7 +3959,7 @@ envoys:
 		},
 		{
 			name:            "include-tree surfaces unmatched pattern",
-			subject:         "module",
+			subject:         "configcrate",
 			value:           "nginx",
 			includeTree:     true,
 			wantHosts:       []string{"web01.example.com"},
@@ -3968,7 +3968,7 @@ envoys:
 		},
 		{
 			name:    "module not present anywhere returns empty",
-			subject: "module",
+			subject: "configcrate",
 			value:   "nonexistent",
 		},
 		{

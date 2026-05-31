@@ -21,13 +21,13 @@ var configStockpileCmd = &cobra.Command{
 
 var stockpileOrganizeCmd = &cobra.Command{
 	Use:   "organize",
-	Short: "Move flat modules into proper subdirectories based on example layout",
-	Long: `Scans stockpile/modules/ for .vgo files at the top level and moves them
-into the subdirectory structure used by the example modules.
+	Short: "Move flat configcrates into proper subdirectories based on example layout",
+	Long: `Scans stockpile/configcrates/ for .vgo files at the top level and moves them
+into the subdirectory structure used by the example configcrates.
 
-For example, if stockpile/modules/ssh-hardening.vgo exists and the example
-layout has modules/system/ssh-hardening.vgo.example, the file is moved to
-stockpile/modules/system/ssh-hardening.vgo.`,
+For example, if stockpile/configcrates/ssh-hardening.vgo exists and the example
+layout has configcrates/system/ssh-hardening.vgo.example, the file is moved to
+stockpile/configcrates/system/ssh-hardening.vgo.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		exampleDir, _ := cmd.Flags().GetString("example-dir")
@@ -37,9 +37,9 @@ stockpile/modules/system/ssh-hardening.vgo.`,
 
 var stockpileSearchCmd = &cobra.Command{
 	Use:   "search <query>",
-	Short: "Search modules in the stockpile by name, resource, or content",
-	Long: `Search stockpile/modules/ for .vgo files matching a query string.
-Matches against module name, description, resource names, resource types,
+	Short: "Search configcrates in the stockpile by name, resource, or content",
+	Long: `Search stockpile/configcrates/ for .vgo files matching a query string.
+Matches against configcrate name, description, resource names, resource types,
 and attribute values (target_path, package, service, command, etc.).
 
 Examples:
@@ -64,7 +64,7 @@ type stockpileModule struct {
 }
 
 func runStockpileSearch(query, stockpileDir string) error {
-	modulesDir := filepath.Join(stockpileDir, "modules")
+	modulesDir := filepath.Join(stockpileDir, "configcrates")
 	query = strings.ToLower(query)
 
 	var results []searchResult
@@ -90,11 +90,11 @@ func runStockpileSearch(query, stockpileDir string) error {
 	}
 
 	if len(results) == 0 {
-		fmt.Printf("No modules matching %q in stockpile.\n", query)
+		fmt.Printf("No configcrates matching %q in stockpile.\n", query)
 		return nil
 	}
 
-	fmt.Printf("Found %d module(s) matching %q:\n\n", len(results), query)
+	fmt.Printf("Found %d configcrate(s) matching %q:\n\n", len(results), query)
 	for _, r := range results {
 		fmt.Printf("  %s\n", green(r.path))
 		for _, m := range r.matches {

@@ -126,11 +126,11 @@ func buildPolicyConfigcrate(mod config.Configcrate, seEnabled bool, seAllowed []
 			if seVal, ok := attrs["stream_edit"]; ok {
 				if !seEnabled {
 					slog.Warn("stream_edit disabled, stripping attribute",
-						"module", mod.Name, "resource", res.Name)
+						"configcrate", mod.Name, "resource", res.Name)
 					delete(attrs, "stream_edit")
 				} else if !streamEditPathsAllowed(seVal, seAllowed) {
 					slog.Warn("stream_edit script outside allowed paths, stripping attribute",
-						"module", mod.Name, "resource", res.Name,
+						"configcrate", mod.Name, "resource", res.Name,
 						"allowed_paths", seAllowed)
 					delete(attrs, "stream_edit")
 				}

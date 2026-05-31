@@ -241,8 +241,8 @@ func TestConfigTrace_InverseModule(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if result.Subject != "module" || result.Value != "nginx" {
-		t.Errorf("expected subject=module value=nginx, got %s/%s", result.Subject, result.Value)
+	if result.Subject != "configcrate" || result.Value != "nginx" {
+		t.Errorf("expected subject=configcrate value=nginx, got %s/%s", result.Subject, result.Value)
 	}
 }
 

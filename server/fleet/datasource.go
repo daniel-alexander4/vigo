@@ -513,7 +513,7 @@ func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observ
 	put("role", roleFilter)
 	put("os", osFilter)
 	put("arch", archFilter)
-	put("module", moduleFilter)
+	put("configcrate", moduleFilter)
 	put("compliance", complianceFilter)
 
 	specs := []FilterAxisSpec{
@@ -554,7 +554,7 @@ func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observ
 		{Key: "role", Label: "Role", Selected: roleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Roles }},
 		{Key: "os", Label: "OS", Selected: osFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.OS) }},
 		{Key: "arch", Label: "Arch", Selected: archFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.Arch) }},
-		{Key: "module", Label: "Module", Selected: moduleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Configcrates }},
+		{Key: "configcrate", Label: "Configcrate", Selected: moduleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Configcrates }},
 		{Key: "compliance", Label: "Compliance", Selected: complianceFilter, Extract: func(r ui.EnvoyRow) []string { return r.ComplianceFrameworks }},
 	}
 

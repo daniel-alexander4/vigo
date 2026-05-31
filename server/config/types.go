@@ -1487,7 +1487,7 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 		case "exclude_modules":
 			return fmt.Errorf("`exclude_modules:` was renamed to `exclude_configcrates:` — update the match block (see docs/reference/writing-configcrates.md)")
 		case "exclude_usercrates":
-			return fmt.Errorf("`exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-modules.md)")
+			return fmt.Errorf("`exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-configcrates.md)")
 		case "exclude_resources":
 			if err := val.Decode(&n.ExcludeResources); err != nil {
 				return fmt.Errorf("decoding exclude_resources: %w", err)

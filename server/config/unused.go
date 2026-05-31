@@ -12,7 +12,7 @@ import (
 // UnusedModule describes a module defined but never referenced.
 type UnusedModule struct {
 	Name       string `json:"name"`
-	SourceFile string `json:"source_file"` // stockpile-relative path, e.g. "modules/system/cleanup.vgo"
+	SourceFile string `json:"source_file"` // stockpile-relative path, e.g. "configcrates/system/cleanup.vgo"
 }
 
 // UnusedUsercrate describes a usercrate defined but never referenced.

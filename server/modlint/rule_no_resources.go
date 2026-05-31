@@ -44,7 +44,7 @@ func (noResourcesRule) apply(mod *module, _ Options) []Finding {
 		Line:     mod.Line,
 		Column:   mod.Column,
 		RuleID:   "no-resources",
-		Message:  "module has no resources",
+		Message:  "configcrate has no resources",
 	}}
 }
 

@@ -603,7 +603,7 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 	}
 
 	recordAudit(r.Context(), h.auditWriter, "config.retract", actorFromRequest(r), "rest",
-		fmt.Sprintf("generated retract modules for: %s", strings.Join(moduleNames, ", ")), "")
+		fmt.Sprintf("generated retract configcrates for: %s", strings.Join(moduleNames, ", ")), "")
 
 	writeJSON(w, r, http.StatusOK, retractResponse{
 		Enabled: true,
@@ -659,7 +659,7 @@ func (h *ConfigHandler) aiEnhanceRetract(ctx context.Context, name, original, dr
 		return ""
 	}
 
-	prompt := fmt.Sprintf(`You are reviewing an auto-generated retract module for the Vigo configuration management system.
+	prompt := fmt.Sprintf(`You are reviewing an auto-generated retract configcrate for the Vigo configuration management system.
 
 ORIGINAL MODULE (being removed):
 %s

@@ -21,7 +21,7 @@ import (
 type RetractedModule struct {
 	// OriginalName is the module name that was removed (e.g., "nginx").
 	OriginalName string
-	// RelPath is the relative path in the config tree (e.g., "modules/nginx.vgo").
+	// RelPath is the relative path in the config tree (e.g., "configcrates/nginx.vgo").
 	RelPath string
 	// RetractYAML is the generated retract module content.
 	RetractYAML string
@@ -109,11 +109,11 @@ func readModuleContent(baseDir string, relPaths []string) map[string][]byte {
 func GenerateRetractModule(name string, content []byte) (string, []RetractWarning, error) {
 	var mod retractConfigcrate
 	if err := yaml.Unmarshal(content, &mod); err != nil {
-		return "", nil, fmt.Errorf("parsing module %s: %w", name, err)
+		return "", nil, fmt.Errorf("parsing configcrate %s: %w", name, err)
 	}
 
 	if len(mod.Resources) == 0 {
-		return "", nil, fmt.Errorf("module %s has no resources", name)
+		return "", nil, fmt.Errorf("configcrate %s has no resources", name)
 	}
 
 	var warnings []RetractWarning
@@ -133,18 +133,18 @@ func GenerateRetractModule(name string, content []byte) (string, []RetractWarnin
 	}
 
 	if len(reversed) == 0 {
-		return "", warnings, fmt.Errorf("module %s: no resources could be reversed", name)
+		return "", warnings, fmt.Errorf("configcrate %s: no resources could be reversed", name)
 	}
 
 	retractMod := retractConfigcrate{
 		Name:        name + "-retract",
-		Description: fmt.Sprintf("Auto-generated retract module for %s. Review before activating.", name),
+		Description: fmt.Sprintf("Auto-generated retract configcrate for %s. Review before activating.", name),
 		Resources:   reversed,
 	}
 
 	out, err := yaml.Marshal(&retractMod)
 	if err != nil {
-		return "", warnings, fmt.Errorf("marshaling retract module: %w", err)
+		return "", warnings, fmt.Errorf("marshaling retract configcrate: %w", err)
 	}
 
 	// Run through modlint for validation and normalization.

@@ -33,7 +33,7 @@ files for review).
 Examples:
   vigocli ask "how many envoys do I have?"
   vigocli ask --envoy web-03 "why is it failing?"
-  vigocli ask "write a module for nginx with TLS"
+  vigocli ask "write a configcrate for nginx with TLS"
   vigocli ask < module.vgo`,
 	RunE: runAsk,
 }

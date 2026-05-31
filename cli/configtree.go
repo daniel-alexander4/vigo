@@ -13,7 +13,7 @@ import (
 var configTreeCmd = &cobra.Command{
 	Use:   "tree",
 	Short: "Show the config directory inheritance tree",
-	Long:  "Displays the directory hierarchy with inherited modules, roles, and match patterns at each level.",
+	Long:  "Displays the directory hierarchy with inherited configcrates, roles, and match patterns at each level.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 

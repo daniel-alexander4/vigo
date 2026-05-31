@@ -200,7 +200,7 @@ type resolvedEntry struct {
 }
 
 // ConfigStore loads, watches, and provides per-envoy configuration.
-// The base dir contains modules/ and templates/ subdirectories plus
+// The base dir contains configcrates/ and templates/ subdirectories plus
 // .vgo/.yaml config files organized in a directory hierarchy for
 // cascading inheritance. Secret references are resolved via a
 // secrets.Provider. Reload triggered by config publish via REST endpoint.
@@ -353,7 +353,7 @@ func (cs *ConfigStore) ApprovedSources() []string {
 }
 
 // NewConfigStore creates a ConfigStore that scans baseDir for envoy
-// config files (.vgo or .yaml), module definitions from baseDir/modules/,
+// config files (.vgo or .yaml), module definitions from baseDir/configcrates/,
 // and role definitions from baseDir/roles/. Secret references are resolved
 // using the given provider.
 //
@@ -783,7 +783,7 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 	// the filtered module.
 	out.ConfigcrateComplianceFiles = nil
 	for _, mcf := range t.ConfigcrateComplianceFiles {
-		for _, covered := range mcf.CoveredModules {
+		for _, covered := range mcf.CoveredConfigcrates {
 			if covered == module {
 				out.ConfigcrateComplianceFiles = append(out.ConfigcrateComplianceFiles, mcf)
 				break
@@ -836,23 +836,23 @@ type RoleTraceEntry struct {
 type VarSourceEntry struct {
 	Key    string `json:"key"`
 	Value  any    `json:"value"`
-	Source string `json:"source"` // "module:<name>", "inline"
+	Source string `json:"source"` // "configcrate:<name>", "inline"
 }
 
 // SecretTraceEntry tracks a secret: reference in the resolved config.
 type SecretTraceEntry struct {
 	Key    string `json:"key"`    // var name or resource attribute path
 	Path   string `json:"path"`   // the secret path (e.g., "vigo/db/dsn") — never the resolved value
-	Source string `json:"source"` // "var", "resource:<module>/<resource>/<attr>", "credential"
+	Source string `json:"source"` // "var", "resource:<configcrate>/<resource>/<attr>", "credential"
 	Configcrate string `json:"configcrate"` // module that introduced it (empty for envoy-level vars)
 }
 
-// DependencyTraceEntry tracks a dependency relationship between modules/resources.
+// DependencyTraceEntry tracks a dependency relationship between configcrates/resources.
 type DependencyTraceEntry struct {
 	From  string `json:"from"`  // source module or module/resource
 	To    string `json:"to"`    // target module or module/resource
 	Type  string `json:"type"`  // "depends_on", "before", "notify", "subscribes", "watch_secret"
-	Level string `json:"level"` // "module" or "resource"
+	Level string `json:"level"` // "configcrate" or "resource"
 }
 
 // ComplianceTraceEntry tracks compliance framework tags on a resolved
@@ -902,7 +902,7 @@ type EnvoyWaiverTraceEntry struct {
 type ConfigcrateComplianceFileEntry struct {
 	SourceFile     string              `json:"source_file"`
 	Compliance     map[string][]string `json:"compliance"`
-	CoveredModules []string            `json:"covered_modules,omitempty"`
+	CoveredConfigcrates []string            `json:"covered_configcrates,omitempty"`
 }
 
 // ConditionalTraceEntry tracks a when: expression on a module or resource.
@@ -1185,7 +1185,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			trace.ConfigcrateComplianceFiles = append(trace.ConfigcrateComplianceFiles, ConfigcrateComplianceFileEntry{
 				SourceFile:     src.RelPath,
 				Compliance:     src.Compliance,
-				CoveredModules: covered,
+				CoveredConfigcrates: covered,
 			})
 		}
 	}
@@ -1214,7 +1214,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			seen[ref.Name] = true
 			if def, ok := cs.moduleDefs[ref.Name]; ok {
 				for k := range def.Vars {
-					varSource[k] = "module:" + ref.Name
+					varSource[k] = "configcrate:" + ref.Name
 				}
 			}
 		}
@@ -1226,7 +1226,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		seen[ref.Name] = true
 		if def, ok := cs.moduleDefs[ref.Name]; ok {
 			for k := range def.Vars {
-				varSource[k] = "module:" + ref.Name
+				varSource[k] = "configcrate:" + ref.Name
 			}
 		}
 	}
@@ -1318,14 +1318,14 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		// Configcrate-level depends_on.
 		for _, dep := range mod.DependsOn {
 			trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
-				From: mod.Name, To: dep, Type: "depends_on", Level: "module",
+				From: mod.Name, To: dep, Type: "depends_on", Level: "configcrate",
 			})
 		}
 		// Configcrate-level before (from definition).
 		if def, ok := cs.moduleDefs[mod.Name]; ok {
 			for _, before := range def.Before {
 				trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
-					From: mod.Name, To: before, Type: "before", Level: "module",
+					From: mod.Name, To: before, Type: "before", Level: "configcrate",
 				})
 			}
 		}
@@ -1619,7 +1619,7 @@ func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string 
 // Lower values come first: module defaults (trunk) → inline (leaf).
 func varSourcePriority(source string) int {
 	switch {
-	case strings.HasPrefix(source, "module:"):
+	case strings.HasPrefix(source, "configcrate:"):
 		return 0
 	case source == "inline":
 		return 1
@@ -1993,7 +1993,7 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 			Excluded: entry.ExcludeConfigcrates,
 		}
 
-		// Own modules/roles (before inheritance).
+		// Own configcrates/roles (before inheritance).
 		for _, ref := range entry.Configcrates {
 			se.OwnConfigcrates = append(se.OwnConfigcrates, ref.Name)
 		}
@@ -2061,7 +2061,7 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 // lists config-tree patterns that reference the subject but match no
 // currently-enrolled envoy.
 type InverseTraceResult struct {
-	Subject     string              `json:"subject"` // "module" or "usercrate"
+	Subject     string              `json:"subject"` // "configcrate" or "usercrate"
 	Value       string              `json:"value"`   // the subject name being looked up
 	IncludeTree bool                `json:"include_tree"`
 	Envoys      []InverseEnvoyEntry `json:"envoys"`              // enrolled envoys whose resolved config includes the subject
@@ -2102,7 +2102,7 @@ type InverseEnvoyRef struct {
 // includeTree is true, also lists envoyEntries patterns that reference the
 // subject but match no enrolled envoy.
 //
-// subject must be "module" or "usercrate"; any other value returns an empty
+// subject must be "configcrate" or "usercrate"; any other value returns an empty
 // result.
 func (cs *ConfigStore) TraceInverse(subject, value string, includeTree bool, envoys []InverseEnvoyRef) *InverseTraceResult {
 	result := &InverseTraceResult{
@@ -2111,7 +2111,7 @@ func (cs *ConfigStore) TraceInverse(subject, value string, includeTree bool, env
 		IncludeTree: includeTree,
 		Envoys:      []InverseEnvoyEntry{},
 	}
-	if value == "" || (subject != "module" && subject != "usercrate") {
+	if value == "" || (subject != "configcrate" && subject != "usercrate") {
 		return result
 	}
 
@@ -2174,7 +2174,7 @@ func (cs *ConfigStore) TraceInverse(subject, value string, includeTree bool, env
 // name shape.
 func traceCarrierFor(trace *ConfigTrace, subject, value string) (string, bool) {
 	switch subject {
-	case "module":
+	case "configcrate":
 		for _, m := range trace.Configcrates {
 			if m == value {
 				if src, ok := trace.ConfigcrateSources[value]; ok {
@@ -2223,7 +2223,7 @@ func (cs *ConfigStore) inverseTreeCarrier(entry *EnvoyEntry, subject, value stri
 	}
 
 	switch subject {
-	case "module":
+	case "configcrate":
 		for _, ref := range entry.OwnConfigcrates {
 			if ref.Name == value {
 				return leafSrc
@@ -2375,7 +2375,7 @@ func globContains(pattern, query string) bool {
 }
 
 // contentDir returns the directory the loader treats as the content root.
-// Holds every config primitive directly at the top level: modules/,
+// Holds every config primitive directly at the top level: configcrates/,
 // usercrates/, templates/, tasks/, workflows/, plus the assignment-tree
 // files (roles.vgo, envoys.vgo hostcrates, common.vgo, waivers.vgo,
 // environments.vgo) and directory-inherited compliance.vgo claim files.
@@ -2385,7 +2385,7 @@ func globContains(pattern, query string) bool {
 func (cs *ConfigStore) contentDir() string { return cs.dir }
 
 // configcratesDir returns the path to the configcrates directory (named "configcrates" on
-// disk; YAML keys and Go identifiers retain "module" for industry-standard
+// disk; YAML keys and Go identifiers retain "configcrate" for industry-standard
 // recognition).
 func (cs *ConfigStore) configcratesDir() string { return filepath.Join(cs.dir, "configcrates") }
 
@@ -2428,7 +2428,7 @@ func (cs *ConfigStore) loadAllInner() error {
 
 	moduleDefs, err := loadConfigcrateDefs(cs.configcratesDir(), cs.dangerous)
 	if err != nil {
-		return fmt.Errorf("loading modules: %w", err)
+		return fmt.Errorf("loading configcrates: %w", err)
 	}
 
 	if err := resolveSourceFiles(moduleDefs, cs.contentDir()); err != nil {
@@ -2446,7 +2446,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 	for name, def := range usercrateDefs {
 		if existing, clash := moduleDefs[name]; clash {
-			return fmt.Errorf("name collision between module and usercrate %q: module at %s, usercrate at %s — module and usercrate names share one namespace; rename one",
+			return fmt.Errorf("name collision between configcrate and usercrate %q: configcrate at %s, usercrate at %s — configcrate and usercrate names share one namespace; rename one",
 				name, existing.SourceFile, def.SourceFile)
 		}
 		moduleDefs[name] = def
@@ -2454,7 +2454,7 @@ func (cs *ConfigStore) loadAllInner() error {
 
 	// Walk the stockpile subtree for compliance.vgo files and union their
 	// claims into each module's effective Compliance block. One walk covers
-	// the whole tree — modules/, usercrates/, and the rest — so usercrate
+	// the whole tree — configcrates/, usercrates/, and the rest — so usercrate
 	// defs receive claim inheritance through the same byDir the module defs
 	// use: their SourceFile dir (e.g. "usercrates" or "customerA/usercrates")
 	// is just another key.
@@ -2492,7 +2492,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	for _, role := range roleDefs {
 		for _, ref := range role.Configcrates {
 			if _, ok := moduleDefs[ref.Name]; !ok {
-				return fmt.Errorf("role %q references module %q which does not exist%s",
+				return fmt.Errorf("role %q references configcrate %q which does not exist%s",
 					role.Name, ref.Name,
 					notFoundHint(ref.Name, moduleCandidates(moduleDefs), "add a module definition to modules/"))
 			}
@@ -2504,7 +2504,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		return err
 	}
 
-	// Apply directory inheritance: prepend inherited modules/roles/vars
+	// Apply directory inheritance: prepend inherited configcrates/roles/vars
 	// from common.vgo files in ancestor directories. Usercrates auto-apply
 	// from any usercrates/ subdir in the entry's ancestor chain.
 	for i := range envoyEntries {
@@ -2878,7 +2878,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 			modName = ref.Name
 			expanded, rerr := expandModuleInstanceResources(resources, ref.EachItem, ref.InstanceKey)
 			if rerr != nil {
-				return nil, fmt.Errorf("module %q instance [%s]: %w", ref.BaseName, ref.InstanceKey, rerr)
+				return nil, fmt.Errorf("configcrate %q instance [%s]: %w", ref.BaseName, ref.InstanceKey, rerr)
 			}
 			resources = expanded
 		}
@@ -2930,21 +2930,21 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 			idxs, ok := modulesByBase[target]
 			if !ok {
 				// Distinguish three cases for a more actionable error:
-				//  1. Target module does not exist anywhere in modules/
+				//  1. Target module does not exist anywhere in configcrates/
 				//  2. Target exists but is explicitly excluded via exclude_modules:
 				//  3. Target exists but is simply not in this envoy's modules: list
 				if _, defined := moduleDefs[target]; !defined {
-					return nil, fmt.Errorf("module %q has before: [%s] but module %q does not exist%s",
+					return nil, fmt.Errorf("configcrate %q has before: [%s] but configcrate %q does not exist%s",
 						mod.Name, target, target,
 						notFoundHint(target, moduleCandidates(moduleDefs), "add a module definition to modules/"))
 				}
 				for _, ex := range entry.ExcludeConfigcrates {
 					if ex == target {
-						return nil, fmt.Errorf("module %q has before: [%s] but module %q is listed in exclude_modules: for this envoy — remove the exclusion or drop the before: reference",
+						return nil, fmt.Errorf("configcrate %q has before: [%s] but configcrate %q is listed in exclude_configcrates: for this envoy — remove the exclusion or drop the before: reference",
 							mod.Name, target, target)
 					}
 				}
-				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this envoy — add it to the envoy's modules: list (directly or via a role) or drop the before: reference",
+				return nil, fmt.Errorf("configcrate %q has before: [%s] but configcrate %q is not assigned to this envoy — add it to the envoy's configcrates: list (directly or via a role) or drop the before: reference",
 					mod.Name, target, target)
 			}
 			for _, idx := range idxs {
@@ -3307,13 +3307,13 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDefinition, error) {
 	paths, err := walkConfigFiles(dir)
 	if err != nil {
-		return nil, fmt.Errorf("reading modules dir: %w", err)
+		return nil, fmt.Errorf("reading configcrates dir: %w", err)
 	}
 
 	defs := make(map[string]*ConfigcrateDefinition)
 	var idempErrs []IdempotencyModuleError
 	for _, path := range paths {
-		// compliance.vgo files under modules/ are handled by
+		// compliance.vgo files under configcrates/ are handled by
 		// loadComplianceConfigs — skip them here so they aren't
 		// parsed as module definitions.
 		if filepath.Base(path) == "compliance.vgo" {
@@ -3345,7 +3345,7 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 			if rel, relErr := filepath.Rel(filepath.Dir(dir), path); relErr == nil {
 				newRel = filepath.ToSlash(rel)
 			}
-			return nil, fmt.Errorf("duplicate module name %q: already defined in %s, redefined in %s — modules are indexed by the `name:` field (not the filename); rename one of them",
+			return nil, fmt.Errorf("duplicate configcrate name %q: already defined in %s, redefined in %s — configcrates are indexed by the `name:` field (not the filename); rename one of them",
 				def.Name, existing.SourceFile, newRel)
 		}
 
@@ -3353,7 +3353,7 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 		findings := validate.ValidateConfigcrate(moduleToValidate(def))
 		for _, f := range findings {
 			if f.Severity == validate.SeverityWarning {
-				slog.Warn("idempotency warning", "module", def.Name, "finding", f.String())
+				slog.Warn("idempotency warning", "configcrate", def.Name, "finding", f.String())
 			}
 		}
 		if !dangerous && validate.HasErrors(findings) {
@@ -3367,7 +3367,7 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 		// Self-protection guardrails — always enforced, even in dangerous mode.
 		spFindings := validate.ValidateSelfProtection(moduleToValidate(def))
 		for _, f := range spFindings {
-			slog.Error("self-protection violation", "module", def.Name, "finding", f.String())
+			slog.Error("self-protection violation", "configcrate", def.Name, "finding", f.String())
 		}
 		if validate.HasErrors(spFindings) {
 			idempErrs = append(idempErrs, IdempotencyModuleError{
@@ -3557,7 +3557,7 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 // modules. Usercrates are NOT auto-applied — they require an explicit
 // positive include via a carrier's `usercrates:` field (see step 3+).
 func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEnvOverrides map[string]map[string]*PerEnvOverrideBlock) {
-	// Snapshot the entry's own modules/roles/usercrates/vars before merging.
+	// Snapshot the entry's own configcrates/roles/usercrates/vars before merging.
 	entry.OwnConfigcrates = append([]ConfigcrateRef(nil), entry.Configcrates...)
 	entry.OwnRoles = append([]RoleRef(nil), entry.Roles...)
 	entry.OwnUsercrates = append([]ConfigcrateRef(nil), entry.Usercrates...)
@@ -3844,7 +3844,7 @@ func validateComplianceTopLevelKeys(data []byte, relPath string) error {
 }
 
 // loadComplianceConfigs is the single walker for compliance.vgo claim files.
-// It descends the entire stockpile tree — modules/, usercrates/, everything —
+// It descends the entire stockpile tree — configcrates/, usercrates/, everything —
 // and collects every compliance.vgo exactly once (do not add a parallel
 // per-subtree walker; this one already covers them). Returns a map keyed by
 // the file's parent directory (stockpile-relative, forward slashes) holding
@@ -3958,7 +3958,7 @@ func unionDedupeStrings(a, b []string) []string {
 
 // applyModuleComplianceInheritance unions claims from every ancestor
 // compliance.vgo in the modules tree into each module's own Compliance
-// block. For a module at modules/users/dan.vgo, this walks ["modules/users",
+// block. For a module at configcrates/users/dan.vgo, this walks ["configcrates/users",
 // "configcrates"] and unions each matching directory's claims into def.Compliance.
 func applyModuleComplianceInheritance(
 	defs map[string]*ConfigcrateDefinition,
@@ -3971,7 +3971,7 @@ func applyModuleComplianceInheritance(
 		if def.SourceFile == "" {
 			continue
 		}
-		// SourceFile is stockpile-relative (e.g. "modules/users/dan.vgo").
+		// SourceFile is stockpile-relative (e.g. "configcrates/users/dan.vgo").
 		dir := filepath.ToSlash(filepath.Dir(def.SourceFile))
 
 		// Walk from the module's directory up to (and including) "configcrates".
@@ -4081,10 +4081,10 @@ func (cs *ConfigStore) AllWaivers() map[string]map[string]*WaiverEntry {
 // CommonConfig items from common.vgo files at each directory level.
 //
 // The directory structure defines inheritance:
-//   - common.vgo at any level = modules/roles/vars inherited by all subdirs
+//   - common.vgo at any level = configcrates/roles/vars inherited by all subdirs
 //   - Any other .vgo file = leaf entry (must have match:)
 //   - Root-level common.vgo applies only to subdirectories
-//   - modules/, templates/ are skipped (not part of envoy hierarchy)
+//   - configcrates/, templates/ are skipped (not part of envoy hierarchy)
 //   - roles.vgo at root is skipped (loaded separately by loadRolesFile)
 func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 	envoyRoot := dir
@@ -4106,7 +4106,7 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 			return nil
 		}
 		// Skip subtrees that aren't part of the envoy assignment hierarchy:
-		// modules/ (module defs), templates/ (template fragments), tasks/
+		// configcrates/ (module defs), templates/ (template fragments), tasks/
 		// (task defs), workflows/ (workflow defs), examples/ (read-only
 		// reference templates). usercrates/ is skipped below per directory
 		// segment; usercrates can live at any depth.
@@ -4383,7 +4383,7 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 			_, hasContent := attrs["content"]
 
 			if hasSource && hasContent {
-				return fmt.Errorf("module %q resource %q: cannot set both 'source' and 'content'",
+				return fmt.Errorf("configcrate %q resource %q: cannot set both 'source' and 'content'",
 					def.Name, def.Resources[i].Name)
 			}
 			if !hasSource {
@@ -4392,13 +4392,13 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 
 			sourcePath, ok := source.(string)
 			if !ok {
-				return fmt.Errorf("module %q resource %q: 'source' must be a string",
+				return fmt.Errorf("configcrate %q resource %q: 'source' must be a string",
 					def.Name, def.Resources[i].Name)
 			}
 
 			fullPath := filepath.Clean(filepath.Join(baseDir, sourcePath))
 			if !strings.HasPrefix(fullPath, baseDir+string(filepath.Separator)) && fullPath != baseDir {
-				return fmt.Errorf("module %q resource %q: source path %q escapes config directory",
+				return fmt.Errorf("configcrate %q resource %q: source path %q escapes config directory",
 					def.Name, def.Resources[i].Name, sourcePath)
 			}
 
@@ -4413,7 +4413,7 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 					return fmt.Errorf("resolving config directory: %w", err)
 				}
 				if !strings.HasPrefix(resolved, resolvedBase+string(filepath.Separator)) && resolved != resolvedBase {
-					return fmt.Errorf("module %q resource %q: source path %q resolves outside config directory",
+					return fmt.Errorf("configcrate %q resource %q: source path %q resolves outside config directory",
 						def.Name, def.Resources[i].Name, sourcePath)
 				}
 				readPath = resolved
@@ -4421,7 +4421,7 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 
 			data, err := os.ReadFile(readPath)
 			if err != nil {
-				return fmt.Errorf("module %q resource %q: reading source %q: %w",
+				return fmt.Errorf("configcrate %q resource %q: reading source %q: %w",
 					def.Name, def.Resources[i].Name, sourcePath, err)
 			}
 

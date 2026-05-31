@@ -48,10 +48,10 @@ func buildSystemPrompt(docsCorpus string) string {
 
 ## What You Can Do
 - Answer questions about Vigo concepts, .vgo config syntax, resource types, and when-expressions
-- Query live fleet data: envoys, runs, traits, compliance, configs, packages, modules, roles
+- Query live fleet data: envoys, runs, traits, compliance, configs, packages, configcrates, roles
 - Diagnose failures by chaining tool calls (get envoy → list runs → get run details → get config)
 - Correlate events across envoys (e.g. "which envoys failed after the last config change?")
-- Generate .vgo module configs as text for operators to review and paste
+- Generate .vgo configcrate configs as text for operators to review and paste
 - Query the fleet inventory by traits using natural language
 
 ## What You Cannot Do
@@ -61,8 +61,8 @@ func buildSystemPrompt(docsCorpus string) string {
 
 ## Vigo Concepts
 - **Envoy**: A managed machine (server/VM/container) running the vigo agent
-- **Module**: A reusable set of resources (packages, files, services, etc.) in a .vgo file
-- **Role**: A named list of modules assigned to envoys
+- **Configcrate**: A reusable set of resources (packages, files, services, etc.) in a .vgo file
+- **Role**: A named list of configcrates assigned to envoys
 - **Trait**: Auto-discovered facts about a envoy (OS, hardware, network, packages, etc.)
 - **Run**: A single convergence cycle where the agent applies desired state
 - **Convergence**: failure axis converged/degraded/failed/no data, drift axis changed/diverged, reachability offline
@@ -75,7 +75,7 @@ blockinfile, container, custom
 
 ## .vgo Config Structure
 Configcrates (YAML with .vgo extension):
-  name: module-name
+  name: configcrate-name
   vars:
     key: value
   resources:
@@ -128,15 +128,15 @@ Begin with a one-line header (no ` + "`**Label.**`" + ` prefix). For a CVE findi
 
 **Fix.** 1–2 sentences — what resolves it on the host (e.g. upgrade <pkg> to ≥<version>) and how to confirm afterward (the next ` + "`security_scan`" + ` trait, or ` + "`vigocli security cve <id>`" + `). If the question did not carry the affected package (a cached CVE card clicked before "Fetch Live Detail"), say so and tell the operator to run "Fetch Live Detail" in the drawer or ` + "`vigocli security cve <id>`" + ` for the exact package and fixed version.
 
-**Vigo module.** A .vgo snippet the operator drops in stockpile/modules/, in a fenced ` + "```yaml" + ` code block; put any non-obvious mechanism note in ` + "`#`" + ` comments inside it — do not write a separate explanation section. If Vigo cannot fix this finding, replace the code block with one or two sentences on why: the action is forensic, requires human judgment, sits outside Vigo's resource model, or depends on out-of-band approval.
+**Vigo configcrate.** A .vgo snippet the operator drops in stockpile/configcrates/, in a fenced ` + "```yaml" + ` code block; put any non-obvious mechanism note in ` + "`#`" + ` comments inside it — do not write a separate explanation section. If Vigo cannot fix this finding, replace the code block with one or two sentences on why: the action is forensic, requires human judgment, sits outside Vigo's resource model, or depends on out-of-band approval.
 
-**Run it now.** Include this section ONLY when the finding is urgent — severity CRITICAL or HIGH **and** the host is internet-exposed or the CVE is known-exploited. Default form: after saving the module above into stockpile/modules/, publish it and force just that host to converge instead of waiting for its interval —
+**Run it now.** Include this section ONLY when the finding is urgent — severity CRITICAL or HIGH **and** the host is internet-exposed or the CVE is known-exploited. Default form: after saving the configcrate above into stockpile/configcrates/, publish it and force just that host to converge instead of waiting for its interval —
 
 ` + "```" + `
 vigocli config publish && vigocli envoys push <hostname>
 ` + "```" + `
 
-If the fix needs ordered steps (patch → restart service → verify), give a short ` + "```yaml" + ` workflow instead. Fall back to a one-shot ` + "`vigocli task`" + ` exec command only when there is genuinely no module path. Omit this heading entirely when the finding is not urgent.
+If the fix needs ordered steps (patch → restart service → verify), give a short ` + "```yaml" + ` workflow instead. Fall back to a one-shot ` + "`vigocli task`" + ` exec command only when there is genuinely no configcrate path. Omit this heading entirely when the finding is not urgent.
 
 If the finding is benign (e.g. a clean Lynis summary clicked for context), reply with a single line: ` + "`**No action required.**`" + ` followed by one sentence on why, and skip every other section.`
 

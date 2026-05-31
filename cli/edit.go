@@ -24,9 +24,9 @@ var configEditCmd = &cobra.Command{
 	ValidArgsFunction: completeModuleNames,
 	Long: `Opens a .vgo file in the specified editor with validation.
 
-Accepts a module name, a relative path, or an absolute path. Module names
-are searched recursively in stockpile/modules/ (e.g., "nginx" finds
-stockpile/modules/system/nginx.vgo). The .vgo extension is optional.
+Accepts a configcrate name, a relative path, or an absolute path. Configcrate names
+are searched recursively in stockpile/configcrates/ (e.g., "nginx" finds
+stockpile/configcrates/system/nginx.vgo). The .vgo extension is optional.
 
 Editor defaults to $EDITOR, falling back to vi. Override with --editor.
 vi/vim get vigo-aware syntax highlighting and write-time validation.
@@ -35,7 +35,7 @@ Other editors get post-save validation only.
 Examples:
   vigocli config edit nginx
   vigocli config edit ssh-hardening --editor nano
-  vigocli config edit modules/nginx.vgo
+  vigocli config edit configcrates/nginx.vgo
   vigocli config edit alexander4/us-west1/us-west1-a/danlap.vgo`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -246,7 +246,7 @@ const vigoSyntax = `" Vim syntax file for Vigo .vgo configuration files
 runtime! syntax/yaml.vim
 
 " Vigo top-level keys
-syn match vigoTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|envoys\|depends_on\|when\|environment\|env\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+syn match vigoTopKey    /^\s*\(name\|vars\|resources\|configcrates\|roles\|envoys\|depends_on\|when\|environment\|env\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi vigoTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes
