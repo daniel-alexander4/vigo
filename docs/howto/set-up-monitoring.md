@@ -143,6 +143,7 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | `vigo_convergence_offline` | Gauge | Number of envoys that have offline |
 | `vigo_convergence_no_data` | Gauge | Number of envoys with no convergence data |
 | `vigo_convergence_pct` | Gauge | Fleet-wide convergence percentage (0.0 to 1.0) |
+| `vigo_publish_convergence_seconds` | Histogram | Seconds from a config version becoming current to an envoy first applying it. One observation per envoy per forward version adoption; label-free and fleet-wide. Routine re-converges and catch-up to long-stale versions are excluded. |
 
 ### Risk
 
@@ -312,7 +313,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](grafana/vigo-convergence.json) |
 | **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](grafana/vigo-risk.json) |
 | **Swarm & Spanner** | 13 panels across 5 rows: substrate footprint, content-subsystem counts (gitback/curator/lockbox/longdrawer), cross-envoy divergence, spanner bolt roster | [vigo-swarm.json](grafana/vigo-swarm.json) |
-| **Publish Bursts** | 13 panels across 4 rows: at-a-glance in-flight CheckIns / active nodes / outbound MB·s / convergence %, gRPC rate + latency + TLS handshakes, bundle bytes/s + size quantiles + force pushes, module actions + drift + sig-verify failures + convergence over time. Vertical annotations mark every config publish. | [vigo-bursts.json](grafana/vigo-bursts.json) |
+| **Publish Bursts** | 14 panels across 4 rows: at-a-glance in-flight CheckIns / active nodes / outbound MB·s / convergence %, gRPC rate + latency + TLS handshakes, bundle bytes/s + size quantiles + force pushes, module actions + drift + sig-verify failures + convergence over time + time-to-converge quantiles. Vertical annotations mark every config publish. | [vigo-bursts.json](grafana/vigo-bursts.json) |
 
 ## Install via Vigo modules (recommended)
 
@@ -579,6 +580,9 @@ Watch a config publish ripple through the fleet end-to-end. Every panel reads fr
 | Module Actions + Drift Corrections /s | Time series (two series) | `rate(vigo_module_actions_total[1m])`, `rate(vigo_drift_detected_total[1m])` |
 | Signature Verification Failures | Time series (red) | `sum(rate(vigo_sig_verify_failed_total[1m]))` |
 | Convergence % over Time | Time series (0-100) | `vigo_convergence_pct * 100` |
+| Time to Converge after Publish (p50 / p95 / p99) | Time series (seconds, full width) | `histogram_quantile(0.95, sum by (le) (rate(vigo_publish_convergence_seconds_bucket[10m])))` |
+
+The time-to-converge panel measures the wall-clock seconds from a config version becoming current to each envoy first applying it — one sample per envoy per forward version adoption (routine re-converges are excluded). The tail tracks your check-in cadence: a long-interval fleet converges slower because envoys only notice the change at their next check-in. Samples come from the streaming check-in path (the default daemon mode); one-shot `vigo run` invocations are not counted, since they are operator-initiated and not part of a publish wave.
 
 > **Label cardinality.** Every panel here aggregates over `method` / `code` / `status` / `scope` — fixed-cardinality labels. Per-envoy series are never introduced; at fleet scale (25K+ envoys) per-envoy labels would blow Prometheus's series budget.
 
@@ -606,7 +610,7 @@ A curated alert-rules file ships alongside the Grafana dashboards:
 [grafana/alerts.yaml](grafana/alerts.yaml)
 ```
 
-Eighteen Prometheus rules across convergence (failed / degraded / diverged / offline), runs (p95 duration), security (sig-verify failures, critical CVEs), operability (config reload errors, secret resolution errors), license (enforcement errors, days remaining, stage), swarm (spanner bolt roster), and bursts (sustained gRPC rate, TLS handshake spike, sig-verify failures, in-flight CheckIn high-water). Every rule references a metric defined in `server/metrics/registry.go`; thresholds are starting points — tune to your fleet.
+Nineteen Prometheus rules across convergence (failed / degraded / diverged / offline), runs (p95 duration), security (sig-verify failures, critical CVEs), operability (config reload errors, secret resolution errors), license (enforcement errors, days remaining, stage), swarm (spanner bolt roster), and bursts (sustained gRPC rate, TLS handshake spike, sig-verify failures, in-flight CheckIn high-water, publish→converge p95 over SLO). Every rule references a metric defined in `server/metrics/registry.go`; thresholds are starting points — tune to your fleet.
 
 Load into a stock Prometheus:
 

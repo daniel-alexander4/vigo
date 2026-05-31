@@ -48,6 +48,7 @@ type Metrics struct {
 	PolicyBundleSizeBytes  *prometheus.HistogramVec
 	ForcePushesTotal       *prometheus.CounterVec
 	ConfigPublishesTotal   prometheus.Counter
+	PublishConvergence     prometheus.Histogram
 
 	// --- Orchestration ---
 
@@ -279,6 +280,15 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		ConfigPublishesTotal: f.NewCounter(prometheus.CounterOpts{
 			Name: "vigo_config_publishes_total",
 			Help: "Successful config reloads triggered by a publish. Use as the annotation source for publish-correlated dashboard panels.",
+		}),
+		PublishConvergence: f.NewHistogram(prometheus.HistogramOpts{
+			Name: "vigo_publish_convergence_seconds",
+			Help: "Seconds from a config version becoming current to an envoy first applying it. Observed once per envoy per forward version adoption (routine re-converges and catch-up to long-stale versions are excluded). Label-free and fleet-wide — cardinality-safe at 25K nodes.",
+			// Convergence latency spans seconds (short-interval fleets) to
+			// tens of minutes (long-interval fleets, where the check-in
+			// cadence dominates). The +Inf bucket captures waves slower than
+			// the top bucket.
+			Buckets: []float64{1, 2, 5, 10, 30, 60, 120, 300, 600, 1800},
 		}),
 
 		// --- Orchestration ---

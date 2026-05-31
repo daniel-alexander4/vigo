@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // mockProvider implements secrets.Provider for testing.
@@ -359,7 +360,7 @@ envoys:
 `)
 
 	mp := &mockProvider{secrets: map[string]string{
-		"vigo/db/dsn":   "/srv/vigo/db/vigo.db",
+		"vigo/db/dsn":     "/srv/vigo/db/vigo.db",
 		"myapp/db/config": "host=db port=5432 user=myapp",
 	}}
 	store, err := NewConfigStore(dir, mp, true)
@@ -651,7 +652,6 @@ func TestUnconfiguredClient(t *testing.T) {
 		t.Errorf("expected empty modules, got %d", len(cfg.Modules))
 	}
 }
-
 
 func TestConfigReload(t *testing.T) {
 	dir := setupDir(t)
@@ -1002,7 +1002,7 @@ func TestRenderVars(t *testing.T) {
 	tests := []struct {
 		name     string
 		vars     map[string]any
-		traits    map[string]any
+		traits   map[string]any
 		varOrder []string
 		want     map[string]any
 		wantErr  bool
@@ -1026,7 +1026,7 @@ func TestRenderVars(t *testing.T) {
 				"base_port": "8080",
 				"port_line": "port={{ .Vars.base_port }}",
 			},
-			traits:    map[string]any{},
+			traits:   map[string]any{},
 			varOrder: []string{"base_port", "port_line"},
 			want: map[string]any{
 				"base_port": "8080",
@@ -1053,7 +1053,7 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"plain": "no templates here",
 			},
-			traits:    map[string]any{},
+			traits:   map[string]any{},
 			varOrder: []string{"plain"},
 			want: map[string]any{
 				"plain": "no templates here",
@@ -1066,7 +1066,7 @@ func TestRenderVars(t *testing.T) {
 				"enabled": true,
 				"name":    "test",
 			},
-			traits:    map[string]any{},
+			traits:   map[string]any{},
 			varOrder: []string{"count", "enabled", "name"},
 			want: map[string]any{
 				"count":   42,
@@ -1079,14 +1079,14 @@ func TestRenderVars(t *testing.T) {
 			vars: map[string]any{
 				"bad": "{{ .InvalidSyntax }{",
 			},
-			traits:    map[string]any{},
+			traits:   map[string]any{},
 			varOrder: []string{"bad"},
 			wantErr:  true,
 		},
 		{
 			name:     "empty vars map returns empty map",
 			vars:     map[string]any{},
-			traits:    map[string]any{},
+			traits:   map[string]any{},
 			varOrder: nil,
 			want:     map[string]any{},
 		},
@@ -1133,11 +1133,6 @@ func TestRenderVars(t *testing.T) {
 		})
 	}
 }
-
-
-
-
-
 
 // --- Conditional Block Loader Integration Tests ---
 
@@ -2137,16 +2132,6 @@ envoys:
 
 // --- vars_from tests ---
 
-
-
-
-
-
-
-
-
-
-
 func TestOverlappingGlobFirstWins(t *testing.T) {
 	dir := setupDir(t)
 
@@ -2214,7 +2199,6 @@ func TestEmptyEnvoysDir(t *testing.T) {
 	}
 }
 
-
 func TestNodeVarsOverrideModuleDefaults(t *testing.T) {
 	dir := setupDir(t)
 
@@ -2250,7 +2234,6 @@ envoys:
 		t.Errorf("workers = %v, want auto (module default preserved)", cfg.Vars["workers"])
 	}
 }
-
 
 func TestSourcePathTraversalDotDot(t *testing.T) {
 	dir := setupDir(t)
@@ -2385,6 +2368,34 @@ envoys:
 	if v2 <= v1 {
 		t.Errorf("expected version to increase after reload: v1=%d, v2=%d", v1, v2)
 	}
+
+	// Reload also stamps the new version's mint time for publish→converge
+	// measurement.
+	if _, ok := store.VersionMintedAt(v2); !ok {
+		t.Errorf("expected version %d to have a recorded mint time after reload", v2)
+	}
+}
+
+func TestVersionMintedAtHorizon(t *testing.T) {
+	cs := &ConfigStore{}
+	base := time.Now()
+
+	cs.recordVersionMint(1, base)
+	if _, ok := cs.VersionMintedAt(1); !ok {
+		t.Fatal("version 1 should be retrievable immediately after minting")
+	}
+	if _, ok := cs.VersionMintedAt(99); ok {
+		t.Error("an unminted version should not be retrievable")
+	}
+
+	// Minting a later version far in the future prunes the stale entry.
+	cs.recordVersionMint(2, base.Add(versionMintHorizon+time.Minute))
+	if _, ok := cs.VersionMintedAt(1); ok {
+		t.Error("version 1 should be pruned once older than the retention horizon")
+	}
+	if t2, ok := cs.VersionMintedAt(2); !ok || !t2.After(base) {
+		t.Error("version 2 should remain retrievable")
+	}
 }
 
 func TestReloadFailureKeepsOldConfig(t *testing.T) {
@@ -2434,7 +2445,6 @@ envoys:
 		t.Error("expected old config to be preserved after failed reload")
 	}
 }
-
 
 func TestSourceSymlinkEscapeRejected(t *testing.T) {
 	dir := setupDir(t)
@@ -2635,8 +2645,6 @@ envoys:
 }
 
 // --- Wildcard vars_from ---
-
-
 
 // --- Config Trace ---
 
@@ -3192,7 +3200,6 @@ envoys:
 	}
 }
 
-
 // --- New function tests: compliance index, when display, var priority ---
 
 func TestBuildComplianceIndex(t *testing.T) {
@@ -3335,7 +3342,6 @@ envoys:
 		t.Errorf("expected memoized pointer equality, got %p vs %p", a, b)
 	}
 }
-
 
 func TestClassifyWhen(t *testing.T) {
 	tests := []struct {
@@ -3915,13 +3921,13 @@ envoys:
 	}
 
 	cases := []struct {
-		name         string
-		subject      string
-		value        string
-		includeTree  bool
-		wantHosts    []string         // expected hostnames in Envoys
-		wantCarrier  string           // expected substring in Envoys[0].Carrier
-		wantTreeMatches []string      // expected Match values in TreeRefs
+		name            string
+		subject         string
+		value           string
+		includeTree     bool
+		wantHosts       []string // expected hostnames in Envoys
+		wantCarrier     string   // expected substring in Envoys[0].Carrier
+		wantTreeMatches []string // expected Match values in TreeRefs
 	}{
 		{
 			name:        "module direct on entry",
@@ -3952,12 +3958,12 @@ envoys:
 			wantCarrier: "envoys.vgo",
 		},
 		{
-			name:         "include-tree surfaces unmatched pattern",
-			subject:      "module",
-			value:        "nginx",
-			includeTree:  true,
-			wantHosts:    []string{"web01.example.com"},
-			wantCarrier:  "envoys.vgo",
+			name:            "include-tree surfaces unmatched pattern",
+			subject:         "module",
+			value:           "nginx",
+			includeTree:     true,
+			wantHosts:       []string{"web01.example.com"},
+			wantCarrier:     "envoys.vgo",
 			wantTreeMatches: []string{"staging-only.example.com"},
 		},
 		{
@@ -4000,5 +4006,3 @@ envoys:
 		})
 	}
 }
-
-

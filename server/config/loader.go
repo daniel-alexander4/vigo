@@ -227,17 +227,25 @@ type ConfigStore struct {
 	moduleComplianceSources []ModuleComplianceSource                   // per-file modules-tree compliance.vgo entries for trace display
 	dir                     string                                     // examples directory
 	provider                secrets.Provider
-	backend                 string          // secrets backend name for diagnostic hints
-	dangerous               bool            // allow non-idempotent resources
-	version                 atomic.Uint64   // incremented on each successful reload
-	secretsEpoch            atomic.Int64    // bumped on each successful reload AND on watcher-detected rotation; lets agents invalidate cached resolved secret values when the marker shifts
-	onReloadFailure         func(err error) // optional callback on reload failure
-	onReloadSuccess         func()          // optional callback after successful reload
-	lastReloadErr           error           // last reload error (nil if last reload succeeded)
-	lastReloadAt            time.Time       // wall-clock time of the last loadAll attempt (success or failure)
-	enabledStandards        map[string]bool // nil = all enabled; non-nil = only these standard keys
-	approvedSources         []string        // nil/empty = no annotation; non-empty = URL prefixes for package_source_audit trait
-	serverYamlPath          string          // path to server.yaml for re-reading compliance on reload
+	backend                 string        // secrets backend name for diagnostic hints
+	dangerous               bool          // allow non-idempotent resources
+	version                 atomic.Uint64 // incremented on each successful reload
+	secretsEpoch            atomic.Int64  // bumped on each successful reload AND on watcher-detected rotation; lets agents invalidate cached resolved secret values when the marker shifts
+	// versionMintAt stamps the wall-clock time each config version became
+	// current, retained for versionMintHorizon so the gRPC delta path can
+	// measure publish→converge latency (vigo_publish_convergence_seconds)
+	// when an envoy reports applying that version. Bounded: pruned on every
+	// write, and a convergence onto a version older than the horizon is
+	// catch-up to stale state, not a fresh publish wave, so it's not measured.
+	versionMintMu    sync.Mutex
+	versionMintAt    map[uint64]time.Time
+	onReloadFailure  func(err error) // optional callback on reload failure
+	onReloadSuccess  func()          // optional callback after successful reload
+	lastReloadErr    error           // last reload error (nil if last reload succeeded)
+	lastReloadAt     time.Time       // wall-clock time of the last loadAll attempt (success or failure)
+	enabledStandards map[string]bool // nil = all enabled; non-nil = only these standard keys
+	approvedSources  []string        // nil/empty = no annotation; non-empty = URL prefixes for package_source_audit trait
+	serverYamlPath   string          // path to server.yaml for re-reading compliance on reload
 
 	// fleet: lookup memoization. fleetLookupTTL is operator-set
 	// (cs.SetFleetLookupTTL); 0 means use defaultFleetLookupTTL. The memo
@@ -504,6 +512,42 @@ func (cs *ConfigStore) reloadComplianceStandards() {
 // reload, used by the response cache to detect config changes.
 func (cs *ConfigStore) Version() uint64 {
 	return cs.version.Load()
+}
+
+// versionMintHorizon bounds how long a config version's mint time is
+// retained for publish→converge measurement. A convergence onto a version
+// older than this is treated as catch-up to stale state, not a fresh
+// publish wave, and is not measured. Comfortably exceeds the convergence
+// histogram's top bucket (30m) so slow but legitimate waves are captured.
+const versionMintHorizon = time.Hour
+
+// recordVersionMint stamps the time a config version became current and
+// prunes entries older than versionMintHorizon so the map stays bounded.
+// Called once per successful reload.
+func (cs *ConfigStore) recordVersionMint(v uint64, now time.Time) {
+	cs.versionMintMu.Lock()
+	defer cs.versionMintMu.Unlock()
+	if cs.versionMintAt == nil {
+		cs.versionMintAt = make(map[uint64]time.Time)
+	}
+	cs.versionMintAt[v] = now
+	for ver, t := range cs.versionMintAt {
+		if now.Sub(t) > versionMintHorizon {
+			delete(cs.versionMintAt, ver)
+		}
+	}
+}
+
+// VersionMintedAt returns the time the given config version became current,
+// if still within the retention horizon. The gRPC delta path uses this to
+// measure publish→converge latency when an envoy reports it has applied that
+// version. Returns false for versions older than the horizon or minted
+// before this process started — both are catch-up, not a fresh publish wave.
+func (cs *ConfigStore) VersionMintedAt(v uint64) (time.Time, bool) {
+	cs.versionMintMu.Lock()
+	defer cs.versionMintMu.Unlock()
+	t, ok := cs.versionMintAt[v]
+	return t, ok
 }
 
 // ResolveSecret fetches the plaintext value of the given secret key from
@@ -2533,6 +2577,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	v := cs.version.Add(1)
+	cs.recordVersionMint(v, time.Now())
 	// Bump the secrets epoch on every successful reload. A reload may
 	// have introduced new secret references, retired old ones, or
 	// resolved the same refs against rotated provider values — agents

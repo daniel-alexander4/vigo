@@ -53,7 +53,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 		s.fleetIndex.UpdateRunStatus(envoyID, run.RunId, runStatus, changedCount, failedCount, moduleCount, now)
 		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
 			RunID:        run.RunId,
-			EnvoyID:     envoyID,
+			EnvoyID:      envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
 			Trigger:      trigger,
@@ -72,6 +72,19 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 	}
 	s.metrics.RunDuration.WithLabelValues(hostname).Observe(0) // delta doesn't carry duration
 
+	// Publish→converge latency: when this envoy first adopts a newer policy
+	// version, observe how long it took from that version becoming current.
+	// AdvanceConvergedVersion filters routine re-converges and initial
+	// catch-up; VersionMintedAt returns !ok for versions older than its
+	// retention horizon (catch-up to stale state, not a fresh publish wave).
+	if v := run.BundleVersion; v != 0 && s.fleetIndex != nil && s.fleetIndex.AdvanceConvergedVersion(envoyID, v) {
+		if s.configStore != nil {
+			if minted, ok := s.configStore.VersionMintedAt(v); ok {
+				s.metrics.PublishConvergence.Observe(now.Sub(minted).Seconds())
+			}
+		}
+	}
+
 	// Build DB result params and submit to async batcher.
 	if s.runBatcher != nil {
 		var dbResults []fleet.RunBatchResultParam
@@ -89,7 +102,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 
 		s.runBatcher.Submit(fleet.RunBatchEntry{
 			RunID:        run.RunId,
-			EnvoyID:     envoyID,
+			EnvoyID:      envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
 			Trigger:      trigger,

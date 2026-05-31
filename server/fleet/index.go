@@ -69,7 +69,14 @@ type EnvoyState struct {
 	// drift detection (changed/diverged) has enough signal without
 	// growing unbounded. Populated by [FleetIndex.UpdateRunStatus] at
 	// check-in time and rehydrated from the DB on server startup.
-	RecentRuns            []convergence.RunInfo
+	RecentRuns []convergence.RunInfo
+	// LastConvergedVersion is the highest policy version this envoy has
+	// reported applying. Used by AdvanceConvergedVersion to measure
+	// publish→converge latency once per forward adoption. In-memory only;
+	// not persisted (a restart resets it to 0, which suppresses the first
+	// post-restart observation per envoy — correct, since the mint time is
+	// also gone).
+	LastConvergedVersion  uint64
 	Traits                map[string]string // flattened key→value for trait index
 	PendingRotatedSecrets []string
 	ForcePush             bool
@@ -1340,6 +1347,34 @@ func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount, 
 	if driftChanged {
 		f.bumpDriftCounters(oldDrift, newDrift)
 	}
+}
+
+// AdvanceConvergedVersion records that envoy id has applied the given policy
+// version and reports whether this is a fresh forward adoption worth
+// measuring for publish→converge latency. It returns true only on the first
+// report of a strictly-newer version, and never on the very first observation
+// for an envoy (whose prior version is unknown, 0) — so routine re-converges
+// of an already-applied version and an envoy's initial catch-up don't pollute
+// the convergence histogram.
+func (f *FleetIndex) AdvanceConvergedVersion(id string, version uint64) bool {
+	if version == 0 {
+		return false
+	}
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
+		return false
+	}
+	lk := f.lockFor(id)
+	lk.Lock()
+	defer lk.Unlock()
+	prev := ts.LastConvergedVersion
+	if version <= prev {
+		return false
+	}
+	ts.LastConvergedVersion = version
+	return prev != 0
 }
 
 // AppendRecentRun adds a run summary to the ring buffer. Takes the

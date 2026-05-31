@@ -38,12 +38,13 @@ func TestHandleRunDelta(t *testing.T) {
 		Sequence: 1,
 		Event: &pb.DeltaEvent_Run{
 			Run: &pb.RunCompleted{
-				RunId:        "run-abc",
-				Status:       "success",
-				TotalCount:   5,
-				ChangedCount: 2,
-				FailedCount:  0,
-				SkippedCount: 3,
+				RunId:         "run-abc",
+				Status:        "success",
+				TotalCount:    5,
+				ChangedCount:  2,
+				FailedCount:   0,
+				SkippedCount:  3,
+				BundleVersion: 7,
 				Results: []*pb.ModuleResult{
 					{
 						ModuleName:   "nginx",
@@ -83,6 +84,12 @@ func TestHandleRunDelta(t *testing.T) {
 	}
 	if ts.LastRunChangedCount != 2 {
 		t.Errorf("expected last_run_changed_count=2, got %d", ts.LastRunChangedCount)
+	}
+
+	// The handler threads RunCompleted.bundle_version through to the
+	// per-envoy convergence cursor (the input to publish→converge latency).
+	if ts.LastConvergedVersion != 7 {
+		t.Errorf("expected last_converged_version=7, got %d", ts.LastConvergedVersion)
 	}
 
 	// Verify recent runs has the entry.

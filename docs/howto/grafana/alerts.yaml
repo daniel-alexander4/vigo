@@ -184,3 +184,12 @@ groups:
         annotations:
           summary: "{{ $value }} concurrent CheckIns in flight for >2m"
           description: "Queue depth past the high-water mark — leading edge of cascading overload. Investigate offered load vs server capacity; if a publish triggered this, the wave is still catching up."
+
+      - alert: VigoBurstConvergeP95OverSLO
+        expr: histogram_quantile(0.95, sum by (le) (rate(vigo_publish_convergence_seconds_bucket[10m]))) > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Publish→converge p95 {{ $value | printf \"%.0f\" }}s (>5m SLO) for >10m"
+          description: "95% of envoys are taking longer than the 5-minute SLO to apply a published config version. If this tracks your check-in interval, convergence latency is cadence-bound — shorten the interval or accept the floor. Otherwise look for a slow module, a degraded subset, or capacity pressure on the wave. Threshold is a starting point — set it to your own publish-to-converge SLO."

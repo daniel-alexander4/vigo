@@ -594,3 +594,38 @@ func TestConsumeRunTrigger_Concurrent(t *testing.T) {
 			hits, marks)
 	}
 }
+
+func TestAdvanceConvergedVersion(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{ID: "e1", Hostname: "h1", ConvergenceStatus: "no data"}, nil)
+
+	// Version 0 is never an adoption.
+	if fi.AdvanceConvergedVersion("e1", 0) {
+		t.Error("version 0 should not be measured")
+	}
+	// Unknown envoy is never an adoption.
+	if fi.AdvanceConvergedVersion("nope", 5) {
+		t.Error("unknown envoy should not be measured")
+	}
+	// First observation initializes the cursor but is not measured (the
+	// prior version is unknown — this is catch-up, not a publish wave).
+	if fi.AdvanceConvergedVersion("e1", 5) {
+		t.Error("first observation should not be measured")
+	}
+	// Re-converge on the same version is not measured.
+	if fi.AdvanceConvergedVersion("e1", 5) {
+		t.Error("re-converge on same version should not be measured")
+	}
+	// A lower version (stale, out-of-order delta) is not measured.
+	if fi.AdvanceConvergedVersion("e1", 4) {
+		t.Error("lower version should not be measured")
+	}
+	// A strictly-newer version after a known prior IS a fresh adoption.
+	if !fi.AdvanceConvergedVersion("e1", 6) {
+		t.Error("forward adoption should be measured")
+	}
+	// And only once.
+	if fi.AdvanceConvergedVersion("e1", 6) {
+		t.Error("forward adoption should be measured only once")
+	}
+}
