@@ -4,11 +4,12 @@
 #
 # End-to-end swarm validation against a real Vigo fleet.
 #
-# Exercises all four swarm content subsystems — payload, longdrawer,
-# puddle (lifecycle), lockbox, gitback — in sequence. Pass/fail per
-# step, exit non-zero on any failure. Mirrors the manual procedure
-# captured in tshoot/log-substrate-2026-05-09.md so a future "did
-# everything still work" check is one command.
+# Exercises all six swarm content subsystems — filecast(payload),
+# longdrawer, lockbox, gitback, curator, poolq — plus the puddle
+# identity lifecycle, in sequence. Pass/fail per step, exit non-zero
+# on any failure. Mirrors the manual procedure captured in
+# tshoot/log-substrate-2026-05-09.md so a future "did everything
+# still work" check is one command.
 #
 # Usage:
 #   test/swarm-substrate.sh [--wipe]
@@ -21,10 +22,13 @@
 # Behavior:
 #   --wipe is required and destructive. Stops the agent on each envoy,
 #   removes per-user swarm dirs (~/.vigo-puddle, ~/.lockbox,
-#   ~/lockbox, ~/.vigo-gitback, ~/longdrawer), removes the
-#   root-owned /var/lib/vigo/swarm/{gitback,lockbox}, restarts the
-#   agent, then runs the full 5-step substrate sequence (payload →
-#   longdrawer → puddle → lockbox → gitback) from a clean slate.
+#   ~/lockbox, ~/.vigo-gitback, ~/.vigo-curator, ~/.vigo-poolq) and
+#   the root-owned /var/lib/vigo/swarm/{gitback,lockbox} +
+#   /var/lib/vigo/artifacts, restarts the agent, then runs the full
+#   7-step substrate sequence (payload → longdrawer → puddle →
+#   lockbox → gitback → curator → poolq) from a clean slate.
+#   longdrawer (~/longdrawer) is intentionally NOT wiped — every
+#   other subsystem is reset and redone from scratch.
 #
 # Why no non-destructive mode: gitback's project_id is fixed by the
 # founder's puddle pubkey, so a single founder can only have ONE
@@ -64,11 +68,12 @@ if [[ $WIPE -ne 1 ]]; then
     cat >&2 <<'EOF'
 swarm-substrate.sh requires --wipe.
 
-This script is destructive: it wipes per-user swarm state and
-root-owned /var/lib/vigo/swarm/{gitback,lockbox} on every envoy,
-then runs the full 5-step substrate test from a clean slate. There
-is no non-destructive mode (gitback's single-project-per-puddle
-invariant precludes a re-runnable smoke).
+This script is destructive: it wipes per-user swarm state (all
+subsystems except longdrawer), root-owned /var/lib/vigo/swarm/{gitback,
+lockbox} and /var/lib/vigo/artifacts on every envoy, then runs the full
+7-step substrate test from a clean slate. There is no non-destructive
+mode (gitback's single-project-per-puddle invariant precludes a
+re-runnable smoke).
 
 For a fleet-free quick smoke, run:
     cd agent && cargo test --test gitback_helper
@@ -175,8 +180,10 @@ if [[ $WIPE -eq 1 ]]; then
         ssh "$h" '
             set -e
             sudo systemctl stop vigo-envoy
-            rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-gitback ~/longdrawer
-            sudo rm -rf /var/lib/vigo/swarm/gitback /var/lib/vigo/swarm/lockbox
+            # longdrawer (~/longdrawer) is intentionally preserved; every
+            # other subsystem is scrubbed and redone from a clean slate.
+            rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-gitback ~/.vigo-curator ~/.vigo-poolq
+            sudo rm -rf /var/lib/vigo/swarm/gitback /var/lib/vigo/swarm/lockbox /var/lib/vigo/artifacts
             sudo systemctl start vigo-envoy
             # Poll for active state — vigo-envoy can spend several
             # seconds in "activating" while it does enrollment refresh
@@ -437,6 +444,100 @@ ssh "$CLONER" "
 echo "  clone from $CLONER: c1.txt content verified"
 
 ok "gitback push + fan-out + cross-envoy clone on ${#HOSTS[@]} envoys"
+
+# ---------- step 8: curator ----------
+
+step "curator: founder publishes artifact, receivers resolve + pull"
+
+# Founder publishes a generic blob. Publishing requires `curator: true`
+# on the founder's usercrate + swarm.curator.enabled for this envoy + an
+# unlocked puddle (same gating shape as gitback). Read verbs (resolve /
+# pull) on receivers are ungated.
+CUR_BLOB=/tmp/$TAG-curator.bin
+echo "$TAG curator blob $(date -Iseconds)" > "$CUR_BLOB"
+CUR_CONTENT=$(cat "$CUR_BLOB")
+scp -q "$CUR_BLOB" "$FOUNDER:/tmp/$TAG-curator.bin"
+
+PUSH_OUT=$(ssh "$FOUNDER" "
+    set -e
+    export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+    echo '$PASSPHRASE' | vigo swarm puddle unlock >/dev/null 2>&1
+    sleep 1
+    vigo swarm curator push $TAG --file /tmp/$TAG-curator.bin --version 1.0.0 --os linux --arch amd64 --recipients '*' 2>&1
+") || { bad "curator push on $FOUNDER failed (needs curator: usercrate flag + swarm.curator.enabled)"; echo "$PUSH_OUT"; exit 1; }
+ART_ID=$(echo "$PUSH_OUT" | awk '/artifact_id:/{print $2}')
+if [[ -z "$ART_ID" ]]; then
+    bad "could not parse artifact_id from curator push output"; echo "$PUSH_OUT"; exit 1
+fi
+echo "  published artifact_id=$ART_ID"
+
+# Each receiver resolves (catalog propagation + end-to-end signature
+# verify, server /resolve), then pulls (blob relay + sha-verified
+# materialization) and we assert the materialized bytes round-trip.
+for h in "${RECEIVERS[@]}"; do
+    deadline=$(( $(date +%s) + 90 ))
+    while :; do
+        bsha=$(remote_run "$h" "vigo swarm curator resolve $ART_ID 1.0.0 linux amd64 2>/dev/null" | awk '/blob_sha:/{print $2}')
+        [[ -n "$bsha" ]] && break
+        if [[ $(date +%s) -ge $deadline ]]; then
+            bad "$h did not resolve the artifact within 90s"; exit 1
+        fi
+        sleep 3
+    done
+    PULL_OUT=$(ssh "$h" "export XDG_RUNTIME_DIR=/run/user/\$(id -u); sudo vigo swarm curator pull $ART_ID 1.0.0 linux amd64 2>&1") \
+        || { bad "curator pull on $h failed"; echo "$PULL_OUT"; exit 1; }
+    MPATH=$(echo "$PULL_OUT" | awk '/Materialized/{print $NF}')
+    got=$(ssh "$h" "sudo cat '$MPATH' 2>/dev/null")
+    if [[ "$got" != "$CUR_CONTENT" ]]; then
+        bad "curator content mismatch on $h (path=$MPATH)"; exit 1
+    fi
+    echo "  $h resolved + pulled + content verified"
+done
+ok "curator publish + cross-envoy resolve/pull on ${#RECEIVERS[@]} receiver(s)"
+
+# ---------- step 9: poolq ----------
+
+step "poolq: founder posts to a topic, receivers read the fleet log"
+
+# Founder posts 3 messages. Posting requires `poolq: true` on the
+# founder's usercrate + swarm.poolq.enabled for this envoy + an unlocked
+# puddle. Read verbs (topics / tail) on receivers are ungated; the log
+# is fleet-readable over the server REST surface (poolqmesh).
+ssh "$FOUNDER" "
+    set -e
+    export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+    echo '$PASSPHRASE' | vigo swarm puddle unlock >/dev/null 2>&1
+    sleep 1
+    for i in 1 2 3; do
+        vigo swarm poolq post $TAG --body \"$TAG poolq msg \$i\" >/dev/null
+    done
+" || { bad "poolq post on $FOUNDER failed (needs poolq: usercrate flag + swarm.poolq.enabled)"; exit 1; }
+
+# topic_id = the founder's per-topic state dir name, created on first
+# post (sha256(founder_puddle_pubkey ‖ topic_name)). Cross-puddle reads
+# on receivers must use this hex form, not the bare name.
+TOPIC_ID=$(ssh "$FOUNDER" "ls ~/.vigo-poolq/ 2>/dev/null | grep -E '^[0-9a-f]{64}\$' | head -1")
+if [[ -z "$TOPIC_ID" ]]; then
+    bad "could not determine poolq topic_id from founder state"; exit 1
+fi
+echo "  posted 3 msgs to topic_id=$TOPIC_ID"
+
+# Each receiver tails the fleet-readable log and must see all 3 messages
+# (propagation rides the agent trait → poolqmesh → REST path, so allow a
+# check-in cycle).
+for h in "${RECEIVERS[@]}"; do
+    deadline=$(( $(date +%s) + 90 ))
+    while :; do
+        n=$(remote_run "$h" "vigo swarm poolq tail $TOPIC_ID --limit 10 2>/dev/null" | grep -c 'seq=' || true)
+        [[ "$n" -ge 3 ]] && break
+        if [[ $(date +%s) -ge $deadline ]]; then
+            bad "$h saw $n/3 poolq messages within 90s"; exit 1
+        fi
+        sleep 3
+    done
+    echo "  $h tailed 3 message(s)"
+done
+ok "poolq founder-post + fleet-read on ${#RECEIVERS[@]} receiver(s)"
 
 # ---------- summary ----------
 
