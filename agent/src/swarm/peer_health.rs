@@ -156,7 +156,7 @@ pub fn probe(agent: &ureq::Agent, peer_addr: &str, purpose: &Purpose) -> ProbeOu
 
     // Serve a fresh cache hit without touching the network.
     {
-        let map = cache().lock().expect("peer_health cache lock poisoned");
+        let map = cache().lock().unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = map.get(&key) {
             if entry.fetched.elapsed() < CACHE_TTL {
                 return classify(entry.pct);
@@ -167,7 +167,7 @@ pub fn probe(agent: &ureq::Agent, peer_addr: &str, purpose: &Purpose) -> ProbeOu
     let url = format!("https://{}/health/storage?{}", normalized, purpose.query());
     match fetch(agent, &url) {
         Ok(pct) => {
-            let mut map = cache().lock().expect("peer_health cache lock poisoned");
+            let mut map = cache().lock().unwrap_or_else(|e| e.into_inner());
             prune_stale(&mut map);
             map.insert(
                 key,

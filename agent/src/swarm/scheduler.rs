@@ -457,7 +457,7 @@ async fn run_endgame_round(
     tokio::spawn(async move {
         for (chunk_idx, peer_addr) in tasks {
             // Early exit if this chunk already arrived from another peer.
-            if producer_claimed.read().unwrap().contains(&chunk_idx) {
+            if producer_claimed.read().unwrap_or_else(|e| e.into_inner()).contains(&chunk_idx) {
                 continue;
             }
             let permit = match producer_sem.clone().acquire_owned().await {
@@ -473,7 +473,7 @@ async fn run_endgame_round(
                 let _permit = permit;
                 // Re-check after acquiring the permit — the chunk might
                 // have landed while we were queued behind other fetches.
-                if claimed.read().unwrap().contains(&chunk_idx) {
+                if claimed.read().unwrap_or_else(|e| e.into_inner()).contains(&chunk_idx) {
                     return;
                 }
                 let start = std::time::Instant::now();
@@ -540,7 +540,7 @@ async fn run_endgame_round(
                     continue;
                 }
 
-                claimed.write().unwrap().insert(result.index);
+                claimed.write().unwrap_or_else(|e| e.into_inner()).insert(result.index);
                 stats.succeeded.insert(result.index);
 
                 *source_counts.entry(result.source.clone()).or_insert(0) += 1;

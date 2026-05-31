@@ -72,7 +72,7 @@ pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
         poolq_max_msg_bytes: opt_nonzero_u64(msg.poolq_max_msg_bytes),
         poolq_retention_secs: opt_nonzero_u64(msg.poolq_retention_secs),
     };
-    let mut w = cell().write().expect("swarm runtime limits cache poisoned");
+    let mut w = cell().write().unwrap_or_else(|e| e.into_inner());
     *w = new;
 }
 
@@ -80,7 +80,7 @@ pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
 /// `Option`s); callers can match on individual fields without holding
 /// the lock.
 pub fn current() -> SwarmLimits {
-    cell().read().expect("swarm runtime limits cache poisoned").clone()
+    cell().read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 /// Reset the cache. Tests only.

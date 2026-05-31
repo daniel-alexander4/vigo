@@ -199,7 +199,7 @@ async fn run(
                     }
                     Some(RawEvent::Notify(ev)) => {
                         if let Some((user, filename, action)) =
-                            resolve_event(&ev, &watches.lock().unwrap())
+                            resolve_event(&ev, &watches.lock().unwrap_or_else(|e| e.into_inner()))
                         {
                             let key = (user.clone(), filename.clone(), action);
                             let now = std::time::Instant::now();
@@ -657,7 +657,7 @@ fn reconcile_watches(
         }
     };
 
-    let mut active = watches.lock().unwrap();
+    let mut active = watches.lock().unwrap_or_else(|e| e.into_inner());
 
     // Step 1: drop watches for users no longer enrolled.
     let unenrolled: Vec<String> = active

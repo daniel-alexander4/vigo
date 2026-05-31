@@ -85,7 +85,7 @@ impl PeerMap {
     /// (build TLS agent, HTTPS round-trip) when the peer just told us
     /// their bitmap and nothing has changed since.
     pub fn should_probe(&self, sha256: &str, address: &str) -> bool {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let cutoff = Instant::now() - PROBE_COOLDOWN;
         match map.get(sha256).and_then(|peers| peers.get(address)) {
             Some(info) => info.bitmap_refreshed_at < cutoff,
@@ -98,7 +98,7 @@ impl PeerMap {
     /// /meta is unchanged since our last fetch returns 304 with no body
     /// instead of re-sending the full bitmap.
     pub fn stored_etag(&self, sha256: &str, address: &str) -> Option<String> {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         map.get(sha256)
             .and_then(|peers| peers.get(address))
             .and_then(|info| info.etag.clone())
@@ -145,7 +145,7 @@ impl PeerMap {
         etag: Option<String>,
     ) {
         self.mark_dirty();
-        let mut map = self.inner.write().unwrap();
+        let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let blob_peers = map.entry(sha256.to_string()).or_default();
         let now = Instant::now();
 
@@ -190,7 +190,7 @@ impl PeerMap {
     /// returns 304 Not Modified on a /meta probe — we know they're still
     /// alive, but their inventory hasn't changed.
     pub fn touch_peer(&self, sha256: &str, address: &str) {
-        let mut map = self.inner.write().unwrap();
+        let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if let Some(blob_peers) = map.get_mut(sha256) {
             if let Some(info) = blob_peers.get_mut(address) {
                 let now = Instant::now();
@@ -209,7 +209,7 @@ impl PeerMap {
 
     /// Get all live peers for a blob, filtering out expired entries.
     pub fn peers_for(&self, sha256: &str) -> Vec<PeerInfo> {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let cutoff = Instant::now() - PEER_TTL;
 
         match map.get(sha256) {
@@ -232,7 +232,7 @@ impl PeerMap {
 
     /// Get all blob hashes that have at least one live peer.
     pub fn active_blobs(&self) -> Vec<String> {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let cutoff = Instant::now() - PEER_TTL;
 
         map.iter()
@@ -245,7 +245,7 @@ impl PeerMap {
     /// blob eviction so stale entries don't cause 404 floods when the
     /// same SHA is re-seeded.
     pub fn flush_sha(&self, sha256: &str) {
-        let mut map = self.inner.write().unwrap();
+        let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         if map.remove(sha256).is_some() {
             self.mark_dirty();
         }
@@ -256,7 +256,7 @@ impl PeerMap {
     /// GC that finds nothing to prune is a no-op as far as save() is
     /// concerned, so we don't rewrite peers.json every announce cycle.
     pub fn gc(&self) {
-        let mut map = self.inner.write().unwrap();
+        let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let cutoff = Instant::now() - PEER_TTL;
         let before: usize = map.values().map(|m| m.len()).sum();
 
@@ -273,13 +273,13 @@ impl PeerMap {
 
     /// Total number of peer entries (for diagnostics).
     pub fn len(&self) -> usize {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         map.values().map(|m| m.len()).sum()
     }
 
     /// True iff no peer entries are tracked.
     pub fn is_empty(&self) -> bool {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         map.values().all(|m| m.is_empty())
     }
 
@@ -291,7 +291,7 @@ impl PeerMap {
         &self,
         threshold: Duration,
     ) -> Vec<(String, String, Option<String>)> {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         let stale_cutoff = now - threshold;
         let live_cutoff = now - PEER_TTL;
@@ -308,7 +308,7 @@ impl PeerMap {
 
     /// Get all unique peer addresses across all blobs (for active probing).
     pub fn all_addresses(&self) -> Vec<String> {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let cutoff = Instant::now() - PEER_TTL;
         let mut addrs: HashSet<String> = HashSet::new();
         for peers in map.values() {
@@ -323,7 +323,7 @@ impl PeerMap {
 
     /// Save peer state to disk for persistence across restarts.
     pub fn save(&self, path: &Path) {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         let mut entries = Vec::new();
 
@@ -385,7 +385,7 @@ impl PeerMap {
         let now = Instant::now();
         let mut count = 0;
         {
-            let mut map = pm.inner.write().unwrap();
+            let mut map = pm.inner.write().unwrap_or_else(|e| e.into_inner());
             for entry in entries {
                 let source = match entry.source.as_str() {
                     "multicast" => PeerSource::Multicast,
