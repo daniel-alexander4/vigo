@@ -19,6 +19,8 @@ Manages file content, permissions, and ownership idempotently. Uses SHA-256 cont
 | `validate` | No | -- | Shell command to validate content before writing. `%` is replaced with the temp file path. Non-zero exit blocks the write. |
 | `stream_edit` | No | -- | Path to a script (or list of paths) that transforms `content` before writing. See [Stream Edit](#stream-edit). |
 
+> **`secret:` in `content` is always a reference.** A `secret:<path>` token anywhere in `content` (whole-value or mid-string) is resolved as a secret reference — the path's value is fetched and substituted in. This is how you write a secret into a file (`content: "db_pw = secret:vigo/db/pw"`). There is no escape, so a *literal* `secret:<path>`-shaped token you mean as plain text (e.g. documentation of the secret syntax) will be treated as a reference: it injects the value if the path exists, or fails the publish if it doesn't. To include literal `secret:<path>` text in a managed file, render it via a template variable rather than typing it directly into `content`.
+
 ## States
 
 - **`present`** -- Ensure the file exists with the specified content, mode, owner, and group.
