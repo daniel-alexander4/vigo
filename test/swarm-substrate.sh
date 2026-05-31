@@ -182,7 +182,11 @@ if [[ $WIPE -eq 1 ]]; then
             sudo systemctl stop vigo-envoy
             # longdrawer (~/longdrawer) is intentionally preserved; every
             # other subsystem is scrubbed and redone from a clean slate.
-            rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-gitback ~/.vigo-curator ~/.vigo-poolq
+            # sudo because curators root helper daemon writes root-owned
+            # files into ~/.vigo-curator/ (plain user rm hits EPERM). The
+            # ~ is expanded by the calling-user shell before sudo runs, so
+            # the paths resolve under that home dir, not roots.
+            sudo rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-gitback ~/.vigo-curator ~/.vigo-poolq
             sudo rm -rf /var/lib/vigo/swarm/gitback /var/lib/vigo/swarm/lockbox /var/lib/vigo/artifacts
             sudo systemctl start vigo-envoy
             # Poll for active state — vigo-envoy can spend several
@@ -351,9 +355,10 @@ fi
 
 step "gitback: init project, push, fan-out, cross-envoy clone"
 
-# Founder inits the project.
+# Founder inits the project. The project_id is embedded in the printed
+# URL line (gitback://<project_id>/<handle>); Founder: gives ed25519:<pub>.
 INIT_OUT=$(remote_unlock_and "$FOUNDER" "vigo swarm gitback project init $TAG")
-PID=$(echo "$INIT_OUT" | awk '/Project ID:/{print $3}')
+PID=$(echo "$INIT_OUT" | awk '/URL:/{print $2}' | sed -E 's#^gitback://([^/]+)/.*#\1#')
 PUDDLE_PUB=$(echo "$INIT_OUT" | awk '/Founder:/{print $2}')
 if [[ -z "$PID" ]] || [[ -z "$PUDDLE_PUB" ]]; then
     bad "could not parse project init output"
@@ -474,10 +479,14 @@ echo "  published artifact_id=$ART_ID"
 # Each receiver resolves (catalog propagation + end-to-end signature
 # verify, server /resolve), then pulls (blob relay + sha-verified
 # materialization) and we assert the materialized bytes round-trip.
+# resolve/pull run under sudo: the server-mediated read path needs the
+# agent's root-owned mTLS client cert to reach /resolve and /blob — a
+# non-root user has "no mTLS material". resolve exits non-zero until the
+# artifact propagates, so `|| true` keeps the poll alive under set -e.
 for h in "${RECEIVERS[@]}"; do
     deadline=$(( $(date +%s) + 90 ))
     while :; do
-        bsha=$(remote_run "$h" "vigo swarm curator resolve $ART_ID 1.0.0 linux amd64 2>/dev/null" | awk '/blob_sha:/{print $2}')
+        bsha=$(ssh "$h" "sudo vigo swarm curator resolve $ART_ID 1.0.0 linux amd64 2>/dev/null" | awk '/blob_sha:/{print $2}' || true)
         [[ -n "$bsha" ]] && break
         if [[ $(date +%s) -ge $deadline ]]; then
             bad "$h did not resolve the artifact within 90s"; exit 1
@@ -501,8 +510,9 @@ step "poolq: founder posts to a topic, receivers read the fleet log"
 
 # Founder posts 3 messages. Posting requires `poolq: true` on the
 # founder's usercrate + swarm.poolq.enabled for this envoy + an unlocked
-# puddle. Read verbs (topics / tail) on receivers are ungated; the log
-# is fleet-readable over the server REST surface (poolqmesh).
+# puddle (post is local — no server round-trip). The receiver `tail` reads
+# the fleet log over the server REST surface (poolqmesh), so — like curator
+# resolve — it needs the agent's root-owned mTLS cert and runs under sudo.
 ssh "$FOUNDER" "
     set -e
     export XDG_RUNTIME_DIR=/run/user/\$(id -u)
@@ -528,7 +538,7 @@ echo "  posted 3 msgs to topic_id=$TOPIC_ID"
 for h in "${RECEIVERS[@]}"; do
     deadline=$(( $(date +%s) + 90 ))
     while :; do
-        n=$(remote_run "$h" "vigo swarm poolq tail $TOPIC_ID --limit 10 2>/dev/null" | grep -c 'seq=' || true)
+        n=$(ssh "$h" "sudo vigo swarm poolq tail $TOPIC_ID --limit 10 2>/dev/null" | grep -c 'seq=' || true)
         [[ "$n" -ge 3 ]] && break
         if [[ $(date +%s) -ge $deadline ]]; then
             bad "$h saw $n/3 poolq messages within 90s"; exit 1
