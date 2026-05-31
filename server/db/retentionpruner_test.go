@@ -26,6 +26,12 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 
 	old := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02 15:04:05")
 	recent := time.Now().Add(-1 * time.Hour).UTC().Format("2006-01-02 15:04:05")
+	// History tables (convergence_history, compliance_history) are pruned
+	// date-only against cutoff.Format("2006-01-02"), so their fixtures use
+	// date-only relative values — never literal dates, which age out of the
+	// retention window as wall-clock advances.
+	oldDate := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02")
+	recentDate := time.Now().UTC().Format("2006-01-02")
 
 	// Insert old and recent runs (migration CHECK allows: running, success, failure, partial).
 	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'success')`, old)
@@ -43,12 +49,12 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 
 	// Old and recent convergence history (post axis-split: failure axis
 	// columns + drift axis columns + offline).
-	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline) VALUES ('ch1', '2024-01-01', 10, 8, 1, 0, 0, 2, 0, 1)`)
-	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline) VALUES ('ch2', '2026-03-01', 10, 9, 0, 0, 0, 1, 0, 1)`)
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline) VALUES ('ch1', ?, 10, 8, 1, 0, 0, 2, 0, 1)`, oldDate)
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline) VALUES ('ch2', ?, 10, 9, 0, 0, 0, 1, 0, 1)`, recentDate)
 
 	// Old and recent compliance history.
-	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co1', '2024-01-01', 'cis', 80.0, 8, 1, 1, 10)`)
-	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co2', '2026-03-01', 'cis', 90.0, 9, 1, 0, 10)`)
+	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co1', ?, 'cis', 80.0, 8, 1, 1, 10)`, oldDate)
+	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co2', ?, 'cis', 90.0, 9, 1, 0, 10)`, recentDate)
 
 	// Prune with 90-day retention.
 	pruner := NewRetentionPruner(queries, sqlDB, 90*24*time.Hour)
