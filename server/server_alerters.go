@@ -427,14 +427,15 @@ func (s *Server) runComplianceChecker(ctx context.Context, threshold int) {
 
 			compliantCount := 0
 			for _, id := range ids {
-				var recent []convergence.RunInfo
-				if run, ok := latestRuns[id]; ok {
-					recent = []convergence.RunInfo{{
-						Status:       run.Status,
-						ChangedCount: int64(run.ChangedCount),
-					}}
+				run, ok := latestRuns[id]
+				if !ok {
+					continue // no run data → not converged
 				}
-				if convergence.ComputeConvergence(recent) == "converged" {
+				ri := convergence.RunInfo{
+					Status:       run.Status,
+					ChangedCount: int64(run.ChangedCount),
+				}
+				if convergence.ComputeStatus(ri) == convergence.StatusConverged {
 					compliantCount++
 				}
 			}
