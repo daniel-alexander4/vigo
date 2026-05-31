@@ -1,6 +1,11 @@
 {{/*
-envoy-filter-bar — the three-axis count strip (Failure / Drift / Reach)
-above the envoys table.
+envoy-filter-bar — the three-axis count strip (Convergence / Drift /
+Reachability) under a single "Fleet Envoy Status" heading, above the
+envoys table. The axes are orthogonal — counts do NOT sum across them
+(Drift overlays the Convergence buckets; Diverged ⊆ Changed; Reachability
+is independent) — which is why the per-axis sub-labels are kept under the
+single heading rather than flattened into one row. Pills within each axis
+run least→most severe, left→right.
 
 Two render modes, selected by .ReadOnly:
   - ReadOnly=false (dashboard): clickable count pills that navigate to
@@ -19,14 +24,16 @@ Callers that don't already have these fields on their data should pass
 them via `dict` (see dashboard.html, envoys-tree.html).
 */}}
 {{define "envoy-filter-bar"}}
+<div class="filter-bar-group__title">Fleet Envoy Status</div>
 <div class="filter-bar-group flex flex-wrap items-end gap-2">
     <div class="filter-bar-axis">
-        <span class="filter-bar-axis__label">Failure</span>
+        <span class="filter-bar-axis__label">Convergence</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys" "Active" (and (eq .ConvFilter "") (eq .DriftFilter "") (eq .ReachFilter "") (eq .Search "")) "Label" "All" "Count" .TotalEnvoys "CountClass" ""}}
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=converged" "Active" (eq .ConvFilter "converged") "Label" "Converged" "Count" .CountConverged "CountClass" "filter-count--success"}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=degraded" "Active" (eq .ConvFilter "degraded") "Label" "Degraded" "Count" .CountDegraded "CountClass" "filter-count--warning"}}
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=no+data" "Active" (eq .ConvFilter "no data") "Label" "No Data" "Count" .CountNoData "CountClass" "filter-count--muted"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=degraded" "Active" (eq .ConvFilter "degraded") "Label" "Degraded" "Count" .CountDegraded "CountClass" "filter-count--warning"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=failed" "Active" (eq .ConvFilter "failed") "Label" "Failed" "Count" .CountFailed "CountClass" "filter-count--danger" "Tooltip" "Latest run failed (≥80% module failures or agent blocked)"}}
         </div>
     </div>
     <div class="filter-bar-axis">
@@ -34,11 +41,10 @@ them via `dict` (see dashboard.html, envoys-tree.html).
         <div class="filter-bar flex items-center gap-1 flex-wrap">
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=changed" "Active" (eq .DriftFilter "changed") "Label" "Changed" "Count" .CountChanged "CountClass" "filter-count--info" "Tooltip" "Last run made changes"}}
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=diverged" "Active" (eq .DriftFilter "diverged") "Label" "Diverged" "Count" .CountDiverged "CountClass" "filter-count--peach" "Tooltip" "5+ consecutive runs with changes"}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=failed" "Active" (eq .ConvFilter "failed") "Label" "Failed" "Count" .CountFailed "CountClass" "filter-count--danger" "Tooltip" "Latest run failed (≥80% module failures or agent blocked)"}}
         </div>
     </div>
     <div class="filter-bar-axis">
-        <span class="filter-bar-axis__label">Reach</span>
+        <span class="filter-bar-axis__label">Reachability</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=offline" "Active" (eq .ReachFilter "offline") "Label" "Offline" "Count" .CountOffline "CountClass" "filter-count--muted" "Tooltip" (printf "Envoys silent past their per-envoy stale threshold (2.5× the agent's observed inter-CheckIn cadence; floor of %s when no cadence has been reported yet)." .OfflineThresholdLabel)}}
             {{if gt .CountObserving 0}}

@@ -245,6 +245,27 @@ func TestEnvoysHandlerRendersFilterDrawer(t *testing.T) {
 	if !strings.Contains(body, `<span class="btn btn--sm filter-bar__chip-readonly`) {
 		t.Error("Envoys page filter bar should render chips as <span>, not <a>")
 	}
+	// Single "Fleet Envoy Status" heading over the three orthogonal-axis
+	// groups, with the axes relabeled to full words.
+	if !strings.Contains(body, "Fleet Envoy Status") {
+		t.Error("Envoys page filter bar should carry the single Fleet Envoy Status heading")
+	}
+	for _, axis := range []string{"Convergence", "Drift", "Reachability"} {
+		if !strings.Contains(body, ">"+axis+"<") {
+			t.Errorf("Envoys page filter bar missing the %q axis sub-label", axis)
+		}
+	}
+	// The retired terse "Failure"/"Reach" axis labels must be gone.
+	for _, gone := range []string{`__label">Failure<`, `__label">Reach<`} {
+		if strings.Contains(body, gone) {
+			t.Errorf("Envoys page filter bar still shows the retired axis label %q", gone)
+		}
+	}
+	// Failed is a Convergence-axis state (conv=failed), no longer mis-grouped
+	// under Drift; the pill must point at the conv filter.
+	if !strings.Contains(body, "Failed") || !strings.Contains(body, "conv=failed") {
+		t.Error("Envoys page filter bar missing the Failed pill in the Convergence group")
+	}
 }
 
 func TestEnvoysHandlerStatusFilter(t *testing.T) {

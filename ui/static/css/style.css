@@ -1523,6 +1523,14 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     letter-spacing: 0.6px;
     color: var(--color-text-muted);
 }
+/* Single heading over the three orthogonal-axis pill groups (Convergence /
+   Drift / Reachability). One level up from the per-axis labels. */
+.filter-bar-group__title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 6px;
+}
 
 /* Hard-cap sentinel: replaces the "load more" trigger past the rendered
    cap (default 1,000 rows). Sits as a TR inside the tbody so outerHTML
