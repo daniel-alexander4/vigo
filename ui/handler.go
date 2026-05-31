@@ -6233,12 +6233,12 @@ func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 
 	result, err := audit.VerifyFull(ctx, h.queries)
 	if err != nil {
-		fmt.Fprintf(w, `<span class="badge badge--failure">Verification error: %s</span>`, err.Error())
+		fmt.Fprintf(w, `<span class="badge badge--failure">Verification error: %s</span>`, template.HTMLEscapeString(err.Error()))
 		return
 	}
 
 	if !result.Valid {
-		fmt.Fprintf(w, `<div class="mt-1"><span class="badge badge--failure">CHAIN BROKEN at entry #%d</span><p class="text-muted mt-1">%s</p></div>`, result.FirstBroken, result.Error)
+		fmt.Fprintf(w, `<div class="mt-1"><span class="badge badge--failure">CHAIN BROKEN at entry #%d</span><p class="text-muted mt-1">%s</p></div>`, result.FirstBroken, template.HTMLEscapeString(result.Error))
 		return
 	}
 
@@ -6257,8 +6257,14 @@ func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 		if len(hash) > 12 {
 			hash = hash[:12] + "..."
 		}
+		// Audit entries carry operator-influenceable free text (actor,
+		// summary, and the patterns/hostnames folded into them). Escape
+		// every interpolated value — source also lands inside a class
+		// attribute, so an unescaped quote would break out of it.
+		source := template.HTMLEscapeString(e.Source)
 		b.WriteString(fmt.Sprintf(`<tr><td>%d</td><td>%s</td><td><span class="badge badge--info">%s</span></td><td><span class="badge badge--%s">%s</span></td><td>%s</td><td>%s</td><td class="text-muted">%s</td></tr>`,
-			e.ID, e.Timestamp.Local().Format("2006-01-02 15:04:05"), e.EventType, e.Source, e.Source, e.Actor, e.Summary, hash))
+			e.ID, e.Timestamp.Local().Format("2006-01-02 15:04:05"), template.HTMLEscapeString(e.EventType), source, source,
+			template.HTMLEscapeString(e.Actor), template.HTMLEscapeString(e.Summary), template.HTMLEscapeString(hash)))
 	}
 	b.WriteString(`</tbody></table></div>`)
 	w.Header().Set("Content-Type", "text/html")
