@@ -20,10 +20,12 @@ Single-`docker run` if you don't want compose:
 ```bash
 sudo mkdir -p /srv/vigo
 docker run -d --name vigo \
-  -p 8443:8443 -p 1530:1530 \
+  --network host \
   -v /srv/vigo:/srv/vigo \
   us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
 ```
+
+`--network host` binds 8443 (REST/UI), 1530 (gRPC), and 1531 (swarm) directly on the host — matching the generated compose, which host-networks the server so agent traffic doesn't route through Docker's per-port userland proxy. (Scrier's `guacd` sidecar isn't started by this bare `docker run`; use compose if you need RDP/VNC scrier sessions.)
 
 Open `https://localhost:8443` — accept the self-signed cert, you'll land on the dashboard.
 

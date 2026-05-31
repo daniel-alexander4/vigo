@@ -25,8 +25,8 @@ Scrier is Vigo's admin remote-access feature: interactive SSH, RDP, and VNC sess
 ```yaml
 scrier:
   enabled: true
-  guacd_addr: "guacd:4822"            # Docker-compose service hostname:port
-  proxy_hostname: "vigo"              # how guacd reaches back to vigosrv
+  guacd_addr: "127.0.0.1:4822"        # how vigosrv reaches guacd
+  proxy_hostname: "127.0.0.1"         # how guacd reaches back to vigosrv
   allowed_ports:                      # ports the agent will tunnel to
     - 22
     - 3389
@@ -35,7 +35,7 @@ scrier:
   recording_enabled: false            # schema placeholder; not yet writing
 ```
 
-If you're using the bundled Docker Compose, `guacd_addr: "guacd:4822"` and `proxy_hostname: "vigo"` are correct as-is — the `vigo-guacd` sidecar ships in the same compose file. Bare-metal installs need to provide their own `guacd` instance.
+The bundled Docker Compose host-networks both `vigo` and the `vigo-guacd` sidecar, so they reach each other over host loopback — `guacd_addr: "127.0.0.1:4822"` and `proxy_hostname: "127.0.0.1"` as shown. Bare-metal installs (guacd as a local service) use the same loopback values. Only a guacd on a *separate* host needs different addresses.
 
 Restart `vigosrv` after editing.
 

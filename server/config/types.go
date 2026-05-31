@@ -285,18 +285,19 @@ type SwarmLockboxSection struct {
 // ScrierSection configures the Scrier remote access feature.
 type ScrierSection struct {
 	Enabled          bool     `yaml:"enabled" doc:"Enable browser-based remote sessions (SSH, RDP, VNC)." default:"false" example:"true"`
-	GuacdAddr        string   `yaml:"guacd_addr" doc:"Address of the guacd container (host:port)." default:"guacd:4822" example:"guacd:4822, 10.0.0.5:4822"`
-	ProxyHostname    string   `yaml:"proxy_hostname" doc:"Hostname guacd uses to reach back to this server (Docker service name)." default:"vigo" example:"vigo (compose service name)"`
+	GuacdAddr        string   `yaml:"guacd_addr" doc:"Address vigosrv uses to reach guacd (host:port). The bundled compose host-networks both, so guacd is on host loopback." default:"127.0.0.1:4822" example:"127.0.0.1:4822, 10.0.0.5:4822"`
+	ProxyHostname    string   `yaml:"proxy_hostname" doc:"Hostname guacd uses to reach back to this server. Host loopback under the bundled host-networked compose." default:"127.0.0.1" example:"127.0.0.1, or a routable host for a remote guacd"`
 	AllowedPorts     []uint32 `yaml:"allowed_ports" doc:"TCP ports that may be tunneled to managed envoys." default:"[22,3389,5900]" example:"[22, 3389, 5900]  # ssh, rdp, vnc"`
 	MaxSessions      int      `yaml:"max_sessions" doc:"Maximum concurrent Scrier sessions on this server." default:"10" example:"5-20 typical; bound by guacd capacity"`
 	RecordingEnabled bool     `yaml:"recording_enabled" doc:"Persist every session as a Guacamole .recording file for later replay." default:"false" example:"true (compliance/forensics)"`
 	RecordingDir     string   `yaml:"recording_dir" doc:"Directory where session recordings are written." default:"/srv/vigo/recordings" example:"/srv/vigo/recordings"`
 }
 
-// ScrierGuacdAddr returns the guacd address, defaulting to "guacd:4822".
+// ScrierGuacdAddr returns the guacd address, defaulting to "127.0.0.1:4822"
+// (the bundled compose host-networks guacd alongside vigosrv).
 func (s ScrierSection) ScrierGuacdAddr() string {
 	if s.GuacdAddr == "" {
-		return "guacd:4822"
+		return "127.0.0.1:4822"
 	}
 	return s.GuacdAddr
 }
@@ -310,10 +311,10 @@ func (s ScrierSection) ScrierAllowedPorts() []uint32 {
 }
 
 // ScrierProxyHostname returns the hostname guacd uses to reach the proxy,
-// defaulting to "vigo" (the Docker Compose service name).
+// defaulting to "127.0.0.1" (guacd is host-networked alongside vigosrv).
 func (s ScrierSection) ScrierProxyHostname() string {
 	if s.ProxyHostname == "" {
-		return "vigo"
+		return "127.0.0.1"
 	}
 	return s.ProxyHostname
 }
