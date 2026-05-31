@@ -75,8 +75,8 @@
         <span class="compliance-gauge__label">compliant on {{.SnapshotDate}}</span>
     </div>
     <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .ConvergencePct}}%"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}} w-pct-{{wbucket .ConvergencePct}}"
+            ></div>
     </div>
 </div>
 <div class="breakdown">
@@ -177,7 +177,7 @@
             <tr>
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
                 <td class="mono">{{.Configcrate}}</td>
-                <td>{{if gt .ConfigcrateCount 0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ConfigcrateCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
+                <td>{{if gt .ConfigcrateCount 0}}<span class="badge {{pctClassBg .FailurePct}} {{pctClass .FailurePct}}">{{.FailedCount}}/{{.ConfigcrateCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
                 <td>{{.RunCount}}</td>
                 <td>{{if gt .FailureCount 0}}<span class="text-danger">{{.FailureCount}}</span>{{else}}<span class="text-success">0</span>{{end}}</td>
                 <td class="text-muted">{{.LastRun}}</td>

@@ -67,9 +67,9 @@
     <h3 class="trace-group__title">Usercrates</h3>
     <div class="trace-chain">
     {{range $i, $sc := $usercrates}}
-        <div class="trace-card" style="{{traceGreenBord $i $ucTotal}};">
+        <div class="trace-card {{traceGreenBordClass $i $ucTotal}}">
             <div class="trace-card__header">
-                <span class="trace-card__file" style="{{traceGreenText $i $ucTotal}};">{{$sc.Path}}</span>
+                <span class="trace-card__file {{traceGreenTextClass $i $ucTotal}}">{{$sc.Path}}</span>
             </div>
             <div class="trace-card__row">
                 <span class="trace-card__label">usercrates:</span>
@@ -77,7 +77,7 @@
             </div>
         </div>
         {{if not (isLastIndex $i $ucTotal)}}
-        <div class="trace-arrow" style="{{traceGreenBord $i $ucTotal}};">&#9474;<br>&#9660;</div>
+        <div class="trace-arrow {{traceGreenBordClass $i $ucTotal}}">&#9474;<br>&#9660;</div>
         {{end}}
     {{end}}
     </div>
@@ -93,9 +93,9 @@
     {{range $i, $lvl := $moduleLevels}}
         {{if or $lvl.Configcrates $lvl.Roles (isLastIndex $i $mTotal)}}
         {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-        <div class="trace-card" style="{{traceGreenBord $i $mTotal}};">
+        <div class="trace-card {{traceGreenBordClass $i $mTotal}}">
             <div class="trace-card__header">
-                <span class="trace-card__file" style="{{traceGreenText $i $mTotal}};">{{$filePath}}</span>
+                <span class="trace-card__file {{traceGreenTextClass $i $mTotal}}">{{$filePath}}</span>
             </div>
             {{if isLastIndex $i $mTotal}}
             <div class="trace-card__row">
@@ -118,7 +118,7 @@
         </div>
         {{$hasMore := false}}{{range $j, $later := $moduleLevels}}{{if and (gt $j $i) (or $later.Configcrates $later.Roles (isLastIndex $j $mTotal))}}{{$hasMore = true}}{{end}}{{end}}
         {{if $hasMore}}
-        <div class="trace-arrow" style="{{traceGreenBord $i $mTotal}};">&#9474;<br>&#9660;</div>
+        <div class="trace-arrow {{traceGreenBordClass $i $mTotal}}">&#9474;<br>&#9660;</div>
         {{end}}
         {{end}}
     {{end}}
@@ -135,9 +135,9 @@
     {{range $i, $lvl := .Inheritance}}
         {{if $lvl.Vars}}
         {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-        <div class="trace-card" style="{{traceGreenBord $i $total}};">
+        <div class="trace-card {{traceGreenBordClass $i $total}}">
             <div class="trace-card__header">
-                <span class="trace-card__file" style="{{traceGreenText $i $total}};">{{$filePath}}</span>
+                <span class="trace-card__file {{traceGreenTextClass $i $total}}">{{$filePath}}</span>
             </div>
             {{range $key, $val := $lvl.Vars}}
             <div class="trace-card__row">
@@ -150,7 +150,7 @@
         </div>
         {{$hasMoreVars := false}}{{range $j, $later := $.Trace.Inheritance}}{{if and (gt $j $i) $later.Vars}}{{$hasMoreVars = true}}{{end}}{{end}}
         {{if $hasMoreVars}}
-        <div class="trace-arrow" style="{{traceGreenBord $i $total}};">&#9474;<br>&#9660;</div>
+        <div class="trace-arrow {{traceGreenBordClass $i $total}}">&#9474;<br>&#9660;</div>
         {{end}}
         {{end}}
     {{end}}
@@ -232,9 +232,9 @@
     <div class="trace-chain">
         {{$mcTotal := len .ConfigcrateComplianceFiles}}
         {{range $i, $mcf := .ConfigcrateComplianceFiles}}
-        <div class="trace-card" style="{{traceGreenBord $i $mcTotal}};">
+        <div class="trace-card {{traceGreenBordClass $i $mcTotal}}">
             <div class="trace-card__header">
-                <span class="trace-card__file" style="{{traceGreenText $i $mcTotal}};">{{$mcf.SourceFile}}</span>
+                <span class="trace-card__file {{traceGreenTextClass $i $mcTotal}}">{{$mcf.SourceFile}}</span>
             </div>
             {{range $fw := sortedKeys $mcf.Compliance}}
             <div class="trace-card__row">
@@ -250,7 +250,7 @@
             {{end}}
         </div>
         {{if not (isLastIndex $i $mcTotal)}}
-        <div class="trace-arrow" style="{{traceGreenBord $i $mcTotal}};">&#9474;<br>&#9660;</div>
+        <div class="trace-arrow {{traceGreenBordClass $i $mcTotal}}">&#9474;<br>&#9660;</div>
         {{end}}
         {{end}}
     </div>
@@ -265,9 +265,9 @@
         {{$waiverFiles := groupWaiversByFile .EnvoyWaivers}}
         {{$wTotal := len $waiverFiles}}
         {{range $i, $wf := $waiverFiles}}
-        <div class="trace-card" style="{{traceGreenBord $i $wTotal}};">
+        <div class="trace-card {{traceGreenBordClass $i $wTotal}}">
             <div class="trace-card__header">
-                <span class="trace-card__file" style="{{traceGreenText $i $wTotal}};">{{$wf.File}}</span>
+                <span class="trace-card__file {{traceGreenTextClass $i $wTotal}}">{{$wf.File}}</span>
             </div>
             {{range $wf.Entries}}
             <div class="trace-card__row">
@@ -281,7 +281,7 @@
             {{end}}
         </div>
         {{if not (isLastIndex $i $wTotal)}}
-        <div class="trace-arrow" style="{{traceGreenBord $i $wTotal}};">&#9474;<br>&#9660;</div>
+        <div class="trace-arrow {{traceGreenBordClass $i $wTotal}}">&#9474;<br>&#9660;</div>
         {{end}}
         {{end}}
     </div>

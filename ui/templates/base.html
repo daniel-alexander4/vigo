@@ -9,7 +9,7 @@
          or point somewhere external. Without this, htmx 2.0.x has no
          bypass for `download` or `target="_blank"` and silently swallows
          the click on boosted pages, breaking every download button. -->
-    <meta name="htmx-config" content='{"disableSelector":"[hx-disable], [data-hx-disable], a[download], a[target=_blank], a[rel~=external]"}'>
+    <meta name="htmx-config" content='{"includeIndicatorStyles":false,"disableSelector":"[hx-disable], [data-hx-disable], a[download], a[target=_blank], a[rel~=external]"}'>
     <link rel="icon" type="image/svg+xml" href="{{if .CustomFavicon}}/branding/favicon{{else}}/static/img/icon.svg{{end}}">
     <!-- Pre-paint theme applier (render-blocking, in <head>) — moved out of an
          inline <script> so the CSP can drop script-src 'unsafe-inline'. -->

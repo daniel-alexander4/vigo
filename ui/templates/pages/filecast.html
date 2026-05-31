@@ -153,7 +153,7 @@
                 <tr>
                     <th class="swarm-matrix__corner">target&nbsp;↓&nbsp;/&nbsp;source&nbsp;→</th>
                     {{range .Matrix.Peers}}
-                    <th style="color:{{sourceColor . $.Matrix.Colors}};">{{.}}</th>
+                    <th class="cc-fg {{sourceColor . $.Matrix.Colors}}">{{.}}</th>
                     {{end}}
                     <th class="swarm-matrix__trailer-sep">status</th>
                     <th class="swarm-matrix__trailer-head">progress</th>
@@ -163,12 +163,12 @@
             <tbody>
                 {{range $r, $row := .Matrix.Rows}}
                 <tr>
-                    <th class="swarm-matrix__row-label" style="color:{{$row.Color}};">{{$row.Target}}</th>
+                    <th class="swarm-matrix__row-label cc-fg {{$row.ColorClass}}">{{$row.Target}}</th>
                     {{range $c, $cell := $row.Cells}}
                     {{if eq $r $c}}
                     <td class="swarm-matrix__diag" title="self"></td>
                     {{else if gt $cell.Chunks 0}}
-                    <td class="swarm-matrix__cell" style="background:{{$cell.BgColor}};" title="{{index $.Matrix.Peers $c}} → {{$row.Target}}: {{$cell.Chunks}} chunks">{{$cell.Chunks}}</td>
+                    <td class="swarm-matrix__cell {{$cell.BgClass}}" title="{{index $.Matrix.Peers $c}} → {{$row.Target}}: {{$cell.Chunks}} chunks">{{$cell.Chunks}}</td>
                     {{else}}
                     <td class="swarm-matrix__empty"></td>
                     {{end}}
@@ -189,7 +189,7 @@
                         {{if gt $row.DurationMs 0}}
                         <div class="swarm-matrix__time-bar">
                             <div class="swarm-matrix__time-track">
-                                <div class="swarm-matrix__time-fill" style="width:{{$row.DurationPct}}%;background:{{$row.Color}};"></div>
+                                <div class="swarm-matrix__time-fill w-pct-{{$row.DurationPct}} swviz-bg {{$row.ColorClass}}"></div>
                             </div>
                             <span class="swarm-matrix__time-value">{{humanMs $row.DurationMs}}</span>
                         </div>

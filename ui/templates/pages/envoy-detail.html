@@ -282,12 +282,12 @@
     {{$rPct := fwPct .NotSatisfied $total}}
     <a href="/envoys/{{$.EnvoyID}}/compliance/{{.Slug}}" class="fw-card">
         <div class="fw-card__name">{{.Name}}</div>
-        <div class="fw-card__score" style="color:{{pctColorInv .ScorePercent}};">{{printf "%.1f" .ScorePercent}}%</div>
+        <div class="fw-card__score {{pctClassInv .ScorePercent}}">{{printf "%.1f" .ScorePercent}}%</div>
         <div class="fw-card__bar">
-            {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $gPct}}%"></div>{{end}}
-            {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $bPct}}%"></div>{{end}}
-            {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $yPct}}%"></div>{{end}}
-            {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:{{printf "%.1f" $rPct}}%"></div>{{end}}
+            {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green w-pct-{{wbucket $gPct}}"></div>{{end}}
+            {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue w-pct-{{wbucket $bPct}}"></div>{{end}}
+            {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow w-pct-{{wbucket $yPct}}"></div>{{end}}
+            {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red w-pct-{{wbucket $rPct}}"></div>{{end}}
         </div>
         <div class="fw-card__counts">{{.Satisfied}} satisfied{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} not met</div>
         <div class="fw-card__action">View Report &rarr;</div>

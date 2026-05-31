@@ -5135,3 +5135,113 @@ a.server-config-card:hover {
 .u-w-120px { width:120px; }
 .u-blk29 { margin:0; white-space:pre-wrap; word-break:break-all; }
 .u-blk30 { background:var(--color-muted-bg); padding:1rem; border-radius:6px; overflow-x:auto; font-size:0.85rem; color:var(--color-text); }
+
+/* ── Dynamic-style support classes (CSP: style-src 'self', no 'unsafe-inline') ──
+   Generated to back the de-inlined dynamic style= attributes. Formulas mirror
+   the Go helpers in render.go / swarm_viz.go. */
+
+/* width buckets — .w-pct-N for progress/coverage/time bars */
+.w-pct-0{width:0%} .w-pct-1{width:1%} .w-pct-2{width:2%} .w-pct-3{width:3%} .w-pct-4{width:4%} .w-pct-5{width:5%} .w-pct-6{width:6%} .w-pct-7{width:7%} .w-pct-8{width:8%} .w-pct-9{width:9%} .w-pct-10{width:10%} .w-pct-11{width:11%} .w-pct-12{width:12%} .w-pct-13{width:13%} .w-pct-14{width:14%} .w-pct-15{width:15%} .w-pct-16{width:16%} .w-pct-17{width:17%} .w-pct-18{width:18%} .w-pct-19{width:19%} .w-pct-20{width:20%} .w-pct-21{width:21%} .w-pct-22{width:22%} .w-pct-23{width:23%} .w-pct-24{width:24%} .w-pct-25{width:25%} .w-pct-26{width:26%} .w-pct-27{width:27%} .w-pct-28{width:28%} .w-pct-29{width:29%} .w-pct-30{width:30%} .w-pct-31{width:31%} .w-pct-32{width:32%} .w-pct-33{width:33%} .w-pct-34{width:34%} .w-pct-35{width:35%} .w-pct-36{width:36%} .w-pct-37{width:37%} .w-pct-38{width:38%} .w-pct-39{width:39%} .w-pct-40{width:40%} .w-pct-41{width:41%} .w-pct-42{width:42%} .w-pct-43{width:43%} .w-pct-44{width:44%} .w-pct-45{width:45%} .w-pct-46{width:46%} .w-pct-47{width:47%} .w-pct-48{width:48%} .w-pct-49{width:49%} .w-pct-50{width:50%} .w-pct-51{width:51%} .w-pct-52{width:52%} .w-pct-53{width:53%} .w-pct-54{width:54%} .w-pct-55{width:55%} .w-pct-56{width:56%} .w-pct-57{width:57%} .w-pct-58{width:58%} .w-pct-59{width:59%} .w-pct-60{width:60%} .w-pct-61{width:61%} .w-pct-62{width:62%} .w-pct-63{width:63%} .w-pct-64{width:64%} .w-pct-65{width:65%} .w-pct-66{width:66%} .w-pct-67{width:67%} .w-pct-68{width:68%} .w-pct-69{width:69%} .w-pct-70{width:70%} .w-pct-71{width:71%} .w-pct-72{width:72%} .w-pct-73{width:73%} .w-pct-74{width:74%} .w-pct-75{width:75%} .w-pct-76{width:76%} .w-pct-77{width:77%} .w-pct-78{width:78%} .w-pct-79{width:79%} .w-pct-80{width:80%} .w-pct-81{width:81%} .w-pct-82{width:82%} .w-pct-83{width:83%} .w-pct-84{width:84%} .w-pct-85{width:85%} .w-pct-86{width:86%} .w-pct-87{width:87%} .w-pct-88{width:88%} .w-pct-89{width:89%} .w-pct-90{width:90%} .w-pct-91{width:91%} .w-pct-92{width:92%} .w-pct-93{width:93%} .w-pct-94{width:94%} .w-pct-95{width:95%} .w-pct-96{width:96%} .w-pct-97{width:97%} .w-pct-98{width:98%} .w-pct-99{width:99%} .w-pct-100{width:100%}
+
+/* score/failure band colors (pctClass*) */
+.pct-danger{color:var(--color-danger)}
+.pct-danger-bg{background:var(--color-danger-bg)}
+.pct-warning{color:var(--color-warning)}
+.pct-warning-bg{background:var(--color-warning-bg)}
+.pct-success{color:var(--color-success)}
+.pct-success-bg{background:var(--color-success-bg)}
+.bg-brand{background:var(--color-brand)}
+
+/* swarm/compliance viz colors (ccClass): .cc-<rrggbb> sets --cc-rgb;
+   .cc-fg/.cc-bg/.cc-bg-aN consume it (solid text/bg + heatmap alpha buckets) */
+.cc-f9e2af{--cc-rgb:249,226,175}
+.cc-f38ba8{--cc-rgb:243,139,168}
+.cc-a6e3a1{--cc-rgb:166,227,161}
+.cc-89b4fa{--cc-rgb:137,180,250}
+.cc-fab387{--cc-rgb:250,179,135}
+.cc-cba6f7{--cc-rgb:203,166,247}
+.cc-94e2d5{--cc-rgb:148,226,213}
+.cc-f5c2e7{--cc-rgb:245,194,231}
+.cc-df8e1d{--cc-rgb:223,142,29}
+.cc-d20f39{--cc-rgb:210,15,57}
+.cc-40a02b{--cc-rgb:64,160,43}
+.cc-1e66f5{--cc-rgb:30,102,245}
+.cc-fe640b{--cc-rgb:254,100,11}
+.cc-8839ef{--cc-rgb:136,57,239}
+.cc-179299{--cc-rgb:23,146,153}
+.cc-ea76cb{--cc-rgb:234,118,203}
+.cc-a0aec0{--cc-rgb:160,174,192}
+.cc-fg{color:rgb(var(--cc-rgb))}
+.cc-bg{background:rgb(var(--cc-rgb))}
+.cc-bg-a0{background:rgba(var(--cc-rgb),0.250)}
+.cc-bg-a1{background:rgba(var(--cc-rgb),0.297)}
+.cc-bg-a2{background:rgba(var(--cc-rgb),0.344)}
+.cc-bg-a3{background:rgba(var(--cc-rgb),0.391)}
+.cc-bg-a4{background:rgba(var(--cc-rgb),0.438)}
+.cc-bg-a5{background:rgba(var(--cc-rgb),0.484)}
+.cc-bg-a6{background:rgba(var(--cc-rgb),0.531)}
+.cc-bg-a7{background:rgba(var(--cc-rgb),0.578)}
+.cc-bg-a8{background:rgba(var(--cc-rgb),0.625)}
+.cc-bg-a9{background:rgba(var(--cc-rgb),0.672)}
+.cc-bg-a10{background:rgba(var(--cc-rgb),0.719)}
+.cc-bg-a11{background:rgba(var(--cc-rgb),0.766)}
+.cc-bg-a12{background:rgba(var(--cc-rgb),0.812)}
+.cc-bg-a13{background:rgba(var(--cc-rgb),0.859)}
+.cc-bg-a14{background:rgba(var(--cc-rgb),0.906)}
+.cc-bg-a15{background:rgba(var(--cc-rgb),0.953)}
+.cc-bg-a16{background:rgba(var(--cc-rgb),1.000)}
+
+/* envoy-trace green gradient buckets (traceGreen*Class): set the same
+   --tb-*/--tc-* custom props the inline style did, quantized to 21 levels */
+.tgb-0{--tb-l:rgb(91,179,112);--tb-d:rgb(140,210,140)}
+.tgb-1{--tb-l:rgb(87,174,108);--tb-d:rgb(141,210,141)}
+.tgb-2{--tb-l:rgb(84,170,105);--tb-d:rgb(142,211,142)}
+.tgb-3{--tb-l:rgb(81,165,102);--tb-d:rgb(143,212,143)}
+.tgb-4{--tb-l:rgb(78,161,99);--tb-d:rgb(145,213,144)}
+.tgb-5{--tb-l:rgb(74,157,96);--tb-d:rgb(146,214,145)}
+.tgb-6{--tb-l:rgb(71,152,92);--tb-d:rgb(147,215,146)}
+.tgb-7{--tb-l:rgb(68,148,89);--tb-d:rgb(149,215,147)}
+.tgb-8{--tb-l:rgb(65,144,86);--tb-d:rgb(150,216,148)}
+.tgb-9{--tb-l:rgb(61,139,83);--tb-d:rgb(151,217,149)}
+.tgb-10{--tb-l:rgb(58,135,80);--tb-d:rgb(153,218,150)}
+.tgb-11{--tb-l:rgb(55,131,76);--tb-d:rgb(154,219,151)}
+.tgb-12{--tb-l:rgb(52,126,73);--tb-d:rgb(155,220,152)}
+.tgb-13{--tb-l:rgb(48,122,70);--tb-d:rgb(156,221,153)}
+.tgb-14{--tb-l:rgb(45,118,67);--tb-d:rgb(158,221,154)}
+.tgb-15{--tb-l:rgb(42,113,64);--tb-d:rgb(159,222,155)}
+.tgb-16{--tb-l:rgb(39,109,60);--tb-d:rgb(160,223,156)}
+.tgb-17{--tb-l:rgb(35,105,57);--tb-d:rgb(162,224,157)}
+.tgb-18{--tb-l:rgb(32,100,54);--tb-d:rgb(163,225,158)}
+.tgb-19{--tb-l:rgb(29,96,51);--tb-d:rgb(164,226,159)}
+.tgb-20{--tb-l:rgb(26,92,48);--tb-d:rgb(166,227,161)}
+.tgt-0{--tc-l:rgb(58,138,80);--tc-d:rgb(120,200,130)}
+.tgt-1{--tc-l:rgb(56,135,78);--tc-d:rgb(122,201,131)}
+.tgt-2{--tc-l:rgb(54,132,76);--tc-d:rgb(124,202,133)}
+.tgt-3{--tc-l:rgb(53,129,75);--tc-d:rgb(126,204,134)}
+.tgt-4{--tc-l:rgb(51,126,73);--tc-d:rgb(129,205,136)}
+.tgt-5{--tc-l:rgb(50,123,72);--tc-d:rgb(131,206,137)}
+.tgt-6{--tc-l:rgb(48,120,70);--tc-d:rgb(133,208,139)}
+.tgt-7{--tc-l:rgb(46,117,68);--tc-d:rgb(136,209,140)}
+.tgt-8{--tc-l:rgb(45,114,67);--tc-d:rgb(138,210,142)}
+.tgt-9{--tc-l:rgb(43,111,65);--tc-d:rgb(140,212,143)}
+.tgt-10{--tc-l:rgb(42,109,64);--tc-d:rgb(143,213,145)}
+.tgt-11{--tc-l:rgb(40,106,62);--tc-d:rgb(145,214,147)}
+.tgt-12{--tc-l:rgb(38,103,60);--tc-d:rgb(147,216,148)}
+.tgt-13{--tc-l:rgb(37,100,59);--tc-d:rgb(149,217,150)}
+.tgt-14{--tc-l:rgb(35,97,57);--tc-d:rgb(152,218,151)}
+.tgt-15{--tc-l:rgb(34,94,56);--tc-d:rgb(154,220,153)}
+.tgt-16{--tc-l:rgb(32,91,54);--tc-d:rgb(156,221,154)}
+.tgt-17{--tc-l:rgb(30,88,52);--tc-d:rgb(159,222,156)}
+.tgt-18{--tc-l:rgb(29,85,51);--tc-d:rgb(161,224,157)}
+.tgt-19{--tc-l:rgb(27,82,49);--tc-d:rgb(163,225,159)}
+.tgt-20{--tc-l:rgb(26,80,48);--tc-d:rgb(166,227,161)}
+
+/* inventory alert banner (was inline style + {{if}} border color) */
+.alert-band{margin-bottom:8px;border-left:3px solid;padding:12px 16px}
+.alert-band--danger{border-left-color:var(--color-danger)}
+.alert-band--warning{border-left-color:var(--color-warning)}
+
+/* htmx indicator (config includeIndicatorStyles:false — no injected <style>) */
+.htmx-indicator{opacity:0;transition:opacity 200ms ease-in}
+.htmx-request .htmx-indicator{opacity:1}
+.htmx-request.htmx-indicator{opacity:1}

@@ -4,7 +4,6 @@
 package ui
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,12 +63,13 @@ var swarmVizColors = []string{
 }
 
 // ChunkMatrixCell is one cell in the target × source chunk-flow matrix.
-// BgColor is a pre-computed rgba(...) string derived from the column-peer
-// (the source) with alpha proportional to Chunks/MaxCount. Empty for
-// zero-count and diagonal cells.
+// BgClass is the CSP-safe class pair "cc-<rrggbb> cc-bg-aN" derived from the
+// column-peer (the source): cc-<rrggbb> sets --cc-rgb, cc-bg-aN paints it at
+// an alpha bucket proportional to Chunks/MaxCount. Empty for zero-count and
+// diagonal cells.
 type ChunkMatrixCell struct {
 	Chunks  int
-	BgColor string
+	BgClass string
 }
 
 // ChunkMatrixRow is one target-peer row in the chunk-flow matrix. The
@@ -80,10 +80,10 @@ type ChunkMatrixCell struct {
 // cells at all, and "pending" reads identical to "off-palette" without
 // a status pill to disambiguate.
 type ChunkMatrixRow struct {
-	Target string
-	Color  string // target-peer label color
-	Cells  []ChunkMatrixCell
-	Total  int // chunks this target received from peers (cells sum)
+	Target     string
+	ColorClass string // .cc-<rrggbb> target-peer label color class (sets --cc-rgb)
+	Cells      []ChunkMatrixCell
+	Total      int // chunks this target received from peers (cells sum)
 
 	// Trailer fields — rendered to the right of the matrix cells.
 	Status       string // source / complete / cached / downloading / pending / skipped
@@ -184,17 +184,17 @@ func buildChunkMatrix(envoys []swarm.EnvoySwarmStatus, peerColors map[string]str
 			c := counts[i][j]
 			cells[j] = ChunkMatrixCell{Chunks: c}
 			if c > 0 && i != j {
-				cells[j].BgColor = rgbaFromHex(peerColors[peers[j]], cellAlpha(c, maxCount))
+				cells[j].BgClass = ccClass(peerColors[peers[j]]) + " cc-bg-a" + strconv.Itoa(alphaBucket(c, maxCount))
 				rowTotal += c
 				sourceTotal[j] += c
 			}
 		}
 
 		row := ChunkMatrixRow{
-			Target: target,
-			Color:  peerColors[target],
-			Cells:  cells,
-			Total:  rowTotal,
+			Target:     target,
+			ColorClass: ccClass(peerColors[target]),
+			Cells:      cells,
+			Total:      rowTotal,
 		}
 		if e, ok := envoyByHost[target]; ok {
 			row.Status = e.Status
@@ -228,31 +228,23 @@ func buildChunkMatrix(envoys []swarm.EnvoySwarmStatus, peerColors map[string]str
 	}
 }
 
-// cellAlpha maps a chunk count to an opacity in [0.25, 1.0] so the
-// lightest populated cell still reads as "non-empty" and the heaviest
-// saturates to the full peer color.
-func cellAlpha(count, max int) float64 {
+// vizAlphaSteps is the number of opacity buckets the continuous cell alpha
+// (0.25..1.0 by Chunks/MaxCount) is quantized into for the .cc-bg-aN classes.
+// The classes in style.css are generated at alpha = 0.25 + 0.75*(N/vizAlphaSteps).
+const vizAlphaSteps = 16
+
+// alphaBucket maps a chunk count to an opacity bucket 0..vizAlphaSteps so the
+// lightest populated cell still reads as "non-empty" (bucket carries the same
+// 0.25 floor in CSS) and the heaviest saturates to the full peer color.
+func alphaBucket(count, max int) int {
 	if max <= 0 || count <= 0 {
 		return 0
 	}
-	return 0.25 + 0.75*float64(count)/float64(max)
-}
-
-// rgbaFromHex parses a "#rrggbb" color and returns a CSS rgba() string
-// with the given alpha. Returns the hex unchanged if it isn't in the
-// expected form — swarmVizColors is authoritative here, so the fallback
-// only runs if the palette is ever changed to use non-hex values.
-func rgbaFromHex(hex string, alpha float64) string {
-	if len(hex) != 7 || hex[0] != '#' {
-		return hex
+	b := int(float64(count)/float64(max)*float64(vizAlphaSteps) + 0.5)
+	if b > vizAlphaSteps {
+		b = vizAlphaSteps
 	}
-	r, err1 := strconv.ParseUint(hex[1:3], 16, 8)
-	g, err2 := strconv.ParseUint(hex[3:5], 16, 8)
-	b, err3 := strconv.ParseUint(hex[5:7], 16, 8)
-	if err1 != nil || err2 != nil || err3 != nil {
-		return hex
-	}
-	return fmt.Sprintf("rgba(%d,%d,%d,%.3f)", r, g, b, alpha)
+	return b
 }
 
 // vizNamedColors maps human-readable color names to the eight base
@@ -376,4 +368,3 @@ func topVizEnvoys(envoys []swarm.EnvoySwarmStatus, n int) []swarm.EnvoySwarmStat
 	}
 	return cp
 }
-

@@ -29,8 +29,8 @@
         <span class="compliance-gauge__label">{{.Rating}}</span>
     </div>
     <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if ge .Percent 95.0}}success{{else if ge .Percent 80.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .Percent}}%"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if ge .Percent 95.0}}success{{else if ge .Percent 80.0}}warning{{else}}danger{{end}} w-pct-{{wbucket .Percent}}"
+            ></div>
     </div>
 </div>
 {{end}}
@@ -83,10 +83,10 @@
                 <td>{{printf "%.1f" .ScorePercent}}%</td>
                 <td>
                     <div class="fw-card__bar">
-                        {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $gPct}}%"></div>{{end}}
-                        {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $bPct}}%"></div>{{end}}
-                        {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $yPct}}%"></div>{{end}}
-                        {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:{{printf "%.1f" $rPct}}%"></div>{{end}}
+                        {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green w-pct-{{wbucket $gPct}}"></div>{{end}}
+                        {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue w-pct-{{wbucket $bPct}}"></div>{{end}}
+                        {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow w-pct-{{wbucket $yPct}}"></div>{{end}}
+                        {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red w-pct-{{wbucket $rPct}}"></div>{{end}}
                     </div>
                 </td>
                 <td>{{.Satisfied}}</td>

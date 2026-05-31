@@ -228,6 +228,14 @@ func TestRender_CSPHeader(t *testing.T) {
 	if !strings.Contains(csp, "default-src 'self'") {
 		t.Errorf("CSP header missing default-src 'self': %s", csp)
 	}
+	// The de-inline work (static u-* sweep + dynamic class conversion) exists
+	// precisely so this holds: no 'unsafe-inline' anywhere, script or style.
+	if strings.Contains(csp, "unsafe-inline") {
+		t.Errorf("CSP must not contain 'unsafe-inline': %s", csp)
+	}
+	if !strings.Contains(csp, "style-src 'self'") {
+		t.Errorf("CSP missing locked style-src 'self': %s", csp)
+	}
 }
 
 func TestRender_FirstRunEmptyState(t *testing.T) {

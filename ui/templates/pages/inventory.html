@@ -8,7 +8,7 @@
 {{if .Alerts}}
 <div class="u-mb-16px">
     {{range .Alerts}}
-    <details class="card" style="margin-bottom:8px; border-left:3px solid {{if eq .Level "danger"}}var(--color-danger){{else}}var(--color-warning){{end}}; padding:12px 16px;">
+    <details class="card alert-band {{if eq .Level "danger"}}alert-band--danger{{else}}alert-band--warning{{end}}">
         <summary class="u-cur-pointer-fw-600">
             {{if eq .Level "danger"}}&#x26A0;{{else}}&#x26A0;{{end}}
             {{.Title}} &mdash; <strong>{{.Count}}</strong> machine{{if ne .Count 1}}s{{end}}

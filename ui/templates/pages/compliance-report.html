@@ -37,10 +37,10 @@
         <span class="compliance-gauge__label">fleet average coverage &middot; {{$total}} controls &middot; {{.Satisfied}} covered{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} missing</span>
     </div>
     <div class="fw-card__bar u-h-12px">
-        {{if gt $satPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $satPct}}%"></div>{{end}}
-        {{if gt $waivPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $waivPct}}%"></div>{{end}}
-        {{if gt $parPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $parPct}}%"></div>{{end}}
-        {{if gt $notPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:{{printf "%.1f" $notPct}}%"></div>{{end}}
+        {{if gt $satPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green w-pct-{{wbucket $satPct}}"></div>{{end}}
+        {{if gt $waivPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue w-pct-{{wbucket $waivPct}}"></div>{{end}}
+        {{if gt $parPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow w-pct-{{wbucket $parPct}}"></div>{{end}}
+        {{if gt $notPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red w-pct-{{wbucket $notPct}}"></div>{{end}}
     </div>
 </div>
 {{end}}

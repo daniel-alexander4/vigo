@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -226,11 +227,18 @@ func funcMap() template.FuncMap {
 			}
 			return action
 		},
-		"tracePathTree":  tracePathTree,
-		"traceGreenBg":   traceGreenBg,
-		"traceGreenBord": traceGreenBord,
-		"traceGreenText": traceGreenText,
-		"isLastIndex":    func(i, length int) bool { return i == length-1 },
+		"tracePathTree":       tracePathTree,
+		"traceGreenBg":        traceGreenBg,
+		"traceGreenBord":      traceGreenBord,
+		"traceGreenText":      traceGreenText,
+		"traceGreenBordClass": traceGreenBordClass,
+		"traceGreenTextClass": traceGreenTextClass,
+		"wbucket":             wbucket,
+		"pctClass":            pctClass,
+		"pctClassBg":          pctClassBg,
+		"pctClassInv":         pctClassInv,
+		"ccClass":             ccClass,
+		"isLastIndex":         func(i, length int) bool { return i == length-1 },
 		"inSlice": func(needle string, haystack []string) bool {
 			for _, s := range haystack {
 				if s == needle {
@@ -424,9 +432,9 @@ func funcMap() template.FuncMap {
 		},
 		"sourceColor": func(source string, colors map[string]string) string {
 			if c, ok := colors[source]; ok {
-				return c
+				return ccClass(c)
 			}
-			return "#a0aec0"
+			return ccClass("#a0aec0")
 		},
 		"mul": func(a, b int) int {
 			return a * b
@@ -845,13 +853,14 @@ func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	// script-src is 'self' only — all inline scripts/handlers were moved to
-	// /static/js (delegated via ui-actions.js), so no 'unsafe-inline'/nonce is
-	// needed for scripts. style-src keeps 'unsafe-inline' deliberately: the UI
-	// still uses ~375 inline style= attributes (CSP nonces don't cover style
-	// attributes), and inline-style injection can't execute JS — de-inlining
-	// styles is tracked separately as lower-value work.
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'")
+	// Fully locked: no 'unsafe-inline', no nonce, anywhere. All inline scripts
+	// /handlers moved to /static/js (delegated via ui-actions.js); all inline
+	// style= attributes moved to u-* utility classes + the dynamic-support
+	// classes (w-pct-*, pct-*, cc-*, tgb-*/tgt-*) in style.css, and htmx's
+	// indicator-style injection is disabled (includeIndicatorStyles:false in
+	// base.html). CSP nonces don't cover style attributes, so de-inlining was
+	// the only way to drop 'unsafe-inline' for style-src.
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'")
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
 		slog.Error("template execution error", "name", name, "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -1261,6 +1270,73 @@ func traceGreenText(depth, total int) template.CSS {
 	lr, lg, lb := int(58-t*32), int(138-t*58), int(80-t*32)   // Latte: #3a8a50 → #1a5030
 	dr, dg, db := int(120+t*46), int(200+t*27), int(130+t*31) // Mocha: #78c882 → #a6e3a1
 	return template.CSS(fmt.Sprintf("--tc-l:rgb(%d,%d,%d);--tc-d:rgb(%d,%d,%d)", lr, lg, lb, dr, dg, db))
+}
+
+// traceRampSteps is the number of discrete buckets the continuous green ramp
+// is quantized into for de-inlined CSS classes (21 levels: 0..traceRampSteps).
+// The .tgb-N / .tgt-N classes in style.css are generated at t = N/traceRampSteps
+// using the exact same rgb() formulas as traceGreenBord / traceGreenText.
+const traceRampSteps = 20
+
+func traceGreenBucket(depth, total int) int {
+	return int(traceGreenRamp(depth, total)*float64(traceRampSteps) + 0.5)
+}
+
+// traceGreenBordClass / traceGreenTextClass return the bucketed border / text
+// gradient class — the CSP-safe replacement for the traceGreenBord /
+// traceGreenText inline style attributes (each class sets the same --tb-* /
+// --tc-* custom properties the inline style did).
+func traceGreenBordClass(depth, total int) string {
+	return "tgb-" + strconv.Itoa(traceGreenBucket(depth, total))
+}
+func traceGreenTextClass(depth, total int) string {
+	return "tgt-" + strconv.Itoa(traceGreenBucket(depth, total))
+}
+
+// wbucket rounds a percentage-ish value to an integer 0..100 for the .w-pct-N
+// width utility classes (de-inlined progress / coverage / time bars).
+func wbucket(v any) int {
+	n := int(toFloat64(v) + 0.5)
+	if n < 0 {
+		return 0
+	}
+	if n > 100 {
+		return 100
+	}
+	return n
+}
+
+// pctClass / pctClassBg / pctClassInv return the .pct-<band> utility class
+// carrying the color that pctColor / pctColorBg / pctColorInv used to inline.
+func pctClass(v any) string    { return "pct-" + pctBand(v) }
+func pctClassBg(v any) string  { return "pct-" + pctBand(v) + "-bg" }
+func pctClassInv(v any) string { return "pct-" + pctBandInv(v) }
+
+// ccClassColors is the set of viz colors with a generated .cc-<rrggbb> rule in
+// style.css: the swarm palette (which also covers the compliance-donut hues)
+// plus the neutral fallback. Built once at init.
+var ccClassColors = func() map[string]bool {
+	m := make(map[string]bool, len(swarmVizColors)+1)
+	for _, h := range swarmVizColors {
+		m[strings.ToLower(h)] = true
+	}
+	m["#a0aec0"] = true
+	return m
+}()
+
+// ccClass maps a "#rrggbb" viz color to its .cc-<rrggbb> custom-property class
+// (which sets --cc-rgb). Paired with the .cc-fg / .cc-bg / .cc-bg-aN consumers
+// in style.css. Replaces inline background:/color: hex values in the swarm and
+// compliance visualizations. A color without a generated class — e.g. an
+// operator `viz.color=#customhex` tag override, which strict CSP can't turn
+// into a static class — degrades to the neutral fallback rather than an
+// unstyled (invisible) element.
+func ccClass(hex string) string {
+	h := strings.ToLower(hex)
+	if len(h) == 7 && h[0] == '#' && ccClassColors[h] {
+		return "cc-" + h[1:]
+	}
+	return "cc-a0aec0"
 }
 
 // waiverFileGroup is a waiver file with its entries, for template rendering.

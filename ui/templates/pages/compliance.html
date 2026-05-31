@@ -53,12 +53,12 @@
     </div>
     <div class="compliance-gauge__bar">
         {{if gt .TotalControls 0}}
-        <div class="compliance-gauge__fill compliance-gauge__fill--success" style="width: {{pct .SatisfiedControls .TotalControls}}%" title="{{.SatisfiedControls}} satisfied"></div>
-        {{if gt .WaivedControls 0}}<div class="compliance-gauge__fill" style="width: {{pct .WaivedControls .TotalControls}}%; background: var(--color-brand);" title="{{.WaivedControls}} waived"></div>{{end}}
-        <div class="compliance-gauge__fill compliance-gauge__fill--warning" style="width: {{pct .PartialControls .TotalControls}}%" title="{{.PartialControls}} partial"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--success w-pct-{{wbucket (pct .SatisfiedControls .TotalControls)}}" title="{{.SatisfiedControls}} satisfied"></div>
+        {{if gt .WaivedControls 0}}<div class="compliance-gauge__fill w-pct-{{wbucket (pct .WaivedControls .TotalControls)}} bg-brand" title="{{.WaivedControls}} waived"></div>{{end}}
+        <div class="compliance-gauge__fill compliance-gauge__fill--warning w-pct-{{wbucket (pct .PartialControls .TotalControls)}}" title="{{.PartialControls}} partial"></div>
         {{else}}
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .StandardsPct}}%"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}} w-pct-{{wbucket .StandardsPct}}"
+            ></div>
         {{end}}
     </div>
     <div class="gauge-legend">
@@ -122,10 +122,10 @@
     <div class="fw-card__name">{{.Name}}</div>
     <div class="fw-card__score fw-card__score--{{pctAccentInv .ScorePercent}}">{{printf "%.1f" .ScorePercent}}%</div>
     <div class="fw-card__bar">
-        {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $gPct}}%"></div>{{end}}
-        {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $bPct}}%"></div>{{end}}
-        {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $yPct}}%"></div>{{end}}
-        {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:{{printf "%.1f" $rPct}}%"></div>{{end}}
+        {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green w-pct-{{wbucket $gPct}}"></div>{{end}}
+        {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue w-pct-{{wbucket $bPct}}"></div>{{end}}
+        {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow w-pct-{{wbucket $yPct}}"></div>{{end}}
+        {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red w-pct-{{wbucket $rPct}}"></div>{{end}}
     </div>
     <div class="fw-card__counts">{{.Satisfied}} satisfied{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} not met</div>
     <div class="fw-card__action">View Report &rarr;</div>

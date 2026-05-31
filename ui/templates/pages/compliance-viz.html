@@ -24,7 +24,7 @@
     </div>
     <div class="swarm-legend u-flex-direction-column">
         {{range .DonutSegments}}
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{.Color}};"></div> {{.Label}} ({{.Count}})</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch cc-bg {{ccClass .Color}}"></div> {{.Label}} ({{.Count}})</div>
         {{end}}
     </div>
 </div>

@@ -5,6 +5,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"git.alexander4.io/vigo/server/swarm"
@@ -345,25 +346,17 @@ func TestBuildChunkMatrix_CellColorFromSource(t *testing.T) {
 	if cell.Chunks != 50 {
 		t.Fatalf("chunks = %d, want 50", cell.Chunks)
 	}
-	// Cell bg should derive from danlap's color (#f38ba8 → rgba(243,139,168,…)),
-	// not plex's (#a6e3a1 → rgba(166,227,161,…)).
-	if !containsRGB(cell.BgColor, 243, 139, 168) {
-		t.Errorf("cell.BgColor = %q, want rgba derived from source #f38ba8", cell.BgColor)
+	// Cell bg class should derive from danlap's color (#f38ba8 → .cc-f38ba8),
+	// not plex's (#a6e3a1 → .cc-a6e3a1), plus a .cc-bg-aN alpha bucket.
+	if !strings.Contains(cell.BgClass, "cc-f38ba8") {
+		t.Errorf("cell.BgClass = %q, want color class from source #f38ba8", cell.BgClass)
 	}
-	if containsRGB(cell.BgColor, 166, 227, 161) {
-		t.Errorf("cell.BgColor = %q, must not derive from target #a6e3a1", cell.BgColor)
+	if strings.Contains(cell.BgClass, "cc-a6e3a1") {
+		t.Errorf("cell.BgClass = %q, must not derive from target #a6e3a1", cell.BgClass)
 	}
-}
-
-func containsRGB(s string, r, g, b int) bool {
-	return s != "" && len(s) > len("rgba()") && s[:5] == "rgba(" &&
-		(s == fmt.Sprintf("rgba(%d,%d,%d,%.3f)", r, g, b, 1.0) ||
-			// compare by prefix since alpha varies
-			len(s) > 0 && s[5:] != "" && strHasPrefix(s[5:], fmt.Sprintf("%d,%d,%d,", r, g, b)))
-}
-
-func strHasPrefix(s, p string) bool {
-	return len(s) >= len(p) && s[:len(p)] == p
+	if !strings.Contains(cell.BgClass, "cc-bg-a") {
+		t.Errorf("cell.BgClass = %q, want a .cc-bg-aN alpha bucket", cell.BgClass)
+	}
 }
 
 // TestBuildChunkMatrix_DiagonalIsZero verifies that self-transfers from
@@ -384,8 +377,8 @@ func TestBuildChunkMatrix_DiagonalIsZero(t *testing.T) {
 		if m.Rows[i].Cells[i].Chunks != 0 {
 			t.Errorf("diagonal cell [%d][%d] = %d, want 0", i, i, m.Rows[i].Cells[i].Chunks)
 		}
-		if m.Rows[i].Cells[i].BgColor != "" {
-			t.Errorf("diagonal cell [%d][%d] BgColor = %q, want empty", i, i, m.Rows[i].Cells[i].BgColor)
+		if m.Rows[i].Cells[i].BgClass != "" {
+			t.Errorf("diagonal cell [%d][%d] BgClass = %q, want empty", i, i, m.Rows[i].Cells[i].BgClass)
 		}
 	}
 }
@@ -442,35 +435,39 @@ func TestBuildChunkMatrix_EmptyWhenNoTransfers(t *testing.T) {
 	}
 }
 
-// TestCellAlpha_Bounds verifies that cellAlpha stays in [0.25, 1.0] across
-// the expected count range so lightly-populated cells still render visibly
-// and the heaviest cell reaches full saturation.
-func TestCellAlpha_Bounds(t *testing.T) {
+// TestAlphaBucket_Bounds verifies that alphaBucket stays in [0, vizAlphaSteps]
+// across the count range: zero count → bucket 0 (no cell painted), and the
+// heaviest cell reaches the top bucket (full saturation). The .cc-bg-aN classes
+// in style.css map each bucket to alpha 0.25 + 0.75*(N/vizAlphaSteps).
+func TestAlphaBucket_Bounds(t *testing.T) {
 	cases := []struct {
 		count, max int
-		wantLow    float64
-		wantHigh   float64
+		want       int
 	}{
-		{0, 100, 0, 0},       // zero count → zero alpha (no BgColor emitted)
-		{1, 100, 0.25, 0.26}, // minimum populated alpha
-		{50, 100, 0.62, 0.63},
-		{100, 100, 1.0, 1.0}, // full saturation at the max
+		{0, 100, 0}, // zero count → bucket 0 (no cell painted)
+		{1, 100, 0}, // lightest populated rounds to the floor bucket
+		{50, 100, vizAlphaSteps / 2},
+		{100, 100, vizAlphaSteps}, // full saturation at the max
 	}
 	for _, tc := range cases {
-		got := cellAlpha(tc.count, tc.max)
-		if got < tc.wantLow-0.01 || got > tc.wantHigh+0.01 {
-			t.Errorf("cellAlpha(%d, %d) = %.3f, want in [%.2f, %.2f]", tc.count, tc.max, got, tc.wantLow, tc.wantHigh)
+		got := alphaBucket(tc.count, tc.max)
+		if got != tc.want {
+			t.Errorf("alphaBucket(%d, %d) = %d, want %d", tc.count, tc.max, got, tc.want)
+		}
+		if got < 0 || got > vizAlphaSteps {
+			t.Errorf("alphaBucket(%d, %d) = %d, out of [0, %d]", tc.count, tc.max, got, vizAlphaSteps)
 		}
 	}
 }
 
-// TestRgbaFromHex_RoundTrip verifies that rgbaFromHex parses a valid hex
-// color and emits a CSS rgba() string with the requested alpha.
-func TestRgbaFromHex_RoundTrip(t *testing.T) {
-	got := rgbaFromHex("#a6e3a1", 0.5)
-	want := "rgba(166,227,161,0.500)"
-	if got != want {
-		t.Errorf("rgbaFromHex = %q, want %q", got, want)
+// TestCCClass_Slug verifies ccClass maps a "#rrggbb" viz color to its
+// .cc-<rrggbb> custom-property class, with a neutral fallback for malformed input.
+func TestCCClass_Slug(t *testing.T) {
+	if got := ccClass("#a6e3a1"); got != "cc-a6e3a1" {
+		t.Errorf("ccClass(#a6e3a1) = %q, want cc-a6e3a1", got)
+	}
+	if got := ccClass("nonsense"); got != "cc-a0aec0" {
+		t.Errorf("ccClass(bad) = %q, want neutral fallback cc-a0aec0", got)
 	}
 }
 
