@@ -12,6 +12,10 @@ Reports laptop battery charge level, wear health, cycle count, and status. Emitt
 |------|------|---------|-------------|
 | `battery.health_pct` | number | `66.5` | Worst battery's wear health (`energy_full` ÷ `energy_full_design` × 100). The value the server classifies onto the Agent Health card |
 | `battery.ac_online` | boolean | `false` | Whether an AC adapter is connected |
+| `battery.batteries.<name>.manufacturer` | string | `"LGC"` | Cell manufacturer (omitted when firmware doesn't report it) |
+| `battery.batteries.<name>.model_name` | string | `"DELL ABC1234"` | Battery model (omitted when absent) |
+| `battery.batteries.<name>.serial_number` | string | `"0001"` | Battery serial number (omitted when absent) |
+| `battery.batteries.<name>.technology` | string | `"Li-poly"` | Cell chemistry, e.g. `Li-ion` / `Li-poly` (omitted when absent) |
 | `battery.batteries.<name>.capacity_pct` | integer | `73` | Current charge level (0–100) |
 | `battery.batteries.<name>.health_pct` | number | `66.5` | This cell's wear health |
 | `battery.batteries.<name>.status` | string | `"Discharging"` | `Charging` / `Discharging` / `Full` / `Not charging` / `Unknown` |
@@ -34,7 +38,7 @@ On the per-envoy **Agent Health** card, `battery.health_pct` renders as a colore
 A worn cell therefore raises the envoy's overall Agent Health severity, surfacing on the dashboard Agent Health card and the `/agent-health` page automatically.
 
 ## Collection Method
-Walks `/sys/class/power_supply/`. Each `Battery`-type entry named `BAT*` contributes a row; `Mains`-type entries supply `ac_online`. Wear health uses `energy_full` ÷ `energy_full_design` (µWh), falling back to `charge_full` ÷ `charge_full_design` (µAh) — the ratio is unit-independent. Time-to-empty/full uses `energy_now` ÷ `power_now` (µWh ÷ µW), falling back to `charge_now` ÷ `current_now` (µAh ÷ µA); both divide to hours. Pure sysfs reads; no subprocess, no upower dependency.
+Walks `/sys/class/power_supply/`. Each `Battery`-type entry named `BAT*` contributes a row; `Mains`-type entries supply `ac_online`. Identity fields (`manufacturer`, `model_name`, `serial_number`, `technology`) are read straight from the matching sysfs attributes and omitted when the firmware leaves them blank. Wear health uses `energy_full` ÷ `energy_full_design` (µWh), falling back to `charge_full` ÷ `charge_full_design` (µAh) — the ratio is unit-independent. Time-to-empty/full uses `energy_now` ÷ `power_now` (µWh ÷ µW), falling back to `charge_now` ÷ `current_now` (µAh ÷ µA); both divide to hours. Pure sysfs reads; no subprocess, no upower dependency.
 
 ## Using in Templates
 ```yaml

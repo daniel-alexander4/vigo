@@ -22,13 +22,13 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | Load Average | `loadavg` | 1/5/15-minute load averages | [loadavg.md](loadavg.md) |
 | Mountpoints | `mountpoints` | Physical mounts with device, fstype, size, inode usage | [mountpoints.md](mountpoints.md) |
 | Processors | `processors` | CPU model, vendor, physical/logical cores, clock speed | [processors.md](processors.md) |
-| DMI | `dmi` | BIOS, motherboard, chassis SMBIOS fields | [dmi.md](dmi.md) |
+| DMI | `dmi` | BIOS, motherboard, chassis, system serial, and per-DIMM identity (SMBIOS type-17: manufacturer/part/serial/size/speed) | [dmi.md](dmi.md) |
 | Cloud | `cloud` | Cloud provider + IMDS metadata (instance ID, type, region, zone, tags) | [cloud.md](cloud.md) |
 | Filesystem | `filesystem` | Per-mount disk usage (total, used, free, percent) | [filesystem.md](filesystem.md) |
 | Kernel | `kernel` | Kernel version, release, hostname | [kernel.md](kernel.md) |
 | Users | `users` | Human, OS, and third-party accounts; logged-in users | [users.md](users.md) |
 | Memory | `memory` | RAM and swap total, used, free, available, percent | [memory.md](memory.md) |
-| Block Devices | `blockdevices` | Physical block devices with size, model, read-only flag | [blockdevices.md](blockdevices.md) |
+| Block Devices | `blockdevices` | Physical block devices with size, vendor, model, serial, firmware, read-only flag | [blockdevices.md](blockdevices.md) |
 | Docker | `docker` | Docker version, running containers, storage/cgroup driver | [docker.md](docker.md) |
 | Systemd | `systemd` | systemd version, default target, failed units | [systemd.md](systemd.md) |
 | SELinux | `selinux` | SELinux enabled/mode/policy | [selinux.md](selinux.md) |

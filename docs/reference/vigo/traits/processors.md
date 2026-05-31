@@ -16,6 +16,8 @@ Provides detailed CPU information including model, vendor, core counts, and cloc
 | `processors.vendor` | string | `"GenuineIntel"` | CPU vendor ID |
 | `processors.mhz` | number | `2600` | CPU clock speed in MHz |
 
+`model` + `vendor` are the CPU's identifying fields. There is no per-CPU **serial**: the x86 processor serial number was disabled industry-wide after the Pentium III, and ARM exposes no equivalent — so unlike battery/storage/RAM, CPU identity stops at model and vendor.
+
 ## Collection Method
 Parses `/proc/cpuinfo` to count logical processors, identify unique physical/core ID pairs for physical core count, and extract the model name, vendor ID, and clock speed. Prefers the stable max frequency from `/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq` (in kHz, converted to MHz) over the fluctuating `cpu MHz` field in `/proc/cpuinfo`.
 

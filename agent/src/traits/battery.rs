@@ -83,6 +83,19 @@ fn read_field(base: &Path, name: &str) -> Option<String> {
 fn parse_battery(get: impl Fn(&str) -> Option<String>) -> (serde_json::Map<String, Value>, Option<f64>) {
     let mut dev = serde_json::Map::new();
 
+    // Identity (asset tracking) — each is optional; firmware that doesn't
+    // populate the node leaves the field absent rather than empty.
+    for (field, key) in [
+        ("manufacturer", "manufacturer"),
+        ("model_name", "model_name"),
+        ("serial_number", "serial_number"),
+        ("technology", "technology"),
+    ] {
+        if let Some(v) = get(field) {
+            dev.insert(key.into(), json!(v));
+        }
+    }
+
     if let Some(cap) = get("capacity").and_then(|s| s.parse::<u64>().ok()) {
         dev.insert("capacity_pct".into(), json!(cap));
     }
@@ -277,6 +290,28 @@ mod tests {
     fn test_parse_battery_zero_cycle_count_omitted() {
         let (dev, _) = parse_battery(getter(&[("cycle_count", "0")]));
         assert!(!dev.contains_key("cycle_count"));
+    }
+
+    #[test]
+    fn test_parse_battery_identity_fields() {
+        let (dev, _) = parse_battery(getter(&[
+            ("manufacturer", "LGC"),
+            ("model_name", "DELL ABC123"),
+            ("serial_number", "0001"),
+            ("technology", "Li-poly"),
+            ("capacity", "80"),
+        ]));
+        assert_eq!(dev["manufacturer"], json!("LGC"));
+        assert_eq!(dev["model_name"], json!("DELL ABC123"));
+        assert_eq!(dev["serial_number"], json!("0001"));
+        assert_eq!(dev["technology"], json!("Li-poly"));
+    }
+
+    #[test]
+    fn test_parse_battery_identity_absent_omitted() {
+        let (dev, _) = parse_battery(getter(&[("capacity", "80")]));
+        assert!(!dev.contains_key("manufacturer"));
+        assert!(!dev.contains_key("serial_number"));
     }
 
     #[test]
