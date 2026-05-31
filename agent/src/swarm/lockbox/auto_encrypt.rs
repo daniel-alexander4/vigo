@@ -124,31 +124,30 @@ pub fn encrypt_in_place(
         ));
     }
 
-    // Tombstone preflight — refuse before any encryption work when
-    // the filename has an effective tombstone (tombstone exists AND
-    // no later resurrect supersedes it). Without this, auto-encrypt
-    // would silently produce ciphertext that every peer rejects with
-    // 410 Gone — wasted CPU, destroyed plaintext, no operator-visible
-    // signal until they grep the journal. Watcher's `plaintext_warns`
-    // dedup map throttles the WARN spam if the same plaintext keeps
-    // re-appearing.
+    // Tombstone preflight. Re-adding a deleted file by dropping it into
+    // ~/lockbox/ is an intentional operator act on a single-user system,
+    // so instead of refusing (which renames the plaintext to .failed and
+    // only WARNs to the journal), auto-resurrect inline: record + gossip
+    // the resurrect — which lifts the sync-path 410 gates for this name —
+    // then proceed to encrypt. Mirrors the CLI `encrypt` auto-resurrect;
+    // we record directly because auto-encrypt runs inside the daemon. The
+    // sync-path gates themselves stay absolute, so a peer's stale copy
+    // can't auto-resurrect — only this explicit local re-add does.
     let preflight_tombs = tombstones::TombstoneTable::load_user(username, home);
     let preflight_res = resurrects::ResurrectsTable::load_user(username, home);
-    if let Some(t) =
-        tombstones::effective_tombstone(filename, &preflight_tombs, &preflight_res)
-    {
-        let now_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-        let retention_remaining_secs =
-            tombstones::effective_retention_secs() - (now_secs - t.deletion_time);
-        let days_remaining = (retention_remaining_secs / (24 * 60 * 60)).max(0);
-        return Err(AutoEncryptError::Terminal(format!(
-            "filename `{}` is tombstoned ({}d remaining in retention); \
-             run `vigo swarm lockbox resurrect <file>` to override and re-encrypt",
-            filename, days_remaining,
-        )));
+    if tombstones::effective_tombstone(filename, &preflight_tombs, &preflight_res).is_some() {
+        let machine = super::read_hostname();
+        if let Err(e) = super::record_and_fan_resurrect(&machine, username, filename) {
+            return Err(AutoEncryptError::Terminal(format!(
+                "filename `{}` is tombstoned and auto-resurrect failed: {}",
+                filename, e
+            )));
+        }
+        tracing::info!(
+            user = %username,
+            filename = %filename,
+            "lockbox: auto-encrypt auto-resurrecting tombstoned name"
+        );
     }
 
     let content_dir = config::content_dir(home);
@@ -449,13 +448,16 @@ mod tests {
         }
     }
 
-    /// Tombstone preflight: a filename with an active effective
-    /// tombstone (no resurrect) must be refused before any
-    /// encryption work. The plaintext sits untouched on disk; the
-    /// caller (watcher / unlock sweep) sees a Terminal error and
-    /// logs once via `plaintext_warns` dedup.
+    /// Tombstone preflight: dropping a file at a tombstoned name now
+    /// auto-resurrects in place (record + gossip the resurrect, then
+    /// encrypt). When the resurrect *can't* be recorded — here the test
+    /// env has no daemon signing key — it fails closed: a Terminal error
+    /// naming the auto-resurrect failure, with the plaintext left untouched
+    /// (never encrypted into ciphertext peers would 410-reject). The
+    /// success path (key present → resurrect lands → encrypt proceeds) is
+    /// covered end-to-end by the substrate test.
     #[test]
-    fn encrypt_in_place_terminal_on_active_tombstone() {
+    fn encrypt_in_place_terminal_when_auto_resurrect_unavailable() {
         use age::x25519::Identity;
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path();
@@ -499,20 +501,24 @@ mod tests {
                     "expected tombstoned-message, got: {}",
                     m
                 );
+                // New behavior: it attempted an auto-resurrect and failed
+                // closed (no daemon key in the test env) — not the old
+                // "run the resurrect verb" refusal.
                 assert!(
-                    m.contains("resurrect"),
-                    "expected verb pointer, got: {}",
+                    m.contains("auto-resurrect failed"),
+                    "expected auto-resurrect-failure message, got: {}",
                     m
                 );
             }
             other => panic!("expected Terminal, got {:?}", other),
         }
 
-        // Plaintext must still be on disk, unmodified.
+        // Plaintext must still be on disk, unmodified — fail closed, never
+        // encrypt into ciphertext peers would reject.
         let after = std::fs::read(&plain_path).unwrap();
         assert_eq!(
             after, plaintext,
-            "preflight must not touch plaintext on refusal"
+            "auto-resurrect failure must not touch plaintext"
         );
     }
 

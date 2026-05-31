@@ -115,7 +115,9 @@ files:            5
 
 ### Deletion is a mesh operation — tombstones
 
-Deleting a file (either `vigo swarm lockbox delete <name>` or plain `rm ~/lockbox/<name>`) propagates via a **signed DELETE envelope** fanned out to every peer. Each peer records a **tombstone** (retention: 90 days) and removes its local copy. Any future PUSH/PULL of that filename returns **410 Gone** until either the tombstone ages out or an operator runs `vigo swarm lockbox resurrect <file>` to override.
+Deleting a file (either `vigo swarm lockbox delete <name>` or plain `rm ~/lockbox/<name>`) propagates via a **signed DELETE envelope** fanned out to every peer. Each peer records a **tombstone** (retention: 90 days) and removes its local copy. A peer that hasn't yet learned of a deletion returns **410 Gone** for that filename — which is what stops a lagging peer's stale copy from resurrecting it.
+
+**Re-adding a deleted file just works.** Add the file back — drop it into `~/lockbox/` (auto-encrypt picks it up) or run `vigo swarm lockbox encrypt <name>` — and the agent auto-resurrects it in one step: it records and gossips a signed resurrect (which lifts the 410 gate for that name across the mesh) and then encrypts. Edit the file first and the edited version is what comes back. No separate step is needed; the standalone `vigo swarm lockbox resurrect <file>` verb remains as an explicit synonym. (The 410 gate stays absolute on the *sync* path — only an explicit local re-add records the resurrect that opens it, so a stale peer can't auto-resurrect.)
 
 Each envoy has its own Ed25519 signing key (`/var/lib/vigo/swarm/lockbox/<user>/signing.key`, root-owned, daemon-managed) used to authorize DELETE / LEAVE / RESURRECT envelopes. Daemon-owned (not password-wrapped) so reactive deletion works without the user being unlocked — eviction of a compromised signing key is via `vigocli swarm puddle evict <host>` from the control plane.
 

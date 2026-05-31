@@ -1034,36 +1034,27 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
         );
     }
 
-    // Tombstone preflight — refuse before doing any encryption work
-    // when the target name has an effective tombstone (tombstone
-    // exists AND no later resurrect supersedes it). Without this
-    // check the encrypt would silently produce ciphertext that every
-    // peer rejects with HTTP 410 Gone, leaving an orphaned local
-    // ciphertext and destroyed plaintext. Override path is the
-    // `resurrect` verb; the error message names it explicitly.
+    // Tombstone preflight. Re-encrypting a tombstoned name without first
+    // recording a resurrect would silently produce ciphertext every peer
+    // rejects with HTTP 410 Gone (orphaned local ciphertext, destroyed
+    // plaintext). Re-adding a deleted file is an intentional operator
+    // action (plaintext in hand), so instead of refusing and demanding a
+    // separate `resurrect` verb, auto-resurrect in one step: record + gossip
+    // the resurrect (which lifts the sync-path 410 gates for this name),
+    // then fall through to the encrypt. The sync-path gates themselves stay
+    // absolute — only an explicit local act records the resurrect that
+    // opens them, so a lagging peer's stale copy can't auto-resurrect.
     let username = user_for_invocation()?;
     let preflight_tombs = tombstones::TombstoneTable::load_user(&username, &home);
     let preflight_res = resurrects::ResurrectsTable::load_user(&username, &home);
-    if let Some(t) =
-        tombstones::effective_tombstone(&target_name, &preflight_tombs, &preflight_res)
-    {
-        let now = now_secs();
-        let retention_remaining_secs =
-            tombstones::effective_retention_secs() - (now - t.deletion_time);
-        let days_remaining = (retention_remaining_secs / (24 * 60 * 60)).max(0);
-        tracing::warn!(
+    if tombstones::effective_tombstone(&target_name, &preflight_tombs, &preflight_res).is_some() {
+        tracing::info!(
             user = %username,
             filename = %target_name,
-            deletion_time = t.deletion_time,
-            days_remaining = days_remaining,
-            "lockbox: encrypt refused — filename is tombstoned"
+            "lockbox: encrypt auto-resurrecting tombstoned name"
         );
-        bail!(
-            "filename `{name}` is tombstoned ({days}d remaining in retention).\n\
-             Run `vigo swarm lockbox resurrect <file> [--as <name>]` to override and re-encrypt.",
-            name = target_name,
-            days = days_remaining,
-        );
+        println!("re-adding tombstoned `{}` (auto-resurrect)…", target_name);
+        queue_resurrect_and_await(&username, &home, &target_name, &src)?;
     }
 
     let content_dir = config::content_dir(&home);
@@ -1096,6 +1087,79 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
 }
 
 // ---------- resurrect ----------
+
+/// Drop the `resurrect.pending` sentinel for `target_name`, wait for the
+/// daemon to process it (record the resurrect, sign it, fan it to peers —
+/// ~1-2s under steady load), and verify the local resurrect record landed.
+/// Shared by the explicit `resurrect` verb and the auto-resurrect path in
+/// `encrypt` (re-adding a tombstoned name). Does NOT encrypt — the caller
+/// runs the encrypt once this returns, so the encrypt-time preflight passes
+/// and the watcher's PushJob lands on peers that just received the resurrect.
+fn queue_resurrect_and_await(
+    username: &str,
+    home: &Path,
+    target_name: &str,
+    src: &Path,
+) -> Result<()> {
+    let pending = config::resurrect_pending_path(home);
+    let spec = ResurrectPendingSpec {
+        filename: target_name.to_string(),
+        src_path: src.to_string_lossy().to_string(),
+    };
+    let raw = serde_json::to_vec_pretty(&spec).context("serializing resurrect.pending")?;
+    if let Some(parent) = pending.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&pending)
+            .with_context(|| format!("creating {}", pending.display()))?;
+        f.write_all(&raw)?;
+        f.sync_all().ok();
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(&pending, &raw).with_context(|| format!("writing {}", pending.display()))?;
+    }
+
+    // Poll for daemon-side processing. The dedicated 1s tick should pick
+    // this up within 1-2s; budget 60s before bailing in case the daemon is
+    // stopped or wedged.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        if !pending.exists() {
+            break;
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = fs::remove_file(&pending);
+            bail!(
+                "daemon did not process resurrect within 60s — \
+                 check `systemctl status vigo-envoy` and try again"
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+
+    // Verify the daemon actually persisted the resurrect record. If the
+    // sentinel disappeared but the record didn't land (daemon raced a crash,
+    // malformed sentinel, etc.), bail before encrypt — the encrypt would
+    // silently produce orphaned ciphertext again.
+    let resurrects_post = resurrects::ResurrectsTable::load_user(username, home);
+    if resurrects_post.active(target_name).is_none() {
+        bail!(
+            "daemon cleared the sentinel but no resurrect record landed for `{}` — \
+             check the journal for `lockbox: resurrect processing failed`",
+            target_name
+        );
+    }
+    Ok(())
+}
 
 /// Override an active tombstone for a filename and re-encrypt the
 /// file in one step. The verb exists because lockbox tombstones
@@ -1206,67 +1270,9 @@ fn cmd_resurrect(args: &[String]) -> Result<()> {
         );
     }
 
-    // Drop the sentinel for the daemon to pick up on its next 1s tick.
-    let pending = config::resurrect_pending_path(&home);
-    let spec = ResurrectPendingSpec {
-        filename: target_name.clone(),
-        src_path: src.to_string_lossy().to_string(),
-    };
-    let raw = serde_json::to_vec_pretty(&spec)
-        .context("serializing resurrect.pending")?;
-    if let Some(parent) = pending.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("creating {}", parent.display()))?;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&pending)
-            .with_context(|| format!("creating {}", pending.display()))?;
-        f.write_all(&raw)?;
-        f.sync_all().ok();
-    }
-    #[cfg(not(unix))]
-    {
-        fs::write(&pending, &raw)
-            .with_context(|| format!("writing {}", pending.display()))?;
-    }
-
-    // Poll for daemon-side processing. The dedicated 1s tick should
-    // pick this up within 1-2s; budget 60s before bailing in case the
-    // daemon is stopped or wedged.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    loop {
-        if !pending.exists() {
-            break;
-        }
-        if std::time::Instant::now() > deadline {
-            let _ = fs::remove_file(&pending);
-            bail!(
-                "daemon did not process resurrect within 60s — \
-                 check `systemctl status vigo-envoy` and try again"
-            );
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
-
-    // Verify the daemon actually persisted the resurrect record. If
-    // the sentinel disappeared but the record didn't land (daemon
-    // raced a crash, malformed sentinel, etc.), bail before encrypt
-    // — the encrypt would silently produce orphaned ciphertext again.
-    let resurrects_post = resurrects::ResurrectsTable::load_user(&username, &home);
-    if resurrects_post.active(&target_name).is_none() {
-        bail!(
-            "daemon cleared the sentinel but no resurrect record landed for `{}` — \
-             check the journal for `lockbox: resurrect processing failed`",
-            target_name
-        );
-    }
+    // Record + gossip the resurrect (shared with encrypt's auto-resurrect
+    // path), then fall through to the encrypt below.
+    queue_resurrect_and_await(&username, &home, &target_name, &src)?;
 
     // Encrypt — same path as `cmd_encrypt`. The local resurrect
     // record means the encrypt-time preflight (loaded fresh) passes;

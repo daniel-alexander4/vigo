@@ -390,19 +390,32 @@ async fn process_one_resurrect(
         anyhow::bail!("resurrect.pending: filename is empty");
     }
 
-    let signing_key = load_local_signing_key(user)
-        .context("cannot load daemon signing key")?;
+    record_and_fan_resurrect(machine, user, &spec.filename)?;
+
+    fs::remove_file(pending)
+        .with_context(|| format!("removing {}", pending.display()))?;
+    Ok(())
+}
+
+/// Record a local resurrect for `filename` and fan a signed resurrect
+/// envelope to peers. The local record is persisted FIRST (so an encrypt
+/// run immediately after sees the supersede on its `effective_tombstone`
+/// check) and is kept even if every peer push fails. Fan-out is best-effort
+/// and `DAEMON_TLS`-gated — when TLS isn't initialised (or in unit tests)
+/// the local record still lands and peers catch up via `resurrects_digest`.
+///
+/// Shared by the CLI sentinel path (`process_one_resurrect`) and the
+/// daemon-side auto-encrypt path (`auto_encrypt::encrypt_in_place`), which
+/// runs inside the daemon and so records inline rather than via a sentinel.
+pub(crate) fn record_and_fan_resurrect(machine: &str, user: &str, filename: &str) -> Result<()> {
+    let signing_key =
+        load_local_signing_key(user).context("cannot load daemon signing key")?;
 
     let resurrect_time = now_secs();
 
-    // Persist local resurrect record FIRST so the encrypt-time
-    // preflight (run by the CLI right after sentinel removal) sees
-    // the supersede on its `effective_tombstone` check. Doing this
-    // before fan-out keeps THIS envoy in a coherent state even if
-    // every peer push fails.
     if let Err(e) = resurrects::ResurrectsTable::modify(user, |table| {
         table.upsert(
-            &spec.filename,
+            filename,
             resurrects::ResurrectRecord {
                 resurrect_time,
                 source_hostname: machine.to_string(),
@@ -411,23 +424,17 @@ async fn process_one_resurrect(
     }) {
         warn!(
             user = %user,
-            filename = %spec.filename,
+            filename = %filename,
             error = %e,
             "lockbox: resurrect record save failed"
         );
     }
 
-    let envelope = resurrects::build_envelope(
-        &signing_key,
-        machine,
-        user,
-        &spec.filename,
-        resurrect_time,
-    );
+    let envelope =
+        resurrects::build_envelope(&signing_key, machine, user, filename, resurrect_time);
 
     if let Some(tls) = DAEMON_TLS.get() {
-        // Spawn into the runtime so the blocking pushes don't pin
-        // the polling tick.
+        // Spawn into the runtime so the blocking pushes don't pin the caller.
         let tls = tls.clone();
         let envelope_clone = envelope.clone();
         tokio::spawn(async move {
@@ -439,8 +446,6 @@ async fn process_one_resurrect(
         warn!("lockbox: DAEMON_TLS not initialised, skipping RESURRECT fan-out (peers catch up via resurrects_digest mismatch)");
     }
 
-    fs::remove_file(pending)
-        .with_context(|| format!("removing {}", pending.display()))?;
     Ok(())
 }
 
