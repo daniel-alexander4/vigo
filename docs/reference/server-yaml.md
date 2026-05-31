@@ -125,6 +125,7 @@ checkin:
   bundle_max_age: "24h"              # signed bundle TTL on agents (0 = forever)
   max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = CPU-scaled default; always on)
   report_max_concurrent: 0           # cap on concurrent ReportResult handlers (0 = built-in 2048; always on)
+  max_connections: 0                 # cap on concurrently-held agent streams (0 = no cap; set to host safe ceiling)
 ```
 
 | Field | Default | Description |
@@ -134,6 +135,7 @@ checkin:
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
 | `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. The cap gates the policy-bundle build (CPU-heavy) inside the handler, so a fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via `ResourceExhausted` → agent backoff instead of CPU-cascading. **Always on** — `0` = a CPU-scaled built-in (`max(128, NumCPU*16)`), not disabled. Higher admits more before shedding (more CPU thrash under a wave); lower sheds sooner. Watch `vigo_checkins_total{status="shed"}` |
 | `report_max_concurrent` | `0` | Cap on concurrent ReportResult handlers in front of the single SQLite writer. Overflow returns `ResourceExhausted` so the agent backs off. **Always on** — `0` = the built-in `2048`, not disabled (unlike `max_concurrent`). Higher admits more before shedding (deeper queue, higher tail latency under sustained overload); lower sheds sooner (tighter tail). Watch `vigo_reportresults_total{status="shed"}` |
+| `max_connections` | `0` | Cap on concurrently-held agent streams. Each connected envoy holds one persistent stream costing ~220 KB RSS, so connection count — not request rate — is what drives the server toward OOM. Past this cap, new streams are refused with `ResourceExhausted` (the agent backs off and retries) so the server sheds gracefully instead of being OOM-killed. `0` = no cap (legacy behavior); set it to your host's safe ceiling from the [sizing guide](../howto/sizing.md) (≈ 50% of RAM ÷ 220 KB). Watch `vigo_streams_active` against this value, and `vigo_checkins_total{status="stream_shed"}` for rejections |
 
 ### Sizing `max_concurrent`
 

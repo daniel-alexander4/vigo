@@ -26,7 +26,7 @@ func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second, 0)
 
 	msg := testMsg("push-1")
 	sm.queueForPromotion("t1", msg, nil)
@@ -41,7 +41,7 @@ func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 	}
 
 	// Register a stream — pending messages should be delivered.
-	as, cleanup := sm.register("t1", "web1.example.com")
+	as, cleanup, _ := sm.register("t1", "web1.example.com")
 	defer cleanup()
 
 	select {
@@ -69,7 +69,7 @@ func TestStreamPromotionTimeout(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 10*time.Millisecond)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 10*time.Millisecond, 0)
 
 	timedOut := make(chan struct{}, 1)
 	sm.queueForPromotion("t1", testMsg("push-1"), func() {
@@ -101,9 +101,9 @@ func TestStreamReleaseOnWorkComplete(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second, 0)
 
-	as, cleanup := sm.register("t1", "web1.example.com")
+	as, cleanup, _ := sm.register("t1", "web1.example.com")
 	defer cleanup()
 
 	as.promoted = true
@@ -125,9 +125,9 @@ func TestStreamReleaseNotSentForUnpromoted(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second, 0)
 
-	as, cleanup := sm.register("t1", "web1.example.com")
+	as, cleanup, _ := sm.register("t1", "web1.example.com")
 	defer cleanup()
 
 	// Stream is NOT promoted (default), workCount is 0.
@@ -145,10 +145,10 @@ func TestStreamPromotionToAlreadyConnected(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second, 0)
 
 	// Register stream first.
-	as, cleanup := sm.register("t1", "web1.example.com")
+	as, cleanup, _ := sm.register("t1", "web1.example.com")
 	defer cleanup()
 
 	msg := testMsg("push-1")
@@ -175,7 +175,7 @@ func TestStreamPromotionMultipleMessages(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second, 0)
 
 	msg1 := testMsg("push-1")
 	msg2 := testMsg("push-2")
@@ -183,7 +183,7 @@ func TestStreamPromotionMultipleMessages(t *testing.T) {
 	sm.queueForPromotion("t1", msg2, nil)
 
 	// Register stream — both messages should be delivered.
-	as, cleanup := sm.register("t1", "web1.example.com")
+	as, cleanup, _ := sm.register("t1", "web1.example.com")
 	defer cleanup()
 
 	received := make([]*pb.ServerStreamMessage, 0, 2)
@@ -211,9 +211,9 @@ func TestWorkCompletedMultipleDispatch(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second, 0)
 
-	as, cleanup := sm.register("t1", "web1.example.com")
+	as, cleanup, _ := sm.register("t1", "web1.example.com")
 	defer cleanup()
 
 	as.promoted = true
@@ -246,7 +246,7 @@ func TestStreamPromotionTimeoutClearsFlag(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 10*time.Millisecond)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 10*time.Millisecond, 0)
 
 	timedOut := make(chan struct{}, 1)
 	sm.queueForPromotion("t1", testMsg("push-1"), func() {
@@ -288,11 +288,11 @@ func TestForcePushIncrementsCounterByScope(t *testing.T) {
 	}
 
 	m := metrics.NewTestMetrics()
-	sm := newStreamManager(8, fi, m, 5*time.Second)
+	sm := newStreamManager(8, fi, m, 5*time.Second, 0)
 
 	// Register three streams so broadcast has something to land on.
 	for _, id := range []string{"e1", "e2", "e3"} {
-		_, cleanup := sm.register(id, id+".example.com")
+		_, cleanup, _ := sm.register(id, id+".example.com")
 		defer cleanup()
 	}
 
@@ -319,5 +319,58 @@ func TestForcePushIncrementsCounterByScope(t *testing.T) {
 	}
 	if after := testutil.ToFloat64(m.ForcePushesTotal.WithLabelValues("single")); after != before {
 		t.Errorf("counter moved on unsuccessful push: before=%v after=%v", before, after)
+	}
+}
+
+// TestStreamRegisterCapShedsAndReadmits verifies the held-stream cap
+// (checkin.max_connections): it admits up to the limit, sheds the next new
+// envoy with admitted=false, re-admits once a slot frees, and never counts a
+// reconnecting envoy against the cap.
+func TestStreamRegisterCapShedsAndReadmits(t *testing.T) {
+	m := metrics.NewTestMetrics()
+	sm := newStreamManager(8, nil, m, 5*time.Second, 2) // cap = 2
+
+	// Admit up to the cap.
+	_, c1, ok1 := sm.register("e1", "h1")
+	_, _, ok2 := sm.register("e2", "h2")
+	if !ok1 || !ok2 {
+		t.Fatalf("expected first two registers admitted, got %v %v", ok1, ok2)
+	}
+
+	// Third new envoy is shed.
+	as3, c3, ok3 := sm.register("e3", "h3")
+	if ok3 {
+		t.Fatal("expected third register to be shed (over cap)")
+	}
+	if as3 != nil {
+		t.Fatal("shed register must return a nil stream")
+	}
+	c3() // cleanup must be a safe no-op on a shed register
+	if got := testutil.ToFloat64(m.CheckinsTotal.WithLabelValues("stream_shed")); got != 1 {
+		t.Fatalf("expected 1 stream_shed, got %v", got)
+	}
+
+	// A reconnect of an already-held envoy is admitted even at capacity — it
+	// replaces its own slot rather than consuming a new one. (Use a fresh
+	// register so c1 stays the live cleanup for e1's slot.)
+	_, _, okReconnect := sm.register("e2", "h2") // reconnect e2 at capacity
+	if !okReconnect {
+		t.Fatal("expected reconnect of held envoy to be admitted at capacity")
+	}
+
+	// Free e1's slot via its live cleanup, then a new envoy is re-admitted.
+	c1()
+	if _, _, ok := sm.register("e4", "h4"); !ok {
+		t.Fatal("expected re-admit after a slot freed")
+	}
+}
+
+// TestStreamRegisterNoCap verifies max_connections=0 disables the gate.
+func TestStreamRegisterNoCap(t *testing.T) {
+	sm := newStreamManager(8, nil, metrics.NewTestMetrics(), 5*time.Second, 0)
+	for i := 0; i < 50; i++ {
+		if _, _, ok := sm.register(string(rune('a'+i)), "h"); !ok {
+			t.Fatalf("register %d shed with no cap configured", i)
+		}
 	}
 }

@@ -67,6 +67,7 @@ type ServerConfig struct {
 	JitterPercent              int32
 	MaxConcurrentCheckIns      int // 0 → defaultCheckInConcurrency() (always on)
 	MaxConcurrentReportResults int // 0 → defaultReportResultConcurrency (always on)
+	MaxConnections             int // 0 → no cap; >0 → refuse held streams past this count (ResourceExhausted)
 	Integrations               *integrations.Dispatcher
 	TraitsDir                  string
 	SignatureWindow            time.Duration         // 0 → default 5m
@@ -219,7 +220,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		traitsScanner:     traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		traitsBatch:       traitsBatch,
 		policyCache:       newPolicyCache(),
-		streamMgr:         newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute),
+		streamMgr:         newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute, cfg.MaxConnections),
 		taskRouter:        newTaskRouter(cfg.Queries, cfg.Metrics),
 		queryRouter:       newQueryRouter(),
 		taskStore:         cfg.TaskStore,

@@ -926,6 +926,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		JitterPercent:              int32(s.cfg.CheckIn.JitterPercent),
 		MaxConcurrentCheckIns:      s.cfg.CheckIn.MaxConcurrent,
 		MaxConcurrentReportResults: s.cfg.CheckIn.ReportMaxConcurrent,
+		MaxConnections:             s.cfg.CheckIn.MaxConnections,
 		Integrations:               s.integrations,
 		TraitsDir:                  s.traitsDir,
 		SignatureWindow:            s.sigWindow,

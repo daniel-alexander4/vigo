@@ -74,9 +74,9 @@ func TestPushRouterRemoveTarget(t *testing.T) {
 }
 
 func TestStreamManagerIsConnected(t *testing.T) {
-	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0, 0)
 
-	_, cleanup := sm.register("envoy-1", "host-1")
+	_, cleanup, _ := sm.register("envoy-1", "host-1")
 	defer cleanup()
 
 	if !sm.isConnected("envoy-1") {
@@ -89,11 +89,11 @@ func TestStreamManagerIsConnected(t *testing.T) {
 }
 
 func TestStreamManagerConnectedEnvoyIDs(t *testing.T) {
-	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0, 0)
 
-	_, cleanup1 := sm.register("envoy-1", "host-1")
+	_, cleanup1, _ := sm.register("envoy-1", "host-1")
 	defer cleanup1()
-	_, cleanup2 := sm.register("envoy-2", "host-2")
+	_, cleanup2, _ := sm.register("envoy-2", "host-2")
 	defer cleanup2()
 
 	ids := sm.connectedEnvoyIDs()
@@ -106,9 +106,9 @@ func TestStreamManagerConnectedEnvoyIDs(t *testing.T) {
 }
 
 func TestStreamManagerDispatchPush(t *testing.T) {
-	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0, 0)
 
-	as, cleanup := sm.register("envoy-1", "host-1")
+	as, cleanup, _ := sm.register("envoy-1", "host-1")
 	defer cleanup()
 
 	msg := &pb.ServerStreamMessage{
@@ -147,9 +147,9 @@ func TestStreamManagerDispatchPush(t *testing.T) {
 }
 
 func TestStreamManagerDispatchCleanup(t *testing.T) {
-	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0, 0)
 
-	_, cleanup := sm.register("envoy-1", "host-1")
+	_, cleanup, _ := sm.register("envoy-1", "host-1")
 	cleanup() // Disconnect.
 
 	if sm.isConnected("envoy-1") {

@@ -25,6 +25,7 @@ type streamManager struct {
 	fleetIndex       *fleet.FleetIndex
 	metrics          *metrics.Metrics // per-instance prometheus collectors
 	promotionTimeout time.Duration    // default: 12 minutes
+	maxConns         int              // 0 → no cap; >0 → refuse new envoys past this held-stream count
 }
 
 type agentStream struct {
@@ -43,7 +44,7 @@ type pendingPromotion struct {
 	timer     *time.Timer
 }
 
-func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, m *metrics.Metrics, promotionTimeout time.Duration) *streamManager {
+func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, m *metrics.Metrics, promotionTimeout time.Duration, maxConns int) *streamManager {
 	if sendBuf <= 0 {
 		sendBuf = 8
 	}
@@ -57,11 +58,18 @@ func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, m *metrics.Metr
 		fleetIndex:       fleetIndex,
 		metrics:          m,
 		promotionTimeout: promotionTimeout,
+		maxConns:         maxConns,
 	}
 }
 
-// register adds an agent stream. Returns the stream and a cleanup function.
-func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func()) {
+// register adds an agent stream. Returns the stream, a cleanup function, and
+// whether the stream was admitted. admitted is false only when the held-stream
+// cap (checkin.max_connections) is reached — the caller must then return
+// ResourceExhausted and not use the stream or call cleanup. The cap is enforced
+// under the same write lock that mutates the map, so the count can't race past
+// it; a reconnecting envoy (already in the map) replaces its own slot and never
+// counts against the cap.
+func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func(), bool) {
 	as := &agentStream{
 		envoyID:  envoyID,
 		hostname: hostname,
@@ -71,7 +79,16 @@ func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func(
 
 	sm.mu.Lock()
 	// If there's an existing stream for this envoy, close it.
-	if old, ok := sm.streams[envoyID]; ok {
+	old, reconnect := sm.streams[envoyID]
+	// Held-stream cap: refuse a genuinely new envoy past the limit so the
+	// server sheds (ResourceExhausted → agent backoff) instead of climbing to
+	// OOM. Reconnects don't count — they reuse their own slot.
+	if sm.maxConns > 0 && !reconnect && len(sm.streams) >= sm.maxConns {
+		sm.mu.Unlock()
+		sm.metrics.CheckinsTotal.WithLabelValues("stream_shed").Inc()
+		return nil, func() {}, false
+	}
+	if reconnect {
 		close(old.done)
 	}
 	sm.streams[envoyID] = as
@@ -111,7 +128,7 @@ func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func(
 		sm.metrics.StreamsActive.Set(float64(len(sm.streams)))
 		sm.mu.Unlock()
 		slog.Info("agent stream disconnected", "envoy_id", envoyID, "hostname", hostname)
-	}
+	}, true
 }
 
 // queueForPromotion stores a message for delivery when the agent opens a stream.

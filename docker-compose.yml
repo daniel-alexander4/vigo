@@ -11,6 +11,12 @@ services:
     # no bridge, no per-port docker-proxy byte-pump. Mirrors docker-compose.prod.yml;
     # guacd is host-networked too so scrier reaches it at 127.0.0.1:4822.
     network_mode: host
+    # One FD per agent connection; default 65536 caps the server near ~63k
+    # concurrent agents. Lift it so memory (~220 KB/conn), not FDs, is the limit.
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
     volumes:
       - /srv/vigo:/srv/vigo
       - /var/lib/vigo/swarm:/var/lib/vigo/swarm

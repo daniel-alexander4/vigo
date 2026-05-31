@@ -76,8 +76,14 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 		}
 	}
 
-	// Register the stream for push notifications.
-	as, cleanup := s.streamMgr.register(envoyID, envoy.Hostname)
+	// Register the stream for push notifications. Refused when the held-stream
+	// cap (checkin.max_connections) is reached — shed with ResourceExhausted so
+	// the agent backs off and the server stays under its memory ceiling instead
+	// of being OOM-killed (see docs/howto/sizing.md).
+	as, cleanup, admitted := s.streamMgr.register(envoyID, envoy.Hostname)
+	if !admitted {
+		return status.Error(codes.ResourceExhausted, "server at connection capacity; retry with backoff")
+	}
 	defer cleanup()
 	// Persist final last_seen to DB when the stream closes so the timestamp
 	// survives server restart (streaming envoys skip DB writes mid-stream).
