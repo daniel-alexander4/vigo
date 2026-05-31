@@ -64,9 +64,11 @@ type SwarmSnapshot struct {
 	CuratorArtifacts  int
 	CuratorPublishers int
 
-	LockboxUsers          int
-	LockboxFiles          int
-	LockboxDivergentFiles int
+	LockboxUsers           int
+	LockboxFiles           int
+	LockboxDivergentFiles  int
+	LockboxFailedFiles     int
+	LockboxRecipientDrifts int
 
 	LongdrawerUsers          int
 	LongdrawerFiles          int
@@ -215,6 +217,8 @@ func updateSwarmMetrics(m *Metrics, s SwarmSnapshot) {
 	m.LockboxUsers.Set(float64(s.LockboxUsers))
 	m.LockboxFiles.Set(float64(s.LockboxFiles))
 	m.LockboxDivergentFiles.Set(float64(s.LockboxDivergentFiles))
+	m.LockboxFailedFiles.Set(float64(s.LockboxFailedFiles))
+	m.LockboxRecipientDrifts.Set(float64(s.LockboxRecipientDrifts))
 
 	m.LongdrawerUsers.Set(float64(s.LongdrawerUsers))
 	m.LongdrawerFiles.Set(float64(s.LongdrawerFiles))

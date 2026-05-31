@@ -99,6 +99,14 @@ func buildLockboxHealth(f *lockboxmesh.Fleet) HealthBanner {
 				Severity: "err",
 			})
 		}
+		if u.FailedFiles > 0 {
+			problems = append(problems, HealthProblem{
+				Kind:     "failed",
+				Subject:  u.User,
+				Detail:   fmt.Sprintf("%d file(s) failed to encrypt and sit in plaintext, never syncing — check `journalctl -u vigo-envoy | grep lockbox`", u.FailedFiles),
+				Severity: "err",
+			})
+		}
 		if u.RecipientDrift {
 			problems = append(problems, HealthProblem{
 				Kind:     "drift",

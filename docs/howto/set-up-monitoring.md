@@ -177,6 +177,8 @@ Fleet-total gauges for the swarm substrate, the content subsystems, and the span
 | `vigo_lockbox_users` | Gauge | Users with lockbox state across the fleet |
 | `vigo_lockbox_files` | Gauge | Total encrypted files across all lockbox users |
 | `vigo_lockbox_divergent_files` | Gauge | Lockbox files whose hash/size disagrees across envoys |
+| `vigo_lockbox_failed_files` | Gauge | Lockbox `.failed` artifacts — files whose encrypt failed permanently and sit in plaintext, never syncing (a non-zero value is an actionable failure, not drift) |
+| `vigo_lockbox_recipient_drifts` | Gauge | Lockbox users whose recipient set disagrees across envoys (newly-encrypted files won't decrypt on the missing peers) |
 | `vigo_longdrawer_users` | Gauge | Users with longdrawer sync state across the fleet |
 | `vigo_longdrawer_files` | Gauge | Total synced files across all longdrawer users |
 | `vigo_longdrawer_divergent_files` | Gauge | Longdrawer files whose hash/size disagrees across envoys |

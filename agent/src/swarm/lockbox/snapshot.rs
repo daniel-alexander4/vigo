@@ -64,6 +64,13 @@ pub struct UserSnapshot {
     /// Total file count (not bounded — if `files` is truncated to
     /// `RECENT_FILE_CAP`, this still reflects the full count).
     pub file_count: usize,
+    /// ADR-012 `.failed` artifacts in `~<user>/lockbox/` — a file whose
+    /// encrypt failed permanently, so it sits in plaintext and never syncs.
+    /// Excluded from `file_count`/`files`/`files_digest` (it's not part of
+    /// the synced corpus); surfaced here so the mesh can expose
+    /// `vigo_lockbox_failed_files` for an otherwise journal-only failure.
+    #[serde(default)]
+    pub failed_file_count: usize,
     pub total_bytes: u64,
     /// Recent files, bounded at `RECENT_FILE_CAP`. Sorted by mtime
     /// descending (newest first). Use the drill-down endpoint for
@@ -170,6 +177,7 @@ pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
     Ok(UserSnapshot {
         user: user.to_string(),
         file_count,
+        failed_file_count: count_failed_artifacts(user, home),
         total_bytes,
         files: recent,
         files_digest,
@@ -191,6 +199,25 @@ pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
 /// read. The catch-up path interprets that as "I have nothing, pull
 /// everything"; the trait collector handles the empty case identically
 /// to the historical behavior.
+/// count_failed_artifacts counts ADR-012 `.failed` artifacts in
+/// `~<user>/lockbox/` — files whose encrypt failed permanently and now sit
+/// in plaintext, never syncing. `local_files_for_user` deliberately skips
+/// these (they aren't part of the synced corpus); this is the one place that
+/// counts them, so the mesh can surface them as a metric instead of leaving
+/// the failure journal-only. A separate, full enumeration of the content dir
+/// (not the bounded recent-file list) so the count is exact, not truncated.
+pub(super) fn count_failed_artifacts(_user: &str, home: &Path) -> usize {
+    let content_dir = config::content_dir(home);
+    let read = match fs::read_dir(&content_dir) {
+        Ok(r) => r,
+        Err(_) => return 0,
+    };
+    read.filter_map(|e| e.ok())
+        .filter_map(|e| e.path().file_name().and_then(|n| n.to_str()).map(str::to_string))
+        .filter(|name| super::auto_encrypt::is_failed_artifact_name(name))
+        .count()
+}
+
 pub(super) fn local_files_for_user(user: &str, home: &Path) -> Vec<FileEntry> {
     let content_dir = config::content_dir(home);
     if !content_dir.is_dir() {
@@ -387,6 +414,28 @@ fn cache_path(user: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn count_failed_artifacts_counts_only_failed_suffix() {
+        let home = tempfile::tempdir().unwrap();
+        let content = config::content_dir(home.path());
+        std::fs::create_dir_all(&content).unwrap();
+        // Two genuine `.failed` artifacts (with the unix-ts shape), one
+        // synced ciphertext, one user-named "report.failed" (NOT ours).
+        std::fs::write(content.join("a.txt.20260531.failed"), b"x").unwrap();
+        std::fs::write(content.join("b.conf.1234567890.failed"), b"x").unwrap();
+        std::fs::write(content.join("c.age"), b"x").unwrap();
+        std::fs::write(content.join("report.failed"), b"x").unwrap();
+
+        assert_eq!(count_failed_artifacts("dan", home.path()), 2);
+    }
+
+    #[test]
+    fn count_failed_artifacts_zero_when_dir_absent() {
+        let home = tempfile::tempdir().unwrap();
+        // No lockbox/ dir created.
+        assert_eq!(count_failed_artifacts("dan", home.path()), 0);
+    }
 
     #[test]
     fn sha_cache_hits_on_same_mtime_size() {

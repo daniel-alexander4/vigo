@@ -46,35 +46,38 @@ type Fleet struct {
 }
 
 type Totals struct {
-	Users             int `json:"users"`
-	Envoys            int `json:"envoys"`
-	Files             int `json:"files"`
-	Tombstones        int `json:"tombstones"`
-	Divergences       int `json:"divergences"`
-	RecipientDrifts   int `json:"recipient_drifts"`
-	UnlockedSessions  int `json:"unlocked_sessions"`
+	Users            int `json:"users"`
+	Envoys           int `json:"envoys"`
+	Files            int `json:"files"`
+	Tombstones       int `json:"tombstones"`
+	Divergences      int `json:"divergences"`
+	FailedFiles      int `json:"failed_files"`
+	RecipientDrifts  int `json:"recipient_drifts"`
+	UnlockedSessions int `json:"unlocked_sessions"`
 }
 
 type UserSummary struct {
-	User              string          `json:"user"`
-	Envoys            []EnvoyPresence `json:"envoys"`
-	Files             []FileRow       `json:"files"`
-	Tombstones        []TombstoneRow  `json:"tombstones"`
-	Divergences       []string        `json:"divergences,omitempty"`
-	RecipientDrift    bool            `json:"recipient_drift"`
-	ActiveSessions    []string        `json:"active_sessions,omitempty"`
-	FileCount         int             `json:"file_count"`
-	TotalBytes        int64           `json:"total_bytes"`
+	User           string          `json:"user"`
+	Envoys         []EnvoyPresence `json:"envoys"`
+	Files          []FileRow       `json:"files"`
+	Tombstones     []TombstoneRow  `json:"tombstones"`
+	Divergences    []string        `json:"divergences,omitempty"`
+	RecipientDrift bool            `json:"recipient_drift"`
+	ActiveSessions []string        `json:"active_sessions,omitempty"`
+	FileCount      int             `json:"file_count"`
+	FailedFiles    int             `json:"failed_files"`
+	TotalBytes     int64           `json:"total_bytes"`
 }
 
 type EnvoyPresence struct {
-	Hostname         string `json:"hostname"`
-	Status           string `json:"status"` // reporting | not_reporting | stale
-	UpdatedAt        int64  `json:"updated_at,omitempty"`
-	FileCount        int    `json:"file_count"`
-	FilesDigest      string `json:"files_digest,omitempty"`
-	TombstoneCount   int    `json:"tombstone_count"`
-	SessionUnlocked  bool   `json:"session_unlocked"`
+	Hostname        string `json:"hostname"`
+	Status          string `json:"status"` // reporting | not_reporting | stale
+	UpdatedAt       int64  `json:"updated_at,omitempty"`
+	FileCount       int    `json:"file_count"`
+	FailedFileCount int    `json:"failed_file_count"`
+	FilesDigest     string `json:"files_digest,omitempty"`
+	TombstoneCount  int    `json:"tombstone_count"`
+	SessionUnlocked bool   `json:"session_unlocked"`
 	// RecipientsDigest is a 16-byte hex digest of this envoy's
 	// sorted `(hostname, pubkey, sign_pubkey)` tuples for the
 	// user. Drift is flagged when two envoys in the same mesh
@@ -195,6 +198,7 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 	summaries := make([]UserSummary, 0, len(userSet))
 	participants := make(map[string]struct{})
 	totalFiles := 0
+	totalFailed := 0
 	totalTombstones := 0
 	totalDivergences := 0
 	totalDrifts := 0
@@ -208,6 +212,7 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 			}
 		}
 		totalFiles += s.FileCount
+		totalFailed += s.FailedFiles
 		totalTombstones += len(s.Tombstones)
 		totalDivergences += len(s.Divergences)
 		if s.RecipientDrift {
@@ -231,6 +236,7 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 			Users:            len(summaries),
 			Envoys:           len(partList),
 			Files:            totalFiles,
+			FailedFiles:      totalFailed,
 			Tombstones:       totalTombstones,
 			Divergences:      totalDivergences,
 			RecipientDrifts:  totalDrifts,
@@ -265,6 +271,8 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 			}
 			presence.UpdatedAt = r.envelope.UpdatedAt
 			presence.FileCount = us.FileCount
+			presence.FailedFileCount = us.FailedFileCount
+			summary.FailedFiles += us.FailedFileCount
 			presence.FilesDigest = us.FilesDigest
 			presence.TombstoneCount = us.TombstoneCount
 			presence.SessionUnlocked = us.SessionUnlocked
@@ -493,6 +501,7 @@ type traitEnvelope struct {
 type userTrait struct {
 	User            string           `json:"user"`
 	FileCount       int              `json:"file_count"`
+	FailedFileCount int              `json:"failed_file_count"`
 	TotalBytes      int64            `json:"total_bytes"`
 	Files           []fileTrait      `json:"files"`
 	FilesDigest     string           `json:"files_digest"`

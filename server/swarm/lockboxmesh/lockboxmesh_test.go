@@ -146,3 +146,41 @@ func TestBuildUserSummary_TombstonesSorted(t *testing.T) {
 		}
 	}
 }
+
+// FailedFiles aggregation: a user's failed-artifact count is summed across
+// that user's reporting envoys (each .failed artifact is local to one envoy,
+// so there's no cross-envoy dedup — unlike synced files).
+func TestBuildUserSummary_FailedFilesSummed(t *testing.T) {
+	now := time.Unix(10_000, 0)
+	fresh := now.Unix() - 5
+
+	rows := []envRow{
+		{hostname: "a", reported: true, envelope: &traitEnvelope{
+			UpdatedAt: fresh,
+			Users:     []userTrait{{User: "dan", FailedFileCount: 2}},
+		}},
+		{hostname: "b", reported: true, envelope: &traitEnvelope{
+			UpdatedAt: fresh,
+			Users:     []userTrait{{User: "dan", FailedFileCount: 3}},
+		}},
+		// A not-reporting envoy contributes nothing.
+		{hostname: "c", reported: false},
+	}
+	s := buildUserSummary("dan", rows, now)
+	if s.FailedFiles != 5 {
+		t.Errorf("FailedFiles = %d, want 5 (2+3 across reporting envoys)", s.FailedFiles)
+	}
+	// Per-envoy presence carries its own count.
+	for _, ep := range s.Envoys {
+		switch ep.Hostname {
+		case "a":
+			if ep.FailedFileCount != 2 {
+				t.Errorf("envoy a FailedFileCount = %d, want 2", ep.FailedFileCount)
+			}
+		case "b":
+			if ep.FailedFileCount != 3 {
+				t.Errorf("envoy b FailedFileCount = %d, want 3", ep.FailedFileCount)
+			}
+		}
+	}
+}

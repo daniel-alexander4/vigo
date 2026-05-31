@@ -149,9 +149,11 @@ type Metrics struct {
 
 	// --- Swarm: lockbox ---
 
-	LockboxUsers          prometheus.Gauge
-	LockboxFiles          prometheus.Gauge
-	LockboxDivergentFiles prometheus.Gauge
+	LockboxUsers           prometheus.Gauge
+	LockboxFiles           prometheus.Gauge
+	LockboxDivergentFiles  prometheus.Gauge
+	LockboxFailedFiles     prometheus.Gauge
+	LockboxRecipientDrifts prometheus.Gauge
 
 	// --- Swarm: longdrawer ---
 
@@ -551,6 +553,14 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		LockboxDivergentFiles: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_lockbox_divergent_files",
 			Help: "Lockbox files whose hash/size disagrees across envoys.",
+		}),
+		LockboxFailedFiles: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_lockbox_failed_files",
+			Help: "Lockbox .failed artifacts across the fleet — files whose encrypt failed permanently, sitting in plaintext and never syncing.",
+		}),
+		LockboxRecipientDrifts: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_lockbox_recipient_drifts",
+			Help: "Lockbox users whose recipient set disagrees across envoys (some envoys would encrypt to a different audience).",
 		}),
 
 		// --- Swarm: longdrawer ---

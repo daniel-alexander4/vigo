@@ -33,6 +33,10 @@
             <div class="stat-card__value {{if gt .Crypt.Totals.Divergences 0}}text-warn{{end}}">{{.Crypt.Totals.Divergences}}</div>
         </div>
         <div class="stat-card">
+            <div class="stat-card__label">Failed (unencrypted)</div>
+            <div class="stat-card__value {{if gt .Crypt.Totals.FailedFiles 0}}text-danger{{end}}">{{.Crypt.Totals.FailedFiles}}</div>
+        </div>
+        <div class="stat-card">
             <div class="stat-card__label">Recipient drift</div>
             <div class="stat-card__value {{if gt .Crypt.Totals.RecipientDrifts 0}}text-warn{{end}}">{{.Crypt.Totals.RecipientDrifts}}</div>
         </div>

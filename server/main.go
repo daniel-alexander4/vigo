@@ -419,6 +419,8 @@ func (a *metricsSwarmAdapter) SwarmSnapshot(ctx context.Context) metrics.SwarmSn
 		out.LockboxUsers = f.Totals.Users
 		out.LockboxFiles = f.Totals.Files
 		out.LockboxDivergentFiles = f.Totals.Divergences
+		out.LockboxFailedFiles = f.Totals.FailedFiles
+		out.LockboxRecipientDrifts = f.Totals.RecipientDrifts
 	}
 	if f, err := a.longdrawer.Snapshot(ctx, meshInputs(envoys, func(id, h string, r bool) longdrawermesh.EnvoyInput {
 		return longdrawermesh.EnvoyInput{ID: id, Hostname: h, Revoked: r}
