@@ -3,6 +3,8 @@
 
 Vigo keeps envoys in the state you've declared. Agents on each envoy pull desired state from a central server, apply changes idempotently, and report results back. You write the state in YAML; the system converges envoys toward it on a fixed interval — and stays there.
 
+That convergence engine is the core, but Vigo is a good deal more than configuration management. The same server that enforces state also scores regulatory compliance, runs active verification (Connwaer), brokers browser SSH/RDP/VNC without inbound ports (Scrier), distributes content peer-to-peer, and holds tens of thousands of nodes per host at a one-second check-in cadence. The sections below start with the convergence model; the rest of the platform layers on from there.
+
 ## Three binaries
 
 | Binary | Where it runs | What it does |
@@ -25,6 +27,7 @@ Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Per-platform init syst
 ## Key properties you'll encounter
 
 - **One server, whole fleet.** No compile masters, worker pools, or database clusters at any scale. SQLite + WAL + optional Litestream WAL replication to S3-compatible storage.
+- **Scales to tens of thousands of nodes per server.** One vigosrv holds ~60k concurrent agent streams on a 31 GiB host — memory-bound and linear (~220 KB/node), CPU never the limit, with graceful shedding rather than collapse under overload. Past that, peer-equal `spanner` federation partitions the fleet across hosts (no central compile to bottleneck). See [Sizing](howto/sizing.md).
 - **Continuous convergence.** Every check-in runs a full convergence pass, not just diff-apply. Drift correction is interval-bounded, not on-deploy-only.
 - **Offline-safe agents.** Each envoy caches the last signed policy bundle. When the server is unreachable, the agent re-applies that bundle against fresh traits, queues results locally, and flushes them on reconnect. Bundles expire when a `bundle_max_age` is set in `server.yaml`.
 - **Mandatory mTLS, mandatory signing.** Every gRPC call rides mTLS. Every agent request is ed25519-signed against the stored pubkey for that envoy. No plaintext mode, no signature-skip mode.

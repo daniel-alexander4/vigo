@@ -206,7 +206,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- 15-second check-ins, spanner federation, AI assistant, compliance export with auto-rollback, RBAC, 73 resource types across 8 platforms, verified binary distribution, all integrations
+- One-second-capable check-ins at fleet scale (tens of thousands of nodes per server, peer-equal spanner federation beyond), regulatory compliance scoring + GRC export with auto-rollback, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration, a read-only AI assistant, RBAC, 73 resource types across 7 operating systems, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–100 nodes) includes all features with no time limit.
