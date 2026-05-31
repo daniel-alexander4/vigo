@@ -54,46 +54,46 @@ func isCRUDAction(action string) bool {
 // funcMap returns the template FuncMap used across all templates.
 func funcMap() template.FuncMap {
 	return template.FuncMap{
-		"statusColor":    statusColor,
-		"sparklineSVG":        SparklineSVG,
-		"sparklineSVGColor":   SparklineSVGColor,
-		"sparklineSVGBounded": SparklineSVGBounded,
-		"formatTime":     formatTime,
-		"formatUnixTime": formatUnixTime,
-		"truncGitSha":    truncGitSha,
-		"timeAgo":        timeAgo,
-		"sortHeader":     sortHeader,
-		"pctColor":          pctColor,
-		"pctColorInv":       pctColorInv,
-		"pctColorBg":        pctColorBg,
-		"pctColorBgInv":     pctColorBgInv,
-		"pctAccent":         pctAccent,
-		"pctAccentInv":      pctAccentInv,
-		"failureBadgeClass": failureBadgeClass,
-		"highlightYAML":  highlightYAML,
-		"truncUUID":      truncUUID,
-		"labelDisplayName": labelDisplayName,
-		"sub":            func(a, b int) int { return a - b },
-		"dict":           dict,
-		"pct":            pct,
-		"truncCommand":   truncCommand,
-		"cveURL":         cveURL,
-		"debianCVEURL":   debianCVEURL,
-		"lynisControlURL": lynisControlURL,
-		"secAIQuestion":  securityAIQuestion,
-		"cachedCVEAIQ":   cachedCVEAIQuestion,
-		"trivyAIQ":       trivyAIQuestion,
-		"debsecanAIQ":    debsecanAIQuestion,
-		"lynisWarnAIQ":   lynisWarningAIQuestion,
-		"lynisSugAIQ":    lynisSuggestionAIQuestion,
-		"rkhunterAIQ":    rkhunterAIQuestion,
-		"chkrootkitAIQ":  chkrootkitAIQuestion,
-		"clamavAIQ":      clamavAIQuestion,
-		"aideAIQ":        aideAIQuestion,
-		"defenderAIQ":    defenderAIQuestion,
-		"scapAIQ":        scapAIQuestion,
-		"ddgLink":        ddgLink,
-		"trivySevCounts":      trivySevCounts,
+		"statusColor":           statusColor,
+		"sparklineSVG":          SparklineSVG,
+		"sparklineSVGColor":     SparklineSVGColor,
+		"sparklineSVGBounded":   SparklineSVGBounded,
+		"formatTime":            formatTime,
+		"formatUnixTime":        formatUnixTime,
+		"truncGitSha":           truncGitSha,
+		"timeAgo":               timeAgo,
+		"sortHeader":            sortHeader,
+		"pctColor":              pctColor,
+		"pctColorInv":           pctColorInv,
+		"pctColorBg":            pctColorBg,
+		"pctColorBgInv":         pctColorBgInv,
+		"pctAccent":             pctAccent,
+		"pctAccentInv":          pctAccentInv,
+		"failureBadgeClass":     failureBadgeClass,
+		"highlightYAML":         highlightYAML,
+		"truncUUID":             truncUUID,
+		"labelDisplayName":      labelDisplayName,
+		"sub":                   func(a, b int) int { return a - b },
+		"dict":                  dict,
+		"pct":                   pct,
+		"truncCommand":          truncCommand,
+		"cveURL":                cveURL,
+		"debianCVEURL":          debianCVEURL,
+		"lynisControlURL":       lynisControlURL,
+		"secAIQuestion":         securityAIQuestion,
+		"cachedCVEAIQ":          cachedCVEAIQuestion,
+		"trivyAIQ":              trivyAIQuestion,
+		"debsecanAIQ":           debsecanAIQuestion,
+		"lynisWarnAIQ":          lynisWarningAIQuestion,
+		"lynisSugAIQ":           lynisSuggestionAIQuestion,
+		"rkhunterAIQ":           rkhunterAIQuestion,
+		"chkrootkitAIQ":         chkrootkitAIQuestion,
+		"clamavAIQ":             clamavAIQuestion,
+		"aideAIQ":               aideAIQuestion,
+		"defenderAIQ":           defenderAIQuestion,
+		"scapAIQ":               scapAIQuestion,
+		"ddgLink":               ddgLink,
+		"trivySevCounts":        trivySevCounts,
 		"debsecanUrgencyCounts": debsecanUrgencyCounts,
 		"secSeverityClass": func(sev string) string {
 			switch cve.Classify(sev) {
@@ -344,38 +344,38 @@ func funcMap() template.FuncMap {
 			}
 		},
 		"humanDuration": func(start, end time.Time) string {
-				if start.IsZero() || end.IsZero() {
-					return ""
-				}
-				d := end.Sub(start)
-				if d < 0 {
-					return ""
-				}
-				switch {
-				case d < time.Second:
-					return fmt.Sprintf("%dms", d.Milliseconds())
-				case d < time.Minute:
-					return fmt.Sprintf("%ds", int(d.Seconds()))
-				case d < time.Hour:
-					return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
-				default:
-					return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
-				}
-			},
-			"humanMs": func(ms int64) string {
-				d := time.Duration(ms) * time.Millisecond
-				switch {
-				case d < time.Second:
-					return fmt.Sprintf("%dms", ms)
-				case d < time.Minute:
-					return fmt.Sprintf("%ds", int(d.Seconds()))
-				case d < time.Hour:
-					return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
-				default:
-					return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
-				}
-			},
-			"swarmStatusClass": func(status string) string {
+			if start.IsZero() || end.IsZero() {
+				return ""
+			}
+			d := end.Sub(start)
+			if d < 0 {
+				return ""
+			}
+			switch {
+			case d < time.Second:
+				return fmt.Sprintf("%dms", d.Milliseconds())
+			case d < time.Minute:
+				return fmt.Sprintf("%ds", int(d.Seconds()))
+			case d < time.Hour:
+				return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+			default:
+				return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+			}
+		},
+		"humanMs": func(ms int64) string {
+			d := time.Duration(ms) * time.Millisecond
+			switch {
+			case d < time.Second:
+				return fmt.Sprintf("%dms", ms)
+			case d < time.Minute:
+				return fmt.Sprintf("%ds", int(d.Seconds()))
+			case d < time.Hour:
+				return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+			default:
+				return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+			}
+		},
+		"swarmStatusClass": func(status string) string {
 			switch status {
 			case "source":
 				// Green — the seeder has the blob by construction.
@@ -761,27 +761,27 @@ func funcMap() template.FuncMap {
 // fwSlug maps compliance framework display names to URL slugs.
 func fwSlug(name string) string {
 	slugs := map[string]string{
-		"HIPAA":             "compliance",
-		"HITRUST CSF":       "hitrust",
-		"SOC 2":             "soc2",
-		"PCI DSS v4.0":      "pci",
-		"CIS Benchmarks":    "cis",
-		"NIST 800-53":       "nist",
-		"ISO 27001":         "iso27001",
-		"GDPR":              "gdpr",
-		"NERC CIP":          "nerccip",
-		"Cyber Essentials+": "cyberessentials",
-		"IEC 62443":         "iec62443",
-		"SOX":               "sox",
-		"FINRA":             "finra",
-		"MiFID II":          "mifid2",
-		"CCSS":               "ccss",
-		"FDA 21 CFR Part 11": "fda21cfr11",
-		"Gaming Commission":  "gaming",
-		"CIS Windows":        "ciswindows",
-		"CIS Ubuntu":                "cisubuntu",
-		"CIS RHEL":                  "cisrhel",
-		"ABA Cybersecurity":         "abacyber",
+		"HIPAA":                       "compliance",
+		"HITRUST CSF":                 "hitrust",
+		"SOC 2":                       "soc2",
+		"PCI DSS v4.0":                "pci",
+		"CIS Benchmarks":              "cis",
+		"NIST 800-53":                 "nist",
+		"ISO 27001":                   "iso27001",
+		"GDPR":                        "gdpr",
+		"NERC CIP":                    "nerccip",
+		"Cyber Essentials+":           "cyberessentials",
+		"IEC 62443":                   "iec62443",
+		"SOX":                         "sox",
+		"FINRA":                       "finra",
+		"MiFID II":                    "mifid2",
+		"CCSS":                        "ccss",
+		"FDA 21 CFR Part 11":          "fda21cfr11",
+		"Gaming Commission":           "gaming",
+		"CIS Windows":                 "ciswindows",
+		"CIS Ubuntu":                  "cisubuntu",
+		"CIS RHEL":                    "cisrhel",
+		"ABA Cybersecurity":           "abacyber",
 		"NY DFS Cyber (23 NYCRR 500)": "nydfscyber",
 	}
 	if s, ok := slugs[name]; ok {
@@ -845,7 +845,13 @@ func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
+	// script-src is 'self' only — all inline scripts/handlers were moved to
+	// /static/js (delegated via ui-actions.js), so no 'unsafe-inline'/nonce is
+	// needed for scripts. style-src keeps 'unsafe-inline' deliberately: the UI
+	// still uses ~375 inline style= attributes (CSP nonces don't cover style
+	// attributes), and inline-style injection can't execute JS — de-inlining
+	// styles is tracked separately as lower-value work.
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'")
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
 		slog.Error("template execution error", "name", name, "error", err)
 		http.Error(w, "template error", http.StatusInternalServerError)
@@ -1001,6 +1007,7 @@ func toFloat64(v any) float64 {
 //   - >50% → danger
 //   - >20% → warning
 //   - else → success
+//
 // (The percentage scale matches what the original HSL gradient encoded
 // as a smooth red-yellow-green ramp; the band classification is the
 // honest 3-state approximation.)
@@ -1242,8 +1249,8 @@ func traceGreenBg(depth, total int) template.CSS {
 // each depth in the inheritance chain carries its own gradient position.
 func traceGreenBord(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
-	lr, lg, lb := int(91-t*65), int(179-t*87), int(112-t*64)       // Latte: #5bb370 → #1a5c30
-	dr, dg, db := int(140+t*26), int(210+t*17), int(140+t*21)      // Mocha: #8cd28c → #a6e3a1 (approaches Mocha Green)
+	lr, lg, lb := int(91-t*65), int(179-t*87), int(112-t*64)  // Latte: #5bb370 → #1a5c30
+	dr, dg, db := int(140+t*26), int(210+t*17), int(140+t*21) // Mocha: #8cd28c → #a6e3a1 (approaches Mocha Green)
 	return template.CSS(fmt.Sprintf("--tb-l:rgb(%d,%d,%d);--tb-d:rgb(%d,%d,%d)", lr, lg, lb, dr, dg, db))
 }
 
@@ -1251,8 +1258,8 @@ func traceGreenBord(depth, total int) template.CSS {
 // --tc-d custom properties are consumed by CSS rules keyed on theme.
 func traceGreenText(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
-	lr, lg, lb := int(58-t*32), int(138-t*58), int(80-t*32)        // Latte: #3a8a50 → #1a5030
-	dr, dg, db := int(120+t*46), int(200+t*27), int(130+t*31)      // Mocha: #78c882 → #a6e3a1
+	lr, lg, lb := int(58-t*32), int(138-t*58), int(80-t*32)   // Latte: #3a8a50 → #1a5030
+	dr, dg, db := int(120+t*46), int(200+t*27), int(130+t*31) // Mocha: #78c882 → #a6e3a1
 	return template.CSS(fmt.Sprintf("--tc-l:rgb(%d,%d,%d);--tc-d:rgb(%d,%d,%d)", lr, lg, lb, dr, dg, db))
 }
 

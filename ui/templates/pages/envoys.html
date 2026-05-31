@@ -24,7 +24,7 @@
 <div class="envoys-toolbar mt-2 mb-2">
     <div class="envoys-toolbar__filter">
         <button type="button" class="btn btn--sm envoys-toolbar__filter-button"
-                onclick="toggleEnvoyFilterDrawer()"
+                data-action="toggle-filter-drawer"
                 aria-controls="envoy-filter-drawer"
                 aria-label="Open filter drawer">
             Filter
@@ -47,7 +47,7 @@
         {{if .ModuleFilter}}<input type="hidden" name="module" value="{{.ModuleFilter}}">{{end}}
         {{if .ComplianceFilter}}<input type="hidden" name="compliance" value="{{.ComplianceFilter}}">{{end}}
         <label class="envoys-toolbar__label" for="envoys-sort">Sort</label>
-        <select id="envoys-sort" name="sort" onchange="this.form.submit()" class="input input--sm">
+        <select id="envoys-sort" name="sort" data-change="submit-form" class="input input--sm">
             <option value="status"{{if eq .SortColumn "status"}} selected{{end}}>Worst first</option>
             <option value="last_run"{{if eq .SortColumn "last_run"}} selected{{end}}>Last run (newest)</option>
             <option value="last_seen"{{if eq .SortColumn "last_seen"}} selected{{end}}>Last seen (newest)</option>

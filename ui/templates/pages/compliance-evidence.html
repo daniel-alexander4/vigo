@@ -120,10 +120,10 @@
 {{end}}
 
 <div class="filter-tabs" id="evidence-filter">
-    <button class="filter-tab filter-tab--active" onclick="filterControls('all', this)">All</button>
-    <button class="filter-tab" onclick="filterControls('satisfied', this)">Satisfied</button>
-    <button class="filter-tab" onclick="filterControls('waived', this)">Waived</button>
-    <button class="filter-tab" onclick="filterControls('not_satisfied', this)">Not Met</button>
+    <button class="filter-tab filter-tab--active" data-action="filter-controls" data-filter="all">All</button>
+    <button class="filter-tab" data-action="filter-controls" data-filter="satisfied">Satisfied</button>
+    <button class="filter-tab" data-action="filter-controls" data-filter="waived">Waived</button>
+    <button class="filter-tab" data-action="filter-controls" data-filter="not_satisfied">Not Met</button>
 </div>
 
 <div class="table-container">
@@ -148,7 +148,7 @@
                             hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
                             hx-target="#drill-{{.ControlID | cssClass}}"
                             hx-swap="innerHTML"
-                            onclick="this.dataset.showWaiver='1'">Add Waiver</button>
+                            data-action="show-waiver">Add Waiver</button>
                     {{end}}
                 </td>
                 <td>
@@ -165,27 +165,6 @@
         </tbody>
     </table>
 </div>
-<script>
-function filterControls(status, btn) {
-    var rows = document.querySelectorAll('#controls-table tbody tr[data-status]');
-    for (var i = 0; i < rows.length; i++) {
-        var row = rows[i];
-        var drill = row.nextElementSibling;
-        if (status === 'all' || row.dataset.status === status) {
-            row.style.display = '';
-            if (drill) drill.style.display = '';
-        } else {
-            row.style.display = 'none';
-            if (drill) drill.style.display = 'none';
-        }
-    }
-    var tabs = document.querySelectorAll('.filter-tab');
-    for (var j = 0; j < tabs.length; j++) {
-        tabs[j].classList.remove('filter-tab--active');
-    }
-    btn.classList.add('filter-tab--active');
-}
-</script>
 {{end}}
 
 {{define "evidence-control-drill"}}

@@ -45,10 +45,10 @@ import (
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
-	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
+	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 	"git.alexander4.io/vigo/server/traits"
 	"github.com/google/uuid"
 )
@@ -782,20 +782,20 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // PageData holds common fields for all page templates.
 type PageData struct {
-	Title            string
-	ActiveNav        string
-	BodyClass        string // extra CSS class on <body>
-	Version          string
-	PollInterval     string // HTMX polling interval — min(checkin.base_interval, 5m). Polling faster than check-ins yields no fresh data; the 5m cap keeps long-interval fleets from looking frozen.
-	CheckInInterval  string // configured check-in interval, e.g. "15s", "5m0s"
-	AIEnabled        bool
-	AIProviderName   string // "Claude", "Ollama", "OpenAI", etc.
-	SpannerEnabled   bool
-	DocsEnabled      bool
-	PeerEnabled      bool
-	SwarmEnabled     bool
-	AuthEnabled      bool
-	AuthMethod       string
+	Title           string
+	ActiveNav       string
+	BodyClass       string // extra CSS class on <body>
+	Version         string
+	PollInterval    string // HTMX polling interval — min(checkin.base_interval, 5m). Polling faster than check-ins yields no fresh data; the 5m cap keeps long-interval fleets from looking frozen.
+	CheckInInterval string // configured check-in interval, e.g. "15s", "5m0s"
+	AIEnabled       bool
+	AIProviderName  string // "Claude", "Ollama", "OpenAI", etc.
+	SpannerEnabled  bool
+	DocsEnabled     bool
+	PeerEnabled     bool
+	SwarmEnabled    bool
+	AuthEnabled     bool
+	AuthMethod      string
 	// NoEnvoys is true when zero envoys are enrolled — the first-run
 	// state. The shared nav partial collapses to the brand block only,
 	// and the dashboard renders the enrollment panel.
@@ -1073,7 +1073,7 @@ type FleetRow struct {
 	HealthSeverity fleetpressure.Severity
 	// HealthSummary is the one-line per-axis breakdown shown on the
 	// pill's hover title; empty when HealthSeverity is Unknown.
-	HealthSummary  string
+	HealthSummary string
 }
 
 // RunRow is a single run displayed in a table.
@@ -1263,11 +1263,11 @@ type EnvoyRow struct {
 	// OOM-recent, rootfs %, inode %, and repo-health. Drives the
 	// /envoys "Agent Health" pill color; the pill links to /agent-health.
 	// Unknown when no agent-health trait has been reported yet.
-	HealthSeverity      fleetpressure.Severity
+	HealthSeverity fleetpressure.Severity
 	// HealthSummary is the one-line per-axis breakdown shown on the
 	// pill's hover title (e.g. "rootfs 19%, repos ok, fd 12%, no OOM").
 	// Empty when HealthSeverity is Unknown.
-	HealthSummary       string
+	HealthSummary string
 
 	// Slice-2 envoy-filter axes (ADR-032). All populated by the envoyRow
 	// builder so the canonical row stays the SoT for what every envoys-
@@ -1313,10 +1313,10 @@ type EnvoysPageData struct {
 	// matches EnvoyRow.Status (failure axis); DriftFilter
 	// matches the drift bucket; ReachFilter matches reachability /
 	// observability flags. All three combine with AND.
-	ConvFilter    string
-	DriftFilter   string
-	ReachFilter   string
-	Search        string
+	ConvFilter  string
+	DriftFilter string
+	ReachFilter string
+	Search      string
 	// ADR-032 slice-2 chip axes — case-insensitive substring with
 	// OR-within-axis (comma-separated values), AND across axes.
 	EnvFilter        string
@@ -1327,14 +1327,14 @@ type EnvoysPageData struct {
 	ModuleFilter     string
 	ComplianceFilter string
 	SortColumn       string // active sort column (status, hostname, last_seen, last_run, ip)
-	SortDir       string // "asc" or "desc"
-	EnvoyCount    int    // rows on this page after filter+offset
-	MatchingTotal int    // total entries matching filter (across all pages)
-	TotalEnvoys   int    // fleet-wide total, regardless of filter
-	HasMore       bool
-	Offset        int
-	Limit         int
-	NextOffset    int
+	SortDir          string // "asc" or "desc"
+	EnvoyCount       int    // rows on this page after filter+offset
+	MatchingTotal    int    // total entries matching filter (across all pages)
+	TotalEnvoys      int    // fleet-wide total, regardless of filter
+	HasMore          bool
+	Offset           int
+	Limit            int
+	NextOffset       int
 	// RenderedCap is true when the operator has paged to the hard DOM cap;
 	// the table footer renders a "refine your filter" sentinel instead of
 	// another load-more trigger so the DOM cannot grow unbounded.
@@ -1637,6 +1637,38 @@ type DocsPageData struct {
 	CurrentPath    string
 	CurrentSection string
 	IsFreeTier     bool
+	// SearchIndexJSON is the flattened page index ({t,p,x} per page) emitted
+	// as a <script type="application/json"> data island for docs.js — keeps
+	// the search corpus out of an inline <script> (CSP script-src 'self').
+	SearchIndexJSON template.JS
+}
+
+// buildDocsSearchIndex flattens the nav tree into the search corpus docs.js
+// consumes: every page's title (t), path (p), and full-text (x), across each
+// section's own pages and its subsections' pages. Mirrors the iteration the
+// docs template previously did inline.
+func buildDocsSearchIndex(nav []DocsNavSection) template.JS {
+	type idxPage struct {
+		T string `json:"t"`
+		P string `json:"p"`
+		X string `json:"x"`
+	}
+	var pages []idxPage
+	for _, sec := range nav {
+		for _, p := range sec.Pages {
+			pages = append(pages, idxPage{p.Title, p.Path, p.Text})
+		}
+		for _, sub := range sec.Subsections {
+			for _, p := range sub.Pages {
+				pages = append(pages, idxPage{p.Title, p.Path, p.Text})
+			}
+		}
+	}
+	b, err := json.Marshal(pages)
+	if err != nil {
+		return template.JS("[]")
+	}
+	return template.JS(b)
 }
 
 // docsSectionOrder is the allowlist of documentation sections rendered in
@@ -2023,10 +2055,11 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DocsPageData{
-		PageData:   PageData{Title: "Documentation", ActiveNav: "docs"},
-		Content:    template.HTML(content),
-		NavTree:    nav,
-		IsFreeTier: isFreeTier,
+		PageData:        PageData{Title: "Documentation", ActiveNav: "docs"},
+		Content:         template.HTML(content),
+		NavTree:         nav,
+		IsFreeTier:      isFreeTier,
+		SearchIndexJSON: buildDocsSearchIndex(nav),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "docs", data)
@@ -2110,13 +2143,14 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DocsPageData{
-		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
-		Content:        template.HTML(content),
-		Breadcrumbs:    breadcrumbs,
-		NavTree:        nav,
-		CurrentPath:    pagePath,
-		CurrentSection: currentSection,
-		IsFreeTier:     isFreeTier,
+		PageData:        PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
+		Content:         template.HTML(content),
+		Breadcrumbs:     breadcrumbs,
+		NavTree:         nav,
+		CurrentPath:     pagePath,
+		CurrentSection:  currentSection,
+		IsFreeTier:      isFreeTier,
+		SearchIndexJSON: buildDocsSearchIndex(nav),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "docs", data)
@@ -8105,34 +8139,23 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	closeModal := `document.getElementById('trait-index-modal').innerHTML='';`
-
-	// Modal overlay.
-	fmt.Fprint(w, `<div style="position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center;" onclick="if(event.target===this){`+closeModal+`}">`)
+	// Modal overlay. data-overlay-close closes the modal on a backdrop click
+	// (handled in ui-actions.js, which only fires when the overlay itself is
+	// the click target — not its children).
+	fmt.Fprint(w, `<div data-overlay-close="trait-index-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center;">`)
 	fmt.Fprint(w, `<div style="background:var(--color-card-bg); border-radius:10px; width:90%; max-width:640px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.3);">`)
 
 	// Header.
 	fmt.Fprintf(w, `<div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--color-border);">`)
 	fmt.Fprintf(w, `<strong style="font-size:16px;">Trait Index — %d traits across %d namespaces</strong>`, len(keyCounts), len(nsNames))
-	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="%s">Close</button>`, closeModal)
+	fmt.Fprint(w, `<button class="btn btn--sm" data-action="close-trait-modal">Close</button>`)
 	fmt.Fprint(w, `</div>`)
 
 	// Search field.
 	fmt.Fprint(w, `<div style="padding:12px 20px; border-bottom:1px solid var(--color-border);">`)
 	fmt.Fprint(w, `<input id="trait-index-search" type="text" placeholder="Filter traits..." `+
 		`style="width:100%; padding:6px 10px; border:1px solid var(--color-border); border-radius:6px; background:var(--color-bg); color:var(--color-text); font-size:14px; outline:none;" `+
-		`oninput="(function(q){`+
-		`var rows=document.querySelectorAll('#trait-index-body [data-trait-key]');`+
-		`var hdrs=document.querySelectorAll('#trait-index-body [data-ns-header]');`+
-		`q=q.toLowerCase();`+
-		`rows.forEach(function(r){r.style.display=(!q||r.getAttribute('data-trait-key').toLowerCase().indexOf(q)!==-1)?'':'none';});`+
-		`hdrs.forEach(function(h){`+
-		`var ns=h.getAttribute('data-ns-header');`+
-		`var any=false;`+
-		`rows.forEach(function(r){if(r.getAttribute('data-ns')===ns&&r.style.display!=='none')any=true;});`+
-		`h.style.display=any||!q?'':'none';`+
-		`});`+
-		`})(this.value)">`)
+		`data-input="trait-filter">`)
 	fmt.Fprint(w, `</div>`)
 
 	// Scrollable body.
@@ -8166,7 +8189,7 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 	fmt.Fprint(w, `</div>`) // scrollable body
 	fmt.Fprint(w, `</div>`) // modal card
 	fmt.Fprint(w, `</div>`) // overlay
-	fmt.Fprint(w, `<script>document.getElementById('trait-index-search').focus();</script>`)
+	// Focus is applied by ui-actions.js on htmx:afterSettle (no inline script).
 }
 
 // InventorySearchFragment returns trait key/value matches as HTML for the
@@ -8334,7 +8357,7 @@ func (h *Handler) InventoryExploreFragment(w http.ResponseWriter, r *http.Reques
 	fmt.Fprintf(w, `<h3>Exploring: <code>%s</code></h3>`, escapedKey)
 	fmt.Fprint(w, `<div class="trait-explore__header-actions">`)
 	fmt.Fprint(w, `<button type="submit" form="trait-explore-form" formaction="/ui/export/inventory-explore.ods" class="btn btn--sm btn--primary" hx-disable>Export ODS</button>`)
-	fmt.Fprint(w, `<button class="btn btn--sm" onclick="document.getElementById('trait-explore-panel').innerHTML='';document.getElementById('trait-search-results').innerHTML='';">Close</button>`)
+	fmt.Fprint(w, `<button class="btn btn--sm" data-action="close-trait-explore">Close</button>`)
 	fmt.Fprint(w, `</div></div>`)
 	fmt.Fprintf(w, `<p class="trait-explore__description">Grouped by <code>%s</code> &middot; columns from the <code>%s</code> namespace.</p>`, escapedKey, escapedNS)
 	fmt.Fprint(w, `</div>`)

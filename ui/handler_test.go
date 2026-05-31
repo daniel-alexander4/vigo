@@ -225,8 +225,9 @@ func TestEnvoysHandlerRendersFilterDrawer(t *testing.T) {
 	if !strings.Contains(body, `id="envoy-filter-drawer"`) {
 		t.Error("Envoys page missing the filter drawer aside (id=envoy-filter-drawer)")
 	}
-	// "Filter" toggle button is present and wired to the JS hook.
-	if !strings.Contains(body, "toggleEnvoyFilterDrawer()") {
+	// "Filter" toggle button is present and wired to the delegated JS hook
+	// (data-action, dispatched by ui-actions.js — no inline onclick).
+	if !strings.Contains(body, `data-action="toggle-filter-drawer"`) {
 		t.Error("Envoys page missing the Filter toggle button")
 	}
 	// At least one mock-supplied pill renders with the page-scoped URL.

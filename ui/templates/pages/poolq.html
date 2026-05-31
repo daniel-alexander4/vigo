@@ -112,7 +112,7 @@
                 {{range .Snap.Topics}}
                 {{$tid := .TopicIDHex}}
                 {{$isBlocked := poolqIsBlocked $tid $blocked}}
-                <tr onclick="location.href='/swarm/poolq/{{$tid}}'" style="cursor:pointer;">
+                <tr data-action="nav" data-href="/swarm/poolq/{{$tid}}" style="cursor:pointer;">
                     <td><strong>{{.TopicName}}</strong></td>
                     <td>{{.HeadSeq}}</td>
                     <td>{{.Count}}</td>

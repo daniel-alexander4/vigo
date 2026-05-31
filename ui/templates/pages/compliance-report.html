@@ -85,7 +85,7 @@
                             hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
                             hx-target="#docs-row-{{cssClass .ControlID}}"
                             hx-swap="innerHTML"
-                            onclick="document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display=document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display==='table-row'?'none':'table-row';">
+                            data-action="toggle-docs-row" data-target="docs-row-{{cssClass .ControlID}}">
                         &#128206; {{.DocCount}} attached
                     </button>
                     {{else if eq .Scope "documented"}}
@@ -94,7 +94,7 @@
                             hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
                             hx-target="#docs-row-{{cssClass .ControlID}}"
                             hx-swap="innerHTML"
-                            onclick="document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display=document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display==='table-row'?'none':'table-row';"
+                            data-action="toggle-docs-row" data-target="docs-row-{{cssClass .ControlID}}"
                             title="No docs uploaded — click to upload">
                         Upload
                     </button>

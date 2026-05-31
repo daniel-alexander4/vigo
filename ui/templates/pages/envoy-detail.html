@@ -20,48 +20,48 @@
             hx-get="/ui/fragments/envoy-footprint/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Agent Health</button>
+            data-action="set-active-tab">Agent Health</button>
     <button class="btn btn--sm" id="tab-traits"
             hx-get="/ui/fragments/envoy-traits/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Traits</button>
+            data-action="set-active-tab">Traits</button>
     <button class="btn btn--sm" id="tab-config"
             hx-get="/ui/fragments/envoy-config/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">View Config</button>
+            data-action="set-active-tab">View Config</button>
     <button class="btn btn--sm" id="tab-trace"
             hx-get="/ui/fragments/envoy-trace/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Config Trace</button>
+            data-action="set-active-tab">Config Trace</button>
     <button class="btn btn--sm" id="tab-runs"
             hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Recent Runs</button>
+            data-action="set-active-tab">Recent Runs</button>
     <button class="btn btn--sm" id="tab-swarm-load"
             hx-get="/ui/fragments/envoy-swarm-load/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Swarm</button>
+            data-action="set-active-tab">Swarm</button>
     <button class="btn btn--sm" id="tab-attack-surface"
             hx-get="/ui/fragments/envoy-attack-surface/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Attack Surface</button>
+            data-action="set-active-tab">Attack Surface</button>
     <button class="btn btn--sm" id="tab-compliance"
             hx-get="/ui/fragments/envoy-compliance/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Standards Compliance</button>
+            data-action="set-active-tab">Standards Compliance</button>
     {{if .ScrierEnabled}}
     <button class="btn btn--sm" id="tab-sessions"
             hx-get="/ui/fragments/envoy-sessions/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Sessions</button>
+            data-action="set-active-tab">Sessions</button>
     {{end}}
 </div>
 
@@ -100,7 +100,7 @@
                 <td class="text-muted">{{formatTime .StartedAt}}</td>
                 <td>
                     <button class="btn btn--sm"
-                            onclick="let t=this.closest('tr').nextElementSibling.querySelector('.run-results');if(t.innerHTML.trim()){t.innerHTML=''}else{htmx.ajax('GET','/ui/fragments/run-results/{{.ID}}',{target:t,swap:'innerHTML'})}">Details</button>
+                            data-action="toggle-run-results" data-run-id="{{.ID}}">Details</button>
                 </td>
             </tr>
             <tr class="run-results-row">

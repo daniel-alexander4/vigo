@@ -16,7 +16,7 @@ Required fields on the data context:
 <aside class="envoy-filter-drawer" id="envoy-filter-drawer" data-base-path="{{.BasePath}}">
     <div class="envoy-filter-drawer__header">
         <span class="envoy-filter-drawer__title">Filter envoys</span>
-        <button type="button" class="envoy-filter-drawer__close" onclick="toggleEnvoyFilterDrawer()" aria-label="Close filter drawer">&times;</button>
+        <button type="button" class="envoy-filter-drawer__close" data-action="toggle-filter-drawer" aria-label="Close filter drawer">&times;</button>
     </div>
     <div class="envoy-filter-drawer__body">
         <form action="{{.BasePath}}" method="get" hx-boost="false" class="envoy-filter-drawer__search-form">
@@ -45,7 +45,7 @@ Required fields on the data context:
                 {{if gt (len .Choices) 12}}
                 <input type="search" class="input input--sm envoy-filter-drawer__pill-search"
                        placeholder="Search {{.Label}}…"
-                       oninput="filterEnvoyFilterPills(this)"
+                       data-input="filter-pills"
                        autocomplete="off" />
                 {{end}}
             </div>

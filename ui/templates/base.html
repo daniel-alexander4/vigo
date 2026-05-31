@@ -11,28 +11,9 @@
          the click on boosted pages, breaking every download button. -->
     <meta name="htmx-config" content='{"disableSelector":"[hx-disable], [data-hx-disable], a[download], a[target=_blank], a[rel~=external]"}'>
     <link rel="icon" type="image/svg+xml" href="{{if .CustomFavicon}}/branding/favicon{{else}}/static/img/icon.svg{{end}}">
-    <script>
-    // Apply theme class on <html> before first paint so there's no flash of the
-    // wrong theme. Order of precedence: localStorage override → branding default
-    // → OS preference (when branding is "auto" or unset). Class goes on <html>
-    // so it survives HTMX body swaps. Values other than "light"/"dark" are
-    // ignored to keep the set closed.
-    (function() {
-        var d = document.documentElement;
-        var stored = null;
-        try { stored = localStorage.getItem("vigo_theme"); } catch (e) {}
-        var branding = d.getAttribute("data-branding-theme") || "";
-        var resolved;
-        if (stored === "light" || stored === "dark") {
-            resolved = stored;
-        } else if (branding === "light" || branding === "dark") {
-            resolved = branding;
-        } else {
-            resolved = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
-        }
-        d.classList.add(resolved === "dark" ? "theme-dark" : "theme-light");
-    })();
-    </script>
+    <!-- Pre-paint theme applier (render-blocking, in <head>) — moved out of an
+         inline <script> so the CSP can drop script-src 'unsafe-inline'. -->
+    <script src="/static/js/theme-init.js?v={{.Version}}"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
     <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
     <!-- idiomorph: DOM-diff swap so polling fragments don't repaint unchanged
@@ -43,6 +24,8 @@
     <script src="/static/js/theme.js?v={{.Version}}"></script>
     <script src="/static/js/clipboard.js?v={{.Version}}"></script>
     <script src="/static/js/filter-drawer.js?v={{.Version}}"></script>
+    <!-- Delegated event dispatcher: replaces inline on* handlers (CSP). -->
+    <script src="/static/js/ui-actions.js?v={{.Version}}"></script>
 </head>
 <body hx-boost="true" hx-ext="morph" class="{{if .BodyClass}}{{.BodyClass}}{{end}}" data-theme="{{.Theme}}">
     <div class="layout">
@@ -78,28 +61,27 @@
     <aside class="ai-panel" id="ai-panel" data-provider="{{.AIProviderName}}">
         <div class="ai-panel__header">
             <span class="ai-panel__title">Ask {{.AIProviderName}}</span>
-            <button class="ai-panel__close" onclick="toggleAIChat()" aria-label="Close AI chat panel">&times;</button>
+            <button class="ai-panel__close" data-action="toggle-ai-chat" aria-label="Close AI chat panel">&times;</button>
         </div>
         <div class="ai-panel__messages" id="ai-drawer-messages">
             <div class="ai-panel__welcome">
                 <p>Ask anything about your fleet, convergence, or configuration.</p>
                 <div class="ai-panel__suggestions">
-                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>
-                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys have failed convergence and why?">Failed envoys?</button>
-                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet convergence summary with breakdown by status.">Convergence summary</button>
+                    <button class="chat-suggestion" data-action="ai-suggest">How many envoys?</button>
+                    <button class="chat-suggestion" data-action="ai-suggest" data-question="Which envoys have failed convergence and why?">Failed envoys?</button>
+                    <button class="chat-suggestion" data-action="ai-suggest" data-question="Show the fleet convergence summary with breakdown by status.">Convergence summary</button>
                 </div>
             </div>
         </div>
-        <form class="ai-panel__form" id="ai-drawer-form" hx-boost="false" onsubmit="return aiDrawerSubmit(event)">
+        <form class="ai-panel__form" id="ai-drawer-form" hx-boost="false" data-submit="ai-submit">
             <div class="chat-input-wrapper">
                 <textarea class="chat-input" id="ai-drawer-input" placeholder="Ask a question..." rows="1"
-                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiDrawerSubmit(event)}"
-                    oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+                    data-input="ai-autosize" data-keydown="ai-enter-submit"></textarea>
                 <button class="chat-send" type="submit" id="ai-drawer-send">Send</button>
             </div>
         </form>
     </aside>
-    <button class="ai-toggle" id="ai-fab" onclick="toggleAIChat()" title="Ask {{.AIProviderName}}" aria-label="Ask {{.AIProviderName}}">
+    <button class="ai-toggle" id="ai-fab" data-action="toggle-ai-chat" title="Ask {{.AIProviderName}}" aria-label="Ask {{.AIProviderName}}">
         <svg class="ai-toggle__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>

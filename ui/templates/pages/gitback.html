@@ -153,7 +153,7 @@
             </thead>
             <tbody>
                 {{range .Fleet.Projects}}
-                <tr onclick="location.href='/swarm/gitback/{{.ProjectID}}'" style="cursor:pointer;">
+                <tr data-action="nav" data-href="/swarm/gitback/{{.ProjectID}}" style="cursor:pointer;">
                     <td><strong>{{.Handle}}</strong>{{if .FriendlyName}}<br><code>gitback://{{.FriendlyName}}/{{.Handle}}</code>{{end}}</td>
                     <td>{{.DrScope}}</td>
                     <td>{{.MemberFleetCount}}</td>

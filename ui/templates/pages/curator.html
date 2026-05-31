@@ -184,7 +184,7 @@
                 {{range .Catalog.Artifacts}}
                 {{$aid := curatorArtifactID .}}
                 {{$isBlocked := curatorIsBlocked $aid $blocked}}
-                <tr onclick="location.href='/swarm/curator/{{$aid}}'" style="cursor:pointer;">
+                <tr data-action="nav" data-href="/swarm/curator/{{$aid}}" style="cursor:pointer;">
                     <td><strong>{{.Body.Name}}</strong></td>
                     <td><code>{{.Body.Kind}}</code></td>
                     <td>{{len .Body.Versions}}</td>

@@ -80,29 +80,29 @@
             <h3>Security Scanning <span class="security-badge security-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
 
             <div class="security-stats">
-                <div class="security-stat security-stat--danger sec-stat-click" onclick="secToggle('sec-panel-high')" title="Unique CVE IDs across all hosts (deduplicated)">
+                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-high" title="Unique CVE IDs across all hosts (deduplicated)">
                     <span class="security-stat__val">{{.Security.UniqueCVEs}}</span>
                     <span class="security-stat__lbl">Unique CVEs</span>
                 </div>
-                <div class="security-stat security-stat--info sec-stat-click" onclick="secToggle('sec-panel-lynis')" title="Click to view Lynis scores by host">
+                <div class="security-stat security-stat--info sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-lynis" title="Click to view Lynis scores by host">
                     <span class="security-stat__val">{{.Security.LynisAvgScore}}</span>
                     <span class="security-stat__lbl">Avg Lynis Score</span>
                 </div>
-                <div class="security-stat security-stat--danger sec-stat-click" onclick="secToggle('sec-panel-rootkit')" title="Click to view rootkit details">
+                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-rootkit" title="Click to view rootkit details">
                     <span class="security-stat__val">{{.Security.RootkitWarning}}</span>
                     <span class="security-stat__lbl">Rootkit Warnings</span>
                 </div>
-                <div class="security-stat security-stat--danger sec-stat-click" onclick="secToggle('sec-panel-malware')" title="Click to view malware details">
+                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-malware" title="Click to view malware details">
                     <span class="security-stat__val">{{.Security.ClamavInfected}}</span>
                     <span class="security-stat__lbl">Malware Detected</span>
                 </div>
-                <div class="security-stat security-stat--warning sec-stat-click" onclick="secToggle('sec-panel-integrity')" title="Click to view integrity changes">
+                <div class="security-stat security-stat--warning sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-integrity" title="Click to view integrity changes">
                     <span class="security-stat__val">{{.Security.AideChanged}}</span>
                     <span class="security-stat__lbl">Integrity Changes</span>
                 </div>
                 {{$certTone := "info"}}
                 {{if gt .Certs.Expired 0}}{{$certTone = "danger"}}{{else if gt .Certs.ExpiringIn7 0}}{{$certTone = "warning"}}{{end}}
-                <div class="security-stat security-stat--{{$certTone}} sec-stat-click" onclick="secToggle('sec-panel-certs')" title="Click to view certs expiring within 30 days (and expired)">
+                <div class="security-stat security-stat--{{$certTone}} sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-certs" title="Click to view certs expiring within 30 days (and expired)">
                     <span class="security-stat__val">{{.Certs.ExpiringSoon}}</span>
                     <span class="security-stat__lbl">Certs ≤30d</span>
                 </div>
@@ -296,7 +296,7 @@
     <span class="sec-drawer__title">{{if .Hostname}}{{.Hostname}}{{else}}Security Details{{end}}</span>
     <div>
         {{if .EnvoyID}}<a href="/envoys/{{.EnvoyID}}" class="btn btn--sm" style="margin-right:8px">View Envoy</a>{{end}}
-        <button class="sec-drawer__close" onclick="closeSecDrawer()" aria-label="Close drawer">&times;</button>
+        <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="Close drawer">&times;</button>
     </div>
 </div>
 <p class="text-muted">No security scan data for this host.</p>
@@ -307,7 +307,7 @@
     <span class="sec-drawer__title">{{.Hostname}} — Security Details</span>
     <div>
         <a href="/envoys/{{.EnvoyID}}" class="btn btn--sm" style="margin-right:8px">View Envoy</a>
-        <button class="sec-drawer__close" onclick="closeSecDrawer()" aria-label="Close drawer">&times;</button>
+        <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="Close drawer">&times;</button>
     </div>
 </div>
 
@@ -418,7 +418,7 @@
          live source), so per-CVE gating produced mostly-hidden buttons. */}}
     {{if $.Live}}
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
     </div>
     {{end}}
 </div>
@@ -575,7 +575,7 @@
     </div>
     {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{trivyAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{trivyAIQ $.Hostname .}}">Ask AI</button>
     </div>
 </div>
 {{end}}
@@ -601,7 +601,7 @@
     </div>
     <div class="sec-card__body"><span class="mono">{{.Package}}</span></div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{debsecanAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{debsecanAIQ $.Hostname .}}">Ask AI</button>
     </div>
 </div>
 {{end}}
@@ -623,7 +623,7 @@
     </div>
     <div class="sec-card__desc">{{.Text}}</div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{lynisWarnAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{lynisWarnAIQ $.Hostname .}}">Ask AI</button>
     </div>
 </div>
 {{end}}
@@ -638,7 +638,7 @@
     </div>
     <div class="sec-card__desc">{{.Text}}</div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{lynisSugAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{lynisSugAIQ $.Hostname .}}">Ask AI</button>
     </div>
 </div>
 {{end}}
@@ -658,7 +658,7 @@
         <span class="sec-card__sev">Warning</span>
     </div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{rkhunterAIQ $.Hostname .File}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{rkhunterAIQ $.Hostname .File}}">Ask AI</button>
     </div>
 </div>
 {{end}}
@@ -679,7 +679,7 @@
     </div>
     {{if .Files}}<div class="sec-card__body"><span class="text-muted">Suspect files:</span> <span class="mono">{{.Files}}</span></div>{{end}}
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{chkrootkitAIQ $.Hostname .Check .Files}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{chkrootkitAIQ $.Hostname .Check .Files}}">Ask AI</button>
     </div>
 </div>
 {{end}}
@@ -696,7 +696,7 @@
     <div class="sec-card__header"><span class="sec-card__cve mono">{{.Path}}</span></div>
     <div class="sec-card__desc">Signature: <a href="{{ddgLink (printf "ClamAV %s" .Signature)}}" target="_blank" rel="noopener" class="sec-card__cve">{{.Signature}}</a></div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{clamavAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{clamavAIQ $.Hostname .}}">Ask AI</button>
     </div>
 </div>
 {{end}}
@@ -708,9 +708,9 @@
 {{if .Detail.Clean}}
 <p class="text-success">Clean — no integrity changes detected.</p>
 {{else}}
-{{if .Detail.Added}}<h4>Added ({{len .Detail.Added}})</h4>{{range .Detail.Added}}<div class="sec-card sec-card--medium"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{aideAIQ $.Hostname "added" .}}">Ask AI</button></div></div>{{end}}{{end}}
-{{if .Detail.Removed}}<h4>Removed ({{len .Detail.Removed}})</h4>{{range .Detail.Removed}}<div class="sec-card sec-card--critical"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{aideAIQ $.Hostname "removed" .}}">Ask AI</button></div></div>{{end}}{{end}}
-{{if .Detail.Changed}}<h4>Changed ({{len .Detail.Changed}})</h4>{{range .Detail.Changed}}<div class="sec-card sec-card--high"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{aideAIQ $.Hostname "changed" .}}">Ask AI</button></div></div>{{end}}{{end}}
+{{if .Detail.Added}}<h4>Added ({{len .Detail.Added}})</h4>{{range .Detail.Added}}<div class="sec-card sec-card--medium"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "added" .}}">Ask AI</button></div></div>{{end}}{{end}}
+{{if .Detail.Removed}}<h4>Removed ({{len .Detail.Removed}})</h4>{{range .Detail.Removed}}<div class="sec-card sec-card--critical"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "removed" .}}">Ask AI</button></div></div>{{end}}{{end}}
+{{if .Detail.Changed}}<h4>Changed ({{len .Detail.Changed}})</h4>{{range .Detail.Changed}}<div class="sec-card sec-card--high"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "changed" .}}">Ask AI</button></div></div>{{end}}{{end}}
 {{end}}
 {{end}}
 
@@ -728,7 +728,7 @@
 <div class="sec-card sec-card--critical">
     <div class="sec-card__header"><span class="sec-card__cve">Threats Detected</span><span class="sec-card__sev">{{.Detail.ThreatsDetected}}</span></div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{defenderAIQ .Hostname .Detail.ThreatsDetected}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{defenderAIQ .Hostname .Detail.ThreatsDetected}}">Ask AI</button>
     </div>
 </div>
 {{else}}
@@ -756,7 +756,7 @@
         Low: {{.Detail.LowFail}}
     </div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{scapAIQ .Hostname .Detail}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{scapAIQ .Hostname .Detail}}">Ask AI</button>
     </div>
 </div>
 {{end}}
