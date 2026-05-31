@@ -9,7 +9,7 @@ You'll finish this page knowing **how many envoys one server can comfortably hol
 
 ## The headline
 
-**vigosrv's single-host ceiling is memory, and it's linear: about 220 KB of RAM per connected envoy.** Nothing else binds first — CPU never saturates, the connection/goroutine model is flat and predictable, and latency degrades gracefully under overload rather than collapsing. The server holds connections until it runs out of RAM, at which point the kernel OOM-kills the process.
+**vigosrv's single-host ceiling is memory, and it's linear: about 220 KB of RAM per connected envoy.** Nothing else binds first — CPU never saturates, the connection/goroutine model is flat and predictable, and latency degrades gracefully under overload rather than collapsing. **By default the server sizes a held-connection cap from host RAM and, once that safe ceiling is reached, sheds new streams with `ResourceExhausted` — the agent backs off and retries — so it stays up under overload instead of being OOM-killed.** Reaching the kernel-OOM point requires explicitly disabling the cap (`checkin.max_connections: -1`); the numbers below are the *physical* behavior of an uncapped server, i.e. what the cap is sized to keep you below.
 
 On this page's hardware (8 logical CPUs, **31 GiB RAM**, NVMe), measured live:
 
@@ -31,9 +31,11 @@ The safe ceiling sits at ~60k because you want headroom below the OOM point for 
 | 64 GiB | ~120,000 | ~140,000 |
 | 128 GiB | ~260,000 | ~290,000 |
 
+The "safe ceiling" column is what `checkin.max_connections: 0` auto-derives (40% of RAM ÷ 220 KB); the 32 GiB row is the measured anchor (60k comfortable / 70k OOM), the others scale linearly from it. The auto-derivation and these figures agree to within rounding.
+
 **Past the safe ceiling, the answer is federation, not just a bigger box** (though a bigger box buys proportional headroom). Vigo's [spanner mode (ADR-026)](../adr/026-spanner-peer-equal-admissions.md) partitions the fleet by hostname pattern across peer-equal bolts; every bolt holds its own slice and they CRDT-gossip the admissions roster. That's the supported path beyond one host, and it's what also gives you survival of a single-host failure.
 
-> **Set `checkin.max_connections` to your host's safe ceiling.** Past this many concurrently-held agent streams, the server refuses new ones with `ResourceExhausted` (the agent backs off and retries) instead of accepting connections until the kernel OOM-kills it. An OOM-kill is a hard failure — it drops every in-flight connection and loses run records mid-transaction; `restart: unless-stopped` recovers in ~60 s but the shed is the graceful path. The cap defaults to `0` (no limit, legacy behavior); set it from the table above (≈ 50% of RAM ÷ 220 KB — e.g. `60000` on a 31 GiB host) and watch `vigo_streams_active` against it. The cap protects one host; a fleet that legitimately outgrows it is the signal to add RAM or [federate](#when-to-federate-and-how).
+> **`checkin.max_connections` is on by default — auto-derived from host RAM.** Past this many concurrently-held agent streams, the server refuses new ones with `ResourceExhausted` (the agent backs off and retries) instead of accepting connections until the kernel OOM-kills it. An OOM-kill is a hard failure — it drops every in-flight connection and loses run records mid-transaction; `restart: unless-stopped` recovers in ~60 s but the shed is the graceful path. Left unset (`0`), the cap resolves at startup to the safe ceiling for the host (≈ 40% of RAM ÷ 220 KB — e.g. ~60,000 on a 31 GiB host), logged as `held-stream admission cap auto-derived from host memory`. Override it with an explicit number if you've measured a different line for your hardware; set `-1` to disable it entirely and accept the legacy OOM-at-the-wall behavior. Watch `vigo_streams_active` against the effective value. The cap protects one host; a fleet that legitimately outgrows it is the signal to add RAM or [federate](#when-to-federate-and-how).
 
 ## What "comfortable" looks like, on what hardware
 
@@ -77,7 +79,7 @@ Earlier Vigo builds (≤ 0.69.19) showed a *transport-instability* ceiling aroun
 
 These live in `server.yaml` (see [server-yaml.md](../reference/server-yaml.md)) and trade one resource for another. None turns a 31 GiB host into a comfortable 100k host on its own — they nudge a host that's near its line.
 
-- **`checkin.max_connections`** (default `0` → no cap). The direct guard against the memory wall: caps concurrently-held agent streams, refusing the excess with `ResourceExhausted` so the server sheds instead of OOMing. Set it to the safe ceiling for your RAM (the table above). This is the knob that turns "OOM at the wall" into "graceful backoff at the wall" — `grpc.memory_limit` below only slows the climb; it does not refuse connections.
+- **`checkin.max_connections`** (default `0` → auto-derived from host RAM; `-1` → uncapped). The direct guard against the memory wall: caps concurrently-held agent streams, refusing the excess with `ResourceExhausted` so the server sheds instead of OOMing. On by default — `0` resolves at startup to ≈ 40% of RAM ÷ 220 KB (the safe-ceiling table above); set an explicit number to override, or `-1` to turn it off. This is what turns "OOM at the wall" into "graceful backoff at the wall" — `grpc.memory_limit` below only slows the climb; it does not refuse connections.
 - **`grpc.memory_limit`** (Go's `GOMEMLIMIT`). Set it below the host's available RAM so Go's GC works harder to stay under it instead of letting RSS climb into OOM territory. It trades CPU for survival and buys headroom, but it does not stop accepting connections — pair it with `checkin.max_connections` for an actual ceiling.
 - **`grpc.gogc`** (default `100`). Lower (e.g. `50`) shrinks the GC working set and RSS peaks at the cost of more GC CPU; higher trades the other way.
 - **`grpc.max_concurrent_streams`** (default `5000`). Bounds per-connection HTTP/2 stream state when an envoy misbehaves; doesn't change envoy count.

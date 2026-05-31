@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -67,7 +68,7 @@ type ServerConfig struct {
 	JitterPercent              int32
 	MaxConcurrentCheckIns      int // 0 → defaultCheckInConcurrency() (always on)
 	MaxConcurrentReportResults int // 0 → defaultReportResultConcurrency (always on)
-	MaxConnections             int // 0 → no cap; >0 → refuse held streams past this count (ResourceExhausted)
+	MaxConnections             int // 0 → auto-derive a safe ceiling from host RAM; <0 → uncapped; >0 → refuse held streams past this count (ResourceExhausted)
 	Integrations               *integrations.Dispatcher
 	TraitsDir                  string
 	SignatureWindow            time.Duration         // 0 → default 5m
@@ -211,6 +212,29 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 
 	reassignStore := NewReassignStore()
 
+	// Resolve the held-stream admission cap (checkin.max_connections). Each
+	// connected envoy holds one AgentStream (~220 KB RSS), so connection count
+	// is the exact driver of the single-host memory ceiling. 0 (unset) →
+	// auto-derive a safe ceiling from host RAM so the default failure mode is
+	// graceful ResourceExhausted shed, not OOM-kill (mirrors how
+	// checkin.max_concurrent's 0 resolves to a host-scaled default); a negative
+	// value → truly uncapped (legacy opt-out); >0 → the operator's exact cap.
+	maxConns := cfg.MaxConnections
+	switch {
+	case maxConns < 0:
+		maxConns = 0
+		slog.Info("held-stream admission cap disabled (checkin.max_connections < 0)")
+	case maxConns == 0:
+		maxConns = defaultMaxConnections(hostMemoryBytes())
+		if maxConns == 0 {
+			slog.Warn("could not read host memory; held-stream cap left off — set checkin.max_connections to avoid OOM at the memory wall")
+		} else {
+			slog.Info("held-stream admission cap auto-derived from host memory", "max_connections", maxConns)
+		}
+	default:
+		slog.Info("held-stream admission cap set by operator", "max_connections", maxConns)
+	}
+
 	agentSvc := &AgentService{
 		registry:          cfg.Registry,
 		configStore:       cfg.ConfigStore,
@@ -220,7 +244,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		traitsScanner:     traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		traitsBatch:       traitsBatch,
 		policyCache:       newPolicyCache(),
-		streamMgr:         newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute, cfg.MaxConnections),
+		streamMgr:         newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute, maxConns),
 		taskRouter:        newTaskRouter(cfg.Queries, cfg.Metrics),
 		queryRouter:       newQueryRouter(),
 		taskStore:         cfg.TaskStore,
