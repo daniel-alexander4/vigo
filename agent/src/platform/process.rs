@@ -163,6 +163,45 @@ pub fn apply_memory_limit(cmd: &mut std::process::Command, memory_bytes: u64) {
 #[cfg(not(unix))]
 pub fn apply_memory_limit(_cmd: &mut std::process::Command, _memory_bytes: u64) {}
 
+/// harden_process_memory reduces the chance that resolved-secret plaintext in
+/// agent memory reaches disk or another process. The SecretCache
+/// (`policy::secrets`) plus every transient copy the substitute→eval→apply
+/// pipeline makes hold cleartext secrets, so the meaningful boundary is the
+/// process itself, not any one allocation:
+///
+///   - `RLIMIT_CORE = 0` (all Unix): a crash produces no core dump, so secret
+///     bytes can't be captured in a core file on disk.
+///   - `PR_SET_DUMPABLE = 0` (Linux): marks the process non-dumpable, blocking
+///     ptrace attach and `/proc/<pid>/mem` reads by another same-uid process.
+///
+/// Best-effort — a failure is logged and the agent continues; this is
+/// defense-in-depth, not a startup gate. Deliberately NOT `mlockall`: pinning
+/// all agent memory into RAM conflicts with the bounded-footprint doctrine,
+/// and swap of secret pages is an accepted residual (tracked in pending).
+/// Call once, as early in startup as possible.
+#[cfg(unix)]
+pub fn harden_process_memory() {
+    let no_core = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: valid resource id + an initialized rlimit; no pointers escape.
+    if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &no_core) } != 0 {
+        tracing::warn!(error = %std::io::Error::last_os_error(), "could not disable core dumps");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // SAFETY: prctl(PR_SET_DUMPABLE, 0) takes only scalar args.
+        if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0) } != 0 {
+            tracing::warn!(error = %std::io::Error::last_os_error(), "could not set process non-dumpable");
+        }
+    }
+}
+
+#[cfg(not(unix))]
+pub fn harden_process_memory() {}
+
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
@@ -219,5 +258,34 @@ mod tests {
         // normalize rather than panic or produce garbage ioprio bits.
         assert_eq!(decode_ioprio(ioprio_for_nice(-5)).0, 2);
         assert_eq!(decode_ioprio(ioprio_for_nice(1_000)).0, 3);
+    }
+
+    #[test]
+    fn harden_disables_core_dumps_and_dumpable() {
+        // Save dumpable so this global process mutation doesn't bleed into
+        // sibling tests sharing the test binary's process.
+        let original_dumpable = unsafe { libc::prctl(libc::PR_GET_DUMPABLE) };
+
+        harden_process_memory();
+
+        assert_eq!(
+            unsafe { libc::prctl(libc::PR_GET_DUMPABLE) },
+            0,
+            "process must be non-dumpable after harden"
+        );
+        let mut rl = libc::rlimit {
+            rlim_cur: 1,
+            rlim_max: 1,
+        };
+        assert_eq!(
+            unsafe { libc::getrlimit(libc::RLIMIT_CORE, &mut rl) },
+            0,
+            "getrlimit(RLIMIT_CORE) should succeed"
+        );
+        assert_eq!(rl.rlim_cur, 0, "RLIMIT_CORE soft limit must be 0 after harden");
+
+        if original_dumpable >= 0 {
+            unsafe { libc::prctl(libc::PR_SET_DUMPABLE, original_dumpable) };
+        }
     }
 }

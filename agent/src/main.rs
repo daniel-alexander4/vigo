@@ -1696,6 +1696,12 @@ fn main() -> Result<()> {
         }
     }
 
+    // Keep resolved-secret plaintext (the SecretCache + every copy the
+    // substitute→apply pipeline makes) off disk and out of a debugger:
+    // disable core dumps and mark the process non-dumpable before any
+    // secret can be resolved. Best-effort; see platform::process.
+    platform::process::harden_process_memory();
+
     // Regular agent flow: build the multi-thread tokio runtime and
     // hand off to async_main. Equivalent to what `#[tokio::main]`
     // would have done, but explicit so the multicall fast-path above

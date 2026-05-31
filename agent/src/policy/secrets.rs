@@ -24,6 +24,14 @@
 //! across agent restarts. A cold restart (or a server outage at cold
 //! start) cannot apply secret-bearing resources until contact returns.
 //!
+//! The cache holds plaintext, as do the many transient copies this module
+//! and the downstream eval/apply pipeline make (vars_json, attribute
+//! strings, rendered templates, exec args) — so the boundary that keeps
+//! resolved secrets off disk is the process itself, not any single
+//! allocation. The agent disables core dumps and marks itself non-dumpable
+//! at startup (`platform::process::harden_process_memory`) so a crash or a
+//! same-uid debugger can't capture that plaintext.
+//!
 //! Post-substitution assertion: after substitution every attribute /
 //! vars_json string is re-scanned for the begin marker. Any survivor
 //! fails the call (caller should abort the apply rather than write a
