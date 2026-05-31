@@ -253,9 +253,13 @@
 {{define "evidence-audit"}}
 <h3 class="section-heading">Audit Chain</h3>
 {{if .Valid}}
-<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; {{.EntryCount}} entries, integrity intact.</div>
-{{else if eq .EntryCount 0}}
+  {{if eq .EntryCount 0}}
 <div class="audit-banner" style="background:var(--color-muted-bg);"><strong>Audit Chain:</strong> No audit entries recorded.</div>
+  {{else}}
+<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; {{.EntryCount}} entries, integrity intact.</div>
+  {{end}}
+{{else if eq .Error ""}}
+<div class="audit-banner" style="background:var(--color-muted-bg);"><strong>Audit Chain:</strong> Verifying&hellip; (chain check in progress)</div>
 {{else}}
 <div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED{{if .Error}} &mdash; {{.Error}}{{end}}</div>
 {{end}}

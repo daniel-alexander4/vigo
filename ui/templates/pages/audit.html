@@ -9,11 +9,16 @@
         <div class="chain-verification">
             <div class="chain-verification-status">
                 {{if .ChainValid}}
-                <span class="badge badge--success">Chain valid</span>
-                <span class="text-muted">{{.EntryCount}} entries verified — tamper-evident hash chain intact</span>
-                {{else if eq .EntryCount 0}}
+                  {{if eq .EntryCount 0}}
                 <span class="badge badge--unknown">No audit entries</span>
                 <span class="text-muted">No entries in the audit chain yet</span>
+                  {{else}}
+                <span class="badge badge--success">Chain valid</span>
+                <span class="text-muted">{{.EntryCount}} entries verified — tamper-evident hash chain intact</span>
+                  {{end}}
+                {{else if eq .ChainError ""}}
+                <span class="badge badge--unknown">Verifying…</span>
+                <span class="text-muted">Audit-chain verification in progress; this updates shortly</span>
                 {{else}}
                 <span class="badge badge--failure">Chain broken</span>
                 <span>Integrity failure at entry #{{.FirstBroken}}{{if .ChainError}} — {{.ChainError}}{{end}}</span>

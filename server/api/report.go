@@ -71,43 +71,37 @@ func (c *auditStatusCache) store(v *audit.VerifyResult) {
 }
 
 // cachedAuditStatus returns the cached audit-chain status without ever
-// blocking the caller on the O(N) verify — except on the cold first
-// access, which verifies synchronously so the badge starts from a real
-// value. Within auditStatusCacheTTL it returns the memoised value; once
-// expired it returns the stale value immediately and kicks a single
-// background re-verify (serve-stale-while-revalidate). On verify error
-// the stale value is preserved (stale-but-known beats fresh-but-error
-// for a status badge). The on-demand /api/v1/audit/verify endpoint is
-// the surface for an immediate fresh check.
+// blocking the caller on the O(N) verify. Within auditStatusCacheTTL it
+// returns the memoised value; otherwise (cold OR expired) it returns the
+// current value immediately and kicks a single background re-verify
+// (serve-stale-while-revalidate). It never walks the chain on the request
+// path — on a large audit_log a cold full walk is tens of seconds (~25 s
+// at ~2.8 M entries), which used to hang the first dashboard/compliance/
+// executive load after a restart until the async boot warm-up anchored the
+// Verifier. On cold, the "current value" is the zero status — the
+// not-yet-verified sentinel (see AuditChainStatus): badges render it as
+// "verifying…", and it flips to the real verdict once the background verify
+// stores. The ctx is unused (the refresh detaches its own bounded context,
+// since it outlives the request); kept for call-site symmetry with
+// AuditStatus. The /api/v1/audit/verify endpoint remains a fresh full check.
 func (h *ReportHandler) cachedAuditStatus(ctx context.Context) AuditChainStatus {
+	_ = ctx
 	c := &h.auditStatusCache
 	c.mu.Lock()
-	switch {
-	case !c.cachedAt.IsZero() && time.Since(c.cachedAt) < auditStatusCacheTTL:
-		status := c.status
-		c.mu.Unlock()
-		return status
-	case c.cachedAt.IsZero():
-		// Cold first access: verify synchronously (holding the lock, so
-		// concurrent boot-window callers dedupe and all get the result).
-		// Incremental once the Verifier is warm (boot re-verify); a full
-		// walk only on a truly cold checkpoint.
-		if v, err := h.verifyAuditChain(ctx); err == nil {
-			c.store(v)
-		}
-		status := c.status
-		c.mu.Unlock()
-		return status
-	default:
-		// Warm but expired: serve stale now, re-verify in the background.
-		if !c.refreshing {
-			c.refreshing = true
-			go h.refreshAuditStatusAsync()
-		}
-		status := c.status
-		c.mu.Unlock()
-		return status
+	defer c.mu.Unlock()
+	if !c.cachedAt.IsZero() && time.Since(c.cachedAt) < auditStatusCacheTTL {
+		return c.status
 	}
+	// Cold (not yet verified) or expired: serve the current value now,
+	// refresh in the background. Single-flight via `refreshing`. At boot
+	// the kicked refresh does the full walk + anchors the Verifier off the
+	// hot path; the daily runAuditReverify may also walk once concurrently
+	// (a negligible one-time boot cost — both off the request path).
+	if !c.refreshing {
+		c.refreshing = true
+		go h.refreshAuditStatusAsync()
+	}
+	return c.status
 }
 
 // AuditStatus returns the cached audit-chain verification status
@@ -1058,6 +1052,15 @@ type FleetEnvoyStatus struct {
 }
 
 // AuditChainStatus is the integrity status of the audit chain.
+// AuditChainStatus is the cached audit-chain verdict. Three states, encoded
+// in the existing fields (no separate flag):
+//   - verified-valid:   Valid=true
+//   - verified-broken:  Valid=false AND Error set (FirstBroken points at it)
+//   - not-yet-verified: the zero value — Valid=false AND Error=="" (the cold
+//     sentinel cachedAuditStatus serves before the first background verify
+//     stores). A real broken chain ALWAYS carries Error and an empty log is
+//     Valid=true, so Valid=false+empty-Error is unambiguously "verifying".
+//     Badge renderers MUST treat this as "verifying…", not "broken".
 type AuditChainStatus struct {
 	Valid       bool   `json:"valid"`
 	EntryCount  int64  `json:"entry_count"`

@@ -53,33 +53,46 @@ func TestReportHandler_CachedAuditStatus(t *testing.T) {
 	h := NewReportHandler(queries, fleet.NewFleetIndex(), nil, "test")
 	ctx := context.Background()
 
-	// First call: cold cache → DB hit + Verify, cachedAt set, status populated.
+	// First (cold) call: returns the not-yet-verified sentinel immediately —
+	// no synchronous walk on the request path — and kicks a background verify.
 	got1 := h.cachedAuditStatus(ctx)
-	if got1.EntryCount != 2 {
-		t.Errorf("first call EntryCount = %d, want 2", got1.EntryCount)
-	}
-	if !got1.Valid {
-		t.Errorf("first call Valid = false, want true (chain seeded correctly)")
-	}
-	firstCachedAt := h.auditStatusCache.cachedAt
-	if firstCachedAt.IsZero() {
-		t.Fatal("first call did not populate cachedAt")
+	if got1.Valid || got1.EntryCount != 0 || got1.Error != "" {
+		t.Errorf("cold call should return the not-yet-verified sentinel {Valid:false, EntryCount:0, Error:\"\"}, got %+v", got1)
 	}
 
-	// Second call inside the TTL: cache hit, cachedAt MUST NOT change.
-	// If cachedAt advances, the cache failed and Verify ran again.
-	got2 := h.cachedAuditStatus(ctx)
-	if got2 != got1 {
-		t.Errorf("cached value changed: first=%+v second=%+v", got1, got2)
+	// The background verify populates the cache with the real verdict.
+	warmDeadline := time.Now().Add(5 * time.Second)
+	for {
+		h.auditStatusCache.mu.Lock()
+		st := h.auditStatusCache.status
+		set := !h.auditStatusCache.cachedAt.IsZero()
+		refreshing := h.auditStatusCache.refreshing
+		h.auditStatusCache.mu.Unlock()
+		if !refreshing && set && st.EntryCount == 2 && st.Valid {
+			break
+		}
+		if time.Now().After(warmDeadline) {
+			t.Fatalf("cold background verify did not populate cache within 5s (count=%d valid=%v set=%v refreshing=%v)",
+				st.EntryCount, st.Valid, set, refreshing)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	firstCachedAt := h.auditStatusCache.cachedAt
+
+	// Warm cache hit inside the TTL: returns the populated value; cachedAt
+	// MUST NOT change (if it advances, a verify ran again).
+	warm := h.cachedAuditStatus(ctx)
+	if warm.EntryCount != 2 || !warm.Valid {
+		t.Errorf("warm status = %+v, want EntryCount=2 Valid=true", warm)
 	}
 	if !h.auditStatusCache.cachedAt.Equal(firstCachedAt) {
-		t.Errorf("cachedAt moved on cache-hit call: first=%v second=%v",
+		t.Errorf("cachedAt moved on cache-hit call: first=%v now=%v",
 			firstCachedAt, h.auditStatusCache.cachedAt)
 	}
 
 	// Add a third audit entry — the cache should NOT see it inside the
 	// TTL (the whole point of caching is that stale-but-recent is OK).
-	insertAuditEntry(t, sqlDB, got1.Error, "config.reload", "carol", "third", now)
+	insertAuditEntry(t, sqlDB, "", "config.reload", "carol", "third", now)
 	got3 := h.cachedAuditStatus(ctx)
 	if got3.EntryCount != 2 {
 		t.Errorf("after new entry, cached EntryCount = %d, want 2 (stale by design)", got3.EntryCount)
