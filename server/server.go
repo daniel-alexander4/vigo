@@ -1402,6 +1402,15 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			},
 			EnvoyFrameworkStatus: s.reportHandler.ComputeEnvoyFrameworkStatus,
 			EnvoyFrameworkDetail: s.reportHandler.ComputeEnvoyFrameworkDetail,
+			AuditStatus: func(r *http.Request) ui.AuditChainStatus {
+				st := s.reportHandler.AuditStatus(r.Context())
+				return ui.AuditChainStatus{
+					Valid:       st.Valid,
+					EntryCount:  st.EntryCount,
+					FirstBroken: st.FirstBroken,
+					Error:       st.Error,
+				}
+			},
 		})
 		uiHandler.SetIntegrationsConfig(s.cfg.Integrations, s.cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: s.fleetIndex})

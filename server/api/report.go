@@ -66,7 +66,7 @@ type auditStatusCache struct {
 
 // store records a fresh verify result. Caller must hold c.mu.
 func (c *auditStatusCache) store(v *audit.VerifyResult) {
-	c.status = AuditChainStatus{Valid: v.Valid, EntryCount: v.EntryCount, Error: v.Error}
+	c.status = AuditChainStatus{Valid: v.Valid, EntryCount: v.EntryCount, FirstBroken: v.FirstBroken, Error: v.Error}
 	c.cachedAt = time.Now()
 }
 
@@ -108,6 +108,16 @@ func (h *ReportHandler) cachedAuditStatus(ctx context.Context) AuditChainStatus 
 		c.mu.Unlock()
 		return status
 	}
+}
+
+// AuditStatus returns the cached audit-chain verification status
+// (serve-stale-while-revalidate). It's the read the UI's ambient
+// audit-status badges use, so they share this single cached SoT instead
+// of each running an O(N) VerifyFull on page/fragment load. The explicit
+// Verify-Chain button and the /api/v1/audit/verify endpoint stay fresh
+// full walks.
+func (h *ReportHandler) AuditStatus(ctx context.Context) AuditChainStatus {
+	return h.cachedAuditStatus(ctx)
 }
 
 // refreshAuditStatusAsync re-runs audit.Verify off the hot path and
@@ -1049,9 +1059,10 @@ type FleetEnvoyStatus struct {
 
 // AuditChainStatus is the integrity status of the audit chain.
 type AuditChainStatus struct {
-	Valid      bool   `json:"valid"`
-	EntryCount int64  `json:"entry_count"`
-	Error      string `json:"error,omitempty"`
+	Valid       bool   `json:"valid"`
+	EntryCount  int64  `json:"entry_count"`
+	FirstBroken int64  `json:"first_broken,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 // BuildReport constructs a compliance report with the given title and controls.

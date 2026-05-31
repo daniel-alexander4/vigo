@@ -182,6 +182,22 @@ type ReportBuilder struct {
 	// /envoys/<id>/compliance/<slug> drilldown, which must match the
 	// Standards tab card that linked to it.
 	EnvoyFrameworkDetail func(r *http.Request, hostname, slug string) (*EnvoyFrameworkDetail, bool)
+	// AuditStatus returns the cached audit-chain verification status (the
+	// report layer's serve-stale-while-revalidate value), so the ambient
+	// audit badges share one SoT instead of each running an O(N) full
+	// chain walk on load. nil when no report builder is wired (tests) —
+	// callers fall back to a direct VerifyFull.
+	AuditStatus func(r *http.Request) AuditChainStatus
+}
+
+// AuditChainStatus mirrors the report layer's cached audit-chain status
+// for the ambient UI badges. Same fields the badges render; populated from
+// api.ReportHandler.AuditStatus via the wiring closure.
+type AuditChainStatus struct {
+	Valid       bool
+	EntryCount  int64
+	FirstBroken int64
+	Error       string
 }
 
 // EnvoyFrameworkStatus is one envoy's bucketed per-framework totals.
@@ -4197,16 +4213,19 @@ func (h *Handler) EvidenceCoverageFragment(w http.ResponseWriter, r *http.Reques
 
 // EvidenceAuditFragment renders the audit chain verification status.
 func (h *Handler) EvidenceAuditFragment(w http.ResponseWriter, r *http.Request) {
-	result, err := audit.VerifyFull(r.Context(), h.queries)
 	data := struct {
 		Valid      bool
 		EntryCount int64
 		Error      string
 	}{}
-	if err == nil {
-		data.Valid = result.Valid
-		data.EntryCount = result.EntryCount
-		data.Error = result.Error
+	// Ambient badge: read the report layer's cached status (no O(N) walk on
+	// load). Fall back to a direct verify only when no report builder is
+	// wired (bare-handler tests).
+	if h.reportBuilder != nil && h.reportBuilder.AuditStatus != nil {
+		s := h.reportBuilder.AuditStatus(r)
+		data.Valid, data.EntryCount, data.Error = s.Valid, s.EntryCount, s.Error
+	} else if result, err := audit.VerifyFull(r.Context(), h.queries); err == nil {
+		data.Valid, data.EntryCount, data.Error = result.Valid, result.EntryCount, result.Error
 	}
 	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-audit", data)
 }
@@ -6231,18 +6250,21 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 		return events[i].Timestamp > events[j].Timestamp
 	})
 
-	// Verify chain integrity on page load.
+	// Chain status on page load: read the report layer's cached value
+	// (serve-stale-while-revalidate) so the page doesn't run an O(N) full
+	// chain walk on every load. The explicit Verify-Chain button
+	// (AuditVerify) still does a fresh full walk. Fall back to a direct
+	// verify only when no report builder is wired (bare-handler tests).
 	var chainValid bool
 	var entryCount, firstBroken int64
 	var chainError string
-	result, err := audit.VerifyFull(ctx, h.queries)
-	if err != nil {
-		chainError = err.Error()
+	if h.reportBuilder != nil && h.reportBuilder.AuditStatus != nil {
+		s := h.reportBuilder.AuditStatus(r)
+		chainValid, entryCount, firstBroken, chainError = s.Valid, s.EntryCount, s.FirstBroken, s.Error
+	} else if result, err := audit.VerifyFull(ctx, h.queries); err == nil {
+		chainValid, entryCount, firstBroken, chainError = result.Valid, result.EntryCount, result.FirstBroken, result.Error
 	} else {
-		chainValid = result.Valid
-		entryCount = result.EntryCount
-		firstBroken = result.FirstBroken
-		chainError = result.Error
+		chainError = err.Error()
 	}
 
 	data := AuditPageData{

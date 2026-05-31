@@ -8,9 +8,24 @@ import (
 	"testing"
 	"time"
 
+	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 )
+
+// TestAuditStatusCache_StoreCarriesFirstBroken pins that the cached status
+// carries FirstBroken from the verify result — the field the audit-page badge
+// renders now that it reads the cache instead of running VerifyFull on load.
+func TestAuditStatusCache_StoreCarriesFirstBroken(t *testing.T) {
+	c := &auditStatusCache{}
+	c.store(&audit.VerifyResult{Valid: false, EntryCount: 9, FirstBroken: 4, Error: "chain broken at 4"})
+	if c.status.FirstBroken != 4 {
+		t.Errorf("FirstBroken = %d, want 4", c.status.FirstBroken)
+	}
+	if c.status.Valid || c.status.EntryCount != 9 || c.status.Error != "chain broken at 4" {
+		t.Errorf("status = %+v, want the verify result's fields carried through", c.status)
+	}
+}
 
 // TestReportHandler_CachedAuditStatus pins the TTL-cache behavior of
 // cachedAuditStatus. The verify reads + rehashes every audit_entries
