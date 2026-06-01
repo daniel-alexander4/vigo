@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -66,6 +67,20 @@ var filecastRevokeCmd = &cobra.Command{
 	Short: "Revoke a filecast: stop distribution and evict from envoys",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runFilecastRevoke,
+}
+
+var filecastPurgeCmd = &cobra.Command{
+	Use:   "purge",
+	Short: "Purge revoked filecasts — drop the revoked tombstones from the manifest",
+	Long: `Garbage-collect revoked filecast records from the server manifest.
+
+revoke is a soft-delete: the entry stays as a revoked tombstone (so the
+blob can't silently resurrect) and the retention pruner only GCs it after
+the retention window. purge drops those records now. With no flag it purges
+every revoked entry; --older-than limits it to tombstones past that age.
+Active distributions are never touched.`,
+	Args: cobra.NoArgs,
+	RunE: runFilecastPurge,
 }
 
 var filecastBrokenCmd = &cobra.Command{
@@ -327,8 +342,17 @@ func runFilecastList(cmd *cobra.Command, args []string) error {
 		filtered = append(filtered, b)
 	}
 
+	if asJSON, _ := cmd.Flags().GetBool("json"); asJSON {
+		out, err := json.MarshalIndent(filtered, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshaling filecasts: %w", err)
+		}
+		fmt.Println(string(out))
+		return nil
+	}
+
 	if len(filtered) == 0 {
-		fmt.Println("No payload payloads.")
+		fmt.Println("No filecasts.")
 		return nil
 	}
 
@@ -422,6 +446,25 @@ func runFilecastRevoke(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runFilecastPurge(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+
+	path := "/api/v1/swarm/filecast/purge"
+	if olderThan, _ := cmd.Flags().GetString("older-than"); olderThan != "" {
+		path += "?older_than=" + url.QueryEscape(olderThan)
+	}
+
+	var resp struct {
+		Purged int `json:"purged"`
+	}
+	if err := client.post(path, nil, &resp); err != nil {
+		return fmt.Errorf("purging filecasts: %w", err)
+	}
+
+	fmt.Printf("Purged %d revoked filecast(s).\n", resp.Purged)
+	return nil
+}
+
 // lodeProgressBar renders a 20-character block progress bar.
 // Each block represents 5% completion. Uses Catppuccin Green for filled
 // blocks and Surface1 for empty.
@@ -453,6 +496,9 @@ func init() {
 	filecastListCmd.Flags().String("source", "", "Filter by source: server or seed")
 	filecastListCmd.Flags().String("status", "", "Filter by status: active or complete")
 	filecastListCmd.Flags().Bool("revoked", false, "Include revoked (expired or operator-revoked) payloads")
+	filecastListCmd.Flags().Bool("json", false, "Output raw JSON (includes full sha256, for scripting)")
 
-	filecastCmd.AddCommand(filecastDistributeCmd, filecastStatusCmd, filecastListCmd, filecastRevokeCmd, filecastBrokenCmd)
+	filecastPurgeCmd.Flags().String("older-than", "", "Only purge revoked filecasts older than this (e.g. 24h, 7d); default: all revoked")
+
+	filecastCmd.AddCommand(filecastDistributeCmd, filecastStatusCmd, filecastListCmd, filecastRevokeCmd, filecastPurgeCmd, filecastBrokenCmd)
 }

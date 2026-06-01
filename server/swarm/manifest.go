@@ -361,7 +361,12 @@ func (m *ManifestStore) Version() uint64 {
 	return m.version
 }
 
-// PruneRevoked removes revoked entries older than maxAge.
+// PruneRevoked removes revoked entries at least maxAge old. maxAge=0
+// purges every revoked entry (the operator `filecast purge` path); the
+// retention pruner passes the retention window. The bound is inclusive
+// (UpdatedAt <= cutoff) so maxAge=0 also catches an entry revoked in the
+// current millisecond — without it, "purge all" silently skips a
+// just-revoked tombstone.
 func (m *ManifestStore) PruneRevoked(maxAge time.Duration) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -369,7 +374,7 @@ func (m *ManifestStore) PruneRevoked(maxAge time.Duration) int {
 	cutoff := uint64(time.Now().Add(-maxAge).UnixMilli())
 	pruned := 0
 	for sha, e := range m.entries {
-		if e.Status == "revoked" && e.UpdatedAt < cutoff {
+		if e.Status == "revoked" && e.UpdatedAt <= cutoff {
 			delete(m.entries, sha)
 			pruned++
 		}

@@ -4,15 +4,18 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // newGatedHandler builds a LodeHandler with just enough plumbing to
@@ -218,5 +221,82 @@ func TestDistribute_AllowedWhenNotGated_StillGuardsOnSeedDir(t *testing.T) {
 	h.Distribute(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 (no seedDir), got %d", rec.Code)
+	}
+}
+
+// TestFilecastPurge_DropsRevokedKeepsActive proves the purge verb GCs
+// revoked tombstones while leaving active distributions untouched.
+func TestFilecastPurge_DropsRevokedKeepsActive(t *testing.T) {
+	sqlDB, queries := openAuditTestDB(t)
+	defer sqlDB.Close()
+
+	const (
+		active   = "1111111111111111111111111111111111111111111111111111111111111111"
+		revokedA = "2222222222222222222222222222222222222222222222222222222222222222"
+		revokedB = "3333333333333333333333333333333333333333333333333333333333333333"
+	)
+	manifest := swarm.NewManifestStore()
+	manifest.RecordSeed(active, "keep-me", "*", "", "server", 10)
+	manifest.RecordSeed(revokedA, "drop-a", "*", "", "server", 10)
+	manifest.Revoke(revokedA)
+	manifest.RecordSeed(revokedB, "drop-b", "*", "", "server", 10)
+	manifest.Revoke(revokedB)
+
+	h := NewLodeHandler(t.TempDir(), swarm.NewPeerTracker(60*time.Second), nil, manifest, queries)
+	h.SetAuditWriter(audit.NewWriter(queries))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/filecast/purge", nil)
+	rec := httptest.NewRecorder()
+	h.Purge(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Purged int `json:"purged"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Purged != 2 {
+		t.Fatalf("purged = %d, want 2", resp.Purged)
+	}
+	if _, ok := manifest.Get(active); !ok {
+		t.Error("active entry was purged — purge must leave active distributions alone")
+	}
+	if _, ok := manifest.Get(revokedA); ok {
+		t.Error("revoked entry survived the purge")
+	}
+}
+
+// TestFilecastPurge_OlderThanScopesByAge proves ?older_than scopes the
+// purge: a freshly-revoked tombstone is younger than the window and survives.
+func TestFilecastPurge_OlderThanScopesByAge(t *testing.T) {
+	sqlDB, queries := openAuditTestDB(t)
+	defer sqlDB.Close()
+
+	const fresh = "4444444444444444444444444444444444444444444444444444444444444444"
+	manifest := swarm.NewManifestStore()
+	manifest.RecordSeed(fresh, "fresh", "*", "", "server", 10)
+	manifest.Revoke(fresh)
+
+	h := NewLodeHandler(t.TempDir(), swarm.NewPeerTracker(60*time.Second), nil, manifest, queries)
+	h.SetAuditWriter(audit.NewWriter(queries))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/filecast/purge?older_than=24h", nil)
+	rec := httptest.NewRecorder()
+	h.Purge(rec, req)
+
+	var resp struct {
+		Purged int `json:"purged"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Purged != 0 {
+		t.Fatalf("purged = %d, want 0 (fresh tombstone is younger than 24h)", resp.Purged)
+	}
+	if _, ok := manifest.Get(fresh); !ok {
+		t.Error("fresh revoked tombstone should survive an older_than=24h purge")
 	}
 }

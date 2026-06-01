@@ -2285,12 +2285,13 @@ Substrate-level overview of the envoy P2P network. Content-subsystem operations 
 
 Administrator-pushed file distribution on the swarm substrate. These endpoints power `vigocli swarm filecast`.
 
-- **GET /api/v1/swarm/filecast/list** — list all active payload payloads. _(fleet.read)_
+- **GET /api/v1/swarm/filecast/list** — list filecasts (`?revoked=true` includes revoked tombstones; `?json=true` returns full sha256s). _(fleet.read)_
 - **GET /api/v1/swarm/filecast/match** — preview which envoys match a given target expression. _(fleet.read)_
 - **GET /api/v1/swarm/filecast/status/{sha256}** — per-envoy distribution status for one payload. _(fleet.read)_
 - **GET /api/v1/swarm/filecast/broken** — payloads with unreachable peers or failed distributions. _(fleet.read)_
 - **POST /api/v1/swarm/filecast/distribute** — seed a new payload into the swarm for distribution. _(admin)_ Returns **403** when `swarm.enabled: false` or `swarm.filecast.enabled: false`; denials are recorded as `swarm.filecast.denied` in the [tamper-evident audit chain](compliance-matrix.md).
 - **DELETE /api/v1/swarm/filecast/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_ Allowed when the substrate is disabled (cleanup must work on a halted substrate).
+- **POST /api/v1/swarm/filecast/purge** — garbage-collect revoked filecast tombstones from the manifest; optional `?older_than=<dur>` limits the purge to entries past that age (default: all revoked). _(admin)_ Re-poison-safe: agents cannot re-create a purged entry (the agent-gossip path only refreshes existing active seeds).
 
 ### Gitback
 

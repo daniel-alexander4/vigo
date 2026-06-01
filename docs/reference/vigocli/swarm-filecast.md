@@ -11,6 +11,7 @@ Administrator-pushed file distribution on the [swarm](../../howto/set-up-swarm.m
 | `status` | Show per-envoy distribution progress |
 | `list` | List all filecast files and their distribution status |
 | `revoke` | Revoke a filecast fleet-wide; agents evict on next check-in |
+| `purge` | Drop revoked filecast tombstones from the manifest |
 | `broken` | List broken seed manifests across envoys |
 
 ## Usage
@@ -225,6 +226,23 @@ Already revoked: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abc
 ```
 
 To re-distribute the same content after deletion, run `vigocli swarm filecast distribute` again — the fresh manifest entry overrides the revocation.
+
+## purge
+
+`revoke` is a soft-delete — the entry stays in the manifest as a `revoked` tombstone (so the blob can't silently resurrect), and the retention pruner only garbage-collects those records after the retention window. `purge` lets you drop them now, so `list` and the UI stop showing stale revoked rows.
+
+With no flag it purges every revoked entry. `--older-than <dur>` scopes the purge to tombstones past that age (matching what the auto-pruner does on a schedule). Active distributions are never touched.
+
+```bash
+vigocli swarm filecast purge                 # drop all revoked tombstones
+vigocli swarm filecast purge --older-than 24h # only those revoked >24h ago
+```
+
+```
+Purged 3 revoked filecast(s).
+```
+
+The purge is server-authoritative and cannot be re-poisoned: an agent gossiping its own copy of a tombstone can't re-create a purged entry, because the agent-ingest path only refreshes seeds that already exist as *active* on the server. (Agent-local tombstones clear on each envoy's own retention prune.)
 
 ## broken
 

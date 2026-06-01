@@ -121,6 +121,7 @@ func (h *LodeHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/swarm/filecast/list", read(http.HandlerFunc(h.List)))
 	mux.Handle("GET /api/v1/swarm/filecast/status/{sha256}", read(http.HandlerFunc(h.Status)))
 	mux.Handle("DELETE /api/v1/swarm/filecast/{sha256}", admin(http.HandlerFunc(h.Revoke)))
+	mux.Handle("POST /api/v1/swarm/filecast/purge", admin(http.HandlerFunc(h.Purge)))
 	mux.Handle("GET /api/v1/swarm/filecast/broken", read(http.HandlerFunc(h.BrokenSeeds)))
 	mux.Handle("GET /api/v1/swarm/filecast/match", read(http.HandlerFunc(h.Match)))
 }
@@ -318,7 +319,7 @@ type lodeEntry struct {
 	RevokedAt   string `json:"revoked_at,omitempty"`
 }
 
-// List returns all payload payloads with status summaries.
+// List returns all filecasts with status summaries.
 func (h *LodeHandler) List(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
 		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
@@ -449,6 +450,42 @@ func (h *LodeHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		"revoked":         hash,
 		"already_revoked": alreadyRevoked,
 	})
+}
+
+// Purge garbage-collects revoked filecast tombstones from the manifest.
+// revoke is a soft-delete — the entry stays as a `revoked` CRDT tombstone
+// so the blob can't silently resurrect — and the retention pruner only
+// GCs them after the retention window. Purge lets an operator drop them
+// now. Optional ?older_than=<dur> limits the purge to tombstones older
+// than that window; default (0) purges every revoked entry. Re-poison
+// safe: RecordSeedFromAgent rejects any SHA that isn't already an active
+// server entry, so agents can't push a purged tombstone back.
+func (h *LodeHandler) Purge(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
+		return
+	}
+	if h.manifestStore == nil {
+		writeJSON(w, r, http.StatusOK, map[string]any{"purged": 0})
+		return
+	}
+
+	var maxAge time.Duration
+	if s := r.URL.Query().Get("older_than"); s != "" {
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid older_than duration: "+err.Error())
+			return
+		}
+		maxAge = d
+	}
+
+	pruned := h.manifestStore.PruneRevoked(maxAge)
+	if pruned > 0 {
+		recordAudit(r.Context(), h.auditWriter, "swarm.filecast.purge", actorFromRequest(r), "rest",
+			fmt.Sprintf("purged %d revoked filecast(s)", pruned), "")
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"purged": pruned})
 }
 
 // Status returns per-envoy distribution progress for a payload.

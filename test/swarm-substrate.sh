@@ -20,15 +20,17 @@
 #   VIGO_TEST_PASSPHRASE=<phrase>    (default: test-substrate)
 #
 # Behavior:
-#   --wipe is required and destructive. Stops the agent on each envoy,
-#   removes per-user swarm dirs (~/.vigo-puddle, ~/.lockbox,
-#   ~/lockbox, ~/.vigo-gitback, ~/.vigo-curator, ~/.vigo-poolq) and
-#   the root-owned /var/lib/vigo/swarm/{gitback,lockbox} +
-#   /var/lib/vigo/artifacts, restarts the agent, then runs the full
-#   7-step substrate sequence (payload → longdrawer → puddle →
-#   lockbox → gitback → curator → poolq) from a clean slate.
-#   longdrawer (~/longdrawer) is intentionally NOT wiped — every
-#   other subsystem is reset and redone from scratch.
+#   --wipe is required and destructive. It is a COMPLETE swarm reset:
+#   first it revokes every filecast distribution server-side (otherwise
+#   agents re-materialize the files after the scrub); then on each envoy
+#   it stops the agent, removes the whole root-owned /var/lib/vigo/swarm
+#   + /var/lib/vigo/artifacts and every per-user swarm dir (current names
+#   AND retired lineages — cryptsync/vigocrypt, swarmgit/gitmirror/
+#   vigorepo/cairn, filesync/vigosync, longdrawer), then restarts the
+#   agent. It preserves /var/lib/vigo/{state,security} (agent enrollment)
+#   and never touches ~/repos, user documents, or /srv/vigo. Then it runs
+#   the full 7-step sequence (payload → longdrawer → puddle → lockbox →
+#   gitback → curator → poolq) from a genuinely clean slate.
 #
 # Why no non-destructive mode: gitback's project_id is fixed by the
 # founder's puddle pubkey, so a single founder can only have ONE
@@ -68,12 +70,14 @@ if [[ $WIPE -ne 1 ]]; then
     cat >&2 <<'EOF'
 swarm-substrate.sh requires --wipe.
 
-This script is destructive: it wipes per-user swarm state (all
-subsystems except longdrawer), root-owned /var/lib/vigo/swarm/{gitback,
-lockbox} and /var/lib/vigo/artifacts on every envoy, then runs the full
-7-step substrate test from a clean slate. There is no non-destructive
-mode (gitback's single-project-per-puddle invariant precludes a
-re-runnable smoke).
+This script is destructive: it revokes all filecast distributions
+server-side, then on every envoy removes the whole /var/lib/vigo/swarm
++ /var/lib/vigo/artifacts and every per-user swarm dir (current names +
+retired lineages), preserving only agent enrollment, before running the
+full 7-step substrate test from a genuinely clean slate. It never
+touches ~/repos, user documents, or /srv/vigo. There is no
+non-destructive mode (gitback's single-project-per-puddle invariant
+precludes a re-runnable smoke).
 
 For a fleet-free quick smoke, run:
     cd agent && cargo test --test gitback_helper
@@ -175,23 +179,58 @@ ok "linger enabled (idempotent)"
 # ---------- step 2: wipe (optional) ----------
 
 if [[ $WIPE -eq 1 ]]; then
-    step "wipe: stop agent + scrub swarm state on each envoy"
+    # Filecast is the one subsystem whose state lives in the SERVER
+    # manifest, not the agent — so a per-host scrub alone is undone the
+    # moment agents re-materialize on their next check-in. Revoke every
+    # distribution first (stop + evict). revoke needs the full sha256,
+    # which the table truncates, so pull it from --json.
+    step "wipe: revoke + purge all filecasts (server-side)"
+    # Revoke every active distribution (stop + evict) so agents don't
+    # re-materialize the files after the per-host scrub, then purge the
+    # revoked tombstones so the manifest is genuinely empty (no stale
+    # rows in `list`/the UI). revoke needs the full sha256, which the
+    # table truncates — pull it from --json.
+    revoked=0
+    while read -r sha; do
+        [ -n "$sha" ] || continue
+        sudo vigocli swarm filecast revoke "$sha" >/dev/null 2>&1 && revoked=$((revoked+1))
+    done < <(sudo vigocli swarm filecast list --json 2>/dev/null | grep -oE '[0-9a-f]{64}' | sort -u)
+    sudo vigocli swarm filecast purge >/dev/null 2>&1 || true
+    ok "revoked $revoked + purged filecast tombstones"
+
+    step "wipe: stop agent + scrub ALL swarm state on each envoy"
     for h in "${HOSTS[@]}"; do
         ssh "$h" '
             set -e
             sudo systemctl stop vigo-envoy
-            # longdrawer (~/longdrawer) is intentionally preserved; every
-            # other subsystem is scrubbed and redone from a clean slate.
-            # sudo because curators root helper daemon writes root-owned
-            # files into ~/.vigo-curator/ (plain user rm hits EPERM). The
-            # ~ is expanded by the calling-user shell before sudo runs, so
-            # the paths resolve under that home dir, not roots.
-            sudo rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-gitback ~/.vigo-curator ~/.vigo-poolq
-            sudo rm -rf /var/lib/vigo/swarm/gitback /var/lib/vigo/swarm/lockbox /var/lib/vigo/artifacts
+
+            # Full clean slate. sudo throughout: curator/gitback root helper
+            # daemons write root-owned files into the per-user dirs, so a
+            # plain user rm hits EPERM. We scrub only the swarm subtrees of
+            # /var/lib/vigo (NOT state/ or security/ — that is agent
+            # enrollment/identity, which must survive). The per-user list is
+            # fixed dir names (current + retired lineages: cryptsync/vigocrypt
+            # = lockbox, swarmgit/gitmirror/vigorepo/cairn = gitback,
+            # filesync/vigosync = longdrawer) — never repos or user documents.
+            #
+            # Empty swarm/ + artifacts/ by CONTENT, not the dirs themselves:
+            # on a server host these dirs are bind-mounted into the vigosrv
+            # container, and rm-ing the dir deletes the mount source inode
+            # (the container is then stuck with a stale, empty view). Removing
+            # only the contents keeps the inode + bind mount intact.
+            for sd in /var/lib/vigo/swarm /var/lib/vigo/artifacts; do
+                if [ -d "$sd" ]; then sudo find "$sd" -mindepth 1 -maxdepth 1 -exec rm -rf {} +; fi
+            done
+
+            USER_DIRS=".vigo-puddle .vigo-gitback .vigo-curator .vigo-poolq .lockbox lockbox longdrawer .cryptsync .cryptsync-test-password .vigocrypt cryptsync .vigo-swarmgit .vigo-gitmirror .vigorepo .vigo-cairn filesync vigosync longdrawer.old"
+            for home in /home/* /root; do
+                [ -d "$home" ] || continue
+                for d in $USER_DIRS; do sudo rm -rf "$home/$d"; done
+            done
+
             sudo systemctl start vigo-envoy
-            # Poll for active state — vigo-envoy can spend several
-            # seconds in "activating" while it does enrollment refresh
-            # + initial check-in.
+            # Poll for active — vigo-envoy can spend several seconds in
+            # "activating" doing enrollment refresh + initial check-in.
             for i in $(seq 1 60); do
                 state=$(systemctl is-active vigo-envoy 2>/dev/null || true)
                 [ "$state" = "active" ] && exit 0
