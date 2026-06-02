@@ -76,7 +76,7 @@ envoys:
 
 ## How It Works
 
-1. The `redis` module is applied first because `app-stack` declares `depends_on: [redis]`.
+1. The `redis` configcrate is applied first because `app-stack` declares `depends_on: [redis]`.
 2. Each `container` resource pulls its image (if missing) and creates + starts the container in one idempotent step.
 3. If the image tag changes (e.g., deploying a new version), the container is recreated with the new image.
 
