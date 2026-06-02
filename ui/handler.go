@@ -1830,9 +1830,15 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 				if strings.HasPrefix(pf.Name(), ".") {
 					continue
 				}
-				// Build a subsection for nested directories.
+				// Build a subsection for nested directories — but only when it
+				// holds navigable pages. Asset-only subdirs (howto/grafana/
+				// dashboard JSON, howto/_pdf/ rendered PDFs) would otherwise
+				// render as empty nav entries; they stay reachable by direct
+				// link via DocsPage's static-asset branch, just not in the nav.
 				sub := buildSubsection(docsDir, sectionPath, pf.Name())
-				subsections = append(subsections, sub)
+				if len(sub.Pages) > 0 {
+					subsections = append(subsections, sub)
+				}
 				continue
 			}
 			if !strings.HasSuffix(pf.Name(), ".md") || pf.Name() == "_index.md" {

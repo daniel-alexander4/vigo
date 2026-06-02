@@ -1395,6 +1395,60 @@ func TestDocsPageRefusesNonPublishedSection(t *testing.T) {
 	}
 }
 
+// buildDocsNav must not surface asset-only subdirectories (e.g.
+// howto/grafana/ dashboard JSON, howto/_pdf/ rendered PDFs) as empty nav
+// subsections. They hold no markdown pages, so they're excluded from the
+// tree — while staying reachable by direct link via DocsPage's static-asset
+// branch (the monitoring howto links to ../grafana/*.json).
+func TestBuildDocsNavSkipsAssetOnlySubdirs(t *testing.T) {
+	docsDir := t.TempDir()
+	mk := func(rel, body string) {
+		p := filepath.Join(docsDir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("howto/_index.md", "# How-to\n")
+	mk("howto/install.md", "# Install\n")
+	mk("howto/operate/_index.md", "# Operate\n")
+	mk("howto/operate/set-up-monitoring.md", "# Monitoring\n")
+	mk("howto/grafana/vigo-overview.json", "{}\n") // asset-only: no .md
+	mk("howto/_pdf/install.pdf", "%PDF-1.4\n")      // asset-only: no .md
+
+	nav := buildDocsNav(docsDir)
+
+	var howto *DocsNavSection
+	for i := range nav {
+		if nav[i].Path == "howto" {
+			howto = &nav[i]
+		}
+	}
+	if howto == nil {
+		t.Fatal("howto section missing from nav")
+	}
+	for _, sub := range howto.Subsections {
+		if sub.Path == "howto/grafana" || sub.Path == "howto/_pdf" {
+			t.Errorf("asset-only subdir %q surfaced as a nav subsection", sub.Path)
+		}
+		if len(sub.Pages) == 0 {
+			t.Errorf("empty subsection %q in nav (no navigable pages)", sub.Path)
+		}
+	}
+	// The real subsection with a page must still be present.
+	var foundOperate bool
+	for _, sub := range howto.Subsections {
+		if sub.Path == "howto/operate" {
+			foundOperate = true
+		}
+	}
+	if !foundOperate {
+		t.Error("real subsection howto/operate dropped from nav")
+	}
+}
+
 func TestPlatformComplianceHandler(t *testing.T) {
 	h := newTestHandler(t)
 
