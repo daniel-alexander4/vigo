@@ -65,10 +65,6 @@ func funcMap() template.FuncMap {
 		"truncGitSha":           truncGitSha,
 		"timeAgo":               timeAgo,
 		"sortHeader":            sortHeader,
-		"pctColor":              pctColor,
-		"pctColorInv":           pctColorInv,
-		"pctColorBg":            pctColorBg,
-		"pctColorBgInv":         pctColorBgInv,
 		"pctAccent":             pctAccent,
 		"pctAccentInv":          pctAccentInv,
 		"failureBadgeClass":     failureBadgeClass,
@@ -1048,35 +1044,6 @@ func pctAccent(v any) string { return pctBand(v) }
 // pctAccentInv is the inverse band — "higher is better" semantic.
 func pctAccentInv(v any) string { return pctBandInv(v) }
 
-// pctColor returns a Catppuccin-token CSS reference for inline-style
-// usage like `style="color: {{pctColor .X}}"`. "Higher is worse" — high
-// percentages map to `var(--color-danger)`. Replaces the legacy HSL
-// gradient with a 3-band token classification (per the project's
-// Catppuccin Mocha palette doctrine; raw HSL/hex literals are banned).
-// Existing inline-styled callsites continue to work without template
-// changes; new code should prefer `pctAccent` + class-based styling.
-func pctColor(v any) template.CSS {
-	return template.CSS("var(--color-" + pctBand(v) + ")")
-}
-
-// pctColorInv is the inverse: "higher is better" — high percentages
-// (e.g., convergence %) map to `var(--color-success)`.
-func pctColorInv(v any) template.CSS {
-	return template.CSS("var(--color-" + pctBandInv(v) + ")")
-}
-
-// pctColorBg returns the `-bg` token variant for tinted backgrounds
-// (e.g., badge fills). "Higher is worse" semantic — same band mapping
-// as pctColor, but resolves to the lighter `--color-{band}-bg` variant.
-func pctColorBg(v any) template.CSS {
-	return template.CSS("var(--color-" + pctBand(v) + "-bg)")
-}
-
-// pctColorBgInv is the inverse `-bg` variant.
-func pctColorBgInv(v any) template.CSS {
-	return template.CSS("var(--color-" + pctBandInv(v) + "-bg)")
-}
-
 // failureBadgeClass returns the badge class modifier ("badge--compliant"
 // / "badge--warning" / "badge--failed") for a `failedCount / totalCount`
 // pair. Used by dashboard fleet + activity tables in place of inline
@@ -1298,7 +1265,8 @@ func wbucket(v any) int {
 }
 
 // pctClass / pctClassBg / pctClassInv return the .pct-<band> utility class
-// carrying the color that pctColor / pctColorBg / pctColorInv used to inline.
+// carrying the band color (CSP-safe — the stylesheet's .pct-* rules resolve
+// it, instead of an inline var(--color-…)).
 func pctClass(v any) string    { return "pct-" + pctBand(v) }
 func pctClassBg(v any) string  { return "pct-" + pctBand(v) + "-bg" }
 func pctClassInv(v any) string { return "pct-" + pctBandInv(v) }
