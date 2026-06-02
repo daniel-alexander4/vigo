@@ -17,6 +17,11 @@ Config inspection commands.
 | `config freeze` | Freeze config publishes until a specified time |
 | `config unfreeze` | Remove the config publish freeze |
 | `config status` | Show config-reload health (exit 0 healthy, 1 unhealthy) |
+| `config validate` | Validate `.vgo` files for YAML syntax, cross-references, and idempotency guards |
+| `config promote` | Copy a configcrate's `environment_overrides` from one tier to another |
+| `config dedup` | Find redundant configcrates and variables in the config tree |
+| `config stockpile` | Manage the stockpile directory |
+| `config server.yaml` | Annotated `server.yaml` reference: list sections, show full config, or filter by section |
 | `config examples list` | Show available install templates under `stacks/examples/` |
 | `config examples copy <name>` | Copy an install template into `stacks/stockpile/` |
 | `config anti-examples list` | Show available retract templates under `stacks/anti-examples/` |
@@ -47,8 +52,6 @@ vigocli config edit --editor nano nginx      # use nano instead of vim
 ```
 
 When using vi/vim, the editor launches with Vigo-aware syntax highlighting and validates the file on every `:w`. Validation errors abort the write — use `:w!` to force. Other editors get post-save validation only.
-
-See [vi](vi.md) for syntax highlighting and validation details.
 
 ## config trace
 

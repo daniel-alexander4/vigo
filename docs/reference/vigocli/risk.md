@@ -1,12 +1,12 @@
 
-# vigocli risk
+# vigocli security risk
 
 Display fleet-wide or per-envoy risk scores computed from CVEs, hardening, rootkits, integrity, open ports, convergence status, and connectivity.
 
 ## Usage
 
 ```bash
-vigocli risk [hostname] [flags]
+vigocli security risk [hostname] [flags]
 ```
 
 ## Flags
@@ -24,7 +24,7 @@ vigocli risk [hostname] [flags]
 Shows the fleet-wide risk distribution and the highest-risk envoys.
 
 ```bash
-vigocli risk
+vigocli security risk
 ```
 
 ```
@@ -52,7 +52,7 @@ Top Risks
 Shows the risk score for a single envoy with a breakdown of contributing factors.
 
 ```bash
-vigocli risk db01.prod.example.com
+vigocli security risk db01.prod.example.com
 ```
 
 ```
@@ -69,7 +69,7 @@ db01.prod.example.com  78  critical
 Show the fleet risk trend over time.
 
 ```bash
-vigocli risk --history
+vigocli security risk --history
 ```
 
 ```
@@ -85,7 +85,7 @@ Risk Trend (30 days)
 Show 90 days of history:
 
 ```bash
-vigocli risk --history --days 90
+vigocli security risk --history --days 90
 ```
 
 ## Insurance report export
@@ -93,13 +93,13 @@ vigocli risk --history --days 90
 Export a cyber insurance attestation report to stdout:
 
 ```bash
-vigocli risk --export json
+vigocli security risk --export json
 ```
 
 Save an HTML report to a file:
 
 ```bash
-vigocli risk --export html -o report.html
+vigocli security risk --export html -o report.html
 ```
 
 The insurance report includes the current risk posture, a 90-day trend summary, and fleet composition (OS distribution). The HTML version is self-contained and print-friendly.

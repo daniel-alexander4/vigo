@@ -1,12 +1,12 @@
 
-# vigocli inventory
+# vigocli traits inventory
 
 Query enrolled envoys by their collected traits with flexible filtering and column display.
 
 ## Usage
 
 ```bash
-vigocli inventory [flags]
+vigocli traits inventory [flags]
 ```
 
 ## Flags
@@ -21,7 +21,7 @@ vigocli inventory [flags]
 ### Filter by a single trait
 
 ```bash
-vigocli inventory --where os.distro=ubuntu
+vigocli traits inventory --where os.distro=ubuntu
 ```
 
 ```json
@@ -41,7 +41,7 @@ vigocli inventory --where os.distro=ubuntu
 ### Filter and display specific columns
 
 ```bash
-vigocli inventory --where os.distro=ubuntu --show network.ip
+vigocli traits inventory --where os.distro=ubuntu --show network.ip
 ```
 
 ```
@@ -56,7 +56,7 @@ web-03.example.com    10.0.1.12
 ### Multiple filters with multiple columns
 
 ```bash
-vigocli inventory --where os.family=debian --where virtual.type=kvm \
+vigocli traits inventory --where os.family=debian --where virtual.type=kvm \
   --show os.distro,os.version
 ```
 
@@ -72,7 +72,7 @@ db-01.internal.net    debian     12
 ### No matches
 
 ```bash
-vigocli inventory --where os.distro=centos
+vigocli traits inventory --where os.distro=centos
 ```
 
 ```

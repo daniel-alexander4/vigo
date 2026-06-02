@@ -1,12 +1,12 @@
 
-# vigocli validate
+# vigocli config validate
 
 Check `.vgo` files for YAML correctness, structural validity, and idempotency.
 
 ## Usage
 
 ```bash
-vigocli validate <file.vgo> [file2.vgo ...] [flags]
+vigocli config validate <file.vgo> [file2.vgo ...] [flags]
 ```
 
 ## Checks Performed
@@ -27,7 +27,7 @@ Accepts `.vgo`, `.yaml`, and `.yml` file extensions.
 ### Validate a single configcrate
 
 ```bash
-vigocli validate stockpile/configcrates/nginx.vgo
+vigocli config validate stockpile/configcrates/nginx.vgo
 ```
 
 ```
@@ -37,7 +37,7 @@ stockpile/configcrates/nginx.vgo: OK
 ### Validate multiple files
 
 ```bash
-vigocli validate stockpile/configcrates/*.vgo
+vigocli config validate stockpile/configcrates/*.vgo
 ```
 
 ```
@@ -53,12 +53,12 @@ stockpile/configcrates/app.vgo: [error] app: resource "deploy" (exec) missing id
 
 ## Relationship to Config Publish
 
-`vigocli validate` checks individual files in isolation. `vigocli config publish` runs a more comprehensive pipeline that includes the **configcrate linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
+`vigocli config validate` checks individual files in isolation. `vigocli config publish` runs a more comprehensive pipeline that includes the **configcrate linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
 
 ## Related
 
-- [vi](vi.md) -- edit .vgo files with live validation
-- [preview](preview.md) -- preview planned changes
+- [config edit](config.md) -- edit .vgo files with validation on save
+- [envoys preview](preview.md) -- preview planned changes
 - [doctor](doctor.md) -- server health checks including config validation
 - [config publish](config.md#config-publish) -- full validation + linting pipeline
 ---

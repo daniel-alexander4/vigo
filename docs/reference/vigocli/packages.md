@@ -1,5 +1,5 @@
 
-# vigocli packages
+# vigocli traits packages
 
 Query package audit information across your fleet.
 
@@ -13,7 +13,7 @@ Query package audit information across your fleet.
 ## Usage
 
 ```bash
-vigocli packages [subcommand] [flags]
+vigocli traits packages [subcommand] [flags]
 ```
 
 ## list
@@ -21,7 +21,7 @@ vigocli packages [subcommand] [flags]
 List packages across envoys with installed and desired version information.
 
 ```bash
-vigocli packages list [flags]
+vigocli traits packages list [flags]
 ```
 
 ### Flags
@@ -35,7 +35,7 @@ vigocli packages list [flags]
 #### List all packages
 
 ```bash
-vigocli packages list
+vigocli traits packages list
 ```
 
 ```
@@ -48,7 +48,7 @@ db-01.internal.net    postgres   16.2       16.2
 #### List packages for a specific envoy
 
 ```bash
-vigocli packages list --envoy a1b2c3d4
+vigocli traits packages list --envoy a1b2c3d4
 ```
 
 ## drift
@@ -56,14 +56,14 @@ vigocli packages list --envoy a1b2c3d4
 List packages where the installed version differs from the desired version.
 
 ```bash
-vigocli packages drift
+vigocli traits packages drift
 ```
 
 
 ### Example
 
 ```bash
-vigocli packages drift
+vigocli traits packages drift
 ```
 
 ```

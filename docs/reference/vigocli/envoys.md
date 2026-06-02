@@ -12,11 +12,11 @@ Manage enrolled envoys (managed nodes).
 | `revoke` | Revoke an enrolled envoy |
 | `delete` | Permanently delete a envoy and all its history |
 | `traits` | View collected traits for a envoy |
-| `tag` | Set tags on a envoy |
-| `untag` | Remove specific tags from a envoy |
+| `preview` | Dry-run config resolution — what resources would change, without applying |
+| `push` | Force immediate check-in and convergence |
+| `revert` | Revert an envoy's file resources to a previous convergence run's state |
 | `maintenance` | Set or clear maintenance mode |
 | `purge` | Delete stale duplicate envoys, keeping only the most recently seen per hostname |
-| `push` | Force immediate check-in and convergence |
 | `rebootstrap` | Signal envoys to download the latest agent binary and restart |
 
 ## Usage

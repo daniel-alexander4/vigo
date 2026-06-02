@@ -1,12 +1,12 @@
 
-# vigocli export
+# vigocli compliance export
 
 Export compliance data from the Vigo server in formats suitable for SIEM, CMDB, and OSCAL tools.
 
 ## Usage
 
 ```bash
-vigocli export <subcommand> [flags]
+vigocli compliance export <subcommand> [flags]
 ```
 
 ## Subcommands
@@ -24,7 +24,7 @@ vigocli export <subcommand> [flags]
 Export run results as a JSON array of SIEM events.
 
 ```bash
-vigocli export siem [flags]
+vigocli compliance export siem [flags]
 ```
 
 ### Flags
@@ -40,13 +40,13 @@ vigocli export siem [flags]
 
 ```bash
 # Last 24 hours of events
-vigocli export siem
+vigocli compliance export siem
 
 # Events since midnight for a specific envoy
-vigocli export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
+vigocli compliance export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
 
 # Last 100 events, saved to a file
-vigocli export siem --limit 100 --output events.json
+vigocli compliance export siem --limit 100 --output events.json
 ```
 
 ---
@@ -56,7 +56,7 @@ vigocli export siem --limit 100 --output events.json
 Export fleet inventory as a JSON array of CMDB records.
 
 ```bash
-vigocli export cmdb [flags]
+vigocli compliance export cmdb [flags]
 ```
 
 
@@ -72,13 +72,13 @@ vigocli export cmdb [flags]
 
 ```bash
 # All envoys
-vigocli export cmdb
+vigocli compliance export cmdb
 
 # Only production envoys in compliant state
-vigocli export cmdb --status compliant --environment prod
+vigocli compliance export cmdb --status compliant --environment prod
 
 # Save to file
-vigocli export cmdb --output fleet.json
+vigocli compliance export cmdb --output fleet.json
 ```
 
 ---
@@ -88,7 +88,7 @@ vigocli export cmdb --output fleet.json
 Export an OSCAL Assessment Results envelope.
 
 ```bash
-vigocli export oscal [flags]
+vigocli compliance export oscal [flags]
 ```
 
 ### Flags
@@ -101,10 +101,10 @@ vigocli export oscal [flags]
 
 ```bash
 # Print to stdout
-vigocli export oscal
+vigocli compliance export oscal
 
 # Save to file
-vigocli export oscal --output assessment.json
+vigocli compliance export oscal --output assessment.json
 ```
 
 ---

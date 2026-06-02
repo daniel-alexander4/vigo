@@ -20,51 +20,70 @@ Vigo has two CLI binaries:
 
 ## Commands
 
+Top-level commands, grouped by area. Several commands are **subcommands** of a
+group (e.g. `vigocli security audit`, `vigocli traits inventory`); the detail
+pages are linked under their parent.
+
+### Enrollment & fleet
 | Command | Description |
 |---------|-------------|
 | [approved](approved.md) | Manage approved enrollment patterns |
-| [envoys](envoys.md) | Manage enrolled envoys (alias: `nodes`) |
-| [tokens](tokens.md) | Manage enrollment tokens |
-| [runs](runs.md) | View run history |
-| [task](task.md) | Dispatch and monitor ad-hoc commands on envoys |
-| [query](query.md) | Query trait values from targeted envoys |
-| [workflow](workflow.md) | Run and monitor multi-step workflows |
-| [packages](packages.md) | Query package audit information |
-| [env](env.md) | Manage environment tier operations |
-| [export](export.md) | Export compliance data (SIEM, CMDB, OSCAL) |
-| [report](report.md) | Generate HIPAA compliance reports |
-| [preview](preview.md) | Dry-run to preview planned changes |
-| [rollback](rollback.md) | Rollback a envoy to a previous state |
-| [validate](validate.md) | Check .vgo files for YAML correctness and idempotency |
+| [tokens](tokens.md) | Generate one-time enrollment tokens |
+| [envoys](envoys.md) | Inspect + manage enrolled envoys — `list`, `show`, [`preview`](preview.md), `push`, [`revert`](rollback.md), `revoke`, `delete`, `purge`, `rebootstrap`, `maintenance` |
+| [runs](runs.md) | View convergence run history |
+
+### Config
+| Command | Description |
+|---------|-------------|
+| [config](config.md) | Publish, inspect, and manage `.vgo` config — `publish`, `edit`, [`validate`](validate.md), `trace`, `tree`, `history`, `rollback`, `promote`, `freeze`, `search`, `stockpile`, `server.yaml` |
 | [test](test.md) | Run config tests against expected outcomes |
-| [inventory](inventory.md) | Query envoys by traits |
-| [doctor](doctor.md) | Run health checks against the Vigo server |
-| [risk](risk.md) | Show fleet-wide or per-envoy risk scores |
+
+### Traits & inventory
+| Command | Description |
+|---------|-------------|
+| [traits](traits.md) | Search + explore trait dot-paths — [`inventory`](inventory.md), [`livequery`](query.md), [`packages`](packages.md), `search` |
+
+### Operations
+| Command | Description |
+|---------|-------------|
+| [task](task.md) | Dispatch + monitor ad-hoc commands on envoys |
+| [workflow](workflow.md) | Run + monitor multi-step workflows |
+| [scrier](scrier.md) | Remote access — user mappings and interactive sessions |
+| [ask](ask.md) | Ask the AI assistant about your fleet |
+
+### Security & compliance
+| Command | Description |
+|---------|-------------|
+| [security](security.md) | Security posture — [`audit`](audit.md), [`cve`](cve.md), [`risk`](risk.md) |
+| [compliance](compliance.md) | Compliance — [`report`](report.md), [`export`](export.md), `remediation`, `bundles`, `provisions` |
+
+### Server administration
+| Command | Description |
+|---------|-------------|
+| [doctor](doctor.md) | Server health checks (config, TLS, secrets, DB, license, spanner) |
+| [secrets](secrets.md) | Manage AES-256-GCM encrypted secrets |
+| [webusers](webusers.md) | Manage web UI + API user accounts |
+| [auth](auth.md) | Manage this CLI's auth token |
+| [backup](backup.md) | Create + restore full server backups |
+| [server](server.md) | Peer replication — promote to primary, check status |
+| [db](db.md) | Inspect + maintain the SQLite database |
+| [license](license.md) | View + install the server license |
 | [spanner](spanner.md) | Federated control-plane operations |
-| [ask](ask.md) | Ask the AI assistant a question about your fleet |
-| [config](config.md) | Config editing, inspection, publish history, rollback, and freeze |
-| [secrets](secrets.md) | Manage local encrypted secrets |
-| [webusers](webusers.md) | Manage web UI and API user accounts |
-| [auth](auth.md) | Manage CLI authentication tokens |
-| [audit](audit.md) | View unified audit log |
-| [backup](backup.md) | Create and restore full server backups |
-| [server](server.md) | Peer replication: promote a server to primary, check status |
-| [db](db.md) | Inspect and maintain the SQLite database |
-| [vi](vi.md) | Edit a .vgo file with syntax highlighting and validation |
-| [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
-| [license](license.md) | View license status and manage license keys |
-| [swarm](../../howto/set-up-swarm.md) | Substrate-level view of the envoy P2P network (status + peers) |
-| [payload](swarm-filecast.md) | Admin-pushed file distribution on the swarm substrate |
-| [gitback](swarm-gitback.md) | Fleet-wide read-only view of gitback personal-DR mirrors |
-| [longdrawer](swarm-longdrawer.md) | Fleet-wide read-only view of the longdrawer per-user directory sync mesh |
-| [lockbox](swarm-lockbox.md) | Fleet-wide read-only view of the lockbox per-user encrypted directory sync mesh |
-| [puddle](swarm-puddle.md) | Cross-envoy puddle ops — eviction + the fleet friendly-name map (ADR-022) |
-| [curator](swarm-curator.md) | Fleet-wide read-only view of the [curator](../../howto/set-up-curator.md) P2P artifact registry + admin block / unblock (ADR-024) |
-| [poolq](swarm-poolq.md) | Fleet-wide read-only view of the [poolq](../../howto/set-up-poolq.md) P2P ordered-log queue + admin block / unblock (ADR-029) |
-| [scrier](scrier.md) | Remote access — user mappings and interactive shell sessions |
 | [sandgorgon](sandgorgon.md) | Bare-metal lifecycle — commission, provision, decommission |
-| [security](security.md) | Fleet-wide security posture summary and findings |
-| [compliance](compliance.md) | Fleet-wide compliance status by framework |
 | `completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |
+
+### Swarm
+`vigocli swarm` views the envoy P2P substrate and each content subsystem's fleet state.
+
+| Command | Description |
+|---------|-------------|
+| [swarm](swarm.md) | Substrate-level view of the envoy P2P network (status + peers) |
+| [swarm filecast](swarm-filecast.md) | Admin-pushed file distribution on the substrate |
+| [swarm gitback](swarm-gitback.md) | Fleet-wide read-only view of gitback projects |
+| [swarm longdrawer](swarm-longdrawer.md) | Fleet view of the longdrawer per-user directory sync |
+| [swarm lockbox](swarm-lockbox.md) | Fleet view of the lockbox per-user encrypted directory sync |
+| [swarm puddle](swarm-puddle.md) | Puddle fleet view + cross-envoy ops (eviction, names) |
+| [swarm curator](swarm-curator.md) | Fleet view of the [curator](../../howto/set-up-curator.md) artifact registry + admin block (ADR-024) |
+| [swarm poolq](swarm-poolq.md) | Fleet view of the [poolq](../../howto/set-up-poolq.md) ordered-log queue + admin block (ADR-029) |
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*
