@@ -715,17 +715,19 @@ if docker ps -q -f name=vigo | grep -q .; then
         # Ask the server if config loaded successfully.
         RELOAD_ERR=$(docker exec vigo vigocli config trace __health_check__ 2>&1 || true)
         CONFIG_LOG=$(docker logs vigo 2>&1 | grep "config loaded" | tail -1)
-        if echo "$CONFIG_LOG" | grep -q "envoys=0 modules=0"; then
-            echo "  WARNING: server has empty config (envoys=0, modules=0)"
+        if echo "$CONFIG_LOG" | grep -q "envoys=0 configcrates=0"; then
+            echo "  WARNING: server has empty config (envoys=0, configcrates=0)"
             echo "  Run: vigocli config publish"
             echo "  Then: docker compose restart vigo"
         elif echo "$CONFIG_LOG" | grep -q "error"; then
             echo "  WARNING: config loaded with errors"
             echo "  Run: vigocli config publish"
         else
-            ENVOYS=$(echo "$CONFIG_LOG" | grep -o 'envoys=[0-9]*' | cut -d= -f2)
-            MODULES=$(echo "$CONFIG_LOG" | grep -o 'modules=[0-9]*' | cut -d= -f2)
-            echo "  OK     config loaded: ${ENVOYS:-?} envoys, ${MODULES:-?} modules"
+            # || true: never let a missing field abort the script under
+            # `set -euo pipefail` — the ${VAR:-?} fallbacks render "?" instead.
+            ENVOYS=$(echo "$CONFIG_LOG" | grep -o 'envoys=[0-9]*' | cut -d= -f2 || true)
+            CONFIGCRATES=$(echo "$CONFIG_LOG" | grep -o 'configcrates=[0-9]*' | cut -d= -f2 || true)
+            echo "  OK     config loaded: ${ENVOYS:-?} envoys, ${CONFIGCRATES:-?} configcrates"
         fi
     else
         echo "  No .live/ config — run: vigocli config publish"
