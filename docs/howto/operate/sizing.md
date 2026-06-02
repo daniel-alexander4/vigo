@@ -33,7 +33,7 @@ The safe ceiling sits at ~60k because you want headroom below the OOM point for 
 
 The "safe ceiling" column is what `checkin.max_connections: 0` auto-derives (40% of RAM ÷ 220 KB); the 32 GiB row is the measured anchor (60k comfortable / 70k OOM), the others scale linearly from it. The auto-derivation and these figures agree to within rounding.
 
-**Past the safe ceiling, the answer is federation, not just a bigger box** (though a bigger box buys proportional headroom). Vigo's [spanner mode (ADR-026)](../../adr/026-spanner-peer-equal-admissions.md) partitions the fleet by hostname pattern across peer-equal bolts; every bolt holds its own slice and they CRDT-gossip the admissions roster. That's the supported path beyond one host, and it's what also gives you survival of a single-host failure.
+**Past the safe ceiling, the answer is federation, not just a bigger box** (though a bigger box buys proportional headroom). Vigo's spanner mode (ADR-026) partitions the fleet by hostname pattern across peer-equal bolts; every bolt holds its own slice and they CRDT-gossip the admissions roster. That's the supported path beyond one host, and it's what also gives you survival of a single-host failure.
 
 > **`checkin.max_connections` is on by default — auto-derived from host RAM.** Past this many concurrently-held agent streams, the server refuses new ones with `ResourceExhausted` (the agent backs off and retries) instead of accepting connections until the kernel OOM-kills it. An OOM-kill is a hard failure — it drops every in-flight connection and loses run records mid-transaction; `restart: unless-stopped` recovers in ~60 s but the shed is the graceful path. Left unset (`0`), the cap resolves at startup to the safe ceiling for the host (≈ 40% of RAM ÷ 220 KB — e.g. ~60,000 on a 31 GiB host), logged as `held-stream admission cap auto-derived from host memory`. Override it with an explicit number if you've measured a different line for your hardware; set `-1` to disable it entirely and accept the legacy OOM-at-the-wall behavior. Watch `vigo_streams_active` against the effective value. The cap protects one host; a fleet that legitimately outgrows it is the signal to add RAM or [federate](#when-to-federate-and-how).
 
@@ -94,7 +94,7 @@ Federate via spanner when **any** of these is true for the planned fleet:
 2. Correlated check-in events (post-publish waves, mass re-enroll, network-partition recovery) could push concurrent connections past the safe ceiling even if steady state would fit. These spikes are real and they land on memory directly — size for the peak, not the average.
 3. Fault tolerance matters and you can't lose the one host without losing the fleet.
 
-The spanner setup is in [Set up spanner](set-up-spanner.md); the rationale is [ADR-026](../../adr/026-spanner-peer-equal-admissions.md). Operator-visible cost: a few more moving parts (peer-equal bolts, hostname-pattern partitioning, multicast Tier-1 + REST Tier-2 admissions gossip) in exchange for linear scale-out and single-host-failure survival.
+The spanner setup is in [Set up spanner](set-up-spanner.md); the rationale is ADR-026. Operator-visible cost: a few more moving parts (peer-equal bolts, hostname-pattern partitioning, multicast Tier-1 + REST Tier-2 admissions gossip) in exchange for linear scale-out and single-host-failure survival.
 
 ## Re-running the measurements yourself
 

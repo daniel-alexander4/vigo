@@ -151,7 +151,7 @@ Phase 1 deliberately defers: multi-puddle per user (one puddle per user for now)
 - **`vigo swarm puddle status`** — `init` / `unlock` / `pair-pending` / `rekey` state; recovery hints.
 - **`session.unlocked` sentinel** — if absent, the session helper is down; sibling subsystems (lockbox, gitback signing) won't work.
 - **Agent logs** carry WARN lines for pair-claim mismatch, signature failures, and helper crashes.
-- **ADRs** for the design rationale: [ADR-014](../../adr/014-puddle-primitive.md) (the primitive), [ADR-015](../../adr/015-unified-gitback-substrate.md) (gitback on puddle), [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) (lockbox on puddle), [ADR-017](../../adr/017-no-puddle-level-revoke.md) (no puddle-level revoke), [ADR-018](../../adr/018-puddle-rekey.md) (rekey), [ADR-022](../../adr/022-gitback-friendly-names.md) (friendly names).
+- **ADRs** for the design rationale: ADR-014 (the primitive), ADR-015 (gitback on puddle), ADR-016 (lockbox on puddle), ADR-017 (no puddle-level revoke), ADR-018 (rekey), ADR-022 (friendly names).
 
 ## See it fleet-wide
 

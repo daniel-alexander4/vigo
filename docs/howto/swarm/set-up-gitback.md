@@ -54,7 +54,7 @@ vigo swarm gitback project list                    # all projects you have a foo
 vigo swarm gitback project invite <other-puddle>   # for multi-member collaboration
 ```
 
-The full verb tree: `vigo swarm gitback {status,purge,gc-orphans}` plus `project {init,invite,join,leave,list,status,revoke,reanchor,re-invite-all,rejoin,re-found}`. Operators rarely touch `reanchor` / `re-found` — those are recovery paths for compromised-key scenarios documented in [ADR-019](../../adr/019-gitback-founder-rekey.md). `gc-orphans` is hygiene for the post-`userdel -r` case (see [Leaving a project](#leaving-a-project--decommissioning-a-user) below).
+The full verb tree: `vigo swarm gitback {status,purge,gc-orphans}` plus `project {init,invite,join,leave,list,status,revoke,reanchor,re-invite-all,rejoin,re-found}`. Operators rarely touch `reanchor` / `re-found` — those are recovery paths for compromised-key scenarios documented in ADR-019. `gc-orphans` is hygiene for the post-`userdel -r` case (see [Leaving a project](#leaving-a-project--decommissioning-a-user) below).
 
 
 ## How it works
@@ -90,7 +90,7 @@ Operator surface:
 
 - `vigo swarm gitback project reanchor` — re-issue the project to a new local puddle pubkey (used in disaster recovery after `puddle rotate`).
 - `vigo swarm gitback project re-invite-all` — re-issue invitations to every existing member from the current signing key.
-- `vigo swarm gitback project re-found` — last-resort: new project_id, tombstone the old. URLs that used the friendly-name form continue to resolve via the [ADR-022](../../adr/022-gitback-friendly-names.md) `supersedes` chain; hex-form URLs break by design.
+- `vigo swarm gitback project re-found` — last-resort: new project_id, tombstone the old. URLs that used the friendly-name form continue to resolve via the ADR-022 `supersedes` chain; hex-form URLs break by design.
 
 ### Friendly URLs (ADR-022)
 
@@ -131,13 +131,13 @@ Then `userdel -r` is safe.
 - **`vigocli swarm gitback fleet`** — fleet-wide view: members, head refs, divergent refs, envelope counts.
 - **`/gitback` Web UI** (admin-only) — per-project membership, fleet-wide ref divergence visualization.
 - **Disk pressure**: pushes refuse at ≤10% free (same fleet-wide rule as other swarm subsystems).
-- **ADRs**: [ADR-015](../../adr/015-unified-gitback-substrate.md) (substrate), [ADR-019](../../adr/019-gitback-founder-rekey.md) (rekey), [ADR-022](../../adr/022-gitback-friendly-names.md) (names), [ADR-023](../../adr/023-gitback-puddle-wide-adoption.md) (puddle-wide adoption).
+- **ADRs**: ADR-015 (substrate), ADR-019 (rekey), ADR-022 (names), ADR-023 (puddle-wide adoption).
 
 ## What's next
 
 - **Encrypt content that lives in the same fleet** → [Set up Lockbox](set-up-lockbox.md). Gitback is for availability; lockbox is for confidentiality.
 - **Push admin-curated artifacts (binaries, model files, fixtures) over the same substrate** → [Set up Curator](set-up-curator.md).
-- **A puddle key was compromised** → re-issue invitations with `vigo swarm gitback project re-invite-all` or, past the delegation cap, `re-found`. See [ADR-019](../../adr/019-gitback-founder-rekey.md) before acting.
+- **A puddle key was compromised** → re-issue invitations with `vigo swarm gitback project re-invite-all` or, past the delegation cap, `re-found`. See ADR-019 before acting.
 - **`git push` hangs or refuses** → [Troubleshoot common issues](../operate/troubleshoot.md).
 
 ---

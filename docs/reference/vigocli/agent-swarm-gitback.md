@@ -22,7 +22,7 @@ All step-4 follow-up work has shipped. Cross-envoy push, fetch, envelope gossip,
 
 ### ADR-019 (founder-rekey delegations) — complete
 
-[ADR-019](../../adr/019-gitback-founder-rekey.md) shipped across five slices at 0.35.18 → 0.35.22:
+ADR-019 shipped across five slices at 0.35.18 → 0.35.22:
 
 - **Slice 1 (0.35.18)** — `DelegationEnvelope` data layer: Ed25519-signed bridge from a retired founder pubkey to a new one, persisted at `~/.vigo-gitback/<pid>/delegations.json`. Hard cap at `DELEGATION_MAX_LEN = 5`, soft warn at `DELEGATION_WARN_LEN = 3`.
 - **Slice 2 (0.35.19)** — chained verification: `tokens::verify_chain` walks the delegation list before the token chain, applying authority windows so retired founders can't sign post-window tokens (the deposed-founder attack). The helper daemon's per-user verify already loads the local delegation chain.
@@ -169,7 +169,7 @@ done
 
 ## `project init`
 
-Founds a new project. The local fleet (per [ADR-014](../../adr/014-puddle-primitive.md)) becomes the founder; `project_id = sha256(local_puddle_pubkey ‖ handle)`. Run from inside a git work tree (or pass `--repo <path>`), `init` also adds the `swarm` remote and publishes the repo — founding and publishing are one command.
+Founds a new project. The local fleet (per ADR-014) becomes the founder; `project_id = sha256(local_puddle_pubkey ‖ handle)`. Run from inside a git work tree (or pass `--repo <path>`), `init` also adds the `swarm` remote and publishes the repo — founding and publishing are one command.
 
 ```
 vigo swarm gitback project init <handle> [--scope swarm-wide|members-only] [--repo <path>] [--no-push]
@@ -457,9 +457,9 @@ vigo swarm gitback project re-found <project_id> [--force]
 
 ## See also
 
-- [ADR-015 — Unified gitback substrate](../../adr/015-unified-gitback-substrate.md)
-- [ADR-014 — Puddle primitive](../../adr/014-puddle-primitive.md)
-- [ADR-018 — Puddle rekey](../../adr/018-puddle-rekey.md)
-- [ADR-019 — Gitback founder-rekey via anchor-preserving delegation chains](../../adr/019-gitback-founder-rekey.md) — the design behind `re-invite-all`, `rejoin`, `re-found`, the delegation chain primitive, and authority windows. Shipped 0.35.18–0.35.22.
+- ADR-015 — Unified gitback substrate
+- ADR-014 — Puddle primitive
+- ADR-018 — Puddle rekey
+- ADR-019 — Gitback founder-rekey via anchor-preserving delegation chains — the design behind `re-invite-all`, `rejoin`, `re-found`, the delegation chain primitive, and authority windows. Shipped 0.35.18–0.35.22.
 - [vigo swarm puddle CLI reference](agent-swarm-puddle.md)
 - [Capability-token primitives — `tokens.rs`](../../howto/swarm/set-up-gitback.md)

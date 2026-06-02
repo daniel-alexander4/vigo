@@ -3,7 +3,7 @@
 
 These docs are for operators — the person installing Vigo, enrolling envoys, writing configcrates, publishing changes, running Scrier, reporting compliance, and debugging when something goes wrong.
 
-**New here?** Read the [Vigo overview](overview.md) for what the platform does, then pick a path:
+**New here?** Read the [Vigo overview](overview.md) for what the platform does, then run the [quickstart](quickstart.md) — server up, first envoy enrolled, first configcrate applied, in ten minutes of copy-paste. From there, pick a path:
 
 | | |
 |---|---|
@@ -14,7 +14,7 @@ These docs are for operators — the person installing Vigo, enrolling envoys, w
 | **See examples** | [Configcrate examples](examples/) — end-to-end configcrates covering common patterns |
 | **Define a term** | [Glossary](glossary.md) |
 
-The audience is the operator. Engineer-internal rationale lives in the [ADRs](adr/) and the source code; marketing copy lives on vigo-web.
+The audience is the operator. Engineer-internal rationale lives in the ADRs and the source code; marketing copy lives on vigo-web.
 
 ---
 *Confidential — Alexander4, LLC. Not for redistribution. See [legal/license.md](legal/license.md).*

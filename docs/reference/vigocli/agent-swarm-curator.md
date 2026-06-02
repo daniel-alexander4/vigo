@@ -3,7 +3,7 @@
 
 `vigo swarm curator` is the envoy-side surface for [curator](../../howto/swarm/set-up-curator.md) — the P2P artifact registry (ADR-024). Founders publish artifacts; consumers pull them; everyone gets local inspection. The verb tree splits into read verbs (ungated), mutating verbs (gated by `curator: true` on the usercrate + an unlocked puddle), and local cleanup verbs.
 
-`vigo swarm curator` is the **founder + consumer** side. The fleet-aggregator view and admin moderation (`block` / `unblock`) live on [`vigocli swarm curator`](swarm-curator.md). Per [ADR-024 open question #1 resolved 2026-05-13](../../adr/024-curator.md#implementation-notes), mutating verbs deliberately are NOT on the vigocli side — they need an unlocked per-user puddle to sign catalog entries, which doesn't fit vigocli's root-only / peer-auth posture.
+`vigo swarm curator` is the **founder + consumer** side. The fleet-aggregator view and admin moderation (`block` / `unblock`) live on [`vigocli swarm curator`](swarm-curator.md). Per ADR-024 open question #1 resolved 2026-05-13, mutating verbs deliberately are NOT on the vigocli side — they need an unlocked per-user puddle to sign catalog entries, which doesn't fit vigocli's root-only / peer-auth posture.
 
 ## Invocation
 
@@ -19,7 +19,7 @@ The command lives inside the `vigo` agent binary. CLI verbs run as the calling u
 
 ## Artifact identity
 
-Every artifact is identified by `artifact_id = sha256(founder_puddle_pubkey ‖ name)` rendered as 64-character lowercase hex. The hex form is self-certifying; the friendly form is `<founder-puddle-name>/<name>` via the [ADR-022](../../adr/022-gitback-friendly-names.md) fleet name map.
+Every artifact is identified by `artifact_id = sha256(founder_puddle_pubkey ‖ name)` rendered as 64-character lowercase hex. The hex form is self-certifying; the friendly form is `<founder-puddle-name>/<name>` via the ADR-022 fleet name map.
 
 Verbs that take a `<ref>` argument accept (in order):
 
@@ -376,7 +376,7 @@ The destructive lever is the **usercrate `curator: bool` flag**. Removing it tri
 
 - [`vigocli swarm curator`](swarm-curator.md) — operator side: fleet rollup + admin block / unblock
 - [Curator engineering doc](../../howto/swarm/set-up-curator.md) — identity, catalog shape, wire protocol, slicing
-- [ADR-024 — curator P2P artifact registry](../../adr/024-curator.md) — the design
+- ADR-024 — curator P2P artifact registry — the design
 - [`vigo swarm puddle`](agent-swarm-puddle.md) — the per-user identity that anchors curator artifacts
 - [`vigo swarm gitback`](agent-swarm-gitback.md) — the sibling subsystem curator's access primitives derive from
 - [user executor](../vigo/resources/user.md) — where the `curator: bool` flag goes

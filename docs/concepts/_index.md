@@ -1,6 +1,6 @@
 # Concepts
 
-Understanding-oriented. The mental model behind Vigo — how the pieces fit and why they're shaped the way they are. Read these when you want the *why*, not a step or a parameter. (For decisions and their rationale at the engineering level, see the [ADRs](../adr/); those are not operator docs.)
+Understanding-oriented. The mental model behind Vigo — how the pieces fit and why they're shaped the way they are. Read these when you want the *why*, not a step or a parameter. (For decisions and their rationale at the engineering level, see the ADRs; those are not operator docs.)
 
 - [**Architecture**](architecture.md) — server, agent, CLI, and web UI; the check-in → resolve → apply → report loop.
 - [**Configcrates**](configcrates.md) — the configuration model: configcrates, roles, hostcrates, usercrates, environments, and var precedence.

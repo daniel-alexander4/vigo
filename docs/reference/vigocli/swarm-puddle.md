@@ -29,12 +29,12 @@ acme          ed25519:8711b12bac75…   2       ops    —         warning
 
 Health bands: **healthy** (≥1 reporting, initialized holder; name uncontested; nothing mid-rotation), **warning** (contested name, a rekey in progress, or some holders stale), **degraded** (no holder currently reporting, or not initialized anywhere reporting). Reachability uses the same trait-report freshness rule as the other swarm mesh views.
 
-A friendly name is a hint, not a trust anchor — it's spoofable by squatting (first claim wins, including a malicious first-claimer). The unforgeable form is always `gitback://<project_id>/<repo>`. The raw signed name claims are still served at `GET /api/v1/swarm/puddle/names` (the agent name-cache bootstrap consumes it). See [ADR-022](../../adr/022-gitback-friendly-names.md) for the full design + tradeoffs, and the envoy-side [Friendly names](agent-swarm-puddle.md#friendly-names-adr-022) section for setting/clearing one.
+A friendly name is a hint, not a trust anchor — it's spoofable by squatting (first claim wins, including a malicious first-claimer). The unforgeable form is always `gitback://<project_id>/<repo>`. The raw signed name claims are still served at `GET /api/v1/swarm/puddle/names` (the agent name-cache bootstrap consumes it). See ADR-022 for the full design + tradeoffs, and the envoy-side [Friendly names](agent-swarm-puddle.md#friendly-names-adr-022) section for setting/clearing one.
 
 ## See also
 
 - [`vigo swarm puddle`](agent-swarm-puddle.md) — the per-user envoy-side verb tree (including `name set/clear/show`).
 - [Puddle subsystem](../../howto/swarm/set-up-puddle.md) — design + code map.
-- [ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md) — why `puddle evict` is the canonical eviction verb.
-- [ADR-022](../../adr/022-gitback-friendly-names.md) — friendly names.
+- ADR-021 — why `puddle evict` is the canonical eviction verb.
+- ADR-022 — friendly names.
 - [`vigocli swarm gitback`](swarm-gitback.md) — fleet-wide view of gitback projects (the things friendly names point at).

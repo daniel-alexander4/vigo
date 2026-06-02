@@ -2347,7 +2347,7 @@ PXE-serving GETs (boot, preseed, dhcp-config) gate on `fleet.read` even though a
 
 ## Swarm — curator (ADR-024)
 
-The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2P with the server as a relay fallback. See [howto/set-up-swarm.md](../howto/swarm/set-up-swarm.md) for operator usage and [adr/024-curator.md](../adr/024-curator.md) for the design.
+The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2P with the server as a relay fallback. See [howto/set-up-swarm.md](../howto/swarm/set-up-swarm.md) for operator usage; the design lives in ADR-024.
 
 - **GET /api/v1/swarm/curator/list** — list every artifact currently published in the fleet (one row per artifact, latest tag set, target scope). _(fleet.read)_
 - **GET /api/v1/swarm/curator/inspect/{artifact_id}** — full signed catalog entry for one artifact: every platform, every tag, recipient scope, delegation chain. _(fleet.read)_
@@ -2363,7 +2363,7 @@ The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2
 
 ### Poolq (ADR-029)
 
-The P2P ordered-log queue — Kafka-style retained messages with founder-monotonic seq, founder-only-writable in v1, fleet-readable. All reads are public-by-construction (mTLS is the transport guard); messages are explicitly fleet-readable per ADR-029. See [howto/set-up-poolq.md](../howto/swarm/set-up-poolq.md) for operator usage and [adr/029-poolq.md](../adr/029-poolq.md) for the design.
+The P2P ordered-log queue — Kafka-style retained messages with founder-monotonic seq, founder-only-writable in v1, fleet-readable. All reads are public-by-construction (mTLS is the transport guard); messages are explicitly fleet-readable per ADR-029. See [howto/set-up-poolq.md](../howto/swarm/set-up-poolq.md) for operator usage; the design lives in ADR-029.
 
 - **GET /api/v1/swarm/poolq/topics** — every topic the fleet's `poolqmesh` aggregator knows about, with per-topic summary (head seq, message count, first/last posted-at) and a `blocked` flag. Includes a separate `blocked` array for topic_ids that are blocked but have no current catalog entry (publisher cleared them after the block landed). _(no auth)_
 - **GET /api/v1/swarm/poolq/topic/{topic_id}/head** — per-topic summary without the messages (cheap "is there new content?" probe). Returns even for blocked topics so consumers see the block status. _(no auth)_

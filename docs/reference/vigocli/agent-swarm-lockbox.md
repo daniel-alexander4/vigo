@@ -23,7 +23,7 @@ Every verb runs under the invoking user's uid. No root. The agent daemon does no
 
 ## Commands
 
-Per [ADR-020](../../adr/020-lockbox-puddle-only.md) + [ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md) (0.40.0), lockbox is puddle-only and its lifecycle layer absorbed into puddle. The subtree below is content-domain only: encrypt, decrypt, push, list, status, reencrypt, resurrect, purge, plus `puddle init / renew-cert` for recovery. Lifecycle verbs `init / leave / forget <host>` retired — use `vigo swarm puddle init` (founder), `vigo swarm puddle leave` (exit), and `vigocli swarm puddle evict <host>` (admin-side eviction) instead.
+Per ADR-020 + ADR-021 (0.40.0), lockbox is puddle-only and its lifecycle layer absorbed into puddle. The subtree below is content-domain only: encrypt, decrypt, push, list, status, reencrypt, resurrect, purge, plus `puddle init / renew-cert` for recovery. Lifecycle verbs `init / leave / forget <host>` retired — use `vigo swarm puddle init` (founder), `vigo swarm puddle leave` (exit), and `vigocli swarm puddle evict <host>` (admin-side eviction) instead.
 
 ### Content-domain verbs
 

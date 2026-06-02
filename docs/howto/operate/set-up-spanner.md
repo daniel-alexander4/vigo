@@ -116,7 +116,7 @@ The `/spanner` page shows one row per peer bolt from the gossip-backed observabi
 ## Related
 
 - [Server Configuration](../../reference/server-yaml.md) — the `spanner:` section
-- [ADR-026: peer-equal admissions](../../adr/026-spanner-peer-equal-admissions.md) — the design
+- ADR-026: peer-equal admissions — the design
 
 ## What's next
 

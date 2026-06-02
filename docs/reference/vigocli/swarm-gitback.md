@@ -153,4 +153,4 @@ vigocli swarm gitback list --json | jq '.[] | select(.divergent_refs | length > 
 - [gitback trait](../vigo/traits/gitback.md) — the per-envoy report this command aggregates
 - [`vigocli swarm filecast`](swarm-filecast.md) — admin-pushed filecast distribution on the swarm substrate
 - [gitback concepts](../../howto/swarm/set-up-gitback.md)
-- [ADR-015 — Unified gitback substrate](../../adr/015-unified-gitback-substrate.md)
+- ADR-015 — Unified gitback substrate

@@ -291,11 +291,11 @@ The session helper's idle timeout defaults to **24 hours**; override it per-unlo
 ## See also
 
 - [Puddle subsystem](../../howto/swarm/set-up-puddle.md) — design + code map.
-- [ADR-014](../../adr/014-puddle-primitive.md) — design of record.
-- [ADR-015](../../adr/015-unified-gitback-substrate.md) — first consumer of puddle.
-- [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) — second consumer.
-- [ADR-017](../../adr/017-no-puddle-level-revoke.md) — why there is no `revoke` verb.
-- [ADR-018](../../adr/018-puddle-rekey.md) — design of the `rekey-pair` / `rekey` verbs.
-- [ADR-022](../../adr/022-gitback-friendly-names.md) — design of the `name` verbs + the fleet name map.
+- ADR-014 — design of record.
+- ADR-015 — first consumer of puddle.
+- ADR-016 — second consumer.
+- ADR-017 — why there is no `revoke` verb.
+- ADR-018 — design of the `rekey-pair` / `rekey` verbs.
+- ADR-022 — design of the `name` verbs + the fleet name map.
 - [`vigo swarm lockbox`](agent-swarm-lockbox.md) — shares the wrap envelope + session-helper pattern.
 - [`vigocli swarm puddle`](swarm-puddle.md) — admin-side cross-envoy puddle ops (`evict`, `names list`).

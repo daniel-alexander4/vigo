@@ -40,5 +40,5 @@ Each entry is published verbatim — `body` plus its Ed25519 `signature`. Key `b
 ## See also
 
 - [`vigocli swarm curator`](../../vigocli/swarm-curator.md) — the fleet catalog this trait feeds.
-- [Set up curator](../../../howto/swarm/set-up-curator.md) · [ADR-024](../../../adr/024-curator.md).
+- [Set up curator](../../../howto/swarm/set-up-curator.md) · ADR-024.
 - [`puddle`](puddle.md) — the identity curator artifacts are anchored to.

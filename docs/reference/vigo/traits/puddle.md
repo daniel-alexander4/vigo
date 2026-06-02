@@ -82,8 +82,8 @@ The trait is `null` (not an object with empty `puddles: []`) when `/etc/passwd` 
 
 ## See also
 
-- [ADR-014 — Puddle identity](../../../adr/014-puddle-primitive.md)
-- [ADR-022 — Friendly gitback names](../../../adr/022-gitback-friendly-names.md) — the `name_claim` half of this trait.
+- ADR-014 — Puddle identity
+- ADR-022 — Friendly gitback names — the `name_claim` half of this trait.
 - [`gitback`](gitback.md) — references puddle pubkeys (`founder_puddle_pubkey` / `members`) but no longer reports identity.
 - [`vigo swarm puddle ...`](../../vigocli/agent-swarm-puddle.md) — envoy-side verb tree that creates the identity + name claim this trait reports.
 - [`vigocli swarm puddle`](../../vigocli/swarm-puddle.md) — admin-side CLI that consumes the aggregated trait.

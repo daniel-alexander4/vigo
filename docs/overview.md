@@ -38,7 +38,8 @@ But scale is only half of it. Vigo is **far more than configuration management**
 
 | | |
 |---|---|
-| **New to Vigo?** | [Tutorials](start/) — stand up the server, enroll an envoy, ship your first configcrate, run your first compliance report |
+| **Just want it running?** | [Quickstart](quickstart.md) — server up, first envoy enrolled, first configcrate applied, in ten minutes of copy-paste |
+| **New to Vigo?** | [Tutorials](start/) — the same path, walked step by step: stand up the server, enroll an envoy, ship your first configcrate, run your first compliance report |
 | **Need to do a thing?** | [How-to guides](howto/) — configcrates, swarm, auth, monitoring, compliance, backup/DR, migrate from another CM |
 | **Looking something up?** | [Reference](reference/) — vigocli, agent resources, agent traits, REST API, server.yaml, the configcrate language |
 | **Want the mental model?** | [Concepts](concepts/) — architecture, convergence vs compliance, the swarm, puddle identity, the security model |

@@ -95,7 +95,7 @@ The server-side aggregator treats a `null` trait the same as "no participation r
 
 ## See also
 
-- [ADR-015 — Unified gitback substrate](../../../adr/015-unified-gitback-substrate.md)
+- ADR-015 — Unified gitback substrate
 - [`puddle`](puddle.md) — the trait that reports puddle identity + the friendly-name claims (ADR-022) gitback project rows display.
 - [`vigo swarm gitback project ...`](../../vigocli/agent-swarm-gitback.md) — envoy-side verb tree that mutates the project state this trait reports.
 - [`vigocli swarm gitback`](../../vigocli/swarm-gitback.md) — admin-side CLI that consumes the aggregated trait.

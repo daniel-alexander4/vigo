@@ -20,7 +20,7 @@ Every agent-initiated request (`CheckIn`, `ReportResult`, `ReportTraits`) and ev
 
 `TaskDispatch` round-trips end-to-end: the server generates the `trace_id` when dispatching, the agent uses it for execution logs, and echoes it back in `TaskResult` — so server-side "received task result" and agent-side "executing task" share the same field.
 
-The format is standards-compliant W3C `traceparent` (`00-<trace_id_hex>-<span_id_hex>-<flags>`). The trace_id portion (32 lowercase hex characters) is what you query on. See [ADR-028](../../adr/028-trace-id-propagation.md) for the field-placement reasoning.
+The format is standards-compliant W3C `traceparent` (`00-<trace_id_hex>-<span_id_hex>-<flags>`). The trace_id portion (32 lowercase hex characters) is what you query on. See ADR-028 for the field-placement reasoning.
 
 ## Querying in Loki
 

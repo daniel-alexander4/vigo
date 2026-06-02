@@ -3,7 +3,7 @@
 
 Operator-side view of [curator](../../howto/swarm/set-up-curator.md) — the P2P artifact registry (ADR-024). Every envoy's `swarm_curator` trait is aggregated server-side by `server/swarm/curatormesh` (30-second TTL cache; invalidated on block/unblock so moderation takes effect immediately) and surfaced through `/api/v1/swarm/curator/*`. This command is the CLI consumer.
 
-`vigocli swarm curator` is **read-only plus the admin moderation backstop**. Mutating verbs (`push` / `tag` / `untag` / `set-recipients` / `set-target` / `rm` / `prune` / `gc` / `stale` / `purge`) live on the agent side as [`vigo swarm curator`](agent-swarm-curator.md) — they need an unlocked per-user puddle to sign catalog entries, which doesn't fit vigocli's root-only / peer-auth posture. Per [ADR-024 open question #1, resolved 2026-05-13](../../adr/024-curator.md#implementation-notes), this split is deliberate.
+`vigocli swarm curator` is **read-only plus the admin moderation backstop**. Mutating verbs (`push` / `tag` / `untag` / `set-recipients` / `set-target` / `rm` / `prune` / `gc` / `stale` / `purge`) live on the agent side as [`vigo swarm curator`](agent-swarm-curator.md) — they need an unlocked per-user puddle to sign catalog entries, which doesn't fit vigocli's root-only / peer-auth posture. Per ADR-024 open question #1, resolved 2026-05-13, this split is deliberate.
 
 ## Subcommands
 
@@ -119,7 +119,7 @@ Versions:
                           darwin/arm64   8.7 MiB   4a9e7b3c2f1d
 ```
 
-When the signing puddle differs from the founder puddle (the founder has rekeyed via [ADR-019](../../adr/019-gitback-founder-rekey.md)), `show` notes the rekey hint:
+When the signing puddle differs from the founder puddle (the founder has rekeyed via ADR-019), `show` notes the rekey hint:
 
 ```
 Signing puddle: ed25519:<new pubkey>  (rekeyed — delegation chain bridges)
@@ -228,7 +228,7 @@ vigocli swarm curator show e3b0c44298fc --json | jq '[.entry.body.versions[].pla
 
 - [`vigo swarm curator`](agent-swarm-curator.md) — envoy-side surface: founder verbs (push/tag/untag/set-recipients/set-target/rm), read verbs, local cleanup
 - [Curator engineering doc](../../howto/swarm/set-up-curator.md) — identity, catalog shape, two-axis distribution, wire surface
-- [ADR-024 — curator P2P artifact registry](../../adr/024-curator.md) — the design
+- ADR-024 — curator P2P artifact registry — the design
 - [`vigocli swarm gitback`](swarm-gitback.md) — the analogous fleet view for personal-DR git mirrors
 - [`vigocli swarm filecast`](swarm-filecast.md) — admin-pushed *one-off* file distribution (curator is for named, versioned, mutable-tag artifacts)
 

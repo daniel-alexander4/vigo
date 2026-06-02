@@ -69,7 +69,7 @@ Curator combines two existing fleet primitives: the swarm blob substrate (conten
 
 ### Identity
 
-`artifact_id = sha256(founder_puddle_pubkey ‖ name)` — same shape as a gitback project ID, so two operators can both publish `redis` without collision. Human-facing reference: `<founder-puddle-name>/<name>` (resolves to a pubkey via the [ADR-022](../../adr/022-gitback-friendly-names.md) fleet name map, then to an artifact_id). The operator's own puddle is the implicit default namespace — `vigo-agent:latest` ≡ `<your-puddle>/vigo-agent:latest`. The hex `<artifact_id>/<name>` form always works (self-certifying).
+`artifact_id = sha256(founder_puddle_pubkey ‖ name)` — same shape as a gitback project ID, so two operators can both publish `redis` without collision. Human-facing reference: `<founder-puddle-name>/<name>` (resolves to a pubkey via the ADR-022 fleet name map, then to an artifact_id). The operator's own puddle is the implicit default namespace — `vigo-agent:latest` ≡ `<your-puddle>/vigo-agent:latest`. The hex `<artifact_id>/<name>` form always works (self-certifying).
 
 ### Catalog entry
 
@@ -95,7 +95,7 @@ One signed envelope per artifact, re-signed last-write-wins on every mutation:
 }
 ```
 
-The signature anchors to the founder pubkey: any envoy verifying the entry rejects it if the signature doesn't trace back (via the [ADR-019](../../adr/019-gitback-founder-rekey.md) rekey-bridge chain) to the pubkey that hashes the artifact_id. A founder cannot mutate another founder's artifact.
+The signature anchors to the founder pubkey: any envoy verifying the entry rejects it if the signature doesn't trace back (via the ADR-019 rekey-bridge chain) to the pubkey that hashes the artifact_id. A founder cannot mutate another founder's artifact.
 
 ### Publishing — write path
 

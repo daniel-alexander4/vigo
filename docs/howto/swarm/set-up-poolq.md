@@ -101,7 +101,7 @@ Each message is a small signed JSON envelope:
 
 ### Publishing — write path
 
-`vigo swarm poolq post <topic> --body <text>` runs as a real user with `poolq: true` and an unlocked puddle. The CLI (no helper daemon — see [ADR-029](../../adr/029-poolq.md)):
+`vigo swarm poolq post <topic> --body <text>` runs as a real user with `poolq: true` and an unlocked puddle. The CLI (no helper daemon — see ADR-029):
 
 1. Validates topic name + body size (operator cap and the 64 KiB hard ceiling).
 2. Acquires the per-topic seq allocator at `~/.vigo-poolq/<topic_id>/allocator.json` under `flock(LOCK_EX)`, reads `next_seq`, issues it, bumps the file, releases the lock.
@@ -158,4 +158,4 @@ The operator-moderation backstop is `vigocli swarm poolq block <topic_id>` (admi
 
 ### Out of v1 scope
 
-See [ADR-029](../../adr/029-poolq.md)'s "Out of v1 scope" section for the deferred features: competing consumers / ack-redeliver (the RabbitMQ-style work-queue shape), partitions, delegated non-founder publishers, multicast Tier-1 fast-path for sub-cadence latency, active push-delivery hooks (wall / MOTD / exec-on-message), encrypted/private topics, agent-side fleet-log cache, per-publisher block.
+See ADR-029's "Out of v1 scope" section for the deferred features: competing consumers / ack-redeliver (the RabbitMQ-style work-queue shape), partitions, delegated non-founder publishers, multicast Tier-1 fast-path for sub-cadence latency, active push-delivery hooks (wall / MOTD / exec-on-message), encrypted/private topics, agent-side fleet-log cache, per-publisher block.
