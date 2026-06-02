@@ -94,6 +94,10 @@ https://vigo:8443/scrier/<envoy_id>?protocol=vnc
 
 Admin-only. xterm.js for SSH, Guacamole client for RDP/VNC.
 
+![A live Scrier SSH session in the browser, landed on a managed envoy](../../img/screenshots/vigo.scrier-ssh.png)
+
+The session lands you in whichever OS user's `authorized_keys` holds your web user's pubkey (here, `dan@girlslaptop`) — never root. Note the `from 127.0.0.1` on the login line: the agent relays the connection out through its existing server stream to a loopback-only listener, so the envoy never opens an inbound port.
+
 **From the terminal:**
 
 ```bash

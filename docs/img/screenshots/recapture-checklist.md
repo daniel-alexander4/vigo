@@ -43,12 +43,12 @@ Captured against the home-lab vigosrv (`dan` admin login, headless Chromium) wit
 | `vigo.longdrawer.png` | `/swarm/longdrawer` | ✅ Longdrawer fleet view — 1 user, 4 files |
 | `vigo.swarm-poolq.png` | `/swarm/poolq` | ✅ Poolq fleet view — 1 topic, 3 messages |
 | `vigo.audit.png` | `/audit` | ✅ Audit log — Chain Valid, 2.79M entries |
+| `vigo.scrier-ssh.png` | `/scrier/<id>?protocol=ssh` | ✅ Live SSH session to girlslaptop, landed as `dan`, with `id`/`uname`/`uptime` output. Embedded in `howto/operate/set-up-scrier.md`. |
 
-## Still to capture (need a live session / paid license)
+## Still to capture (need a paid license)
 
 | File | URL | Notes |
 |---|---|---|
-| `vigo.scrier-ssh.png` | `/scrier/<envoy-id>?protocol=ssh` | Live SSH session in browser — needs an interactive terminal session, can't be captured headless. |
 | `vigo.swarm-spanner.png` | `/spanner/bolts/<id>` | Per-bolt detail (needs paid license + spanner topology) |
 
 ## Where they're embedded
