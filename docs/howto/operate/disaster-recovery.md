@@ -16,7 +16,7 @@ A complete Vigo server consists of five components, all stored under `/srv/vigo/
 | Component | Path | Purpose | Backup method |
 |-----------|------|---------|---------------|
 | Database | `db/vigo.db` | Enrolled envoys, run history, traits, users, tokens | `vigocli backup` or Litestream |
-| Config files | `stockpile/` | Modules, roles, envoy mappings, vars | `vigocli backup` (also: git) |
+| Config files | `stockpile/` | Configcrates, roles, envoy mappings, vars | `vigocli backup` (also: git) |
 | Secrets | `secrets/` | AES-256-GCM encrypted files + `.master.key` | `vigocli backup` |
 | TLS certs | `tls/` | CA + server cert/key (plain PEM) | `vigocli backup` |
 | Server config | `server.yaml` | Ports, intervals, backends, SMTP, export | `vigocli backup` |
@@ -203,7 +203,7 @@ cd /srv/vigo/stacks/stockpile
 git init && git add -A && git commit -m "initial config"
 
 # After changes:
-git add -A && git commit -m "add redis module for cache nodes"
+git add -A && git commit -m "add redis configcrate for cache nodes"
 ```
 
 This gives you `git log`, `git diff`, and `git revert` for config changes independent of database backups.

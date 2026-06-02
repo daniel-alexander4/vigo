@@ -100,6 +100,29 @@ run_test_grep() {
     fi
 }
 
+# run_test_no_module_vocab: fail if a command's output still uses the retired
+# `module(s)` vocabulary (0.71.0 module→configcrate). Excludes kernel_module,
+# which is the unrelated Linux kernel-module resource/trait. The golden-output
+# net for CLI text — pairs with ui/template_vocabulary_audit_test.go (UI) since
+# the overloaded word can't be cleanly source-scanned.
+run_test_no_module_vocab() {
+    local name="$1"
+    shift
+    echo -ne "  ${YELLOW} RUN${NC}  $name\r"
+    local output
+    output=$("$@" 2>&1 || true)
+    if echo "$output" | grep -oiE '\bmodules?\b' | grep -qiv 'kernel_module'; then
+        echo -e "  ${RED}FAIL${NC}  $name (retired 'module' vocabulary in output — use 'configcrate')"
+        echo "$output" | grep -iE '\bmodules?\b' | grep -iv 'kernel_module' | head -3
+        FAIL=$((FAIL + 1))
+        FAILURES+=("$name")
+        return 1
+    fi
+    echo -e "  ${GREEN}PASS${NC}  $name"
+    PASS=$((PASS + 1))
+    return 0
+}
+
 echo -e "${BOLD}vigocli test suite${NC}"
 echo "Server: $SERVER"
 echo ""
@@ -121,6 +144,7 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[doctor]${NC}"
 run_test "doctor" $CLI doctor --server "$SERVER"
+run_test_no_module_vocab "doctor: no module vocab" $CLI doctor --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
@@ -195,6 +219,7 @@ run_test "runs list" $CLI runs list --server "$SERVER"
 FIRST_RUN=$($CLI runs list --server "$SERVER" 2>/dev/null | awk 'NR==2{print $1}' || true)
 if [[ -n "$FIRST_RUN" && "$FIRST_RUN" != "ID" ]]; then
     run_test "runs show" $CLI runs show "$FIRST_RUN" --server "$SERVER"
+    run_test_no_module_vocab "runs show: no module vocab" $CLI runs show "$FIRST_RUN" --server "$SERVER"
 else
     skip_test "runs show" "no runs found"
 fi
@@ -251,6 +276,7 @@ if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
     run_test_grep "config trace: Path Inheritance" "Path Inheritance" echo "$TRACE_OUT"
     run_test_grep "config trace: Configcrate Inheritance" "Configcrate Inheritance" echo "$TRACE_OUT"
     run_test_grep "config trace: Variable Inheritance" "Variable" echo "$TRACE_OUT"
+    run_test_no_module_vocab "config trace: no module vocab" echo "$TRACE_OUT"
 
     # Test --configcrate filter.
     FIRST_MODULE=$($CLI config trace "$FIRST_ENVOY" --server "$SERVER" 2>/dev/null | grep -oP 'configcrates:\s*\K\S+' | head -1 || true)

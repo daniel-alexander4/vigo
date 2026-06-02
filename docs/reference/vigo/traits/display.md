@@ -41,7 +41,7 @@ Use the `has_display()` builtin to conditionally apply GUI application configcra
 when: "has_display() and os_family('debian')"
 ```
 
-`has_display()` returns true when `display.server` is anything other than `none`. It is evaluated **server-side** — headless envoys never receive GUI modules in their policy bundle.
+`has_display()` returns true when `display.server` is anything other than `none`. It is evaluated **server-side** — headless envoys never receive GUI configcrates in their policy bundle.
 
 ## Example
 

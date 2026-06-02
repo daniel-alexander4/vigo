@@ -1,9 +1,9 @@
 
 # Multi-Cloud Configuration
 
-This example shows how to use cloud traits to manage a fleet spanning AWS, GCP, and Azure with a single set of modules. Cloud traits are collected automatically from each provider's Instance Metadata Service (IMDS) -- no manual tagging required.
+This example shows how to use cloud traits to manage a fleet spanning AWS, GCP, and Azure with a single set of configcrates. Cloud traits are collected automatically from each provider's Instance Metadata Service (IMDS) -- no manual tagging required.
 
-## Cloud-Aware Modules
+## Cloud-Aware Configcrates
 
 ### Cloud-specific monitoring agents
 

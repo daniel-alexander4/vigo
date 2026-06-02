@@ -18,7 +18,7 @@
     <p class="u-blk21">
         Pattern: <code>{{.Trace.MatchPattern}}</code> ({{.Trace.PatternType}})
         {{if .Trace.Environment}}&middot; Environment: <strong>{{.Trace.Environment}}</strong>{{end}}
-        &middot; {{.Trace.ResourceCount}} resources from {{len .Trace.Configcrates}} modules
+        &middot; {{.Trace.ResourceCount}} resources from {{len .Trace.Configcrates}} configcrates
     </p>
     <div class="u-ovx-auto">
         <svg class="u-w-100-maxh-600px" viewBox="{{.TreeViewBox}}" preserveAspectRatio="xMidYMin meet">

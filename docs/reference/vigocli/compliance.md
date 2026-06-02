@@ -7,7 +7,7 @@ Umbrella command for compliance reporting, evidence export, and remediation work
 |---|---|---|
 | `vigocli compliance report` | Generate HIPAA / SOC 2 / PCI DSS / NIST 800-53 / ISO 27001 / etc. compliance reports (JSON, HTML, OSCAL) | [report](report.md) |
 | `vigocli compliance export` | Export SIEM, CMDB, and OSCAL feeds | [export](export.md) |
-| `vigocli compliance provisions` | List the Vigo-curated provision catalog used by modules' `provides:` field | (see below) |
+| `vigocli compliance provisions` | List the Vigo-curated provision catalog used by configcrates' `provides:` field | (see below) |
 
 Run `vigocli compliance --help` on a live server for the current set of subcommands.
 

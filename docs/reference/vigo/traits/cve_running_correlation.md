@@ -77,9 +77,9 @@ vigocli inventory \
 
 ## Scanner Prerequisites
 
-This collector depends on the security-scanning module being active on the host — it reads scanner output from `/var/lib/vigo/security/`. Without at least one of `trivy.json` or `debsecan.log`, the trait emits an empty `running_cves` array. This is intentional: an envoy with no CVE feed reports "zero known running CVEs," which is accurate given what's been measured.
+This collector depends on the security-scanning configcrate being active on the host — it reads scanner output from `/var/lib/vigo/security/`. Without at least one of `trivy.json` or `debsecan.log`, the trait emits an empty `running_cves` array. This is intentional: an envoy with no CVE feed reports "zero known running CVEs," which is accurate given what's been measured.
 
-To pre-populate: install the security-scanning module or equivalent that writes trivy/debsecan output to the shared directory.
+To pre-populate: install the security-scanning configcrate or equivalent that writes trivy/debsecan output to the shared directory.
 
 ## Package Ownership Resolution
 

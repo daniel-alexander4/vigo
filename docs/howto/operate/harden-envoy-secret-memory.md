@@ -84,7 +84,7 @@ swap capacity (dm-crypt) or just burst headroom (zram / none).
 This page is about hardening the **host the agent runs on** against disclosure
 of the agent's own secret memory. It is distinct from
 [`examples/security-hardening.md`](../../examples/security-hardening.md), which is
-about using Vigo *modules* to harden the managed nodes themselves (firewall,
+about using Vigo *configcrates* to harden the managed nodes themselves (firewall,
 SSH, sudo policy).
 
 ---

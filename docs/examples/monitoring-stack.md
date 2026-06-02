@@ -3,7 +3,7 @@
 
 This example sets up Prometheus node_exporter, Prometheus server, and Grafana using the package-config-service pattern.
 
-## Node Exporter Module
+## Node Exporter Configcrate
 
 Deployed to every envoy for metrics collection.
 
@@ -44,7 +44,7 @@ resources:
     enabled: true
 ```
 
-## Prometheus Module
+## Prometheus Configcrate
 
 Deployed to monitoring servers.
 
@@ -104,7 +104,7 @@ resources:
     enabled: true
 ```
 
-## Grafana Module
+## Grafana Configcrate
 
 `stockpile/configcrates/grafana.vgo`:
 

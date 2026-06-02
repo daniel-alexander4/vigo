@@ -317,7 +317,7 @@
       "targets": [{ "expr": "rate(vigo_drift_detected_total[5m]) * 60", "legendFormat": "Drift corrections" }]
     },
     {
-      "title": "Module Actions",
+      "title": "Configcrate Actions",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },

@@ -3,7 +3,7 @@
 
 Runs commands on remote network devices over SSH. This is the network equivalent of the [`exec`](exec.md) executor -- it executes arbitrary commands on devices that can't run the Vigo agent (switches, routers, firewalls).
 
-SSH connection parameters (`host`, `port`, `username`, `credential`) are auto-injected by the gateway proxy -- module authors don't need to specify them.
+SSH connection parameters (`host`, `port`, `username`, `credential`) are auto-injected by the gateway proxy -- configcrate authors don't need to specify them.
 
 ## Parameters
 

@@ -40,7 +40,7 @@ vigocli runs drift
 ```
 
 ```
-HOSTNAME           MODULE      TYPE     RESOURCE                     ACTION    ERROR
+HOSTNAME           CONFIGCRATE TYPE     RESOURCE                     ACTION    ERROR
 web01.example.com  ntp         file     /etc/ntp.conf                updated   -
 web01.example.com  ntp         service  ntpd                         updated   -
 db01.example.com   postgres    file     /etc/postgresql/pg_hba.conf  updated   -
@@ -56,7 +56,7 @@ vigocli runs drift --envoy web01.example.com
 ```
 
 ```
-HOSTNAME           MODULE  TYPE     RESOURCE       ACTION    ERROR
+HOSTNAME           CONFIGCRATE TYPE     RESOURCE       ACTION    ERROR
 web01.example.com  ntp     file     /etc/ntp.conf  updated   -
 web01.example.com  ntp     service  ntpd           updated   -
 
@@ -127,7 +127,7 @@ Finished: 2026-03-13 12:31
 Status:   success
 Configcrates:  5 total, 3 changed, 0 failed, 0 skipped
 
-MODULE      TYPE       RESOURCE           ACTION    CHANGED  ERROR
+CONFIGCRATE TYPE       RESOURCE           ACTION    CHANGED  ERROR
 nginx       package    nginx              install   true     -
 nginx       file       /etc/nginx/nginx   update    true     -
 nginx       service    nginx              restart   true     -

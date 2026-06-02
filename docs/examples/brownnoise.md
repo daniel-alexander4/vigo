@@ -3,7 +3,7 @@
 
 This example builds and runs a brown noise Docker container on a managed node, with audio output piped to the host's PulseAudio server. It demonstrates using `exec` resources with `check` for idempotent Docker image builds and container lifecycle, plus `subscribes` to automatically rebuild and restart when files change.
 
-## Module Definition
+## Configcrate Definition
 
 `stockpile/configcrates/brownnoise.vgo`:
 

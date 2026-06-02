@@ -3,7 +3,7 @@
 
 This example uses the `container` [executor](../reference/vigo/resources/_index.md) to manage containerized services. The `container` executor pulls images on demand — no separate image-pull resource is needed.
 
-## Module Definition
+## Configcrate Definition
 
 `stockpile/configcrates/redis.vgo`:
 

@@ -20,7 +20,7 @@ groups:
           severity: critical
         annotations:
           summary: "{{ $value }} envoy(s) in failed convergence state"
-          description: "Envoys reporting >=80% module failures or blocked status for the past 10 minutes. Check /envoys and the per-envoy run history."
+          description: "Envoys reporting >=80% configcrate failures or blocked status for the past 10 minutes. Check /envoys and the per-envoy run history."
 
       - alert: VigoConvergenceDegraded
         expr: vigo_convergence_degraded > 0
@@ -28,8 +28,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $value }} envoy(s) degraded (1-79% module failures)"
-          description: "Partial failures persisting >30 minutes. Open /envoys to identify which modules are intermittently failing."
+          summary: "{{ $value }} envoy(s) degraded (1-79% configcrate failures)"
+          description: "Partial failures persisting >30 minutes. Open /envoys to identify which configcrates are intermittently failing."
 
       - alert: VigoConvergenceDiverged
         expr: vigo_convergence_diverged > 0
@@ -38,7 +38,7 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $value }} envoy(s) showing persistent drift"
-          description: "Envoys whose last 5+ runs all made changes — modules are non-idempotent or external state is fighting Vigo. Check /envoys, look for env-specific or trait-dependent module bugs."
+          description: "Envoys whose last 5+ runs all made changes — configcrates are non-idempotent or external state is fighting Vigo. Check /envoys, look for env-specific or trait-dependent configcrate bugs."
 
       - alert: VigoEnvoysOffline
         expr: vigo_convergence_offline > 0
@@ -58,7 +58,7 @@ groups:
           severity: warning
         annotations:
           summary: "Fleet-wide run p95 duration > 120s for the past 10 minutes"
-          description: "Agents are taking longer than expected to converge. Investigate slow modules (long-running exec resources, package operations, network-bound fetches)."
+          description: "Agents are taking longer than expected to converge. Investigate slow configcrates (long-running exec resources, package operations, network-bound fetches)."
 
   - name: vigo-security
     rules:
@@ -104,7 +104,7 @@ groups:
           severity: warning
         annotations:
           summary: "Config reload p99 > 2.5s"
-          description: "Publish + reload is getting slow. Stockpile may have grown — check module count and inheritance depth."
+          description: "Publish + reload is getting slow. Stockpile may have grown — check configcrate count and inheritance depth."
 
   - name: vigo-license
     rules:
@@ -192,4 +192,4 @@ groups:
           severity: warning
         annotations:
           summary: "Publish→converge p95 {{ $value | printf \"%.0f\" }}s (>5m SLO) for >10m"
-          description: "95% of envoys are taking longer than the 5-minute SLO to apply a published config version. If this tracks your check-in interval, convergence latency is cadence-bound — shorten the interval or accept the floor. Otherwise look for a slow module, a degraded subset, or capacity pressure on the wave. Threshold is a starting point — set it to your own publish-to-converge SLO."
+          description: "95% of envoys are taking longer than the 5-minute SLO to apply a published config version. If this tracks your check-in interval, convergence latency is cadence-bound — shorten the interval or accept the floor. Otherwise look for a slow configcrate, a degraded subset, or capacity pressure on the wave. Threshold is a starting point — set it to your own publish-to-converge SLO."

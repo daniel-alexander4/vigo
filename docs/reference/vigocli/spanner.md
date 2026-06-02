@@ -73,7 +73,7 @@ Envoy roster for a specific bolt (hostname, IP, revoked flag, last-seen timestam
 
 ### bolt runs &lt;bolt-id&gt;
 
-Recent convergence runs from envoys on a bolt (status, module counts, changed / failed counts, started-at). Calls `GET /api/v1/spanner/bolts/{id}/runs`.
+Recent convergence runs from envoys on a bolt (status, configcrate counts, changed / failed counts, started-at). Calls `GET /api/v1/spanner/bolts/{id}/runs`.
 
 ### bolt push &lt;bolt-id&gt; \[--envoy-id ID\]
 

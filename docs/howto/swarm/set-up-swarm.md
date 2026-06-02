@@ -113,7 +113,7 @@ To change retention or target after seeding, edit the `.swarm` file — changes 
 | 1531 | TCP (mTLS) | Inbound + Outbound | Peer chunk exchange |
 | 1531 | UDP | Inbound + Outbound | Multicast peer discovery (`224.0.0.42`, LAN only) |
 
-**Both TCP and UDP must be allowed on port 1531.** A common misconfiguration is allowing only TCP — the peer server works but multicast discovery silently fails, leaving agents unable to find peers. Use the `swarm-firewall` example module to enforce both rules.
+**Both TCP and UDP must be allowed on port 1531.** A common misconfiguration is allowing only TCP — the peer server works but multicast discovery silently fails, leaving agents unable to find peers. Use the `swarm-firewall` example configcrate to enforce both rules.
 
 Multicast discovery only works within a LAN segment. Across subnets, agents discover peers via active probing (querying known addresses), peer exchange headers, and server hints.
 
@@ -250,7 +250,7 @@ Each subsystem measures the filesystem where its data actually lands — `/var/l
 
 The scheduler finds 0 peers and bails immediately. This is the most common swarm issue. Diagnose in order:
 
-1. **Firewall: both TCP and UDP 1531 must be open.** A common misconfiguration is allowing only TCP — the peer server works but multicast discovery silently fails. Check with `ufw status | grep 1531`. Use the `swarm-firewall` module to enforce both rules.
+1. **Firewall: both TCP and UDP 1531 must be open.** A common misconfiguration is allowing only TCP — the peer server works but multicast discovery silently fails. Check with `ufw status | grep 1531`. Use the `swarm-firewall` configcrate to enforce both rules.
 
 2. **Multicast announcer dead.** The seeder must announce blobs via multicast. Check if the seeder is sending announcements:
    ```bash

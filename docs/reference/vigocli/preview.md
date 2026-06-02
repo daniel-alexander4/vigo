@@ -25,7 +25,7 @@ vigocli envoys preview web-01.example.com
 ```
 
 ```
-MODULE      TYPE       RESOURCE                  ACTION
+CONFIGCRATE TYPE       RESOURCE                  ACTION
 nginx       package    nginx                     update
 nginx       file       /etc/nginx/nginx.conf     update
 nginx       service    nginx                     restart
@@ -39,7 +39,7 @@ vigocli envoys preview --all
 
 ```
 --- web-01.example.com (a1b2c3d4) ---
-MODULE      TYPE       RESOURCE                  ACTION
+CONFIGCRATE TYPE       RESOURCE                  ACTION
 nginx       package    nginx                     update
 
 --- db-01.internal.net (e5f6g7h8) ---

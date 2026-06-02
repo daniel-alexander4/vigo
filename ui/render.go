@@ -1373,7 +1373,7 @@ func traceUsercrates(levels []config.InheritanceLevel) []usercrateScope {
 
 // traceModuleLevels filters out usercrate entries from inheritance levels.
 // The dedicated Usercrates section renders those separately; without this
-// filter the Module Inheritance cards would show duplicate entries.
+// filter the Configcrate Inheritance cards would show duplicate entries.
 func traceModuleLevels(levels []config.InheritanceLevel) []config.InheritanceLevel {
 	out := make([]config.InheritanceLevel, 0, len(levels))
 	for _, lvl := range levels {
