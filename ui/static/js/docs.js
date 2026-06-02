@@ -41,12 +41,14 @@
     input.addEventListener("input", function () {
         var q = this.value.trim().toLowerCase();
         if (!q) {
-            results.style.display = "none";
-            tree.style.display = "";
+            // Visibility is governed by the `u-d-none` class (display:none),
+            // not inline style — toggle the class so it actually shows/hides.
+            results.classList.add("u-d-none");
+            tree.classList.remove("u-d-none");
             return;
         }
-        tree.style.display = "none";
-        results.style.display = "";
+        tree.classList.add("u-d-none");
+        results.classList.remove("u-d-none");
         var html = "";
         var terms = q.split(/\s+/);
         var hits = [];

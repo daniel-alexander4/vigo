@@ -17,15 +17,16 @@
 
     // Behaviors that previously lived in per-page inline <script> blocks.
 
-    // docs.html section toggle.
+    // docs.html section toggle. The markup hides collapsed pages with the
+    // `u-d-none` utility class (since the CSP de-inlining), so toggle that
+    // class — an inline style.display can't override the class's `display:none`.
     window.toggleDocsSection = function (btn) {
         var section = btn.closest(".docs-nav__section");
         if (!section) return;
         var pages = section.querySelector(".docs-nav__pages");
         if (!pages) return;
-        var hidden = pages.style.display === "none";
-        pages.style.display = hidden ? "" : "none";
-        btn.classList.toggle("docs-nav__section-toggle--active", hidden);
+        var nowHidden = pages.classList.toggle("u-d-none");
+        btn.classList.toggle("docs-nav__section-toggle--active", !nowHidden);
     };
 
     // compliance-evidence.html status filter. Toggles each control row and its
