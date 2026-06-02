@@ -1,0 +1,140 @@
+{{define "page-content"}}
+{{if .Puddle}}
+{{/* ── Detail view (single puddle) ── */}}
+<div class="breadcrumb mb-1">
+    <a href="/swarm/puddle">Puddles</a> &rsaquo; {{if .Puddle.Owner}}{{.Puddle.Owner}}{{else}}<code>{{.Puddle.PuddlePubkey}}</code>{{end}}
+</div>
+
+{{template "health-banner" .Health}}
+
+<div class="card">
+    <div class="card-heading-row">
+        <h2 class="u-m-0">{{if .Puddle.Owner}}{{.Puddle.Owner}}{{else if .Puddle.OwnerContested}}<span class="badge badge--warn">contested name</span>{{else}}(unnamed puddle){{end}}</h2>
+        <a href="/swarm/puddle" class="btn btn--sm">Back to list</a>
+    </div>
+
+    <div class="table-container u-mb-24px">
+        <table class="table">
+            <tbody>
+                <tr><td class="u-fw-600-w-200px">Owner</td><td>{{if .Puddle.Owner}}{{.Puddle.Owner}}{{else if .Puddle.OwnerContested}}<span class="badge badge--warn">contested</span> &middot; more than one puddle claims this name{{else}}&mdash; (no friendly name claimed){{end}}</td></tr>
+                <tr><td class="u-fw-600">Puddle key</td><td><code>ed25519:{{.Puddle.PuddlePubkey}}</code></td></tr>
+                <tr><td class="u-fw-600">Health</td><td>{{template "puddle-health-badge" .Puddle.Health.Band}}{{range .Puddle.Health.Reasons}} &middot; {{.}}{{end}}</td></tr>
+                <tr><td class="u-fw-600">Users</td><td>{{range .Puddle.Users}}<code>{{.}}</code> {{end}}</td></tr>
+                <tr><td class="u-fw-600">Envoys</td><td>{{.Puddle.EnvoyCount}}</td></tr>
+                <tr><td class="u-fw-600">Session</td><td>{{if .Puddle.SessionUnlocked}}<span class="badge badge--info">unlocked somewhere</span>{{else}}<span class="badge badge--neutral">locked</span>{{end}}</td></tr>
+                <tr><td class="u-fw-600">Key rotations</td><td>{{.Puddle.RetiredCount}} retired{{if .Puddle.RekeyPending}} &middot; <span class="badge badge--warn">rekey in progress</span>{{end}}</td></tr>
+                <tr><td class="u-fw-600">Last updated</td><td>{{if gt .Puddle.LastUpdated 0}}{{formatUnixTime .Puddle.LastUpdated}}{{else}}&mdash;{{end}}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="u-m-0-0-12px">Member envoys</h3>
+    {{if .Puddle.Envoys}}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Host</th>
+                <th>User</th>
+                <th>Status</th>
+                <th>Initialized</th>
+                <th>Unlocked</th>
+                <th>Flags</th>
+                <th>Last seen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Puddle.Envoys}}
+            <tr>
+                <td>{{.Hostname}}</td>
+                <td><code>{{.User}}</code></td>
+                <td>
+                    {{if eq .Status "reporting"}}<span class="badge badge--ok">reporting</span>
+                    {{else if eq .Status "stale"}}<span class="badge badge--warn">stale</span>
+                    {{else}}<span class="badge badge--neutral">{{.Status}}</span>{{end}}
+                </td>
+                <td>{{if .Initialized}}<span class="badge badge--ok">yes</span>{{else}}<span class="badge badge--err">no</span>{{end}}</td>
+                <td>{{if .SessionUnlocked}}<span class="badge badge--info">unlocked</span>{{else}}&mdash;{{end}}</td>
+                <td>{{if .PairPending}}<span class="badge badge--warn">pair-pending</span> {{end}}{{if .RekeyPending}}<span class="badge badge--warn">rekey-pending</span>{{end}}{{if and (not .PairPending) (not .RekeyPending)}}&mdash;{{end}}</td>
+                <td>{{if gt .UpdatedAt 0}}{{formatUnixTime .UpdatedAt}}{{else}}&mdash;{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p><em>No envoy presence reported for this puddle yet.</em></p>
+    {{end}}
+</div>
+{{else}}
+{{/* ── List view ── */}}
+<div class="page-header">
+    <h1>Puddles</h1>
+    <p>Fleet-wide view of swarm puddles &mdash; the per-user identity (ADR-014) that gitback, curator, poolq, lockbox, and longdrawer build on. Each puddle is keyed by its Ed25519 pubkey; its owner is the friendly name it has claimed (ADR-022).</p>
+</div>
+
+{{template "health-banner" .Health}}
+
+{{if .Error}}
+    <div class="alert alert--warn">Puddle aggregator: {{.Error}}</div>
+{{else if or (not .Fleet) (eq (len .Fleet.Puddles) 0)}}
+    {{template "empty-state" dict "Message" "No puddles observed across the fleet." "Hint" "Run `vigo swarm puddle init` on any envoy to create one, then `vigo swarm puddle name set <name>` to claim a friendly name."}}
+{{else}}
+    <div class="stat-cards mb-2">
+        <div class="stat-card" title="Distinct puddles (Ed25519 identities) observed across the fleet.">
+            <div class="stat-card__label">Puddles</div>
+            <div class="stat-card__value">{{.Fleet.Totals.Puddles}}</div>
+        </div>
+        <div class="stat-card" title="Distinct envoys holding any puddle.">
+            <div class="stat-card__label">Envoys</div>
+            <div class="stat-card__value">{{.Fleet.Totals.Envoys}}</div>
+        </div>
+        <div class="stat-card" title="Puddles with an uncontested friendly name (ADR-022).">
+            <div class="stat-card__label">Named</div>
+            <div class="stat-card__value">{{.Fleet.Totals.Named}}</div>
+        </div>
+        <div class="stat-card" title="Puddles unlocked on at least one envoy.">
+            <div class="stat-card__label">Unlocked</div>
+            <div class="stat-card__value">{{.Fleet.Totals.Unlocked}}</div>
+        </div>
+        <div class="stat-card" title="Puddles whose health is degraded or warning.">
+            <div class="stat-card__label">Need attention</div>
+            <div class="stat-card__value {{if gt .Fleet.Totals.Unhealthy 0}}text-warn{{end}}">{{.Fleet.Totals.Unhealthy}}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 class="u-m-0-0-12px">Puddles</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Owner</th>
+                    <th>Puddle key</th>
+                    <th>Envoys</th>
+                    <th>Users</th>
+                    <th>Unlocked</th>
+                    <th>Health</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Fleet.Puddles}}
+                <tr class="u-cur-pointer" data-action="nav" data-href="/swarm/puddle/{{.PuddlePubkey}}">
+                    <td><strong>{{if .Owner}}{{.Owner}}{{else if .OwnerContested}}<span class="badge badge--warn">contested</span>{{else}}(unnamed){{end}}</strong></td>
+                    <td><code title="ed25519:{{.PuddlePubkey}}">{{truncGitSha .PuddlePubkey}}</code></td>
+                    <td>{{.EnvoyCount}}</td>
+                    <td>{{range .Users}}<code>{{.}}</code> {{end}}</td>
+                    <td>{{if .SessionUnlocked}}<span class="badge badge--info">yes</span>{{else}}&mdash;{{end}}</td>
+                    <td>{{template "puddle-health-badge" .Health.Band}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "puddle-health-badge"}}
+{{- if eq . "healthy"}}<span class="badge badge--ok">healthy</span>
+{{- else if eq . "warning"}}<span class="badge badge--warn">warning</span>
+{{- else if eq . "degraded"}}<span class="badge badge--err">degraded</span>
+{{- else}}<span class="badge badge--neutral">{{.}}</span>{{end}}
+{{- end}}

@@ -53,8 +53,8 @@ import (
 	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
-	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 	"git.alexander4.io/vigo/server/swarm/poolqmesh"
+	"git.alexander4.io/vigo/server/swarm/puddlemesh"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/tickets"
 	"git.alexander4.io/vigo/server/workflows"
@@ -1490,7 +1490,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 					s3Server := curators3.NewServer(
 						curators3.NewVerifier(curators3.NewCredStore(s.queries, lp)),
 						curatorHandler,
-						gitbackmesh.NewAggregator(s.queries),
+						puddlemesh.NewAggregator(s.queries),
 						s.fleetIndex,
 						blobsDir,
 						s.metrics,

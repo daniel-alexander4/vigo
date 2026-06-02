@@ -135,10 +135,21 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 		uiHandler.SetComplianceDocs(&complianceDocsListing{store: complianceDocsStore})
 	}
 
+	// Mount the puddle fleet aggregator (ADR-014). It owns the
+	// friendly-name map, so build it first and share its aggregator with
+	// the gitback handler below — one instance, one cache, one source of
+	// truth for names. The `/puddle` UI page reads the cached
+	// aggregation directly.
+	puddleHandler := NewPuddleHandler(fleetIndex, queries)
+	puddleHandler.RegisterRoutes(mux)
+	uiHandler.SetPuddleFleet(puddleHandler)
+
 	// Mount gitback fleet aggregator. Share the handler with the
 	// UI so the `/gitback` page reads the cached aggregation
 	// directly rather than round-tripping through the REST endpoint.
-	gitbackHandler := NewGitbackHandler(fleetIndex, queries)
+	// Pass the puddle aggregator so project rows can carry the founder
+	// puddle's friendly name (the name map lives in puddlemesh).
+	gitbackHandler := NewGitbackHandler(fleetIndex, queries, puddleHandler.Aggregator())
 	gitbackHandler.RegisterRoutes(mux)
 	uiHandler.SetGitbackFleet(gitbackHandler)
 

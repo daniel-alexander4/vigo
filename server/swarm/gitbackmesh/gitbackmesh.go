@@ -31,6 +31,7 @@ import (
 
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/swarm/puddlemesh"
 )
 
 // EnvoyInput is the minimal envoy descriptor the aggregator needs
@@ -151,21 +152,28 @@ type RefStatus struct {
 // time.
 type Aggregator struct {
 	queries *db.Queries
+	// puddle resolves the founder puddle's friendly name (ADR-022) for
+	// the `gitback://<name>/<handle>` display hint on each project row.
+	// The friendly-name map is owned by puddlemesh; gitbackmesh is a
+	// consumer. May be nil — callers that don't need the display hint
+	// (e.g. the fleet-summary snapshot) pass nil and FriendlyName stays
+	// empty.
+	puddle *puddlemesh.Aggregator
 
 	mu       sync.Mutex
 	cache    *Fleet
 	cacheExp time.Time
-	names    *FleetNames
-	namesExp time.Time
 	ttl      time.Duration
 }
 
-// NewAggregator builds an aggregator bound to the given query
-// handle. The cache TTL is 30 seconds — matches the typical
-// check-in window closely enough that an operator refreshing the
-// page sees data no more than one check-in stale.
-func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
+// NewAggregator builds an aggregator bound to the given query handle.
+// `puddle` (nullable) supplies the friendly-name map for project-row
+// display; pass nil when the friendly name isn't needed. The cache TTL
+// is 30 seconds — matches the typical check-in window closely enough
+// that an operator refreshing the page sees data no more than one
+// check-in stale.
+func NewAggregator(queries *db.Queries, puddle *puddlemesh.Aggregator) *Aggregator {
+	return &Aggregator{queries: queries, puddle: puddle, ttl: swarm.MeshCacheTTL}
 }
 
 // Snapshot returns the cached fleet view or rebuilds it from the
@@ -183,125 +191,6 @@ func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet,
 	a.cache = fleet
 	a.cacheExp = time.Now().Add(a.ttl)
 	return fleet, nil
-}
-
-// NamesSnapshot returns the cached aggregated friendly-name map or
-// rebuilds it from the passed envoy list. Independent TTL cache from
-// the project view but the same window.
-func (a *Aggregator) NamesSnapshot(ctx context.Context, envoys []EnvoyInput) (*FleetNames, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.names != nil && time.Now().Before(a.namesExp) {
-		return a.names, nil
-	}
-	out := a.buildNames(ctx, envoys)
-	a.names = out
-	a.namesExp = time.Now().Add(a.ttl)
-	return out, nil
-}
-
-// buildNames walks every (non-revoked) envoy's `gitback` trait and
-// groups the `name_claims` entries it carries. The grouping itself is
-// in the pure helper [`groupNameClaims`] so it's unit-testable
-// without a DB.
-func (a *Aggregator) buildNames(ctx context.Context, envoys []EnvoyInput) *FleetNames {
-	envs := make([]*traitEnvelope, 0, len(envoys))
-	for _, e := range envoys {
-		if e.Revoked {
-			continue
-		}
-		env, ok := a.loadTrait(ctx, e.ID)
-		if !ok {
-			continue
-		}
-		envs = append(envs, env)
-	}
-	return &FleetNames{UpdatedAt: time.Now().UTC().Unix(), Names: groupNameClaims(envs)}
-}
-
-// groupNameClaims collapses per-envoy `name_claims` lists into a
-// `name → claims` map, deduped by puddle pubkey (the freshest
-// `claimed_at` wins when several envoys report different revisions of
-// the same puddle's claim during a propagation window). No
-// arbitration: every distinct claimant for a name is kept, sorted by
-// pubkey for stable output.
-func groupNameClaims(envs []*traitEnvelope) map[string][]NameClaim {
-	// name → puddle_pubkey(lower) → freshest claim
-	byName := make(map[string]map[string]NameClaim)
-	for _, env := range envs {
-		for _, nc := range env.NameClaims {
-			name := nc.Claim.Body.Name
-			pk := strings.ToLower(nc.Claim.Body.PuddlePubkey)
-			if name == "" || pk == "" {
-				continue
-			}
-			m := byName[name]
-			if m == nil {
-				m = make(map[string]NameClaim)
-				byName[name] = m
-			}
-			if existing, seen := m[pk]; !seen || nc.Claim.Body.ClaimedAt > existing.Body.ClaimedAt {
-				m[pk] = nc.Claim
-			}
-		}
-	}
-	names := make(map[string][]NameClaim, len(byName))
-	for name, m := range byName {
-		list := make([]NameClaim, 0, len(m))
-		for _, c := range m {
-			list = append(list, c)
-		}
-		sort.Slice(list, func(i, j int) bool {
-			return list[i].Body.PuddlePubkey < list[j].Body.PuddlePubkey
-		})
-		names[name] = list
-	}
-	return names
-}
-
-// unambiguousNameByPubkey reverses the grouped name map into
-// puddle_pubkey(lower) → friendly name. Only names with a single
-// claimant survive — a contested name resolves to nothing and the
-// hex project_id stays the proof (ADR-022). If a puddle has claimed
-// several distinct uncontested names (a re-found supersession window,
-// say), the freshest `claimed_at` wins so the display tracks the
-// puddle's current name.
-func unambiguousNameByPubkey(grouped map[string][]NameClaim) map[string]string {
-	type pick struct {
-		name string
-		at   int64
-	}
-	best := make(map[string]pick)
-	for name, claims := range grouped {
-		if len(claims) != 1 {
-			continue // contested — not a usable display name
-		}
-		c := claims[0]
-		pk := strings.ToLower(c.Body.PuddlePubkey)
-		if pk == "" {
-			continue
-		}
-		if cur, ok := best[pk]; !ok || c.Body.ClaimedAt > cur.at {
-			best[pk] = pick{name: name, at: c.Body.ClaimedAt}
-		}
-	}
-	out := make(map[string]string, len(best))
-	for pk, p := range best {
-		out[pk] = p.name
-	}
-	return out
-}
-
-// ReverseNameMap returns the founder-puddle-pubkey-hex → friendly-name map for
-// every unambiguously-claimed name in the fleet (ADR-022); a contested name
-// resolves to nothing. This is the single exported home of the unambiguous-
-// claim rule for callers outside this package — the curator S3 API uses it to
-// render the `<publisher>` segment of an object key.
-func ReverseNameMap(fn *FleetNames) map[string]string {
-	if fn == nil {
-		return map[string]string{}
-	}
-	return unambiguousNameByPubkey(fn.Names)
 }
 
 // build fetches every envoy's `gitback` trait, joins per-envoy
@@ -345,14 +234,16 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 		}
 	}
 
-	// Reverse the fleet's friendly-name claims so each summary can
-	// carry its founder puddle's display name (ADR-022). Built from
-	// the same trait envelopes we already loaded above.
-	envs := make([]*traitEnvelope, 0, len(rows))
-	for _, row := range rows {
-		envs = append(envs, row.envelope)
+	// Founder puddle display names (ADR-022). The friendly-name map is
+	// owned by puddlemesh; gitbackmesh consumes it as a display hint
+	// only — the hex project_id is always the cryptographic identity. A
+	// nil resolver (or a query error) leaves FriendlyName empty.
+	var nameByPubkey map[string]string
+	if a.puddle != nil {
+		if fn, err := a.puddle.NamesSnapshot(ctx, toPuddleInputs(envoys)); err == nil {
+			nameByPubkey = puddlemesh.ReverseNameMap(fn)
+		}
 	}
-	nameByPubkey := unambiguousNameByPubkey(groupNameClaims(envs))
 
 	summaries := make([]ProjectSummary, 0, len(by))
 	for projectID, slot := range by {
@@ -599,54 +490,21 @@ func (a *Aggregator) loadTrait(ctx context.Context, envoyID string) (*traitEnvel
 
 // --- trait payload shapes (deserialized from agent JSON) ---
 
+// toPuddleInputs converts gitbackmesh's envoy tuples to puddlemesh's
+// equivalent so the friendly-name map (owned by puddlemesh) can be
+// resolved over the same fleet.
+func toPuddleInputs(envoys []EnvoyInput) []puddlemesh.EnvoyInput {
+	out := make([]puddlemesh.EnvoyInput, 0, len(envoys))
+	for _, e := range envoys {
+		out = append(out, puddlemesh.EnvoyInput{ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked})
+	}
+	return out
+}
+
 type traitEnvelope struct {
-	UpdatedAt      int64            `json:"updated_at"`
-	ProjectCount   int              `json:"project_count"`
-	Projects       []projectTrait   `json:"projects"`
-	NameClaimCount int              `json:"name_claim_count"`
-	NameClaims     []TraitNameClaim `json:"name_claims"`
-}
-
-// TraitNameClaim is one Unix user's friendly-name claim (ADR-022) as
-// it appears inside the `gitback` trait. The `Claim` is passed
-// through to the published fleet name map verbatim — the server
-// publishes signed claims; it never re-signs or arbitrates.
-type TraitNameClaim struct {
-	User  string    `json:"user"`
-	Claim NameClaim `json:"claim"`
-}
-
-// NameClaim mirrors the agent's `puddle::name::NameClaim` wire shape.
-// Used both for parsing the trait and for the REST / cache output, so
-// the claim bytes flow through unchanged and resolvers can verify the
-// signature + `supersedes` chain end-to-end.
-type NameClaim struct {
-	Body      NameClaimBody `json:"body"`
-	Signature string        `json:"signature"`
-}
-
-// NameClaimBody is the signed body of a name claim. `Supersedes` is a
-// `[]DelegationEnvelope` in the agent; we keep it as raw JSON since
-// the server only needs `Name` / `PuddlePubkey` / `ClaimedAt` for
-// grouping + dedup, and re-emitting the chain verbatim preserves its
-// signatures.
-type NameClaimBody struct {
-	PuddlePubkey string          `json:"puddle_pubkey"`
-	Name         string          `json:"name"`
-	ClaimedAt    int64           `json:"claimed_at"`
-	Supersedes   json.RawMessage `json:"supersedes,omitempty"`
-}
-
-// FleetNames is the aggregated friendly-name map (ADR-022). Also the
-// JSON shape of `GET /api/v1/swarm/puddle/names` and of the agent's
-// local cache at `/var/lib/vigo/swarm/puddle/names.json`. A name with
-// one claim is unambiguous; a name with several is either a collision
-// (the resolver errors, pointing at the hex form) or a `re-found`
-// supersession (the resolver follows the newer claim's `supersedes`
-// chain). The server emits all of them and decides nothing.
-type FleetNames struct {
-	UpdatedAt int64                  `json:"updated_at"` // unix seconds
-	Names     map[string][]NameClaim `json:"names"`
+	UpdatedAt    int64          `json:"updated_at"`
+	ProjectCount int            `json:"project_count"`
+	Projects     []projectTrait `json:"projects"`
 }
 
 type projectTrait struct {

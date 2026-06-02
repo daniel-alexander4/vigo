@@ -43,7 +43,7 @@ type bed struct {
 
 // newBed publishes one fixture artifact (`foo`, kind `oci-archive`, version
 // `1.0` tagged `latest`, platform `linux/amd64`) and stands up a Server. The
-// gitback aggregator + fleet index are nil — handler tests use hex publishers,
+// puddle aggregator + fleet index are nil — handler tests use hex publishers,
 // which need no name map; the name helpers are unit-tested separately.
 func newBed(t *testing.T) *bed {
 	t.Helper()

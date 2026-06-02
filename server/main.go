@@ -359,10 +359,12 @@ func newMetricsSwarmAdapter(s *Server) *metricsSwarmAdapter {
 		fleetIndex:    s.fleetIndex,
 		peerTracker:   s.peerTracker,
 		manifestStore: s.manifestStore,
-		gitback:       gitbackmesh.NewAggregator(s.queries),
-		lockbox:       lockboxmesh.NewAggregator(s.queries),
-		longdrawer:    longdrawermesh.NewAggregator(s.queries),
-		curator:       s.curatorAgg,
+		// nil puddle resolver — this adapter only reads project totals,
+		// not the friendly-name display hint.
+		gitback:    gitbackmesh.NewAggregator(s.queries, nil),
+		lockbox:    lockboxmesh.NewAggregator(s.queries),
+		longdrawer: longdrawermesh.NewAggregator(s.queries),
+		curator:    s.curatorAgg,
 	}
 }
 

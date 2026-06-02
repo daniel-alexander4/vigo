@@ -40,10 +40,6 @@
             <div class="stat-card__label">Recipient drift</div>
             <div class="stat-card__value {{if gt .Crypt.Totals.RecipientDrifts 0}}text-warn{{end}}">{{.Crypt.Totals.RecipientDrifts}}</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-card__label">Unlocked sessions</div>
-            <div class="stat-card__value">{{.Crypt.Totals.UnlockedSessions}}</div>
-        </div>
     </div>
 
     <div class="card">
@@ -56,7 +52,6 @@
                     <th>Tombstones</th>
                     <th>Envoys</th>
                     <th>Drift</th>
-                    <th>Active unlocks</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -74,7 +69,6 @@
                             <span class="badge badge--ok">ok</span>
                         {{end}}
                     </td>
-                    <td>{{len .ActiveSessions}}</td>
                     <td>
                         {{if gt (len .Divergences) 0}}
                             <span class="badge badge--err">{{len .Divergences}} divergent</span>
@@ -112,7 +106,6 @@
                 <th>Status</th>
                 <th>Files</th>
                 <th>Tombstones</th>
-                <th>Unlocked</th>
                 <th>Files digest</th>
                 <th>Recipients digest</th>
             </tr>
@@ -128,7 +121,6 @@
                 </td>
                 <td>{{.FileCount}}</td>
                 <td>{{.TombstoneCount}}</td>
-                <td>{{if .SessionUnlocked}}<span class="badge badge--info">unlocked</span>{{else}}—{{end}}</td>
                 <td><code class="u-fs-0-85em">{{.FilesDigest}}</code></td>
                 <td><code class="u-fs-0-85em">{{.RecipientsDigest}}</code></td>
             </tr>

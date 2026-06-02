@@ -14,7 +14,7 @@ import (
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
-	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
+	"git.alexander4.io/vigo/server/swarm/puddlemesh"
 )
 
 // CatalogSource is the curator fleet-catalog accessor the S3 API reads — the
@@ -31,17 +31,17 @@ type CatalogSource interface {
 type Server struct {
 	verifier   *Verifier
 	catalog    CatalogSource
-	gitback    *gitbackmesh.Aggregator
+	puddle     *puddlemesh.Aggregator
 	fleetIndex *fleet.FleetIndex
 	blobsDir   string
 	metrics    *metrics.Metrics
 }
 
-// NewServer wires the S3 endpoint. `gitbackAgg` resolves the founder-pubkey →
+// NewServer wires the S3 endpoint. `puddleAgg` resolves the puddle-pubkey →
 // friendly-name map (ADR-022) for `<publisher>` key rendering; `blobsDir` is
 // the server's co-resident envoy blob cache.
-func NewServer(v *Verifier, catalog CatalogSource, gitbackAgg *gitbackmesh.Aggregator, fleetIndex *fleet.FleetIndex, blobsDir string, m *metrics.Metrics) *Server {
-	return &Server{verifier: v, catalog: catalog, gitback: gitbackAgg, fleetIndex: fleetIndex, blobsDir: blobsDir, metrics: m}
+func NewServer(v *Verifier, catalog CatalogSource, puddleAgg *puddlemesh.Aggregator, fleetIndex *fleet.FleetIndex, blobsDir string, m *metrics.Metrics) *Server {
+	return &Server{verifier: v, catalog: catalog, puddle: puddleAgg, fleetIndex: fleetIndex, blobsDir: blobsDir, metrics: m}
 }
 
 // Handler returns the http.Handler the S3 listener serves.
@@ -108,28 +108,28 @@ func (s *Server) count(op string) {
 // facade then falls back to hex publishers, which always resolve.
 func (s *Server) nameMaps(ctx context.Context) (byPubkey, byName map[string]string) {
 	byPubkey, byName = map[string]string{}, map[string]string{}
-	if s.gitback == nil {
+	if s.puddle == nil {
 		return
 	}
-	fn, err := s.gitback.NamesSnapshot(ctx, s.envoyInputs())
+	fn, err := s.puddle.NamesSnapshot(ctx, s.envoyInputs())
 	if err != nil || fn == nil {
 		return
 	}
-	byPubkey = gitbackmesh.ReverseNameMap(fn)
+	byPubkey = puddlemesh.ReverseNameMap(fn)
 	for pk, nm := range byPubkey {
 		byName[nm] = pk
 	}
 	return
 }
 
-func (s *Server) envoyInputs() []gitbackmesh.EnvoyInput {
+func (s *Server) envoyInputs() []puddlemesh.EnvoyInput {
 	if s.fleetIndex == nil {
 		return nil
 	}
 	envoys := s.fleetIndex.AllEnvoys()
-	out := make([]gitbackmesh.EnvoyInput, 0, len(envoys))
+	out := make([]puddlemesh.EnvoyInput, 0, len(envoys))
 	for _, e := range envoys {
-		out = append(out, gitbackmesh.EnvoyInput{ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked})
+		out = append(out, puddlemesh.EnvoyInput{ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked})
 	}
 	return out
 }

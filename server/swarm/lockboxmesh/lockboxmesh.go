@@ -3,18 +3,16 @@
 
 // Package lockboxmesh builds the fleet-wide lockbox
 // observability view. Same pattern as longdrawermesh — trait-based
-// projection over the standard check-in pipeline — plus two
-// lockbox-specific signals:
+// projection over the standard check-in pipeline — plus the
+// lockbox-specific **recipient drift** signal: if two envoys in the
+// same user's mesh report different pubkey sets (different
+// recipients.txt content), the aggregator flags it. Common cause is
+// one envoy missing a recent peer enrollment, which breaks decryption
+// on that envoy.
 //
-//   - **Recipient drift**: if two envoys in the same user's mesh
-//     report different pubkey sets (different recipients.txt
-//     content), the aggregator flags it. Common cause is one
-//     envoy missing a recent peer enrollment, which breaks
-//     decryption on that envoy.
-//
-//   - **Session-helper active**: per-envoy signal of whether the
-//     user currently has their lockbox identity unlocked in a
-//     session-helper process. Ambient operational visibility.
+// Puddle session-unlock state is NOT reported here — it's a puddle
+// fact, surfaced on the puddle view via `puddlemesh` (the puddle trait
+// is its sole reporter).
 package lockboxmesh
 
 import (
@@ -46,14 +44,13 @@ type Fleet struct {
 }
 
 type Totals struct {
-	Users            int `json:"users"`
-	Envoys           int `json:"envoys"`
-	Files            int `json:"files"`
-	Tombstones       int `json:"tombstones"`
-	Divergences      int `json:"divergences"`
-	FailedFiles      int `json:"failed_files"`
-	RecipientDrifts  int `json:"recipient_drifts"`
-	UnlockedSessions int `json:"unlocked_sessions"`
+	Users           int `json:"users"`
+	Envoys          int `json:"envoys"`
+	Files           int `json:"files"`
+	Tombstones      int `json:"tombstones"`
+	Divergences     int `json:"divergences"`
+	FailedFiles     int `json:"failed_files"`
+	RecipientDrifts int `json:"recipient_drifts"`
 }
 
 type UserSummary struct {
@@ -63,7 +60,6 @@ type UserSummary struct {
 	Tombstones     []TombstoneRow  `json:"tombstones"`
 	Divergences    []string        `json:"divergences,omitempty"`
 	RecipientDrift bool            `json:"recipient_drift"`
-	ActiveSessions []string        `json:"active_sessions,omitempty"`
 	FileCount      int             `json:"file_count"`
 	FailedFiles    int             `json:"failed_files"`
 	TotalBytes     int64           `json:"total_bytes"`
@@ -77,7 +73,6 @@ type EnvoyPresence struct {
 	FailedFileCount int    `json:"failed_file_count"`
 	FilesDigest     string `json:"files_digest,omitempty"`
 	TombstoneCount  int    `json:"tombstone_count"`
-	SessionUnlocked bool   `json:"session_unlocked"`
 	// RecipientsDigest is a 16-byte hex digest of this envoy's
 	// sorted `(hostname, pubkey, sign_pubkey)` tuples for the
 	// user. Drift is flagged when two envoys in the same mesh
@@ -202,14 +197,10 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 	totalTombstones := 0
 	totalDivergences := 0
 	totalDrifts := 0
-	totalUnlocked := 0
 	for user := range userSet {
 		s := buildUserSummary(user, rows, now)
 		for _, ep := range s.Envoys {
 			participants[ep.Hostname] = struct{}{}
-			if ep.SessionUnlocked {
-				totalUnlocked++
-			}
 		}
 		totalFiles += s.FileCount
 		totalFailed += s.FailedFiles
@@ -233,14 +224,13 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 		Users:        summaries,
 		Participants: partList,
 		Totals: Totals{
-			Users:            len(summaries),
-			Envoys:           len(partList),
-			Files:            totalFiles,
-			FailedFiles:      totalFailed,
-			Tombstones:       totalTombstones,
-			Divergences:      totalDivergences,
-			RecipientDrifts:  totalDrifts,
-			UnlockedSessions: totalUnlocked,
+			Users:           len(summaries),
+			Envoys:          len(partList),
+			Files:           totalFiles,
+			FailedFiles:     totalFailed,
+			Tombstones:      totalTombstones,
+			Divergences:     totalDivergences,
+			RecipientDrifts: totalDrifts,
 		},
 	}, nil
 }
@@ -275,13 +265,9 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 			summary.FailedFiles += us.FailedFileCount
 			presence.FilesDigest = us.FilesDigest
 			presence.TombstoneCount = us.TombstoneCount
-			presence.SessionUnlocked = us.SessionUnlocked
 			presence.RecipientsDigest = recipientsDigest(us.Peers)
 			digests[presence.RecipientsDigest] = struct{}{}
 
-			if presence.SessionUnlocked {
-				summary.ActiveSessions = append(summary.ActiveSessions, r.hostname)
-			}
 			for _, f := range us.Files {
 				summary.Files = appendFileCell(
 					summary.Files, r.hostname, f.Name, f.Sha256, f.Size, f.Mtime, "live")
@@ -297,7 +283,6 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 	sort.Slice(summary.Envoys, func(i, j int) bool {
 		return summary.Envoys[i].Hostname < summary.Envoys[j].Hostname
 	})
-	sort.Strings(summary.ActiveSessions)
 
 	// Recipient drift if there are ≥2 distinct digests from
 	// reporting envoys. Empty digest (fresh envoy with no peers
@@ -508,7 +493,6 @@ type userTrait struct {
 	TombstoneCount  int              `json:"tombstone_count"`
 	Tombstones      []tombstoneTrait `json:"tombstones"`
 	Peers           []peerTrait      `json:"peers"`
-	SessionUnlocked bool             `json:"session_unlocked"`
 }
 
 type fileTrait struct {

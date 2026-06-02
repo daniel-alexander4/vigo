@@ -69,6 +69,10 @@
             <span class="nav-link__label">Filecast</span>
         </a>
         {{if .CurrentUser.HasPermission "fleet.write"}}
+        <a href="/swarm/puddle" class="nav-link{{if eq .ActiveNav "puddle"}} nav-link--active{{end}}" title="Per-User Swarm Identity — owner, member envoys, health (ADR-014)">
+            <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            <span class="nav-link__label">Puddles</span>
+        </a>
         <a href="/swarm/longdrawer" class="nav-link{{if eq .ActiveNav "longdrawer"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">
             <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M20 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3l2 3h9a2 2 0 0 1 2 2z"/><path d="M2 8h20"/></svg>
             <span class="nav-link__label">Longdrawer</span>

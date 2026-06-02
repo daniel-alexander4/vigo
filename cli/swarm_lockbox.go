@@ -52,7 +52,6 @@ type lockboxUserSummary struct {
 	TotalBytes     int64                  `json:"total_bytes"`
 	Divergences    []string               `json:"divergences,omitempty"`
 	RecipientDrift bool                   `json:"recipient_drift"`
-	ActiveSessions []string               `json:"active_sessions,omitempty"`
 }
 
 type lockboxEnvoyPresence struct {
@@ -62,7 +61,6 @@ type lockboxEnvoyPresence struct {
 	FileCount        int    `json:"file_count"`
 	FilesDigest      string `json:"files_digest,omitempty"`
 	TombstoneCount   int    `json:"tombstone_count"`
-	SessionUnlocked  bool   `json:"session_unlocked"`
 	RecipientsDigest string `json:"recipients_digest,omitempty"`
 }
 
@@ -158,13 +156,12 @@ func runLockboxList(cmd *cobra.Command, _ []string) error {
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].User < sorted[j].User })
 
 	w := newAlignedTable(os.Stdout)
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-		bold("USER"), bold("ENVOYS"), bold("FILES"), bold("SIZE"), bold("UNLOCKED"), bold("STATE"))
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+		bold("USER"), bold("ENVOYS"), bold("FILES"), bold("SIZE"), bold("STATE"))
 	for _, u := range sorted {
 		envoys := fmt.Sprintf("%d", len(u.Envoys))
 		files := fmt.Sprintf("%d", u.FileCount)
 		size := formatBytes(u.TotalBytes)
-		unlocked := fmt.Sprintf("%d", len(u.ActiveSessions))
 		state := green("in sync")
 		switch {
 		case u.RecipientDrift:
@@ -172,7 +169,7 @@ func runLockboxList(cmd *cobra.Command, _ []string) error {
 		case len(u.Divergences) > 0:
 			state = red(fmt.Sprintf("%d divergence(s)", len(u.Divergences)))
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", u.User, envoys, files, size, unlocked, state)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", u.User, envoys, files, size, state)
 	}
 	w.Flush()
 	return nil
@@ -210,9 +207,6 @@ func runLockboxShow(cmd *cobra.Command, args []string) error {
 	if len(match.Divergences) > 0 {
 		fmt.Printf("Divergences:      %s\n", red(strings.Join(match.Divergences, ", ")))
 	}
-	if len(match.ActiveSessions) > 0 {
-		fmt.Printf("Unlocked on:      %s\n", strings.Join(match.ActiveSessions, ", "))
-	}
 	fmt.Println()
 
 	if len(match.Envoys) == 0 {
@@ -224,20 +218,16 @@ func runLockboxShow(cmd *cobra.Command, args []string) error {
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Hostname < sorted[j].Hostname })
 
 	w := newAlignedTable(os.Stdout)
-	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
-		bold("HOST"), bold("STATUS"), bold("FILES"), bold("TOMBSTONES"), bold("SESSION"), bold("LAST UPDATE"))
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n",
+		bold("HOST"), bold("STATUS"), bold("FILES"), bold("TOMBSTONES"), bold("LAST UPDATE"))
 	for _, e := range sorted {
 		status := echoPresenceStatus(e.Status)
-		unlocked := "locked"
-		if e.SessionUnlocked {
-			unlocked = green("unlocked")
-		}
 		updated := "—"
 		if e.UpdatedAt > 0 {
 			updated = time.Unix(e.UpdatedAt, 0).Local().Format("2006-01-02 15:04")
 		}
-		fmt.Fprintf(w, "  %s\t%s\t%d\t%d\t%s\t%s\n",
-			e.Hostname, status, e.FileCount, e.TombstoneCount, unlocked, updated)
+		fmt.Fprintf(w, "  %s\t%s\t%d\t%d\t%s\n",
+			e.Hostname, status, e.FileCount, e.TombstoneCount, updated)
 	}
 	w.Flush()
 	return nil
@@ -277,14 +267,10 @@ func runLockboxMembers(args []string) error {
 		}
 		fmt.Printf("USER: %s\n", u.User)
 		tw := newAlignedTable(os.Stdout)
-		fmt.Fprintln(tw, "HOST\tSTATUS\tFILES\tSESSION")
+		fmt.Fprintln(tw, "HOST\tSTATUS\tFILES")
 		sort.Slice(u.Envoys, func(i, j int) bool { return u.Envoys[i].Hostname < u.Envoys[j].Hostname })
 		for _, e := range u.Envoys {
-			sess := "-"
-			if e.SessionUnlocked {
-				sess = "unlocked"
-			}
-			fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", e.Hostname, e.Status, e.FileCount, sess)
+			fmt.Fprintf(tw, "%s\t%s\t%d\n", e.Hostname, e.Status, e.FileCount)
 		}
 		tw.Flush()
 		fmt.Println()

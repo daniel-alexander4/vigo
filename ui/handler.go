@@ -49,6 +49,7 @@ import (
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 	"git.alexander4.io/vigo/server/swarm/poolqmesh"
+	"git.alexander4.io/vigo/server/swarm/puddlemesh"
 	"git.alexander4.io/vigo/server/traits"
 	"github.com/google/uuid"
 )
@@ -283,6 +284,7 @@ type Handler struct {
 	swarmConfig       config.SwarmSection
 	traitLookup       TraitLookup
 	gitbackFleet      GitbackFleetSource
+	puddleFleet       PuddleFleetSource
 	curatorFleet      CuratorFleetSource
 	poolqFleet        PoolqFleetSource
 	mesh              MeshSource
@@ -343,6 +345,19 @@ type GitbackFleetSource interface {
 // Called from gateway.go after both handlers are constructed.
 func (h *Handler) SetGitbackFleet(src GitbackFleetSource) {
 	h.gitbackFleet = src
+}
+
+// PuddleFleetSource surfaces the aggregated fleet-wide puddle view
+// (ADR-014) — the puddle topology + health the `/puddle` page renders.
+// Implemented by `*api.PuddleHandler` in the main binary; a tiny
+// interface so the UI package doesn't depend on the full handler type.
+type PuddleFleetSource interface {
+	FleetSnapshot(ctx context.Context) (*puddlemesh.Fleet, error)
+}
+
+// SetPuddleFleet wires the puddle aggregator into the UI handler.
+func (h *Handler) SetPuddleFleet(src PuddleFleetSource) {
+	h.puddleFleet = src
 }
 
 // CuratorFleetSource surfaces the aggregated fleet-wide curator
@@ -696,6 +711,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/swarm-longdrawer-user/{user}", h.EchoUserDrilldown)
 	mux.HandleFunc("GET /swarm/lockbox", h.Lockbox)
 	mux.HandleFunc("GET /ui/fragments/swarm-lockbox-user/{user}", h.LockboxUserDrilldown)
+	mux.HandleFunc("GET /swarm/puddle", h.Puddle)
+	mux.HandleFunc("GET /swarm/puddle/{pubkey}", h.Puddle)
 	mux.HandleFunc("GET /swarm/gitback", h.Gitback)
 	mux.HandleFunc("GET /swarm/gitback/{project_id}", h.Gitback)
 	mux.HandleFunc("GET /swarm/curator", h.Curator)

@@ -57,36 +57,6 @@ func TestBuildUserSummary_RecipientDrift(t *testing.T) {
 	}
 }
 
-// Session-unlocked per-envoy aggregation: ActiveSessions lists only
-// envoys whose trait reported session_unlocked=true. Totals.UnlockedSessions
-// is the global count.
-func TestBuildUserSummary_ActiveSessions(t *testing.T) {
-	now := time.Unix(10_000, 0)
-	fresh := now.Unix() - 5
-
-	rows := []envRow{
-		{hostname: "a", reported: true, envelope: &traitEnvelope{
-			UpdatedAt: fresh,
-			Users:     []userTrait{{User: "dan", SessionUnlocked: true}},
-		}},
-		{hostname: "b", reported: true, envelope: &traitEnvelope{
-			UpdatedAt: fresh,
-			Users:     []userTrait{{User: "dan", SessionUnlocked: false}},
-		}},
-		{hostname: "c", reported: true, envelope: &traitEnvelope{
-			UpdatedAt: fresh,
-			Users:     []userTrait{{User: "dan", SessionUnlocked: true}},
-		}},
-	}
-	s := buildUserSummary("dan", rows, now)
-	if len(s.ActiveSessions) != 2 {
-		t.Fatalf("expected 2 active sessions, got %d (%v)", len(s.ActiveSessions), s.ActiveSessions)
-	}
-	if s.ActiveSessions[0] != "a" || s.ActiveSessions[1] != "c" {
-		t.Errorf("expected a+c active, got %v", s.ActiveSessions)
-	}
-}
-
 // recipientsDigest must be deterministic across peer-table
 // insertion order.
 func TestRecipientsDigestStable(t *testing.T) {

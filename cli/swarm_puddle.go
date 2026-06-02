@@ -4,37 +4,266 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 )
 
-// Admin-side view of puddle — per-user trust anchor (ADR-014, ADR-020,
-// ADR-021). Most puddle lifecycle (`init`, `pair`, `join`, `unlock`,
-// `lock`, `leave`, `rotate-passphrase`, `rekey-pair`, `rekey`) is
-// per-user and lives on the agent CLI. The verbs that surface here
-// are the ones that span envoys and require admin authority via the
-// server's TaskDispatch path.
+// Admin-side view of puddle — the per-user trust anchor every swarm
+// content subsystem builds on (ADR-014, ADR-020, ADR-021). Most puddle
+// lifecycle (`init`, `pair`, `join`, `unlock`, `lock`, `leave`,
+// `rotate-passphrase`, `rekey-pair`, `rekey`, `name`) is per-user and
+// lives on the agent CLI. The observability + cross-envoy admin verbs
+// surface here.
 
 var puddleCmd = &cobra.Command{
 	Use:   "puddle",
-	Short: "Admin-side puddle operations across the fleet",
-	Long: `Cross-envoy admin operations for the puddle primitive (ADR-014).
+	Short: "Fleet view + admin operations for the puddle primitive",
+	Long: `Read-only fleet view and cross-envoy admin operations for the puddle
+primitive (ADR-014) — the per-user identity that gitback, curator,
+poolq, lockbox, and longdrawer all build on.
 
-Most puddle lifecycle verbs (init, pair, join, leave, unlock, lock,
-rotate-passphrase, rekey-pair, rekey) are per-user-per-envoy and live
-on the agent CLI ('vigo swarm puddle <verb>'). The admin-authority
-verbs that span envoys live here.
+'list' / 'show' render the fleet puddle topology: which puddles exist,
+who owns each (its friendly name, ADR-022), which envoys hold it, and
+whether it's healthy. Most lifecycle verbs (init, pair, join, leave,
+unlock, lock, rotate-passphrase, rekey-pair, rekey, name) are
+per-user-per-envoy and live on the agent CLI ('vigo swarm puddle
+<verb>'). The admin-authority verbs that span envoys (evict) live here.`,
+}
 
-Per ADR-020 + ADR-021, lockbox is mandatory on puddle membership
-and 'puddle evict' is the canonical fleet-wide eviction path —
-covering lockbox recipient cleanup as a side effect. The legacy
-'vigocli swarm lockbox evict' is retained as an alias during the
-0.40.0 transition.`,
+// ---------- shared fleet shape (mirrors server/swarm/puddlemesh.Fleet) ----------
+
+type puddleFleetResponse struct {
+	GeneratedAt time.Time            `json:"generated_at"`
+	Puddles     []puddleSummaryResp  `json:"puddles"`
+	Totals      puddleTotalsResponse `json:"totals"`
+}
+
+type puddleTotalsResponse struct {
+	Puddles   int `json:"puddles"`
+	Envoys    int `json:"envoys"`
+	Named     int `json:"named"`
+	Unlocked  int `json:"unlocked"`
+	Unhealthy int `json:"unhealthy"`
+}
+
+type puddleSummaryResp struct {
+	PuddlePubkey    string                `json:"puddle_pubkey"`
+	Owner           string                `json:"owner"`
+	OwnerContested  bool                  `json:"owner_contested"`
+	Envoys          []puddleEnvoyPresence `json:"envoys"`
+	EnvoyCount      int                   `json:"envoy_count"`
+	Users           []string              `json:"users"`
+	SessionUnlocked bool                  `json:"session_unlocked"`
+	RetiredCount    int                   `json:"retired_count"`
+	RekeyPending    bool                  `json:"rekey_pending"`
+	LastUpdated     int64                 `json:"last_updated"`
+	Health          puddleHealthResp      `json:"health"`
+}
+
+type puddleHealthResp struct {
+	Band    string   `json:"band"`
+	Reasons []string `json:"reasons"`
+}
+
+type puddleEnvoyPresence struct {
+	Hostname        string `json:"hostname"`
+	User            string `json:"user"`
+	Status          string `json:"status"`
+	UpdatedAt       int64  `json:"updated_at"`
+	Initialized     bool   `json:"initialized"`
+	SessionUnlocked bool   `json:"session_unlocked"`
+	PairPending     bool   `json:"pair_pending"`
+	RekeyPending    bool   `json:"rekey_pending"`
+}
+
+func fetchPuddleFleet() (*puddleFleetResponse, error) {
+	client := newAPIClient()
+	var fleet puddleFleetResponse
+	if err := client.get("/api/v1/swarm/puddle/fleet", &fleet); err != nil {
+		return nil, fmt.Errorf("fetch puddle fleet: %w", err)
+	}
+	return &fleet, nil
+}
+
+// ---------- vigocli swarm puddle list ----------
+
+var puddleListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "One row per puddle across the fleet — owner, envoys, health",
+	Args:  cobra.NoArgs,
+	RunE:  runPuddleList,
+}
+
+func runPuddleList(cmd *cobra.Command, _ []string) error {
+	asJSON, _ := cmd.Flags().GetBool("json")
+	fleet, err := fetchPuddleFleet()
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		return writeJSONPretty(fleet.Puddles)
+	}
+	if len(fleet.Puddles) == 0 {
+		fmt.Println("No puddles in the fleet yet.")
+		fmt.Println("Create one on an envoy with:  vigo swarm puddle init")
+		return nil
+	}
+
+	w := newAlignedTable(os.Stdout)
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		bold("OWNER"), bold("PUBKEY"), bold("ENVOYS"), bold("USERS"), bold("UNLOCKED"), bold("HEALTH"))
+	for _, p := range fleet.Puddles {
+		unlocked := "—"
+		if p.SessionUnlocked {
+			unlocked = green("yes")
+		}
+		fmt.Fprintf(w, "%s\ted25519:%s\t%d\t%s\t%s\t%s\n",
+			puddleOwnerLabel(p), shortPubkey(p.PuddlePubkey), p.EnvoyCount,
+			strings.Join(p.Users, ","), unlocked, healthBadge(p.Health.Band))
+	}
+	w.Flush()
+
+	fmt.Printf("\n%d puddle(s) · %d envoy(s) · %d named · %d unlocked",
+		fleet.Totals.Puddles, fleet.Totals.Envoys, fleet.Totals.Named, fleet.Totals.Unlocked)
+	if fleet.Totals.Unhealthy > 0 {
+		fmt.Printf(" · %s", yellow(fmt.Sprintf("%d need attention", fleet.Totals.Unhealthy)))
+	}
+	fmt.Println()
+	return nil
+}
+
+// ---------- vigocli swarm puddle show ----------
+
+var puddleShowCmd = &cobra.Command{
+	Use:   "show <name|pubkey>",
+	Short: "Detailed view of one puddle — member envoys + health reasons",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runPuddleShow,
+}
+
+func runPuddleShow(cmd *cobra.Command, args []string) error {
+	target := args[0]
+	asJSON, _ := cmd.Flags().GetBool("json")
+	fleet, err := fetchPuddleFleet()
+	if err != nil {
+		return err
+	}
+	match, err := resolvePuddle(fleet.Puddles, target)
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		return writeJSONPretty(match)
+	}
+
+	fmt.Printf("Owner:        %s\n", puddleOwnerLabel(*match))
+	fmt.Printf("Puddle key:   ed25519:%s\n", match.PuddlePubkey)
+	fmt.Printf("Users:        %s\n", strings.Join(match.Users, ", "))
+	fmt.Printf("Health:       %s\n", healthBadge(match.Health.Band))
+	for _, r := range match.Health.Reasons {
+		fmt.Printf("              · %s\n", r)
+	}
+	if match.RetiredCount > 0 {
+		fmt.Printf("Rotations:    %d retired key(s)\n", match.RetiredCount)
+	}
+	fmt.Println()
+
+	if len(match.Envoys) == 0 {
+		fmt.Println("  (no envoy presence reported yet)")
+		return nil
+	}
+	w := newAlignedTable(os.Stdout)
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
+		bold("HOST"), bold("USER"), bold("STATUS"), bold("INIT"), bold("UNLOCKED"), bold("FLAGS"))
+	for _, e := range match.Envoys {
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
+			e.Hostname, e.User, echoPresenceStatus(e.Status),
+			yesNo(e.Initialized), yesNo(e.SessionUnlocked), puddleEnvoyFlags(e))
+	}
+	w.Flush()
+	return nil
+}
+
+// resolvePuddle finds a puddle by exact owner name or by a pubkey
+// prefix that uniquely identifies one puddle.
+func resolvePuddle(puddles []puddleSummaryResp, target string) (*puddleSummaryResp, error) {
+	for i := range puddles {
+		if puddles[i].Owner != "" && puddles[i].Owner == target {
+			return &puddles[i], nil
+		}
+	}
+	t := strings.TrimPrefix(strings.ToLower(target), "ed25519:")
+	var matches []*puddleSummaryResp
+	for i := range puddles {
+		if strings.HasPrefix(strings.ToLower(puddles[i].PuddlePubkey), t) {
+			matches = append(matches, &puddles[i])
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return nil, fmt.Errorf("no puddle matches %q (try an owner name or a pubkey prefix; see `vigocli swarm puddle list`)", target)
+	default:
+		return nil, fmt.Errorf("%q is ambiguous — %d puddles share that pubkey prefix; use more characters", target, len(matches))
+	}
+}
+
+func puddleOwnerLabel(p puddleSummaryResp) string {
+	if p.OwnerContested {
+		return yellow("(contested)")
+	}
+	if p.Owner == "" {
+		return "(unnamed)"
+	}
+	return p.Owner
+}
+
+func puddleEnvoyFlags(e puddleEnvoyPresence) string {
+	var flags []string
+	if e.PairPending {
+		flags = append(flags, "pair-pending")
+	}
+	if e.RekeyPending {
+		flags = append(flags, "rekey-pending")
+	}
+	if len(flags) == 0 {
+		return "—"
+	}
+	return strings.Join(flags, ",")
+}
+
+func healthBadge(band string) string {
+	switch band {
+	case "healthy":
+		return green("healthy")
+	case "warning":
+		return yellow("warning")
+	case "degraded":
+		return red("degraded")
+	default:
+		return band
+	}
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
+// shortPubkey trims a 64-char hex pubkey to a head…tail form for table
+// display; leaves shorter strings untouched.
+func shortPubkey(hex string) string {
+	if len(hex) <= 20 {
+		return hex
+	}
+	return hex[:12] + "…" + hex[len(hex)-8:]
 }
 
 // ---------- vigocli swarm puddle evict ----------
@@ -67,145 +296,28 @@ accepted during the 0.40.0 transition.`,
 		if user != "" && allUsers {
 			return fmt.Errorf("--user and --all-users are mutually exclusive")
 		}
-		// Delegate to the existing lockbox-evict implementation:
-		// today's puddle-eviction is structurally a lockbox eviction
-		// (peer-table drop + recipients regen + reencrypt). When
-		// gitback project-revoke fan-out lands, this verb will also
-		// dispatch the per-project revokes — see ADR-021 follow-up.
 		return runLockboxEvict(host, user, allUsers, yes)
 	},
 }
 
-// ---------- vigocli swarm puddle names ----------
-
-var puddleNamesCmd = &cobra.Command{
-	Use:   "names",
-	Short: "Fleet view of friendly puddle names (ADR-022)",
-	Long: `Friendly names map a human-meaningful label to a puddle pubkey, so
-gitback://<name>/<repo> can be used alongside the self-certifying
-gitback://<project_id>/<repo> form. Names are first-come and
-cooperatively enforced; the server publishes the fleet name map and
-arbitrates nothing — a name with competing claims is shown with all
-of them, and resolvers refuse it. Set / clear a name on an envoy with
-'vigo swarm puddle name set|clear'.`,
-}
-
-var puddleNamesListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "Every claimed puddle name across the fleet, collisions flagged",
-	Args:  cobra.NoArgs,
-	RunE:  runPuddleNamesList,
-}
-
-// puddleNamesResponse mirrors server/swarm/gitbackmesh.FleetNames.
-// Duplicated here so the CLI stays decoupled from the server package.
-type puddleNamesResponse struct {
-	UpdatedAt int64                        `json:"updated_at"`
-	Names     map[string][]puddleNameClaim `json:"names"`
-}
-
-type puddleNameClaim struct {
-	Body      puddleNameClaimBody `json:"body"`
-	Signature string              `json:"signature"`
-}
-
-type puddleNameClaimBody struct {
-	PuddlePubkey string          `json:"puddle_pubkey"`
-	Name         string          `json:"name"`
-	ClaimedAt    int64           `json:"claimed_at"`
-	Supersedes   json.RawMessage `json:"supersedes,omitempty"`
-}
-
-func runPuddleNamesList(cmd *cobra.Command, _ []string) error {
-	asJSON, _ := cmd.Flags().GetBool("json")
-	client := newAPIClient()
-	var resp puddleNamesResponse
-	if err := client.get("/api/v1/swarm/puddle/names", &resp); err != nil {
-		return fmt.Errorf("fetching puddle name map: %w", err)
-	}
-	if asJSON {
-		return writeJSONPretty(resp)
-	}
-	if len(resp.Names) == 0 {
-		fmt.Println("No puddle names claimed in the fleet yet.")
-		fmt.Println("Claim one on an envoy with:  vigo swarm puddle name set <name>")
-		return nil
-	}
-	when := "(unknown)"
-	if resp.UpdatedAt > 0 {
-		when = time.Unix(resp.UpdatedAt, 0).Local().Format("2006-01-02 15:04:05")
-	}
-	fmt.Printf("Puddle names — fleet map generated %s\n\n", when)
-
-	names := make([]string, 0, len(resp.Names))
-	for n := range resp.Names {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-
-	w := newAlignedTable(os.Stdout)
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", bold("NAME"), bold("PUDDLE PUBKEY"), bold("CLAIMED"), bold("STATUS"))
-	collisions := 0
-	for _, n := range names {
-		claims := resp.Names[n]
-		collision := len(claims) > 1
-		if collision {
-			collisions++
-		}
-		for i, c := range claims {
-			label := n
-			status := "ok"
-			if collision {
-				status = fmt.Sprintf("COLLISION — %d competing claims", len(claims))
-			}
-			if i > 0 {
-				label = ""
-				status = ""
-			}
-			claimed := "(unknown)"
-			if c.Body.ClaimedAt > 0 {
-				claimed = time.Unix(c.Body.ClaimedAt, 0).Local().Format("2006-01-02")
-			}
-			sup := ""
-			if len(c.Body.Supersedes) > 2 { // anything beyond "[]"
-				sup = " (re-found)"
-			}
-			fmt.Fprintf(w, "%s\ted25519:%s%s\t%s\t%s\n", label, shortPubkey(c.Body.PuddlePubkey), sup, claimed, status)
-		}
-	}
-	w.Flush()
-	if collisions > 0 {
-		fmt.Printf("\n%d name(s) have competing claims; resolvers refuse those and require gitback://<project_id>/<repo>.\n", collisions)
-	}
-	return nil
-}
-
-// shortPubkey trims a 64-char hex pubkey to a head…tail form for
-// table display; leaves shorter strings untouched.
-func shortPubkey(hex string) string {
-	if len(hex) <= 20 {
-		return hex
-	}
-	return hex[:12] + "…" + hex[len(hex)-8:]
-}
-
 func init() {
+	puddleListCmd.Flags().Bool("json", false, "Emit the fleet puddle list as JSON")
+	puddleShowCmd.Flags().Bool("json", false, "Emit the puddle detail as JSON")
+
 	puddleEvictCmd.Flags().String("user", "", "User whose puddle to evict from")
 	puddleEvictCmd.Flags().Bool("all-users", false, "Evict the host from every user's puddle it belongs to")
 	puddleEvictCmd.Flags().Bool("yes", false, "Skip the confirmation prompt")
 
-	puddleNamesListCmd.Flags().Bool("json", false, "Emit the raw fleet name map as JSON")
-	puddleNamesCmd.AddCommand(puddleNamesListCmd)
-
+	puddleCmd.AddCommand(puddleListCmd)
+	puddleCmd.AddCommand(puddleShowCmd)
 	puddleCmd.AddCommand(puddleEvictCmd)
-	puddleCmd.AddCommand(puddleNamesCmd)
 	// Hidden redirects for the per-user agent-side verbs. Puddle identity
 	// is per-Unix-user; every lifecycle + signing verb lives on
 	// `vigo swarm puddle` and signs with the user's own ~/.vigo-puddle/
-	// identity. The operator-side `vigocli swarm puddle` is admin-only
-	// (evict, names list). This is the most common mis-invocation —
-	// `vigo swarm puddle status` run as root was the original trigger
-	// for adding these redirects.
+	// identity. The operator-side `vigocli swarm puddle` is fleet
+	// observability (list, show) + admin authority (evict). This is the
+	// most common mis-invocation — `vigo swarm puddle status` run as root
+	// was the original trigger for adding these redirects.
 	addAgentRedirects(puddleCmd, "puddle", "puddle", []string{
 		"init", "pubkey", "unlock", "lock", "pair", "join", "leave",
 		"rekey-pair", "rekey", "members", "rotate-passphrase", "status", "name",

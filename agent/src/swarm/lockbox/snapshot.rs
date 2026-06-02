@@ -86,9 +86,6 @@ pub struct UserSnapshot {
     /// Peers known for this user from the lockbox discovery
     /// table, with basic metadata for UI display.
     pub peers: Vec<PeerSummary>,
-    /// True when the per-user session helper has an unlocked
-    /// identity in memory. Ambient-security signal for operators.
-    pub session_unlocked: bool,
 }
 
 /// Compact peer view for the trait payload — a strict subset of
@@ -170,10 +167,6 @@ pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
         })
         .collect();
 
-    // Session-helper state: ask via the unix socket. Failure to
-    // connect means "locked" — exactly what we want to report.
-    let session_unlocked = super::session::request_status().is_ok();
-
     Ok(UserSnapshot {
         user: user.to_string(),
         file_count,
@@ -184,7 +177,6 @@ pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
         tombstone_count,
         tombstones,
         peers,
-        session_unlocked,
     })
 }
 

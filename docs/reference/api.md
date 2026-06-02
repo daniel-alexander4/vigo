@@ -2293,11 +2293,15 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 - **DELETE /api/v1/swarm/filecast/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_ Allowed when the substrate is disabled (cleanup must work on a halted substrate).
 - **POST /api/v1/swarm/filecast/purge** — garbage-collect revoked filecast tombstones from the manifest; optional `?older_than=<dur>` limits the purge to entries past that age (default: all revoked). _(admin)_ Re-poison-safe: agents cannot re-create a purged entry (the agent-gossip path only refreshes existing active seeds).
 
+### Puddle
+
+- **GET /api/v1/swarm/puddle/fleet** — fleet-wide puddle topology + health (ADR-014), aggregated from the per-envoy `puddle` trait by `puddlemesh`. Returns `{generated_at, puddles: [{puddle_pubkey, owner, owner_contested, envoys: [{hostname, user, status, updated_at, initialized, session_unlocked, pair_pending, rekey_pending}], envoy_count, users[], session_unlocked, retired_count, rekey_pending, last_updated, health: {band, reasons[]}}], totals: {puddles, envoys, named, unlocked, unhealthy}}`. `health.band` is `healthy`/`warning`/`degraded`. _(fleet.read)_
+- **GET /api/v1/swarm/puddle/names** — fleet friendly-name map (ADR-022): `{updated_at, names: {<name>: [{body:{puddle_pubkey, name, claimed_at, supersedes}, signature}, …]}}`, aggregated from every envoy's `puddle` trait name claims. The server publishes signed claims verbatim and never arbitrates — a name with more than one claimant is returned with all of them (a collision the resolver refuses). Unauthenticated, like `/api/v1/fleet/pubkeys` — the bindings are public-by-construction; mTLS is the transport guard. Consumed by each agent's `puddle name-map bootstrap` loop (cached at `/var/lib/vigo/swarm/puddle/names.json` for the `git-remote-gitback` resolver and the `vigo swarm puddle name set` collision check) and by `vigocli swarm puddle list`.
+
 ### Gitback
 
 - **GET /api/v1/swarm/gitback/fleet** — fleet-wide gitback project view (aggregated from per-envoy traits). _(fleet.read)_
 - **GET /api/v1/swarm/gitback/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_scope, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
-- **GET /api/v1/swarm/puddle/names** — fleet friendly-name map (ADR-022): `{updated_at, names: {<name>: [{body:{puddle_pubkey, name, claimed_at, supersedes}, signature}, …]}}`, aggregated from every envoy's `gitback` trait `name_claims`. The server publishes signed claims verbatim and never arbitrates — a name with more than one claimant is returned with all of them (a collision the resolver refuses). Unauthenticated, like `/api/v1/fleet/pubkeys` — the bindings are public-by-construction; mTLS is the transport guard. Consumed by each agent's `puddle name-map bootstrap` loop (cached at `/var/lib/vigo/swarm/puddle/names.json` for the `git-remote-gitback` resolver and the `vigo swarm puddle name set` collision check) and by `vigocli swarm puddle names list`.
 
 ### Longdrawer
 

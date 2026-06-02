@@ -23,6 +23,7 @@ mod lockbox;
 pub(crate) mod gitback;
 pub(crate) mod curator;
 pub(crate) mod poolq;
+pub(crate) mod puddle;
 mod longdrawer;
 
 // Shared sysctl utility for macOS/BSD collectors.
@@ -272,6 +273,12 @@ pub enum CollectorKind {
     /// `~/.vigo-poolq/<topic_id>/messages/*.json` and emits their signed
     /// `Message`s verbatim for the server's `poolqmesh` aggregator.
     Poolq,
+    /// Sole reporter of puddle identity + health (ADR-014): walks each
+    /// user's `~/.vigo-puddle/` and emits the current pubkey, the
+    /// friendly-name claim (ADR-022), and local health signals
+    /// (initialized, session unlocked, pair/rekey window, retired count)
+    /// for the server's `puddlemesh` aggregator.
+    Puddle,
     /// Enumerates apt/yum/dnf package sources configured on the host.
     /// Emits per-source rows with URL (credentials stripped), suite,
     /// components, and enabled state. Linux-only. Server-side compares
@@ -373,6 +380,7 @@ impl CollectorKind {
             Self::Gitback => "gitback",
             Self::Curator => "curator",
             Self::Poolq => "poolq",
+            Self::Puddle => "puddle",
             Self::PackageSourceAudit => "package_source_audit",
             Self::KernelModuleAttestation => "kernel_module_attestation",
             Self::Listeners => "listeners",
@@ -418,6 +426,7 @@ impl CollectorKind {
             Self::Gitback => gitback::collect(),
             Self::Curator => curator::collect(),
             Self::Poolq => poolq::collect(),
+            Self::Puddle => puddle::collect(),
             Self::Longdrawer => longdrawer::collect(),
             Self::Lockbox => lockbox::collect(),
             Self::AgentSelf => agent_self::collect(),
@@ -688,6 +697,7 @@ impl CollectorKind {
             "gitback" => Some(Self::Gitback),
             "curator" => Some(Self::Curator),
             "poolq" => Some(Self::Poolq),
+            "puddle" => Some(Self::Puddle),
             "package_source_audit" => Some(Self::PackageSourceAudit),
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             "listeners" => Some(Self::Listeners),
@@ -745,6 +755,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Gitback,
         CollectorKind::Curator,
         CollectorKind::Poolq,
+        CollectorKind::Puddle,
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
@@ -776,6 +787,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Gitback,
         CollectorKind::Curator,
         CollectorKind::Poolq,
+        CollectorKind::Puddle,
         CollectorKind::Longdrawer,
         CollectorKind::Lockbox,
         CollectorKind::AgentSelf,

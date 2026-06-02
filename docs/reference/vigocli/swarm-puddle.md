@@ -1,35 +1,35 @@
 # vigocli swarm puddle
 
-Admin-side cross-envoy operations for the [puddle](../../howto/set-up-puddle.md) primitive (ADR-014, ADR-020, ADR-021, ADR-022). Most puddle lifecycle (`init`, `pair`, `join`, `unlock`, `lock`, `leave`, `rotate-passphrase`, `rekey-pair`, `rekey`, `name`) is per-user-per-envoy and lives on the agent CLI — see [`vigo swarm puddle`](agent-swarm-puddle.md). The verbs here are the admin-authority / fleet-wide ones.
+Fleet view and admin-side cross-envoy operations for the [puddle](../../howto/set-up-puddle.md) primitive (ADR-014, ADR-020, ADR-021, ADR-022) — the per-user identity that gitback, curator, poolq, lockbox, and longdrawer all build on. Most puddle lifecycle (`init`, `pair`, `join`, `unlock`, `lock`, `leave`, `rotate-passphrase`, `rekey-pair`, `rekey`, `name`) is per-user-per-envoy and lives on the agent CLI — see [`vigo swarm puddle`](agent-swarm-puddle.md). The verbs here are fleet observability + admin authority.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
+| `list` | One row per puddle across the fleet: owner (its uncontested friendly name, ADR-022, or `(unnamed)`/`(contested)`), short pubkey, envoy count, users, unlocked state, and health (`healthy`/`warning`/`degraded`). `--json` emits the full list. Read-only. |
+| `show <name\|pubkey>` | Detailed view of one puddle — resolved by uncontested owner name or a pubkey prefix. Prints owner, full pubkey, users, health band + reasons, retired-key count, and a per-envoy table (host, user, status, initialized, unlocked, pair/rekey flags). `--json` emits the detail. |
 | `evict <host>` | Evict a host from a puddle fleet-wide (cross-envoy). Triggers lockbox peer-table cleanup + `recipients.txt` regeneration + a queued reencrypt on every remaining member so the evicted host can't decrypt future ciphertext. Authenticated end-to-end via mTLS + admin token through the server's TaskDispatch path; the evicted host doesn't need to cooperate. Per ADR-021 this is the canonical fleet-wide eviction verb; `vigocli swarm lockbox evict` delegates here. Flags: `--user <u>` (the puddle owner) **or** `--all-users`; `--yes` to skip confirmation. |
-| `names list` | (ADR-022) Every claimed friendly puddle name across the fleet, one row per name. Collisions (a name claimed by more than one puddle) are flagged loudly; a `(re-found)` marker shows when a claim carries a `supersedes` chain. `--json` emits the raw fleet name map. Read-only — names are set/cleared on the envoy with [`vigo swarm puddle name set\|clear`](agent-swarm-puddle.md#friendly-names-adr-022). |
 
-## Friendly names
+## Fleet view
 
-`names list` consumes `GET /api/v1/swarm/puddle/names` — the fleet name map the server builds by aggregating every envoy's `gitback` trait (each user's `~/.vigo-puddle/name-claim.json`, reported verbatim). The server **publishes, never arbitrates**: a name with one claimant is unambiguous; a name with two or more is shown with all of them and flagged a collision (resolvers refuse it and require the hex `gitback://<project_id>/<repo>` form).
+`list` / `show` consume `GET /api/v1/swarm/puddle/fleet` — the puddle topology the server builds by aggregating every envoy's `puddle` trait (each user's `~/.vigo-puddle/` identity, name claim, and health signals). A puddle's **owner** is its uncontested friendly name; a name claimed by more than one puddle is **contested** (the resolver refuses it and requires the hex `gitback://<project_id>/<repo>` form, and the puddle's health drops to a warning).
 
 ```bash
-vigocli swarm puddle names list
+vigocli swarm puddle list
 ```
 
 ```
-Puddle names — fleet map generated 2026-04-23 18:24:11
+OWNER         PUBKEY                  ENVOYS  USERS  UNLOCKED  HEALTH
+dan           ed25519:9f3acafe1234…   3       dan    yes       healthy
+acme          ed25519:8711b12bac75…   2       ops    —         warning
+(contested)   ed25519:11aa22bb33cc…   1       ops    —         warning
 
-NAME  PUDDLE PUBKEY                 CLAIMED     STATUS
-acme  ed25519:8711b12bac75…0a9aea8  2026-04-12  ok
-dan   ed25519:9f3acafe1234…c1d8abc1  2026-04-09  ok
-ops   ed25519:11aa22bb33cc…ddeeff00  2026-04-15  COLLISION — 2 competing claims
-ops   ed25519:99887766aabb…ccddeeff  2026-04-16
-
-1 name(s) have competing claims; resolvers refuse those and require gitback://<project_id>/<repo>.
+3 puddle(s) · 5 envoy(s) · 2 named · 1 unlocked · 2 need attention
 ```
 
-A friendly name is a hint, not a trust anchor — it's spoofable by squatting (first claim wins, including a malicious first-claimer). The unforgeable form is always `gitback://<project_id>/<repo>`. See [ADR-022](../../adr/022-gitback-friendly-names.md) for the full design + tradeoffs, and the envoy-side [Friendly names](agent-swarm-puddle.md#friendly-names-adr-022) section for setting/clearing one.
+Health bands: **healthy** (≥1 reporting, initialized holder; name uncontested; nothing mid-rotation), **warning** (contested name, a rekey in progress, or some holders stale), **degraded** (no holder currently reporting, or not initialized anywhere reporting). Reachability uses the same trait-report freshness rule as the other swarm mesh views.
+
+A friendly name is a hint, not a trust anchor — it's spoofable by squatting (first claim wins, including a malicious first-claimer). The unforgeable form is always `gitback://<project_id>/<repo>`. The raw signed name claims are still served at `GET /api/v1/swarm/puddle/names` (the agent name-cache bootstrap consumes it). See [ADR-022](../../adr/022-gitback-friendly-names.md) for the full design + tradeoffs, and the envoy-side [Friendly names](agent-swarm-puddle.md#friendly-names-adr-022) section for setting/clearing one.
 
 ## See also
 

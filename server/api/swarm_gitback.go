@@ -11,6 +11,7 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
+	"git.alexander4.io/vigo/server/swarm/puddlemesh"
 )
 
 // GitbackHandler serves the fleet-wide gitback observability
@@ -22,11 +23,13 @@ type GitbackHandler struct {
 	agg        *gitbackmesh.Aggregator
 }
 
-// NewGitbackHandler builds the handler.
-func NewGitbackHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries) *GitbackHandler {
+// NewGitbackHandler builds the handler. `puddleAgg` (shared with the
+// puddle handler) supplies the friendly-name map for the
+// `gitback://<name>/<handle>` display hint — puddlemesh owns names now.
+func NewGitbackHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, puddleAgg *puddlemesh.Aggregator) *GitbackHandler {
 	return &GitbackHandler{
 		fleetIndex: fleetIndex,
-		agg:        gitbackmesh.NewAggregator(queries),
+		agg:        gitbackmesh.NewAggregator(queries, puddleAgg),
 	}
 }
 
@@ -37,12 +40,6 @@ func (h *GitbackHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/swarm/gitback/fleet", read(http.HandlerFunc(h.handleFleet)))
 	mux.Handle("GET /api/v1/swarm/gitback/projects/{project_id}/roster",
 		read(http.HandlerFunc(h.handleRoster)))
-	// Friendly puddle-name map (ADR-022). Public-by-construction —
-	// name↔pubkey bindings, nothing secret — so the agent can fetch
-	// it on startup the same way it fetches /api/v1/fleet/pubkeys;
-	// mTLS is the transport guard. vigocli reaches the same data via
-	// `vigocli swarm puddle names list`.
-	mux.HandleFunc("GET /api/v1/swarm/puddle/names", h.handlePuddleNames)
 }
 
 // FleetSnapshot returns the cached aggregated view. The UI handler
@@ -89,26 +86,6 @@ func (h *GitbackHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, r, http.StatusOK, fleet)
-}
-
-// PuddleNamesSnapshot returns the cached aggregated friendly-name
-// map. The agent's names-cache bootstrap loop and `vigocli swarm
-// puddle names list` both call through this.
-func (h *GitbackHandler) PuddleNamesSnapshot(ctx context.Context) (*gitbackmesh.FleetNames, error) {
-	return h.agg.NamesSnapshot(ctx, h.envoyInputs())
-}
-
-func (h *GitbackHandler) handlePuddleNames(w http.ResponseWriter, r *http.Request) {
-	if h.fleetIndex == nil {
-		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
-		return
-	}
-	out, err := h.PuddleNamesSnapshot(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "puddle name map query failed")
-		return
-	}
-	writeJSON(w, r, http.StatusOK, out)
 }
 
 // RosterResponse is the JSON shape returned by
