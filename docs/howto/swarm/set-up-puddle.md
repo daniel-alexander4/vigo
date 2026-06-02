@@ -116,7 +116,7 @@ Three independent triggers each scrub the key and exit:
 
 ### Friendly names (ADR-022)
 
-`gitback://<project_id>/<repo>` is self-certifying but unmemorable. A **name claim** binds a human name to a puddle pubkey so `gitback://<name>/<repo>` resolves. `vigo swarm puddle name set <name>` (requires unlocked puddle) writes a signed `~/.vigo-puddle/name-claim.json` blob; the `gitback` trait collector reports it; `server/swarm/gitbackmesh/` joins claims fleet-wide; agents cache the resulting map at `/var/lib/vigo/swarm/puddle/names.json` (refreshed startup + 15min, off the check-in hot path).
+`gitback://<project_id>/<repo>` is self-certifying but unmemorable. A **name claim** binds a human name to a puddle pubkey so `gitback://<name>/<repo>` resolves. `vigo swarm puddle name set <name>` (requires unlocked puddle) writes a signed `~/.vigo-puddle/name-claim.json` blob; the `puddle` trait collector reports it; `server/swarm/puddlemesh/` joins claims fleet-wide (and `gitbackmesh` consumes that map for the `gitback://<name>/<handle>` display hint); agents cache the resulting map at `/var/lib/vigo/swarm/puddle/names.json` (refreshed startup + 15min, off the check-in hot path).
 
 **First-come, cooperatively enforced; ambiguous on collision.** `name set` refuses a name another puddle holds in the agent's current view; it can't beat the propagation window. Two unrelated claims for the same name → resolvers error and require the hex form. No automatic tiebreaker. **A name is a hint, not a trust anchor**; the unforgeable form is always `gitback://<project_id>/<repo>`.
 
