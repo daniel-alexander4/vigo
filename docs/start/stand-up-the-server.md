@@ -44,6 +44,8 @@ curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh
 
 The default trusted-enrollment policy (private + loopback CIDRs) auto-signs this one without a token. Within a check-in interval, **refresh the dashboard — one envoy appears.** That's the server's own machine, now managed.
 
+![The Vigo dashboard — fleet health, security, compliance, and risk at a glance](../img/screenshots/vigo.dashboard.png)
+
 ## Checkpoint
 
 You have: a healthy server, a browser session, and one converging envoy. If the dashboard still shows zero envoys after a minute, see [Install](../howto/operate/install.md#troubleshooting).

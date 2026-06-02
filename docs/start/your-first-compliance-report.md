@@ -10,6 +10,8 @@ By the end of this page you'll have read your fleet's coverage against a regulat
 
 Open the **Compliance** page in the web UI. Pick a framework (HIPAA, SOC 2, PCI DSS, …). You'll see a **coverage percentage** and a per-control breakdown: which controls are covered, and *how* each one is covered — by a configcrate's claim, a [Connwaer](../concepts/compliance-model.md) check, or a waiver.
 
+![The Compliance page — fleet coverage score, satisfied/partial/not-met counts, and per-framework drill-down](../img/screenshots/vigo.compliance.png)
+
 Your number will be low right now — you've only written one configcrate. That's the point: coverage reflects what you can actually **prove**, not what you hope is true. See [convergence vs compliance](../concepts/convergence-vs-compliance.md) for why these are different questions.
 
 ## 2. Make a control go green
