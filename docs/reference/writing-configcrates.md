@@ -175,7 +175,7 @@ configcrates:
 
 Configcrates in a role can be plain strings or objects with a `when:` expression for conditional inclusion.
 
-A configcrate object can also carry `foreach:` (a list var) and, for a list of maps, `key:` (the item field naming each instance) — the configcrate is instantiated once per list item as `<configcrate>[<key>]`, with each item's fields available inside as `{{ .Each.<field> }}`. This works wherever a configcrate reference appears (role `configcrates:`/`case:`, `common.vgo`, `environments.vgo`, a match block). See [Configcrate-level `foreach:`](#module-level-foreach--stamp-out-a-module-per-item).
+A configcrate object can also carry `foreach:` (a list var) and, for a list of maps, `key:` (the item field naming each instance) — the configcrate is instantiated once per list item as `<configcrate>[<key>]`, with each item's fields available inside as `{{ .Each.<field> }}`. This works wherever a configcrate reference appears (role `configcrates:`/`case:`, `common.vgo`, `environments.vgo`, a match block). See [Configcrate-level `foreach:`](#configcrate-level-foreach--stamp-out-a-configcrate-per-item).
 
 ### Role-Level When
 
@@ -697,7 +697,7 @@ vars:
 
 Empty lists produce zero resources — canonical configcrates stay untouched.
 
-To instantiate a *whole configcrate* per item (not just one resource), put `foreach:` on the configcrate reference instead — see [Configcrate-level `foreach:`](#module-level-foreach--stamp-out-a-module-per-item).
+To instantiate a *whole configcrate* per item (not just one resource), put `foreach:` on the configcrate reference instead — see [Configcrate-level `foreach:`](#configcrate-level-foreach--stamp-out-a-configcrate-per-item).
 
 ### Configcrate-level `foreach:` — Stamp Out a Configcrate Per Item
 
