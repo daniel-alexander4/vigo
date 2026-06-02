@@ -35,8 +35,8 @@ var configTraceCmd = &cobra.Command{
   conditional evaluation. Use --configcrate to filter to a single configcrate's branch.
 
 Inverse (subject-rooted):
-  Use --module or --usercrate (without a hostname) to find every enrolled
-  envoy whose resolved config includes that module or usercrate, plus the
+  Use --configcrate or --usercrate (without a hostname) to find every enrolled
+  envoy whose resolved config includes that configcrate or usercrate, plus the
   carrier (file/role/env) that pulled it in. Add --include-tree to also
   surface config-tree patterns that reference the subject but match no
   currently-enrolled envoy.
@@ -216,17 +216,17 @@ Examples:
 
 // traceResult is the CLI-side representation of the config trace API response.
 type traceResult struct {
-	Hostname      string               `json:"hostname"`
-	Matched       bool                 `json:"matched"`
-	MatchPattern  string               `json:"match_pattern"`
-	PatternType   string               `json:"pattern_type"`
-	Environment   string               `json:"environment"`
-	Roles         []string             `json:"roles"`
-	RoleExpansion []roleExpansionEntry `json:"role_expansion"`
-	Inheritance   []inheritanceLevel   `json:"inheritance"`
+	Hostname           string               `json:"hostname"`
+	Matched            bool                 `json:"matched"`
+	MatchPattern       string               `json:"match_pattern"`
+	PatternType        string               `json:"pattern_type"`
+	Environment        string               `json:"environment"`
+	Roles              []string             `json:"roles"`
+	RoleExpansion      []roleExpansionEntry `json:"role_expansion"`
+	Inheritance        []inheritanceLevel   `json:"inheritance"`
 	Configcrates       []string             `json:"configcrates"`
 	ConfigcrateSources map[string]string    `json:"configcrate_sources"`
-	VarSources    []struct {
+	VarSources         []struct {
 		Key    string `json:"key"`
 		Value  any    `json:"value"`
 		Source string `json:"source"`
@@ -234,26 +234,26 @@ type traceResult struct {
 	ConditionalVars []string `json:"conditional_vars"`
 	ResourceCount   int      `json:"resource_count"`
 
-	SecretRefs            []secretTraceEntry          `json:"secret_refs"`
-	SecretsProvider       string                      `json:"secrets_provider"`
-	Dependencies          []dependencyTraceEntry      `json:"dependencies"`
-	ComplianceTags        []complianceTraceEntry      `json:"compliance_tags"`
+	SecretRefs                 []secretTraceEntry          `json:"secret_refs"`
+	SecretsProvider            string                      `json:"secrets_provider"`
+	Dependencies               []dependencyTraceEntry      `json:"dependencies"`
+	ComplianceTags             []complianceTraceEntry      `json:"compliance_tags"`
 	ConfigcrateComplianceFiles []moduleComplianceFileEntry `json:"configcrate_compliance_files"`
-	EnvoyWaiverFiles      []string                    `json:"envoy_waiver_files"`
-	EnvoyWaivers          []envoyWaiverTraceEntry     `json:"envoy_waivers"`
-	Conditionals          []conditionalTraceEntry     `json:"conditionals"`
+	EnvoyWaiverFiles           []string                    `json:"envoy_waiver_files"`
+	EnvoyWaivers               []envoyWaiverTraceEntry     `json:"envoy_waivers"`
+	Conditionals               []conditionalTraceEntry     `json:"conditionals"`
 }
 
 type moduleComplianceFileEntry = struct {
-	SourceFile     string              `json:"source_file"`
-	Compliance     map[string][]string `json:"compliance"`
+	SourceFile          string              `json:"source_file"`
+	Compliance          map[string][]string `json:"compliance"`
 	CoveredConfigcrates []string            `json:"covered_configcrates"`
 }
 
 type secretTraceEntry = struct {
-	Key    string `json:"key"`
-	Path   string `json:"path"`
-	Source string `json:"source"`
+	Key         string `json:"key"`
+	Path        string `json:"path"`
+	Source      string `json:"source"`
 	Configcrate string `json:"configcrate"`
 }
 
@@ -265,7 +265,7 @@ type dependencyTraceEntry = struct {
 }
 
 type complianceTraceEntry = struct {
-	Configcrate         string                       `json:"configcrate"`
+	Configcrate    string                       `json:"configcrate"`
 	Provides       []string                     `json:"provides,omitempty"`
 	Bundle         []string                     `json:"bundle,omitempty"`
 	Frameworks     map[string][]string          `json:"frameworks"`
@@ -282,7 +282,7 @@ type envoyWaiverTraceEntry = struct {
 }
 
 type conditionalTraceEntry = struct {
-	Configcrate       string `json:"configcrate"`
+	Configcrate  string `json:"configcrate"`
 	Resource     string `json:"resource"`
 	When         string `json:"when"`
 	ResolvedWhen string `json:"resolved_when"`
@@ -318,18 +318,18 @@ func greenRampBold(depth, total int) string {
 }
 
 type inheritanceLevel = struct {
-	Dir       string         `json:"dir"`
-	File      string         `json:"file"`
-	Configcrates   []string       `json:"configcrates"`
-	Roles     []string       `json:"roles"`
-	Vars      map[string]any `json:"vars"`
-	Overrides []string       `json:"overrides"`
+	Dir          string         `json:"dir"`
+	File         string         `json:"file"`
+	Configcrates []string       `json:"configcrates"`
+	Roles        []string       `json:"roles"`
+	Vars         map[string]any `json:"vars"`
+	Overrides    []string       `json:"overrides"`
 }
 
 type roleExpansionEntry = struct {
-	Role     string   `json:"role"`
-	Includes []string `json:"includes"`
-	Configcrates  []string `json:"configcrates"`
+	Role         string   `json:"role"`
+	Includes     []string `json:"includes"`
+	Configcrates []string `json:"configcrates"`
 }
 
 // renderInheritanceTree draws Section 1: the directory tree structure.
@@ -483,7 +483,7 @@ func renderModuleCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 
 		// Configcrates.
 		if len(lvl.Configcrates) > 0 {
-			fmt.Printf("  %s│%s %s %s\n", color, rst, amber("modules:"), strings.Join(lvl.Configcrates, ", "))
+			fmt.Printf("  %s│%s %s %s\n", color, rst, amber("configcrates:"), strings.Join(lvl.Configcrates, ", "))
 		}
 
 		// Roles with inline expansion.

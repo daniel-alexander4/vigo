@@ -25,7 +25,7 @@ inheritance chain, configcrates, and vars.
 
 Examples:
   vigocli config search --match "*web*"
-  vigocli config search --module nginx
+  vigocli config search --configcrate nginx
   vigocli config search --var log_level`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if searchMatch == "" && searchModule == "" && searchVar == "" {
@@ -73,16 +73,16 @@ type searchEntry struct {
 	Match       string `json:"match"`
 	Dir         string `json:"dir"`
 	Inheritance []struct {
-		Dir     string   `json:"dir"`
-		File    string   `json:"file"`
+		Dir          string   `json:"dir"`
+		File         string   `json:"file"`
 		Configcrates []string `json:"configcrates"`
-		Roles   []string `json:"roles"`
+		Roles        []string `json:"roles"`
 	} `json:"inheritance"`
 	OwnConfigcrates []string       `json:"own_configcrates"`
-	OwnRoles   []string       `json:"own_roles"`
-	Total      []string       `json:"total"`
-	Excluded   []string       `json:"excluded"`
-	Vars       map[string]any `json:"vars"`
+	OwnRoles        []string       `json:"own_roles"`
+	Total           []string       `json:"total"`
+	Excluded        []string       `json:"excluded"`
+	Vars            map[string]any `json:"vars"`
 }
 
 func printSearchEntry(e searchEntry) {

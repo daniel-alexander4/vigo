@@ -82,7 +82,7 @@
                     {{else if eq .Status "waived"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Status "partial"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Scope "documented"}}<span class="text-warning">requires uploaded documentation</span>
-                    {{else}}{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no module available</span>{{end}}
+                    {{else}}{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no configcrate available</span>{{end}}
                     {{end}}
                 </td>
             </tr>

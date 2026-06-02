@@ -131,8 +131,8 @@ func classifyConfigFile(name, relPath string) string {
 	if strings.HasSuffix(name, ".vgo") {
 		for _, p := range strings.Split(relPath, "/") {
 			switch p {
-			case "modules":
-				return "module"
+			case "configcrates":
+				return "configcrate"
 			case "usercrates":
 				return "usercrate"
 			}

@@ -43,7 +43,7 @@
         <span class="trace-summary__value">{{.ResourceCount}}</span>
     </div>
     <div class="trace-summary__item">
-        <span class="trace-summary__label">Modules:</span>
+        <span class="trace-summary__label">Configcrates:</span>
         <span class="trace-summary__value">{{len .Configcrates}}</span>
     </div>
 </div>
@@ -84,11 +84,11 @@
 </div>
 {{end}}
 
-<!-- Module Inheritance -->
+<!-- Configcrate Inheritance -->
 {{$moduleLevels := traceModuleLevels .Inheritance}}
 {{$mTotal := len $moduleLevels}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Module Inheritance</h3>
+    <h3 class="trace-group__title">Configcrate Inheritance</h3>
     <div class="trace-chain">
     {{range $i, $lvl := $moduleLevels}}
         {{if or $lvl.Configcrates $lvl.Roles (isLastIndex $i $mTotal)}}
@@ -105,7 +105,7 @@
             {{end}}
             {{if $lvl.Configcrates}}
             <div class="trace-card__row">
-                <span class="trace-card__label">modules:</span>
+                <span class="trace-card__label">configcrates:</span>
                 <span class="trace-card__modules">{{range $j, $m := $lvl.Configcrates}}{{if $j}}, {{end}}{{$m}}{{end}}</span>
             </div>
             {{end}}
@@ -189,7 +189,7 @@
                 <th>Value</th>
                 <th>Path</th>
                 <th>Source</th>
-                <th>Module</th>
+                <th>Configcrate</th>
             </tr>
             {{range .SecretRefs}}
             <tr>
@@ -244,7 +244,7 @@
             {{end}}
             {{if $mcf.CoveredModules}}
             <div class="trace-card__row u-pl-0">
-                <span class="text-muted">modules:</span>
+                <span class="text-muted">configcrates:</span>
                 <span class="u-ml-8px">{{joinStrings $mcf.CoveredModules ", "}}</span>
             </div>
             {{end}}

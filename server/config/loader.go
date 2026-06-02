@@ -28,13 +28,13 @@ import (
 // SecretError describes a single secret resolution failure with enough
 // context to diagnose and fix without guessing.
 type SecretError struct {
-	Match    string // envoy match pattern (e.g. "db-*.prod.example.com")
-	Configcrate   string // module name (empty if failure is in envoy vars)
-	Resource string // resource name (empty if failure is in vars)
-	Attr     string // attribute or var name
-	Secret   string // the secret key that failed
-	Err      error  // underlying error from provider
-	Backend  string // secrets backend name ("local", "isopass")
+	Match       string // envoy match pattern (e.g. "db-*.prod.example.com")
+	Configcrate string // module name (empty if failure is in envoy vars)
+	Resource    string // resource name (empty if failure is in vars)
+	Attr        string // attribute or var name
+	Secret      string // the secret key that failed
+	Err         error  // underlying error from provider
+	Backend     string // secrets backend name ("local", "isopass")
 }
 
 func (e *SecretError) Error() string {
@@ -130,9 +130,9 @@ type IdempotencyErrors struct {
 
 // IdempotencyModuleError holds validation findings for a single module file.
 type IdempotencyModuleError struct {
-	Configcrate   string
-	Path     string
-	Findings []validate.Finding
+	Configcrate string
+	Path        string
+	Findings    []validate.Finding
 }
 
 func (ie *IdempotencyErrors) Error() string {
@@ -207,12 +207,12 @@ type resolvedEntry struct {
 type ConfigStore struct {
 	mu              sync.RWMutex
 	entries         []resolvedEntry
-	index           *patternIndex                  // accelerated hostname lookup
-	rawModules      map[string]*ConfigcrateDefinition   // unresolved, for secret ref scanning
-	envoyEntries    []EnvoyEntry                   // original entries for tracing
-	roleDefs        map[string]*RoleDefinition     // loaded roles for tracing
-	moduleDefs      map[string]*ConfigcrateDefinition   // loaded modules for tracing
-	complianceIndex map[string]map[string][]string // standard → control_id → []module_name
+	index           *patternIndex                     // accelerated hostname lookup
+	rawModules      map[string]*ConfigcrateDefinition // unresolved, for secret ref scanning
+	envoyEntries    []EnvoyEntry                      // original entries for tracing
+	roleDefs        map[string]*RoleDefinition        // loaded roles for tracing
+	moduleDefs      map[string]*ConfigcrateDefinition // loaded modules for tracing
+	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
 	// coverageCache memoizes EnvoyStandardCoverage results at publish
 	// time keyed by (hostcrate entry index, standard). Each entry's
 	// module set is fixed by the publish-time hostcrate resolution, so
@@ -224,7 +224,7 @@ type ConfigStore struct {
 	perEnvOverrides         map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
 	waivers                 map[string]map[string]*WaiverEntry         // standard → control_id → waiver
 	waiversByFile           []EnvoyWaiverFileEntry                     // per-file waiver data for trace display
-	moduleComplianceSources []ConfigcrateComplianceSource                   // per-file modules-tree compliance.vgo entries for trace display
+	moduleComplianceSources []ConfigcrateComplianceSource              // per-file modules-tree compliance.vgo entries for trace display
 	dir                     string                                     // examples directory
 	provider                secrets.Provider
 	backend                 string        // secrets backend name for diagnostic hints
@@ -416,7 +416,7 @@ func (cs *ConfigStore) Dir() string {
 // ConfigStats holds summary statistics about the loaded configuration.
 type ConfigStats struct {
 	Configcrates int
-	Entries int
+	Entries      int
 }
 
 // Stats returns the current module and entry counts.
@@ -425,7 +425,7 @@ func (cs *ConfigStore) Stats() ConfigStats {
 	defer cs.mu.RUnlock()
 	return ConfigStats{
 		Configcrates: len(cs.rawModules),
-		Entries: len(cs.entries),
+		Entries:      len(cs.entries),
 	}
 }
 
@@ -622,7 +622,7 @@ func (cs *ConfigStore) Get(hostname string) *EnvoyConfig {
 	}
 
 	return &EnvoyConfig{
-		Envoy:   hostname,
+		Envoy:        hostname,
 		Configcrates: []Configcrate{},
 	}
 }
@@ -662,19 +662,19 @@ func (cs *ConfigStore) MatchClone(hostname string) (string, *EnvoyConfig) {
 
 // ConfigTrace contains detailed resolution information for a hostname.
 type ConfigTrace struct {
-	Hostname      string             `json:"hostname"`
-	Matched       bool               `json:"matched"`
-	MatchPattern  string             `json:"match_pattern,omitempty"`
-	PatternType   string             `json:"pattern_type,omitempty"` // "exact" or "glob"
-	Environment   string             `json:"environment,omitempty"`
-	Roles         []string           `json:"roles,omitempty"`
-	RoleExpansion []RoleTraceEntry   `json:"role_expansion,omitempty"`
-	Inheritance   []InheritanceLevel `json:"inheritance,omitempty"`
+	Hostname           string             `json:"hostname"`
+	Matched            bool               `json:"matched"`
+	MatchPattern       string             `json:"match_pattern,omitempty"`
+	PatternType        string             `json:"pattern_type,omitempty"` // "exact" or "glob"
+	Environment        string             `json:"environment,omitempty"`
+	Roles              []string           `json:"roles,omitempty"`
+	RoleExpansion      []RoleTraceEntry   `json:"role_expansion,omitempty"`
+	Inheritance        []InheritanceLevel `json:"inheritance,omitempty"`
 	Configcrates       []string           `json:"configcrates"`
 	ConfigcrateSources map[string]string  `json:"configcrate_sources,omitempty"` // module name → source file/role
-	VarSources    []VarSourceEntry   `json:"var_sources"`
-	FinalVars     map[string]any     `json:"final_vars"`
-	ResourceCount int                `json:"resource_count"`
+	VarSources         []VarSourceEntry   `json:"var_sources"`
+	FinalVars          map[string]any     `json:"final_vars"`
+	ResourceCount      int                `json:"resource_count"`
 
 	// Password Inheritance
 	SecretRefs      []SecretTraceEntry `json:"secret_refs,omitempty"`
@@ -815,21 +815,21 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 // inclusion site activated each kind (parallel to the carrier's `modules:`
 // and `usercrates:` YAML fields).
 type InheritanceLevel struct {
-	Dir        string         `json:"dir"`                  // relative dir path (e.g., "production/web")
-	File       string         `json:"file"`                 // filename (e.g., "common.vgo")
-	Configcrates    []string       `json:"configcrates,omitempty"`    // modules contributed at this level
-	Usercrates []string       `json:"usercrates,omitempty"` // usercrates contributed at this level
-	Roles      []string       `json:"roles,omitempty"`      // roles contributed at this level
-	Vars       map[string]any `json:"vars,omitempty"`       // vars contributed at this level
-	Overrides  []string       `json:"overrides,omitempty"`  // var keys that override a parent value
+	Dir          string         `json:"dir"`                    // relative dir path (e.g., "production/web")
+	File         string         `json:"file"`                   // filename (e.g., "common.vgo")
+	Configcrates []string       `json:"configcrates,omitempty"` // modules contributed at this level
+	Usercrates   []string       `json:"usercrates,omitempty"`   // usercrates contributed at this level
+	Roles        []string       `json:"roles,omitempty"`        // roles contributed at this level
+	Vars         map[string]any `json:"vars,omitempty"`         // vars contributed at this level
+	Overrides    []string       `json:"overrides,omitempty"`    // var keys that override a parent value
 }
 
 // RoleTraceEntry shows which modules and usercrates came from which role (and includes).
 type RoleTraceEntry struct {
-	Role       string   `json:"role"`
-	Includes   []string `json:"includes,omitempty"`
-	Configcrates    []string `json:"configcrates"`
-	Usercrates []string `json:"usercrates,omitempty"`
+	Role         string   `json:"role"`
+	Includes     []string `json:"includes,omitempty"`
+	Configcrates []string `json:"configcrates"`
+	Usercrates   []string `json:"usercrates,omitempty"`
 }
 
 // VarSourceEntry tracks where a var's value came from.
@@ -841,9 +841,9 @@ type VarSourceEntry struct {
 
 // SecretTraceEntry tracks a secret: reference in the resolved config.
 type SecretTraceEntry struct {
-	Key    string `json:"key"`    // var name or resource attribute path
-	Path   string `json:"path"`   // the secret path (e.g., "vigo/db/dsn") — never the resolved value
-	Source string `json:"source"` // "var", "resource:<configcrate>/<resource>/<attr>", "credential"
+	Key         string `json:"key"`         // var name or resource attribute path
+	Path        string `json:"path"`        // the secret path (e.g., "vigo/db/dsn") — never the resolved value
+	Source      string `json:"source"`      // "var", "resource:<configcrate>/<resource>/<attr>", "credential"
 	Configcrate string `json:"configcrate"` // module that introduced it (empty for envoy-level vars)
 }
 
@@ -867,7 +867,7 @@ type DependencyTraceEntry struct {
 // would be "explicit" — emit nothing and keep the renderer's legacy
 // compact form).
 type ComplianceTraceEntry struct {
-	Configcrate         string                       `json:"configcrate"`
+	Configcrate    string                       `json:"configcrate"`
 	Provides       []string                     `json:"provides,omitempty"`        // the module's raw provides: list (kept for renderer headers)
 	Bundle         []string                     `json:"bundle,omitempty"`          // the module's raw bundle: list
 	Frameworks     map[string][]string          `json:"frameworks"`                // framework → control IDs (union of explicit + provides + bundle)
@@ -900,14 +900,14 @@ type EnvoyWaiverTraceEntry struct {
 // under the file's directory. The trace only lists files that cover at
 // least one of the envoy's modules.
 type ConfigcrateComplianceFileEntry struct {
-	SourceFile     string              `json:"source_file"`
-	Compliance     map[string][]string `json:"compliance"`
+	SourceFile          string              `json:"source_file"`
+	Compliance          map[string][]string `json:"compliance"`
 	CoveredConfigcrates []string            `json:"covered_configcrates,omitempty"`
 }
 
 // ConditionalTraceEntry tracks a when: expression on a module or resource.
 type ConditionalTraceEntry struct {
-	Configcrate       string `json:"configcrate"`                  // module name
+	Configcrate  string `json:"configcrate"`             // module name
 	Resource     string `json:"resource,omitempty"`      // resource name (empty for module-level)
 	When         string `json:"when"`                    // the raw when expression
 	ResolvedWhen string `json:"resolved_when,omitempty"` // expression with vars replaced by resolved values
@@ -938,10 +938,10 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	defer cs.mu.RUnlock()
 
 	trace := &ConfigTrace{
-		Hostname:   hostname,
-		Configcrates:    []string{},
-		VarSources: []VarSourceEntry{},
-		FinalVars:  map[string]any{},
+		Hostname:     hostname,
+		Configcrates: []string{},
+		VarSources:   []VarSourceEntry{},
+		FinalVars:    map[string]any{},
 	}
 
 	idx := cs.index.Lookup(hostname)
@@ -1183,8 +1183,8 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 		if len(covered) > 0 {
 			trace.ConfigcrateComplianceFiles = append(trace.ConfigcrateComplianceFiles, ConfigcrateComplianceFileEntry{
-				SourceFile:     src.RelPath,
-				Compliance:     src.Compliance,
+				SourceFile:          src.RelPath,
+				Compliance:          src.Compliance,
 				CoveredConfigcrates: covered,
 			})
 		}
@@ -1268,9 +1268,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			for k, v := range def.Vars {
 				if s, ok := v.(string); ok && strings.HasPrefix(s, "secret:") {
 					trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-						Key:    k,
-						Path:   strings.TrimPrefix(s, "secret:"),
-						Source: "var",
+						Key:         k,
+						Path:        strings.TrimPrefix(s, "secret:"),
+						Source:      "var",
 						Configcrate: mod.Name,
 					})
 				}
@@ -1280,9 +1280,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				for attrKey, attrVal := range res.Attributes {
 					if s, ok := attrVal.(string); ok && strings.HasPrefix(s, "secret:") {
 						trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-							Key:    attrKey,
-							Path:   strings.TrimPrefix(s, "secret:"),
-							Source: "resource:" + mod.Name + "/" + res.Name + "/" + attrKey,
+							Key:         attrKey,
+							Path:        strings.TrimPrefix(s, "secret:"),
+							Source:      "resource:" + mod.Name + "/" + res.Name + "/" + attrKey,
 							Configcrate: mod.Name,
 						})
 					}
@@ -1295,9 +1295,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	for k, v := range envoyEntry.Vars {
 		if s, ok := v.(string); ok && strings.HasPrefix(s, "secret:") {
 			trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-				Key:    k,
-				Path:   strings.TrimPrefix(s, "secret:"),
-				Source: "var",
+				Key:         k,
+				Path:        strings.TrimPrefix(s, "secret:"),
+				Source:      "var",
 				Configcrate: "",
 			})
 		}
@@ -1306,9 +1306,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	// Network device credential.
 	if envoyEntry.Credential != "" && strings.HasPrefix(envoyEntry.Credential, "secret:") {
 		trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-			Key:    "credential",
-			Path:   strings.TrimPrefix(envoyEntry.Credential, "secret:"),
-			Source: "credential",
+			Key:         "credential",
+			Path:        strings.TrimPrefix(envoyEntry.Credential, "secret:"),
+			Source:      "credential",
 			Configcrate: "",
 		})
 	}
@@ -1496,7 +1496,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				resolved = mod.When
 			}
 			trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
-				Configcrate:       mod.Name,
+				Configcrate:  mod.Name,
 				When:         rendered,
 				ResolvedWhen: resolved,
 				EvalSide:     classifyWhen(rendered),
@@ -1512,7 +1512,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 					resolved = res.When
 				}
 				trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
-					Configcrate:       mod.Name,
+					Configcrate:  mod.Name,
 					Resource:     res.Name,
 					When:         rendered,
 					ResolvedWhen: resolved,
@@ -1832,8 +1832,8 @@ func computeStandardCoverage(entryModules map[string]bool, standard string, cont
 		}
 		if len(assigned) > 0 {
 			sc.CoveredControls = append(sc.CoveredControls, ControlCoverage{
-				ControlID: cid,
-				Configcrates:   assigned,
+				ControlID:    cid,
+				Configcrates: assigned,
 			})
 		} else {
 			sc.MissingControls = append(sc.MissingControls, cid)
@@ -1878,14 +1878,14 @@ func buildCoverageCache(entries []resolvedEntry, complianceIndex map[string]map[
 // TreeNode represents one node in the config directory hierarchy for
 // the config tree command. It shows inheritance at each level.
 type TreeNode struct {
-	Dir      string      `json:"dir"`                // relative dir path ("", "production", "production/web")
-	File     string      `json:"file,omitempty"`     // filename if this is a leaf or common.vgo
-	Configcrates  []string    `json:"configcrates,omitempty"`  // modules defined at this level
-	Roles    []string    `json:"roles,omitempty"`    // roles defined at this level
-	Match    string      `json:"match,omitempty"`    // match pattern (leaf entries only)
-	Total    []string    `json:"total,omitempty"`    // accumulated modules (leaf entries only)
-	Excluded []string    `json:"excluded,omitempty"` // excluded modules (leaf entries only)
-	Children []*TreeNode `json:"children,omitempty"` // subdirectories
+	Dir          string      `json:"dir"`                    // relative dir path ("", "production", "production/web")
+	File         string      `json:"file,omitempty"`         // filename if this is a leaf or common.vgo
+	Configcrates []string    `json:"configcrates,omitempty"` // modules defined at this level
+	Roles        []string    `json:"roles,omitempty"`        // roles defined at this level
+	Match        string      `json:"match,omitempty"`        // match pattern (leaf entries only)
+	Total        []string    `json:"total,omitempty"`        // accumulated modules (leaf entries only)
+	Excluded     []string    `json:"excluded,omitempty"`     // excluded modules (leaf entries only)
+	Children     []*TreeNode `json:"children,omitempty"`     // subdirectories
 }
 
 // Tree returns the directory inheritance structure for visualization.
@@ -1960,14 +1960,14 @@ type SearchResult struct {
 
 // SearchEntry is a single search result showing a envoy entry and its context.
 type SearchEntry struct {
-	Match       string             `json:"match"`
-	Dir         string             `json:"dir"`
-	Inheritance []InheritanceLevel `json:"inheritance,omitempty"`
-	OwnConfigcrates  []string           `json:"own_configcrates"`
-	OwnRoles    []string           `json:"own_roles,omitempty"`
-	Total       []string           `json:"total"`
-	Excluded    []string           `json:"excluded,omitempty"`
-	Vars        map[string]any     `json:"vars,omitempty"`
+	Match           string             `json:"match"`
+	Dir             string             `json:"dir"`
+	Inheritance     []InheritanceLevel `json:"inheritance,omitempty"`
+	OwnConfigcrates []string           `json:"own_configcrates"`
+	OwnRoles        []string           `json:"own_roles,omitempty"`
+	Total           []string           `json:"total"`
+	Excluded        []string           `json:"excluded,omitempty"`
+	Vars            map[string]any     `json:"vars,omitempty"`
 }
 
 // Search finds envoy entries matching the given criteria.
@@ -2988,7 +2988,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 		MatchPattern: entry.Match,
 		Environment:  entry.Environment,
 		Roles:        roleRefNames(entry.Roles),
-		Configcrates:      modules,
+		Configcrates: modules,
 		Vars:         vars,
 		VarOrder:     varOrder,
 		Tags:         append([]string(nil), entry.Tags...),
@@ -3023,7 +3023,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 	for i := range cfg.Configcrates {
 		expanded, err := ExpandForEach(cfg.Configcrates[i].Resources, cfg.Vars)
 		if err != nil {
-			return nil, fmt.Errorf("module %q: %w", cfg.Configcrates[i].Name, err)
+			return nil, fmt.Errorf("configcrate %q: %w", cfg.Configcrates[i].Name, err)
 		}
 		cfg.Configcrates[i].Resources = expanded
 	}
@@ -3358,9 +3358,9 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 		}
 		if !dangerous && validate.HasErrors(findings) {
 			idempErrs = append(idempErrs, IdempotencyModuleError{
-				Configcrate:   def.Name,
-				Path:     path,
-				Findings: findings,
+				Configcrate: def.Name,
+				Path:        path,
+				Findings:    findings,
 			})
 		}
 
@@ -3371,9 +3371,9 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 		}
 		if validate.HasErrors(spFindings) {
 			idempErrs = append(idempErrs, IdempotencyModuleError{
-				Configcrate:   def.Name,
-				Path:     path,
-				Findings: spFindings,
+				Configcrate: def.Name,
+				Path:        path,
+				Findings:    spFindings,
 			})
 		}
 
@@ -3485,7 +3485,7 @@ func loadUsercrateDefs(stockpileDir string) (map[string]*ConfigcrateDefinition, 
 			}
 		}
 		if userCount != 1 {
-			return fmt.Errorf("%s: usercrate must declare exactly one `type: user` resource — found %d. Move it to modules/ or restructure",
+			return fmt.Errorf("%s: usercrate must declare exactly one `type: user` resource — found %d. Move it to configcrates/ or restructure",
 				relSlash, userCount)
 		}
 
@@ -4177,10 +4177,10 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 			// modules and assign the role by name; long inline lists are
 			// how stockpiles grow one-off configurations that belong in a
 			// standard location. Threshold of 4 permits "one envoy gets a
-			// module or two beyond its role" without forcing role ceremony
+			// configcrate or two beyond its role" without forcing role ceremony
 			// on genuinely small exceptions.
 			if len(entry.Configcrates) > 4 {
-				slog.Warn("match-block modules: list is longer than 4 — prefer a named role",
+				slog.Warn("match-block configcrates: list is longer than 4 — prefer a named role",
 					"file", path, "match", entry.Match, "count", len(entry.Configcrates),
 					"guidance", "define a role in roles.vgo and reference it via 'roles:' on the match block")
 			}
@@ -4268,12 +4268,12 @@ func (cs *ConfigStore) resolveModuleSecrets(match string, mod *Configcrate) []*S
 			resolved, failures := cs.resolveSecretsInValue(str)
 			for _, f := range failures {
 				errs = append(errs, &SecretError{
-					Match:    match,
-					Configcrate:   mod.Name,
-					Resource: mod.Resources[i].Name,
-					Attr:     k,
-					Secret:   f.key,
-					Err:      f.err,
+					Match:       match,
+					Configcrate: mod.Name,
+					Resource:    mod.Resources[i].Name,
+					Attr:        k,
+					Secret:      f.key,
+					Err:         f.err,
 				})
 			}
 			if len(failures) == 0 {

@@ -33,11 +33,11 @@ them via `dict` (see dashboard.html, envoys-tree.html).
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=converged" "Active" (eq .ConvFilter "converged") "Label" "Converged" "Count" .CountConverged "CountClass" "filter-count--success"}}
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=no+data" "Active" (eq .ConvFilter "no data") "Label" "No Data" "Count" .CountNoData "CountClass" "filter-count--muted"}}
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=degraded" "Active" (eq .ConvFilter "degraded") "Label" "Degraded" "Count" .CountDegraded "CountClass" "filter-count--warning"}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=failed" "Active" (eq .ConvFilter "failed") "Label" "Failed" "Count" .CountFailed "CountClass" "filter-count--danger" "Tooltip" "Latest run failed (≥80% module failures or agent blocked)"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=failed" "Active" (eq .ConvFilter "failed") "Label" "Failed" "Count" .CountFailed "CountClass" "filter-count--danger" "Tooltip" "Latest run failed (≥80% configcrate failures or agent blocked)"}}
         </div>
     </div>
     <div class="filter-bar-axis">
-        <span class="filter-bar-axis__label" title="Modules that change across recent runs. Diverged ⊆ Changed.">Drift</span>
+        <span class="filter-bar-axis__label" title="Configcrates that change across recent runs. Diverged ⊆ Changed.">Drift</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=changed" "Active" (eq .DriftFilter "changed") "Label" "Changed" "Count" .CountChanged "CountClass" "filter-count--info" "Tooltip" "Last run made changes"}}
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=diverged" "Active" (eq .DriftFilter "diverged") "Label" "Diverged" "Count" .CountDiverged "CountClass" "filter-count--peach" "Tooltip" "5+ consecutive runs with changes"}}

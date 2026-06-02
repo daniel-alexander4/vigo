@@ -446,7 +446,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	pattern, cfg := s.configStore.Match(envoy.Hostname)
 	if cfg == nil {
 		cfg = &config.EnvoyConfig{
-			Envoy:   envoy.Hostname,
+			Envoy:        envoy.Hostname,
 			Configcrates: []config.Configcrate{},
 		}
 		pattern = ""
@@ -519,7 +519,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			for i := range cloned.Configcrates {
 				expanded, err := config.ExpandCase(cloned.Configcrates[i].Resources, traits, cloned.Vars)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "expanding case for module %q: %v", cloned.Configcrates[i].Name, err)
+					return nil, status.Errorf(codes.Internal, "expanding case for configcrate %q: %v", cloned.Configcrates[i].Name, err)
 				}
 				cloned.Configcrates[i].Resources = expanded
 			}
@@ -561,7 +561,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			for i := range cloned.Configcrates {
 				expanded, err := config.ExpandForEach(cloned.Configcrates[i].Resources, cloned.Vars)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "expanding foreach for module %q: %v", cloned.Configcrates[i].Name, err)
+					return nil, status.Errorf(codes.Internal, "expanding foreach for configcrate %q: %v", cloned.Configcrates[i].Name, err)
 				}
 				cloned.Configcrates[i].Resources = expanded
 			}

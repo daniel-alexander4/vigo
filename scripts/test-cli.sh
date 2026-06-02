@@ -249,18 +249,18 @@ if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
     # Config trace should include all 7 sections when data exists.
     TRACE_OUT=$($CLI config trace "$FIRST_ENVOY" --server "$SERVER" 2>&1 || true)
     run_test_grep "config trace: Path Inheritance" "Path Inheritance" echo "$TRACE_OUT"
-    run_test_grep "config trace: Module Inheritance" "Module Inheritance" echo "$TRACE_OUT"
+    run_test_grep "config trace: Configcrate Inheritance" "Configcrate Inheritance" echo "$TRACE_OUT"
     run_test_grep "config trace: Variable Inheritance" "Variable" echo "$TRACE_OUT"
 
-    # Test --module filter.
-    FIRST_MODULE=$($CLI config trace "$FIRST_ENVOY" --server "$SERVER" 2>/dev/null | grep -oP 'modules:\s*\K\S+' | head -1 || true)
+    # Test --configcrate filter.
+    FIRST_MODULE=$($CLI config trace "$FIRST_ENVOY" --server "$SERVER" 2>/dev/null | grep -oP 'configcrates:\s*\K\S+' | head -1 || true)
     if [[ -n "$FIRST_MODULE" ]]; then
-        run_test "config trace --module" $CLI config trace "$FIRST_ENVOY" --module "$FIRST_MODULE" --server "$SERVER"
+        run_test "config trace --configcrate" $CLI config trace "$FIRST_ENVOY" --configcrate "$FIRST_MODULE" --server "$SERVER"
     fi
 fi
 run_test "config tree" $CLI config tree --server "$SERVER"
 run_test "config pending" $CLI config pending --server "$SERVER"
-run_test "config search --module" $CLI config search --module "backups" --server "$SERVER" || true
+run_test "config search --configcrate" $CLI config search --configcrate "backups" --server "$SERVER" || true
 
 # History show: grab first publish ID.
 FIRST_PUBLISH=$($CLI config history --server "$SERVER" 2>/dev/null | awk 'NR==2{print $1}' || true)
@@ -522,15 +522,15 @@ echo ""
 # 21. validate
 # -------------------------------------------------------------------
 echo -e "${BOLD}[validate]${NC}"
-if [[ -d "/srv/vigo/stockpile/modules" ]]; then
-    VGO_FILE=$(find /srv/vigo/stockpile/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+if [[ -d "/srv/vigo/stockpile/configcrates" ]]; then
+    VGO_FILE=$(find /srv/vigo/stockpile/configcrates -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$VGO_FILE" ]]; then
         run_test "config validate" $CLI config validate "$VGO_FILE"
     else
         skip_test "config validate" "no .vgo files found in stage"
     fi
-elif [[ -d "example-configs/stockpile/modules" ]]; then
-    VGO_FILE=$(find example-configs/stockpile/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+elif [[ -d "example-configs/stockpile/configcrates" ]]; then
+    VGO_FILE=$(find example-configs/stockpile/configcrates -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$VGO_FILE" ]]; then
         run_test "config validate" $CLI config validate "$VGO_FILE"
     else
@@ -545,7 +545,7 @@ echo ""
 # 23. env
 # -------------------------------------------------------------------
 echo -e "${BOLD}[env]${NC}"
-# env promote requires valid module + tiers; test that it rejects bad input.
+# env promote requires valid configcrate + tiers; test that it rejects bad input.
 run_test_expect_fail "env promote (no args)" $CLI env promote --server "$SERVER"
 echo ""
 

@@ -21,8 +21,8 @@ func TestClassifyConfigFile(t *testing.T) {
 		{"roles.vgo", "scaffolding", "roles"},
 		{"waivers.vgo", "alexander4/us-west1", "waivers"},
 		{"envoys.vgo", "alexander4", "hostcrate"},
-		{"docker.vgo", "stockpile/modules/system", "module"},
-		{"docker-windows.vgo", "stockpile/modules/system", "module"},
+		{"docker.vgo", "stockpile/configcrates/system", "configcrate"},
+		{"docker-windows.vgo", "stockpile/configcrates/system", "configcrate"},
 		{"alice.vgo", "stockpile/usercrates", "usercrate"},
 		{"some-task.vgo", "stockpile/tasks", "vgo"},
 		{"some-workflow.vgo", "stockpile/workflows", "vgo"},
@@ -43,7 +43,7 @@ func TestBuildConfigTree(t *testing.T) {
 	mkdirs := []string{
 		"alexander4/us-west1/us-west1-a",
 		"alexander4/us-east1/us-east1-a",
-		"stockpile/modules/system",
+		"stockpile/configcrates/system",
 		"stockpile/usercrates",
 	}
 	for _, d := range mkdirs {
@@ -59,7 +59,7 @@ func TestBuildConfigTree(t *testing.T) {
 		"alexander4/us-west1/us-west1-a/danlap.vgo",
 		"alexander4/us-west1/waivers.vgo",
 		"alexander4/us-east1/us-east1-a/plex.vgo",
-		"stockpile/modules/system/docker.vgo",
+		"stockpile/configcrates/system/docker.vgo",
 		"stockpile/usercrates/alice.vgo",
 		".hidden.vgo", // dotfile — must be skipped
 	}
@@ -89,9 +89,9 @@ func TestBuildConfigTree(t *testing.T) {
 	if k := find(tree, "common.vgo").Kind; k != "common" {
 		t.Errorf("common.vgo kind = %q, want common", k)
 	}
-	docker := findPath(tree, "stockpile", "modules", "system", "docker.vgo")
-	if docker == nil || docker.Kind != "module" {
-		t.Errorf("docker.vgo: got %+v, want kind=module", docker)
+	docker := findPath(tree, "stockpile", "configcrates", "system", "docker.vgo")
+	if docker == nil || docker.Kind != "configcrate" {
+		t.Errorf("docker.vgo: got %+v, want kind=configcrate", docker)
 	}
 	alice := findPath(tree, "stockpile", "usercrates", "alice.vgo")
 	if alice == nil || alice.Kind != "usercrate" {

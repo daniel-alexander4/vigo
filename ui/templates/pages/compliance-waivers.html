@@ -11,8 +11,8 @@
     <div class="card-body u-fs-0-9em">
         <strong>Enforcement types:</strong>
         <ul class="u-m-6px-0-0-0-pl-18px">
-            <li><span class="badge badge--compliant">enforced + waived</span> &mdash; A module actively enforces this control <em>and</em> a waiver is in place. The control is covered by policy regardless of the waiver. If the waiver expires, compliance scoring is unaffected.</li>
-            <li><span class="badge badge--info">waived only</span> &mdash; No module enforces this control. The waiver is the only reason it counts as accepted. If the waiver expires, this control becomes a gap in compliance scoring.</li>
+            <li><span class="badge badge--compliant">enforced + waived</span> &mdash; A configcrate actively enforces this control <em>and</em> a waiver is in place. The control is covered by policy regardless of the waiver. If the waiver expires, compliance scoring is unaffected.</li>
+            <li><span class="badge badge--info">waived only</span> &mdash; No configcrate enforces this control. The waiver is the only reason it counts as accepted. If the waiver expires, this control becomes a gap in compliance scoring.</li>
         </ul>
     </div>
 </div>
@@ -69,6 +69,6 @@
     </table>
 </div>
 {{else}}
-<p class="text-muted">No active waivers. Add waivers to a <code>compliance.vgo</code> file in your config directory (outside <code>modules/</code>).</p>
+<p class="text-muted">No active waivers. Add waivers to a <code>compliance.vgo</code> file in your config directory (outside <code>configcrates/</code>).</p>
 {{end}}
 {{end}}

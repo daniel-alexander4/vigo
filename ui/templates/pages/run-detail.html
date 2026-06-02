@@ -16,7 +16,7 @@
 <div class="stat-cards mb-2">
     <div class="stat-card stat-card--brand">
         <div class="stat-card__value">{{.Run.ConfigcrateCount}}</div>
-        <div class="stat-card__label">Modules</div>
+        <div class="stat-card__label">Configcrates</div>
     </div>
     <div class="stat-card stat-card--success">
         <div class="stat-card__value">{{.Run.ChangedCount}}</div>
@@ -29,11 +29,11 @@
 </div>
 
 <div class="table-container">
-    <h3>Per-Module Results</h3>
+    <h3>Per-Configcrate Results</h3>
     <table class="table">
         <thead>
             <tr>
-                <th>Module</th>
+                <th>Configcrate</th>
                 <th>Type</th>
                 <th>Resource</th>
                 <th>Action</th>
@@ -60,7 +60,7 @@
             {{end}}
             {{if not .Results}}
             <tr>
-                <td colspan="7" class="table__empty-cell">No module results recorded.</td>
+                <td colspan="7" class="table__empty-cell">No configcrate results recorded.</td>
             </tr>
             {{end}}
         </tbody>
@@ -72,7 +72,7 @@
 <table class="table">
     <thead>
         <tr>
-            <th>Module</th>
+            <th>Configcrate</th>
             <th>Type</th>
             <th>Resource</th>
             <th>Action</th>
@@ -99,7 +99,7 @@
         {{end}}
         {{if not .Results}}
         <tr>
-            <td colspan="7" class="table__empty-cell">No module results recorded.</td>
+            <td colspan="7" class="table__empty-cell">No configcrate results recorded.</td>
         </tr>
         {{end}}
     </tbody>

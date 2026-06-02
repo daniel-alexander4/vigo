@@ -30,11 +30,11 @@ func (h *PreviewHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/preview", read(http.HandlerFunc(h.Preview)))
 }
 
-// Preview returns the list of envoys that would be affected by changes to a module.
+// Preview returns the list of envoys that would be affected by changes to a configcrate.
 func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	moduleName := r.URL.Query().Get("configcrate")
 	if moduleName == "" {
-		writeError(w, http.StatusBadRequest, "module parameter is required")
+		writeError(w, http.StatusBadRequest, "configcrate parameter is required")
 		return
 	}
 
@@ -74,7 +74,7 @@ func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"configcrate": moduleName,
-		"affected": affected,
-		"count":    len(affected),
+		"affected":    affected,
+		"count":       len(affected),
 	})
 }

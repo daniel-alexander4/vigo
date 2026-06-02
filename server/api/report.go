@@ -4245,7 +4245,7 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditS
 	if summary.Diverged > 0 {
 		issues = append(issues, ExecutiveIssue{
 			Severity:    "warning",
-			Description: fmt.Sprintf("%d node(s) are experiencing persistent configuration drift. Configcrates keep applying changes across many consecutive runs, indicating an external process may be conflicting or a module may be non-idempotent.", summary.Diverged),
+			Description: fmt.Sprintf("%d node(s) are experiencing persistent configuration drift. Configcrates keep applying changes across many consecutive runs, indicating an external process may be conflicting or a configcrate may be non-idempotent.", summary.Diverged),
 		})
 	}
 

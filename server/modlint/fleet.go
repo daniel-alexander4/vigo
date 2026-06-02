@@ -126,7 +126,7 @@ func LintFleet(files []FleetFile) []Finding {
 			Severity: Warning,
 			RuleID:   "fleet-duplicate-file",
 			Message: fmt.Sprintf(
-				"target_path %q is written by %d modules: %s — if multiple configcrates end up assigned to the same envoy, convergence order is undefined and the on-disk content is whichever wrote last",
+				"target_path %q is written by %d configcrates: %s — if multiple configcrates end up assigned to the same envoy, convergence order is undefined and the on-disk content is whichever wrote last",
 				k.targetPath, len(owners), renderOriginList(owners),
 			),
 		})

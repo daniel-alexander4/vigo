@@ -34,10 +34,10 @@
             {{/* Label */}}
             <text x="70" y="{{add $lvl.Y 18}}" font-size="12" font-weight="600"
                   fill="{{$lvl.Color}}" font-family="monospace">{{$lvl.Label}}</text>
-            {{/* Modules */}}
+            {{/* Configcrates */}}
             {{if $lvl.Configcrates}}
             <text x="70" y="{{add $lvl.Y 34}}" font-size="10" fill="var(--color-text)" font-family="monospace">
-                modules: {{joinStrings $lvl.Configcrates ", "}}
+                configcrates: {{joinStrings $lvl.Configcrates ", "}}
             </text>
             {{end}}
             {{/* Roles */}}
@@ -57,10 +57,10 @@
 </div>
 {{end}}
 
-{{/* Module Dependency DAG */}}
+{{/* Configcrate Dependency DAG */}}
 {{if .HasDeps}}
 <div class="card mt-2">
-    <h3 class="u-mb-12px">Module Dependencies</h3>
+    <h3 class="u-mb-12px">Configcrate Dependencies</h3>
     <div class="u-blk22" id="dependency-dag-container"></div>
     <script id="dependency-dag-data" type="application/json">{{.DependencyJSON}}</script>
     <div class="swarm-legend u-mt-8px">

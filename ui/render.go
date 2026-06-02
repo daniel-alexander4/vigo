@@ -162,7 +162,7 @@ func funcMap() template.FuncMap {
 		//   "<changed>/<failed>/<total>"
 		// e.g. "3/1/172". The bare slash form keeps the badge compact;
 		// the title attribute (convergenceHover) carries the labeled
-		// "X changed · Y failed of Z modules" form for operators who
+		// "X changed · Y failed of Z configcrates" form for operators who
 		// need the legend. Badge color comes from convergenceBadgeClass
 		// against the envoy/run's bucket — never the raw failed/total
 		// ratio, so the table colors agree with the pill counts.
@@ -173,7 +173,7 @@ func funcMap() template.FuncMap {
 		// attribute on the badge — operator hovers and gets a sentence
 		// instead of a numeric trio.
 		"convergenceHover": func(changed, failed, total int64) string {
-			return fmt.Sprintf("%d changed · %d failed of %d modules", changed, failed, total)
+			return fmt.Sprintf("%d changed · %d failed of %d configcrates", changed, failed, total)
 		},
 		// actionCSSClass maps the richer per-resource action_taken
 		// vocabulary the agent emits (create/update/delete plus

@@ -171,7 +171,7 @@
 {{if .Envoys}}
 <div class="u-p-8px-16px-bg-var-color-bg">
     <table class="table u-fs-12px">
-        <thead><tr><th>Hostname</th><th>Module</th><th>Module Status</th><th>Runs (period)</th><th>Failures</th><th>Last Run</th></tr></thead>
+        <thead><tr><th>Hostname</th><th>Configcrate</th><th>Configcrate Status</th><th>Runs (period)</th><th>Failures</th><th>Last Run</th></tr></thead>
         <tbody>
             {{range .Envoys}}
             <tr>
@@ -188,7 +188,7 @@
 </div>
 {{else}}
 <div class="u-p-12px-16px-bg-var-color-bg">
-    <p class="text-muted u-m-0">No envoys enforce modules mapped to this control.</p>
+    <p class="text-muted u-m-0">No envoys enforce configcrates mapped to this control.</p>
 </div>
 {{end}}
 <div class="u-p-8px-16px-12px-bg-var-color-bg">

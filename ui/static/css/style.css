@@ -4968,7 +4968,7 @@ a.server-config-card:hover {
 .config-tree__file--roles        { color: #f9e2af; } /* yellow */
 .config-tree__file--waivers      { color: #f38ba8; } /* red */
 .config-tree__file--hostcrate    { color: #89dceb; } /* sky */
-.config-tree__file--module       { color: #a6e3a1; } /* green */
+.config-tree__file--configcrate  { color: #a6e3a1; } /* green */
 .config-tree__file--usercrate    { color: #94e2d5; } /* teal */
 .config-tree__file--vgo          { color: var(--color-text); }
 .config-tree__file--other        { color: #6c7086; } /* overlay0 */

@@ -75,8 +75,8 @@ func validateFile(path string) ([]validate.Finding, error) {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
 
-	// Phase 2: detect file type — envoys file vs module file.
-	// A envoys file has a top-level "envoys:" key; a role file has "modules:" but no "resources:".
+	// Phase 2: detect file type — envoys file vs configcrate file.
+	// A envoys file has a top-level "envoys:" key; a role file has "configcrates:" but no "resources:".
 	var probe map[string]any
 	_ = yaml.Unmarshal(data, &probe) // data already validated as YAML above
 
@@ -90,17 +90,17 @@ func validateFile(path string) ([]validate.Finding, error) {
 		for i, entry := range cfg.Envoys {
 			if entry.Match == "" {
 				findings = append(findings, validate.Finding{
-					Severity: validate.SeverityError,
-					Configcrate:   filepath.Base(path),
-					Message:  fmt.Sprintf("entry %d: missing required 'match' field", i),
+					Severity:    validate.SeverityError,
+					Configcrate: filepath.Base(path),
+					Message:     fmt.Sprintf("entry %d: missing required 'match' field", i),
 				})
 			}
 		}
 		if len(cfg.Envoys) == 0 {
 			findings = append(findings, validate.Finding{
-				Severity: validate.SeverityWarning,
-				Configcrate:   filepath.Base(path),
-				Message:  "no envoy entries defined",
+				Severity:    validate.SeverityWarning,
+				Configcrate: filepath.Base(path),
+				Message:     "no envoy entries defined",
 			})
 		}
 		return findings, nil
@@ -117,9 +117,9 @@ func validateFile(path string) ([]validate.Finding, error) {
 
 	if def.Name == "" {
 		findings = append(findings, validate.Finding{
-			Severity: validate.SeverityError,
-			Configcrate:   filepath.Base(path),
-			Message:  "missing required 'name' field",
+			Severity:    validate.SeverityError,
+			Configcrate: filepath.Base(path),
+			Message:     "missing required 'name' field",
 		})
 	}
 
@@ -132,7 +132,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 		if r.Name == "" {
 			findings = append(findings, validate.Finding{
 				Severity:     validate.SeverityError,
-				Configcrate:       moduleName,
+				Configcrate:  moduleName,
 				ResourceType: r.Type,
 				Message:      "resource missing 'name' field",
 			})
@@ -140,7 +140,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 		if r.Type == "" {
 			findings = append(findings, validate.Finding{
 				Severity:     validate.SeverityError,
-				Configcrate:       moduleName,
+				Configcrate:  moduleName,
 				ResourceName: r.Name,
 				Message:      "resource missing 'type' field",
 			})

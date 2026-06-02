@@ -26,9 +26,9 @@ var complianceBundlesCmd = &cobra.Command{
 
 Each bundle is a kebab-case tag tied to a specific framework section
 (e.g. "cis-ubuntu-access-baseline", "ce-firewalls", "aba-audit-logging")
-that the loader expands into framework -> control coverage. A module
+that the loader expands into framework -> control coverage. A configcrate
 that exists to implement one framework's rule set declares
-"bundle: [cis-ubuntu-access-baseline]"; a module that ships a
+"bundle: [cis-ubuntu-access-baseline]"; a configcrate that ships a
 functional capability that happens to satisfy controls across many
 frameworks uses "provides:" instead.
 
