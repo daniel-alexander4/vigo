@@ -72,6 +72,14 @@ scripts/migrate-0.30.sh:*:cairn
 # patterns it greps for.
 scripts/check-legacy-naming.sh:*:cairn
 
+# The factory-reset substrate test deliberately names the retired
+# per-user state dirs (.vigo-swarmgit, .vigo-cairn, .vigorepo, …) in its
+# USER_DIRS wipe list and the comments describing it, so leftover state
+# from pre-0.50.0 enrollments gets scrubbed before the e2e runs from a
+# clean slate. Rewriting these would make the wipe stop cleaning those
+# dirs. Whole-file because the wipe list + its comments are edited often.
+test/swarm-substrate.sh:*:swarmgit
+
 # Pre-existing references to the historical "cairn"-era reset incident —
 # the tshoot archive file is named log-archive-cairn-resolved-20260424-…
 # (its name can't change), and the prose pointing at it cites it by that
