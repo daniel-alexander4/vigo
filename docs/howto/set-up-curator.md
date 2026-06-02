@@ -273,7 +273,7 @@ The API is **read-only** — every write or management verb returns an S3 `405`;
 
 ## What's next
 
-- **Refer to artifacts from a module's `package` / `source_package` / `file` resource** → `resources/package` in the reference vocabulary. Curator URIs work wherever a download URL fits.
+- **Refer to artifacts from a configcrate's `package` / `source_package` / `file` resource** → `resources/package` in the reference vocabulary. Curator URIs work wherever a download URL fits.
 - **The blob is bigger than 2 GiB** → raise `swarm.curator.max_bytes` per envoy. Republish; tags re-anchor automatically.
 - **Recall a bad release** → `vigocli swarm curator block <artifact_id>` blocks fleet-wide resolution; only a publisher `rm` truly purges the bytes.
 - **`pull` hangs or sha-mismatches** → [Troubleshoot common issues](troubleshoot.md).

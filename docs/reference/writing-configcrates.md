@@ -581,7 +581,7 @@ resources:
 **Rules:**
 - `#~` comments are auto-generated — they are stripped and regenerated on every publish. Do not edit them.
 - `#` comments (no tilde) are hand-written and never touched by the linter. Use these for your own notes.
-- The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../howto/publish-config.md#module-linter) for details.
+- The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../howto/publish-config.md#configcrate-linter) for details.
 
 ## Config Reload
 

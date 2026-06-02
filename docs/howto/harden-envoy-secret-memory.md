@@ -1,7 +1,7 @@
 
 # Harden an envoy against secret-memory disclosure
 
-When an envoy applies a module that references a `secret:`, the agent fetches
+When an envoy applies a configcrate that references a `secret:`, the agent fetches
 the plaintext from the server and holds it **in process memory** for the
 lifetime of that secret epoch — in a resolved-secrets cache, and in the
 short-lived copies the substitute → render → apply pipeline makes (the

@@ -143,7 +143,7 @@ The Prometheus and Loki rule files don't conflict — most operators ship both: 
 After publish:
 
 1. Watch the server logs for `integrations dispatcher enabled targets=N` (count includes Loki when enabled).
-2. Trigger a synthetic event — force-push a module that won't apply, or revoke + re-enroll a test envoy.
+2. Trigger a synthetic event — force-push a configcrate that won't apply, or revoke + re-enroll a test envoy.
 3. In Grafana, open Explore → Loki → `{service="vigo"}` and confirm the line lands.
 4. Run `vigocli config publish` against any unchanged stockpile — that fires an `audit.config_published` event you can find at `{service="vigo", event_name="audit.config_published"}`.
 
