@@ -221,7 +221,7 @@ In the Web UI, the new envoy appears in `/envoys` with a populated check-in time
 
 ## What's next
 
-- **Apply some declarative state to the envoy** → [Write your first configcrate](../configcrates/write-your-first-module.md).
+- **Apply some declarative state to the envoy** → [Write your first configcrate](../configcrates/write-your-first-configcrate.md).
 - **The envoy enrolled but isn't checking in** → [Troubleshoot common issues](troubleshoot.md#envoy-shows-as-stale-but-the-agent-is-running).
 - **Repeat the procedure on more envoys** — the same one-liner works for every additional machine you want managed.
 
@@ -229,7 +229,7 @@ In the Web UI, the new envoy appears in `/envoys` with a populated check-in time
 
 - [Installation](install.md)
 - [Server config (`server.yaml`) reference](../../reference/server-yaml.md)
-- [Configcrate-writing reference](../../reference/writing-configcrates.md)
+- [Configcrate-writing reference](../../reference/configcrate-language.md)
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

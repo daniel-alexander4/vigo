@@ -999,7 +999,7 @@ Generate retract configcrates for removed configcrates. Called automatically by 
 }
 ```
 
-When retraction or AI is disabled, returns `{"enabled": false, "reason": "..."}`. See [Configcrate Retraction](writing-configcrates.md).
+When retraction or AI is disabled, returns `{"enabled": false, "reason": "..."}`. See [Configcrate Retraction](configcrate-language.md).
 
 ---
 

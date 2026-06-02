@@ -331,14 +331,14 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 ## Related
 
-- [Config Format](../../reference/writing-configcrates.md) — Configcrates, roles, envoys.vgo, vars
-- [Resource DAG](../../reference/writing-configcrates.md) — depends_on, notify, subscribes
-- [Templates](../../reference/writing-configcrates.md) — Go template syntax and restrictions
-- [When Expressions](../../reference/writing-configcrates.md) — Conditional expressions and builtins
+- [Config Format](../../reference/configcrate-language.md) — Configcrates, roles, envoys.vgo, vars
+- [Resource DAG](../../reference/configcrate-language.md) — depends_on, notify, subscribes
+- [Templates](../../reference/configcrate-language.md) — Go template syntax and restrictions
+- [When Expressions](../../reference/configcrate-language.md) — Conditional expressions and builtins
 - [Secrets](../../reference/server-yaml.md) — Secret providers and the secret: prefix
 - [Executors](../../reference/vigo/resources/_index.md) — All resource executors
 - [Nginx Configcrate Example](../../examples/nginx-module.md) — Full nginx walkthrough
-- [First Configcrate](../../howto/configcrates/write-your-first-module.md) — Writing your first configcrate
+- [First Configcrate](../../howto/configcrates/write-your-first-configcrate.md) — Writing your first configcrate
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*

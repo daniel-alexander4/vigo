@@ -5,7 +5,7 @@ You'll finish this page with a working nginx configcrate published to your fleet
 
 **When you'd use this:** every operator writing their first Vigo configcrate. The example is nginx because it exercises the five most common resource types in one go (`package`, `file`, `service`, `directory`, `exec`); swap the package and config and you have a template for postgres, redis, prometheus, anything.
 
-**When you'd skip this:** you've already shipped configcrates for a different service; jump straight to the [configcrate-writing reference](../../reference/writing-configcrates.md).
+**When you'd skip this:** you've already shipped configcrates for a different service; jump straight to the [configcrate-writing reference](../../reference/configcrate-language.md).
 
 This walkthrough builds a complete nginx configcrate with package installation, config file management, and service control — demonstrating the core patterns you'll use in every Vigo configcrate.
 
@@ -104,7 +104,7 @@ envoys:
 
 Node-level `vars` override the configcrate's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have configcrates that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../../reference/writing-configcrates.md#directory-inheritance).
+**Tip:** If you have configcrates that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../../reference/configcrate-language.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
@@ -225,10 +225,10 @@ vigocli envoys show web1.example.com
 
 ## What's Next
 
-- [Config Format](../../reference/writing-configcrates.md) — Full reference for configcrates, roles, vars, environments.vgo
-- [Resource DAG](../../reference/writing-configcrates.md) — depends_on, notify, subscribes in depth
-- [When Expressions](../../reference/writing-configcrates.md) — Conditional logic reference
-- [Templates](../../reference/writing-configcrates.md) — Go template syntax for content: attributes
+- [Config Format](../../reference/configcrate-language.md) — Full reference for configcrates, roles, vars, environments.vgo
+- [Resource DAG](../../reference/configcrate-language.md) — depends_on, notify, subscribes in depth
+- [When Expressions](../../reference/configcrate-language.md) — Conditional logic reference
+- [Templates](../../reference/configcrate-language.md) — Go template syntax for content: attributes
 - [File Executor: stream_edit](../../reference/vigo/resources/file.md#stream-edit) — Pipe file content through transform scripts before writing
 
 ## What success looks like
@@ -250,7 +250,7 @@ be3f86c5-c809-4989-a014-20a9d9647b2b  cb4acb1f-f995-4026-a01e-f5390283ca6c  2026
 ## What's next
 
 - **Add more configcrates** → assign by hostname pattern or role, see [Publish your config](publish-config.md).
-- **Make configcrates vary by host / OS / environment** → [the configcrate-writing reference](../../reference/writing-configcrates.md) covers conditionals, lookups, foreach, and per-environment overrides.
+- **Make configcrates vary by host / OS / environment** → [the configcrate-writing reference](../../reference/configcrate-language.md) covers conditionals, lookups, foreach, and per-environment overrides.
 - **A resource didn't apply** → [Troubleshoot common issues](../operate/troubleshoot.md#configcrate-convergence-loop--same-resource-changes-every-cycle).
 
 ---

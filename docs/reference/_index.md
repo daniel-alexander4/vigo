@@ -9,7 +9,7 @@ Lookup material. Not a tutorial — get the shape of what you need from the [how
 | [vigo/](vigo/) | The agent: flags, plus the full resource and trait vocabulary that you write configcrates in. |
 | [API](api.md) | REST API endpoints. Every `/api/v1/*` route in the codebase is documented here. |
 | [server.yaml](server-yaml.md) | The full server-config schema. |
-| [Writing configcrates](writing-configcrates.md) | The canonical configcrate-authoring reference: YAML format, resource types, conditionals, templates, composition (roles / hostcrates / usercrates / common.vgo / environments.vgo), lookups, retraction, stream-edit. |
+| [Writing configcrates](configcrate-language.md) | The canonical configcrate-authoring reference: YAML format, resource types, conditionals, templates, composition (roles / hostcrates / usercrates / common.vgo / environments.vgo), lookups, retraction, stream-edit. |
 | [Compliance matrix](compliance-matrix.md) | Framework × control table; which Vigo configcrates / Connwaer traits satisfy each control. |
 
 ---

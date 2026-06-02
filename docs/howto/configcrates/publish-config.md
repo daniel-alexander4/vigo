@@ -40,7 +40,7 @@ Both modes share the same operator-visible verb (`vigocli config publish`) and t
 └── .live/                        ← server reads here (locked, do not edit) — mirrors stockpile/ contents directly
 ```
 
-The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../../reference/writing-configcrates.md#directory-inheritance) for details.
+The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../../reference/configcrate-language.md#directory-inheritance) for details.
 
 Publish only walks `stockpile/`. Sibling subtrees (`examples/`, `anti-examples/`, `.live/`) are outside the walk and never appear in the diff or sync.
 
@@ -305,7 +305,7 @@ Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
 
 ## What's next
 
-- **A publish failed validation** → read the AI-streamed fix suggestions in your terminal; if you need the full validation rules, see [the configcrate-writing reference](../../reference/writing-configcrates.md).
+- **A publish failed validation** → read the AI-streamed fix suggestions in your terminal; if you need the full validation rules, see [the configcrate-writing reference](../../reference/configcrate-language.md).
 - **You want to trace why a particular envoy got a particular value** → `vigocli config trace <envoy> <configcrate>` walks the resolution chain.
 - **A publish landed but rolled itself back** → the convergence-rollback monitor caught it; inspect the audit log via `vigocli config history`.
 - **You need to verify what's live** → `vigocli config tree` shows the entire resolved tree as the server sees it.

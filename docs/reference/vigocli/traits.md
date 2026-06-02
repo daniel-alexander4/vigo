@@ -14,8 +14,8 @@ Run `vigocli traits --help` for current flags.
 ## Related
 
 - [Trait Collectors](../vigo/traits/_index.md) — per-collector schema reference
-- [When Expressions](../../reference/writing-configcrates.md) — how traits flow into condition evaluation
-- [Templates](../../reference/writing-configcrates.md) — how traits flow into `content:` rendering
+- [When Expressions](../../reference/configcrate-language.md) — how traits flow into condition evaluation
+- [Templates](../../reference/configcrate-language.md) — how traits flow into `content:` rendering
 
 ## Note on `vigo traits`
 

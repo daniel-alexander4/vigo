@@ -1445,7 +1445,7 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 			}
 			n.Configcrates = append(n.Configcrates, extra...)
 		case "modules":
-			return fmt.Errorf("`modules:` was renamed to `configcrates:` — update the match block (see docs/reference/writing-configcrates.md)")
+			return fmt.Errorf("`modules:` was renamed to `configcrates:` — update the match block (see docs/reference/configcrate-language.md)")
 		case "usercrates":
 			var extra []ConfigcrateRef
 			if err := val.Decode(&extra); err != nil {
@@ -1485,9 +1485,9 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("decoding exclude_configcrates: %w", err)
 			}
 		case "exclude_modules":
-			return fmt.Errorf("`exclude_modules:` was renamed to `exclude_configcrates:` — update the match block (see docs/reference/writing-configcrates.md)")
+			return fmt.Errorf("`exclude_modules:` was renamed to `exclude_configcrates:` — update the match block (see docs/reference/configcrate-language.md)")
 		case "exclude_usercrates":
-			return fmt.Errorf("`exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-configcrates.md)")
+			return fmt.Errorf("`exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/configcrate-language.md)")
 		case "exclude_resources":
 			if err := val.Decode(&n.ExcludeResources); err != nil {
 				return fmt.Errorf("decoding exclude_resources: %w", err)

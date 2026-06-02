@@ -1,7 +1,7 @@
 
 # Writing configcrates
 
-This is the canonical reference for operators authoring Vigo configcrates. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, hostcrates, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first configcrate](../howto/configcrates/write-your-first-module.md) first; come back here when you need the full surface.
+This is the canonical reference for operators authoring Vigo configcrates. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, hostcrates, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first configcrate](../howto/configcrates/write-your-first-configcrate.md) first; come back here when you need the full surface.
 
 ---
 ## Config Format
@@ -422,7 +422,7 @@ If a usercrate is defined in `stockpile/**/usercrates/` but no carrier includes 
 
 ### Migration from <0.54.0
 
-The pre-0.54.0 auto-apply rule and the `exclude_usercrates:` opt-out field are removed. A hostcrate, common.vgo, or environments.vgo containing `exclude_usercrates:` on an envoy entry fails to load with: ``exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-configcrates.md)``. To migrate: delete the field and add a positive `usercrates:` list to each carrier (hostcrate, common.vgo, role, or environments.vgo) that should pick up the usercrates that used to auto-apply.
+The pre-0.54.0 auto-apply rule and the `exclude_usercrates:` opt-out field are removed. A hostcrate, common.vgo, or environments.vgo containing `exclude_usercrates:` on an envoy entry fails to load with: ``exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/configcrate-language.md)``. To migrate: delete the field and add a positive `usercrates:` list to each carrier (hostcrate, common.vgo, role, or environments.vgo) that should pick up the usercrates that used to auto-apply.
 
 ### User management specifically
 

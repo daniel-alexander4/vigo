@@ -256,7 +256,7 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
 ## What's next
 
 - **Add a managed node** → [Enroll an envoy](enroll-an-envoy.md).
-- **Write your first declarative config** → [Write your first configcrate](../configcrates/write-your-first-module.md).
+- **Write your first declarative config** → [Write your first configcrate](../configcrates/write-your-first-configcrate.md).
 - **If the server didn't come up clean** → [Troubleshoot common issues](troubleshoot.md).
 
 ---

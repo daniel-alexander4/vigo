@@ -218,7 +218,7 @@ vigo version
 ## Related
 
 - [Bootstrap](../../howto/operate/enroll-an-envoy.md) -- Agent enrollment workflow
-- [Compiled Promises](../../reference/writing-configcrates.md) -- Offline convergence and LMDB state store
+- [Compiled Promises](../../reference/configcrate-language.md) -- Offline convergence and LMDB state store
 - [Guardrails](../../howto/operate/troubleshoot.md) -- Self-protection for agent paths
 - [Troubleshooting](../../howto/operate/troubleshoot.md) -- Common issues and diagnostics
 ---
