@@ -583,6 +583,99 @@ paths:
   license_dir: "/srv/vigo/license"
 ```
 
+## watcher
+
+Polls the secrets provider on a schedule and force-pushes affected envoys when a value changes — automatic secret rotation without waiting for the next check-in. See [Secrets](../concepts/secrets.md).
+
+```yaml
+watcher:
+  enabled: true
+  poll_interval: "5m"
+```
+
+## rate_limit
+
+Per-envoy and global ceilings on check-in RPCs. Requests over the limit get a retryable error so agents back off on their own. Note that *connection count*, not request rate, drives the memory ceiling — see [Size a vigosrv host](../howto/operate/sizing.md); this section only caps offered request rate.
+
+```yaml
+rate_limit:
+  enabled: true
+  checkin_per_envoy: 6      # max check-ins per envoy per window
+  checkin_global: 500       # max check-ins fleet-wide per window
+```
+
+## maintenance
+
+Global change freeze — `vigocli config publish` is blocked until `freeze_until` passes. For code freezes, customer maintenance windows, or incident response. Bypass requires editing the file and reloading, so the freeze is real.
+
+```yaml
+maintenance:
+  freeze_until: "2026-07-01T00:00:00Z"   # RFC3339; unset = no freeze
+```
+
+## task
+
+Ad-hoc task-dispatch safety. With `require_definition: true`, every task sent via `vigocli task dispatch` must reference a reviewed definition under `stockpile/tasks/` — direct shell commands are refused. Turn this on in production to force review of anything fan-outable to the fleet.
+
+```yaml
+task:
+  require_definition: true
+```
+
+## export
+
+One-way outbound compliance feeds — SIEM audit-event ingestion, CMDB inventory sync, and OSCAL-format framework reports — each toggled independently. See [Compliance reporting](../howto/compliance/compliance-reporting.md).
+
+```yaml
+export:
+  siem: true
+  cmdb: false
+  oscal: true
+```
+
+## compliance
+
+Scopes which compliance frameworks this deployment reports against. An empty `standards` list activates every framework Vigo knows; an explicit list restricts dashboards, reports, and waiver tooling to that subset. See the [Compliance matrix](compliance-matrix.md) for the framework catalog.
+
+```yaml
+compliance:
+  standards: ["hipaa", "soc2"]   # empty/unset = every framework
+```
+
+## risk
+
+Per-envoy risk scoring. An optional NVD CVE API key enriches scoring with CVSS metrics and vendor-attributed advisories; without it, CVE severity comes from scanner output alone. Risk scores drive the dashboard Risk Posture column and the cyber-insurance attestation PDF.
+
+```yaml
+risk:
+  nvd:
+    api_key: "secret:vigo/risk/nvd_api_key"   # optional CVSS enrichment
+```
+
+## stream_edit
+
+Guardrails on the file resource's `stream_edit:` attribute, which pipes content through agent-local scripts before it's written. Controls whether stream-edits are allowed, the permitted script paths, and the per-transform timeout. See [the configcrate language](configcrate-language.md) for the attribute itself.
+
+```yaml
+stream_edit:
+  enabled: true
+  allowed_paths: ["/srv/vigo/scripts"]
+  default_timeout: "10s"
+```
+
+## scrier
+
+Browser-based remote access (SSH, RDP, VNC) to any enrolled envoy, routed out through the envoy's outbound agent stream so no inbound ports are required on the target. Every session is logged in `scrier_sessions` and audited on disconnect. See [Set up Scrier](../howto/operate/set-up-scrier.md) and [Scrier](../concepts/scrier.md).
+
+```yaml
+scrier:
+  enabled: true
+  guacd_addr: "127.0.0.1:4822"
+  allowed_ports: [22, 3389, 5900]
+  max_sessions: 10
+  recording_enabled: false
+```
+
 ## Event Types Reference
 
 All event types available for SMTP, webhook, and integration subscriptions:
