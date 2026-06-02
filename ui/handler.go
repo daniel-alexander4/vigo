@@ -29,7 +29,6 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	licfmt "git.alexander4.io/tessera/license/products/vigo"
 	"git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/auth"
@@ -1669,7 +1668,6 @@ type DocsPageData struct {
 	NavTree        []DocsNavSection
 	CurrentPath    string
 	CurrentSection string
-	IsFreeTier     bool
 	// SearchIndexJSON is the flattened page index ({t,p,x} per page) emitted
 	// as a <script type="application/json"> data island for docs.js — keeps
 	// the search corpus out of an inline <script> (CSP script-src 'self').
@@ -1718,20 +1716,6 @@ var docsSectionOrder = []string{
 	"examples",
 }
 
-// docsGatedSections previously hid sections from the free tier. Doc-level
-// gating was retired in the 2026-06-01 docs rebuild — the whole operator
-// corpus is available to every tier. Kept as an empty set so the gating
-// call sites (isDocsPathGated, filterGatedNavForFreeTier, the watermark
-// branch) stay harmless no-ops; they're removed in the rebuild's UI-polish
-// phase.
-var docsGatedSections = map[string]bool{}
-
-// isDocsPathGated returns true if the given docs path falls under a gated section.
-func isDocsPathGated(pagePath string) bool {
-	section := strings.SplitN(pagePath, "/", 2)[0]
-	return docsGatedSections[section]
-}
-
 // isPublishedDocsSection reports whether a top-level docs section is in
 // the `docsSectionOrder` allowlist — the single source of truth for
 // "what the in-product docs serve". Both the nav builder and DocsPage
@@ -1763,21 +1747,6 @@ func docsTopSegment(pagePath string) string {
 func isDocsSectionDir(docsDir, section string) bool {
 	info, err := os.Stat(filepath.Join(docsDir, section))
 	return err == nil && info.IsDir()
-}
-
-// filterGatedNavForFreeTier returns a copy of the nav tree with gated
-// sections removed. Called per-request for free-tier license holders so
-// they don't see nav entries they can't follow. Paid-tier callers use the
-// full nav directly.
-func filterGatedNavForFreeTier(nav []DocsNavSection) []DocsNavSection {
-	out := make([]DocsNavSection, 0, len(nav))
-	for _, section := range nav {
-		if docsGatedSections[section.Path] {
-			continue
-		}
-		out = append(out, section)
-	}
-	return out
 }
 
 // buildDocsBreadcrumbs builds breadcrumb navigation from a docs page path.
@@ -2111,17 +2080,12 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 		content = "<h1>Documentation</h1><p>No docs found. Place markdown files in the docs directory.</p>"
 	}
 
-	isFreeTier := h.enforcer != nil && h.enforcer.IsFreeLicense()
 	nav := h.docsNav
-	if isFreeTier {
-		nav = filterGatedNavForFreeTier(nav)
-	}
 
 	data := DocsPageData{
 		PageData:        PageData{Title: "Documentation", ActiveNav: "docs"},
 		Content:         template.HTML(content),
 		NavTree:         nav,
-		IsFreeTier:      isFreeTier,
 		SearchIndexJSON: buildDocsSearchIndex(nav),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
@@ -2169,17 +2133,6 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// License gating: free-tier callers get a plain 403 on gated paths. No
-	// upgrade prompt, no path-exists disclosure beyond the response code.
-	// Nav entries for gated sections are already filtered for free-tier, so
-	// this branch only fires on direct URL access (bookmarks from a prior
-	// paid license, shared links, manual navigation).
-	isFreeTier := h.enforcer != nil && h.enforcer.IsFreeLicense()
-	if isFreeTier && isDocsPathGated(pagePath) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-
 	// Try exact .md file first, then _index.md for directories.
 	var raw []byte
 	var err error
@@ -2201,23 +2154,9 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 
 	content := rewriteDocsLinks(RenderMarkdown(string(raw)), baseDir)
 
-	// Watermark gated content for paid-tier users (visible footer + invisible ZW chars).
-	if !isFreeTier && isDocsPathGated(pagePath) && h.enforcer != nil {
-		status := h.enforcer.GetStatus()
-		licID := status.License.LicenseID
-		custName := status.License.CustomerName
-		content = licfmt.EncodeWatermark(content, licID)
-		content += fmt.Sprintf(`<div class="docs-watermark">Licensed to %s — %s</div>`,
-			template.HTMLEscapeString(custName),
-			template.HTMLEscapeString(licID))
-	}
-
 	breadcrumbs, currentSection := buildDocsBreadcrumbs(pagePath, h.docsNav)
 
 	nav := h.docsNav
-	if isFreeTier {
-		nav = filterGatedNavForFreeTier(nav)
-	}
 
 	data := DocsPageData{
 		PageData:        PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
@@ -2226,7 +2165,6 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		NavTree:         nav,
 		CurrentPath:     pagePath,
 		CurrentSection:  currentSection,
-		IsFreeTier:      isFreeTier,
 		SearchIndexJSON: buildDocsSearchIndex(nav),
 	}
 	h.setCommonWithRequest(&data.PageData, r)

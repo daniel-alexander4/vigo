@@ -1345,37 +1345,6 @@ func actionColor(action string) string {
 	}
 }
 
-func TestFilterGatedNavForFreeTier(t *testing.T) {
-	// Doc-level gating was retired in the 2026-06-01 rebuild — the filter
-	// is now a pass-through, so every section survives for every tier.
-	nav := []DocsNavSection{
-		{Title: "Start", Path: "start"},
-		{Title: "How-to", Path: "howto"},
-		{Title: "Concepts", Path: "concepts"},
-		{Title: "Reference", Path: "reference"},
-		{Title: "Examples", Path: "examples"},
-	}
-	filtered := filterGatedNavForFreeTier(nav)
-	if len(filtered) != len(nav) {
-		t.Fatalf("filtered nav dropped sections (%d → %d); doc gating should be off", len(nav), len(filtered))
-	}
-	for i := range nav {
-		if filtered[i].Path != nav[i].Path {
-			t.Errorf("filtered[%d].Path = %q, want %q", i, filtered[i].Path, nav[i].Path)
-		}
-	}
-}
-
-func TestIsDocsPathGated(t *testing.T) {
-	// Doc-level free-tier gating was retired in the 2026-06-01 rebuild —
-	// nothing is gated anymore, regardless of section.
-	for _, p := range []string{"compliance/hipaa", "compliance", "security", "reference/cli/config", "howto/install", ""} {
-		if isDocsPathGated(p) {
-			t.Errorf("isDocsPathGated(%q) = true, want false (doc gating retired)", p)
-		}
-	}
-}
-
 // DocsPage must refuse, by direct URL, any top-level section that isn't in
 // the published-section allowlist (adr/, internal.docs/) — the same rule
 // the nav builder uses — even when the files are present on disk. Root
