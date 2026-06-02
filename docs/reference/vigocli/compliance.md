@@ -13,7 +13,7 @@ Run `vigocli compliance --help` on a live server for the current set of subcomma
 
 ## provisions
 
-Lists the Vigo-curated catalog used by modules' `provides:` field. Each provision is a kebab-case tag (e.g. `time-sync`, `audit-trail`) that the loader expands into framework → control coverage. Adding `provides: [time-sync]` to a module's header replaces a hand-rolled `compliance:` block listing the same controls across HIPAA / PCI / NIST / ISO / CIS — the cross-walk lives once, in this catalog.
+Lists the Vigo-curated catalog used by configcrates' `provides:` field. Each provision is a kebab-case tag (e.g. `time-sync`, `audit-trail`) that the loader expands into framework → control coverage. Adding `provides: [time-sync]` to a configcrate's header replaces a hand-rolled `compliance:` block listing the same controls across HIPAA / PCI / NIST / ISO / CIS — the cross-walk lives once, in this catalog.
 
 The catalog is code-curated (`server/compliance/provisions.go`); the command reads it from the binary, so it works offline and on a fresh server.
 

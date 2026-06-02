@@ -117,7 +117,7 @@ Linux, macOS, FreeBSD, Windows. Requires the appropriate dump tool to be install
 
 ## Notes
 
-- Database credentials (passwords) should be handled via `.pgpass`, `.my.cnf`, or environment variables — not in the module YAML. Use Vigo secrets to manage credential files.
+- Database credentials (passwords) should be handled via `.pgpass`, `.my.cnf`, or environment variables — not in the configcrate YAML. Use Vigo secrets to manage credential files.
 - The dump runs as the agent's user (root). For Postgres, use `db_user: postgres` to run as the postgres system user via `pg_dump -U`.
 - Snapshot directories use the same `YYYY.JJJ.HH.MM` naming as the backup executor.
 - Unlike the backup executor, db_backup does not use hardlinks between snapshots — each dump is a fresh file. The snapshot directory structure provides dated organization and retention.

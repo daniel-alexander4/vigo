@@ -233,7 +233,7 @@ APT repositories use the modern `signed-by` keyring path (`/etc/apt/keyrings/<na
 | Key fingerprint provided | After download, fingerprint is verified via `gpg --with-colons --import-options show-only --import` — rejected if mismatch |
 | Key expired (`EXPKEYSIG`) | Automatically re-fetched from `key_url` if configured |
 | Key missing (`NO_PUBKEY`) | Reports error with the missing fingerprint — add `key_url` to fix |
-| Key URL returns 404 | Reports error with the failed URL — update `key_url` in the module |
+| Key URL returns 404 | Reports error with the failed URL — update `key_url` in the configcrate |
 | Key download fails | Tries curl then wget, reports clear error if both fail |
 
 When `apt-get update` fails after adding a repository, the executor parses the error and reports a classified message. GPG and repo errors feed into the package circuit breaker (see [package executor](package.md)).

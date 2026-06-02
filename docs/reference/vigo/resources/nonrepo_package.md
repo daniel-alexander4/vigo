@@ -183,7 +183,7 @@ The executor compiles on all platforms. Install/remove functionality works on:
 
 ## Notes
 
-- Download failures are **not** subject to the circuit breaker. A 404 indicates a broken module definition, not a transient infrastructure issue.
+- Download failures are **not** subject to the circuit breaker. A 404 indicates a broken configcrate definition, not a transient infrastructure issue.
 - The circuit breaker **does** apply to install/remove failures via `is_package_type()`, which includes `nonrepo_package`. This means repeated dpkg/rpm failures will trip the breaker and skip subsequent package resources.
 - Disk pre-flight checks on `/var` are inherited from the runner's package-type handling.
 - The executor cleans up its temp download directory after install, whether the install succeeds or fails.

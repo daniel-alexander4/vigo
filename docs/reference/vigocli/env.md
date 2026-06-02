@@ -17,7 +17,7 @@ vigocli env [subcommand] [flags]
 
 ## promote
 
-Show the variable differences between two environment tiers for a module. This is an informational command -- config files are not modified automatically.
+Show the variable differences between two environment tiers for a configcrate. This is an informational command -- config files are not modified automatically.
 
 ```bash
 vigocli env promote <module> --from <env> --to <env>

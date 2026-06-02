@@ -1,7 +1,7 @@
 
 # Trait Collectors
 
-Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent ships 46 built-in trait collectors covering OS identity, hardware, network, installed and running packages, security posture, certificates, listening services, kernel module attestation, swarm participation, CVE × running-binary correlation, and agent/host resource pressure. Most run cross-platform on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; eight are Linux-only (`tpm`, `secureboot`, `package_source_audit`, `kernel_module_attestation`, `listeners`, `cve_running_correlation`, `host_self`, `hypervisor`); 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
+Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent ships 50 built-in trait collectors covering OS identity, hardware, network, installed and running packages, security posture, certificates, listening services, kernel module attestation, swarm participation, CVE × running-binary correlation, and agent/host resource pressure. Most run cross-platform on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; eight are Linux-only (`tpm`, `secureboot`, `package_source_audit`, `kernel_module_attestation`, `listeners`, `cve_running_correlation`, `host_self`, `hypervisor`); 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
 
 Each collector runs in parallel under a per-collector timeout (5s default; up to 30s for `cve_running_correlation` and 60s for `security_scan`). Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports, swarm, swarm_seeds, gitback, puddle, agent_self, host_self), **stable** (cached across ~12 cycles: everything else), or **periodic** (cached across ~hourly intervals: `package_updates`, `cloud`, `cve_running_correlation`).
 
@@ -15,6 +15,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | Hardware | `hardware` | CPU count, memory MB, disk GB per mount | [hardware.md](hardware.md) |
 | Network | `network` | Hostname, FQDN, IP addresses, MAC addresses | [network.md](network.md) |
 | Packages | `packages` | Installed packages and versions (dpkg/rpm/brew/pkg/pkgin) | [packages.md](packages.md) |
+| Package Updates | `package_updates` | Periodic: count of packages with an available update, plus any repos that failed to refresh. Distinct from `packages` (installed inventory) | [package_updates.md](package_updates.md) |
 | Time | `time` | Current local/UTC time, date, clock, weekday | [time.md](time.md) |
 | Identity | `identity` | UID, GID, username, group, privilege status | [identity.md](identity.md) |
 | Virtual | `virtual` | Virtualization detection (VM/container type and role) | [virtual.md](virtual.md) |
@@ -43,10 +44,13 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | Secure Boot | `secureboot` | UEFI Secure Boot status and boot mode | [secureboot.md](secureboot.md) |
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
 | Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](../../../howto/set-up-swarm.md) |
-| Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
+| Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | [swarm_seeds.md](swarm_seeds.md) |
 | Gitback | `gitback` | Publisher-side state (active sources, per-source sha, discovery/publish errors) plus receiver-side materialized mirrors | [gitback.md](gitback.md) |
 | Poolq | `poolq` | Per-user signed poolq messages (ADR-029): walks `~/.vigo-poolq/<topic_id>/messages/*.json` across users and emits the verifying ones verbatim for the server's `poolqmesh` aggregator | [poolq.md](poolq.md) |
 | Puddle | `puddle` | Sole reporter of puddle identity + health (ADR-014): walks each user's `~/.vigo-puddle/` and emits the current pubkey, the friendly-name claim (ADR-022), and local health signals (initialized, session unlocked, pair/rekey window, retired count) for the server's `puddlemesh` aggregator | [puddle.md](puddle.md) |
+| Curator | `curator` | Per-user signed curator catalog entries (ADR-024): walks `~/.vigo-curator/<artifact_id>/entry.json` across users and emits the verifying ones verbatim for the server's `curatormesh` aggregator | [curator.md](curator.md) |
+| Lockbox | `lockbox` | Per-user encrypted-directory state — ciphertext file set, tombstones, and known recipients in `~/lockbox/`; consumed by `lockboxmesh` for cross-envoy consistency + recipient-drift views | [lockbox.md](lockbox.md) |
+| Longdrawer | `longdrawer` | Per-user LAN directory state — file set + tombstones in `~/longdrawer/`; consumed by `longdrawermesh` | [longdrawer.md](longdrawer.md) |
 | Agent Self | `agent_self` | Vigo agent's own resource footprint: RSS, VSZ, threads, open FDs, direct-descendant count + descendant FD total, uptime | [agent_self.md](agent_self.md) |
 | Package Source Audit | `package_source_audit` | Linux-only: apt/yum/dnf package sources with URL (credentials stripped), suite, components, enabled state | [package_source_audit.md](package_source_audit.md) |
 | Kernel Module Attestation | `kernel_module_attestation` | Linux-only: loaded kernel modules with signature status (signed / unsigned / bad_signature) from `/proc/modules` + sysfs taint | [kernel_module_attestation.md](kernel_module_attestation.md) |
@@ -78,7 +82,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 
 ## Connwaer Trait Collector
 
-If the [Connwaer](../../compliance-matrix.md) compliance verification agent is installed alongside the Vigo agent, the `connwaer` trait collector reads Connwaer's JSON result files from disk and reports them under the `connwaer` trait namespace. Each capability's latest result (status, summary, evidence, controls) is available as `.Traits.connwaer.<capability_name>`. Results older than 24 hours are considered stale and excluded.
+If the [Connwaer](../../compliance-matrix.md) compliance verification agent is installed alongside the Vigo agent, the `connwaer` trait collector reads Connwaer's JSON result files from disk and reports them under the `connwaer` trait namespace (see [connwaer.md](connwaer.md)). Each capability's latest result (status, summary, evidence, controls) is available as `.Traits.connwaer.<capability_name>`. Results older than 24 hours are considered stale and excluded.
 
 | Platform | Results Directory |
 |----------|------------------|
