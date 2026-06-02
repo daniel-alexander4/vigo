@@ -1735,6 +1735,39 @@ func isDocsPathGated(pagePath string) bool {
 	return docsGatedSections[section]
 }
 
+// isPublishedDocsSection reports whether a top-level docs section is in
+// the `docsSectionOrder` allowlist — the single source of truth for
+// "what the in-product docs serve". Both the nav builder and DocsPage
+// consult it so they can't disagree on which sections are public.
+// Non-operator content (adr/, internal.docs/) is absent from the
+// allowlist and so is hidden from the nav AND refused by direct URL.
+func isPublishedDocsSection(section string) bool {
+	for _, s := range docsSectionOrder {
+		if s == section {
+			return true
+		}
+	}
+	return false
+}
+
+// docsTopSegment returns the first path segment of a cleaned docs page
+// path (the candidate section name). `internal.docs/strategy/x` → `internal.docs`;
+// `overview` → `overview`.
+func docsTopSegment(pagePath string) string {
+	p := strings.TrimPrefix(filepath.Clean("/"+pagePath), "/")
+	if i := strings.IndexByte(p, '/'); i >= 0 {
+		return p[:i]
+	}
+	return p
+}
+
+// isDocsSectionDir reports whether `<docsDir>/<section>` is a directory —
+// i.e. the segment names a docs section rather than a root-level page.
+func isDocsSectionDir(docsDir, section string) bool {
+	info, err := os.Stat(filepath.Join(docsDir, section))
+	return err == nil && info.IsDir()
+}
+
 // filterGatedNavForFreeTier returns a copy of the nav tree with gated
 // sections removed. Called per-request for free-tier license holders so
 // they don't see nav entries they can't follow. Paid-tier callers use the
@@ -2101,6 +2134,20 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 // DocsPage renders an individual docs page from disk.
 func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	pagePath := r.PathValue("path")
+
+	// Published-section allowlist — the same `docsSectionOrder` rule the
+	// nav builder uses. A request whose top-level segment names a docs
+	// directory that isn't in the allowlist (adr/, internal.docs/) gets
+	// the same 404 as a missing page, whether or not the files happen to
+	// be on disk — so non-operator content never serves by direct URL.
+	// Defense in depth behind .dockerignore; covers markdown pages AND
+	// static assets. Root-level pages (overview.md, glossary.md) aren't
+	// directories, so they fall through and serve normally.
+	if section := docsTopSegment(pagePath); section != "" &&
+		isDocsSectionDir(h.docsDir, section) && !isPublishedDocsSection(section) {
+		http.Error(w, "page not found", http.StatusNotFound)
+		return
+	}
 
 	// Serve static assets (SVG, PNG, etc.) directly from the docs directory.
 	ext := filepath.Ext(pagePath)

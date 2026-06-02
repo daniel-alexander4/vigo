@@ -1394,6 +1394,56 @@ func TestIsDocsPathGated(t *testing.T) {
 	}
 }
 
+// DocsPage must refuse, by direct URL, any top-level section that isn't in
+// the published-section allowlist (adr/, internal.docs/) — the same rule
+// the nav builder uses — even when the files are present on disk. Root
+// pages and published sections must still be reachable (i.e. not 404 by
+// the allowlist guard). Guards against the non-operator-docs leak.
+func TestDocsPageRefusesNonPublishedSection(t *testing.T) {
+	docsDir := t.TempDir()
+	mk := func(rel, body string) {
+		p := filepath.Join(docsDir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("overview.md", "# Overview\n")
+	mk("reference/_index.md", "# Reference\n")
+	mk("reference/api.md", "# API\n")
+	mk("internal.docs/_index.md", "# Internal\n")
+	mk("internal.docs/strategy/pricing.md", "# Secret pricing\n")
+	mk("adr/_index.md", "# ADRs\n")
+
+	h := newTestHandler(t)
+	h.docsDir = docsDir
+	h.docsNav = buildDocsNav(docsDir)
+
+	// internal.docs / adr must 404 by direct URL even though they exist.
+	for _, p := range []string{"internal.docs", "internal.docs/strategy/pricing", "adr", "adr/_index"} {
+		req := httptest.NewRequest(http.MethodGet, "/docs/"+p, nil)
+		req.SetPathValue("path", p)
+		rec := httptest.NewRecorder()
+		h.DocsPage(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("DocsPage(%q) = %d, want 404 (non-published section must not serve)", p, rec.Code)
+		}
+	}
+
+	// Published section + root page must not be blocked by the allowlist guard.
+	for _, p := range []string{"reference/api", "overview"} {
+		req := httptest.NewRequest(http.MethodGet, "/docs/"+p, nil)
+		req.SetPathValue("path", p)
+		rec := httptest.NewRecorder()
+		h.DocsPage(rec, req)
+		if rec.Code == http.StatusNotFound {
+			t.Errorf("DocsPage(%q) = 404, want it served (published/root content)", p)
+		}
+	}
+}
+
 func TestPlatformComplianceHandler(t *testing.T) {
 	h := newTestHandler(t)
 
