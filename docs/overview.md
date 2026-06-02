@@ -1,61 +1,48 @@
+# Vigo
 
-# Overview
+**60,000 envoys. A 1-second check-in cadence. One server.**
 
-Vigo keeps envoys in the state you've declared. Agents on each envoy pull desired state from a central server, apply changes idempotently, and report results back. You write the state in YAML; the system converges envoys toward it on a fixed interval — and stays there.
+Vigo is a distributed state enforcement engine: agents on your managed nodes (envoys) pull desired state from a central server over gRPC/mTLS, apply idempotent resource changes, and report results back — at a tight cadence, at fleet scale, on commodity hardware. When one server isn't enough, **spanner** federates write-equal peers and the ceiling goes away.
 
-That convergence engine is the core, but Vigo is a good deal more than configuration management. The same server that enforces state also scores regulatory compliance, runs active verification (Connwaer), brokers browser SSH/RDP/VNC without inbound ports (Scrier), distributes content peer-to-peer, and holds tens of thousands of nodes per host at a one-second check-in cadence. The sections below start with the convergence model; the rest of the platform layers on from there.
+But scale is only half of it. Vigo is **far more than configuration management** — it bundles the platform an operator usually has to assemble from a half-dozen tools: enforcement *and* compliance scoring *and* GRC evidence *and* reverse remote access *and* a peer-to-peer content fabric *and* an AI assistant *and* HA — under one mTLS-signed control plane. Vigo uniquely pairs elite tight-cadence scale with that full bundle.
 
-## Three binaries
+---
 
-| Binary | Where it runs | What it does |
-|---|---|---|
-| `vigosrv` | One central server | Holds the desired-state config, signs and serves it, accepts results. gRPC on port 1530, REST + Web UI on port 8443. SQLite-backed; no separate database to operate. |
-| `vigo` | Every envoy (the managed-node agent) | Pulls policy, applies it, reports back. ~7 MB static Rust binary, no runtime deps. |
-| `vigocli` | Wherever you administer from | Talks to the server's REST API: enroll, query, publish config, dispatch tasks, open Scrier sessions, run reports. |
+## What Vigo does
 
-## Supported platforms
+**State enforcement & convergence.** Describe desired state as **configcrates** — reusable resource sets across 74 idempotent resource types (`file`, `package`, `service`, `user`, `exec`, `container`, `vm`, repositories, …). Resources form a `depends_on` DAG with `notify`/`subscribes` triggers; `when:` conditionals and Go-template `content:` adapt per host. The agent checks before it acts, self-heals from external failures, and **converges offline** from its cached bundle when the server is unreachable. Convergence is classified on two orthogonal axes — failure (Converged/Degraded/Failed) × drift (None/Changed/Diverged) — plus reachability.
 
-Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Per-platform init systems (systemd / launchd / rc.d / rcctl / SMF / Windows Service) and package managers (apt, dnf, yum, zypper, pacman, apk, Homebrew, pkg, pkgin, IPS, Chocolatey, winget, Scoop) are supported. Network devices (Cisco IOS/NX-OS, Juniper Junos) work over SSH via a gateway envoy.
+**Multi-axis configuration.** One YAML language ties together configcrates, roles, hostcrates (hostname-pattern → role/vars, first match wins), per-user **usercrates**, and per-environment overrides, with a clear var-precedence chain. The source of truth is files only: edit the stockpile, `vigocli config publish`, the server validates and reloads.
 
-## Mental model
+**Compliance & GRC.** Per-framework coverage (HIPAA, SOC 2, PCI DSS, ISO 27001, and more): a control counts as covered when a configcrate claims it (`provides:` capabilities or `bundle:` framework cuts), a **Connwaer** active check escalates it to satisfied, or a waiver applies. Push per-control pass/fail evidence to Vanta, Drata, Secureframe, ServiceNow GRC, and others on a schedule; export cyber-insurance / audit PDFs. Convergence and compliance are never conflated.
 
-1. **Declare state in YAML files** under `/srv/vigo/stacks/stockpile/`. Hostname patterns match envoys to roles, roles aggregate configcrates, configcrates describe resources (files, packages, services, users, repositories, exec actions). Per-host overrides, environment splits, and conditional logic compose on top.
-2. **Publish.** `vigocli config publish` validates the tree, syncs it to `/srv/vigo/stacks/.live/`, and triggers a server reload.
-3. **Agents converge.** Every check-in interval — default 5 minutes; configurable shorter on capable hardware — each envoy pulls the configcrates matching its hostname, applies any drift idempotently, and reports per-resource outcomes. Drift from manual changes, package upgrades, or external automation is corrected within one interval. (Per-fleet capacity at low intervals is workload-dependent; see your own benchmarks rather than relying on a static "X seconds works" claim.)
-4. **Observe.** The Web UI shows fleet convergence, drift, compliance posture, risk scoring, audit history, and a per-envoy detail view. The CLI gives you the same data plus orchestration verbs (task dispatch, workflow execution, ad-hoc query, Scrier shells).
+**Reverse remote access (Scrier).** Admin SSH / RDP / VNC to any envoy with **no inbound ports** on the node — sessions reverse out through the agent's existing stream, land in the right OS user's `authorized_keys` transiently, and never expose lateral movement. RDP/VNC ride a `guacd` sidecar in the browser.
 
-## Key properties you'll encounter
+**Peer-to-peer swarm.** A shared mTLS substrate carries six content subsystems — **filecast** (admin file push), **gitback** (git over swarm), **longdrawer** (LAN plaintext sync), **lockbox** (encrypted sync), **curator** (artifact registry + Docker/S3 shims), **poolq** (ordered-log queue) — all rooted in the per-user **puddle** identity. Fleet-distributed binaries, container images, and agent self-updates move node-to-node instead of hammering the server.
 
-- **One server, whole fleet.** No compile masters, worker pools, or database clusters at any scale. SQLite + WAL + optional Litestream WAL replication to S3-compatible storage.
-- **Scales to tens of thousands of nodes per server.** One vigosrv holds ~60k concurrent agent streams on a 31 GiB host — memory-bound and linear (~220 KB/node), CPU never the limit, with graceful shedding rather than collapse under overload. Past that, peer-equal `spanner` federation partitions the fleet across hosts (no central compile to bottleneck). See [Sizing](howto/sizing.md).
-- **Continuous convergence.** Every check-in runs a full convergence pass, not just diff-apply. Drift correction is interval-bounded, not on-deploy-only.
-- **Offline-safe agents.** Each envoy caches the last signed policy bundle. When the server is unreachable, the agent re-applies that bundle against fresh traits, queues results locally, and flushes them on reconnect. Bundles expire when a `bundle_max_age` is set in `server.yaml`.
-- **Mandatory mTLS, mandatory signing.** Every gRPC call rides mTLS. Every agent request is ed25519-signed against the stored pubkey for that envoy. No plaintext mode, no signature-skip mode.
-- **Secrets stay out of every visible surface.** A `secret:` prefix in YAML is resolved at config load; the value never appears in config files, environment variables, logs, the database, gRPC payloads, or run results. Provider plug-ins resolve the prefix (`local` file-backed by default, `isopass` HTTP-backed in production).
-- **Tamper-evident audit log.** Every auditable event lands in a SHA-256-hash-chained log; modifying or deleting a row is cryptographically detectable.
-- **Self-protection guardrails.** The agent refuses to touch its own binary, the server's binary, the config directory, or the agent's service unit, regardless of what a configcrate declares. These checks aren't overridable.
-- **Scrier remote access without inbound ports.** SSH, RDP, and VNC sessions to any enrolled envoy ride the same outbound gRPC connection the agent uses for check-in. No port-22 exposure, no bastion, no VPN. See [Set up Scrier](howto/set-up-scrier.md).
-- **Compliance matrix derived from configcrates.** Configcrates carry `compliance:` tags; the server produces per-framework coverage reports (HIPAA, SOC 2, PCI-DSS, NIST 800-53, ISO 27001, more). See [Compliance reporting](howto/compliance-reporting.md).
-- **P2P content distribution.** A swarm substrate moves files, container images, git repos, and per-user encrypted directories between envoys directly. See [Set up Swarm](howto/set-up-swarm.md).
+**Orchestration.** Dispatch ad-hoc tasks and live queries across the fleet; chain them into workflows with conditional branching and abort; roll changes out in health-checked batches.
 
-## Limits to know up front
+**AI assistant.** A built-in, **strictly read-only** assistant answers questions about your fleet through ~14 tools (traits, runs, compliance, risk, CVE, docs), streamed, with the docs corpus in-context.
 
-- **Pre-1.0.** APIs and YAML schema can change between minor versions; no backward-compatibility shims. Read the changelog before upgrading; pin versions in production until the project hits 1.0.
-- **One server process per control plane.** High-availability is via a primary→secondary peer-replication topology in `server/peer/`, plus optional hub + bolts sharding (`server/spanner/`) for very large fleets. No multi-master.
-- **Linux + macOS first.** New agent subsystems ship Linux and macOS at launch; Windows / BSD / illumos parity is a follow-up, prioritized against the rest of the backlog (per the Linux-first doctrine).
-- **No session recording (yet).** Scrier's `recording_enabled` is a schema placeholder; the relay does not currently write recordings.
-- **No SCP/file-transfer over Scrier.** Interactive shell only.
-- **Wayland VNC unsupported.** No reliable Wayland-native VNC server exists at time of writing.
-- **Sandgorgon (bare-metal lifecycle).** Deferred to post-v1. The code is in-repo but not a v1-supported feature.
-- **Compliance claims are scoped to what the agent + Connwaer can prove.** Process controls, physical-security controls, organizational controls, and sub-millisecond enforcement (financial-services kill switches) are explicitly out of scope. See [reference/compliance-matrix.md → "What's deliberately not claimed"](reference/compliance-matrix.md).
+**High availability & DR.** Run peer replicas with one-command failover; or partition the fleet across spanner peers. SQLite with optional Litestream WAL replication to S3 keeps state durable.
 
-## Where to go next
+**Security by construction.** Every byte is mTLS; every agent request is ed25519-signed against the stored pubkey; one-time enrollment tokens are hashed at rest; RBAC spans admin / viewer / compliance; a SHA-256 hash chain makes the audit log tamper-evident; startup hardening fail-closes on a bad binary signature; secrets resolve from a pluggable backend and never appear in config, logs, DB, wire, or run results.
 
-- **First-time setup:** [Quickstart](quickstart.md) walks install → enroll → first configcrate.
-- **A specific task:** [How-to guides](howto/) covers install, enrollment, writing configcrates, publishing, Scrier, swarm, auth, monitoring, backup/DR, compliance, troubleshooting, and migrating from Puppet/Chef/Ansible/Salt/CFEngine.
-- **Looking something up:** [Reference](reference/) holds `vigocli` command pages, agent resource and trait pages, the REST API, the server.yaml schema, the configcrate-writing guide, and the compliance-framework matrix.
-- **What things mean:** [Glossary](glossary.md).
-- **Why decisions were made:** [ADRs](adr/) — historical decision archive, not operator docs.
+**Observability & integrations.** Dashboards for convergence, compliance, risk (0–100 scoring), agent health, CVE impact, attack surface, and inventory — every number drilling down to its evidence. Prometheus on `/metrics`; outbound webhooks to Slack, PagerDuty, ServiceNow, ConnectWise, Splunk, Datadog, Loki, Opsgenie, Sentry, NetBox, and more.
+
+**The agent.** A single Rust binary for Linux, macOS, and the BSDs / illumos (Windows supported; new subsystems ship Linux + macOS first). 74 resource types, 29 trait collectors, custom executors over JSON, libvirt VM management, first-class containers, and signed self-update.
+
+---
+
+## Start here
+
+| | |
+|---|---|
+| **New to Vigo?** | [Tutorials](start/) — stand up the server, enroll an envoy, ship your first configcrate, run your first compliance report |
+| **Need to do a thing?** | [How-to guides](howto/) — configcrates, swarm, auth, monitoring, compliance, backup/DR, migrate from another CM |
+| **Looking something up?** | [Reference](reference/) — vigocli, agent resources, agent traits, REST API, server.yaml, the configcrate language |
+| **Want the mental model?** | [Concepts](concepts/) — architecture, convergence vs compliance, the swarm, puddle identity, the security model |
+| **What's a term mean?** | [Glossary](glossary.md) |
 
 ---
 *Confidential — Alexander4, LLC. Not for redistribution. See [legal/license.md](legal/license.md).*

@@ -1346,50 +1346,32 @@ func actionColor(action string) string {
 }
 
 func TestFilterGatedNavForFreeTier(t *testing.T) {
+	// Doc-level gating was retired in the 2026-06-01 rebuild — the filter
+	// is now a pass-through, so every section survives for every tier.
 	nav := []DocsNavSection{
-		{Title: "Getting Started", Path: "getting-started"},
+		{Title: "Start", Path: "start"},
+		{Title: "How-to", Path: "howto"},
+		{Title: "Concepts", Path: "concepts"},
 		{Title: "Reference", Path: "reference"},
-		{Title: "Compliance", Path: "compliance"},
-		{Title: "Security", Path: "security"},
-		{Title: "Operations", Path: "operations"},
+		{Title: "Examples", Path: "examples"},
 	}
 	filtered := filterGatedNavForFreeTier(nav)
-
-	// Compliance and security must be dropped.
-	for _, s := range filtered {
-		if s.Path == "compliance" || s.Path == "security" {
-			t.Errorf("free-tier nav contains gated section %q", s.Path)
-		}
+	if len(filtered) != len(nav) {
+		t.Fatalf("filtered nav dropped sections (%d → %d); doc gating should be off", len(nav), len(filtered))
 	}
-
-	// Non-gated sections must survive in order.
-	wantPaths := []string{"getting-started", "reference", "operations"}
-	if len(filtered) != len(wantPaths) {
-		t.Fatalf("filtered nav has %d sections, want %d", len(filtered), len(wantPaths))
-	}
-	for i, want := range wantPaths {
-		if filtered[i].Path != want {
-			t.Errorf("filtered[%d].Path = %q, want %q", i, filtered[i].Path, want)
+	for i := range nav {
+		if filtered[i].Path != nav[i].Path {
+			t.Errorf("filtered[%d].Path = %q, want %q", i, filtered[i].Path, nav[i].Path)
 		}
 	}
 }
 
 func TestIsDocsPathGated(t *testing.T) {
-	cases := []struct {
-		path string
-		want bool
-	}{
-		{"compliance/hipaa", true},
-		{"compliance", true},
-		{"security/self-protection", true},
-		{"security", true},
-		{"getting-started/install", false},
-		{"reference/cli/config", false},
-		{"", false},
-	}
-	for _, c := range cases {
-		if got := isDocsPathGated(c.path); got != c.want {
-			t.Errorf("isDocsPathGated(%q) = %v, want %v", c.path, got, c.want)
+	// Doc-level free-tier gating was retired in the 2026-06-01 rebuild —
+	// nothing is gated anymore, regardless of section.
+	for _, p := range []string{"compliance/hipaa", "compliance", "security", "reference/cli/config", "howto/install", ""} {
+		if isDocsPathGated(p) {
+			t.Errorf("isDocsPathGated(%q) = true, want false (doc gating retired)", p)
 		}
 	}
 }

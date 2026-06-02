@@ -44,3 +44,6 @@ docs/getting-started/performance-15s.md
 
 # Internal engineering / strategy memos — never ship to operators.
 docs/internal.docs/
+
+# Frozen pre-rebuild docs snapshot — browsable in-repo, never shipped.
+docs.archived/

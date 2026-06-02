@@ -3,18 +3,18 @@
 
 These docs are for operators — the person installing Vigo, enrolling envoys, writing configcrates, publishing changes, running Scrier, reporting compliance, and debugging when something goes wrong.
 
-If that's you, start here:
+**New here?** Read the [Vigo overview](overview.md) for what the platform does, then pick a path:
 
 | | |
 |---|---|
-| **New to Vigo?** | [Overview](overview.md) → [Quickstart](quickstart.md) |
-| **Need to do a thing?** | [How-to guides](howto/) — install, enroll, write a configcrate, publish, Scrier, swarm, auth, monitoring, backup/DR, compliance, troubleshoot, migrate from another CM |
-| **Looking something up?** | [Reference](reference/) — vigocli commands, agent resources, agent traits, REST API, server.yaml, configcrate-writing guide, compliance matrix |
-| **What's a term mean?** | [Glossary](glossary.md) |
-| **Want examples?** | [Configcrate examples](examples/) — nine end-to-end configcrates covering common patterns |
-| **Curious why?** | [ADRs](adr/) — design-decision archive (not operator docs) |
+| **Get running** | [Tutorials](start/) — the golden path: stand up the server, enroll an envoy, ship your first configcrate, run your first compliance report |
+| **Do a task** | [How-to guides](howto/) — configcrates, swarm, auth, monitoring, compliance, backup/DR, migrate from another CM |
+| **Look something up** | [Reference](reference/) — vigocli commands, agent resources, agent traits, REST API, server.yaml, the configcrate language, the compliance matrix |
+| **Understand the why** | [Concepts](concepts/) — architecture, convergence vs compliance, the swarm, puddle identity, the security model |
+| **See examples** | [Configcrate examples](examples/) — end-to-end configcrates covering common patterns |
+| **Define a term** | [Glossary](glossary.md) |
 
-The audience is the operator. Engineer-internal rationale lives in `adr/` and the source code. Marketing copy lives on vigo-web.
+The audience is the operator. Engineer-internal rationale lives in the [ADRs](adr/) and the source code; marketing copy lives on vigo-web.
 
 ---
 *Confidential — Alexander4, LLC. Not for redistribution. See [legal/license.md](legal/license.md).*

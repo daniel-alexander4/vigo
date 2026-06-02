@@ -67,3 +67,7 @@ docs.old/
 
 # Rendered PDFs from the docify pipeline (build artifacts; markdown is source of truth)
 docs/**/_pdf/
+
+# Local pre-rebuild docs snapshot (working reference during the docs rebuild).
+# The committed history + the docs-pre-rebuild-2026-06-01 tag are the durable archive.
+docs.archived/

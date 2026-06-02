@@ -1711,23 +1711,20 @@ func buildDocsSearchIndex(nav []DocsNavSection) template.JS {
 // Follows the engineer journey: get started → understand the system →
 // operate → secure → comply → look up → try.
 var docsSectionOrder = []string{
-	"getting-started",
-	"engineering",
-	"operations",
-	"security",
-	"compliance",
+	"start",
+	"howto",
+	"concepts",
 	"reference",
 	"examples",
 }
 
-// docsGatedSections lists documentation sections that require a paid license.
-// Free-tier users don't see nav entries for these sections, and direct URL
-// access returns 403. No upgrade prompt — the free-tier UI is as if these
-// sections don't exist.
-var docsGatedSections = map[string]bool{
-	"compliance": true,
-	"security":   true,
-}
+// docsGatedSections previously hid sections from the free tier. Doc-level
+// gating was retired in the 2026-06-01 docs rebuild — the whole operator
+// corpus is available to every tier. Kept as an empty set so the gating
+// call sites (isDocsPathGated, filterGatedNavForFreeTier, the watermark
+// branch) stay harmless no-ops; they're removed in the rebuild's UI-polish
+// phase.
+var docsGatedSections = map[string]bool{}
 
 // isDocsPathGated returns true if the given docs path falls under a gated section.
 func isDocsPathGated(pagePath string) bool {
