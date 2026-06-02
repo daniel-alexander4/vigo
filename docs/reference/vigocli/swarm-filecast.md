@@ -1,7 +1,7 @@
 
 # vigocli swarm filecast
 
-Administrator-pushed file distribution on the [swarm](../../howto/set-up-swarm.md) substrate. Distribute files across the fleet via peer-to-peer transfer and monitor progress.
+Administrator-pushed file distribution on the [swarm](../../howto/swarm/set-up-swarm.md) substrate. Distribute files across the fleet via peer-to-peer transfer and monitor progress.
 
 ## Subcommands
 
@@ -89,7 +89,7 @@ If the target spec matches zero envoys, a warning is printed:
 
 ### Operability
 
-`distribute` is the lone admin-write that rides the filecast substrate, so it is gated by the substrate's [kill switches](../../howto/set-up-swarm.md#operability--kill-switches). When the operator has set `swarm.enabled: false` or `swarm.filecast.enabled: false` in `server.yaml` and republished, the server responds with HTTP **403** and a message naming the offending knob. The denial is recorded as a `swarm.filecast.denied` entry in the [tamper-evident audit chain](../compliance-matrix.md) under the calling user's identity.
+`distribute` is the lone admin-write that rides the filecast substrate, so it is gated by the substrate's [kill switches](../../howto/swarm/set-up-swarm.md#operability--kill-switches). When the operator has set `swarm.enabled: false` or `swarm.filecast.enabled: false` in `server.yaml` and republished, the server responds with HTTP **403** and a message naming the offending knob. The denial is recorded as a `swarm.filecast.denied` entry in the [tamper-evident audit chain](../compliance-matrix.md) under the calling user's identity.
 
 `status`, `list`, `match`, and `broken` (read-only views) are not gated — operators can still inspect the substrate's state while it's halted. `revoke` is also allowed when disabled, since cleanup needs to work on a halted substrate.
 
@@ -263,7 +263,7 @@ plex                           backup.tar.gz                  invalid manifest: 
 
 ## Related
 
-- [Swarm Substrate](../../howto/set-up-swarm.md) — The envoy P2P transport payload rides on
-- [Swarm Operations](../../howto/set-up-swarm.md) — Configuration, monitoring, troubleshooting
+- [Swarm Substrate](../../howto/swarm/set-up-swarm.md) — The envoy P2P transport payload rides on
+- [Swarm Operations](../../howto/swarm/set-up-swarm.md) — Configuration, monitoring, troubleshooting
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

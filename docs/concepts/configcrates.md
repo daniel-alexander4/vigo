@@ -37,9 +37,9 @@ environments.vgo  >  match-block vars  >  inherited vars  >  configcrate default
 
 ## Where this shows up
 
-- [Write your first configcrate](../howto/write-your-first-module.md) — hands-on.
+- [Write your first configcrate](../howto/configcrates/write-your-first-module.md) — hands-on.
 - [Writing configcrates](../reference/writing-configcrates.md) — the full authoring reference.
-- [Publish config](../howto/publish-config.md) — validate + push to the fleet.
+- [Publish config](../howto/configcrates/publish-config.md) — validate + push to the fleet.
 
 ---
 *Confidential — Alexander4, LLC. Not for redistribution.*

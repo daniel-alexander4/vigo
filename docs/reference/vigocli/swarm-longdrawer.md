@@ -1,7 +1,7 @@
 
 # vigocli longdrawer
 
-Read-only admin view of the [longdrawer](../../howto/set-up-longdrawer.md) mesh across the fleet — per-user plaintext directory sync on the [swarm](../../howto/set-up-swarm.md) substrate. Every envoy reports its per-user longdrawer state (files, tombstones, peer digest) through the `longdrawer` trait; this command renders the fleet-wide join.
+Read-only admin view of the [longdrawer](../../howto/swarm/set-up-longdrawer.md) mesh across the fleet — per-user plaintext directory sync on the [swarm](../../howto/swarm/set-up-swarm.md) substrate. Every envoy reports its per-user longdrawer state (files, tombstones, peer digest) through the `longdrawer` trait; this command renders the fleet-wide join.
 
 Longdrawer membership is per-user: users opt in by dropping files into `~<user>/longdrawer/`. There is no admin write path — `vigocli swarm longdrawer` never touches files, tombstones, or decides what syncs where.
 
@@ -89,7 +89,7 @@ Per-envoy states:
 
 ## Related
 
-- [Longdrawer Subsystem](../../howto/set-up-longdrawer.md) — How the plaintext per-user sync works
-- [Swarm Substrate](../../howto/set-up-swarm.md) — The envoy P2P transport longdrawer rides on
+- [Longdrawer Subsystem](../../howto/swarm/set-up-longdrawer.md) — How the plaintext per-user sync works
+- [Swarm Substrate](../../howto/swarm/set-up-swarm.md) — The envoy P2P transport longdrawer rides on
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

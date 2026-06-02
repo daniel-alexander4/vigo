@@ -5,7 +5,7 @@ weight: 26
 
 # `vigo swarm puddle`
 
-`vigo swarm puddle` is the user-facing CLI for the [puddle](../../howto/set-up-puddle.md) primitive — a per-user Ed25519 puddle identity that subsystems like gitback (ADR-015) and lockbox membership (ADR-016) consume as a single trust unit. State lives under `~/.vigo-puddle/`. No Vigo-server contact for any verb on this page.
+`vigo swarm puddle` is the user-facing CLI for the [puddle](../../howto/swarm/set-up-puddle.md) primitive — a per-user Ed25519 puddle identity that subsystems like gitback (ADR-015) and lockbox membership (ADR-016) consume as a single trust unit. State lives under `~/.vigo-puddle/`. No Vigo-server contact for any verb on this page.
 
 ## Invocation
 
@@ -290,7 +290,7 @@ The session helper's idle timeout defaults to **24 hours**; override it per-unlo
 
 ## See also
 
-- [Puddle subsystem](../../howto/set-up-puddle.md) — design + code map.
+- [Puddle subsystem](../../howto/swarm/set-up-puddle.md) — design + code map.
 - [ADR-014](../../adr/014-puddle-primitive.md) — design of record.
 - [ADR-015](../../adr/015-unified-gitback-substrate.md) — first consumer of puddle.
 - [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) — second consumer.

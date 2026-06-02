@@ -1,7 +1,7 @@
 
 # vigo swarm poolq CLI Reference
 
-`vigo swarm poolq` is the envoy-side surface for [poolq](../../howto/set-up-poolq.md) — the P2P ordered-log queue (ADR-029). Founders post messages; consumers read them with a per-user offset that survives across restarts and replays freely.
+`vigo swarm poolq` is the envoy-side surface for [poolq](../../howto/swarm/set-up-poolq.md) — the P2P ordered-log queue (ADR-029). Founders post messages; consumers read them with a per-user offset that survives across restarts and replays freely.
 
 `vigo swarm poolq` is the **founder + consumer** side. The fleet-aggregator view and admin moderation (`block` / `unblock`) live on [`vigocli swarm poolq`](swarm-poolq.md). The mutating verb (`post`) deliberately is NOT on the vigocli side — it needs an unlocked per-user puddle to sign messages, which doesn't fit vigocli's root-only / peer-auth posture (same split that curator takes).
 

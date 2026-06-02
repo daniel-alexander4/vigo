@@ -4,7 +4,7 @@ title: poolq
 
 # poolq
 
-Reports each envoy's local view of the [poolq](../../../howto/set-up-poolq.md) ordered-log queue (ADR-029): every signed message posted by a local founder, verbatim, ready for the server's `poolqmesh` aggregator to merge into the fleet-wide G-Set.
+Reports each envoy's local view of the [poolq](../../../howto/swarm/set-up-poolq.md) ordered-log queue (ADR-029): every signed message posted by a local founder, verbatim, ready for the server's `poolqmesh` aggregator to merge into the fleet-wide G-Set.
 
 The agent walks every user's `~/.vigo-poolq/<topic_id>/messages/*.json` and drops anything whose directory name doesn't equal its own derived `topic_id`, whose filename doesn't equal its own derived `msg_id`, or whose signature doesn't verify. Surviving messages flow through verbatim; the server's aggregator buckets them by `topic_id`, applies age-based retention with stale-on-ingest refusal, and serves the merged log via `/api/v1/swarm/poolq/*`. The server does **not** verify Ed25519 signatures — end-to-end verification stays on the consumer side (see [ADR-029](../../../adr/029-poolq.md)).
 

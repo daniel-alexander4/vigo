@@ -43,7 +43,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | TPM | `tpm` | Trusted Platform Module presence and version | [tpm.md](tpm.md) |
 | Secure Boot | `secureboot` | UEFI Secure Boot status and boot mode | [secureboot.md](secureboot.md) |
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
-| Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](../../../howto/set-up-swarm.md) |
+| Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](../../../howto/swarm/set-up-swarm.md) |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | [swarm_seeds.md](swarm_seeds.md) |
 | Gitback | `gitback` | Publisher-side state (active sources, per-source sha, discovery/publish errors) plus receiver-side materialized mirrors | [gitback.md](gitback.md) |
 | Poolq | `poolq` | Per-user signed poolq messages (ADR-029): walks `~/.vigo-poolq/<topic_id>/messages/*.json` across users and emits the verifying ones verbatim for the server's `poolqmesh` aggregator | [poolq.md](poolq.md) |
@@ -91,7 +91,7 @@ If the [Connwaer](../../compliance-matrix.md) compliance verification agent is i
 
 ## Network Device Traits
 
-Network devices managed via the [gateway proxy](../../../howto/set-up-network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.
+Network devices managed via the [gateway proxy](../../../howto/operate/set-up-network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.
 
 | Name | Trait Path | Description | Doc |
 |------|------------|-------------|-----|

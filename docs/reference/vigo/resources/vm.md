@@ -12,7 +12,7 @@ Manages libvirt KVM virtual machines idempotently. Defines the domain, builds a 
 | `vm_name` | libvirt domain name. Also the idempotency key — two configcrates can't manage the same domain. |
 | `memory_mib` | RAM in MiB. Positive integer. |
 | `vcpu` | vCPU count. Positive integer. |
-| `disk_path` *or* `artifact` | Base disk source. `disk_path:` is a local file (qcow2/raw) or `pool:volume`. `artifact:` references a [curator](../../../howto/set-up-curator.md) artifact of `kind: generic` (a published qcow2/raw disk image). Mutually exclusive. |
+| `disk_path` *or* `artifact` | Base disk source. `disk_path:` is a local file (qcow2/raw) or `pool:volume`. `artifact:` references a [curator](../../../howto/swarm/set-up-curator.md) artifact of `kind: generic` (a published qcow2/raw disk image). Mutually exclusive. |
 
 ### Lifecycle
 

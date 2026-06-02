@@ -46,7 +46,7 @@ The default trusted-enrollment policy (private + loopback CIDRs) auto-signs this
 
 ## Checkpoint
 
-You have: a healthy server, a browser session, and one converging envoy. If the dashboard still shows zero envoys after a minute, see [Install](../howto/install.md#troubleshooting).
+You have: a healthy server, a browser session, and one converging envoy. If the dashboard still shows zero envoys after a minute, see [Install](../howto/operate/install.md#troubleshooting).
 
 **Next:** [Enroll your first envoy →](enroll-your-first-envoy.md) — a *separate* machine.
 

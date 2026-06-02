@@ -101,6 +101,6 @@ Peers holding this blob:
 
 ## Related
 
-- [Swarm Engineering Reference](../../howto/set-up-swarm.md) — substrate architecture and gate semantics
-- [Swarm Operations](../../howto/set-up-swarm.md) — operator-side configuration and troubleshooting
-- [`vigocli swarm` reference](../../howto/set-up-swarm.md) — server-side inspection (works against any reachable envoy)
+- [Swarm Engineering Reference](../../howto/swarm/set-up-swarm.md) — substrate architecture and gate semantics
+- [Swarm Operations](../../howto/swarm/set-up-swarm.md) — operator-side configuration and troubleshooting
+- [`vigocli swarm` reference](../../howto/swarm/set-up-swarm.md) — server-side inspection (works against any reachable envoy)

@@ -1,7 +1,7 @@
 
 # vigo swarm lockbox CLI Reference
 
-`vigo swarm lockbox` is the user-facing interface to [lockbox](../../howto/set-up-lockbox.md), the per-user encrypted P2P directory. It runs inside the `vigo` agent binary, operates on files under the invoking user's home, and does not require root. The agent daemon is never contacted directly by the CLI — `unlock` spawns its own session helper daemon, and `encrypt`/`decrypt` talk to that helper over a local Unix socket.
+`vigo swarm lockbox` is the user-facing interface to [lockbox](../../howto/swarm/set-up-lockbox.md), the per-user encrypted P2P directory. It runs inside the `vigo` agent binary, operates on files under the invoking user's home, and does not require root. The agent daemon is never contacted directly by the CLI — `unlock` spawns its own session helper daemon, and `encrypt`/`decrypt` talk to that helper over a local Unix socket.
 
 ## Invocation
 
@@ -32,7 +32,7 @@ Per [ADR-020](../../adr/020-lockbox-puddle-only.md) + [ADR-021](../../adr/021-lo
 | `unlock` | Prompt password, spawn session helper that holds the unwrapped identity. After the helper is up, walks `~/lockbox/` and encrypts any plaintext that landed while locked (the **unlock sweep**, ADR-012). |
 | `lock` | Scrub the held key. Auto-fires on logout and idle timeout. |
 | `encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/lockbox/` to every current recipient. (Equivalent to dropping the file directly into `~/lockbox/` while unlocked — the watcher auto-encrypts new plaintext per ADR-012.) If the target name has an active tombstone, **auto-resurrects in one step** — records + gossips a signed resurrect (lifting the mesh 410 gate for that name), then encrypts — instead of refusing. Re-adding an edited deleted file therefore just works, via either `encrypt` or the drop-into-`~/lockbox/` watcher path. |
-| `resurrect <file> [--as <name>]` | Explicit synonym for the auto-resurrect that `encrypt` (and the drop-in watcher path) now perform — override an active tombstone and re-encrypt in one step. Drops a `~/.lockbox/resurrect.pending` sentinel; the daemon signs a `ResurrectEnvelope`, persists a local resurrect record, and fans out to live peers within ~1-2s on its dedicated 1s polling tick. The CLI awaits the daemon's sentinel removal (60s ceiling) before invoking the encrypt path so peers have the resurrect record before the ciphertext arrives. Refuses if the target name has no active tombstone (use `encrypt` directly). See [the lockbox how-to](../../howto/set-up-lockbox.md). |
+| `resurrect <file> [--as <name>]` | Explicit synonym for the auto-resurrect that `encrypt` (and the drop-in watcher path) now perform — override an active tombstone and re-encrypt in one step. Drops a `~/.lockbox/resurrect.pending` sentinel; the daemon signs a `ResurrectEnvelope`, persists a local resurrect record, and fans out to live peers within ~1-2s on its dedicated 1s polling tick. The CLI awaits the daemon's sentinel removal (60s ceiling) before invoking the encrypt path so peers have the resurrect record before the ciphertext arrives. Refuses if the target name has no active tombstone (use `encrypt` directly). See [the lockbox how-to](../../howto/swarm/set-up-lockbox.md). |
 | `decrypt <file> -o <path>` | Decrypt from `~/lockbox/` to a user-chosen path. Requires `unlock`. `-o` is mandatory. |
 | `purge --yes` | Power-user wipe of ALL local lockbox state for this user (`~/.lockbox/` + `~/lockbox/`). Does NOT gossip; peers age the envoy out via the staleness rule. Recovery / decommission verb. For the canonical exit (with peer notification + puddle + gitback cleanup), use `vigo swarm puddle leave` instead. |
 | `reencrypt` | Force re-encrypt of every file in `~/lockbox/` to the current recipient set. Requires `unlock`. |
@@ -91,7 +91,7 @@ Cert shape:
 Self-unenrollment. Three-stage handoff:
 
 1. **CLI** (user context) validates enrollment, reads the local age pubkey from `recipients.txt`, writes `~/.lockbox/leave.pending` containing the pubkey + hostname + leave time + flags, exits.
-2. **Daemon reactor** (running as root, ticks every ~30 s) polls for the sentinel. When present: loads the daemon Ed25519 signing key, builds a signed [LEAVE envelope](../../howto/set-up-lockbox.md#signed-leave-envelope), fans it out to every live peer (+ cross-subnet peers). Persists the record to `/var/lib/vigo/swarm/lockbox/<user>/leaves.json`. Scrubs `~/.lockbox/` (default) and `~/lockbox/` (with `--purge`). Removes the sentinel.
+2. **Daemon reactor** (running as root, ticks every ~30 s) polls for the sentinel. When present: loads the daemon Ed25519 signing key, builds a signed [LEAVE envelope](../../howto/swarm/set-up-lockbox.md#signed-leave-envelope), fans it out to every live peer (+ cross-subnet peers). Persists the record to `/var/lib/vigo/swarm/lockbox/<user>/leaves.json`. Scrubs `~/.lockbox/` (default) and `~/lockbox/` (with `--purge`). Removes the sentinel.
 3. **Peer envoys** receive the envelope via `POST /lockbox/leaves/<user>`, verify the signer is the subject (cryptographic self-leave-only), drop the pubkey from `peers.json`, regenerate `recipients.txt`, drop `reencrypt.pending`, persist.
 
 **Flags:**
@@ -196,7 +196,7 @@ $ vigo swarm lockbox lock
 ✓ Locked. Key scrubbed.
 ```
 
-The sweep line after `unlock` reports any plaintext files encrypted on the way in — files that were dropped while the session was locked. While unlocked, the watcher auto-encrypts new plaintext immediately; the sweep only has work when something landed during the locked window. See [Auto-Encrypt-on-Write](../../howto/set-up-lockbox.md#auto-encrypt-on-write) for the full rules (1 GiB cap, three-class failure handling, `<orig>.<ts>.failed` recovery).
+The sweep line after `unlock` reports any plaintext files encrypted on the way in — files that were dropped while the session was locked. While unlocked, the watcher auto-encrypts new plaintext immediately; the sweep only has work when something landed during the locked window. See [Auto-Encrypt-on-Write](../../howto/swarm/set-up-lockbox.md#auto-encrypt-on-write) for the full rules (1 GiB cap, three-class failure handling, `<orig>.<ts>.failed` recovery).
 
 **Listing files:**
 ```
@@ -256,5 +256,5 @@ idle_timeout_minutes: 60    # session helper auto-lock (default 60)
 
 ## See also
 
-- [lockbox concept](../../howto/set-up-lockbox.md) — architecture, threat model, relationship to longdrawer
-- [Longdrawer](../../howto/set-up-longdrawer.md) — the plaintext sibling
+- [lockbox concept](../../howto/swarm/set-up-lockbox.md) — architecture, threat model, relationship to longdrawer
+- [Longdrawer](../../howto/swarm/set-up-longdrawer.md) — the plaintext sibling

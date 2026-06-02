@@ -61,7 +61,7 @@ You've written, bound, published, and converged a configcrate, and seen drift co
 
 **Next:** [Your first compliance report →](your-first-compliance-report.md)
 
-See also: [Write your first configcrate](../howto/write-your-first-module.md) and the [configcrate authoring reference](../reference/writing-configcrates.md) for the full surface (conditionals, templates, roles, environments).
+See also: [Write your first configcrate](../howto/configcrates/write-your-first-module.md) and the [configcrate authoring reference](../reference/writing-configcrates.md) for the full surface (conditionals, templates, roles, environments).
 
 ---
 *Confidential — Alexander4, LLC. Not for redistribution.*

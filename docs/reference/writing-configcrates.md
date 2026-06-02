@@ -1,7 +1,7 @@
 
 # Writing configcrates
 
-This is the canonical reference for operators authoring Vigo configcrates. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, hostcrates, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first configcrate](../howto/write-your-first-module.md) first; come back here when you need the full surface.
+This is the canonical reference for operators authoring Vigo configcrates. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, hostcrates, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first configcrate](../howto/configcrates/write-your-first-module.md) first; come back here when you need the full surface.
 
 ---
 ## Config Format
@@ -581,7 +581,7 @@ resources:
 **Rules:**
 - `#~` comments are auto-generated — they are stripped and regenerated on every publish. Do not edit them.
 - `#` comments (no tilde) are hand-written and never touched by the linter. Use these for your own notes.
-- The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../howto/publish-config.md#configcrate-linter) for details.
+- The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../howto/configcrates/publish-config.md#configcrate-linter) for details.
 
 ## Config Reload
 

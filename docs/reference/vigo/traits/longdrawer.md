@@ -4,7 +4,7 @@ title: longdrawer
 
 # longdrawer
 
-Reports each envoy's local view of the [longdrawer](../../../howto/set-up-longdrawer.md) per-user LAN directory sync — the file set and tombstones in every enrolled user's `~/longdrawer/`. The server's `longdrawermesh` aggregator joins these across the fleet to render per-user cross-envoy consistency on the `/swarm/longdrawer` page.
+Reports each envoy's local view of the [longdrawer](../../../howto/swarm/set-up-longdrawer.md) per-user LAN directory sync — the file set and tombstones in every enrolled user's `~/longdrawer/`. The server's `longdrawermesh` aggregator joins these across the fleet to render per-user cross-envoy consistency on the `/swarm/longdrawer` page.
 
 The longdrawer reactor persists `UserState { files, tombstones }` per user at `/var/lib/vigo/longdrawer/<user>.json` on each reconcile; this collector reads every state file and ships it verbatim — no separate snapshot writer. Returns `null` when no per-user state files exist (an envoy that never had a `~/longdrawer/` directory).
 
@@ -34,5 +34,5 @@ The longdrawer reactor persists `UserState { files, tombstones }` per user at `/
 ## See also
 
 - [`vigocli swarm longdrawer`](../../vigocli/swarm-longdrawer.md) — the fleet view this trait feeds.
-- [Set up longdrawer](../../../howto/set-up-longdrawer.md).
+- [Set up longdrawer](../../../howto/swarm/set-up-longdrawer.md).
 - [`lockbox`](lockbox.md) — longdrawer's encryption-first sibling.

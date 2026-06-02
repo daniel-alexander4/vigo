@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitback` recovery CLI](agent-swarm-gitback.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm lockbox` CLI](agent-swarm-lockbox.md) for managing [lockbox](../../howto/set-up-lockbox.md) — the per-user encrypted P2P directory, the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../howto/set-up-puddle.md) — the per-user puddle identity primitive, the [`vigo swarm curator` CLI](agent-swarm-curator.md) for publishing + consuming artifacts in the [curator](../../howto/set-up-curator.md) P2P artifact registry, and the [`vigo swarm poolq` CLI](agent-swarm-poolq.md) for posting + consuming messages on the [poolq](../../howto/set-up-poolq.md) P2P ordered-log queue.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitback` recovery CLI](agent-swarm-gitback.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm lockbox` CLI](agent-swarm-lockbox.md) for managing [lockbox](../../howto/swarm/set-up-lockbox.md) — the per-user encrypted P2P directory, the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../howto/swarm/set-up-puddle.md) — the per-user puddle identity primitive, the [`vigo swarm curator` CLI](agent-swarm-curator.md) for publishing + consuming artifacts in the [curator](../../howto/swarm/set-up-curator.md) P2P artifact registry, and the [`vigo swarm poolq` CLI](agent-swarm-poolq.md) for posting + consuming messages on the [poolq](../../howto/swarm/set-up-poolq.md) P2P ordered-log queue.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---
@@ -83,7 +83,7 @@ pages are linked under their parent.
 | [swarm longdrawer](swarm-longdrawer.md) | Fleet view of the longdrawer per-user directory sync |
 | [swarm lockbox](swarm-lockbox.md) | Fleet view of the lockbox per-user encrypted directory sync |
 | [swarm puddle](swarm-puddle.md) | Puddle fleet view + cross-envoy ops (eviction, names) |
-| [swarm curator](swarm-curator.md) | Fleet view of the [curator](../../howto/set-up-curator.md) artifact registry + admin block (ADR-024) |
-| [swarm poolq](swarm-poolq.md) | Fleet view of the [poolq](../../howto/set-up-poolq.md) ordered-log queue + admin block (ADR-029) |
+| [swarm curator](swarm-curator.md) | Fleet view of the [curator](../../howto/swarm/set-up-curator.md) artifact registry + admin block (ADR-024) |
+| [swarm poolq](swarm-poolq.md) | Fleet view of the [poolq](../../howto/swarm/set-up-poolq.md) ordered-log queue + admin block (ADR-029) |
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

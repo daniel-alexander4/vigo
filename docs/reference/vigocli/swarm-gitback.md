@@ -1,7 +1,7 @@
 
 # vigocli swarm gitback
 
-Admin-side, fleet-wide view of the [gitback](../../howto/set-up-gitback.md) unified-substrate mesh (ADR-015). Every envoy's `gitback` trait is aggregated server-side by `server/swarm/gitbackmesh` and surfaced through `GET /api/v1/swarm/gitback/fleet`; this command is the CLI consumer of that endpoint.
+Admin-side, fleet-wide view of the [gitback](../../howto/swarm/set-up-gitback.md) unified-substrate mesh (ADR-015). Every envoy's `gitback` trait is aggregated server-side by `server/swarm/gitbackmesh` and surfaced through `GET /api/v1/swarm/gitback/fleet`; this command is the CLI consumer of that endpoint.
 
 `vigocli swarm gitback` is **read-only**. Membership changes (init / invite / join / leave / revoke / reanchor) run on the envoy holding the project — see the envoy-side [`vigo swarm gitback`](agent-swarm-gitback.md) verb tree.
 
@@ -152,5 +152,5 @@ vigocli swarm gitback list --json | jq '.[] | select(.divergent_refs | length > 
 - [`vigo swarm gitback`](agent-swarm-gitback.md) — envoy-local verb tree (`project init / invite / join / leave / revoke / reanchor`)
 - [gitback trait](../vigo/traits/gitback.md) — the per-envoy report this command aggregates
 - [`vigocli swarm filecast`](swarm-filecast.md) — admin-pushed filecast distribution on the swarm substrate
-- [gitback concepts](../../howto/set-up-gitback.md)
+- [gitback concepts](../../howto/swarm/set-up-gitback.md)
 - [ADR-015 — Unified gitback substrate](../../adr/015-unified-gitback-substrate.md)

@@ -3,7 +3,7 @@
 
 This is the canonical reference for **which Vigo configcrates and Connwaer trait checks satisfy which controls in which frameworks**. Use it to answer "what do I tag this configcrate with?" and "what's left to satisfy framework X?"
 
-For *how* to tag configcrates and run reports, see [howto/compliance-reporting.md](../howto/compliance-reporting.md). For per-framework regulatory checklists (HIPAA, SOC 2, PCI-DSS, NY DFS Cyber, decommissioning, incident response), see the appendix on that same page.
+For *how* to tag configcrates and run reports, see [howto/compliance-reporting.md](../howto/compliance/compliance-reporting.md). For per-framework regulatory checklists (HIPAA, SOC 2, PCI-DSS, NY DFS Cyber, decommissioning, incident response), see the appendix on that same page.
 
 ## How to read this
 

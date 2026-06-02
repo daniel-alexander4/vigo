@@ -1,7 +1,7 @@
 
 # vigo swarm curator CLI Reference
 
-`vigo swarm curator` is the envoy-side surface for [curator](../../howto/set-up-curator.md) — the P2P artifact registry (ADR-024). Founders publish artifacts; consumers pull them; everyone gets local inspection. The verb tree splits into read verbs (ungated), mutating verbs (gated by `curator: true` on the usercrate + an unlocked puddle), and local cleanup verbs.
+`vigo swarm curator` is the envoy-side surface for [curator](../../howto/swarm/set-up-curator.md) — the P2P artifact registry (ADR-024). Founders publish artifacts; consumers pull them; everyone gets local inspection. The verb tree splits into read verbs (ungated), mutating verbs (gated by `curator: true` on the usercrate + an unlocked puddle), and local cleanup verbs.
 
 `vigo swarm curator` is the **founder + consumer** side. The fleet-aggregator view and admin moderation (`block` / `unblock`) live on [`vigocli swarm curator`](swarm-curator.md). Per [ADR-024 open question #1 resolved 2026-05-13](../../adr/024-curator.md#implementation-notes), mutating verbs deliberately are NOT on the vigocli side — they need an unlocked per-user puddle to sign catalog entries, which doesn't fit vigocli's root-only / peer-auth posture.
 
@@ -175,7 +175,7 @@ vigo swarm curator repo-publish <name> --dir <pkgs> --kind <apt-repo|dnf-repo|ap
     [--version <v>] [--tag <tag>]
 ```
 
-Builds a signed package-repository tree from a directory of loose `.deb`/`.rpm`/`.apk` files and publishes it as a curator artifact — the one-command form of hand-building a repo tree and `push`ing it. See [Hosting a private package repository](../../howto/set-up-curator.md#hosting-a-private-package-repository).
+Builds a signed package-repository tree from a directory of loose `.deb`/`.rpm`/`.apk` files and publishes it as a curator artifact — the one-command form of hand-building a repo tree and `push`ing it. See [Hosting a private package repository](../../howto/swarm/set-up-curator.md#hosting-a-private-package-repository).
 
 The build shells out to the toolchain matching `--kind` — `dpkg-scanpackages` + `gpg` (`apt-repo`), `createrepo_c` + `gpg` (`dnf-repo`), `apk index` + `abuild-sign` (`apk-repo`) — which must be installed on the publishing host; a missing tool gives a clear "install …" error. The built tarball is then handed to the `push` path unchanged (puddle-signed, helper-daemon staged).
 
@@ -345,7 +345,7 @@ PUSH                 # publish a new blob
 ENTRY                # re-sign an existing artifact without shipping bytes
 ```
 
-`PUSH` carries the catalog entry as a JSON header plus the raw blob bytes; the daemon answers `READY\n` after header validation, the client streams the file, and the daemon answers `OK\n` (or `ERR <msg>\n`). `ENTRY` carries just the catalog entry as a JSON line; the daemon validates the signature + delegation chain, drops the entry as `.pending`, and (for `set-target`) refreshes the manifest seed for blobs we seed. See [the engineering doc](../../howto/set-up-curator.md#bytes) for the full wire shape.
+`PUSH` carries the catalog entry as a JSON header plus the raw blob bytes; the daemon answers `READY\n` after header validation, the client streams the file, and the daemon answers `OK\n` (or `ERR <msg>\n`). `ENTRY` carries just the catalog entry as a JSON line; the daemon validates the signature + delegation chain, drops the entry as `.pending`, and (for `set-target`) refreshes the manifest seed for blobs we seed. See [the engineering doc](../../howto/swarm/set-up-curator.md#bytes) for the full wire shape.
 
 The socket is mode 0666 + SO_PEERCRED — any local user can connect; the daemon identifies them by UID and gates on their usercrate `curator: true` flag. Same shape `gitback.sock` uses.
 
@@ -375,7 +375,7 @@ The destructive lever is the **usercrate `curator: bool` flag**. Removing it tri
 ## Related
 
 - [`vigocli swarm curator`](swarm-curator.md) — operator side: fleet rollup + admin block / unblock
-- [Curator engineering doc](../../howto/set-up-curator.md) — identity, catalog shape, wire protocol, slicing
+- [Curator engineering doc](../../howto/swarm/set-up-curator.md) — identity, catalog shape, wire protocol, slicing
 - [ADR-024 — curator P2P artifact registry](../../adr/024-curator.md) — the design
 - [`vigo swarm puddle`](agent-swarm-puddle.md) — the per-user identity that anchors curator artifacts
 - [`vigo swarm gitback`](agent-swarm-gitback.md) — the sibling subsystem curator's access primitives derive from

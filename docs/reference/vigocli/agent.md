@@ -87,7 +87,7 @@ vigo bootstrap --server <URL> [--token <TOKEN>] [--install-service] [--grpc-port
 | `--grpc-port <PORT>` | Server gRPC port (default: `1530`) |
 | `--force` | Revoke any existing enrollment for this hostname and re-register |
 
-In practice, the bootstrap shell script from `curl -sSfk https://<server>:8443/bootstrap | sudo sh` calls this command. See [Bootstrap](../../howto/enroll-an-envoy.md) for the full enrollment workflow.
+In practice, the bootstrap shell script from `curl -sSfk https://<server>:8443/bootstrap | sudo sh` calls this command. See [Bootstrap](../../howto/operate/enroll-an-envoy.md) for the full enrollment workflow.
 
 ---
 
@@ -217,9 +217,9 @@ vigo version
 
 ## Related
 
-- [Bootstrap](../../howto/enroll-an-envoy.md) -- Agent enrollment workflow
+- [Bootstrap](../../howto/operate/enroll-an-envoy.md) -- Agent enrollment workflow
 - [Compiled Promises](../../reference/writing-configcrates.md) -- Offline convergence and LMDB state store
-- [Guardrails](../../howto/troubleshoot.md) -- Self-protection for agent paths
-- [Troubleshooting](../../howto/troubleshoot.md) -- Common issues and diagnostics
+- [Guardrails](../../howto/operate/troubleshoot.md) -- Self-protection for agent paths
+- [Troubleshooting](../../howto/operate/troubleshoot.md) -- Common issues and diagnostics
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

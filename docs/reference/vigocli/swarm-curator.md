@@ -1,7 +1,7 @@
 
 # vigocli swarm curator
 
-Operator-side view of [curator](../../howto/set-up-curator.md) — the P2P artifact registry (ADR-024). Every envoy's `swarm_curator` trait is aggregated server-side by `server/swarm/curatormesh` (30-second TTL cache; invalidated on block/unblock so moderation takes effect immediately) and surfaced through `/api/v1/swarm/curator/*`. This command is the CLI consumer.
+Operator-side view of [curator](../../howto/swarm/set-up-curator.md) — the P2P artifact registry (ADR-024). Every envoy's `swarm_curator` trait is aggregated server-side by `server/swarm/curatormesh` (30-second TTL cache; invalidated on block/unblock so moderation takes effect immediately) and surfaced through `/api/v1/swarm/curator/*`. This command is the CLI consumer.
 
 `vigocli swarm curator` is **read-only plus the admin moderation backstop**. Mutating verbs (`push` / `tag` / `untag` / `set-recipients` / `set-target` / `rm` / `prune` / `gc` / `stale` / `purge`) live on the agent side as [`vigo swarm curator`](agent-swarm-curator.md) — they need an unlocked per-user puddle to sign catalog entries, which doesn't fit vigocli's root-only / peer-auth posture. Per [ADR-024 open question #1, resolved 2026-05-13](../../adr/024-curator.md#implementation-notes), this split is deliberate.
 
@@ -200,7 +200,7 @@ Curator S3 credential created.
   Scope:             alexander4
 ```
 
-Point an S3 SDK at `https://<server>:<s3_port>` with these keys — see [Exposing artifacts over an S3 API](../../howto/set-up-curator.md#exposing-artifacts-over-an-s3-api).
+Point an S3 SDK at `https://<server>:<s3_port>` with these keys — see [Exposing artifacts over an S3 API](../../howto/swarm/set-up-curator.md#exposing-artifacts-over-an-s3-api).
 
 ## JSON output
 
@@ -227,7 +227,7 @@ vigocli swarm curator show e3b0c44298fc --json | jq '[.entry.body.versions[].pla
 ## Related
 
 - [`vigo swarm curator`](agent-swarm-curator.md) — envoy-side surface: founder verbs (push/tag/untag/set-recipients/set-target/rm), read verbs, local cleanup
-- [Curator engineering doc](../../howto/set-up-curator.md) — identity, catalog shape, two-axis distribution, wire surface
+- [Curator engineering doc](../../howto/swarm/set-up-curator.md) — identity, catalog shape, two-axis distribution, wire surface
 - [ADR-024 — curator P2P artifact registry](../../adr/024-curator.md) — the design
 - [`vigocli swarm gitback`](swarm-gitback.md) — the analogous fleet view for personal-DR git mirrors
 - [`vigocli swarm filecast`](swarm-filecast.md) — admin-pushed *one-off* file distribution (curator is for named, versioned, mutable-tag artifacts)

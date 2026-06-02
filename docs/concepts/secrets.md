@@ -27,7 +27,7 @@ The operator surface (`vigocli secrets {init,unlock,rotate,set,reveal,…}`) is 
 ## Where this shows up
 
 - [Manage secrets](../reference/vigocli/secrets.md) — the CLI surface.
-- [Harden secret memory](../howto/harden-envoy-secret-memory.md) — locking down the agent's in-RAM cache.
+- [Harden secret memory](../howto/operate/harden-envoy-secret-memory.md) — locking down the agent's in-RAM cache.
 - [The security model](security-model.md) — where secrets sit in the broader posture.
 
 ---

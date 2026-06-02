@@ -4,7 +4,7 @@ title: lockbox
 
 # lockbox
 
-Reports each envoy's local view of the [lockbox](../../../howto/set-up-lockbox.md) per-user encrypted directory sync — the ciphertext file set, tombstones, and known recipients in every enrolled user's `~/lockbox/`. The server's `lockboxmesh` aggregator joins these across the fleet to render per-user cross-envoy consistency, tombstone propagation, and recipient drift on the `/swarm/lockbox` page.
+Reports each envoy's local view of the [lockbox](../../../howto/swarm/set-up-lockbox.md) per-user encrypted directory sync — the ciphertext file set, tombstones, and known recipients in every enrolled user's `~/lockbox/`. The server's `lockboxmesh` aggregator joins these across the fleet to render per-user cross-envoy consistency, tombstone propagation, and recipient drift on the `/swarm/lockbox` page.
 
 Lockbox holds **ciphertext at rest** on every envoy; this trait reports metadata only — file names, sizes, hashes of the encrypted blobs, and recipient pubkeys, never plaintext. Returns `null` when no users are enrolled.
 
@@ -38,6 +38,6 @@ Lockbox holds **ciphertext at rest** on every envoy; this trait reports metadata
 ## See also
 
 - [`vigocli swarm lockbox`](../../vigocli/swarm-lockbox.md) — the fleet view this trait feeds.
-- [Set up lockbox](../../../howto/set-up-lockbox.md).
+- [Set up lockbox](../../../howto/swarm/set-up-lockbox.md).
 - [`puddle`](puddle.md) — owns the identity + session-unlock state lockbox builds on.
 - [`longdrawer`](longdrawer.md) — lockbox's plaintext LAN sibling.

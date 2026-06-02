@@ -1,7 +1,7 @@
 
 # vigocli lockbox
 
-Read-only admin view of the [lockbox](../../howto/set-up-lockbox.md) mesh across the fleet — per-user always-encrypted directory sync on the [swarm](../../howto/set-up-swarm.md) substrate. Every envoy reports its per-user lockbox state (ciphertext files, recipients digest, session unlock status) through the `lockbox` trait; this command renders the fleet-wide join.
+Read-only admin view of the [lockbox](../../howto/swarm/set-up-lockbox.md) mesh across the fleet — per-user always-encrypted directory sync on the [swarm](../../howto/swarm/set-up-swarm.md) substrate. Every envoy reports its per-user lockbox state (ciphertext files, recipients digest, session unlock status) through the `lockbox` trait; this command renders the fleet-wide join.
 
 Lockbox enrollment is per-user on the envoy via `vigo swarm lockbox enroll`. The admin surface is mostly read-only, plus one write verb — `evict` — for pulling a host out of a user's circle when the host itself can't self-leave (gone laptop, decommission).
 
@@ -113,8 +113,8 @@ Per-envoy states follow the same meanings as [vigocli longdrawer show](swarm-lon
 
 ## Related
 
-- [Lockbox Subsystem](../../howto/set-up-lockbox.md) — How the encryption-first per-user sync works
+- [Lockbox Subsystem](../../howto/swarm/set-up-lockbox.md) — How the encryption-first per-user sync works
 - [`vigo swarm lockbox`](agent-swarm-lockbox.md) — Per-user CLI on the envoy (init, enroll, unlock, encrypt, decrypt, lock)
-- [Swarm Substrate](../../howto/set-up-swarm.md) — The envoy P2P transport lockbox rides on
+- [Swarm Substrate](../../howto/swarm/set-up-swarm.md) — The envoy P2P transport lockbox rides on
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

@@ -26,7 +26,7 @@ The model is **pull-based**: there is no push channel from server to node for ro
 
 - [Configcrates](configcrates.md) — how desired state is written and resolved.
 - [The security model](security-model.md) — mTLS, signing, RBAC, the audit chain.
-- [Install the server](../howto/install.md) · [Enroll an envoy](../howto/enroll-an-envoy.md) — the loop, set up for real.
+- [Install the server](../howto/operate/install.md) · [Enroll an envoy](../howto/operate/enroll-an-envoy.md) — the loop, set up for real.
 
 ---
 *Confidential — Alexander4, LLC. Not for redistribution.*

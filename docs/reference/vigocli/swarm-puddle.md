@@ -1,6 +1,6 @@
 # vigocli swarm puddle
 
-Fleet view and admin-side cross-envoy operations for the [puddle](../../howto/set-up-puddle.md) primitive (ADR-014, ADR-020, ADR-021, ADR-022) — the per-user identity that gitback, curator, poolq, lockbox, and longdrawer all build on. Most puddle lifecycle (`init`, `pair`, `join`, `unlock`, `lock`, `leave`, `rotate-passphrase`, `rekey-pair`, `rekey`, `name`) is per-user-per-envoy and lives on the agent CLI — see [`vigo swarm puddle`](agent-swarm-puddle.md). The verbs here are fleet observability + admin authority.
+Fleet view and admin-side cross-envoy operations for the [puddle](../../howto/swarm/set-up-puddle.md) primitive (ADR-014, ADR-020, ADR-021, ADR-022) — the per-user identity that gitback, curator, poolq, lockbox, and longdrawer all build on. Most puddle lifecycle (`init`, `pair`, `join`, `unlock`, `lock`, `leave`, `rotate-passphrase`, `rekey-pair`, `rekey`, `name`) is per-user-per-envoy and lives on the agent CLI — see [`vigo swarm puddle`](agent-swarm-puddle.md). The verbs here are fleet observability + admin authority.
 
 ## Subcommands
 
@@ -34,7 +34,7 @@ A friendly name is a hint, not a trust anchor — it's spoofable by squatting (f
 ## See also
 
 - [`vigo swarm puddle`](agent-swarm-puddle.md) — the per-user envoy-side verb tree (including `name set/clear/show`).
-- [Puddle subsystem](../../howto/set-up-puddle.md) — design + code map.
+- [Puddle subsystem](../../howto/swarm/set-up-puddle.md) — design + code map.
 - [ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md) — why `puddle evict` is the canonical eviction verb.
 - [ADR-022](../../adr/022-gitback-friendly-names.md) — friendly names.
 - [`vigocli swarm gitback`](swarm-gitback.md) — fleet-wide view of gitback projects (the things friendly names point at).

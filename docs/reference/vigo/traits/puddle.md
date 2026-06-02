@@ -4,7 +4,7 @@ title: puddle
 
 # puddle
 
-Reports each envoy's local view of every [puddle](../../../howto/set-up-puddle.md) — the per-user swarm identity (ADR-014) that gitback, curator, poolq, lockbox, and longdrawer all build on. This trait is the **sole reporter** of puddle identity and state: the current pubkey, the friendly-name claim (ADR-022), and the local health signals. Sibling traits only *reference* puddle pubkeys (gitback's `founder_puddle_pubkey` / `members`, curator/poolq founders, lockbox recipients) — they never re-report them.
+Reports each envoy's local view of every [puddle](../../../howto/swarm/set-up-puddle.md) — the per-user swarm identity (ADR-014) that gitback, curator, poolq, lockbox, and longdrawer all build on. This trait is the **sole reporter** of puddle identity and state: the current pubkey, the friendly-name claim (ADR-022), and the local health signals. Sibling traits only *reference* puddle pubkeys (gitback's `founder_puddle_pubkey` / `members`, curator/poolq founders, lockbox recipients) — they never re-report them.
 
 The agent walks every user in `/etc/passwd` and, for each one whose `~/.vigo-puddle/identity.pub` is present, emits one entry. Trait collection runs as root, so per-user "is the session unlocked?" is read from the home-rooted `~/.vigo-puddle/session.unlocked` sentinel (written by the session helper, removed on lock) — a genuinely per-user answer without the uid-bound helper socket.
 

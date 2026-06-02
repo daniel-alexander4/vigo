@@ -1,7 +1,7 @@
 
 # vigocli swarm
 
-Read-only admin view of the [swarm substrate](../../howto/set-up-swarm.md) — the envoy peer-to-peer network that all four content subsystems ride on.
+Read-only admin view of the [swarm substrate](../../howto/swarm/set-up-swarm.md) — the envoy peer-to-peer network that all four content subsystems ride on.
 
 > **This is the substrate, not content.** For admin-pushed filecasts (formerly `vigocli swarm distribute`), use [`vigocli swarm filecast`](swarm-filecast.md). For personal-DR mirrors, [`vigocli swarm gitback`](swarm-gitback.md). For per-user sync meshes, [`vigocli swarm longdrawer`](swarm-longdrawer.md) and [`vigocli swarm lockbox`](swarm-lockbox.md).
 
@@ -115,8 +115,8 @@ Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an
 
 ## Related
 
-- [Swarm Substrate](../../howto/set-up-swarm.md) — How the peer-to-peer network works
-- [Swarm page](../../howto/troubleshoot.md) — `/swarm` in the web UI
+- [Swarm Substrate](../../howto/swarm/set-up-swarm.md) — How the peer-to-peer network works
+- [Swarm page](../../howto/operate/troubleshoot.md) — `/swarm` in the web UI
 - [`vigocli swarm filecast`](swarm-filecast.md) — Admin-pushed payloads on the substrate
 - [`vigocli swarm gitback`](swarm-gitback.md), [`vigocli swarm longdrawer`](swarm-longdrawer.md), [`vigocli swarm lockbox`](swarm-lockbox.md) — Other content subsystems on the substrate
 ---

@@ -7,7 +7,7 @@ All endpoints return JSON and accept JSON request bodies. Errors use the format 
 
 ## Authorization
 
-Every endpoint requires both authentication (session cookie or `vgot_*` API token) and a specific permission. Read endpoints (status, list, get) require `fleet.read`; mutation endpoints require a permission matched to the action — `config.publish` for publish/freeze/reload/retract, `config.rollback` for rollback, `push.execute` for task dispatch, `workflow.execute` for workflow run/abort, `query.execute` for live queries and the AI assistant, `fleet.write` for envoy maintenance and force-update, `audit.read` for the raw audit log. Database administration, peer promotion, secret-rotation callbacks, and emergency-access recording require the admin role. The compliance framework reports + audit-bundle download ride `compliance.read`; supporting-doc upload requires `compliance.docs.write`. See the [Authentication doc](../howto/set-up-auth.md#roles-and-permissions) for the full role/permission matrix.
+Every endpoint requires both authentication (session cookie or `vgot_*` API token) and a specific permission. Read endpoints (status, list, get) require `fleet.read`; mutation endpoints require a permission matched to the action — `config.publish` for publish/freeze/reload/retract, `config.rollback` for rollback, `push.execute` for task dispatch, `workflow.execute` for workflow run/abort, `query.execute` for live queries and the AI assistant, `fleet.write` for envoy maintenance and force-update, `audit.read` for the raw audit log. Database administration, peer promotion, secret-rotation callbacks, and emergency-access recording require the admin role. The compliance framework reports + audit-bundle download ride `compliance.read`; supporting-doc upload requires `compliance.docs.write`. See the [Authentication doc](../howto/operate/set-up-auth.md#roles-and-permissions) for the full role/permission matrix.
 
 ## Tasks
 
@@ -1256,7 +1256,7 @@ Deactivate (revoke) a waiver. The row is marked inactive — the audit chain ret
 
 Operator-uploaded artifacts (BAA, IR plan, risk assessment, training records, signed contracts, etc.) that satisfy `documented`-scope framework controls. Files are envelope-encrypted at rest with the secrets master key under `compliance.docs.docs_dir` (default `/srv/vigo/compliance-docs/`); metadata is in `compliance_docs` and link rows in `compliance_doc_links`.
 
-Available only when the deployment uses the `local` secrets backend — under any other backend the routes return `503 Service Unavailable`. Uploaded by [permission](../howto/set-up-auth.md): `compliance.docs.write` to upload/replace/soft-delete and to manage links; `compliance.read` to list/download; `compliance.docs.purge` to physically remove a soft-deleted doc and its ciphertext.
+Available only when the deployment uses the `local` secrets backend — under any other backend the routes return `503 Service Unavailable`. Uploaded by [permission](../howto/operate/set-up-auth.md): `compliance.docs.write` to upload/replace/soft-delete and to manage links; `compliance.read` to list/download; `compliance.docs.purge` to physically remove a soft-deleted doc and its ciphertext.
 
 Every mutation records an entry in the [tamper-evident audit chain](compliance-matrix.md) with the doc's SHA-256.
 
@@ -1764,7 +1764,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/metrics` | Prometheus metrics (see [Metrics](../howto/set-up-monitoring.md)) |
+| GET | `/metrics` | Prometheus metrics (see [Metrics](../howto/operate/set-up-monitoring.md)) |
 | GET | `/healthz` | Health check (see above) |
 | GET | `/bootstrap` | Agent bootstrap script |
 | GET | `/bootstrap/agent/{os}/{arch}` | Agent binary download |
@@ -2347,7 +2347,7 @@ PXE-serving GETs (boot, preseed, dhcp-config) gate on `fleet.read` even though a
 
 ## Swarm — curator (ADR-024)
 
-The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2P with the server as a relay fallback. See [howto/set-up-swarm.md](../howto/set-up-swarm.md) for operator usage and [adr/024-curator.md](../adr/024-curator.md) for the design.
+The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2P with the server as a relay fallback. See [howto/set-up-swarm.md](../howto/swarm/set-up-swarm.md) for operator usage and [adr/024-curator.md](../adr/024-curator.md) for the design.
 
 - **GET /api/v1/swarm/curator/list** — list every artifact currently published in the fleet (one row per artifact, latest tag set, target scope). _(fleet.read)_
 - **GET /api/v1/swarm/curator/inspect/{artifact_id}** — full signed catalog entry for one artifact: every platform, every tag, recipient scope, delegation chain. _(fleet.read)_
@@ -2363,7 +2363,7 @@ The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2
 
 ### Poolq (ADR-029)
 
-The P2P ordered-log queue — Kafka-style retained messages with founder-monotonic seq, founder-only-writable in v1, fleet-readable. All reads are public-by-construction (mTLS is the transport guard); messages are explicitly fleet-readable per ADR-029. See [howto/set-up-poolq.md](../howto/set-up-poolq.md) for operator usage and [adr/029-poolq.md](../adr/029-poolq.md) for the design.
+The P2P ordered-log queue — Kafka-style retained messages with founder-monotonic seq, founder-only-writable in v1, fleet-readable. All reads are public-by-construction (mTLS is the transport guard); messages are explicitly fleet-readable per ADR-029. See [howto/set-up-poolq.md](../howto/swarm/set-up-poolq.md) for operator usage and [adr/029-poolq.md](../adr/029-poolq.md) for the design.
 
 - **GET /api/v1/swarm/poolq/topics** — every topic the fleet's `poolqmesh` aggregator knows about, with per-topic summary (head seq, message count, first/last posted-at) and a `blocked` flag. Includes a separate `blocked` array for topic_ids that are blocked but have no current catalog entry (publisher cleared them after the block landed). _(no auth)_
 - **GET /api/v1/swarm/poolq/topic/{topic_id}/head** — per-topic summary without the messages (cheap "is there new content?" probe). Returns even for blocked topics so consumers see the block status. _(no auth)_

@@ -21,11 +21,11 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 ## Migration Guides
 
 - [Migration Overview](../howto/_index.md#coming-from-another-config-management-system) -- Comparison table and guide index
-- [From Puppet](../howto/migrate-from-puppet.md) -- Pull-based, catalog, resources, Facter
-- [From Ansible](../howto/migrate-from-ansible.md) -- Push-to-pull shift, handlers to notify
-- [From Chef](../howto/migrate-from-chef.md) -- Ruby DSL to YAML, cookbooks to configcrates
-- [From Salt](../howto/migrate-from-salt.md) -- Both YAML, Pillar to vars, Grains to Traits
-- [From CFEngine](../howto/migrate-from-cfengine.md) -- Promise theory, classes to when:
+- [From Puppet](../howto/migrate/migrate-from-puppet.md) -- Pull-based, catalog, resources, Facter
+- [From Ansible](../howto/migrate/migrate-from-ansible.md) -- Push-to-pull shift, handlers to notify
+- [From Chef](../howto/migrate/migrate-from-chef.md) -- Ruby DSL to YAML, cookbooks to configcrates
+- [From Salt](../howto/migrate/migrate-from-salt.md) -- Both YAML, Pillar to vars, Grains to Traits
+- [From CFEngine](../howto/migrate/migrate-from-cfengine.md) -- Promise theory, classes to when:
 
 ## Conventions
 

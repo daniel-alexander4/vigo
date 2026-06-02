@@ -135,7 +135,7 @@ checkin:
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
 | `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. The cap gates the policy-bundle build (CPU-heavy) inside the handler, so a fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via `ResourceExhausted` → agent backoff instead of CPU-cascading. **Always on** — `0` = a CPU-scaled built-in (`max(128, NumCPU*16)`), not disabled. Higher admits more before shedding (more CPU thrash under a wave); lower sheds sooner. Watch `vigo_checkins_total{status="shed"}` |
 | `report_max_concurrent` | `0` | Cap on concurrent ReportResult handlers in front of the single SQLite writer. Overflow returns `ResourceExhausted` so the agent backs off. **Always on** — `0` = the built-in `2048`, not disabled (unlike `max_concurrent`). Higher admits more before shedding (deeper queue, higher tail latency under sustained overload); lower sheds sooner (tighter tail). Watch `vigo_reportresults_total{status="shed"}` |
-| `max_connections` | `0` | Cap on concurrently-held agent streams. Each connected envoy holds one persistent stream costing ~220 KB RSS, so connection count — not request rate — is what drives the server toward OOM. Past this cap, new streams are refused with `ResourceExhausted` (the agent backs off and retries) so the server sheds gracefully instead of being OOM-killed. `0` (default) = auto-derive a safe ceiling from host RAM (≈ 40% of RAM ÷ 220 KB — the [sizing guide](../howto/sizing.md) table; on by default, sheds rather than OOMs out of the box); a positive value sets an explicit cap; `-1` disables the cap (legacy uncapped — accepts streams until OOM). Watch `vigo_streams_active` against the effective value, and `vigo_checkins_total{status="stream_shed"}` for rejections |
+| `max_connections` | `0` | Cap on concurrently-held agent streams. Each connected envoy holds one persistent stream costing ~220 KB RSS, so connection count — not request rate — is what drives the server toward OOM. Past this cap, new streams are refused with `ResourceExhausted` (the agent backs off and retries) so the server sheds gracefully instead of being OOM-killed. `0` (default) = auto-derive a safe ceiling from host RAM (≈ 40% of RAM ÷ 220 KB — the [sizing guide](../howto/operate/sizing.md) table; on by default, sheds rather than OOMs out of the box); a positive value sets an explicit cap; `-1` disables the cap (legacy uncapped — accepts streams until OOM). Watch `vigo_streams_active` against the effective value, and `vigo_checkins_total{status="stream_shed"}` for rejections |
 
 ### Sizing `max_concurrent`
 
@@ -145,7 +145,7 @@ Watch `vigo_grpc_checkin_in_flight` as the pre-cascade signal — a sustained cl
 
 Default `0` resolves to a CPU-scaled built-in (`max(128, NumCPU*16)`) — the cap is **always on**. Operators tune the knob; the burstwave test (2026-05-29) showed that an unbounded read path will CPU-cascade under a fleet-wide stale-checkin wave (post-publish, mass re-enroll), so the always-on default is the safety net.
 
-For per-host envoy capacity (how many envoys one vigosrv host can comfortably hold at a given check-in interval, and when to federate via spanner instead of scaling up), see [How-to: Size a vigosrv host](../howto/sizing.md).
+For per-host envoy capacity (how many envoys one vigosrv host can comfortably hold at a given check-in interval, and when to federate via spanner instead of scaling up), see [How-to: Size a vigosrv host](../howto/operate/sizing.md).
 
 ## bootstrap
 
@@ -361,7 +361,7 @@ grc:
 
 ## spanner
 
-Peer-equal control-plane federation (ADR-026). See [Set up Spanner](../howto/set-up-spanner.md) for the walkthrough.
+Peer-equal control-plane federation (ADR-026). See [Set up Spanner](../howto/operate/set-up-spanner.md) for the walkthrough.
 
 ```yaml
 # A spanner bolt — a peer-equal vigosrv that owns a hostname-pattern
@@ -458,7 +458,7 @@ backup:
 
 ## ai
 
-AI assistant configuration. Claude or OpenAI recommended for best results. Ollama works for air-gapped environments but requires a dedicated GPU and produces lower-quality answers. See [AI Providers](../howto/troubleshoot.md) for details on each provider, hardware requirements, and data privacy considerations.
+AI assistant configuration. Claude or OpenAI recommended for best results. Ollama works for air-gapped environments but requires a dedicated GPU and produces lower-quality answers. See [AI Providers](../howto/operate/troubleshoot.md) for details on each provider, hardware requirements, and data privacy considerations.
 
 ### Prompt-injection defense — structural mitigations + provider-dependent adherence
 
@@ -541,7 +541,7 @@ swarm:
 
 Publishing additionally requires `poolq: true` on the user's usercrate AND an unlocked puddle (a heavier grant than `gitback:`). Reading is ungated — messages are fleet-readable.
 
-The admin moderation backstop is `vigocli swarm poolq block <topic_id>`: the server stops serving the topic's `/range` and `/log` endpoints fleet-wide. See the [poolq howto](../howto/set-up-poolq.md) for the publish + consume flow.
+The admin moderation backstop is `vigocli swarm poolq block <topic_id>`: the server stops serving the topic's `/range` and `/log` endpoints fleet-wide. See the [poolq howto](../howto/swarm/set-up-poolq.md) for the publish + consume flow.
 
 ## tuning
 
@@ -566,7 +566,7 @@ The server sends an HTTP/2 PING to every conn every `keepalive_time` (default `3
 
 The trade-off is dead-client detection latency vs. tolerance for transient Go scheduler queueing delays. At high concurrent connection counts the runqueue depth grows (per `docs/howto/sizing.md`'s measurements, ~16k runnable goroutines at 20k conns), and the deepest tail of waiting goroutines can take ~20s to dispatch — tight `keepalive_timeout` values kill conns under that transient pressure. The `30s` default gives ~50% margin over the observed worst-case dispatch latency at the comfortable conn-count envelope. Operators running large fleets that still see `Unavailable` errors growing should raise to `60s` before chasing other tunables; operators who need faster dead-conn reaping (small fleets where every connection matters) can drop to `20s` — gRPC's own default — without re-introducing the scheduler-queueing failure mode at sub-15k conn counts.
 
-The pre-0.69.20 default was `10s`, which scaling work in 2026-05-29 showed was the actual mechanism behind the matrix's `Unavailable` errors at 20k+ conns regardless of check-in interval. See [How-to: Size a vigosrv host](../howto/sizing.md) for the supporting evidence.
+The pre-0.69.20 default was `10s`, which scaling work in 2026-05-29 showed was the actual mechanism behind the matrix's `Unavailable` errors at 20k+ conns regardless of check-in interval. See [How-to: Size a vigosrv host](../howto/operate/sizing.md) for the supporting evidence.
 
 ## paths
 

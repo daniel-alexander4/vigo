@@ -7,11 +7,11 @@ If you hit a term in the docs or CLI that isn't here, that's a doc bug — pleas
 
 ## blob
 
-An opaque byte sequence distributed by the [swarm](howto/set-up-swarm.md) subsystem, addressed by its SHA-256 hash. A blob is immutable: re-distributing updated content means seeding a new blob and revoking the old one. Agents store blobs in `/var/lib/vigo/swarm/.blobs/` and materialize symlinks to them under `/var/lib/vigo/swarm/files/` per the manifest's target paths.
+An opaque byte sequence distributed by the [swarm](howto/swarm/set-up-swarm.md) subsystem, addressed by its SHA-256 hash. A blob is immutable: re-distributing updated content means seeding a new blob and revoking the old one. Agents store blobs in `/var/lib/vigo/swarm/.blobs/` and materialize symlinks to them under `/var/lib/vigo/swarm/files/` per the manifest's target paths.
 
 ## bundle
 
-A self-contained git repository archive produced by `git bundle create`, used as [gitback](howto/set-up-gitback.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/swarm/gitback/mirrors/<seeder>/<user>/<project>.git`.
+A self-contained git repository archive produced by `git bundle create`, used as [gitback](howto/swarm/set-up-gitback.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/swarm/gitback/mirrors/<seeder>/<user>/<project>.git`.
 
 ## compliance
 
@@ -41,7 +41,7 @@ The drift axis of convergence (above). Computed by `convergence.ComputeDrift` ov
 
 ## envoy
 
-A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives a client UUID, and checks in periodically to pull desired state and report results. The central server addresses individual envoys by UUID; operators reference them by hostname. The retire/replace/dispose path uses three different verbs (revoke, puddle evict, delete) with deliberately different scopes — see the [Envoy Lifecycle](howto/troubleshoot.md) reference.
+A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives a client UUID, and checks in periodically to pull desired state and report results. The central server addresses individual envoys by UUID; operators reference them by hostname. The retire/replace/dispose path uses three different verbs (revoke, puddle evict, delete) with deliberately different scopes — see the [Envoy Lifecycle](howto/operate/troubleshoot.md) reference.
 
 ## executor
 
@@ -56,7 +56,7 @@ Every [envoy](#envoy) enrolled with a given server. "Fleet-wide" means *across a
 
 Canonical scope words, narrowest to broadest: **puddle** ⊆ envoys-running-a-given-user ⊆ **fleet**; the **swarm** is the substrate over the fleet. ("Mesh" is *not* a canonical Vigo term — where older prose said "mesh" it meant either the puddle (for [lockbox](#lockbox)) or an ad-hoc per-user sync set (for [longdrawer](#longdrawer)); use the precise term.)
 
-See the [scope-hierarchy diagram](howto/set-up-swarm.md#scope-fleet-vs-swarm-vs-puddle) on the Swarm page for how these layers and the four content subsystems relate.
+See the [scope-hierarchy diagram](howto/swarm/set-up-swarm.md#scope-fleet-vs-swarm-vs-puddle) on the Swarm page for how these layers and the four content subsystems relate.
 
 ## filecast
 
@@ -64,7 +64,7 @@ Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. 
 
 ## manifest
 
-The LWW-CRDT metadata store for swarm blobs, gossiped between envoys. Tracks which blobs exist, their targets, retention policies, and revocation tombstones. Each envoy holds a local manifest; version mismatches during multicast trigger manifest sync over the peer HTTPS channel. See [Swarm Manifest](howto/set-up-swarm.md#manifest).
+The LWW-CRDT metadata store for swarm blobs, gossiped between envoys. Tracks which blobs exist, their targets, retention policies, and revocation tombstones. Each envoy holds a local manifest; version mismatches during multicast trigger manifest sync over the peer HTTPS channel. See [Swarm Manifest](howto/swarm/set-up-swarm.md#manifest).
 
 ## hostcrate
 
@@ -92,7 +92,7 @@ Vigo's bare metal lifecycle subsystem: PXE provisioning, BMC (Redfish) integrati
 
 ## scrier
 
-Vigo's admin remote-access subsystem: interactive SSH, RDP, and VNC sessions to any enrolled envoy, routed through the envoy's outbound `AgentStream` + a dedicated `TunnelStream`. No inbound ports on the envoy side — the core MSP/customer-firewall value prop. Browser access at `/scrier/{envoy_id}`; CLI access via `vigocli scrier ssh`. See [Scrier](howto/set-up-scrier.md).
+Vigo's admin remote-access subsystem: interactive SSH, RDP, and VNC sessions to any enrolled envoy, routed through the envoy's outbound `AgentStream` + a dedicated `TunnelStream`. No inbound ports on the envoy side — the core MSP/customer-firewall value prop. Browser access at `/scrier/{envoy_id}`; CLI access via `vigocli scrier ssh`. See [Scrier](howto/operate/set-up-scrier.md).
 
 ## seed
 
@@ -100,7 +100,7 @@ The originating instance of a swarm blob on an envoy — the source of truth for
 
 ## spanner
 
-The whole federated control plane — a constellation of [bolt](#bolt) servers cooperating to operate one fleet. CLI (`vigocli spanner`), UI route (`/spanner`), REST namespace (`/api/v1/spanner/*`), YAML key (`spanner:`), and metric prefix (`vigo_spanner_*`) all speak the spanner vocabulary. The current wire implementation is hub + bolts; Phase 1+ will replace it with peer-equal gossip. The loader rejects the retired `tungol:` YAML key at startup. See [Set up Spanner](howto/set-up-spanner.md).
+The whole federated control plane — a constellation of [bolt](#bolt) servers cooperating to operate one fleet. CLI (`vigocli spanner`), UI route (`/spanner`), REST namespace (`/api/v1/spanner/*`), YAML key (`spanner:`), and metric prefix (`vigo_spanner_*`) all speak the spanner vocabulary. The current wire implementation is hub + bolts; Phase 1+ will replace it with peer-equal gossip. The loader rejects the retired `tungol:` YAML key at startup. See [Set up Spanner](howto/operate/set-up-spanner.md).
 
 ## bolt
 
@@ -116,7 +116,7 @@ A configcrate definition file in `stockpile/configcrates/**/*.vgo`. The director
 
 ## swarm
 
-The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [filecast](#filecast) (admin-pushed blobs, fleet-wide), [longdrawer](#longdrawer) (plaintext home-dir sync, per-user LAN set), [gitback](#gitback) (source-control repo mirrors, per-puddle), [lockbox](#lockbox) (encrypted home-dir sync, per-puddle). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. The swarm is singular and fleet-wide — see [fleet](#fleet) for the scope-word distinctions. See [Swarm](howto/set-up-swarm.md).
+The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [filecast](#filecast) (admin-pushed blobs, fleet-wide), [longdrawer](#longdrawer) (plaintext home-dir sync, per-user LAN set), [gitback](#gitback) (source-control repo mirrors, per-puddle), [lockbox](#lockbox) (encrypted home-dir sync, per-puddle). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. The swarm is singular and fleet-wide — see [fleet](#fleet) for the scope-word distinctions. See [Swarm](howto/swarm/set-up-swarm.md).
 
 ## trait
 
@@ -134,11 +134,11 @@ A reference to a value stored in the secrets vault, written in [stocks](#stockpi
 
 ## lockbox
 
-Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Membership is the user's [puddle](#puddle) (ADR-020 — lockbox is puddle-only). Files dropped into `~/lockbox/` are age-encrypted to every envoy in the user's puddle and synced as ciphertext — every envoy holds the same encrypted bytes, only puddle members can decrypt. Requires the user's lockbox password for decryption. The encryption-first sibling of [longdrawer](#longdrawer): same transport, different content rules. See [Lockbox](howto/set-up-lockbox.md).
+Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Membership is the user's [puddle](#puddle) (ADR-020 — lockbox is puddle-only). Files dropped into `~/lockbox/` are age-encrypted to every envoy in the user's puddle and synced as ciphertext — every envoy holds the same encrypted bytes, only puddle members can decrypt. Requires the user's lockbox password for decryption. The encryption-first sibling of [longdrawer](#longdrawer): same transport, different content rules. See [Lockbox](howto/swarm/set-up-lockbox.md).
 
 ## puddle
 
-Per-user puddle identity primitive (ADR-014). A single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit," wrapped under the user's passphrase using lockbox's Argon2id+XChaCha20 envelope. Sibling subsystems ([gitback](#gitback) under ADR-015, lockbox membership under ADR-016) consume it as a trust anchor — "envoys in puddle X" expressed as a single pubkey rather than a per-pair invite ceremony. Onboarding via [peer-pair](#peer-pair); manual scp survives as the air-gapped fallback. State at `~/.vigo-puddle/`. CLI: `vigo swarm puddle {init,pair,join,unlock,lock,pubkey,members,rotate-passphrase,status}`. See [Puddle](howto/set-up-puddle.md).
+Per-user puddle identity primitive (ADR-014). A single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit," wrapped under the user's passphrase using lockbox's Argon2id+XChaCha20 envelope. Sibling subsystems ([gitback](#gitback) under ADR-015, lockbox membership under ADR-016) consume it as a trust anchor — "envoys in puddle X" expressed as a single pubkey rather than a per-pair invite ceremony. Onboarding via [peer-pair](#peer-pair); manual scp survives as the air-gapped fallback. State at `~/.vigo-puddle/`. CLI: `vigo swarm puddle {init,pair,join,unlock,lock,pubkey,members,rotate-passphrase,status}`. See [Puddle](howto/swarm/set-up-puddle.md).
 
 ## peer-pair
 
@@ -146,11 +146,11 @@ The primary onboarding flow for [puddle](#puddle) and (by ADR-015) the unified g
 
 ## gitback
 
-Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitback/<project>/` for repositories with a `.gitback.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-deny per-envoy in 0.41.0+; operators authorize hosts via the `swarm.gitback.enabled` pattern list in server.yaml (first-match-wins, `-` prefix denies). Per-user opt-in is gated by the `gitback: true` flag on the user resource in the usercrate. See [Gitback](howto/set-up-gitback.md).
+Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitback/<project>/` for repositories with a `.gitback.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-deny per-envoy in 0.41.0+; operators authorize hosts via the `swarm.gitback.enabled` pattern list in server.yaml (first-match-wins, `-` prefix denies). Per-user opt-in is gated by the `gitback: true` flag on the user resource in the usercrate. See [Gitback](howto/swarm/set-up-gitback.md).
 
 ## longdrawer
 
-Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/longdrawer/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with longdrawer's own LAN multicast group on `224.0.0.43:1532` for discovery. Unlike [lockbox](#lockbox), longdrawer is *not* puddle-scoped — the sync set is the envoys on the user's LAN segment (plus any `cross_subnet_peers:`) that hold a `~/longdrawer/` directory for that user. Plaintext at rest (encryption moved to [lockbox](#lockbox) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.longdrawer/config.yaml`. See [Longdrawer](howto/set-up-longdrawer.md).
+Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/longdrawer/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with longdrawer's own LAN multicast group on `224.0.0.43:1532` for discovery. Unlike [lockbox](#lockbox), longdrawer is *not* puddle-scoped — the sync set is the envoys on the user's LAN segment (plus any `cross_subnet_peers:`) that hold a `~/longdrawer/` directory for that user. Plaintext at rest (encryption moved to [lockbox](#lockbox) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.longdrawer/config.yaml`. See [Longdrawer](howto/swarm/set-up-longdrawer.md).
 
 ## audit bundle
 
@@ -169,7 +169,7 @@ Surfaced as the Scope column on per-envoy compliance detail pages so a "missing"
 
 ## compliance role
 
-The third web-UI role added 0.34.2, sitting between admin and viewer. Default permissions: `compliance.read` + `compliance.docs.write` only — every framework page is visible, supporting documentation can be uploaded, and the per-framework audit-bundle export downloads (it's classified as `compliance.read` because the bundle is an evidence artifact, not the raw audit-log stream). The role deliberately excludes `audit.read`, `fleet.read`, and every mutation permission, so a holder can't see envoys/configcrates/config/secrets/scrier/payload, can't publish or dispatch tasks, and can't read the hash-chained audit log directly. Intended for GRC staff and compliance-document uploaders, **not** auditors — auditors should be assigned `admin` or `viewer` depending on the depth of evidence access required. Stored as `role: 'compliance'` in `users.role`; the DB CHECK constraint enumerates the three valid values. See [Authentication](howto/set-up-auth.md#roles-and-permissions).
+The third web-UI role added 0.34.2, sitting between admin and viewer. Default permissions: `compliance.read` + `compliance.docs.write` only — every framework page is visible, supporting documentation can be uploaded, and the per-framework audit-bundle export downloads (it's classified as `compliance.read` because the bundle is an evidence artifact, not the raw audit-log stream). The role deliberately excludes `audit.read`, `fleet.read`, and every mutation permission, so a holder can't see envoys/configcrates/config/secrets/scrier/payload, can't publish or dispatch tasks, and can't read the hash-chained audit log directly. Intended for GRC staff and compliance-document uploaders, **not** auditors — auditors should be assigned `admin` or `viewer` depending on the depth of evidence access required. Stored as `role: 'compliance'` in `users.role`; the DB CHECK constraint enumerates the three valid values. See [Authentication](howto/operate/set-up-auth.md#roles-and-permissions).
 
 ## compliance docs
 

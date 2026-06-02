@@ -1,7 +1,7 @@
 
 # vigocli swarm poolq
 
-Operator-side view of [poolq](../../howto/set-up-poolq.md) — the P2P ordered-log queue (ADR-029). Every envoy's `poolq` trait is aggregated server-side by `server/swarm/poolqmesh` (30-second TTL cache; invalidated on block/unblock so moderation takes effect immediately) and surfaced through `/api/v1/swarm/poolq/*`. This command is the CLI consumer.
+Operator-side view of [poolq](../../howto/swarm/set-up-poolq.md) — the P2P ordered-log queue (ADR-029). Every envoy's `poolq` trait is aggregated server-side by `server/swarm/poolqmesh` (30-second TTL cache; invalidated on block/unblock so moderation takes effect immediately) and surfaced through `/api/v1/swarm/poolq/*`. This command is the CLI consumer.
 
 `vigocli swarm poolq` is **read-only plus the admin moderation backstop**. The write verb (`post`) lives on the agent side as [`vigo swarm poolq`](agent-swarm-poolq.md) — it needs an unlocked per-user puddle to sign messages, which doesn't fit vigocli's root-only / peer-auth posture. Same split that [`vigocli swarm curator`](swarm-curator.md) takes.
 

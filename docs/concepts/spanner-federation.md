@@ -32,7 +32,7 @@ You can run both: HA within a partition, spanner across partitions.
 
 ## Where this shows up
 
-- [Set up spanner](../howto/set-up-spanner.md) — found, invite, join.
+- [Set up spanner](../howto/operate/set-up-spanner.md) — found, invite, join.
 - The `/spanner` UI + [`vigocli spanner`](../reference/vigocli/spanner.md).
 - [High availability](high-availability.md) — the other axis of scale.
 

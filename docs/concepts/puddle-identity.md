@@ -28,7 +28,7 @@ Compartmentalization. A compromised single envoy shouldn't decrypt a whole puddl
 ## Where this shows up
 
 - [The swarm](the-swarm.md) — what puddles authorize.
-- [Set up puddle](../howto/set-up-puddle.md) — pair, join, name.
+- [Set up puddle](../howto/swarm/set-up-puddle.md) — pair, join, name.
 - The `/swarm/puddle` UI + [`vigocli swarm puddle`](../reference/vigocli/swarm-puddle.md) — fleet view.
 
 ---

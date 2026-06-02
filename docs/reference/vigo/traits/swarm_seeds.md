@@ -33,5 +33,5 @@ The payload carries whichever of these is non-empty (there is no `updated_at`):
 
 ## See also
 
-- [`swarm`](../../../howto/set-up-swarm.md) — the substrate seeds distribute over.
+- [`swarm`](../../../howto/swarm/set-up-swarm.md) — the substrate seeds distribute over.
 - [`vigocli swarm filecast`](../../vigocli/swarm-filecast.md) — admin-pushed file distribution that rides the same substrate.

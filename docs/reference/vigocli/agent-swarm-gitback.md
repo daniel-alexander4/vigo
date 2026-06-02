@@ -462,4 +462,4 @@ vigo swarm gitback project re-found <project_id> [--force]
 - [ADR-018 — Puddle rekey](../../adr/018-puddle-rekey.md)
 - [ADR-019 — Gitback founder-rekey via anchor-preserving delegation chains](../../adr/019-gitback-founder-rekey.md) — the design behind `re-invite-all`, `rejoin`, `re-found`, the delegation chain primitive, and authority windows. Shipped 0.35.18–0.35.22.
 - [vigo swarm puddle CLI reference](agent-swarm-puddle.md)
-- [Capability-token primitives — `tokens.rs`](../../howto/set-up-gitback.md)
+- [Capability-token primitives — `tokens.rs`](../../howto/swarm/set-up-gitback.md)
