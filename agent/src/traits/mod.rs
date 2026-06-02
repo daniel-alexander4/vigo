@@ -217,7 +217,7 @@ use tracing::warn;
 /// Maximum time a single trait collector may run.
 pub const COLLECTOR_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Enum dispatch for the 33 built-in trait collectors.
+/// Enum dispatch for the 50 built-in trait collectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollectorKind {
     Os,
