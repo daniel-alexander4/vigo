@@ -29,16 +29,26 @@ The 14 PNGs in `docs/img/screenshots/` were captured against Vigo 0.23.52 (vigo-
 | `vigo.integrations.png` | `/integrations` | Outbound integration list |
 | `vigo.docs-ai.png` | `/ask` (or wherever AI ask UI lives now) | AI assistant with a real query |
 
-## To capture (7 missing — features that landed post-0.23.52)
+## Captured 2026-06-01 (admin pages, v0.72.3, dark Mocha, 1440×900)
+
+Captured against the home-lab vigosrv (`dan` admin login, headless Chromium) with real fleet data from the weekend swarm-substrate e2e:
+
+| File | URL | Status |
+|---|---|---|
+| `vigo.swarm-puddle.png` | `/swarm/puddle` | ✅ Puddles fleet view (0.72.0 feature) — 1 puddle, 2 envoys, Healthy. Embedded in `howto/swarm/set-up-puddle.md`. |
+| `vigo.swarm.png` | `/swarm` | ✅ Swarm overview — content-subsystem blob table + peers |
+| `vigo.gitback.png` | `/swarm/gitback` | ✅ Gitback fleet view — 1 project, no divergence |
+| `vigo.lockbox.png` | `/swarm/lockbox` | ✅ Lockbox fleet view — incl. live Drift problem panel |
+| `vigo.swarm-curator.png` | `/swarm/curator` | ✅ Curator fleet view — 1 artifact, Ok |
+| `vigo.longdrawer.png` | `/swarm/longdrawer` | ✅ Longdrawer fleet view — 1 user, 4 files |
+| `vigo.swarm-poolq.png` | `/swarm/poolq` | ✅ Poolq fleet view — 1 topic, 3 messages |
+| `vigo.audit.png` | `/audit` | ✅ Audit log — Chain Valid, 2.79M entries |
+
+## Still to capture (need a live session / paid license)
 
 | File | URL | Notes |
 |---|---|---|
-| `vigo.scrier-ssh.png` | `/scrier/<envoy-id>?protocol=ssh` | Live SSH session in browser. Show the terminal pane with a real prompt. |
-| `vigo.swarm-curator.png` | `/swarm/curator` | Curator fleet view — needs at least one published artifact |
-| `vigo.lockbox.png` | `/lockbox` | Lockbox fleet view — presence matrix per (user × envoy × file) |
-| `vigo.gitback.png` | `/gitback` | Gitback fleet view — projects + ref divergence |
-| `vigo.longdrawer.png` | `/longdrawer` | Longdrawer fleet view — file presence matrix |
-| `vigo.audit.png` | `/audit` | Hash-chained audit log entries |
+| `vigo.scrier-ssh.png` | `/scrier/<envoy-id>?protocol=ssh` | Live SSH session in browser — needs an interactive terminal session, can't be captured headless. |
 | `vigo.swarm-spanner.png` | `/spanner/bolts/<id>` | Per-bolt detail (needs paid license + spanner topology) |
 
 ## Where they're embedded

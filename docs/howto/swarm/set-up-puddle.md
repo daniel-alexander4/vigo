@@ -153,6 +153,14 @@ Phase 1 deliberately defers: multi-puddle per user (one puddle per user for now)
 - **Agent logs** carry WARN lines for pair-claim mismatch, signature failures, and helper crashes.
 - **ADRs** for the design rationale: [ADR-014](../../adr/014-puddle-primitive.md) (the primitive), [ADR-015](../../adr/015-unified-gitback-substrate.md) (gitback on puddle), [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) (lockbox on puddle), [ADR-017](../../adr/017-no-puddle-level-revoke.md) (no puddle-level revoke), [ADR-018](../../adr/018-puddle-rekey.md) (rekey), [ADR-022](../../adr/022-gitback-friendly-names.md) (friendly names).
 
+## See it fleet-wide
+
+The web UI's **Puddles** page (`/swarm/puddle`) rolls every puddle up across the fleet — owner (friendly name, or `(unnamed)`), short pubkey, how many envoys carry it, which Unix users it belongs to, whether a session is unlocked, and a health badge. It's the single read-only source of truth for "who has a puddle, where, and is it healthy" — the substrate that lockbox, gitback, curator, and poolq all build on.
+
+![The Puddles fleet view — one row per puddle, with envoy count, owning users, unlock state, and health](../../img/screenshots/vigo.swarm-puddle.png)
+
+Health is `Healthy` / `Warning` / `Degraded`; a puddle whose envoys disagree on membership or whose key copies have drifted shows up here before its dependent subsystems start failing.
+
 ## What's next
 
 - **Turn on the per-user content subsystems** → [Set up Lockbox](set-up-lockbox.md), [Set up Gitback](set-up-gitback.md).
