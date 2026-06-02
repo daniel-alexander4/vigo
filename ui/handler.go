@@ -240,7 +240,7 @@ type ControlStatusRow struct {
 	Title              string
 	Status             string
 	Scope              string
-	Configcrates            []string // present when Status == "covered"
+	Configcrates       []string // present when Status == "covered"
 	Evidence           string
 	RecommendedModules []string // present when Status == "missing"
 }
@@ -1074,13 +1074,13 @@ type FleetRow struct {
 	Status   string
 	// Drift mirrors EnvoyRow.Drift — drives the Diverged-row peach badge.
 	// DriftLabel is the precomputed string form so the template stays method-free.
-	Drift        convergence.DriftLevel
-	DriftLabel   string
-	LastRunID    string
-	FailurePct   float64
-	ChangedCount int64
-	FailedCount  int64
-	ConfigcrateCount  int64
+	Drift            convergence.DriftLevel
+	DriftLabel       string
+	LastRunID        string
+	FailurePct       float64
+	ChangedCount     int64
+	FailedCount      int64
+	ConfigcrateCount int64
 	// HealthSeverity is the composite fleetpressure.EnvoyPressure.Health
 	// for this row — same SoT the /envoys "Agent Health" column and the
 	// /agent-health fleet page consume. Populated in datasource.go alongside
@@ -1103,11 +1103,11 @@ type RunRow struct {
 	// Trigger is what kicked off the run — "scheduled" (normal cycle)
 	// or "force-push" (operator-initiated). Lets the dashboard pick
 	// operator actions out of the scheduled heartbeat.
-	Trigger      string
-	ConfigcrateCount  int64
-	ChangedCount int64
-	FailedCount  int64
-	FailurePct   float64 // 0-100: failed_count / module_count * 100
+	Trigger          string
+	ConfigcrateCount int64
+	ChangedCount     int64
+	FailedCount      int64
+	FailurePct       float64 // 0-100: failed_count / module_count * 100
 	// Outcome is the per-run failure-axis bucket — "converged",
 	// "degraded", "failed", or "no data" — derived once at row build
 	// time via convergence.ComputeStatus so the dashboard can show the
@@ -1259,14 +1259,14 @@ type EnvoyRow struct {
 	// "changed" / "diverged") so the template never has to call a method on
 	// a typed int — `.DriftLabel` is a plain string field and reflection
 	// surprises are off the table.
-	Drift        convergence.DriftLevel
-	DriftLabel   string
-	FailurePct   float64 // 0-100: failed_count / module_count * 100
-	ConfigcrateCount  int64
-	FailedCount  int64
-	ChangedCount int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
-	Offline      bool
-	ObserveOnly  bool // observe-only mode: drift reporting only
+	Drift            convergence.DriftLevel
+	DriftLabel       string
+	FailurePct       float64 // 0-100: failed_count / module_count * 100
+	ConfigcrateCount int64
+	FailedCount      int64
+	ChangedCount     int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
+	Offline          bool
+	ObserveOnly      bool // observe-only mode: drift reporting only
 	// StaleThresholdLabel is the resolved per-envoy stale threshold
 	// (2.5× max(configured_interval, observed_cycle)) rendered in
 	// short form for tooltips. Empty when bootstrap (no observed
@@ -1296,7 +1296,7 @@ type EnvoyRow struct {
 	Arch                 string // Traits["arch"]
 	Environment          string
 	Roles                []string
-	Configcrates              []string
+	Configcrates         []string
 	ComplianceFrameworks []string
 }
 
@@ -1335,22 +1335,22 @@ type EnvoysPageData struct {
 	Search      string
 	// ADR-032 slice-2 chip axes — case-insensitive substring with
 	// OR-within-axis (comma-separated values), AND across axes.
-	EnvFilter        string
-	TagFilter        string
-	RoleFilter       string
-	OSFilter         string
-	ArchFilter       string
-	ConfigcrateFilter     string
-	ComplianceFilter string
-	SortColumn       string // active sort column (status, hostname, last_seen, last_run, ip)
-	SortDir          string // "asc" or "desc"
-	EnvoyCount       int    // rows on this page after filter+offset
-	MatchingTotal    int    // total entries matching filter (across all pages)
-	TotalEnvoys      int    // fleet-wide total, regardless of filter
-	HasMore          bool
-	Offset           int
-	Limit            int
-	NextOffset       int
+	EnvFilter         string
+	TagFilter         string
+	RoleFilter        string
+	OSFilter          string
+	ArchFilter        string
+	ConfigcrateFilter string
+	ComplianceFilter  string
+	SortColumn        string // active sort column (status, hostname, last_seen, last_run, ip)
+	SortDir           string // "asc" or "desc"
+	EnvoyCount        int    // rows on this page after filter+offset
+	MatchingTotal     int    // total entries matching filter (across all pages)
+	TotalEnvoys       int    // fleet-wide total, regardless of filter
+	HasMore           bool
+	Offset            int
+	Limit             int
+	NextOffset        int
 	// RenderedCap is true when the operator has paged to the hard DOM cap;
 	// the table footer renders a "refine your filter" sentinel instead of
 	// another load-more trigger so the DOM cannot grow unbounded.
@@ -1405,13 +1405,13 @@ type EnvoyDetailRunRow struct {
 
 // RunResultRow is a single run result (per-module) displayed in a table.
 type RunResultRow struct {
-	ConfigcrateName   string
-	ResourceType string
-	ResourceName string
-	ActionTaken  string
-	Changed      bool
-	ErrorMessage string
-	DurationMs   int64
+	ConfigcrateName string
+	ResourceType    string
+	ResourceName    string
+	ActionTaken     string
+	Changed         bool
+	ErrorMessage    string
+	DurationMs      int64
 	// Drift is the drift-axis bucket for this row's module as of the
 	// run being viewed (window: this run + DivergedThreshold-1 prior).
 	// Populated by RunDetailData. DriftLabel mirrors Drift.String() so
@@ -1599,11 +1599,11 @@ type ServerConfigSectionPageData struct {
 
 // PlanResultRow is a single plan result displayed in the plans page.
 type PlanResultRow struct {
-	ConfigcrateName    string
-	ResourceType  string
-	ResourceName  string
-	PlannedAction string
-	ActionColor   string
+	ConfigcrateName string
+	ResourceType    string
+	ResourceName    string
+	PlannedAction   string
+	ActionColor     string
 }
 
 // PlanDetailPageData holds data for the plan detail page.
@@ -2570,27 +2570,27 @@ func (h *Handler) dashboardData() DashboardPageData {
 			dur = FriendlyDurationLabel(finished.Sub(r.StartedAt))
 		}
 		outcome := convergence.ComputeStatus(convergence.RunInfo{
-			Status:       r.Status,
-			ChangedCount: r.ChangedCount,
-			FailedCount:  r.FailedCount,
-			ConfigcrateCount:  r.ConfigcrateCount,
+			Status:           r.Status,
+			ChangedCount:     r.ChangedCount,
+			FailedCount:      r.FailedCount,
+			ConfigcrateCount: r.ConfigcrateCount,
 		}).String()
 		data.RecentRuns = append(data.RecentRuns, RunRow{
-			ID:              r.ID,
-			EnvoyID:         r.EnvoyID,
-			Hostname:        r.Hostname,
-			StartedAt:       r.StartedAt,
-			FinishedAt:      finished,
-			Status:          r.Status,
-			Trigger:         r.Trigger,
+			ID:                   r.ID,
+			EnvoyID:              r.EnvoyID,
+			Hostname:             r.Hostname,
+			StartedAt:            r.StartedAt,
+			FinishedAt:           finished,
+			Status:               r.Status,
+			Trigger:              r.Trigger,
 			ConfigcrateCount:     r.ConfigcrateCount,
-			ChangedCount:    r.ChangedCount,
-			FailedCount:     r.FailedCount,
-			FailurePct:      failPct,
-			Outcome:         outcome,
-			EnvoyDriftLabel: h.dataSource.EnvoyDriftLabel(r.EnvoyID),
+			ChangedCount:         r.ChangedCount,
+			FailedCount:          r.FailedCount,
+			FailurePct:           failPct,
+			Outcome:              outcome,
+			EnvoyDriftLabel:      h.dataSource.EnvoyDriftLabel(r.EnvoyID),
 			TopFailedConfigcrate: r.TopFailedConfigcrate,
-			DurationLabel:   dur,
+			DurationLabel:        dur,
 		})
 	}
 
@@ -3807,16 +3807,16 @@ type EvidenceControlDoc struct {
 
 // EvidenceControlEnvoy is a single envoy's enforcement evidence for a control.
 type EvidenceControlEnvoy struct {
-	ID           string
-	Hostname     string
-	Module       string
-	Status       string
-	FailurePct   float64
-	FailedCount  int64
-	ConfigcrateCount  int64
-	RunCount     int
-	FailureCount int
-	LastRun      string
+	ID               string
+	Hostname         string
+	Module           string
+	Status           string
+	FailurePct       float64
+	FailedCount      int64
+	ConfigcrateCount int64
+	RunCount         int
+	FailureCount     int
+	LastRun          string
 }
 
 // evidenceFrameworks returns the list of framework options for the dropdown.
@@ -4125,11 +4125,11 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 
 	// Get all envoys from fleet cache or fall back to DataSource.
 	type envoyInfo struct {
-		ID          string
-		Hostname    string
-		Status      string
-		FailurePct  float64
-		FailedCount int64
+		ID               string
+		Hostname         string
+		Status           string
+		FailurePct       float64
+		FailedCount      int64
 		ConfigcrateCount int64
 	}
 	var allEnvoys []envoyInfo
@@ -4164,12 +4164,12 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	var envoys []EvidenceControlEnvoy
 	for _, m := range matches {
 		envoys = append(envoys, EvidenceControlEnvoy{
-			ID:          m.envoyID,
-			Hostname:    m.hostname,
-			Module:      m.module,
-			Status:      m.status,
-			FailurePct:  m.failurePct,
-			FailedCount: m.failedCount,
+			ID:               m.envoyID,
+			Hostname:         m.hostname,
+			Module:           m.module,
+			Status:           m.status,
+			FailurePct:       m.failurePct,
+			FailedCount:      m.failedCount,
 			ConfigcrateCount: m.moduleCount,
 		})
 	}
@@ -4847,14 +4847,14 @@ type MissingControlRec struct {
 // numbers match the Standards tab card that linked to it; Covered +
 // Waived + Partial + Missing = Total by construction.
 type EnvoyStandardCoverageData struct {
-	EnvoyID           string
-	Hostname          string
-	FrameworkTitle    string
-	Status            EnvoyFrameworkStatus
-	Controls          []ControlStatusRow
+	EnvoyID                string
+	Hostname               string
+	FrameworkTitle         string
+	Status                 EnvoyFrameworkStatus
+	Controls               []ControlStatusRow
 	ConfigcrateConvergence string  // envoy convergence status (converged, failed, etc.)
 	ConfigcratePct         float64 // module convergence percentage (100 = all modules converged)
-	Unavailable       bool    // true when no findings could be produced (framework disabled, slug unknown, etc.)
+	Unavailable            bool    // true when no findings could be produced (framework disabled, slug unknown, etc.)
 }
 
 // AttackSurfaceData holds data for the envoy attack surface tab.
@@ -4913,7 +4913,7 @@ func (h *Handler) EnvoyScrierSessionsFragment(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if len(sessions) == 0 {
-		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No remote access sessions recorded for this envoy.</p>`)
+		fmt.Fprintf(w, `<p class="text-muted u-p-20px">No remote access sessions recorded for this envoy.</p>`)
 		return
 	}
 
@@ -5244,9 +5244,9 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 	}
 
 	data := EnvoyStandardCoverageData{
-		EnvoyID:           idStr,
-		Hostname:          detail.Envoy.Hostname,
-		FrameworkTitle:    standardDisplayNameFromSlug(fw),
+		EnvoyID:                idStr,
+		Hostname:               detail.Envoy.Hostname,
+		FrameworkTitle:         standardDisplayNameFromSlug(fw),
 		ConfigcrateConvergence: detail.Envoy.Status,
 		ConfigcratePct:         modPct,
 	}
@@ -7976,7 +7976,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(all) == 0 && cursor == "" {
-		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No envoys with trait data. Traits are collected after the first check-in.</p>`)
+		fmt.Fprintf(w, `<p class="text-muted u-p-20px">No envoys with trait data. Traits are collected after the first check-in.</p>`)
 		return
 	}
 
@@ -8056,7 +8056,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 
 	// Render count.
 	if cursor == "" {
-		fmt.Fprintf(w, `<p class="text-muted" style="margin-bottom:8px;">%d envoys`, len(rows))
+		fmt.Fprintf(w, `<p class="text-muted u-mb-8px">%d envoys`, len(rows))
 		if hasMore {
 			fmt.Fprintf(w, `+`)
 		}
@@ -8067,7 +8067,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(rows) == 0 && cursor == "" {
-		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No envoys match the filter criteria.</p>`)
+		fmt.Fprintf(w, `<p class="text-muted u-p-20px">No envoys match the filter criteria.</p>`)
 		return
 	}
 
@@ -8104,7 +8104,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 			params += "&show=" + url.QueryEscape(showParam)
 		}
 		fmt.Fprintf(w,
-			`<tr hx-get="/ui/fragments/inventory?%s" hx-trigger="revealed" hx-swap="afterend" hx-target="#inventory-tbody" hx-select="tr" style="height:1px;"><td colspan="%d"></td></tr>`,
+			`<tr class="u-h-1px" hx-get="/ui/fragments/inventory?%s" hx-trigger="revealed" hx-swap="afterend" hx-target="#inventory-tbody" hx-select="tr"><td colspan="%d"></td></tr>`,
 			params, len(showFields)+3)
 	}
 }
@@ -8164,32 +8164,32 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 	// Modal overlay. data-overlay-close closes the modal on a backdrop click
 	// (handled in ui-actions.js, which only fires when the overlay itself is
 	// the click target — not its children).
-	fmt.Fprint(w, `<div data-overlay-close="trait-index-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center;">`)
-	fmt.Fprint(w, `<div style="background:var(--color-card-bg); border-radius:10px; width:90%; max-width:640px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.3);">`)
+	fmt.Fprint(w, `<div class="trait-index-modal" data-overlay-close="trait-index-modal">`)
+	fmt.Fprint(w, `<div class="trait-index-modal__panel">`)
 
 	// Header.
-	fmt.Fprintf(w, `<div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--color-border);">`)
-	fmt.Fprintf(w, `<strong style="font-size:16px;">Trait Index — %d traits across %d namespaces</strong>`, len(keyCounts), len(nsNames))
+	fmt.Fprintf(w, `<div class="trait-index-modal__header">`)
+	fmt.Fprintf(w, `<strong class="trait-index-modal__title">Trait Index — %d traits across %d namespaces</strong>`, len(keyCounts), len(nsNames))
 	fmt.Fprint(w, `<button class="btn btn--sm" data-action="close-trait-modal">Close</button>`)
 	fmt.Fprint(w, `</div>`)
 
 	// Search field.
-	fmt.Fprint(w, `<div style="padding:12px 20px; border-bottom:1px solid var(--color-border);">`)
+	fmt.Fprint(w, `<div class="trait-index-modal__search">`)
 	fmt.Fprint(w, `<input id="trait-index-search" type="text" placeholder="Filter traits..." `+
-		`style="width:100%; padding:6px 10px; border:1px solid var(--color-border); border-radius:6px; background:var(--color-bg); color:var(--color-text); font-size:14px; outline:none;" `+
+		`class="trait-index-modal__search-input" `+
 		`data-input="trait-filter">`)
 	fmt.Fprint(w, `</div>`)
 
 	// Scrollable body.
-	fmt.Fprint(w, `<div id="trait-index-body" style="overflow-y:auto; flex:1;">`)
+	fmt.Fprint(w, `<div id="trait-index-body" class="trait-index-modal__body">`)
 	for _, ns := range nsNames {
 		keys := namespaces[ns]
 		escapedNS := template.HTMLEscapeString(ns)
-		fmt.Fprintf(w, `<div data-ns-header="%s" style="padding:6px 20px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); position:sticky; top:0;">%s (%d)</div>`,
+		fmt.Fprintf(w, `<div class="trait-index-modal__ns" data-ns-header="%s">%s (%d)</div>`,
 			escapedNS, escapedNS, len(keys))
 		for _, ki := range keys {
 			escapedKey := template.HTMLEscapeString(ki.Key)
-			fmt.Fprintf(w, `<div class="trait-search__hit" data-trait-key="%s" data-ns="%s" style="cursor:pointer; padding:4px 20px;" `+
+			fmt.Fprintf(w, `<div class="trait-search__hit" data-trait-key="%s" data-ns="%s" `+
 				`hx-get="/ui/fragments/inventory-explore?key=%s" `+
 				`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
 				`<span class="trait-search__key">%s</span>`+
@@ -8293,7 +8293,7 @@ func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request
 			sample = sample[:60] + "..."
 		}
 		escapedKey := template.HTMLEscapeString(hit.Key)
-		fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer;" `+
+		fmt.Fprintf(w, `<div class="trait-search__hit" `+
 			`hx-get="/ui/fragments/inventory-explore?key=%s" `+
 			`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
 			`<span class="trait-search__key">%s</span>`+
@@ -8556,11 +8556,11 @@ func (h *Handler) InventoryExploreTableFragment(w http.ResponseWriter, r *http.R
 	// Empty-cols path: just hostname lists per group (no table chrome needed).
 	if len(displayCols) == 0 {
 		for _, g := range groups {
-			fmt.Fprint(w, `<div style="margin-bottom:12px;">`)
-			fmt.Fprint(w, `<div style="font-size:13px; margin-bottom:4px;">`)
+			fmt.Fprint(w, `<div class="u-mb-12px">`)
+			fmt.Fprint(w, `<div class="u-fs-13px-mb-4px">`)
 			fmt.Fprint(w, renderGroupHeading(key, g.Label, len(g.Rows), missingLabel))
 			fmt.Fprint(w, `</div>`)
-			fmt.Fprint(w, `<div style="font-size:13px; color:var(--color-muted);">`)
+			fmt.Fprint(w, `<div class="u-fs-13px-c-var-color-muted">`)
 			for i, row := range g.Rows {
 				if i > 0 {
 					fmt.Fprint(w, `, `)
@@ -9049,11 +9049,11 @@ func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request)
 	}
 
 	if len(rows) == 0 {
-		fmt.Fprintf(w, `<p class="text-muted" style="padding:8px;">No matching envoys found.</p>`)
+		fmt.Fprintf(w, `<p class="text-muted u-p-8px">No matching envoys found.</p>`)
 		return
 	}
 
-	fmt.Fprintf(w, `<table class="table" style="margin:8px 0;"><thead><tr><th>Hostname</th>`)
+	fmt.Fprintf(w, `<table class="table u-m-8px-0"><thead><tr><th>Hostname</th>`)
 	for _, col := range cols {
 		fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(col.Header))
 	}
@@ -9063,7 +9063,7 @@ func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request)
 			template.HTMLEscapeString(row.ID),
 			template.HTMLEscapeString(row.Hostname))
 		for _, val := range row.Fields {
-			fmt.Fprintf(w, `<td class="mono" style="font-size:12px;">%s</td>`, template.HTMLEscapeString(val))
+			fmt.Fprintf(w, `<td class="mono u-fs-12px">%s</td>`, template.HTMLEscapeString(val))
 		}
 		fmt.Fprintf(w, `</tr>`)
 	}
@@ -9221,11 +9221,11 @@ func (h *Handler) HealthFragment(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `<div class="stat-grid">`)
 	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Overall Status</div><div class="stat-card__value text-%s">%s</div></div>`, statusCSS, template.HTMLEscapeString(status))
 	if skipCount > 0 {
-		fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Checks Passed</div><div class="stat-card__value">%d / %d <span style="font-size:0.65em;font-weight:normal">(%d skipped)</span></div></div>`, passCount, applicable, skipCount)
+		fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Checks Passed</div><div class="stat-card__value">%d / %d <span class="u-fs-0-65em-fw-normal">(%d skipped)</span></div></div>`, passCount, applicable, skipCount)
 	} else {
 		fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Checks Passed</div><div class="stat-card__value">%d / %d</div></div>`, passCount, applicable)
 	}
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Version</div><div class="stat-card__value" style="font-size:1rem">%s</div></div>`, template.HTMLEscapeString(h.version))
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Version</div><div class="stat-card__value u-fs-1rem">%s</div></div>`, template.HTMLEscapeString(h.version))
 	fmt.Fprintf(w, `</div>`)
 	fmt.Fprintf(w, `<div class="card mt-3"><h2>Diagnostic Checks</h2><table class="table"><thead><tr><th>Check</th><th>Status</th><th>Details</th></tr></thead><tbody>`)
 	for _, c := range serverChecks {

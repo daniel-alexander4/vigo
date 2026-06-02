@@ -351,10 +351,11 @@ func TestRender_EnvoyTrace(t *testing.T) {
 
 // TestTracePathTree_ThemedColor pins that the Path Inheritance tree colors
 // itself the way the rest of the trace page does: each line carries the
-// --tc-* custom-property pair in its style and the .trace-path-line class
-// that resolves it per theme. The bug it guards: traceGreenText returns a
-// custom-property pair, not a color — interpolating it into `color:` yields
-// malformed CSS and the tree falls back to the inherited default.
+// .trace-path-line class plus a .tgt-N bucket class. The .tgt-N class sets the
+// --tc-* custom-property pair the .trace-path-line rule resolves per theme — so
+// the coloring is CSP-safe (no inline style) yet still themed. The bug it
+// guards: the gradient is a custom-property pair, not a color, and must reach
+// the page as a class, never an inline style= attribute (style-src 'self').
 func TestTracePathTree_ThemedColor(t *testing.T) {
 	out := string(tracePathTree([]config.InheritanceLevel{
 		{Dir: "", File: "common.vgo"},
@@ -363,13 +364,13 @@ func TestTracePathTree_ThemedColor(t *testing.T) {
 	if out == "" {
 		t.Fatal("tracePathTree returned empty for non-empty levels")
 	}
-	if !strings.Contains(out, `class="trace-path-line"`) {
+	if !strings.Contains(out, "trace-path-line") {
 		t.Errorf("tracePathTree output missing the .trace-path-line class:\n%s", out)
 	}
-	if !strings.Contains(out, "--tc-") {
-		t.Errorf("tracePathTree output missing the --tc-* custom properties:\n%s", out)
+	if !strings.Contains(out, "tgt-") {
+		t.Errorf("tracePathTree output missing the .tgt-N gradient bucket class:\n%s", out)
 	}
-	if strings.Contains(out, "color:--tc") {
-		t.Errorf("tracePathTree emits malformed CSS — color set to a custom-property pair:\n%s", out)
+	if strings.Contains(out, "style=") {
+		t.Errorf("tracePathTree must not emit an inline style= attribute (CSP style-src 'self'):\n%s", out)
 	}
 }

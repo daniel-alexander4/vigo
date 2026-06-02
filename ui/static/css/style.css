@@ -1037,6 +1037,7 @@ a.dash-column--link:focus-visible {
 .sparkline {
     width: 100%;
     height: 60px;
+    overflow: visible;
 }
 
 .sparkline-container {
@@ -3260,6 +3261,79 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     text-align: center;
 }
 
+/* Trait Index modal (inventory "Search Traits") — rendered as a fragment in
+   handler.go; de-inlined for CSP style-src 'self'. */
+.trait-index-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.trait-index-modal__panel {
+    background: var(--color-card-bg);
+    border-radius: 10px;
+    width: 90%;
+    max-width: 640px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.trait-index-modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.trait-index-modal__title {
+    font-size: 16px;
+}
+
+.trait-index-modal__search {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.trait-index-modal__search-input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 14px;
+    outline: none;
+}
+
+.trait-index-modal__body {
+    overflow-y: auto;
+    flex: 1;
+}
+
+.trait-index-modal__ns {
+    padding: 6px 20px;
+    background: var(--color-bg);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+}
+
+/* Denser hit rows inside the modal than the typeahead default. */
+.trait-index-modal__body .trait-search__hit {
+    padding: 4px 20px;
+}
+
 .trait-explore {
     margin-top: 12px;
     /* min-width: 0 lets the column form and table wrap actually clip
@@ -4404,6 +4478,7 @@ html.theme-dark .envoys-tree__children {
 
 /* === Sortable Column Headers === */
 th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable a { color: inherit; text-decoration: none; }
 th.sortable:hover { color: var(--color-brand); }
 th.sortable .sort-arrow { font-size: 10px; margin-left: 3px; opacity: 0.3; }
 th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
@@ -5141,6 +5216,13 @@ a.server-config-card:hover {
 .u-w-120px { width:120px; }
 .u-blk29 { margin:0; white-space:pre-wrap; word-break:break-all; }
 .u-blk30 { background:var(--color-muted-bg); padding:1rem; border-radius:6px; overflow-x:auto; font-size:0.85rem; color:var(--color-text); }
+.u-p-8px { padding:8px; }
+.u-m-8px-0 { margin:8px 0; }
+.u-h-1px { height:1px; }
+.u-fs-1rem { font-size:1rem; }
+.u-fs-0-65em-fw-normal { font-size:0.65em; font-weight:normal; }
+.u-fs-13px-mb-4px { font-size:13px; margin-bottom:4px; }
+.u-fs-13px-c-var-color-muted { font-size:13px; color:var(--color-muted); }
 
 /* ── Dynamic-style support classes (CSP: style-src 'self', no 'unsafe-inline') ──
    Generated to back the de-inlined dynamic style= attributes. Formulas mirror

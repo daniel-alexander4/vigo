@@ -90,7 +90,7 @@ func sparklineSVG(values []float64, width, height int, color string, minVal, max
 	labelMax := formatScaleLabel(maxVal)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" class="sparkline" preserveAspectRatio="none" style="overflow:visible;">`, width, height)
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" class="sparkline" preserveAspectRatio="none">`, width, height)
 
 	// Area fill.
 	fmt.Fprintf(&b, `<path d="%s" fill="%s" opacity="0.1"/>`, areaPath, color)
