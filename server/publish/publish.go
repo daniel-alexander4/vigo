@@ -121,15 +121,15 @@ type FileError struct {
 }
 
 type Result struct {
-	Configcrates     int
-	Roles       int
-	Entries     int
-	Files       int      // total files synced (0 for validate-only)
-	AllFiles    []string // all files examined in stockpile/
-	Changed     []string // files that are new or changed vs .live
-	Removed     []string // files in .live not present in stockpile
-	DiffSummary string   // unified diff of changed files
-	URLWarning  string   // non-fatal URL check warnings (empty if all OK)
+	Configcrates int
+	Roles        int
+	Entries      int
+	Files        int      // total files synced (0 for validate-only)
+	AllFiles     []string // all files examined in stockpile/
+	Changed      []string // files that are new or changed vs .live
+	Removed      []string // files in .live not present in stockpile
+	DiffSummary  string   // unified diff of changed files
+	URLWarning   string   // non-fatal URL check warnings (empty if all OK)
 
 	// stagingDir is the temp directory ValidateSource built (= stockpile +
 	// linted overrides). Publish reuses it for the atomic sync to .live.
@@ -338,7 +338,7 @@ func ValidateSource(opts Options) (*Result, error) {
 
 	stats := store.Stats()
 	return &Result{
-		Configcrates:          stats.Configcrates,
+		Configcrates:     stats.Configcrates,
 		Roles:            len(store.ListRoleNames()),
 		Entries:          stats.Entries,
 		AllFiles:         allFiles,
@@ -583,7 +583,7 @@ func filterBySubdir(paths []string, subdir string) []string {
 func filterUsercrates(paths []string) []string {
 	var out []string
 	for _, p := range paths {
-		if isUsercratePath(p) {
+		if modlint.IsUsercratePath(p) {
 			out = append(out, p)
 		}
 	}
@@ -1001,12 +1001,12 @@ func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
 
 	stats := store.Stats()
 	return &Result{
-		Configcrates:  stats.Configcrates,
-		Roles:    len(store.ListRoleNames()),
-		Entries:  stats.Entries,
-		Files:    1,
-		AllFiles: []string{relPath},
-		Changed:  []string{relPath},
+		Configcrates: stats.Configcrates,
+		Roles:        len(store.ListRoleNames()),
+		Entries:      stats.Entries,
+		Files:        1,
+		AllFiles:     []string{relPath},
+		Changed:      []string{relPath},
 	}, nil
 }
 
@@ -1185,24 +1185,10 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 			return nil, err
 		}
 
-		// Dispatch to the right modlint entry point by filename.
-		// Configcrates and usercrates share the same entry point with
-		// IsUsercrate gating one rule; the four scaffolding file
-		// types each have their own parser + rule set.
-		opts := modlint.Options{IsUsercrate: isUsercratePath(rel)}
-		var result *modlint.Result
-		switch filepath.Base(rel) {
-		case "envoys.vgo":
-			result = modlint.LintHostcrate(data, opts)
-		case "roles.vgo":
-			result = modlint.LintRolesFile(data, opts)
-		case "waivers.vgo":
-			result = modlint.LintWaiversFile(data, opts)
-		case "environments.vgo":
-			result = modlint.LintEnvironmentsFile(data, opts)
-		default:
-			result = modlint.Lint(data, opts)
-		}
+		// Dispatch to the right modlint entry point by filename — the
+		// canonical "lint a file by its kind" path, shared with
+		// `vigocli config validate` so the two never disagree.
+		result := modlint.LintFile(rel, data, modlint.Options{})
 
 		if !result.OK() {
 			for _, e := range result.Errors {
@@ -1257,21 +1243,6 @@ func fleetFindings(baseDir string, relPaths []string, unreachable map[string]boo
 		files = append(files, modlint.FleetFile{Path: rel, Data: data})
 	}
 	return modlint.LintFleet(files)
-}
-
-// isUsercratePath reports whether rel (slash-separated, stockpile-relative)
-// points at a file living directly inside a usercrates/ directory. Mirrors
-// the detection in server/config/loader.go loadUsercrateDefs.
-func isUsercratePath(rel string) bool {
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	for i, p := range parts {
-		if p == "usercrates" {
-			// usercrates/ cannot be the leaf, and the file must live
-			// directly in it (not in a nested subdirectory).
-			return i == len(parts)-2
-		}
-	}
-	return false
 }
 
 // buildStagingDir produces a temp directory whose contents mirror

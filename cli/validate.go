@@ -8,10 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"git.alexander4.io/vigo/server/config"
-	"git.alexander4.io/vigo/server/validate"
+	"git.alexander4.io/vigo/server/modlint"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var validateCmd = &cobra.Command{
@@ -30,23 +28,22 @@ Exit code 0 = all checks pass, 1 = errors found.`,
 		hasErrors := false
 
 		for _, path := range args {
-			findings, err := validateFile(path)
+			result, err := validateFile(path)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
 				hasErrors = true
 				continue
 			}
 
-			if len(findings) == 0 {
+			if len(result.Findings) == 0 {
 				fmt.Printf("%s: OK\n", path)
 				continue
 			}
 
-			for _, f := range findings {
+			for _, f := range result.Findings {
 				fmt.Println(f.String())
 			}
-
-			if validate.HasErrors(findings) {
+			if !result.OK() {
 				hasErrors = true
 			}
 		}
@@ -58,7 +55,11 @@ Exit code 0 = all checks pass, 1 = errors found.`,
 	},
 }
 
-func validateFile(path string) ([]validate.Finding, error) {
+// validateFile lints a single .vgo file through modlint — the same
+// file-kind dispatch the publish path uses, so `config validate` predicts
+// `config publish` exactly (no second validation source of truth).
+// IsUsercrate is derived from the path inside LintFile.
+func validateFile(path string) (*modlint.Result, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -69,113 +70,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 		return nil, fmt.Errorf("unsupported file type %q (expected .vgo, .yaml, or .yml)", ext)
 	}
 
-	// Phase 1: YAML syntax check — catch malformed YAML before anything else.
-	var raw yaml.Node
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("invalid YAML: %w", err)
-	}
-
-	// Phase 2: detect file type — envoys file vs configcrate file.
-	// A envoys file has a top-level "envoys:" key; a role file has "configcrates:" but no "resources:".
-	var probe map[string]any
-	_ = yaml.Unmarshal(data, &probe) // data already validated as YAML above
-
-	if _, isNodes := probe["envoys"]; isNodes {
-		// Envoys file — validate each entry has a "match" field.
-		var cfg config.EnvoysConfig
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("parsing envoys file: %w", err)
-		}
-		var findings []validate.Finding
-		for i, entry := range cfg.Envoys {
-			if entry.Match == "" {
-				findings = append(findings, validate.Finding{
-					Severity:    validate.SeverityError,
-					Configcrate: filepath.Base(path),
-					Message:     fmt.Sprintf("entry %d: missing required 'match' field", i),
-				})
-			}
-		}
-		if len(cfg.Envoys) == 0 {
-			findings = append(findings, validate.Finding{
-				Severity:    validate.SeverityWarning,
-				Configcrate: filepath.Base(path),
-				Message:     "no envoy entries defined",
-			})
-		}
-		return findings, nil
-	}
-
-	// Phase 2b: structural parse as module via the tolerant envoy parser.
-	def, err := config.ParseModuleFile(data)
-	if err != nil {
-		return nil, err
-	}
-
-	// Phase 3: structural validation.
-	var findings []validate.Finding
-
-	if def.Name == "" {
-		findings = append(findings, validate.Finding{
-			Severity:    validate.SeverityError,
-			Configcrate: filepath.Base(path),
-			Message:     "missing required 'name' field",
-		})
-	}
-
-	moduleName := def.Name
-	if moduleName == "" {
-		moduleName = filepath.Base(path)
-	}
-
-	for _, r := range def.Resources {
-		if r.Name == "" {
-			findings = append(findings, validate.Finding{
-				Severity:     validate.SeverityError,
-				Configcrate:  moduleName,
-				ResourceType: r.Type,
-				Message:      "resource missing 'name' field",
-			})
-		}
-		if r.Type == "" {
-			findings = append(findings, validate.Finding{
-				Severity:     validate.SeverityError,
-				Configcrate:  moduleName,
-				ResourceName: r.Name,
-				Message:      "resource missing 'type' field",
-			})
-		}
-	}
-
-	// Phase 4: idempotency validation.
-	mod := validate.Configcrate{Name: moduleName}
-	for _, r := range def.Resources {
-		mod.Resources = append(mod.Resources, validate.Resource{
-			Name:        r.Name,
-			Type:        r.Type,
-			Attributes:  r.Attributes,
-			Notify:      r.Notify,
-			Subscribes:  r.Subscribes,
-			WatchSecret: r.WatchSecret,
-		})
-	}
-	findings = append(findings, validate.ValidateConfigcrate(mod)...)
-
-	// Deduplicate (structural checks may overlap with validate.ValidateConfigcrate).
-	return dedup(findings), nil
-}
-
-func dedup(findings []validate.Finding) []validate.Finding {
-	seen := make(map[string]bool)
-	var out []validate.Finding
-	for _, f := range findings {
-		key := f.String()
-		if !seen[key] {
-			seen[key] = true
-			out = append(out, f)
-		}
-	}
-	return out
+	return modlint.LintFile(path, data, modlint.Options{}), nil
 }
 
 func init() {

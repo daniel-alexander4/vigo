@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"git.alexander4.io/vigo/server/validate"
 	"github.com/spf13/cobra"
 )
 
@@ -151,14 +150,14 @@ func runEditorWithName(editor, absPath string) error {
 	}
 
 	// Post-save validation.
-	findings, err := validateFile(absPath)
+	result, err := validateFile(absPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: post-edit validation failed: %v\n", err)
 		return nil
 	}
-	if validate.HasErrors(findings) {
+	if !result.OK() {
 		fmt.Fprintln(os.Stderr, "validation errors:")
-		for _, f := range findings {
+		for _, f := range result.Findings {
 			fmt.Fprintln(os.Stderr, " ", f.String())
 		}
 	} else {
@@ -218,14 +217,14 @@ func runVimEditor(absPath string) error {
 	}
 
 	// Post-save validation.
-	findings, err := validateFile(absPath)
+	result, err := validateFile(absPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: post-edit validation failed: %v\n", err)
 		return nil
 	}
-	if validate.HasErrors(findings) {
+	if !result.OK() {
 		fmt.Fprintln(os.Stderr, "warning: file has validation errors:")
-		for _, f := range findings {
+		for _, f := range result.Findings {
 			fmt.Fprintln(os.Stderr, " ", f.String())
 		}
 	}

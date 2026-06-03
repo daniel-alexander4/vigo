@@ -35,6 +35,7 @@ package modlint
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -125,6 +126,49 @@ func Lint(input []byte, opts Options) *Result {
 
 	finalizeFindings(r)
 	return r
+}
+
+// LintFile dispatches a single .vgo file to the correct linter by its
+// basename. Configcrates and usercrates share the configcrate pipeline
+// (Lint), with IsUsercrate — derived from the path — gating the one rule
+// that exempts usercrates from `name:`; each scaffolding file type has its
+// own parser + rule set. This is the single source of truth for "lint a
+// file by its kind"; both `vigocli config validate` and the publish path
+// route through it so the two never disagree.
+func LintFile(relPath string, data []byte, opts Options) *Result {
+	opts.IsUsercrate = opts.IsUsercrate || IsUsercratePath(relPath)
+	switch filepath.Base(relPath) {
+	case "compliance.vgo":
+		// Directory-level compliance-inheritance file (framework→control
+		// shape). Validated by the config loader's compliance index at
+		// publish time, not by modlint — the publish path skips it here too,
+		// so matching that keeps `config validate` in agreement with publish.
+		return &Result{}
+	case "envoys.vgo":
+		return LintHostcrate(data, opts)
+	case "roles.vgo":
+		return LintRolesFile(data, opts)
+	case "waivers.vgo":
+		return LintWaiversFile(data, opts)
+	case "environments.vgo":
+		return LintEnvironmentsFile(data, opts)
+	default:
+		return Lint(data, opts)
+	}
+}
+
+// IsUsercratePath reports whether path (slash- or OS-separated) points at a
+// file living directly inside a usercrates/ directory. Mirrors the detection
+// in server/config/loader.go loadUsercrateDefs: usercrates/ cannot be the
+// leaf, and the file must sit directly in it (not a nested subdirectory).
+func IsUsercratePath(path string) bool {
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	for i, p := range parts {
+		if p == "usercrates" {
+			return i == len(parts)-2
+		}
+	}
+	return false
 }
 
 // finalizeFindings populates the legacy Errors/Warnings string-slice
