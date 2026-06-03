@@ -818,7 +818,7 @@ type PageData struct {
 	ActiveNav       string
 	BodyClass       string // extra CSS class on <body>
 	Version         string
-	PollInterval    string // HTMX polling interval — min(checkin.base_interval, 5m). Polling faster than check-ins yields no fresh data; the 5m cap keeps long-interval fleets from looking frozen.
+	PollInterval    string // HTMX polling interval — clamp(checkin.base_interval, 5s, 5m). Tracks the check-in interval but never faster than 5s (sub-5s refreshes just hammer the server) nor slower than 5m (long-interval fleets shouldn't look frozen).
 	CheckInInterval string // configured check-in interval, e.g. "15s", "5m0s"
 	AIEnabled       bool
 	AIProviderName  string // "Claude", "Ollama", "OpenAI", etc.
@@ -2185,14 +2185,20 @@ func (h *Handler) noEnvoys() bool {
 }
 
 // formatPollInterval renders the UI's HTMX poll cadence as a duration
-// string. The cadence tracks the configured check-in interval (polling
-// faster yields no fresh data) and caps at 5 minutes so operators on
-// long-interval fleets don't stare at a page that looks frozen. A
-// zero/negative input falls back to the cap.
+// string, clamped to [5s, 5m] regardless of the check-in interval. The
+// cadence tracks the configured check-in interval in between, but never
+// polls faster than every 5s (a human doesn't need sub-5s refreshes, and
+// at a 1s check-in default that would hammer the fragment endpoints for no
+// added value) and never slower than every 5m (so a long-interval fleet
+// doesn't look frozen). A zero/negative input falls back to the cap.
 func formatPollInterval(checkIn time.Duration) string {
+	const minPoll = 5 * time.Second
 	const maxPoll = 5 * time.Minute
 	if checkIn <= 0 || checkIn > maxPoll {
 		return fmt.Sprintf("%.0fs", maxPoll.Seconds())
+	}
+	if checkIn < minPoll {
+		return fmt.Sprintf("%.0fs", minPoll.Seconds())
 	}
 	return fmt.Sprintf("%.0fs", checkIn.Seconds())
 }
