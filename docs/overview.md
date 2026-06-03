@@ -10,7 +10,7 @@ But scale is only half of it. Vigo is **far more than configuration management**
 
 ## What Vigo does
 
-**State enforcement & convergence.** Describe desired state as **configcrates** — reusable resource sets across 68 idempotent resource types (`file`, `package`, `service`, `user`, `exec`, `container`, `vm`, repositories, …). Resources form a `depends_on` DAG with `notify`/`subscribes` triggers; `when:` conditionals and Go-template `content:` adapt per host. The agent checks before it acts, self-heals from external failures, and **converges offline** from its cached bundle when the server is unreachable. Convergence is classified on two orthogonal axes — failure (Converged/Degraded/Failed) × drift (None/Changed/Diverged) — plus reachability.
+**State enforcement & convergence.** Describe desired state as **configcrates** — reusable resource sets across 69 idempotent resource types (`file`, `package`, `service`, `user`, `exec`, `container`, `vm`, repositories, the user-supplied `custom` executor, …). Resources form a `depends_on` DAG with `notify`/`subscribes` triggers; `when:` conditionals and Go-template `content:` adapt per host. The agent checks before it acts, self-heals from external failures, and **converges offline** from its cached bundle when the server is unreachable. Convergence is classified on two orthogonal axes — failure (Converged/Degraded/Failed) × drift (None/Changed/Diverged) — plus reachability.
 
 **Multi-axis configuration.** One YAML language ties together configcrates, roles, hostcrates (hostname-pattern → role/vars, first match wins), per-user **usercrates**, and per-environment overrides, with a clear var-precedence chain. The source of truth is files only: edit the stockpile, `vigocli config publish`, the server validates and reloads.
 
@@ -30,7 +30,7 @@ But scale is only half of it. Vigo is **far more than configuration management**
 
 **Observability & integrations.** Dashboards for convergence, compliance, risk (0–100 scoring), agent health, CVE impact, attack surface, and inventory — every number drilling down to its evidence. Prometheus on `/metrics`; outbound webhooks to Slack, PagerDuty, ServiceNow, ConnectWise, Splunk, Datadog, Loki, Opsgenie, Sentry, NetBox, and more.
 
-**The agent.** A single Rust binary for Linux, macOS, and the BSDs / illumos (Windows supported; new subsystems ship Linux + macOS first). 68 resource types, 50 trait collectors, custom executors over JSON, libvirt VM management, first-class containers, and signed self-update.
+**The agent.** A single Rust binary for Linux, macOS, and the BSDs / illumos (Windows supported; new subsystems ship Linux + macOS first). 69 resource types (including custom executors over JSON), 50 trait collectors, libvirt VM management, first-class containers, and signed self-update.
 
 ---
 

@@ -691,8 +691,11 @@ func TestExecutorCountConsistent(t *testing.T) {
 		t.Fatalf("reading docs/_index.md: %v", err)
 	}
 
-	// Look for patterns like "72 built-in" or "72 resource types".
-	countRe := regexp.MustCompile(`(\d+)\s+built-in\s+resource`)
+	// Match the honest total in a phrase like "69 resource types". The
+	// count includes the dynamic `custom` type (added above), so the doc
+	// must headline the total — not a "built-in"-qualified subset, which
+	// would legitimately read 68 and never equal codeCount.
+	countRe := regexp.MustCompile(`(\d+)\s+resource\s+types?`)
 	m := countRe.FindStringSubmatch(string(indexData))
 	if m == nil {
 		t.Log("could not find executor count claim in docs/_index.md, skipping doc count check")

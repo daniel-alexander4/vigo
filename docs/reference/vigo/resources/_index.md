@@ -1,7 +1,7 @@
 
 # Executor Reference
 
-Vigo ships 68 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Vigo ships 69 resource types: 68 built-in executors that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos), and the user-supplied [`custom`](custom.md) executor that runs your own logic over the JSON executor protocol. Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
