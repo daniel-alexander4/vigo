@@ -186,8 +186,10 @@ run_test "envoys list" $CLI envoys list --server "$SERVER"
 FIRST_ENVOY=$($CLI envoys list --server "$SERVER" 2>/dev/null | awk 'NR==2{print $2}' || true)
 if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
     run_test "envoys show" $CLI envoys show "$FIRST_ENVOY" --server "$SERVER"
+    run_test_no_module_vocab "envoys show: no module vocab" $CLI envoys show "$FIRST_ENVOY" --server "$SERVER"
     run_test "envoys traits" $CLI envoys traits "$FIRST_ENVOY" --server "$SERVER"
     run_test "envoys preview" $CLI envoys preview "$FIRST_ENVOY" --server "$SERVER"
+    run_test_no_module_vocab "envoys preview: no module vocab" $CLI envoys preview "$FIRST_ENVOY" --server "$SERVER"
 
     # Tag and untag.
     run_test "envoys tag" $CLI envoys tag "$FIRST_ENVOY" "test-tag" --server "$SERVER"
@@ -285,8 +287,10 @@ if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
     fi
 fi
 run_test "config tree" $CLI config tree --server "$SERVER"
+run_test_no_module_vocab "config tree: no module vocab" $CLI config tree --server "$SERVER"
 run_test "config pending" $CLI config pending --server "$SERVER"
 run_test "config search --configcrate" $CLI config search --configcrate "backups" --server "$SERVER" || true
+run_test_no_module_vocab "config search: no module vocab" $CLI config search --configcrate "backups" --server "$SERVER"
 
 # History show: grab first publish ID.
 FIRST_PUBLISH=$($CLI config history --server "$SERVER" 2>/dev/null | awk 'NR==2{print $1}' || true)

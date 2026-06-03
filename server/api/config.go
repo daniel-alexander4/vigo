@@ -661,19 +661,19 @@ func (h *ConfigHandler) aiEnhanceRetract(ctx context.Context, name, original, dr
 
 	prompt := fmt.Sprintf(`You are reviewing an auto-generated retract configcrate for the Vigo configuration management system.
 
-ORIGINAL MODULE (being removed):
+ORIGINAL CONFIGCRATE (being removed):
 %s
 
 DETERMINISTIC RETRACT DRAFT:
 %s
 
-Review and improve this retract module:
+Review and improve this retract configcrate:
 1. For any exec resources with placeholder commands (TODO), generate the correct reversal command with an appropriate onlyif or unless guard for idempotency.
 2. If an exec resource has no meaningful reversal (e.g., "apt-get update", "systemctl daemon-reload"), remove it entirely.
 3. Verify the resource ordering makes sense for cleanup (services stop before configs are removed).
 4. Keep all non-exec resources as-is — the deterministic reversal is correct for those.
 
-Return ONLY the final YAML content of the retract module. No explanation, no markdown fences, no commentary.`, original, draft)
+Return ONLY the final YAML content of the retract configcrate. No explanation, no markdown fences, no commentary.`, original, draft)
 
 	resp, err := h.assistant.Ask(ctx, ai.AskRequest{Question: prompt})
 	if err != nil {

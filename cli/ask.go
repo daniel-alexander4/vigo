@@ -25,7 +25,7 @@ var askCmd = &cobra.Command{
 	Short: "Ask the AI assistant a natural language question about fleet state, configs, or compliance",
 	Long: `Ask the Vigo AI assistant a natural language question about your
 infrastructure. The assistant can query envoys, runs, traits, compliance,
-configs, modules, and packages to answer questions.
+configs, configcrates, and packages to answer questions.
 
 If no question argument is given, reads from stdin (useful for piping config
 files for review).
@@ -34,7 +34,7 @@ Examples:
   vigocli ask "how many envoys do I have?"
   vigocli ask --envoy web-03 "why is it failing?"
   vigocli ask "write a configcrate for nginx with TLS"
-  vigocli ask < module.vgo`,
+  vigocli ask < configcrate.vgo`,
 	RunE: runAsk,
 }
 

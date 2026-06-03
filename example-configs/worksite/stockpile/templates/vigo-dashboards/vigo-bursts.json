@@ -177,7 +177,7 @@
       "collapsed": false
     },
     {
-      "title": "Module Actions + Drift Corrections /s",
+      "title": "Configcrate Actions + Drift Corrections /s",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
