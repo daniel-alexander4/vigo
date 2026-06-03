@@ -14,6 +14,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 | `ip_address` | No | -- | IP address with mask (e.g., `10.0.1.1 255.255.255.0`) |
 | `shutdown` | No | -- | `true` to shutdown, `false` to enable |
 | `switchport_mode` | No | -- | `access` or `trunk` |
+| `state` | No | `present` | `present` to apply the interface configuration, `absent` to remove it |
 | `access_vlan` | No | -- | VLAN number for access mode ports |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |

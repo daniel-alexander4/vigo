@@ -73,6 +73,15 @@ echo "var generatedSchemas = map[string][]string{"
 
 for type_name in $(echo "${!TYPE_FILES[@]}" | tr ' ' '\n' | sort); do
     files="${TYPE_FILES[$type_name]}"
+    # Follow shared helpers. The network_* / cisco_* / junos_* / ssh_exec
+    # executors delegate SSH connection handling to network_common.rs, which
+    # reads host/port/username/credential/state via params.get(...). Those
+    # params are auto-injected and real, but live in the helper, not the
+    # type's own file — without this the schema undercounts them and the
+    # doc-parity guard would false-flag correctly-documented params.
+    if grep -ql 'network_common' $files 2>/dev/null; then
+        files="$files $EXEC_DIR/network_common.rs"
+    fi
     # Extract params from:
     #   - direct  params.get("name")  calls (and the .get("name") shape generally)
     #   - helper-call shapes like  push_repeated(&mut args, params, "name", "-flag")
@@ -80,7 +89,7 @@ for type_name in $(echo "${!TYPE_FILES[@]}" | tr ' ' '\n' | sort); do
     #   - the  require_param!(params, "name", result)  macro used by the
     #     network_common helpers (network_*, cisco_*, junos_* executors).
     # Join lines first to catch multi-line patterns.
-    params=$(cat $files 2>/dev/null | tr '\n' ' ' | grep -oP '(?:\.get\(\s*"|push_(?:repeated|single)\([^,]+,\s*params,\s*"|require_param!\(\s*[^,]+,\s*")\K[^"]+' | grep -v '^_' | sort -u || true)
+    params=$(cat $files 2>/dev/null | tr '\n' ' ' | grep -oP '(?:params\s*\.get\(\s*"|push_(?:repeated|single)\([^,]+,\s*params,\s*"|require_param!\(\s*[^,]+,\s*")\K[^"]+' | grep -v '^_' | sort -u || true)
     if [[ -z "$params" ]]; then
         echo "	\"$type_name\": {},"
     else

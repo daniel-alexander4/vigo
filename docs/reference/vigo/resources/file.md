@@ -13,6 +13,7 @@ Manages file content, permissions, and ownership idempotently. Uses SHA-256 cont
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `owner` | No | -- | File owner (username or UID). Linux only. |
 | `group` | No | -- | File group (group name or GID). Linux only. |
+| `secontext` | No | -- | SELinux security context, applied via `chcon` after writing (e.g., `system_u:object_r:httpd_config_t:s0`). Linux only; no-op on systems without SELinux. |
 | `baseindent` | No | -- | Number of spaces to prepend to each non-empty line of `content`. Useful for keeping YAML indentation clean. |
 | `source` | No | -- | Local file path on the envoy to copy content from. Mutually exclusive with `content`. |
 | `backup` | No | -- | Create a backup before overwriting. `"true"` creates `<path>.<epoch>.bak`; a custom string (e.g., `".orig"`) creates `<path><suffix>`. Only triggers when content differs. |

@@ -14,6 +14,7 @@ Database backup using native dump tools. Runs the appropriate dump command for t
 | `db_host` | No | `localhost` | Database host. |
 | `db_port` | No | *(per db_type)* | Database port. Defaults: postgres=5432, mysql/mariadb=3306, mongodb=27017. |
 | `db_dump_command` | No | -- | Override the built-in dump command. Use `{output}` as placeholder for the output file path. |
+| `min_free_space` | No | `1G` | Refuse to run if the target filesystem has less than this much free space (e.g., `1G`, `500M`). |
 | `retain` | No | `30` | Days of snapshots to keep. |
 | `schedule` | No | `daily` | Dedup window: `daily`, `hourly`, or `weekly`. |
 

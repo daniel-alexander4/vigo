@@ -10,6 +10,7 @@ SSH connection parameters (`host`, `port`, `username`, `credential`) are auto-in
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `command` | Yes | -- | Command to execute on the remote device |
+| `state` | No | `present` | Accepted for interface consistency with the other network resources but has no effect — `ssh_exec` always runs `command`. Gate execution with `onlyif`/`unless` instead. |
 | `unless` | No | -- | Skip if this command succeeds (exit 0) on the device |
 | `onlyif` | No | -- | Only run if this command succeeds (exit 0) on the device |
 | `timeout` | No | `30` | Per-command timeout in seconds |

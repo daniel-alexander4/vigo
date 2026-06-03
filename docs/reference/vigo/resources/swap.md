@@ -10,6 +10,7 @@ Manages swap files -- creates, activates, and persists swap files, or removes th
 | `path` | Yes | -- | Path to the swap file. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `size` | Yes (for new files) | -- | Swap file size in megabytes (e.g., `512`, `2048`). Only required when the file does not exist. |
+| `device` | No | -- | Activate an existing block device as swap (e.g., `/dev/sdb2`) instead of a swap file. When set, `path`/`size` are not used. |
 | `priority` | No | -- | Swap priority (passed to `swapon -p`). |
 
 ## States

@@ -282,6 +282,154 @@ func TestEveryTraitHasDocPage(t *testing.T) {
 	}
 }
 
+// ---------- 2c. TestEveryResourceParamDocumented ----------
+
+// paramDocExcluded lists schema attributes that are intentionally not
+// required in a resource's Parameters table. `name` is the universal
+// resource-identity/title field (every resource block carries a `name:`),
+// read by many executors only to label the ResourceResult — not a
+// type-specific configuration param, so pages legitimately omit it.
+var paramDocExcluded = map[string]bool{"name": true}
+
+// resourceParamTableNames extracts the documented parameter names from a
+// resource doc page: every backticked token in the first column of a table
+// under "## Parameters" whose header row's first cell is "Parameter". The
+// header gate skips value-reference sub-tables (e.g. container's curator
+// Form|Example table, cron's schedule-field table) that also live in the
+// Parameters section. Reading *all* backticked tokens in the cell handles
+// combined cells like "`image` *or* `artifact`".
+func resourceParamTableNames(md string) map[string]bool {
+	names := map[string]bool{}
+	sec := regexp.MustCompile(`(?ms)^##\s+Parameters\s*$(.*?)(?:^##\s|\z)`).FindStringSubmatch(md)
+	if sec == nil {
+		return names
+	}
+	backtick := regexp.MustCompile("`([^`]+)`")
+	inParamTable := false
+	for _, line := range strings.Split(sec[1], "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "|") {
+			inParamTable = false
+			continue
+		}
+		cells := strings.Split(trimmed, "|") // ["", c1, c2, ..., ""]
+		if len(cells) < 3 {
+			continue
+		}
+		first := strings.TrimSpace(cells[1])
+		if strings.EqualFold(first, "Parameter") {
+			inParamTable = true
+			continue
+		}
+		if strings.Trim(first, "-: ") == "" { // separator row
+			continue
+		}
+		if inParamTable {
+			for _, m := range backtick.FindAllStringSubmatch(cells[1], -1) {
+				names[strings.TrimSpace(m[1])] = true
+			}
+		}
+	}
+	return names
+}
+
+// TestEveryResourceParamDocumented asserts that every parameter the
+// executor source reads (per the generated schema in schemas_gen.go) is
+// documented in its resource page's Parameters table. It enforces only the
+// schema→doc direction: the scraper undercounts (params read via loops,
+// shared helpers, or destructuring escape it — e.g. cron's minute/hour/…
+// via a keys array), so the reverse (doc-not-in-schema) would false-flag
+// correctly-documented params and is deliberately not checked here.
+func TestEveryResourceParamDocumented(t *testing.T) {
+	root := repoRoot(t)
+
+	genData, err := os.ReadFile(filepath.Join(root, "server", "validate", "schemas_gen.go"))
+	if err != nil {
+		t.Fatalf("reading schemas_gen.go: %v", err)
+	}
+	gen := string(genData)
+
+	// Known type names (gate for distinguishing a per-OS supplement page
+	// from a distinct type, e.g. file_line.md / service_recovery_windows.md
+	// are their own types, not supplements of file / service).
+	known := map[string]bool{}
+	for _, m := range regexp.MustCompile(`(?m)^\t"([^"]+)": true,`).FindAllStringSubmatch(gen, -1) {
+		known[m[1]] = true
+	}
+
+	// Parse generatedSchemas: `"type": {"a","b",...},`.
+	schemaBlock := regexp.MustCompile(`(?s)var generatedSchemas = map\[string\]\[\]string\{(.*?)\n\}`).FindStringSubmatch(gen)
+	if schemaBlock == nil {
+		t.Fatal("could not find generatedSchemas in schemas_gen.go")
+	}
+	rowRe := regexp.MustCompile(`(?m)^\t"([^"]+)":\s*\{(.*)\},`)
+	attrRe := regexp.MustCompile(`"([^"]+)"`)
+
+	docsDir := filepath.Join(root, "docs", "reference", "vigo", "resources")
+
+	type drift struct {
+		typ     string
+		missing []string
+	}
+	var drifts []drift
+
+	for _, row := range rowRe.FindAllStringSubmatch(schemaBlock[1], -1) {
+		typ := row[1]
+		var attrs []string
+		for _, a := range attrRe.FindAllStringSubmatch(row[2], -1) {
+			attrs = append(attrs, a[1])
+		}
+
+		// Collect doc params across the base page plus per-OS supplement
+		// pages (`<typ>_<os>.md` whose basename is not itself a type).
+		docParams := map[string]bool{}
+		pages := []string{typ + ".md"}
+		supplements, _ := filepath.Glob(filepath.Join(docsDir, typ+"_*.md"))
+		for _, sp := range supplements {
+			base := strings.TrimSuffix(filepath.Base(sp), ".md")
+			if !known[base] {
+				pages = append(pages, base+".md")
+			}
+		}
+		any := false
+		for _, p := range pages {
+			data, err := os.ReadFile(filepath.Join(docsDir, p))
+			if err != nil {
+				continue
+			}
+			any = true
+			for n := range resourceParamTableNames(string(data)) {
+				docParams[n] = true
+			}
+		}
+		if !any {
+			continue // no doc page — covered by TestEveryExecutorHasDocPage
+		}
+
+		var missing []string
+		for _, a := range attrs {
+			if paramDocExcluded[a] || docParams[a] {
+				continue
+			}
+			missing = append(missing, a)
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			drifts = append(drifts, drift{typ, missing})
+		}
+	}
+
+	if len(drifts) > 0 {
+		sort.Slice(drifts, func(i, j int) bool { return drifts[i].typ < drifts[j].typ })
+		var b strings.Builder
+		for _, d := range drifts {
+			fmt.Fprintf(&b, "\n  %s: undocumented params %v", d.typ, d.missing)
+		}
+		t.Errorf("resource params read by the executor but missing from the doc Parameters table:%s\n\n"+
+			"Document each in docs/reference/vigo/resources/<type>.md, or (if the param is a dead read) remove it from the executor.", b.String())
+	}
+}
+
 // ---------- 3. TestEveryCLICommandHasDocPage ----------
 
 func TestEveryCLICommandHasDocPage(t *testing.T) {

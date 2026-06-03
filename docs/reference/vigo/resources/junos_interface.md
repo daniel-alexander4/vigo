@@ -13,6 +13,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 | `description` | No | -- | Interface description |
 | `ip_address` | No | -- | IP address with prefix length (e.g., `10.0.1.1/24`) |
 | `unit` | No | `0` | Logical unit number |
+| `state` | No | `present` | `present` to apply the interface configuration, `absent` to remove it |
 | `family` | No | `inet` | Address family (`inet`, `inet6`) |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |

@@ -13,6 +13,9 @@ Hardlink-based incremental directory snapshots. Creates dated snapshot directori
 | `schedule` | No | `daily` | Dedup window: `daily`, `hourly`, or `weekly`. Only one snapshot is created per window. |
 | `exclude` | No | -- | Comma-separated glob patterns to skip (e.g., `*.swp,*.tmp,cache/*`). |
 | `cross_fs` | No | `fail` | Behavior when source and target_path are on different filesystems. See below. |
+| `min_free_space` | No | `1G` | Refuse to run if the target filesystem has less than this much free space (e.g., `1G`, `500M`). Guards against filling the disk mid-backup. |
+| `pre_command` | No | -- | Shell command run before the backup. A non-zero exit aborts the run. |
+| `post_command` | No | -- | Shell command run after a successful backup (e.g., to sync the snapshot offsite). |
 
 ## cross_fs Values
 
