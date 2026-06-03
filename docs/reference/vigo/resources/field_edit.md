@@ -10,7 +10,7 @@ Edits individual fields within columnar or tabular files like `/etc/passwd`, `/e
 | `path` | Yes | -- | Absolute path to the file. |
 | `line_match` | Yes | -- | Regex to identify the target line. |
 | `select_field` | Yes | -- | 1-indexed field number to modify. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `field_separator` | No | `:` | Character used to split fields. |
 | `field_value` | Yes (for present) | -- | The value to set on the selected field. |
 | `field_operation` | No | `set` | Operation to perform: `set`, `append`, `prepend`, or `delete`. |

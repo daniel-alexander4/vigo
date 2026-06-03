@@ -29,6 +29,7 @@ resources:
   #~ Create directory /srv/nfs
   - name: nfs-export-dir
     type: directory
+    state: present
     target_path: /srv/nfs
     owner: root
     group: root
@@ -39,6 +40,7 @@ resources:
   #~ Deploy /etc/exports
   - name: nfs-exports
     type: file
+    state: present
     target_path: /etc/exports
     content: |
       # Managed by Vigo — do not edit manually
@@ -84,6 +86,7 @@ resources:
   #~ Create directory /mnt/nfs
   - name: nfs-mount-dir
     type: directory
+    state: present
     target_path: /mnt/nfs
     owner: root
     group: root

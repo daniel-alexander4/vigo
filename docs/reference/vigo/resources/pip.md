@@ -8,7 +8,7 @@ Manages Python packages via pip. Supports version pinning, virtualenvs, and cust
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `package` | Yes | -- | Package name. |
-| `state` | No | `present` | Desired state: `present`, `absent`, or `latest`. |
+| `state` | Yes | -- | Desired state: `present`, `absent`, or `latest`. |
 | `version` | No | -- | Specific version to install (e.g., `2.28.0`). |
 | `extra_args` | No | -- | Additional arguments passed to `pip install` (space-separated). |
 | `pip_cmd` | No | `pip3` | The pip command to use. |

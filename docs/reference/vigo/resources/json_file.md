@@ -10,7 +10,7 @@ Manages individual keys in JSON files using dot-separated key paths.
 | `target_path` | Yes | -- | Absolute path to the JSON file. |
 | `key` | Yes | -- | Dot-separated key path (e.g., `database.host` or `server.ports.0`). |
 | `value` | Yes (for present) | -- | The value to set, as a JSON string (e.g., `"\"localhost\""`, `"8080"`, `"true"`, `"[1,2,3]"`). |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `indent` | No | `  ` (2 spaces) | Indentation string for pretty-printing the output. |
 
 ## States

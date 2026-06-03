@@ -8,7 +8,7 @@ Manages Windows scheduled tasks via `schtasks.exe`. Translates cron-style schedu
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | Yes | -- | Scheduled task name. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `command` | Yes (for present) | -- | Command to execute. |
 | `schedule` | No | `* * * * *` | Cron-style schedule expression or shortcut (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@reboot`). |
 | `user` | No | -- | Windows user to run the task as (passed to `/RU`). |

@@ -12,6 +12,7 @@ resources:
   #~ Deploy /etc/resolv.conf
   - name: resolv-conf
     type: file
+    state: present
     target_path: /etc/resolv.conf
     content: |
       # Managed by Vigo — do not edit manually

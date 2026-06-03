@@ -11,7 +11,7 @@ Manages Windows Registry keys and values idempotently. Reads the current state v
 | `name` | No | -- | Value name within the key. Omit to manage the key itself (create/delete). |
 | `value` | No | -- | Desired value data. Required when `name` is set and `state` is `present`. |
 | `type` | No | `string` | Value type: `string`, `dword`, `qword`, `binary`, `multi_string`, `expand_string`. |
-| `state` | No | `present` | `present` to ensure the key/value exists, `absent` to remove it. |
+| `state` | Yes | -- | `present` to ensure the key/value exists, `absent` to remove it. |
 
 ## Registry Hives
 

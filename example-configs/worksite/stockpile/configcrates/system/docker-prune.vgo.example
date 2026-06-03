@@ -11,6 +11,7 @@ resources:
 
   - name: docker-prune-service
     type: file
+    state: present
     target_path: /etc/systemd/system/docker-prune.service
     content: |
       [Unit]
@@ -26,6 +27,7 @@ resources:
 
   - name: docker-prune-timer
     type: file
+    state: present
     target_path: /etc/systemd/system/docker-prune.timer
     content: |
       [Unit]

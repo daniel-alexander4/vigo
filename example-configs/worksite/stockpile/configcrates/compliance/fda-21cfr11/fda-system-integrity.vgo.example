@@ -16,6 +16,7 @@ resources:
 
   - name: aide-fda-paths
     type: file
+    state: present
     target_path: /etc/aide/aide.conf.d/fda-paths
     content: |
       /opt/lims p+i+u+g+s+md5+sha256

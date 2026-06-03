@@ -13,6 +13,7 @@ resources:
 
   - name: interactive-logon-message-title
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
     value_name: "legalnoticecaption"
@@ -21,6 +22,7 @@ resources:
 
   - name: interactive-logon-message-text
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
     value_name: "legalnoticetext"
@@ -29,6 +31,7 @@ resources:
 
   - name: smb-signing-required
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
     value_name: "RequireSecuritySignature"
@@ -37,10 +40,12 @@ resources:
 
   - name: defender-realtime-protection
     type: windows_defender
+    state: present
     skip_validation: true
     realtime_monitoring: true
 
   - name: defender-behavior-monitoring
     type: windows_defender
+    state: present
     skip_validation: true
     behavior_monitoring: true

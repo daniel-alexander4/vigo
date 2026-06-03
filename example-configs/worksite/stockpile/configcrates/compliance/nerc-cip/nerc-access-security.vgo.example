@@ -5,6 +5,7 @@ resources:
   # CIP-003 R1: Security policies enforced via config
   - name: security-policy-banner
     type: file
+    state: present
     target_path: /etc/issue.net
     content: |
       NERC CIP PROTECTED SYSTEM - AUTHORIZED USERS ONLY
@@ -54,6 +55,7 @@ resources:
   # CIP-007 R5: System access control
   - name: faillock-config
     type: file
+    state: present
     target_path: /etc/security/faillock.conf
     content: |
       deny = 3

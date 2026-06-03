@@ -19,7 +19,7 @@ SSH connection parameters (`host`, `username`, `credential`, `port`, `device_typ
 |-----------|----------|---------|-------------|
 | `acl` | Yes | -- | ACL name (e.g., `BLOCK_SSH`, `ALLOW_WEB`) |
 | `entry` | Yes | -- | ACL entry line. Format varies by platform (see examples). |
-| `state` | No | `present` | `present` to add the entry, `absent` to remove it |
+| `state` | Yes | -- | `present` to add the entry, `absent` to remove it |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

@@ -35,6 +35,7 @@ resources:
 
   - name: restic-env
     type: file
+    state: present
     target_path: "/etc/restic/restic.env"
     owner: root
     group: root
@@ -46,6 +47,7 @@ resources:
 
   - name: restic-init-script
     type: file
+    state: present
     target_path: "/usr/local/sbin/restic-init.sh"
     owner: root
     group: root
@@ -67,6 +69,7 @@ resources:
 
   - name: restic-backup-script
     type: file
+    state: present
     target_path: "/usr/local/sbin/restic-backup.sh"
     owner: root
     group: root
@@ -87,6 +90,7 @@ resources:
 
   - name: restic-cron
     type: cron
+    state: present
     user: root
     name: restic-scheduled
     command: "/usr/local/sbin/restic-backup.sh"

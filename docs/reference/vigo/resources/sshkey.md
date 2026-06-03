@@ -8,7 +8,7 @@ Manages SSH known host key entries in a known hosts file.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `hostname` | Yes | -- | The hostname for the SSH key entry. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `sshkey_type` | Yes (for present) | -- | Key type (e.g., `ssh-rsa`, `ssh-ed25519`, `ecdsa-sha2-nistp256`). |
 | `sshkey` | Yes (for present) | -- | The public key data (base64-encoded). |
 | `aliases` | No | -- | Comma-separated list of hostname aliases for the key entry. |

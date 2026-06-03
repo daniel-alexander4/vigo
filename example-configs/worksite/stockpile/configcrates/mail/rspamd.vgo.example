@@ -20,6 +20,7 @@ resources:
 
   - name: rspamd-worker-proxy
     type: file
+    state: present
     target_path: "/etc/rspamd/local.d/worker-proxy.inc"
     owner: root
     group: _rspamd

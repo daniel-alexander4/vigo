@@ -58,6 +58,7 @@ resources:
 
   - name: sysctl-hardening
     type: file
+    state: present
     target_path: /etc/sysctl.d/99-pci-hardening.conf
     content: |
       # PCI DSS v4.0 Req 2.2.5 — Network security parameters
@@ -108,6 +109,7 @@ resources:
 
   - name: pam-faillock
     type: file
+    state: present
     target_path: /etc/security/faillock.conf
     content: |
       # PCI DSS v4.0 Req 8.3.4 — Account lockout
@@ -123,6 +125,7 @@ resources:
 
   - name: login-defs
     type: file
+    state: present
     target_path: /etc/login.defs
     source: templates/pci-login-defs.tmpl
     owner: root
@@ -134,6 +137,7 @@ resources:
 
   - name: shell-timeout
     type: file
+    state: present
     target_path: /etc/profile.d/pci-timeout.sh
     content: |
       # PCI DSS v4.0 Req 8.2.8 — Idle session timeout

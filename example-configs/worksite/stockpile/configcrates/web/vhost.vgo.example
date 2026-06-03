@@ -44,6 +44,7 @@ vars:
 resources:
   - name: vhost-docroot
     type: directory
+    state: present
     target_path: "{{ .Vars.doc_root_base }}/{{ .Each.server_name }}"
     owner: www-data
     group: www-data
@@ -51,6 +52,7 @@ resources:
 
   - name: vhost-conf
     type: file
+    state: present
     target_path: "/etc/nginx/sites-enabled/{{ .Each.server_name }}.conf"
     owner: root
     group: root
@@ -67,6 +69,7 @@ resources:
 
   - name: vhost-logrotate
     type: file
+    state: present
     target_path: "/etc/logrotate.d/nginx-{{ .Each.server_name }}"
     owner: root
     group: root

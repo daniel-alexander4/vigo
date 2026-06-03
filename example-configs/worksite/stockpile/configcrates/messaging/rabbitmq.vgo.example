@@ -37,6 +37,7 @@ resources:
 
   - name: rabbitmq-conf
     type: file
+    state: present
     target_path: /etc/rabbitmq/rabbitmq.conf
     content: |
       # Managed by Vigo — do not edit manually

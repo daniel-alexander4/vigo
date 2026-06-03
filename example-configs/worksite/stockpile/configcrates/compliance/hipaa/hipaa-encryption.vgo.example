@@ -10,6 +10,7 @@ resources:
   # Enforce TLS 1.2+ system-wide
   - name: crypto-policy
     type: file
+    state: present
     target_path: /etc/crypto-policies/config
     content: "FUTURE\n"
     owner: root
@@ -26,6 +27,7 @@ resources:
   # SSH hardening for data in transit
   - name: ssh-ciphers
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-hipaa-crypto.conf
     content: |
       Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr

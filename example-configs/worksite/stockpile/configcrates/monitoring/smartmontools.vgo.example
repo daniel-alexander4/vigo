@@ -14,6 +14,7 @@ resources:
 
   - name: smartd-conf-debian
     type: file
+    state: present
     target_path: /etc/smartmontools/smartd.conf
     content: |
       # Managed by Vigo — do not edit manually
@@ -35,6 +36,7 @@ resources:
 
   - name: smartd-conf-redhat
     type: file
+    state: present
     target_path: /etc/smartd.conf
     content: |
       # Managed by Vigo — do not edit manually

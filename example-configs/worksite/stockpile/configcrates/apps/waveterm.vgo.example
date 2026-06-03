@@ -6,10 +6,12 @@ vars:
 resources:
   - name: install-waveterm-deb
     type: nonrepo_package
+    state: present
     url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch }}-{{ .Vars.waveterm_version }}.deb"
     when: "has_display() and os_family('debian')"
 
   - name: install-waveterm-rpm
     type: nonrepo_package
+    state: present
     url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch_raw }}-{{ .Vars.waveterm_version }}.rpm"
     when: "has_display() and os_family('redhat')"

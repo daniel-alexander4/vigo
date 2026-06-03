@@ -8,7 +8,7 @@ Manages PF (Packet Filter) firewall rules and state on macOS and BSD systems.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | No | `pf-rule` | Resource name for identification. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `pf_rule` | No | -- | Raw PF rule string (e.g., `pass in on egress proto tcp to port 443`). |
 | `enabled` | No | -- | Enable or disable PF entirely: `true` or `false`. Mutually exclusive with `pf_rule`. |
 

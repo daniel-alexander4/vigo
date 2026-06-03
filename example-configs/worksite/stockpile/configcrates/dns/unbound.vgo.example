@@ -13,6 +13,7 @@ resources:
 
   - name: unbound-conf
     type: file
+    state: present
     target_path: "/etc/unbound/unbound.conf.d/local.conf"
     owner: root
     group: root

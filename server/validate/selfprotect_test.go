@@ -16,7 +16,7 @@ func TestSelfProtect_FileTargetingAgentBinary(t *testing.T) {
 			Type: "file",
 			Attributes: map[string]any{
 				"target_path": "/usr/local/sbin/vigo",
-				"content":    "malicious",
+				"content":     "malicious",
 			},
 		}},
 	}
@@ -34,7 +34,7 @@ func TestSelfProtect_FileTargetingServerBinary(t *testing.T) {
 			Type: "file",
 			Attributes: map[string]any{
 				"target_path": "/usr/local/sbin/vigosrv",
-				"content":    "malicious",
+				"content":     "malicious",
 			},
 		}},
 	}
@@ -52,7 +52,7 @@ func TestSelfProtect_FileTargetingServerConfigDir(t *testing.T) {
 			Type: "file",
 			Attributes: map[string]any{
 				"target_path": "/srv/vigo/server.yaml",
-				"content":    "malicious",
+				"content":     "malicious",
 			},
 		}},
 	}
@@ -70,7 +70,7 @@ func TestSelfProtect_FileTargetingAgentState(t *testing.T) {
 			Type: "file",
 			Attributes: map[string]any{
 				"target_path": "/var/lib/vigo/state/data.mdb",
-				"content":    "garbage",
+				"content":     "garbage",
 			},
 		}},
 	}
@@ -88,7 +88,7 @@ func TestSelfProtect_FileSafePathAllowed(t *testing.T) {
 			Type: "file",
 			Attributes: map[string]any{
 				"target_path": "/etc/nginx/nginx.conf",
-				"content":    "server {}",
+				"content":     "server {}",
 			},
 		}},
 	}
@@ -214,7 +214,7 @@ func TestSelfProtect_ExecStopAgent(t *testing.T) {
 			Type: "exec",
 			Attributes: map[string]any{
 				"command": "systemctl stop vigo-envoy",
-				"unless": "test -f /tmp/marker",
+				"unless":  "test -f /tmp/marker",
 			},
 		}},
 	}
@@ -232,7 +232,7 @@ func TestSelfProtect_ExecStopServer(t *testing.T) {
 			Type: "exec",
 			Attributes: map[string]any{
 				"command": "systemctl stop vigosrv",
-				"unless": "test -f /tmp/marker",
+				"unless":  "test -f /tmp/marker",
 			},
 		}},
 	}
@@ -250,7 +250,7 @@ func TestSelfProtect_ExecSafeCommandAllowed(t *testing.T) {
 			Type: "exec",
 			Attributes: map[string]any{
 				"command": "systemctl restart nginx",
-				"unless": "test -f /tmp/marker",
+				"unless":  "test -f /tmp/marker",
 			},
 		}},
 	}

@@ -23,6 +23,7 @@ resources:
   # SR 6.1/6.2: Audit events for IEC 62443 requirements
   - name: audit-rules-iec62443
     type: file
+    state: present
     target_path: /etc/audit/rules.d/90-iec62443.rules
     content: |
       # IEC 62443 SR 6.1: Audit log events
@@ -85,6 +86,7 @@ resources:
   # SR 6.1: Audit daemon configuration
   - name: auditd-config
     type: file
+    state: present
     target_path: /etc/audit/auditd.conf
     content: |
       log_file = /var/log/audit/audit.log
@@ -117,6 +119,7 @@ resources:
   # SR 2.9: Audit storage capacity — log rotation
   - name: audit-log-rotation
     type: file
+    state: present
     target_path: /etc/logrotate.d/iec62443-audit
     content: |
       /var/log/audit/audit.log {
@@ -138,6 +141,7 @@ resources:
   # SR 6.2: Continuous monitoring — syslog retention
   - name: syslog-retention
     type: file
+    state: present
     target_path: /etc/logrotate.d/iec62443-syslog
     content: |
       /var/log/syslog /var/log/auth.log /var/log/kern.log {

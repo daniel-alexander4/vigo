@@ -7,18 +7,21 @@ compliance:
 resources:
   - name: ssh-strong-ciphers
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr"
     match_pattern: "^#?Ciphers"
 
   - name: ssh-strong-macs
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com"
     match_pattern: "^#?MACs"
 
   - name: tls-min-version
     type: file
+    state: present
     owner: root
     group: root
     mode: "0644"

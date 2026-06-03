@@ -9,7 +9,7 @@ Manages Debian/Ubuntu `update-alternatives` entries. Installs and sets the activ
 |-----------|----------|---------|-------------|
 | `name` | Yes | -- | Alternatives name (e.g., `editor`, `java`). |
 | `path` | Yes | -- | Path to the actual binary (e.g., `/usr/bin/vim`). |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `link` | No | `/usr/bin/<name>` | Symlink location. Defaults to `/usr/bin/<name>`. |
 | `priority` | No | `50` | Priority for this alternative. |
 

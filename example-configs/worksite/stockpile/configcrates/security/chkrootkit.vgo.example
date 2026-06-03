@@ -14,6 +14,7 @@ resources:
 
   - name: chkrootkit-cron
     type: cron
+    state: present
     user: root
     name: chkrootkit-check
     command: "chkrootkit -q"

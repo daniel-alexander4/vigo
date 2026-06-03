@@ -31,6 +31,7 @@ resources:
   # Reboot if kernel module changes require it
   - name: reboot-after-kmod
     type: reboot
+    state: present
     delay_secs: "60"
     message: "Kernel module changes require reboot"
     reboot_required_file: /var/run/reboot-required

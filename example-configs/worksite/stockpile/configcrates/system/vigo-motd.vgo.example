@@ -27,6 +27,7 @@ vars:
 resources:
   - name: write-motd
     type: file
+    state: present
     target_path: "/etc/motd"
     owner: root
     group: root

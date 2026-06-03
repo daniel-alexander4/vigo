@@ -11,6 +11,7 @@ vars:
 resources:
   - name: write-internal-ca
     type: file
+    state: present
     target_path: "/usr/local/share/ca-certificates/vigo-internal.crt"
     owner: root
     group: root
@@ -26,6 +27,7 @@ resources:
 
   - name: write-internal-ca-rhel
     type: file
+    state: present
     target_path: "/etc/pki/ca-trust/source/anchors/vigo-internal.crt"
     owner: root
     group: root

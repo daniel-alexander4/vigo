@@ -11,7 +11,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 |-----------|----------|---------|-------------|
 | `vlan_id` | Yes | -- | VLAN number (1-4094) |
 | `name` | Yes | -- | VLAN name |
-| `state` | No | `present` | `present` to create/update, `absent` to remove |
+| `state` | Yes | -- | `present` to create/update, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

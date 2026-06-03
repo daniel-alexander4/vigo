@@ -20,6 +20,7 @@ func TestLint_NestedMap_PreservesKeyOrderAndFlowStyle(t *testing.T) {
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
     groups:
       danlap:      [docker]
@@ -82,6 +83,7 @@ func TestLint_LongList_FallsBackToBlockStyle(t *testing.T) {
 resources:
   - name: many-groups
     type: user
+    state: present
     username: ops
     groups: [systemd-journal, systemd-network, systemd-resolve, systemd-timesync, audio, video, render, input]
 `
@@ -114,6 +116,7 @@ func TestLint_EmptyListAttr_RoundTrips(t *testing.T) {
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
     groups:
       plex:         [plex]
@@ -148,6 +151,7 @@ resources:
 
   - name: nginx-conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     content: "server {}"
     owner: root
@@ -186,7 +190,7 @@ resources:
 }
 
 func TestLint_RepairTabs(t *testing.T) {
-	input := "name: test\nresources:\n\t- name: pkg\n\t  type: package\n\t  package: vim\n"
+	input := "name: test\nresources:\n\t- name: pkg\n\t  type: package\n\t  state: present\n\t  package: vim\n"
 	r := Lint([]byte(input), Options{})
 	if !r.OK() {
 		t.Fatalf("expected no errors, got: %v", r.Errors)
@@ -197,7 +201,7 @@ func TestLint_RepairTabs(t *testing.T) {
 }
 
 func TestLint_RepairBOM(t *testing.T) {
-	input := "\xef\xbb\xbfname: test\nresources:\n  - name: pkg\n    type: package\n    package: vim\n"
+	input := "\xef\xbb\xbfname: test\nresources:\n  - name: pkg\n    type: package\n    state: present\n    package: vim\n"
 	r := Lint([]byte(input), Options{})
 	if !r.OK() {
 		t.Fatalf("expected no errors after BOM stripping, got: %v", r.Errors)
@@ -206,7 +210,7 @@ func TestLint_RepairBOM(t *testing.T) {
 
 func TestLint_RepairLeadingNonASCII(t *testing.T) {
 	// ● (U+25CF) followed by space then valid YAML — common from terminal copy-paste.
-	input := "\xe2\x97\x8f #~ comment\nname: test\nresources:\n  - name: pkg\n    type: package\n    package: vim\n"
+	input := "\xe2\x97\x8f #~ comment\nname: test\nresources:\n  - name: pkg\n    type: package\n    state: present\n    package: vim\n"
 	r := Lint([]byte(input), Options{})
 	if !r.OK() {
 		t.Fatalf("expected no errors after stripping leading non-ASCII, got: %v", r.Errors)
@@ -225,6 +229,7 @@ func TestLint_RepairOverIndentation(t *testing.T) {
   resources:
     - name: allow-ssh
       type: firewall
+      state: present
       port: "{{ .Vars.ssh_port }}"
       proto: tcp
       action: allow
@@ -292,6 +297,7 @@ func TestLint_FileMissingContent(t *testing.T) {
 resources:
   - name: my-file
     type: file
+    state: present
     target_path: /etc/foo
     owner: root
     group: root
@@ -311,6 +317,7 @@ func TestLint_FileMissingRequiredAttrs(t *testing.T) {
 resources:
   - name: my-file
     type: file
+    state: present
     content: "hello"
 `
 	r := Lint([]byte(input), Options{})
@@ -378,6 +385,7 @@ func TestLint_DependsOnUnknown_IsWarning(t *testing.T) {
 resources:
   - name: pkg
     type: package
+    state: present
     package: vim
     depends_on: [nonexistent]
 `
@@ -395,6 +403,7 @@ func TestLint_DependsOnSelf(t *testing.T) {
 resources:
   - name: pkg
     type: package
+    state: present
     package: vim
     depends_on: [pkg]
 `
@@ -412,10 +421,12 @@ func TestLint_DependencyCycle(t *testing.T) {
 resources:
   - name: a
     type: package
+    state: present
     package: a
     depends_on: [b]
   - name: b
     type: package
+    state: present
     package: b
     depends_on: [a]
 `
@@ -433,6 +444,7 @@ func TestLint_RedundantTrigger(t *testing.T) {
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/foo
     content: hello
     owner: root
@@ -459,6 +471,7 @@ func TestLint_CommunityRejectsSecrets(t *testing.T) {
 resources:
   - name: my-file
     type: file
+    state: present
     target_path: /etc/foo
     content: "secret:vigo/db/dsn"
     owner: root
@@ -479,6 +492,7 @@ func TestLint_CommunityGPLHeader(t *testing.T) {
 resources:
   - name: pkg
     type: package
+    state: present
     package: vim
 `
 	r := Lint([]byte(input), Options{
@@ -508,6 +522,7 @@ resources:
   #~ Outdated resource comment
   - name: pkg
     type: package
+    state: present
     package: nginx
 `
 	r := Lint([]byte(input), Options{})
@@ -534,6 +549,7 @@ resources:
   # This is a hand-written comment that the user wrote
   - name: pkg
     type: package
+    state: present
     package: vim
 `
 	r := Lint([]byte(input), Options{})
@@ -560,9 +576,11 @@ func TestLint_DuplicateResourceNames(t *testing.T) {
 resources:
   - name: pkg
     type: package
+    state: present
     package: vim
   - name: pkg
     type: package
+    state: present
     package: curl
 `
 	r := Lint([]byte(input), Options{})
@@ -579,6 +597,7 @@ func TestLint_CronMissingSchedule(t *testing.T) {
 resources:
   - name: backup
     type: cron
+    state: present
     command: /usr/bin/backup.sh
     user: root
 `
@@ -596,6 +615,7 @@ func TestLint_CronMissingUser(t *testing.T) {
 resources:
   - name: backup
     type: cron
+    state: present
     command: /usr/bin/backup.sh
     schedule: "0 2 * * *"
 `
@@ -613,6 +633,7 @@ func TestLint_RebootNoGuard(t *testing.T) {
 resources:
   - name: reboot-box
     type: reboot
+    state: present
     message: "rebooting"
 `
 	r := Lint([]byte(input), Options{})
@@ -629,6 +650,7 @@ func TestLint_MultilineContent(t *testing.T) {
 resources:
   - name: my-conf
     type: file
+    state: present
     target_path: /etc/myapp.conf
     content: |
       line1
@@ -655,6 +677,7 @@ vars:
 resources:
   - name: pkg
     type: package
+    state: present
     package: vim
 `
 	r := Lint([]byte(input), Options{})
@@ -675,6 +698,7 @@ func TestLint_CanonicalKeyOrder(t *testing.T) {
 resources:
   - name: my-file
     type: file
+    state: present
     mode: "0644"
     group: root
     owner: root
@@ -698,9 +722,11 @@ func TestLint_ModuleComment(t *testing.T) {
 resources:
   - name: pkg
     type: package
+    state: present
     package: nginx
   - name: conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     content: "test"
     owner: root
@@ -731,6 +757,7 @@ func TestLint_NotifyUnknownTarget_IsWarning(t *testing.T) {
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/foo
     content: hello
     owner: root
@@ -752,6 +779,7 @@ func TestLint_BeforeUnknownTarget_IsWarning(t *testing.T) {
 resources:
   - name: pkg
     type: package
+    state: present
     package: vim
     before: [nobody]
 `
@@ -792,6 +820,7 @@ func TestLint_UsercrateOmittedName(t *testing.T) {
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `
 	// Default Options — not a usercrate. Must flag the missing name.

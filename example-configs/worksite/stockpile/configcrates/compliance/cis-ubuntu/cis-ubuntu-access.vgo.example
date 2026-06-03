@@ -58,6 +58,7 @@ resources:
 
   - name: 5.1.8-cron-restrict
     type: file
+    state: present
     target_path: /etc/cron.allow
     content: |
       root
@@ -74,6 +75,7 @@ resources:
 
   - name: 5.2-sshd-hardening
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-cis-ubuntu.conf
     owner: root
     group: root
@@ -143,6 +145,7 @@ resources:
 
   - name: 5.2.23-ssh-banner
     type: file
+    state: present
     target_path: /etc/issue.net
     owner: root
     group: root
@@ -165,6 +168,7 @@ resources:
 
   - name: 5.3.2-pwquality-config
     type: file
+    state: present
     target_path: /etc/security/pwquality.conf
     owner: root
     group: root
@@ -182,6 +186,7 @@ resources:
 
   - name: 5.3.3-pam-faillock
     type: file
+    state: present
     target_path: /etc/security/faillock.conf
     owner: root
     group: root
@@ -234,6 +239,7 @@ resources:
 
   - name: 5.4.4-default-umask
     type: file
+    state: present
     target_path: /etc/profile.d/cis-umask.sh
     owner: root
     group: root
@@ -243,6 +249,7 @@ resources:
 
   - name: 5.4.5-shell-timeout
     type: file
+    state: present
     target_path: /etc/profile.d/cis-tmout.sh
     owner: root
     group: root

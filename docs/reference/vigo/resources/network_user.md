@@ -13,7 +13,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 | `device_username` | Yes | -- | Username to manage on the device |
 | `privilege` | No | -- | Privilege level (Cisco: 0-15) |
 | `secret` | No | -- | Password for the user |
-| `state` | No | `present` | `present` to create/update, `absent` to remove |
+| `state` | Yes | -- | `present` to create/update, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

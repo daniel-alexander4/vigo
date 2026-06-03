@@ -21,6 +21,7 @@ resources:
 
   - name: auditd-conf
     type: file
+    state: present
     target_path: /etc/audit/auditd.conf
     content: |
       # /etc/audit/auditd.conf — managed by vigo
@@ -48,6 +49,7 @@ resources:
 
   - name: auditd-rules
     type: file
+    state: present
     target_path: /etc/audit/rules.d/vigo.rules
     content: |
       # /etc/audit/rules.d/vigo.rules — managed by vigo

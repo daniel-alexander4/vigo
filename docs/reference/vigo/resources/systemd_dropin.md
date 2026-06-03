@@ -10,7 +10,7 @@ Manages systemd unit drop-in override files. Creates or removes files under `/et
 | `unit` | Yes | -- | Systemd unit name (e.g., `nginx.service`, `docker.service`). |
 | `dropin` | No | `override` | Drop-in file name (without `.conf` extension). |
 | `content` | Yes (for present) | -- | Contents of the drop-in file. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 
 ## States
 

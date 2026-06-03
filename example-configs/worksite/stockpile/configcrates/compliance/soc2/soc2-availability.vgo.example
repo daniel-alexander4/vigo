@@ -17,6 +17,7 @@ resources:
   # Disk space monitoring
   - name: disk-check-cron
     type: cron
+    state: present
     command: |
       df -h / | awk 'NR==2{gsub(/%/,"",$5); if($5>85) print "DISK WARNING: "$5"% used on /" | "logger -t disk-monitor -p local0.warning"}'
     schedule: "0 */2 * * *"
@@ -38,6 +39,7 @@ resources:
 
   - name: chrony-config
     type: file
+    state: present
     target_path: /etc/chrony/chrony.conf
     content: |
       pool ntp.ubuntu.com iburst maxsources 4

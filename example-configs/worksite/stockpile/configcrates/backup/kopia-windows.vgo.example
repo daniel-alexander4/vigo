@@ -18,6 +18,7 @@ resources:
 
   - name: kopia-config
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\kopia\\kopia.env"
     owner: SYSTEM
     group: Administrators
@@ -29,6 +30,7 @@ resources:
 
   - name: kopia-snapshot-script
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\kopia\\kopia-snapshot.ps1"
     owner: SYSTEM
     group: Administrators

@@ -9,6 +9,7 @@ vars:
 resources:
   - name: "vimrc-{{ .Item }}"
     type: file
+    state: present
     foreach: users
     target_path: "/home/{{ .Item }}/.vimrc"
     content: "{{ .Vars.vimrc_content }}"
@@ -18,6 +19,7 @@ resources:
 
   - name: "bashrc-{{ .Item }}"
     type: file
+    state: present
     foreach: users
     target_path: "/home/{{ .Item }}/.bashrc"
     content: "{{ .Vars.bashrc_content }}"

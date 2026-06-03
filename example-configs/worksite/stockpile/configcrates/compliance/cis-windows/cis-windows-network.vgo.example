@@ -8,6 +8,7 @@ resources:
   # Disable LLMNR
   - name: disable-llmnr
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'
     value_name: "EnableMulticast"
@@ -17,6 +18,7 @@ resources:
   # Disable NetBIOS over TCP/IP (via registry)
   - name: disable-netbios
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Services\NetBT\Parameters'
     value_name: "NodeType"
@@ -26,6 +28,7 @@ resources:
   # Disable WPAD
   - name: disable-wpad
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Wpad'
     value_name: "WpadOverride"
@@ -35,6 +38,7 @@ resources:
   # SMB v1 disabled
   - name: disable-smbv1-server
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
     value_name: "SMB1"
@@ -44,6 +48,7 @@ resources:
   # WDigest authentication disabled (prevents plaintext creds in memory)
   - name: disable-wdigest
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest'
     value_name: "UseLogonCredential"
@@ -53,6 +58,7 @@ resources:
   # SMB signing required (client)
   - name: smb-signing-client
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
     value_name: "RequireSecuritySignature"
@@ -62,6 +68,7 @@ resources:
   # LDAP client signing
   - name: ldap-client-signing
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Services\LDAP'
     value_name: "LDAPClientIntegrity"
@@ -71,6 +78,7 @@ resources:
   # Refuse LM/NTLM — NTLMv2 only
   - name: ntlm-auth-level
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Control\Lsa'
     value_name: "LmCompatibilityLevel"

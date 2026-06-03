@@ -14,6 +14,7 @@ resources:
 
   - name: audit-baseline-rules
     type: file
+    state: present
     target_path: "/etc/audit/rules.d/vigo-baseline.rules"
     owner: root
     group: root

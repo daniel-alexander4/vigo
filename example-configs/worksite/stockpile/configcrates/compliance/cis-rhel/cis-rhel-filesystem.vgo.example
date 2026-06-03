@@ -10,6 +10,7 @@ resources:
 
   - name: 1.1.1-disable-unused-fs
     type: file
+    state: present
     target_path: /etc/modprobe.d/cis-filesystems.conf
     content: |
       # CIS 1.1.1.1 — Disable cramfs
@@ -67,18 +68,21 @@ resources:
 
   - name: 1.5.1-aslr
     type: sysctl
+    state: present
     key: kernel.randomize_va_space
     value: "2"
     persist: true
 
   - name: 1.5.2-ptrace-scope
     type: sysctl
+    state: present
     key: kernel.yama.ptrace_scope
     value: "1"
     persist: true
 
   - name: 1.5.3-disable-core-dumps
     type: file
+    state: present
     target_path: /etc/security/limits.d/99-cis-coredump.conf
     content: |
       * hard core 0
@@ -88,12 +92,14 @@ resources:
 
   - name: 1.5.3-suid-dumpable
     type: sysctl
+    state: present
     key: fs.suid_dumpable
     value: "0"
     persist: true
 
   - name: 1.5.3-coredump-systemd
     type: file
+    state: present
     target_path: /etc/systemd/coredump.conf.d/cis.conf
     content: |
       [Coredump]

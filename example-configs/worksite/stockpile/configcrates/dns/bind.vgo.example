@@ -19,6 +19,7 @@ resources:
 
   - name: named-conf-options
     type: file
+    state: present
     target_path: "/etc/bind/named.conf.options"
     owner: root
     group: bind

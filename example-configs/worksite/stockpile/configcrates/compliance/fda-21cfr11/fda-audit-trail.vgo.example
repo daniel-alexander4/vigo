@@ -17,6 +17,7 @@ resources:
 
   - name: audit-rules-fda
     type: file
+    state: present
     target_path: /etc/audit/rules.d/fda-21cfr11.rules
     content: |
       # FDA 21 CFR Part 11 audit rules
@@ -31,6 +32,7 @@ resources:
 
   - name: log-retention-fda
     type: file
+    state: present
     target_path: /etc/logrotate.d/fda-audit
     content: |
       /var/log/audit/*.log {

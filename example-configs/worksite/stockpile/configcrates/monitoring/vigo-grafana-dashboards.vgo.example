@@ -13,6 +13,7 @@ vars:
 resources:
   - name: vigo-dashboards-dir
     type: directory
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo"
     owner: grafana
     group: grafana
@@ -20,6 +21,7 @@ resources:
 
   - name: vigo-dashboards-provider
     type: file
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo.yaml"
     content: |
       # Provisions the Vigo dashboard suite from disk. Grafana watches
@@ -46,6 +48,7 @@ resources:
 
   - name: vigo-overview-dashboard
     type: file
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-overview.json"
     source: templates/vigo-dashboards/vigo-overview.json
     owner: grafana
@@ -55,6 +58,7 @@ resources:
 
   - name: vigo-convergence-dashboard
     type: file
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-convergence.json"
     source: templates/vigo-dashboards/vigo-convergence.json
     owner: grafana
@@ -64,6 +68,7 @@ resources:
 
   - name: vigo-bursts-dashboard
     type: file
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-bursts.json"
     source: templates/vigo-dashboards/vigo-bursts.json
     owner: grafana
@@ -73,6 +78,7 @@ resources:
 
   - name: vigo-risk-dashboard
     type: file
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-risk.json"
     source: templates/vigo-dashboards/vigo-risk.json
     owner: grafana
@@ -82,6 +88,7 @@ resources:
 
   - name: vigo-security-dashboard
     type: file
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-security.json"
     source: templates/vigo-dashboards/vigo-security.json
     owner: grafana
@@ -91,6 +98,7 @@ resources:
 
   - name: vigo-swarm-dashboard
     type: file
+    state: present
     target_path: "{{ .Vars.grafana_dashboards_dir }}/vigo/vigo-swarm.json"
     source: templates/vigo-dashboards/vigo-swarm.json
     owner: grafana

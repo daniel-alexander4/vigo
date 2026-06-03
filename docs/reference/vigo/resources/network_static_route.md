@@ -20,7 +20,7 @@ SSH connection parameters (`host`, `username`, `credential`, `port`, `device_typ
 | `network` | Yes | -- | Destination network in CIDR (`10.0.0.0/8`) or dotted-decimal (`10.0.0.0 255.0.0.0`) notation |
 | `next_hop` | Yes | -- | Next-hop IP address or exit interface |
 | `route_name` | No | -- | Route name or tag (used by IOS-XR and Junos) |
-| `state` | No | `present` | `present` to add, `absent` to remove |
+| `state` | Yes | -- | `present` to add, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

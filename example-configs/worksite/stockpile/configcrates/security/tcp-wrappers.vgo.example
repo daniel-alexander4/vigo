@@ -21,6 +21,7 @@ resources:
 
   - name: hosts-allow
     type: file
+    state: present
     target_path: /etc/hosts.allow
     content: |
       # /etc/hosts.allow — managed by vigo
@@ -32,6 +33,7 @@ resources:
 
   - name: hosts-deny
     type: file
+    state: present
     target_path: /etc/hosts.deny
     content: |
       # /etc/hosts.deny — managed by vigo

@@ -9,24 +9,28 @@ compliance:
 resources:
   - name: ssh-no-root-login
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "PermitRootLogin no"
     match_pattern: "^#?PermitRootLogin"
 
   - name: ssh-key-only
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "PasswordAuthentication no"
     match_pattern: "^#?PasswordAuthentication"
 
   - name: ssh-no-empty-passwords
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "PermitEmptyPasswords no"
     match_pattern: "^#?PermitEmptyPasswords"
 
   - name: sudo-require-password
     type: file_line
+    state: present
     target_path: /etc/sudoers.d/vigo-sox
     line: "Defaults    timestamp_timeout=5"
 

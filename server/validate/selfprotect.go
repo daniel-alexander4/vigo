@@ -100,7 +100,7 @@ func ValidatePushCommand(command string) error {
 
 func checkSelfProtection(moduleName string, res Resource) []Finding {
 	base := Finding{
-		Configcrate:       moduleName,
+		Configcrate:  moduleName,
 		ResourceName: res.Name,
 		ResourceType: res.Type,
 		Severity:     SeverityError,

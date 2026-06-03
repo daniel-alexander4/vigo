@@ -9,7 +9,7 @@ Creates and removes directories with specified permissions and ownership.
 |-----------|----------|---------|-------------|
 | `target_path` | Yes | -- | Absolute path to the directory. |
 | `mode` | No | `0755` | Directory permission mode (octal string). |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `owner` | No | -- | Directory owner (username or UID). Linux only. |
 | `group` | No | -- | Directory group (group name or GID). Linux only. |
 | `recurse` | No | `false` | When `true`, recursively apply `mode`, `owner`, and `group` to all files and subdirectories. |

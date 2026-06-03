@@ -12,6 +12,7 @@ resources:
 
   - name: opendmarc-conf
     type: file
+    state: present
     target_path: "/etc/opendmarc.conf"
     owner: root
     group: root

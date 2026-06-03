@@ -31,6 +31,7 @@ vars:
 resources:
   - name: install-litestream
     type: source_package
+    state: present
     url: "https://github.com/benbjohnson/litestream/releases/download/v{{ .Vars.litestream_version }}/litestream-v{{ .Vars.litestream_version }}-linux-{{ .Traits.os.arch }}.tar.gz"
     target_path: "{{ .Vars.litestream_bin }}"
     binary_path: litestream
@@ -39,6 +40,7 @@ resources:
 
   - name: litestream-config
     type: file
+    state: present
     target_path: "{{ .Vars.litestream_config }}"
     owner: root
     group: root
@@ -55,6 +57,7 @@ resources:
 
   - name: litestream-systemd-unit
     type: file
+    state: present
     target_path: "/etc/systemd/system/litestream.service"
     owner: root
     group: root

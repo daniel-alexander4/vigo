@@ -50,6 +50,7 @@ resources:
 
   - name: mount-dir
     type: directory
+    state: present
     target_path: /data
     owner: root
     group: root

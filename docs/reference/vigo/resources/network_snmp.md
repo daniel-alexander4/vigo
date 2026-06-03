@@ -13,7 +13,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 | `community` | Yes | -- | SNMP community string |
 | `permission` | No | `RO` | `RO` (read-only) or `RW` (read-write) |
 | `acl` | No | -- | Access list name to restrict access (Cisco only) |
-| `state` | No | `present` | `present` to configure, `absent` to remove |
+| `state` | Yes | -- | `present` to configure, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

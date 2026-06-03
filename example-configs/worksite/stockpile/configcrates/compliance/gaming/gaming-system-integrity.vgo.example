@@ -9,12 +9,14 @@ compliance:
 resources:
   - name: ssh-hardening
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "PermitRootLogin no"
     match_pattern: "^#?PermitRootLogin"
 
   - name: ssh-key-only
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "PasswordAuthentication no"
     match_pattern: "^#?PasswordAuthentication"

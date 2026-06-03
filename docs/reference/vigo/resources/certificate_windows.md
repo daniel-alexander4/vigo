@@ -11,7 +11,7 @@ Manages certificates in Windows certificate stores idempotently via PowerShell. 
 | `source_path` | Conditional | -- | Path to certificate file (`.pfx`, `.p12`, `.cer`, `.crt`). Required for import operations. |
 | `password` | No | -- | PFX/P12 password. Only used with `.pfx`/`.p12` files. Use `secret:` prefix. |
 | `store` | No | `Cert:\LocalMachine\My` | Certificate store location. |
-| `state` | No | `present` | `present` to import/verify, `absent` to remove. |
+| `state` | Yes | -- | `present` to import/verify, `absent` to remove. |
 | `exportable` | No | `false` | Set to `true` to make the private key exportable on import (PFX only). |
 
 At least one of `thumbprint` or `source_path` must be provided. When `source_path` is provided without `thumbprint`, the certificate is imported unconditionally. When both are provided, the thumbprint is checked first to avoid duplicate imports.

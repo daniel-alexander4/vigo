@@ -11,6 +11,7 @@ vars:
 resources:
   - name: backup-verify-script
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\evidence\\backup-verify.ps1"
     owner: SYSTEM
     group: Administrators

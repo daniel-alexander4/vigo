@@ -11,6 +11,7 @@ resources:
 
   - name: haproxy-cfg
     type: file
+    state: present
     target_path: /etc/haproxy/haproxy.cfg
     content: |
       global
@@ -63,6 +64,7 @@ resources:
 
   - name: haproxy-logrotate
     type: logrotate
+    state: present
     path: /var/log/haproxy/*.log
     frequency: daily
     rotate: "14"

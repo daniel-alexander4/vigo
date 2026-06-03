@@ -5,6 +5,7 @@ resources:
   # 7.2.1/7.2.2: Restrict access by role
   - name: sudo-group-only
     type: file
+    state: present
     target_path: /etc/sudoers.d/99-pci-access
     content: |
       Defaults use_pty
@@ -24,6 +25,7 @@ resources:
   # 8.3.9: Password aging — 90-day max, 1-day min
   - name: login-defs-password-aging
     type: file
+    state: present
     target_path: /etc/login.defs.d/pci-password.conf
     content: |
       PASS_MAX_DAYS 90

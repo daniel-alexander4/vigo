@@ -7,7 +7,7 @@ Triggers or cancels system reboots. Supports delayed reboots and conditional reb
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `state` | No | `present` | `present` to trigger a reboot, `absent` to cancel a pending reboot. |
+| `state` | Yes | -- | `present` to trigger a reboot, `absent` to cancel a pending reboot. |
 | `delay_secs` | No | `0` | Delay in minutes before the reboot (passed to `shutdown -r +N`). |
 | `message` | No | `System reboot triggered by Vigo` | Message displayed to logged-in users. |
 | `reboot_required_file` | No | -- | Path to a sentinel file. If set, the reboot only triggers when this file exists. Commonly `/var/run/reboot-required` on Debian/Ubuntu. |

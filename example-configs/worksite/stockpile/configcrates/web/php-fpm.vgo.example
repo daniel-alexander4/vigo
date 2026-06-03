@@ -23,6 +23,7 @@ resources:
 
   - name: php-fpm-pool-debian
     type: file
+    state: present
     target_path: /etc/php/8.2/fpm/pool.d/www.conf
     content: |
       ; Managed by Vigo — do not edit manually
@@ -60,6 +61,7 @@ resources:
 
   - name: php-fpm-pool-redhat
     type: file
+    state: present
     target_path: /etc/php-fpm.d/www.conf
     content: |
       ; Managed by Vigo — do not edit manually
@@ -97,6 +99,7 @@ resources:
 
   - name: php-fpm-log-dir-debian
     type: directory
+    state: present
     target_path: /var/log/php-fpm
     owner: www-data
     group: www-data
@@ -105,6 +108,7 @@ resources:
 
   - name: php-fpm-log-dir-redhat
     type: directory
+    state: present
     target_path: /var/log/php-fpm
     owner: apache
     group: apache

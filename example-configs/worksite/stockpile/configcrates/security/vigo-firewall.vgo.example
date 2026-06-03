@@ -44,6 +44,7 @@ resources:
 
   - name: allow-ssh
     type: firewall
+    state: present
     port: "22"
     proto: tcp
     action: allow
@@ -54,6 +55,7 @@ resources:
 
   - name: allow-grpc
     type: firewall
+    state: present
     port: "1530"
     proto: tcp
     action: allow
@@ -64,6 +66,7 @@ resources:
 
   - name: allow-https
     type: firewall
+    state: present
     port: "8443"
     proto: tcp
     action: allow
@@ -74,6 +77,7 @@ resources:
 
   - name: allow-swarm-tcp
     type: firewall
+    state: present
     port: "1531"
     proto: tcp
     action: allow
@@ -84,6 +88,7 @@ resources:
 
   - name: allow-swarm-discovery
     type: firewall
+    state: present
     port: "1531"
     proto: udp
     action: allow
@@ -94,6 +99,7 @@ resources:
 
   - name: allow-longdrawer
     type: firewall
+    state: present
     port: "1532"
     proto: udp
     action: allow
@@ -104,6 +110,7 @@ resources:
 
   - name: allow-lockbox
     type: firewall
+    state: present
     port: "1533"
     proto: udp
     action: allow

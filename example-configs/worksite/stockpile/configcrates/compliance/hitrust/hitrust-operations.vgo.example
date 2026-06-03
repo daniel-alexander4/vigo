@@ -16,6 +16,7 @@ resources:
 
   - name: hitrust-audit-rules
     type: file
+    state: present
     target_path: /etc/audit/rules.d/hitrust.rules
     content: |
       # Login/logout events

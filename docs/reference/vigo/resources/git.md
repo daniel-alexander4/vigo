@@ -8,7 +8,7 @@ Clones and updates git repositories idempotently. Supports branch selection, sha
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `path` | Yes | -- | Local filesystem path for the repository. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `repo` | Yes (for present) | -- | Remote repository URL. |
 | `branch` | No | -- | Branch to check out. If the current branch differs, switches to this branch. |
 | `depth` | No | -- | Clone depth for shallow clones (e.g., `1`). |

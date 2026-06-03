@@ -8,6 +8,7 @@ resources:
   # that can no longer be downloaded (superseded versions)
   - name: apt-autoclean
     type: file
+    state: present
     target_path: /etc/apt/apt.conf.d/99vigo-autoclean
     content: |
       APT::Periodic::AutocleanInterval "{{ .Vars.apt_autoclean_interval }}";

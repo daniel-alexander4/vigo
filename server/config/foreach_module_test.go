@@ -187,10 +187,12 @@ vars:
 resources:
   - name: vhost-docroot
     type: directory
+    state: present
     target_path: "{{ .Vars.doc_root_base }}/{{ .Each.server_name }}"
     mode: "0755"
   - name: vhost-conf
     type: file
+    state: present
     target_path: "/etc/nginx/sites-enabled/{{ .Each.server_name }}.conf"
     content: "server_name {{ .Each.server_name }};"
     depends_on: [vhost-docroot]
@@ -323,6 +325,7 @@ name: site
 resources:
   - name: site-file
     type: file
+    state: present
     target_path: "/srv/{{ .Each.name }}"
     content: "ok"
 `)
@@ -415,6 +418,7 @@ before: [app]
 resources:
   - name: base-r
     type: file
+    state: present
     target_path: /etc/base
     content: ok
 `)
@@ -423,6 +427,7 @@ name: app
 resources:
   - name: app-r
     type: file
+    state: present
     target_path: "/srv/{{ .Each.name }}"
     content: ok
 `)

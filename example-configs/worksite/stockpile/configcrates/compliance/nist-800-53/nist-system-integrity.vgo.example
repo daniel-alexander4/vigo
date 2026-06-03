@@ -45,6 +45,7 @@ resources:
 
   - name: debsums-cron
     type: cron
+    state: present
     command: "/usr/bin/debsums --changed --silent 2>&1 | logger -t debsums-check"
     schedule: "30 4 * * *"
     hour: "4"
@@ -54,6 +55,7 @@ resources:
   # SI-2: Flaw remediation — ensure security updates are applied
   - name: apt-security-check
     type: cron
+    state: present
     command: "/usr/bin/apt-get update -q && /usr/lib/update-notifier/apt-check --human-readable | logger -t security-updates"
     schedule: "0 6 * * *"
     hour: "6"

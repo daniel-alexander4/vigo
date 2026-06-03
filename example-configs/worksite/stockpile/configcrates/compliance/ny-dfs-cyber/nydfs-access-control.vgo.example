@@ -7,24 +7,28 @@ compliance:
 resources:
   - name: ssh-no-root
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "PermitRootLogin no"
     match_pattern: "^#?PermitRootLogin"
 
   - name: ssh-key-only
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "PasswordAuthentication no"
     match_pattern: "^#?PasswordAuthentication"
 
   - name: ssh-idle-timeout
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "ClientAliveInterval 300"
     match_pattern: "^#?ClientAliveInterval"
 
   - name: ssh-idle-count
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "ClientAliveCountMax 2"
     match_pattern: "^#?ClientAliveCountMax"
@@ -37,6 +41,7 @@ resources:
 
   - name: password-policy
     type: file_line
+    state: present
     target_path: /etc/security/pwquality.conf
     line: "minlen = 14"
     match_pattern: "^#?minlen"

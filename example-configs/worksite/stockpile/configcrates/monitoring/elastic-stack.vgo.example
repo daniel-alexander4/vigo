@@ -52,6 +52,7 @@ resources:
 
   - name: elasticsearch-yml
     type: file
+    state: present
     target_path: /etc/elasticsearch/elasticsearch.yml
     content: |
       # Managed by Vigo — do not edit manually
@@ -71,6 +72,7 @@ resources:
 
   - name: elasticsearch-heap
     type: file
+    state: present
     target_path: /etc/elasticsearch/jvm.options.d/heap.options
     content: |
       -Xms{{ .Vars.es_heap_size }}
@@ -85,6 +87,7 @@ resources:
 
   - name: kibana-yml
     type: file
+    state: present
     target_path: /etc/kibana/kibana.yml
     content: |
       # Managed by Vigo — do not edit manually
@@ -102,6 +105,7 @@ resources:
 
   - name: logstash-yml
     type: file
+    state: present
     target_path: /etc/logstash/logstash.yml
     content: |
       # Managed by Vigo — do not edit manually
@@ -119,6 +123,7 @@ resources:
 
   - name: elasticsearch-logrotate
     type: logrotate
+    state: present
     path: /var/log/elasticsearch/*.log
     frequency: daily
     rotate: "7"
@@ -130,6 +135,7 @@ resources:
 
   - name: logstash-logrotate
     type: logrotate
+    state: present
     path: /var/log/logstash/*.log
     frequency: daily
     rotate: "7"

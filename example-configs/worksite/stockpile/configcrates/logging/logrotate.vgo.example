@@ -14,6 +14,7 @@ resources:
 
   - name: system-logrotate
     type: logrotate
+    state: present
     path: /var/log/*.log
     frequency: daily
     rotate: "{{ .Vars.rotate_count }}"
@@ -27,6 +28,7 @@ resources:
 
   - name: service-logrotate
     type: logrotate
+    state: present
     path: /var/log/*/*.log
     frequency: daily
     rotate: "{{ .Vars.rotate_count }}"

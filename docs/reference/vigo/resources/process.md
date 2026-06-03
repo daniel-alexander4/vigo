@@ -8,7 +8,7 @@ Manages running processes -- ensures processes are running or stopped, with opti
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `process` | Yes | -- | Process name to match. |
-| `state` | No | `running` | Desired state: `running` or `stopped`. |
+| `state` | Yes | -- | Desired state: `running` or `stopped`. |
 | `signal` | No | `TERM` | Signal to send when stopping processes. |
 | `match_mode` | No | `exact` | Match mode: `exact` (process name equals) or `pattern` (regex match via `pgrep -f`). |
 | `count` | No | -- | Exact number of matching processes expected. If the count differs, triggers action. |

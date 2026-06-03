@@ -21,6 +21,7 @@ resources:
 
   - name: aide-cron
     type: cron
+    state: present
     user: root
     name: aide-check
     command: "aide --check"

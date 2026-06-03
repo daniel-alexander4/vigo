@@ -13,6 +13,7 @@ resources:
 
   - name: nginx-conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     source: templates/nginx.conf.tmpl
     owner: root
@@ -23,6 +24,7 @@ resources:
 
   - name: default-site
     type: file
+    state: present
     target_path: /etc/nginx/conf.d/default.conf
     content: |
       server {
@@ -42,6 +44,7 @@ resources:
 
   - name: doc-root
     type: directory
+    state: present
     target_path: /var/www/html
     owner: www-data
     group: www-data
@@ -49,6 +52,7 @@ resources:
 
   - name: nginx-logrotate
     type: logrotate
+    state: present
     path: /var/log/nginx/*.log
     frequency: daily
     rotate: "14"

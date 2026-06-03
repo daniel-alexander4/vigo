@@ -12,6 +12,7 @@ vars:
 resources:
   - name: selinux-config
     type: file
+    state: present
     target_path: /etc/selinux/config
     content: |
       # /etc/selinux/config — managed by vigo

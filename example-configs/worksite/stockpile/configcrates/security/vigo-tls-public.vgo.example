@@ -49,6 +49,7 @@ resources:
   #~ the new cert is picked up.
   - name: vigo-renewal-hook
     type: file
+    state: present
     target_path: "/etc/letsencrypt/renewal-hooks/deploy/vigo-tls.sh"
     owner: root
     group: root

@@ -21,6 +21,7 @@ resources:
 
   - name: aide-crypto-paths
     type: file
+    state: present
     target_path: /etc/aide/aide.conf.d/ccss-paths
     content: |
       /srv/crypto p+i+u+g+s+md5+sha256
@@ -33,6 +34,7 @@ resources:
 
   - name: log-retention
     type: file
+    state: present
     target_path: /etc/logrotate.d/crypto-audit
     content: |
       /var/log/crypto/*.log {

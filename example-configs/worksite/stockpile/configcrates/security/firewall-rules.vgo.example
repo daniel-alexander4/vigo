@@ -26,6 +26,7 @@ resources:
 
   - name: allow-ssh
     type: firewall
+    state: present
     port: "{{ .Vars.ssh_port }}"
     proto: tcp
     action: allow
@@ -34,6 +35,7 @@ resources:
 
   - name: allow-http
     type: firewall
+    state: present
     port: "{{ .Vars.http_port }}"
     proto: tcp
     action: allow
@@ -42,6 +44,7 @@ resources:
 
   - name: allow-https
     type: firewall
+    state: present
     port: "{{ .Vars.https_port }}"
     proto: tcp
     action: allow

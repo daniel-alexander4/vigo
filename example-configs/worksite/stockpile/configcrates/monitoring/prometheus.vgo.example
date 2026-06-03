@@ -10,6 +10,7 @@ vars:
 resources:
   - name: prometheus-user
     type: user
+    state: present
     username: prometheus
     system: "true"
     shell: /usr/sbin/nologin
@@ -21,6 +22,7 @@ resources:
 
   - name: prometheus-conf
     type: file
+    state: present
     target_path: /etc/prometheus/prometheus.yml
     content: |
       global:

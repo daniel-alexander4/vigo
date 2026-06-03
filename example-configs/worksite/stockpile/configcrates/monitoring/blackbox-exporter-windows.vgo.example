@@ -10,6 +10,7 @@ vars:
 resources:
   - name: install-blackbox-exporter
     type: source_package
+    state: present
     url: "https://github.com/prometheus/blackbox_exporter/releases/download/v{{ .Vars.blackbox_version }}/blackbox_exporter-{{ .Vars.blackbox_version }}.windows-amd64.zip"
     target_path: "C:\\Program Files\\blackbox_exporter\\blackbox_exporter.exe"
     binary_path: "blackbox_exporter.exe"
@@ -18,6 +19,7 @@ resources:
 
   - name: blackbox-config
     type: file
+    state: present
     target_path: "C:\\ProgramData\\blackbox_exporter\\blackbox.yml"
     owner: SYSTEM
     group: Administrators

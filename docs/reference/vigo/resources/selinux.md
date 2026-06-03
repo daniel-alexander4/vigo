@@ -10,7 +10,7 @@ Manage SELinux security contexts on files and directories. Linux only.
 | `path` | Yes | File or directory path to manage |
 | `context` | No | Full SELinux context (e.g., `system_u:object_r:httpd_sys_content_t:s0`) |
 | `selinux_type` | No | SELinux type component only (e.g., `httpd_sys_content_t`) -- shorthand |
-| `state` | No | `present` (default) or `absent` for persistent fcontext rules |
+| `state` | Yes | -- |
 
 Either `context` or `selinux_type` must be specified.
 

@@ -10,6 +10,7 @@ resources:
   # Password complexity
   - name: pwquality-config
     type: file
+    state: present
     target_path: /etc/security/pwquality.conf
     content: |
       minlen = 14
@@ -28,6 +29,7 @@ resources:
   # Account lockout after 5 failed attempts
   - name: faillock-config
     type: file
+    state: present
     target_path: /etc/security/faillock.conf
     content: |
       deny = 5
@@ -43,6 +45,7 @@ resources:
   # Session timeout
   - name: session-timeout
     type: file
+    state: present
     target_path: /etc/profile.d/hipaa-timeout.sh
     content: |
       readonly TMOUT=900
@@ -54,6 +57,7 @@ resources:
   # Disable root login via SSH
   - name: no-root-ssh
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-hipaa-access.conf
     content: |
       PermitRootLogin no

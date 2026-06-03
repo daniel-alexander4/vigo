@@ -306,10 +306,12 @@ defaults:
 resources:
   - name: vimrc
     type: file
+    state: present
     target_path: "/home/dan/.vimrc"
     content: "set number"
   - name: bashrc
     type: file
+    state: present
     target_path: "/home/dan/.bashrc"
     content: "export PS1='$ '"
 `)
@@ -343,10 +345,12 @@ defaults:
 resources:
   - name: vimrc
     type: file
+    state: present
     target_path: "/home/dan/.vimrc"
     content: "set number"
   - name: script
     type: file
+    state: present
     target_path: "/home/dan/run.sh"
     content: "#!/bin/sh"
     mode: "0755"
@@ -378,6 +382,7 @@ defaults:
 resources:
   - name: cfg
     type: file
+    state: present
     target_path: /etc/test.conf
     content: "test"
 `)
@@ -405,6 +410,7 @@ defaults: {}
 resources:
   - name: cfg
     type: file
+    state: present
     target_path: /etc/test.conf
     content: "test"
 `)
@@ -424,6 +430,7 @@ name: dotfiles
 resources:
   - name: "vimrc-{{ .Item }}"
     type: file
+    state: present
     foreach: users
     target_path: "/home/{{ .Item }}/.vimrc"
     content: "set number"
@@ -485,6 +492,7 @@ name: test
 resources:
   - name: bad
     type: package
+    state: present
     case: "{{ .Traits.os_family }}"
 `)
 
@@ -503,6 +511,7 @@ name: test
 resources:
   - name: bad
     type: package
+    state: present
     case: "{{ .Traits.os_family }}"
     match:
       debian:

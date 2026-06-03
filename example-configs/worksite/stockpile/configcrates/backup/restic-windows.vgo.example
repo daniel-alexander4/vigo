@@ -29,6 +29,7 @@ resources:
 
   - name: restic-config
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\restic\\restic.env"
     owner: SYSTEM
     group: Administrators
@@ -40,6 +41,7 @@ resources:
 
   - name: restic-backup-script
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\restic\\restic-backup.ps1"
     owner: SYSTEM
     group: Administrators

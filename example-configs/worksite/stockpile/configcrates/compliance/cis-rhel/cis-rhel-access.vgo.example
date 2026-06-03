@@ -58,6 +58,7 @@ resources:
 
   - name: 5.1.8-cron-restrict
     type: file
+    state: present
     target_path: /etc/cron.allow
     content: |
       root
@@ -74,6 +75,7 @@ resources:
 
   - name: 5.2-sshd-hardening
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-cis-rhel.conf
     content: |
       # CIS 5.2.4 — SSH Protocol
@@ -137,6 +139,7 @@ resources:
 
   - name: 5.2-ssh-banner
     type: file
+    state: present
     target_path: /etc/issue.net
     content: |
       Authorized uses only. All activity may be monitored and reported.
@@ -159,6 +162,7 @@ resources:
 
   - name: 5.3.2-pwquality-config
     type: file
+    state: present
     target_path: /etc/security/pwquality.conf
     content: |
       # CIS 5.3.2 — Password quality (RHEL)
@@ -175,6 +179,7 @@ resources:
 
   - name: 5.3.3-faillock-config
     type: file
+    state: present
     target_path: /etc/security/faillock.conf
     content: |
       # CIS 5.3.3 — Account lockout
@@ -235,6 +240,7 @@ resources:
 
   - name: 5.5.4-default-umask
     type: file
+    state: present
     target_path: /etc/profile.d/cis-umask.sh
     content: |
       umask 027
@@ -244,6 +250,7 @@ resources:
 
   - name: 5.5.5-shell-timeout
     type: file
+    state: present
     target_path: /etc/profile.d/cis-tmout.sh
     content: |
       readonly TMOUT={{ .Vars.shell_timeout }}

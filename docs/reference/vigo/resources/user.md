@@ -10,7 +10,7 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `username` | Yes | -- | Username. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `uid` | No | -- | Desired UID. |
 | `shell` | No | -- | Login shell (e.g., `/bin/bash`). |
 | `home` | No | -- | Home directory path. |

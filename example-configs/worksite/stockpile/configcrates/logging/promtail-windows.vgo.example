@@ -13,6 +13,7 @@ vars:
 resources:
   - name: install-promtail
     type: source_package
+    state: present
     url: "https://github.com/grafana/loki/releases/download/v{{ .Vars.promtail_version }}/promtail-windows-amd64.exe.zip"
     target_path: "C:\\Program Files\\promtail\\promtail.exe"
     binary_path: "promtail-windows-amd64.exe"
@@ -22,6 +23,7 @@ resources:
 
   - name: promtail-config
     type: file
+    state: present
     target_path: "C:\\ProgramData\\promtail\\promtail.yaml"
     owner: SYSTEM
     group: Administrators

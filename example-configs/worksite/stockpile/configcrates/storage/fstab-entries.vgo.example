@@ -11,6 +11,7 @@ resources:
 
   - name: nfs-mount-dir
     type: directory
+    state: present
     target_path: /mnt/shared
     owner: root
     group: root
@@ -49,6 +50,7 @@ resources:
 
   - name: bind-mount-dir
     type: directory
+    state: present
     target_path: /srv/www
     owner: root
     group: root

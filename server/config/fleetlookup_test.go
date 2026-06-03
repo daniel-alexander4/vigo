@@ -279,6 +279,7 @@ name: allow
 resources:
   - name: "allow-{{ .Item }}"
     type: file
+    state: present
     foreach: web_ips
     target_path: "/etc/allow.d/{{ .Item }}"
     content: "{{ .Item }}"

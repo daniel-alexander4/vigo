@@ -52,6 +52,7 @@ func TestLintFleet_DuplicateFile(t *testing.T) {
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     content: "from-a"
     owner: root
@@ -62,6 +63,7 @@ resources:
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     content: "from-b"
     owner: root

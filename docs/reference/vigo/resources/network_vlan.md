@@ -19,7 +19,7 @@ SSH connection parameters (`host`, `username`, `credential`, `port`, `device_typ
 |-----------|----------|---------|-------------|
 | `vlan` | Yes | -- | VLAN ID (1-4094) |
 | `vlan_name` | No | -- | VLAN name. On Junos, defaults to `vlan<id>` if omitted. |
-| `state` | No | `present` | `present` to create, `absent` to remove |
+| `state` | Yes | -- | `present` to create, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

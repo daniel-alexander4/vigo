@@ -20,6 +20,7 @@ resources:
 
   - name: rsyslog-vigo-conf
     type: file
+    state: present
     target_path: /etc/rsyslog.d/50-vigo.conf
     content: |
       # Managed by Vigo — do not edit manually

@@ -18,6 +18,7 @@ resources:
 
   - name: snmpd-conf
     type: file
+    state: present
     target_path: "/etc/snmp/snmpd.conf"
     owner: root
     group: root

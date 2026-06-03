@@ -8,6 +8,7 @@ vars:
 resources:
   - name: locale-conf
     type: file
+    state: present
     target_path: "/etc/locale.conf"
     owner: root
     group: root

@@ -26,6 +26,7 @@ name: %s
 resources:
   - name: create-%s
     type: user
+    state: present
     username: %s
 `, name, name, name)
 	writeFile(t, filepath.Join(usercrateDir, name+".vgo"), content)
@@ -43,6 +44,7 @@ func writeUsercrateDirNoName(t *testing.T, dir, scope, filenameStem string) {
 resources:
   - name: create-%s
     type: user
+    state: present
     username: %s
 `, filenameStem, filenameStem)
 	writeFile(t, filepath.Join(usercrateDir, filenameStem+".vgo"), content)
@@ -248,6 +250,7 @@ name: broken
 resources:
   - name: motd
     type: file
+    state: present
     path: /etc/motd
     content: "hi"
 `)
@@ -276,9 +279,11 @@ name: dan
 resources:
   - name: create-dan
     type: user
+    state: present
     username: dan
   - name: dan-authorized-keys
     type: file
+    state: present
     path: /home/dan/.ssh/authorized_keys
     content: "ssh-ed25519 ..."
   - name: dan-shell-init
@@ -361,6 +366,7 @@ resources:
   - name: placeholder
     type: package
     package: bash
+    state: present
 `)
 	writeUsercrateDir(t, dir, "", "dan")
 

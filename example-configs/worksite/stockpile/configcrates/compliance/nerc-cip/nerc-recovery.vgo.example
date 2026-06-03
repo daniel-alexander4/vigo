@@ -15,6 +15,7 @@ resources:
 
   - name: daily-config-backup
     type: cron
+    state: present
     command: "tar czf /var/backups/nerc/config-$(date +\\%Y\\%m\\%d).tar.gz /etc/ 2>/dev/null && find /var/backups/nerc -name 'config-*.tar.gz' -mtime +90 -delete"
     schedule: "0 1 * * *"
     hour: "1"
@@ -23,6 +24,7 @@ resources:
 
   - name: daily-baseline-backup
     type: cron
+    state: present
     command: "dpkg --get-selections > /var/backups/nerc/packages-$(date +\\%Y\\%m\\%d).list 2>/dev/null"
     schedule: "15 1 * * *"
     hour: "1"
@@ -48,6 +50,7 @@ resources:
 
   - name: aide-daily-check
     type: cron
+    state: present
     command: "/usr/bin/aide --check 2>&1 | logger -t nerc-aide"
     schedule: "0 5 * * *"
     hour: "5"

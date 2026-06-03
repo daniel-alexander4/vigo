@@ -16,8 +16,8 @@ func TestExpandForEach_BasicExpansion(t *testing.T) {
 			Type: "file",
 			Attributes: map[string]any{
 				"target_path": "/home/{{ .Item }}/.vimrc",
-				"owner":      "{{ .Item }}",
-				"content":    "set number",
+				"owner":       "{{ .Item }}",
+				"content":     "set number",
 			},
 			ForEach: "users",
 		},

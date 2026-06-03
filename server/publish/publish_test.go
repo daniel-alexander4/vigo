@@ -487,6 +487,7 @@ name: download
 resources:
   - name: get-archive
     type: source_package
+    state: present
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
@@ -514,6 +515,7 @@ name: download
 resources:
   - name: get-archive
     type: source_package
+    state: present
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
@@ -539,6 +541,7 @@ name: gitmod
 resources:
   - name: clone-repo
     type: git
+    state: present
     repo: "git@github.com:example/repo.git"
     path: "/opt/repo"
 `)
@@ -561,6 +564,7 @@ name: download
 resources:
   - name: get-archive
     type: source_package
+    state: present
     url: "http://nonexistent.invalid/file.tar.gz"
     target_path: "/opt/app"
 `)
@@ -592,6 +596,7 @@ name: download
 resources:
   - name: get-archive
     type: source_package
+    state: present
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
@@ -619,6 +624,7 @@ name: repo
 resources:
   - name: add-repo
     type: repository
+    state: present
     repo: "deb https://example.com/apt stable main"
     key_url: "%s/gpg.key"
 `, srv.URL))
@@ -651,6 +657,7 @@ name: download
 resources:
   - name: get-archive
     type: source_package
+    state: present
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL)
@@ -691,6 +698,7 @@ name: nginx
 resources:
   - name: site
     type: file
+    state: present
     target_path: /etc/nginx/conf.d/site
     owner: root
     group: root
@@ -713,6 +721,7 @@ name: alice
 resources:
   - name: alice
     type: user
+    state: present
     username: alice
 `)
 	// Unreferenced usercrate → pruned.
@@ -721,6 +730,7 @@ name: bob
 resources:
   - name: bob
     type: user
+    state: present
     username: bob
 `)
 

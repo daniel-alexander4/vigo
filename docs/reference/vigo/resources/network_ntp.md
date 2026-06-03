@@ -11,7 +11,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 |-----------|----------|---------|-------------|
 | `device_type` | Yes | -- | `cisco_ios`, `cisco_nxos`, or `juniper_junos` |
 | `server` | Yes | -- | NTP server address |
-| `state` | No | `present` | `present` to configure, `absent` to remove |
+| `state` | Yes | -- | `present` to configure, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

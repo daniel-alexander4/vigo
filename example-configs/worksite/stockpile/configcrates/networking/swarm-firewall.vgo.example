@@ -7,6 +7,7 @@ description: >-
 resources:
   - name: allow-swarm-peer-tcp
     type: firewall
+    state: present
     port: "1531"
     proto: tcp
     action: allow
@@ -14,6 +15,7 @@ resources:
 
   - name: allow-swarm-discovery-udp
     type: firewall
+    state: present
     port: "1531"
     proto: udp
     action: allow

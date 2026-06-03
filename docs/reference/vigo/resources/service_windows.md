@@ -8,7 +8,7 @@ Manages Windows services via `sc.exe`. Supports starting, stopping, restarting, 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `service` | Yes | -- | Service name. Supports comma-separated names for multiple services. |
-| `state` | No | `running` | Desired state: `running`, `stopped`, or `restarted`. |
+| `state` | Yes | -- | Desired state: `running`, `stopped`, or `restarted`. |
 | `enabled` | No | -- | Startup type: `true` for auto-start, `false` for disabled. Empty means do not change. |
 
 ## States

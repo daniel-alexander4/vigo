@@ -15,6 +15,7 @@ resources:
 
   - name: dnsmasq-conf
     type: file
+    state: present
     target_path: /etc/dnsmasq.d/vigo.conf
     content: |
       # Managed by Vigo — do not edit manually

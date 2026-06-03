@@ -99,3 +99,25 @@ for type_name in $(echo "${!TYPE_FILES[@]}" | tr ' ' '\n' | sort); do
 done
 
 echo "}"
+echo
+echo "// generatedStateTypes is the set of resource types whose executor actually"
+echo "// consumes a \`state\` param — a direct params.get(\"state\") or the"
+echo "// network_common::parse_state(params) helper. It drives the mandatory-state"
+echo "// validation rule (validate.go requires \`state\` iff the type is in this set)."
+echo "//"
+echo "// Scanned from each type's OWN executor file(s) only — deliberately NOT the"
+echo "// shared network_common.rs helper. The schema scrape above follows"
+echo "// network_common (so SSH-transport params attribute correctly), which would"
+echo "// otherwise mark ssh_exec / cisco_interface / junos_interface as"
+echo "// state-bearing even though they never call parse_state. Keying off own-file"
+echo "// consumption excludes those false positives."
+echo "var generatedStateTypes = map[string]bool{"
+for type_name in $(echo "${!TYPE_FILES[@]}" | tr ' ' '\n' | sort); do
+    own_files="${TYPE_FILES[$type_name]}"
+    # Join lines first (some executors split `params\n.get("state")` across
+    # lines, e.g. package_windows.rs), then match either idiom.
+    if cat $own_files 2>/dev/null | tr '\n' ' ' | grep -Pq 'params\s*\.get\(\s*"state"\)|parse_state\(\s*params\s*\)'; then
+        echo "	\"$type_name\": true,"
+    fi
+done
+echo "}"

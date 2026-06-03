@@ -23,6 +23,7 @@ resources:
 
   - name: hosts-deny-all
     type: file
+    state: present
     target_path: /etc/hosts.deny
     content: "ALL: ALL\n"
     owner: root
@@ -31,6 +32,7 @@ resources:
 
   - name: hosts-allow-ssh
     type: file
+    state: present
     target_path: /etc/hosts.allow
     content: "sshd: ALL\n"
     owner: root
@@ -57,6 +59,7 @@ resources:
 
   - name: openscap-weekly-scan
     type: cron
+    state: present
     command: "oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_pci-dss --results /var/log/openscap/pci-$(date +\\%Y\\%m\\%d).xml /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml 2>&1 | logger -t openscap"
     schedule: "0 3 * * 0"
     weekday: "0"

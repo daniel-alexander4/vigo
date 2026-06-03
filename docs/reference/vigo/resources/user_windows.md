@@ -8,7 +8,7 @@ Manages local Windows user accounts via `net user` and `net localgroup`.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `username` | Yes | -- | Username. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `password` | No | -- | User password (for account creation). |
 | `comment` | No | -- | User description/comment field. |
 | `groups` | No | -- | Comma-separated list of local groups to add the user to. |

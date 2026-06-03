@@ -9,7 +9,7 @@ Manages cron jobs by writing configuration files to `/etc/cron.d/`.
 |-----------|----------|---------|-------------|
 | `name` | Yes | -- | Cron job name (used as the filename in `/etc/cron.d/`). |
 | `command` | Yes (for present) | -- | The command to execute. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `schedule` | No | -- | Cron schedule expression (e.g., `*/5 * * * *`) or special schedule (`@daily`, `@hourly`, `@reboot`, etc.). Takes precedence over individual time fields. |
 | `minute` | No | `*` | Minute field (0-59). |
 | `hour` | No | `*` | Hour field (0-23). |

@@ -10,6 +10,7 @@ resources:
 
   - name: fail2ban-jail
     type: file
+    state: present
     target_path: /etc/fail2ban/jail.local
     content: |
       [DEFAULT]
@@ -32,6 +33,7 @@ resources:
 
   - name: fail2ban-logrotate
     type: logrotate
+    state: present
     path: /var/log/fail2ban.log
     frequency: daily
     rotate: "7"

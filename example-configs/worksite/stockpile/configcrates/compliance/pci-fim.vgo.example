@@ -32,6 +32,7 @@ resources:
 
   - name: aide-conf
     type: file
+    state: present
     target_path: /etc/aide/aide.conf
     content: |
       # AIDE configuration for PCI DSS v4.0 Req 11.5.1
@@ -83,6 +84,7 @@ resources:
 
   - name: aide-cron
     type: cron
+    state: present
     name: "pci-fim-daily-check"
     command: "/usr/bin/aide --check > /var/log/aide/aide-$(date +\\%Y\\%m\\%d).log 2>&1"
     schedule: "30 3 * * *"

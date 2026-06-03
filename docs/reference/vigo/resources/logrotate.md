@@ -8,7 +8,7 @@ Manages logrotate configuration files in `/etc/logrotate.d/`.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | Yes | -- | Configuration name (used as the filename: `/etc/logrotate.d/<name>`). |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `path` | Yes (for present) | -- | Log file path or glob pattern (e.g., `/var/log/myapp/*.log`). |
 | `frequency` | No | `weekly` | Rotation frequency: `daily`, `weekly`, `monthly`, `yearly`. |
 | `rotate` | No | `4` | Number of rotated files to keep. |

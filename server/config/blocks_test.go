@@ -52,6 +52,7 @@ func TestFlattenBlockMergesConditionals(t *testing.T) {
     resources:
       - name: r1
         type: file
+        state: present
         target_path: /etc/r1
       - name: r2
         type: exec
@@ -83,6 +84,7 @@ func TestFlattenBlockMergesDifferentConditionals(t *testing.T) {
     resources:
       - name: r1
         type: file
+        state: present
         target_path: /etc/r1
         when: "not is_container"
 `
@@ -105,6 +107,7 @@ func TestFlattenBlockSameFieldConcatenated(t *testing.T) {
     resources:
       - name: r1
         type: file
+        state: present
         target_path: /etc/r1
         when: "has_enough_mem"
 `
@@ -129,9 +132,11 @@ func TestFlattenMixedResourcesAndBlocksOrdering(t *testing.T) {
     resources:
       - name: b
         type: file
+        state: present
         target_path: /b
       - name: c
         type: file
+        state: present
         target_path: /c
 - name: d
   type: file
@@ -240,6 +245,7 @@ func TestFlattenBlockWhenExpression(t *testing.T) {
     resources:
       - name: r1
         type: file
+        state: present
         target_path: /etc/r1
 `
 	resources, err := flattenFromYAML(t, input)
@@ -262,6 +268,7 @@ name: test-module
 resources:
   - name: standalone
     type: package
+    state: present
     package: nginx
 
   - conditional_block:

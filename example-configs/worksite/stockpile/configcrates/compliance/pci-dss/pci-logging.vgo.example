@@ -9,6 +9,7 @@ resources:
 
   - name: audit-rules
     type: file
+    state: present
     target_path: /etc/audit/rules.d/pci.rules
     content: |
       # PCI DSS 10.2.1 — Individual user access to cardholder data
@@ -45,6 +46,7 @@ resources:
 
   - name: auditd-config
     type: file
+    state: present
     target_path: /etc/audit/auditd.conf
     content: |
       log_file = /var/log/audit/audit.log

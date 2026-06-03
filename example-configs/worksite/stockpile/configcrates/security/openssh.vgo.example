@@ -21,6 +21,7 @@ resources:
 
   - name: sshd-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config
     content: |
       Port {{ .Vars.ssh_port }}

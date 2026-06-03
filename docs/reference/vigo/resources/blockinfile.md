@@ -9,7 +9,7 @@ Manages marked blocks of text within a file, delimited by BEGIN/END markers. Use
 |-----------|----------|---------|-------------|
 | `target_path` | Yes | -- | Absolute path to the file. |
 | `block_content` | Yes (for present) | -- | The content to place between the markers. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `label` | No | `managed` | Label used in marker comments to distinguish multiple blocks. |
 | `marker_begin` | No | `# BEGIN {label} - managed by vigo` | Custom begin marker. `{label}` is replaced with the label value. |
 | `marker_end` | No | `# END {label} - managed by vigo` | Custom end marker. |

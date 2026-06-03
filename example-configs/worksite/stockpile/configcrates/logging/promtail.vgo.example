@@ -11,6 +11,7 @@ vars:
 resources:
   - name: install-promtail
     type: source_package
+    state: present
     url: "https://github.com/grafana/loki/releases/download/v{{ .Vars.promtail_version }}/promtail-linux-{{ .Traits.os.arch }}.zip"
     target_path: "/usr/local/bin/promtail"
     binary_path: "promtail-linux-{{ .Traits.os.arch }}"
@@ -19,6 +20,7 @@ resources:
 
   - name: promtail-config
     type: file
+    state: present
     target_path: "/etc/promtail/promtail.yaml"
     owner: root
     group: root
@@ -43,6 +45,7 @@ resources:
 
   - name: promtail-systemd-unit
     type: file
+    state: present
     target_path: "/etc/systemd/system/promtail.service"
     owner: root
     group: root

@@ -14,6 +14,7 @@ resources:
 
   - name: postfix-main-cf
     type: file
+    state: present
     target_path: /etc/postfix/main.cf
     content: |
       # Managed by Vigo — do not edit manually

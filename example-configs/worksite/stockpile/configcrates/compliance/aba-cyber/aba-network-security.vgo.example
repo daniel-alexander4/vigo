@@ -21,18 +21,21 @@ resources:
 
   - name: ssh-strong-ciphers
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr"
     match_pattern: "^#?Ciphers"
 
   - name: ssh-strong-macs
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com"
     match_pattern: "^#?MACs"
 
   - name: ssh-strong-kex
     type: file_line
+    state: present
     target_path: /etc/ssh/sshd_config
     line: "KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256"
     match_pattern: "^#?KexAlgorithms"

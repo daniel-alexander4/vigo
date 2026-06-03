@@ -33,6 +33,7 @@ resources:
 
   - name: openvpn-log-dir
     type: directory
+    state: present
     target_path: /var/log/openvpn
     owner: root
     group: root
@@ -41,11 +42,13 @@ resources:
 
   - name: ip-forwarding
     type: sysctl
+    state: present
     key: net.ipv4.ip_forward
     value: "1"
 
   - name: openvpn-server-conf
     type: file
+    state: present
     target_path: /etc/openvpn/server/server.conf
     content: |
       # Managed by Vigo — do not edit manually

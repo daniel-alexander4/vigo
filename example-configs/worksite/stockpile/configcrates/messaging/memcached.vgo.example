@@ -14,6 +14,7 @@ resources:
 
   - name: memcached-conf
     type: file
+    state: present
     target_path: /etc/memcached.conf
     content: |
       # Managed by Vigo — do not edit manually

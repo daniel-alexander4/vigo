@@ -35,6 +35,7 @@ resources:
   # CM-6: Configuration enforcement — kernel hardening
   - name: kernel-hardening
     type: file
+    state: present
     target_path: /etc/sysctl.d/99-nist-hardening.conf
     content: |
       # Disable IP forwarding
@@ -73,6 +74,7 @@ resources:
   # CM-11: User-installed software restrictions
   - name: restrict-package-install
     type: file
+    state: present
     target_path: /etc/apt/apt.conf.d/99restrict
     content: |
       APT::Get::AllowUnauthenticated "false";

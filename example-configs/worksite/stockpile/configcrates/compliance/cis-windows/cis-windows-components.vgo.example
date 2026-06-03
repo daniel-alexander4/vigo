@@ -10,6 +10,7 @@ resources:
   # Require NLA for RDP
   - name: rdp-require-nla
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
     value_name: "UserAuthentication"
@@ -19,6 +20,7 @@ resources:
   # Set RDP encryption level to High
   - name: rdp-encryption-high
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
     value_name: "MinEncryptionLevel"
@@ -30,6 +32,7 @@ resources:
   # WinRM: Disable unencrypted traffic
   - name: winrm-no-unencrypted
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service'
     value_name: "AllowUnencryptedTraffic"
@@ -39,6 +42,7 @@ resources:
   # WinRM: Disable basic authentication
   - name: winrm-no-basic-auth
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service'
     value_name: "AllowBasic"
@@ -50,6 +54,7 @@ resources:
   # Enable PowerShell Script Block Logging
   - name: ps-script-block-logging
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'
     value_name: "EnableScriptBlockLogging"
@@ -59,6 +64,7 @@ resources:
   # Enable PowerShell Transcription
   - name: ps-transcription
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription'
     value_name: "EnableTranscripting"
@@ -70,6 +76,7 @@ resources:
   # Disable AutoPlay for all drives
   - name: disable-autoplay
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
     value_name: "NoDriveTypeAutoRun"
@@ -79,6 +86,7 @@ resources:
   # Disable AutoRun default behavior
   - name: disable-autorun
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
     value_name: "NoAutorun"
@@ -90,6 +98,7 @@ resources:
   # Machine inactivity timeout (900 seconds = 15 minutes)
   - name: machine-inactivity-limit
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
     value_name: "InactivityTimeoutSecs"
@@ -101,6 +110,7 @@ resources:
   # Configure automatic updates
   - name: windows-update-auto
     type: windows_update
+    state: present
     skip_validation: true
     auto_update: true
     schedule_day: everyday
@@ -110,6 +120,7 @@ resources:
 
   - name: credential-guard
     type: registry
+    state: present
     skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard'
     value_name: "EnableVirtualizationBasedSecurity"

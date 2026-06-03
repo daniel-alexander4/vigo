@@ -21,6 +21,7 @@ resources:
 
   - name: wg0-conf
     type: file
+    state: present
     target_path: "/etc/wireguard/wg0.conf"
     owner: root
     group: root

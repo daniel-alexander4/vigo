@@ -81,7 +81,7 @@ func TestServiceRestarted_WithSubscribes_IsClean(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "nginx-conf", Type: "file", Attributes: map[string]any{
-				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644", "state": "present",
 			}},
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
 				"service": "nginx",
@@ -118,12 +118,12 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		typ   string
 		attrs map[string]any
 	}{
-		{"file", map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
+		{"file", map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644", "state": "present"}},
 		{"package", map[string]any{"package": "nginx", "state": "present"}},
-		{"user", map[string]any{"username": "deploy"}},
+		{"user", map[string]any{"username": "deploy", "state": "present"}},
 		{"repository", map[string]any{"repo": "ppa:nginx/stable", "state": "present"}},
-		{"source_package", map[string]any{"url": "https://example.com/foo.tar.gz", "target_path": "/opt/foo"}},
-		{"cron", map[string]any{"command": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy"}},
+		{"source_package", map[string]any{"url": "https://example.com/foo.tar.gz", "target_path": "/opt/foo", "state": "present"}},
+		{"cron", map[string]any{"command": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy", "state": "present"}},
 	}
 
 	for _, tt := range types {
@@ -151,15 +151,15 @@ func TestFileValidation_MissingRequiredFields(t *testing.T) {
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for bare file resource")
 	}
-	// Should require: target_path, owner, group, mode, content/source = 5 errors.
+	// Should require: target_path, owner, group, mode, state, content/source = 6 errors.
 	errorCount := 0
 	for _, f := range findings {
 		if f.Severity == SeverityError {
 			errorCount++
 		}
 	}
-	if errorCount != 5 {
-		t.Errorf("expected 5 errors, got %d: %s", errorCount, FormatFindings(findings))
+	if errorCount != 6 {
+		t.Errorf("expected 6 errors, got %d: %s", errorCount, FormatFindings(findings))
 	}
 }
 
@@ -184,7 +184,7 @@ func TestFileValidation_SourceSatisfiesContent(t *testing.T) {
 		Resources: []Resource{
 			{Name: "tmpl-file", Type: "file", Attributes: map[string]any{
 				"target_path": "/etc/app.conf", "source": "templates/app.conf.tmpl",
-				"owner": "root", "group": "root", "mode": "0600",
+				"owner": "root", "group": "root", "mode": "0600", "state": "present",
 			}},
 		},
 	}
@@ -227,8 +227,8 @@ func TestUnknownType_WithSkipValidation_IsClean(t *testing.T) {
 
 func TestProcessAndFileLineTypes_AreClean(t *testing.T) {
 	fixtures := map[string]map[string]any{
-		"process":   {"process": "nginx"},
-		"file_line": {"target_path": "/etc/hosts", "line": "127.0.0.1 myhost"},
+		"process":   {"process": "nginx", "state": "running"},
+		"file_line": {"target_path": "/etc/hosts", "line": "127.0.0.1 myhost", "state": "present"},
 	}
 	for typ, attrs := range fixtures {
 		mod := Configcrate{
@@ -276,7 +276,7 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "good-file", Type: "file", Attributes: map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
+			{Name: "good-file", Type: "file", Attributes: map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644", "state": "present"}},
 			{Name: "bad-exec", Type: "exec", Attributes: map[string]any{"command": "longdrawer hello"}},
 			{Name: "good-exec", Type: "exec", Attributes: map[string]any{"command": "longdrawer world", "unless": "test -f /tmp/done"}},
 		},
@@ -355,6 +355,7 @@ func TestCronValidation_IndividualFields_IsClean(t *testing.T) {
 			{Name: "fields-cron", Type: "cron", Attributes: map[string]any{
 				"command": "/usr/local/bin/backup.sh",
 				"user":    "deploy",
+				"state":   "present",
 				"minute":  "0",
 				"hour":    "2",
 				"day":     "*",
@@ -465,15 +466,15 @@ func TestFieldEditValidation_MissingRequired(t *testing.T) {
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for field_edit without required fields")
 	}
-	// Should require: path, line_match, select_field, field_value = 4 errors.
+	// Should require: path, line_match, select_field, state, field_value = 5 errors.
 	errorCount := 0
 	for _, f := range findings {
 		if f.Severity == SeverityError {
 			errorCount++
 		}
 	}
-	if errorCount != 4 {
-		t.Errorf("expected 4 errors, got %d: %s", errorCount, FormatFindings(findings))
+	if errorCount != 5 {
+		t.Errorf("expected 5 errors, got %d: %s", errorCount, FormatFindings(findings))
 	}
 }
 
@@ -498,7 +499,7 @@ func TestFieldEditValidation_ValidConfig(t *testing.T) {
 		Resources: []Resource{
 			{Name: "good-fe", Type: "field_edit", Attributes: map[string]any{
 				"path": "/etc/group", "line_match": "^docker:", "select_field": "4",
-				"field_value": "deploy", "field_operation": "append",
+				"field_value": "deploy", "field_operation": "append", "state": "present",
 			}},
 		},
 	}
@@ -514,9 +515,9 @@ func TestFileWithoutContent_IsError(t *testing.T) {
 		Resources: []Resource{
 			{Name: "config", Type: "file", Attributes: map[string]any{
 				"target_path": "/etc/myapp/config",
-				"owner":      "root",
-				"group":      "root",
-				"mode":       "0644",
+				"owner":       "root",
+				"group":       "root",
+				"mode":        "0644",
 			}},
 		},
 	}
@@ -533,9 +534,10 @@ func TestDirectoryType_NoContentRequired(t *testing.T) {
 		Resources: []Resource{
 			{Name: "datadir", Type: "directory", Attributes: map[string]any{
 				"target_path": "/var/lib/myapp/data",
-				"owner":      "root",
-				"group":      "root",
-				"mode":       "0755",
+				"owner":       "root",
+				"group":       "root",
+				"mode":        "0755",
+				"state":       "present",
 			}},
 		},
 	}
@@ -569,7 +571,8 @@ func TestSymlinkType_Valid(t *testing.T) {
 		Resources: []Resource{
 			{Name: "enable-site", Type: "symlink", Attributes: map[string]any{
 				"target_path": "/etc/nginx/sites-enabled/mysite",
-				"to":         "../sites-available/mysite",
+				"to":          "../sites-available/mysite",
+				"state":       "present",
 			}},
 		},
 	}
@@ -602,7 +605,7 @@ func TestSymlinkType_AbsentSkipsTo(t *testing.T) {
 		Resources: []Resource{
 			{Name: "rm-link", Type: "symlink", Attributes: map[string]any{
 				"target_path": "/some/link",
-				"state":      "absent",
+				"state":       "absent",
 			}},
 		},
 	}
@@ -616,7 +619,7 @@ func TestSymlinkType_AbsentSkipsTo(t *testing.T) {
 func TestFindingString_Format(t *testing.T) {
 	f := Finding{
 		Severity:     SeverityError,
-		Configcrate:       "nginx",
+		Configcrate:  "nginx",
 		ResourceName: "run-setup",
 		ResourceType: "exec",
 		Message:      "exec resource has no idempotency guard — add creates, onlyif, or unless",
@@ -660,7 +663,7 @@ func TestDependsOn_ValidReference_IsClean(t *testing.T) {
 	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
+			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx", "state": "present"}},
 			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"pkg"}},
 		},
@@ -699,7 +702,7 @@ func TestNotify_UnknownResource_IsWarning(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "conf", Type: "file", Attributes: map[string]any{
-				"target_path": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644", "state": "present",
 			}, Notify: []string{"nonexistent-svc"}},
 		},
 	}
@@ -745,7 +748,7 @@ func TestBefore_UnknownResource_IsWarning(t *testing.T) {
 	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"},
+			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx", "state": "present"},
 				Before: []string{"nonexistent-svc"}},
 		},
 	}
@@ -769,7 +772,7 @@ func TestRedundantNotifySubscribes_IsError(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "conf", Type: "file", Attributes: map[string]any{
-				"target_path": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644", "state": "present",
 			}, Notify: []string{"svc"}},
 			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				Subscribes: []string{"conf"}},
@@ -809,9 +812,9 @@ func TestAllReferencesValid_IsClean(t *testing.T) {
 	mod := Configcrate{
 		Name: "nginx",
 		Resources: []Resource{
-			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
+			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx", "state": "present"}},
 			{Name: "conf", Type: "file", Attributes: map[string]any{
-				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
+				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644", "state": "present",
 			}, DependsOn: []string{"pkg"}, Notify: []string{"svc"}},
 			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"pkg"}},
@@ -827,6 +830,52 @@ func TestAllKnownTypesHaveSchema(t *testing.T) {
 	for typeName := range KnownTypes {
 		if _, ok := TypeSchemas[typeName]; !ok {
 			t.Errorf("KnownTypes has %q but TypeSchemas does not — add a schema entry", typeName)
+		}
+	}
+}
+
+// TestStateMandatoryForStateTypes pins the mandatory-state rule: types whose
+// executor consumes `state` (generatedStateTypes) must declare it, so the
+// present→absent retraction lever stays visible; types that ignore state must
+// not require it. Guards both the rule and the generator's false-positive
+// exclusion (ssh_exec / *_interface appear in generatedSchemas via the shared
+// network_common helper but never read state themselves).
+func TestStateMandatoryForStateTypes(t *testing.T) {
+	hasStateErr := func(findings []Finding) bool {
+		for _, f := range findings {
+			if f.Severity == SeverityError && strings.Contains(f.Message, `missing required attribute "state"`) {
+				return true
+			}
+		}
+		return false
+	}
+	check := func(typ string, attrs map[string]any) []Finding {
+		return ValidateConfigcrate(Configcrate{Name: "m", Resources: []Resource{{Name: "r", Type: typ, Attributes: attrs}}})
+	}
+	fileAttrs := func() map[string]any {
+		return map[string]any{"target_path": "/etc/x", "content": "y", "owner": "root", "group": "root", "mode": "0644"}
+	}
+
+	// State-consuming type without state → error; with state → no state error.
+	if !hasStateErr(check("file", fileAttrs())) {
+		t.Error("file without state should error on missing state")
+	}
+	withState := fileAttrs()
+	withState["state"] = "present"
+	if hasStateErr(check("file", withState)) {
+		t.Error("file with state should not error on state")
+	}
+
+	// Exempt action type (exec) must not require state.
+	if hasStateErr(check("exec", map[string]any{"command": "echo hi", "unless": "false"})) {
+		t.Error("exec should not require state")
+	}
+
+	// Schema false-positives: present in generatedSchemas (via network_common)
+	// but never consume state — must be excluded from the mandatory set.
+	for _, typ := range []string{"ssh_exec", "cisco_interface", "junos_interface"} {
+		if generatedStateTypes[typ] {
+			t.Errorf("%s is a schema false-positive and must not be in generatedStateTypes", typ)
 		}
 	}
 }

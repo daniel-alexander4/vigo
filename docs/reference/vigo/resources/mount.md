@@ -9,7 +9,7 @@ Manages mount points and `/etc/fstab` entries. Can mount/unmount filesystems and
 |-----------|----------|---------|-------------|
 | `path` | Yes | -- | Mount point path. |
 | `mountpoint` | BSD | -- | Mount point path on the BSD family (FreeBSD/OpenBSD/NetBSD), where the executor reads `mountpoint` rather than `path`. Use `path` on Linux. |
-| `state` | No | `mounted` | Desired state: `mounted`, `present`, `unmounted`, or `absent`. |
+| `state` | Yes | -- | Desired state: `mounted`, `present`, `unmounted`, or `absent`. |
 | `device` | Yes (for mounted/present) | -- | Block device or remote filesystem to mount (e.g., `/dev/sdb1`, `nfs-server:/export`). |
 | `fstype` | Yes (for mounted/present) | -- | Filesystem type (e.g., `ext4`, `xfs`, `nfs`). |
 | `options` | No | `defaults` | Mount options (e.g., `defaults,noatime`). |

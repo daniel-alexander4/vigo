@@ -19,6 +19,7 @@ resources:
 
   - name: zone-firewall-rules
     type: file
+    state: present
     target_path: /etc/nftables.conf
     content: |
       #!/usr/sbin/nft -f
@@ -83,6 +84,7 @@ resources:
   # SR 5.2: Zone boundary protection — disable IP forwarding
   - name: zone-sysctl
     type: file
+    state: present
     target_path: /etc/sysctl.d/99-iec62443-zones.conf
     content: |
       # IEC 62443 SR 5.2 — Disable routing between zones

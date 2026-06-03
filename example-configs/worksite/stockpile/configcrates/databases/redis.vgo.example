@@ -14,6 +14,7 @@ resources:
 
   - name: redis-conf
     type: file
+    state: present
     target_path: /etc/redis/redis.conf
     content: |
       bind {{ .Vars.redis_bind }}
@@ -37,6 +38,7 @@ resources:
 
   - name: redis-logrotate
     type: logrotate
+    state: present
     path: /var/log/redis/*.log
     frequency: daily
     rotate: "7"

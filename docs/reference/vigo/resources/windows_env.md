@@ -10,7 +10,7 @@ Manages persistent Windows environment variables idempotently via the .NET `[Env
 | `variable` | Yes | -- | Environment variable name (e.g., `JAVA_HOME`, `PATH`). |
 | `value` | Yes (for present) | -- | Desired value for the variable. |
 | `target` | No | `Machine` | Scope: `Machine` (system-wide, HKLM) or `User` (current user, HKCU). |
-| `state` | No | `present` | `present` to set the variable, `absent` to remove it. |
+| `state` | Yes | -- | `present` to set the variable, `absent` to remove it. |
 
 ## States
 

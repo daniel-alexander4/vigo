@@ -39,6 +39,7 @@ resources:
 
   - name: redis-openvas-conf
     type: file
+    state: present
     target_path: /etc/redis/redis-openvas.conf
     content: |
       # Redis instance for OpenVAS — managed by vigo

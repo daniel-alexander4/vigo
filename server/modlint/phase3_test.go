@@ -106,6 +106,7 @@ func TestLint_CommunityPaths_KernelStateRejected(t *testing.T) {
 resources:
   - name: peek
     type: file
+    state: present
     target_path: ` + bad + `
     content: "x"
     owner: root
@@ -129,6 +130,7 @@ func TestLint_CommunityPaths_PerHostRejected(t *testing.T) {
 resources:
   - name: peek
     type: file
+    state: present
     target_path: ` + bad + `
     content: "x"
     owner: root
@@ -152,6 +154,7 @@ func TestLint_CommunityPaths_AllowlistOK(t *testing.T) {
 resources:
   - name: f
     type: file
+    state: present
     target_path: ` + ok + `
     content: "x"
     owner: root
@@ -171,6 +174,7 @@ func TestLint_CommunityPaths_NotEnforcedInFleetMode(t *testing.T) {
 resources:
   - name: peek
     type: file
+    state: present
     target_path: /proc/sys/foo
     content: "x"
     owner: root

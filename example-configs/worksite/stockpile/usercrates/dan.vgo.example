@@ -22,6 +22,7 @@ compliance:
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
     comment: Dan Alexander
 

@@ -11,7 +11,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 |-----------|----------|---------|-------------|
 | `acl_name` | Yes | -- | ACL name |
 | `entries` | Yes | -- | Newline-separated ACL entries |
-| `state` | No | `present` | `present` to create/update, `absent` to remove entire ACL |
+| `state` | Yes | -- | `present` to create/update, `absent` to remove entire ACL |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

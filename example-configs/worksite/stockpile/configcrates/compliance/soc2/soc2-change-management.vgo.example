@@ -21,6 +21,7 @@ resources:
 
   - name: debsums-weekly-check
     type: cron
+    state: present
     command: "/usr/bin/debsums --changed --silent 2>&1 | logger -t debsums-integrity"
     schedule: "0 5 * * 1"
     weekday: "1"
@@ -37,6 +38,7 @@ resources:
   # CC8.3: Authorized changes only — restrict sudo
   - name: sudoers-strict
     type: file
+    state: present
     target_path: /etc/sudoers.d/99-soc2-restrict
     content: |
       Defaults logfile="/var/log/sudo.log"

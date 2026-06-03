@@ -42,10 +42,10 @@ func TestLint_WhenSyntax_MalformedExpressions(t *testing.T) {
 	// finding at Error severity. The full err.Error() is included
 	// in the message for the operator to read.
 	cases := []string{
-		`os_family(`,                  // unclosed paren / missing arg
-		`(is_root and is_container`,    // unmatched `(`
-		`is_root and`,                  // dangling operator
-		`os_family('debian)`,           // unterminated string
+		`os_family(`,                // unclosed paren / missing arg
+		`(is_root and is_container`, // unmatched `(`
+		`is_root and`,               // dangling operator
+		`os_family('debian)`,        // unterminated string
 	}
 	for _, expr := range cases {
 		input := `name: w
@@ -96,6 +96,7 @@ func TestLint_TemplateSyntax_ValidContent(t *testing.T) {
 resources:
   - name: motd
     type: file
+    state: present
     target_path: /etc/motd
     content: "Hello {{ .Traits.hostname }}, you are running {{ .Vars.role }}."
     owner: root
@@ -117,6 +118,7 @@ func TestLint_TemplateSyntax_NoTemplateMarkers(t *testing.T) {
 resources:
   - name: hello
     type: file
+    state: present
     target_path: /etc/hello
     content: "plain text with no template markers"
     owner: root
@@ -134,6 +136,7 @@ func TestLint_TemplateSyntax_UnclosedAction(t *testing.T) {
 resources:
   - name: motd
     type: file
+    state: present
     target_path: /etc/motd
     content: "Hello {{ .Traits.hostname"
     owner: root
@@ -154,6 +157,7 @@ func TestLint_TemplateSyntax_UnmatchedIfEnd(t *testing.T) {
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/conf
     content: "{{ if .Vars.x }}value\n"
     owner: root
@@ -176,6 +180,7 @@ func TestLint_TemplateSyntax_GrammarOnlyNotFuncs(t *testing.T) {
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/conf
     content: "{{ definitelyNotARealFunction .X }}"
     owner: root

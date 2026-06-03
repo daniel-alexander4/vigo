@@ -13,6 +13,7 @@ vars:
 resources:
   - name: install-loki
     type: source_package
+    state: present
     url: "https://github.com/grafana/loki/releases/download/v{{ .Vars.loki_version }}/loki-linux-{{ .Traits.os.arch }}.zip"
     target_path: "/usr/local/bin/loki"
     binary_path: "loki-linux-{{ .Traits.os.arch }}"
@@ -21,6 +22,7 @@ resources:
 
   - name: loki-config
     type: file
+    state: present
     target_path: "/etc/loki/loki.yaml"
     owner: root
     group: root
@@ -53,6 +55,7 @@ resources:
 
   - name: loki-systemd-unit
     type: file
+    state: present
     target_path: "/etc/systemd/system/loki.service"
     owner: root
     group: root

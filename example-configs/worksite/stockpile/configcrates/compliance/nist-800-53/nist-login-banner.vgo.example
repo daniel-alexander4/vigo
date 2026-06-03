@@ -4,6 +4,7 @@ compliance:
 resources:
   - name: issue-banner
     type: file
+    state: present
     target_path: /etc/issue
     content: |
       WARNING: This system is for authorized use only.
@@ -15,6 +16,7 @@ resources:
 
   - name: issue-net-banner
     type: file
+    state: present
     target_path: /etc/issue.net
     content: |
       WARNING: This system is for authorized use only.
@@ -26,6 +28,7 @@ resources:
 
   - name: motd-banner
     type: file
+    state: present
     target_path: /etc/motd
     content: |
       This system is managed by Vigo. Configuration changes are enforced automatically.
@@ -36,6 +39,7 @@ resources:
 
   - name: sshd-banner
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-banner.conf
     content: |
       Banner /etc/issue.net

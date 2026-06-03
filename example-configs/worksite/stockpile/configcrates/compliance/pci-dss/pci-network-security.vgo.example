@@ -9,6 +9,7 @@ resources:
 
   - name: nftables-config
     type: file
+    state: present
     target_path: /etc/nftables.conf
     content: |
       #!/usr/sbin/nft -f
@@ -49,6 +50,7 @@ resources:
   # Disable IPv6 if not needed
   - name: disable-ipv6
     type: file
+    state: present
     target_path: /etc/sysctl.d/99-pci-ipv6.conf
     content: |
       net.ipv6.conf.all.disable_ipv6 = 1

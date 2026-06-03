@@ -18,6 +18,7 @@ resources:
   # SR 1.1: Human user identification and authentication
   - name: login-banner
     type: file
+    state: present
     target_path: /etc/issue.net
     content: "{{.Vars.login_banner}}"
     owner: root
@@ -26,6 +27,7 @@ resources:
 
   - name: login-banner-local
     type: file
+    state: present
     target_path: /etc/issue
     content: "{{.Vars.login_banner}}"
     owner: root
@@ -35,6 +37,7 @@ resources:
   # SR 1.2: Software process identification — SSH key-based auth
   - name: ssh-iec62443-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-iec62443.conf
     content: |
       # SR 1.1/1.2: Authentication
@@ -92,6 +95,7 @@ resources:
 
   - name: pwquality-config
     type: file
+    state: present
     target_path: /etc/security/pwquality.conf
     content: |
       # IEC 62443 SR 1.7: Password strength
@@ -117,6 +121,7 @@ resources:
   # SR 1.10: Account lockout
   - name: faillock-config
     type: file
+    state: present
     target_path: /etc/security/faillock.conf
     content: |
       # IEC 62443 SR 1.10: Account lockout
@@ -138,6 +143,7 @@ resources:
   # SR 2.1: Authorization enforcement — restrict su
   - name: restrict-su
     type: file
+    state: present
     target_path: /etc/pam.d/su
     content: |
       auth required pam_wheel.so use_uid

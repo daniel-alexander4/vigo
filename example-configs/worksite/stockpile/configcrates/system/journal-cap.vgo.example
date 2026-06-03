@@ -9,6 +9,7 @@ vars:
 resources:
   - name: journald-conf-dir
     type: directory
+    state: present
     target_path: /etc/systemd/journald.conf.d
     owner: root
     group: root
@@ -16,6 +17,7 @@ resources:
 
   - name: journald-size-limit
     type: file
+    state: present
     target_path: /etc/systemd/journald.conf.d/size-limit.conf
     content: |
       [Journal]

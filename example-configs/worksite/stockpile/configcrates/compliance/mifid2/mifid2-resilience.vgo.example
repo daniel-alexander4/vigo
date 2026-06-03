@@ -21,6 +21,7 @@ resources:
 
   - name: watchdog-config
     type: file
+    state: present
     target_path: /etc/vigo-envoy/resilience.conf
     content: |
       # MiFID II RTS 7 resilience configuration

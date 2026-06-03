@@ -26,6 +26,7 @@ resources:
 
   - name: aide-cron
     type: file
+    state: present
     owner: root
     group: root
     target_path: /etc/cron.daily/aide-check

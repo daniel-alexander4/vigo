@@ -10,7 +10,7 @@ Manages file content, permissions, and ownership idempotently. Uses SHA-256 cont
 | `target_path` | Yes | -- | Absolute path to the file. |
 | `content` | No | -- | Desired file content. Supports Go templates with `.Traits` and `.Vars` namespaces. |
 | `mode` | No | `0644` | File permission mode (octal string). |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `owner` | No | -- | File owner (username or UID). Linux only. |
 | `group` | No | -- | File group (group name or GID). Linux only. |
 | `secontext` | No | -- | SELinux security context, applied via `chcon` after writing (e.g., `system_u:object_r:httpd_config_t:s0`). Linux only; no-op on systems without SELinux. |

@@ -15,6 +15,7 @@ vars:
 resources:
   - name: install-kopia
     type: source_package
+    state: present
     url: "https://github.com/kopia/kopia/releases/download/v{{ .Vars.kopia_version }}/kopia-{{ .Vars.kopia_version }}-linux-{{ .Traits.os.arch }}.tar.gz"
     target_path: "/usr/local/bin/kopia"
     binary_path: kopia
@@ -23,6 +24,7 @@ resources:
 
   - name: kopia-env
     type: file
+    state: present
     target_path: "/etc/kopia/kopia.env"
     owner: root
     group: root
@@ -34,6 +36,7 @@ resources:
 
   - name: kopia-init-script
     type: file
+    state: present
     target_path: "/usr/local/sbin/kopia-init.sh"
     owner: root
     group: root
@@ -58,6 +61,7 @@ resources:
 
   - name: kopia-cron
     type: cron
+    state: present
     user: root
     name: kopia-scheduled
     command: ". /etc/kopia/kopia.env && export KOPIA_PASSWORD KOPIA_CONFIG_PATH && kopia snapshot create {{ .Vars.source_paths }}"

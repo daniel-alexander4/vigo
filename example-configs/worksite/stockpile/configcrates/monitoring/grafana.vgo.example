@@ -22,6 +22,7 @@ resources:
 
   - name: grafana-ini
     type: file
+    state: present
     target_path: /etc/grafana/grafana.ini
     content: |
       [server]
@@ -50,6 +51,7 @@ resources:
 
   - name: grafana-logrotate
     type: logrotate
+    state: present
     path: /var/log/grafana/*.log
     frequency: daily
     rotate: "7"

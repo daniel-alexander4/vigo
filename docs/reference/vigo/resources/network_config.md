@@ -11,7 +11,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 |-----------|----------|---------|-------------|
 | `device_type` | Yes | -- | Device platform: `cisco_ios`, `cisco_nxos`, `juniper_junos` |
 | `config_lines` | Yes | -- | Newline-separated config lines to ensure |
-| `state` | No | `present` | `present` to ensure lines exist, `absent` to ensure removal |
+| `state` | Yes | -- | `present` to ensure lines exist, `absent` to ensure removal |
 | `check_command` | No | `show running-config` | Command to check current config state |
 | `save` | No | `true` | Whether to save config after change |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |

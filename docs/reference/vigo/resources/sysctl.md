@@ -9,7 +9,7 @@ Manages kernel parameters via `sysctl`, with optional persistence to `/etc/sysct
 |-----------|----------|---------|-------------|
 | `key` | Yes | -- | Sysctl key name (e.g., `net.ipv4.ip_forward`). |
 | `value` | Yes (for present) | -- | Desired value for the key. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `persist` | No | `true` | If `true`, write the setting to `/etc/sysctl.d/99-vigo-<key>.conf` for persistence across reboots. |
 
 ## States

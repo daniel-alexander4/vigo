@@ -16,6 +16,7 @@ resources:
 
   - name: initiator-name
     type: file
+    state: present
     target_path: "/etc/iscsi/initiatorname.iscsi"
     owner: root
     group: root

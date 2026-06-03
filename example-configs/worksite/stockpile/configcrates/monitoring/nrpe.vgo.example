@@ -36,6 +36,7 @@ resources:
 
   - name: nrpe-cfg
     type: file
+    state: present
     target_path: /etc/nagios/nrpe.cfg
     content: |
       # Managed by Vigo — do not edit manually

@@ -9,7 +9,7 @@ Manages Windows Firewall rules via `netsh advfirewall firewall`.
 |-----------|----------|---------|-------------|
 | `name` | No | -- | Rule name. If omitted, a name is generated from port/protocol/direction. |
 | `port` | No | -- | Port number. At least one of `name` or `port` is required. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `protocol` | No | `tcp` | Protocol: `tcp` or `udp`. |
 | `action` | No | `allow` | Firewall action: `allow` or `block`. |
 | `direction` | No | `in` | Direction: `in` or `out`. |

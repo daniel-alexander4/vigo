@@ -46,6 +46,7 @@ resources:
 
   - name: apache-conf-debian
     type: file
+    state: present
     target_path: /etc/apache2/apache2.conf
     content: |
       # Managed by Vigo — do not edit manually
@@ -99,6 +100,7 @@ resources:
 
   - name: apache-conf-redhat
     type: file
+    state: present
     target_path: /etc/httpd/conf/httpd.conf
     content: |
       # Managed by Vigo — do not edit manually
@@ -150,6 +152,7 @@ resources:
 
   - name: apache-logrotate-debian
     type: logrotate
+    state: present
     path: /var/log/apache2/*.log
     frequency: daily
     rotate: "14"
@@ -163,6 +166,7 @@ resources:
 
   - name: apache-logrotate-redhat
     type: logrotate
+    state: present
     path: /var/log/httpd/*log
     frequency: daily
     rotate: "14"

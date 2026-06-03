@@ -27,6 +27,7 @@ resources:
   # Disable USB autorun
   - name: disable-usb-storage
     type: file
+    state: present
     target_path: /etc/modprobe.d/usb-storage.conf
     content: "install usb-storage /bin/true\nblacklist usb-storage\n"
     owner: root
@@ -36,6 +37,7 @@ resources:
   # Screen lock timeout (15 minutes)
   - name: tmout-profile
     type: file
+    state: present
     target_path: /etc/profile.d/tmout.sh
     content: |
       readonly TMOUT=900
@@ -47,6 +49,7 @@ resources:
   # Login banner
   - name: login-banner
     type: file
+    state: present
     target_path: /etc/issue.net
     content: |
       Authorized users only. All activity is monitored and recorded.

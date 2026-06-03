@@ -9,6 +9,7 @@ resources:
 
   - name: pam-sshd-totp
     type: file
+    state: present
     target_path: /etc/pam.d/sshd-totp
     content: |
       auth required pam_google_authenticator.so nullok
@@ -18,6 +19,7 @@ resources:
 
   - name: sshd-challenge-response
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-mfa.conf
     content: |
       ChallengeResponseAuthentication yes

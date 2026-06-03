@@ -15,6 +15,7 @@ resources:
 
   - name: weekly-asset-inventory
     type: cron
+    state: present
     command: "lshw -short > /var/log/asset-inventory.txt 2>/dev/null && dpkg -l > /var/log/software-inventory.txt 2>/dev/null"
     schedule: "0 6 * * 1"
     weekday: "1"
@@ -30,6 +31,7 @@ resources:
 
   - name: weekly-compliance-audit
     type: cron
+    state: present
     command: "/usr/bin/lynis audit system --cronjob --quiet"
     schedule: "0 3 * * 0"
     weekday: "0"
@@ -57,6 +59,7 @@ resources:
 
   - name: cert-expiry-check
     type: cron
+    state: present
     command: "find /etc/ssl/certs -name '*.pem' -exec openssl x509 -enddate -noout -in {} \\; 2>/dev/null | grep -i 'notafter' | logger -t cert-check"
     schedule: "0 7 * * 1"
     weekday: "1"

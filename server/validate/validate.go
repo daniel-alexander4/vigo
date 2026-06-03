@@ -33,7 +33,7 @@ const (
 // Finding describes a single validation issue.
 type Finding struct {
 	Severity     Severity
-	Configcrate       string
+	Configcrate  string
 	ResourceName string
 	ResourceType string
 	Message      string
@@ -129,7 +129,8 @@ var TypeSchemas = map[string]TypeSchema{}
 // AbsPath:      attribute (if present) must be an absolute path
 // Mode:         attribute (if present) must be a valid octal mode
 // Supplemental: attribute names the generator can't extract (variable-key
-//               lookups, cross-platform unions, runner-injected params)
+//
+//	lookups, cross-platform unions, runner-injected params)
 type TypeConstraints struct {
 	Required     []string
 	AbsPath      []string
@@ -147,28 +148,28 @@ type TypeConstraints struct {
 // in `Required` (which is AND-semantics) and live in dedicated modlint
 // rules.
 var typeConstraints = map[string]TypeConstraints{
-	"alternatives":   {Required: []string{"path"}, AbsPath: []string{"path"}},
-	"backup":         {Required: []string{"source_dir", "target_path"}, AbsPath: []string{"source_dir", "target_path"}},
-	"blockinfile":    {Required: []string{"target_path", "block_content"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
-	"cron":           {Required: []string{"command", "user"}, Supplemental: []string{"minute", "hour", "day", "month", "weekday"}},
-	"db_backup":      {Required: []string{"db_type", "source_db", "target_path"}, AbsPath: []string{"target_path"}},
-	"directory":      {Required: []string{"target_path"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
-	"exec":           {Required: []string{"command"}, AbsPath: []string{"cwd"}},
-	"field_edit":     {Required: []string{"path", "line_match", "select_field"}, AbsPath: []string{"path"}},
-	"file":           {Required: []string{"target_path", "owner", "group", "mode"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
-	"file_line":      {Required: []string{"target_path"}, AbsPath: []string{"target_path"}},
-	"firewall":       {Required: []string{"port"}},
-	"gem":            {Required: []string{"package"}},
-	"git":            {Required: []string{"repo", "path"}, AbsPath: []string{"path"}},
-	"group":          {Required: []string{"group"}},
-	"host":           {Required: []string{"hostname"}},
-	"hostname":       {Required: []string{"hostname"}},
-	"ini":            {Required: []string{"target_path", "key"}, AbsPath: []string{"target_path"}},
-	"json_file":      {Required: []string{"target_path", "key"}, AbsPath: []string{"target_path"}},
-	"kernel_module":  {Required: []string{"module"}},
-	"logrotate":      {Required: []string{"path"}, AbsPath: []string{"path"}},
-	"mount":          {Required: []string{"path"}, AbsPath: []string{"path"}},
-	"npm":            {Required: []string{"package"}},
+	"alternatives":  {Required: []string{"path"}, AbsPath: []string{"path"}},
+	"backup":        {Required: []string{"source_dir", "target_path"}, AbsPath: []string{"source_dir", "target_path"}},
+	"blockinfile":   {Required: []string{"target_path", "block_content"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
+	"cron":          {Required: []string{"command", "user"}, Supplemental: []string{"minute", "hour", "day", "month", "weekday"}},
+	"db_backup":     {Required: []string{"db_type", "source_db", "target_path"}, AbsPath: []string{"target_path"}},
+	"directory":     {Required: []string{"target_path"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
+	"exec":          {Required: []string{"command"}, AbsPath: []string{"cwd"}},
+	"field_edit":    {Required: []string{"path", "line_match", "select_field"}, AbsPath: []string{"path"}},
+	"file":          {Required: []string{"target_path", "owner", "group", "mode"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
+	"file_line":     {Required: []string{"target_path"}, AbsPath: []string{"target_path"}},
+	"firewall":      {Required: []string{"port"}},
+	"gem":           {Required: []string{"package"}},
+	"git":           {Required: []string{"repo", "path"}, AbsPath: []string{"path"}},
+	"group":         {Required: []string{"group"}},
+	"host":          {Required: []string{"hostname"}},
+	"hostname":      {Required: []string{"hostname"}},
+	"ini":           {Required: []string{"target_path", "key"}, AbsPath: []string{"target_path"}},
+	"json_file":     {Required: []string{"target_path", "key"}, AbsPath: []string{"target_path"}},
+	"kernel_module": {Required: []string{"module"}},
+	"logrotate":     {Required: []string{"path"}, AbsPath: []string{"path"}},
+	"mount":         {Required: []string{"path"}, AbsPath: []string{"path"}},
+	"npm":           {Required: []string{"package"}},
 	// `package`: Required guards against missing scrape; Supplemental
 	// covers variable-key reads + runner-injected values the gen can't see.
 	"package":        {Required: []string{"package"}, Supplemental: []string{"package", "name", "version", "allow_downgrade", "lock_version", "purge", "post_cleanup", "update_cache"}},
@@ -235,6 +236,20 @@ func init() {
 			schema.Attrs[attr] = spec
 		}
 
+		// Mandatory state: every type whose executor actually consumes a
+		// `state` param (generatedStateTypes, scraped from the Rust source)
+		// must declare it explicitly. State is the resource's lifecycle
+		// lever — flipping `present`→`absent` is the cheapest retraction —
+		// so it stays visible in every resource that supports it rather
+		// than hiding behind a per-type implicit default. Types that ignore
+		// state (exec, timezone, the *_interface device executors, …) are
+		// not in the set and keep no such requirement.
+		if generatedStateTypes[typeName] {
+			spec := schema.Attrs["state"]
+			spec.Required = true
+			schema.Attrs["state"] = spec
+		}
+
 		TypeSchemas[typeName] = schema
 	}
 }
@@ -268,7 +283,7 @@ func validateCrossReferences(mod Configcrate) []Finding {
 	// Check all reference lists.
 	for _, res := range mod.Resources {
 		base := Finding{
-			Configcrate:       mod.Name,
+			Configcrate:  mod.Name,
 			ResourceName: res.Name,
 			ResourceType: res.Type,
 		}
@@ -359,7 +374,7 @@ func validateCrossReferences(mod Configcrate) []Finding {
 		for _, sub := range res.Subscribes {
 			if targets, ok := notifyMap[sub]; ok && targets[res.Name] {
 				f := Finding{
-					Configcrate:       mod.Name,
+					Configcrate:  mod.Name,
 					ResourceName: res.Name,
 					ResourceType: res.Type,
 					Severity:     SeverityError,
@@ -373,9 +388,9 @@ func validateCrossReferences(mod Configcrate) []Finding {
 	// DAG cycle detection on depends_on + before edges.
 	if err := detectCycles(mod.Resources); err != nil {
 		findings = append(findings, Finding{
-			Configcrate:   mod.Name,
-			Severity: SeverityError,
-			Message:  err.Error(),
+			Configcrate: mod.Name,
+			Severity:    SeverityError,
+			Message:     err.Error(),
 		})
 	}
 
@@ -455,7 +470,7 @@ func validateResource(moduleName string, res Resource) []Finding {
 	var findings []Finding
 
 	base := Finding{
-		Configcrate:       moduleName,
+		Configcrate:  moduleName,
 		ResourceName: res.Name,
 		ResourceType: res.Type,
 	}

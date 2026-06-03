@@ -14,6 +14,7 @@ resources:
 
   - name: collectd-conf-base
     type: file
+    state: present
     target_path: /etc/collectd/collectd.conf
     content: |
       # Managed by Vigo — do not edit manually
@@ -66,6 +67,7 @@ resources:
 
   - name: collectd-conf-disk
     type: file
+    state: present
     target_path: /etc/collectd.conf
     content: |
       # Managed by Vigo — do not edit manually

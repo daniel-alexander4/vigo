@@ -16,7 +16,7 @@ func TestHashModuleContent_Deterministic(t *testing.T) {
 				Type: "file",
 				Attributes: map[string]any{
 					"target_path": "/etc/nginx/nginx.conf",
-					"content":    "server { listen 80; }",
+					"content":     "server { listen 80; }",
 				},
 				Notify: []string{"nginx-svc"},
 			},

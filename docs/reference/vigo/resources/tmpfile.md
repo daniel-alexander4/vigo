@@ -8,7 +8,7 @@ Manages systemd-tmpfiles configuration files in `/etc/tmpfiles.d/`. Used to decl
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | Yes | -- | Configuration name (used as the filename: `/etc/tmpfiles.d/<name>.conf`). |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `path` | Yes (for present) | -- | Filesystem path managed by this tmpfile rule. |
 | `entry_type` | No | `d` | tmpfiles.d entry type: `d` (directory), `f` (file), `D` (directory with cleanup), etc. |
 | `mode` | No | `0755` | Permission mode. |

@@ -11,6 +11,7 @@ vars:
 resources:
   - name: evidence-dir
     type: directory
+    state: present
     target_path: "{{ .Vars.evidence_dir }}"
     owner: root
     group: root
@@ -19,6 +20,7 @@ resources:
 
   - name: backup-verify-script
     type: file
+    state: present
     target_path: "/usr/local/sbin/backup-verify.sh"
     owner: root
     group: root
@@ -41,6 +43,7 @@ resources:
 
   - name: backup-verify-cron
     type: cron
+    state: present
     user: root
     name: backup-verify
     command: "/usr/local/sbin/backup-verify.sh"

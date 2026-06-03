@@ -15,6 +15,7 @@ resources:
 
   - name: weekly-hw-inventory
     type: cron
+    state: present
     command: "lshw -short > /var/log/nerc-hw-inventory.txt 2>/dev/null"
     schedule: "0 6 * * 1"
     weekday: "1"
@@ -24,6 +25,7 @@ resources:
 
   - name: weekly-sw-inventory
     type: cron
+    state: present
     command: "dpkg -l > /var/log/nerc-sw-inventory.txt 2>/dev/null"
     schedule: "5 6 * * 1"
     weekday: "1"

@@ -15,6 +15,7 @@ resources:
 
   - name: daily-encrypted-backup
     type: cron
+    state: present
     command: "borg create --encryption=repokey --compression lz4 /var/backups/gdpr::$(date +\\%Y\\%m\\%d) /etc /var/data 2>&1 | logger -t gdpr-backup"
     schedule: "0 2 * * *"
     hour: "1"
@@ -24,6 +25,7 @@ resources:
   # Art 32(1)(d): Regular testing — backup verification
   - name: weekly-backup-verify
     type: cron
+    state: present
     command: "borg check /var/backups/gdpr 2>&1 | logger -t gdpr-backup-verify"
     schedule: "0 3 * * 0"
     weekday: "0"
@@ -34,6 +36,7 @@ resources:
   # Art 30(1): Records of processing — logging
   - name: rsyslog-retention
     type: file
+    state: present
     target_path: /etc/logrotate.d/gdpr-retention
     content: |
       /var/log/syslog /var/log/auth.log {
@@ -55,6 +58,7 @@ resources:
 
   - name: monthly-dpia-scan
     type: cron
+    state: present
     command: "/usr/bin/lynis audit system --cronjob --quiet --logfile /var/log/lynis-dpia.log"
     schedule: "0 4 1 * *"
     day: "1"

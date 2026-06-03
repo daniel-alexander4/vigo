@@ -11,6 +11,7 @@ resources:
   # Enforce strong TLS system-wide
   - name: tls-hardening
     type: file
+    state: present
     target_path: /etc/ssl/openssl-gdpr.cnf
     content: |
       [system_default_sect]
@@ -23,6 +24,7 @@ resources:
   # Art 25(1): Data protection by design — restrict core dumps (prevent data leaks)
   - name: disable-core-dumps
     type: file
+    state: present
     target_path: /etc/security/limits.d/99-gdpr-coredump.conf
     content: |
       * hard core 0
@@ -32,6 +34,7 @@ resources:
 
   - name: sysctl-core-dumps
     type: file
+    state: present
     target_path: /etc/sysctl.d/99-gdpr-coredump.conf
     content: |
       fs.suid_dumpable = 0
@@ -50,6 +53,7 @@ resources:
   # Art 5(1)(f): Integrity and confidentiality — file permissions
   - name: world-writable-check
     type: cron
+    state: present
     command: "find / -xdev -type f -perm -0002 -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | logger -t gdpr-world-writable"
     schedule: "0 2 * * *"
     user: root
@@ -57,6 +61,7 @@ resources:
   # Art 32(1)(b): Ensure ongoing confidentiality — restrict access to logs. Daily cron.
   - name: secure-log-permissions
     type: cron
+    state: present
     user: root
     name: gdpr-log-permissions
     command: "chmod -R o-rwx /var/log/"

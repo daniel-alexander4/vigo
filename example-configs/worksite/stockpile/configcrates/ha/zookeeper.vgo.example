@@ -27,6 +27,7 @@ resources:
 
   - name: zk-data-dir
     type: directory
+    state: present
     target_path: /var/lib/zookeeper
     owner: zookeeper
     group: zookeeper
@@ -34,6 +35,7 @@ resources:
 
   - name: zoo-cfg
     type: file
+    state: present
     target_path: /etc/zookeeper/conf/zoo.cfg
     content: |
       # Managed by Vigo — do not edit manually
@@ -53,6 +55,7 @@ resources:
 
   - name: zk-myid
     type: file
+    state: present
     target_path: /var/lib/zookeeper/myid
     content: "{{ .Vars.zk_server_id }}"
     owner: zookeeper

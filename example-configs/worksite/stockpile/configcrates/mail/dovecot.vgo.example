@@ -17,6 +17,7 @@ resources:
 
   - name: dovecot-conf
     type: file
+    state: present
     target_path: "/etc/dovecot/local.conf"
     owner: root
     group: root

@@ -39,6 +39,7 @@ resources:
 
   - name: deploy-key
     type: file
+    state: present
     target_path: "{{ .Vars.ssh_key_path }}"
     owner: root
     group: root
@@ -55,6 +56,7 @@ resources:
 
   - name: push-script
     type: file
+    state: present
     target_path: "/usr/local/sbin/vigo-stockpile-push.sh"
     owner: root
     group: root
@@ -73,6 +75,7 @@ resources:
 
   - name: push-cron
     type: cron
+    state: present
     user: root
     name: vigo-stockpile-push
     command: "/usr/local/sbin/vigo-stockpile-push.sh"

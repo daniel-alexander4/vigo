@@ -54,6 +54,7 @@ resources:
   #~ Create TFTP root directory
   - name: tftp-directory
     type: directory
+    state: present
     target_path: "{{ .Vars.tftp_root }}"
     owner: root
     group: root
@@ -74,6 +75,7 @@ resources:
   #~ Configure ISC DHCP to listen on the provisioning interface
   - name: dhcpd-defaults
     type: file
+    state: present
     target_path: /etc/default/isc-dhcp-server
     owner: root
     group: root
@@ -88,6 +90,7 @@ resources:
   #~ Deploy dhcpd.conf with PXE chainloading
   - name: dhcpd-config
     type: file
+    state: present
     target_path: /etc/dhcp/dhcpd.conf
     owner: root
     group: root
@@ -129,6 +132,7 @@ resources:
   #~ Configure tftpd-hpa
   - name: tftpd-config
     type: file
+    state: present
     target_path: /etc/default/tftpd-hpa
     owner: root
     group: root

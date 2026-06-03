@@ -7,6 +7,7 @@ vars:
 resources:
   - name: tmp-cleanup-conf
     type: file
+    state: present
     target_path: /etc/tmpfiles.d/vigo-tmp-aging.conf
     content: |
       # Managed by Vigo — remove old files from temporary directories

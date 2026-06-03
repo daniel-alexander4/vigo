@@ -5,6 +5,7 @@ resources:
   # AC-6: Least privilege — restrict su to wheel group
   - name: restrict-su
     type: file
+    state: present
     target_path: /etc/pam.d/su
     content: |
       auth required pam_wheel.so use_uid
@@ -23,6 +24,7 @@ resources:
   # AC-3: Enforce permission bits on sensitive dirs — daily cron.
   - name: home-dir-permissions
     type: cron
+    state: present
     user: root
     name: nist-home-dir-permissions
     command: "find /home -maxdepth 1 -mindepth 1 -type d -perm /g+w,o+rwx -exec chmod 750 {} +"
@@ -43,6 +45,7 @@ resources:
   # AC-12: Session termination
   - name: sshd-session-timeout
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-nist-session.conf
     content: |
       ClientAliveInterval 300

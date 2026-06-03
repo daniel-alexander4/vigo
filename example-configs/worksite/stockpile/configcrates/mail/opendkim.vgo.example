@@ -22,6 +22,7 @@ resources:
 
   - name: opendkim-conf
     type: file
+    state: present
     target_path: "/etc/opendkim.conf"
     owner: root
     group: root

@@ -39,6 +39,7 @@ vars:
 resources:
   - name: brew-cache-dir
     type: directory
+    state: present
     target_path: "{{ .Vars.cache_path }}"
     owner: nginx
     group: nginx
@@ -47,6 +48,7 @@ resources:
 
   - name: mirror-nginx-site
     type: file
+    state: present
     target_path: /etc/nginx/conf.d/brew-bottle-mirror.conf
     owner: root
     group: root

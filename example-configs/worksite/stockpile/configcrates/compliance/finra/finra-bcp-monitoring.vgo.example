@@ -9,6 +9,7 @@ compliance:
 resources:
   - name: backup-config-exists
     type: file
+    state: present
     target_path: /etc/vigo-bcp-verified
     content: |
       # BCP verification marker

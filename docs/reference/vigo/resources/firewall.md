@@ -8,7 +8,7 @@ Manages UFW (Uncomplicated Firewall) rules idempotently.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `port` | Yes | -- | Port number or range. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `proto` | No | `any` | Protocol: `tcp`, `udp`, or `any`. |
 | `action` | Yes (for present) | -- | Firewall action: `allow` or `deny`. |
 | `from` | No | `any` | Source address or `any`. |

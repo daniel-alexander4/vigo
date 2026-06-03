@@ -86,6 +86,7 @@ name: users
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
     groups:
       tag:workstation: [docker, virtualbox]
@@ -347,6 +348,7 @@ name: app
 resources:
   - name: config
     type: file
+    state: present
     target_path: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
@@ -438,6 +440,7 @@ name: app
 resources:
   - name: config-file
     type: file
+    state: present
     path: /etc/app/config
     content: "secret:app/config/content"
 `)
@@ -810,6 +813,7 @@ name: app
 resources:
   - name: config
     type: file
+    state: present
     target_path: /etc/app/config
     content: "secret:myapp/db/config"
 `)
@@ -861,6 +865,7 @@ vars:
 resources:
   - name: nginx-conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     source: templates/nginx.conf.tmpl
     owner: root
@@ -909,6 +914,7 @@ name: bad
 resources:
   - name: both-set
     type: file
+    state: present
     target_path: /etc/test
     source: templates/test.tmpl
     content: "inline content"
@@ -937,6 +943,7 @@ name: bad
 resources:
   - name: missing-source
     type: file
+    state: present
     target_path: /etc/test
     source: templates/nonexistent.tmpl
 `)
@@ -972,6 +979,7 @@ vars:
 resources:
   - name: nginx-site
     type: file
+    state: present
     target_path: /etc/nginx/sites-enabled/default
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
@@ -1512,6 +1520,7 @@ resources:
     enabled: false
   - name: kernel-aslr
     type: sysctl
+    state: present
     key: kernel.randomize_va_space
     value: "2"
 `)
@@ -2243,6 +2252,7 @@ name: app
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/app/config
     source: "../../etc/shadow"
 `)
@@ -2269,6 +2279,7 @@ name: app
 resources:
   - name: conf
     type: file
+    state: present
     target_path: /etc/app/config
     source: "/etc/passwd"
 `)
@@ -2471,6 +2482,7 @@ name: evil
 resources:
   - name: evil-file
     type: file
+    state: present
     target_path: /etc/evil.conf
     source: templates/evil.conf
 `)
@@ -2499,6 +2511,7 @@ name: firewall
 resources:
   - name: fw-rules
     type: file
+    state: present
     target_path: /etc/iptables/rules.v4
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
@@ -2506,6 +2519,7 @@ name: sshd
 resources:
   - name: sshd-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
@@ -2562,6 +2576,7 @@ name: a
 resources:
   - name: r
     type: file
+    state: present
     target_path: /tmp/a
 `)
 	writeRoles(t, dir, `
@@ -2600,6 +2615,7 @@ name: shared
 resources:
   - name: r
     type: file
+    state: present
     target_path: /tmp/shared
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "web.vgo"), `
@@ -2607,6 +2623,7 @@ name: web
 resources:
   - name: r
     type: file
+    state: present
     target_path: /tmp/web
 `)
 	writeRoles(t, dir, `
@@ -2662,6 +2679,7 @@ resources:
     state: present
   - name: nginx-config
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "firewall.vgo"), `
@@ -2669,6 +2687,7 @@ name: firewall
 resources:
   - name: fw
     type: file
+    state: present
     target_path: /etc/iptables/rules.v4
 `)
 	writeRoles(t, dir, `
@@ -2745,6 +2764,7 @@ name: a
 resources:
   - name: r
     type: file
+    state: present
     target_path: /tmp/a
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
@@ -2771,6 +2791,7 @@ name: app
 resources:
   - name: r
     type: file
+    state: present
     target_path: /tmp/app
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
@@ -2818,6 +2839,7 @@ name: sshd
 resources:
   - name: install-sshd
     type: package
+    state: present
     package: openssh-server
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "monitoring.vgo"), `
@@ -2825,6 +2847,7 @@ name: monitoring
 resources:
   - name: install-monitoring
     type: package
+    state: present
     package: prometheus-node-exporter
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
@@ -2832,6 +2855,7 @@ name: nginx
 resources:
   - name: install-nginx
     type: package
+    state: present
     package: nginx
 `)
 
@@ -2888,6 +2912,7 @@ name: %s
 resources:
   - name: install-%s
     type: package
+    state: present
     package: %s
 `, name, name, name))
 	}
@@ -2943,6 +2968,7 @@ name: %s
 resources:
   - name: install-%s
     type: package
+    state: present
     package: %s
 `, name, name, name))
 	}
@@ -2993,6 +3019,7 @@ name: app
 resources:
   - name: install-app
     type: package
+    state: present
     package: app
 `)
 
@@ -3040,6 +3067,7 @@ name: sshd
 resources:
   - name: install-sshd
     type: package
+    state: present
     package: openssh-server
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
@@ -3047,6 +3075,7 @@ name: app
 resources:
   - name: install-app
     type: package
+    state: present
     package: myapp
 `)
 
@@ -3096,6 +3125,7 @@ name: %s
 resources:
   - name: install-%s
     type: package
+    state: present
     package: %s
 `, name, name, name))
 	}
@@ -3151,6 +3181,7 @@ name: %s
 resources:
   - name: install-%s
     type: package
+    state: present
     package: %s
 `, name, name, name))
 	}
@@ -3257,6 +3288,7 @@ name: sshd
 resources:
   - name: sshd-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "compliance.vgo"), `
@@ -3430,6 +3462,7 @@ vars:
 resources:
   - name: db-config
     type: file
+    state: present
     target_path: /etc/db.conf
     content: "dsn={{ .Vars.dsn }}"
 `)
@@ -3479,6 +3512,7 @@ resources:
     state: present
   - name: nginx-config
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     notify: [nginx-service]
   - name: nginx-service
@@ -3492,6 +3526,7 @@ name: sshd
 resources:
   - name: sshd-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
@@ -3544,6 +3579,7 @@ name: sshd
 resources:
   - name: sshd-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "sshd", "compliance.vgo"), `
@@ -3641,6 +3677,7 @@ vars:
 resources:
   - name: app-config
     type: file
+    state: present
     target_path: /etc/app.conf
 `)
 	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
@@ -3688,6 +3725,7 @@ name: sshd
 resources:
   - name: sshd-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config
     when: "is_enabled"
 `)
@@ -3815,6 +3853,7 @@ name: alerts
 resources:
   - name: alerts-yaml
     type: file
+    state: present
     target_path: /etc/prometheus/rules/vigo-alerts.yml
     content: |
       description: "`+literal+`"

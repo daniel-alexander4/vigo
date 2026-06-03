@@ -11,6 +11,7 @@ vars:
 resources:
   - name: evidence-dir
     type: directory
+    state: present
     target_path: "{{ .Vars.evidence_dir }}"
     owner: root
     group: root
@@ -19,6 +20,7 @@ resources:
 
   - name: encryption-attest-script
     type: file
+    state: present
     target_path: "/usr/local/sbin/encryption-attest.sh"
     owner: root
     group: root
@@ -36,6 +38,7 @@ resources:
 
   - name: encryption-attest-cron
     type: cron
+    state: present
     user: root
     name: encryption-attest
     command: "/usr/local/sbin/encryption-attest.sh"

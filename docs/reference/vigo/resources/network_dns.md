@@ -19,7 +19,7 @@ SSH connection parameters (`host`, `username`, `credential`, `port`, `device_typ
 |-----------|----------|---------|-------------|
 | `server` | No* | -- | DNS server IP address |
 | `domain` | No* | -- | Domain name for the device |
-| `state` | No | `present` | `present` to configure, `absent` to remove |
+| `state` | Yes | -- | `present` to configure, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

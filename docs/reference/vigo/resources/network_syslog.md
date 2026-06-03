@@ -13,7 +13,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 | `syslog_host` | Yes | -- | Syslog server address |
 | `syslog_port` | No | -- | Syslog server port |
 | `facility` | No | -- | Syslog facility (Cisco only) |
-| `state` | No | `present` | `present` to configure, `absent` to remove |
+| `state` | Yes | -- | `present` to configure, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

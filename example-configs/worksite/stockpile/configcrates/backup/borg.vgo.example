@@ -29,6 +29,7 @@ resources:
 
   - name: borgmatic-config
     type: file
+    state: present
     target_path: "/etc/borgmatic/config.yaml"
     owner: root
     group: root
@@ -55,6 +56,7 @@ resources:
 
   - name: borg-cron
     type: cron
+    state: present
     user: root
     name: borgmatic-scheduled
     command: "borgmatic --syslog-verbosity 1"

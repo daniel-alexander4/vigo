@@ -34,6 +34,7 @@ resources:
 
   - name: dhcpd-defaults
     type: file
+    state: present
     target_path: /etc/default/isc-dhcp-server
     content: |
       INTERFACESv4="{{ .Vars.dhcpd_interface }}"
@@ -48,6 +49,7 @@ resources:
 
   - name: dhcpd-config
     type: file
+    state: present
     target_path: /etc/dhcp/dhcpd.conf
     content: |
       # Managed by Vigo — do not edit manually.

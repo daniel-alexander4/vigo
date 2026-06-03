@@ -10,6 +10,7 @@ vars:
 resources:
   - name: write-ca-temp
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\ca\\internal_root.crt"
     owner: SYSTEM
     group: Administrators

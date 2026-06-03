@@ -7,6 +7,7 @@ resources:
   # HIPAA-specific audit rules beyond PCI baseline
   - name: hipaa-audit-rules
     type: file
+    state: present
     target_path: /etc/audit/rules.d/hipaa.rules
     content: |
       # HIPAA 164.312(b) — Audit controls for ePHI access
@@ -36,6 +37,7 @@ resources:
   # Ensure audit log rotation preserves history
   - name: audit-logrotate
     type: file
+    state: present
     target_path: /etc/logrotate.d/audit
     content: |
       /var/log/audit/audit.log {

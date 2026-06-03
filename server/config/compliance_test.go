@@ -161,6 +161,7 @@ name: users/dan
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
@@ -205,6 +206,7 @@ name: users/dan
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
@@ -266,6 +268,7 @@ name: users/dan
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
@@ -398,6 +401,7 @@ name: users/dan
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
@@ -489,6 +493,7 @@ compliance:
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `)
 	writeFile(t, filepath.Join(dir, "usercrates", "alice.vgo"), `
@@ -496,6 +501,7 @@ name: alice
 resources:
   - name: alice
     type: user
+    state: present
     username: alice
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
@@ -545,6 +551,7 @@ func TestCompliance_UsercratesTreeScoped_ClaimsScopedToSubtree(t *testing.T) {
 resources:
   - name: globaladmin
     type: user
+    state: present
     username: globaladmin
 `)
 	// CustomerA-scoped compliance + usercrate (lives under stockpile/).
@@ -556,6 +563,7 @@ compliance:
 resources:
   - name: alice
     type: user
+    state: present
     username: alice
 `)
 	// Hostcrate scoped to customerA envoys.
@@ -632,6 +640,7 @@ waivers:
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
@@ -694,6 +703,7 @@ compliance:
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `

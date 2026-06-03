@@ -16,6 +16,7 @@ resources:
 
   - name: app-workdir
     type: directory
+    state: present
     target_path: /opt/myapp
     owner: myapp
     group: myapp
@@ -24,6 +25,7 @@ resources:
 
   - name: app-unit-file
     type: file
+    state: present
     target_path: /etc/systemd/system/myapp.service
     content: |
       [Unit]

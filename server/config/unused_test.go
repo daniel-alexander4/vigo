@@ -199,6 +199,7 @@ name: alice
 resources:
   - name: alice
     type: user
+    state: present
     username: alice
 `)
 	writeFile(t, filepath.Join(dir, "usercrates", "bob.vgo"), `
@@ -206,6 +207,7 @@ name: bob
 resources:
   - name: bob
     type: user
+    state: present
     username: bob
 `)
 	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
@@ -254,6 +256,7 @@ name: nginx
 resources:
   - name: site
     type: file
+    state: present
     target_path: /etc/nginx/conf.d/site
     source: templates/nginx/site.tmpl
 `)

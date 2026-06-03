@@ -10,6 +10,7 @@ vars:
 resources:
   - name: limits-conf
     type: file
+    state: present
     target_path: /etc/security/limits.d/99-vigo.conf
     content: |
       # /etc/security/limits.d/99-vigo.conf — managed by vigo

@@ -8,7 +8,7 @@ Manages OS package repository configurations. Supports APT (Debian/Ubuntu), DNF/
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `repository` | Yes | -- | Repository identifier name. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `repo` | Yes (for present) | -- | Repository URL or definition string. For APT: a deb line (e.g., `deb https://... stable main`). For DNF/YUM: the baseurl (or a full INI-formatted `.repo` file starting with `[`). For APK: the repo URL. For Pacman: the server URL. For Zypper: the repo URL. |
 | `key_url` | No | -- | URL to the GPG signing key for the repository. Downloaded and imported automatically. For Pacman, this is treated as a key fingerprint for `pacman-key`. |
 | `key_fingerprint` | No | -- | Expected GPG key fingerprint. After downloading the key, the executor verifies the fingerprint matches before installing. APT only. If the fingerprint does not match, the key is rejected with a clear error. |

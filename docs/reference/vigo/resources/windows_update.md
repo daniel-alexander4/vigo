@@ -11,7 +11,7 @@ Manages Windows Update and WSUS (Windows Server Update Services) configuration i
 | `auto_update_enabled` | No | `enabled` | Auto-update mode: `enabled`, `disabled`, `notify`, `download`, or `scheduled`. |
 | `scheduled_day` | No | -- | Day for scheduled installs. `0` = every day, `1` = Sunday through `7` = Saturday. Only used when `auto_update_enabled=scheduled`. |
 | `scheduled_time` | No | -- | Hour for scheduled installs (0-23). Only used when `auto_update_enabled=scheduled`. |
-| `state` | No | `present` | `present` to apply configuration, `absent` to remove WSUS policy (reverts to Microsoft Update). |
+| `state` | Yes | -- | `present` to apply configuration, `absent` to remove WSUS policy (reverts to Microsoft Update). |
 
 ## Auto-Update Modes
 

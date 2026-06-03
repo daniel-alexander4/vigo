@@ -17,6 +17,7 @@ resources:
 
   - name: fluentbit-conf
     type: file
+    state: present
     target_path: "C:\\Program Files\\fluent-bit\\conf\\fluent-bit.conf"
     owner: SYSTEM
     group: Administrators

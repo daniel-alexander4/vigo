@@ -19,9 +19,11 @@ func TestLint_FindingsCarryRuleAndLine(t *testing.T) {
 resources:
   - name: same
     type: package
+    state: present
     package: foo
   - name: same
     type: package
+    state: present
     package: bar
 `
 	r := Lint([]byte(input), Options{})
@@ -58,6 +60,7 @@ func TestLint_FixAppliedOnAutoFix(t *testing.T) {
 resources:
   - name: nginx-conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     content: "..."
     owner: root
@@ -102,6 +105,7 @@ func TestLint_LegacyErrorsWarningsStillPopulated(t *testing.T) {
 	input := `resources:
   - name: foo
     type: package
+    state: present
     package: vim
 `
 	r := Lint([]byte(input), Options{})

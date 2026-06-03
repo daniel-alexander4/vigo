@@ -21,6 +21,7 @@ resources:
 
   - name: rkhunter-config
     type: file
+    state: present
     target_path: /etc/rkhunter.conf.local
     content: |
       MIRRORS_MODE=0
@@ -34,6 +35,7 @@ resources:
 
   - name: rkhunter-update
     type: cron
+    state: present
     command: "/usr/bin/rkhunter --update --nocolors 2>&1 | logger -t rkhunter"
     schedule: "15 3 * * *"
     hour: "3"
@@ -71,6 +73,7 @@ resources:
 
   - name: lynis-weekly-audit
     type: cron
+    state: present
     command: "/usr/bin/lynis audit system --cronjob --quiet"
     schedule: "0 2 * * 0"
     weekday: "0"

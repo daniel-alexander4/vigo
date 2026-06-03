@@ -8,7 +8,7 @@ Manages Ruby gems via the gem command. Supports version pinning and custom gem c
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `package` | Yes | -- | Gem name. |
-| `state` | No | `present` | Desired state: `present`, `absent`, or `latest`. |
+| `state` | Yes | -- | Desired state: `present`, `absent`, or `latest`. |
 | `version` | No | -- | Specific version to install. |
 | `gem_cmd` | No | `gem` | The gem command to use. |
 | `no_document` | No | `true` | If `true`, install with `--no-document` to skip documentation generation. Set to `false` to include docs. |

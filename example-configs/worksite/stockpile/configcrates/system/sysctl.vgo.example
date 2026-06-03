@@ -15,35 +15,42 @@ vars:
 resources:
   - name: vm-swappiness
     type: sysctl
+    state: present
     key: vm.swappiness
     value: "10"
 
   - name: net-somaxconn
     type: sysctl
+    state: present
     key: net.core.somaxconn
     value: "65535"
 
   - name: ip-forward
     type: sysctl
+    state: present
     key: net.ipv4.ip_forward
     value: "1"
 
   - name: tcp-tw-reuse
     type: sysctl
+    state: present
     key: net.ipv4.tcp_tw_reuse
     value: "1"
 
   - name: file-max
     type: sysctl
+    state: present
     key: fs.file-max
     value: "2097152"
 
   - name: rmem-max
     type: sysctl
+    state: present
     key: net.core.rmem_max
     value: "16777216"
 
   - name: wmem-max
     type: sysctl
+    state: present
     key: net.core.wmem_max
     value: "16777216"

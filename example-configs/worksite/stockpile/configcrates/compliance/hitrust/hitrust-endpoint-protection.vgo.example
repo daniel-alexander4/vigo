@@ -39,6 +39,7 @@ resources:
   # 01.m: Segregation in networks
   - name: network-segmentation-sysctl
     type: file
+    state: present
     target_path: /etc/sysctl.d/99-hitrust-network.conf
     content: |
       net.ipv4.ip_forward = 0

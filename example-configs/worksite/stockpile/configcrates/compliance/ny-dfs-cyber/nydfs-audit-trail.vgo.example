@@ -20,6 +20,7 @@ resources:
 
   - name: audit-log-retention
     type: file_line
+    state: present
     target_path: /etc/audit/auditd.conf
     line: "max_log_file_action = ROTATE"
     match_pattern: "^max_log_file_action"
@@ -27,6 +28,7 @@ resources:
 
   - name: audit-num-logs
     type: file_line
+    state: present
     target_path: /etc/audit/auditd.conf
     line: "num_logs = 99"
     match_pattern: "^num_logs"
@@ -34,12 +36,14 @@ resources:
 
   - name: audit-rules-auth
     type: file_line
+    state: present
     target_path: /etc/audit/rules.d/vigo-nydfs.rules
     line: "-w /var/log/auth.log -p wa -k auth_log"
     when: "os_family('debian')"
 
   - name: audit-rules-sudo
     type: file_line
+    state: present
     target_path: /etc/audit/rules.d/vigo-nydfs.rules
     line: "-w /etc/sudoers -p wa -k privilege_escalation"
     when: "os_family('debian') || os_family('redhat')"

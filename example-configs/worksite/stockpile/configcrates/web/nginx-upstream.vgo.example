@@ -25,6 +25,7 @@ vars:
 resources:
   - name: nginx-upstream-conf
     type: file
+    state: present
     target_path: /etc/nginx/conf.d/app-upstream.conf
     owner: root
     group: root

@@ -10,6 +10,7 @@ vars:
 resources:
   - name: access-export-script
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\evidence\\access-review-export.ps1"
     owner: SYSTEM
     group: Administrators

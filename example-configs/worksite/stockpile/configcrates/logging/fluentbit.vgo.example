@@ -17,6 +17,7 @@ resources:
 
   - name: fluentbit-conf
     type: file
+    state: present
     target_path: "/etc/fluent-bit/fluent-bit.conf"
     owner: root
     group: root

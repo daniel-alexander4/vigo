@@ -20,6 +20,7 @@ resources:
 
   - name: pci-audit-rules
     type: file
+    state: present
     target_path: /etc/audit/rules.d/pci-dss.rules
     content: |
       # PCI DSS v4.0 Audit Rules — managed by Vigo
@@ -59,6 +60,7 @@ resources:
 
   - name: audit-log-permissions
     type: directory
+    state: present
     target_path: /var/log/audit
     owner: root
     group: root

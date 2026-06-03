@@ -10,7 +10,7 @@ Manages individual lines within a file. Can add, remove, or replace lines based 
 | `target_path` | Yes | -- | Absolute path to the file. |
 | `line` | No | -- | The line content to ensure is present or absent. |
 | `match_pattern` | No | -- | Regex pattern to match existing lines. When combined with `line`, replaces matched lines. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `position` | No | `end` | Where to insert the line: `end`, `begin`, `after:<regex>`, or `before:<regex>`. |
 | `region_start` | No | -- | Regex marking the start of a region to constrain operations within. |
 | `region_end` | No | -- | Regex marking the end of a region to constrain operations within. |

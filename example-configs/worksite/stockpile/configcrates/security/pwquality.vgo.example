@@ -19,6 +19,7 @@ resources:
 
   - name: pwquality-conf
     type: file
+    state: present
     target_path: "/etc/security/pwquality.conf"
     owner: root
     group: root

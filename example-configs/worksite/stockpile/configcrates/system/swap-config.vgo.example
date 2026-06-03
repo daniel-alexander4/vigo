@@ -23,6 +23,7 @@ resources:
 
   - name: swap-fstab
     type: file_line
+    state: present
     target_path: "/etc/fstab"
     line: "{{ .Vars.swap_path }}  none  swap  sw  0  0"
     match_pattern: "^{{ .Vars.swap_path }}\\s"

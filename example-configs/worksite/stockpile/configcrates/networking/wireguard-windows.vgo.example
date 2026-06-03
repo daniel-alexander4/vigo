@@ -22,6 +22,7 @@ resources:
 
   - name: wg0-conf
     type: file
+    state: present
     target_path: "C:\\ProgramData\\WireGuard\\wg0.conf"
     owner: SYSTEM
     group: Administrators

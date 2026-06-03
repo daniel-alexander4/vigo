@@ -15,6 +15,7 @@ resources:
 
   - name: audit-rules
     type: file
+    state: present
     target_path: /etc/audit/rules.d/mifid2.rules
     content: |
       # MiFID II audit rules — track changes to critical system files

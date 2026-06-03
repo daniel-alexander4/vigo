@@ -18,6 +18,7 @@ resources:
 
   - name: pg-conf
     type: file
+    state: present
     target_path: /etc/postgresql/16/main/postgresql.conf
     content: |
       data_directory = '{{ .Vars.pg_data_dir }}'
@@ -40,6 +41,7 @@ resources:
 
   - name: pg-hba
     type: file
+    state: present
     target_path: /etc/postgresql/16/main/pg_hba.conf
     content: |
       # TYPE  DATABASE  USER  ADDRESS       METHOD
@@ -56,6 +58,7 @@ resources:
 
   - name: backup-dir
     type: directory
+    state: present
     target_path: /var/backups/postgresql
     owner: postgres
     group: postgres
@@ -63,6 +66,7 @@ resources:
 
   - name: pg-logrotate
     type: logrotate
+    state: present
     path: "/var/log/postgresql/*.log"
     frequency: daily
     rotate: "14"

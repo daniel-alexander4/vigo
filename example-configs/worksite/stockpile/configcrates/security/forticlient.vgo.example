@@ -18,6 +18,7 @@ resources:
 
   - name: fortinet-apt-repo
     type: file
+    state: present
     target_path: /etc/apt/sources.list.d/fortinet.list
     owner: root
     group: root
@@ -37,6 +38,7 @@ resources:
   # Fortinet repo — RHEL/CentOS/Fedora
   - name: fortinet-yum-repo
     type: file
+    state: present
     target_path: /etc/yum.repos.d/fortinet.repo
     owner: root
     group: root

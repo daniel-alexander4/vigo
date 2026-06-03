@@ -9,6 +9,7 @@ vars:
 resources:
   - name: motd
     type: file
+    state: present
     target_path: /etc/motd
     content: |
       ========================================

@@ -14,6 +14,7 @@ vars:
 resources:
   - name: vigo-alerts-dir
     type: directory
+    state: present
     target_path: "{{ .Vars.prometheus_rules_dir }}"
     owner: prometheus
     group: prometheus
@@ -21,6 +22,7 @@ resources:
 
   - name: vigo-alerts-yaml
     type: file
+    state: present
     # `.yml` to match Prometheus's default `rule_files: *.yml` glob.
     target_path: "{{ .Vars.prometheus_rules_dir }}/vigo-alerts.yml"
     source: templates/vigo-prometheus/vigo-alerts.yaml

@@ -28,6 +28,7 @@ func TestLint_ModeOctal_BareIntegerAutoFixed(t *testing.T) {
 resources:
   - name: nginx-conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     content: "..."
     owner: root
@@ -55,6 +56,7 @@ func TestLint_ModeOctal_NonOctalDigitsRejected(t *testing.T) {
 resources:
   - name: bad
     type: file
+    state: present
     target_path: /tmp/x
     content: "x"
     owner: root
@@ -75,6 +77,7 @@ func TestLint_ModeOctal_StringPassThrough(t *testing.T) {
 resources:
   - name: ok
     type: file
+    state: present
     target_path: /etc/x
     content: "x"
     owner: root
@@ -99,6 +102,7 @@ func TestLint_ModeOctal_LeadingZeroOctal(t *testing.T) {
 resources:
   - name: nginx-conf
     type: file
+    state: present
     target_path: /etc/nginx/nginx.conf
     content: "..."
     owner: root
@@ -130,6 +134,7 @@ func TestLint_ModeOctal_ExplicitOctalPrefix(t *testing.T) {
 resources:
   - name: cfg
     type: file
+    state: present
     target_path: /etc/x
     content: "x"
     owner: root
@@ -153,6 +158,7 @@ func TestLint_ModeOctal_LeadingZeroSetuid(t *testing.T) {
 resources:
   - name: bin
     type: file
+    state: present
     target_path: /usr/local/bin/x
     content: "x"
     owner: root
@@ -242,6 +248,7 @@ func TestLint_FileContentSourceConflict(t *testing.T) {
 resources:
   - name: confused
     type: file
+    state: present
     target_path: /etc/x
     content: "inline"
     source: "templates/x.tmpl"
@@ -269,6 +276,7 @@ resources:
     state: present
   - name: dsn-file
     type: file
+    state: present
     target_path: /etc/dsn
     content: "secret:vigo/db/dsn"
     owner: root
@@ -286,16 +294,17 @@ resources:
 
 func TestLint_SecretPath_InvalidShape(t *testing.T) {
 	cases := []string{
-		"secret:",                      // empty
-		"secret:Foo/Bar",               // uppercase
-		"secret:foo bar/baz",           // whitespace
-		"secret:foo//bar",              // empty path component
+		"secret:",            // empty
+		"secret:Foo/Bar",     // uppercase
+		"secret:foo bar/baz", // whitespace
+		"secret:foo//bar",    // empty path component
 	}
 	for _, bad := range cases {
 		input := `name: m
 resources:
   - name: f
     type: file
+    state: present
     target_path: /etc/x
     content: "` + bad + `"
     owner: root
@@ -369,6 +378,7 @@ func TestLint_DidYouMean_TypoAttribute(t *testing.T) {
 resources:
   - name: vim
     type: package
+    state: present
     pakcage: vim
 `
 	r := Lint([]byte(input), Options{})

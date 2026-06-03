@@ -11,6 +11,7 @@ vars:
 resources:
   - name: install-alertmanager
     type: source_package
+    state: present
     url: "https://github.com/prometheus/alertmanager/releases/download/v{{ .Vars.alertmanager_version }}/alertmanager-{{ .Vars.alertmanager_version }}.linux-{{ .Traits.os.arch }}.tar.gz"
     target_path: "/usr/local/bin/alertmanager"
     binary_path: alertmanager
@@ -19,6 +20,7 @@ resources:
 
   - name: alertmanager-config
     type: file
+    state: present
     target_path: "/etc/alertmanager/alertmanager.yml"
     owner: root
     group: root
@@ -37,6 +39,7 @@ resources:
 
   - name: alertmanager-systemd-unit
     type: file
+    state: present
     target_path: "/etc/systemd/system/alertmanager.service"
     owner: root
     group: root

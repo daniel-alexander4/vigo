@@ -14,6 +14,7 @@ resources:
 
   - name: aide-config
     type: file
+    state: present
     target_path: /etc/aide/aide.conf.d/sox-critical-paths
     content: |
       /etc/ssh p+i+u+g+s+md5+sha256
@@ -27,6 +28,7 @@ resources:
 
   - name: aide-cron
     type: cron
+    state: present
     command: "/usr/bin/aide --check"
     schedule: "0 */4 * * *"
     user: root

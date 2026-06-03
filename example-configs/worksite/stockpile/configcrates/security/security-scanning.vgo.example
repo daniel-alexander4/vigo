@@ -49,6 +49,7 @@ resources:
 
   - name: scan-dir
     type: directory
+    state: present
     target_path: "{{ .Vars.scan_dir }}"
     owner: root
     group: root
@@ -66,6 +67,7 @@ resources:
 
   - name: trivy-repo-debian
     type: file
+    state: present
     target_path: /etc/apt/sources.list.d/trivy.list
     content: |
       deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main
@@ -84,6 +86,7 @@ resources:
 
   - name: trivy-repo-rhel
     type: file
+    state: present
     target_path: /etc/yum.repos.d/trivy.repo
     content: |
       [trivy]
@@ -236,6 +239,7 @@ resources:
 
   - name: aide-conf
     type: file
+    state: present
     target_path: /etc/aide/aide.conf
     source: templates/aide.conf.tmpl
     owner: root

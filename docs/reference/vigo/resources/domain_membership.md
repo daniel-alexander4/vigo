@@ -8,7 +8,7 @@ Manages Active Directory domain membership idempotently via PowerShell. Joins ma
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `domain` | Yes | -- | Domain name (e.g., `example.com`, `ad.corp.local`). |
-| `state` | No | `present` | `present` to join the domain, `absent` to leave it. |
+| `state` | Yes | -- | `present` to join the domain, `absent` to leave it. |
 | `username` | Conditional | -- | Domain admin username (e.g., `admin@example.com` or `DOMAIN\admin`). Required for `state=present`. |
 | `password` | Conditional | -- | Domain admin password. Required for `state=present`. Use `secret:` prefix. |
 | `ou_path` | No | -- | Organizational Unit path for the computer object (e.g., `OU=Servers,DC=example,DC=com`). |

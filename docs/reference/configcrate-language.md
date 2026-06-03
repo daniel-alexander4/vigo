@@ -1736,6 +1736,30 @@ Use `default: []` for list fields that should be empty when no arm matches, `def
 At config load time, vigo scans every resource attribute and sets `HasLookups=true` on the `EnvoyConfig` if any attribute is a lookup table. At check-in time, configs with `HasLookups=true` bypass the pattern-level policy cache and get a freshly resolved bundle per envoy — the same mechanism that `case:` conditional resources already use. The cost is a bundle rebuild per check-in for affected envoys; for configs without lookups, nothing changes.
 
 ---
+## Retraction: flip `state` first
+
+The cheapest way to retract a resource is to **flip its `state`** — change `state: present` to `state: absent` (or `state: stopped` for a service, `unmounted` for a mount) and republish. Vigo then *removes* what the resource created on the next convergence. Because `state` is a **required field on every resource that supports it**, the lever is always visible in the resource you're editing — you don't have to remember a default or reach for tooling.
+
+```yaml
+# Before — the resource is enforced:
+- name: allow-miniserve
+  type: firewall
+  state: present        # ← flip this…
+  port: 8080
+  action: allow
+  proto: tcp
+
+# After — the rule is removed fleet-wide on next converge:
+- name: allow-miniserve
+  type: firewall
+  state: absent         # ← …to this
+  port: 8080
+  action: allow
+  proto: tcp
+```
+
+Reach for the heavier retract-configcrate machinery below only when a flip isn't enough — removing a **whole set** of resources at once, uninstalling packages, or reversing `exec` actions that have no inverse `state`. One caveat on the flip: `state: absent` **deletes**, it does not revert. For a file Vigo *created* (motd, an app config) that's exactly right; for a file Vigo only edits the *content* of while the OS owns it (e.g. `/etc/ssh/sshd_config`), `absent` removes the file rather than restoring the original — revert the `content:` instead.
+
 ## Configcrate Retraction
 
 Configcrate retraction automatically generates `.retract` files --- the reverse of each configcrate --- so you always have a clean undo ready. When enabled, `vigocli config publish` generates a retract configcrate for every new or changed configcrate, and shows affected envoys when a configcrate is removed.

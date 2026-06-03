@@ -11,7 +11,7 @@ Manages key-value pairs in INI-style configuration files with optional section s
 | `section` | No | -- | Section name (e.g., `database`). If omitted, the key is managed in the global scope (before any section). |
 | `key` | Yes | -- | The key to manage. |
 | `value` | Yes (for present) | -- | The value to set. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `separator` | No | `=` | The separator between key and value (e.g., `=`, ` = `, `:`). |
 
 ## States

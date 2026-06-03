@@ -39,6 +39,7 @@ resources:
 
   - name: mirror-tree-dir
     type: directory
+    state: present
     target_path: "{{ .Vars.base_path }}"
     owner: root
     group: root
@@ -47,6 +48,7 @@ resources:
 
   - name: dnf-mirror-sync-script
     type: file
+    state: present
     target_path: /usr/local/sbin/dnf-mirror-sync
     owner: root
     group: root
@@ -79,6 +81,7 @@ resources:
 
   - name: mirror-nginx-site
     type: file
+    state: present
     target_path: /etc/nginx/conf.d/dnf-mirror.conf
     owner: root
     group: root

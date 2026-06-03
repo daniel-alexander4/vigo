@@ -24,6 +24,7 @@ vars:
 resources:
   - name: docker-daemon-json
     type: file
+    state: present
     target_path: "/etc/docker/daemon.json"
     owner: root
     group: root

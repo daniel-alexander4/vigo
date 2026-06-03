@@ -13,7 +13,7 @@ Manages Windows Defender settings and exclusions idempotently via PowerShell. Su
 | `real_time_protection` | No | -- | `true` to enable real-time monitoring, `false` to disable it. |
 | `scan_schedule_day` | No | -- | Day for scheduled quick scan: `0` = daily, `1` = Sunday, `2` = Monday, ..., `7` = Saturday. |
 | `scan_schedule_time` | No | -- | Time for scheduled quick scan in `HH:MM` format (e.g., `02:00`). |
-| `state` | No | `present` | `present` to apply settings/add exclusions, `absent` to remove exclusions. |
+| `state` | Yes | -- | `present` to apply settings/add exclusions, `absent` to remove exclusions. |
 
 At least one setting parameter (`exclusion_path`, `exclusion_process`, `exclusion_extension`, `real_time_protection`, `scan_schedule_day`, or `scan_schedule_time`) is required.
 

@@ -24,6 +24,7 @@ resources:
 
   - name: pci-firewall-rules
     type: file
+    state: present
     target_path: /etc/iptables/rules.v4
     content: |
       # PCI DSS v4.0 Req 1 — Network Security Controls

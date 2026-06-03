@@ -9,7 +9,7 @@ Manages symbolic and hard links idempotently.
 |-----------|----------|---------|-------------|
 | `target_path` | Yes | -- | Path where the link will be created. |
 | `to` | Yes (for present) | -- | Target path the link points to. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `link_type` | No | `soft` | Link type: `soft` (symbolic) or `hard`. |
 | `force` | No | `false` | If `true`, remove an existing file/link at `target_path` before creating the new link. |
 | `owner` | No | -- | Link owner (username or UID). Linux only. Applies to symlinks via `lchown`. |

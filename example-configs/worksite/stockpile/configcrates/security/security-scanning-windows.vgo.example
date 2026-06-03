@@ -24,6 +24,7 @@ resources:
 
   - name: scan-dir
     type: directory
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\security"
     when: "os_family('windows')"
 

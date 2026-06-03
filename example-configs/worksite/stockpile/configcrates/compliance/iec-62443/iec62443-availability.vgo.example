@@ -12,6 +12,7 @@ resources:
   # SR 7.1: Denial of service protection — resource limits
   - name: system-limits
     type: file
+    state: present
     target_path: /etc/security/limits.d/99-iec62443.conf
     content: |
       # IEC 62443 SR 7.1: Resource limits to prevent DoS
@@ -27,6 +28,7 @@ resources:
   # SR 7.1: SYN flood protection
   - name: dos-protection-sysctl
     type: file
+    state: present
     target_path: /etc/sysctl.d/99-iec62443-availability.conf
     content: |
       # IEC 62443 SR 7.1: DoS protection
@@ -55,6 +57,7 @@ resources:
   # SR 7.2: Resource management — disk space monitoring
   - name: disk-monitor-script
     type: file
+    state: present
     target_path: /usr/local/bin/iec62443-disk-check.sh
     content: |
       #!/bin/bash
@@ -73,6 +76,7 @@ resources:
 
   - name: disk-monitor-cron
     type: file
+    state: present
     target_path: /etc/cron.d/iec62443-disk-monitor
     content: |
       # IEC 62443 SR 7.2: Hourly disk space check
@@ -89,6 +93,7 @@ resources:
 
   - name: backup-script
     type: file
+    state: present
     target_path: /usr/local/bin/iec62443-backup.sh
     content: |
       #!/bin/bash
@@ -122,6 +127,7 @@ resources:
 
   - name: backup-cron
     type: file
+    state: present
     target_path: /etc/cron.d/iec62443-backup
     content: |
       # IEC 62443 SR 7.3: Daily configuration backup
@@ -133,6 +139,7 @@ resources:
   # SR 7.6: Network and security config recovery
   - name: recovery-verification
     type: file
+    state: present
     target_path: /usr/local/bin/iec62443-verify-recovery.sh
     content: |
       #!/bin/bash
@@ -162,6 +169,7 @@ resources:
   # SR 4.3: Use of cryptography — ensure strong defaults
   - name: crypto-policy
     type: file
+    state: present
     target_path: /etc/ssl/openssl-iec62443.cnf
     content: |
       # IEC 62443 SR 4.3: Minimum cryptographic standards
@@ -187,6 +195,7 @@ resources:
   # SR 7.8: Control system component inventory
   - name: inventory-script
     type: file
+    state: present
     target_path: /usr/local/bin/iec62443-inventory.sh
     content: |
       #!/bin/bash

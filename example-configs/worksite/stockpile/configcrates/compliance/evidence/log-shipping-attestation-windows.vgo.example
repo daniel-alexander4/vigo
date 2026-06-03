@@ -12,6 +12,7 @@ vars:
 resources:
   - name: attestation-script
     type: file
+    state: present
     target_path: "C:\\ProgramData\\Vigo\\evidence\\log-ship-attest.ps1"
     owner: SYSTEM
     group: Administrators

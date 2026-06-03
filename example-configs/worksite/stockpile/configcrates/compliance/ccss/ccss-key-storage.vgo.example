@@ -9,6 +9,7 @@ compliance:
 resources:
   - name: key-storage-permissions
     type: directory
+    state: present
     target_path: /srv/crypto/keys
     owner: crypto
     group: crypto
@@ -16,6 +17,7 @@ resources:
 
   - name: key-backup-permissions
     type: directory
+    state: present
     target_path: /srv/crypto/backups
     owner: crypto
     group: crypto
@@ -29,6 +31,7 @@ resources:
 
   - name: restrict-key-access
     type: file
+    state: present
     target_path: /etc/security/limits.d/crypto.conf
     content: |
       crypto  hard  nofile  4096

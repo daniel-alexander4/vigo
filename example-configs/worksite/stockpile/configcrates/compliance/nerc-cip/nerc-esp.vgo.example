@@ -10,6 +10,7 @@ resources:
 
   - name: esp-firewall-rules
     type: file
+    state: present
     target_path: /etc/nftables.conf
     content: |
       #!/usr/sbin/nft -f
@@ -74,6 +75,7 @@ resources:
   # CIP-005 R2: Remote access — SSH hardening
   - name: ssh-nerc-config
     type: file
+    state: present
     target_path: /etc/ssh/sshd_config.d/90-nerc-esp.conf
     content: |
       AllowUsers admin@10.100.0.*

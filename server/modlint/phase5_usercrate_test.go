@@ -27,6 +27,7 @@ func TestLint_UsercratePasswordHash_AcceptsValidForms(t *testing.T) {
 		input := `resources:
   - name: dan
     type: user
+    state: present
     username: dan
     password: ` + quoteForYAML(pw) + `
 `
@@ -48,6 +49,7 @@ func TestLint_UsercratePasswordHash_RejectsPlaintext(t *testing.T) {
 		input := `resources:
   - name: dan
     type: user
+    state: present
     username: dan
     password: ` + quoteForYAML(pw) + `
 `
@@ -65,6 +67,7 @@ func TestLint_UsercratePasswordHash_OnlyFiresWhenIsUsercrate(t *testing.T) {
 resources:
   - name: dan
     type: user
+    state: present
     username: dan
     password: "hunter2"
 `
@@ -129,6 +132,7 @@ func TestLint_UsercrateInvalidUsername(t *testing.T) {
 		input := `resources:
   - name: u
     type: user
+    state: present
     username: ` + quoteForYAML(uname) + `
 `
 		r := Lint([]byte(input), Options{IsUsercrate: true})
@@ -144,6 +148,7 @@ func TestLint_UsercrateValidUsername_OK(t *testing.T) {
 		input := `resources:
   - name: u
     type: user
+    state: present
     username: ` + quoteForYAML(uname) + `
 `
 		r := Lint([]byte(input), Options{IsUsercrate: true})
@@ -159,6 +164,7 @@ func TestLint_UsercrateSSHKeysValid(t *testing.T) {
 	input := `resources:
   - name: dan
     type: user
+    state: present
     username: dan
     authorized_keys:
       - "ssh-rsa AAAAB3NzaC1yc2E... dan@laptop"
@@ -175,6 +181,7 @@ func TestLint_UsercrateSSHKeysMalformed(t *testing.T) {
 	input := `resources:
   - name: dan
     type: user
+    state: present
     username: dan
     authorized_keys:
       - "ssh-rsa AAAAB... dan@valid"

@@ -21,6 +21,7 @@ resources:
 
   - name: install-consul
     type: source_package
+    state: present
     url: "https://releases.hashicorp.com/consul/{{ .Vars.consul_version }}/consul_{{ .Vars.consul_version }}_linux_{{ .Traits.os.arch }}.zip"
     target_path: /usr/local/bin/consul
     binary_path: consul
@@ -30,6 +31,7 @@ resources:
 
   - name: consul-data-dir
     type: directory
+    state: present
     target_path: /opt/consul/data
     owner: consul
     group: consul
@@ -38,6 +40,7 @@ resources:
 
   - name: consul-config-dir
     type: directory
+    state: present
     target_path: /etc/consul.d
     owner: consul
     group: consul
@@ -48,6 +51,7 @@ resources:
 
   - name: consul-hcl
     type: file
+    state: present
     target_path: /etc/consul.d/consul.hcl
     content: |
       # Managed by Vigo — do not edit manually
@@ -81,6 +85,7 @@ resources:
 
   - name: consul-unit-file
     type: file
+    state: present
     target_path: /etc/systemd/system/consul.service
     content: |
       [Unit]

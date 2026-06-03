@@ -34,6 +34,7 @@ resources:
 
   - name: fail2ban-config
     type: file
+    state: present
     target_path: /etc/fail2ban/jail.local
     content: |
       [DEFAULT]

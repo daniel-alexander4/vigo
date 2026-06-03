@@ -20,6 +20,7 @@ vars:
 resources:
   - name: login-defs
     type: file
+    state: present
     target_path: /etc/login.defs
     content: |
       # /etc/login.defs — managed by vigo
@@ -68,6 +69,7 @@ resources:
 
   - name: pwquality-conf
     type: file
+    state: present
     target_path: /etc/security/pwquality.conf
     content: |
       # /etc/security/pwquality.conf — managed by vigo

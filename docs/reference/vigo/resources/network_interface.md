@@ -19,7 +19,7 @@ SSH connection parameters (`host`, `username`, `credential`, `port`, `device_typ
 |-----------|----------|---------|-------------|
 | `interface` | Yes | -- | Interface name (e.g., `GigabitEthernet0/1`, `Ethernet1`, `ge-0/0/1`) |
 | `description` | No | -- | Interface description string |
-| `state` | No | `present` | `present`, `up`, `down`, or `absent` |
+| `state` | Yes | -- | `present`, `up`, `down`, or `absent` |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |

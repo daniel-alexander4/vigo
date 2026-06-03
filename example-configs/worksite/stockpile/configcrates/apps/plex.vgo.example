@@ -17,6 +17,7 @@ resources:
 
   - name: plex-repo
     type: file
+    state: present
     target_path: /etc/apt/sources.list.d/plexmediaserver.list
     content: "deb [signed-by=/usr/share/keyrings/plex-archive-keyring.gpg] https://downloads.plex.tv/repo/deb public main"
     owner: root
@@ -32,6 +33,7 @@ resources:
 
   - name: plex-media-dir
     type: directory
+    state: present
     target_path: /srv/media
     owner: plex
     group: plex
@@ -39,6 +41,7 @@ resources:
 
   - name: plex-movies-dir
     type: directory
+    state: present
     target_path: /srv/media/movies
     owner: plex
     group: plex
@@ -47,6 +50,7 @@ resources:
 
   - name: plex-tv-dir
     type: directory
+    state: present
     target_path: /srv/media/tv
     owner: plex
     group: plex
@@ -55,6 +59,7 @@ resources:
 
   - name: plex-music-dir
     type: directory
+    state: present
     target_path: /srv/media/music
     owner: plex
     group: plex
@@ -63,6 +68,7 @@ resources:
 
   - name: plex-transcode-dir
     type: directory
+    state: present
     target_path: /tmp/plex-transcode
     owner: plex
     group: plex
@@ -70,6 +76,7 @@ resources:
 
   - name: plex-env
     type: file
+    state: present
     target_path: /etc/default/plexmediaserver
     content: |
       PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR={{ .Vars.plex_data_dir }}/Library/Application Support
