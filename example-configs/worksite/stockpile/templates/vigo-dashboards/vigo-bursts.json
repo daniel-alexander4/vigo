@@ -221,6 +221,29 @@
         { "expr": "histogram_quantile(0.95, sum by (le) (rate(vigo_publish_convergence_seconds_bucket[10m])))", "legendFormat": "p95" },
         { "expr": "histogram_quantile(0.99, sum by (le) (rate(vigo_publish_convergence_seconds_bucket[10m])))", "legendFormat": "p99" }
       ]
+    },
+    {
+      "title": "Reachability",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
+      "collapsed": false
+    },
+    {
+      "title": "Envoy State Transitions /min (flap detector)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+      "description": "Reachability edges per minute (vigo_envoy_state_transitions_total). A healthy fleet shows offline transitions only for genuine disconnects. Sustained offline transitions while envoys are live mean the staleness floor (freshness.MinStaleThreshold, 30s) is flapping them under load — the signal this dashboard validates at burst scale. Compare against the burst annotation: flaps that land at the publish spike implicate the floor; offline edges at cooldown are just synthetic envoys disconnecting.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
+      "targets": [{ "expr": "sum by (transition) (increase(vigo_envoy_state_transitions_total[1m]))", "legendFormat": "{{transition}}" }]
+    },
+    {
+      "title": "Envoys Offline",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
+      "targets": [{ "expr": "vigo_convergence_offline", "legendFormat": "offline" }]
     }
   ],
   "refresh": "10s",

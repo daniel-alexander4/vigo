@@ -256,57 +256,7 @@ func (s *Server) runStaleChecker(ctx context.Context) {
 		case <-ticker.C:
 			// Use FleetIndex when available (zero DB queries).
 			if s.fleetIndex != nil {
-				allEnvoys := s.fleetIndex.AllEnvoys()
-				nowStale := make(map[string]bool, len(wasStale))
-				for _, ts := range allEnvoys {
-					if ts.Revoked || ts.LastSeen.IsZero() {
-						continue
-					}
-					stale := freshness.IsStaleFromCycle(ts.LastSeen, s.baseInterval, s.fleetIndex.EnvoyCycle(ts.ID), s.offlineThreshold)
-					s.fleetIndex.SetOffline(ts.ID, stale)
-					if !stale {
-						continue
-					}
-					nowStale[ts.ID] = true
-					if wasStale[ts.ID] {
-						continue
-					}
-					if canNotify {
-						integ.Dispatch(integrations.Event{
-							Name:      "envoy.stale",
-							Timestamp: time.Now().UTC(),
-							Hostname:  ts.Hostname,
-							EnvoyID:   ts.ID,
-							Summary:   fmt.Sprintf("%s stale since %s", ts.Hostname, ts.LastSeen.Format("15:04 UTC")),
-							Details:   map[string]any{"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC")},
-						})
-						integ.Dispatch(integrations.Event{
-							Name:      "envoy.offline",
-							Timestamp: time.Now().UTC(),
-							Hostname:  ts.Hostname,
-							EnvoyID:   ts.ID,
-							Summary:   fmt.Sprintf("%s went offline", ts.Hostname),
-							Details:   map[string]any{"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC")},
-						})
-					}
-				}
-				// Detect envoys that recovered (were stale, now not).
-				if canNotify {
-					for id := range wasStale {
-						if !nowStale[id] {
-							if ts, ok, _ := s.fleetIndex.GetEnvoyLite(id); ok {
-								integ.Dispatch(integrations.Event{
-									Name:      "envoy.online",
-									Timestamp: time.Now().UTC(),
-									Hostname:  ts.Hostname,
-									EnvoyID:   id,
-									Summary:   fmt.Sprintf("%s back online", ts.Hostname),
-								})
-							}
-						}
-					}
-				}
-				wasStale = nowStale
+				wasStale = s.staleScanTick(wasStale)
 				continue
 			}
 
@@ -349,6 +299,78 @@ func (s *Server) runStaleChecker(ctx context.Context) {
 			wasStale = nowStale
 		}
 	}
+}
+
+// staleScanTick runs one reachability scan over the fleet index: it
+// refreshes every envoy's offline flag, counts non-stale→stale (offline)
+// and stale→non-stale (online) edges relative to the previous tick's
+// wasStale set, and dispatches stale/offline/online notifications for the
+// envoys that changed state. Edge counting is unconditional so flapping is
+// measurable even with no integration target configured; only the dispatch
+// is gated on having one. Returns the set of currently-stale envoy IDs to
+// carry into the next tick.
+func (s *Server) staleScanTick(wasStale map[string]bool) map[string]bool {
+	integ := s.integrations
+	canNotify := integ != nil
+
+	allEnvoys := s.fleetIndex.AllEnvoys()
+	nowStale := make(map[string]bool, len(wasStale))
+	for _, ts := range allEnvoys {
+		if ts.Revoked || ts.LastSeen.IsZero() {
+			continue
+		}
+		stale := freshness.IsStaleFromCycle(ts.LastSeen, s.baseInterval, s.fleetIndex.EnvoyCycle(ts.ID), s.offlineThreshold)
+		s.fleetIndex.SetOffline(ts.ID, stale)
+		if !stale {
+			continue
+		}
+		nowStale[ts.ID] = true
+		if wasStale[ts.ID] {
+			continue
+		}
+		if s.metrics != nil {
+			s.metrics.StateTransitions.WithLabelValues("offline").Inc()
+		}
+		if canNotify {
+			integ.Dispatch(integrations.Event{
+				Name:      "envoy.stale",
+				Timestamp: time.Now().UTC(),
+				Hostname:  ts.Hostname,
+				EnvoyID:   ts.ID,
+				Summary:   fmt.Sprintf("%s stale since %s", ts.Hostname, ts.LastSeen.Format("15:04 UTC")),
+				Details:   map[string]any{"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC")},
+			})
+			integ.Dispatch(integrations.Event{
+				Name:      "envoy.offline",
+				Timestamp: time.Now().UTC(),
+				Hostname:  ts.Hostname,
+				EnvoyID:   ts.ID,
+				Summary:   fmt.Sprintf("%s went offline", ts.Hostname),
+				Details:   map[string]any{"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC")},
+			})
+		}
+	}
+	// Detect envoys that recovered (were stale, now not).
+	for id := range wasStale {
+		if nowStale[id] {
+			continue
+		}
+		if s.metrics != nil {
+			s.metrics.StateTransitions.WithLabelValues("online").Inc()
+		}
+		if canNotify {
+			if ts, ok, _ := s.fleetIndex.GetEnvoyLite(id); ok {
+				integ.Dispatch(integrations.Event{
+					Name:      "envoy.online",
+					Timestamp: time.Now().UTC(),
+					Hostname:  ts.Hostname,
+					EnvoyID:   id,
+					Summary:   fmt.Sprintf("%s back online", ts.Hostname),
+				})
+			}
+		}
+	}
+	return nowStale
 }
 
 // runComplianceChecker periodically computes the convergence percentage
@@ -432,10 +454,10 @@ func (s *Server) runComplianceChecker(ctx context.Context, threshold int) {
 					continue // no run data → not converged
 				}
 				ri := convergence.RunInfo{
-					Status:       run.Status,
-					ChangedCount: int64(run.ChangedCount),
-					FailedCount:  int64(run.FailedCount),
-					ConfigcrateCount:  int64(run.ConfigcrateCount),
+					Status:           run.Status,
+					ChangedCount:     int64(run.ChangedCount),
+					FailedCount:      int64(run.FailedCount),
+					ConfigcrateCount: int64(run.ConfigcrateCount),
 				}
 				if convergence.ComputeStatus(ri) == convergence.StatusConverged {
 					compliantCount++

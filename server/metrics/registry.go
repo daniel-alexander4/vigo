@@ -128,6 +128,7 @@ type Metrics struct {
 	// --- Reachability ---
 
 	ConvergenceOffline prometheus.Gauge
+	StateTransitions   *prometheus.CounterVec
 
 	// --- Swarm substrate ---
 
@@ -494,6 +495,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_convergence_offline",
 			Help: "Number of envoys past the staleness threshold.",
 		}),
+		StateTransitions: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_envoy_state_transitions_total",
+			Help: "Envoy reachability edges: count of non-stale→stale (offline) and stale→non-stale (online) transitions. Rising offline transitions under load indicate the staleness floor is flapping envoys.",
+		}, []string{"transition"}),
 
 		// --- Swarm substrate ---
 
