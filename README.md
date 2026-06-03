@@ -2,7 +2,7 @@
 
 Distributed state enforcement for servers, network devices, and workstations. Agents on managed nodes pull desired state from a central server via gRPC over mTLS, apply idempotent changes, and report results back.
 
-Far more than configuration management. One server holds tens of thousands of nodes at a one-second check-in cadence — linear in memory (~220 KB/node), with peer-equal `spanner` federation beyond a single host's ceiling. Around the convergence engine (73 built-in resource types, 27 trait collectors, 7 operating systems — Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) Vigo bundles regulatory-framework compliance scoring + GRC export, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration (ad-hoc tasks, workflows, rolling execution, live queries), a read-only AI assistant, RBAC with pluggable authentication (basic, OIDC, SSH key signing), a tamper-evident audit log, and a web dashboard. One binary, every feature in every tier.
+Far more than configuration management. One server holds tens of thousands of nodes at a one-second check-in cadence — linear in memory (~220 KB/node), with peer-equal `spanner` federation beyond a single host's ceiling. Around the convergence engine (69 resource types, 50 trait collectors, 7 operating systems — Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) Vigo bundles regulatory-framework compliance scoring + GRC export, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration (ad-hoc tasks, workflows, rolling execution, live queries), a read-only AI assistant, RBAC with pluggable authentication (basic, OIDC, SSH key signing), a tamper-evident audit log, and a web dashboard. One binary, every feature in every tier.
 
 ## Quickstart
 
@@ -379,7 +379,7 @@ nodes:
 
 ## Resource types
 
-73 built-in executors across 7 operating systems:
+69 resource types — 68 built-in plus the user-supplied `custom` executor — across 7 operating systems (the table lists them with their per-OS implementations):
 
 | Category | Types |
 |----------|-------|

@@ -90,7 +90,7 @@ taxes, third-party costs, and separately negotiated services.
 ## Loyalty Discount
 
 Long-term customers pay less every year. Starting in year 3, your rate
-decreases by 3% per year from 100% down to a 75% floor in year 12. The
+decreases by 3% per year from 100% down to a 75% floor in year 11. The
 discount is a multiplier on the graduated bill — the bracket math
 underneath does not change, the total is just scaled down.
 
@@ -206,7 +206,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- One-second-capable check-ins at fleet scale (tens of thousands of nodes per server, peer-equal spanner federation beyond), regulatory compliance scoring + GRC export with auto-rollback, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration, a read-only AI assistant, RBAC, 73 resource types across 7 operating systems, verified binary distribution, all integrations
+- One-second-capable check-ins at fleet scale (tens of thousands of nodes per server, peer-equal spanner federation beyond), regulatory compliance scoring + GRC export with auto-rollback, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration, a read-only AI assistant, RBAC, 69 resource types across 7 operating systems, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–100 nodes) includes all features with no time limit.

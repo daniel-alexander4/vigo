@@ -156,7 +156,7 @@ rates summed); Connwaer uses flat-tier pricing per the table above.
 ## Loyalty Discount
 
 Long-term customers pay less every year. Starting in year 3, your rate
-decreases by 3% per year from 100% down to a 75% floor in year 12:
+decreases by 3% per year from 100% down to a 75% floor in year 11:
 
 | Year   | You Pay | 1K-node Growth customer pays |
 |--------|---------|------------------------------|
