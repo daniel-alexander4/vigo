@@ -94,7 +94,7 @@ These executors replace their Unix counterparts on Windows or manage Windows-spe
 | `cron` (Windows) | Manage Windows scheduled tasks | [cron_windows](cron_windows.md) |
 | `hostname` (Windows) | Set the Windows hostname | [hostname_windows](hostname_windows.md) |
 | `timezone` (Windows) | Set the Windows timezone | [timezone_windows](timezone_windows.md) |
-| `registry` | Manage Windows Registry keys and values | [registry_windows](registry_windows.md) |
+| `registry` | Manage Windows Registry keys and values | [registry](registry.md) |
 | `windows_env` | Manage persistent Windows environment variables | [windows_env](windows_env.md) |
 | `reboot_windows` | Manage pending reboots and trigger reboots | [reboot_windows](reboot_windows.md) |
 | `powershell` | Run PowerShell scripts with error handling and guards | [powershell](powershell.md) |

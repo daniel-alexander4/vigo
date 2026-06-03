@@ -217,6 +217,71 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 	}
 }
 
+// ---------- 2b. TestEveryTraitHasDocPage ----------
+
+func TestEveryTraitHasDocPage(t *testing.T) {
+	root := repoRoot(t)
+
+	modPath := filepath.Join(root, "agent", "src", "traits", "mod.rs")
+	data, err := os.ReadFile(modPath)
+	if err != nil {
+		t.Fatalf("reading traits/mod.rs: %v", err)
+	}
+
+	// Extract the canonical collector name strings from the from_name
+	// match arms ("name" => Some(Self::Variant)). The string is the
+	// authoritative name (CamelCase enum variants don't map 1:1 to the
+	// snake_case page basenames), so we key off the same table the agent
+	// uses to resolve a requested collector.
+	armRe := regexp.MustCompile(`"([a-z_]+)"\s*=>\s*Some\(Self::`)
+	seen := map[string]bool{}
+	for _, m := range armRe.FindAllStringSubmatch(string(data), -1) {
+		seen[m[1]] = true
+	}
+
+	if len(seen) == 0 {
+		t.Fatal("found no collector names in traits/mod.rs from_name")
+	}
+
+	// Some collectors ship a base page plus per-OS supplements (e.g.
+	// os.md + os_windows.md). Accept either the exact name or any
+	// <name>_<platform>.md variant — same convention as the executor
+	// pages. (The non-enum network_device.md page documents the
+	// network-device trait family and has no CollectorKind variant; it
+	// is not required by this test and simply ignored.)
+	docsDir := filepath.Join(root, "docs", "reference", "vigo", "traits")
+
+	docEntries, _ := os.ReadDir(docsDir)
+	docNames := map[string]bool{}
+	for _, e := range docEntries {
+		if strings.HasSuffix(e.Name(), ".md") {
+			docNames[strings.TrimSuffix(e.Name(), ".md")] = true
+		}
+	}
+
+	var missing []string
+	for name := range seen {
+		if docNames[name] {
+			continue
+		}
+		found := false
+		for docName := range docNames {
+			if strings.HasPrefix(docName, name+"_") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, name)
+		}
+	}
+
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Errorf("trait collectors missing doc pages in docs/reference/vigo/traits/:\n  %s", strings.Join(missing, "\n  "))
+	}
+}
+
 // ---------- 3. TestEveryCLICommandHasDocPage ----------
 
 func TestEveryCLICommandHasDocPage(t *testing.T) {
