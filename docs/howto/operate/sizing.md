@@ -52,7 +52,7 @@ The numbers above are measured live, not extrapolated. The harness is [`test/bur
 | Container | Docker, **host networking**, container `nofile` raised to 1,048,576, no CPU/memory cgroup limit |
 | Vigo version | 0.69.20 |
 
-**Measured scaling (1-second check-in interval, `--results-per-report 12`, connections driven from multiple hosts so the offered load is real — see the methodology note below):**
+**Measured scaling (at the default 1-second check-in interval, `--results-per-report 12`, connections driven from multiple hosts so the offered load is real — see the methodology note below):**
 
 | Concurrent envoys | Peak goroutines | Peak RSS | Check-in `p50` / `p99` | Host CPU peak | Verdict |
 |---|---|---|---|---|---|

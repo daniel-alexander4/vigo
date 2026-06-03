@@ -903,7 +903,7 @@ type WebhookTuning struct {
 // RateLimitSection configures rate limiting for agent RPCs.
 type RateLimitSection struct {
 	Enabled         bool `yaml:"enabled" doc:"Enforce rate limits on agent RPCs." default:"false" example:"true (shared/public-facing servers)"`
-	CheckinPerEnvoy int  `yaml:"checkin_per_envoy" doc:"Per-envoy check-in rate cap in requests per minute." default:"6" example:"6 (default), 12 (aggressive intervals), 2 (conservative)"`
+	CheckinPerEnvoy int  `yaml:"checkin_per_envoy" doc:"Per-envoy check-in rate cap in requests per minute. Sized above the 1s default cadence (60/min) so enabling rate limiting doesn't throttle the default." default:"120" example:"120 (default, ~1s cadence + headroom), 240 (aggressive), 12 (slow cadences)"`
 	CheckinGlobal   int  `yaml:"checkin_global" doc:"Global check-in rate cap in requests per second." default:"500" example:"500 (default), 5000 (large fleet)"`
 }
 
@@ -959,7 +959,7 @@ type DatabaseSection struct {
 
 // CheckInSection holds check-in interval settings.
 type CheckInSection struct {
-	Interval            string `yaml:"interval" doc:"Nominal agent check-in interval as a Go duration string." example:"15s (responsive), 30s (default), 5m (conservative); minimum 5s"`
+	Interval            string `yaml:"interval" doc:"Nominal agent check-in interval as a Go duration string. The server pushes this to agents, so it sets the effective fleet poll cadence." default:"1s" example:"1s (default), 15s (lighter), 5m (conservative)"`
 	JitterPercent       int    `yaml:"jitter_percent" doc:"Random ± jitter applied to the check-in interval (percent)." example:"0-50; 10 (default) spreads load across a ±10% window"`
 	BundleMaxAge        string `yaml:"bundle_max_age" doc:"Signed-bundle TTL on agents (e.g. 24h). \"0\" means bundles never expire." default:"24h" example:"1h, 24h, 168h (accepts s, m, h); 0 to disable"`
 	OfflineThreshold    string `yaml:"offline_threshold" doc:"Override the staleness threshold used by the Offline pill, risk scorer, and stale-envoy notifier. Empty preserves the default 2.5× check-in interval." example:"empty (use 2.5× interval), 5m, 15m (accepts s, m, h)"`

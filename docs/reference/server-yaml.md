@@ -120,7 +120,7 @@ Agent polling behavior.
 
 ```yaml
 checkin:
-  interval: "5m"                     # agent poll frequency (stale = 2x this)
+  interval: "1s"                     # agent poll frequency (default 1s; sets the fleet cadence)
   jitter_percent: 20                 # randomize timing by 0-N%
   bundle_max_age: "24h"              # signed bundle TTL on agents (0 = forever)
   max_concurrent: 0                  # cap on concurrent CheckIn handlers (0 = CPU-scaled default; always on)
@@ -130,7 +130,7 @@ checkin:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `interval` | `5m` | How often agents check in. Stale threshold = 2x this value |
+| `interval` | `1s` | How often agents check in. The server pushes this to agents, so it sets the effective fleet poll cadence. The staleness threshold is **not** a fixed multiple of this — it's `2.5 × max(interval, observed-cycle)`, floored at 30s, so a fast cadence still tolerates a few missed beats (see `offline_threshold` to override) |
 | `jitter_percent` | `20` | Random jitter to prevent thundering herd |
 | `bundle_max_age` | `24h` | How long agents trust their cached policy bundle |
 | `max_concurrent` | `0` | Cap on concurrent CheckIn handlers. The cap gates the policy-bundle build (CPU-heavy) inside the handler, so a fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via `ResourceExhausted` → agent backoff instead of CPU-cascading. **Always on** — `0` = a CPU-scaled built-in (`max(128, NumCPU*16)`), not disabled. Higher admits more before shedding (more CPU thrash under a wave); lower sheds sooner. Watch `vigo_checkins_total{status="shed"}` |

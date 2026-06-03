@@ -34,6 +34,18 @@ import "time"
 // raise `checkin.interval` to match.
 const MaxReportedCycle = 30 * time.Minute
 
+// MinStaleThreshold floors the default stale boundary so the predicate
+// stays decoupled from the cadence at the fast end. With the 1s default
+// check-in interval, a raw 2.5× rule would mark an envoy offline after
+// 2.5s — a single GC pause, scheduler hiccup, or TCP retransmit would
+// flap it. A 30s floor tolerates ~30 missed 1s-beats while still
+// detecting a genuinely-offline envoy ~25× faster than the old 5m
+// default's 12.5min boundary. The floor only bites below a ~12s
+// effective cadence (where 2.5× < 30s); slower deployments are
+// unaffected. An explicit `checkin.offline_threshold:` override bypasses
+// the floor entirely — operator intent wins.
+const MinStaleThreshold = 30 * time.Second
+
 // effectiveInterval returns the larger of configured and observed.
 // Configured is the operator's intent; observed is the agent's actual
 // inter-CheckIn cadence. We never go below configured (a fast agent
@@ -47,17 +59,23 @@ func effectiveInterval(configured, observed time.Duration) time.Duration {
 }
 
 // StaleThresholdFromCycle resolves the staleness boundary for one
-// envoy. Default is 2.5 × max(configured, observed) — a half-beat of
-// grace lets one missed check-in count as jitter; two missed beats is
-// a real signal. A positive offlineThreshold replaces the default
-// with a literal duration (operator's `checkin.offline_threshold:`
-// in server.yaml); zero means "use the default formula."
+// envoy. Default is 2.5 × max(configured, observed), floored at
+// MinStaleThreshold — a half-beat of grace lets one missed check-in
+// count as jitter; two missed beats is a real signal; and the floor
+// keeps the boundary sane at sub-12s cadences (see MinStaleThreshold).
+// A positive offlineThreshold replaces the default with a literal
+// duration (operator's `checkin.offline_threshold:` in server.yaml)
+// and bypasses the floor; zero means "use the default formula."
 func StaleThresholdFromCycle(configured, observed, offlineThreshold time.Duration) time.Duration {
 	if offlineThreshold > 0 {
 		return offlineThreshold
 	}
 	eff := effectiveInterval(configured, observed)
-	return 5 * eff / 2 // 2.5×, integer-safe
+	stale := 5 * eff / 2 // 2.5×, integer-safe
+	if stale < MinStaleThreshold {
+		return MinStaleThreshold
+	}
+	return stale
 }
 
 // IsStaleFromCycle reports whether an envoy's last check-in is older

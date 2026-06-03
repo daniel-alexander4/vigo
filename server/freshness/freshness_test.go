@@ -16,12 +16,15 @@ func TestStaleThresholdFromCycle(t *testing.T) {
 		offlineThreshold time.Duration
 		want             time.Duration
 	}{
-		{"bootstrap (observed=0): use configured", 5 * time.Second, 0, 0, 12500 * time.Millisecond},
-		{"observed below configured: use configured", 5 * time.Second, 2 * time.Second, 0, 12500 * time.Millisecond},
+		{"bootstrap below floor: floored to 30s", 5 * time.Second, 0, 0, 30 * time.Second},
+		{"observed below configured, both below floor: floored", 5 * time.Second, 2 * time.Second, 0, 30 * time.Second},
+		{"1s default cadence: floored to 30s", 1 * time.Second, 1 * time.Second, 0, 30 * time.Second},
+		{"12s cadence: 2.5× hits the floor exactly", 12 * time.Second, 0, 0, 30 * time.Second},
+		{"13s cadence: 2.5× clears the floor", 13 * time.Second, 0, 0, 32500 * time.Millisecond},
 		{"observed above configured: use observed", 5 * time.Second, 60 * time.Second, 0, 150 * time.Second},
 		{"5min interval, no observation", 5 * time.Minute, 0, 0, 12*time.Minute + 30*time.Second},
 		{"30s interval, observed 45s", 30 * time.Second, 45 * time.Second, 0, 112500 * time.Millisecond},
-		{"offlineThreshold wins over formula", 5 * time.Second, 60 * time.Second, 20 * time.Second, 20 * time.Second},
+		{"offlineThreshold below floor still wins (bypasses floor)", 5 * time.Second, 60 * time.Second, 20 * time.Second, 20 * time.Second},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -45,11 +48,15 @@ func TestIsStaleFromCycle(t *testing.T) {
 		{"fresh, well inside threshold", now.Add(-1 * time.Minute), 5 * time.Minute, 0, false},
 		{"at 2× configured, still fresh under 2.5×", now.Add(-10 * time.Minute), 5 * time.Minute, 0, false},
 		{"past 2.5× configured, stale", now.Add(-15 * time.Minute), 5 * time.Minute, 0, true},
-		{"fast configured, fresh", now.Add(-5 * time.Second), 5 * time.Second, 0, false},
-		{"fast configured, just over threshold (bootstrap), stale", now.Add(-15 * time.Second), 5 * time.Second, 0, true},
+		{"fast configured, fresh (inside 30s floor)", now.Add(-5 * time.Second), 5 * time.Second, 0, false},
+		{"fast cadence, inside the 30s floor, not stale", now.Add(-15 * time.Second), 5 * time.Second, 0, false},
+		{"fast cadence, past the 30s floor, stale", now.Add(-31 * time.Second), 1 * time.Second, 1 * time.Second, true},
 		// Cycle-aware: same lastSeen age, observed cycle widens the window.
 		{"slow cycle widens threshold, no longer stale", now.Add(-30 * time.Second), 5 * time.Second, 60 * time.Second, false},
-		{"observed below configured doesn't tighten", now.Add(-15 * time.Second), 5 * time.Second, 1 * time.Second, true},
+		// Above the floor, observed below configured doesn't tighten:
+		// eff=20s→50s window; had it used observed 5s it'd be floored to
+		// 30s and 40s ago would read stale. false proves it used configured.
+		{"observed below configured doesn't tighten", now.Add(-40 * time.Second), 20 * time.Second, 5 * time.Second, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -76,8 +83,10 @@ func TestResponsiveThreshold(t *testing.T) {
 		offlineThreshold time.Duration
 		want             time.Duration
 	}{
-		// 1.2× the stale threshold = 3× effective interval.
-		{"bootstrap: 1.2× of 2.5× = 3× configured", 5 * time.Second, 0, 0, 15 * time.Second},
+		// 1.2× the stale threshold. Below the floor the stale boundary
+		// is 30s, so the responsive boundary is 1.2×30s = 36s.
+		{"bootstrap below floor: 1.2× of 30s floor", 5 * time.Second, 0, 0, 36 * time.Second},
+		// Above the floor: 1.2× of 2.5× = 3× effective interval.
 		{"observed widens window proportionally", 5 * time.Second, 60 * time.Second, 0, 180 * time.Second},
 		{"5m interval, no observation", 5 * time.Minute, 0, 0, 15 * time.Minute},
 		// configured=0 + observed=0 + no override hits the
@@ -107,8 +116,8 @@ func TestIsResponsive(t *testing.T) {
 	}{
 		{"zero time is not responsive", time.Time{}, 5 * time.Second, 0, false},
 		{"fresh, well inside window", now.Add(-3 * time.Second), 5 * time.Second, 0, true},
-		{"at 2.5× configured, stale but still responsive (window is 3×)", now.Add(-13 * time.Second), 5 * time.Second, 0, true},
-		{"past 3× configured, no longer responsive", now.Add(-16 * time.Second), 5 * time.Second, 0, false},
+		{"inside the 36s responsive floor, responsive", now.Add(-13 * time.Second), 5 * time.Second, 0, true},
+		{"past the 36s responsive floor, no longer responsive", now.Add(-37 * time.Second), 5 * time.Second, 0, false},
 		// Per-envoy cycle awareness: a slow envoy (observed=60s)
 		// stays responsive far longer than a 3×configured rule
 		// would allow.
@@ -133,11 +142,12 @@ func TestIsResponsive(t *testing.T) {
 func TestIsResponsive_LooserThanIsStale(t *testing.T) {
 	now := time.Now()
 	configured := 5 * time.Second
-	// 13s ago is past 2.5×5 = 12.5s (stale) but inside 3×5 = 15s
-	// (responsive).
-	lastSeen := now.Add(-13 * time.Second)
+	// At a sub-12s cadence the stale boundary floors to 30s and the
+	// responsive boundary to 36s, so 33s ago is past stale (30s) but
+	// still inside the responsive window (36s).
+	lastSeen := now.Add(-33 * time.Second)
 	if !IsStaleFromCycle(lastSeen, configured, 0, 0) {
-		t.Fatal("test premise broken: 13s ago should be stale at 5s configured")
+		t.Fatal("test premise broken: 33s ago should be stale at the 30s floor")
 	}
 	if !IsResponsive(lastSeen, configured, 0, 0) {
 		t.Error("an envoy that's just barely stale must still be responsive")

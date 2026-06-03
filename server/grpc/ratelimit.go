@@ -29,7 +29,12 @@ type perEnvoyEntry struct {
 func RateLimitInterceptor(cfg config.RateLimitSection) grpc.UnaryServerInterceptor {
 	perEnvoyRate := cfg.CheckinPerEnvoy
 	if perEnvoyRate <= 0 {
-		perEnvoyRate = 6 // 6 per minute default
+		// 120/min ≈ the 1s default cadence (60/min) plus headroom for
+		// jitter and force-push retries. Rate limiting is off by default
+		// (rate_limit.enabled=false); this only applies on shared/public
+		// servers that opt in, so the cap must not throttle the default
+		// cadence the moment an operator enables it.
+		perEnvoyRate = 120
 	}
 	globalRate := cfg.CheckinGlobal
 	if globalRate <= 0 {

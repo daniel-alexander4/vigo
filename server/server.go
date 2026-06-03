@@ -621,8 +621,13 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 	// --- CheckIn tuning ---
 
-	// Parse base interval for compliance stale threshold.
-	s.baseInterval = 5 * time.Minute // default
+	// Parse base interval for compliance stale threshold. The default
+	// cadence is 1s — the server pushes this to agents via the CheckIn
+	// response, so it sets the effective fleet poll rate. The freshness
+	// package floors the derived stale threshold (see
+	// freshness.MinStaleThreshold) so a 1s cadence doesn't make a single
+	// missed beat read as offline.
+	s.baseInterval = 1 * time.Second // default
 	if s.cfg.CheckIn.Interval != "" {
 		if parsed, err := time.ParseDuration(s.cfg.CheckIn.Interval); err == nil {
 			s.baseInterval = parsed

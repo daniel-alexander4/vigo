@@ -260,7 +260,7 @@ message CheckInRequest {
 
 message CheckInResponse {
   repeated Configcrate configcrates = 1;
-  string interval = 2;   // e.g. "5m"
+  string interval = 2;   // e.g. "1s" (default), "5m"
   int32 jitter_percent = 3;
   repeated CustomTraitEntry custom_traits = 4;
   bool no_change = 5;                    // true = fingerprint matched, skip execution
