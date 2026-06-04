@@ -4,6 +4,7 @@
 package validate
 
 import (
+	"sort"
 	"strings"
 	"testing"
 )
@@ -914,6 +915,90 @@ func TestStateValuesKeysAreStateTypes(t *testing.T) {
 			t.Errorf("stateValues key %q is not a state-consuming type (generatedStateTypes) — typo, or the type no longer reads state", typ)
 		}
 	}
+}
+
+// executorStateVocab is the authoritative per-type set of accepted `state:`
+// values, hand-derived from the Rust executors with the source pointer for each
+// value. This is the reviewer's checklist: when you change a state vocabulary in
+// an executor, update the matching entry here, and TestStateValuesMatchExecutors
+// will fail until the production stateValues map (server/validate/validate.go) is
+// brought back in sync. A scrape was rejected — the vocab is spread across
+// platform-variant files with aliases, an array-literal gate, and an early
+// short-circuit, too heterogeneous to extract reliably without per-type special
+// casing that would itself drift.
+//
+// Paths below are under agent/src/executors/. Union across all platform variants
+// (kept generous so a valid platform-specific value is never rejected at publish).
+var executorStateVocab = map[string][]string{
+	// service*.rs match arms on `state`. Linux service.rs: running/stopped/
+	// restarted/reloaded. macOS/illumos/freebsd/openbsd add started (alias of
+	// running), enabled, disabled. illumos service_illumos.rs:56 adds maintenance.
+	"service": {"running", "started", "stopped", "restarted", "reloaded", "enabled", "disabled", "maintenance"},
+	// process.rs:98,218
+	"process": {"running", "stopped"},
+	// container.rs:305,413,431
+	"container": {"running", "stopped", "absent"},
+	// vm.rs:264 matches!(running|stopped|defined); vm.rs:241 short-circuits absent
+	"vm": {"running", "stopped", "defined", "absent"},
+	// mount.rs:166,227,245 (mounted|present / unmounted / absent); mount_bsd.rs:54,85
+	"mount": {"mounted", "present", "unmounted", "absent"},
+	// swap.rs:94,172 (present/absent); swap_bsd.rs:52,66 add on/off aliases
+	"swap": {"present", "absent", "on", "off"},
+	// kernel_module.rs:68,122,164,189; kernel_module_freebsd.rs:42,56 group aliases
+	"kernel_module": {"present", "absent", "loaded", "unloaded"},
+	// network_interface.rs:197 ["present","up","down","absent"].contains(state)
+	"network_interface": {"present", "absent", "up", "down"},
+	// package_windows.rs:256,275,294; generic package executor (runner/mod.rs) same
+	"package": {"present", "absent", "latest"},
+	// npm.rs:62,100,121
+	"npm": {"present", "absent", "latest"},
+	// pip.rs:69,117,137
+	"pip": {"present", "absent", "latest"},
+	// gem.rs:70,106,129
+	"gem": {"present", "absent", "latest"},
+	// nonrepo_package.rs:183 matches!(present|absent|latest)
+	"nonrepo_package": {"present", "absent", "latest"},
+}
+
+// TestStateValuesMatchExecutors guards the stateValues *values* against executor
+// drift — the companion to TestStateValuesKeysAreStateTypes (which guards keys).
+// If an executor adds, renames, or drops an accepted state value, update
+// executorStateVocab above (it carries the source pointers) and this test forces
+// the production stateValues map back into agreement.
+func TestStateValuesMatchExecutors(t *testing.T) {
+	for typ, want := range executorStateVocab {
+		got, ok := stateValues[typ]
+		if !ok {
+			t.Errorf("type %q is in the executor checklist but missing from stateValues — add it (or drop it from the checklist if it became default present|absent)", typ)
+			continue
+		}
+		if a, b := sortedCopy(got), sortedCopy(want); !stringSlicesEqual(a, b) {
+			t.Errorf("state vocab drift for %q:\n  stateValues: %v\n  executors:   %v", typ, a, b)
+		}
+	}
+	for typ := range stateValues {
+		if _, ok := executorStateVocab[typ]; !ok {
+			t.Errorf("type %q is in stateValues but not the executor checklist — add it to executorStateVocab with a source pointer", typ)
+		}
+	}
+}
+
+func sortedCopy(s []string) []string {
+	out := append([]string(nil), s...)
+	sort.Strings(out)
+	return out
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestStateValueValidation(t *testing.T) {

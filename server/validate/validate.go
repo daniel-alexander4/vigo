@@ -98,23 +98,29 @@ var universalAttrs = map[string]bool{
 
 // ReversibleTypes are the non-state resource types that support the `revert:`
 // lever in this build. Group B value-setters (hostname, timezone) revert by
-// restoring a snapshotted prior value; the Group A local-command types
-// (CommandReversibleTypes) run an operator-declared `on_revert:` inverse. The
+// restoring a snapshotted prior value; the Group A command types
+// (CommandReversibleTypes) run an operator-declared `on_revert:` inverse —
+// locally via `sh -c` (exec, backup, db_backup, replace) or in the executor's
+// own context (ssh_exec over remote SSH, powershell via powershell.exe). The
 // agent's reversal layer (agent/src/runner/reversal.rs) is the matching source
-// of truth — TestReversibleTypesDocumented guards the surface. Remote-context
-// types (ssh_exec, powershell) and the stanza/policy setters (cisco_interface,
-// junos_interface, local_security_policy, service_recovery_windows) are a
-// tracked follow-on.
+// of truth. The stanza/policy setters (cisco_interface, junos_interface,
+// local_security_policy, service_recovery_windows) are a tracked follow-on —
+// they revert in a structured (multi-field) or remote-device context this
+// build doesn't cover.
 var ReversibleTypes = map[string]bool{
 	"hostname": true, "timezone": true,
 	"exec": true, "backup": true, "db_backup": true, "replace": true,
+	"ssh_exec": true, "powershell": true,
 }
 
 // CommandReversibleTypes (Group A) revert by running `on_revert:`, so
 // `revert: true` on one of these requires a non-empty `on_revert:` — enforced
-// at publish by validateReversal. A subset of ReversibleTypes.
+// at publish by validateReversal. A subset of ReversibleTypes. (How the
+// inverse runs — local `sh -c` vs the executor's native transport — is the
+// agent's concern; publish validation only cares that `on_revert:` is present.)
 var CommandReversibleTypes = map[string]bool{
 	"exec": true, "backup": true, "db_backup": true, "replace": true,
+	"ssh_exec": true, "powershell": true,
 }
 
 // ParamSpec describes a single attribute's validation constraints.
@@ -582,14 +588,15 @@ func validateResource(moduleName string, res Resource) []Finding {
 //
 // SoT note: hand-derived by reading agent/src/executors/. The agent is the
 // authoritative validator (its executors fail closed on an unknown state); this
-// is the early publish-time gate. A value-drift guard (catching a future
-// executor that adds a state value) is tracked in pending — the parity test
-// below only guards that keys are real state-consuming types, not the values.
+// is the early publish-time gate. TestStateValuesMatchExecutors guards these
+// value sets against executor drift via an annotated checklist with per-value
+// source pointers (the executor vocab is too heterogeneous across platform
+// variants to scrape reliably); TestStateValuesKeysAreStateTypes guards the keys.
 var stateValues = map[string][]string{
-	"service":           {"running", "started", "stopped", "restarted", "reloaded", "disabled", "maintenance"},
+	"service":           {"running", "started", "stopped", "restarted", "reloaded", "enabled", "disabled", "maintenance"},
 	"process":           {"running", "stopped"},
 	"container":         {"running", "stopped", "absent"},
-	"vm":                {"running", "stopped", "defined"},
+	"vm":                {"running", "stopped", "defined", "absent"},
 	"mount":             {"mounted", "present", "unmounted", "absent"},
 	"swap":              {"present", "absent", "on", "off"},
 	"kernel_module":     {"present", "absent", "loaded", "unloaded"},
