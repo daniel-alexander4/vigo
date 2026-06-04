@@ -13,6 +13,7 @@ import (
 	"net"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -185,7 +186,7 @@ func (g *Gossiper) runTier1Sender(ctx context.Context) {
 			slog.Info("spanner tier-1 sender stopped")
 			return
 		case <-ticker.C:
-			g.sendDigest(ctx, addr)
+			daemon.Guard("spanner-tier1-sender", func() { g.sendDigest(ctx, addr) })
 		}
 	}
 }
@@ -297,7 +298,9 @@ func (g *Gossiper) runTier1Listener(ctx context.Context, founderPubkeyHook func(
 		}
 		datagram := make([]byte, n)
 		copy(datagram, buf[:n])
-		g.handleTier1Datagram(ctx, datagram, founderPubkeyHook)
+		daemon.Guard("spanner-tier1-listener", func() {
+			g.handleTier1Datagram(ctx, datagram, founderPubkeyHook)
+		})
 	}
 }
 

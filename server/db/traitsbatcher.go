@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"git.alexander4.io/vigo/server/daemon"
 )
 
 // TraitsFlushHook is called after each successful flush with the batch of
@@ -87,7 +89,7 @@ func (b *TraitsBatcher) Start(ctx context.Context, interval, offset time.Duratio
 			b.Flush(context.Background())
 			return
 		case <-ticker.C:
-			b.Flush(ctx)
+			daemon.Guard("traits-batcher", func() { b.Flush(ctx) })
 		}
 	}
 }

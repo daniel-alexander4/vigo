@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/traits"
@@ -329,18 +330,22 @@ func (c *Collector) Run(ctx context.Context, interval time.Duration) {
 	defer ticker.Stop()
 
 	// Initial update.
-	if err := c.UpdateGauges(ctx); err != nil {
-		slog.Error("metrics collector initial update failed", "error", err)
-	}
+	daemon.Guard("metrics-collector", func() {
+		if err := c.UpdateGauges(ctx); err != nil {
+			slog.Error("metrics collector initial update failed", "error", err)
+		}
+	})
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := c.UpdateGauges(ctx); err != nil {
-				slog.Error("metrics collector update failed", "error", err)
-			}
+			daemon.Guard("metrics-collector", func() {
+				if err := c.UpdateGauges(ctx); err != nil {
+					slog.Error("metrics collector update failed", "error", err)
+				}
+			})
 		}
 	}
 }

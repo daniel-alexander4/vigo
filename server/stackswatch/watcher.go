@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -158,22 +159,24 @@ func (w *Watcher) Run(ctx context.Context) error {
 		case <-fireC:
 			fireC = nil
 			quiesce = nil
-			start := time.Now()
-			if err := w.pullIntoLive(); err != nil {
-				slog.Error("stackswatch: bare→.live pull failed; skipping reload",
-					"error", err,
-					"bare_repo", w.bareRepo,
-					"live_dir", w.liveDir,
-				)
-				continue
-			}
-			if err := w.reloader.Reload(); err != nil {
-				slog.Error("stackswatch: config reload failed", "error", err)
-			} else {
-				slog.Info("stackswatch: bare→.live pull + reload complete",
-					"elapsed_ms", time.Since(start).Milliseconds(),
-				)
-			}
+			daemon.Guard("stacks-watcher", func() {
+				start := time.Now()
+				if err := w.pullIntoLive(); err != nil {
+					slog.Error("stackswatch: bare→.live pull failed; skipping reload",
+						"error", err,
+						"bare_repo", w.bareRepo,
+						"live_dir", w.liveDir,
+					)
+					return
+				}
+				if err := w.reloader.Reload(); err != nil {
+					slog.Error("stackswatch: config reload failed", "error", err)
+				} else {
+					slog.Info("stackswatch: bare→.live pull + reload complete",
+						"elapsed_ms", time.Since(start).Milliseconds(),
+					)
+				}
+			})
 		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/convergence"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/integrations"
@@ -165,74 +166,84 @@ func (s *Server) runFrameworkDriftAlerter(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Find runs with changes since last check.
-			runs, err := s.queries.ListAllRuns(ctx, 50)
-			if err != nil {
-				continue
-			}
-
-			envoyMap := make(map[string]string) // envoy ID → hostname
-			if s.fleetIndex != nil {
-				for _, ts := range s.fleetIndex.AllEnvoys() {
-					envoyMap[ts.ID] = ts.Hostname
-				}
-			}
-
-			for _, r := range runs {
-				if r.StartedAt.Before(lastChecked) {
-					break
-				}
-				if r.ChangedCount == 0 {
-					continue
-				}
-
-				hostname := envoyMap[r.EnvoyID]
-				if hostname == "" {
-					continue
-				}
-
-				// Look up which frameworks/controls are affected.
-				trace := s.configStore.Trace(hostname)
-				if !trace.Matched || len(trace.ComplianceTags) == 0 {
-					continue
-				}
-
-				var affected []string
-				for _, ct := range trace.ComplianceTags {
-					for fw, ids := range ct.Frameworks {
-						for _, id := range ids {
-							affected = append(affected, fw+": "+id)
-						}
-					}
-				}
-
-				if len(affected) == 0 {
-					continue
-				}
-
-				// Truncate to avoid huge emails.
-				display := strings.Join(affected, ", ")
-				if len(display) > 200 {
-					display = display[:200] + "..."
-				}
-
-				integ.Dispatch(integrations.Event{
-					Name:      "convergence.drift",
-					Timestamp: r.StartedAt,
-					Hostname:  hostname,
-					EnvoyID:   r.EnvoyID,
-					Summary:   fmt.Sprintf("drift on %s affected %s", hostname, display),
-					Details: map[string]any{
-						"run_id":            r.ID,
-						"changed":           r.ChangedCount,
-						"affected_controls": display,
-					},
-				})
-			}
-
-			lastChecked = time.Now()
+			daemon.Guard("framework-drift-alerter", func() {
+				lastChecked = s.driftAlertTick(ctx, lastChecked)
+			})
 		}
 	}
+}
+
+// driftAlertTick scans recent runs for drift since lastChecked, dispatches a
+// convergence.drift event enriched with the affected framework/control context
+// for each changed run, and returns the new high-water mark. Called once per
+// runFrameworkDriftAlerter tick, under daemon.Guard. Assumes s.integrations and
+// s.configStore are non-nil (the loop returns early otherwise).
+func (s *Server) driftAlertTick(ctx context.Context, lastChecked time.Time) time.Time {
+	runs, err := s.queries.ListAllRuns(ctx, 50)
+	if err != nil {
+		return lastChecked
+	}
+
+	envoyMap := make(map[string]string) // envoy ID → hostname
+	if s.fleetIndex != nil {
+		for _, ts := range s.fleetIndex.AllEnvoys() {
+			envoyMap[ts.ID] = ts.Hostname
+		}
+	}
+
+	for _, r := range runs {
+		if r.StartedAt.Before(lastChecked) {
+			break
+		}
+		if r.ChangedCount == 0 {
+			continue
+		}
+
+		hostname := envoyMap[r.EnvoyID]
+		if hostname == "" {
+			continue
+		}
+
+		// Look up which frameworks/controls are affected.
+		trace := s.configStore.Trace(hostname)
+		if !trace.Matched || len(trace.ComplianceTags) == 0 {
+			continue
+		}
+
+		var affected []string
+		for _, ct := range trace.ComplianceTags {
+			for fw, ids := range ct.Frameworks {
+				for _, id := range ids {
+					affected = append(affected, fw+": "+id)
+				}
+			}
+		}
+
+		if len(affected) == 0 {
+			continue
+		}
+
+		// Truncate to avoid huge emails.
+		display := strings.Join(affected, ", ")
+		if len(display) > 200 {
+			display = display[:200] + "..."
+		}
+
+		s.integrations.Dispatch(integrations.Event{
+			Name:      "convergence.drift",
+			Timestamp: r.StartedAt,
+			Hostname:  hostname,
+			EnvoyID:   r.EnvoyID,
+			Summary:   fmt.Sprintf("drift on %s affected %s", hostname, display),
+			Details: map[string]any{
+				"run_id":            r.ID,
+				"changed":           r.ChangedCount,
+				"affected_controls": display,
+			},
+		})
+	}
+
+	return time.Now()
 }
 
 // runStaleChecker fires a envoy.stale notification when a envoy
@@ -242,9 +253,7 @@ func (s *Server) runFrameworkDriftAlerter(ctx context.Context) {
 // frequency. It always updates the FleetIndex offline flag; SMTP
 // notifications are optional.
 func (s *Server) runStaleChecker(ctx context.Context) {
-	integ := s.integrations
 	wasStale := make(map[string]bool) // envoy ID → was stale last tick
-	canNotify := integ != nil
 
 	ticker := time.NewTicker(s.baseInterval)
 	defer ticker.Stop()
@@ -254,51 +263,63 @@ func (s *Server) runStaleChecker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Use FleetIndex when available (zero DB queries).
-			if s.fleetIndex != nil {
-				wasStale = s.staleScanTick(wasStale)
-				continue
-			}
-
-			envoys, err := s.queries.ListEnvoys(ctx)
-			if err != nil {
-				slog.Error("stale checker: listing envoys", "error", err)
-				continue
-			}
-
-			nowStale := make(map[string]bool, len(wasStale))
-			for _, t := range envoys {
-				if t.Revoked != 0 {
-					continue
-				}
-				if !t.LastSeen.Valid {
-					continue
-				}
-				// DB-only fallback path (fleetIdx unavailable): no observed cycle
-				// data, so the threshold is derived from configured interval alone.
-				if !freshness.IsStaleFromCycle(t.LastSeen.Time, s.baseInterval, 0, s.offlineThreshold) {
-					continue
-				}
-
-				nowStale[t.ID] = true
-				if wasStale[t.ID] {
-					continue // already notified
-				}
-
-				if canNotify {
-					integ.Dispatch(integrations.Event{
-						Name:      "envoy.stale",
-						Timestamp: time.Now().UTC(),
-						Hostname:  t.Hostname,
-						EnvoyID:   t.ID,
-						Summary:   fmt.Sprintf("%s stale since %s", t.Hostname, t.LastSeen.Time.Format("15:04 UTC")),
-						Details:   map[string]any{"last_seen": t.LastSeen.Time.Format("2006-01-02 15:04:05 UTC")},
-					})
-				}
-			}
-			wasStale = nowStale
+			daemon.Guard("stale-checker", func() {
+				wasStale = s.staleCheckTick(ctx, wasStale)
+			})
 		}
 	}
+}
+
+// staleCheckTick runs one stale scan and returns the set of currently-stale
+// envoy IDs to carry into the next tick. The FleetIndex path (the production
+// path) delegates to staleScanTick; the DB fallback applies when no index is
+// available. Called once per runStaleChecker tick, under daemon.Guard.
+func (s *Server) staleCheckTick(ctx context.Context, wasStale map[string]bool) map[string]bool {
+	// Use FleetIndex when available (zero DB queries).
+	if s.fleetIndex != nil {
+		return s.staleScanTick(wasStale)
+	}
+
+	integ := s.integrations
+	canNotify := integ != nil
+
+	envoys, err := s.queries.ListEnvoys(ctx)
+	if err != nil {
+		slog.Error("stale checker: listing envoys", "error", err)
+		return wasStale
+	}
+
+	nowStale := make(map[string]bool, len(wasStale))
+	for _, t := range envoys {
+		if t.Revoked != 0 {
+			continue
+		}
+		if !t.LastSeen.Valid {
+			continue
+		}
+		// DB-only fallback path (fleetIdx unavailable): no observed cycle
+		// data, so the threshold is derived from configured interval alone.
+		if !freshness.IsStaleFromCycle(t.LastSeen.Time, s.baseInterval, 0, s.offlineThreshold) {
+			continue
+		}
+
+		nowStale[t.ID] = true
+		if wasStale[t.ID] {
+			continue // already notified
+		}
+
+		if canNotify {
+			integ.Dispatch(integrations.Event{
+				Name:      "envoy.stale",
+				Timestamp: time.Now().UTC(),
+				Hostname:  t.Hostname,
+				EnvoyID:   t.ID,
+				Summary:   fmt.Sprintf("%s stale since %s", t.Hostname, t.LastSeen.Time.Format("15:04 UTC")),
+				Details:   map[string]any{"last_seen": t.LastSeen.Time.Format("2006-01-02 15:04:05 UTC")},
+			})
+		}
+	}
+	return nowStale
 }
 
 // staleScanTick runs one reachability scan over the fleet index: it
@@ -394,95 +415,106 @@ func (s *Server) runComplianceChecker(ctx context.Context, threshold int) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Use FleetIndex when available (O(1) compliance summary).
-			if s.fleetIndex != nil {
-				summary := s.fleetIndex.ConvergenceSummary()
-				total := summary.Total
-				if total == 0 {
-					continue
-				}
-				pct := (summary.Converged * 100) / total
-				belowNow := pct < threshold
-
-				if belowNow && !wasBelowThreshold {
-					integ.Dispatch(integrations.Event{
-						Name:      "convergence.threshold",
-						Timestamp: time.Now().UTC(),
-						Summary:   fmt.Sprintf("convergence %d%% below threshold %d%%", pct, threshold),
-						Details: map[string]any{
-							"converged_pct": pct,
-							"threshold":     threshold,
-							"converged":     summary.Converged,
-							"total":         total,
-						},
-					})
-				}
-				wasBelowThreshold = belowNow
-				continue
-			}
-
-			envoys, err := s.queries.ListEnvoys(ctx)
-			if err != nil {
-				slog.Error("compliance checker: listing envoys", "error", err)
-				continue
-			}
-
-			// Collect active envoy IDs.
-			var ids []string
-			envoyMap := make(map[string]db.Envoy)
-			for _, t := range envoys {
-				if t.Revoked != 0 {
-					continue
-				}
-				ids = append(ids, t.ID)
-				envoyMap[t.ID] = t
-			}
-			if len(ids) == 0 {
-				continue
-			}
-
-			latestRuns, err := s.runStore.LatestRunPerEnvoy(ctx, ids)
-			if err != nil {
-				slog.Error("compliance checker: fetching latest runs", "error", err)
-				continue
-			}
-
-			compliantCount := 0
-			for _, id := range ids {
-				run, ok := latestRuns[id]
-				if !ok {
-					continue // no run data → not converged
-				}
-				ri := convergence.RunInfo{
-					Status:           run.Status,
-					ChangedCount:     int64(run.ChangedCount),
-					FailedCount:      int64(run.FailedCount),
-					ConfigcrateCount: int64(run.ConfigcrateCount),
-				}
-				if convergence.ComputeStatus(ri) == convergence.StatusConverged {
-					compliantCount++
-				}
-			}
-
-			pct := (compliantCount * 100) / len(ids)
-			belowNow := pct < threshold
-
-			if belowNow && !wasBelowThreshold {
-				integ.Dispatch(integrations.Event{
-					Name:      "convergence.threshold",
-					Timestamp: time.Now().UTC(),
-					Summary:   fmt.Sprintf("convergence %d%% below threshold %d%%", pct, threshold),
-					Details: map[string]any{
-						"converged_pct": pct,
-						"threshold":     threshold,
-						"converged":     compliantCount,
-						"total":         len(ids),
-					},
-				})
-			}
-			wasBelowThreshold = belowNow
+			daemon.Guard("compliance-checker", func() {
+				wasBelowThreshold = s.complianceCheckTick(ctx, threshold, wasBelowThreshold)
+			})
 		}
 	}
+}
+
+// complianceCheckTick computes fleet convergence percentage and fires a
+// convergence.threshold event on the transition below `threshold`, returning
+// the new below-threshold state. The FleetIndex path (O(1) summary) is the
+// production path; the DB fallback applies when no index is available. Called
+// once per runComplianceChecker tick, under daemon.Guard. Assumes
+// s.integrations is non-nil (the loop returns early otherwise).
+func (s *Server) complianceCheckTick(ctx context.Context, threshold int, wasBelow bool) bool {
+	// Use FleetIndex when available (O(1) compliance summary).
+	if s.fleetIndex != nil {
+		summary := s.fleetIndex.ConvergenceSummary()
+		total := summary.Total
+		if total == 0 {
+			return wasBelow
+		}
+		pct := (summary.Converged * 100) / total
+		belowNow := pct < threshold
+
+		if belowNow && !wasBelow {
+			s.integrations.Dispatch(integrations.Event{
+				Name:      "convergence.threshold",
+				Timestamp: time.Now().UTC(),
+				Summary:   fmt.Sprintf("convergence %d%% below threshold %d%%", pct, threshold),
+				Details: map[string]any{
+					"converged_pct": pct,
+					"threshold":     threshold,
+					"converged":     summary.Converged,
+					"total":         total,
+				},
+			})
+		}
+		return belowNow
+	}
+
+	envoys, err := s.queries.ListEnvoys(ctx)
+	if err != nil {
+		slog.Error("compliance checker: listing envoys", "error", err)
+		return wasBelow
+	}
+
+	// Collect active envoy IDs.
+	var ids []string
+	envoyMap := make(map[string]db.Envoy)
+	for _, t := range envoys {
+		if t.Revoked != 0 {
+			continue
+		}
+		ids = append(ids, t.ID)
+		envoyMap[t.ID] = t
+	}
+	if len(ids) == 0 {
+		return wasBelow
+	}
+
+	latestRuns, err := s.runStore.LatestRunPerEnvoy(ctx, ids)
+	if err != nil {
+		slog.Error("compliance checker: fetching latest runs", "error", err)
+		return wasBelow
+	}
+
+	compliantCount := 0
+	for _, id := range ids {
+		run, ok := latestRuns[id]
+		if !ok {
+			continue // no run data → not converged
+		}
+		ri := convergence.RunInfo{
+			Status:           run.Status,
+			ChangedCount:     int64(run.ChangedCount),
+			FailedCount:      int64(run.FailedCount),
+			ConfigcrateCount: int64(run.ConfigcrateCount),
+		}
+		if convergence.ComputeStatus(ri) == convergence.StatusConverged {
+			compliantCount++
+		}
+	}
+
+	pct := (compliantCount * 100) / len(ids)
+	belowNow := pct < threshold
+
+	if belowNow && !wasBelow {
+		s.integrations.Dispatch(integrations.Event{
+			Name:      "convergence.threshold",
+			Timestamp: time.Now().UTC(),
+			Summary:   fmt.Sprintf("convergence %d%% below threshold %d%%", pct, threshold),
+			Details: map[string]any{
+				"converged_pct": pct,
+				"threshold":     threshold,
+				"converged":     compliantCount,
+				"total":         len(ids),
+			},
+		})
+	}
+	return belowNow
 }
 
 // runSecurityPostureSnapshot takes a daily security posture snapshot.
@@ -562,7 +594,7 @@ func (s *Server) runSecurityPostureSnapshot(ctx context.Context) {
 		}
 	}
 
-	takeSnapshot()
+	daemon.Guard("security-posture-snapshot", takeSnapshot)
 
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
@@ -571,7 +603,7 @@ func (s *Server) runSecurityPostureSnapshot(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			takeSnapshot()
+			daemon.Guard("security-posture-snapshot", takeSnapshot)
 		}
 	}
 }
@@ -604,7 +636,7 @@ func (s *Server) runAuditReverify(ctx context.Context) {
 		}
 	}
 
-	reverify() // boot warm-up + post-downtime full re-verify
+	daemon.Guard("audit-reverify", reverify) // boot warm-up + post-downtime full re-verify
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -612,7 +644,7 @@ func (s *Server) runAuditReverify(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			reverify()
+			daemon.Guard("audit-reverify", reverify)
 		}
 	}
 }
@@ -637,14 +669,14 @@ func (s *Server) runCuratorFeed(ctx context.Context, interval time.Duration) {
 	case <-ctx.Done():
 		return
 	case <-time.After(20 * time.Second): // let the fleet index rehydrate first
-		s.curatorFeedOnce(ctx)
+		daemon.Guard("curator-feed", func() { s.curatorFeedOnce(ctx) })
 	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.curatorFeedOnce(ctx)
+			daemon.Guard("curator-feed", func() { s.curatorFeedOnce(ctx) })
 		}
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/metrics"
 )
 
@@ -117,7 +118,7 @@ const maxBackoffMultiplier = 32
 // exponentially (2^failures * pollInterval, capped at 32x) to avoid hammering
 // an unreachable provider. Blocks until the context is cancelled.
 func (w *Watcher) Run(ctx context.Context) error {
-	w.initVersions(ctx)
+	daemon.Guard("secret-watcher", func() { w.initVersions(ctx) })
 
 	slog.Info("secret watcher started",
 		"paths", w.watchPaths,
@@ -141,7 +142,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(sleep):
-			w.checkRotations(ctx)
+			daemon.Guard("secret-watcher", func() { w.checkRotations(ctx) })
 		}
 	}
 }

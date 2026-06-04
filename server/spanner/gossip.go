@@ -18,6 +18,7 @@ import (
 	"time"
 
 	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -207,7 +208,7 @@ func (g *Gossiper) Run(ctx context.Context) {
 			slog.Info("spanner roster gossiper stopped")
 			return
 		case <-ticker.C:
-			g.cycle(ctx)
+			daemon.Guard("spanner-gossip", func() { g.cycle(ctx) })
 		}
 	}
 }

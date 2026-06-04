@@ -12,6 +12,7 @@ import (
 	"time"
 
 	vigolic "git.alexander4.io/tessera/license/products/vigo"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/metrics"
 )
 
@@ -242,20 +243,34 @@ func (e *Enforcer) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			e.mu.Lock()
-			_ = e.loadAndCheckLocked()
-			e.logIfNeeded()
-			if e.stage == StageServiceStop && e.shutdownFn != nil {
-				e.mu.Unlock()
-				slog.Error("license enforcement: stage 3 reached — initiating server shutdown",
-					"license_id", e.license.LicenseID,
-					"violation", e.violation)
+			shutdown := false
+			daemon.Guard("license-enforcer", func() { shutdown = e.checkTick() })
+			if shutdown {
 				e.shutdownFn()
 				return
 			}
-			e.mu.Unlock()
 		}
 	}
+}
+
+// checkTick runs one enforcement evaluation under the enforcer lock and reports
+// whether stage 3 (service stop) has been reached. The lock is released via
+// defer, so a panic in loadAndCheckLocked/logIfNeeded unwinds it cleanly —
+// letting daemon.Guard recover and the next tick re-acquire the lock instead of
+// deadlocking on a lock the panicked goroutine left held. The shutdown callback
+// is invoked by the caller, outside the lock.
+func (e *Enforcer) checkTick() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_ = e.loadAndCheckLocked()
+	e.logIfNeeded()
+	if e.stage == StageServiceStop && e.shutdownFn != nil {
+		slog.Error("license enforcement: stage 3 reached — initiating server shutdown",
+			"license_id", e.license.LicenseID,
+			"violation", e.violation)
+		return true
+	}
+	return false
 }
 
 // loadAndCheck loads the license and evaluates enforcement. Acquires lock.

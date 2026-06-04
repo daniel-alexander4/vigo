@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/metrics"
 )
@@ -56,7 +57,7 @@ func (sf *StateFlusher) Start(ctx context.Context, interval, offset time.Duratio
 			sf.Flush(context.Background())
 			return
 		case <-ticker.C:
-			sf.Flush(ctx)
+			daemon.Guard("state-flusher", func() { sf.Flush(ctx) })
 		}
 	}
 }

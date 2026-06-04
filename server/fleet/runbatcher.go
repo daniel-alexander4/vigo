@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -82,7 +83,7 @@ func (rb *RunBatcher) Start(ctx context.Context, interval, offset time.Duration)
 			rb.Flush(context.Background())
 			return
 		case <-ticker.C:
-			rb.Flush(ctx)
+			daemon.Guard("run-batcher", func() { rb.Flush(ctx) })
 		}
 	}
 }

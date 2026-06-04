@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -35,7 +36,7 @@ func (r *Reaper) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			r.reap(ctx)
+			daemon.Guard("task-reaper", func() { r.reap(ctx) })
 		}
 	}
 }

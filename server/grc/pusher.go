@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/fleet"
 )
 
@@ -60,8 +61,14 @@ func (p *Pusher) Start(ctx context.Context) {
 }
 
 func (p *Pusher) runLoop(ctx context.Context, intg config.GRCIntegration, interval time.Duration) {
+	// runLoop runs in its own goroutine, spawned per integration by Start —
+	// outside the SafeGo recover that wraps Start itself. Guard each push so a
+	// panic in one integration's evidence build/transport is recovered and that
+	// integration retries next tick, rather than crashing the whole process.
+	name := "grc-push:" + intg.Name
+
 	// Push immediately on startup.
-	p.pushEvidence(ctx, intg)
+	daemon.Guard(name, func() { p.pushEvidence(ctx, intg) })
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -70,7 +77,7 @@ func (p *Pusher) runLoop(ctx context.Context, intg config.GRCIntegration, interv
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			p.pushEvidence(ctx, intg)
+			daemon.Guard(name, func() { p.pushEvidence(ctx, intg) })
 		}
 	}
 }

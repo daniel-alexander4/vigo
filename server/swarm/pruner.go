@@ -7,6 +7,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"git.alexander4.io/vigo/server/daemon"
 )
 
 // RetentionPruner periodically revokes seeds whose retention window has elapsed.
@@ -56,7 +58,7 @@ func (p *RetentionPruner) Start(ctx context.Context, interval time.Duration) {
 	case <-ctx.Done():
 		return
 	case <-time.After(30 * time.Second):
-		p.Prune(ctx)
+		daemon.Guard("swarm-pruner", func() { p.Prune(ctx) })
 	}
 
 	for {
@@ -64,7 +66,7 @@ func (p *RetentionPruner) Start(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			p.Prune(ctx)
+			daemon.Guard("swarm-pruner", func() { p.Prune(ctx) })
 		}
 	}
 }

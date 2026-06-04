@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"git.alexander4.io/vigo/server/daemon"
 )
 
 // NVDDetail is the authoritative record for a single CVE pulled from the
@@ -61,7 +63,7 @@ func NewNVDEnricher(apiKey string, cache NVDCache) *NVDEnricher {
 
 // Run starts the NVD enrichment loop. It runs immediately once, then every 6 hours.
 func (e *NVDEnricher) Run(ctx context.Context, cveCollector func() []string) {
-	e.enrich(ctx, cveCollector())
+	daemon.Guard("nvd-enricher", func() { e.enrich(ctx, cveCollector()) })
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -69,7 +71,7 @@ func (e *NVDEnricher) Run(ctx context.Context, cveCollector func() []string) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			e.enrich(ctx, cveCollector())
+			daemon.Guard("nvd-enricher", func() { e.enrich(ctx, cveCollector()) })
 		}
 	}
 }
