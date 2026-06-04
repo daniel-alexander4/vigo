@@ -1,0 +1,29 @@
+# Hostcrate — maps hostname patterns to roles, configcrates, environments,
+# tags, and vars. First match wins, top to bottom. Any .vgo file with an
+# `envoys:` block is a hostcrate; `envoys.vgo` is the conventional name, but
+# you can split hostcrates across files and subdirectories.
+#
+# Copy with: vigocli config examples copy envoys
+envoys:
+  # Production web tier — assign the webserver role, tag for filtering,
+  # and override a couple of vars just for this match.
+  - match: "web*.prod.example.com"
+    environment: production
+    roles: [webserver]
+    tags: [webserver, production]
+    vars:
+      nginx_port: 443
+
+  # OS-conditional compliance baselines: each role applies only where its
+  # when: expression holds, so one match block covers a mixed fleet.
+  - match: "*.example.com"
+    roles:
+      - name: cis-ubuntu
+        when: "distro('ubuntu')"
+      - name: cis-rhel
+        when: "distro('rhel') || distro('centos') || distro('rocky')"
+
+  # Catch-all baseline for everything else, plus a single configcrate.
+  - match: "*"
+    roles: [baseline]
+    configcrates: [vigo-motd]

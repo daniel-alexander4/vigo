@@ -1,0 +1,14 @@
+# Compliance waivers — exempt specific framework controls from scoring, each
+# with a documented reason, an approver, and an optional expiry. Keyed by
+# framework name; a waivered control is reported as waived (not failed) in
+# compliance output. Waivers may live at any directory level and apply to that
+# subtree. Copy with: vigocli config examples copy waivers
+waivers:
+  cis-ubuntu:
+    - control: "6.1.10"
+      reason: "Build artifacts require a world-writable tmp on this fleet"
+      approved_by: dan
+      expires: 2099-01-01
+    - control: "6.2.5"
+      reason: "Home directories are managed centrally by LDAP, not on-host"
+      approved_by: dan

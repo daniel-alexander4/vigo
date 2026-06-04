@@ -62,6 +62,14 @@ func TestExampleModulesLintClean(t *testing.T) {
 			if effective == "compliance.vgo" || effective == "common.vgo" {
 				return nil
 			}
+			// tasks/ and workflows/ hold task/workflow definitions, not
+			// configcrates — publish.go's lintModules never feeds them to
+			// modlint (they're not configcrates/usercrates/scaffolding); the
+			// loader/task engine validates them instead. Skip here too.
+			slashed := filepath.ToSlash(path)
+			if strings.Contains(slashed, "/tasks/") || strings.Contains(slashed, "/workflows/") {
+				return nil
+			}
 			walked++
 			data, err := os.ReadFile(path)
 			if err != nil {
