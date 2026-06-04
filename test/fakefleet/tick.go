@@ -104,7 +104,7 @@ func checkInAndReport(cfg config, h *hostState, deltaMs uint32) error {
 		Signature:          checkInSig,
 		Timestamp:          timestamppb.New(now),
 		TraitsJson:         h.TraitsJSON,
-		AgentVersion:       "vigo-synthfleet",
+		AgentVersion:       "vigo-fakefleet",
 		IpAddress:          h.IP,
 		LastCheckinDeltaMs: deltaMs,
 	})

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// vigo-synthfleet stands up a realistic, multi-cloud SYNTHETIC envoy
+// vigo-fakefleet stands up a realistic, multi-cloud SYNTHETIC envoy
 // fleet against a live vigosrv — believable AWS/GCP host hierarchy,
 // per-host traits, and mostly-converged-with-a-few-broken convergence —
 // for demos, screenshots, and exercising the fleet/UI surfaces at scale
@@ -10,9 +10,9 @@
 // It is deliberately a test/ harness, not a vigocli verb: enrolling
 // thousands of fake envoys has no place in the production admin CLI.
 //
-//	go run ./test/synthfleet create   --admin-token "$(sudo cat /srv/vigo/cli-admin-token)"
-//	go run ./test/synthfleet tick     # one freshness pass (driven by the systemd timer)
-//	go run ./test/synthfleet backout  --admin-token "$(sudo cat /srv/vigo/cli-admin-token)"
+//	go run ./test/fakefleet create   --admin-token "$(sudo cat /srv/vigo/cli-admin-token)"
+//	go run ./test/fakefleet tick     # one freshness pass (driven by the systemd timer)
+//	go run ./test/fakefleet backout  --admin-token "$(sudo cat /srv/vigo/cli-admin-token)"
 //
 // Every synthetic host's name ends in the reserved `.synthetic` suffix.
 // That suffix is the marker: it can never collide with a real host, the
@@ -43,21 +43,22 @@ type config struct {
 	concurrency int
 	cadence     time.Duration
 	vigocliBin  string
+	fleetDir    string
 	httpClient  *http.Client
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `vigo-synthfleet %s — synthetic demo fleet harness
+	fmt.Fprintf(os.Stderr, `vigo-fakefleet %s — synthetic demo fleet harness
 
 Usage:
-  vigo-synthfleet <command> [flags]
+  vigo-fakefleet <command> [flags]
 
 Commands:
   create    Generate the stacks/synthetic tree, enroll the fleet, publish, first tick.
   tick      One freshness pass: check in + report every synthetic envoy once, then exit.
   backout   Delete every *.synthetic envoy, wipe the synthetic config, remove state.
 
-Run 'vigo-synthfleet <command> -h' for command flags.
+Run 'vigo-fakefleet <command> -h' for command flags.
 `, toolVersion)
 }
 
@@ -97,12 +98,13 @@ func parseFlags(cmd string, args []string) config {
 	adminToken := fs.String("admin-token", "", "admin bearer token; defaults to the contents of --admin-token-file")
 	tokenFile := fs.String("admin-token-file", "/srv/vigo/cli-admin-token", "root-only local-admin token file, read when --admin-token is empty")
 	stacksDir := fs.String("stacks-dir", "/srv/vigo/stacks", "operator stacks tree; synthetic config is written under it")
-	statePath := fs.String("state", "/srv/vigo/synthfleet/state.json", "fleet identity manifest (0600); resume reads it")
+	statePath := fs.String("state", "/srv/vigo/fakefleet/state.json", "fleet identity manifest (0600); resume reads it")
 	count := fs.Int("count", 13647, "number of synthetic envoys (create only)")
 	broken := fs.Int("broken", 7, "how many envoys report a failing resource (create only)")
 	concurrency := fs.Int("concurrency", 64, "max in-flight enroll/checkin operations")
 	cadence := fs.Duration("cadence", 2*time.Minute, "tick interval reported to the server as the check-in cycle (match the systemd timer)")
 	vigocliBin := fs.String("vigocli", "vigocli", "vigocli binary used to publish the synthetic config (stacks → .live)")
+	fleetDir := fs.String("fleet-dir", "alexander4", "stacks subdir the fake clouds nest under (e.g. alexander4); the harness owns <fleet-dir>/{aws,gcp} and removes only those on backout")
 	fs.Parse(args)
 
 	tok := *adminToken
@@ -123,6 +125,7 @@ func parseFlags(cmd string, args []string) config {
 		concurrency: *concurrency,
 		cadence:     *cadence,
 		vigocliBin:  *vigocliBin,
+		fleetDir:    *fleetDir,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{

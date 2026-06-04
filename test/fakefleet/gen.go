@@ -31,6 +31,7 @@ type hostPlan struct {
 type region struct {
 	cloud string
 	name  string
+	code  string // short region code used in realistic hostnames (e.g. use1)
 	azs   []string
 }
 
@@ -59,14 +60,20 @@ var synthEnvs = []string{"prod", "stage", "test"}
 // block covers ~36 hosts — realistic, and far cheaper to publish than
 // per-host files.
 var synthRegions = []region{
-	{"aws", "us-east-1", []string{"us-east-1a", "us-east-1b", "us-east-1c"}},
-	{"aws", "us-west-2", []string{"us-west-2a", "us-west-2b", "us-west-2c"}},
-	{"aws", "eu-west-1", []string{"eu-west-1a", "eu-west-1b", "eu-west-1c"}},
-	{"aws", "ap-southeast-1", []string{"ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"}},
-	{"gcp", "us-central1", []string{"us-central1-a", "us-central1-b", "us-central1-c"}},
-	{"gcp", "europe-west1", []string{"europe-west1-b", "europe-west1-c", "europe-west1-d"}},
-	{"gcp", "asia-east1", []string{"asia-east1-a", "asia-east1-b", "asia-east1-c"}},
+	{"aws", "us-east-1", "use1", []string{"us-east-1a", "us-east-1b", "us-east-1c"}},
+	{"aws", "us-west-2", "usw2", []string{"us-west-2a", "us-west-2b", "us-west-2c"}},
+	{"aws", "eu-west-1", "euw1", []string{"eu-west-1a", "eu-west-1b", "eu-west-1c"}},
+	{"aws", "ap-southeast-1", "apse1", []string{"ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"}},
+	{"gcp", "us-central1", "usc1", []string{"us-central1-a", "us-central1-b", "us-central1-c"}},
+	{"gcp", "europe-west1", "euw1", []string{"europe-west1-b", "europe-west1-c", "europe-west1-d"}},
+	{"gcp", "asia-east1", "ase1", []string{"asia-east1-a", "asia-east1-b", "asia-east1-c"}},
 }
+
+// azCode is the short zone code used in realistic hostnames + match
+// patterns — the region code plus the zone's trailing letter (us-east-1a
+// → use1a, us-central1-b → usc1b). Combined with the cloud it's globally
+// unique, so first-match-wins patterns stay zone-specific.
+func azCode(r region, az string) string { return r.code + az[len(az)-1:] }
 
 var synthClasses = []hostClass{
 	{"web", "synthetic-web", "m5.large", "e2-standard-2", 2, 8192, "amd64"},
@@ -256,7 +263,10 @@ func buildHostPlan(count, broken int) []hostPlan {
 			if cl.r.cloud == "gcp" {
 				inst = cl.cls.gcpInstance
 			}
-			host := fmt.Sprintf("%s-%05d.%s.%s.%s.%s", cl.cls.name, k, cl.env, cl.az, cl.r.cloud, synthTLD)
+			// Realistic ops-convention hostname: role-env-zonecode-NNN,
+			// then a cloud "domain" + the reserved marker suffix —
+			// e.g. web-prod-use1a-007.aws.synthetic.
+			host := fmt.Sprintf("%s-%s-%s-%03d.%s.%s", cl.cls.name, cl.env, azCode(cl.r, cl.az), k, cl.r.cloud, synthTLD)
 			traits, _ := json.Marshal(map[string]any{
 				"os":             d.os,
 				"os_family":      d.family,
@@ -300,43 +310,54 @@ func buildHostPlan(count, broken int) []hostPlan {
 }
 
 // writeConfigTree renders the synthetic configcrates and the nested
-// per-zone glob hostcrates under stacksDir. The hostcrate files are laid
-// out as synthetic/<cloud>/<region>/<zone>/envoys.vgo — one shared file
-// per zone (not per host, so no file explosion) — so the /envoys/tree
-// view groups each envoy under its cloud/region/zone, mirroring the real
-// fleet hierarchy. Returns the two synthetic directories it owns (for
-// backout to remove).
-func writeConfigTree(stacksDir string, plan []hostPlan) (configcratesDir, hostcratesDir string, err error) {
-	configcratesDir = filepath.Join(stacksDir, "configcrates", synthTLD)
-	hostcratesDir = filepath.Join(stacksDir, synthTLD)
-
+// per-zone glob hostcrates under stacksDir. The hostcrates nest under the
+// operator's own fleet dir as <fleetDir>/<cloud>/<region>/<zone>/envoys.vgo
+// (e.g. alexander4/aws/us-east-1/us-east-1a/envoys.vgo) — one shared file
+// per zone (not per host) — so /envoys/tree groups each envoy under its
+// cloud/region/zone alongside the real fleet. configcrate *definitions*
+// must live under configcrates/ (loader-hardcoded), so they go in
+// configcrates/synthetic/. Returns the exact directories it created, so
+// backout removes precisely those — never the operator's fleet dir
+// itself, which holds real config.
+func writeConfigTree(stacksDir, fleetDir string, plan []hostPlan) (cleanupDirs []string, err error) {
+	configcratesDir := filepath.Join(stacksDir, "configcrates", synthTLD)
 	if err = os.MkdirAll(configcratesDir, 0o755); err != nil {
-		return "", "", err
+		return nil, err
 	}
 	for name, content := range configcrateFiles {
 		if err = os.WriteFile(filepath.Join(configcratesDir, name), []byte(content), 0o644); err != nil {
-			return "", "", err
+			return nil, err
 		}
 	}
-	if err = os.MkdirAll(hostcratesDir, 0o755); err != nil {
-		return "", "", err
-	}
-	if err = os.WriteFile(filepath.Join(hostcratesDir, "environments.vgo"), []byte(environmentsFile), 0o644); err != nil {
-		return "", "", err
-	}
+	cleanupDirs = append(cleanupDirs, configcratesDir)
+
+	seenCloud := map[string]bool{}
 	for _, r := range synthRegions {
-		for _, az := range r.azs {
-			dir := filepath.Join(hostcratesDir, r.cloud, r.name, az)
-			if err = os.MkdirAll(dir, 0o755); err != nil {
-				return "", "", err
+		cloudRoot := filepath.Join(stacksDir, fleetDir, r.cloud)
+		if !seenCloud[r.cloud] {
+			seenCloud[r.cloud] = true
+			if err = os.MkdirAll(cloudRoot, 0o755); err != nil {
+				return nil, err
 			}
-			body := renderZoneHostcrate(r, az)
-			if err = os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(body), 0o644); err != nil {
-				return "", "", err
+			// One environments.vgo per cloud root keeps the env overrides
+			// inside the dirs the harness owns (removed wholesale by
+			// backout) while still covering every zone beneath it.
+			if err = os.WriteFile(filepath.Join(cloudRoot, "environments.vgo"), []byte(environmentsFile), 0o644); err != nil {
+				return nil, err
+			}
+			cleanupDirs = append(cleanupDirs, cloudRoot)
+		}
+		for _, az := range r.azs {
+			dir := filepath.Join(cloudRoot, r.name, az)
+			if err = os.MkdirAll(dir, 0o755); err != nil {
+				return nil, err
+			}
+			if err = os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(renderZoneHostcrate(r, az)), 0o644); err != nil {
+				return nil, err
 			}
 		}
 	}
-	return configcratesDir, hostcratesDir, nil
+	return cleanupDirs, nil
 }
 
 // renderZoneHostcrate emits one zone's hostcrate: a glob match block per
@@ -350,11 +371,12 @@ func renderZoneHostcrate(r region, az string) string {
 	b.WriteString("envoys:\n")
 	for _, c := range synthClasses {
 		for _, env := range synthEnvs {
-			// One block per (class, env). The env literal in the pattern
-			// partitions hosts by environment; `environment:` makes it the
-			// multi-axis env dimension the synthetic environments.vgo then
-			// layers overrides onto.
-			fmt.Fprintf(&b, "  - match: \"%s-*.%s.%s.%s.%s\"\n", c.name, env, az, r.cloud, synthTLD)
+			// One block per (class, env), matching the realistic
+			// role-env-zonecode-NNN hostname. The env + zonecode literals
+			// keep the pattern zone- and environment-specific;
+			// `environment:` makes it the multi-axis env dimension the
+			// synthetic environments.vgo then layers overrides onto.
+			fmt.Fprintf(&b, "  - match: \"%s-%s-%s-*.%s.%s\"\n", c.name, env, azCode(r, az), r.cloud, synthTLD)
 			fmt.Fprintf(&b, "    environment: %s\n", env)
 			fmt.Fprintf(&b, "    configcrates: [%s]\n", c.configcrate)
 			fmt.Fprintf(&b, "    tags: [%s, %s, %s, %s]\n", synthTLD, r.cloud, c.name, env)

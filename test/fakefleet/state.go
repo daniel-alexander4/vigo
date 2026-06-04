@@ -29,10 +29,14 @@ type hostState struct {
 // restarted tick (after process death, host reboot, or server restart)
 // resumes the same envoys instead of enrolling duplicates.
 type fleetState struct {
-	Version   int         `json:"version"`
-	Count     int         `json:"count"`
-	StacksDir string      `json:"stacks_dir"`
-	Hosts     []hostState `json:"hosts"`
+	Version   int    `json:"version"`
+	Count     int    `json:"count"`
+	StacksDir string `json:"stacks_dir"`
+	// CleanupDirs are the exact directories create wrote (the configcrates
+	// dir + each fleet-dir cloud root). backout removes precisely these, so
+	// it never touches the operator's real config in the same fleet dir.
+	CleanupDirs []string    `json:"cleanup_dirs"`
+	Hosts       []hostState `json:"hosts"`
 }
 
 const stateVersion = 1

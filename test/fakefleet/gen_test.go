@@ -4,11 +4,65 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"git.alexander4.io/vigo/server/modlint"
 )
+
+// TestWriteConfigTreeNestsUnderFleetDir locks the layout + backout-safety
+// invariant: hostcrates nest under <fleetDir>/<cloud>/..., no top-level
+// `synthetic/` dir is created, the operator's existing fleet-dir config is
+// untouched, and the reported cleanup dirs are exactly the harness-owned
+// ones (never the fleet dir itself).
+func TestWriteConfigTreeNestsUnderFleetDir(t *testing.T) {
+	stacks := t.TempDir()
+	// A pre-existing "real" file in the fleet dir that backout must never reach.
+	real := filepath.Join(stacks, "alexander4", "us-east1", "us-east1-a")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realFile := filepath.Join(real, "girlslaptop.vgo")
+	if err := os.WriteFile(realFile, []byte("envoys: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup, err := writeConfigTree(stacks, "alexander4", buildHostPlan(400, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Nested hostcrate exists; no top-level synthetic dir.
+	if _, err := os.Stat(filepath.Join(stacks, "alexander4", "aws", "us-east-1", "us-east-1a", "envoys.vgo")); err != nil {
+		t.Errorf("expected nested zone hostcrate: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(stacks, synthTLD)); !os.IsNotExist(err) {
+		t.Errorf("a top-level %s/ dir must not be created", synthTLD)
+	}
+	// The operator's real file is untouched.
+	if _, err := os.Stat(realFile); err != nil {
+		t.Errorf("real fleet-dir file was disturbed: %v", err)
+	}
+	// Cleanup dirs are exactly the harness-owned ones, never the fleet dir.
+	want := map[string]bool{
+		filepath.Join(stacks, "configcrates", synthTLD): true,
+		filepath.Join(stacks, "alexander4", "aws"):      true,
+		filepath.Join(stacks, "alexander4", "gcp"):      true,
+	}
+	if len(cleanup) != len(want) {
+		t.Fatalf("cleanup dirs = %v, want the 3 harness-owned dirs", cleanup)
+	}
+	for _, d := range cleanup {
+		if !want[d] {
+			t.Errorf("unexpected cleanup dir %q", d)
+		}
+		if d == filepath.Join(stacks, "alexander4") {
+			t.Fatalf("cleanup must never include the fleet dir itself")
+		}
+	}
+}
 
 // TestConfigcratesLintClean asserts every generated synthetic configcrate
 // passes modlint with no Error-severity findings — i.e. publish accepts

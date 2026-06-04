@@ -23,17 +23,16 @@ func runBackout(cfg config) {
 		die("admin token required (pass --admin-token or make --admin-token-file readable)")
 	}
 
-	// Prefer the manifest's ids; fall back to listing the server and
-	// filtering by suffix if the manifest is lost.
-	stacksDir := cfg.stacksDir
+	// Prefer the manifest's ids + the exact dirs create recorded; fall
+	// back to listing the server by suffix and the default dirs if the
+	// manifest is lost.
 	var ids []string
+	var cleanupDirs []string
 	if st, err := loadState(cfg.statePath); err == nil {
 		for _, h := range st.Hosts {
 			ids = append(ids, h.EnvoyID)
 		}
-		if st.StacksDir != "" {
-			stacksDir = st.StacksDir
-		}
+		cleanupDirs = st.CleanupDirs
 		fmt.Printf("manifest lists %d synthetic envoys\n", len(ids))
 	} else {
 		fmt.Println("no manifest — listing the server and filtering by suffix")
@@ -42,6 +41,13 @@ func runBackout(cfg config) {
 			die("list envoys: %v", err)
 		}
 		fmt.Printf("found %d *.%s envoys server-side\n", len(ids), synthTLD)
+		// Recompute the harness-owned dirs from the flags. These are the
+		// only dirs create ever writes — never the fleet dir itself.
+		cleanupDirs = []string{
+			filepath.Join(cfg.stacksDir, "configcrates", synthTLD),
+			filepath.Join(cfg.stacksDir, cfg.fleetDir, "aws"),
+			filepath.Join(cfg.stacksDir, cfg.fleetDir, "gcp"),
+		}
 	}
 
 	if len(ids) > 0 {
@@ -50,12 +56,10 @@ func runBackout(cfg config) {
 		})
 	}
 
-	// Wipe the synthetic config (both namespaced dirs) and republish so
-	// the server drops it from .live/.
-	for _, dir := range []string{
-		filepath.Join(stacksDir, "configcrates", synthTLD),
-		filepath.Join(stacksDir, synthTLD),
-	} {
+	// Remove exactly the dirs create wrote (configcrates/synthetic + each
+	// fleet-dir cloud root) and republish so the server drops them from
+	// .live/. Never the fleet dir itself — it holds real config.
+	for _, dir := range cleanupDirs {
 		if err := os.RemoveAll(dir); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: remove %s: %v\n", dir, err)
 		} else {
@@ -71,7 +75,7 @@ func runBackout(cfg config) {
 	}
 	os.Remove(filepath.Dir(cfg.statePath)) // best-effort: drop the dir if now empty
 
-	fmt.Printf("\nbackout complete. If the timer is installed, stop it:\n  sudo systemctl disable --now vigo-synthfleet.timer\n")
+	fmt.Printf("\nbackout complete. If the timer is installed, stop it:\n  sudo systemctl disable --now vigo-fakefleet.timer\n")
 }
 
 // listSyntheticEnvoyIDs GETs /api/v1/envoys and returns the ids of every

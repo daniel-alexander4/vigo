@@ -1,5 +1,5 @@
-# Synthetic demo fleet — one freshness pass. Driven by vigo-synthfleet.timer.
-# Build the binary first:  go build -o /usr/local/bin/vigo-synthfleet ./test/synthfleet
+# Synthetic demo fleet — one freshness pass. Driven by vigo-fakefleet.timer.
+# Build the binary first:  go build -o /usr/local/bin/vigo-fakefleet ./test/fakefleet
 # Stateless and idempotent: each run checks in + reports every synthetic
 # envoy once, then exits. A server restart / outage just means the next
 # timer-fired run retries. Reads the root-only local-admin token itself.
@@ -10,8 +10,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/vigo-synthfleet tick
+ExecStart=/usr/local/bin/vigo-fakefleet tick
 # tick is the only privileged-token reader; runs as root to read
-# /srv/vigo/cli-admin-token and /srv/vigo/synthfleet/state.json.
+# /srv/vigo/cli-admin-token and /srv/vigo/fakefleet/state.json.
 Nice=10
 IOSchedulingClass=idle

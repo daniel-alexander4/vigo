@@ -120,7 +120,7 @@ func signWith(key ed25519.PrivateKey, msg []byte) []byte { return ed25519.Sign(k
 // keeps this on the exact operator path rather than re-implementing the
 // publish/validate/sync machinery here.
 func publishConfig(cfg config) error {
-	cmd := exec.Command(cfg.vigocliBin, "config", "publish", "--skip-url-check", "--operator", "vigo-synthfleet")
+	cmd := exec.Command(cfg.vigocliBin, "config", "publish", "--skip-url-check", "--operator", "vigo-fakefleet")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

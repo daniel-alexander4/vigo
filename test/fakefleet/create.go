@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -21,11 +22,11 @@ func runCreate(cfg config) {
 	plan := buildHostPlan(cfg.count, cfg.brokenCount)
 	fmt.Printf("planned %d synthetic envoys across %d regions (%d broken)\n", len(plan), len(synthRegions), cfg.brokenCount)
 
-	ccDir, hcDir, err := writeConfigTree(cfg.stacksDir, plan)
+	cleanupDirs, err := writeConfigTree(cfg.stacksDir, cfg.fleetDir, plan)
 	if err != nil {
 		die("write config tree: %v", err)
 	}
-	fmt.Printf("wrote synthetic config:\n  %s\n  %s\n", ccDir, hcDir)
+	fmt.Printf("wrote synthetic config under:\n  %s\n", strings.Join(cleanupDirs, "\n  "))
 
 	if err := publishConfig(cfg); err != nil {
 		die("publish synthetic config: %v", err)
@@ -69,10 +70,11 @@ func runCreate(cfg config) {
 	}
 
 	st := &fleetState{
-		Version:   stateVersion,
-		Count:     len(enrolled),
-		StacksDir: cfg.stacksDir,
-		Hosts:     enrolled,
+		Version:     stateVersion,
+		Count:       len(enrolled),
+		StacksDir:   cfg.stacksDir,
+		CleanupDirs: cleanupDirs,
+		Hosts:       enrolled,
 	}
 	if err := saveState(cfg.statePath, st); err != nil {
 		die("save state manifest: %v", err)
@@ -84,12 +86,12 @@ func runCreate(cfg config) {
 
 	fmt.Printf(`
 synthetic fleet is up. To keep it fresh across reboots and server
-restarts, install + enable the timer (units in test/synthfleet/):
+restarts, install + enable the timer (units in test/fakefleet/):
 
-  sudo cp test/synthfleet/vigo-synthfleet.{service,timer} /etc/systemd/system/
+  sudo cp test/fakefleet/vigo-fakefleet.{service,timer} /etc/systemd/system/
   sudo systemctl daemon-reload
-  sudo systemctl enable --now vigo-synthfleet.timer
+  sudo systemctl enable --now vigo-fakefleet.timer
 
-Tear down with:  vigo-synthfleet backout   (then: systemctl disable --now vigo-synthfleet.timer)
+Tear down with:  vigo-fakefleet backout   (then: systemctl disable --now vigo-fakefleet.timer)
 `)
 }

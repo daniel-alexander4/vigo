@@ -13,21 +13,24 @@ thousands of fake envoys has no place in the production admin CLI.
 - **~13,647 envoys** spread across a multi-axis hierarchy: 7 cloud regions
   × 3 AZs × 6 host classes (web/app/db/cache/monitoring/bastion) × 3
   **environments** (prod/stage/test). Counts and topology are flags.
-- **Self-contained synthetic config**, written under two clearly
-  namespaced dirs and removed wholesale by `backout`:
+- **Synthetic config**, nested into the operator's own fleet dir
+  (`--fleet-dir`, default `alexander4`) so the fake clouds sit alongside
+  the real regions, and removed by `backout` (which deletes only the exact
+  dirs `create` wrote, never the fleet dir itself):
   - `stacks/configcrates/synthetic/*.vgo` — 4 synthetic configcrates
-    (real resource params + real `compliance.provides` tags).
-  - `stacks/synthetic/<cloud>/<region>/<zone>/envoys.vgo` — glob hostcrates
-    nested by cloud/region/zone (one shared file per zone, not per host),
-    so the `/envoys/tree` view groups envoys under their cloud/region/zone
-    just like the real fleet. Each match block maps a host-class pattern
-    straight to a configcrate and carries an `environment:` (the env is a
-    label in the hostname, e.g. `web-00001.prod.us-east-1a.aws.synthetic`).
-    **No roles** — the central `stacks/roles.vgo` is never touched.
-  - `stacks/synthetic/environments.vgo` — per-environment overrides
-    (prod adds fleet-wide monitoring + a stricter `log_level`; stage/test
-    differ in vars), so the multi-axis env dimension shows real
-    differentiation, not just a label.
+    (real resource params + real `compliance.provides` tags). Definitions
+    must live under `configcrates/` (loader-hardcoded).
+  - `stacks/<fleet-dir>/<cloud>/<region>/<zone>/envoys.vgo` — glob
+    hostcrates nested by cloud/region/zone (one shared file per zone, not
+    per host), so `/envoys/tree` groups envoys under cloud/region/zone
+    alongside the real fleet. Each match block maps a host-class pattern
+    straight to a configcrate and carries an `environment:` (a hostname
+    label, e.g. `web-prod-use1a-007.aws.synthetic`). **No roles** —
+    `stacks/roles.vgo` is never touched. Nesting under the fleet dir means
+    synthetic hosts inherit its `common.vgo` baseline (more realistic).
+  - `stacks/<fleet-dir>/<cloud>/environments.vgo` — per-environment
+    overrides (prod adds fleet-wide monitoring + a stricter `log_level`;
+    stage/test differ in vars), kept inside the harness-owned cloud dirs.
 - **Per-host traits** (os/distro/arch/cloud/region/az/instance) sent
   inline on every check-in, plus **5–10 deliberately broken** hosts that
   report a failing resource so Degraded/Failed pills, risk, and alerts
@@ -96,10 +99,12 @@ If every envoy comes back `NotFound` (e.g. the server DB was wiped),
 ## Backout order
 
 `backout` deletes the envoys (keyed on the `.synthetic` suffix — from the
-manifest, or by listing the server if the manifest is lost), wipes both
-`synthetic/` config dirs, republishes, and removes the manifest. Disable
-the timer first so a tick doesn't race the delete (a racing tick just
-logs `NotFound` and is harmless either way).
+manifest, or by listing the server if the manifest is lost), removes
+exactly the dirs `create` wrote (the manifest's `cleanup_dirs`:
+`configcrates/synthetic` + each fleet-dir cloud root — **never** the fleet
+dir itself), republishes, and removes the manifest. Disable the timer
+first so a tick doesn't race the delete (a racing tick just logs
+`NotFound` and is harmless either way).
 
 ## Flags
 
@@ -114,6 +119,7 @@ logs `NotFound` and is harmless either way).
 | `--server` | `127.0.0.1:1530` | gRPC address |
 | `--api` | `https://127.0.0.1:8443` | REST API base |
 | `--stacks-dir` | `/srv/vigo/stacks` | operator stacks tree |
+| `--fleet-dir` | `alexander4` | stacks subdir the fake `aws`/`gcp` clouds nest under |
 | `--state` | `/srv/vigo/fakefleet/state.json` | identity manifest |
 | `--admin-token` / `--admin-token-file` | (file) `/srv/vigo/cli-admin-token` | admin auth |
 | `--vigocli` | `vigocli` | binary used to publish |

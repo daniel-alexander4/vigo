@@ -15,13 +15,13 @@ import (
 // newFlagSet returns a per-command flag set that prints the command name
 // on error rather than the bare binary path.
 func newFlagSet(cmd string) *flag.FlagSet {
-	fs := flag.NewFlagSet("vigo-synthfleet "+cmd, flag.ExitOnError)
+	fs := flag.NewFlagSet("vigo-fakefleet "+cmd, flag.ExitOnError)
 	return fs
 }
 
 // die prints to stderr and exits non-zero.
 func die(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "vigo-synthfleet: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "vigo-fakefleet: "+format+"\n", args...)
 	os.Exit(1)
 }
 
