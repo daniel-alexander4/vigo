@@ -17,13 +17,17 @@
 //!   value at first forward apply (write-once-guarded), restore it on revert.
 //!   A missing snapshot at revert fails loud — Vigo never guesses a default.
 //! - **Group A — local-command** (`exec`, `backup`, `db_backup`, `replace`):
-//!   no snapshot; revert runs the operator's `on_revert:` command locally.
-//!   Publish-time validation guarantees `on_revert:` is present.
+//!   no snapshot; revert runs the operator's `on_revert:` command locally via
+//!   `sh -c`. Publish-time validation guarantees `on_revert:` is present.
+//! - **Group A — native-context command** (`ssh_exec`, `powershell`): like the
+//!   local-command flavor, but the `on_revert:` inverse runs in the executor's
+//!   own context — re-dispatched through the inner executor (remote SSH /
+//!   local PowerShell) with idempotency guards stripped — not local `sh -c`.
 //!
-//! Remote-context types (`ssh_exec`, `powershell`) and the stanza/policy
-//! setters (`cisco_interface`, `junos_interface`, `local_security_policy`,
-//! `service_recovery_windows`) are a tracked follow-on — they revert in a
-//! remote / structured context this local-only v1 doesn't cover.
+//! The stanza/policy setters (`cisco_interface`, `junos_interface`,
+//! `local_security_policy`, `service_recovery_windows`) are a tracked follow-on
+//! — they revert in a structured (multi-field) or remote-device context this
+//! build doesn't cover.
 
 use crate::executors::{run_command, Action, Executor, ResourceResult};
 use crate::state::reversal::{ReversalCache, ReversalEntry};
@@ -42,14 +46,25 @@ pub fn snapshot_target_param(resource_type: &str) -> Option<&'static str> {
     }
 }
 
-/// Group A local-command types → revert by running `on_revert:` locally.
+/// Group A local-command types → revert by running `on_revert:` locally via
+/// `sh -c`.
 pub fn is_command_reversible(resource_type: &str) -> bool {
     matches!(resource_type, "exec" | "backup" | "db_backup" | "replace")
 }
 
+/// Group A native-context command types → revert by re-dispatching the inner
+/// executor with `command` ← `on_revert:` (idempotency guards stripped), so the
+/// inverse runs over the executor's own transport — remote SSH (`ssh_exec`) or
+/// local PowerShell (`powershell`) — not `sh -c`.
+pub fn is_inner_command_reversible(resource_type: &str) -> bool {
+    matches!(resource_type, "ssh_exec" | "powershell")
+}
+
 /// Every type that supports `revert:` in this build.
 pub fn is_reversible(resource_type: &str) -> bool {
-    snapshot_target_param(resource_type).is_some() || is_command_reversible(resource_type)
+    snapshot_target_param(resource_type).is_some()
+        || is_command_reversible(resource_type)
+        || is_inner_command_reversible(resource_type)
 }
 
 /// Wrap each reversible executor in the map with a [`ReversibleExecutor`].
@@ -69,6 +84,7 @@ pub fn wrap_reversible(
         if let Some(inner) = executors.remove(&t) {
             let kind = match snapshot_target_param(&t) {
                 Some(param) => ReversalKind::Snapshot { param },
+                None if is_inner_command_reversible(&t) => ReversalKind::CommandViaInner,
                 None => ReversalKind::Command,
             };
             executors.insert(
@@ -87,8 +103,13 @@ pub fn wrap_reversible(
 enum ReversalKind {
     /// Group B: restore a captured prior value via the executor's target param.
     Snapshot { param: &'static str },
-    /// Group A: run the operator's `on_revert:` command locally.
+    /// Group A: run the operator's `on_revert:` command locally via `sh -c`.
     Command,
+    /// Group A, native context: re-dispatch the inner executor with its
+    /// `command` param swapped to `on_revert:` (idempotency guards stripped),
+    /// so the inverse runs over the executor's own transport — remote SSH
+    /// (`ssh_exec`) or local PowerShell (`powershell`) — not `sh -c`.
+    CommandViaInner,
 }
 
 /// Decorator that adds reversal behavior around a real executor.
@@ -175,7 +196,7 @@ impl ReversibleExecutor {
                 r.duration_ms = start.elapsed().as_millis() as i32;
                 r
             }
-            ReversalKind::Command => {
+            ReversalKind::Command | ReversalKind::CommandViaInner => {
                 let cmd = params.get("on_revert").map(|s| s.as_str()).unwrap_or("");
                 let mut r = self.result(params);
                 if cmd.is_empty() {
@@ -191,6 +212,22 @@ impl ReversibleExecutor {
                     r.changed = true;
                     r.duration_ms = start.elapsed().as_millis() as i32;
                     return r;
+                }
+                if let ReversalKind::CommandViaInner = &self.kind {
+                    // Re-run the inner executor with `command` ← on_revert and
+                    // the idempotency guards stripped, so the inverse runs over
+                    // the executor's own transport (remote SSH / local
+                    // PowerShell) and runs unconditionally.
+                    let mut revert_params = params.clone();
+                    revert_params.insert("command".to_string(), cmd.to_string());
+                    revert_params.remove("onlyif");
+                    revert_params.remove("unless");
+                    let mut ir = self.inner.execute(&revert_params, false);
+                    if ir.error.is_none() {
+                        self.write_entry(key, &ReversalEntry { snapshot: None, reverted: true });
+                    }
+                    ir.duration_ms = start.elapsed().as_millis() as i32;
+                    return ir;
                 }
                 match run_command("sh", &["-c", cmd]) {
                     Ok(o) if o.status.success() => {
@@ -248,7 +285,7 @@ impl ReversibleExecutor {
                         }
                     }
                 }
-                ReversalKind::Command => {
+                ReversalKind::Command | ReversalKind::CommandViaInner => {
                     // No snapshot to keep — just clear a spent revert marker.
                     if entry.map(|e| e.reverted).unwrap_or(false) {
                         self.delete_entry(key);
@@ -453,6 +490,118 @@ mod tests {
             kind: ReversalKind::Command,
         };
         let rv = params(&[("name", "r1"), ("revert", "true")]);
+        let r = w.execute(&rv, false);
+        assert!(r.error.is_some());
+        assert!(r.error.as_deref().unwrap().contains("on_revert command is required"));
+    }
+
+    /// Records the params it was executed with, so CommandViaInner tests can
+    /// assert the re-dispatched params (command swap + guard strip).
+    struct RecordingInner {
+        last: Mutex<Option<HashMap<String, String>>>,
+    }
+    impl RecordingInner {
+        fn new() -> Self {
+            Self { last: Mutex::new(None) }
+        }
+    }
+    // Implemented on the Arc so a test can keep a handle on the recorder while
+    // the wrapper owns it as a Box<dyn Executor>.
+    impl Executor for Arc<RecordingInner> {
+        fn execute(&self, params: &HashMap<String, String>, _dry_run: bool) -> ResourceResult {
+            *self.last.lock().unwrap() = Some(params.clone());
+            let mut r = ResourceResult::new("recording", "");
+            r.action = Action::Updated;
+            r.changed = true;
+            r
+        }
+    }
+
+    fn inner_rev(inner: Arc<RecordingInner>, store: Arc<StateStore>) -> ReversibleExecutor {
+        ReversibleExecutor {
+            resource_type: "ssh_exec".into(),
+            inner: Box::new(inner),
+            store,
+            kind: ReversalKind::CommandViaInner,
+        }
+    }
+
+    #[test]
+    fn inner_command_revert_redispatches_with_command_swapped_and_guards_stripped() {
+        let s = store();
+        let inner = Arc::new(RecordingInner::new());
+        let w = inner_rev(inner.clone(), s.clone());
+        let rv = params(&[
+            ("name", "r1"),
+            ("host", "10.0.0.1"),
+            ("username", "admin"),
+            ("credential", "secret:net/admin"),
+            ("command", "forward-cmd"),
+            ("onlyif", "should-be-stripped"),
+            ("unless", "should-be-stripped"),
+            ("revert", "true"),
+            ("on_revert", "undo-cmd"),
+        ]);
+        let r = w.execute(&rv, false);
+        assert!(r.error.is_none(), "unexpected error: {:?}", r.error);
+        let dispatched = inner.last.lock().unwrap().clone().expect("inner was executed");
+        // command swapped to on_revert; transport params preserved; guards gone.
+        assert_eq!(dispatched.get("command").map(String::as_str), Some("undo-cmd"));
+        assert_eq!(dispatched.get("host").map(String::as_str), Some("10.0.0.1"));
+        assert_eq!(dispatched.get("credential").map(String::as_str), Some("secret:net/admin"));
+        assert!(!dispatched.contains_key("onlyif"), "onlyif must be stripped");
+        assert!(!dispatched.contains_key("unless"), "unless must be stripped");
+        // Marker persisted.
+        let key = ReversalCache::key("ssh_exec", "r1");
+        assert!(w.read_entry(&key).unwrap().reverted);
+    }
+
+    #[test]
+    fn inner_command_revert_is_idempotent_and_rearms() {
+        let s = store();
+        let inner = Arc::new(RecordingInner::new());
+        let w = inner_rev(inner.clone(), s.clone());
+        let key = ReversalCache::key("ssh_exec", "r1");
+        let rv = params(&[
+            ("name", "r1"),
+            ("command", "fwd"),
+            ("revert", "true"),
+            ("on_revert", "undo"),
+        ]);
+        w.execute(&rv, false); // reverts
+        assert!(w.read_entry(&key).unwrap().reverted);
+        *inner.last.lock().unwrap() = None;
+        let r2 = w.execute(&rv, false); // already reverted → settled no-op
+        assert_eq!(r2.action, Action::None);
+        assert!(inner.last.lock().unwrap().is_none(), "inner must not re-run once reverted");
+        // Forward apply re-arms: spent marker cleared.
+        let fwd = params(&[("name", "r1"), ("command", "fwd")]);
+        w.execute(&fwd, false);
+        assert!(w.read_entry(&key).is_none(), "forward apply clears the spent marker");
+    }
+
+    #[test]
+    fn inner_command_revert_dry_run_does_not_dispatch() {
+        let s = store();
+        let inner = Arc::new(RecordingInner::new());
+        let w = inner_rev(inner.clone(), s.clone());
+        let rv = params(&[
+            ("name", "r1"),
+            ("command", "fwd"),
+            ("revert", "true"),
+            ("on_revert", "undo"),
+        ]);
+        let r = w.execute(&rv, true);
+        assert!(r.changed);
+        assert!(inner.last.lock().unwrap().is_none(), "dry-run must not touch the transport");
+    }
+
+    #[test]
+    fn inner_command_revert_without_on_revert_fails_loud() {
+        let s = store();
+        let inner = Arc::new(RecordingInner::new());
+        let w = inner_rev(inner, s.clone());
+        let rv = params(&[("name", "r1"), ("command", "fwd"), ("revert", "true")]);
         let r = w.execute(&rv, false);
         assert!(r.error.is_some());
         assert!(r.error.as_deref().unwrap().contains("on_revert command is required"));

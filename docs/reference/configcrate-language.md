@@ -880,9 +880,9 @@ Every executor supports `state: absent` to remove/disable the managed resource:
 
 ## Reversal (`revert:` / `on_revert:`)
 
-A handful of resource types have **no `state`** — they perform an action (`exec`, `backup`, `db_backup`, `replace`) or set an always-present value (`hostname`, `timezone`), so `state: absent` doesn't apply. For these, **removing the resource from config does *not* undo it** — that only stops enforcement; the change Vigo made persists. To actively undo, set `revert: true`.
+A handful of resource types have **no `state`** — they perform an action (`exec`, `backup`, `db_backup`, `replace`, `ssh_exec`, `powershell`) or set an always-present value (`hostname`, `timezone`), so `state: absent` doesn't apply. For these, **removing the resource from config does *not* undo it** — that only stops enforcement; the change Vigo made persists. To actively undo, set `revert: true`.
 
-There are two flavors:
+There are three flavors:
 
 - **Value-setters** (`hostname`, `timezone`) — the agent snapshots the value it first finds on each node (write-once) before changing it. `revert: true` restores that prior value. If no snapshot was captured (the resource never applied here, or agent state was rebuilt), revert **fails loud** at apply rather than guessing — set the desired value explicitly instead.
 
@@ -893,7 +893,7 @@ There are two flavors:
     revert: true          # restore the hostname Vigo first found on this node
   ```
 
-- **Local-command actions** (`exec`, `backup`, `db_backup`, `replace`) — there's no inferable inverse, so you declare one with `on_revert:` (a shell command run locally). `revert: true` runs it. `revert: true` without an `on_revert:` is rejected at `config publish`.
+- **Local-command actions** (`exec`, `backup`, `db_backup`, `replace`) — there's no inferable inverse, so you declare one with `on_revert:` (a shell command run locally via `sh -c`). `revert: true` runs it. `revert: true` without an `on_revert:` is rejected at `config publish`.
 
   ```yaml
   - name: open-8080
@@ -904,9 +904,19 @@ There are two flavors:
     revert: true          # run on_revert to undo
   ```
 
+- **Native-context commands** (`ssh_exec`, `powershell`) — like local-command actions, but the `on_revert:` inverse runs in the executor's own context rather than local `sh -c`: `ssh_exec` runs it on the remote device over the same SSH connection, `powershell` via `powershell.exe`. The agent re-dispatches with the idempotency guards stripped so the inverse runs unconditionally. `revert: true` without an `on_revert:` is rejected at `config publish`.
+
+  ```yaml
+  - name: open-8080-on-fw
+    type: ssh_exec
+    command: "iptables -A INPUT -p tcp --dport 8080 -j ACCEPT"
+    on_revert: "iptables -D INPUT -p tcp --dport 8080 -j ACCEPT"
+    revert: true          # run on_revert on the device to undo
+  ```
+
 Reversal is **idempotent**: once honored it reports settled on subsequent runs (it never flaps or re-runs), and a normal (non-revert) apply re-arms it. `modlint` annotates every reversible resource's `#~` comment so the lever is visible where you read the resource.
 
-> Reversal currently covers the local-executing types above. Remote-context types (`ssh_exec`, `powershell`) and the stanza/policy setters (`cisco_interface`, `junos_interface`, `local_security_policy`, `service_recovery_windows`) are a tracked follow-on.
+> Reversal currently covers the action/value types above. The stanza/policy setters (`cisco_interface`, `junos_interface`, `local_security_policy`, `service_recovery_windows`) are a tracked follow-on — their prior state is a multi-field structure or sits on a remote device this build doesn't yet snapshot.
 
 ## Combining Patterns
 

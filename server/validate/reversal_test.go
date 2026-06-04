@@ -117,3 +117,47 @@ func TestReversal_CommandSetIsSubsetOfReversible(t *testing.T) {
 		}
 	}
 }
+
+// ssh_exec / powershell are command-reverted (the agent runs on_revert in the
+// executor's own transport, not sh -c) — at publish they behave like the other
+// Group A types: revert: true requires a non-empty on_revert:, and both attrs
+// are known (never "unknown").
+func TestReversal_NativeContextCommandTypes(t *testing.T) {
+	missing := Configcrate{
+		Name: "m",
+		Resources: []Resource{
+			{Name: "remote-fw", Type: "ssh_exec", Attributes: map[string]any{
+				"host": "10.0.0.1", "username": "admin", "credential": "secret:net/admin",
+				"command": "iptables -A INPUT -p tcp --dport 8080 -j ACCEPT",
+				"revert":  true,
+			}},
+		},
+	}
+	if !hasMessageContaining(ValidateConfigcrate(missing), "no on_revert") {
+		t.Fatalf("ssh_exec revert without on_revert should error, got: %+v", ValidateConfigcrate(missing))
+	}
+
+	clean := Configcrate{
+		Name: "m",
+		Resources: []Resource{
+			{Name: "remote-fw", Type: "ssh_exec", Attributes: map[string]any{
+				"host": "10.0.0.1", "username": "admin", "credential": "secret:net/admin",
+				"command":   "iptables -A INPUT -p tcp --dport 8080 -j ACCEPT",
+				"revert":    true,
+				"on_revert": "iptables -D INPUT -p tcp --dport 8080 -j ACCEPT",
+			}},
+			{Name: "ps", Type: "powershell", Attributes: map[string]any{
+				"command":   "New-Item C:\\flag",
+				"revert":    true,
+				"on_revert": "Remove-Item C:\\flag",
+			}},
+		},
+	}
+	findings := ValidateConfigcrate(clean)
+	if hasMessageContaining(findings, "on_revert") {
+		t.Fatalf("ssh_exec/powershell with on_revert should be clean, got: %+v", findings)
+	}
+	if hasMessageContaining(findings, "unknown attribute") {
+		t.Fatalf("revert/on_revert should be known on ssh_exec/powershell, got: %+v", findings)
+	}
+}

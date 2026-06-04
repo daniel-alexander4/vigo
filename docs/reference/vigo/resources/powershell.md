@@ -12,6 +12,8 @@ Runs PowerShell scripts with proper error handling and idempotency guards. Unlik
 | `onlyif` | No | -- | PowerShell command. If it fails (non-zero exit), the resource is skipped. |
 | `cwd` | No | -- | Working directory for the command. |
 | `environment` | No | -- | Comma-separated `KEY=VALUE` pairs to set as environment variables. |
+| `revert` | No | `false` | When `true`, run `on_revert` to undo this resource instead of applying. See [Reversal](#reversal). |
+| `on_revert` | No | -- | PowerShell command run (via `powershell.exe`, same flags as `command`) to reverse this resource. Required when `revert: true`. |
 
 ## Idempotency
 
@@ -21,6 +23,16 @@ The executor supports three guard mechanisms, evaluated in order:
 2. **`onlyif`** -- Skip if the guard command fails (non-zero exit). Use this to check whether a prerequisite is met before running.
 
 If none of the guards are specified, the command runs on every convergence. Always use at least one guard to maintain idempotency.
+
+## Reversal
+
+`powershell` runs an arbitrary script with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command. The inverse runs via `powershell.exe` (same flags as `command`, with the idempotency guards stripped so it runs unconditionally), not via `sh -c`.
+
+- `on_revert:` — a PowerShell command that undoes the resource. Inert until triggered.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent — it never re-runs). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- A normal (non-revert) apply clears a spent revert, re-arming it.
+
+Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.
 
 ## Examples
 

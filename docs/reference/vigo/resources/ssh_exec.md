@@ -14,6 +14,8 @@ SSH connection parameters (`host`, `port`, `username`, `credential`) are auto-in
 | `unless` | No | -- | Skip if this command succeeds (exit 0) on the device |
 | `onlyif` | No | -- | Only run if this command succeeds (exit 0) on the device |
 | `timeout` | No | `30` | Per-command timeout in seconds |
+| `revert` | No | `false` | When `true`, run `on_revert` on the device to undo this resource instead of applying. See [Reversal](#reversal). |
+| `on_revert` | No | -- | Command run **on the remote device over the same SSH connection** to reverse this resource. Required when `revert: true`. |
 | `host` | Auto | -- | Target IP/hostname (auto-injected from device config) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |
@@ -27,6 +29,16 @@ Idempotency is achieved through guard conditions, identical to the local `exec` 
 - **`onlyif`** -- The guard command is run on the device first. If it exits non-zero, the main command is skipped.
 
 Without guards, the command runs on every convergence.
+
+## Reversal
+
+`ssh_exec` runs an arbitrary command with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command. Unlike local [`exec`](exec.md), the inverse runs **on the remote device** — the agent re-dispatches over the same SSH connection (with the idempotency guards stripped so it runs unconditionally), not via local `sh -c`.
+
+- `on_revert:` — a command, run on the device, that undoes the resource. Inert until triggered.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent — it never re-runs). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- A normal (non-revert) apply clears a spent revert, re-arming it.
+
+Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.
 
 ## Examples
 
