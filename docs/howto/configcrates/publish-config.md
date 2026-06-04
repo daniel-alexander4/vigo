@@ -177,7 +177,7 @@ resources:
 - `#~` comments are auto-generated and **refreshed in place on every publish**. Never edit them — they're overwritten.
 - `#` comments (without the tilde) are yours and **never touched** in source — including **commented-out attributes** like `#owner: 0644`, which Vigo keeps as operator information rather than stripping. Use them for your own notes.
 - `#` inside `content:` blocks and `files/` is file **data** — never touched, in source or `.live/`.
-- In `.live/` (server-facing) every comment is stripped — `#~` labels and your `#` notes alike; only config and content remain.
+- In `.live/` (server-facing) every comment is stripped from configcrates and usercrates — `#~` labels and your `#` notes alike; only config and content remain. (Scaffolding files — `envoys.vgo`, `roles.vgo`, `waivers.vgo`, `environments.vgo` — keep their comments in `.live/`; the server ignores `.live/` comments regardless.)
 - Labels are derived from resource name, type, and attributes — they never restate what the YAML already says.
 
 ## Atomic sync — standalone mode

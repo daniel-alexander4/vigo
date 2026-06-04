@@ -543,7 +543,7 @@ Plus type-specific attributes (see [Executors](../reference/vigo/resources/_inde
 
 ## Auto-Comments (`#~`)
 
-When you run `vigocli config publish`, the configcrate linter formats your **source** crates in place: it adds/refreshes `#~`-prefixed standard labels (one per module, one per resource) **while preserving everything else you wrote** — your `#` comments, formatting, and content. Separately, the copy synced to `.live/` (what the server reads) is **stripped of all comments**, since the server ignores them. So your source stays human-readable; `.live/` stays clean.
+When you run `vigocli config publish`, the configcrate linter formats your **source** crates in place: it adds/refreshes `#~`-prefixed standard labels (one per module, one per resource) **while preserving everything else you wrote** — your `#` comments, formatting, and content. Separately, the copy of each configcrate/usercrate synced to `.live/` (what the server reads) is **stripped of all comments**, since the server ignores them. So your source stays human-readable; `.live/` stays clean. (Scaffolding files — `envoys.vgo`, `roles.vgo`, `waivers.vgo`, `environments.vgo` — keep their comments in `.live/`; harmless, since the server ignores `.live/` comments either way.)
 
 ```yaml
 #~ Manages package, file, service
@@ -582,7 +582,7 @@ resources:
 - `#~` comments are auto-generated — they're refreshed in place on every publish. Don't edit them; your text is overwritten.
 - `#` comments (no tilde) are **yours and are never touched** in source. Use them for your own notes. This includes **commented-out attributes** like `#owner: 0644` — Vigo treats those as operator information, not disposable comments, and leaves them exactly where you put them.
 - `#` characters inside `content:` blocks and `files/` are file **data** — never touched, in source or `.live/`.
-- In `.live/` (server-facing), both `#~` labels and your `#` comments are stripped; only the config and content remain.
+- In `.live/` (server-facing), both `#~` labels and your `#` comments are stripped from configcrates and usercrates; only the config and content remain. (Scaffolding files keep their comments in `.live/` — the server ignores them regardless.)
 - The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../howto/configcrates/publish-config.md#configcrate-linter) for details.
 
 ## Config Reload

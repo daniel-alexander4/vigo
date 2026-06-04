@@ -1230,10 +1230,14 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 		// Dispatch to the right modlint entry point by filename — the
 		// canonical "lint a file by its kind" path, shared with
 		// `vigocli config validate` so the two never disagree. StripComments
-		// yields the clean machine-facing form for `.live/`: the server reads
-		// `.live/` and ignores comments, so it carries no `#~` labels and no
-		// operator `#` comments. `content:` data is preserved. The labels live
-		// in the operator's source (formatted in place by formatSourceLabels).
+		// yields the clean machine-facing form for `.live/`: the configcrate /
+		// usercrate render drops both `#~` labels and operator `#` comments
+		// (`content:` data preserved). The scaffolding kinds (envoys/roles/
+		// waivers/environments) are structural-lint-only and pass through with
+		// their comments intact — uniform `.live/` comment stripping for those
+		// is an accepted non-goal, since the server ignores `.live/` comments
+		// regardless. The labels live in the operator's source (formatted in
+		// place by formatSourceLabels).
 		result := modlint.LintFile(rel, data, modlint.Options{StripComments: true})
 
 		if !result.OK() {
