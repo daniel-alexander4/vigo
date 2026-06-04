@@ -97,7 +97,7 @@ flowchart LR
     H -- "yes" --> I --> E
 ```
 
-1. Normalizes whitespace in all `.vgo` files (strip trailing spaces, fix line endings, replace tabs in YAML indentation, drop UTF-8 BOM). Templates (`.tmpl`) are not normalized — operators may rely on whitespace inside Go template directives.
+1. Normalizes whitespace in all `.vgo` files (strip trailing spaces, fix line endings, replace tabs in YAML indentation, drop UTF-8 BOM). Templates (`.tmpl`) are not normalized — operators may rely on whitespace inside Go template directives. It then **formats your source crates in place**: refreshing modlint's `#~` standard labels (one per module, one per resource) while preserving everything you wrote — your `#` comments (prose *and* commented-out attributes like `#owner: 0644`) and all content. The labels live in your source; the copy synced to `.live/` is stripped of all comments (step 7).
 2. Diffs `stacks/` against `.live/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stacks is invisible to publish.
 3. Runs the **configcrate linter** on changed/new configcrate files (see below)
 4. Loads all `.vgo` files from a staging copy of stacks using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because configcrates, roles, and envoy entries cross-reference each other.
@@ -174,9 +174,11 @@ resources:
 ```
 
 **Comment convention:**
-- `#~` comments are auto-generated and **regenerated on every publish**. Never edit them — they will be overwritten.
-- `#` comments (without the tilde) are hand-written and **never touched** by the linter. Use these for your own notes.
-- Comments are derived from resource name, type, and attributes — they never restate what the YAML already says.
+- `#~` comments are auto-generated and **refreshed in place on every publish**. Never edit them — they're overwritten.
+- `#` comments (without the tilde) are yours and **never touched** in source — including **commented-out attributes** like `#owner: 0644`, which Vigo keeps as operator information rather than stripping. Use them for your own notes.
+- `#` inside `content:` blocks and `files/` is file **data** — never touched, in source or `.live/`.
+- In `.live/` (server-facing) every comment is stripped — `#~` labels and your `#` notes alike; only config and content remain.
+- Labels are derived from resource name, type, and attributes — they never restate what the YAML already says.
 
 ## Atomic sync — standalone mode
 

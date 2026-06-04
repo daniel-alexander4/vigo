@@ -225,13 +225,26 @@ envoys:
 		t.Error("expected files to be synced to .live")
 	}
 
-	// Stacks must be byte-identical to what we wrote.
+	// Publish formats the source: it adds modlint's `#~` labels but must
+	// mangle nothing else — the hand-written compact form (flow-style
+	// sequences, non-alphabetic key order) survives. Strip the `#~` lines it
+	// added; what remains must be byte-identical to the original.
 	got, err := os.ReadFile(srcPath)
 	if err != nil {
 		t.Fatalf("re-reading stacks dan.vgo: %v", err)
 	}
-	if string(got) != original {
-		t.Errorf("stacks dan.vgo was modified by publish.\nwant:\n%s\n\ngot:\n%s", original, string(got))
+	if !strings.Contains(string(got), "#~") {
+		t.Error("expected publish to add #~ labels to source")
+	}
+	var kept []string
+	for _, line := range strings.Split(string(got), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#~") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if minusLabels := strings.Join(kept, "\n"); minusLabels != original {
+		t.Errorf("publish changed more than the #~ labels.\nwant (minus labels):\n%s\n\ngot (minus labels):\n%s", original, minusLabels)
 	}
 
 	// .live must contain the linted bytes — at minimum, the canonical
@@ -248,6 +261,79 @@ envoys:
 	}
 	if !contains(string(liveBytes), "default: []") {
 		t.Errorf(".live dan.vgo missing default empty list; got:\n%s", string(liveBytes))
+	}
+}
+
+// TestPublish_FormatsSourceStripsLive is the end-to-end contract for the
+// comment-aware publish path: source keeps its hand comments (prose AND
+// commented-out attributes) and gains the `#~` standard labels, while `.live/`
+// is stripped of ALL comments — and `#` lines inside content are data,
+// preserved on both sides.
+func TestPublish_FormatsSourceStripsLive(t *testing.T) {
+	env := withTestDirs(t)
+
+	original := `name: sshd
+resources:
+  # harden the daemon — keep this note
+  #owner: 0644
+  - name: sshd-config
+    type: file
+    state: present
+    target_path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Authentication
+      PermitRootLogin no
+`
+	srcPath := filepath.Join(env.stacks, "configcrates", "sshd.vgo")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, srcPath, original)
+	writeFile(t, filepath.Join(env.stacks, "envoys", "girlslaptop.vgo"), `
+envoys:
+  - match: "girlslaptop"
+    configcrates: [sshd]
+`)
+
+	if _, err := Publish(noURLOpts(env), nil); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+
+	srcBytes, err := os.ReadFile(srcPath)
+	if err != nil {
+		t.Fatalf("re-reading source: %v", err)
+	}
+	src := string(srcBytes)
+	// Source keeps both kinds of hand comment and gains the label.
+	for _, want := range []string{
+		"# harden the daemon — keep this note",
+		"#owner: 0644",
+		"#~ ", // a Vigo label was added
+		"      # Authentication", // content data untouched
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("source missing %q after publish:\n%s", want, src)
+		}
+	}
+
+	liveBytes, err := os.ReadFile(filepath.Join(env.live, "configcrates", "sshd.vgo"))
+	if err != nil {
+		t.Fatalf("re-reading .live: %v", err)
+	}
+	live := string(liveBytes)
+	// .live is stripped of all comments...
+	if strings.Contains(live, "#~") {
+		t.Errorf(".live still has #~ labels:\n%s", live)
+	}
+	if strings.Contains(live, "harden the daemon") || strings.Contains(live, "#owner: 0644") {
+		t.Errorf(".live still has operator hand comments:\n%s", live)
+	}
+	// ...but content data (including its #) is preserved.
+	if !strings.Contains(live, "# Authentication") || !strings.Contains(live, "PermitRootLogin no") {
+		t.Errorf(".live lost content data:\n%s", live)
 	}
 }
 

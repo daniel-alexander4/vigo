@@ -56,6 +56,13 @@ type Options struct {
 	// usercrates/ dir). Usercrates may omit `name:` — the loader defaults
 	// it to the filename stem. Callers set this based on the file path.
 	IsUsercrate bool
+	// StripComments suppresses modlint's generated `#~` annotations in the
+	// rendered output, producing the clean machine-facing form. The publish
+	// path uses this for the `.live/` tree: the server reads `.live/` and
+	// ignores comments, so it carries no `#~` labels (and parse already drops
+	// the operator's hand `#` comments). `content:` scalar data is unaffected.
+	// Operator source keeps its labels + hand comments via FormatSource.
+	StripComments bool
 }
 
 // Result holds the output of a lint pass.
@@ -710,8 +717,10 @@ func render(mod *module, opts Options, r *Result) string {
 		b.WriteString("\n")
 	}
 
-	// Module-level block comment.
-	b.WriteString(fmt.Sprintf("#~ %s\n", generateModuleComment(mod)))
+	// Module-level block comment (suppressed for the stripped .live form).
+	if !opts.StripComments {
+		b.WriteString(fmt.Sprintf("#~ %s\n", generateModuleComment(mod)))
+	}
 	if mod.Name != "" {
 		b.WriteString(fmt.Sprintf("name: %s\n", mod.Name))
 	}
@@ -774,17 +783,20 @@ func render(mod *module, opts Options, r *Result) string {
 			if i > 0 {
 				b.WriteString("\n")
 			}
-			renderResource(&b, res)
+			renderResource(&b, res, opts.StripComments)
 		}
 	}
 
 	return b.String()
 }
 
-// renderResource writes a single resource with #~ comment.
-func renderResource(b *strings.Builder, res resource) {
-	comment := generateResourceComment(res) + reversalNote(res.Type)
-	b.WriteString(fmt.Sprintf("  #~ %s\n", comment))
+// renderResource writes a single resource, with its `#~` label unless
+// stripComments is set (the clean machine-facing .live form).
+func renderResource(b *strings.Builder, res resource, stripComments bool) {
+	if !stripComments {
+		comment := generateResourceComment(res) + reversalNote(res.Type)
+		b.WriteString(fmt.Sprintf("  #~ %s\n", comment))
+	}
 	b.WriteString(fmt.Sprintf("  - name: %s\n", res.Name))
 	b.WriteString(fmt.Sprintf("    type: %s\n", res.Type))
 

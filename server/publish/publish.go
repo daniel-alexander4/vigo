@@ -207,6 +207,17 @@ func ValidateSource(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
+	// Format the operator's source crates in place: ensure each carries
+	// modlint's `#~` standard labels (module + per-resource), while
+	// preserving every hand `#` comment — prose AND commented-out attributes
+	// like `#owner: 0644` — plus all content. Like normalizeWhitespace, this
+	// rewrites stacks/ idempotently (only when labels actually change). It
+	// runs before the stacks-vs-.live diff so a freshly-relabeled crate is
+	// correctly picked up as a candidate.
+	if err := formatSourceLabels(opts.StacksDir); err != nil {
+		return nil, fmt.Errorf("formatting source labels: %w", err)
+	}
+
 	// Initial diff (raw stacks vs .live/) identifies candidate files for
 	// linting. The "true" diff (staging vs live) is computed below after
 	// staging is built, since the canonical form may match live even when
@@ -1072,6 +1083,40 @@ func normalizeStacksPermissions(dir string) error {
 // Templates (.tmpl) are deliberately not normalized — operators may
 // rely on whitespace inside Go template directives, so we leave the
 // bytes alone.
+// formatSourceLabels walks every .vgo crate under dir and rewrites it in place
+// to carry modlint's `#~` standard labels, preserving the operator's hand `#`
+// comments and all content (see modlint.FormatSource). Idempotent — a file is
+// only rewritten when its labels actually change. Scaffolding, compliance, and
+// invalid files are returned unchanged by FormatSource, so they're never
+// written here; validation errors surface later in lintModules.
+func formatSourceLabels(dir string) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if filepath.Ext(path) != ".vgo" {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		formatted, _ := modlint.FormatSource(rel, data, modlint.Options{})
+		if string(formatted) == string(data) {
+			return nil
+		}
+		mode := os.FileMode(0o640)
+		if info, ierr := d.Info(); ierr == nil {
+			mode = info.Mode().Perm()
+		}
+		return os.WriteFile(path, formatted, mode)
+	})
+}
+
 func normalizeWhitespace(dir string) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -1184,8 +1229,12 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 
 		// Dispatch to the right modlint entry point by filename — the
 		// canonical "lint a file by its kind" path, shared with
-		// `vigocli config validate` so the two never disagree.
-		result := modlint.LintFile(rel, data, modlint.Options{})
+		// `vigocli config validate` so the two never disagree. StripComments
+		// yields the clean machine-facing form for `.live/`: the server reads
+		// `.live/` and ignores comments, so it carries no `#~` labels and no
+		// operator `#` comments. `content:` data is preserved. The labels live
+		// in the operator's source (formatted in place by formatSourceLabels).
+		result := modlint.LintFile(rel, data, modlint.Options{StripComments: true})
 
 		if !result.OK() {
 			for _, e := range result.Errors {
@@ -1194,12 +1243,10 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 			continue // collect all errors before failing
 		}
 
-		// Only stash the override when linting actually changed bytes.
-		// Files that are already in canonical form skip the staging-dir
-		// write entirely (they're hardlinked from stacks instead).
-		if result.Output != string(data) {
-			overrides[rel] = []byte(result.Output)
-		}
+		// The stripped form always differs from the commented source, so it's
+		// always stashed as the `.live/` override; the later staging-vs-live
+		// diff limits the actual sync to files whose stripped bytes changed.
+		overrides[rel] = []byte(result.Output)
 	}
 
 	if len(lintErrors) > 0 {
