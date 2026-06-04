@@ -192,6 +192,33 @@ while IFS= read -r f; do
   done < <(grep -nE "$PATTERN" "$f" || true)
 done < <(git ls-files)
 
+# ---------------------------------------------------------------------------
+# Path-name scan
+# ---------------------------------------------------------------------------
+# The scan above greps file *bodies*. A retired *directory name* whose only
+# file is content-free — e.g. an empty `.gitkeep` — leaves no legacy token in
+# any scanned body, and `.gitkeep` isn't in EXTS_RE, so it sails past the
+# content scan. That's exactly how `stockpile/stones/.gitkeep` survived
+# `make lint` across the stones→modules→configcrates renames. Scan the tracked
+# path strings themselves (every tracked file, no extension filter) against the
+# same legacy patterns to catch retired vocabulary embedded in a path.
+#
+# Allowlist a path hit with a `<path>:path:<term>` line (the pseudo-line token
+# is literally `path`), or whole-file with `<path>:*:<term>` as usual.
+while IFS= read -r f; do
+  is_file_allowlisted "$f" && continue
+  matched_term=""
+  for t in "${TOKENS[@]}" "${PATHS[@]}"; do
+    if grep -qE "$t" <<<"$f"; then matched_term="$t"; break; fi
+  done
+  [[ -z "$matched_term" ]] && continue
+  key="$f:path:$matched_term"
+  [[ -n "${ALLOW_LINES[$key]:-}" ]] && continue
+  printf '%s: (legacy name in path) — matched: %s\n' "$f" "$matched_term"
+  failed=1
+  total_hits=$((total_hits + 1))
+done < <(git ls-files)
+
 if [[ $failed -eq 0 ]]; then
   echo "check-legacy-naming: clean (0 hits)"
   exit 0

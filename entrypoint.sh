@@ -98,7 +98,7 @@ rm -rf "${DATA_DIR}/example-stockpile"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows" "${VIGO_STOCKPILE}/usercrates"
+mkdir -p "${VIGO_STOCKPILE}/configcrates" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows" "${VIGO_STOCKPILE}/usercrates"
 mkdir -p -m 750 "${VIGO_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
@@ -176,7 +176,7 @@ fi
 # Seed layout (per repo): /seed/worksite/stockpile/ and /seed/worksite/
 # scaffolding/. Both contribute to the single /srv/vigo/stacks/stockpile/
 # tree at runtime — scaffolding/ contents are merged in alongside
-# modules/usercrates/templates as part of the post-0.33.0 collapse.
+# configcrates/usercrates/templates as part of the post-0.33.0 collapse.
 # ---------------------------------------------------------------------------
 
 if [ -d "${SEED_DIR}/worksite/stockpile" ]; then
@@ -241,9 +241,9 @@ mkdir -p "${EXAMPLES_DIR}" "${ANTI_EXAMPLES_DIR}"
 # <name>` then writes destinations relative to stockpile/.
 find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/worksite/}"
-    # Skip compliance modules and roles — gated behind paid license.
+    # Skip compliance configcrates — gated behind paid license.
     case "$rel" in
-        stockpile/modules/compliance/*|scaffolding/compliance-roles.vgo.example) continue ;;
+        stockpile/configcrates/compliance/*) continue ;;
     esac
     # Strip the stockpile/ or scaffolding/ prefix so the example file
     # tree mirrors the runtime stockpile/ layout one-to-one.
@@ -257,14 +257,14 @@ find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | whil
 done
 
 # Seed retract templates — sibling to examples/. The mirror layout
-# pairs each module example with its retract:
-#   examples/modules/<cat>/<name>.vgo.example
-#   anti-examples/modules/<cat>/<name>-retract.vgo.example
+# pairs each configcrate example with its retract:
+#   examples/configcrates/<cat>/<name>.vgo.example
+#   anti-examples/configcrates/<cat>/<name>-retract.vgo.example
 find "${SEED_DIR}/example-configs/retractions" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/retractions/}"
     # Skip compliance retractions — gated behind paid license.
     case "$rel" in
-        modules/compliance/*) continue ;;
+        configcrates/compliance/*) continue ;;
     esac
     dest="${ANTI_EXAMPLES_DIR}/${rel}"
     mkdir -p "$(dirname "$dest")"

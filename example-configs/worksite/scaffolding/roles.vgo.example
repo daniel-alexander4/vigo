@@ -1,21 +1,21 @@
-# Role definitions — group modules into reusable profiles.
-# Assign roles to envoy entries instead of listing modules individually.
+# Role definitions — group configcrates into reusable profiles.
+# Assign roles to envoy entries instead of listing configcrates individually.
 #
 # Roles can include other roles (single level):
 #   - name: webserver
 #     includes: [bastion]
-#     modules: [nginx, certbot]
+#     configcrates: [nginx, certbot]
 #
-# A module reference can carry foreach: (a list var) + key: (the item field
-# naming each instance) to stamp the module out once per list item — see the
-# webserver-vhosts role below and modules/web/vhost.vgo.example.
+# A configcrate reference can carry foreach: (a list var) + key: (the item field
+# naming each instance) to stamp the configcrate out once per list item — see the
+# webserver-vhosts role below and configcrates/web/vhost.vgo.example.
 
 roles:
   - name: webserver
     includes: [bastion]
     configcrates: [nginx]
 
-  # nginx (singleton: package + service) plus one vhost module instance per
+  # nginx (singleton: package + service) plus one vhost configcrate instance per
   # entry in the `vhosts` var — supply that var in environments.vgo, a
   # common.vgo, or a match block. Expands to vhost[<server_name>] instances.
   - name: webserver-vhosts
@@ -104,7 +104,7 @@ roles:
   # ─── Sysadmin (T2) ──────────────────────────────────────────────────
   # General-purpose host role: backup, cert mgmt, mail, VPN, log shipping,
   # monitoring, storage tools, system tuning, DNS, and the sysadmin
-  # diagnostic toolkit. case: dispatch swaps Linux modules for Windows
+  # diagnostic toolkit. case: dispatch swaps Linux configcrates for Windows
   # functional analogs (where one exists; some are Linux-only stubs that
   # do nothing on Windows by design).
   - name: sysadmin
@@ -178,11 +178,11 @@ roles:
       - vigo-server-toolkit
 
   # ─── Compliance framework roles ─────────────────────────────────────
-  # Assign one or more of these to envoys whose modules should satisfy
-  # the named framework. Modules referenced below live under
-  # modules/compliance/<framework>/.
+  # Assign one or more of these to envoys whose configcrates should satisfy
+  # the named framework. Configcrates referenced below live under
+  # configcrates/compliance/<framework>/.
   #
-  # CIS roles use conditional when: to auto-select the right modules per OS:
+  # CIS roles use conditional when: to auto-select the right configcrates per OS:
   #   envoys:
   #     - match: "*.example.com"
   #       roles:
