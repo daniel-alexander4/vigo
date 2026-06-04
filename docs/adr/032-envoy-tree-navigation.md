@@ -30,7 +30,7 @@ Four design questions to settle before any code:
 
 Granularity is directory-level, not file-level. `dc1/web/envoys.vgo` and `dc1/web/envoys-canary.vgo` group together under `dc1/web/`. File-level grouping (separating canary from prod hostcrates that share a directory) is a slice-2 refinement; the directory-level grouping is what operators ask for first and is what the existing `MatchDirPaths()` returns.
 
-Envoys with no matched hostcrate cluster under a synthetic `(unmatched)` node at root. Never silently dropped — an unmatched envoy is operator-visible signal that the stockpile has a gap.
+Envoys with no matched hostcrate cluster under a synthetic `(unmatched)` node at root. Never silently dropped — an unmatched envoy is operator-visible signal that the stacks has a gap.
 
 **3. Extend the existing URL-param chip pattern; defer faceted sidebar.** The flat `/envoys` page uses URL-param chips (`?conv=converged&drift=changed&reach=offline&search=web`). The tree view uses the *same* chips so the UX is uniform between the two views; filtering on tree hides leaves (and the whole branches they're under) where no envoy survives the filter. New chip axes (tag, role, OS) are slice 2 of this work — adding them to both views together keeps the UX uniform.
 

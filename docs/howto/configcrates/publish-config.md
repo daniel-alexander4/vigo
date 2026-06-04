@@ -1,16 +1,16 @@
 
 # Publish your config
 
-You'll finish this page knowing how to ship a config change to the fleet safely: edit under `stockpile/`, validate without applying, publish atomically to `.live/`, and (when something's wrong post-publish) roll back to the previous live version with one command.
+You'll finish this page knowing how to ship a config change to the fleet safely: edit under `stacks/`, validate without applying, publish atomically to `.live/`, and (when something's wrong post-publish) roll back to the previous live version with one command.
 
 **When you'd use this:** every time you add or change a configcrate, role, hostcrate, usercrate, environment override, waiver, or compliance claim. Validation runs locally before anything touches the fleet, so this is also how you sanity-check changes before pushing them through a CI gate.
 
 **When you'd skip this:** never, if you're authoring config. There's no other path; the server only reads `.live/`.
 
-Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then propagates to `stacks/.live/` — the locked-read-only directory the server reads from (contents mirror `stockpile/` directly; no inner namespace). Propagation has two shapes:
+Operators edit `.vgo` files in `stacks/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then propagates to `/srv/vigo/.live/` — the locked-read-only directory the server reads from (contents mirror `stacks/` directly; no inner namespace). Propagation has two shapes:
 
 - **Standalone mode** — the CLI atomically syncs the validated tree into the local `.live/` and calls the REST reload trigger. One vigosrv, one filesystem; the publish is done when the swap completes.
-- **Spanner mode** — the CLI commits the validated tree to the ops-puddle's stockpile gitback project and pushes it to the local bare repo. The `stockpilewatch` background goroutine on every vigosrv (including the originating one) sees the new ref, archives `HEAD` into its local `.live/`, and reloads. The CLI then polls `GET /api/v1/config/version` until it increments before reporting success.
+- **Spanner mode** — the CLI commits the validated tree to the ops-puddle's stacks gitback project and pushes it to the local bare repo. The `stackswatch` background goroutine on every vigosrv (including the originating one) sees the new ref, archives `HEAD` into its local `.live/`, and reloads. The CLI then polls `GET /api/v1/config/version` until it increments before reporting success.
 
 Both modes share the same operator-visible verb (`vigocli config publish`) and the same validation pipeline. The mode is auto-detected via `GET /api/v1/spanner/status`.
 
@@ -19,8 +19,8 @@ Both modes share the same operator-visible verb (`vigocli config publish`) and t
 ## Directory Layout
 
 ```
-/srv/vigo/stacks/
-├── stockpile/                    ← operators edit here
+/srv/vigo/
+├── stacks/                    ← operators edit here (the config tree)
 │   ├── configcrates/             # Configcrate definitions
 │   ├── usercrates/               # Per-user configcrates (inert until included via `usercrates:`)
 │   ├── templates/                # Go template files for source: references
@@ -35,14 +35,13 @@ Both modes share the same operator-visible verb (`vigocli config publish`) and t
 │       ├── common.vgo            # Inherited by customerA subtree
 │       ├── envoys.vgo            # Per-customer hostcrate
 │       └── web/web.vgo           # Per-host hostcrate
-├── examples/                     ← read-only install templates (image-seeded)
-├── anti-examples/                ← read-only retract templates (mirrors examples/configcrates)
-└── .live/                        ← server reads here (locked, do not edit) — mirrors stockpile/ contents directly
+├── stacks-examples/           ← read-only install templates (image-seeded)
+└── .live/                     ← server reads here (locked, do not edit) — mirrors stacks/ contents directly
 ```
 
 The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../../reference/configcrate-language.md#directory-inheritance) for details.
 
-Publish only walks `stockpile/`. Sibling subtrees (`examples/`, `anti-examples/`, `.live/`) are outside the walk and never appear in the diff or sync.
+Publish only walks `stacks/`. `.live/` and `stacks-examples/` live outside it under `/srv/vigo/`, so they never appear in the diff or sync.
 
 ## Usage
 
@@ -72,14 +71,14 @@ The first six steps (validate + lint) are the same in both modes. The propagate 
 
 ```mermaid
 flowchart LR
-    A[stockpile/<br/>operator edits]
+    A[stacks/<br/>operator edits]
     B[vigocli config publish<br/>validate + lint]
     C{validates?}
     M{spanner mode?}
     D[.live/<br/>atomic swap]
     E[server reload<br/>via REST trigger]
     G[gitback commit + push<br/>to bare repo]
-    W[stockpilewatch on every vigosrv<br/>archive HEAD → .live/]
+    W[stackswatch on every vigosrv<br/>archive HEAD → .live/]
     R[server reload]
     F[fan-out to<br/>envoys on<br/>next check-in]
     K[convergence<br/>rollback monitor]
@@ -99,14 +98,14 @@ flowchart LR
 ```
 
 1. Normalizes whitespace in all `.vgo` files (strip trailing spaces, fix line endings, replace tabs in YAML indentation, drop UTF-8 BOM). Templates (`.tmpl`) are not normalized — operators may rely on whitespace inside Go template directives.
-2. Diffs `stockpile/` against `.live/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stockpile is invisible to publish.
+2. Diffs `stacks/` against `.live/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stacks is invisible to publish.
 3. Runs the **configcrate linter** on changed/new configcrate files (see below)
-4. Loads all `.vgo` files from a staging copy of stockpile using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because configcrates, roles, and envoy entries cross-reference each other.
+4. Loads all `.vgo` files from a staging copy of stacks using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because configcrates, roles, and envoy entries cross-reference each other.
 5. HTTP/HTTPS URLs in **changed configcrates only** are probed for aliveness (HEAD with GET fallback). Unchanged configcrates are skipped.
 6. The CLI calls `GET /api/v1/spanner/status` to detect mode. Standalone vigosrvs go through step 7a; spanner-mode vigosrvs go through step 7b.
 7. **(7a, standalone)** Prunes the staging tree of any configcrate / usercrate / template no carrier references (unless `--no-prune` is set), then atomically syncs it into `.live/` (see [Atomic sync — standalone mode](#atomic-sync--standalone-mode) below), and calls `POST /api/v1/config/reload` to trigger a server-side reload.
-   **(7b, spanner)** Commits the staging tree to the local clone of the ops-puddle's stockpile gitback project and pushes to the bare repo at `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` via `file://`. The local `stockpilewatch` goroutine sees the new ref, archives `HEAD` into `.live/`, and reloads. The CLI polls `GET /api/v1/config/version` until it increments (30s timeout) before declaring success. Other vigosrvs in the spanner receive the bytes via the gitback substrate's peer-pull on the next reactor cycle and run the same watcher path locally.
-8. Sibling subtrees of stockpile (`examples/`, `anti-examples/`) are never read by the publisher.
+   **(7b, spanner)** Commits the staging tree to the local clone of the ops-puddle's stacks gitback project and pushes to the bare repo at `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` via `file://`. The local `stackswatch` goroutine sees the new ref, archives `HEAD` into `.live/`, and reloads. The CLI polls `GET /api/v1/config/version` until it increments (30s timeout) before declaring success. Other vigosrvs in the spanner receive the bytes via the gitback substrate's peer-pull on the next reactor cycle and run the same watcher path locally.
+8. `.live/` and `stacks-examples/` (siblings of `stacks/` under `/srv/vigo/`) are never read by the publisher.
 9. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`.
 
 ## Configcrate Linter
@@ -192,7 +191,7 @@ Subdirectories not present in stage are removed from `.live/` (sync is replaceme
 
 ## Bare→.live archive — spanner mode
 
-In spanner mode the CLI never touches `.live/` directly — it pushes to the gitback bare repo and the `stockpilewatch` goroutine on every vigosrv (including this one) propagates the bytes:
+In spanner mode the CLI never touches `.live/` directly — it pushes to the gitback bare repo and the `stackswatch` goroutine on every vigosrv (including this one) propagates the bytes:
 
 1. fsnotify on `<bare-repo>/refs/heads/` fires when the push lands; the watcher debounces 250ms so a multi-write push burst settles into one reload.
 2. The watcher pipes `git --git-dir=<bare-repo> archive --format=tar HEAD | tar -x -C <tmp>` to materialize HEAD's tree without a working git checkout under `.live/`.
@@ -259,7 +258,7 @@ chown -R root:vigo /srv/vigo/stacks/structure
 chmod 750 /srv/vigo/stacks/structure
 
 # Operators can write to stage
-chmod 770 /srv/vigo/stacks/stockpile
+chmod 770 /srv/vigo/stacks
 ```
 
 ## Custom Executor Resources
@@ -309,7 +308,7 @@ Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
 - **You want to trace why a particular envoy got a particular value** → `vigocli config trace <envoy> <configcrate>` walks the resolution chain.
 - **A publish landed but rolled itself back** → the convergence-rollback monitor caught it; inspect the audit log via `vigocli config history`.
 - **You need to verify what's live** → `vigocli config tree` shows the entire resolved tree as the server sees it.
-- **You published in spanner mode and one bolt's `config_version` is lagging** → check that bolt's `journalctl -u vigosrv` for `stockpilewatch` lines. The watcher uses a 250ms quiesce-debounce per ref-change, so brief skew is normal; persistent lag points at a stale ops-puddle gitback fetch (the peer-pull reactor hasn't run) or an unresponsive puddle helper daemon (`/var/run/vigo/puddle.sock`).
+- **You published in spanner mode and one bolt's `config_version` is lagging** → check that bolt's `journalctl -u vigosrv` for `stackswatch` lines. The watcher uses a 250ms quiesce-debounce per ref-change, so brief skew is normal; persistent lag points at a stale ops-puddle gitback fetch (the peer-pull reactor hasn't run) or an unresponsive puddle helper daemon (`/var/run/vigo/puddle.sock`).
 - **You want the architectural narrative for spanner-mode distribution** → see `docs/internal.docs/design-config-distribution.md`.
 
 ---

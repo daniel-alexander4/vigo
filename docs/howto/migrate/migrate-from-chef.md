@@ -126,7 +126,7 @@ http {
 
 ### Vigo Version
 
-`stockpile/configcrates/nginx.vgo`:
+`stacks/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -178,7 +178,7 @@ resources:
     enabled: true
 ```
 
-`stockpile/roles/webserver.vgo`:
+`stacks/roles/webserver.vgo`:
 
 
 ```yaml
@@ -187,7 +187,7 @@ configcrates:
   - nginx
 ```
 
-`stockpile/envoys/envoys.vgo`:
+`stacks/envoys/envoys.vgo`:
 
 ```yaml
 envoys:

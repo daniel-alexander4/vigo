@@ -49,9 +49,9 @@ The published config didn't pass one of the validation gates (YAML syntax, cross
 
 ### vigosrv exits at startup with `config load failed`
 
-The published config tree at `/srv/vigo/stacks/.live/` has a structural error (typically duplicate names, YAML syntax, dangling references, or a layout violation). vigosrv refuses to start rather than run with no policy — a config-enforcement server with no config silently strands the fleet on its last-cached state, which is worse than a loud crash.
+The published config tree at `/srv/vigo/.live/` has a structural error (typically duplicate names, YAML syntax, dangling references, or a layout violation). vigosrv refuses to start rather than run with no policy — a config-enforcement server with no config silently strands the fleet on its last-cached state, which is worse than a loud crash.
 
-**Fix:** repair the source under `/srv/vigo/stacks/stockpile/`, then `vigocli config publish` (the file ops run even when the server is down), then restart vigosrv. The startup error message names the failing rule.
+**Fix:** repair the source under `/srv/vigo/stacks/`, then `vigocli config publish` (the file ops run even when the server is down), then restart vigosrv. The startup error message names the failing rule.
 
 ### Configcrate convergence loop — same resource changes every cycle
 
@@ -221,7 +221,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 **Fix:**
 1. Check the error details: `vigocli doctor` or look at the server logs
-2. Fix the configcrate in `stockpile/` (the configcrate linter will catch and repair most issues)
+2. Fix the configcrate in `stacks/` (the configcrate linter will catch and repair most issues)
 3. Republish: `vigocli config publish`
 
 ### Config Reload Errors

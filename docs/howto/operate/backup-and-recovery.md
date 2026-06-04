@@ -5,7 +5,7 @@ You'll finish this page with three independent recovery paths in place: **Litest
 
 **When you'd use this:** any production deployment. Even a single-server fleet should have at least one of these on; a real production deployment should have all three.
 
-**When you'd skip this:** development and pre-production servers where the entire stack is reproducible from git. Keep `stockpile/` in version control regardless — Vigo's config source of truth is plain YAML, so git is the cheapest first-line backup you have.
+**When you'd skip this:** development and pre-production servers where the entire stack is reproducible from git. Keep `stacks/` in version control regardless — Vigo's config source of truth is plain YAML, so git is the cheapest first-line backup you have.
 
 Backup is only applicable when `database.driver` is `sqlite` (the default). PostgreSQL deployments back up via their own mechanism.
 
@@ -110,7 +110,7 @@ vigocli backup create /tmp/vigo-backup.tar.gz
 The command reads `server.yaml` to find the database path, then:
 
 1. Snapshots the SQLite database using the sqlite3 backup API (safe with concurrent WAL writers)
-2. Copies `stockpile/` (config source of truth)
+2. Copies `stacks/` (config source of truth)
 3. Copies `secrets/` (already AES-256-GCM encrypted at rest)
 4. Copies `tls/` (CA + server certs)
 5. Copies `server.yaml`
@@ -124,7 +124,7 @@ Every backup automatically generates a SHA-256 checksum sidecar file (`.sha256`)
 |------|---------|-------------|
 | `--server-yaml` | `/srv/vigo/server.yaml` | Path to server.yaml |
 
-| `--server-root` | `/srv/vigo` | Root directory containing stockpile/, secrets/, tls/ |
+| `--server-root` | `/srv/vigo` | Root directory containing stacks/, secrets/, tls/ |
 | `--encrypt` | `false` | Encrypt the archive with AES-256-GCM (prompts for password) |
 
 ### Encrypted Backups
@@ -181,7 +181,7 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 ├── manifest.json
 ├── db/
 │   └── vigo.db
-├── stockpile/
+├── stacks/
 │   ├── configcrates/
 │   ├── roles/
 │   ├── envoys/
@@ -210,7 +210,7 @@ The recommended approach is the `vigo-server-backup` configcrate, which creates 
 
 The configcrate uses the agent's `backup` executor to create dated snapshot directories with hardlink dedup. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Snapshots run nightly (configurable) and appear automatically in the web UI.
 
-See `example-configs/stockpile/configcrates/system/vigo-server-backup.vgo.example` for the full configcrate and all configurable vars.
+See `example-configs/stacks/configcrates/system/vigo-server-backup.vgo.example` for the full configcrate and all configurable vars.
 
 For one-off backups before risky changes, `vigocli backup create` is still available. See [Disaster Recovery](disaster-recovery.md) for full server failure recovery procedures.
 
@@ -292,13 +292,13 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
-| `stockpile/` | Configcrates, roles, envoy mappings, vars | High — your entire policy |
+| `stacks/` | Configcrates, roles, envoy mappings, vars | High — your entire policy |
 | `secrets/` | AES-256-GCM encrypted files + `.master.key` | Critical — unrecoverable without master key |
 | `tls/` | CA cert/key, server cert/key | High — agents authenticate against these |
 | `server.yaml` | Server configuration | Medium — can be recreated |
 | `db/vigo.db` | SQLite database | Covered by Litestream if configured |
 
-1. **Keep `stockpile/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
+1. **Keep `stacks/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
 2. **Use the `backups` configcrate** for daily hardlink snapshots to `/var/backups/vigo/`. Use `db_backup` resources for databases — raw DB files change every transaction, defeating hardlink dedup. The `db_backup` executor dumps to compressed SQL that hardlinks effectively.
 

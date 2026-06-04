@@ -9,7 +9,7 @@ Configuration management tools typically offer multiple config input paths: API 
 
 ## Decision
 
-Vigo has exactly one config path: edit YAML files in `/srv/vigo/stacks/stockpile/`, then publish to `.live/` via `vigocli config publish`. The publish CLI calls the server's REST reload endpoint to activate the new config — reload is pull-based, not filesystem-watched.
+Vigo has exactly one config path: edit YAML files in `/srv/vigo/stacks/`, then publish to `.live/` via `vigocli config publish`. The publish CLI calls the server's REST reload endpoint to activate the new config — reload is pull-based, not filesystem-watched.
 
 No API endpoint, database record, CLI command, or UI action can write configuration. The filesystem is the single source of truth.
 

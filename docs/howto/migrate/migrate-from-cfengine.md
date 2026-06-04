@@ -30,7 +30,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | `cf-execd` | Agent systemd service | Agent runs as a daemon with built-in scheduling |
 | `cf-monitord` | Traits | Agent-side monitoring replaced by trait collection |
 | `cf-hub` | FleetIndex + SQLite | Central data aggregation |
-| Masterfiles | `stockpile/` | Policy repository |
+| Masterfiles | `stacks/` | Policy repository |
 | Augments (`def.json`) | `vars` / `common.vgo` / `environments.vgo` | External variable data, layered by inheritance |
 | Module protocol | Custom executors | JSON stdin/stdout protocol for extensions |
 | `cf-secret` | `secret:` prefix | Secrets resolved at bundle compile time |
@@ -120,7 +120,7 @@ http {
 ### Vigo Version
 
 
-`stockpile/configcrates/nginx.vgo`:
+`stacks/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -172,7 +172,7 @@ resources:
     enabled: true
 ```
 
-`stockpile/roles/webserver.vgo`:
+`stacks/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -181,7 +181,7 @@ configcrates:
 ```
 
 
-`stockpile/envoys/envoys.vgo`:
+`stacks/envoys/envoys.vgo`:
 
 ```yaml
 envoys:

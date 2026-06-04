@@ -18,7 +18,7 @@ The 14 PNGs in `docs/img/screenshots/` were captured against Vigo 0.23.52 (vigo-
 | `vigo.envoys.png` | `/envoys` | Envoy list (5 rows: danlap/annlap/raspberrypi/plex/girlslaptop) |
 | `vigo.envoy-detail.png` | `/envoys/<id>` | Pick a converged envoy (e.g., plex) |
 | `vigo.envoy-config.png` | `/envoys/<id>?tab=config` | Same envoy, config-trace tab |
-| `vigo.server-config.png` | `/config` | Show `.live/` tree, not stockpile/ |
+| `vigo.server-config.png` | `/config` | Show `.live/` tree, not stacks/ |
 | `vigo.compliance.png` | `/compliance` | Framework cards |
 | `vigo.compliance-frameworks.png` | `/compliance/hipaa` (or current framework view) | Framework drill-down |
 | `vigo.inventory.png` | `/inventory` | Package / process / port view |

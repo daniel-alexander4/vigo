@@ -5,7 +5,7 @@ This example shows how to maintain different variable values for production and 
 
 ## Configcrate Definition
 
-`stockpile/configcrates/webapp.vgo`:
+`stacks/configcrates/webapp.vgo`:
 
 ```yaml
 name: webapp
@@ -42,7 +42,7 @@ resources:
 
 ## Match Blocks Declare Environment
 
-`stockpile/envoys.vgo`:
+`stacks/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -59,7 +59,7 @@ Each match block declares the tier via `environment:`. No inline env-specific va
 
 ## Per-Environment Overrides
 
-`stockpile/environments.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
+`stacks/environments.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
 
 ```yaml
 env:
@@ -92,7 +92,7 @@ At check-in time the server:
 4. Applies match-block vars (if any — in this example there are none).
 5. Applies `environments.vgo` vars for the block's `environment:` on top.
 
-`environments.vgo` is scoped by filesystem location: a file at `stockpile/customerA/environments.vgo` only affects envoys whose hostcrate lives at `stockpile/customerA/` or deeper.
+`environments.vgo` is scoped by filesystem location: a file at `stacks/customerA/environments.vgo` only affects envoys whose hostcrate lives at `stacks/customerA/` or deeper.
 
 ## Separate Secrets per Environment
 

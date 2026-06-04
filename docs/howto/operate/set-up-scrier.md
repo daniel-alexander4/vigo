@@ -68,7 +68,7 @@ For viewer / compliance users (no scrier access), the OS-user mapping doesn't ap
 This is the only state Scrier-SSH needs on the envoy itself. The conventional way is to declare a `user` resource in a usercrate that lists the operator's pubkey in `authorized_keys`:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/usercrates/dan.vgo
+# /srv/vigo/stacks/usercrates/dan.vgo
 resources:
   - name: dan
     type: user

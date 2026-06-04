@@ -19,7 +19,7 @@ The model is **pull-based**: there is no push channel from server to node for ro
 ## Why it's shaped this way
 
 - **The agent survives a missing server.** It caches the last bundle, its traits, and a results queue in an embedded LMDB store, so it keeps converging offline and flushes results on reconnect. See [convergence vs compliance](convergence-vs-compliance.md).
-- **Files are the only source of truth.** Operators edit YAML (`.vgo`) under the stockpile; `vigocli config publish` validates and reloads. There is no API/UI/DB path that writes config.
+- **Files are the only source of truth.** Operators edit YAML (`.vgo`) under the stacks; `vigocli config publish` validates and reloads. There is no API/UI/DB path that writes config.
 - **One server scales to tens of thousands of envoys at a tight cadence**, and past that, [spanner](spanner-federation.md) federates write-equal peers.
 
 ## Where this shows up

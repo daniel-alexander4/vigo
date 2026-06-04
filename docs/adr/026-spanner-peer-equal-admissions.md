@@ -71,6 +71,6 @@ The plan's "Open questions" list at lines 833–854 had 5 items still open. All 
 ## Cross-references
 
 - **Canonical plan**: `docs/internal.docs/plans/vigo-plan-spanner-redesign-2026-05-16.md` — single source of truth for the spanner redesign; this ADR cites without restating.
-- **ADR-025**: `docs/adr/025-stockpile-in-gitback.md` — gates Phase 0; shipped 0.65.8/0.65.9 (Slices 3+4).
+- **ADR-025**: `docs/adr/025-stacks-in-gitback.md` — gates Phase 0; shipped 0.65.8/0.65.9 (Slices 3+4).
 - **Phase 1 implementation**: commit `55dc2dcd` (0.65.10) — per-bolt Ed25519 identity + signed announcements + pin-on-first-sighting. Pin-on-first-sighting integration test at `796c5ecd`.
 - **Withdrawn ADR-026 (2026-05-18)**: commit `31aba7a1` (added) + `05f95938` (withdrawn). Replaced by this document.

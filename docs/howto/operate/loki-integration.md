@@ -145,7 +145,7 @@ After publish:
 1. Watch the server logs for `integrations dispatcher enabled targets=N` (count includes Loki when enabled).
 2. Trigger a synthetic event — force-push a configcrate that won't apply, or revoke + re-enroll a test envoy.
 3. In Grafana, open Explore → Loki → `{service="vigo"}` and confirm the line lands.
-4. Run `vigocli config publish` against any unchanged stockpile — that fires an `audit.config_published` event you can find at `{service="vigo", event_name="audit.config_published"}`.
+4. Run `vigocli config publish` against any unchanged stacks — that fires an `audit.config_published` event you can find at `{service="vigo", event_name="audit.config_published"}`.
 
 If Loki returns `4xx`, check the server logs for `integration dispatch failed target=loki`; the error message carries the Loki response code (usually 401 / 403 from auth, or 400 from a malformed tenant header).
 

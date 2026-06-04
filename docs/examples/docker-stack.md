@@ -5,7 +5,7 @@ This example uses the `container` [executor](../reference/vigo/resources/_index.
 
 ## Configcrate Definition
 
-`stockpile/configcrates/redis.vgo`:
+`stacks/configcrates/redis.vgo`:
 
 ```yaml
 name: redis
@@ -26,7 +26,7 @@ resources:
 
 ## Multi-Container Stack
 
-`stockpile/configcrates/app-stack.vgo`:
+`stacks/configcrates/app-stack.vgo`:
 
 ```yaml
 name: app-stack
@@ -51,7 +51,7 @@ resources:
 
 ## Role Definition
 
-`stockpile/roles/docker-app.vgo`:
+`stacks/roles/docker-app.vgo`:
 
 ```yaml
 name: docker-app
@@ -62,7 +62,7 @@ configcrates:
 
 ## Node Assignment
 
-`stockpile/envoys/envoys.vgo`:
+`stacks/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -103,7 +103,7 @@ vigocli task run \
 
 Vigo's preferred shape is one `container:` resource per service, joined with `depends_on` and (when the pod primitive lands) namespace-sharing. For operators with a maintained `docker-compose.yml` they don't want to rewrite, the migration recipe is a `file:` resource for the compose file plus an `exec:` wrapper guarded by a service-state check:
 
-`stockpile/configcrates/compose-app.vgo`:
+`stacks/configcrates/compose-app.vgo`:
 
 ```yaml
 name: compose-app

@@ -5,11 +5,11 @@ By the end of this page you'll have written a tiny [configcrate](../concepts/con
 ## Prerequisites
 
 - [Tutorial 2](enroll-your-first-envoy.md) done — at least one envoy checking in.
-- Shell access to the server's stockpile (`/srv/vigo/stacks/stockpile/`).
+- Shell access to the server's stacks (`/srv/vigo/stacks/`).
 
 ## 1. Write a configcrate
 
-A configcrate is a named set of idempotent resources. Create `configcrates/motd.vgo` under the stockpile:
+A configcrate is a named set of idempotent resources. Create `configcrates/motd.vgo` under the stacks:
 
 ```yaml
 configcrate: motd

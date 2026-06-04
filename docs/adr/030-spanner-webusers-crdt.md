@@ -9,7 +9,7 @@ title: "ADR-030: Spanner webusers CRDT — cross-bolt user replication + session
 
 ## Context
 
-Each vigosrv keeps its own SQLite database, including its own `users` table (web users / API token owners) and its own SCS session store. In standalone mode this is fine — there is exactly one vigosrv per stockpile. In spanner mode the bolts are peer-equal control planes for one fleet, but the `users` table is not replicated between them. Two operator-visible bugs follow:
+Each vigosrv keeps its own SQLite database, including its own `users` table (web users / API token owners) and its own SCS session store. In standalone mode this is fine — there is exactly one vigosrv per stacks. In spanner mode the bolts are peer-equal control planes for one fleet, but the `users` table is not replicated between them. Two operator-visible bugs follow:
 
 1. **Stale role on demotion.** `vigocli webusers set-role --username alice --role viewer` against bolt A demotes alice in A's DB, and `auth.SessionManager.DestroyUserSessions(ctx, alice.ID)` (shipped 0.66.75) kills A's cached sessions immediately. Bolt B still has alice as admin in its DB. If alice is logged into B's web UI, B keeps serving the old role until the idle (15 min) or absolute (24 h) timeout fires. The hostile-insider story — Dan demotes the alleged hostile, the hostile retains admin on a peer bolt for the full timeout — is real.
 

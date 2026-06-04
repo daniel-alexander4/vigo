@@ -5,7 +5,7 @@ This example sets up PostgreSQL with managed credentials using `secret:` referen
 
 ## PostgreSQL Configcrate
 
-`stockpile/configcrates/postgresql.vgo`:
+`stacks/configcrates/postgresql.vgo`:
 
 ```yaml
 name: postgresql
@@ -76,7 +76,7 @@ resources:
 
 ## Application Database Setup
 
-`stockpile/configcrates/app-database.vgo`:
+`stacks/configcrates/app-database.vgo`:
 
 ```yaml
 name: app-database
@@ -113,7 +113,7 @@ resources:
 
 Directory-level `common.vgo` files set shared vars for every envoy in the subtree. A `common.vgo` alongside the database envoys provides the database-wide defaults:
 
-`stockpile/db/common.vgo`:
+`stacks/db/common.vgo`:
 
 ```yaml
 vars:
@@ -122,11 +122,11 @@ vars:
   pg_allowed_cidr: "10.0.0.0/8"
 ```
 
-Any match block under `stockpile/db/` inherits these vars; match-block vars override them.
+Any match block under `stacks/db/` inherits these vars; match-block vars override them.
 
 ## Role Definition
 
-`stockpile/roles/database-server.vgo`:
+`stacks/roles/database-server.vgo`:
 
 ```yaml
 name: database-server
@@ -137,7 +137,7 @@ configcrates:
 
 ## Node Assignment
 
-`stockpile/db/envoys.vgo`:
+`stacks/db/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -158,7 +158,7 @@ Match blocks stay small — only vars that aren't env-specific go here.
 
 ## Per-Environment Tuning
 
-`stockpile/db/environments.vgo`:
+`stacks/db/environments.vgo`:
 
 ```yaml
 env:

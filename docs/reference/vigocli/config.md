@@ -20,17 +20,14 @@ Config inspection commands.
 | `config validate` | Validate `.vgo` files for YAML syntax, cross-references, and idempotency guards |
 | `config promote` | Copy a configcrate's `environment_overrides` from one tier to another |
 | `config dedup` | Find redundant configcrates and variables in the config tree |
-| `config stockpile` | Manage the stockpile directory |
+| `config stacks` | Manage the stacks directory |
 | `config server.yaml` | Annotated `server.yaml` reference: list sections, show full config, or filter by section |
-| `config examples list` | Show available install templates under `stacks/examples/` |
-| `config examples copy <name>` | Copy an install template into `stacks/stockpile/` |
-| `config anti-examples list` | Show available retract templates under `stacks/anti-examples/` |
-| `config anti-examples copy <name>` | Copy a retract template into `stacks/stockpile/` |
-| `config anti-examples mirror-check` | Verify every configcrate example has a paired retract (and vice versa) |
+| `config examples list` | Show available install templates under `stacks-examples/` |
+| `config examples copy <name>` | Copy an install template into `stacks/` |
 
 ## config edit
 
-Open a `.vgo` config file in an editor with YAML validation on save. Accepts a configcrate name, relative path, or absolute path. Configcrate names are searched recursively in `stockpile/configcrates/`.
+Open a `.vgo` config file in an editor with YAML validation on save. Accepts a configcrate name, relative path, or absolute path. Configcrate names are searched recursively in `stacks/configcrates/`.
 
 ### Usage
 
@@ -45,9 +42,9 @@ vigocli config edit <name-or-path> [--editor <editor>]
 ### Examples
 
 ```bash
-vigocli config edit nginx                    # finds stockpile/configcrates/.../nginx.vgo
-vigocli config edit configcrates/nginx.vgo        # relative to stockpile/
-vigocli config edit danlap.vgo               # finds by name anywhere in stockpile/
+vigocli config edit nginx                    # finds stacks/configcrates/.../nginx.vgo
+vigocli config edit configcrates/nginx.vgo        # relative to stacks/
+vigocli config edit danlap.vgo               # finds by name anywhere in stacks/
 vigocli config edit --editor nano nginx      # use nano instead of vim
 ```
 
@@ -193,7 +190,7 @@ Conditional vars: is_debian, has_enough_ram
 The trace output has 8 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
 
 1. **Path Inheritance** — directory tree showing which config files apply
-2. **Usercrates** — auto-applied per-user configcrates from `stockpile/**/usercrates/`, listed with the scope directory where each one lives. Only rendered when any usercrates apply. See [Usercrates](../../reference/configcrate-language.md#usercrates).
+2. **Usercrates** — auto-applied per-user configcrates from `stacks/**/usercrates/`, listed with the scope directory where each one lives. Only rendered when any usercrates apply. See [Usercrates](../../reference/configcrate-language.md#usercrates).
 3. **Configcrate Inheritance** — configcrates and roles contributed at each level (usercrates excluded — they show in section 2)
 4. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
 5. **Password Inheritance** — all `secret:` references with masked values, secret paths, source configcrate, and provider
@@ -347,7 +344,7 @@ $ vigocli config search --var log_level
 
 ## config publish
 
-Validates `.vgo` files in `/srv/vigo/stacks/stockpile/` then atomically syncs to `/srv/vigo/stacks/.live/` (the directory the server reads). Changed configcrate files are automatically run through the configcrate linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../howto/configcrates/publish-config.md) for full details.
+Validates `.vgo` files in `/srv/vigo/stacks/` then atomically syncs to `/srv/vigo/.live/` (the directory the server reads). Changed configcrate files are automatically run through the configcrate linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../howto/configcrates/publish-config.md) for full details.
 
 Publish carries forward only files some carrier — a role, role `case:` branch, role `includes:` chain, match block, `common.vgo`, or `environments.vgo` — can actually reach. Configcrates and usercrates with no inbound reference, and template files no configcrate names via `source:`, are dropped from `.live/`. Structural files (hostcrates, `common.vgo`, `roles.vgo`, `environments.vgo`, `waivers.vgo`, task / workflow definitions) are always preserved. Use `--no-prune` to fall back to a verbatim mirror.
 
@@ -367,7 +364,7 @@ vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 | `--operator` | `$USER` | Operator name for audit trail |
 | `--diff` | `false` | Show line-level diff for each changed file |
 | `--ask-ai` | `false` | Ask AI to suggest fixes for validation errors |
-| `--no-prune` | `false` | Publish every file in `stockpile/` verbatim — skip the reachability prune |
+| `--no-prune` | `false` | Publish every file in `stacks/` verbatim — skip the reachability prune |
 
 ### Examples
 

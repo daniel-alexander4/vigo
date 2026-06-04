@@ -99,7 +99,7 @@ Drains the bolt and signs a revocation row into the admissions CRDT (`spanner_bo
 
 Generates the ops-puddle's Ed25519 keypair, wraps it under this vigosrv's master-key-derived wrap key, and persists it under `--ops-puddle-dir`. This vigosrv's service-account puddle becomes member zero. Other vigosrvs join via the pair flow.
 
-The friendly name participates in gitback URLs (`gitback://<name>/stockpile`) — pick something stable; renaming requires re-founding the ops-puddle. Name validation rules mirror the agent's per-user puddle rules: 1–64 ASCII alphanumeric + `-` `_` `.`, no leading dot, and no 64-hex-character `project_id` lookalike.
+The friendly name participates in gitback URLs (`gitback://<name>/stacks`) — pick something stable; renaming requires re-founding the ops-puddle. Name validation rules mirror the agent's per-user puddle rules: 1–64 ASCII alphanumeric + `-` `_` `.`, no leading dot, and no 64-hex-character `project_id` lookalike.
 
 Requires an unlocked secrets vault (`vigocli secrets unlock`).
 
@@ -158,13 +158,13 @@ Ops-puddle joined
     - ed25519:f81de2c4a8f1bb4d6e23b07c5b920fd1a2eb43d9a09f3e2b40c47ab9a83b66c1 (this vigosrv)
 ```
 
-## stockpile init
+## stacks init
 
-Founds the ops-puddle-owned stockpile gitback project on this vigosrv and auto-imports the existing on-disk stockpile as the first commit (ADR-025 Slice 3).
+Founds the ops-puddle-owned stacks gitback project on this vigosrv and auto-imports the existing on-disk stacks as the first commit (ADR-025 Slice 3).
 
 The command:
-1. Calls the service-account puddle helper at `/var/run/vigo/puddle.sock` (`FOUND_OPS_PROJECT stockpile members-only`) to mint a new gitback project owned by the ops-puddle.
-2. Auto-imports the contents of `--source` (default `/srv/vigo/stacks/stockpile`) into a temp work tree, runs `git init` + `git add .` + `git commit -m "stockpile init"`, and pushes via `file://` to the bare repo at `<--gitback-base>/projects/<project-id>.git`.
+1. Calls the service-account puddle helper at `/var/run/vigo/puddle.sock` (`FOUND_OPS_PROJECT stacks members-only`) to mint a new gitback project owned by the ops-puddle.
+2. Auto-imports the contents of `--source` (default `/srv/vigo/stacks`) into a temp work tree, runs `git init` + `git add .` + `git commit -m "stacks init"`, and pushes via `file://` to the bare repo at `<--gitback-base>/projects/<project-id>.git`.
 
 Preconditions:
 
@@ -173,47 +173,47 @@ Preconditions:
 - Unlocked secrets vault.
 - Service-account puddle helper running (auto-started by the agent when `/srv/vigo/puddle/identity.wrapped` exists).
 
-The project's `dr_scope` is fixed at `members-only`: only vigosrvs that hold ops-puddle membership materialize stockpile bytes. Non-ops-puddle envoys continue to receive resolved policy via the standard check-in gRPC stream from their bolt. The bundle-ingest gate in `agent/src/swarm/gitback/dr_scope.rs` enforces this — non-member envoys refuse stockpile bundles.
+The project's `dr_scope` is fixed at `members-only`: only vigosrvs that hold ops-puddle membership materialize stacks bytes. Non-ops-puddle envoys continue to receive resolved policy via the standard check-in gRPC stream from their bolt. The bundle-ingest gate in `agent/src/swarm/gitback/dr_scope.rs` enforces this — non-member envoys refuse stacks bundles.
 
 ```
-$ vigocli spanner stockpile init
-Stockpile project founded
-  URL:           gitback://alexander4-ops/stockpile
+$ vigocli spanner stacks init
+Stacks project founded
+  URL:           gitback://alexander4-ops/stacks
   Project ID:    8f5e2b7c91d4a3f6e88c7d2b1a9f5e3d4c6b8a7f9e2d1c5b8a3f7e6d2c4b9a8f5
-  Source:        /srv/vigo/stacks/stockpile
+  Source:        /srv/vigo/stacks
   Bare repo:     /var/lib/vigo/swarm/gitback/projects/8f5e2b7c…a8f5.git
   Auto-imported: 1 commit, 24576 bytes
 
-Other ops-puddle members will receive the stockpile after the next push
+Other ops-puddle members will receive the stacks after the next push
 (landing in Slice 4 — today's init seeds the founder side only).
 ```
 
-## stockpile join
+## stacks join
 
-Creates local stockpile project state on a vigosrv that has just joined the ops-puddle (via `spanner ops-puddle join`). The `project_id` is deterministic from the ops-puddle pubkey + the fixed handle `"stockpile"`, so every member computes the same id and every member's chain verifies against the shared ops-puddle pubkey.
+Creates local stacks project state on a vigosrv that has just joined the ops-puddle (via `spanner ops-puddle join`). The `project_id` is deterministic from the ops-puddle pubkey + the fixed handle `"stacks"`, so every member computes the same id and every member's chain verifies against the shared ops-puddle pubkey.
 
-After local state lands, the gitback catch-up reactor pulls the stockpile bytes from any reachable ops-puddle member (LAN multicast discovery or `cross_subnet_members`). The stockpile watcher then syncs bare→`.live` and triggers `configStore.Reload()` automatically.
+After local state lands, the gitback catch-up reactor pulls the stacks bytes from any reachable ops-puddle member (LAN multicast discovery or `cross_subnet_members`). The stacks watcher then syncs bare→`.live` and triggers `configStore.Reload()` automatically.
 
 Preconditions:
 
 - `spanner.mode != standalone`.
 - Ops-puddle exists locally (`spanner ops-puddle join --from <member> --code <c>` first).
-- No local stockpile state yet — re-running on an already-joined vigosrv errors with "already locally tracked".
+- No local stacks state yet — re-running on an already-joined vigosrv errors with "already locally tracked".
 
 ```
-$ vigocli spanner stockpile join
-Stockpile project state created
+$ vigocli spanner stacks join
+Stacks project state created
   Project ID:    8f5e2b7c91d4a3f6e88c7d2b1a9f5e3d4c6b8a7f9e2d1c5b8a3f7e6d2c4b9a8f5
   State dir:     /srv/vigo/ops-puddle/.vigo-gitback/8f5e2b7c…a8f5/
 
-The gitback catch-up reactor will pull stockpile bytes from a
+The gitback catch-up reactor will pull stacks bytes from a
 reachable ops-puddle member shortly (LAN multicast or cross-
-subnet members). The stockpile watcher syncs bare→.live and
+subnet members). The stacks watcher syncs bare→.live and
 reloads on arrival.
 ```
 
 ## Publish flow in spanner mode (Slice 4)
 
-`vigocli config publish` detects spanner mode via `/api/v1/spanner/status` and switches to a gitback-driven push: clone the stockpile bare repo into a temp work tree, mirror this vigosrv's on-disk `/srv/vigo/stacks/stockpile/` into the work tree (delete-aware), `git add -A` + `git commit` + `git push` via `file://` to the bare repo. The push triggers the stockpile watcher's bare→`.live` pull + `configStore.Reload()`; vigocli polls `/api/v1/config/version` until it increments (30s timeout) to confirm the publish landed.
+`vigocli config publish` detects spanner mode via `/api/v1/spanner/status` and switches to a gitback-driven push: clone the stacks bare repo into a temp work tree, mirror this vigosrv's on-disk `/srv/vigo/stacks/` into the work tree (delete-aware), `git add -A` + `git commit` + `git push` via `file://` to the bare repo. The push triggers the stacks watcher's bare→`.live` pull + `configStore.Reload()`; vigocli polls `/api/v1/config/version` until it increments (30s timeout) to confirm the publish landed.
 
-Standalone mode (`spanner.mode == standalone` or no spanner section) is unchanged: validate stockpile, write to `.live/` directly, POST `/api/v1/config/reload`. The pre-Slice-4 hub-fanout `SyncConfig` gRPC RPC + `Hub.SyncConfigToBolts` are retired — spanner-mode publishes go through gitback exclusively.
+Standalone mode (`spanner.mode == standalone` or no spanner section) is unchanged: validate stacks, write to `.live/` directly, POST `/api/v1/config/reload`. The pre-Slice-4 hub-fanout `SyncConfig` gRPC RPC + `Hub.SyncConfigToBolts` are retired — spanner-mode publishes go through gitback exclusively.

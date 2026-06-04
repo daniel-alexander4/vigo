@@ -3,7 +3,7 @@
 
 Manages local user accounts -- create, modify, and delete users with configurable shell, home directory, groups, and SSH authorized keys.
 
-> **Organizational guidance:** user accounts are vigo's most complex resource type and benefit from a specific stockpile layout (usercrate files under `stockpile/usercrates/`, directory-level compliance claims, lookup-table per-host variation, two-phase retirement). See the [User Management concept page](../../../reference/configcrate-language.md) for why and how, and the [Glossary](../../../glossary.md#usercrate) for what "usercrate" means.
+> **Organizational guidance:** user accounts are vigo's most complex resource type and benefit from a specific stacks layout (usercrate files under `stacks/usercrates/`, directory-level compliance claims, lookup-table per-host variation, two-phase retirement). See the [User Management concept page](../../../reference/configcrate-language.md) for why and how, and the [Glossary](../../../glossary.md#usercrate) for what "usercrate" means.
 
 ## Parameters
 

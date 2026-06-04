@@ -6,14 +6,14 @@ This is the canonical reference for operators authoring Vigo configcrates. It co
 ---
 ## Config Format
 
-All Vigo configuration lives in YAML files with the `.vgo` extension under `stockpile/`. The server reloads config when `vigocli config publish` syncs files to `.live/`.
+All Vigo configuration lives in YAML files with the `.vgo` extension under `stacks/`. The server reloads config when `vigocli config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
 The config directory doubles as a envoy hierarchy. Subdirectories define inheritance — `common.vgo` at any level defines configcrates, roles, and vars inherited by all entries in subdirectories below it.
 
 ```
-stockpile/
+stacks/
 ├── configcrates/                     # Configcrate definitions (unchanged)
 │   ├── nginx.vgo
 │   ├── postgres.vgo
@@ -353,10 +353,10 @@ Result for `web01.prod.example.com`: configcrates `sshd, ntp, monitoring, log-sh
 
 ## Usercrates
 
-Usercrates are per-user configcrates (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class. As of 0.54.0, **a usercrate is inert until it is positively included** by a carrier's `usercrates:` field — exactly like a regular configcrate. The directory is a library, not an auto-apply zone. See the [Glossary](../glossary.md#usercrate) for why the kind is distinct from a regular configcrate.
+Usercrates are per-user configcrates (user account + home-dir config + dotfiles, typically) that live in a dedicated `stacks/**/usercrates/` directory class. As of 0.54.0, **a usercrate is inert until it is positively included** by a carrier's `usercrates:` field — exactly like a regular configcrate. The directory is a library, not an auto-apply zone. See the [Glossary](../glossary.md#usercrate) for why the kind is distinct from a regular configcrate.
 
 ```
-stockpile/
+stacks/
   usercrates/
     admin.vgo              # defined here; inert until included
   customerA/
@@ -375,7 +375,7 @@ stockpile/
 | Match block | `envoys.vgo` | Single envoy |
 | `common.vgo` | Any directory | Every envoy at this dir and below |
 | `environments.vgo` per-env block | Any directory | Every envoy of that environment in scope |
-| Role | `stockpile/roles.vgo` | Every envoy that assigns the role |
+| Role | `stacks/roles.vgo` | Every envoy that assigns the role |
 
 ```yaml
 # envoys.vgo — include directly on a match block
@@ -390,7 +390,7 @@ usercrates: [anja, ann, dan, elena]
 ```
 
 ```yaml
-# stockpile/roles.vgo — bundle usercrates with a role
+# stacks/roles.vgo — bundle usercrates with a role
 roles:
   - name: ops
     configcrates: [sshd, ntp]
@@ -418,7 +418,7 @@ The `name:` field is optional; when omitted, it defaults to the filename stem (`
 
 ### Unreferenced-usercrate warning
 
-If a usercrate is defined in `stockpile/**/usercrates/` but no carrier includes it, the loader emits a publish-time warning: `unreferenced usercrates — defined under stockpile/**/usercrates/ but not included by any envoy count=N names=[...]`. Either include it (positive `usercrates:` somewhere) or move/delete the file.
+If a usercrate is defined in `stacks/**/usercrates/` but no carrier includes it, the loader emits a publish-time warning: `unreferenced usercrates — defined under stacks/**/usercrates/ but not included by any envoy count=N names=[...]`. Either include it (positive `usercrates:` somewhere) or move/delete the file.
 
 ### Migration from <0.54.0
 
@@ -434,24 +434,24 @@ Compliance claims and waivers use **distinct filenames in distinct trees** — f
 
 | Filename | Tree | Top-level key | What it does |
 |---|---|---|---|
-| `compliance.vgo` | `stockpile/` | `compliance:` | Per-configcrate compliance claims. Claims are unioned into every configcrate and usercrate in the same subtree. |
-| `waivers.vgo` | `stockpile/` | `waivers:` | Per-envoy compliance exceptions. Waivers follow the same inheritance pattern as `common.vgo` — root applies fleet-wide, subdirs apply only to their subtree. |
+| `compliance.vgo` | `stacks/` | `compliance:` | Per-configcrate compliance claims. Claims are unioned into every configcrate and usercrate in the same subtree. |
+| `waivers.vgo` | `stacks/` | `waivers:` | Per-envoy compliance exceptions. Waivers follow the same inheritance pattern as `common.vgo` — root applies fleet-wide, subdirs apply only to their subtree. |
 
-**Mixed keys are a hard error.** A `waivers:` block inside `stockpile/compliance.vgo`, or a `compliance:` block inside `stockpile/waivers.vgo` — both rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `.live/`.
+**Mixed keys are a hard error.** A `waivers:` block inside `stacks/compliance.vgo`, or a `compliance:` block inside `stacks/waivers.vgo` — both rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `.live/`.
 
-**Claims** from a `stockpile/**/compliance.vgo` are unioned into every configcrate defined anywhere beneath that file. A usercrate at `stockpile/usercrates/dan.vgo` inherits claims from `stockpile/usercrates/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the usercrate itself declares in its own inline `compliance:` block. All sources union with dedupe.
+**Claims** from a `stacks/**/compliance.vgo` are unioned into every configcrate defined anywhere beneath that file. A usercrate at `stacks/usercrates/dan.vgo` inherits claims from `stacks/usercrates/compliance.vgo` AND from `stacks/compliance.vgo` if both exist, plus whatever the usercrate itself declares in its own inline `compliance:` block. All sources union with dedupe.
 
-**Waivers** apply only to envoys whose hostcrate lives under the same directory subtree. `stockpile/customerA/waivers.vgo` waivers don't cross into `stockpile/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
+**Waivers** apply only to envoys whose hostcrate lives under the same directory subtree. `stacks/customerA/waivers.vgo` waivers don't cross into `stacks/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
 
 ```yaml
-# stockpile/compliance.vgo — claims only
+# stacks/compliance.vgo — claims only
 compliance:
   cis: ["1.1.1"]
   nist-800-53: ["AC-1", "CM-1"]
 ```
 
 ```yaml
-# stockpile/usercrates/compliance.vgo — claims scoped to usercrates
+# stacks/usercrates/compliance.vgo — claims scoped to usercrates
 compliance:
   cis: ["5.4.1"]
   nist-800-53: ["AC-3", "AC-6", "AC-6(1)", "IA-2", "IA-5"]
@@ -461,7 +461,7 @@ compliance:
 ```
 
 ```yaml
-# stockpile/waivers.vgo — fleet-wide waivers
+# stacks/waivers.vgo — fleet-wide waivers
 waivers:
   cis-ubuntu:
     - control: "6.1.10"
@@ -480,9 +480,9 @@ waivers:
 - `approved_by` — who approved (required)
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
-### Why compliance.vgo is a special filename under stockpile/configcrates/
+### Why compliance.vgo is a special filename under stacks/configcrates/
 
-The configcrate loader walks every `.vgo` file under `stockpile/configcrates/` and parses it as a configcrate definition (requires `name:` and `resources:`). `compliance.vgo` has neither — it's a directory-level claim declaration with a `compliance:` block only. The loader and the publish-time linter both key off the literal filename `compliance.vgo` under `stockpile/` and route it to a separate claim-inheritance walker instead of the configcrate parser. This is the only named exception in the configcrate library.
+The configcrate loader walks every `.vgo` file under `stacks/configcrates/` and parses it as a configcrate definition (requires `name:` and `resources:`). `compliance.vgo` has neither — it's a directory-level claim declaration with a `compliance:` block only. The loader and the publish-time linter both key off the literal filename `compliance.vgo` under `stacks/` and route it to a separate claim-inheritance walker instead of the configcrate parser. This is the only named exception in the configcrate library.
 
 ### Rationale for the filename split
 
@@ -497,11 +497,11 @@ The only valid top-level keys in either file are `compliance:` and `waivers:`. A
 
 Existing deployments migrate automatically on first boot via `entrypoint.sh`:
 
-- `/srv/vigo/stockpile/` → `/srv/vigo/stacks/stockpile/` (if old layout exists)
-- `stockpile/configcrates/` → `stockpile/configcrates/`
-- `stockpile/.live/` → `.live/`
-- `stockpile/envoys.vgo`, `stockpile/roles.vgo`, `stockpile/common.vgo` → `stockpile/`
-- `stockpile/compliance.vgo` containing a `waivers:` block → `stockpile/waivers.vgo` (waivers side)
+- `/srv/vigo/stacks/` → `/srv/vigo/stacks/` (if old layout exists)
+- `stacks/configcrates/` → `stacks/configcrates/`
+- `stacks/.live/` → `.live/`
+- `stacks/envoys.vgo`, `stacks/roles.vgo`, `stacks/common.vgo` → `stacks/`
+- `stacks/compliance.vgo` containing a `waivers:` block → `stacks/waivers.vgo` (waivers side)
 
 The migration is idempotent — safe to re-run after upgrades.
 
@@ -1438,35 +1438,34 @@ Vigo composes an envoy's effective config from **a small number of orthogonal ax
 
 The whole config operation lives under a single parent directory, **stacks** (`/srv/vigo/stacks/`). Inside it, three subtrees have distinct roles:
 
-- **`stockpile/`** — the operator's working tree. Holds *every* config primitive: `configcrates/` (definitions), `usercrates/`, `templates/`, `tasks/`, `workflows/`, plus the assignment files themselves (`envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`) and directory-inherited `compliance.vgo` claims. **There is one operator-edited tree.**
-- **`examples/`** — read-only install-template tree seeded by the image. Operators copy from here into stockpile via `vigocli config examples copy <name>`.
-- **`anti-examples/`** — read-only retract-template tree, mirroring `examples/configcrates/` one-for-one. Each install template `examples/configcrates/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/configcrates/<cat>/<name>-retract.vgo.example`. Copy with `vigocli config anti-examples copy <name>`; verify completeness with `vigocli config anti-examples mirror-check`. Never read by the server, never published.
-- **`.live/`** — the validated published output. `vigocli config publish` lints stockpile and atomically syncs it here; the server reads `.live/` on every reload.
+- **`stacks/`** — the operator's working tree. Holds *every* config primitive: `configcrates/` (definitions), `usercrates/`, `templates/`, `tasks/`, `workflows/`, plus the assignment files themselves (`envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`) and directory-inherited `compliance.vgo` claims. **There is one operator-edited tree.**
+- **`examples/`** — read-only install-template tree seeded by the image. Operators copy from here into stacks via `vigocli config examples copy <name>`.
+- **`.live/`** — the validated published output. `vigocli config publish` lints stacks and atomically syncs it here; the server reads `.live/` on every reload.
 
-Operators edit `stockpile/`. Never `.live/`. Never edit `examples/` directly — copy first, then edit your stockpile copy.
+Operators edit `stacks/`. Never `.live/`. Never edit `examples/` directly — copy first, then edit your stacks copy.
 
-> The 0.33.1 collapse merged the prior `worksite/{stockpile,scaffolding,structure}/` layout into the `stacks/{stockpile,examples,.live}/` shape. Existing installs migrate automatically on first boot. The `scaffolding/` tree is gone — its contents (hostcrates, roles, common.vgo, waivers, environments.vgo) live in stockpile alongside configcrates and usercrates.
+> The 0.33.1 collapse merged the prior `worksite/{stacks,scaffolding,structure}/` layout into the `stacks/{stacks,examples,.live}/` shape. Existing installs migrate automatically on first boot. The `scaffolding/` tree is gone — its contents (hostcrates, roles, common.vgo, waivers, environments.vgo) live in stacks alongside configcrates and usercrates.
 
 ## The axes
 
 | Axis | Where | What it does |
 |---|---|---|
-| **Directory structure** | `stockpile/<org>/<site>/` | Organizes by business axis (customer, site, tenant). Inheritance via `common.vgo`. **Not used for env.** |
-| **Hostcrates** | `stockpile/**/envoys.vgo` (or any `.vgo` with an `envoys:` block, anywhere outside `configcrates/`/`templates/`/`tasks/`/`workflows/`/`usercrates/`) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
-| **Roles** | `stockpile/roles.vgo` | Named groupings of configcrates. Supports `when:` (role-wide) and `case:` (per-platform configcrate groups). Single fleet-wide file at the stockpile root. |
-| **Configcrates** | `stockpile/configcrates/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `configcrates/` on disk; YAML keys and identifiers stay `configcrate`. |
-| **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user configcrates. Inert until positively included via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo). |
-| **Common defaults** | `stockpile/**/common.vgo` | Directory-inherited configcrates/usercrates/roles/vars + `exclude_configcrates`. |
+| **Directory structure** | `stacks/<org>/<site>/` | Organizes by business axis (customer, site, tenant). Inheritance via `common.vgo`. **Not used for env.** |
+| **Hostcrates** | `stacks/**/envoys.vgo` (or any `.vgo` with an `envoys:` block, anywhere outside `configcrates/`/`templates/`/`tasks/`/`workflows/`/`usercrates/`) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
+| **Roles** | `stacks/roles.vgo` | Named groupings of configcrates. Supports `when:` (role-wide) and `case:` (per-platform configcrate groups). Single fleet-wide file at the stacks root. |
+| **Configcrates** | `stacks/configcrates/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `configcrates/` on disk; YAML keys and identifiers stay `configcrate`. |
+| **Usercrates** | `stacks/**/usercrates/*.vgo` | Per-user configcrates. Inert until positively included via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo). |
+| **Common defaults** | `stacks/**/common.vgo` | Directory-inherited configcrates/usercrates/roles/vars + `exclude_configcrates`. |
 | **Environment** | `environment:` field on match block | Cross-cutting env declaration. Orthogonal to directory structure. |
-| **Per-env overrides** | `stockpile/**/environments.vgo` | Env-specific configcrate sets + vars. Scope follows ancestor chain. |
+| **Per-env overrides** | `stacks/**/environments.vgo` | Env-specific configcrate sets + vars. Scope follows ancestor chain. |
 | **Lookup tables** | Inside configcrate fields (`tag:...`, `os_family:...`) | Per-trait or per-tag field variation. |
 | **Conditional resources** | `when:` on individual resources | Skip a resource based on traits or vars. |
-| **Compliance claims** | `stockpile/**/compliance.vgo` | Directory-level claim inheritance for configcrates + usercrates. |
-| **Waivers** | `stockpile/**/waivers.vgo` | Per-envoy compliance exceptions. |
+| **Compliance claims** | `stacks/**/compliance.vgo` | Directory-level claim inheritance for configcrates + usercrates. |
+| **Waivers** | `stacks/**/waivers.vgo` | Per-envoy compliance exceptions. |
 
 ### Canonical filename rule
 
-Two file shapes are protected by name. Both live in stockpile:
+Two file shapes are protected by name. Both live in stacks:
 
 | Filename | Top-level key |
 |---|---|
@@ -1486,7 +1485,7 @@ For an envoy `web01.customerA.example.com` checking in:
 ┌──────────────────────────────────────────────────────────────────┐
 │  Match block lookup (first-match-wins, all hostcrates walked)    │
 │                                                                  │
-│  stockpile/customerA/envoys.vgo:                                 │
+│  stacks/customerA/envoys.vgo:                                 │
 │    - match: "web01.customerA.*"                                  │
 │      role: web-server                                            │
 │      environment: prod         ← env declared HERE               │
@@ -1499,8 +1498,8 @@ For an envoy `web01.customerA.example.com` checking in:
 │  Compose configcrate list (in order)                                  │
 │                                                                  │
 │  1. Inherited common.vgo configcrates (parent → child)                │
-│       stockpile/common.vgo              → [baseline, monitoring] │
-│       stockpile/customerA/common.vgo    → [customerA-baseline]   │
+│       stacks/common.vgo              → [baseline, monitoring] │
+│       stacks/customerA/common.vgo    → [customerA-baseline]   │
 │                                                                  │
 │  2. Role configcrates (expand via roles.vgo; case: applied per OS)    │
 │       web-server → [nginx, php, tls]                             │
@@ -1510,8 +1509,8 @@ For an envoy `web01.customerA.example.com` checking in:
 │       match block `usercrates: [alice]`         → users/alice    │
 │                                                                  │
 │  4. environments.vgo (ancestor chain, env == "prod")             │
-│       stockpile/environments.vgo (prod)  → [audit-logging]       │
-│       stockpile/customerA/environments.vgo (prod)                │
+│       stacks/environments.vgo (prod)  → [audit-logging]       │
+│       stacks/customerA/environments.vgo (prod)                │
 │                                            → [customerA-prod-only] │
 └──────────────────────────────────────────────────────────────────┘
                               │
@@ -1524,14 +1523,14 @@ For an envoy `web01.customerA.example.com` checking in:
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  Attach compliance claims (from stockpile/**/compliance.vgo)     │
+│  Attach compliance claims (from stacks/**/compliance.vgo)     │
 │  to each configcrate in the list, walking up the directory ancestor   │
 │  chain of each configcrate's source file.                             │
 └──────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  Attach waivers (from stockpile/**/waivers.vgo) to the envoy,    │
+│  Attach waivers (from stacks/**/waivers.vgo) to the envoy,    │
 │  walking up the directory ancestor chain of the hostcrate.       │
 └──────────────────────────────────────────────────────────────────┘
                               │
@@ -1562,29 +1561,28 @@ For an envoy `web01.customerA.example.com` checking in:
 
 | Question | Canonical answer |
 |---|---|
-| How does a configcrate get assigned to an envoy? | Via a **role** (defined in `stockpile/roles.vgo`) that the hostcrate assigns, OR via inheritance from `stockpile/**/common.vgo`. Inline `configcrates:` on a match block is allowed but warns at >4 entries — that's the signal you should define a role. |
+| How does a configcrate get assigned to an envoy? | Via a **role** (defined in `stacks/roles.vgo`) that the hostcrate assigns, OR via inheritance from `stacks/**/common.vgo`. Inline `configcrates:` on a match block is allowed but warns at >4 entries — that's the signal you should define a role. |
 | How does a host get per-host config? | Tag the host in its match block; use tag-keyed lookup tables inside configcrates to vary field values. Separate match blocks only for genuinely bespoke hosts. |
-| How does config differ per env? | Declare `environment:` on the match block. Declare env-specific configcrates/vars in `stockpile/**/environments.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
+| How does config differ per env? | Declare `environment:` on the match block. Declare env-specific configcrates/vars in `stacks/**/environments.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
 | How does a configcrate branch per OS / platform? | `case:` on the role (when whole configcrates differ per platform) OR platform-keyed lookup tables inside configcrate fields (when only values differ). Never inline `when:` on a resource when the axis is platform — that's harder to read. |
 | How do vars resolve? | 3 layers, low-to-high: configcrate defaults < common.vgo inherited vars < envoy match-block vars < environments.vgo vars. |
-| How is a user account configured? | A **usercrate** in `stockpile/usercrates/` (fleet-wide) or `stockpile/<scope>/usercrates/` (scoped). The directory is a library — positively include via a `usercrates:` field on a carrier (match block, common.vgo, role, or environments.vgo). See [User Management](#usercrates). |
-| Where do compliance claims live? | `stockpile/**/compliance.vgo` — directory-level, inherited by every configcrate and usercrate in the subtree. Inline `compliance:` on a configcrate definition for configcrate-specific exceptions. |
-| Where do waivers live? | `stockpile/**/waivers.vgo` — at any directory level, scoped by directory. Distinct filename from compliance claims. |
-| Where do I copy an example from? | `vigocli config examples list` to browse, then `vigocli config examples copy <name>` to materialize one into stockpile. |
-| Where does a configcrate example's retract come from? | `vigocli config anti-examples copy <name>` materializes the paired retract from `anti-examples/configcrates/<cat>/<name>-retract.vgo.example` into stockpile alongside the install configcrate. `vigocli config anti-examples mirror-check` reports any configcrate example missing a paired retract. |
+| How is a user account configured? | A **usercrate** in `stacks/usercrates/` (fleet-wide) or `stacks/<scope>/usercrates/` (scoped). The directory is a library — positively include via a `usercrates:` field on a carrier (match block, common.vgo, role, or environments.vgo). See [User Management](#usercrates). |
+| Where do compliance claims live? | `stacks/**/compliance.vgo` — directory-level, inherited by every configcrate and usercrate in the subtree. Inline `compliance:` on a configcrate definition for configcrate-specific exceptions. |
+| Where do waivers live? | `stacks/**/waivers.vgo` — at any directory level, scoped by directory. Distinct filename from compliance claims. |
+| Where do I copy an example from? | `vigocli config examples list` to browse, then `vigocli config examples copy <name>` to materialize one into stacks. |
 
 ## Directory layout — reference
 
 ```
-/srv/vigo/stacks/
-├── stockpile/                    ← operator-edited working tree
+/srv/vigo/
+├── stacks/                       ← operator-edited config tree
 │   ├── compliance.vgo            ← fleet-wide claims
 │   ├── waivers.vgo               ← fleet-wide waivers
 │   ├── common.vgo                ← fleet-wide defaults (configcrates, roles, vars)
 │   ├── environments.vgo          ← fleet-wide env overrides (optional)
 │   ├── roles.vgo                 ← role definitions (single, fleet-wide)
 │   │
-│   ├── configcrates/                  ← configcrate definitions (any depth)
+│   ├── configcrates/             ← configcrate definitions (any depth)
 │   │   ├── nginx.vgo
 │   │   ├── postgres.vgo
 │   │   └── compliance.vgo        ← claims inherited by every configcrate beneath
@@ -1603,26 +1601,23 @@ For an envoy `web01.customerA.example.com` checking in:
 │       └── usercrates/
 │           └── alice.vgo         ← customerA-only usercrate
 │
-├── examples/                     ← read-only install templates (image-seeded)
+├── stacks-examples/              ← read-only install templates (image-seeded)
 │   ├── configcrates/<cat>/<name>.vgo.example
 │   ├── usercrates/<name>.vgo.example
 │   └── ...
 │
-├── anti-examples/                ← read-only retract templates (mirrors examples/configcrates)
-│   └── configcrates/<cat>/<name>-retract.vgo.example
-│
-└── .live/                        ← validated published output (server reads here;
-                                    locked read-only between publishes)
-    └── stockpile/                ← canonical bytes synced from stockpile after modlint
+└── .live/                        ← validated published output the server reads
+                                    (locked read-only between publishes; mirrors
+                                    stacks/ contents flat after modlint)
 ```
 
 Key rules:
 
-- **Operators only edit `stockpile/`.** `.live/` is locked between publishes; `examples/` is image-managed.
+- **Operators only edit `stacks/`.** `.live/` is locked between publishes; `examples/` is image-managed.
 - **No env in directory paths.** No `prod/` or `staging/` directories. Env is a field on the match block.
-- **Roles live once.** `stockpile/roles.vgo`, fleet-wide.
-- **Configcrates live under `stockpile/configcrates/`.** Walked recursively.
-- **Usercrates live at any scope within stockpile.** Root for fleet-wide, customer subdir for customer-scoped.
+- **Roles live once.** `stacks/roles.vgo`, fleet-wide.
+- **Configcrates live under `stacks/configcrates/`.** Walked recursively.
+- **Usercrates live at any scope within stacks.** Root for fleet-wide, customer subdir for customer-scoped.
 - **Organization axes** (customer, site, tenant, region, cloud) mirror your business, not your infrastructure. `aws/` or `gcp/` also works if cloud is your organizing axis.
 
 ## User management — why usercrates exist
@@ -1638,14 +1633,14 @@ When a person leaves, the user resource must be **`state: absent` in the config 
 The convention:
 
 1. Edit the resource to `state: absent` (keep `username`, keep `password`-`secret:` ref so the secret can be retired after).
-2. Move the file to `stockpile/usercrates/retired/<name>.vgo`.
+2. Move the file to `stacks/usercrates/retired/<name>.vgo`.
 3. Commit, publish, wait one full convergence cycle on every envoy that ever held the account.
 4. Only then is it safe to delete the file. The `retired/` directory is the historical roster — git history plus the retained file answers "did we provision `<name>` on this envoy between X and Y" cleanly.
 
 ### Things that look right but aren't
 
 - **User resources in general-purpose configcrates.** Don't put `type: user` in `configcrates/base.vgo`. Git blame becomes useless and per-person audit is impossible. Put it in a usercrate.
-- **Dropping a file into `usercrates/` and assuming it applies.** As of 0.54.0 the directory is a library; a usercrate is inert until positively included via a carrier's `usercrates:` field. Include fleet-wide users in `stockpile/common.vgo`; scope-restricted users in the scoped carrier (subdir `common.vgo`, match block, role, or per-env override).
+- **Dropping a file into `usercrates/` and assuming it applies.** As of 0.54.0 the directory is a library; a usercrate is inert until positively included via a carrier's `usercrates:` field. Include fleet-wide users in `stacks/common.vgo`; scope-restricted users in the scoped carrier (subdir `common.vgo`, match block, role, or per-env override).
 - **One human across multiple files.** Splitting a human's config across files makes history noisier without benefit. The opposite — multiple humans per file (a team / role / on-call rotation crate) — is supported when the group genuinely moves together; drop the bundle from a carrier's `usercrates:` list to remove it cleanly.
 
 ---
@@ -1812,18 +1807,18 @@ publish:
 
 ### On new or changed configcrates
 
-1. Run `vigocli config publish` after adding or modifying a configcrate in `stockpile/configcrates/`
+1. Run `vigocli config publish` after adding or modifying a configcrate in `stacks/configcrates/`
 2. The publish pipeline detects new/changed configcrates and reads their content
 3. The server generates a deterministic retract configcrate (flipping each resource to its absent state)
 4. The AI reviews and improves the draft, especially for `exec` resources where reversal requires reasoning
-5. A `.retract` file is written alongside the configcrate in `stockpile/configcrates/`
+5. A `.retract` file is written alongside the configcrate in `stacks/configcrates/`
 
 ### On removed configcrates
 
-1. Run `vigocli config publish` after removing a configcrate from `stockpile/configcrates/`
+1. Run `vigocli config publish` after removing a configcrate from `stacks/configcrates/`
 2. The publish pipeline detects the removal and reads the configcrate content from the previous config
 3. The server generates the retract configcrate and looks up which envoys previously ran it
-4. A `.retract` file is written to `stockpile/configcrates/` with a detailed summary of affected envoys and per-resource confidence levels
+4. A `.retract` file is written to `stacks/configcrates/` with a detailed summary of affected envoys and per-resource confidence levels
 
 ## Generated Output
 
@@ -1851,7 +1846,7 @@ The generated `.retract` file is inert --- it won't be loaded by the config syst
 
 ## Applying a Retraction
 
-1. Review the generated file: `stockpile/configcrates/<name>.retract`
+1. Review the generated file: `stacks/configcrates/<name>.retract`
 2. Rename to `<name>-retract.vgo`
 3. Add configcrate `<name>-retract` to the relevant match blocks or roles
 4. Run `vigocli config publish`
@@ -1877,14 +1872,14 @@ Returns generated retract YAML, warnings, and affected envoy list for each confi
 
 ## Example Retractions
 
-Every example configcrate in `example-configs/stockpile/configcrates/` has a pre-built retraction counterpart in `example-configs/retractions/configcrates/`. These follow the same reversal rules documented above and serve as reference implementations.
+Every example configcrate in `example-configs/stacks/configcrates/` has a pre-built retraction counterpart in `example-configs/retractions/configcrates/`. These follow the same reversal rules documented above and serve as reference implementations.
 
 To use an example retraction:
 
-1. Copy the retraction to your stockpile:
+1. Copy the retraction to your stacks:
    ```bash
    cp example-configs/retractions/configcrates/web/nginx-retract.vgo.example \
-      /srv/vigo/stacks/stockpile/configcrates/nginx-retract.vgo
+      /srv/vigo/stacks/configcrates/nginx-retract.vgo
    ```
 2. Review the file, especially any `# REVIEW:` or `# WARNING:` comments
 3. Add `nginx-retract` to the relevant match blocks or roles
@@ -1944,7 +1939,7 @@ stream_edit:
     - /opt/vigo/bin
 ```
 
-Tighten this if you want a specific pinned-down script directory managed separately from stockpile content.
+Tighten this if you want a specific pinned-down script directory managed separately from stacks content.
 
 ### `stream_edit.default_timeout`
 

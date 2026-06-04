@@ -577,8 +577,8 @@ paths:
   migrations: "migrations"
   custom_traits: "custom-traits"
   docs: "docs"
-  tasks: "stockpile/tasks"
-  workflows: "stockpile/workflows"
+  tasks: "stacks/tasks"
+  workflows: "stacks/workflows"
   agent_dist: "dist/agent"
   license_dir: "/srv/vigo/license"
 ```
@@ -615,7 +615,7 @@ maintenance:
 
 ## task
 
-Ad-hoc task-dispatch safety. With `require_definition: true`, every task sent via `vigocli task dispatch` must reference a reviewed definition under `stockpile/tasks/` — direct shell commands are refused. Turn this on in production to force review of anything fan-outable to the fleet.
+Ad-hoc task-dispatch safety. With `require_definition: true`, every task sent via `vigocli task dispatch` must reference a reviewed definition under `stacks/tasks/` — direct shell commands are refused. Turn this on in production to force review of anything fan-outable to the fleet.
 
 ```yaml
 task:

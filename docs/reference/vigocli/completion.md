@@ -29,7 +29,7 @@ Restart your shell or source the file for changes to take effect.
 
 - All commands and subcommands: `vigocli env<TAB>` completes to `vigocli envoys`
 - All flags: `vigocli envoys list --<TAB>` shows `--all`, `--server`
-- `vigocli config edit <TAB>` lists configcrate names from `/srv/vigo/stacks/stockpile/configcrates/`
+- `vigocli config edit <TAB>` lists configcrate names from `/srv/vigo/stacks/configcrates/`
 
 ### Dynamic completions (queries the server)
 

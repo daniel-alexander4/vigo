@@ -31,9 +31,9 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 All examples follow these patterns:
 
-- Configcrates live in `stockpile/configcrates/`
-- Roles live in `stockpile/roles/`
-- Node assignments live in `stockpile/envoys/envoys.vgo`
+- Configcrates live in `stacks/configcrates/`
+- Roles live in `stacks/roles/`
+- Node assignments live in `stacks/envoys/envoys.vgo`
 - Go templates (`{{ }}`) are only used in `content:` attributes
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider

@@ -5,7 +5,7 @@ This example builds and runs a brown noise Docker container on a managed node, w
 
 ## Configcrate Definition
 
-`stockpile/configcrates/brownnoise.vgo`:
+`stacks/configcrates/brownnoise.vgo`:
 
 ```yaml
 name: brownnoise
@@ -74,7 +74,7 @@ resources:
 
 ## Node Assignment
 
-`stockpile/envoys/envoys.vgo`:
+`stacks/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -89,7 +89,7 @@ envoys:
 
 ## Template
 
-Place your `brownnoise.sh` script at `stockpile/configcrates/templates/brownnoise.sh.tmpl`. You can optionally template the parameters:
+Place your `brownnoise.sh` script at `stacks/configcrates/templates/brownnoise.sh.tmpl`. You can optionally template the parameters:
 
 ```bash
 minutes=${1:-'{{ .Vars.brownnoise_minutes }}'}

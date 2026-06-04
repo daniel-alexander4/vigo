@@ -12,7 +12,7 @@ You'll finish this page with switches, routers, and firewalls under the same con
 Pick one envoy on the same management network as the device(s) — call it the **gateway envoy**. It'll SSH to each network device on Vigo's behalf. Declare the devices as envoys via the network-device hostcrate shape, with the gateway specified:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/envoys.vgo
+# /srv/vigo/stacks/envoys.vgo
 envoys:
   - match: "switch-*.lab"
     network_device:
@@ -171,7 +171,7 @@ Traits are available in templates (`{{ .Traits.device.model }}`) and `when:` exp
 ## Example Configcrate
 
 ```yaml
-# stockpile/configcrates/switch-base.vgo
+# stacks/configcrates/switch-base.vgo
 name: switch-base
 resources:
   - name: login-banner

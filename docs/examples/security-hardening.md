@@ -5,7 +5,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 
 ## Firewall Configcrate
 
-`stockpile/configcrates/firewall.vgo`:
+`stacks/configcrates/firewall.vgo`:
 
 ```yaml
 name: firewall
@@ -76,7 +76,7 @@ vars:
 
 ## SSH Hardening Configcrate
 
-`stockpile/configcrates/ssh-hardening.vgo`:
+`stacks/configcrates/ssh-hardening.vgo`:
 
 ```yaml
 name: ssh-hardening
@@ -115,7 +115,7 @@ resources:
 
 ## Fail2ban Configcrate
 
-`stockpile/configcrates/fail2ban.vgo`:
+`stacks/configcrates/fail2ban.vgo`:
 
 ```yaml
 name: fail2ban
@@ -157,7 +157,7 @@ resources:
 
 ## Sudo Configcrate
 
-`stockpile/configcrates/sudo-config.vgo`:
+`stacks/configcrates/sudo-config.vgo`:
 
 ```yaml
 name: sudo-config
@@ -185,7 +185,7 @@ resources:
 
 ## Role Definition
 
-`stockpile/roles/hardened.vgo`:
+`stacks/roles/hardened.vgo`:
 
 ```yaml
 name: hardened
@@ -198,7 +198,7 @@ configcrates:
 
 ## Node Assignment
 
-`stockpile/envoys/envoys.vgo`:
+`stacks/envoys/envoys.vgo`:
 
 ```yaml
 envoys:

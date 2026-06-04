@@ -6,7 +6,7 @@ Prevent disk and inode exhaustion with a role that bundles five focused configcr
 ## The Role
 
 ```yaml
-# stockpile/roles.vgo
+# stacks/roles.vgo
 roles:
   - name: disk-hygiene
     configcrates: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]

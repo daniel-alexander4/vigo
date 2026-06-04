@@ -52,7 +52,7 @@ After enrollment each envoy appears in the dashboard at `https://localhost:8443/
 ## 3. Write a configcrate
 
 ```yaml
-# /srv/vigo/stacks/stockpile/configcrates/motd.vgo
+# /srv/vigo/stacks/configcrates/motd.vgo
 name: motd
 resources:
   - name: motd-file
@@ -74,14 +74,14 @@ resources:
 The simplest assignment — every envoy gets it:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/common.vgo
+# /srv/vigo/stacks/common.vgo
 configcrates: [motd]
 ```
 
 For per-host assignment use a hostcrate:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/envoys.vgo
+# /srv/vigo/stacks/envoys.vgo
 envoys:
   - match: "web*.prod"
     configcrates: [motd, nginx]
@@ -97,7 +97,7 @@ envoys:
 sudo vigocli config publish
 ```
 
-Validates the tree, syncs to `/srv/vigo/stacks/.live/`, triggers a server reload. If validation fails, the built-in AI assistant prints fix suggestions to your terminal.
+Validates the tree, syncs to `/srv/vigo/.live/`, triggers a server reload. If validation fails, the built-in AI assistant prints fix suggestions to your terminal.
 
 ## 6. Force an immediate check-in (don't wait 5 minutes)
 

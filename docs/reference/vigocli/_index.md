@@ -35,7 +35,7 @@ pages are linked under their parent.
 ### Config
 | Command | Description |
 |---------|-------------|
-| [config](config.md) | Publish, inspect, and manage `.vgo` config — `publish`, `edit`, [`validate`](validate.md), `trace`, `tree`, `history`, `rollback`, `promote`, `freeze`, `search`, `stockpile`, `server.yaml` |
+| [config](config.md) | Publish, inspect, and manage `.vgo` config — `publish`, `edit`, [`validate`](validate.md), `trace`, `tree`, `history`, `rollback`, `promote`, `freeze`, `search`, `stacks`, `server.yaml` |
 | [test](test.md) | Run config tests against expected outcomes |
 
 ### Traits & inventory

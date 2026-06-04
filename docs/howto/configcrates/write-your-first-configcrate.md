@@ -11,7 +11,7 @@ This walkthrough builds a complete nginx configcrate with package installation, 
 
 ## Configcrate Structure
 
-A configcrate is a YAML file with a `.vgo` extension in `stockpile/configcrates/`. It contains:
+A configcrate is a YAML file with a `.vgo` extension in `stacks/configcrates/`. It contains:
 
 ```yaml
 name: configcrate-name
@@ -25,7 +25,7 @@ resources:
 
 ## Step 1: Create the Configcrate
 
-Create `stockpile/configcrates/nginx.vgo`:
+Create `stacks/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -89,11 +89,11 @@ This configcrate demonstrates three key patterns:
 Create a directory for your web servers and add a envoy entry:
 
 ```bash
-mkdir -p stockpile/web
+mkdir -p stacks/web
 ```
 
 ```yaml
-# stockpile/web/web.vgo
+# stacks/web/web.vgo
 envoys:
   - match: "web*.example.com"
     configcrates: [nginx]
@@ -104,11 +104,11 @@ envoys:
 
 Node-level `vars` override the configcrate's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have configcrates that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../../reference/configcrate-language.md#directory-inheritance).
+**Tip:** If you have configcrates that should apply to *all* your envoys (like SSH and monitoring), put them in `stacks/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../../reference/configcrate-language.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
-For multiple configcrates, group them into a role. Create `stockpile/roles.vgo`:
+For multiple configcrates, group them into a role. Create `stacks/roles.vgo`:
 
 ```yaml
 roles:

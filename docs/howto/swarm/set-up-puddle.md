@@ -13,7 +13,7 @@ A **puddle** is the per-user identity that ties together "this user's collection
 Puddle is per-user, not per-fleet. Grant a user the `puddle: true` flag in their usercrate:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/usercrates/dan.vgo
+# /srv/vigo/stacks/usercrates/dan.vgo
 resources:
   - type: user
     username: dan

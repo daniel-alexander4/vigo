@@ -323,14 +323,14 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 For any host that runs Grafana under Vigo management, drop the `vigo-grafana-dashboards` configcrate into the role and converge:
 
 ```yaml
-# worksite/stockpile/scaffolding/roles.vgo
+# stacks/scaffolding/roles.vgo
 - name: grafana-host
   configcrates:
     - grafana                  # installs the daemon
     - vigo-grafana-dashboards  # drops all six dashboards into provisioning
 ```
 
-The configcrate sources the dashboard JSONs from `worksite/stockpile/templates/vigo-dashboards/` and writes them to `/etc/grafana/provisioning/dashboards/vigo/`. Grafana picks them up on its next provisioning scan (default 30 s) — no UI import, no service restart.
+The configcrate sources the dashboard JSONs from `stacks/templates/vigo-dashboards/` and writes them to `/etc/grafana/provisioning/dashboards/vigo/`. Grafana picks them up on its next provisioning scan (default 30 s) — no UI import, no service restart.
 
 The companion `vigo-prometheus-alerts` configcrate ships [`alerts.yaml`](#alert-rules) to `/etc/prometheus/rules/vigo-alerts.yaml` and notifies the Prometheus service to reload. Pair it with the standard `prometheus` configcrate — which already mounts `rule_files: /etc/prometheus/rules/*.yml`.
 

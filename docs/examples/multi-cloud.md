@@ -9,7 +9,7 @@ This example shows how to use cloud traits to manage a fleet spanning AWS, GCP, 
 
 Each cloud provider has its own monitoring agent. Use `when:` expressions to install the right one.
 
-`stockpile/configcrates/cloud-monitoring.vgo`:
+`stacks/configcrates/cloud-monitoring.vgo`:
 
 ```yaml
 name: cloud-monitoring
@@ -54,7 +54,7 @@ resources:
 
 Enforce GDPR compliance for EU-region instances:
 
-`stockpile/configcrates/gdpr-audit.vgo`:
+`stacks/configcrates/gdpr-audit.vgo`:
 
 ```yaml
 name: gdpr-audit
@@ -82,7 +82,7 @@ resources:
 
 Generate a local inventory file with cloud metadata for asset tracking:
 
-`stockpile/configcrates/cloud-inventory.vgo`:
+`stacks/configcrates/cloud-inventory.vgo`:
 
 ```yaml
 name: cloud-inventory
@@ -110,7 +110,7 @@ resources:
 
 Use cloud traits to target entire providers or regions:
 
-`stockpile/envoys.vgo`:
+`stacks/envoys.vgo`:
 
 ```yaml
 match:

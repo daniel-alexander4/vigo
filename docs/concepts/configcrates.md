@@ -8,7 +8,7 @@ You write **configcrates** — reusable sets of resources — and bind them to m
 
 | Primitive | What it is |
 |---|---|
-| **Configcrate** | A named set of [resources](../reference/vigo/resources/_index.md) (`file`, `package`, `service`, …) with default variables. Lives in `stockpile/configcrates/*.vgo`. Inert until something includes it. |
+| **Configcrate** | A named set of [resources](../reference/vigo/resources/_index.md) (`file`, `package`, `service`, …) with default variables. Lives in `stacks/configcrates/*.vgo`. Inert until something includes it. |
 | **Role** | A named group of configcrates (with per-OS `case:` groups and single-level `includes:`). Defined once in `roles.vgo`. |
 | **Hostcrate** | A `.vgo` file mapping hostname patterns/globs → roles, configcrates, and vars. **First match wins.** |
 | **Usercrate** | A per-Unix-user configcrate kind; positively included via a carrier's `usercrates:` field. |

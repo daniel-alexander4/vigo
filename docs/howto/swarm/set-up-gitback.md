@@ -12,7 +12,7 @@ You'll finish this page with a git project living across every puddle-member env
 Gitback rides on top of puddle, so the prerequisite is [puddle membership](set-up-puddle.md). Also enable it per-user via the usercrate:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/usercrates/dan.vgo
+# /srv/vigo/stacks/usercrates/dan.vgo
 resources:
   - type: user
     username: dan

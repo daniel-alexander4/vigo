@@ -31,26 +31,22 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
-├── stacks/                  # config operation root
-│   ├── stockpile/           # operator-edited working tree
-│   │   ├── configcrates/    # reusable configcrate definitions
-│   │   ├── usercrates/      # user-scoped configcrates (inert until included via `usercrates:`)
-│   │   ├── templates/       # Go template fragments
-│   │   ├── tasks/           # reusable task definitions
-│   │   ├── workflows/       # workflow definitions
-│   │   ├── envoys.vgo       # hostcrate (any .vgo with envoys: works)
-│   │   ├── roles.vgo        # role definitions (single, fleet-wide)
-│   │   ├── common.vgo       # directory-inherited defaults
-│   │   ├── waivers.vgo      # compliance waivers (any depth)
-│   │   ├── environments.vgo # per-env configcrate/var overrides
-│   │   └── compliance.vgo   # directory-inherited claims
-│   ├── examples/            # read-only install templates
-│   │                        #   (rebuilt from image on every container start;
-│   │                        #    vigocli config examples copy)
-│   ├── anti-examples/       # read-only retract templates (mirrors examples/configcrates)
-│   │                        #   (rebuilt from image on every container start;
-│   │                        #    vigocli config anti-examples copy / mirror-check)
-│   └── .live/               # published config (locked between publishes)
+├── stacks/                  # operator-edited config tree
+│   ├── configcrates/        # reusable configcrate definitions
+│   ├── usercrates/          # user-scoped configcrates (inert until included via `usercrates:`)
+│   ├── templates/           # Go template fragments
+│   ├── tasks/               # reusable task definitions
+│   ├── workflows/           # workflow definitions
+│   ├── envoys.vgo           # hostcrate (any .vgo with envoys: works)
+│   ├── roles.vgo            # role definitions (single, fleet-wide)
+│   ├── common.vgo           # directory-inherited defaults
+│   ├── waivers.vgo          # compliance waivers (any depth)
+│   ├── environments.vgo     # per-env configcrate/var overrides
+│   └── compliance.vgo       # directory-inherited claims
+├── stacks-examples/         # read-only install templates
+│                            #   (rebuilt from image on every container start;
+│                            #    vigocli config examples copy)
+├── .live/                   # published config (locked between publishes)
 ├── config-history/          # rollback snapshots
 └── docs/                    # browsable documentation
 ```

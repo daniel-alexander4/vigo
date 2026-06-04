@@ -12,7 +12,7 @@ You'll finish this page with configcrate-level `compliance:` tags rolled up into
 Every configcrate that satisfies a control gets a `compliance:` block. Use the framework's actual control IDs:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/configcrates/openvpn.vgo
+# /srv/vigo/stacks/configcrates/openvpn.vgo
 name: openvpn
 compliance:
   hipaa:       ["164.312(e)(1)", "164.312(e)(2)(ii)"]
@@ -103,7 +103,7 @@ See `reference/server-yaml.md` for the full per-vendor schema.
 Some controls can't be satisfied by automation (process controls, physical-security controls, BCP exercises). Declare a waiver:
 
 ```yaml
-# /srv/vigo/stacks/stockpile/waivers.vgo
+# /srv/vigo/stacks/waivers.vgo
 waivers:
   - control: "pci-dss:9.1"           # physical access to cardholder data env
     rationale: "Co-located in SOC-2 audited DC; vendor-provided physical security."

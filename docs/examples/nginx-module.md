@@ -5,7 +5,7 @@ A complete nginx configcrate demonstrating the package-config-service pattern wi
 
 ## Configcrate Definition
 
-`stockpile/configcrates/nginx.vgo`:
+`stacks/configcrates/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -68,7 +68,7 @@ resources:
 
 ## Role Assignment
 
-`stockpile/roles/webserver.vgo`:
+`stacks/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -78,7 +78,7 @@ configcrates:
 
 ## Node Assignment
 
-`stockpile/envoys/envoys.vgo`:
+`stacks/envoys/envoys.vgo`:
 
 ```yaml
 envoys:

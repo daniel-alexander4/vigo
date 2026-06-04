@@ -12,15 +12,15 @@ You'll finish this page with one host in your fleet mirroring an upstream packag
 
 ## How it fits
 
-Each `<pm>-mirror` configcrate is a self-contained stockpile recipe: install the upstream mirror tool, write its config, run it on cron, serve the resulting tree over HTTP via nginx. The same shape repeats across package managers — only the tooling, the upstream URL, and the on-disk layout change.
+Each `<pm>-mirror` configcrate is a self-contained stacks recipe: install the upstream mirror tool, write its config, run it on cron, serve the resulting tree over HTTP via nginx. The same shape repeats across package managers — only the tooling, the upstream URL, and the on-disk layout change.
 
-Not curator. Not the swarm. **One host runs the upstream mirror; the rest of the fleet points its package manager at that host's nginx.** That's the whole architecture. The reason to use a stockpile configcrate here rather than curator's P2P substrate is that when one host already has the bytes from upstream, there's no reason to also P2P-distribute them across the fleet — the bandwidth-save story is "fetch once from the internet, serve N times on the LAN."
+Not curator. Not the swarm. **One host runs the upstream mirror; the rest of the fleet points its package manager at that host's nginx.** That's the whole architecture. The reason to use a stacks configcrate here rather than curator's P2P substrate is that when one host already has the bytes from upstream, there's no reason to also P2P-distribute them across the fleet — the bandwidth-save story is "fetch once from the internet, serve N times on the LAN."
 
 Pair the mirror configcrate with the [nginx configcrate](../../reference/vigo/resources/file.md) on the same host. The mirror configcrate drops a `server` block into `/etc/nginx/conf.d/` and notifies the nginx service for reload — it does not install nginx itself.
 
 ## Shipped recipes
 
-Each example lives at `example-configs/stacks/configcrates/system/<pm>-mirror.vgo.example`. Copy into your stockpile, set vars to match your upstream of choice, publish.
+Each example lives at `example-configs/stacks/configcrates/system/<pm>-mirror.vgo.example`. Copy into your stacks, set vars to match your upstream of choice, publish.
 
 | Configcrate | OS family | Tooling | Upstream | Client-side config |
 |---|---|---|---|---|
