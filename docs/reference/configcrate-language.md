@@ -876,6 +876,36 @@ Every executor supports `state: absent` to remove/disable the managed resource:
   enabled: false
 ```
 
+## Reversal (`revert:` / `on_revert:`)
+
+A handful of resource types have **no `state`** — they perform an action (`exec`, `backup`, `db_backup`, `replace`) or set an always-present value (`hostname`, `timezone`), so `state: absent` doesn't apply. For these, **removing the resource from config does *not* undo it** — that only stops enforcement; the change Vigo made persists. To actively undo, set `revert: true`.
+
+There are two flavors:
+
+- **Value-setters** (`hostname`, `timezone`) — the agent snapshots the value it first finds on each node (write-once) before changing it. `revert: true` restores that prior value. If no snapshot was captured (the resource never applied here, or agent state was rebuilt), revert **fails loud** at apply rather than guessing — set the desired value explicitly instead.
+
+  ```yaml
+  - name: set-hostname
+    type: hostname
+    hostname: web-01
+    revert: true          # restore the hostname Vigo first found on this node
+  ```
+
+- **Local-command actions** (`exec`, `backup`, `db_backup`, `replace`) — there's no inferable inverse, so you declare one with `on_revert:` (a shell command run locally). `revert: true` runs it. `revert: true` without an `on_revert:` is rejected at `config publish`.
+
+  ```yaml
+  - name: open-8080
+    type: exec
+    command: "iptables -A INPUT -p tcp --dport 8080 -j ACCEPT"
+    onlyif: "! iptables -C INPUT -p tcp --dport 8080 -j ACCEPT"
+    on_revert: "iptables -D INPUT -p tcp --dport 8080 -j ACCEPT"
+    revert: true          # run on_revert to undo
+  ```
+
+Reversal is **idempotent**: once honored it reports settled on subsequent runs (it never flaps or re-runs), and a normal (non-revert) apply re-arms it. `modlint` annotates every reversible resource's `#~` comment so the lever is visible where you read the resource.
+
+> Reversal currently covers the local-executing types above. Remote-context types (`ssh_exec`, `powershell`) and the stanza/policy setters (`cisco_interface`, `junos_interface`, `local_security_policy`, `service_recovery_windows`) are a tracked follow-on.
+
 ## Combining Patterns
 
 These features compose naturally:

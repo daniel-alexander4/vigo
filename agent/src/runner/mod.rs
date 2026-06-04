@@ -9,6 +9,7 @@ pub mod dag;
 pub mod lock;
 pub mod pkg_breaker;
 pub mod preempt;
+pub mod reversal;
 
 use crate::executors::{Action, Executor, ResourceResult};
 use crate::proto::Configcrate;

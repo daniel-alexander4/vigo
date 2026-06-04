@@ -783,7 +783,7 @@ func render(mod *module, opts Options, r *Result) string {
 
 // renderResource writes a single resource with #~ comment.
 func renderResource(b *strings.Builder, res resource) {
-	comment := generateResourceComment(res)
+	comment := generateResourceComment(res) + reversalNote(res.Type)
 	b.WriteString(fmt.Sprintf("  #~ %s\n", comment))
 	b.WriteString(fmt.Sprintf("  - name: %s\n", res.Name))
 	b.WriteString(fmt.Sprintf("    type: %s\n", res.Type))
@@ -1142,6 +1142,22 @@ func generateResourceComment(res resource) string {
 	default:
 		return fmt.Sprintf("Manage %s (%s)", clean, typ)
 	}
+}
+
+// reversalNote returns the trailing reversibility annotation for a resource's
+// generated #~ comment. The non-state types have no `state: absent` retraction;
+// for the reversible ones this surfaces the `revert:` lever right where the
+// operator reads the resource — the visibility the mandatory-`state` rule gives
+// the state types, without an active attribute on every stanza. Empty for any
+// non-reversible type. SoT: validate.ReversibleTypes / CommandReversibleTypes.
+func reversalNote(typ string) string {
+	if vigovalidate.CommandReversibleTypes[typ] {
+		return " — reversible: set revert: true with on_revert: to undo"
+	}
+	if vigovalidate.ReversibleTypes[typ] {
+		return " — reversible: set revert: true to restore the prior value"
+	}
+	return ""
 }
 
 // --- Helpers ---

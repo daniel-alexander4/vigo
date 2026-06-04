@@ -301,6 +301,18 @@ pub trait Executor: Send + Sync {
         params: &HashMap<String, String>,
         dry_run: bool,
     ) -> ResourceResult;
+
+    /// Read the resource's current live value, for resource-reversal snapshots.
+    ///
+    /// Only value-setter executors (hostname, timezone) implement this — it
+    /// exposes the same current-state read they already do in `execute`'s
+    /// check-before-act, so the reversal layer can snapshot the operator's
+    /// prior value without a second source of truth. Returns `None` when the
+    /// value can't be read or the executor isn't snapshot-reversible (the
+    /// default), which the reversal layer treats as "no snapshot available".
+    fn current_value(&self, _params: &HashMap<String, String>) -> Option<String> {
+        None
+    }
 }
 
 /// Runs a command and returns (stdout, success).

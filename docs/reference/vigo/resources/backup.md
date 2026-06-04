@@ -16,6 +16,18 @@ Hardlink-based incremental directory snapshots. Creates dated snapshot directori
 | `min_free_space` | No | `1G` | Refuse to run if the target filesystem has less than this much free space (e.g., `1G`, `500M`). Guards against filling the disk mid-backup. |
 | `pre_command` | No | -- | Shell command run before the backup. A non-zero exit aborts the run. |
 | `post_command` | No | -- | Shell command run after a successful backup (e.g., to sync the snapshot offsite). |
+| `revert` | No | `false` | When `true`, run `on_revert` to undo this resource instead of applying. See [Reversal](#reversal). |
+| `on_revert` | No | -- | Shell command run locally to reverse this resource. Required when `revert: true`. |
+
+## Reversal
+
+`backup` performs an action with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command (e.g. to prune the snapshots it created).
+
+- `on_revert:` — a shell command, run locally on the agent, that undoes the resource. Inert until triggered.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- A normal (non-revert) apply clears a spent revert, re-arming it.
+
+Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.
 
 ## cross_fs Values
 

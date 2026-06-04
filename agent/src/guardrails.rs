@@ -330,21 +330,20 @@ fn check_exec_resource(
     resource_type: &str,
     params: &HashMap<String, String>,
 ) -> Option<Violation> {
-    let command = params
-        .get("command")
-        .map(|s| s.as_str())
-        .unwrap_or("");
-
-    if command.is_empty() {
-        return None;
-    }
-
-    if let Some(reason) = check_push_command(command) {
-        return Some(Violation {
-            resource_name: resource_name.to_string(),
-            resource_type: resource_type.to_string(),
-            reason,
-        });
+    // Scan both the forward command and the reversal command — `on_revert`
+    // runs via the reversal lever and must not become a guardrail bypass.
+    for key in ["command", "on_revert"] {
+        let command = params.get(key).map(|s| s.as_str()).unwrap_or("");
+        if command.is_empty() {
+            continue;
+        }
+        if let Some(reason) = check_push_command(command) {
+            return Some(Violation {
+                resource_name: resource_name.to_string(),
+                resource_type: resource_type.to_string(),
+                reason,
+            });
+        }
     }
 
     None
@@ -537,6 +536,18 @@ mod tests {
         let p = params(&[("command", "systemctl restart nginx")]);
         let v = check_resource("safe-exec", "exec", &p);
         assert!(v.is_none());
+    }
+
+    #[test]
+    fn exec_dangerous_on_revert_blocked() {
+        // A safe forward command must not let a dangerous on_revert through —
+        // the reversal lever runs on_revert, so it's guardrail-scanned too.
+        let p = params(&[
+            ("command", "systemctl restart nginx"),
+            ("on_revert", "systemctl stop vigo-envoy"),
+        ]);
+        let v = check_resource("sneaky-exec", "exec", &p);
+        assert!(v.is_some());
     }
 
     // ── Push command tests ──────────────────────────────────────────

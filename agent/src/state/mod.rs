@@ -9,6 +9,7 @@
 pub mod checksums;
 pub mod pending;
 pub mod policy;
+pub mod reversal;
 pub mod server_key;
 pub mod ssh_keys;
 pub mod swarm_retention;
@@ -39,6 +40,7 @@ pub struct StateStore {
     pub server_key: server_key::ServerKeyCache,
     pub ssh_keys: ssh_keys::SshKeysCache,
     pub swarm_retention: swarm_retention::SwarmRetentionCache,
+    pub reversal: reversal::ReversalCache,
 }
 
 impl StateStore {
@@ -67,6 +69,7 @@ impl StateStore {
         let server_key = server_key::ServerKeyCache::open(&env, &mut wtxn)?;
         let ssh_keys = ssh_keys::SshKeysCache::open(&env, &mut wtxn)?;
         let swarm_retention = swarm_retention::SwarmRetentionCache::open(&env, &mut wtxn)?;
+        let reversal = reversal::ReversalCache::open(&env, &mut wtxn)?;
 
         wtxn.commit()?;
 
@@ -81,6 +84,7 @@ impl StateStore {
             server_key,
             ssh_keys,
             swarm_retention,
+            reversal,
         })
     }
 

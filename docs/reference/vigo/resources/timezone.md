@@ -8,10 +8,21 @@ Sets the system timezone idempotently.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `timezone` | Yes | -- | Desired timezone (e.g., `America/New_York`, `UTC`). |
+| `revert` | No | `false` | When `true`, restore the timezone Vigo first captured on this node instead of applying. See [Reversal](#reversal). |
 
 ## States
 
 The timezone executor does not use a `state` parameter. It always ensures the timezone matches the desired value.
+
+## Reversal
+
+`timezone` has no `state: absent` retraction — a host always *has* a timezone. Instead it is **reversible**: the agent snapshots the value it first finds on the node (write-once) before changing it, and `revert: true` restores that prior value.
+
+- `revert: true` restores the snapshotted prior value, then reports settled on subsequent runs (idempotent — it never flaps).
+- If no snapshot was captured on this node (the resource never applied here, or agent state was rebuilt), revert **fails loud** at apply rather than guessing a default — set the desired `timezone` explicitly instead.
+- A normal (non-revert) apply **re-arms** reversal: it re-captures the current value as the new prior.
+
+Removing the resource from config does **not** undo it — that only stops enforcement; the timezone Vigo set persists. Use `revert: true` to actively restore.
 
 ## Idempotency
 

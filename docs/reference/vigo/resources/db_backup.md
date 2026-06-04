@@ -17,6 +17,18 @@ Database backup using native dump tools. Runs the appropriate dump command for t
 | `min_free_space` | No | `1G` | Refuse to run if the target filesystem has less than this much free space (e.g., `1G`, `500M`). |
 | `retain` | No | `30` | Days of snapshots to keep. |
 | `schedule` | No | `daily` | Dedup window: `daily`, `hourly`, or `weekly`. |
+| `revert` | No | `false` | When `true`, run `on_revert` to undo this resource instead of applying. See [Reversal](#reversal). |
+| `on_revert` | No | -- | Shell command run locally to reverse this resource. Required when `revert: true`. |
+
+## Reversal
+
+`db_backup` performs an action with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command (e.g. to prune the dumps it created).
+
+- `on_revert:` — a shell command, run locally on the agent, that undoes the resource. Inert until triggered.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- A normal (non-revert) apply clears a spent revert, re-arming it.
+
+Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.
 
 ## Built-in Dump Commands
 

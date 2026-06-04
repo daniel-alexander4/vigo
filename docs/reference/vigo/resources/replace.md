@@ -13,10 +13,22 @@ Performs regex find-and-replace operations within a file. Supports backreference
 | `occurrences` | No | `all` | How many matches to replace: `all` or `first`. |
 | `region_start` | No | -- | Regex marking the start of a region to constrain replacements within. |
 | `region_end` | No | -- | Regex marking the end of a region to constrain replacements within. |
+| `revert` | No | `false` | When `true`, run `on_revert` to undo this resource instead of applying. See [Reversal](#reversal). |
+| `on_revert` | No | -- | Shell command run locally to reverse this resource. Required when `revert: true`. |
 
 ## States
 
 The replace executor does not use a `state` parameter. It always operates in "present" mode -- finding and replacing matches.
+
+## Reversal
+
+`replace` is a transformation with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command (e.g. a reverse `sed`/`replace` that restores the original text).
+
+- `on_revert:` — a shell command, run locally on the agent, that undoes the replacement. Inert until triggered.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- A normal (non-revert) apply clears a spent revert, re-arming it.
+
+Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.
 
 ## Idempotency
 

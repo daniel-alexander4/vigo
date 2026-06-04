@@ -1165,6 +1165,11 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         }
     };
 
+    // Wrap reversible executors with the persistent reversal store so the
+    // `revert:` lever can capture/restore prior values and run `on_revert:`
+    // inverses. No-op when the state store is unavailable.
+    runner::reversal::wrap_reversible(&mut executors, state_store.clone());
+
     // Configure daemon loop.
     let traits_cache_dir = cli.data_dir.join("traits").to_string_lossy().to_string();
     // Create the peer map and manifest early so they can be shared between LoopConfig,

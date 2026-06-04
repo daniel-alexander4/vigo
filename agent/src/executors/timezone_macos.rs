@@ -71,6 +71,11 @@ impl Executor for TimezoneMacosExecutor {
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
     }
+
+    fn current_value(&self, _params: &HashMap<String, String>) -> Option<String> {
+        let v = self.current_timezone();
+        if v.is_empty() { None } else { Some(v) }
+    }
 }
 
 #[cfg(test)]

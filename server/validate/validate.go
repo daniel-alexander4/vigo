@@ -96,6 +96,27 @@ var universalAttrs = map[string]bool{
 	"foreach": true, "key": true,
 }
 
+// ReversibleTypes are the non-state resource types that support the `revert:`
+// lever in this build. Group B value-setters (hostname, timezone) revert by
+// restoring a snapshotted prior value; the Group A local-command types
+// (CommandReversibleTypes) run an operator-declared `on_revert:` inverse. The
+// agent's reversal layer (agent/src/runner/reversal.rs) is the matching source
+// of truth — TestReversibleTypesDocumented guards the surface. Remote-context
+// types (ssh_exec, powershell) and the stanza/policy setters (cisco_interface,
+// junos_interface, local_security_policy, service_recovery_windows) are a
+// tracked follow-on.
+var ReversibleTypes = map[string]bool{
+	"hostname": true, "timezone": true,
+	"exec": true, "backup": true, "db_backup": true, "replace": true,
+}
+
+// CommandReversibleTypes (Group A) revert by running `on_revert:`, so
+// `revert: true` on one of these requires a non-empty `on_revert:` — enforced
+// at publish by validateReversal. A subset of ReversibleTypes.
+var CommandReversibleTypes = map[string]bool{
+	"exec": true, "backup": true, "db_backup": true, "replace": true,
+}
+
 // ParamSpec describes a single attribute's validation constraints.
 type ParamSpec struct {
 	Required bool // must be present and non-empty
@@ -248,6 +269,23 @@ func init() {
 			spec := schema.Attrs["state"]
 			spec.Required = true
 			schema.Attrs["state"] = spec
+		}
+
+		// Reversal: `revert:` is allowed on every reversible type and
+		// `on_revert:` on the command-reverted (Group A) types. Both are
+		// optional — their presence in source is nudged by modlint's
+		// generated annotation, not required by the schema. Read at the
+		// agent's dispatch layer, not in executor files, so the scraper
+		// can't see them — they're added here.
+		if ReversibleTypes[typeName] {
+			if _, exists := schema.Attrs["revert"]; !exists {
+				schema.Attrs["revert"] = ParamSpec{}
+			}
+		}
+		if CommandReversibleTypes[typeName] {
+			if _, exists := schema.Attrs["on_revert"]; !exists {
+				schema.Attrs["on_revert"] = ParamSpec{}
+			}
 		}
 
 		TypeSchemas[typeName] = schema
@@ -523,7 +561,37 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateNonRepoPackage(base, res)...)
 	}
 
+	// Reversal: applies across the Group A command-reversible set, so it's a
+	// single cross-type check rather than a per-type switch case.
+	findings = append(findings, validateReversal(base, res)...)
+
 	return findings
+}
+
+// validateReversal enforces the publish-time half of the `revert:` lever: a
+// Group A (command-reverted) resource that sets `revert: true` must declare a
+// non-empty `on_revert:` — its inverse can't be inferred (unlike the Group B
+// value-setters, which restore a snapshot). The server can prove this
+// statically, so it fails at publish rather than as a red resource at apply.
+func validateReversal(base Finding, res Resource) []Finding {
+	if !attrIsTrue(res.Attributes, "revert") {
+		return nil
+	}
+	if CommandReversibleTypes[res.Type] && attrString(res.Attributes, "on_revert") == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf(
+			"%s sets revert: true but declares no on_revert: — actions have no inferable inverse; "+
+				"declare the command to run on revert, or remove revert:", res.Type)
+		return []Finding{f}
+	}
+	return nil
+}
+
+// attrIsTrue treats both a YAML bool `true` and the string "true" as true —
+// `revert:` may be written either way and both serialize to "true" on the wire.
+func attrIsTrue(attrs map[string]any, key string) bool {
+	return attrBool(attrs, key) || attrString(attrs, key) == "true"
 }
 
 // validateSchema runs data-driven validation from TypeSchemas: checks required

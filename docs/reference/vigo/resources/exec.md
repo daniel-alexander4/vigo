@@ -25,10 +25,22 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `sensitive` | No | `false` | When `true`, suppress the command string from result names, logs, and error messages. Distinct from `logoutput: false` which only suppresses stdout/stderr. |
 | `shell` | No | `sh` | Shell to use for command execution (e.g., `bash`, `zsh`, `fish`). Default is `sh` on Unix, `cmd` on Windows. Guards also use the specified shell. |
 | `report_settled` | No | `false` | When `true` and the command exits with an acceptable code, the agent reports `Action::None` (Settled) and `changed=false` instead of `Action::Created`. Operator's escape hatch for exec resources whose successful execution is maintenance / cache-warming rather than a real state change — keeps daily refreshers (e.g., `apt-get update`) from inflating `ChangedCount` and tripping drift detection. Failures are unaffected: a non-zero exit still surfaces normally with the error populated. |
+| `revert` | No | `false` | When `true`, run `on_revert` to undo this resource instead of applying. See [Reversal](#reversal). |
+| `on_revert` | No | -- | Shell command run locally to reverse this resource. Required when `revert: true`. |
 
 ## States
 
 The exec executor does not use a `state` parameter. It either runs or is skipped based on guards.
+
+## Reversal
+
+`exec` performs an action with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command.
+
+- `on_revert:` — a shell command, run locally on the agent, that undoes the resource. Inert until triggered.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent — it never re-runs). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- A normal (non-revert) apply clears a spent revert, re-arming it.
+
+Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.
 
 ## Idempotency
 
