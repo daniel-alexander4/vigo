@@ -8,6 +8,7 @@ Umbrella command for compliance reporting, evidence export, and remediation work
 | `vigocli compliance report` | Generate HIPAA / SOC 2 / PCI DSS / NIST 800-53 / ISO 27001 / etc. compliance reports (JSON, HTML, OSCAL) | [report](report.md) |
 | `vigocli compliance export` | Export SIEM, CMDB, and OSCAL feeds | [export](export.md) |
 | `vigocli compliance provisions` | List the Vigo-curated provision catalog used by configcrates' `provides:` field | (see below) |
+| `vigocli compliance docs` | Manage operator-uploaded compliance evidence documents (upload, list, link, delete) | (see below) |
 
 Run `vigocli compliance --help` on a live server for the current set of subcommands.
 
@@ -48,6 +49,24 @@ time-sync  (System time synchronization)
   nist-800-53: AU-8
   pci-dss:     10.6.1, 10.6.2, 10.6.3
 ```
+
+## docs
+
+Manage operator-uploaded compliance **evidence documents** — policies, contracts, IR plans, BAAs, and other artifacts that satisfy `documented`-scope controls. They're envelope-encrypted at rest under the master key (so this requires the **local** secrets backend). The web UI displays these **read-only**; every write goes through this command — the single action path.
+
+```bash
+vigocli compliance docs upload ir-plan.pdf --type "IR Plan"                       # upload an artifact
+vigocli compliance docs upload baa.pdf --type BAA --link hipaa:164.308 --link soc2:CC1.1   # upload + link to controls
+vigocli compliance docs list                                                      # list all docs
+vigocli compliance docs list --framework hipaa --control 164.308                  # docs for one control
+vigocli compliance docs download <id> -o evidence.pdf                             # download (default: server filename)
+vigocli compliance docs link <id> hipaa 164.308                                   # link an existing doc to a control
+vigocli compliance docs unlink <id> hipaa 164.308                                 # remove a link
+vigocli compliance docs delete <id>                                               # soft delete
+vigocli compliance docs delete <id> --purge                                       # permanently remove
+```
+
+`--link` takes `framework:control` and is repeatable. Uploads cap at 50 MiB; accepted types include PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG.
 
 ## See also
 

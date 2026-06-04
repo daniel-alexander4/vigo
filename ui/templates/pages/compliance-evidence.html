@@ -212,15 +212,9 @@
         </tbody>
     </table>
     {{else}}
-    <p class="text-muted u-m-0-0-8px-fs-12px">No documents attached. Upload a policy, contract, plan, or other artifact below to satisfy this control.</p>
+    <p class="text-muted u-m-0-0-8px-fs-12px">No documents attached. Upload evidence via the CLI to satisfy this control.</p>
     {{end}}
-    <form class="u-blk9" method="POST" action="/api/v1/compliance/docs" enctype="multipart/form-data">
-        <input type="file" name="file" required>
-        <input class="u-fs-12px" type="text" name="doc_type" placeholder="Doc type (e.g. BAA, IR Plan)">
-        <input type="hidden" name="links" value='[{"framework":"{{.Slug}}","control_id":"{{.ControlID}}"}]'>
-        <button type="submit" class="btn btn--sm">Upload</button>
-        <span class="text-muted u-fs-11px">PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG up to 50 MiB</span>
-    </form>
+    <p class="text-muted u-fs-11px">The web UI is read-only. Upload evidence with <code>vigocli compliance docs upload &lt;file&gt; --type "BAA" --link {{.Slug}}:{{.ControlID}}</code>.</p>
 </div>
 {{end}}
 
