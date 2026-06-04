@@ -227,18 +227,6 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 	// Start stale envoy checker — fires envoy.stale events on transition.
 	safeGo("stale-checker", func() { s.runStaleChecker(ctx) })
 
-	// Expire any overdue compliance waivers daily.
-	safeGo("waiver-expirer", func() {
-		for {
-			_ = s.queries.ExpireComplianceWaivers(ctx)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(24 * time.Hour):
-			}
-		}
-	})
-
 	// Start secret rotation watcher.
 	if s.cfg.Watcher.Enabled {
 		if vp, ok := s.provider.(watcher.VersionProvider); ok {

@@ -390,8 +390,6 @@ All authentication and user management events are recorded in the tamper-evident
 | `user.totp_disable` | TOTP disabled | Subject username |
 | `token.create` | API token created | Token owner |
 | `token.revoke` | API token revoked | Token owner |
-| `compliance.waiver.created` | Compliance waiver created via `POST /api/v1/compliance/waivers` | Session user (or request-supplied approver) |
-| `compliance.waiver.revoked` | Compliance waiver revoked via `DELETE /api/v1/compliance/waivers/{id}` | Session user (or waiver's original approver) |
 | `secret.accessed` | Secret revealed via `vigocli secrets reveal` | CLI user (via `X-Vigo-User` header) |
 | `secret.rotation_acked` | Server acknowledged a secret rotation reported by `vigocli secrets set` | Session user |
 | `secrets.unlocked` | Secrets vault unlocked | Session user |

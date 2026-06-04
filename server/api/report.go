@@ -388,12 +388,13 @@ func (h *ReportHandler) applyConnwaerEscalations(slug string, findings []Control
 
 // buildFrameworkFindings constructs the finding set for a framework,
 // applies Connwaer trait-driven escalations, then applies fleet-wide
-// waivers in place. Waivers come from two sources — envoys-tree
-// compliance.vgo (via ConfigStore) and API-created waivers in the DB.
-// A waiver promotes a not-satisfied finding to "waived" but never
-// overrides a "satisfied" status (already-passing controls keep
-// passing; the waiver badge still surfaces in the evidence string).
+// waivers in place. Waivers come from the single config source —
+// envoys-tree waivers.vgo (via ConfigStore). A waiver promotes a
+// not-satisfied finding to "waived" but never overrides a "satisfied"
+// status (already-passing controls keep passing; the waiver badge still
+// surfaces in the evidence string).
 func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string, fw frameworkDef) []ControlFinding {
+	_ = ctx // waivers now come from ConfigStore (in-memory); no DB read here
 	findings := fw.controls()
 	h.applyConnwaerEscalations(slug, findings)
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
@@ -404,21 +405,6 @@ func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string,
 						findings[i].Status = "waived"
 					}
 					findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
-				}
-			}
-		}
-	}
-	if waivers, err := h.queries.ListComplianceWaiversByFramework(ctx, slug); err == nil {
-		for i := range findings {
-			for _, w := range waivers {
-				if w.ControlID == findings[i].ControlID {
-					if findings[i].Status != "satisfied" && findings[i].Status != "waived" {
-						findings[i].Status = "waived"
-					}
-					if !strings.Contains(findings[i].Evidence, "[WAIVED:") {
-						findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
-					}
-					break
 				}
 			}
 		}

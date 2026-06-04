@@ -1212,43 +1212,7 @@ Returns the current compliance status for a envoy.
 
 ## Compliance Waivers
 
-Operator-recorded exceptions to a regulatory framework control — typically for `documented`-scope controls that the deployment will satisfy through process or external attestation rather than automated enforcement. Each waiver is keyed on (framework, control_id) and may carry an `expires_at` date. Create + delete are tamper-evident audit events (`compliance.waiver_created`, `compliance.waiver_revoked`).
-
-### POST /api/v1/compliance/waivers
-
-**Permission:** `compliance.docs.write`
-
-Create a waiver for one control.
-
-**Request body:**
-
-```json
-{
-  "framework": "soc2",
-  "control_id": "CC6.1",
-  "reason": "covered by external SOC 2 Type II report; see /compliance/evidence",
-  "approver": "alice@example.com",
-  "expires_at": "2026-12-31"
-}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `framework` | Yes | Framework slug (`soc2`, `hipaa`, `pci`, …) — must match a known framework. |
-| `control_id` | Yes | The control identifier inside that framework (e.g., `CC6.1`). |
-| `reason` | Yes | Free-form justification recorded in the audit chain. |
-| `approver` | Yes | Who approved the waiver (email or username). |
-| `expires_at` | No | `YYYY-MM-DD`. Waiver auto-lapses after this date. |
-
-**Response (200):** the created waiver row (id, framework, control_id, reason, approver, expires_at, created_at).
-
-### DELETE /api/v1/compliance/waivers/{id}
-
-**Permission:** `compliance.docs.write`
-
-Deactivate (revoke) a waiver. The row is marked inactive — the audit chain retains the original create + the revoke event.
-
-**Response:** `204 No Content`.
+Waivers — operator-recorded exceptions to a regulatory framework control (typically for `documented`-scope controls satisfied through process or external attestation rather than automated enforcement) — are **config, not an API surface.** Declare them in `waivers.vgo` and publish with `vigocli config publish`, the single config path. A waiver promotes a not-satisfied control to `waived` in the compliance report (never overriding an already-`satisfied` control) and surfaces on `/compliance/waivers`. There are no waiver create/delete endpoints; waiver changes are audited through the config-publish audit trail.
 
 ---
 

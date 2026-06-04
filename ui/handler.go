@@ -683,9 +683,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/integration/{slug}", h.IntegrationDetail)
 	mux.HandleFunc("GET /compliance/evidence", h.EvidenceCenter)
 	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
-	complianceDocsWrite := auth.RequirePermission(auth.PermComplianceDocsWrite)
-	mux.Handle("POST /api/v1/compliance/waivers", complianceDocsWrite(http.HandlerFunc(h.CreateWaiver)))
-	mux.Handle("DELETE /api/v1/compliance/waivers/{id}", complianceDocsWrite(http.HandlerFunc(h.DeleteWaiver)))
 	mux.HandleFunc("GET /compliance/waivers", h.ComplianceWaivers)
 	mux.HandleFunc("GET /compliance/{framework}", h.ComplianceFramework)
 	mux.HandleFunc("GET /compliance/{framework}/viz", h.ComplianceFrameworkViz)
@@ -3361,44 +3358,19 @@ func (h *Handler) standardsData() StandardsPageData {
 		data.TotalControls = s.Total
 	}
 
-	// Compute waiver alerts — merge config-file + DB-managed waivers.
-	// Same merge the unified scorer uses so the badge count matches the
-	// rows shown on /compliance/waivers.
-	now := time.Now()
-	soonThreshold := now.AddDate(0, 0, 30)
-	countedKeys := make(map[string]bool) // "stdKey|controlID" dedup across sources
-	countWaiver := func(stdKey, controlID, expires string) {
-		key := stdKey + "|" + controlID
-		if countedKeys[key] {
-			return
-		}
-		countedKeys[key] = true
-		data.TotalActiveWaivers++
-		if expires != "" {
-			if exp, err := time.Parse("2006-01-02", expires); err == nil && exp.Before(soonThreshold) {
-				data.ExpiringWaivers++
-			}
-		}
-	}
+	// Compute waiver alerts from the config-file waivers (waivers.vgo) —
+	// the single source the unified scorer uses, so the badge count
+	// matches the rows shown on /compliance/waivers.
+	soonThreshold := time.Now().AddDate(0, 0, 30)
 	if h.configStore != nil {
-		for stdKey, controls := range h.configStore.AllWaivers() {
-			for controlID, w := range controls {
-				countWaiver(stdKey, controlID, w.Expires)
-			}
-		}
-	}
-	if h.queries != nil {
-		if dbWaivers, err := h.queries.ListComplianceWaivers(context.Background()); err == nil {
-			for _, w := range dbWaivers {
-				stdKey := w.Framework
-				if mapped, ok := config.StandardKeyForSlug[w.Framework]; ok {
-					stdKey = mapped
+		for _, controls := range h.configStore.AllWaivers() {
+			for _, w := range controls {
+				data.TotalActiveWaivers++
+				if w.Expires != "" {
+					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soonThreshold) {
+						data.ExpiringWaivers++
+					}
 				}
-				expires := ""
-				if w.ExpiresAt.Valid {
-					expires = w.ExpiresAt.Time.Format("2006-01-02")
-				}
-				countWaiver(stdKey, w.ControlID, expires)
 			}
 		}
 	}
@@ -3517,10 +3489,8 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	soonThreshold := now.AddDate(0, 0, 30)
 
-	// Collect config-file waivers and DB-managed waivers into a single
-	// (standardKey → controlID → entry) map. Same merge the unified scorer
-	// does — without it, DB-created waivers silently influence every
-	// compliance score but never appear on this page.
+	// Collect config-file waivers (waivers.vgo) into a
+	// (standardKey → controlID → entry) map — the single waiver source.
 	type mergedEntry struct {
 		reason     string
 		approvedBy string
@@ -3538,33 +3508,6 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 					reason:     w.Reason,
 					approvedBy: w.ApprovedBy,
 					expires:    w.Expires,
-				}
-			}
-		}
-	}
-	if h.queries != nil {
-		if dbWaivers, err := h.queries.ListComplianceWaivers(r.Context()); err == nil {
-			for _, w := range dbWaivers {
-				stdKey := w.Framework
-				if mapped, ok := config.StandardKeyForSlug[w.Framework]; ok {
-					stdKey = mapped
-				}
-				if _, ok := merged[stdKey]; !ok {
-					merged[stdKey] = make(map[string]mergedEntry)
-				}
-				// Config-file waiver wins on conflict — operators edit
-				// those directly, DB waivers are convenience-API only.
-				if _, present := merged[stdKey][w.ControlID]; present {
-					continue
-				}
-				expires := ""
-				if w.ExpiresAt.Valid {
-					expires = w.ExpiresAt.Time.Format("2006-01-02")
-				}
-				merged[stdKey][w.ControlID] = mergedEntry{
-					reason:     w.Reason,
-					approvedBy: w.Approver,
-					expires:    expires,
 				}
 			}
 		}
@@ -4016,15 +3959,13 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 	}
 	_ = json.Unmarshal(raw, &parsed) // malformed input yields empty controls
 
-	// Load active waivers: config-file waivers + DB waivers.
+	// Load active waivers from the config-file source (waivers.vgo).
 	type waiverInfo struct {
 		Reason string
 		By     string
 		Expiry string
-		ID     string // DB waivers have an ID
 	}
 	waiverMap := make(map[string]waiverInfo)
-	// Config-file waivers (envoys-tree compliance.vgo).
 	if h.configStore != nil {
 		if stdKey, ok := config.StandardKeyForSlug[slug]; ok {
 			if fileWaivers := h.configStore.Waivers(stdKey); len(fileWaivers) > 0 {
@@ -4038,16 +3979,6 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	}
-	// DB waivers (override file-based if both exist for same control).
-	if dbWaivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
-		for _, w := range dbWaivers {
-			wi := waiverInfo{Reason: w.Reason, By: w.Approver, ID: w.ID}
-			if w.ExpiresAt.Valid {
-				wi.Expiry = w.ExpiresAt.Time.Format("2006-01-02")
-			}
-			waiverMap[w.ControlID] = wi
-		}
-	}
 
 	type controlWithWaiver struct {
 		ControlID    string
@@ -4058,7 +3989,6 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 		WaiverReason string
 		WaiverBy     string
 		WaiverExpiry string
-		WaiverID     string
 	}
 
 	data := struct {
@@ -4090,7 +4020,6 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 			cw.WaiverReason = w.Reason
 			cw.WaiverBy = w.By
 			cw.WaiverExpiry = w.Expiry
-			cw.WaiverID = w.ID
 
 			data.TotalWaivers++
 			if c.Status == "satisfied" {
@@ -4330,90 +4259,6 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-}
-
-// CreateWaiver creates a compliance waiver for a control.
-func (h *Handler) CreateWaiver(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Framework string `json:"framework"`
-		ControlID string `json:"control_id"`
-		Reason    string `json:"reason"`
-		Approver  string `json:"approver"`
-		ExpiresAt string `json:"expires_at,omitempty"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return
-	}
-	if req.Framework == "" || req.ControlID == "" || req.Reason == "" || req.Approver == "" {
-		http.Error(w, "framework, control_id, reason, and approver are required", http.StatusBadRequest)
-		return
-	}
-
-	var expiresAt sql.NullTime
-	if req.ExpiresAt != "" {
-		t, err := time.Parse("2006-01-02", req.ExpiresAt)
-		if err != nil {
-			http.Error(w, "invalid expires_at format (expected YYYY-MM-DD)", http.StatusBadRequest)
-			return
-		}
-		expiresAt = sql.NullTime{Time: t, Valid: true}
-	}
-
-	waiver, err := h.queries.CreateComplianceWaiver(r.Context(), db.CreateComplianceWaiverParams{
-		Framework: req.Framework,
-		ControlID: req.ControlID,
-		Reason:    req.Reason,
-		Approver:  req.Approver,
-		ExpiresAt: expiresAt,
-	})
-	if err != nil {
-		slog.Error("failed to create compliance waiver", "error", err)
-		http.Error(w, "failed to create waiver", http.StatusInternalServerError)
-		return
-	}
-
-	recordAudit(r.Context(), h.auditWriter, "compliance.waiver.created", waiverActor(r, req.Approver), "ui",
-		fmt.Sprintf("created waiver for %s/%s (reason: %s)", waiver.Framework, waiver.ControlID, waiver.Reason), "")
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(waiver)
-}
-
-// DeleteWaiver deactivates a compliance waiver.
-func (h *Handler) DeleteWaiver(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	// Pre-fetch so the audit row names the framework + control_id the
-	// operator just revoked — an ID-only row is operationally useless.
-	waiver, err := h.queries.GetComplianceWaiver(r.Context(), id)
-	if err != nil {
-		http.Error(w, "waiver not found", http.StatusNotFound)
-		return
-	}
-
-	if err := h.queries.DeactivateComplianceWaiver(r.Context(), id); err != nil {
-		http.Error(w, "failed to delete waiver", http.StatusInternalServerError)
-		return
-	}
-
-	recordAudit(r.Context(), h.auditWriter, "compliance.waiver.revoked", waiverActor(r, waiver.Approver), "ui",
-		fmt.Sprintf("revoked waiver for %s/%s", waiver.Framework, waiver.ControlID), "")
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// waiverActor resolves the audit actor for waiver mutations. Prefers
-// the authenticated session user; falls back to the request-supplied
-// approver (create flow) or "unknown".
-func waiverActor(r *http.Request, fallback string) string {
-	if u := auth.UserFromContext(r.Context()); u != nil && u.Username != "" {
-		return u.Username
-	}
-	if fallback != "" {
-		return fallback
-	}
-	return "unknown"
 }
 
 // ComplianceFrameworksFragment renders the frameworks grid as an HTMX fragment.
