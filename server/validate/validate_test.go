@@ -880,6 +880,67 @@ func TestStateMandatoryForStateTypes(t *testing.T) {
 	}
 }
 
+// TestStateValuesKeysAreStateTypes is the parity guard: every type with a
+// non-default state vocabulary must actually consume state. Catches a typo'd
+// or stale key in stateValues (the value sets themselves are hand-derived from
+// the executors and not auto-verified — see the value-drift pending item).
+func TestStateValuesKeysAreStateTypes(t *testing.T) {
+	for typ := range stateValues {
+		if !generatedStateTypes[typ] {
+			t.Errorf("stateValues key %q is not a state-consuming type (generatedStateTypes) — typo, or the type no longer reads state", typ)
+		}
+	}
+}
+
+func TestStateValueValidation(t *testing.T) {
+	hasInvalidStateErr := func(findings []Finding) bool {
+		for _, f := range findings {
+			if f.Severity == SeverityError && strings.Contains(f.Message, "invalid state") {
+				return true
+			}
+		}
+		return false
+	}
+	check := func(typ, state string, extra map[string]any) []Finding {
+		attrs := map[string]any{"state": state}
+		for k, v := range extra {
+			attrs[k] = v
+		}
+		return ValidateConfigcrate(Configcrate{Name: "m", Resources: []Resource{{Name: "r", Type: typ, Attributes: attrs}}})
+	}
+	fileExtra := map[string]any{"target_path": "/etc/x", "content": "y", "owner": "root", "group": "root", "mode": "0644"}
+
+	cases := []struct {
+		typ, state string
+		extra      map[string]any
+		wantErr    bool
+	}{
+		// Default present|absent types.
+		{"file", "absent", fileExtra, false},
+		{"file", "present", fileExtra, false},
+		{"file", "stopped", fileExtra, true}, // wrong-vocab flip
+		{"file", "absnt", fileExtra, true},   // typo
+		// Templated state resolves at apply time — never rejected at publish.
+		{"package", "{{.Vars.pkg_state}}", map[string]any{"package": "nginx"}, false},
+		// Non-default unions.
+		{"service", "running", map[string]any{"service": "nginx"}, false},
+		{"service", "maintenance", map[string]any{"service": "nginx"}, false}, // illumos-only
+		{"service", "present", map[string]any{"service": "nginx"}, true},      // not a service state
+		{"mount", "mounted", map[string]any{"path": "/mnt", "device": "/dev/sdb", "fstype": "ext4"}, false},
+		{"mount", "unmounted", map[string]any{"path": "/mnt", "device": "/dev/sdb", "fstype": "ext4"}, false},
+		{"swap", "on", map[string]any{"path": "/swap"}, false}, // BSD alias
+		{"kernel_module", "loaded", map[string]any{"module": "br_netfilter"}, false},
+		{"package", "latest", map[string]any{"package": "nginx"}, false},
+		{"vm", "defined", map[string]any{"vm": "web", "image": "x"}, false},
+		{"vm", "present", map[string]any{"vm": "web", "image": "x"}, true}, // vm has no present
+	}
+	for _, c := range cases {
+		if got := hasInvalidStateErr(check(c.typ, c.state, c.extra)); got != c.wantErr {
+			t.Errorf("%s state=%q: invalid-state error = %v, want %v", c.typ, c.state, got, c.wantErr)
+		}
+	}
+}
+
 func TestSchemaRejectsUnknownAttribute(t *testing.T) {
 	mod := Configcrate{
 		Name: "test-mod",

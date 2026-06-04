@@ -541,6 +541,10 @@ func validateResource(moduleName string, res Resource) []Finding {
 	// Schema-driven validation: required fields, unknown attributes, path/mode checks.
 	findings = append(findings, validateSchema(base, res)...)
 
+	// State-value validation: reject a state the type's executor doesn't
+	// accept. Cross-type, so a single check rather than a per-type case.
+	findings = append(findings, validateStateValue(base, res)...)
+
 	// Type-specific semantic validation (idempotency guards, state enums, etc.).
 	switch res.Type {
 	case "file":
@@ -566,6 +570,76 @@ func validateResource(moduleName string, res Resource) []Finding {
 	findings = append(findings, validateReversal(base, res)...)
 
 	return findings
+}
+
+// stateValues maps a resource type to the set of `state:` values its executor
+// accepts, for types whose vocabulary differs from the universal present|absent
+// default. Each set is the UNION across OS-variant executors (e.g. service on
+// illumos adds started/disabled/maintenance; swap on BSD adds on/off;
+// kernel_module accepts loaded/unloaded aliases) — kept generous so a valid
+// platform-specific value is never rejected at publish. Types absent from this
+// map accept exactly present|absent.
+//
+// SoT note: hand-derived by reading agent/src/executors/. The agent is the
+// authoritative validator (its executors fail closed on an unknown state); this
+// is the early publish-time gate. A value-drift guard (catching a future
+// executor that adds a state value) is tracked in pending — the parity test
+// below only guards that keys are real state-consuming types, not the values.
+var stateValues = map[string][]string{
+	"service":           {"running", "started", "stopped", "restarted", "reloaded", "disabled", "maintenance"},
+	"process":           {"running", "stopped"},
+	"container":         {"running", "stopped", "absent"},
+	"vm":                {"running", "stopped", "defined"},
+	"mount":             {"mounted", "present", "unmounted", "absent"},
+	"swap":              {"present", "absent", "on", "off"},
+	"kernel_module":     {"present", "absent", "loaded", "unloaded"},
+	"network_interface": {"present", "absent", "up", "down"},
+	"package":           {"present", "absent", "latest"},
+	"npm":               {"present", "absent", "latest"},
+	"pip":               {"present", "absent", "latest"},
+	"gem":               {"present", "absent", "latest"},
+	"nonrepo_package":   {"present", "absent", "latest"},
+}
+
+// defaultStateValues is the universal vocabulary for state-consuming types not
+// listed in stateValues.
+var defaultStateValues = []string{"present", "absent"}
+
+// allowedStates returns the accepted state values for a type.
+func allowedStates(typeName string) []string {
+	if v, ok := stateValues[typeName]; ok {
+		return v
+	}
+	return defaultStateValues
+}
+
+// validateStateValue rejects a `state:` value the type's executor doesn't
+// accept. Cross-type (like validateReversal): runs for every state-consuming
+// type. Catches typos (state: absnt) and wrong-vocab flips (state: stopped on a
+// file) at publish, instead of as a red resource — or a silent no-op — at apply
+// time on the agent. Mandatory-state (0.72.9) guarantees presence; this guards
+// the value.
+func validateStateValue(base Finding, res Resource) []Finding {
+	if !generatedStateTypes[res.Type] {
+		return nil
+	}
+	state := attrString(res.Attributes, "state")
+	if state == "" {
+		return nil // presence is enforced separately by the mandatory-state rule
+	}
+	if strings.Contains(state, "{{") {
+		return nil // templated — resolves at check-in time; the agent validates the rendered value
+	}
+	allowed := allowedStates(res.Type)
+	for _, a := range allowed {
+		if state == a {
+			return nil
+		}
+	}
+	f := base
+	f.Severity = SeverityError
+	f.Message = fmt.Sprintf("invalid state %q for type %q — must be one of: %s", state, res.Type, strings.Join(allowed, ", "))
+	return []Finding{f}
 }
 
 // validateReversal enforces the publish-time half of the `revert:` lever: a
@@ -717,26 +791,12 @@ func validateExec(base Finding, res Resource) []Finding {
 	return nil
 }
 
-// validServiceStates are the allowed values for service.state.
-var validServiceStates = map[string]bool{
-	"running":   true,
-	"stopped":   true,
-	"restarted": true,
-	"reloaded":  true,
-}
-
-// validateService checks service state enum and subscribes gating.
+// validateService checks subscribes gating for restart/reload states.
+// The state-value enum itself is validated generically by validateStateValue.
 func validateService(base Finding, res Resource) []Finding {
 	var findings []Finding
 
 	state := attrString(res.Attributes, "state")
-	if state != "" && !validServiceStates[state] {
-		f := base
-		f.Severity = SeverityError
-		f.Message = fmt.Sprintf("invalid service state %q — must be one of: running, stopped, restarted, reloaded", state)
-		findings = append(findings, f)
-	}
-
 	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) == 0 && !strings.Contains(res.When, "changed") {
 		f := base
 		f.Severity = SeverityError
@@ -846,14 +906,6 @@ func validateNonRepoPackage(base Finding, res Resource) []Finding {
 			f.Message = fmt.Sprintf("nonrepo_package url must end in .deb, .rpm, .pkg, or .msi (got %q)", filepath.Base(url))
 			findings = append(findings, f)
 		}
-	}
-
-	state := attrString(res.Attributes, "state")
-	if state != "" && state != "present" && state != "absent" && state != "latest" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = fmt.Sprintf("nonrepo_package state must be present, absent, or latest (got %q)", state)
-		findings = append(findings, f)
 	}
 
 	return findings
