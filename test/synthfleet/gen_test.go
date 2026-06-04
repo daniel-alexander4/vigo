@@ -34,6 +34,35 @@ func TestHostcratesLintClean(t *testing.T) {
 	}
 }
 
+// TestEnvironmentsFileLintClean asserts the synthetic environments.vgo
+// passes the environments linter clean — it's published like any other
+// scaffolding file.
+func TestEnvironmentsFileLintClean(t *testing.T) {
+	res := modlint.LintEnvironmentsFile([]byte(environmentsFile), modlint.Options{})
+	if !res.OK() {
+		t.Errorf("environments.vgo has lint errors: %v", res.Errors)
+	}
+}
+
+// TestEnvAxisCovered confirms every host carries one of the three
+// environments and all three are represented — the multi-axis env
+// dimension is populated, not collapsed.
+func TestEnvAxisCovered(t *testing.T) {
+	valid := map[string]bool{"prod": true, "stage": true, "test": true}
+	counts := map[string]int{}
+	for _, h := range buildHostPlan(13647, 7) {
+		if !valid[h.Env] {
+			t.Fatalf("host %q has invalid env %q", h.Hostname, h.Env)
+		}
+		counts[h.Env]++
+	}
+	for env := range valid {
+		if counts[env] == 0 {
+			t.Errorf("env %q has no hosts", env)
+		}
+	}
+}
+
 // TestHostPlanCountAndBroken verifies the plan lands the exact requested
 // count and exactly the requested number of broken hosts, for both the
 // default fleet size and an arbitrary one (distribution must always sum).

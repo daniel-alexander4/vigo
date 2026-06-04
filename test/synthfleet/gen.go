@@ -23,6 +23,7 @@ type hostPlan struct {
 	Region      string          `json:"region"`
 	AZ          string          `json:"az"`
 	Class       string          `json:"class"`
+	Env         string          `json:"env"`
 	Configcrate string          `json:"configcrate"`
 	TraitsJSON  json.RawMessage `json:"traits_json"`
 	Broken      bool            `json:"broken"`
@@ -48,9 +49,16 @@ type distroSpec struct {
 	os, family, distro, version, kernel string
 }
 
-// The synthetic topology. 7 regions × 3 AZs × 6 classes = 126 cells; the
-// requested count is spread evenly across them, so a match block covers
-// ~100 hosts — realistic, and far cheaper to publish than per-host files.
+// synthEnvs is the multi-axis environment dimension. Each host belongs to
+// exactly one; the hostcrate match block carries it as `environment:`,
+// which surfaces as the filterable "env" axis on the envoys page, and
+// the synthetic environments.vgo layers per-env overrides on top.
+var synthEnvs = []string{"prod", "stage", "test"}
+
+// The synthetic topology. 7 regions × 3 AZs × 6 classes × 3 envs = 378
+// cells; the requested count is spread evenly across them, so a match
+// block covers ~36 hosts — realistic, and far cheaper to publish than
+// per-host files.
 var synthRegions = []region{
 	{"aws", "us-east-1", []string{"us-east-1a", "us-east-1b", "us-east-1c"}},
 	{"aws", "us-west-2", []string{"us-west-2a", "us-west-2b", "us-west-2c"}},
@@ -186,6 +194,27 @@ resources:
 `,
 }
 
+// environmentsFile is the synthetic per-environment override layer,
+// written as stacks/synthetic/environments.vgo (discovered per-directory,
+// so it merges cleanly without touching any central file). It exercises
+// the multi-axis env dimension: prod adds fleet-wide monitoring + a
+// stricter log level, stage/test differ only in vars. Keys are limited to
+// configcrates/vars (the modlint-known set).
+const environmentsFile = `#~ Synthetic per-environment overrides — demo fleet only (vigo-synthfleet).
+env:
+  prod:
+    configcrates: [synthetic-monitoring]
+    vars:
+      log_level: warn
+      backup_schedule: "0 */4 * * *"
+  stage:
+    vars:
+      log_level: info
+  test:
+    vars:
+      log_level: debug
+`
+
 // synthTLD is the reserved suffix on every synthetic hostname. It is the
 // marker the whole tool keys on: hostcrate patterns only ever match it,
 // it can never collide with a real host, and backout targets exactly it.
@@ -199,12 +228,15 @@ func buildHostPlan(count, broken int) []hostPlan {
 		r   region
 		az  string
 		cls hostClass
+		env string
 	}
 	var cells []cell
 	for _, r := range synthRegions {
 		for _, az := range r.azs {
 			for _, c := range synthClasses {
-				cells = append(cells, cell{r, az, c})
+				for _, env := range synthEnvs {
+					cells = append(cells, cell{r, az, c, env})
+				}
 			}
 		}
 	}
@@ -225,7 +257,7 @@ func buildHostPlan(count, broken int) []hostPlan {
 			if cl.r.cloud == "gcp" {
 				inst = cl.cls.gcpInstance
 			}
-			host := fmt.Sprintf("%s-%05d.%s.%s.%s", cl.cls.name, k, cl.az, cl.r.cloud, synthTLD)
+			host := fmt.Sprintf("%s-%05d.%s.%s.%s.%s", cl.cls.name, k, cl.env, cl.az, cl.r.cloud, synthTLD)
 			traits, _ := json.Marshal(map[string]any{
 				"os":             d.os,
 				"os_family":      d.family,
@@ -241,6 +273,7 @@ func buildHostPlan(count, broken int) []hostPlan {
 				"cpu_cores":      cl.cls.cpuCores,
 				"memory_mb":      cl.cls.memoryMB,
 				"role_class":     cl.cls.name,
+				"environment":    cl.env,
 				"synthetic":      true,
 			})
 			plan = append(plan, hostPlan{
@@ -250,6 +283,7 @@ func buildHostPlan(count, broken int) []hostPlan {
 				Region:      cl.r.name,
 				AZ:          cl.az,
 				Class:       cl.cls.name,
+				Env:         cl.env,
 				Configcrate: cl.cls.configcrate,
 				TraitsJSON:  traits,
 			})
@@ -281,6 +315,12 @@ func writeConfigTree(stacksDir string, plan []hostPlan) (configcratesDir, hostcr
 			return "", "", err
 		}
 	}
+	if err = os.MkdirAll(hostcratesDir, 0o755); err != nil {
+		return "", "", err
+	}
+	if err = os.WriteFile(filepath.Join(hostcratesDir, "environments.vgo"), []byte(environmentsFile), 0o644); err != nil {
+		return "", "", err
+	}
 	for _, r := range synthRegions {
 		dir := filepath.Join(hostcratesDir, r.cloud)
 		if err = os.MkdirAll(dir, 0o755); err != nil {
@@ -307,13 +347,20 @@ func renderHostcrate(r region) string {
 	sort.Strings(azs)
 	for _, az := range azs {
 		for _, c := range synthClasses {
-			fmt.Fprintf(&b, "  - match: \"%s-*.%s.%s.%s\"\n", c.name, az, r.cloud, synthTLD)
-			fmt.Fprintf(&b, "    configcrates: [%s]\n", c.configcrate)
-			fmt.Fprintf(&b, "    tags: [%s, %s, %s]\n", synthTLD, r.cloud, c.name)
-			b.WriteString("    vars:\n")
-			fmt.Fprintf(&b, "      cloud: %s\n", r.cloud)
-			fmt.Fprintf(&b, "      region: %s\n", r.name)
-			fmt.Fprintf(&b, "      az: %s\n", az)
+			for _, env := range synthEnvs {
+				// One block per (az, class, env). The env literal in the
+				// pattern partitions hosts by environment; `environment:`
+				// makes it the multi-axis env dimension the synthetic
+				// environments.vgo then layers overrides onto.
+				fmt.Fprintf(&b, "  - match: \"%s-*.%s.%s.%s.%s\"\n", c.name, env, az, r.cloud, synthTLD)
+				fmt.Fprintf(&b, "    environment: %s\n", env)
+				fmt.Fprintf(&b, "    configcrates: [%s]\n", c.configcrate)
+				fmt.Fprintf(&b, "    tags: [%s, %s, %s, %s]\n", synthTLD, r.cloud, c.name, env)
+				b.WriteString("    vars:\n")
+				fmt.Fprintf(&b, "      cloud: %s\n", r.cloud)
+				fmt.Fprintf(&b, "      region: %s\n", r.name)
+				fmt.Fprintf(&b, "      az: %s\n", az)
+			}
 		}
 	}
 	return b.String()

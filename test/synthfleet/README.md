@@ -10,16 +10,22 @@ thousands of fake envoys has no place in the production admin CLI.
 
 ## What it builds
 
-- **~13,647 envoys** spread across 7 cloud regions × 3 AZs × 6 host
-  classes (web/app/db/cache/monitoring/bastion). Counts and topology are
-  flags.
+- **~13,647 envoys** spread across a multi-axis hierarchy: 7 cloud regions
+  × 3 AZs × 6 host classes (web/app/db/cache/monitoring/bastion) × 3
+  **environments** (prod/stage/test). Counts and topology are flags.
 - **Self-contained synthetic config**, written under two clearly
   namespaced dirs and removed wholesale by `backout`:
   - `stacks/configcrates/synthetic/*.vgo` — 4 synthetic configcrates
     (real resource params + real `compliance.provides` tags).
   - `stacks/synthetic/{aws,gcp}/<region>.vgo` — glob hostcrates mapping
-    host-class patterns straight to those configcrates. **No roles** — the
-    central `stacks/roles.vgo` is never touched.
+    host-class patterns straight to those configcrates, each carrying an
+    `environment:` (the env is a label in the hostname, e.g.
+    `web-00001.prod.us-east-1a.aws.synthetic`). **No roles** — the central
+    `stacks/roles.vgo` is never touched.
+  - `stacks/synthetic/environments.vgo` — per-environment overrides
+    (prod adds fleet-wide monitoring + a stricter `log_level`; stage/test
+    differ in vars), so the multi-axis env dimension shows real
+    differentiation, not just a label.
 - **Per-host traits** (os/distro/arch/cloud/region/az/instance) sent
   inline on every check-in, plus **5–10 deliberately broken** hosts that
   report a failing resource so Degraded/Failed pills, risk, and alerts
