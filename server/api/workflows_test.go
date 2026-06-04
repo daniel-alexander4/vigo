@@ -5,6 +5,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -19,8 +20,19 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"git.alexander4.io/vigo/server/db"
+	isgrpc "git.alexander4.io/vigo/server/grpc"
 	"git.alexander4.io/vigo/server/workflows"
 )
+
+// stubRunner is a no-op TaskRunner for workflow tests that start a real
+// async run but assert only on the synchronous handler behavior. It lets
+// the background executeWorkflow goroutine dispatch cleanly instead of
+// nil-dereferencing a nil runner.
+type stubRunner struct{}
+
+func (stubRunner) DispatchPush(ctx context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error) {
+	return &isgrpc.DispatchResult{ID: "stub-task-run"}, nil
+}
 
 // openWorkflowTestDB returns an in-memory SQLite database with the full
 // migration schema. Delegates to the shared openMigratedTestDB helper.
@@ -217,7 +229,7 @@ func TestWorkflowHandler_AbortNotFound(t *testing.T) {
 func TestWorkflowHandler_RunRecordsAuditEvent(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
 	queries := db.New(sqlDB)
-	engine := workflows.NewEngine(queries, nil, nil)
+	engine := workflows.NewEngine(queries, stubRunner{}, nil)
 	t.Cleanup(engine.Close)
 
 	// Load a workflow from disk so the engine has a known def to start.

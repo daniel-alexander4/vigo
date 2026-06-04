@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -266,6 +267,27 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 	ctx := e.ctx
 	defer e.abortFlags.Delete(runID)
 
+	// currentIdx is the loop cursor, hoisted so the panic recovery below
+	// can report which step was executing.
+	currentIdx := 0
+
+	// A workflow runs in a detached goroutine; an unrecovered panic here
+	// would crash the entire server process — gRPC streams, REST, metrics,
+	// and every other in-flight workflow with it. Isolate it: fail this
+	// run, keep the server up. Mirrors the integrations dispatcher's
+	// per-goroutine recover (server/integrations/integrations.go).
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("workflow: panic in executeWorkflow",
+				"workflow_run_id", runID,
+				"step", currentIdx,
+				"panic", r,
+				"stack", string(debug.Stack()),
+			)
+			e.failWorkflow(ctx, runID, currentIdx, fmt.Sprintf("workflow panicked: %v", r))
+		}
+	}()
+
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	if err := e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
 		ID:        runID,
@@ -282,7 +304,6 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		stepIndex[step.Name] = i
 	}
 
-	currentIdx := 0
 	for currentIdx < len(def.Steps) {
 		step := def.Steps[currentIdx]
 
