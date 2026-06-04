@@ -1,4 +1,4 @@
-# vigo-synthfleet — synthetic demo fleet harness
+# vigo-fakefleet — synthetic demo fleet harness
 
 Stands up a realistic, multi-cloud **synthetic** envoy fleet against a live
 vigosrv — believable AWS/GCP host hierarchy, per-host traits, and
@@ -17,11 +17,13 @@ thousands of fake envoys has no place in the production admin CLI.
   namespaced dirs and removed wholesale by `backout`:
   - `stacks/configcrates/synthetic/*.vgo` — 4 synthetic configcrates
     (real resource params + real `compliance.provides` tags).
-  - `stacks/synthetic/{aws,gcp}/<region>.vgo` — glob hostcrates mapping
-    host-class patterns straight to those configcrates, each carrying an
-    `environment:` (the env is a label in the hostname, e.g.
-    `web-00001.prod.us-east-1a.aws.synthetic`). **No roles** — the central
-    `stacks/roles.vgo` is never touched.
+  - `stacks/synthetic/<cloud>/<region>/<zone>/envoys.vgo` — glob hostcrates
+    nested by cloud/region/zone (one shared file per zone, not per host),
+    so the `/envoys/tree` view groups envoys under their cloud/region/zone
+    just like the real fleet. Each match block maps a host-class pattern
+    straight to a configcrate and carries an `environment:` (the env is a
+    label in the hostname, e.g. `web-00001.prod.us-east-1a.aws.synthetic`).
+    **No roles** — the central `stacks/roles.vgo` is never touched.
   - `stacks/synthetic/environments.vgo` — per-environment overrides
     (prod adds fleet-wide monitoring + a stricter `log_level`; stage/test
     differ in vars), so the multi-axis env dimension shows real
@@ -54,19 +56,19 @@ targets exactly it. Two unit tests enforce this invariant.
 ## Usage
 
 ```bash
-go build -o /usr/local/bin/vigo-synthfleet ./test/synthfleet
+go build -o /usr/local/bin/vigo-fakefleet ./test/fakefleet
 
 # Stand the fleet up (generate config, publish, enroll, first tick):
-sudo vigo-synthfleet create
+sudo vigo-fakefleet create
 
 # Keep it fresh durably — install + enable the timer:
-sudo cp test/synthfleet/vigo-synthfleet.{service,timer} /etc/systemd/system/
+sudo cp test/fakefleet/vigo-fakefleet.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now vigo-synthfleet.timer
+sudo systemctl enable --now vigo-fakefleet.timer
 
 # Tear it all down:
-sudo systemctl disable --now vigo-synthfleet.timer
-sudo vigo-synthfleet backout
+sudo systemctl disable --now vigo-fakefleet.timer
+sudo vigo-fakefleet backout
 ```
 
 ## Durability — systemd timer + stateless tick
@@ -75,7 +77,7 @@ sudo vigo-synthfleet backout
 stateless `tick`**, not a long-lived daemon:
 
 - `create` persists every envoy's identity (id + ed25519 key + mTLS cert)
-  to `/srv/vigo/synthfleet/state.json` (mode 0600 — it holds private
+  to `/srv/vigo/fakefleet/state.json` (mode 0600 — it holds private
   keys).
 - `tick` loads that manifest and fires one CheckIn + ReportResult per
   envoy, then exits. The timer fires it every 2 minutes (reported to the
@@ -112,6 +114,6 @@ logs `NotFound` and is harmless either way).
 | `--server` | `127.0.0.1:1530` | gRPC address |
 | `--api` | `https://127.0.0.1:8443` | REST API base |
 | `--stacks-dir` | `/srv/vigo/stacks` | operator stacks tree |
-| `--state` | `/srv/vigo/synthfleet/state.json` | identity manifest |
+| `--state` | `/srv/vigo/fakefleet/state.json` | identity manifest |
 | `--admin-token` / `--admin-token-file` | (file) `/srv/vigo/cli-admin-token` | admin auth |
 | `--vigocli` | `vigocli` | binary used to publish |

@@ -22,14 +22,16 @@ func TestConfigcratesLintClean(t *testing.T) {
 	}
 }
 
-// TestHostcratesLintClean asserts every region's generated hostcrate
+// TestHostcratesLintClean asserts every generated per-zone hostcrate
 // passes the hostcrate linter clean.
 func TestHostcratesLintClean(t *testing.T) {
 	for _, r := range synthRegions {
-		body := renderHostcrate(r)
-		res := modlint.LintHostcrate([]byte(body), modlint.Options{})
-		if !res.OK() {
-			t.Errorf("hostcrate %s/%s has lint errors: %v", r.cloud, r.name, res.Errors)
+		for _, az := range r.azs {
+			body := renderZoneHostcrate(r, az)
+			res := modlint.LintHostcrate([]byte(body), modlint.Options{})
+			if !res.OK() {
+				t.Errorf("hostcrate %s/%s/%s has lint errors: %v", r.cloud, r.name, az, res.Errors)
+			}
 		}
 	}
 }
@@ -118,13 +120,15 @@ func TestEveryHostnameIsSynthetic(t *testing.T) {
 func TestEveryMatchPatternIsSyntheticScoped(t *testing.T) {
 	want := "." + synthTLD + `"`
 	for _, r := range synthRegions {
-		for _, line := range strings.Split(renderHostcrate(r), "\n") {
-			line = strings.TrimSpace(line)
-			if !strings.HasPrefix(line, "- match:") {
-				continue
-			}
-			if !strings.HasSuffix(line, want) {
-				t.Errorf("%s/%s: match pattern not synthetic-scoped: %q", r.cloud, r.name, line)
+		for _, az := range r.azs {
+			for _, line := range strings.Split(renderZoneHostcrate(r, az), "\n") {
+				line = strings.TrimSpace(line)
+				if !strings.HasPrefix(line, "- match:") {
+					continue
+				}
+				if !strings.HasSuffix(line, want) {
+					t.Errorf("%s/%s/%s: match pattern not synthetic-scoped: %q", r.cloud, r.name, az, line)
+				}
 			}
 		}
 	}
