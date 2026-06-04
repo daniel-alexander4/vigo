@@ -39,6 +39,7 @@ resources:
   #~ the same path (certbot caches state in /etc/letsencrypt).
   - name: issue-cert
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: 'certbot certonly --standalone --non-interactive --agree-tos -m "{{ .Vars.cert_email }}" -d "{{ .Vars.ui_hostname }}"'
     onlyif: 'test ! -f "/etc/letsencrypt/live/{{ .Vars.ui_hostname }}/fullchain.pem"'
     depends_on: [install-certbot]

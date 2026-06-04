@@ -23,10 +23,12 @@ resources:
 
   - name: firewall-default-deny
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "iptables -P INPUT DROP"
     onlyif: "iptables -L INPUT | head -1 | grep -q ACCEPT"
 
   - name: firewall-allow-ssh
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "iptables -A INPUT -p tcp --dport 22 -j ACCEPT"
     unless: "iptables -L INPUT -n | grep -q 'tcp dpt:22'"

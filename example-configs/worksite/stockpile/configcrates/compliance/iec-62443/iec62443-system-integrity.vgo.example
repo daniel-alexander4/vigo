@@ -85,6 +85,7 @@ resources:
 
   - name: aide-init-db
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: aide --init && cp /var/lib/aide/aide.db.new {{.Vars.aide_db_path}}
     unless: "test -f {{.Vars.aide_db_path}}"
     when: "os_family('debian')"
@@ -129,6 +130,7 @@ resources:
   # SR 3.9: Audit log protection (immutable attribute on log dir)
   - name: protect-audit-logs
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: chattr +a /var/log/syslog /var/log/auth.log 2>/dev/null || true
     onlyif: "command -v chattr"
 
@@ -155,6 +157,7 @@ resources:
 
   - name: enable-verify-service
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: systemctl daemon-reload && systemctl enable iec62443-verify.service
     onlyif: "test -f /etc/systemd/system/iec62443-verify.service"
     when: "changed"

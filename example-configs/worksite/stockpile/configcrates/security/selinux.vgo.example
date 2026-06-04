@@ -27,6 +27,7 @@ resources:
   # Only runs when getenforce is available (SELinux tooling installed).
   - name: selinux-enforce
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "setenforce enforcing"
     when: "os_family('redhat') && command_succeeds('which getenforce')"
     depends_on: [selinux-config]

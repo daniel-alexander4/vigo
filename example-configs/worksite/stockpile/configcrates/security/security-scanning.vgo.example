@@ -59,6 +59,7 @@ resources:
 
   - name: trivy-repo-key-debian
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: >-
       sh -c 'wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key
       | gpg --dearmor -o /usr/share/keyrings/trivy.gpg'
@@ -79,6 +80,7 @@ resources:
 
   - name: trivy-apt-update
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "apt-get update -qq"
     when: "os_family('debian')"
     onlyif: "! dpkg -s trivy >/dev/null 2>&1"
@@ -107,6 +109,7 @@ resources:
 
   - name: run-trivy
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'trivy rootfs --format json --severity {{ .Vars.trivy_severity }}
@@ -130,6 +133,7 @@ resources:
 
   - name: run-lynis
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'lynis audit system --no-colors --quiet
@@ -150,6 +154,7 @@ resources:
 
   - name: run-chkrootkit
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'chkrootkit > {{ .Vars.scan_dir }}/chkrootkit.log 2>&1 || true;
@@ -168,6 +173,7 @@ resources:
 
   - name: run-rkhunter
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'rkhunter --check --skip-keypress --report-warnings-only
@@ -208,6 +214,7 @@ resources:
 
   - name: freshclam-update
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'freshclam --quiet || true;
@@ -219,6 +226,7 @@ resources:
 
   - name: run-clamscan
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'clamscan --recursive --infected --no-summary
@@ -249,6 +257,7 @@ resources:
 
   - name: aide-reinit
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "sh -c 'aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}'"
     depends_on: [aide-conf]
     subscribes: [aide-conf]
@@ -256,6 +265,7 @@ resources:
 
   - name: aide-init
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "sh -c 'if command -v aideinit >/dev/null 2>&1; then aideinit; else aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}; fi'"
     onlyif: "! test -f {{ .Vars.aide_db_path }}"
     background: "true"
@@ -264,6 +274,7 @@ resources:
 
   - name: run-aide
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'aide --check --config /etc/aide/aide.conf
@@ -284,6 +295,7 @@ resources:
 
   - name: run-debsecan
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     when: "os_family('debian') and hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'debsecan --format detail > {{ .Vars.scan_dir }}/debsecan.log 2>&1 || true;

@@ -19,6 +19,7 @@ resources:
   # 8.2.1/8.2.2: Unique user IDs, no shared accounts
   - name: no-shared-accounts
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "true"
     onlyif: "! awk -F: '($3 >= 1000 && $3 < 65534) { print $1 }' /etc/passwd | sort | uniq -d | grep -q ."
 
@@ -38,6 +39,7 @@ resources:
 
   - name: password-aging-enforcement
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: |
       sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 90/' /etc/login.defs
       sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS 1/' /etc/login.defs
@@ -47,5 +49,6 @@ resources:
   # 8.6.1: Service account restrictions
   - name: service-account-nologin
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "for u in $(awk -F: '($3 < 1000 && $3 != 0) {print $1}' /etc/passwd); do usermod -s /usr/sbin/nologin $u 2>/dev/null; done"
     onlyif: "awk -F: '($3 < 1000 && $3 != 0 && $7 !~ /nologin|false/) {print $1}' /etc/passwd | grep -q ."

@@ -76,6 +76,7 @@ resources:
 
   - name: reload-auditd
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: augenrules --load
     onlyif: "test -f /etc/audit/rules.d/pci.rules"
     when: "changed"
@@ -83,5 +84,6 @@ resources:
   # Protect audit logs from unauthorized modification
   - name: audit-log-permissions
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: chmod 0640 /var/log/audit/audit.log && chown root:adm /var/log/audit/audit.log
     onlyif: "test -f /var/log/audit/audit.log && ! stat -c '%a' /var/log/audit/audit.log | grep -q 640"

@@ -13,12 +13,14 @@ resources:
 
   - name: root-ssh-key-permissions
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "chmod 600 /root/.ssh/authorized_keys 2>/dev/null; chmod 700 /root/.ssh 2>/dev/null"
     onlyif: "test -d /root/.ssh"
 
   # TLS certificate permissions
   - name: cert-permissions
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "find /etc/ssl/private -type f -exec chmod 600 {} \\; && chmod 700 /etc/ssl/private"
     onlyif: "test -d /etc/ssl/private && find /etc/ssl/private -type f -perm /go+r | grep -q ."
 
@@ -41,6 +43,7 @@ resources:
 
   - name: apply-crypto-policy
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: update-crypto-policies
     onlyif: "test -f /etc/crypto-policies/config"
     when: "os_family('rhel')"

@@ -49,6 +49,7 @@ resources:
 
   - name: borg-init
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: 'BORG_PASSPHRASE="{{ .Vars.borg_passphrase }}" borgmatic init --encryption repokey-blake2'
     unless: 'BORG_PASSPHRASE="{{ .Vars.borg_passphrase }}" borgmatic info >/dev/null 2>&1'
     depends_on: [borgmatic-config]

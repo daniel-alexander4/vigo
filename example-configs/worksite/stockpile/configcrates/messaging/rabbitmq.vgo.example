@@ -58,6 +58,7 @@ resources:
 
   - name: enable-management-plugin
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "rabbitmq-plugins enable rabbitmq_management"
     onlyif: "! rabbitmq-plugins list -e | grep -q rabbitmq_management"
     depends_on: [install-rabbitmq]

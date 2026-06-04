@@ -90,6 +90,7 @@ resources:
 
   - name: apply-sysctl
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: sysctl --system
     onlyif: "test -f /etc/sysctl.d/60-cis-network.conf"
     when: "changed"
@@ -110,6 +111,7 @@ resources:
 
   - name: 3.4.2.1-default-zone-drop
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: firewall-cmd --set-default-zone=drop
     onlyif: "! firewall-cmd --get-default-zone | grep -q drop"
     depends_on: [3.4.1.2-firewalld-enabled]

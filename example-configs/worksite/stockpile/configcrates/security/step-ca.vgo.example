@@ -26,6 +26,7 @@ resources:
 
   - name: step-ca-init
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: 'step ca init --dns="{{ .Vars.step_ca_dns }}" --address="{{ .Vars.step_ca_address }}" --provisioner=admin --password-file=<(echo "{{ .Vars.step_ca_passphrase }}") --deployment-type=standalone'
     unless: "test -f /root/.step/config/ca.json"
     depends_on: [install-step-ca, install-step-cli]

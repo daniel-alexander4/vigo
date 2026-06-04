@@ -12,10 +12,12 @@ compliance:
 resources:
   - name: archival-service-running
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "systemctl is-active archival-agent 2>/dev/null || echo 'not-installed'"
     onlyif: "systemctl list-units --type=service | grep -q archival"
 
   - name: retention-policy-check
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "test -f /etc/archival/retention.conf && echo 'retention policy exists'"
     onlyif: "test -d /etc/archival"

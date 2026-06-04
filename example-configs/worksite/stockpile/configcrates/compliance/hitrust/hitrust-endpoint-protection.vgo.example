@@ -28,11 +28,13 @@ resources:
   # 09.k: Controls against mobile code — disable unnecessary interpreters
   - name: restrict-perl
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: chmod 0750 /usr/bin/perl
     onlyif: "test -f /usr/bin/perl && stat -c '%a' /usr/bin/perl | grep -q 755"
 
   - name: restrict-python
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: chmod 0750 /usr/bin/python3
     onlyif: "test -f /usr/bin/python3 && stat -c '%a' /usr/bin/python3 | grep -q 755"
 
@@ -52,6 +54,7 @@ resources:
 
   - name: apply-sysctl
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: sysctl --system
     onlyif: "test -f /etc/sysctl.d/99-hitrust-network.conf"
     when: "changed"

@@ -54,6 +54,7 @@ resources:
 
   - name: kopia-init
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "/usr/local/sbin/kopia-init.sh"
     unless: "test -f /etc/kopia/repo.config"
     depends_on: [install-kopia, kopia-env, kopia-init-script]

@@ -9,36 +9,42 @@ resources:
 
   - name: default-input-drop
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: iptables -P INPUT DROP
     onlyif: "iptables -L INPUT | head -1 | grep -q ACCEPT"
     notify: [save-iptables]
 
   - name: default-forward-drop
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: iptables -P FORWARD DROP
     onlyif: "iptables -L FORWARD | head -1 | grep -q ACCEPT"
     notify: [save-iptables]
 
   - name: allow-established
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
     onlyif: "! iptables -C INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null"
     notify: [save-iptables]
 
   - name: allow-loopback
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: iptables -A INPUT -i lo -j ACCEPT
     onlyif: "! iptables -C INPUT -i lo -j ACCEPT 2>/dev/null"
     notify: [save-iptables]
 
   - name: allow-ssh
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "iptables -A INPUT -p tcp --dport 22 -j ACCEPT"
     onlyif: "! iptables -C INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null"
     notify: [save-iptables]
 
   - name: save-iptables
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: iptables-save > /etc/iptables/rules.v4
     onlyif: "test -f /etc/iptables/rules.v4"
     when: "changed"

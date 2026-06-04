@@ -10,6 +10,7 @@ resources:
 
   - name: backup-directory
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: mkdir -p /var/backups/gdpr && chmod 0700 /var/backups/gdpr
     onlyif: "! test -d /var/backups/gdpr"
 

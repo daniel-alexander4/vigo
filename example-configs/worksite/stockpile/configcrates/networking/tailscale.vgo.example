@@ -10,6 +10,7 @@ vars:
 resources:
   - name: install-tailscale-repo
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: 'curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null && curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list >/dev/null && apt-get update'
     unless: "test -f /usr/share/keyrings/tailscale-archive-keyring.gpg"
     when: "os_family('debian')"
@@ -23,6 +24,7 @@ resources:
 
   - name: tailscale-up
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: 'tailscale up --authkey={{ .Vars.tailscale_authkey }} --accept-dns=false'
     unless: "tailscale status --json 2>/dev/null | grep -q '\"BackendState\": \"Running\"'"
     depends_on: [install-tailscale]

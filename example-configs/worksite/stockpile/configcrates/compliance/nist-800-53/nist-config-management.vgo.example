@@ -67,6 +67,7 @@ resources:
 
   - name: apply-sysctl
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: sysctl --system
     onlyif: "test -f /etc/sysctl.d/99-nist-hardening.conf"
     when: "changed"

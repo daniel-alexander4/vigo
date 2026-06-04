@@ -15,10 +15,12 @@ vars:
 resources:
   - name: disk-space-check
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "df --output=pcent / | tail -1 | tr -d ' %' | awk '{if($1 > {{ .Vars.disk_alert_threshold }}) exit 1}'"
     onlyif: "which df"
 
   - name: kill-switch-installed
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "test -x /usr/local/bin/trading-killswitch && echo 'kill switch binary present'"
     onlyif: "test -f /usr/local/bin/trading-killswitch"

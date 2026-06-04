@@ -14,6 +14,7 @@ resources:
 
   - name: aide-init
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "aideinit && mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db"
     unless: "test -f /var/lib/aide/aide.db"
     depends_on: [install-aide]

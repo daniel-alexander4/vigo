@@ -43,6 +43,7 @@ resources:
 
   - name: init-aide-db
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: aide --init && mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
     onlyif: "! test -f /var/lib/aide/aide.db"
 

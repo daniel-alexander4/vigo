@@ -77,6 +77,7 @@ resources:
 
   - name: reload-nftables
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: nft -f /etc/nftables.conf
     onlyif: "test -f /etc/nftables.conf"
     when: "changed"
@@ -111,6 +112,7 @@ resources:
 
   - name: apply-sysctl
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: sysctl --system
     onlyif: "test -f /etc/sysctl.d/99-iec62443-zones.conf"
     when: "changed"

@@ -18,6 +18,7 @@ resources:
   # CIP-004 R4/R5: Access management and revocation
   - name: password-aging
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: |
       sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 90/' /etc/login.defs
       sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS 1/' /etc/login.defs
@@ -25,6 +26,7 @@ resources:
 
   - name: inactive-lock
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: useradd -D -f 35
     onlyif: "! useradd -D | grep -q 'INACTIVE=35'"
 
@@ -70,5 +72,6 @@ resources:
   # CIP-011 R1: Information protection — encryption
   - name: encrypt-at-rest-check
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "cryptsetup status /dev/mapper/* 2>/dev/null || true"
     onlyif: "which cryptsetup"

@@ -15,6 +15,7 @@ resources:
 
   - name: ufw-default-deny
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "ufw default deny incoming"
     onlyif: "ufw status | grep -q 'Status: active'"
     when: "os_family('debian')"

@@ -18,6 +18,7 @@ resources:
 
   - name: ipa-enroll
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: 'ipa-client-install --unattended --domain="{{ .Vars.ipa_domain }}" --server="{{ .Vars.ipa_server }}" --principal=admin --password="{{ .Vars.ipa_admin_password }}"'
     unless: "test -f /etc/ipa/default.conf"
     depends_on: [install-freeipa-client]

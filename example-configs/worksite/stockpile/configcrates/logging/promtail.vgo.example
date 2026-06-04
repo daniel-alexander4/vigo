@@ -67,6 +67,7 @@ resources:
 
   - name: promtail-daemon-reload
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "systemctl daemon-reload"
     subscribes: [promtail-systemd-unit]
     when: "os_family('linux')"

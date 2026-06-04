@@ -12,6 +12,7 @@ vars:
 resources:
   - name: plex-repo-key
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "curl -fsSL https://downloads.plex.tv/plex-keys/PlexSign.key | gpg --dearmor -o /usr/share/keyrings/plex-archive-keyring.gpg"
     unless: "test -f /usr/share/keyrings/plex-archive-keyring.gpg"
 

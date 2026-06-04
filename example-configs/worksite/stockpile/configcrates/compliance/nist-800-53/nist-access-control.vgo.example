@@ -18,6 +18,7 @@ resources:
   # AC-2: Remove inactive accounts after 30 days
   - name: inactive-account-lock
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: useradd -D -f 30
     onlyif: "! useradd -D | grep -q 'INACTIVE=30'"
 
@@ -39,6 +40,7 @@ resources:
   # AC-7: Unsuccessful login attempts — pam_faillock
   - name: faillock-common-auth
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: pam-auth-update --enable faillock
     onlyif: "! grep -q pam_faillock /etc/pam.d/common-auth"
 

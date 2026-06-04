@@ -21,6 +21,7 @@ resources:
 
   - name: update-ca-certs-debian
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "update-ca-certificates"
     subscribes: [write-internal-ca]
     when: "os_family('debian')"
@@ -37,6 +38,7 @@ resources:
 
   - name: update-ca-certs-rhel
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "update-ca-trust extract"
     subscribes: [write-internal-ca-rhel]
     when: "os_family('rhel')"

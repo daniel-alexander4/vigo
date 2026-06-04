@@ -73,18 +73,21 @@ resources:
 
   - name: gvm-setup
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "gvm-setup"
     onlyif: "! test -f {{ .Vars.gvm_data_dir }}/.gvm-setup-done"
     depends_on: [install-gvm]
 
   - name: gvm-setup-sentinel
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "touch {{ .Vars.gvm_data_dir }}/.gvm-setup-done"
     depends_on: [gvm-setup]
     onlyif: "! test -f {{ .Vars.gvm_data_dir }}/.gvm-setup-done"
 
   - name: gvm-admin-user
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: >-
       gvmd --create-user={{ .Vars.gvm_admin_user }}
     stdin: "{{ .Vars.gvm_admin_pass }}"
@@ -95,6 +98,7 @@ resources:
 
   - name: sync-nvt-feeds
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "greenbone-feed-sync"
     when: "hour_range('3','5')"
     onlyif: "! test -f /tmp/.vigo-gvm-sync-$(date +%Y%U)"
@@ -102,6 +106,7 @@ resources:
 
   - name: nvt-sync-sentinel
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "touch /tmp/.vigo-gvm-sync-$(date +%Y%U)"
     depends_on: [sync-nvt-feeds]
     when: "hour_range('3','5')"

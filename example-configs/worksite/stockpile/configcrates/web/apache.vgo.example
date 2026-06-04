@@ -30,6 +30,7 @@ resources:
 
   - name: enable-mod-rewrite
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: a2enmod rewrite
     onlyif: "! apache2ctl -M 2>/dev/null | grep -q rewrite"
     when: "os_family('debian')"
@@ -38,6 +39,7 @@ resources:
 
   - name: enable-mod-ssl
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: a2enmod ssl
     onlyif: "! apache2ctl -M 2>/dev/null | grep -q ssl_module"
     when: "os_family('debian')"

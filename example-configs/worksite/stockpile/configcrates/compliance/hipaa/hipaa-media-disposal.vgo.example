@@ -14,6 +14,7 @@ resources:
 
   - name: shred-available
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "which shred"
     onlyif: "! which shred"
 

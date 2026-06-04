@@ -62,6 +62,7 @@ resources:
 
   - name: restic-init
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "/usr/local/sbin/restic-init.sh"
     unless: "test -f /var/lib/restic/.initialized"
     depends_on: [install-restic, restic-env, restic-init-script]

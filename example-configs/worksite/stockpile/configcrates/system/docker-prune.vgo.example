@@ -47,6 +47,7 @@ resources:
 
   - name: docker-prune-daemon-reload
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "systemctl daemon-reload"
     subscribes: [docker-prune-service, docker-prune-timer]
     when: "has_command('docker')"

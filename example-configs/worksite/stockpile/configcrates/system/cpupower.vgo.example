@@ -19,6 +19,7 @@ resources:
 
   - name: apply-governor
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: "cpupower frequency-set -g {{ .Vars.cpu_governor }}"
     unless: "cpupower frequency-info -p | grep -q 'governor \"{{ .Vars.cpu_governor }}\"'"
     when: "os_family('linux')"

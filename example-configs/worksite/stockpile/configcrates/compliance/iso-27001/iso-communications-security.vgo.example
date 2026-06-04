@@ -10,21 +10,25 @@ resources:
 
   - name: ufw-default-deny
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: ufw default deny incoming
     onlyif: "ufw status verbose | grep -q 'Default: allow (incoming)'"
 
   - name: ufw-default-allow-out
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: ufw default allow outgoing
     onlyif: "ufw status verbose | grep -q 'Default: deny (outgoing)'"
 
   - name: ufw-allow-ssh
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: ufw allow ssh
     onlyif: "! ufw status | grep -q '22/tcp.*ALLOW'"
 
   - name: ufw-enable
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: echo "y" | ufw enable
     onlyif: "! ufw status | grep -q 'Status: active'"
 

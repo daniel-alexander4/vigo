@@ -10,6 +10,7 @@ resources:
 
   - name: backup-directory
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: mkdir -p /var/backups/nerc && chmod 0700 /var/backups/nerc
     onlyif: "! test -d /var/backups/nerc"
 
@@ -39,6 +40,7 @@ resources:
 
   - name: etckeeper-init
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: etckeeper init
     onlyif: "! test -d /etc/.git"
 

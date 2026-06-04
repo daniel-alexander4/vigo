@@ -49,6 +49,7 @@ resources:
 
   - name: init-stockpile-repo
     type: exec
+    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
     command: 'cd "{{ .Vars.stockpile_dir }}" && git init -b {{ .Vars.push_branch }} && git remote add origin "{{ .Vars.remote_url }}"'
     onlyif: 'test ! -d "{{ .Vars.stockpile_dir }}/.git"'
     depends_on: [install-git, deploy-key]
