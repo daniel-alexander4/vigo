@@ -37,7 +37,9 @@ resources:
   #~ Ensure the snapshot destination exists.
   - name: snapshot-dir
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "mkdir -p {{ .Vars.snapshot_dir }}"
     onlyif: "test ! -d {{ .Vars.snapshot_dir }}"
 
@@ -45,7 +47,9 @@ resources:
   #~ Without this file, a restore can't find the database or secrets.
   - name: backup-server-yaml
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: 'cp -p "{{ .Vars.vigo_root }}/server.yaml" "{{ .Vars.snapshot_dir }}/server.yaml"'
     unless: 'test -f "{{ .Vars.snapshot_dir }}/server.yaml" && test "{{ .Vars.snapshot_dir }}/server.yaml" -nt "{{ .Vars.vigo_root }}/server.yaml"'
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
@@ -54,7 +58,9 @@ resources:
   #~ Dump the main Vigo database to compressed SQL.
   - name: db-backup
     type: db_backup
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     db_type: sqlite
     source_db: "{{ .Vars.vigo_root }}/db/vigo.db"
     target_path: "{{ .Vars.snapshot_dir }}/db"
@@ -66,7 +72,9 @@ resources:
   #~ Dump the Sandgorgon database to compressed SQL.
   - name: sandgorgon-db-backup
     type: db_backup
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     db_type: sqlite
     source_db: "{{ .Vars.vigo_root }}/sandgorgon/sandgorgon.db"
     target_path: "{{ .Vars.snapshot_dir }}/sandgorgon-db"
@@ -78,7 +86,9 @@ resources:
   #~ Stockpile: modules, roles, match blocks, waivers, tasks, workflows.
   - name: backup-stockpile
     type: backup
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     source_dir: "{{ .Vars.vigo_root }}/stockpile"
     target_path: "{{ .Vars.snapshot_dir }}/stockpile"
     retain: "{{ .Vars.backup_retain }}"
@@ -89,7 +99,9 @@ resources:
   #~ Secrets: encrypted secret files and master key.
   - name: backup-secrets
     type: backup
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     source_dir: "{{ .Vars.vigo_root }}/secrets"
     target_path: "{{ .Vars.snapshot_dir }}/secrets"
     retain: "{{ .Vars.backup_retain }}"
@@ -100,7 +112,9 @@ resources:
   #~ TLS: CA key/cert, server cert/key, agent certs.
   - name: backup-tls
     type: backup
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     source_dir: "{{ .Vars.vigo_root }}/tls"
     target_path: "{{ .Vars.snapshot_dir }}/tls"
     retain: "{{ .Vars.backup_retain }}"

@@ -20,7 +20,9 @@ resources:
   # RHEL/Fedora: disable package cache retention
   - name: dnf-keepcache-off
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "sed -i 's/^keepcache=.*/keepcache=1/' /etc/dnf/dnf.conf"
     command: "sed -i 's/^keepcache=.*/keepcache=0/' /etc/dnf/dnf.conf"
     onlyif: "grep -q '^keepcache=1' /etc/dnf/dnf.conf"
     when: "os_family('redhat')"
@@ -28,7 +30,9 @@ resources:
   # RHEL/Fedora: clean stale metadata and cached packages now
   - name: dnf-clean-all
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "dnf clean all -q"
     onlyif: "test $(du -sm /var/cache/dnf 2>/dev/null | cut -f1) -gt 500"
     when: "os_family('redhat')"

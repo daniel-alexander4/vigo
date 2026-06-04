@@ -46,13 +46,17 @@ resources:
 
   - name: lock-games-user
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "usermod -L -s /usr/sbin/nologin games"
     onlyif: "getent passwd games && ! passwd -S games 2>/dev/null | grep -q '^games L'"
 
   - name: lock-lp-user
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "usermod -L -s /usr/sbin/nologin lp"
     onlyif: "getent passwd lp && ! passwd -S lp 2>/dev/null | grep -q '^lp L'"
 
@@ -103,7 +107,9 @@ resources:
 
   - name: apply-sysctl
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "sysctl --system"
     onlyif: "! sysctl -n net.ipv4.ip_forward 2>/dev/null | grep -q 0"
     depends_on: [sysctl-hardening]

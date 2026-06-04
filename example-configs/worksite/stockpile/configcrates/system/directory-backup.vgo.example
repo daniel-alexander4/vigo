@@ -20,7 +20,9 @@ resources:
   #~ Hardlink-based incremental snapshot of the source directory
   - name: backup-snapshot
     type: backup
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     source_dir: "{{ .Vars.backup_src }}"
     target_path: "{{ .Vars.backup_dest }}"
     retain: "{{ .Vars.backup_retain }}"
@@ -30,7 +32,9 @@ resources:
   #~ Optional: dump SQLite database (skipped if backup_db var is empty)
   - name: db-snapshot
     type: db_backup
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     db_type: sqlite
     source_db: "{{ .Vars.backup_db }}"
     target_path: "{{ .Vars.backup_dest }}/db"

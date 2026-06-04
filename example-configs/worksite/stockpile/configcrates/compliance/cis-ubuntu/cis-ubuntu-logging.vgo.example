@@ -27,7 +27,9 @@ resources:
 
   - name: 4.1.1.3-auditd-boot
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       if grep -q "^GRUB_CMDLINE_LINUX=" /etc/default/grub; then
         sed -i '/^GRUB_CMDLINE_LINUX=/ s/"$/ audit=1"/' /etc/default/grub
@@ -150,7 +152,9 @@ resources:
 
   - name: reload-auditd
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: augenrules --load
     onlyif: "test -f /etc/audit/rules.d/cis-ubuntu.rules"
     when: "changed"

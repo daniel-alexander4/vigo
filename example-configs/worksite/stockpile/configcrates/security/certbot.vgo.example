@@ -20,7 +20,9 @@ resources:
 
   - name: issue-cert
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: 'certbot certonly --{{ .Vars.cert_method }} --non-interactive --agree-tos -m "{{ .Vars.cert_email }}" -d "{{ .Vars.cert_hostname }}"'
     onlyif: 'test ! -f "/etc/letsencrypt/live/{{ .Vars.cert_hostname }}/fullchain.pem"'
     depends_on: [install-certbot]

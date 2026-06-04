@@ -18,7 +18,9 @@ resources:
 
   - name: create-pv
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "pvcreate /dev/sdb"
     onlyif: "! pvs /dev/sdb 2>/dev/null | grep -q /dev/sdb"
     depends_on: [install-lvm]
@@ -27,7 +29,9 @@ resources:
 
   - name: create-vg
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "vgcreate data_vg /dev/sdb"
     onlyif: "! vgs data_vg 2>/dev/null | grep -q data_vg"
     depends_on: [create-pv]
@@ -36,7 +40,9 @@ resources:
 
   - name: create-lv
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "lvcreate -l 100%FREE -n data_lv data_vg"
     onlyif: "! lvs data_vg/data_lv 2>/dev/null"
     depends_on: [create-vg]
@@ -45,7 +51,9 @@ resources:
 
   - name: format-lv
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "mkfs.ext4 /dev/data_vg/data_lv"
     onlyif: "! blkid /dev/data_vg/data_lv 2>/dev/null | grep -q ext4"
     depends_on: [create-lv]

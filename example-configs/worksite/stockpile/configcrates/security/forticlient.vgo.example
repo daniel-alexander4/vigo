@@ -11,7 +11,9 @@ resources:
   # Fortinet repo — Debian/Ubuntu
   - name: fortinet-gpg-key
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       curl -fsSL https://repo.fortinet.com/repo/forticlient/7.4/debian/DEB-GPG-KEY | gpg --dearmor -o /usr/share/keyrings/fortinet.gpg
     unless: "test -f /usr/share/keyrings/fortinet.gpg"
@@ -31,7 +33,9 @@ resources:
 
   - name: apt-update
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: apt-get update -qq
     onlyif: "test -f /etc/apt/sources.list.d/fortinet.list"
     when: "changed"

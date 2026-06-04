@@ -10,7 +10,9 @@ resources:
 
   - name: etckeeper-init
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: etckeeper init
     onlyif: "! test -d /etc/.git"
 
@@ -57,14 +59,18 @@ resources:
 
   - name: rsyslog-permissions
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: chmod 0640 /var/log/syslog /var/log/auth.log
     onlyif: "stat -c '%a' /var/log/syslog | grep -v 640"
 
   # A.12.5.1: Software installation restrictions
   - name: restrict-compiler-access
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "chmod 0755 /usr/bin/gcc /usr/bin/g++ /usr/bin/cc 2>/dev/null || true"
     command: chmod 0750 /usr/bin/gcc /usr/bin/g++ /usr/bin/cc 2>/dev/null || true
     onlyif: "test -f /usr/bin/gcc && stat -c '%a' /usr/bin/gcc | grep -q 755"
 

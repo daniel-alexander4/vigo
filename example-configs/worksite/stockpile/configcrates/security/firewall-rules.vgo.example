@@ -20,7 +20,9 @@ resources:
 
   - name: enable-ufw
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: 'echo "y" | ufw enable'
     onlyif: "ufw status | grep -q inactive"
     depends_on: [install-ufw]
@@ -55,7 +57,9 @@ resources:
   # ICMP uses a ufw application-level rule rather than a port
   - name: allow-icmp
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       ufw allow proto icmp from any to any
     onlyif: "! iptables -L ufw-user-input -n 2>/dev/null | grep -q icmp"
@@ -64,7 +68,9 @@ resources:
   # Default deny incoming — ufw's default policy for anything not explicitly allowed
   - name: deny-incoming-default
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "ufw default deny incoming"
     onlyif: "! ufw status verbose | grep -q 'Default: deny (incoming)'"
     depends_on: [allow-ssh, allow-http, allow-https, allow-icmp]

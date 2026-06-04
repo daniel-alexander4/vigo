@@ -10,14 +10,18 @@ vars:
 resources:
   - name: create-swap-file
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: 'fallocate -l {{ .Vars.swap_size_mb }}M {{ .Vars.swap_path }} && chmod 0600 {{ .Vars.swap_path }} && mkswap {{ .Vars.swap_path }}'
     unless: "test -f {{ .Vars.swap_path }}"
     when: "os_family('linux')"
 
   - name: activate-swap
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "swapoff {{ .Vars.swap_path }}"
     command: "swapon {{ .Vars.swap_path }}"
     unless: "swapon --show=NAME --noheadings | grep -q '^{{ .Vars.swap_path }}$'"
     depends_on: [create-swap-file]

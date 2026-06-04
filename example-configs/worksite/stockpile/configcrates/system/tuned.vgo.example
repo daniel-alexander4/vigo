@@ -23,7 +23,9 @@ resources:
 
   - name: apply-profile
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "tuned-adm off"
     command: "tuned-adm profile {{ .Vars.tuned_profile }}"
     unless: "tuned-adm active | grep -q 'Current active profile: {{ .Vars.tuned_profile }}'"
     depends_on: [tuned-service]

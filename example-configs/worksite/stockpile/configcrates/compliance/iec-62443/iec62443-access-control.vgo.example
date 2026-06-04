@@ -112,7 +112,9 @@ resources:
   # SR 1.8: Password aging
   - name: password-aging
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS {{.Vars.password_max_days}}/' /etc/login.defs
       sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS {{.Vars.password_min_days}}/' /etc/login.defs
@@ -138,7 +140,9 @@ resources:
   # SR 1.9: Lock inactive accounts
   - name: inactive-account-lock
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "useradd -D -f -1"
     command: useradd -D -f 35
     onlyif: "! useradd -D | grep -q 'INACTIVE=35'"
 
@@ -160,7 +164,9 @@ resources:
   # SR 2.2: Wireless use control — disable Wi-Fi on industrial systems
   - name: disable-wifi
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       if command -v nmcli >/dev/null 2>&1; then
         nmcli radio wifi off

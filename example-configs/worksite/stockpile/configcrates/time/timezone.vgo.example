@@ -8,5 +8,6 @@ vars:
 resources:
   - name: set-timezone
     type: timezone
-    # reversible — set `revert: true` to restore the value Vigo first captured on this node
+    # reversible — set 'revert: true' to restore the value Vigo first captured on this node.
+    #~ revert: false
     timezone: "UTC"

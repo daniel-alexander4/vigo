@@ -30,7 +30,9 @@ resources:
 
   - name: enable-mod-rewrite
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "a2dismod rewrite"
     command: a2enmod rewrite
     onlyif: "! apache2ctl -M 2>/dev/null | grep -q rewrite"
     when: "os_family('debian')"
@@ -39,7 +41,9 @@ resources:
 
   - name: enable-mod-ssl
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "a2dismod ssl"
     command: a2enmod ssl
     onlyif: "! apache2ctl -M 2>/dev/null | grep -q ssl_module"
     when: "os_family('debian')"

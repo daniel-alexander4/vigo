@@ -42,7 +42,9 @@ resources:
 
   - name: reload-auditd
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: augenrules --load
     onlyif: "test -f /etc/audit/rules.d/hitrust.rules"
     when: "changed"

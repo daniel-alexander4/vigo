@@ -9,7 +9,9 @@ resources:
 
   - name: virtualbox-repo-key-debian
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "curl -fsSL https://www.virtualbox.org/download/oracle_vbox_2016.asc | gpg --dearmor -o /etc/apt/keyrings/oracle-virtualbox.gpg && chmod a+r /etc/apt/keyrings/oracle-virtualbox.gpg"
     unless: "test -f /etc/apt/keyrings/oracle-virtualbox.gpg"
     when: "has_display() and os_family('debian')"
@@ -63,7 +65,9 @@ resources:
 
   - name: install-virtualbox-windows
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       $installer = "$env:TEMP\VirtualBox-Win.exe"
       Invoke-WebRequest -Uri "https://download.virtualbox.org/virtualbox/{{ .Vars.virtualbox_version }}.0/VirtualBox-{{ .Vars.virtualbox_version }}.0-Win.exe" -OutFile $installer
@@ -74,7 +78,9 @@ resources:
 
   - name: install-ext-pack-windows
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       $vboxVer = (& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" --version) -replace 'r.*',''
       $extUrl = "https://download.virtualbox.org/virtualbox/$vboxVer/Oracle_VirtualBox_Extension_Pack-$vboxVer.vbox-extpack"
@@ -89,7 +95,9 @@ resources:
 
   - name: install-ext-pack-linux
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       VBOX_VER=$(VBoxManage --version | sed 's/r.*//')
       EXT_URL="https://download.virtualbox.org/virtualbox/${VBOX_VER}/Oracle_VirtualBox_Extension_Pack-${VBOX_VER}.vbox-extpack"
@@ -104,7 +112,9 @@ resources:
 
   - name: vboxdrv-setup
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "/sbin/vboxconfig"
     unless: "lsmod | grep -q vboxdrv"
     depends_on: [install-virtualbox-debian, install-virtualbox-rhel]

@@ -50,7 +50,9 @@ resources:
 
   - name: apply-sysctl
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: sysctl --system
     onlyif: "test -f /etc/sysctl.d/99-iec62443-availability.conf"
     when: "changed"
@@ -89,7 +91,9 @@ resources:
   # SR 7.3/7.4: System backup and recovery
   - name: backup-directory
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: mkdir -p {{.Vars.backup_dir}} && chmod 0700 {{.Vars.backup_dir}}
     unless: "test -d {{.Vars.backup_dir}}"
 
@@ -165,7 +169,9 @@ resources:
   # SR 4.1: Information confidentiality — restrict world-readable configs
   - name: restrict-shadow-perms
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: chmod 0640 /etc/shadow && chown root:shadow /etc/shadow
     onlyif: "! stat -c '%a' /etc/shadow | grep -q '640'"
 

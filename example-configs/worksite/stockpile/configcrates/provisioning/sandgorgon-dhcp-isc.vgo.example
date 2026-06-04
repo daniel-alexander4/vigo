@@ -63,14 +63,18 @@ resources:
   #~ Download iPXE BIOS binary
   - name: ipxe-bios-binary
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "curl -sSfL -o {{ .Vars.tftp_root }}/undionly.kpxe https://boot.ipxe.org/undionly.kpxe"
     onlyif: "test ! -f {{ .Vars.tftp_root }}/undionly.kpxe"
 
   #~ Download iPXE UEFI binary
   - name: ipxe-uefi-binary
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: "curl -sSfL -o {{ .Vars.tftp_root }}/ipxe.efi https://boot.ipxe.org/ipxe.efi"
     onlyif: "test ! -f {{ .Vars.tftp_root }}/ipxe.efi"
 

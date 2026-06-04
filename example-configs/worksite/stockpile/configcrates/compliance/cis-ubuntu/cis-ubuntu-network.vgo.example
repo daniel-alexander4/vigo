@@ -90,7 +90,9 @@ resources:
 
   - name: apply-sysctl
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: sysctl --system
     onlyif: "test -f /etc/sysctl.d/60-cis-network.conf"
     when: "changed"
@@ -104,14 +106,18 @@ resources:
 
   - name: 3.4.2-ufw-default-deny
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: ufw default deny incoming && ufw default allow outgoing
     onlyif: "ufw status verbose | grep -q 'Status: inactive' || ! ufw status verbose | grep -q 'Default: deny (incoming)'"
     depends_on: [3.4.1-ufw-installed]
 
   - name: 3.4.3-ufw-loopback
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: |
       ufw allow in on lo
       ufw allow out on lo
@@ -122,7 +128,9 @@ resources:
 
   - name: 3.4.4-ufw-enable
     type: exec
-    # reversible — declare `on_revert: "<undo command>"` and set `revert: true` to undo this action
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: "ufw disable"
     command: echo "y" | ufw enable
     onlyif: "ufw status | grep -q 'Status: inactive'"
     depends_on: [3.4.2-ufw-default-deny, 3.4.3-ufw-loopback]
