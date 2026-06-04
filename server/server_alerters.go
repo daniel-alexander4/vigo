@@ -463,13 +463,11 @@ func (s *Server) complianceCheckTick(ctx context.Context, threshold int, wasBelo
 
 	// Collect active envoy IDs.
 	var ids []string
-	envoyMap := make(map[string]db.Envoy)
 	for _, t := range envoys {
 		if t.Revoked != 0 {
 			continue
 		}
 		ids = append(ids, t.ID)
-		envoyMap[t.ID] = t
 	}
 	if len(ids) == 0 {
 		return wasBelow

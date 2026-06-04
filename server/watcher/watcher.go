@@ -118,7 +118,7 @@ const maxBackoffMultiplier = 32
 // exponentially (2^failures * pollInterval, capped at 32x) to avoid hammering
 // an unreachable provider. Blocks until the context is cancelled.
 func (w *Watcher) Run(ctx context.Context) error {
-	daemon.Guard("secret-watcher", func() { w.initVersions(ctx) })
+	w.initVersions(ctx)
 
 	slog.Info("secret watcher started",
 		"paths", w.watchPaths,
