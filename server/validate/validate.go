@@ -193,7 +193,7 @@ var typeConstraints = map[string]TypeConstraints{
 	"npm":           {Required: []string{"package"}},
 	// `package`: Required guards against missing scrape; Supplemental
 	// covers variable-key reads + runner-injected values the gen can't see.
-	"package":        {Required: []string{"package"}, Supplemental: []string{"package", "name", "version", "allow_downgrade", "lock_version", "purge", "post_cleanup", "update_cache"}},
+	"package":        {Required: []string{"package"}, Supplemental: []string{"package", "name", "version", "allow_downgrade", "lock_version", "purge", "post_cleanup", "update_cache", "flags", "timeout", "retries", "retry_delay"}},
 	"pip":            {Required: []string{"package"}, AbsPath: []string{"virtualenv"}},
 	"process":        {Required: []string{"process"}},
 	"replace":        {Required: []string{"target_path", "match_pattern", "replacement"}, AbsPath: []string{"target_path"}},

@@ -140,6 +140,30 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 	}
 }
 
+func TestPackageOptionalParams_AreClean(t *testing.T) {
+	// The generic package executor (agent/src/runner/mod.rs) reads these
+	// params, but the schema generator can't scrape mod.rs, so they live in
+	// the hand-maintained Supplemental list. Guard that a package resource
+	// setting all of them passes without an unknown-attribute error.
+	mod := Configcrate{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "nginx", Type: "package", Attributes: map[string]any{
+				"package":     "nginx",
+				"state":       "present",
+				"flags":       "--no-install-recommends",
+				"timeout":     "120",
+				"retries":     "3",
+				"retry_delay": "5",
+			}},
+		},
+	}
+	findings := ValidateConfigcrate(mod)
+	if HasErrors(findings) {
+		t.Errorf("package with flags/timeout/retries/retry_delay should be clean, got: %s", FormatFindings(findings))
+	}
+}
+
 func TestFileValidation_MissingRequiredFields(t *testing.T) {
 	mod := Configcrate{
 		Name: "test-mod",
