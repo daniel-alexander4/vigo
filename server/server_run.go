@@ -82,7 +82,7 @@ func (s *Server) Run(ctx context.Context) error {
 // loop. The enforcer was wired with a stop-service callback during
 // NewServer that calls s.cancel on terminal license failure.
 func (s *Server) startLicenseEnforcement(ctx context.Context) {
-	go s.enforcer.Run(ctx)
+	safeGo("license-enforcer", func() { s.enforcer.Run(ctx) })
 
 	// Peer replication: gRPC registration migrated into NewServer. The
 	// primary-side push goroutine lives here because it depends on the
@@ -95,11 +95,11 @@ func (s *Server) startLicenseEnforcement(ctx context.Context) {
 		if peerRole == "primary" {
 			primary := peer.NewPrimary(s.serverRoot, s.cfg.Peers.Servers, s.peerTLS)
 			s.peerPrimary = primary
-			go func() {
+			safeGo("peer-primary", func() {
 				if err := primary.Start(ctx); err != nil && ctx.Err() == nil {
 					slog.Error("peer primary error", "error", err)
 				}
-			}()
+			})
 		}
 	}
 
@@ -111,9 +111,9 @@ func (s *Server) startLicenseEnforcement(ctx context.Context) {
 // interval.
 func (s *Server) startAsyncFlushers(ctx context.Context) {
 	stateFlusher := fleet.NewStateFlusher(s.fleetIndex, s.queries, s.metrics)
-	go stateFlusher.Start(ctx, s.lastSeenFlush, 0)
-	go s.runBatcher.Start(ctx, s.lastSeenFlush, s.lastSeenFlush/3)
-	go s.traitsBatch.Start(ctx, s.lastSeenFlush, 2*s.lastSeenFlush/3)
+	safeGo("state-flusher", func() { stateFlusher.Start(ctx, s.lastSeenFlush, 0) })
+	safeGo("run-batcher", func() { s.runBatcher.Start(ctx, s.lastSeenFlush, s.lastSeenFlush/3) })
+	safeGo("traits-batcher", func() { s.traitsBatch.Start(ctx, s.lastSeenFlush, 2*s.lastSeenFlush/3) })
 }
 
 // startTicketsRotation rotates TLS session-ticket keys daily on the
@@ -125,7 +125,7 @@ func (s *Server) startTicketsRotation(ctx context.Context) {
 	if s.ticketsStore == nil {
 		return
 	}
-	go func() {
+	safeGo("tickets-rotation", func() {
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
 		for {
@@ -140,7 +140,7 @@ func (s *Server) startTicketsRotation(ctx context.Context) {
 				slog.Info("tls ticket-key rotated", "keys", len(s.ticketsStore.Keys()))
 			}
 		}
-	}()
+	})
 }
 
 // startRetentionAndBackup starts the task-run timeout reaper, the
@@ -148,12 +148,12 @@ func (s *Server) startTicketsRotation(ctx context.Context) {
 // Litestream WAL replicator.
 func (s *Server) startRetentionAndBackup(ctx context.Context) {
 	taskReaper := task.NewReaper(s.queries)
-	go taskReaper.Start(ctx)
+	safeGo("task-reaper", func() { taskReaper.Start(ctx) })
 
 	retention := parseRetention(s.cfg.Database.Retention)
 	retentionPruner := db.NewRetentionPruner(s.queries, s.db, retention)
 	retentionPruner.SetPostgres(s.isPostgres)
-	go retentionPruner.Start(ctx, 24*time.Hour)
+	safeGo("retention-pruner", func() { retentionPruner.Start(ctx, 24*time.Hour) })
 	slog.Info("retention pruner enabled", "retention", retention, "interval", "24h")
 
 	if !s.isPostgres && s.cfg.Backup.URL != "" {
@@ -168,11 +168,11 @@ func (s *Server) startRetentionAndBackup(ctx context.Context) {
 			Retention:       s.cfg.Backup.Retention,
 			SyncInterval:    s.cfg.Backup.SyncInterval,
 		})
-		go func() {
+		safeGo("litestream-replicator", func() {
 			if err := replicator.Start(ctx); err != nil && ctx.Err() == nil {
 				slog.Error("litestream replication failed", "error", err)
 			}
-		}()
+		})
 	}
 }
 
@@ -201,7 +201,7 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 	// package level via -ldflags at build time.
 	s.metrics.BuildInfo.WithLabelValues(version).Set(1)
 	serverStartTime := time.Now()
-	go func() {
+	safeGo("uptime-tracker", func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -212,7 +212,7 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 			case <-ticker.C:
 			}
 		}
-	}()
+	})
 
 	// Start metrics collector in background.
 	var fleetSource metrics.FleetSource
@@ -222,13 +222,13 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 		swarmSource = newMetricsSwarmAdapter(s)
 	}
 	metricsCollector := metrics.NewCollector(s.queries, s.db, fleetSource, swarmSource, s.metrics, s.baseInterval, s.offlineThreshold)
-	go metricsCollector.Run(ctx, s.metricsInterval)
+	safeGo("metrics-collector", func() { metricsCollector.Run(ctx, s.metricsInterval) })
 
 	// Start stale envoy checker — fires envoy.stale events on transition.
-	go s.runStaleChecker(ctx)
+	safeGo("stale-checker", func() { s.runStaleChecker(ctx) })
 
 	// Expire any overdue compliance waivers daily.
-	go func() {
+	safeGo("waiver-expirer", func() {
 		for {
 			_ = s.queries.ExpireComplianceWaivers(ctx)
 			select {
@@ -237,7 +237,7 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 			case <-time.After(24 * time.Hour):
 			}
 		}
-	}()
+	})
 
 	// Start secret rotation watcher.
 	if s.cfg.Watcher.Enabled {
@@ -259,11 +259,11 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 					Details:   details,
 				})
 			})
-			go func() {
+			safeGo("secret-watcher", func() {
 				if err := w.Run(ctx); err != nil && ctx.Err() == nil {
 					slog.Error("secret watcher error", "error", err)
 				}
-			}()
+			})
 		} else {
 			slog.Warn("secret watcher enabled but provider does not support versioning")
 		}
@@ -284,17 +284,17 @@ func (s *Server) startConvergenceAlerters(ctx context.Context) {
 	// Warm + periodically re-anchor the audit-chain verifier (boot full
 	// re-verify after any downtime, then daily). Always on — independent of
 	// the compliance threshold below.
-	go s.runAuditReverify(ctx)
+	safeGo("audit-reverify", func() { s.runAuditReverify(ctx) })
 
 	// Start framework-aware drift alerter (background, not hot path).
 	// Scans recent runs every 5 minutes, enriches drift events with framework/control context.
-	go s.runFrameworkDriftAlerter(ctx)
+	safeGo("framework-drift-alerter", func() { s.runFrameworkDriftAlerter(ctx) })
 
 	// Start compliance threshold checker (threshold from checkin config, default 0 = disabled).
 	complianceThreshold := s.cfg.CheckIn.ComplianceThreshold
 	if complianceThreshold > 0 {
-		go s.runComplianceChecker(ctx, complianceThreshold)
-		go s.runSecurityPostureSnapshot(ctx)
+		safeGo("compliance-checker", func() { s.runComplianceChecker(ctx, complianceThreshold) })
+		safeGo("security-posture-snapshot", func() { s.runSecurityPostureSnapshot(ctx) })
 	}
 }
 
@@ -304,7 +304,7 @@ func (s *Server) startConvergenceAlerters(ctx context.Context) {
 // fresh boot.
 func (s *Server) startSnapshotters(ctx context.Context) {
 	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer + DB).
-	go func() {
+	safeGo("convergence-snapshot", func() {
 		// Take an initial snapshot immediately so the sparkline isn't empty on startup.
 		s.fleetIndex.SnapshotConvergence()
 		s.persistConvergenceSnapshot(ctx)
@@ -319,10 +319,10 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 				s.persistConvergenceSnapshot(ctx)
 			}
 		}
-	}()
+	})
 
 	// Start daily risk posture snapshotting.
-	go func() {
+	safeGo("risk-snapshot", func() {
 		s.persistRiskSnapshot(ctx)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -334,10 +334,10 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 				s.persistRiskSnapshot(ctx)
 			}
 		}
-	}()
+	})
 
 	// Start MTTR stats computation (daily, on same cadence as compliance snapshots).
-	go func() {
+	safeGo("mttr-stats", func() {
 		s.computeAndStoreMTTR(ctx)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -349,10 +349,10 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 				s.computeAndStoreMTTR(ctx)
 			}
 		}
-	}()
+	})
 
 	// Start daily standards compliance snapshotting through the unified scorer.
-	go func() {
+	safeGo("compliance-snapshot", func() {
 		s.reportHandler.PersistComplianceSnapshot(ctx)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -364,14 +364,14 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 				s.reportHandler.PersistComplianceSnapshot(ctx)
 			}
 		}
-	}()
+	})
 }
 
 // startGRC starts the GRC evidence pusher's loop. No-op if no GRC
 // integrations are configured.
 func (s *Server) startGRC(ctx context.Context) {
 	if s.grcPusher != nil {
-		go s.grcPusher.Start(ctx)
+		safeGo("grc-pusher", func() { s.grcPusher.Start(ctx) })
 	}
 }
 
@@ -382,8 +382,10 @@ func (s *Server) startNVDEnricher(ctx context.Context) {
 	if s.nvdEnricher == nil {
 		return
 	}
-	go s.nvdEnricher.Run(ctx, func() []string {
-		return collectFleetCVEIDs(s.fleetIndex)
+	safeGo("nvd-enricher", func() {
+		s.nvdEnricher.Run(ctx, func() []string {
+			return collectFleetCVEIDs(s.fleetIndex)
+		})
 	})
 }
 
@@ -396,11 +398,11 @@ func (s *Server) startStacksWatcher(ctx context.Context) {
 		return
 	}
 	w := s.stacksWatcher
-	go func() {
+	safeGo("stacks-watcher", func() {
 		if err := w.Run(ctx); err != nil {
 			slog.Warn("stacks watcher exited", "error", err)
 		}
-	}()
+	})
 }
 
 // startAIWarmup pre-warms the Ollama model so the first user request
@@ -408,7 +410,7 @@ func (s *Server) startStacksWatcher(ctx context.Context) {
 // providers.
 func (s *Server) startAIWarmup() {
 	if ollamaP, ok := s.aiProvider.(*vigoai.OllamaProvider); ok {
-		go ollamaP.WarmModel(s.cfg.AI.Model)
+		safeGo("ai-warmup", func() { ollamaP.WarmModel(s.cfg.AI.Model) })
 	}
 }
 
@@ -420,13 +422,13 @@ func (s *Server) startSwarm(ctx context.Context) {
 	if !s.swarmEnabled {
 		return
 	}
-	go s.runCuratorFeed(ctx, 5*time.Minute)
+	safeGo("curator-feed", func() { s.runCuratorFeed(ctx, 5*time.Minute) })
 
 	swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
 	swarmPruner.SetTracker(s.peerTracker)
 	swarmPruner.SetManifestStore(s.manifestStore)
 	swarmPruner.SetLivenessTTL(parseLivenessTTL(s.cfg.Swarm.ManifestLivenessTTL))
-	go swarmPruner.Start(ctx, 24*time.Hour)
+	safeGo("swarm-pruner", func() { swarmPruner.Start(ctx, 24*time.Hour) })
 }
 
 // startHTTPServer starts the REST + UI gateway. Errors are logged from
@@ -465,5 +467,5 @@ func (s *Server) startSpannerGossip(ctx context.Context) {
 	if s.spannerGossip == nil {
 		return
 	}
-	go s.spannerGossip.Run(ctx)
+	safeGo("spanner-gossip", func() { s.spannerGossip.Run(ctx) })
 }
