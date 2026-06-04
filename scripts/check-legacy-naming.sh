@@ -95,6 +95,15 @@ TOKENS=(
   '\bModuleFilter\b'
   '\bTopFailedModule\b'
   '\bvigo_module_actions\b'
+  # --- 0.73.0 stockpile -> stacks collapse. The operator config-tree
+  #     directory layer was removed (operators now edit /srv/vigo/stacks
+  #     directly), and the word "stockpile" is fully retired: the gitback
+  #     project handle, the `vigocli config stockpile` / `spanner stockpile`
+  #     verbs, and the server/stockpilewatch package all became "stacks".
+  #     The path-name scan below also catches a `stockpile/` directory name.
+  '\bstockpile\b'
+  '\bStockpile\b'
+  '\bSTOCKPILE\b'
 )
 
 # Legacy paths. These would silently break runtime because the new
