@@ -222,26 +222,12 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 func TestEveryTraitHasDocPage(t *testing.T) {
 	root := repoRoot(t)
 
-	modPath := filepath.Join(root, "agent", "src", "traits", "mod.rs")
-	data, err := os.ReadFile(modPath)
-	if err != nil {
-		t.Fatalf("reading traits/mod.rs: %v", err)
-	}
-
-	// Extract the canonical collector name strings from the from_name
-	// match arms ("name" => Some(Self::Variant)). The string is the
-	// authoritative name (CamelCase enum variants don't map 1:1 to the
-	// snake_case page basenames), so we key off the same table the agent
-	// uses to resolve a requested collector.
-	armRe := regexp.MustCompile(`"([a-z_]+)"\s*=>\s*Some\(Self::`)
-	seen := map[string]bool{}
-	for _, m := range armRe.FindAllStringSubmatch(string(data), -1) {
-		seen[m[1]] = true
-	}
-
-	if len(seen) == 0 {
-		t.Fatal("found no collector names in traits/mod.rs from_name")
-	}
+	// Canonical collector name strings from the from_name match arms
+	// ("name" => Some(Self::Variant)) — shared deriver, same table the agent
+	// uses to resolve a requested collector and the numbers-of-record parity
+	// test counts. The string is authoritative (CamelCase enum variants don't
+	// map 1:1 to the snake_case page basenames).
+	seen := traitCollectorNames(t, root)
 
 	// Some collectors ship a base page plus per-OS supplements (e.g.
 	// os.md + os_windows.md). Accept either the exact name or any
@@ -806,30 +792,12 @@ func TestNoSecretsInLogs(t *testing.T) {
 func TestExecutorCountConsistent(t *testing.T) {
 	root := repoRoot(t)
 
-	// Count unique executor type names from runner/mod.rs.
-	modPath := filepath.Join(root, "agent", "src", "runner", "mod.rs")
-	data, err := os.ReadFile(modPath)
-	if err != nil {
-		t.Fatalf("reading runner/mod.rs: %v", err)
-	}
-
-	insertRe := regexp.MustCompile(`executors\.insert\("([^"]+)"`)
-	seen := map[string]bool{}
-	for _, m := range insertRe.FindAllStringSubmatch(string(data), -1) {
-		name := m[1]
-		if name == "mock" {
-			continue
-		}
-		seen[name] = true
-	}
-
-	// "custom" is a dynamic executor type loaded at runtime (not via
-	// executors.insert), but it is a first-class type with its own doc page.
-	// Include it in the count if it's referenced in the source.
-	if strings.Contains(string(data), `"custom"`) {
-		seen["custom"] = true
-	}
-
+	// Built-in executor types from runner/mod.rs (shared deriver — same set
+	// the numbers-of-record parity test reads), plus the runtime-loaded
+	// `custom` type, which is a first-class type with its own doc page but is
+	// not registered via executors.insert.
+	seen := builtinExecutorTypes(t, root)
+	seen["custom"] = true
 	codeCount := len(seen)
 
 	// Check docs/_index.md for the claimed count.
