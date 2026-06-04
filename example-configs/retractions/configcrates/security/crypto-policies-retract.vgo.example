@@ -1,9 +1,0 @@
-name: crypto-policies-retract
-description: Retract crypto-policies. Restores DEFAULT.
-
-resources:
-  - name: reset-policy
-    type: exec
-    command: "update-crypto-policies --set DEFAULT"
-    unless: "update-crypto-policies --show | grep -q '^DEFAULT$'"
-    when: "os_family('rhel')"

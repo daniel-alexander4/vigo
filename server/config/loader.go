@@ -895,7 +895,7 @@ type EnvoyWaiverTraceEntry struct {
 }
 
 // ConfigcrateComplianceFileEntry surfaces one modules-tree compliance.vgo file in
-// the trace: the stockpile-relative path, the compliance claims it
+// the trace: the stacks-relative path, the compliance claims it
 // contributes, and the envoy's effective modules whose SourceFile falls
 // under the file's directory. The trace only lists files that cover at
 // least one of the envoy's modules.
@@ -2379,7 +2379,7 @@ func globContains(pattern, query string) bool {
 // usercrates/, templates/, tasks/, workflows/, plus the assignment-tree
 // files (roles.vgo, envoys.vgo hostcrates, common.vgo, waivers.vgo,
 // environments.vgo) and directory-inherited compliance.vgo claim files.
-// For the editable side cs.dir points at /srv/vigo/stacks/stockpile/;
+// For the editable side cs.dir points at /srv/vigo/stacks/;
 // for the published side it points at /srv/vigo/stacks/.live/. The
 // loader is indifferent — both layouts are flat.
 func (cs *ConfigStore) contentDir() string { return cs.dir }
@@ -2422,7 +2422,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	// published .live/ directory. Publish also runs this check, but
 	// the loader re-checks defensively: a violation here means we refuse
 	// the reload and keep the previous good config live.
-	if err := validateStockpileLayout(cs.contentDir()); err != nil {
+	if err := validateStacksLayout(cs.contentDir()); err != nil {
 		return fmt.Errorf("config layout: %w", err)
 	}
 
@@ -2436,7 +2436,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	// Discover usercrates — structurally identical to modules but living
-	// under stockpile/**/usercrates/ directories. Merged into moduleDefs so
+	// under stacks/**/usercrates/ directories. Merged into moduleDefs so
 	// resolveEntry looks them up the same way. Name collisions with
 	// regular modules are fatal: usercrates share the same name namespace
 	// because they resolve through the same module-ref path.
@@ -2452,7 +2452,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		moduleDefs[name] = def
 	}
 
-	// Walk the stockpile subtree for compliance.vgo files and union their
+	// Walk the stacks subtree for compliance.vgo files and union their
 	// claims into each module's effective Compliance block. One walk covers
 	// the whole tree — configcrates/, usercrates/, and the rest — so usercrate
 	// defs receive claim inheritance through the same byDir the module defs
@@ -2465,7 +2465,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	applyModuleComplianceInheritance(moduleDefs, moduleComplianceByDir)
 	applyModuleComplianceInheritance(usercrateDefs, moduleComplianceByDir)
 
-	// Load roles from stockpile/roles.vgo (single fleet-wide file).
+	// Load roles from stacks/roles.vgo (single fleet-wide file).
 	roleDefs, err := loadRolesFile(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading roles: %w", err)
@@ -2476,9 +2476,9 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading envoys: %w", err)
 	}
 
-	// Waivers live in stockpile/**/waivers.vgo — distinct filename from
-	// stockpile's compliance.vgo claims (mixed-keys check enforces this).
-	waiverMap, waiverFiles, err := loadStockpileWaivers(cs.contentDir())
+	// Waivers live in stacks/**/waivers.vgo — distinct filename from
+	// stacks's compliance.vgo claims (mixed-keys check enforces this).
+	waiverMap, waiverFiles, err := loadStacksWaivers(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading waivers: %w", err)
 	}
@@ -2571,7 +2571,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	// the def out of usercrates/ (it became dead drop-in code on the
 	// 0.54.0 inert-until-included flip).
 	if unref := unreferencedUsercrates(moduleDefs, entries); len(unref) > 0 {
-		slog.Warn("unreferenced usercrates — defined under stockpile/**/usercrates/ but not included by any envoy",
+		slog.Warn("unreferenced usercrates — defined under stacks/**/usercrates/ but not included by any envoy",
 			"count", len(unref),
 			"names", unref)
 	}
@@ -2626,7 +2626,7 @@ func unreferencedUsercrates(moduleDefs map[string]*ConfigcrateDefinition, entrie
 	return unref
 }
 
-// usercrateSource returns the def's SourceFile (stockpile-relative
+// usercrateSource returns the def's SourceFile (stacks-relative
 // usercrates/<file>.vgo path) for a usercrate name, falling back to a
 // synthesized "usercrates/<name>.vgo" if the def isn't registered. Used
 // by the trace builder to attribute ConfigcrateSources to the def file rather
@@ -3377,7 +3377,7 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 			})
 		}
 
-		// Record source file path relative to stockpile root for unused-module reporting.
+		// Record source file path relative to stacks root for unused-module reporting.
 		if rel, err := filepath.Rel(filepath.Dir(dir), path); err == nil {
 			def.SourceFile = filepath.ToSlash(rel)
 		}
@@ -3390,7 +3390,7 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 	return defs, nil
 }
 
-// loadUsercrateDefs walks the stockpile tree looking for usercrates/
+// loadUsercrateDefs walks the stacks tree looking for usercrates/
 // subdirectories at any depth. Every `.vgo` file inside a usercrates/
 // dir is parsed as a module definition with Kind = ConfigcrateKindUsercrate.
 // Usercrates are structurally modules — same YAML shape — distinguished
@@ -3398,18 +3398,18 @@ func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDef
 // (carrier-level `usercrates: [...]` is the only path to activate one).
 //
 // Returns defs: name → ConfigcrateDefinition. SourceFile is the
-// stockpile-relative path (e.g., "usercrates/dan.vgo" or
+// stacks-relative path (e.g., "usercrates/dan.vgo" or
 // "customerA/usercrates/alice.vgo").
-func loadUsercrateDefs(stockpileDir string) (map[string]*ConfigcrateDefinition, error) {
+func loadUsercrateDefs(stacksDir string) (map[string]*ConfigcrateDefinition, error) {
 	defs := make(map[string]*ConfigcrateDefinition)
 
-	walkErr := filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(stacksDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		// Skip known-not-usercrates subtrees to save walks.
 		if d.IsDir() {
-			rel, _ := filepath.Rel(stockpileDir, path)
+			rel, _ := filepath.Rel(stacksDir, path)
 			switch rel {
 			case "configcrates", "templates", "examples", ".live":
 				return filepath.SkipDir
@@ -3428,7 +3428,7 @@ func loadUsercrateDefs(stockpileDir string) (map[string]*ConfigcrateDefinition, 
 		// Only files inside a usercrates/ directory are considered
 		// usercrate definitions. The separator checks keep substring
 		// matches ("my-usercrates-notes/") from false-positiving.
-		rel, relErr := filepath.Rel(stockpileDir, path)
+		rel, relErr := filepath.Rel(stacksDir, path)
 		if relErr != nil {
 			return nil
 		}
@@ -3716,17 +3716,17 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 	return chain
 }
 
-// loadStockpileWaivers discovers waivers.vgo files at each
-// stockpile-tree directory level and merges waiver entries into a flat
+// loadStacksWaivers discovers waivers.vgo files at each
+// stacks-tree directory level and merges waiver entries into a flat
 // standard → control_id → WaiverEntry map. Expired waivers are excluded.
 //
-// Canonical-filename rule: waivers live in stockpile/**/waivers.vgo
-// ONLY. Compliance claims live in stockpile/**/compliance.vgo ONLY —
+// Canonical-filename rule: waivers live in stacks/**/waivers.vgo
+// ONLY. Compliance claims live in stacks/**/compliance.vgo ONLY —
 // picked up separately by loadComplianceConfigs. A compliance:
 // block in a waivers.vgo is a fatal validator error at publish time
-// (caught by validateStockpileLayout); at load time it's ignored with a
+// (caught by validateStacksLayout); at load time it's ignored with a
 // slog.Warn.
-func loadStockpileWaivers(dir string) (map[string]map[string]*WaiverEntry, []EnvoyWaiverFileEntry, error) {
+func loadStacksWaivers(dir string) (map[string]map[string]*WaiverEntry, []EnvoyWaiverFileEntry, error) {
 	merged := make(map[string]map[string]*WaiverEntry)
 	var perFile []EnvoyWaiverFileEntry
 
@@ -3811,7 +3811,7 @@ func loadStockpileWaivers(dir string) (map[string]map[string]*WaiverEntry, []Env
 }
 
 // ConfigcrateComplianceSource records a single compliance.vgo file under the
-// modules tree: its stockpile-relative path and the claims it declared.
+// modules tree: its stacks-relative path and the claims it declared.
 // Used for trace display and debugging.
 type ConfigcrateComplianceSource struct {
 	RelPath    string              // e.g., "modules/users/compliance.vgo"
@@ -3844,24 +3844,24 @@ func validateComplianceTopLevelKeys(data []byte, relPath string) error {
 }
 
 // loadComplianceConfigs is the single walker for compliance.vgo claim files.
-// It descends the entire stockpile tree — configcrates/, usercrates/, everything —
+// It descends the entire stacks tree — configcrates/, usercrates/, everything —
 // and collects every compliance.vgo exactly once (do not add a parallel
 // per-subtree walker; this one already covers them). Returns a map keyed by
-// the file's parent directory (stockpile-relative, forward slashes) holding
+// the file's parent directory (stacks-relative, forward slashes) holding
 // the framework → control-IDs map that file declares, plus a flat list of
 // per-file source entries for trace display.
 //
-// Waivers declared in a stockpile-tree compliance.vgo are ignored (modlint
+// Waivers declared in a stacks-tree compliance.vgo are ignored (modlint
 // flags them as a warning); this loader only harvests the compliance: block.
-func loadComplianceConfigs(stockpileDir string) (map[string]map[string][]string, []ConfigcrateComplianceSource, error) {
+func loadComplianceConfigs(stacksDir string) (map[string]map[string][]string, []ConfigcrateComplianceSource, error) {
 	byDir := make(map[string]map[string][]string)
 	var sources []ConfigcrateComplianceSource
 
-	if _, err := os.Stat(stockpileDir); os.IsNotExist(err) {
+	if _, err := os.Stat(stacksDir); os.IsNotExist(err) {
 		return byDir, sources, nil
 	}
 
-	err := filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(stacksDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil
@@ -3878,7 +3878,7 @@ func loadComplianceConfigs(stockpileDir string) (map[string]map[string][]string,
 		}
 		data = sanitizeYAML(data)
 
-		rel, _ := filepath.Rel(stockpileDir, path)
+		rel, _ := filepath.Rel(stacksDir, path)
 		if err := validateComplianceTopLevelKeys(data, filepath.ToSlash(rel)); err != nil {
 			return err
 		}
@@ -3971,7 +3971,7 @@ func applyModuleComplianceInheritance(
 		if def.SourceFile == "" {
 			continue
 		}
-		// SourceFile is stockpile-relative (e.g. "configcrates/users/dan.vgo").
+		// SourceFile is stacks-relative (e.g. "configcrates/users/dan.vgo").
 		dir := filepath.ToSlash(filepath.Dir(def.SourceFile))
 
 		// Walk from the module's directory up to (and including) "configcrates".
@@ -4175,7 +4175,7 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 			// Soft-warn when a match block carries a long inline modules
 			// list. The canonical path is to define a role with those
 			// modules and assign the role by name; long inline lists are
-			// how stockpiles grow one-off configurations that belong in a
+			// how stackss grow one-off configurations that belong in a
 			// standard location. Threshold of 4 permits "one envoy gets a
 			// configcrate or two beyond its role" without forcing role ceremony
 			// on genuinely small exceptions.
@@ -4430,7 +4430,7 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 
 			// Record the reference so reachability analysis can tell
 			// which template files are live. Path is normalized to
-			// forward slashes and treated as stockpile-relative.
+			// forward slashes and treated as stacks-relative.
 			def.TemplateSources = append(def.TemplateSources, filepath.ToSlash(sourcePath))
 		}
 	}

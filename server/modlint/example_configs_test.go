@@ -20,9 +20,7 @@ import (
 // dry-run can't ship again silently.
 //
 // Roots walked:
-//   - example-configs/worksite/stockpile  (modules + usercrates + common.vgo + hostcrates)
-//   - example-configs/retractions         (paired retract templates)
-//   - example-configs/worksite/scaffolding (roles.vgo + scaffolding common.vgo)
+//   - example-configs/stacks  (configcrates + usercrates + roles.vgo + common.vgo + hostcrates)
 //
 // Dispatch matches server/publish/publish.go: scaffolding-file basenames
 // route to LintHostcrate / LintRolesFile / LintWaiversFile /
@@ -37,9 +35,7 @@ func TestExampleModulesLintClean(t *testing.T) {
 	failures := map[string][]string{}
 
 	subdirs := []string{
-		"worksite/stockpile",
-		"retractions",
-		"worksite/scaffolding",
+		"stacks",
 	}
 	for _, sub := range subdirs {
 		base := filepath.Join(root, sub)

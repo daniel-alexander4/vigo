@@ -12,9 +12,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// validateStockpileLayout enforces filename-and-content rules for the
-// stockpile tree at load time. Intentional duplicate of
-// server/publish.validateStockpileLayout — config/ can't import publish/
+// validateStacksLayout enforces filename-and-content rules for the
+// stacks tree at load time. Intentional duplicate of
+// server/publish.validateStacksLayout — config/ can't import publish/
 // (would be a cycle) and the rule set is small enough that a direct
 // copy is cheaper than introducing a shared package.
 //
@@ -34,33 +34,33 @@ import (
 //     resources:/name:/vars:) not named compliance.vgo —
 //     stray-filename rejection. Module definitions carrying their own
 //     compliance: block are not affected.
-func validateStockpileLayout(stockpileDir string) error {
-	if _, err := os.Stat(stockpileDir); err != nil {
-		// stockpile doesn't exist yet (fresh install); nothing to check.
+func validateStacksLayout(stacksDir string) error {
+	if _, err := os.Stat(stacksDir); err != nil {
+		// stacks doesn't exist yet (fresh install); nothing to check.
 		return nil
 	}
 
-	problems := scanStockpileLayout(stockpileDir)
+	problems := scanStacksLayout(stacksDir)
 	if len(problems) == 0 {
 		return nil
 	}
-	return fmt.Errorf("stockpile layout violations:\n  - %s", strings.Join(problems, "\n  - "))
+	return fmt.Errorf("stacks layout violations:\n  - %s", strings.Join(problems, "\n  - "))
 }
 
-func scanStockpileLayout(stockpileDir string) []string {
+func scanStacksLayout(stacksDir string) []string {
 	var problems []string
-	_ = filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(stacksDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		rel, _ := filepath.Rel(stockpileDir, path)
+		rel, _ := filepath.Rel(stacksDir, path)
 		relSlash := filepath.ToSlash(rel)
 		base := filepath.Base(path)
 
 		if base == "compliance.vgo" {
 			if hasTopLevelYAMLKey(path, "waivers") {
 				problems = append(problems, fmt.Sprintf(
-					"stockpile/%s: waivers: block in compliance.vgo. "+
+					"stacks/%s: waivers: block in compliance.vgo. "+
 						"Move the waivers: entries to waivers.vgo "+
 						"(compliance.vgo holds only compliance: claims).",
 					relSlash))
@@ -70,7 +70,7 @@ func scanStockpileLayout(stockpileDir string) []string {
 		if base == "waivers.vgo" {
 			if hasTopLevelYAMLKey(path, "compliance") {
 				problems = append(problems, fmt.Sprintf(
-					"stockpile/%s: compliance: block in waivers.vgo. "+
+					"stacks/%s: compliance: block in waivers.vgo. "+
 						"Move the compliance: claims to compliance.vgo "+
 						"(waivers.vgo holds only waivers: entries).",
 					relSlash))
@@ -82,7 +82,7 @@ func scanStockpileLayout(stockpileDir string) []string {
 		// filename). Reject with a rename hint.
 		if filepath.Ext(base) == ".vgo" && hasTopLevelYAMLKey(path, "waivers") {
 			problems = append(problems, fmt.Sprintf(
-				"stockpile/%s: top-level waivers: block in a non-waivers.vgo file. "+
+				"stacks/%s: top-level waivers: block in a non-waivers.vgo file. "+
 					"Rename to waivers.vgo (the loader only globs that exact filename).",
 				relSlash))
 			return nil
@@ -90,11 +90,11 @@ func scanStockpileLayout(stockpileDir string) []string {
 		// Stray compliance.vgo: a non-canonical filename that looks
 		// like a claims-only file (top-level compliance: only, no
 		// resources:/name:/vars:). Module definitions carrying their
-		// own compliance: block — common in stockpile/modules — are
+		// own compliance: block — common in stacks/modules — are
 		// not flagged because they have resources:/name:.
 		if filepath.Ext(base) == ".vgo" && looksLikeClaimsOnly(path) {
 			problems = append(problems, fmt.Sprintf(
-				"stockpile/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
+				"stacks/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
 					"Rename to compliance.vgo so directory-level claim inheritance loads it.",
 				relSlash))
 		}
@@ -105,7 +105,7 @@ func scanStockpileLayout(stockpileDir string) []string {
 
 // looksLikeClaimsOnly returns true when a YAML file has a top-level
 // `compliance:` key and lacks any of the keys typical of a module
-// definition (`resources:`, `name:`, `vars:`). Used by the stockpile
+// definition (`resources:`, `name:`, `vars:`). Used by the stacks
 // layout check to flag misnamed compliance.vgo files — the loader
 // globs the exact filename, so a typo silently drops the claims.
 func looksLikeClaimsOnly(path string) bool {

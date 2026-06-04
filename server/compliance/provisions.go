@@ -51,7 +51,7 @@ type ConfigcrateProvision struct {
 //
 // Authoring note: every entry's framework → control list is
 // cross-checked against at least one real-world configcrate under
-// example-configs/worksite/stockpile/configcrates/ that historically
+// example-configs/stacks/configcrates/ that historically
 // hand-rolled the same cross-walk in its `compliance:` block — the
 // catalog is grounded in actual usage, not aspirational benchmark
 // categories.
@@ -251,10 +251,10 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"pci-dss":     {"9.5.1", "3.4"},
 		},
 	},
-	"vigo-stockpile-backup": {
-		ID:          "vigo-stockpile-backup",
-		Title:       "Vigo stockpile snapshot",
-		Description: "Snapshots the Vigo server's stockpile (config-as-code state) on a schedule to a remote target. Vigo-specific: backs up the config-management *control plane* itself, not the managed-host data.",
+	"vigo-stacks-backup": {
+		ID:          "vigo-stacks-backup",
+		Title:       "Vigo stacks snapshot",
+		Description: "Snapshots the Vigo server's stacks (config-as-code state) on a schedule to a remote target. Vigo-specific: backs up the config-management *control plane* itself, not the managed-host data.",
 		Frameworks: map[string][]string{
 			"hipaa":       {"164.308(a)(7)(ii)(A)"},
 			"iso-27001":   {"A.12.3.1", "A.14.2.4"},

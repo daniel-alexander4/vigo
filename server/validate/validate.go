@@ -330,7 +330,7 @@ func validateCrossReferences(mod Configcrate) []Finding {
 		// lint cannot see resources defined in sibling modules, and
 		// cross-module notify/subscribes is the dominant pattern (e.g.
 		// a vhost module notifies the `reload-nginx` resource owned by
-		// the nginx module). Whole-stockpile resolution is the publish
+		// the nginx module). Whole-stacks resolution is the publish
 		// path's job. Self-references stay as Error — a resource that
 		// references itself is a real bug regardless of module scope.
 		for _, ref := range res.DependsOn {

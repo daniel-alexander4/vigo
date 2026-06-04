@@ -39,10 +39,10 @@ func (m *mockProvider) Close() error { return nil }
 
 // setupDir creates a content-root config directory: modules/ for the
 // module library, default/ for envoy entries. The returned path is what
-// the loader walks directly (post-flattening — no inner stockpile/).
+// the loader walks directly (post-flattening — no inner stacks/).
 func setupDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "examples", "stockpile")
+	dir := filepath.Join(t.TempDir(), "examples", "stacks")
 	for _, sub := range []string{"configcrates", "usercrates", "templates", "default"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
@@ -2822,7 +2822,7 @@ envoys:
 // (no envoys/ subdirectory, common.vgo for inheritance).
 func setupInheritanceDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "config", "stockpile")
+	dir := filepath.Join(t.TempDir(), "config", "stacks")
 	for _, sub := range []string{"configcrates", "usercrates", ""} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)

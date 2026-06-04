@@ -49,9 +49,9 @@ bolt join' (there).`,
 
 var spannerOpsPuddleCmd = &cobra.Command{
 	Use:   "ops-puddle",
-	Short: "Manage the ops-puddle — the puddle that owns the stockpile gitback project",
+	Short: "Manage the ops-puddle — the puddle that owns the stacks gitback project",
 	Long: `The ops-puddle is a shared puddle owned by every vigosrv that holds
-authority to push stockpile updates. The first vigosrv founds it; later
+authority to push stacks updates. The first vigosrv founds it; later
 vigosrvs join via the pair flow. See ADR-025.`,
 }
 
@@ -63,7 +63,7 @@ master-key-derived wrap key, and persist it under --ops-puddle-dir. This
 vigosrv's service-account puddle (per ADR-025 Slice 1) becomes the first
 member. Other vigosrvs add themselves via the pair flow (Slice 2b).
 
-The friendly name participates in gitback URLs (gitback://<name>/stockpile),
+The friendly name participates in gitback URLs (gitback://<name>/stacks),
 so pick something stable — renaming is a destructive operation that requires
 re-founding the ops-puddle from scratch.`,
 	Args: cobra.ExactArgs(1),

@@ -1,4 +1,0 @@
-name: zfs-windows-retract
-description: Retract zfs-windows stub. No-op.
-
-resources: []

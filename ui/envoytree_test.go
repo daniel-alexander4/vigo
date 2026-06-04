@@ -94,7 +94,7 @@ func TestBuildEnvoyTree_KeptDirectoryWithNoEnvoysStillRenders(t *testing.T) {
 func TestBuildEnvoyTree_DirsNotInKeptSetAreSkipped(t *testing.T) {
 	// Pin the central contract for this surface: directories that don't
 	// hold a hostcrate and aren't on the path to one are NOT walked.
-	// Without this, the tree surfaces stockpile noise (modules/,
+	// Without this, the tree surfaces stacks noise (modules/,
 	// usercrates/, templates/, …) alongside the actual hostcrate dirs.
 	root := t.TempDir()
 	mustMkdir(t, filepath.Join(root, "alexander4"))

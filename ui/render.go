@@ -1453,7 +1453,7 @@ func tracePathTree(levels []config.InheritanceLevel, waiverFiles []string) templ
 			depth = len(strings.Split(dl.dir, "/"))
 		}
 
-		// Print directory name (except root which gets ● stockpile).
+		// Print directory name (except root which gets ● stacks).
 		if dl.dir != "" {
 			parts := strings.Split(dl.dir, "/")
 			dirName := parts[len(parts)-1]

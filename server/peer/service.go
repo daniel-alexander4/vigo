@@ -52,7 +52,7 @@ func (s *Service) SetAuditWriter(w auditRecorder) {
 }
 
 // NewService creates a new peer service. role is "primary" or "peer".
-// onConfigChange is called after writing files under stockpile/ to trigger config reload.
+// onConfigChange is called after writing files under stacks/ to trigger config reload.
 func NewService(serverRoot string, role string, onConfigChange func()) *Service {
 	return &Service{
 		serverRoot:     serverRoot,
@@ -347,7 +347,7 @@ func (s *Service) PeerStatuses(ctx context.Context) []PeerInfo {
 }
 
 // handleFileChange writes a single file change to disk and returns an ack.
-// If the content is empty, the file is deleted. After writing to a path under stockpile/,
+// If the content is empty, the file is deleted. After writing to a path under stacks/,
 // the needsConfigReload flag is set so the caller can trigger a reload.
 func (s *Service) handleFileChange(fc *pb.PeerFileChange, needsConfigReload *atomic.Bool) *pb.PeerSyncAck {
 	path := fc.GetPath()
@@ -441,12 +441,12 @@ func validatePath(path string) error {
 
 // isConfigPath returns true if the path is under the config tree on the
 // wire — a config reload should be triggered after writing. Accepts both
-// post-0.28 paths under worksite/ and pre-0.28 paths under stockpile/ or
+// post-0.28 paths under worksite/ and pre-0.28 paths under stacks/ or
 // .live/ for compatibility with peers that haven't upgraded yet.
 func isConfigPath(path string) bool {
 	normalized := filepath.ToSlash(path)
 	return strings.HasPrefix(normalized, "worksite/") ||
-		strings.HasPrefix(normalized, "stockpile/") ||
+		strings.HasPrefix(normalized, "stacks/") ||
 		strings.HasPrefix(normalized, ".live/")
 }
 

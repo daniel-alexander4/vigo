@@ -157,6 +157,6 @@ vigocli validate nginx.vgo openssh.vgo
 # Edit with syntax highlighting + validation-on-save
 vigocli vi nginx.vgo
 
-# Short relative paths resolve to /srv/vigo/stockpile/
+# Short relative paths resolve to /srv/vigo/stacks/
 vigocli vi modules/nginx.vgo
 ```

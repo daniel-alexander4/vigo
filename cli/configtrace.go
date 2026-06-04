@@ -851,7 +851,7 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 
 // hasUsercrates reports whether any inheritance level carries auto-applied
 // usercrate entries. Used to gate the "Usercrates:" section header so the
-// separator + heading don't render for stockpiles without usercrates.
+// separator + heading don't render for stackss without usercrates.
 func hasUsercrates(levels []inheritanceLevel) bool {
 	for _, lvl := range levels {
 		if lvl.File == "usercrates/" && len(lvl.Configcrates) > 0 {
@@ -879,7 +879,7 @@ func levelsExcludingUsercrates(levels []inheritanceLevel) []inheritanceLevel {
 // renderUsercrates draws the Usercrates section: one line per
 // auto-applied usercrate with the scope directory where it lives, so
 // operators can quickly see which per-user configs this envoy picks
-// up and from which level of the stockpile tree. Sources the data
+// up and from which level of the stacks tree. Sources the data
 // from inheritance levels tagged File == "usercrates/".
 func renderUsercrates(levels []inheritanceLevel) {
 	// Collect (scope, usercrate-name) pairs preserving parent→child order.

@@ -83,7 +83,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	configTraceHandler.RegisterRoutes(mux)
 
 	// Mount config publish history, versioning, rollback, and reload.
-	// Spanner-mode stockpile distribution is gitback-driven (ADR-025
+	// Spanner-mode stacks distribution is gitback-driven (ADR-025
 	// Slice 4).
 	configHandler := NewConfigHandler(queries, configStore, fleetIndex, publishState, publish.DefaultLiveDir, publish.DefaultHistoryDir)
 	configHandler.SetAuditWriter(aw)

@@ -50,7 +50,7 @@ import (
 	vigoscrier "git.alexander4.io/vigo/server/scrier"
 	"git.alexander4.io/vigo/server/secrets"
 	"git.alexander4.io/vigo/server/spanner"
-	"git.alexander4.io/vigo/server/stockpilewatch"
+	"git.alexander4.io/vigo/server/stackswatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/swarm/poolqmesh"
@@ -182,9 +182,9 @@ type Server struct {
 	curatorAgg    *curatormesh.Aggregator
 	poolqAgg      *poolqmesh.Aggregator
 
-	// --- Stockpile watcher (nil in standalone mode or when the ops-puddle
-	// stockpile project has not been founded yet). ---
-	stockpileWatcher *stockpilewatch.Watcher
+	// --- Stacks watcher (nil in standalone mode or when the ops-puddle
+	// stacks project has not been founded yet). ---
+	stacksWatcher *stackswatch.Watcher
 
 	// --- Peer replication (nil when cfg.Peers.Servers is empty).
 	// peerService is registered on the gRPC server in NewServer; peerTLS
@@ -311,7 +311,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// first boot under /srv/vigo/puddle/ and unwrapped via HKDF over
 		// the secrets master key — no operator unlock required. Held in
 		// memory for sibling subsystems that sign as the vigosrv puddle
-		// (gitback push of the ops-puddle's stockpile project, friendly-
+		// (gitback push of the ops-puddle's stacks project, friendly-
 		// name claim, etc.). Isopass and other non-local backends cannot
 		// host the service-account puddle in v1; vigosrv runs without one
 		// in that mode.
@@ -839,22 +839,22 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// (chunk 4 territory). Load + RecoverInterrupted stay paired with
 	// construction there. ---
 
-	// --- Stockpile watcher (ADR-025 Slice 3): watches the ops-puddle's
-	// stockpile gitback bare repo for ref changes and triggers
-	// configStore.Reload(). Lookup is best-effort — if the stockpile
-	// project has not been founded yet (vigocli spanner stockpile init)
+	// --- Stacks watcher (ADR-025 Slice 3): watches the ops-puddle's
+	// stacks gitback bare repo for ref changes and triggers
+	// configStore.Reload(). Lookup is best-effort — if the stacks
+	// project has not been founded yet (vigocli spanner stacks init)
 	// the watcher stays nil and a future SIGHUP / restart picks it up.
 	// Spanner-mode only; standalone keeps the local-write + SIGHUP shape. ---
 	if s.mode != config.ModeStandalone {
-		if pid, ok := lookupStockpileProjectID(puddle.OpsDefaultDir); ok {
-			s.stockpileWatcher = stockpilewatch.New(
+		if pid, ok := lookupStacksProjectID(puddle.OpsDefaultDir); ok {
+			s.stacksWatcher = stackswatch.New(
 				"/var/lib/vigo/swarm/gitback/projects",
 				pid,
 				publish.DefaultLiveDir,
 				s.configStore,
 			)
 		} else {
-			slog.Debug("stockpile project not founded yet; watcher skipped (run `vigocli spanner stockpile init` to bootstrap)")
+			slog.Debug("stacks project not founded yet; watcher skipped (run `vigocli spanner stacks init` to bootstrap)")
 		}
 	}
 

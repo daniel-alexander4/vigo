@@ -59,9 +59,9 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source,
 }
 
 // ConfigHandler provides REST endpoints for config publish history,
-// versioning, rollback, and reload. In spanner mode stockpile
+// versioning, rollback, and reload. In spanner mode stacks
 // distribution is gitback-driven (per ADR-025 Slice 4) — the hub
-// no longer fans the stockpile out via gRPC.
+// no longer fans the stacks out via gRPC.
 type ConfigHandler struct {
 	queries            *db.Queries
 	configStore        *config.ConfigStore
@@ -198,7 +198,7 @@ func (h *ConfigHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // ReloadConfig re-reads all config files from disk. Called by vigocli
-// in standalone mode and by the stockpile watcher in spanner mode
+// in standalone mode and by the stacks watcher in spanner mode
 // (after bare→.live pull on every ref change).
 //
 // When a compliance threshold is configured, starts a background monitor

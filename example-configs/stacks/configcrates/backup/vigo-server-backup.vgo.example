@@ -1,0 +1,123 @@
+#~ Incremental hardlink-based backup of the Vigo server data directories.
+#~ Creates dated snapshots that the web UI displays at /backups.
+#~
+#~ Backs up:
+#~   - server.yaml (bootstrap config)
+#~   - Database (via db_backup executor — compressed SQL dump)
+#~   - Sandgorgon database (via db_backup executor)
+#~   - Stacks (modules, roles, match blocks, waivers, tasks, workflows)
+#~   - Secrets (encrypted secret files + master key)
+#~   - TLS (CA key/cert, server cert/key)
+#~
+#~ Snapshots use hardlink dedup: unchanged files share inodes with the
+#~ previous snapshot, consuming zero additional disk. Databases are dumped
+#~ separately because raw DB files change every transaction, defeating
+#~ hardlink dedup.
+#~
+#~ The snapshot directory must match paths.snapshots in server.yaml
+#~ (default: /srv/vigo/snapshots). The web UI reads this directory.
+#~
+#~ Assign to the node running the Vigo server:
+#~   roles: [vigo-server-backup]
+#~   vars:
+#~     backup_retain: "90"
+name: vigo-server-backup
+
+compliance:
+  provides: [host-backup]
+vars:
+  vigo_root: "/srv/vigo"
+  snapshot_dir: "/srv/vigo/snapshots"
+  backup_retain: "14"
+  backup_schedule: "daily"
+  backup_hour_start: "2"
+  backup_hour_end: "5"
+
+resources:
+  #~ Ensure the snapshot destination exists.
+  - name: snapshot-dir
+    type: exec
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    command: "mkdir -p {{ .Vars.snapshot_dir }}"
+    onlyif: "test ! -d {{ .Vars.snapshot_dir }}"
+
+  #~ Copy server.yaml into the snapshot directory.
+  #~ Without this file, a restore can't find the database or secrets.
+  - name: backup-server-yaml
+    type: exec
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    command: 'cp -p "{{ .Vars.vigo_root }}/server.yaml" "{{ .Vars.snapshot_dir }}/server.yaml"'
+    unless: 'test -f "{{ .Vars.snapshot_dir }}/server.yaml" && test "{{ .Vars.snapshot_dir }}/server.yaml" -nt "{{ .Vars.vigo_root }}/server.yaml"'
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [snapshot-dir]
+
+  #~ Dump the main Vigo database to compressed SQL.
+  - name: db-backup
+    type: db_backup
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    db_type: sqlite
+    source_db: "{{ .Vars.vigo_root }}/db/vigo.db"
+    target_path: "{{ .Vars.snapshot_dir }}/db"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [snapshot-dir]
+
+  #~ Dump the Sandgorgon database to compressed SQL.
+  - name: sandgorgon-db-backup
+    type: db_backup
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    db_type: sqlite
+    source_db: "{{ .Vars.vigo_root }}/sandgorgon/sandgorgon.db"
+    target_path: "{{ .Vars.snapshot_dir }}/sandgorgon-db"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [snapshot-dir]
+
+  #~ Stacks: modules, roles, match blocks, waivers, tasks, workflows.
+  - name: backup-stacks
+    type: backup
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    source_dir: "{{ .Vars.vigo_root }}/stacks"
+    target_path: "{{ .Vars.snapshot_dir }}/stacks"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [db-backup]
+
+  #~ Secrets: encrypted secret files and master key.
+  - name: backup-secrets
+    type: backup
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    source_dir: "{{ .Vars.vigo_root }}/secrets"
+    target_path: "{{ .Vars.snapshot_dir }}/secrets"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [db-backup]
+
+  #~ TLS: CA key/cert, server cert/key, agent certs.
+  - name: backup-tls
+    type: backup
+    # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
+    #~ revert: false
+    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    source_dir: "{{ .Vars.vigo_root }}/tls"
+    target_path: "{{ .Vars.snapshot_dir }}/tls"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [db-backup]

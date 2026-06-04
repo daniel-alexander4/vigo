@@ -903,14 +903,14 @@ func grpcListenPort(grpcListen string) string {
 	return "1530"
 }
 
-// lookupStockpileProjectID returns the hex project_id of the
-// ops-puddle's stockpile gitback project on this vigosrv, by
+// lookupStacksProjectID returns the hex project_id of the
+// ops-puddle's stacks gitback project on this vigosrv, by
 // walking <opsPuddleDir>/.vigo-gitback/<id>/project.json files
-// and matching on handle == "stockpile". Returns ("", false) when
-// no stockpile project state exists locally — startup uses this
+// and matching on handle == "stacks". Returns ("", false) when
+// no stacks project state exists locally — startup uses this
 // to skip the watcher until the operator runs
-// `vigocli spanner stockpile init`.
-func lookupStockpileProjectID(opsPuddleDir string) (string, bool) {
+// `vigocli spanner stacks init`.
+func lookupStacksProjectID(opsPuddleDir string) (string, bool) {
 	gitbackDir := filepath.Join(opsPuddleDir, ".vigo-gitback")
 	entries, err := os.ReadDir(gitbackDir)
 	if err != nil {
@@ -931,7 +931,7 @@ func lookupStockpileProjectID(opsPuddleDir string) (string, bool) {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			continue
 		}
-		if cfg.Handle == "stockpile" {
+		if cfg.Handle == "stacks" {
 			return e.Name(), true
 		}
 	}

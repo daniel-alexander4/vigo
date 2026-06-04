@@ -35,7 +35,7 @@ import (
 //     defining an environment with nothing in it is dead config.
 //
 // Cross-file resolution (do listed module names exist in the
-// stockpile?) is Phase 6.
+// stacks?) is Phase 6.
 func LintEnvironmentsFile(input []byte, _ Options) *Result {
 	r := &Result{}
 	repaired := repair(input, r)

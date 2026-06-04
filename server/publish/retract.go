@@ -87,9 +87,9 @@ func ReadRemovedModuleContent(liveDir string, relPaths []string) map[string][]by
 }
 
 // ReadChangedModuleContent reads the content of new/changed modules from the
-// stockpile directory. Returns a map of relPath → content.
-func ReadChangedModuleContent(stockpileDir string, relPaths []string) map[string][]byte {
-	return readModuleContent(stockpileDir, relPaths)
+// stacks directory. Returns a map of relPath → content.
+func ReadChangedModuleContent(stacksDir string, relPaths []string) map[string][]byte {
+	return readModuleContent(stacksDir, relPaths)
 }
 
 func readModuleContent(baseDir string, relPaths []string) map[string][]byte {

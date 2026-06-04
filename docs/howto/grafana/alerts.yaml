@@ -104,7 +104,7 @@ groups:
           severity: warning
         annotations:
           summary: "Config reload p99 > 2.5s"
-          description: "Publish + reload is getting slow. Stockpile may have grown — check configcrate count and inheritance depth."
+          description: "Publish + reload is getting slow. Stacks may have grown — check configcrate count and inheritance depth."
 
   - name: vigo-license
     rules:

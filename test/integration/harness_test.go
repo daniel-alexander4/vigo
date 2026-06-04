@@ -130,19 +130,19 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
-	// Build the stacks directory (0.33.0 layout): stockpile/ holds every
+	// Build the stacks directory (0.33.0 layout): stacks/ holds every
 	// config primitive (modules, hostcrates, etc.). Config extension is
 	// .vgo; .yaml is not recognized.
 	configDir := filepath.Join(t.TempDir(), "stacks")
 	modulesDir := filepath.Join(configDir, "configcrates")
-	stockpileDir := filepath.Join(configDir, "stockpile")
+	stacksDir := filepath.Join(configDir, "stacks")
 	os.MkdirAll(modulesDir, 0755)
-	os.MkdirAll(stockpileDir, 0755)
+	os.MkdirAll(stacksDir, 0755)
 	for name, content := range modules {
 		os.WriteFile(filepath.Join(modulesDir, name+".vgo"), []byte(content), 0644)
 	}
 	if envoysYAML != "" {
-		os.WriteFile(filepath.Join(stockpileDir, "envoys.vgo"), []byte(envoysYAML), 0644)
+		os.WriteFile(filepath.Join(stacksDir, "envoys.vgo"), []byte(envoysYAML), 0644)
 	}
 
 	configStore, err := config.NewConfigStore(configDir, &noopProvider{}, true)

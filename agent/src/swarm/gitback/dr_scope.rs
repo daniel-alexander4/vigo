@@ -16,7 +16,7 @@
 //!   - `~<user>/` for each user with `~<user>/.vigo-puddle/identity.pub`
 //!     (per-user puddle, ADR-014)
 //!
-//! For ops-puddle stockpile projects: founder + every paired-in
+//! For ops-puddle stacks projects: founder + every paired-in
 //! vigosrv has `/srv/vigo/ops-puddle/.vigo-gitback/<id>/project.json`
 //! after init/join — those pass. Non-member vigosrvs don't have the
 //! ops-puddle dir at all — those refuse.

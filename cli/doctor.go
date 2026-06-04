@@ -270,7 +270,7 @@ func checkConfigDir(dir string) preStartCheck {
 }
 
 func checkConfigValidation(dir string) preStartCheck {
-	modulesDir := filepath.Join(dir, "stockpile", "configcrates")
+	modulesDir := filepath.Join(dir, "stacks", "configcrates")
 	if _, err := os.Stat(modulesDir); err != nil {
 		return preStartCheck{"config_validation", "skip", "configcrates dir not found"}
 	}

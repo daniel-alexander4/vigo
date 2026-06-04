@@ -1,6 +1,0 @@
-name: sysadmin-toolkit-retract
-description: >-
-  Retract sysadmin-toolkit intentionally no-op; once installed these are
-  generally useful baseline. Hand-uninstall specific packages if intended.
-
-resources: []

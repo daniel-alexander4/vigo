@@ -752,7 +752,7 @@ func TestLint_NotifyUnknownTarget_IsWarning(t *testing.T) {
 	// Unknown notify targets emit a Warning, not an Error: single-file
 	// lint can't see sibling modules and cross-module notify is the
 	// dominant pattern (vhost → nginx's reload-nginx, etc.). Whole-
-	// stockpile resolution happens at publish time.
+	// stacks resolution happens at publish time.
 	input := `name: test
 resources:
   - name: conf

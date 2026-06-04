@@ -11,17 +11,16 @@ import (
 )
 
 // TestComplianceSeedGate pins the license boundary that keeps the paid
-// compliance configcrates out of the free stacks/examples/ and
-// stacks/anti-examples/ reference trees.
+// compliance configcrates out of the free stacks-examples/ reference tree.
 //
-// entrypoint.sh rebuilds those two trees from /seed on every container
-// start and excludes the compliance content with two `case ... continue`
-// skip-globs. Those globs are bare path literals, so a directory rename
-// silently un-gates the content if the globs aren't updated in lockstep:
-// the modules→configcrates rename (0.71.0) did exactly that, leaking
-// ~100 compliance configcrates + ~100 retractions into the free trees on
-// every start (the globs still said modules/compliance/). This test fails
-// the next such drift in CI instead of in a customer's free install.
+// entrypoint.sh rebuilds that tree from /seed on every container start and
+// excludes the compliance content with a `case ... continue` skip-glob.
+// The glob is a bare path literal, so a directory rename silently un-gates
+// the content if the glob isn't updated in lockstep: the modules→configcrates
+// rename (0.71.0) did exactly that, leaking ~100 compliance configcrates into
+// the free tree on every start (the glob still said modules/compliance/).
+// This test fails the next such drift in CI instead of in a customer's free
+// install.
 //
 // The guard ties three facts together:
 //   - entrypoint.sh carries the exact skip-glob for each tree (so a glob
@@ -41,23 +40,18 @@ func TestComplianceSeedGate(t *testing.T) {
 	}
 	ep := string(entrypoint)
 
-	// Each tree: the seed source dir holding the compliance configcrates,
-	// the seed-relative prefix entrypoint.sh strips to, and the skip-glob
-	// that must appear verbatim in entrypoint.sh. The glob is the prefix
-	// plus a trailing `*` (shell case `*` spans `/`).
+	// The seed source dir holding the compliance configcrates, the
+	// seed-relative prefix the skip-glob covers, and the skip-glob that must
+	// appear verbatim in entrypoint.sh. The glob is the prefix plus a
+	// trailing `*` (shell case `*` spans `/`).
 	cases := []struct {
 		name      string // human label
 		seedDir   string // repo-relative dir to walk for *.vgo.example
 		relPrefix string // seed-relative path prefix the skip-glob covers
 	}{
 		{
-			name:      "examples",
-			seedDir:   "example-configs/worksite/stockpile/configcrates/compliance",
-			relPrefix: "stockpile/configcrates/compliance/",
-		},
-		{
-			name:      "anti-examples (retractions)",
-			seedDir:   "example-configs/retractions/configcrates/compliance",
+			name:      "stacks-examples",
+			seedDir:   "example-configs/stacks/configcrates/compliance",
 			relPrefix: "configcrates/compliance/",
 		},
 	}

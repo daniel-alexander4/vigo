@@ -12,8 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// validateStockpileLayout enforces filename-and-content rules for the
-// stockpile tree. Mirrors server/config.validateStockpileLayout —
+// validateStacksLayout enforces filename-and-content rules for the
+// stacks tree. Mirrors server/config.validateStacksLayout —
 // publish/ runs this pre-publish; the loader runs it again at reload
 // time defensively. The two copies exist because publish imports
 // config but not vice versa, and the rule set is small enough that a
@@ -31,33 +31,33 @@ import (
 //     resources:/name:/vars:) not named compliance.vgo —
 //     stray-filename rejection. Module definitions carrying their own
 //     compliance: block are not affected.
-func validateStockpileLayout(stockpileDir string) error {
-	if _, err := os.Stat(stockpileDir); err != nil {
+func validateStacksLayout(stacksDir string) error {
+	if _, err := os.Stat(stacksDir); err != nil {
 		return nil
 	}
-	problems := scanStockpileLayout(stockpileDir)
+	problems := scanStacksLayout(stacksDir)
 	if len(problems) == 0 {
 		return nil
 	}
-	return fmt.Errorf("stockpile layout violations:\n  - %s", strings.Join(problems, "\n  - "))
+	return fmt.Errorf("stacks layout violations:\n  - %s", strings.Join(problems, "\n  - "))
 }
 
-// scanStockpileLayout walks the stockpile subtree and rejects any file
+// scanStacksLayout walks the stacks subtree and rejects any file
 // whose filename or key content violates the canonical-filename rules.
-func scanStockpileLayout(stockpileDir string) []string {
+func scanStacksLayout(stacksDir string) []string {
 	var problems []string
-	_ = filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(stacksDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		rel, _ := filepath.Rel(stockpileDir, path)
+		rel, _ := filepath.Rel(stacksDir, path)
 		relSlash := filepath.ToSlash(rel)
 		base := filepath.Base(path)
 
 		if base == "compliance.vgo" {
 			if hasTopLevelKey(path, "waivers") {
 				problems = append(problems, fmt.Sprintf(
-					"stockpile/%s: waivers: block in compliance.vgo. "+
+					"stacks/%s: waivers: block in compliance.vgo. "+
 						"Move the waivers: entries to waivers.vgo "+
 						"(compliance.vgo holds only compliance: claims).",
 					relSlash))
@@ -67,7 +67,7 @@ func scanStockpileLayout(stockpileDir string) []string {
 		if base == "waivers.vgo" {
 			if hasTopLevelKey(path, "compliance") {
 				problems = append(problems, fmt.Sprintf(
-					"stockpile/%s: compliance: block in waivers.vgo. "+
+					"stacks/%s: compliance: block in waivers.vgo. "+
 						"Move the compliance: claims to compliance.vgo "+
 						"(waivers.vgo holds only waivers: entries).",
 					relSlash))
@@ -76,14 +76,14 @@ func scanStockpileLayout(stockpileDir string) []string {
 		}
 		if filepath.Ext(base) == ".vgo" && hasTopLevelKey(path, "waivers") {
 			problems = append(problems, fmt.Sprintf(
-				"stockpile/%s: top-level waivers: block in a non-waivers.vgo file. "+
+				"stacks/%s: top-level waivers: block in a non-waivers.vgo file. "+
 					"Rename to waivers.vgo (the loader only globs that exact filename).",
 				relSlash))
 			return nil
 		}
 		if filepath.Ext(base) == ".vgo" && looksLikeClaimsOnlyFile(path) {
 			problems = append(problems, fmt.Sprintf(
-				"stockpile/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
+				"stacks/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
 					"Rename to compliance.vgo so directory-level claim inheritance loads it.",
 				relSlash))
 		}

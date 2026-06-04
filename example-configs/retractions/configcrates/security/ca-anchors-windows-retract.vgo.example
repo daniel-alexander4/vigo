@@ -1,9 +1,0 @@
-name: ca-anchors-windows-retract
-description: Retract ca-anchors-windows.
-
-resources:
-  - name: remove-ca
-    type: powershell
-    command: 'certutil -delstore Root "Vigo Internal"; Remove-Item "C:\ProgramData\Vigo\ca\internal_root.crt" -ErrorAction SilentlyContinue'
-    skip_validation: true
-    when: "os_family('windows')"

@@ -33,10 +33,10 @@ func (permissiveSecrets) Close() error { return nil }
 // usercrate set under the CURRENT loader. Step-1 baseline / step-11
 // equivalence gate for pending #41 (usercrates inert-until-included).
 //
-// Gated on STOCKPILE_BASE — path containing stockpile/, e.g.
+// Gated on STACKS_BASE — path containing stacks/, e.g.
 //
-//	STOCKPILE_BASE=/srv/vigo/stacks \
-//	STOCKPILE_BASELINE_OUT=/tmp/baseline.live.json \
+//	STACKS_BASE=/srv/vigo/stacks \
+//	STACKS_BASELINE_OUT=/tmp/baseline.live.json \
 //	  go test ./server/config/ -run TestBaselineUsercrateSnapshot -count=1 -v
 //
 // Output JSON: { "<match-pattern>": ["<usercrate-name>", ...sorted], ... }.
@@ -44,9 +44,9 @@ func (permissiveSecrets) Close() error { return nil }
 // Detection: ConfigTrace.ConfigcrateSources[name] contains the "usercrates/"
 // substring — the same predicate the trace UI uses.
 func TestBaselineUsercrateSnapshot(t *testing.T) {
-	base := os.Getenv("STOCKPILE_BASE")
+	base := os.Getenv("STACKS_BASE")
 	if base == "" {
-		t.Skip("STOCKPILE_BASE not set")
+		t.Skip("STACKS_BASE not set")
 	}
 
 	cs, err := NewConfigStoreQuiet(base, permissiveSecrets{}, false)
@@ -85,7 +85,7 @@ func TestBaselineUsercrateSnapshot(t *testing.T) {
 	}
 	enc = append(enc, '\n')
 
-	if dest := os.Getenv("STOCKPILE_BASELINE_OUT"); dest != "" {
+	if dest := os.Getenv("STACKS_BASELINE_OUT"); dest != "" {
 		if werr := os.WriteFile(dest, enc, 0o644); werr != nil {
 			t.Fatalf("write %q: %v", dest, werr)
 		}

@@ -24,7 +24,7 @@ import (
 //     no case entries — the role would be a no-op).
 //
 // Cross-file resolution (does the included role exist? do listed
-// modules exist in stockpile/modules/?) is Phase 6.
+// modules exist in stacks/modules/?) is Phase 6.
 func LintRolesFile(input []byte, _ Options) *Result {
 	r := &Result{}
 	repaired := repair(input, r)

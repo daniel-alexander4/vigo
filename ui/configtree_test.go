@@ -21,12 +21,12 @@ func TestClassifyConfigFile(t *testing.T) {
 		{"roles.vgo", "scaffolding", "roles"},
 		{"waivers.vgo", "alexander4/us-west1", "waivers"},
 		{"envoys.vgo", "alexander4", "hostcrate"},
-		{"docker.vgo", "stockpile/configcrates/system", "configcrate"},
-		{"docker-windows.vgo", "stockpile/configcrates/system", "configcrate"},
-		{"alice.vgo", "stockpile/usercrates", "usercrate"},
-		{"some-task.vgo", "stockpile/tasks", "vgo"},
-		{"some-workflow.vgo", "stockpile/workflows", "vgo"},
-		{"hosts.j2", "stockpile/templates", "other"},
+		{"docker.vgo", "stacks/configcrates/system", "configcrate"},
+		{"docker-windows.vgo", "stacks/configcrates/system", "configcrate"},
+		{"alice.vgo", "stacks/usercrates", "usercrate"},
+		{"some-task.vgo", "stacks/tasks", "vgo"},
+		{"some-workflow.vgo", "stacks/workflows", "vgo"},
+		{"hosts.j2", "stacks/templates", "other"},
 		{"README.md", "", "other"},
 	}
 	for _, tc := range cases {
@@ -43,8 +43,8 @@ func TestBuildConfigTree(t *testing.T) {
 	mkdirs := []string{
 		"alexander4/us-west1/us-west1-a",
 		"alexander4/us-east1/us-east1-a",
-		"stockpile/configcrates/system",
-		"stockpile/usercrates",
+		"stacks/configcrates/system",
+		"stacks/usercrates",
 	}
 	for _, d := range mkdirs {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
@@ -59,8 +59,8 @@ func TestBuildConfigTree(t *testing.T) {
 		"alexander4/us-west1/us-west1-a/danlap.vgo",
 		"alexander4/us-west1/waivers.vgo",
 		"alexander4/us-east1/us-east1-a/plex.vgo",
-		"stockpile/configcrates/system/docker.vgo",
-		"stockpile/usercrates/alice.vgo",
+		"stacks/configcrates/system/docker.vgo",
+		"stacks/usercrates/alice.vgo",
 		".hidden.vgo", // dotfile — must be skipped
 	}
 	for _, f := range files {
@@ -80,7 +80,7 @@ func TestBuildConfigTree(t *testing.T) {
 
 	// Top-level: directories before files; .hidden.vgo skipped.
 	got := childNames(tree)
-	want := []string{"alexander4/", "stockpile/", "common.vgo", "environments.vgo"}
+	want := []string{"alexander4/", "stacks/", "common.vgo", "environments.vgo"}
 	if !equalSlice(got, want) {
 		t.Errorf("top-level children:\n  got  %v\n  want %v", got, want)
 	}
@@ -89,11 +89,11 @@ func TestBuildConfigTree(t *testing.T) {
 	if k := find(tree, "common.vgo").Kind; k != "common" {
 		t.Errorf("common.vgo kind = %q, want common", k)
 	}
-	docker := findPath(tree, "stockpile", "configcrates", "system", "docker.vgo")
+	docker := findPath(tree, "stacks", "configcrates", "system", "docker.vgo")
 	if docker == nil || docker.Kind != "configcrate" {
 		t.Errorf("docker.vgo: got %+v, want kind=configcrate", docker)
 	}
-	alice := findPath(tree, "stockpile", "usercrates", "alice.vgo")
+	alice := findPath(tree, "stacks", "usercrates", "alice.vgo")
 	if alice == nil || alice.Kind != "usercrate" {
 		t.Errorf("alice.vgo: got %+v, want kind=usercrate", alice)
 	}

@@ -11,8 +11,8 @@ import (
 )
 
 // Single-tree validator cases (post-0.33.0 collapse). The legacy
-// stockpile/scaffolding split is gone — every claim and waiver lives
-// under the single stockpile/ tree.
+// stacks/scaffolding split is gone — every claim and waiver lives
+// under the single stacks/ tree.
 //
 //   1. compliance.vgo carrying a top-level waivers: block — mixed-keys.
 //   2. waivers.vgo carrying a top-level compliance: block — mixed-keys.
@@ -24,13 +24,13 @@ import (
 
 func TestValidate_WaiversKeyInComplianceVgo_Rejected(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "stockpile")
-	_ = os.MkdirAll(stockpileDir, 0o755)
-	_ = os.WriteFile(filepath.Join(stockpileDir, "compliance.vgo"), []byte(
+	stacksDir := filepath.Join(dir, "stacks")
+	_ = os.MkdirAll(stacksDir, 0o755)
+	_ = os.WriteFile(filepath.Join(stacksDir, "compliance.vgo"), []byte(
 		"compliance:\n  cis-ubuntu: [\"1.1.1\"]\n"+
 			"waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: test\n      approved_by: dan\n"), 0o644)
 
-	err := validateStockpileLayout(stockpileDir)
+	err := validateStacksLayout(stacksDir)
 	if err == nil {
 		t.Fatal("expected violation for waivers: block in compliance.vgo, got nil")
 	}
@@ -44,13 +44,13 @@ func TestValidate_WaiversKeyInComplianceVgo_Rejected(t *testing.T) {
 
 func TestValidate_ComplianceKeyInWaiversVgo_Rejected(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "stockpile")
-	_ = os.MkdirAll(stockpileDir, 0o755)
-	_ = os.WriteFile(filepath.Join(stockpileDir, "waivers.vgo"), []byte(
+	stacksDir := filepath.Join(dir, "stacks")
+	_ = os.MkdirAll(stacksDir, 0o755)
+	_ = os.WriteFile(filepath.Join(stacksDir, "waivers.vgo"), []byte(
 		"waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: test\n      approved_by: dan\n"+
 			"compliance:\n  cis-ubuntu: [\"1.1.1\"]\n"), 0o644)
 
-	err := validateStockpileLayout(stockpileDir)
+	err := validateStacksLayout(stacksDir)
 	if err == nil {
 		t.Fatal("expected violation for compliance: block in waivers.vgo, got nil")
 	}
@@ -64,12 +64,12 @@ func TestValidate_ComplianceKeyInWaiversVgo_Rejected(t *testing.T) {
 
 func TestValidate_StrayWaiversFilename_Rejected(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "stockpile")
-	_ = os.MkdirAll(stockpileDir, 0o755)
-	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-waivers.vgo"),
+	stacksDir := filepath.Join(dir, "stacks")
+	_ = os.MkdirAll(stacksDir, 0o755)
+	_ = os.WriteFile(filepath.Join(stacksDir, "corp-waivers.vgo"),
 		[]byte("waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: r\n      approved_by: d\n"), 0o644)
 
-	err := validateStockpileLayout(stockpileDir)
+	err := validateStacksLayout(stacksDir)
 	if err == nil {
 		t.Fatal("expected violation for waivers: block in non-waivers.vgo file, got nil")
 	}
@@ -80,12 +80,12 @@ func TestValidate_StrayWaiversFilename_Rejected(t *testing.T) {
 
 func TestValidate_StrayClaimsFilename_Rejected(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "stockpile")
-	_ = os.MkdirAll(stockpileDir, 0o755)
-	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-compliance.vgo"),
+	stacksDir := filepath.Join(dir, "stacks")
+	_ = os.MkdirAll(stacksDir, 0o755)
+	_ = os.WriteFile(filepath.Join(stacksDir, "corp-compliance.vgo"),
 		[]byte("compliance:\n  cis-ubuntu: [\"5.1.1\"]\n"), 0o644)
 
-	err := validateStockpileLayout(stockpileDir)
+	err := validateStacksLayout(stacksDir)
 	if err == nil {
 		t.Fatal("expected violation for claims-only file not named compliance.vgo, got nil")
 	}
@@ -99,51 +99,51 @@ func TestValidate_StrayClaimsFilename_Rejected(t *testing.T) {
 // claims, and must NOT be rejected.
 func TestValidate_ModuleWithComplianceBlock_NotRejected(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "configcrates")
-	_ = os.MkdirAll(stockpileDir, 0o755)
-	_ = os.WriteFile(filepath.Join(stockpileDir, "openssh.vgo"),
+	stacksDir := filepath.Join(dir, "configcrates")
+	_ = os.MkdirAll(stacksDir, 0o755)
+	_ = os.WriteFile(filepath.Join(stacksDir, "openssh.vgo"),
 		[]byte("name: openssh\ncompliance:\n  cis-ubuntu: [\"5.4.1\"]\nresources:\n  - name: foo\n    type: package\n    package: openssh-server\n"), 0o644)
 
-	if err := validateStockpileLayout(stockpileDir); err != nil {
+	if err := validateStacksLayout(stacksDir); err != nil {
 		t.Errorf("module file with compliance: block should pass; got: %s", err)
 	}
 }
 
 func TestValidate_CleanLayout_Passes(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "stockpile")
-	_ = os.MkdirAll(filepath.Join(stockpileDir, "configcrates"), 0o755)
-	_ = os.WriteFile(filepath.Join(stockpileDir, "compliance.vgo"),
+	stacksDir := filepath.Join(dir, "stacks")
+	_ = os.MkdirAll(filepath.Join(stacksDir, "configcrates"), 0o755)
+	_ = os.WriteFile(filepath.Join(stacksDir, "compliance.vgo"),
 		[]byte("compliance:\n  cis-ubuntu: [\"1.1.1\"]\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(stockpileDir, "waivers.vgo"),
+	_ = os.WriteFile(filepath.Join(stacksDir, "waivers.vgo"),
 		[]byte("waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: r\n      approved_by: d\n"), 0o644)
 
-	if err := validateStockpileLayout(stockpileDir); err != nil {
-		t.Errorf("clean stockpile should pass validation, got: %s", err)
+	if err := validateStacksLayout(stacksDir); err != nil {
+		t.Errorf("clean stacks should pass validation, got: %s", err)
 	}
 }
 
 func TestValidate_AllFourViolations_ReportedTogether(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "stockpile")
-	_ = os.MkdirAll(stockpileDir, 0o755)
+	stacksDir := filepath.Join(dir, "stacks")
+	_ = os.MkdirAll(stacksDir, 0o755)
 
 	// Mixed keys in compliance.vgo
-	_ = os.WriteFile(filepath.Join(stockpileDir, "compliance.vgo"), []byte(
+	_ = os.WriteFile(filepath.Join(stacksDir, "compliance.vgo"), []byte(
 		"compliance:\n  cis-ubuntu: [\"1\"]\n"+
 			"waivers:\n  cis-ubuntu:\n    - control: \"x\"\n      reason: r\n      approved_by: d\n"), 0o644)
 	// Mixed keys in waivers.vgo
-	_ = os.WriteFile(filepath.Join(stockpileDir, "waivers.vgo"), []byte(
+	_ = os.WriteFile(filepath.Join(stacksDir, "waivers.vgo"), []byte(
 		"waivers:\n  cis-ubuntu:\n    - control: \"x\"\n      reason: r\n      approved_by: d\n"+
 			"compliance:\n  cis-ubuntu: [\"bad\"]\n"), 0o644)
 	// Stray waivers filename
-	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-waivers.vgo"),
+	_ = os.WriteFile(filepath.Join(stacksDir, "corp-waivers.vgo"),
 		[]byte("waivers:\n  cis-ubuntu:\n    - control: \"x\"\n      reason: r\n      approved_by: d\n"), 0o644)
 	// Stray claims filename
-	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-compliance.vgo"),
+	_ = os.WriteFile(filepath.Join(stacksDir, "corp-compliance.vgo"),
 		[]byte("compliance:\n  cis-ubuntu: [\"5.1.1\"]\n"), 0o644)
 
-	err := validateStockpileLayout(stockpileDir)
+	err := validateStacksLayout(stacksDir)
 	if err == nil {
 		t.Fatal("expected violations, got nil")
 	}

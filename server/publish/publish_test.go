@@ -16,7 +16,7 @@ import (
 
 // --- helpers ---
 
-// testEnv holds the temp dirs (stacks/stockpile/live) for a test along
+// testEnv holds the temp dirs (stacks/live) for a test along
 // with the Options pre-populated to point at them. Tests pass opts
 // through ValidateSource/Publish/PublishFile directly — the publish
 // package holds no path globals to mutate.
@@ -27,37 +27,23 @@ type testEnv struct {
 }
 
 // withTestDirs builds a per-test temp dir tree and returns a testEnv
-// holding (a) the stockpile/live paths and (b) an Options struct
+// holding (a) the stacks/live paths and (b) an Options struct
 // pre-populated with those paths. Tests should pass env.opts (possibly
 // further customized) to ValidateSource/Publish/PublishFile.
 //
-// The returned "stacks" is the stacks root — tests write files via
-// shorthand symlinks (configcrates/, envoys/, roles/) which all resolve to
-// stockpile/configcrates/, stockpile/envoys/, stockpile/roles/ post-0.33.0
-// collapse.
+// The returned "stacks" is the operator config-tree root — tests write
+// files directly under stacks/configcrates/, stacks/envoys/, stacks/roles/.
 func withTestDirs(t *testing.T) testEnv {
 	t.Helper()
-	stacks := t.TempDir()
+	stacks := filepath.Join(t.TempDir(), "stacks")
 	live := filepath.Join(t.TempDir(), ".live")
-	stockpile := filepath.Join(stacks, "stockpile")
 
 	t.Cleanup(func() {
 		unlockLiveDir(live) // ensure temp dir cleanup can remove read-only files
 	})
 
-	for _, sub := range []string{"stockpile/configcrates", "stockpile/templates", "stockpile/usercrates", "stockpile/envoys", "stockpile/roles"} {
+	for _, sub := range []string{"configcrates", "templates", "usercrates", "envoys", "roles"} {
 		if err := os.MkdirAll(filepath.Join(stacks, sub), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// Shorthand symlinks so tests can write to filepath.Join(stacks,
-	// "configcrates", ...) and have files land in stockpile/configcrates/.
-	for _, link := range []struct{ name, target string }{
-		{"configcrates", "stockpile/configcrates"},
-		{"envoys", "stockpile/envoys"},
-		{"roles", "stockpile/roles"},
-	} {
-		if err := os.Symlink(filepath.Join(stacks, link.target), filepath.Join(stacks, link.name)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -65,9 +51,8 @@ func withTestDirs(t *testing.T) testEnv {
 		stacks: stacks,
 		live:   live,
 		opts: Options{
-			StacksDir:    stacks,
-			StockpileDir: stockpile,
-			LiveDir:      live,
+			StacksDir: stacks,
+			LiveDir:   live,
 		},
 	}
 }
@@ -186,27 +171,27 @@ func TestPublish_SyncsFiles(t *testing.T) {
 	}
 }
 
-// TestPublish_StockpileBytesUnchanged is the regression test for the
+// TestPublish_StacksBytesUnchanged is the regression test for the
 // "modlint mangled my source" complaint. Before this fix, every publish
-// ran modlint and wrote the linted output BACK to the stockpile path,
+// ran modlint and wrote the linted output BACK to the stacks path,
 // reformatting whatever the operator had written. After the fix, publish
 // builds an in-memory linted-overrides map, materializes it into a
 // staging dir alongside hardlinks for unchanged files, and syncs the
-// staging dir to .live — leaving stockpile byte-stable.
+// staging dir to .live — leaving stacks byte-stable.
 //
 // The test writes a module with intentional non-canonical formatting
 // (compact flow-style sequences, hand-chosen key order), runs Publish,
 // and asserts:
 //
-//  1. The bytes in stockpile/modules/users/dan.vgo are EXACTLY what was
+//  1. The bytes in stacks/modules/users/dan.vgo are EXACTLY what was
 //     written, byte for byte. No modlint mangling.
 //  2. The bytes in .live/modules/users/dan.vgo are the canonical (linted)
 //     form, including the flow-style preservation from Fix B.
-func TestPublish_StockpileBytesUnchanged(t *testing.T) {
+func TestPublish_StacksBytesUnchanged(t *testing.T) {
 	env := withTestDirs(t)
 
 	// Hand-written compact form. Flow-style sequences, non-alphabetic key
-	// order. Modlint must not "fix" any of this in stockpile.
+	// order. Modlint must not "fix" any of this in stacks.
 	original := `name: users/dan
 resources:
   - name: dan
@@ -240,18 +225,18 @@ envoys:
 		t.Error("expected files to be synced to .live")
 	}
 
-	// Stockpile must be byte-identical to what we wrote.
+	// Stacks must be byte-identical to what we wrote.
 	got, err := os.ReadFile(srcPath)
 	if err != nil {
-		t.Fatalf("re-reading stockpile dan.vgo: %v", err)
+		t.Fatalf("re-reading stacks dan.vgo: %v", err)
 	}
 	if string(got) != original {
-		t.Errorf("stockpile dan.vgo was modified by publish.\nwant:\n%s\n\ngot:\n%s", original, string(got))
+		t.Errorf("stacks dan.vgo was modified by publish.\nwant:\n%s\n\ngot:\n%s", original, string(got))
 	}
 
 	// .live must contain the linted bytes — at minimum, the canonical
 	// Lint output. Round-trip stability is enough: if we lint the
-	// stockpile source ourselves and compare, .live should match.
+	// stacks source ourselves and compare, .live should match.
 	livePath := filepath.Join(env.live, "configcrates", "users", "dan.vgo")
 	liveBytes, err := os.ReadFile(livePath)
 	if err != nil {
@@ -267,33 +252,33 @@ envoys:
 }
 
 // TestHashTree_SkipsNestedLiveDir guards the invariant that letting `.live/`
-// live inside the stockpile does not cause the publish walker to re-read
+// live inside the stacks does not cause the publish walker to re-read
 // already-published files (which would double-load every module at diff
 // time). hashTree skips any directory whose basename starts with `.`, plus
 // the names in skipDirs. Any regression here — a future walker that
 // includes hidden dirs — would surface here.
 func TestHashTree_SkipsNestedLiveDir(t *testing.T) {
-	stockpile := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(stockpile, "configcrates"), 0o755); err != nil {
+	stacks := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(stacks, "configcrates"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(stockpile, "configcrates", "nginx.vgo"), "name: nginx\nresources: []\n")
+	writeFile(t, filepath.Join(stacks, "configcrates", "nginx.vgo"), "name: nginx\nresources: []\n")
 
-	// Simulate the post-publish layout: .live sits inside stockpile and
+	// Simulate the post-publish layout: .live sits inside stacks and
 	// holds a mirror of the modules. These files must NOT appear in the
-	// stockpile hash.
-	liveModules := filepath.Join(stockpile, ".live", "configcrates")
+	// stacks hash.
+	liveModules := filepath.Join(stacks, ".live", "configcrates")
 	if err := os.MkdirAll(liveModules, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	writeFile(t, filepath.Join(liveModules, "nginx.vgo"), "name: nginx-canonical\nresources: []\n")
 
-	hashes, err := hashTree(stockpile)
+	hashes, err := hashTree(stacks)
 	if err != nil {
 		t.Fatalf("hashTree: %v", err)
 	}
 	if _, ok := hashes[filepath.Join("configcrates", "nginx.vgo")]; !ok {
-		t.Error("stockpile nginx.vgo missing from hash — walker is broken")
+		t.Error("stacks nginx.vgo missing from hash — walker is broken")
 	}
 	for rel := range hashes {
 		if strings.HasPrefix(rel, ".live"+string(filepath.Separator)) {
@@ -434,7 +419,7 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
 	writeFile(t, filepath.Join(env.live, "configcrates", "deleted.vgo"), "will be removed")
 
-	_, changed, removed, err := diffTrees(env.opts.StockpileDir, env.live)
+	_, changed, removed, err := diffTrees(env.opts.StacksDir, env.live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}
@@ -452,7 +437,7 @@ func TestDiff_EmptyLive(t *testing.T) {
 	writeValidConfig(t, env.stacks)
 
 	// .live doesn't exist yet — everything is new.
-	_, changed, removed, err := diffTrees(env.opts.StockpileDir, env.live)
+	_, changed, removed, err := diffTrees(env.opts.StacksDir, env.live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}
@@ -686,7 +671,7 @@ envoys:
 
 // --- prune ---
 
-// writePruneFixture lays out a stockpile with a mix of referenced and
+// writePruneFixture lays out a stacks with a mix of referenced and
 // unreferenced modules, usercrates, and templates so the prune test can
 // assert which files survive publish.
 func writePruneFixture(t *testing.T, env testEnv) {
@@ -716,7 +701,7 @@ resources:
 `)
 
 	// Referenced usercrate → kept.
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "usercrates", "alice.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "usercrates", "alice.vgo"), `
 name: alice
 resources:
   - name: alice
@@ -725,7 +710,7 @@ resources:
     username: alice
 `)
 	// Unreferenced usercrate → pruned.
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "usercrates", "bob.vgo"), `
+	writeFile(t, filepath.Join(env.stacks, "usercrates", "bob.vgo"), `
 name: bob
 resources:
   - name: bob
@@ -735,11 +720,11 @@ resources:
 `)
 
 	// Templates: site.tmpl referenced by nginx module; orphan.tmpl not.
-	if err := os.MkdirAll(filepath.Join(env.stacks, "stockpile", "templates"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(env.stacks, "templates"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "templates", "nginx-site.tmpl"), "server { listen 80; }\n")
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "templates", "orphan.tmpl"), "no consumer\n")
+	writeFile(t, filepath.Join(env.stacks, "templates", "nginx-site.tmpl"), "server { listen 80; }\n")
+	writeFile(t, filepath.Join(env.stacks, "templates", "orphan.tmpl"), "no consumer\n")
 
 	writeFile(t, filepath.Join(env.stacks, "envoys", "web.vgo"), `
 envoys:
@@ -783,14 +768,14 @@ func TestPublish_PrunesUnreferenced(t *testing.T) {
 		}
 	}
 
-	// Stockpile untouched — the operator's library stays whole.
+	// Stacks untouched — the operator's library stays whole.
 	for _, rel := range []string{
 		"configcrates/orphan.vgo",
-		"stockpile/usercrates/bob.vgo",
-		"stockpile/templates/orphan.tmpl",
+		"usercrates/bob.vgo",
+		"templates/orphan.tmpl",
 	} {
 		if _, err := os.Stat(filepath.Join(env.stacks, rel)); err != nil {
-			t.Errorf("stockpile %s should be untouched by prune, missing: %v", rel, err)
+			t.Errorf("stacks %s should be untouched by prune, missing: %v", rel, err)
 		}
 	}
 }
@@ -833,12 +818,12 @@ resources:
     unless: "true"
 `)
 
-	// Structural files at the stockpile top level — every one of these
+	// Structural files at the stacks top level — every one of these
 	// must survive prune even though they're not "referenced" in the
 	// modules/usercrates sense.
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "common.vgo"), "configcrates: []\n")
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "environments.vgo"), "environments:\n  prod: {}\n")
-	writeFile(t, filepath.Join(env.stacks, "stockpile", "waivers.vgo"), "waivers: {}\n")
+	writeFile(t, filepath.Join(env.stacks, "common.vgo"), "configcrates: []\n")
+	writeFile(t, filepath.Join(env.stacks, "environments.vgo"), "environments:\n  prod: {}\n")
+	writeFile(t, filepath.Join(env.stacks, "waivers.vgo"), "waivers: {}\n")
 	writeFile(t, filepath.Join(env.stacks, "roles", "roles.vgo"), "roles: []\n")
 	writeFile(t, filepath.Join(env.stacks, "envoys", "envoys.vgo"), `
 envoys:

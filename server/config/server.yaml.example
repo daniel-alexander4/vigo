@@ -336,7 +336,7 @@ watcher:
 #   retraction:
 #     enabled: false                           # auto-generate retract modules when modules are removed
 #                                              # requires ai.enabled: true — uses AI to improve exec reversals
-#                                              # writes .retract files to stockpile/ for operator review
+#                                              # writes .retract files to stacks/ for operator review
 
 
 # ── Swarm — Peer-to-Peer Content Distribution ───────────────────────────
@@ -498,7 +498,7 @@ watcher:
 
 # ── Task Dispatch ────────────────────────────────────────────────────────
 # When require_definition is true, only named task definitions (from the
-# stacks/stockpile/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
+# stacks/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
 
 # task:
 #   require_definition: false                  # default false — allow ad-hoc commands

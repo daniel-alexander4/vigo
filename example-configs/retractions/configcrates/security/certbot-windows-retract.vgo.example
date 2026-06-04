@@ -1,9 +1,0 @@
-name: certbot-windows-retract
-description: Retract certbot-windows (win-acme).
-
-resources:
-  - name: uninstall-win-acme
-    type: package
-    package: win-acme
-    state: absent
-    when: "os_family('windows')"

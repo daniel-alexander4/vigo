@@ -1,9 +1,0 @@
-name: swap-config-windows-retract
-description: Retract swap-config-windows. Restores automatic pagefile management.
-
-resources:
-  - name: enable-automatic-pagefile
-    type: powershell
-    command: '(Get-WmiObject -Class Win32_ComputerSystem -EnableAllPrivileges).AutomaticManagedPagefile = $true; (Get-WmiObject -Class Win32_ComputerSystem -EnableAllPrivileges).Put()'
-    skip_validation: true
-    when: "os_family('windows')"

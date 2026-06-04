@@ -24,8 +24,8 @@ var configEditCmd = &cobra.Command{
 	Long: `Opens a .vgo file in the specified editor with validation.
 
 Accepts a configcrate name, a relative path, or an absolute path. Configcrate names
-are searched recursively in stockpile/configcrates/ (e.g., "nginx" finds
-stockpile/configcrates/system/nginx.vgo). The .vgo extension is optional.
+are searched recursively in stacks/configcrates/ (e.g., "nginx" finds
+stacks/configcrates/system/nginx.vgo). The .vgo extension is optional.
 
 Editor defaults to $EDITOR, falling back to vi. Override with --editor.
 vi/vim get vigo-aware syntax highlighting and write-time validation.
@@ -59,7 +59,7 @@ Examples:
 	},
 }
 
-// findModuleByName searches the entire stockpile/ tree recursively for a
+// findModuleByName searches the entire stacks/ tree recursively for a
 // .vgo file by name. Accepts "nginx", "nginx.vgo", or "danlap" — returns
 // the absolute path.
 func findModuleByName(name string) (string, error) {
@@ -68,10 +68,10 @@ func findModuleByName(name string) (string, error) {
 		name += ".vgo"
 	}
 
-	stockpileDir := filepath.Join(vigoConfigRoot, "stockpile")
+	stacksDir := filepath.Join(vigoConfigRoot, "stacks")
 
 	var matches []string
-	_ = filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(stacksDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -83,7 +83,7 @@ func findModuleByName(name string) (string, error) {
 
 	switch len(matches) {
 	case 0:
-		return "", fmt.Errorf("%q not found in stockpile", strings.TrimSuffix(name, ".vgo"))
+		return "", fmt.Errorf("%q not found in stacks", strings.TrimSuffix(name, ".vgo"))
 	case 1:
 		return matches[0], nil
 	default:
@@ -107,8 +107,8 @@ func resolveVigoPath(input string) (string, error) {
 		if _, err := os.Stat(input); err == nil {
 			absPath, _ = filepath.Abs(input)
 		} else {
-			// Resolve relative to stockpile/ directory.
-			absPath = filepath.Join(vigoConfigRoot, "stockpile", input)
+			// Resolve relative to stacks/ directory.
+			absPath = filepath.Join(vigoConfigRoot, "stacks", input)
 		}
 	}
 

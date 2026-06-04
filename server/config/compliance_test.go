@@ -23,7 +23,7 @@ func sortFrameworkClaims(m map[string][]string) {
 // Envoys-tree regression — rename doesn't break anything
 // ============================================================================
 
-// Case 1: compliance.vgo at the stockpile root with a waivers: block —
+// Case 1: compliance.vgo at the stacks root with a waivers: block —
 // merged into cs.waivers just like the old waivers.vgo was.
 func TestCompliance_EnvoysTreeRoot_WaiversMerge(t *testing.T) {
 	dir := setupDir(t)
@@ -334,7 +334,7 @@ envoys:
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
-		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/modules/compliance.vgo")
+		t.Fatal("expected NewConfigStore to reject waivers: in stacks/modules/compliance.vgo")
 	}
 	if !strings.Contains(err.Error(), "waivers: block in compliance.vgo") {
 		t.Errorf("error should identify the wrong-key violation; got: %s", err)
@@ -376,11 +376,11 @@ vars:
 }
 
 // (Removed) Case 9 — "legacy waivers.vgo file → skipped". The test relied
-// on dropping a waivers.vgo *outside* the stockpile content root, exercising
+// on dropping a waivers.vgo *outside* the stacks content root, exercising
 // nothing more than "files outside the walked tree are ignored." After the
 // 0.65 layout flattening, the test's "outside" path lands *inside* the
 // content root, where the file is a legitimate top-level waivers.vgo.
-// loadStockpileWaivers explicitly supports top-level waivers per its
+// loadStacksWaivers explicitly supports top-level waivers per its
 // canonical-filename rule, so there is no longer a behavior here worth
 // asserting.
 
@@ -479,7 +479,7 @@ waivers:
 // Usercrate-tree compliance inheritance — mirrors the modules-tree behavior
 // ============================================================================
 
-// Case U1: stockpile/usercrates/compliance.vgo with fleet-wide claims —
+// Case U1: stacks/usercrates/compliance.vgo with fleet-wide claims —
 // every usercrate under usercrates/ inherits them.
 func TestCompliance_UsercratesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
 	dir := setupDir(t)
@@ -554,7 +554,7 @@ resources:
     state: present
     username: globaladmin
 `)
-	// CustomerA-scoped compliance + usercrate (lives under stockpile/).
+	// CustomerA-scoped compliance + usercrate (lives under stacks/).
 	writeFile(t, filepath.Join(dir, "customerA", "usercrates", "compliance.vgo"), `
 compliance:
   pci-dss: ["8.1.1"]
@@ -622,7 +622,7 @@ envoys:
 }
 
 // Case U3: waivers: block inside a usercrate-tree compliance.vgo — now
-// rejected fatally (phase 3, 0.29.1). stockpile/**/compliance.vgo holds
+// rejected fatally (phase 3, 0.29.1). stacks/**/compliance.vgo holds
 // claims only; any waivers: entries belong in scaffolding/waivers.vgo.
 func TestCompliance_UsercratesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
@@ -650,7 +650,7 @@ envoys:
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
-		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/usercrates/compliance.vgo")
+		t.Fatal("expected NewConfigStore to reject waivers: in stacks/usercrates/compliance.vgo")
 	}
 	if !strings.Contains(err.Error(), "waivers: block in compliance.vgo") {
 		t.Errorf("error should identify the wrong-key violation; got: %s", err)

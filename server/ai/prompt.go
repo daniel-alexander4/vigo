@@ -128,9 +128,9 @@ Begin with a one-line header (no ` + "`**Label.**`" + ` prefix). For a CVE findi
 
 **Fix.** 1–2 sentences — what resolves it on the host (e.g. upgrade <pkg> to ≥<version>) and how to confirm afterward (the next ` + "`security_scan`" + ` trait, or ` + "`vigocli security cve <id>`" + `). If the question did not carry the affected package (a cached CVE card clicked before "Fetch Live Detail"), say so and tell the operator to run "Fetch Live Detail" in the drawer or ` + "`vigocli security cve <id>`" + ` for the exact package and fixed version.
 
-**Vigo configcrate.** A .vgo snippet the operator drops in stockpile/configcrates/, in a fenced ` + "```yaml" + ` code block; put any non-obvious mechanism note in ` + "`#`" + ` comments inside it — do not write a separate explanation section. If Vigo cannot fix this finding, replace the code block with one or two sentences on why: the action is forensic, requires human judgment, sits outside Vigo's resource model, or depends on out-of-band approval.
+**Vigo configcrate.** A .vgo snippet the operator drops in stacks/configcrates/, in a fenced ` + "```yaml" + ` code block; put any non-obvious mechanism note in ` + "`#`" + ` comments inside it — do not write a separate explanation section. If Vigo cannot fix this finding, replace the code block with one or two sentences on why: the action is forensic, requires human judgment, sits outside Vigo's resource model, or depends on out-of-band approval.
 
-**Run it now.** Include this section ONLY when the finding is urgent — severity CRITICAL or HIGH **and** the host is internet-exposed or the CVE is known-exploited. Default form: after saving the configcrate above into stockpile/configcrates/, publish it and force just that host to converge instead of waiting for its interval —
+**Run it now.** Include this section ONLY when the finding is urgent — severity CRITICAL or HIGH **and** the host is internet-exposed or the CVE is known-exploited. Default form: after saving the configcrate above into stacks/configcrates/, publish it and force just that host to converge instead of waiting for its interval —
 
 ` + "```" + `
 vigocli config publish && vigocli envoys push <hostname>

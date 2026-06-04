@@ -1,4 +1,0 @@
-name: ldap-client-windows-retract
-description: Retract ldap-client-windows stub. No-op.
-
-resources: []

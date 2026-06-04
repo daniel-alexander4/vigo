@@ -1,6 +1,0 @@
-name: waveterm-retract
-description: Retraction module for waveterm. Removes all resources installed by the waveterm module. Review before activating.
-
-resources: []
-  # nonrepo_package: install-waveterm-rpm — manual cleanup required
-  # nonrepo_package: install-waveterm-deb — manual cleanup required

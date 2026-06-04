@@ -1,9 +1,0 @@
-name: btrfs-retract
-description: Retract btrfs. Does NOT touch any mounted btrfs volumes.
-
-resources:
-  - name: uninstall-btrfs-progs
-    type: package
-    package: btrfs-progs
-    state: absent
-    when: "os_family('linux')"

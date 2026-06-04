@@ -522,8 +522,8 @@ echo ""
 # 19. test (config validation)
 # -------------------------------------------------------------------
 echo -e "${BOLD}[test]${NC}"
-if [[ -d "/srv/vigo/stockpile" ]]; then
-    run_test "test" $CLI test /srv/vigo/stockpile --server "$SERVER"
+if [[ -d "/srv/vigo/stacks" ]]; then
+    run_test "test" $CLI test /srv/vigo/stacks --server "$SERVER"
 elif [[ -d "examples" ]]; then
     run_test "test" $CLI test examples --server "$SERVER"
 else
@@ -552,15 +552,15 @@ echo ""
 # 21. validate
 # -------------------------------------------------------------------
 echo -e "${BOLD}[validate]${NC}"
-if [[ -d "/srv/vigo/stockpile/configcrates" ]]; then
-    VGO_FILE=$(find /srv/vigo/stockpile/configcrates -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+if [[ -d "/srv/vigo/stacks/configcrates" ]]; then
+    VGO_FILE=$(find /srv/vigo/stacks/configcrates -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$VGO_FILE" ]]; then
         run_test "config validate" $CLI config validate "$VGO_FILE"
     else
         skip_test "config validate" "no .vgo files found in stage"
     fi
-elif [[ -d "example-configs/stockpile/configcrates" ]]; then
-    VGO_FILE=$(find example-configs/stockpile/configcrates -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+elif [[ -d "example-configs/stacks/configcrates" ]]; then
+    VGO_FILE=$(find example-configs/stacks/configcrates -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$VGO_FILE" ]]; then
         run_test "config validate" $CLI config validate "$VGO_FILE"
     else

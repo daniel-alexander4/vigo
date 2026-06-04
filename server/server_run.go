@@ -48,7 +48,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startSnapshotters(ctx)
 	s.startGRC(ctx)
 	s.startNVDEnricher(ctx)
-	s.startStockpileWatcher(ctx)
+	s.startStacksWatcher(ctx)
 	s.startAIWarmup()
 	s.startSwarm(ctx)
 	s.startHTTPServer()
@@ -387,18 +387,18 @@ func (s *Server) startNVDEnricher(ctx context.Context) {
 	})
 }
 
-// startStockpileWatcher runs the ADR-025 Slice 3 stockpile-in-gitback
-// watcher. Nil when the stockpile project hasn't been founded yet
-// (vigocli spanner stockpile init) — a future SIGHUP / restart picks it
+// startStacksWatcher runs the ADR-025 Slice 3 stacks-in-gitback
+// watcher. Nil when the stacks project hasn't been founded yet
+// (vigocli spanner stacks init) — a future SIGHUP / restart picks it
 // up.
-func (s *Server) startStockpileWatcher(ctx context.Context) {
-	if s.stockpileWatcher == nil {
+func (s *Server) startStacksWatcher(ctx context.Context) {
+	if s.stacksWatcher == nil {
 		return
 	}
-	w := s.stockpileWatcher
+	w := s.stacksWatcher
 	go func() {
 		if err := w.Run(ctx); err != nil {
-			slog.Warn("stockpile watcher exited", "error", err)
+			slog.Warn("stacks watcher exited", "error", err)
 		}
 	}()
 }

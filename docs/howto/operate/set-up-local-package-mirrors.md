@@ -20,16 +20,16 @@ Pair the mirror configcrate with the [nginx configcrate](../../reference/vigo/re
 
 ## Shipped recipes
 
-Each example lives at `example-configs/worksite/stockpile/configcrates/system/<pm>-mirror.vgo.example`. Copy into your stockpile, set vars to match your upstream of choice, publish.
+Each example lives at `example-configs/stacks/configcrates/system/<pm>-mirror.vgo.example`. Copy into your stockpile, set vars to match your upstream of choice, publish.
 
 | Configcrate | OS family | Tooling | Upstream | Client-side config |
 |---|---|---|---|---|
-| [`apt-mirror`](../../../example-configs/worksite/stockpile/configcrates/system/apt-mirror.vgo.example) | Debian / Ubuntu | `apt-mirror` (package) + cron + nginx | `archive.ubuntu.com/ubuntu` (or any Debian archive) | `deb http://<mirror>/<upstream-host>/<path> <distribution> <components>` in `/etc/apt/sources.list` |
-| [`dnf-mirror`](../../../example-configs/worksite/stockpile/configcrates/system/dnf-mirror.vgo.example) | RHEL / Fedora / Rocky / AlmaLinux / Amazon Linux | `reposync` (dnf-utils) + `createrepo_c` + cron + nginx | configured `dnf` source on the mirror host | `baseurl=http://<mirror>/<repoid>/` in a `.repo` file |
-| [`apk-mirror`](../../../example-configs/worksite/stockpile/configcrates/system/apk-mirror.vgo.example) | Alpine | `rsync` from `rsync://rsync.alpinelinux.org/alpine/` + nginx | Alpine official | `http://<mirror>/alpine/<version>/main` in `/etc/apk/repositories` |
-| [`zypper-mirror`](../../../example-configs/worksite/stockpile/configcrates/system/zypper-mirror.vgo.example) | openSUSE / SLES | `dnf reposync` + `createrepo_c` (rpm-md, same shape as dnf) | openSUSE / SLES mirror | `baseurl=http://<mirror>/<repoid>/` in `/etc/zypp/repos.d/<repo>.repo` |
-| [`pacman-mirror`](../../../example-configs/worksite/stockpile/configcrates/system/pacman-mirror.vgo.example) | Arch Linux | `rsync` from a tier-1 Arch mirror + nginx | configured tier-1 mirror | `Server = http://<mirror>/archlinux/$repo/os/$arch` in `/etc/pacman.d/mirrorlist` |
-| [`brew-bottle-mirror`](../../../example-configs/worksite/stockpile/configcrates/system/brew-bottle-mirror.vgo.example) | macOS | nginx `proxy_cache` fronting `ghcr.io/v2/homebrew/core/` | GitHub Container Registry (Homebrew's bottle store) | `export HOMEBREW_BOTTLE_DOMAIN=http://<mirror>` on each client |
+| [`apt-mirror`](../../../example-configs/stacks/configcrates/system/apt-mirror.vgo.example) | Debian / Ubuntu | `apt-mirror` (package) + cron + nginx | `archive.ubuntu.com/ubuntu` (or any Debian archive) | `deb http://<mirror>/<upstream-host>/<path> <distribution> <components>` in `/etc/apt/sources.list` |
+| [`dnf-mirror`](../../../example-configs/stacks/configcrates/system/dnf-mirror.vgo.example) | RHEL / Fedora / Rocky / AlmaLinux / Amazon Linux | `reposync` (dnf-utils) + `createrepo_c` + cron + nginx | configured `dnf` source on the mirror host | `baseurl=http://<mirror>/<repoid>/` in a `.repo` file |
+| [`apk-mirror`](../../../example-configs/stacks/configcrates/system/apk-mirror.vgo.example) | Alpine | `rsync` from `rsync://rsync.alpinelinux.org/alpine/` + nginx | Alpine official | `http://<mirror>/alpine/<version>/main` in `/etc/apk/repositories` |
+| [`zypper-mirror`](../../../example-configs/stacks/configcrates/system/zypper-mirror.vgo.example) | openSUSE / SLES | `dnf reposync` + `createrepo_c` (rpm-md, same shape as dnf) | openSUSE / SLES mirror | `baseurl=http://<mirror>/<repoid>/` in `/etc/zypp/repos.d/<repo>.repo` |
+| [`pacman-mirror`](../../../example-configs/stacks/configcrates/system/pacman-mirror.vgo.example) | Arch Linux | `rsync` from a tier-1 Arch mirror + nginx | configured tier-1 mirror | `Server = http://<mirror>/archlinux/$repo/os/$arch` in `/etc/pacman.d/mirrorlist` |
+| [`brew-bottle-mirror`](../../../example-configs/stacks/configcrates/system/brew-bottle-mirror.vgo.example) | macOS | nginx `proxy_cache` fronting `ghcr.io/v2/homebrew/core/` | GitHub Container Registry (Homebrew's bottle store) | `export HOMEBREW_BOTTLE_DOMAIN=http://<mirror>` on each client |
 
 ## Different shape: `brew-bottle-mirror`
 

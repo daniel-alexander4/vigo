@@ -9,7 +9,7 @@ import (
 )
 
 // FleetFile is one parsed module file in a publish-time fleet
-// snapshot. Path is the stockpile-relative source location used in
+// snapshot. Path is the stacks-relative source location used in
 // finding messages so operators can locate the offending pair.
 type FleetFile struct {
 	Path string

@@ -69,7 +69,7 @@ Or open the web dashboard at `https://<server-ip>:8443/`.
 ### Nginx with templated config
 
 ```yaml
-# example-configs/worksite/stockpile/modules/nginx.vgo
+# example-configs/stacks/modules/nginx.vgo
 name: nginx
 vars:
   worker_processes: "auto"
@@ -100,7 +100,7 @@ resources:
 ### PostgreSQL with secrets
 
 ```yaml
-# example-configs/worksite/stockpile/modules/postgresql.vgo
+# example-configs/stacks/modules/postgresql.vgo
 name: postgresql
 vars:
   pg_password: "secret:vigo/postgres/password"
@@ -146,7 +146,7 @@ resources:
 ### Docker container with resource wiring
 
 ```yaml
-# example-configs/worksite/stockpile/modules/redis.vgo
+# example-configs/stacks/modules/redis.vgo
 name: redis
 vars:
   redis_password: "secret:vigo/redis/password"
@@ -176,7 +176,7 @@ resources:
 ### OS-conditional packages
 
 ```yaml
-# example-configs/worksite/stockpile/modules/webserver.vgo
+# example-configs/stacks/modules/webserver.vgo
 name: webserver
 vars:
   is_debian:
@@ -205,7 +205,7 @@ resources:
 ### User accounts with SSH keys
 
 ```yaml
-# example-configs/worksite/stockpile/modules/ops-users.vgo
+# example-configs/stacks/modules/ops-users.vgo
 name: ops-users
 resources:
   - name: deploy-user
@@ -227,7 +227,7 @@ resources:
 ### Exec with idempotency guards
 
 ```yaml
-# example-configs/worksite/stockpile/modules/certbot.vgo
+# example-configs/stacks/modules/certbot.vgo
 name: certbot
 vars:
   domain: "example.com"
@@ -247,7 +247,7 @@ resources:
 ### Firewall rules
 
 ```yaml
-# example-configs/worksite/stockpile/modules/firewall.vgo
+# example-configs/stacks/modules/firewall.vgo
 name: firewall
 resources:
   - name: allow-ssh
@@ -275,7 +275,7 @@ resources:
 ### Cron job
 
 ```yaml
-# example-configs/worksite/stockpile/modules/backups.vgo
+# example-configs/stacks/modules/backups.vgo
 name: backups
 resources:
   - name: backup-script
@@ -299,7 +299,7 @@ resources:
 ### Network device configuration
 
 ```yaml
-# example-configs/worksite/stockpile/modules/switch-baseline.vgo
+# example-configs/stacks/modules/switch-baseline.vgo
 name: switch-baseline
 resources:
   - name: set-ntp
@@ -413,7 +413,7 @@ vigocli task status <run-id>
 Chain tasks with conditional branching:
 
 ```yaml
-# stockpile/workflows/deploy.vgo
+# stacks/workflows/deploy.vgo
 name: rolling-deploy
 steps:
   - task: pre-check

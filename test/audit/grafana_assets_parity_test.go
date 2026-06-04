@@ -12,8 +12,8 @@ import (
 
 // TestGrafanaAssetsParity pins the byte-for-byte equality between the
 // canonical Grafana dashboards + alert-rules under docs/howto/grafana/
-// and the copies shipped in the example stockpile templates. The
-// dashboards are the SoT; the stockpile copies exist so the example
+// and the copies shipped in the example stacks templates. The
+// dashboards are the SoT; the stacks copies exist so the example
 // modules vigo-grafana-dashboards / vigo-prometheus-alerts can `source:`
 // them via the normal Vigo `templates/` idiom. Either tree edited in
 // isolation triggers a fail — keeping both copies in lockstep is
@@ -27,19 +27,19 @@ func TestGrafanaAssetsParity(t *testing.T) {
 		template  string
 	}{
 		{"docs/howto/grafana/vigo-overview.json",
-			"example-configs/worksite/stockpile/templates/vigo-dashboards/vigo-overview.json"},
+			"example-configs/stacks/templates/vigo-dashboards/vigo-overview.json"},
 		{"docs/howto/grafana/vigo-convergence.json",
-			"example-configs/worksite/stockpile/templates/vigo-dashboards/vigo-convergence.json"},
+			"example-configs/stacks/templates/vigo-dashboards/vigo-convergence.json"},
 		{"docs/howto/grafana/vigo-bursts.json",
-			"example-configs/worksite/stockpile/templates/vigo-dashboards/vigo-bursts.json"},
+			"example-configs/stacks/templates/vigo-dashboards/vigo-bursts.json"},
 		{"docs/howto/grafana/vigo-risk.json",
-			"example-configs/worksite/stockpile/templates/vigo-dashboards/vigo-risk.json"},
+			"example-configs/stacks/templates/vigo-dashboards/vigo-risk.json"},
 		{"docs/howto/grafana/vigo-security.json",
-			"example-configs/worksite/stockpile/templates/vigo-dashboards/vigo-security.json"},
+			"example-configs/stacks/templates/vigo-dashboards/vigo-security.json"},
 		{"docs/howto/grafana/vigo-swarm.json",
-			"example-configs/worksite/stockpile/templates/vigo-dashboards/vigo-swarm.json"},
+			"example-configs/stacks/templates/vigo-dashboards/vigo-swarm.json"},
 		{"docs/howto/grafana/alerts.yaml",
-			"example-configs/worksite/stockpile/templates/vigo-prometheus/vigo-alerts.yaml"},
+			"example-configs/stacks/templates/vigo-prometheus/vigo-alerts.yaml"},
 	}
 
 	for _, tc := range cases {

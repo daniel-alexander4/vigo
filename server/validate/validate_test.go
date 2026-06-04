@@ -634,7 +634,7 @@ func TestFindingString_Format(t *testing.T) {
 
 func TestDependsOn_UnknownResource_IsWarning(t *testing.T) {
 	// Unknown depends_on targets are Warning (not Error) because single-file
-	// lint can't see resources defined in sibling modules. Whole-stockpile
+	// lint can't see resources defined in sibling modules. Whole-stacks
 	// resolution happens at publish time. Self-references are still Error
 	// (covered by other tests).
 	mod := Configcrate{
@@ -697,7 +697,7 @@ func TestDependsOn_SelfReference_IsError(t *testing.T) {
 func TestNotify_UnknownResource_IsWarning(t *testing.T) {
 	// Cross-module references are the dominant pattern (vhost → nginx's
 	// reload-nginx); single-file validation can't tell a typo from a
-	// cross-module hop. Whole-stockpile resolution happens at publish.
+	// cross-module hop. Whole-stacks resolution happens at publish.
 	mod := Configcrate{
 		Name: "test-mod",
 		Resources: []Resource{

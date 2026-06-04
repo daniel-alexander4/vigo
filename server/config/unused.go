@@ -12,27 +12,27 @@ import (
 // UnusedModule describes a module defined but never referenced.
 type UnusedModule struct {
 	Name       string `json:"name"`
-	SourceFile string `json:"source_file"` // stockpile-relative path, e.g. "configcrates/system/cleanup.vgo"
+	SourceFile string `json:"source_file"` // stacks-relative path, e.g. "configcrates/system/cleanup.vgo"
 }
 
 // UnusedUsercrate describes a usercrate defined but never referenced.
 type UnusedUsercrate struct {
 	Name       string `json:"name"`
-	SourceFile string `json:"source_file"` // stockpile-relative path, e.g. "usercrates/alice.vgo"
+	SourceFile string `json:"source_file"` // stacks-relative path, e.g. "usercrates/alice.vgo"
 }
 
 // UnusedTemplate describes a template file present under templates/ but
 // not referenced by any module's resource source: attribute. Reachability
 // is sound because the loader rejects non-literal source: values at load
 // time (resolveSourceFiles reads the file by its declared path), so every
-// reference is a concrete stockpile-relative path.
+// reference is a concrete stacks-relative path.
 type UnusedTemplate struct {
-	Path string `json:"path"` // stockpile-relative path, e.g. "templates/nginx/site.tmpl"
+	Path string `json:"path"` // stacks-relative path, e.g. "templates/nginx/site.tmpl"
 }
 
 // UnusedHostcrate describes a hostcrate where no pattern matches any enrolled hostname.
 type UnusedHostcrate struct {
-	Path     string   `json:"path"`     // stockpile-relative path, e.g. "staging/web/envoys.vgo"
+	Path     string   `json:"path"`     // stacks-relative path, e.g. "staging/web/envoys.vgo"
 	Patterns []string `json:"patterns"` // the match: values in this file
 }
 

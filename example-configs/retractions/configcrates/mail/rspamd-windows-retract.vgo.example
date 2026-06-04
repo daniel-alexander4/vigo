@@ -1,4 +1,0 @@
-name: rspamd-windows-retract
-description: Retract rspamd-windows stub. No-op.
-
-resources: []

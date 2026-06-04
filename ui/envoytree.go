@@ -178,7 +178,7 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 	// up to root. Walk-time pruning uses this set to skip directories
 	// that aren't on a path to a hostcrate (modules/, usercrates/,
 	// templates/, tasks/, workflows/, …). The tree mirrors the
-	// hostcrate hierarchy only, not the entire stockpile layout.
+	// hostcrate hierarchy only, not the entire stacks layout.
 	keptDirs := hostcrateDirsAndAncestors(dirByPattern)
 
 	// Walk .live/ to build the directory skeleton, then inject envoys at
@@ -338,8 +338,8 @@ func walkEnvoyTree(absDir string, node *EnvoyTreeNode, relPath string, envoysByD
 			childPath = relPath + "/" + name
 		}
 		// Skip directories that aren't on a path to a hostcrate — the
-		// stockpile's modules/, usercrates/, templates/, tasks/, etc.
-		// are valid stockpile contents but not navigation surfaces for
+		// stacks's modules/, usercrates/, templates/, tasks/, etc.
+		// are valid stacks contents but not navigation surfaces for
 		// "which envoys live where."
 		if !keptDirs[childPath] {
 			continue

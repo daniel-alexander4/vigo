@@ -1,4 +1,0 @@
-name: loki-windows-retract
-description: Retract loki-windows stub. No-op.
-
-resources: []

@@ -27,14 +27,14 @@ import (
 
 var configPublishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Validate .vgo files in stockpile/, sync to .live/, and trigger a server config reload",
+	Short: "Validate .vgo files in stacks/, sync to .live/, and trigger a server config reload",
 	Long: fmt.Sprintf(`Validates all .vgo config files in %s using the same
 logic as the server's config loader. If valid, atomically syncs to %s.
 
 By default, all http/https URLs in changed configcrates are checked for aliveness.
 Use --skip-url-check to disable (e.g., in air-gapped environments).
 
-Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, publish.DefaultLiveDir),
+Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publish.DefaultLiveDir),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
@@ -76,7 +76,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, pub
 		}
 
 		// Note: .live/ health is NOT checked here. ValidateSource() validates
-		// the stockpile and returns per-file errors in the Result. The old
+		// the stacks and returns per-file errors in the Result. The old
 		// checkLiveHealth() called NewConfigStore on .live/ which produced
 		// uncontrollable slog output before the file list.
 
@@ -106,7 +106,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, pub
 			fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 		}
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
-			fmt.Printf("\n%s Nothing to publish — .live/ matches stockpile.", green("✓"))
+			fmt.Printf("\n%s Nothing to publish — .live/ matches stacks.", green("✓"))
 			printPublishSummary(res)
 			return nil
 		}
@@ -145,10 +145,10 @@ func printFileList(res *publish.Result) {
 	// ValidationErrors use absolute paths; AllFiles use relative paths.
 	errorMap := make(map[string][]string)
 	for _, fe := range res.ValidationErrors {
-		// Convert absolute path to relative by stripping the stockpile prefix.
+		// Convert absolute path to relative by stripping the stacks prefix.
 		rel := fe.Path
-		if i := strings.Index(rel, "stockpile/"); i >= 0 {
-			rel = rel[i+len("stockpile/"):]
+		if i := strings.Index(rel, "stacks/"); i >= 0 {
+			rel = rel[i+len("stacks/"):]
 		} else if i := strings.Index(rel, ".live/"); i >= 0 {
 			rel = rel[i+len(".live/"):]
 		}
@@ -255,7 +255,7 @@ func suggestFixes(err error, disabled bool) {
 func buildGenericFixPrompt(err error) string {
 	errMsg := err.Error()
 
-	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stockpile/configcrates/foo.vgo: ...")
+	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stacks/configcrates/foo.vgo: ...")
 	var filePath string
 	for _, part := range strings.Fields(errMsg) {
 		if strings.HasSuffix(part, ".vgo") || strings.HasSuffix(part, ".vgo:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
@@ -272,7 +272,7 @@ func buildGenericFixPrompt(err error) string {
 	if filePath != "" {
 		// Only read files within the config tree to prevent information disclosure.
 		cleaned := filepath.Clean(filePath)
-		if strings.HasPrefix(cleaned, publish.DefaultStockpileDir) || strings.HasPrefix(cleaned, publish.DefaultLiveDir) {
+		if strings.HasPrefix(cleaned, publish.DefaultStacksDir) || strings.HasPrefix(cleaned, publish.DefaultLiveDir) {
 			data, readErr := os.ReadFile(cleaned)
 			if readErr == nil {
 				fmt.Fprintf(&b, "File: %s\n```yaml\n%s```\n", cleaned, string(data))
@@ -362,9 +362,9 @@ func streamPublishSSE(body io.Reader) error {
 }
 
 // reloadServer dispatches the post-publish reload either through the
-// legacy stockpile→.live local-write + REST-reload path (standalone)
+// legacy stacks→.live local-write + REST-reload path (standalone)
 // or through the spanner-mode gitback push (which is what triggers
-// the stockpile watcher's bare→.live pull + reload). Detection is
+// the stacks watcher's bare→.live pull + reload). Detection is
 // via /api/v1/spanner/status; failure to detect falls back to the
 // legacy path so misconfigured deployments still get something.
 func reloadServer() {
@@ -395,20 +395,20 @@ func legacyReloadServer() {
 }
 
 // publishViaGitback is the spanner-mode publish path (ADR-025 Slice 4):
-// clone the stockpile bare repo into a temp work tree, mirror this
-// vigosrv's on-disk stockpile/ into it (delete-aware), git add+commit+
+// clone the stacks bare repo into a temp work tree, mirror this
+// vigosrv's on-disk stacks/ into it (delete-aware), git add+commit+
 // push via file://, then poll the server's config version until the
-// stockpile watcher's bare→.live pull + Reload increments it. The
+// stacks watcher's bare→.live pull + Reload increments it. The
 // version-poll is the operator-visible signal that the publish landed.
 func publishViaGitback() error {
 	opsDir := puddle.OpsDefaultDir
-	projectIDHex, err := publishLookupStockpileProjectID(opsDir)
+	projectIDHex, err := publishLookupStacksProjectID(opsDir)
 	if err != nil {
 		return err
 	}
 	bareRepoPath := filepath.Join("/var/lib/vigo/swarm/gitback/projects", projectIDHex+".git")
 	if _, err := os.Stat(bareRepoPath); err != nil {
-		return fmt.Errorf("stockpile bare repo missing at %s: %w (run `vigocli spanner stockpile init` on the founding vigosrv first)", bareRepoPath, err)
+		return fmt.Errorf("stacks bare repo missing at %s: %w (run `vigocli spanner stacks init` on the founding vigosrv first)", bareRepoPath, err)
 	}
 
 	preVersion, err := publishGetConfigVersion()
@@ -426,9 +426,9 @@ func publishViaGitback() error {
 		return fmt.Errorf("cloning bare repo: %w", err)
 	}
 
-	// Mirror /srv/vigo/stacks/stockpile/ → workTree (delete-aware).
-	if err := publishMirrorIntoWorkTree(publish.DefaultStockpileDir, workTree); err != nil {
-		return fmt.Errorf("mirroring stockpile into work tree: %w", err)
+	// Mirror /srv/vigo/stacks/ → workTree (delete-aware).
+	if err := publishMirrorIntoWorkTree(publish.DefaultStacksDir, workTree); err != nil {
+		return fmt.Errorf("mirroring stacks into work tree: %w", err)
 	}
 
 	// Configure committer identity (gitback verifies on signature, not
@@ -447,7 +447,7 @@ func publishViaGitback() error {
 	// Anything staged? `diff --cached --quiet` exits 0 when there is
 	// nothing to commit, non-zero otherwise. Exit 0 = nothing to push.
 	if err := publishRunGit(workTree, "diff", "--cached", "--quiet"); err == nil {
-		fmt.Println("Nothing to publish — bare repo already matches stockpile.")
+		fmt.Println("Nothing to publish — bare repo already matches stacks.")
 		return nil
 	}
 	if err := publishRunGit(workTree, "commit", "-m", "publish"); err != nil {
@@ -459,7 +459,7 @@ func publishViaGitback() error {
 
 	// Poll for the watcher to land the bare→.live pull + reload. The
 	// debounce is 250ms; reload itself is sub-100ms typical. 30s is
-	// generous for any reasonable stockpile size.
+	// generous for any reasonable stacks size.
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		v, err := publishGetConfigVersion()
@@ -469,7 +469,7 @@ func publishViaGitback() error {
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	return fmt.Errorf("watcher did not confirm reload within 30s (pre-version %d); check `journalctl -u vigosrv` for stockpilewatch errors", preVersion)
+	return fmt.Errorf("watcher did not confirm reload within 30s (pre-version %d); check `journalctl -u vigosrv` for stackswatch errors", preVersion)
 }
 
 func publishGetConfigVersion() (uint64, error) {
@@ -483,11 +483,11 @@ func publishGetConfigVersion() (uint64, error) {
 	return resp.Version, nil
 }
 
-// publishLookupStockpileProjectID walks <opsDir>/.vigo-gitback/<id>/
-// project.json files for the entry whose handle is "stockpile".
-// Mirrors server/main.go's lookupStockpileProjectID — duplicated
+// publishLookupStacksProjectID walks <opsDir>/.vigo-gitback/<id>/
+// project.json files for the entry whose handle is "stacks".
+// Mirrors server/main.go's lookupStacksProjectID — duplicated
 // rather than factored to keep cli/ free of imports from server/main.
-func publishLookupStockpileProjectID(opsDir string) (string, error) {
+func publishLookupStacksProjectID(opsDir string) (string, error) {
 	gitbackDir := filepath.Join(opsDir, ".vigo-gitback")
 	entries, err := os.ReadDir(gitbackDir)
 	if err != nil {
@@ -508,16 +508,16 @@ func publishLookupStockpileProjectID(opsDir string) (string, error) {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			continue
 		}
-		if cfg.Handle == "stockpile" {
+		if cfg.Handle == "stacks" {
 			return e.Name(), nil
 		}
 	}
-	return "", fmt.Errorf("no stockpile project state under %s — run `vigocli spanner stockpile init` (founder) or `spanner stockpile join` (joiner)", gitbackDir)
+	return "", fmt.Errorf("no stacks project state under %s — run `vigocli spanner stacks init` (founder) or `spanner stacks join` (joiner)", gitbackDir)
 }
 
 // publishMirrorIntoWorkTree clears src out of workTree (preserving
 // .git/) then copies fresh src/ contents in. After this call the work
-// tree's HEAD vs disk diff reflects exactly the stockpile→bare delta.
+// tree's HEAD vs disk diff reflects exactly the stacks→bare delta.
 func publishMirrorIntoWorkTree(src, workTree string) error {
 	// Step 1: remove every top-level entry in workTree except .git.
 	entries, err := os.ReadDir(workTree)
@@ -570,7 +570,7 @@ func publishMirrorIntoWorkTree(src, workTree string) error {
 }
 
 // publishRunGit is the publish-flow's git invocation helper —
-// parallel to spanner_stockpile.go's runGit; duplicated to keep this
+// parallel to spanner_stacks.go's runGit; duplicated to keep this
 // file self-contained.
 func publishRunGit(dir string, args ...string) error {
 	cmd := exec.Command("git", args...)
@@ -690,7 +690,7 @@ func handleRetractionPregen(res *publish.Result) {
 		if result.RetractYAML == "" {
 			continue
 		}
-		retractPath := filepath.Join(publish.DefaultStockpileDir, "configcrates", result.Name+".retract")
+		retractPath := filepath.Join(publish.DefaultStacksDir, "configcrates", result.Name+".retract")
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
 			continue
@@ -698,14 +698,14 @@ func handleRetractionPregen(res *publish.Result) {
 		generated++
 	}
 	if generated > 0 {
-		fmt.Printf("\n%s Generated %d retract configcrate(s) in stockpile/configcrates/\n",
+		fmt.Printf("\n%s Generated %d retract configcrate(s) in stacks/configcrates/\n",
 			green("✓"), generated)
 	}
 }
 
 func printRetractionResult(result retractAPIResult) {
-	// Write the .retract file to stockpile/modules/.
-	retractPath := filepath.Join(publish.DefaultStockpileDir, "configcrates", result.Name+".retract")
+	// Write the .retract file to stacks/modules/.
+	retractPath := filepath.Join(publish.DefaultStacksDir, "configcrates", result.Name+".retract")
 	if result.RetractYAML != "" {
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
@@ -798,8 +798,8 @@ func init() {
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
-	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stockpile/)")
-	configPublishCmd.Flags().Bool("no-prune", false, "publish every file in stockpile/ verbatim — skip the reachability prune that drops configcrates, usercrates, and templates no carrier references")
+	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stacks/)")
+	configPublishCmd.Flags().Bool("no-prune", false, "publish every file in stacks/ verbatim — skip the reachability prune that drops configcrates, usercrates, and templates no carrier references")
 
 	configCmd.AddCommand(configPublishCmd)
 }

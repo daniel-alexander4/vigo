@@ -153,14 +153,14 @@ type ServerConfig struct {
 	Tuning       TuningSection       `yaml:"tuning" docs:"reference/server-yaml#tuning" doc:"Operational tuning — timing windows, gRPC transport limits, and Go runtime memory caps." long:"Low-level knobs for operators who have hit a scaling ceiling and need to hand-tune. Includes gRPC send/receive limits, concurrent stream caps, timing windows for online-vs-offline envoy classification, and Go runtime memory ceilings (GOMEMLIMIT). Leave at defaults until you see a specific symptom — most fleets never touch this section."`
 	SMTP         SMTPSection         `yaml:"smtp" docs:"reference/server-yaml#smtp" doc:"Email relay for event notifications, digests, and scheduled evidence delivery." long:"SMTP relay used by event notifications, daily/weekly digests, and scheduled compliance evidence delivery. Most deployments should prefer the native integrations (Slack, PagerDuty, Jira) over SMTP — email is the least observable and least actionable channel. Keep this configured only when a recipient genuinely can't be reached any other way."`
 	AI           AISection           `yaml:"ai" docs:"reference/server-yaml#ai" doc:"AI assistant provider (Claude, OpenAI, Ollama) for the Ask page and compliance tooling." long:"Wires the /security chat drawer and compliance-assist tooling to an LLM provider. Supports Claude (sharpest reasoning on Vigo-specific questions), OpenAI (cost/token trade-off), and Ollama (fully self-hosted, no third-party calls). Required for automatic .retract module drafting and for the AI-powered guardrail suggestions in the publish flow."`
-	Backup       BackupSection       `yaml:"backup" docs:"reference/server-yaml#backup" doc:"Continuous Litestream WAL replication of the SQLite database to S3/GCS/filesystem/SFTP." long:"Continuous SQLite WAL replication via Litestream, shipping every committed transaction to an off-server destination (S3, GCS, a mounted filesystem, or SFTP). This is the primary disaster-recovery mechanism — combined with the stockpile directory held in version control, a full server rebuild is a fresh install plus a restore-from-backup. Configure this for every deployment holding more than a test fleet."`
+	Backup       BackupSection       `yaml:"backup" docs:"reference/server-yaml#backup" doc:"Continuous Litestream WAL replication of the SQLite database to S3/GCS/filesystem/SFTP." long:"Continuous SQLite WAL replication via Litestream, shipping every committed transaction to an off-server destination (S3, GCS, a mounted filesystem, or SFTP). This is the primary disaster-recovery mechanism — combined with the stacks directory held in version control, a full server rebuild is a fresh install plus a restore-from-backup. Configure this for every deployment holding more than a test fleet."`
 	Export       ExportSection       `yaml:"export" docs:"reference/server-yaml#export" doc:"Compliance export endpoints (SIEM, CMDB, OSCAL) — each toggled independently." long:"One-way outbound feeds for compliance and audit consumers: SIEM ingestion of audit events, CMDB sync of envoy inventory, and OSCAL-format framework reports for auditors. Each channel is toggled independently — enable only the consumers the organization actually uses. Configure this when the organization needs evidence flowing into an existing GRC or IT ops stack rather than being pulled via the REST API on demand."`
 	Publish      PublishSection      `yaml:"publish" docs:"reference/server-yaml#publish" doc:"Blast-radius limits on config publish — convergence threshold, retraction drafting." long:"Safety rails around 'vigocli config publish' to stop a typo from fanning out to the whole fleet in 15 seconds. Includes a minimum-converged threshold (refuse to publish if too many envoys are already failing) and automatic .retract draft generation when modules are removed. Tune these higher in production fleets and lower in dev — the default is permissive because a lab with three envoys doesn't need a change-control board."`
 	RateLimit    RateLimitSection    `yaml:"rate_limit" docs:"reference/server-yaml#rate_limit" doc:"Per-envoy and global rate limits on check-in RPCs." long:"Ceiling on check-in RPC rates, per-envoy and globally, to protect the server from a runaway agent or a stampeding herd. Requests over the limit are rejected with a retryable error so affected agents back off on their own. Tune this up only after confirming the server's bottleneck is genuinely check-in throughput — for most fleets the default limits sit well above normal traffic."`
 	Maintenance  MaintenanceSection  `yaml:"maintenance" docs:"reference/server-yaml#maintenance" doc:"Global change freeze — publish is blocked until the configured deadline passes." long:"Global change-freeze switch that blocks 'vigocli config publish' until a specified deadline. Use this during code freezes, customer maintenance windows, or incident response when you need to guarantee no config changes can reach the fleet. Emergency bypass requires editing the file and reloading — not a runtime override — so the freeze is real."`
 	Paths        PathsSection        `yaml:"paths" docs:"reference/server-yaml#paths" doc:"Filesystem paths for migrations, custom traits, docs, tasks, workflows, and agent binaries." long:"Override the default filesystem locations for migrations, custom trait collectors, shipped docs, task definitions, workflow definitions, and the agent-binary distribution directory. Change these only for non-standard installs (packaged distributions, per-host chroots) — the defaults under /srv/vigo and /var/lib/vigo cover every normal deployment."`
 	Peers        PeersSection        `yaml:"peers" docs:"reference/server-yaml#peers" doc:"Peer replication — primary or peer role plus the address list for server redundancy." long:"Active-passive replication that keeps one or more standby vigosrv instances file-synced with the primary, so a server outage doesn't strand the fleet. The primary streams config, secrets, and TLS files to each peer over gRPC; agents receive the peer list at enrollment and automatically fall back to one if the primary becomes unreachable. Configure this whenever the fleet is too large to tolerate an unplanned outage — promotion is then a single 'vigocli server promote' command on a surviving peer."`
-	Task         TaskSection         `yaml:"task" docs:"reference/server-yaml#task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task." long:"Controls ad-hoc task dispatch safety. When require_definition is on, every task sent via 'vigocli task dispatch' must reference a pre-reviewed task definition in /srv/vigo/stacks/stockpile/tasks — direct shell commands are refused. Enable this in production to force peer review of anything an operator can fan out to a fleet; leave it off in dev where quick one-off commands are the whole point."`
+	Task         TaskSection         `yaml:"task" docs:"reference/server-yaml#task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task." long:"Controls ad-hoc task dispatch safety. When require_definition is on, every task sent via 'vigocli task dispatch' must reference a pre-reviewed task definition in /srv/vigo/stacks/tasks — direct shell commands are refused. Enable this in production to force peer review of anything an operator can fan out to a fleet; leave it off in dev where quick one-off commands are the whole point."`
 	Branding     BrandingSection     `yaml:"branding" docs:"reference/server-yaml#branding" doc:"Custom org name, logo, favicon, and light/dark/auto UI theme." long:"White-label the web UI with the organization's name (shown in the title bar and in exported reports), a custom logo and favicon, and a forced light/dark theme or auto. The logo is inlined into cover blocks of generated PDFs so emailed attestations carry the customer's brand. Useful for MSPs per-customer and for enterprises who want their audit reports to wear their own logo."`
 	License      LicenseSection      `yaml:"license" docs:"reference/server-yaml#license" doc:"License enforcement mode — local count or aggregated across spanner bolts." long:"How node-count enforcement aggregates across your topology — 'local' counts envoys registered against this single vigosrv, 'aggregated' sums counts across every bolt in a spanner deployment and enforces a single fleet-wide cap. Pick aggregated on MSP hubs or enterprise spanner setups where one license covers the full customer base. Misconfiguring this either blocks legitimate enrollments (too strict) or silently lets the fleet drift past the contract (too loose)."`
 	GRC          GRCSection          `yaml:"grc" docs:"reference/server-yaml#grc" doc:"GRC platform integrations (Vanta, Drata, ServiceNow) for pushing compliance evidence." long:"Outbound push of compliance evidence into third-party GRC platforms (Vanta, Drata, ServiceNow GRC, Hyperproof, and similar). Each GRC target has its own endpoint, token, and control-mapping block — the server translates Vigo's internal compliance state into whatever format the target expects. Configure this when the organization has already standardized on a GRC system and you want Vigo's evidence to land there without manual uploads."`
@@ -780,7 +780,7 @@ type PublishSection struct {
 // RetractionSection configures automatic retract module generation when
 // modules are removed during config publish. Requires both this and AI to
 // be enabled. When a module is removed, a .retract draft is generated
-// in the stockpile for operator review.
+// in the stacks for operator review.
 type RetractionSection struct {
 	Enabled bool `yaml:"enabled" doc:"Draft .retract modules when modules are removed at publish. Requires AI to be enabled." default:"false" example:"true (requires ai.enabled: true)"`
 }
@@ -1058,8 +1058,8 @@ type ResourceConfig struct {
 type ConfigcrateKind string
 
 const (
-	ConfigcrateKindConfigcrate    ConfigcrateKind = ""          // zero value — regular module from stockpile/modules/
-	ConfigcrateKindUsercrate ConfigcrateKind = "usercrate" // loaded from a stockpile/**/usercrates/ dir
+	ConfigcrateKindConfigcrate    ConfigcrateKind = ""          // zero value — regular module from stacks/modules/
+	ConfigcrateKindUsercrate ConfigcrateKind = "usercrate" // loaded from a stacks/**/usercrates/ dir
 )
 
 // ComplianceClaims is a module's per-module compliance attribution block.
@@ -1084,7 +1084,7 @@ type ComplianceClaims struct {
 type ConfigcrateDefinition struct {
 	Name       string           `yaml:"name"`
 	Kind       ConfigcrateKind       `yaml:"-"` // set by loader: regular module vs usercrate
-	SourceFile string           `yaml:"-"` // stockpile-relative path, set by loader
+	SourceFile string           `yaml:"-"` // stacks-relative path, set by loader
 	DependsOn  []string         `yaml:"depends_on"`
 	Before     []string         `yaml:"before"`
 	Defaults   map[string]any   `yaml:"defaults"`
@@ -1120,7 +1120,7 @@ type ConfigcrateDefinition struct {
 	// Compliance.Bundle to build the per-envoy coverage trace.
 	InheritedCompliance map[string][]string `yaml:"-"`
 
-	// TemplateSources are stockpile-relative paths the module references
+	// TemplateSources are stacks-relative paths the module references
 	// via `source:` on any of its resources, captured by resolveSourceFiles
 	// before the source attribute is rewritten into content. Used by the
 	// reachability analysis to know which template files are live.
@@ -1373,7 +1373,7 @@ type WaiverEntry struct {
 // ComplianceConfig holds compliance claims and/or waivers loaded from a
 // compliance.vgo file. One file format, two behaviors by location:
 //
-//   - Files in the envoys directory tree (anywhere under stockpile/ except
+//   - Files in the envoys directory tree (anywhere under stacks/ except
 //     modules/, templates/, examples/) contribute to the waiver index.
 //     The Compliance field is ignored in that location.
 //   - Files in the modules/ subtree contribute to each ancestor module's

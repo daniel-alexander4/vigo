@@ -12,8 +12,8 @@ import (
 )
 
 // writeUsercrateDir writes a usercrate .vgo file under
-// <dir>/stockpile/<scope>/usercrates/<name>.vgo. scope == "" means the
-// root stockpile/usercrates/ directory. The crate declares exactly one
+// <dir>/stacks/<scope>/usercrates/<name>.vgo. scope == "" means the
+// root stacks/usercrates/ directory. The crate declares exactly one
 // `type: user` resource (the 0.54.0 shape rule).
 func writeUsercrateDir(t *testing.T, dir, scope, name string) {
 	t.Helper()

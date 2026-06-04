@@ -1,5 +1,0 @@
-name: timezone-retract
-description: Retraction module for timezone. Removes all resources installed by the timezone module. Review before activating.
-
-resources: []
-  # timezone: set-timezone — manual cleanup required

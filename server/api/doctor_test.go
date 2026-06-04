@@ -85,7 +85,7 @@ func newTestLicenseEnforcer(t *testing.T) *license.Enforcer {
 func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 	t.Helper()
 	dir := t.TempDir()
-	for _, sub := range []string{"stockpile/modules", "stockpile/envoys", "stockpile/roles"} {
+	for _, sub := range []string{"stacks/modules", "stacks/envoys", "stacks/roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}

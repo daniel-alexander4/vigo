@@ -73,7 +73,7 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 // setupE2EConfig creates a temp config directory with the given modules and envoy entries.
 func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "examples", "stockpile")
+	dir := filepath.Join(t.TempDir(), "examples", "stacks")
 	for _, sub := range []string{"configcrates", "envoys", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatal(err)

@@ -15,7 +15,7 @@ Configuration files that define the desired state of managed envoys. These YAML 
 
 ```
 example-configs/
-  stockpile/              # Install modules, roles, tasks, templates, workflows
+  stacks/              # Install modules, roles, tasks, templates, workflows
     common.vgo            # Modules/vars inherited by ALL envoy entries
     roles.vgo             # All role definitions in one file
     modules/              # Reusable resource definitions
@@ -37,7 +37,7 @@ example-configs/
 
 ## Retractions
 
-Every module in `stockpile/modules/` has a pre-built retraction counterpart in `retractions/modules/`. Retraction modules reverse each resource to its absent/stopped state, following the rules from `server/publish/retract.go`:
+Every module in `stacks/modules/` has a pre-built retraction counterpart in `retractions/modules/`. Retraction modules reverse each resource to its absent/stopped state, following the rules from `server/publish/retract.go`:
 
 - **file/directory/symlink** -- `state: absent`
 - **package** -- `state: absent`
@@ -55,7 +55,7 @@ To use an example retraction:
 
 ```bash
 cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
-   /srv/vigo/worksite/stockpile/modules/nginx-retract.vgo
+   /srv/vigo/stacks/modules/nginx-retract.vgo
 # Review the file, then add nginx-retract to match blocks and publish
 ```
 
@@ -64,8 +64,8 @@ cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
 1. Copy the example files:
 
 ```bash
-cp stockpile/common.vgo.example common.vgo
-cp stockpile/roles.vgo.example roles.vgo
+cp stacks/common.vgo.example common.vgo
+cp stacks/roles.vgo.example roles.vgo
 mkdir -p default
 cp default/all.vgo.example default/all.vgo
 ```

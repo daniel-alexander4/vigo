@@ -44,7 +44,7 @@
             <span class="nav-link__label">Spanner</span>
         </a>
         {{end}}
-        <a href="/fleet/config-tree" class="nav-link{{if eq .ActiveNav "config-tree"}} nav-link--active{{end}}" title="Browse stockpile — configcrates, roles, hostcrates, usercrates, environments">
+        <a href="/fleet/config-tree" class="nav-link{{if eq .ActiveNav "config-tree"}} nav-link--active{{end}}" title="Browse stacks — configcrates, roles, hostcrates, usercrates, environments">
             <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-4.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 13 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-3.5a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"/><path d="M3 5v14a2 2 0 0 0 2 2h7"/><path d="M3 12h9"/></svg>
             <span class="nav-link__label">Config Tree</span>
         </a>
@@ -126,7 +126,7 @@
 
         <div class="nav-group__label nav-group__label--sub">Config</div>
         {{if .CurrentUser.HasPermission "config.publish"}}
-        <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}" title="View server.yaml and publish stockpile changes">
+        <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}" title="View server.yaml and publish stacks changes">
             <svg class="nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>
             <span class="nav-link__label">Server Config</span>
         </a>

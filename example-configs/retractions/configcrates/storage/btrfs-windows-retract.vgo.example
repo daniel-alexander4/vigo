@@ -1,4 +1,0 @@
-name: btrfs-windows-retract
-description: Retract btrfs-windows stub. No-op.
-
-resources: []

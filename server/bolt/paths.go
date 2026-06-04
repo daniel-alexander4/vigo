@@ -4,7 +4,7 @@
 // Package bolt implements the per-vigosrv bolt identity for the
 // spanner federation. Each vigosrv running in spanner mode holds an
 // Ed25519 keypair distinct from the service-account puddle: the
-// puddle signs for ops-puddle authority (stockpile pushes), the bolt
+// puddle signs for ops-puddle authority (stacks pushes), the bolt
 // identity signs this bolt's admission row and every gossiped roster
 // snapshot so peers can verify "this really comes from the bolt it
 // claims to."

@@ -1,9 +1,0 @@
-name: tuned-windows-retract
-description: Retract tuned-windows. Restores Balanced power scheme.
-
-resources:
-  - name: reset-power-scheme
-    type: powershell
-    command: "powercfg /setactive SCHEME_BALANCED"
-    skip_validation: true
-    when: "os_family('windows')"
