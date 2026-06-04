@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/fleet"
 )
 
@@ -61,7 +62,7 @@ func (m *ConvergenceMonitor) Start(threshold int, window time.Duration) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	go m.run(ctx, threshold, window)
+	daemon.SafeGo("convergence-monitor", func() { m.run(ctx, threshold, window) })
 }
 
 // Stop cancels the active monitor, if any.

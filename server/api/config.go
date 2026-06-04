@@ -16,6 +16,7 @@ import (
 	"git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/metrics"
@@ -73,9 +74,9 @@ type ConfigHandler struct {
 	auditWriter        auditRecorder  // nil-safe tamper-evident audit writer
 	publishState       *publish.State // freeze deadline owner; required for Freeze/Unfreeze
 	metrics            *metrics.Metrics
-	liveDir            string                  // .live/ path for rollback
-	historyDir         string                  // history dir for rollback / list-versions
-	snapshotCompliance func(context.Context)   // optional; fired after a successful reload so dashboard standards-summary refreshes
+	liveDir            string                // .live/ path for rollback
+	historyDir         string                // history dir for rollback / list-versions
+	snapshotCompliance func(context.Context) // optional; fired after a successful reload so dashboard standards-summary refreshes
 }
 
 // NewConfigHandler creates a ConfigHandler. publishState carries the
@@ -218,7 +219,7 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	// from the request context — closing the publish HTTP response
 	// shouldn't tear down a snapshot that's already running.
 	if h.snapshotCompliance != nil {
-		go h.snapshotCompliance(context.Background())
+		daemon.SafeGo("snapshot-compliance", func() { h.snapshotCompliance(context.Background()) })
 	}
 
 	// Start blast-radius compliance monitor if threshold is configured.
@@ -548,8 +549,8 @@ type retractConfigcrateInput struct {
 
 // retractResponse is the output from the retract endpoint.
 type retractResponse struct {
-	Enabled bool                  `json:"enabled"`
-	Reason  string                `json:"reason,omitempty"`
+	Enabled bool                       `json:"enabled"`
+	Reason  string                     `json:"reason,omitempty"`
 	Results []retractConfigcrateResult `json:"results,omitempty"`
 }
 

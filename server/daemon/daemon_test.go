@@ -108,3 +108,63 @@ func TestGuard_RunsNormalFn(t *testing.T) {
 		t.Fatal("Guard did not run fn")
 	}
 }
+
+// TestRecover_NilOnPanic proves Recover with a nil teardown recovers a panic so
+// the deferring function returns normally. If the panic escaped, the statement
+// after the panicking call would never run.
+func TestRecover_NilOnPanic(t *testing.T) {
+	reached := false
+	func() {
+		defer Recover("test-recover", nil)
+		panic("boom")
+	}()
+	reached = true
+	if !reached {
+		t.Fatal("Recover did not contain the panic")
+	}
+}
+
+// TestRecover_RunsOnPanicTeardown proves the onPanic teardown runs after a
+// recovered panic — and does NOT run when fn returns normally.
+func TestRecover_RunsOnPanicTeardown(t *testing.T) {
+	var got any
+	func() {
+		defer Recover("test-teardown", func(r any) { got = r })
+		panic("boom")
+	}()
+	if got != "boom" {
+		t.Fatalf("onPanic teardown did not receive the panic value: got %v", got)
+	}
+
+	tornDown := false
+	func() {
+		defer Recover("test-teardown", func(any) { tornDown = true })
+		// no panic
+	}()
+	if tornDown {
+		t.Fatal("onPanic teardown ran without a panic")
+	}
+}
+
+// TestRecover_MutatesNamedReturn proves the onPanic teardown can set the
+// enclosing function's named return value — the mechanism the gRPC recovery
+// interceptor relies on to turn a handler panic into a codes.Internal error.
+func TestRecover_MutatesNamedReturn(t *testing.T) {
+	got := callWithNamedReturn(true)
+	if got != "recovered" {
+		t.Fatalf("expected named return set to %q on panic, got %q", "recovered", got)
+	}
+	if got := callWithNamedReturn(false); got != "ok" {
+		t.Fatalf("expected named return %q on clean run, got %q", "ok", got)
+	}
+}
+
+// callWithNamedReturn returns "ok" normally, or "recovered" if it panics — the
+// latter set by the onPanic teardown via the named return.
+func callWithNamedReturn(boom bool) (result string) {
+	defer Recover("test-named-return", func(any) { result = "recovered" })
+	if boom {
+		panic("boom")
+	}
+	return "ok"
+}

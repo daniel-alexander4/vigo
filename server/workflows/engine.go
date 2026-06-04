@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
 	"git.alexander4.io/vigo/server/metrics"
@@ -273,20 +273,12 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 
 	// A workflow runs in a detached goroutine; an unrecovered panic here
 	// would crash the entire server process — gRPC streams, REST, metrics,
-	// and every other in-flight workflow with it. Isolate it: fail this
-	// run, keep the server up. Mirrors the integrations dispatcher's
-	// per-goroutine recover (server/integrations/integrations.go).
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("workflow: panic in executeWorkflow",
-				"workflow_run_id", runID,
-				"step", currentIdx,
-				"panic", r,
-				"stack", string(debug.Stack()),
-			)
-			e.failWorkflow(ctx, runID, currentIdx, fmt.Sprintf("workflow panicked: %v", r))
-		}
-	}()
+	// and every other in-flight workflow with it. Isolate it through the
+	// daemon SoT: fail this run (step + panic value recorded), keep the
+	// server up.
+	defer daemon.Recover("executeWorkflow run="+runID, func(r any) {
+		e.failWorkflow(ctx, runID, currentIdx, fmt.Sprintf("workflow panicked at step %d: %v", currentIdx, r))
+	})
 
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	if err := e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{

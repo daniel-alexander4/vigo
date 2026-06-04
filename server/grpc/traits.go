@@ -10,11 +10,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/traits"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -69,9 +70,11 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		s.fleetIndex.UpdateTraits(envoyID, flat)
 	}
 
-	// Auto-trigger workflows on security trait changes.
+	// Auto-trigger workflows on security trait changes. Detached goroutine
+	// off the handler — route its panic recovery through the daemon SoT so a
+	// bad trait payload can't crash the process.
 	if s.workflowTrigger != nil {
-		go s.checkTraitTriggers(envoyID, traitsJSON)
+		daemon.SafeGo("checkTraitTriggers", func() { s.checkTraitTriggers(envoyID, traitsJSON) })
 	}
 
 	slog.Info("traits reported",

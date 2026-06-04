@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/fleet"
 	vigoscrier "git.alexander4.io/vigo/server/scrier"
 	"github.com/google/uuid"
@@ -20,14 +21,14 @@ import (
 // Each tunnel bridges guacd TCP ↔ agent gRPC TunnelData.
 type tunnelManager struct {
 	mu            sync.RWMutex
-	tunnels       map[string]*activeTunnel          // tunnel_id → tunnel
-	agentStreams  map[string]chan *activeTunnel       // envoy_id → pending tunnel channel
-	guacdAddr     string                             // e.g., "guacd:4822"
-	proxyHostname string                             // hostname guacd uses to reach this server (e.g., "vigo")
+	tunnels       map[string]*activeTunnel      // tunnel_id → tunnel
+	agentStreams  map[string]chan *activeTunnel // envoy_id → pending tunnel channel
+	guacdAddr     string                        // e.g., "guacd:4822"
+	proxyHostname string                        // hostname guacd uses to reach this server (e.g., "vigo")
 	allowedPorts  map[uint32]bool
 	maxSessions   int
-	streamMgr     *streamManager                    // sends TunnelRequest via AgentStream
-	fleetIndex    *fleet.FleetIndex                 // sets TunnelRequested flag for unary agents
+	streamMgr     *streamManager    // sends TunnelRequest via AgentStream
+	fleetIndex    *fleet.FleetIndex // sets TunnelRequested flag for unary agents
 }
 
 // sshAuthResult carries the agent's TunnelOpenResult auth fields back to the
@@ -81,10 +82,10 @@ func NewTunnelManager(guacdAddr, proxyHostname string, allowedPorts []uint32, ma
 		agentStreams:  make(map[string]chan *activeTunnel),
 		guacdAddr:     guacdAddr,
 		proxyHostname: proxyHostname,
-		allowedPorts: ports,
-		maxSessions:  maxSessions,
-		streamMgr:    sm,
-		fleetIndex:   fi,
+		allowedPorts:  ports,
+		maxSessions:   maxSessions,
+		streamMgr:     sm,
+		fleetIndex:    fi,
 	}
 }
 
@@ -402,6 +403,7 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	// Accept one connection from guacd on the proxy listener, then bridge it
 	// to the agent channels.
 	go func() {
+		defer daemon.Recover("scrier-tunnel-guacd-accept", nil)
 		defer listener.Close()
 		conn, err := listener.Accept()
 		if err != nil {

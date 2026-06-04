@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -153,6 +154,7 @@ func (s *AgentService) runTunnelRelay(
 
 	// Agent → guacd: read TunnelData from stream, write to tunnel.agentRecv.
 	go func() {
+		defer daemon.Recover("scrier-tunnel-agent-recv", nil)
 		defer close(done)
 		recvCount := 0
 		totalBytes := 0
@@ -185,6 +187,7 @@ func (s *AgentService) runTunnelRelay(
 
 	// guacd → agent: read from tunnel.agentSend, send as TunnelData on stream.
 	go func() {
+		defer daemon.Recover("scrier-tunnel-agent-send", nil)
 		sendCount := 0
 		totalBytes := 0
 		for {

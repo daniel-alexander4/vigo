@@ -15,12 +15,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/daemon"
 )
 
 // Severity levels for events — integrations can filter by minimum severity.
@@ -28,8 +28,8 @@ type Severity int
 
 const (
 	Info     Severity = iota // drift.detected, run.success, envoy.enrolled, secret.rotated
-	Warning                 // run.failure, run.blocked, envoy.stale, envoy.offline
-	Critical                // security.*, convergence.threshold, config.reload.failure
+	Warning                  // run.failure, run.blocked, envoy.stale, envoy.offline
+	Critical                 // security.*, convergence.threshold, config.reload.failure
 )
 
 // String returns the severity name for display and PagerDuty/Opsgenie mapping.
@@ -322,16 +322,7 @@ func (d *Dispatcher) Dispatch(event Event) {
 		}
 		go func(tgt target) {
 			defer func() { <-d.inflight }()
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Error("integration dispatch panic",
-						"target", tgt.Name(),
-						"event", event.Name,
-						"panic", r,
-						"stack", string(debug.Stack()),
-					)
-				}
-			}()
+			defer daemon.Recover("integration-dispatch "+tgt.Name()+" event="+event.Name, nil)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := tgt.Dispatch(ctx, event); err != nil {
@@ -405,8 +396,10 @@ type slackTarget struct {
 	client *http.Client
 }
 
-func (s *slackTarget) Name() string                { return "slack" }
-func (s *slackTarget) Accepts(event Event) bool    { return acceptsWithSeverity(s.cfg.Events, s.cfg.MinSeverity, event) }
+func (s *slackTarget) Name() string { return "slack" }
+func (s *slackTarget) Accepts(event Event) bool {
+	return acceptsWithSeverity(s.cfg.Events, s.cfg.MinSeverity, event)
+}
 func (s *slackTarget) Dispatch(ctx context.Context, e Event) error {
 	color := "#36a64f" // green (info)
 	switch e.Severity {
@@ -418,9 +411,9 @@ func (s *slackTarget) Dispatch(ctx context.Context, e Event) error {
 
 	payload := map[string]any{
 		"attachments": []map[string]any{{
-			"color":  color,
-			"title":  fmt.Sprintf("[Vigo] %s", e.Name),
-			"text":   e.Summary,
+			"color": color,
+			"title": fmt.Sprintf("[Vigo] %s", e.Name),
+			"text":  e.Summary,
 			"fields": []map[string]string{
 				{"title": "Host", "value": e.Hostname, "short": "true"},
 				{"title": "Time", "value": e.Timestamp.Format("2006-01-02 15:04:05 UTC"), "short": "true"},
@@ -439,8 +432,10 @@ type pagerdutyTarget struct {
 	client *http.Client
 }
 
-func (p *pagerdutyTarget) Name() string             { return "pagerduty" }
-func (p *pagerdutyTarget) Accepts(event Event) bool { return acceptsWithSeverity(p.cfg.Events, p.cfg.MinSeverity, event) }
+func (p *pagerdutyTarget) Name() string { return "pagerduty" }
+func (p *pagerdutyTarget) Accepts(event Event) bool {
+	return acceptsWithSeverity(p.cfg.Events, p.cfg.MinSeverity, event)
+}
 func (p *pagerdutyTarget) Dispatch(ctx context.Context, e Event) error {
 	severity := e.Severity.String()
 	if severity == "info" {
@@ -505,8 +500,10 @@ type opsgenieTarget struct {
 	client *http.Client
 }
 
-func (o *opsgenieTarget) Name() string             { return "opsgenie" }
-func (o *opsgenieTarget) Accepts(event Event) bool { return acceptsWithSeverity(o.cfg.Events, o.cfg.MinSeverity, event) }
+func (o *opsgenieTarget) Name() string { return "opsgenie" }
+func (o *opsgenieTarget) Accepts(event Event) bool {
+	return acceptsWithSeverity(o.cfg.Events, o.cfg.MinSeverity, event)
+}
 func (o *opsgenieTarget) Dispatch(ctx context.Context, e Event) error {
 	priority := "P3"
 	switch e.Severity {
@@ -535,8 +532,10 @@ type teamsTarget struct {
 	client *http.Client
 }
 
-func (t *teamsTarget) Name() string             { return "teams" }
-func (t *teamsTarget) Accepts(event Event) bool { return acceptsWithSeverity(t.cfg.Events, t.cfg.MinSeverity, event) }
+func (t *teamsTarget) Name() string { return "teams" }
+func (t *teamsTarget) Accepts(event Event) bool {
+	return acceptsWithSeverity(t.cfg.Events, t.cfg.MinSeverity, event)
+}
 func (t *teamsTarget) Dispatch(ctx context.Context, e Event) error {
 	color := "00cc00"
 	switch e.Severity {
@@ -603,12 +602,24 @@ func base64Encode(data []byte) string {
 		var n uint32
 		remaining := len(data) - i
 		n = uint32(data[i]) << 16
-		if remaining > 1 { n |= uint32(data[i+1]) << 8 }
-		if remaining > 2 { n |= uint32(data[i+2]) }
+		if remaining > 1 {
+			n |= uint32(data[i+1]) << 8
+		}
+		if remaining > 2 {
+			n |= uint32(data[i+2])
+		}
 		b.WriteByte(alphabet[(n>>18)&0x3f])
 		b.WriteByte(alphabet[(n>>12)&0x3f])
-		if remaining > 1 { b.WriteByte(alphabet[(n>>6)&0x3f]) } else { b.WriteByte('=') }
-		if remaining > 2 { b.WriteByte(alphabet[n&0x3f]) } else { b.WriteByte('=') }
+		if remaining > 1 {
+			b.WriteByte(alphabet[(n>>6)&0x3f])
+		} else {
+			b.WriteByte('=')
+		}
+		if remaining > 2 {
+			b.WriteByte(alphabet[n&0x3f])
+		} else {
+			b.WriteByte('=')
+		}
 	}
 	return b.String()
 }
@@ -695,11 +706,11 @@ func (d *datadogTarget) Dispatch(ctx context.Context, e Event) error {
 	}
 
 	payload := map[string]any{
-		"title":      fmt.Sprintf("[Vigo] %s", e.Name),
-		"text":       e.Summary,
-		"host":       e.Hostname,
-		"tags":       []string{"source:vigo", "event:" + e.Name},
-		"alert_type": alertType,
+		"title":         fmt.Sprintf("[Vigo] %s", e.Name),
+		"text":          e.Summary,
+		"host":          e.Hostname,
+		"tags":          []string{"source:vigo", "event:" + e.Name},
+		"alert_type":    alertType,
 		"date_happened": e.Timestamp.Unix(),
 	}
 	site := d.cfg.Site

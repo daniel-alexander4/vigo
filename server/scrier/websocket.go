@@ -31,6 +31,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"github.com/google/uuid"
@@ -115,8 +116,8 @@ type scrierSession struct {
 	// WebSocket relay handler. The first to claim() wins; the other
 	// no-ops. cleanupOnce makes cleanupSession itself idempotent so
 	// even an accidental second call (defense in depth) is safe.
-	claimed      bool
-	cleanupOnce  sync.Once
+	claimed     bool
+	cleanupOnce sync.Once
 }
 
 // claim atomically marks this session as taken — for relay OR for
@@ -379,7 +380,7 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	h.sessions[sess.id] = sess
 	h.sessionsMu.Unlock()
 
-	go h.setupSession(sess, user)
+	daemon.SafeGo("scrier-setup-session", func() { h.setupSession(sess, user) })
 
 	slog.Info("scrier session created",
 		"session_id", sess.id,
@@ -504,6 +505,7 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	// check and respond 409 Conflict rather than enter a relay loop
 	// against a session whose underlying resources we're closing.
 	time.AfterFunc(h.sessionExpiry, func() {
+		defer daemon.Recover("scrier-session-expiry", nil)
 		if !sess.claim() {
 			return
 		}
@@ -842,6 +844,7 @@ func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionI
 
 	// PTY → WebSocket: read terminal output and send as binary messages.
 	go func() {
+		defer daemon.Recover("scrier-pty-to-ws", nil)
 		defer func() {
 			cancel()
 			select {
@@ -870,6 +873,7 @@ func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionI
 
 	// WebSocket → PTY: read input and control messages.
 	go func() {
+		defer daemon.Recover("scrier-ws-to-pty", nil)
 		defer func() {
 			cancel()
 			select {
@@ -926,6 +930,7 @@ func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessio
 
 	wsWriteDone := make(chan struct{})
 	go func() {
+		defer daemon.Recover("scrier-guacd-ws-write", nil)
 		defer close(wsWriteDone)
 		for {
 			select {
@@ -969,6 +974,7 @@ func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessio
 
 	// guacd → WebSocket: relay display instructions with instruction-aligned messages.
 	go func() {
+		defer daemon.Recover("scrier-guacd-to-ws", nil)
 		buf := make([]byte, 256*1024)
 		var carry []byte
 		syncInjected := false
@@ -1015,6 +1021,7 @@ func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessio
 
 	// WebSocket → guacd: relay input, handle pings.
 	go func() {
+		defer daemon.Recover("scrier-ws-to-guacd", nil)
 		defer cancel()
 		defer close(wsDone)
 		for {

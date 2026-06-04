@@ -1,29 +1,38 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package daemon holds the panic-safety helpers shared by every long-lived
-// background worker the server runs. Two primitives compose into the model:
+// Package daemon is the single source of truth for recovered-panic handling
+// across the server. An unrecovered panic in any goroutine crashes the whole
+// vigosrv process — gRPC streams, REST, metrics, and every other goroutine with
+// it — so every long-lived or detached goroutine, and every request-handler
+// path, routes its panic recovery through here.
 //
-//   - SafeGo launches a daemon goroutine with a recover backstop. An
-//     unrecovered panic in any detached daemon would otherwise crash the whole
-//     vigosrv process — gRPC streams, REST, metrics, and every other daemon
-//     with it. SafeGo contains a panic to the one goroutine: it logs the panic
-//     + stack and lets that goroutine exit. It does NOT restart — a daemon that
-//     panics in its one-time setup (resolving a multicast group, creating an
-//     fsnotify watcher) is usually facing a deterministic fault that a restart
-//     would only hit again, so it stays down, loudly logged.
+// One primitive does the work:
 //
-//   - Guard wraps the per-iteration work inside a daemon's loop. A transient
-//     panic in one tick (a malformed DB row, a momentary nil) is recovered and
-//     the loop continues to the next tick — the daemon self-heals without
-//     losing its accumulated in-memory state, re-running setup, or leaving a
-//     restart-sized gap where it's fully down. The loop's own ticker interval
-//     is the natural backoff.
+//   - Recover is the deferred backstop. `defer daemon.Recover(site, onPanic)`
+//     recovers a panic, logs it with its stack in one canonical shape, then runs
+//     onPanic (may be nil) — the boundary-specific teardown: set a named return
+//     error, push to a coordination channel, mark a run failed. recover() works
+//     inside it because `defer daemon.Recover(...)` makes it the deferred
+//     function calling recover() directly, which is Go's one requirement.
 //
-// The division of labour: SafeGo guards the goroutine boundary (setup-phase
-// panics → recover-and-die), Guard guards each iteration (loop-body panics →
-// recover-and-continue). A worker uses SafeGo to launch and Guard around the
-// work it repeats.
+// Two conveniences wrap Recover for the common goroutine shapes:
+//
+//   - SafeGo launches fn in a new goroutine with a recover backstop (onPanic
+//     nil). A panic that escapes fn — typically from one-time setup — is logged
+//     and the goroutine exits; the daemon is NOT restarted (a deterministic
+//     setup fault would only recur). Use to launch a detached daemon.
+//
+//   - Guard runs fn synchronously, recovering so the caller's loop continues to
+//     the next iteration. A transient tick panic (a malformed DB row, a momentary
+//     nil) is logged and the loop ticks on — no state loss, no restart gap, the
+//     ticker interval is the natural backoff. Use around per-iteration work.
+//
+// Anything that needs a teardown action on panic (a gRPC interceptor returning
+// codes.Internal, a stream reader signalling its error channel, a workflow run
+// marked failed) defers Recover directly with a non-nil onPanic, rather than
+// hand-rolling a fourth recover. The recover, the log level, the stack capture,
+// and the log keys live in exactly one place.
 package daemon
 
 import (
@@ -31,29 +40,44 @@ import (
 	"runtime/debug"
 )
 
-// SafeGo runs fn in a new goroutine with a panic-recovery backstop. A panic
-// that escapes fn (typically from one-time setup, since repeating work should
-// be wrapped in Guard) is logged with its stack and the goroutine exits — the
-// rest of the process keeps running. The daemon is not restarted.
+// Recover is the deferred panic backstop every site routes through. Call it as
+// the deferred function itself:
+//
+//	defer daemon.Recover(site, onPanic)
+//
+// On a panic it logs site + value + stack at Error, then runs onPanic if
+// non-nil, handing it the recovered value. onPanic carries the boundary-specific
+// teardown — set a named return error, push to a coordination channel, mark a
+// run failed (with the panic value in the failure reason) — and may set a named
+// return value of the enclosing function (deferred funcs can mutate named
+// returns). With a nil onPanic it simply contains and logs the panic.
+func Recover(site string, onPanic func(r any)) {
+	if r := recover(); r != nil {
+		slog.Error("recovered panic",
+			"site", site,
+			"panic", r,
+			"stack", string(debug.Stack()),
+		)
+		if onPanic != nil {
+			onPanic(r)
+		}
+	}
+}
+
+// SafeGo runs fn in a new goroutine with a recover backstop. A panic that
+// escapes fn is logged with its stack and the goroutine exits — the rest of the
+// process keeps running. The daemon is not restarted; self-healing of repeating
+// work is Guard's job.
 func SafeGo(name string, fn func()) {
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("background daemon panicked — subsystem stopped until restart",
-					"daemon", name,
-					"panic", r,
-					"stack", string(debug.Stack()),
-				)
-			}
-		}()
+		defer Recover(name, nil)
 		fn()
 	}()
 }
 
 // Guard runs fn synchronously, recovering any panic so the caller's loop can
-// proceed to the next iteration. A panicking tick is logged with its stack and
-// treated as a no-op for that cycle; the daemon stays alive and retries on its
-// next tick. Call it around the per-iteration work inside a daemon loop:
+// proceed to the next iteration. A panicking tick is logged and treated as a
+// no-op for that cycle; the daemon stays alive and retries on its next tick:
 //
 //	for {
 //		select {
@@ -64,14 +88,6 @@ func SafeGo(name string, fn func()) {
 //		}
 //	}
 func Guard(name string, fn func()) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("background daemon tick panicked — recovered, continuing",
-				"daemon", name,
-				"panic", r,
-				"stack", string(debug.Stack()),
-			)
-		}
-	}()
+	defer Recover(name, nil)
 	fn()
 }

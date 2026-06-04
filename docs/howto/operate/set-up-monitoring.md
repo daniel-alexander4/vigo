@@ -44,6 +44,7 @@ The `vigo_checkin_age_seconds` histogram uses custom buckets: 60s, 120s, 300s, 6
 |--------|------|--------|-------------|
 | `vigo_grpc_requests_total` | Counter | `method`, `code` | Total gRPC requests by full method name and status code |
 | `vigo_grpc_request_duration_seconds` | Histogram | `method` | gRPC request latency in seconds |
+| `vigo_grpc_handler_panics_total` | Counter | `method` | gRPC handler panics recovered by the recovery interceptor. **Any non-zero value is a bug** — the handler panicked and the RPC returned `Internal` instead of crashing the process. Alert on `rate(...) > 0`. |
 
 Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirectional streams (AgentStream) are not included — they use the check-in and delta metrics instead.
 

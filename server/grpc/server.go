@@ -173,7 +173,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 
 	sigInterceptor := SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex, cfg.Metrics)
 
-	var interceptors []grpc.UnaryServerInterceptor
+	// Recovery is outermost so it backstops panics in the rate-limit and
+	// signature-verify interceptors as well as the handler itself. grpc-go does
+	// not recover handler panics; without this a handler nil-deref crashes the
+	// whole process. The streaming sibling is the only stream interceptor.
+	interceptors := []grpc.UnaryServerInterceptor{RecoveryUnaryInterceptor(cfg.Metrics)}
 	if cfg.RateLimit.Enabled {
 		interceptors = append(interceptors, RateLimitInterceptor(cfg.RateLimit))
 	}
@@ -182,6 +186,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	opts := []grpc.ServerOption{
 		grpc.Creds(creds),
 		grpc.ChainUnaryInterceptor(interceptors...),
+		grpc.ChainStreamInterceptor(RecoveryStreamInterceptor(cfg.Metrics)),
 		grpc.MaxConcurrentStreams(maxStreams),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle: maxConnIdle,

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -269,6 +270,9 @@ func (a *SpannerAdmin) fanOut(ctx context.Context, fn func(ctx context.Context, 
 		wg.Add(1)
 		go func(idx int, conn *PeerConn) {
 			defer wg.Done()
+			defer daemon.Recover("spanner-adminread", func(r any) {
+				results[idx] = fanOutAdminResult{pubkey: conn.ID, err: fmt.Errorf("peer admin read panicked: %v", r)}
+			})
 			callCtx, cancel := context.WithTimeout(ctx, fanOutTimeout)
 			defer cancel()
 			val, cErr := fn(callCtx, conn)

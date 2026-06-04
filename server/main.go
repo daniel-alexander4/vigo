@@ -39,6 +39,7 @@ import (
 	vigoauth "git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/bolt"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
@@ -128,13 +129,15 @@ func run() error {
 	signal.Notify(sighupCh, syscall.SIGHUP)
 	go func() {
 		for range sighupCh {
-			slog.Info("received SIGHUP, reloading license...")
-			if err := s.enforcer.Reload(); err != nil {
-				slog.Error("license reload failed", "error", err)
-			} else {
-				st := s.enforcer.GetStatus()
-				slog.Info("license reloaded", "stage", st.Stage.String())
-			}
+			daemon.Guard("sighup-license-reload", func() {
+				slog.Info("received SIGHUP, reloading license...")
+				if err := s.enforcer.Reload(); err != nil {
+					slog.Error("license reload failed", "error", err)
+				} else {
+					st := s.enforcer.GetStatus()
+					slog.Info("license reloaded", "stage", st.Stage.String())
+				}
+			})
 		}
 	}()
 

@@ -39,6 +39,7 @@ type Metrics struct {
 
 	GRPCRequestsTotal      *prometheus.CounterVec
 	GRPCRequestDuration    *prometheus.HistogramVec
+	GRPCHandlerPanicsTotal *prometheus.CounterVec
 	GRPCTLSHandshakesTotal *prometheus.CounterVec
 	GRPCCheckInInFlight    prometheus.Gauge
 
@@ -255,6 +256,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name:    "vigo_grpc_request_duration_seconds",
 			Help:    "gRPC request duration in seconds.",
 			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		}, []string{"method"}),
+		GRPCHandlerPanicsTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_grpc_handler_panics_total",
+			Help: "gRPC handler panics recovered by the recovery interceptor, by method. A non-zero value is a bug — the handler panicked and the RPC returned codes.Internal instead of crashing the process.",
 		}, []string{"method"}),
 		GRPCTLSHandshakesTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_grpc_tls_handshakes_total",

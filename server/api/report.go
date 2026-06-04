@@ -18,6 +18,7 @@ import (
 
 	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/ui"
@@ -99,7 +100,7 @@ func (h *ReportHandler) cachedAuditStatus(ctx context.Context) AuditChainStatus 
 	// (a negligible one-time boot cost — both off the request path).
 	if !c.refreshing {
 		c.refreshing = true
-		go h.refreshAuditStatusAsync()
+		daemon.SafeGo("audit-status-refresh", h.refreshAuditStatusAsync)
 	}
 	return c.status
 }

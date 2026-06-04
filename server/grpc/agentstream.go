@@ -14,6 +14,7 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/daemon"
 	"github.com/google/uuid"
 
 	"git.alexander4.io/vigo/server/config"
@@ -138,8 +139,15 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 		}
 	}()
 
-	// Reader: process incoming agent messages.
+	// Reader: process incoming agent messages. A panic mid-dispatch (a bad wire
+	// payload, a nil deref deep in a handler) would otherwise crash the whole
+	// process — this goroutine is outside the recovery interceptor's reach.
+	// Recover through the daemon SoT and signal errCh so the handler tears the
+	// stream down cleanly instead of hanging.
 	go func() {
+		defer daemon.Recover("agentstream-reader", func(any) {
+			errCh <- status.Error(codes.Internal, "agent stream reader panicked")
+		})
 		for {
 			msg, err := stream.Recv()
 			if err != nil {

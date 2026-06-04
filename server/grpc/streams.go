@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/metrics"
 )
@@ -149,13 +150,14 @@ func (sm *streamManager) queueForPromotion(envoyID string, msg *pb.ServerStreamM
 		default:
 			slog.Warn("promotion dispatch dropped (buffer full, stream connected)", "envoy_id", envoyID)
 			if onTimeout != nil {
-				go onTimeout()
+				daemon.SafeGo("promotion-timeout", onTimeout)
 			}
 		}
 		return
 	}
 
 	timer := time.AfterFunc(sm.promotionTimeout, func() {
+		defer daemon.Recover("promotion-timeout-timer", nil)
 		sm.mu.Lock()
 		// Remove this specific pending entry.
 		pending := sm.pending[envoyID]
