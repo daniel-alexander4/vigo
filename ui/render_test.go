@@ -126,11 +126,15 @@ func TestEnvoyFreshness(t *testing.T) {
 			wantStale:    false,
 		},
 		{
-			name:         "5s interval, stale-but-under-30s: precise seconds (the bug case)",
+			// 15s at a 5s interval is past the bare 2.5×=12.5s threshold
+			// but under the 30s MinStaleThreshold floor (0.72.7), so the
+			// envoy stays fresh — that floor is the whole point at fast
+			// cadences: it tolerates missed beats without flapping offline.
+			name:         "5s interval, 15s but under 30s floor: still fresh",
 			lastSeen:     now.Add(-15 * time.Second),
 			baseInterval: 5 * time.Second,
-			wantLabel:    "15s ago",
-			wantStale:    true,
+			wantLabel:    "just now",
+			wantStale:    false,
 		},
 		{
 			name:         "5s interval, stale past 30s: minute label",
