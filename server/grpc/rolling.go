@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"os/exec"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -168,7 +169,40 @@ func (s *AgentService) runRollingExecution(
 	ctx := context.Background()
 	batchTimeout := time.Duration(timeoutSecs+30) * time.Second
 
+	// currentBatch is the loop cursor, hoisted so the panic recovery below
+	// can report which batch was executing.
+	currentBatch := 0
+
+	// A rolling execution runs in a detached goroutine; an unrecovered panic
+	// here would crash the entire server process — gRPC streams, REST, metrics,
+	// and every other in-flight run with it. Isolate it: mark this run failed,
+	// keep the server up. Mirrors executeWorkflow's recover
+	// (server/workflows/engine.go) and the integrations dispatcher.
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("rolling execution: panic in runRollingExecution",
+				"task_run_id", taskRunID,
+				"batch", currentBatch+1,
+				"panic", r,
+				"stack", string(debug.Stack()),
+			)
+			now := sql.NullTime{Time: time.Now(), Valid: true}
+			if err := s.queries.UpdateTaskRunStatus(ctx, db.UpdateTaskRunStatusParams{
+				ID:         taskRunID,
+				Status:     "failed",
+				FinishedAt: now,
+			}); err != nil {
+				slog.Error("failed to mark panicked task run failed",
+					"task_run_id", taskRunID, "error", err)
+			}
+			if s.metrics != nil {
+				s.metrics.TaskRunsTotal.WithLabelValues("failed").Inc()
+			}
+		}
+	}()
+
 	for batchIdx, batch := range batches {
+		currentBatch = batchIdx
 		slog.Info("rolling execution: starting batch",
 			"task_run_id", taskRunID,
 			"batch", batchIdx+1,
