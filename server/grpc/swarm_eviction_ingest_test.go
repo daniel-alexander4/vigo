@@ -64,8 +64,9 @@ func TestIngestSwarmTraits_EvictsRevokedBlob_WhenAgentReportsEmptyInventory(t *t
 
 	// Agent's next trait flush: swarm.blobs is empty (the revoked
 	// blob was its only entry), downloading is empty. This is the
-	// exact shape that used to trip the early-return bug.
-	emptyInventory := []byte(`{"swarm":{"blobs":[],"downloading":{}}}`)
+	// exact shape that used to trip the early-return bug. ingestSwarmTraits
+	// now takes the pre-parsed "swarm" sub-tree, not the full traits payload.
+	emptyInventory := []byte(`{"blobs":[],"downloading":{}}`)
 	svc.ingestSwarmTraits("envoy-a", emptyInventory)
 
 	// After ingestion, envoy-a should have flipped to "revoked".
@@ -99,7 +100,7 @@ func TestIngestSwarmTraits_EmptyInventoryNoOpWithoutRevokedSeeds(t *testing.T) {
 		fleetIndex:  fi,
 	}
 
-	svc.ingestSwarmTraits("envoy-a", []byte(`{"swarm":{"blobs":[],"downloading":{}}}`))
+	svc.ingestSwarmTraits("envoy-a", []byte(`{"blobs":[],"downloading":{}}`))
 
 	// Tracker should still be pristine — no seeds, no peers.
 	if got := len(tracker.ListSeeds()); got != 0 {
