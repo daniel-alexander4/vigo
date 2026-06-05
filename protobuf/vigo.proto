@@ -256,6 +256,11 @@ message CheckInRequest {
   string ip_address = 11;                // agent's preferred outbound IP (refreshed each check-in)
   uint32 last_checkin_delta_ms = 12;     // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
   string traceparent = 13;               // W3C traceparent (ADR-028); 55-char format "00-<trace_id>-<span_id>-<flags>"; empty/malformed → server generates
+  // ADR-033 conditional traits: split agents send vitals + inventory below and leave traits_json (field 5) empty.
+  // Older agents (rolling upgrade) keep sending the full payload in traits_json; the server accepts either shape.
+  bytes vitals_json = 14;                 // volatile collectors (loadavg/memory/uptime/swarm/...), sent every check-in
+  bytes inventory_json = 15;              // stable+periodic collectors (packages/dmi/cert_lifecycle/...), sent only when inventory_hash changes — empty otherwise
+  string inventory_hash = 16;             // sha256-hex of the inventory the agent currently holds; sent every check-in so the server detects desync
 }
 
 message CheckInResponse {
@@ -287,6 +292,7 @@ message CheckInResponse {
   repeated SwarmManifestEntry manifest_entries = 20; // manifest updates for gossip (revocations, new seeds)
   SwarmRuntimeLimits swarm_runtime_limits = 23;     // per-subsystem operational caps (size, retention) sourced from server.yaml; replaces hardcoded constants on the agent
   bytes curator_catalog = 24;                       // ADR-024: JSON-encoded array of curator CatalogEntry — the fleet artifact catalog, cached agent-side so resolution survives a server outage. The server's resolve endpoint still owns access (recipients) enforcement; the agent self-gates at materialization.
+  bool resend_inventory = 25;                       // ADR-033: server holds no cached inventory matching the agent's inventory_hash (restart / eviction / desync) — agent must send full inventory_json on the next check-in
 }
 
 // SwarmRuntimeLimits carries per-subsystem operational caps from the

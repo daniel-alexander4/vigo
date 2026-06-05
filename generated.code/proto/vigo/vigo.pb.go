@@ -198,8 +198,13 @@ type CheckInRequest struct {
 	IpAddress               string                 `protobuf:"bytes,11,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                                                                                                                      // agent's preferred outbound IP (refreshed each check-in)
 	LastCheckinDeltaMs      uint32                 `protobuf:"varint,12,opt,name=last_checkin_delta_ms,json=lastCheckinDeltaMs,proto3" json:"last_checkin_delta_ms,omitempty"`                                                                                      // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
 	Traceparent             string                 `protobuf:"bytes,13,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                                                                                                                                   // W3C traceparent (ADR-028); 55-char format "00-<trace_id>-<span_id>-<flags>"; empty/malformed → server generates
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// ADR-033 conditional traits: split agents send vitals + inventory below and leave traits_json (field 5) empty.
+	// Older agents (rolling upgrade) keep sending the full payload in traits_json; the server accepts either shape.
+	VitalsJson    []byte `protobuf:"bytes,14,opt,name=vitals_json,json=vitalsJson,proto3" json:"vitals_json,omitempty"`          // volatile collectors (loadavg/memory/uptime/swarm/...), sent every check-in
+	InventoryJson []byte `protobuf:"bytes,15,opt,name=inventory_json,json=inventoryJson,proto3" json:"inventory_json,omitempty"` // stable+periodic collectors (packages/dmi/cert_lifecycle/...), sent only when inventory_hash changes — empty otherwise
+	InventoryHash string `protobuf:"bytes,16,opt,name=inventory_hash,json=inventoryHash,proto3" json:"inventory_hash,omitempty"` // sha256-hex of the inventory the agent currently holds; sent every check-in so the server detects desync
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckInRequest) Reset() {
@@ -323,10 +328,31 @@ func (x *CheckInRequest) GetTraceparent() string {
 	return ""
 }
 
+func (x *CheckInRequest) GetVitalsJson() []byte {
+	if x != nil {
+		return x.VitalsJson
+	}
+	return nil
+}
+
+func (x *CheckInRequest) GetInventoryJson() []byte {
+	if x != nil {
+		return x.InventoryJson
+	}
+	return nil
+}
+
+func (x *CheckInRequest) GetInventoryHash() string {
+	if x != nil {
+		return x.InventoryHash
+	}
+	return ""
+}
+
 type CheckInResponse struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Configcrates        []*Configcrate         `protobuf:"bytes,1,rep,name=configcrates,proto3" json:"configcrates,omitempty"`
-	Interval            string                 `protobuf:"bytes,2,opt,name=interval,proto3" json:"interval,omitempty"` // e.g. "5m"
+	Interval            string                 `protobuf:"bytes,2,opt,name=interval,proto3" json:"interval,omitempty"` // e.g. "1s" (default), "5m"
 	JitterPercent       int32                  `protobuf:"varint,3,opt,name=jitter_percent,json=jitterPercent,proto3" json:"jitter_percent,omitempty"`
 	CustomTraits        []*CustomTraitEntry    `protobuf:"bytes,4,rep,name=custom_traits,json=customTraits,proto3" json:"custom_traits,omitempty"`
 	NoChange            bool                   `protobuf:"varint,5,opt,name=no_change,json=noChange,proto3" json:"no_change,omitempty"`                                 // true = fingerprint matched, skip execution
@@ -345,6 +371,7 @@ type CheckInResponse struct {
 	ManifestEntries     []*SwarmManifestEntry  `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"`            // manifest updates for gossip (revocations, new seeds)
 	SwarmRuntimeLimits  *SwarmRuntimeLimits    `protobuf:"bytes,23,opt,name=swarm_runtime_limits,json=swarmRuntimeLimits,proto3" json:"swarm_runtime_limits,omitempty"` // per-subsystem operational caps (size, retention) sourced from server.yaml; replaces hardcoded constants on the agent
 	CuratorCatalog      []byte                 `protobuf:"bytes,24,opt,name=curator_catalog,json=curatorCatalog,proto3" json:"curator_catalog,omitempty"`               // ADR-024: JSON-encoded array of curator CatalogEntry — the fleet artifact catalog, cached agent-side so resolution survives a server outage. The server's resolve endpoint still owns access (recipients) enforcement; the agent self-gates at materialization.
+	ResendInventory     bool                   `protobuf:"varint,25,opt,name=resend_inventory,json=resendInventory,proto3" json:"resend_inventory,omitempty"`           // ADR-033: server holds no cached inventory matching the agent's inventory_hash (restart / eviction / desync) — agent must send full inventory_json on the next check-in
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -517,6 +544,13 @@ func (x *CheckInResponse) GetCuratorCatalog() []byte {
 		return x.CuratorCatalog
 	}
 	return nil
+}
+
+func (x *CheckInResponse) GetResendInventory() bool {
+	if x != nil {
+		return x.ResendInventory
+	}
+	return false
 }
 
 // SwarmRuntimeLimits carries per-subsystem operational caps from the
@@ -7589,7 +7623,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1b\n" +
 	"\tbolt_addr\x18\x04 \x01(\tR\bboltAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xb1\x05\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xa0\x06\n" +
 	"\x0eCheckInRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -7607,10 +7641,14 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x121\n" +
 	"\x15last_checkin_delta_ms\x18\f \x01(\rR\x12lastCheckinDeltaMs\x12 \n" +
-	"\vtraceparent\x18\r \x01(\tR\vtraceparent\x1aJ\n" +
+	"\vtraceparent\x18\r \x01(\tR\vtraceparent\x12\x1f\n" +
+	"\vvitals_json\x18\x0e \x01(\fR\n" +
+	"vitalsJson\x12%\n" +
+	"\x0einventory_json\x18\x0f \x01(\fR\rinventoryJson\x12%\n" +
+	"\x0einventory_hash\x18\x10 \x01(\tR\rinventoryHash\x1aJ\n" +
 	"\x1cCachedConfigcrateHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd6\a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\b\n" +
 	"\x0fCheckInResponse\x128\n" +
 	"\fconfigcrates\x18\x01 \x03(\v2\x14.vigo.v1.ConfigcrateR\fconfigcrates\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7633,7 +7671,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
 	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimits\x12'\n" +
-	"\x0fcurator_catalog\x18\x18 \x01(\fR\x0ecuratorCatalogJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xfb\x04\n" +
+	"\x0fcurator_catalog\x18\x18 \x01(\fR\x0ecuratorCatalog\x12)\n" +
+	"\x10resend_inventory\x18\x19 \x01(\bR\x0fresendInventoryJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xfb\x04\n" +
 	"\x12SwarmRuntimeLimits\x125\n" +
 	"\x17filecast_max_size_bytes\x18\x01 \x01(\x04R\x14filecastMaxSizeBytes\x12<\n" +
 	"\x1afilecast_default_retention\x18\x02 \x01(\tR\x18filecastDefaultRetention\x123\n" +
