@@ -3,9 +3,11 @@ Copyright (c) 2026 Alexander4, LLC
 SPDX-License-Identifier: LicenseRef-Proprietary
 -->
 
-# ADR-033: Conditional traits transmission via delta encoding
+# ADR-033: Conditional traits transmission — vitals/inventory split
 
-**Status:** Proposed 2026-06-04. Design captured; gated on a measurement spike (see Open Questions) before implementation.
+**Status:** Proposed 2026-06-04. **Updated 2026-06-04 with spike findings — the
+decision is refined from delta encoding to a stable/volatile split (the agent
+already maintains the classification); see Spike Findings.** Still pre-implementation.
 **Date:** 2026-06-04
 
 ## Context
@@ -52,112 +54,147 @@ second.
   classifying every collector's volatility forever — a misclassified volatile
   field silently disables the gain.
 
+## Spike findings (2026-06-04)
+
+The spike measured the real danlap payload (218,731 B) against the **classification
+the agent already maintains** for collection cost — `CachedCollectors` in
+`agent/src/traits/cached.rs` splits collectors into `volatile_collectors()` (run
+every check-in), `stable_collectors()` (every `trait_refresh_cycles`, default
+**10**), and `periodic_collectors()` (~1 hour):
+
+- **Volatile set — 5,219 B (2%)**: `time`, `uptime`, `loadavg`, `mountpoints`,
+  `filesystem`, `users`, `memory`, `swap`, `ports`, and the swarm subsystems
+  (`swarm`, `swarm_seeds`, `gitback`, `curator`, `poolq`, `puddle`, `longdrawer`,
+  `lockbox`), `agent_self`, `host_self`, `host_containers`, `battery`.
+- **Stable + periodic inventory — 213,512 B (97%)**: `packages` (80 KB),
+  `cert_lifecycle` (63 KB), `security_scan`, `kernel_module_attestation`, `dmi`,
+  `kernel`, etc. — refreshed only every 10 cycles.
+
+Two consequences invert the original decision:
+
+1. The per-collector volatility classification this feature needs **already
+   exists** — the split is not the brittle, hand-maintained tagging the Context
+   feared.
+2. The **swarm** collectors are *volatile* (sent every check-in already), so the
+   swarm ingest heartbeat is untouched by reducing inventory traffic — the
+   freshness-from-liveness decouple is **not** a prerequisite.
+
 ## Decision
 
-Adopt **delta encoding.** The agent sends only the portion of its traits that
-changed relative to the last full snapshot the server holds; the server
-reconstructs the full traits by applying the delta to a cached baseline. The
-delta is **content-driven** — whatever changed (the volatile tail on a steady
-check-in, a package install on a real change) is exactly what crosses the wire —
-so there is **no per-field volatility classification** to maintain and new or
-mixed collectors are handled automatically.
+Split the wire payload into **vitals** (the volatile collectors, ~5 KB, sent every
+check-in) and **inventory** (stable + periodic collectors, ~213 KB, sent only when
+it changes). This rides the agent's existing `volatile_collectors()` /
+`stable_collectors()` / `periodic_collectors()` classification — no new tagging to
+maintain, and **no diff/patch machinery**.
 
 ### Wire shape
 
-`CheckInRequest` gains:
-- `bytes traits_delta` — the JSON Merge Patch (RFC 7386) of changed top-level
-  subtrees relative to the baseline.
-- `string traits_base_hash` — hash of the baseline the agent diffed against, so
-  the server can detect desync.
+`CheckInRequest`:
+- `bytes vitals_json` — the volatile collectors' output, sent every check-in.
+- `bytes inventory_json` — the stable+periodic output, sent **only when its
+  content hash changes** (or on a server resend request).
+- `string inventory_hash` — hash of the inventory the agent currently holds, sent
+  every check-in so the server detects desync.
 
-The existing `traits_json` carries the **full** snapshot, sent on first contact,
-on a base-hash mismatch, or when the server requests a resend. `CheckInResponse`
-gains `bool resend_traits` (modeled on the existing server-directive flags
-`stream_requested` / `force_update`).
+`CheckInResponse` gains `bool resend_inventory` (modeled on `stream_requested` /
+`force_update`).
 
 ### Agent
 
-Retains its last-sent traits. Each cycle it computes the merge patch (changed
-top-level subtrees) against the current collection and sends `traits_delta` +
-`traits_base_hash`. With no prior baseline, or when the previous response set
-`resend_traits`, it sends the full `traits_json` and records the new baseline.
+`CachedCollectors` already serializes volatile separately from stable/periodic.
+The agent hashes the stable+periodic group, sends `vitals_json` every cycle, and
+sends `inventory_json` only when that hash differs from what it last sent (or
+`resend_inventory` was set). Requirement: stable collectors must be
+**deterministic** (sorted output, no per-refresh timestamps) so an unchanged
+inventory re-serializes byte-identically and the hash gate holds.
 
 ### Server
 
-Holds a per-envoy baseline. On a delta check-in it verifies
-`traits_base_hash == cached baseline hash`, applies the patch to reconstruct the
-full traits, and then **processes exactly as today** — swarm ingest, flatten
-into `FleetIndex`, arch lookup, `when:`/lookups bundle building. On a mismatch
-or cache miss it returns `resend_traits = true` and uses whatever baseline it
-has until the agent resends full.
+Caches the inventory per envoy (rides the already-cached `FleetIndex` flattened
+form — see Resolved Questions). Each check-in it merges fresh vitals + cached
+inventory into the full traits and **processes exactly as today** — swarm ingest,
+flatten, `when:`/lookups, arch. On an `inventory_hash` mismatch / cache miss it
+sets `resend_inventory = true` and uses the inventory it has until the agent
+resends.
 
-### Why this avoids the swarm-freshness rework
+### Delta encoding — considered, not chosen
 
-Because the server reconstructs the **full** traits every check-in, the
-`PeerTracker` swarm ingest still runs every check-in with the complete blob set,
-so the per-blob `LastSeen` heartbeat and eviction-aging are unchanged — no
-freshness-from-liveness decouple is required on the reconstruction path. (That
-decouple, tracked separately, becomes relevant only if a future optimization
-chooses to *skip* ingest on swarm-unchanged deltas.)
+Delta (JSON Merge Patch of the full traits against a server-held baseline) was the
+original decision. It is marginally more robust — content-driven, so it tolerates
+a non-deterministic stable collector by sending just the noisy field rather than
+re-sending 213 KB. But it needs diff/patch machinery and a full per-envoy
+baseline, and the spike showed the agent already maintains the volatile/stable
+split — making the split simpler for the same ~98% cut. Delta stays the fallback
+if stable collectors carry unavoidable per-refresh noise that erodes the gate.
 
 ## Consequences / tradeoffs
 
-- **~50× steady-state wire reduction** (≈220 KB → a few-KB patch of the volatile
-  subtrees), directly on the measured bottleneck; larger at aggressive cadences.
-  The server also applies a small patch instead of re-parsing ~220 KB — a
-  secondary, non-bottleneck CPU win.
-- **Self-healing on desync.** Any base-hash mismatch — agent restart, server
-  restart, a dropped check-in — triggers a full resend on the next cycle; there
-  is no wedged state and no manual recovery.
-- **Backward compatible by construction.** An agent that sends full `traits_json`
-  with no delta processes exactly as today, so mixed fleets work during the
+- **~98% steady-state wire reduction** (measured: ≈5 KB vitals vs ≈219 KB today;
+  the 213 KB inventory ships only on an actual change), directly on the measured
+  bottleneck. The server also merges vitals onto cached inventory instead of
+  re-parsing ~213 KB every cycle — a secondary, non-bottleneck CPU win.
+- **Self-healing on desync.** Any `inventory_hash` mismatch — agent restart,
+  server restart, a dropped check-in — triggers a full inventory resend on the
+  next cycle; there is no wedged state and no manual recovery.
+- **Backward compatible by construction.** An agent that still sends full
+  `traits_json` processes exactly as today, so mixed fleets work during the
   rollout. Per the Linux-first cadence, Windows/BSD agents keep sending full
   until ported.
-- **Cross-cutting.** Proto + Rust agent + server. The agent must retain its
-  last-sent snapshot (one extra in-memory copy per agent — cheap, single node).
+- **Cross-cutting.** Proto + Rust agent + server. The agent holds only the
+  last-sent inventory hash (32 bytes), not a full snapshot copy.
 - **Orthogonal to compression and confidentiality.** gRPC compression can layer
-  on the (already much smaller) delta if wanted; this changes *what* is sent, not
+  on the (already much smaller) vitals if wanted; this changes *what* is sent, not
   how it is encrypted (mTLS) or framed.
 
-## Open Questions
+## Resolved by the spike
 
-The spike (Slice 1) must answer these before committing to implementation —
-each can shrink the win or change the storage shape:
+1. **Which collectors churn per cycle → the volatile set, ~5 KB (2%).** Measured
+   above, and already enumerated by `volatile_collectors()` — nothing to
+   re-discover. The stable+periodic inventory (~213 KB, 97%) refreshes every 10
+   cycles and ships only on change.
+2. **Baseline storage → ride the `FleetIndex` flattened form; no second
+   structured baseline.** The only per-check-in consumer of *structured* traits is
+   swarm ingest, and the swarm sub-trees are *volatile* — sent every cycle — so
+   the server always has them fresh. Everything else (`when:`/lookups, UI)
+   consumes the **flattened** traits the `FleetIndex` already caches; the
+   inventory-hash gate refreshes that flattened cache only when inventory changes.
+   No ~13 GB structured-baseline copy is needed. (envoy_traits history stores
+   inventory on change; volatile vitals are live-only, not historized — consistent
+   with their nature as runtime metrics.)
+3. **Granularity → whole-collector split, not field-level.** The vitals set is
+   only ~5 KB; field-level diffing inside it buys little and adds machinery. The
+   volatile collectors ship whole every cycle.
+4. **Sync robustness → resend-on-mismatch, same shape unary or streamed.** The
+   `inventory_hash` rides every check-in (unary and AgentStream-multiplexed
+   alike); any mismatch sets `resend_inventory` and the agent resends next cycle.
+   First contact and either-side restart are just the no-cached-inventory case →
+   resend. No wedged state.
 
-1. **Which collectors actually churn per cycle?** The ~50× estimate assumes
-   volatile changes stay confined to small subtrees
-   (`memory`/`loadavg`/`uptime`/`time`/`swap`/fs-usage). If `network`,
-   `listeners`, `docker`, or `processes` also change every cycle (unmeasured),
-   the delta is larger and the win shrinks. Instrument consecutive-snapshot
-   diffs on the real fleet first.
-2. **Baseline storage.** Can the server reconstruct everything it needs —
-   especially the `swarm`/`swarm_seeds` sub-trees for ingest — by applying the
-   delta to the **already-cached `FleetIndex` flattened form**, or does it need a
-   second full structured baseline per envoy (~213 KB × N ≈ 13 GB at 60k)? The
-   flattened form may be lossy for sub-tree reconstruction.
-3. **Patch granularity.** Top-level-subtree merge patch (simple, ~50×) vs
-   field-level JSON Patch / RFC 6902 (smaller deltas, more machinery). Start with
-   merge patch unless (1) shows the volatile subtrees are themselves large.
-4. **Base-hash sync robustness.** Confirm the resend-on-mismatch loop converges
-   under dropped / out-of-order check-ins and either-side restarts without a
-   stuck state, and that `AgentStream`-multiplexed check-ins carry the delta the
-   same way as unary ones.
+**Residual concern.** Stable collectors must serialize **deterministically** (no
+per-refresh timestamps, sorted maps) or the inventory hash flaps every 10 cycles
+and re-ships 213 KB needlessly. Slice 2 audits the stable set for non-determinism;
+`security_scan` / `cert_lifecycle` are the likeliest offenders (scan timestamps).
+If one is irreducibly noisy, exclude its noisy field from the hashed inventory, or
+fall back to delta for that robustness.
 
 ## Implementation notes
 
-Deferred until the spike resolves the Open Questions. Sketch:
-
-- **Slice 1** — measurement spike (consecutive-snapshot churn per collector on
-  the real fleet) + this ADR + `_index.md` entry. Decides whether the win
-  justifies the feature and which baseline-storage shape to build.
-- **Slice 2** — proto fields (`traits_delta`, `traits_base_hash`,
-  `resend_traits`) + regenerate; agent delta computation, last-sent baseline,
-  resend handling.
-- **Slice 3** — server baseline + patch-apply + `resend_traits` on desync;
-  reconstruction feeds the existing CheckIn path unchanged.
-- **Slice 4** — tests (delta round-trip, desync/restart recovery, mixed-fleet
-  full-vs-delta) + a before/after wire-size measurement on the live home-lab
-  agents (the synthetic harness can't show it — fakefleet traits are ~400 B).
+- **Slice 1 (done 2026-06-04)** — measurement spike + this ADR + `_index.md`
+  entry. Confirmed the win (~98%), inverted the design to the split, and resolved
+  the storage shape (ride FleetIndex flattened).
+- **Slice 2** — audit the stable collectors for serialization non-determinism
+  (the residual concern); proto fields (`vitals_json`, `inventory_json`,
+  `inventory_hash`, `resend_inventory`) + regenerate; agent: serialize the
+  volatile vs stable+periodic groups separately (reusing `CachedCollectors`), hash
+  the inventory, gate `inventory_json` on hash change, track last-sent hash +
+  resend flag.
+- **Slice 3** — server: cache inventory per envoy onto the FleetIndex flattened
+  form, merge vitals each check-in, `resend_inventory` on hash mismatch /
+  cache-miss; reconstruction feeds the existing CheckIn path unchanged.
+- **Slice 4** — tests (vitals-only round-trip, inventory-change resend,
+  desync/restart recovery, mixed full-vs-split fleet) + a before/after wire-size
+  measurement on the live home-lab agents (the synthetic harness can't show it —
+  fakefleet traits are ~400 B).
 
 Cross-references: the gRPC-response-compression and swarm-freshness-decouple
 follow-ons (`pending.md`); ADR-028 set the precedent of evolving the
