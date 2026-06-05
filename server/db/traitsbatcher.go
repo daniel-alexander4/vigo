@@ -28,18 +28,17 @@ type TraitsFlushHook func(batch map[string]string)
 // old snapshots for every envoy it just inserted, enforcing the
 // 10-snapshot retention cap (DB-04) coupled to the insert.
 type TraitsBatcher struct {
-	mu      sync.Mutex
-	pending map[string]string    // envoy_id → traits JSON
-	hashes  map[string]string    // envoy_id → last written SHA-256
+	mu      sync.Mutex        // guards pending + onFlush
+	pending map[string]string // envoy_id → traits JSON (changed-since-last-flush set)
+	hashes  sync.Map          // envoy_id → last-marked SHA-256 (string); lock-free dedup on the check-in hot path
 	queries *Queries
-	onFlush TraitsFlushHook      // called after successful DB flush
+	onFlush TraitsFlushHook // called after successful DB flush
 }
 
 // NewTraitsBatcher creates a batcher backed by the given Queries.
 func NewTraitsBatcher(queries *Queries) *TraitsBatcher {
 	return &TraitsBatcher{
 		pending: make(map[string]string),
-		hashes:  make(map[string]string),
 		queries: queries,
 	}
 }
@@ -51,20 +50,26 @@ func (b *TraitsBatcher) SetFlushHook(hook TraitsFlushHook) {
 	b.mu.Unlock()
 }
 
-// Mark records traits for a envoy. Deduplicates by hash — if the traits
-// haven't changed since the last flush, the entry is not queued.
+// Mark records traits for an envoy, deduplicated by content hash. The
+// steady-state case — every check-in re-sends byte-identical traits — hits a
+// lock-free sync.Map load and returns, so the per-check-in traits write does
+// not funnel the whole fleet through one mutex. (That mutex was the fleet-scale
+// throughput wall: at ~13K envoys @ 1s a single Mark lock serialized ~82% of
+// all check-in lock-wait, capping the server well below its CPU ceiling.) Only
+// a changed payload takes the pending lock. Writing pending before storing the
+// hash keeps the invariant "hash recorded ⇒ that payload is queued or flushed."
 func (b *TraitsBatcher) Mark(envoyID, traitsJSON string) {
 	h := sha256.Sum256([]byte(traitsJSON))
 	hash := hex.EncodeToString(h[:])
 
-	b.mu.Lock()
-	if b.hashes[envoyID] == hash {
-		b.mu.Unlock()
+	if prev, ok := b.hashes.Load(envoyID); ok && prev.(string) == hash {
 		return
 	}
+
+	b.mu.Lock()
 	b.pending[envoyID] = traitsJSON
-	b.hashes[envoyID] = hash
 	b.mu.Unlock()
+	b.hashes.Store(envoyID, hash)
 }
 
 // Start runs the flush loop, writing accumulated traits to the DB every

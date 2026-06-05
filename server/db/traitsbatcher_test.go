@@ -6,6 +6,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"git.alexander4.io/vigo/server/testutil"
@@ -102,6 +103,56 @@ func TestTraitsBatcher_FlushResetsForNewTraits(t *testing.T) {
 
 	if count != 1 {
 		t.Fatalf("expected 1 pending after new traits, got %d", count)
+	}
+}
+
+// TestTraitsBatcher_ConcurrentMark exercises the lock-free dedup path under
+// concurrency: many envoys, each Marked from many goroutines with identical
+// traits, must yield exactly one pending entry per envoy and race cleanly
+// (run with -race). This locks in the contention-free check-in hot path that
+// replaced the single global Mark mutex.
+func TestTraitsBatcher_ConcurrentMark(t *testing.T) {
+	b := NewTraitsBatcher(nil)
+
+	const envoys = 200
+	const goroutines = 16
+
+	mark := func() {
+		var wg sync.WaitGroup
+		for g := 0; g < goroutines; g++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := 0; i < envoys; i++ {
+					// Identical traits per envoy across every goroutine: the
+					// first Mark queues, the rest must dedup on the lock-free path.
+					b.Mark(fmt.Sprintf("envoy-%d", i), fmt.Sprintf(`{"id":%d}`, i))
+				}
+			}()
+		}
+		wg.Wait()
+	}
+
+	mark()
+	b.mu.Lock()
+	count := len(b.pending)
+	b.mu.Unlock()
+	if count != envoys {
+		t.Fatalf("expected %d pending entries (one per envoy), got %d", envoys, count)
+	}
+
+	// Simulate a flush, then a second round of identical traits: every Mark
+	// must dedup against the retained hashes — zero new pending work.
+	b.mu.Lock()
+	b.pending = make(map[string]string)
+	b.mu.Unlock()
+
+	mark()
+	b.mu.Lock()
+	after := len(b.pending)
+	b.mu.Unlock()
+	if after != 0 {
+		t.Fatalf("expected 0 pending after dedup of unchanged traits, got %d", after)
 	}
 }
 
