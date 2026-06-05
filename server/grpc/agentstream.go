@@ -280,6 +280,17 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		s.fleetIndex.MarkCycleDuration(envoyID, clampReportedCycle(req.GetLastCheckinDeltaMs()))
 	}
+	// ADR-033 conditional traits: a split agent leaves traits_json empty and sends
+	// vitals every check-in + inventory only on change. Reconstruct the full traits
+	// from the per-envoy inventory cache so everything below is unchanged; a cache
+	// miss leaves inlineTraits empty (traits skipped this cycle) and asks the agent
+	// to resend the full inventory. Old agents (traits_json) fall through as-is.
+	inlineTraits := req.GetTraitsJson()
+	resendInventory := false
+	if len(inlineTraits) == 0 && len(req.GetVitalsJson()) > 0 {
+		inlineTraits, resendInventory = s.reconstructTraits(envoyID, req.GetVitalsJson(), req.GetInventoryJson(), req.GetInventoryHash())
+	}
+
 	// Parse the inline traits ONCE per check-in into top-level fields; every
 	// consumer below — and the auto-update arch lookup further down — reads its
 	// own sub-tree from this single shallow parse instead of re-scanning the raw
@@ -287,7 +298,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// A successful Unmarshal is also the validity gate: traits are always a
 	// top-level object, and each value stays a RawMessage so a malformed sub-tree
 	// only fails its own consumer, never the others.
-	inlineTraits := req.GetTraitsJson()
 	var traitsTop map[string]json.RawMessage
 	if len(inlineTraits) > 0 && json.Unmarshal(inlineTraits, &traitsTop) == nil {
 		if s.traitsBatch != nil {
@@ -431,6 +441,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			Interval:        interval,
 			JitterPercent:   s.jitterPercent,
 			ServerPubkeyPem: s.bundlePubKeyPEM,
+			ResendInventory: resendInventory,
 		}
 		// Check for pending reassignment even on no-change cycles.
 		if s.reassignStore != nil {
@@ -500,6 +511,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			Interval:            interval,
 			JitterPercent:       s.jitterPercent,
 			ServerPubkeyPem:     s.bundlePubKeyPEM,
+			ResendInventory:     resendInventory,
 		}
 		if s.reassignStore != nil {
 			if info, ok := s.reassignStore.Pop(envoyID); ok {
@@ -765,6 +777,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		Interval:            interval,
 		JitterPercent:       s.jitterPercent,
 		ServerPubkeyPem:     s.bundlePubKeyPEM,
+		ResendInventory:     resendInventory,
 	}
 
 	// Surface config reload errors as warnings so agents know why

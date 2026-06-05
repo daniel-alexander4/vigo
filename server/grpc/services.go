@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,11 +41,17 @@ type AgentService struct {
 	integrations  *integrations.Dispatcher
 	traitsScanner *traits.Scanner
 	traitsBatch   *db.TraitsBatcher
-	policyCache   *policyCache
-	streamMgr     *streamManager
-	taskRouter    *taskRouter
-	queryRouter   *queryRouter
-	taskStore     *task.Store
+	// inventoryCache holds the last full inventory_json + its hash per envoy for
+	// ADR-033 conditional-traits reconstruction: a split agent sends vitals every
+	// check-in and inventory only on change, so the server merges fresh vitals
+	// with the cached inventory. Keyed envoy_id → *inventoryEntry. Unbounded in
+	// v1 (a bounded LRU is the production follow-up; see ADR-033).
+	inventoryCache sync.Map
+	policyCache    *policyCache
+	streamMgr      *streamManager
+	taskRouter     *taskRouter
+	queryRouter    *queryRouter
+	taskStore      *task.Store
 	// spannerAdmin drives the peer-equal enrollment routing (Slice
 	// 2-ii-b). Non-nil when this vigosrv is in a spanner (mode !=
 	// standalone). Register dispatches: spannerAdmin != nil →
