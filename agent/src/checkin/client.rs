@@ -8,14 +8,14 @@
 
 use crate::auth::signer;
 use crate::proto::{
-    vigo_agent_client::VigoAgentClient, CheckInRequest, CheckInResponse,
-    DownloadCustomTraitRequest, ConfigcrateResult, RegisterRequest, RegisterResponse,
-    ReportResultRequest, ReportResultResponse, ReportTraitsRequest, WakeRequest,
-    WakeResponse,
+    vigo_agent_client::VigoAgentClient, CheckInRequest, CheckInResponse, ConfigcrateResult,
+    DownloadCustomTraitRequest, RegisterRequest, RegisterResponse, ReportResultRequest,
+    ReportResultResponse, ReportTraitsRequest, WakeRequest, WakeResponse,
 };
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
-use std::collections::BTreeMap;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashSet};
 use std::time::Duration;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 use tracing::Instrument;
@@ -26,6 +26,40 @@ const FAILOVER_THRESHOLD: u32 = 3;
 /// Number of check-in cycles between primary probe attempts when failed over.
 /// At 15s intervals, 20 cycles = ~5 minutes.
 const PRIMARY_PROBE_CYCLES: u32 = 20;
+
+/// ADR-033: partition full traits JSON into (vitals_json, inventory_json) along
+/// the agent's existing collector classification — volatile collectors
+/// (loadavg/memory/swarm/...) are the vitals shipped every check-in; everything
+/// else is inventory, shipped only when its content hash changes. Returns None
+/// when the payload isn't a JSON object (the caller then sends nothing).
+fn split_traits(traits_json: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+    let val: serde_json::Value = serde_json::from_slice(traits_json).ok()?;
+    let obj = val.as_object()?;
+    let volatile: HashSet<&'static str> = crate::traits::volatile_collectors()
+        .iter()
+        .map(|c| c.name())
+        .collect();
+    let mut vitals = serde_json::Map::new();
+    let mut inventory = serde_json::Map::new();
+    for (k, v) in obj {
+        if volatile.contains(k.as_str()) {
+            vitals.insert(k.clone(), v.clone());
+        } else {
+            inventory.insert(k.clone(), v.clone());
+        }
+    }
+    Some((
+        serde_json::to_vec(&serde_json::Value::Object(vitals)).ok()?,
+        serde_json::to_vec(&serde_json::Value::Object(inventory)).ok()?,
+    ))
+}
+
+/// Content hash gating inventory transmission. Server-opaque — it is only ever
+/// compared against the value the agent itself last sent, so it need not match
+/// any server-side computation.
+fn sha256_hex(data: &[u8]) -> String {
+    hex::encode(Sha256::digest(data))
+}
 
 pub struct Client {
     agent: VigoAgentClient<Channel>,
@@ -58,6 +92,13 @@ pub struct Client {
     /// `&self` (some are reached through immutable borrows in the
     /// stream loop). Lock is held for nanoseconds and uncontended.
     last_checkin_instant: std::sync::Mutex<Option<std::time::Instant>>,
+
+    /// ADR-033 conditional traits: hash of the inventory the server last
+    /// accepted from us, and whether the server asked us to resend it
+    /// (`resend_inventory`). The unary check-in ships vitals every cycle and
+    /// the full inventory only when its hash changes or a resend is pending.
+    last_inventory_hash: Option<String>,
+    force_resend_inventory: bool,
 }
 
 impl Client {
@@ -82,19 +123,21 @@ impl Client {
             None
         };
 
-        let identity_pem = if let (Some(cert_path), Some(key_path)) = (client_cert_file, client_key_file) {
-            let cert_pem = tokio::fs::read(cert_path)
-                .await
-                .with_context(|| format!("read client cert: {}", cert_path))?;
-            let key_pem = tokio::fs::read(key_path)
-                .await
-                .with_context(|| format!("read client key: {}", key_path))?;
-            Some((cert_pem, key_pem))
-        } else {
-            None
-        };
+        let identity_pem =
+            if let (Some(cert_path), Some(key_path)) = (client_cert_file, client_key_file) {
+                let cert_pem = tokio::fs::read(cert_path)
+                    .await
+                    .with_context(|| format!("read client cert: {}", cert_path))?;
+                let key_pem = tokio::fs::read(key_path)
+                    .await
+                    .with_context(|| format!("read client key: {}", key_path))?;
+                Some((cert_pem, key_pem))
+            } else {
+                None
+            };
 
-        let channel = Self::build_channel(server_addr, ca_pem.as_deref(), identity_pem.as_ref()).await?;
+        let channel =
+            Self::build_channel(server_addr, ca_pem.as_deref(), identity_pem.as_ref()).await?;
 
         Ok(Self {
             agent: VigoAgentClient::new(channel),
@@ -108,6 +151,8 @@ impl Client {
             tls_identity: identity_pem,
             agent_version: String::new(),
             last_checkin_instant: std::sync::Mutex::new(None),
+            last_inventory_hash: None,
+            force_resend_inventory: false,
         })
     }
 
@@ -308,6 +353,7 @@ impl Client {
                     ip_address: crate::platform::net::get_outbound_ip(),
                     last_checkin_delta_ms: 0,
                     traceparent,
+                    ..Default::default() // ADR-033 vitals/inventory: empty for a probe (no traits)
                 };
 
                 match probe_client.check_in(tonic::Request::new(req)).await {
@@ -343,7 +389,10 @@ impl Client {
         let now = std::time::Instant::now();
         let mut guard = self.last_checkin_instant.lock().unwrap();
         let delta = match *guard {
-            Some(prev) => now.saturating_duration_since(prev).as_millis().min(u32::MAX as u128) as u32,
+            Some(prev) => now
+                .saturating_duration_since(prev)
+                .as_millis()
+                .min(u32::MAX as u128) as u32,
             None => 0,
         };
         *guard = Some(now);
@@ -382,12 +431,32 @@ impl Client {
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
         let (traceparent, trace_id) = super::traceparent::generate();
 
+        // ADR-033 conditional traits: split the full payload into vitals (sent
+        // every check-in) and inventory (sent only when its hash changes or the
+        // server requested a resend). A payload that can't be split (None / not
+        // an object) sends nothing — the server skips traits that cycle.
+        let (vitals_json, inventory_json, inventory_hash) =
+            match traits_json.as_deref().and_then(split_traits) {
+                Some((vitals, inventory)) => {
+                    let hash = sha256_hex(&inventory);
+                    let send_inventory = self.force_resend_inventory
+                        || self.last_inventory_hash.as_deref() != Some(hash.as_str());
+                    let inv = if send_inventory {
+                        inventory
+                    } else {
+                        Vec::new()
+                    };
+                    (vitals, inv, hash)
+                }
+                None => (Vec::new(), Vec::new(), String::new()),
+            };
+
         let req = CheckInRequest {
             envoy_id: self.envoy_id.clone(),
             state_fingerprint: state_fingerprint.to_string(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
-            traits_json: traits_json.unwrap_or_default(),
+            traits_json: Vec::new(), // split mode: full payload rides vitals + inventory below
             policy_version,
             policy_mode: true,
             cached_configcrate_hashes: cached_configcrate_hashes.unwrap_or_default(),
@@ -396,6 +465,9 @@ impl Client {
             ip_address: crate::platform::net::get_outbound_ip(),
             last_checkin_delta_ms: self.next_checkin_delta_ms(),
             traceparent,
+            vitals_json,
+            inventory_json,
+            inventory_hash: inventory_hash.clone(),
         };
 
         let span = tracing::info_span!("check_in", trace_id = %trace_id);
@@ -404,9 +476,16 @@ impl Client {
             .check_in(tonic::Request::new(req))
             .instrument(span)
             .await
-            .context("check-in RPC")?;
+            .context("check-in RPC")?
+            .into_inner();
 
-        Ok(resp.into_inner())
+        // Record what the server now holds, and honor a resend request next cycle.
+        if !inventory_hash.is_empty() {
+            self.last_inventory_hash = Some(inventory_hash);
+        }
+        self.force_resend_inventory = resp.resend_inventory;
+
+        Ok(resp)
     }
 
     /// Wake blocks until the server has urgent work or the interval expires.
@@ -425,11 +504,7 @@ impl Client {
         let mut grpc_req = tonic::Request::new(req);
         grpc_req.set_timeout(timeout + Duration::from_secs(5)); // safety margin
 
-        let resp = self
-            .agent
-            .wake(grpc_req)
-            .await
-            .context("wake RPC")?;
+        let resp = self.agent.wake(grpc_req).await.context("wake RPC")?;
 
         Ok(resp.into_inner())
     }
@@ -666,6 +741,9 @@ impl Client {
             ip_address: crate::platform::net::get_outbound_ip(),
             last_checkin_delta_ms: self.next_checkin_delta_ms(),
             traceparent,
+            // ADR-033: the stream path keeps sending the full traits_json for now
+            // (the server handles both shapes); the unary check_in does the split.
+            ..Default::default()
         }
     }
 
@@ -705,8 +783,7 @@ impl Client {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         // Build a lazy channel that doesn't actually connect.
-        let channel = Channel::from_static("https://[::1]:1")
-            .connect_lazy();
+        let channel = Channel::from_static("https://[::1]:1").connect_lazy();
 
         let mut servers = vec![primary.to_string()];
         for fb in &fallbacks {
@@ -727,6 +804,8 @@ impl Client {
             tls_identity: None,
             agent_version: String::new(),
             last_checkin_instant: std::sync::Mutex::new(None),
+            last_inventory_hash: None,
+            force_resend_inventory: false,
         }
     }
 }
@@ -735,16 +814,42 @@ impl Client {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_split_traits_partitions_by_volatility() {
+        // loadavg/uptime are volatile (vitals); packages is stable (inventory).
+        let traits = br#"{"loadavg":{"load1":1.0},"packages":["a","b"],"uptime":{"seconds":5}}"#;
+        let (vitals, inventory) = split_traits(traits).expect("split a JSON object");
+        let v: serde_json::Value = serde_json::from_slice(&vitals).unwrap();
+        let i: serde_json::Value = serde_json::from_slice(&inventory).unwrap();
+        assert!(v.get("loadavg").is_some() && v.get("uptime").is_some());
+        assert!(v.get("packages").is_none());
+        assert!(i.get("packages").is_some());
+        assert!(i.get("loadavg").is_none() && i.get("uptime").is_none());
+    }
+
+    #[test]
+    fn test_split_traits_non_object_returns_none() {
+        assert!(split_traits(b"not json").is_none());
+        assert!(split_traits(b"[1,2,3]").is_none());
+    }
+
+    #[test]
+    fn test_sha256_hex_is_stable_and_lowercase() {
+        let h1 = sha256_hex(b"{\"a\":1}");
+        let h2 = sha256_hex(b"{\"a\":1}");
+        assert_eq!(h1, h2);
+        assert_eq!(h1.len(), 64);
+        assert_eq!(h1, h1.to_lowercase());
+        assert_ne!(h1, sha256_hex(b"{\"a\":2}"));
+    }
+
     #[tokio::test]
     async fn test_set_fallback_servers() {
         let mut client = Client::new_for_test("primary:1530", vec![]);
         assert_eq!(client.servers, vec!["primary:1530"]);
         assert!(!client.is_failed_over());
 
-        client.set_fallback_servers(vec![
-            "peer1:1530".into(),
-            "peer2:1530".into(),
-        ]);
+        client.set_fallback_servers(vec!["peer1:1530".into(), "peer2:1530".into()]);
         assert_eq!(
             client.servers,
             vec!["primary:1530", "peer1:1530", "peer2:1530"]
@@ -759,10 +864,7 @@ mod tests {
             "primary:1530".into(), // duplicate of primary
             "peer1:1530".into(),   // duplicate
         ]);
-        assert_eq!(
-            client.servers,
-            vec!["primary:1530", "peer1:1530"]
-        );
+        assert_eq!(client.servers, vec!["primary:1530", "peer1:1530"]);
     }
 
     #[tokio::test]
@@ -786,10 +888,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_failover_after_threshold() {
-        let mut client = Client::new_for_test(
-            "primary:1530",
-            vec!["peer1:1530".into()],
-        );
+        let mut client = Client::new_for_test("primary:1530", vec!["peer1:1530".into()]);
 
         // First 2 failures don't trigger failover.
         assert!(!client.record_failure().await);
@@ -834,10 +933,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_probe_primary_not_triggered_when_on_primary() {
-        let mut client = Client::new_for_test(
-            "primary:1530",
-            vec!["peer1:1530".into()],
-        );
+        let mut client = Client::new_for_test("primary:1530", vec!["peer1:1530".into()]);
         // On primary — probe should not fire.
         client.cycles_since_probe = PRIMARY_PROBE_CYCLES + 1;
         assert!(!client.maybe_probe_primary().await);
@@ -845,10 +941,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_probe_primary_cycle_counting() {
-        let mut client = Client::new_for_test(
-            "primary:1530",
-            vec!["peer1:1530".into()],
-        );
+        let mut client = Client::new_for_test("primary:1530", vec!["peer1:1530".into()]);
         // Simulate being on fallback.
         client.active_server_idx = 1;
 
