@@ -131,7 +131,7 @@ RUN wget -q "https://github.com/benbjohnson/litestream/releases/download/${LITES
 COPY --from=go-builder /build/vigosrv /usr/local/sbin/vigosrv
 COPY --from=go-builder /build/vigocli /usr/local/bin/vigocli
 RUN chmod 0700 /usr/local/bin/vigocli
-COPY --from=go-builder /build/migrations /migrations
+# Migrations are embedded in the vigosrv binary (migrations.FS) — no on-disk copy.
 
 # Agent binaries — host-built cross-compiled platforms first (arm64, freebsd,
 # windows, darwin — each with its .sig if SIGN_KEY was supplied to upgrade.sh),

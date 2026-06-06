@@ -725,7 +725,6 @@ type GRCIntegration struct {
 // PathsSection configures directory paths for server subsystems.
 // All paths default to subdirectories of the working directory.
 type PathsSection struct {
-	Migrations   string `yaml:"migrations" doc:"Database migration files directory." default:"migrations" example:"migrations  (rarely overridden)"`
 	CustomTraits string `yaml:"custom_traits" doc:"Custom trait collector scripts directory." default:"custom-traits" example:"/srv/vigo/custom-traits"`
 	Docs         string `yaml:"docs" doc:"Documentation directory served by the in-app docs browser." default:"docs" example:"docs, /srv/vigo/docs"`
 	Tasks        string `yaml:"tasks" doc:"Reusable task definitions directory." default:".live/tasks" example:"/srv/vigo/stacks/.live/tasks"`
@@ -985,7 +984,7 @@ type EnvoyConfig struct {
 	MatchPattern    string         `yaml:"-"` // original match pattern from envoys.vgo
 	Environment     string         `yaml:"environment"`
 	Roles           []string       `yaml:"-"` // role names that were expanded
-	Configcrates         []Configcrate `yaml:"configcrates"`
+	Configcrates    []Configcrate  `yaml:"configcrates"`
 	Vars            map[string]any `yaml:"vars"`
 	VarOrder        []string       `yaml:"-"`
 	Tags            []string       `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
@@ -1058,8 +1057,8 @@ type ResourceConfig struct {
 type ConfigcrateKind string
 
 const (
-	ConfigcrateKindConfigcrate    ConfigcrateKind = ""          // zero value — regular module from stacks/modules/
-	ConfigcrateKindUsercrate ConfigcrateKind = "usercrate" // loaded from a stacks/**/usercrates/ dir
+	ConfigcrateKindConfigcrate ConfigcrateKind = ""          // zero value — regular module from stacks/modules/
+	ConfigcrateKindUsercrate   ConfigcrateKind = "usercrate" // loaded from a stacks/**/usercrates/ dir
 )
 
 // ComplianceClaims is a module's per-module compliance attribution block.
@@ -1083,7 +1082,7 @@ type ComplianceClaims struct {
 // in the resources list into plain ResourceConfig items.
 type ConfigcrateDefinition struct {
 	Name       string           `yaml:"name"`
-	Kind       ConfigcrateKind       `yaml:"-"` // set by loader: regular module vs usercrate
+	Kind       ConfigcrateKind  `yaml:"-"` // set by loader: regular module vs usercrate
 	SourceFile string           `yaml:"-"` // stacks-relative path, set by loader
 	DependsOn  []string         `yaml:"depends_on"`
 	Before     []string         `yaml:"before"`
@@ -1298,18 +1297,18 @@ func (r *RoleRef) UnmarshalYAML(value *yaml.Node) error {
 // Case provides conditional module sets — each case entry has a when: and
 // its own modules list. All matching cases contribute modules (not short-circuit).
 type RoleDefinition struct {
-	Name       string      `yaml:"name"`
-	When       string      `yaml:"when,omitempty"`
-	Includes   []string    `yaml:"includes"`       // other role names to include (single level)
-	Configcrates    []ConfigcrateRef `yaml:"configcrates"`        // unconditional modules
-	Usercrates []ConfigcrateRef `yaml:"usercrates"`     // positive include of usercrates (Kind == Usercrate); cross-kind enforced at resolve time
-	Case       []RoleCase  `yaml:"case,omitempty"` // conditional module groups
+	Name         string           `yaml:"name"`
+	When         string           `yaml:"when,omitempty"`
+	Includes     []string         `yaml:"includes"`       // other role names to include (single level)
+	Configcrates []ConfigcrateRef `yaml:"configcrates"`   // unconditional modules
+	Usercrates   []ConfigcrateRef `yaml:"usercrates"`     // positive include of usercrates (Kind == Usercrate); cross-kind enforced at resolve time
+	Case         []RoleCase       `yaml:"case,omitempty"` // conditional module groups
 }
 
 // RoleCase is a conditional group of modules within a role definition.
 // All cases whose when: expression matches contribute their modules.
 type RoleCase struct {
-	When    string      `yaml:"when"`
+	When         string           `yaml:"when"`
 	Configcrates []ConfigcrateRef `yaml:"configcrates"`
 }
 
@@ -1326,16 +1325,16 @@ var ValidDeviceTypes = map[string]bool{
 // that merges duplicate 'modules' and 'roles' keys (standard YAML would
 // silently keep only the last value).
 type EnvoyEntry struct {
-	Match            string         `yaml:"match"`
-	Environment      string         `yaml:"environment"`
-	Roles            []RoleRef      `yaml:"roles"`
-	Configcrates          []ConfigcrateRef    `yaml:"configcrates"`
-	Usercrates       []ConfigcrateRef    `yaml:"usercrates"` // positive include of usercrates (Kind == Usercrate)
-	Vars             map[string]any `yaml:"vars"`
-	Tags             []string       `yaml:"tags"`              // static tags for targeting
-	ExcludeConfigcrates   []string       `yaml:"exclude_configcrates"`   // opt out of inherited modules
-	ExcludeResources []string       `yaml:"exclude_resources"` // opt out of specific resources by name
-	ObserveOnly      bool           `yaml:"observe_only"`      // observe-only mode: report drift only, don't enforce
+	Match               string           `yaml:"match"`
+	Environment         string           `yaml:"environment"`
+	Roles               []RoleRef        `yaml:"roles"`
+	Configcrates        []ConfigcrateRef `yaml:"configcrates"`
+	Usercrates          []ConfigcrateRef `yaml:"usercrates"` // positive include of usercrates (Kind == Usercrate)
+	Vars                map[string]any   `yaml:"vars"`
+	Tags                []string         `yaml:"tags"`                 // static tags for targeting
+	ExcludeConfigcrates []string         `yaml:"exclude_configcrates"` // opt out of inherited modules
+	ExcludeResources    []string         `yaml:"exclude_resources"`    // opt out of specific resources by name
+	ObserveOnly         bool             `yaml:"observe_only"`         // observe-only mode: report drift only, don't enforce
 
 	// DirPath is the relative directory path within the config tree where
 	// this entry was loaded from. Set by the loader for inheritance resolution.
@@ -1347,10 +1346,10 @@ type EnvoyEntry struct {
 
 	// OwnConfigcrates/OwnRoles/OwnUsercrates/OwnVars hold the entry's original
 	// values before inheritance merging. Set by applyInheritance for trace.
-	OwnConfigcrates    []ConfigcrateRef    `yaml:"-"`
-	OwnRoles      []RoleRef      `yaml:"-"`
-	OwnUsercrates []ConfigcrateRef    `yaml:"-"`
-	OwnVars       map[string]any `yaml:"-"`
+	OwnConfigcrates []ConfigcrateRef `yaml:"-"`
+	OwnRoles        []RoleRef        `yaml:"-"`
+	OwnUsercrates   []ConfigcrateRef `yaml:"-"`
+	OwnVars         map[string]any   `yaml:"-"`
 
 	// Network device fields — set when this entry is a virtual envoy managed
 	// through a gateway. Gateway must be a real compute envoy.
@@ -1391,20 +1390,20 @@ type ComplianceConfig struct {
 // entries in subdirectories. Loaded from common.vgo files at each directory
 // level. Files without match: entries are treated as common configs.
 type CommonConfig struct {
-	Configcrates    []ConfigcrateRef    `yaml:"configcrates"`
-	Usercrates []ConfigcrateRef    `yaml:"usercrates"` // positive include of usercrates for every entry at this dir and below
-	Roles      []RoleRef      `yaml:"roles"`
-	Vars       map[string]any `yaml:"vars"`
-	DirPath    string         `yaml:"-"` // relative dir path (e.g., "production/web")
+	Configcrates []ConfigcrateRef `yaml:"configcrates"`
+	Usercrates   []ConfigcrateRef `yaml:"usercrates"` // positive include of usercrates for every entry at this dir and below
+	Roles        []RoleRef        `yaml:"roles"`
+	Vars         map[string]any   `yaml:"vars"`
+	DirPath      string           `yaml:"-"` // relative dir path (e.g., "production/web")
 }
 
 // PerEnvOverrideBlock holds modules, vars, and exclusions for a single
 // environment within a environments.vgo file.
 type PerEnvOverrideBlock struct {
-	Configcrates        []ConfigcrateRef    `yaml:"configcrates"`
-	Usercrates     []ConfigcrateRef    `yaml:"usercrates"` // positive include of usercrates in this environment
-	ExcludeConfigcrates []string       `yaml:"exclude_configcrates"`
-	Vars           map[string]any `yaml:"vars"`
+	Configcrates        []ConfigcrateRef `yaml:"configcrates"`
+	Usercrates          []ConfigcrateRef `yaml:"usercrates"` // positive include of usercrates in this environment
+	ExcludeConfigcrates []string         `yaml:"exclude_configcrates"`
+	Vars                map[string]any   `yaml:"vars"`
 }
 
 // PerEnvOverridesConfig holds the parsed content of a environments.vgo file.
@@ -1517,6 +1516,6 @@ type StandardCoverage struct {
 
 // ControlCoverage describes an envoy's coverage of a single control.
 type ControlCoverage struct {
-	ControlID string   `json:"control_id"`
-	Configcrates   []string `json:"configcrates"`
+	ControlID    string   `json:"control_id"`
+	Configcrates []string `json:"configcrates"`
 }

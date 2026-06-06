@@ -193,7 +193,6 @@ fi
 cd "$DATA_DIR"
 
 export VIGO_CONFIG_FILE="server.yaml"
-export VIGO_MIGRATIONS_DIR="/migrations"
 export VIGO_AGENT_DIR="/dist/agent"
 
 exec vigosrv "$@"

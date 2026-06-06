@@ -52,7 +52,6 @@ make certs
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VIGO_CONFIG_FILE` | `server.yaml` | Server config path |
-| `VIGO_MIGRATIONS_DIR` | `migrations` | Migration files path |
 | `VIGO_CUSTOM_TRAITS_DIR` | `custom-traits` | Custom trait executables |
 | `VIGO_AGENT_DIR` | `dist/agent` | Agent binary distribution directory |
 | `VIGO_VERSION` | `dev` | Version string |

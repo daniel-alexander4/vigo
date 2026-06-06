@@ -18,11 +18,13 @@ import (
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 
 	licfmt "git.alexander4.io/tessera/license/products/vigo"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/migrations"
 	vigoai "git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/api"
 	"git.alexander4.io/vigo/server/audit"
@@ -98,7 +100,6 @@ type Server struct {
 	secretsCfg      secrets.Config       // first-pass secrets backend config
 
 	// --- Resolved paths (env var > cfg.Paths.* > built-in default) ---
-	migrationsDir   string
 	traitsDir       string
 	docsDir         string
 	taskDir         string
@@ -344,7 +345,8 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// Resolve directory paths: env var > server.yaml paths: > default.
-	s.migrationsDir = envOrDefault("VIGO_MIGRATIONS_DIR", stringOrDefault(s.cfg.Paths.Migrations, "migrations"))
+	// (Migrations are embedded in the binary — see migrations.FS — so there's
+	// no migrations path to resolve.)
 	s.traitsDir = envOrDefault("VIGO_CUSTOM_TRAITS_DIR", stringOrDefault(s.cfg.Paths.CustomTraits, "custom-traits"))
 	s.docsDir = envOrDefault("VIGO_DOCS_DIR", stringOrDefault(s.cfg.Paths.Docs, "/seed/docs"))
 	s.taskDir = envOrDefault("VIGO_TASK_DIR", stringOrDefault(s.cfg.Paths.Tasks, filepath.Join(publish.DefaultLiveDir, "tasks")))
@@ -466,14 +468,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 	slog.Info("database connected", "driver", dbDriver)
 
-	// Run migrations (use driver-specific migration directory for Postgres).
-	migDir := s.migrationsDir
+	// Run migrations from the binary's embedded set (ADR: migrations travel
+	// with the binary so a binary-only deploy can't drift from its schema).
+	// SQLite migrations are at the embed root; Postgres under postgres/.
+	migSubdir := "."
 	if s.isPostgres {
-		migDir = filepath.Join(s.migrationsDir, "postgres")
-	}
-	absPath, err := filepath.Abs(migDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolving migrations path: %w", err)
+		migSubdir = "postgres"
 	}
 	var migDSN string
 	if s.isPostgres {
@@ -481,7 +481,11 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	} else {
 		migDSN = "sqlite3://" + s.cfg.Database.DSN
 	}
-	mig, err := migrate.New("file://"+absPath, migDSN)
+	migSrc, err := iofs.New(migrations.FS, migSubdir)
+	if err != nil {
+		return nil, fmt.Errorf("opening embedded migrations: %w", err)
+	}
+	mig, err := migrate.NewWithSourceInstance("iofs", migSrc, migDSN)
 	if err != nil {
 		return nil, fmt.Errorf("creating migrate instance: %w", err)
 	}

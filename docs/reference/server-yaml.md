@@ -574,7 +574,6 @@ Directory paths for server subsystems.
 
 ```yaml
 paths:
-  migrations: "migrations"
   custom_traits: "custom-traits"
   docs: "docs"
   tasks: "stacks/tasks"
