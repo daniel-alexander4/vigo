@@ -4,6 +4,8 @@
 package grpc
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -284,6 +286,45 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 
 	// Wait for either goroutine to finish.
 	return <-errCh
+}
+
+// bundleCompressThreshold is the marshaled-bundle size (bytes) above which
+// the bundle ships gzip-compressed in policy_bundle_gzip instead of the
+// structured policy_bundle field. 4 KiB clears gzip's framing + CPU overhead
+// on small payloads while catching the large config-change bundles that
+// dominate the wire. Bundles never ride the no_change heartbeat path, so this
+// threshold only ever applies to config-change sends.
+const bundleCompressThreshold = 4096
+
+// compressBundle marshals a signed bundle and, when it exceeds
+// bundleCompressThreshold and actually shrinks, returns (nil, gzipped) for the
+// policy_bundle_gzip wire field. Otherwise it returns (bundle, nil) so the
+// structured field is sent as-is. Exactly one of the two return values is ever
+// non-empty; the agent inflates policy_bundle_gzip back into policy_bundle on
+// receipt, so downstream stays bundle-shaped. The signature is over the
+// bundle's content fields (marshalBundleContent), so the gzip round-trip is
+// signature-transparent.
+func compressBundle(bundle *pb.PolicyBundle) (structured *pb.PolicyBundle, gzipped []byte) {
+	if bundle == nil {
+		return nil, nil
+	}
+	raw, err := proto.Marshal(bundle)
+	if err != nil || len(raw) < bundleCompressThreshold {
+		return bundle, nil
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(raw); err != nil {
+		_ = gz.Close()
+		return bundle, nil
+	}
+	if err := gz.Close(); err != nil {
+		return bundle, nil
+	}
+	if buf.Len() >= len(raw) {
+		return bundle, nil // already-compact bundle — compression didn't pay
+	}
+	return nil, buf.Bytes()
 }
 
 // buildCheckInResponse builds a CheckInResponse for both unary and stream contexts.
@@ -796,8 +837,15 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 
 	s.metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
 
+	// Compress large bundles on the wire. Bundles ship only on config-change
+	// (the no_change heartbeat path returns earlier), so this never touches the
+	// steady-state hot path. The agent inflates policy_bundle_gzip back into
+	// policy_bundle on receipt; one of the two fields is always nil/empty.
+	structuredBundle, gzippedBundle := compressBundle(bundle)
+
 	resp := &pb.CheckInResponse{
-		PolicyBundle:        bundle,
+		PolicyBundle:        structuredBundle,
+		PolicyBundleGzip:    gzippedBundle,
 		PolicyVersion:       configVersion,
 		ResponseFingerprint: bundle.MerkleRoot,
 		StreamRequested:     streamRequested,

@@ -293,6 +293,7 @@ message CheckInResponse {
   SwarmRuntimeLimits swarm_runtime_limits = 23;     // per-subsystem operational caps (size, retention) sourced from server.yaml; replaces hardcoded constants on the agent
   bytes curator_catalog = 24;                       // ADR-024: JSON-encoded array of curator CatalogEntry — the fleet artifact catalog, cached agent-side so resolution survives a server outage. The server's resolve endpoint still owns access (recipients) enforcement; the agent self-gates at materialization.
   bool resend_inventory = 25;                       // ADR-033: server holds no cached inventory matching the agent's inventory_hash (restart / eviction / desync) — agent must send full inventory_json on the next check-in
+  bytes policy_bundle_gzip = 26;                     // gzip(proto.Marshal(policy_bundle)), set instead of policy_bundle (field 7) when the marshaled bundle exceeds the server's compression threshold; mutually exclusive with field 7. Bundles ship only on config-change, never on the no_change heartbeat path, so this never touches the steady-state hot path. The agent inflates it back into policy_bundle on receipt, so all downstream code stays bundle-shaped.
 }
 
 // SwarmRuntimeLimits carries per-subsystem operational caps from the

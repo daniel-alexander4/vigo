@@ -513,6 +513,11 @@ impl Client {
             .context("check-in RPC")?
             .into_inner();
 
+        // Inflate a gzip-compressed bundle (large config-change responses) back
+        // into policy_bundle before anything downstream reads it.
+        let mut resp = resp;
+        super::inflate_policy_bundle(&mut resp);
+
         // Record what the server now holds, and honor a resend request next cycle.
         self.commit_inventory(&inventory_hash, resp.resend_inventory);
 

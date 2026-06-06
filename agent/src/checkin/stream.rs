@@ -120,13 +120,14 @@ pub async fn open(
         .context("recv handshake")?
         .ok_or_else(|| anyhow::anyhow!("stream closed during handshake"))?;
 
-    let initial_resp = match first_msg.msg {
+    let mut initial_resp = match first_msg.msg {
         Some(server_stream_message::Msg::CheckInResponse(resp)) => resp,
         other => anyhow::bail!(
             "expected check_in_response in handshake, got {:?}",
             other.map(|m| std::mem::discriminant(&m))
         ),
     };
+    super::inflate_policy_bundle(&mut initial_resp);
 
     // Create dispatch channels.
     let (policy_push_tx, policy_push_rx) = mpsc::channel::<StreamPolicyPush>(4);
@@ -194,7 +195,8 @@ async fn read_loop(
             Ok(Some(msg)) => {
                 if let Some(m) = msg.msg {
                     match m {
-                        server_stream_message::Msg::CheckInResponse(resp) => {
+                        server_stream_message::Msg::CheckInResponse(mut resp) => {
+                            super::inflate_policy_bundle(&mut resp);
                             if check_in_resp_tx.try_send(resp).is_err() {
                                 warn!("check-in response dropped (buffer full)");
                             }

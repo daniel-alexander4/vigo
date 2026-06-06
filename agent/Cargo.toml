@@ -67,6 +67,10 @@ socket2 = { version = "0.5", features = ["all"] }
 # OCI archive parsing (curator registry shim — ADR-024 slice 7)
 tar = { version = "0.4", default-features = false }
 
+# gzip inflate for compressed policy bundles (server sends large bundles in
+# CheckInResponse.policy_bundle_gzip). Already in the graph via `age`.
+flate2 = "1"
+
 # Misc
 regex-lite = "0.1"
 tracing = "0.1"

@@ -372,6 +372,7 @@ type CheckInResponse struct {
 	SwarmRuntimeLimits  *SwarmRuntimeLimits    `protobuf:"bytes,23,opt,name=swarm_runtime_limits,json=swarmRuntimeLimits,proto3" json:"swarm_runtime_limits,omitempty"` // per-subsystem operational caps (size, retention) sourced from server.yaml; replaces hardcoded constants on the agent
 	CuratorCatalog      []byte                 `protobuf:"bytes,24,opt,name=curator_catalog,json=curatorCatalog,proto3" json:"curator_catalog,omitempty"`               // ADR-024: JSON-encoded array of curator CatalogEntry — the fleet artifact catalog, cached agent-side so resolution survives a server outage. The server's resolve endpoint still owns access (recipients) enforcement; the agent self-gates at materialization.
 	ResendInventory     bool                   `protobuf:"varint,25,opt,name=resend_inventory,json=resendInventory,proto3" json:"resend_inventory,omitempty"`           // ADR-033: server holds no cached inventory matching the agent's inventory_hash (restart / eviction / desync) — agent must send full inventory_json on the next check-in
+	PolicyBundleGzip    []byte                 `protobuf:"bytes,26,opt,name=policy_bundle_gzip,json=policyBundleGzip,proto3" json:"policy_bundle_gzip,omitempty"`       // gzip(proto.Marshal(policy_bundle)), set instead of policy_bundle (field 7) when the marshaled bundle exceeds the server's compression threshold; mutually exclusive with field 7. Bundles ship only on config-change, never on the no_change heartbeat path, so this never touches the steady-state hot path. The agent inflates it back into policy_bundle on receipt, so all downstream code stays bundle-shaped.
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -551,6 +552,13 @@ func (x *CheckInResponse) GetResendInventory() bool {
 		return x.ResendInventory
 	}
 	return false
+}
+
+func (x *CheckInResponse) GetPolicyBundleGzip() []byte {
+	if x != nil {
+		return x.PolicyBundleGzip
+	}
+	return nil
 }
 
 // SwarmRuntimeLimits carries per-subsystem operational caps from the
@@ -7648,7 +7656,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0einventory_hash\x18\x10 \x01(\tR\rinventoryHash\x1aJ\n" +
 	"\x1cCachedConfigcrateHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\b\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaf\b\n" +
 	"\x0fCheckInResponse\x128\n" +
 	"\fconfigcrates\x18\x01 \x03(\v2\x14.vigo.v1.ConfigcrateR\fconfigcrates\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7672,7 +7680,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
 	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimits\x12'\n" +
 	"\x0fcurator_catalog\x18\x18 \x01(\fR\x0ecuratorCatalog\x12)\n" +
-	"\x10resend_inventory\x18\x19 \x01(\bR\x0fresendInventoryJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xfb\x04\n" +
+	"\x10resend_inventory\x18\x19 \x01(\bR\x0fresendInventory\x12,\n" +
+	"\x12policy_bundle_gzip\x18\x1a \x01(\fR\x10policyBundleGzipJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xfb\x04\n" +
 	"\x12SwarmRuntimeLimits\x125\n" +
 	"\x17filecast_max_size_bytes\x18\x01 \x01(\x04R\x14filecastMaxSizeBytes\x12<\n" +
 	"\x1afilecast_default_retention\x18\x02 \x01(\tR\x18filecastDefaultRetention\x123\n" +
