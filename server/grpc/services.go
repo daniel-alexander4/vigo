@@ -72,6 +72,7 @@ type AgentService struct {
 	metrics          *metrics.Metrics  // per-instance prometheus collectors
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
 	offlineThreshold time.Duration     // operator-configured override for the stale boundary (0 = default formula)
+	signatureWindow  time.Duration     // ed25519 timestamp window; verifies multiplexed AgentStream messages (matches the unary interceptor)
 	jitterPercent    int32             // jitter percentage sent to agents
 	fallbackServers  []string          // peer server addresses returned to agents on registration
 	// serverVersions is a per-arch ("<goos>/<goarch>" → version) map of the

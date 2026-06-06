@@ -49,6 +49,17 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 	}
 	envoyID := checkin.GetEnvoyId()
 
+	// Authenticate the handshake: verify the ed25519 signature against the
+	// envoy's stored pubkey before trusting the claimed envoy_id. This binds
+	// the whole stream to the holder of that key — TLS session integrity then
+	// covers subsequent messages. Without it, any enrolled mTLS client could
+	// open a stream as any envoy_id (mTLS only proves a CA-signed cert, not
+	// identity). Mirrors TunnelStream's handshake check; the per-message verify
+	// below is defense-in-depth for the messages that carry their own signature.
+	if _, err := verifyCheckIn(stream.Context(), s.queries, checkin, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
+		return err
+	}
+
 	// Validate envoy + look up state in one lock acquisition.
 	var envoy db.Envoy
 	if s.fleetIndex != nil {
@@ -161,6 +172,11 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
+				if _, err := verifyCheckIn(stream.Context(), s.queries, m.CheckIn, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
+					slog.Warn("stream check-in signature verification failed", "envoy_id", envoyID, "error", err)
+					errCh <- err
+					return
+				}
 				ctx, traceID := EnsureTraceID(stream.Context(), m.CheckIn.GetTraceparent())
 				resp, err := s.buildCheckInResponse(ctx, envoyID, envoy, m.CheckIn, true)
 				if err != nil {
@@ -178,6 +194,15 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				}
 
 			case *pb.AgentStreamMessage_ReportResult:
+				// Verify the ed25519 signature against the result's own envoy_id
+				// pubkey — for a proxied device result that's the DEVICE's key
+				// (the device signs; the gateway only relays), which the gateway
+				// config-authz check below cannot prove on its own.
+				if _, err := verifyReportResultCtx(stream.Context(), s.queries, m.ReportResult, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
+					slog.Warn("stream report-result signature verification failed", "envoy_id", envoyID, "result_envoy_id", m.ReportResult.GetEnvoyId(), "error", err)
+					errCh <- err
+					return
+				}
 				// Authorization check for proxied device results: if the
 				// result's envoy_id differs from the stream owner, verify
 				// the sender is the authorized gateway for that device.
@@ -210,6 +235,11 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				}
 
 			case *pb.AgentStreamMessage_ReportTraits:
+				if err := verifyReportTraits(stream.Context(), s.queries, m.ReportTraits, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
+					slog.Warn("stream report-traits signature verification failed", "envoy_id", envoyID, "error", err)
+					errCh <- err
+					return
+				}
 				ctx, traceID := EnsureTraceID(stream.Context(), m.ReportTraits.GetTraceparent())
 				resp, err := s.ReportTraits(ctx, m.ReportTraits)
 				if err != nil {

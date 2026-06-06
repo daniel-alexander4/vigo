@@ -136,7 +136,7 @@ func doCheckIn(t *testing.T, client pb.VigoAgentClient, envoyID string, priv ed2
 	sig := signPayload(payload, tsStr, priv)
 
 	return client.CheckIn(context.Background(), &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: fingerprint,
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -183,6 +183,71 @@ envoys:
 	}
 	if bundle.GetConfigcrates()[0].GetName() != "nginx" {
 		t.Errorf("module name = %q, want nginx", bundle.GetConfigcrates()[0].GetName())
+	}
+}
+
+// TestE2E_StreamRequiresSignature verifies the AgentStream is ed25519-verified
+// end to end: a correctly-signed handshake opens the stream, a bad-sig
+// multiplexed check-in tears it down, and an unsigned handshake is rejected.
+// This closes the cross-envoy impersonation gap where any enrolled mTLS client
+// could open a stream as any envoy_id (mTLS proves a CA-signed cert, not identity).
+func TestE2E_StreamRequiresSignature(t *testing.T) {
+	configDir := setupE2EConfig(t, map[string]string{"nginx": "name: nginx\nresources: []\n"}, `
+envoys:
+  - match: "*.test.example.com"
+    configcrates: [nginx]
+`)
+	addr, _, cleanup := startTestServerWithConfig(t, configDir)
+	defer cleanup()
+
+	envoyID, _, priv, client := registerEnvoy(t, addr, "e2e-stream01.test.example.com", "e2e-stream-token")
+
+	signedCheckIn := func() *pb.CheckInRequest {
+		ts := time.Now()
+		return &pb.CheckInRequest{
+			EnvoyId:          envoyID,
+			StateFingerprint: "fp",
+			Signature:        signPayload([]byte("fp"), fmt.Sprintf("%d", ts.Unix()), priv),
+			Timestamp:        timestamppb.New(ts),
+		}
+	}
+
+	// Signed handshake opens the stream; a bad-sig multiplexed check-in tears it down.
+	stream, err := client.AgentStream(context.Background())
+	if err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	if err := stream.Send(&pb.AgentStreamMessage{Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: signedCheckIn()}}); err != nil {
+		t.Fatalf("send signed handshake: %v", err)
+	}
+	resp, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("signed handshake rejected: %v", err)
+	}
+	if resp.GetCheckInResponse() == nil {
+		t.Fatalf("expected check-in response, got %T", resp.GetMsg())
+	}
+	bad := signedCheckIn()
+	bad.Signature = []byte("garbage")
+	if err := stream.Send(&pb.AgentStreamMessage{Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: bad}}); err != nil {
+		t.Fatalf("send bad-sig check-in: %v", err)
+	}
+	if _, err := stream.Recv(); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("bad-sig multiplexed check-in: got code %v, want Unauthenticated", status.Code(err))
+	}
+
+	// A fresh stream whose handshake carries no signature is rejected at open.
+	stream2, err := client.AgentStream(context.Background())
+	if err != nil {
+		t.Fatalf("open stream2: %v", err)
+	}
+	unsigned := signedCheckIn()
+	unsigned.Signature = nil
+	if err := stream2.Send(&pb.AgentStreamMessage{Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: unsigned}}); err != nil {
+		t.Fatalf("send unsigned handshake: %v", err)
+	}
+	if _, err := stream2.Recv(); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("unsigned handshake: got code %v, want Unauthenticated", status.Code(err))
 	}
 }
 

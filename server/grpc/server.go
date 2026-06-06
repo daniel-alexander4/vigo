@@ -240,6 +240,15 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		slog.Info("held-stream admission cap set by operator", "max_connections", maxConns)
 	}
 
+	// Resolve the signature window with the same 0→default rule the unary
+	// interceptor applies, so the AgentStream per-message verify (which calls
+	// the verify helpers directly, bypassing the interceptor) uses the same
+	// window rather than a degenerate 0 that would reject every message.
+	sigWindow := cfg.SignatureWindow
+	if sigWindow == 0 {
+		sigWindow = defaultSignatureWindow
+	}
+
 	agentSvc := &AgentService{
 		registry:          cfg.Registry,
 		configStore:       cfg.ConfigStore,
@@ -261,6 +270,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		bundleMaxAge:      cfg.BundleMaxAge,
 		baseInterval:      cfg.Interval,
 		offlineThreshold:  cfg.OfflineThreshold,
+		signatureWindow:   sigWindow,
 		jitterPercent:     cfg.JitterPercent,
 		fallbackServers:   cfg.FallbackServers,
 		auditWriter:       cfg.AuditWriter,
