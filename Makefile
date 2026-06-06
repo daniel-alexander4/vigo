@@ -4,7 +4,7 @@
        dist dist-agent dist-connwaer \
        dist-agent-windows dist-agent-macos dist-agent-freebsd dist-agent-illumos \
        dist-sign dist-sign-agent \
-       proto certs migrate sqlc schemas up down logs clean
+       proto certs migrate sqlc schemas notices up down logs clean
 
 VERSION ?= $(shell cat VERSION 2>/dev/null || echo dev)
 
@@ -93,9 +93,16 @@ lint-agent:
 # (see GO_HARDENED above).
 #
 # To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
-dist: dist-agent schemas
+dist: dist-agent schemas notices
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
 	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigocli ./cli
+
+# Regenerate the third-party attribution files (THIRD-PARTY-NOTICES.{go,rust}.txt)
+# that satisfy the MIT/BSD/Apache-2.0/ISC notice obligations of our deps.
+# Re-run when go.mod or agent/Cargo.lock change. Folded into `dist` so a
+# release never ships stale attribution.
+notices:
+	bash scripts/gen-notices.sh
 
 # Sign distribution binaries with ED25519 key for tamper detection.
 # Usage: make dist-sign SIGN_KEY=/path/to/signing.key (default: ./signing.key)
