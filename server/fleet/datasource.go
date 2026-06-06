@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/certexpiry"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/cve"
@@ -1760,20 +1761,22 @@ func parseIntTrait(traitMap map[string]string, key string) int {
 	return n
 }
 
-// CertExpirySummary walks every envoy's `cert_lifecycle.certificates.N.days_remaining`
-// rows and aggregates expired / within-7-days / within-30-days counts plus
-// the number of hosts with at least one cert in any of those buckets.
+// CertExpirySummary walks every envoy's `cert_lifecycle.certificates.N.not_after`
+// timestamps, derives days-remaining as of now (see server/certexpiry — it is
+// never a stored trait), and aggregates expired / within-7-days / within-30-days
+// counts plus the number of hosts with at least one cert in any of those buckets.
 // Runs on each dashboard render via the Security Posture stat card.
 func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
 	const prefix = "cert_lifecycle.certificates."
-	const suffix = ".days_remaining"
+	const suffix = ".not_after"
+	now := time.Now()
 
 	var summary ui.CertExpirySummary
 	for _, ts := range ds.fleet.AllEnvoys() {
 		if ts.Revoked || ts.Traits == nil {
 			continue
 		}
-		var hostExpired, host7, host30 int
+		var host certexpiry.Buckets
 		for k, v := range ts.Traits {
 			if !strings.HasPrefix(k, prefix) || !strings.HasSuffix(k, suffix) {
 				continue
@@ -1782,30 +1785,21 @@ func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
 			if strings.Contains(inner, ".") {
 				continue
 			}
-			days, err := strconv.Atoi(v)
-			if err != nil {
-				continue
-			}
-			switch {
-			case days < 0:
-				hostExpired++
-			case days < 7:
-				host7++
-			case days < 30:
-				host30++
+			if days, ok := certexpiry.DaysRemaining(v, now); ok {
+				host.Add(days)
 			}
 		}
-		summary.Expired += hostExpired
-		summary.ExpiringIn7 += host7
-		summary.ExpiringIn30 += host30
-		if hostExpired+host7+host30 > 0 {
+		summary.Expired += host.Expired
+		summary.ExpiringIn7 += host.In7
+		summary.ExpiringIn30 += host.In30
+		if host.Expired+host.In7+host.In30 > 0 {
 			summary.HostsAffected++
 			summary.PerHost = append(summary.PerHost, ui.CertHostRow{
 				ID:           ts.ID,
 				Hostname:     ts.Hostname,
-				Expired:      hostExpired,
-				ExpiringIn7:  host7,
-				ExpiringIn30: host30,
+				Expired:      host.Expired,
+				ExpiringIn7:  host.In7,
+				ExpiringIn30: host.In30,
 			})
 		}
 	}
@@ -1842,14 +1836,12 @@ func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail,
 	}
 	// Group flattened keys by index, then materialize one CertDetail per index.
 	type rowBuf struct {
-		Path          string
-		CN            string
-		SANs          []string
-		Issuer        string
-		NotAfter      string
-		DaysRemaining int
-		IsCA          bool
-		HasDays       bool
+		Path     string
+		CN       string
+		SANs     []string
+		Issuer   string
+		NotAfter string
+		IsCA     bool
 	}
 	rows := map[string]*rowBuf{}
 	getRow := func(idx string) *rowBuf {
@@ -1885,11 +1877,6 @@ func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail,
 			if r.NotAfter == "" {
 				r.NotAfter = v
 			}
-		case field == "days_remaining":
-			if n, err := strconv.Atoi(v); err == nil {
-				r.DaysRemaining = n
-				r.HasDays = true
-			}
 		case field == "is_ca":
 			r.IsCA = v == "true"
 		case strings.HasPrefix(field, "sans."):
@@ -1904,22 +1891,26 @@ func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail,
 		}
 	}
 
+	now := time.Now()
 	out := make([]ui.CertDetail, 0, len(rows))
 	for _, r := range rows {
-		if !r.HasDays {
+		// days-remaining is derived from not_after (never a stored trait —
+		// see server/certexpiry); skip rows whose not_after won't parse.
+		days, ok := certexpiry.DaysRemaining(r.NotAfter, now)
+		if !ok {
 			continue
 		}
 		// Fleet-panel threshold: certs with >= 30 days remaining aren't "expiring soon".
-		if r.DaysRemaining >= 30 {
+		if days >= certexpiry.SoonThreshold {
 			continue
 		}
-		if bucket == "expired" && r.DaysRemaining >= 0 {
+		if bucket == "expired" && days >= 0 {
 			continue
 		}
-		if bucket == "7d" && (r.DaysRemaining < 0 || r.DaysRemaining >= 7) {
+		if bucket == "7d" && (days < 0 || days >= certexpiry.UrgentThreshold) {
 			continue
 		}
-		if bucket == "30d" && (r.DaysRemaining < 7 || r.DaysRemaining >= 30) {
+		if bucket == "30d" && (days < certexpiry.UrgentThreshold || days >= certexpiry.SoonThreshold) {
 			continue
 		}
 		// Strip any trailing empty slots in SANs caused by sparse indexes.
@@ -1933,7 +1924,7 @@ func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail,
 			SANs:          sans,
 			Issuer:        r.Issuer,
 			NotAfter:      r.NotAfter,
-			DaysRemaining: r.DaysRemaining,
+			DaysRemaining: days,
 			IsCA:          r.IsCA,
 		})
 	}

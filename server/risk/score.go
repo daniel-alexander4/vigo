@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/certexpiry"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/traits"
@@ -62,13 +63,13 @@ type EnvoyRisk struct {
 
 // FleetRisk is the aggregated risk posture for the entire fleet.
 type FleetRisk struct {
-	TotalEnvoys  int            `json:"total_envoys"`
-	ScoredEnvoys int            `json:"scored_envoys"`
-	AvgScore     float64        `json:"avg_score"`
-	MaxScore     int            `json:"max_score"`
-	Distribution map[Level]int  `json:"distribution"`
-	TopRisks     []EnvoyRisk    `json:"top_risks"`
-	Envoys       []EnvoyRisk    `json:"envoys"`
+	TotalEnvoys  int           `json:"total_envoys"`
+	ScoredEnvoys int           `json:"scored_envoys"`
+	AvgScore     float64       `json:"avg_score"`
+	MaxScore     int           `json:"max_score"`
+	Distribution map[Level]int `json:"distribution"`
+	TopRisks     []EnvoyRisk   `json:"top_risks"`
+	Envoys       []EnvoyRisk   `json:"envoys"`
 }
 
 // ScoreEnvoy computes the risk score for a single envoy.
@@ -153,7 +154,7 @@ func ScoreEnvoy(es EnvoyInput, baseInterval, offlineThreshold time.Duration) Env
 	// Weighting: expired +10 each, <7d +5 each, <30d +1 each. Aligned
 	// with the "rootkit/malware" severity tier — an expired serving
 	// cert can be as operationally damaging as a missed patch.
-	if expired, in7, in30 := classifyCertExpiry(es.Traits); expired+in7+in30 > 0 {
+	if expired, in7, in30 := classifyCertExpiry(es.Traits, time.Now()); expired+in7+in30 > 0 {
 		pts := clamp(expired*10 + in7*5 + in30*1)
 		if pts > 0 {
 			score += pts
@@ -305,13 +306,15 @@ func countTraitPrefix(traits map[string]string, prefix string) int {
 	return count
 }
 
-// classifyCertExpiry walks the flattened `cert_lifecycle.certificates.N.days_remaining`
-// values and buckets each into expired / expiring-within-7-days / expiring-within-30-days.
-// Rows without a parseable days_remaining value are skipped. Certs with more than
-// 30 days remaining don't contribute to any bucket.
-func classifyCertExpiry(traitMap map[string]string) (expired, in7, in30 int) {
+// classifyCertExpiry walks the flattened `cert_lifecycle.certificates.N.not_after`
+// timestamps, derives days-remaining as of `now` (days-remaining is never a
+// stored trait — see server/certexpiry), and buckets each into expired /
+// within-7-days / within-30-days. Rows with an empty or unparseable not_after
+// are skipped; certs with >= 30 days left contribute to no bucket.
+func classifyCertExpiry(traitMap map[string]string, now time.Time) (expired, in7, in30 int) {
 	const prefix = "cert_lifecycle.certificates."
-	const suffix = ".days_remaining"
+	const suffix = ".not_after"
+	var b certexpiry.Buckets
 	for k, v := range traitMap {
 		if !strings.HasPrefix(k, prefix) || !strings.HasSuffix(k, suffix) {
 			continue
@@ -321,20 +324,13 @@ func classifyCertExpiry(traitMap map[string]string) (expired, in7, in30 int) {
 		if strings.Contains(inner, ".") {
 			continue
 		}
-		days, err := strconv.Atoi(v)
-		if err != nil {
+		days, ok := certexpiry.DaysRemaining(v, now)
+		if !ok {
 			continue
 		}
-		switch {
-		case days < 0:
-			expired++
-		case days < 7:
-			in7++
-		case days < 30:
-			in30++
-		}
+		b.Add(days)
 	}
-	return
+	return b.Expired, b.In7, b.In30
 }
 
 // certExpiryDetail renders the factor detail string, emitting only the
@@ -372,7 +368,6 @@ func runningCVEDetail(critical, high, medium int) string {
 	}
 	return strings.Join(parts, ", ") + " running"
 }
-
 
 // clamp ensures a point value is non-negative.
 func clamp(n int) int {

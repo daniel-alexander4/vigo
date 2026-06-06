@@ -148,22 +148,28 @@ func TestScoreEnvoy_OpenPorts(t *testing.T) {
 }
 
 func TestScoreEnvoy_ExpiringCerts(t *testing.T) {
+	// days_remaining is derived server-side from not_after (never a stored
+	// trait); fixtures set not_after relative to now. Values are kept mid-bucket
+	// (not on the 0/7/30-day boundaries) so day-truncation can't reclassify them.
+	day := func(n int) string {
+		return time.Now().AddDate(0, 0, n).Format(time.RFC3339)
+	}
 	es := EnvoyInput{
 		ID:       "test-certs",
 		Hostname: "certs.example.com",
 		LastSeen: time.Now(),
 		Traits: map[string]string{
 			// 2 expired (+10 each = 20)
-			"cert_lifecycle.certificates.0.days_remaining": "-5",
-			"cert_lifecycle.certificates.1.days_remaining": "-1",
+			"cert_lifecycle.certificates.0.not_after": day(-5),
+			"cert_lifecycle.certificates.1.not_after": day(-1),
 			// 1 expiring within 7 days (+5)
-			"cert_lifecycle.certificates.2.days_remaining": "3",
+			"cert_lifecycle.certificates.2.not_after": day(3),
 			// 1 expiring within 30 days (+1)
-			"cert_lifecycle.certificates.3.days_remaining": "20",
+			"cert_lifecycle.certificates.3.not_after": day(20),
 			// 1 with plenty of time (ignored)
-			"cert_lifecycle.certificates.4.days_remaining": "180",
+			"cert_lifecycle.certificates.4.not_after": day(180),
 			// Unparseable value (skipped)
-			"cert_lifecycle.certificates.5.days_remaining": "unknown",
+			"cert_lifecycle.certificates.5.not_after": "unknown",
 		},
 	}
 	r := ScoreEnvoy(es, 30*time.Second, 0)
@@ -197,8 +203,8 @@ func TestScoreEnvoy_NoExpiringCerts(t *testing.T) {
 		Hostname: "certs-ok.example.com",
 		LastSeen: time.Now(),
 		Traits: map[string]string{
-			"cert_lifecycle.certificates.0.days_remaining": "90",
-			"cert_lifecycle.certificates.1.days_remaining": "365",
+			"cert_lifecycle.certificates.0.not_after": time.Now().AddDate(0, 0, 90).Format(time.RFC3339),
+			"cert_lifecycle.certificates.1.not_after": time.Now().AddDate(0, 0, 365).Format(time.RFC3339),
 		},
 	}
 	r := ScoreEnvoy(es, 30*time.Second, 0)

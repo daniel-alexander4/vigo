@@ -19,7 +19,6 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 use x509_parser::prelude::*;
 
 /// Default certificate search paths. Linux gets the full set including
@@ -151,12 +150,9 @@ fn cert_to_row(path: &str, cert: &X509Certificate<'_>) -> Value {
     let not_before = format_rfc3339(not_before_ts);
     let not_after = format_rfc3339(not_after_ts);
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    let days_remaining = (not_after_ts - now) / 86400;
-
+    // days-remaining is NOT emitted: it is a pure function of not_after + now,
+    // so it would tick daily and flap the ADR-033 inventory hash. The server
+    // derives it from not_after at read time (server/certexpiry).
     json!({
         "path": path,
         "cn": cn,
@@ -167,7 +163,6 @@ fn cert_to_row(path: &str, cert: &X509Certificate<'_>) -> Value {
         "not_before": not_before,
         "not_after": not_after,
         "expires": not_after, // back-compat with the old cert_expiry trait
-        "days_remaining": days_remaining,
         "is_ca": cert.is_ca(),
     })
 }
@@ -323,9 +318,9 @@ mod tests {
         let not_before = c["not_before"].as_str().unwrap();
         assert!(not_after.len() == 20 && not_after.ends_with('Z'), "not_after={}", not_after);
         assert!(not_before.len() == 20 && not_before.ends_with('Z'), "not_before={}", not_before);
-        // Cert issued in the past, valid now — days_remaining positive.
-        let days = c["days_remaining"].as_i64().unwrap();
-        assert!(days > 0, "days_remaining={}", days);
+        // days_remaining is intentionally NOT emitted (derived server-side from
+        // not_after — see server/certexpiry); the collector stays deterministic.
+        assert!(c.get("days_remaining").is_none(), "days_remaining must not be emitted");
         // SAN populated from the cn passed to CertificateParams::new.
         let sans: Vec<&str> = c["sans"]
             .as_array()

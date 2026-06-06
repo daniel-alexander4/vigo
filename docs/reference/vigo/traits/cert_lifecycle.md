@@ -45,7 +45,6 @@ Java keystores in JKS or PKCS#12 format are **not** parsed by this collector. Op
         "not_before": "2026-04-01T00:00:00Z",
         "not_after": "2027-04-01T00:00:00Z",
         "expires": "2027-04-01T00:00:00Z",
-        "days_remaining": 348,
         "is_ca": false
       }
     ]
@@ -66,8 +65,9 @@ Java keystores in JKS or PKCS#12 format are **not** parsed by this collector. Op
 | `certificates[].not_before` | string | RFC 3339 start-of-validity timestamp |
 | `certificates[].not_after` | string | RFC 3339 end-of-validity timestamp |
 | `certificates[].expires` | string | Alias for `not_after` kept for back-compat with the prior `cert_expiry` trait |
-| `certificates[].days_remaining` | int | Days between now and `not_after`. Negative when the certificate has already expired |
 | `certificates[].is_ca` | bool | `true` when the certificate has the CA basic-constraints bit set |
+
+Days-remaining is **not** a field: it is a pure function of `not_after` and the current time, so emitting it would change every collection and force a needless re-send. The server derives it from `not_after` for the dashboard's expiring-certs card, the per-envoy certificate drill-down, and risk scoring.
 
 ## Platform Support
 
@@ -83,21 +83,17 @@ Java keystores in JKS or PKCS#12 format are **not** parsed by this collector. Op
 
 ## Use Cases
 
-Alert on certificates expiring within 30 days fleet-wide:
+**Expiring-cert alerting** is computed server-side from `not_after` (days-remaining
+is not a trait — see the note under Fields). The fleet dashboard's Security
+Posture card surfaces expired / ≤7-day / ≤30-day counts with a per-envoy
+drill-down, and an expiring cert raises the envoy's risk score — no query needed.
 
-```bash
-vigocli inventory \
-  --where "cert_lifecycle.certificates.0.days_remaining<30" \
-  --show "hostname,cert_lifecycle.certificates.0.cn,cert_lifecycle.certificates.0.days_remaining"
-```
-
-Template fragment that emits every expiring cert on the local host:
+To inspect a specific cert's validity window from a template, use `not_after`
+directly:
 
 ```yaml
 {{range .Traits.cert_lifecycle.certificates}}
-{{if lt .days_remaining 30}}
-WARNING: {{.cn}} at {{.path}} expires in {{.days_remaining}} days ({{.not_after}})
-{{end}}
+{{.cn}} at {{.path}} — valid until {{.not_after}}
 {{end}}
 ```
 
@@ -105,7 +101,7 @@ WARNING: {{.cn}} at {{.path}} expires in {{.days_remaining}} days ({{.not_after}
 
 This collector replaces the earlier `cert_expiry` trait (0.23.x and earlier). The rename is clean — any `.vgo` templates or `vigocli inventory` queries referencing `cert_expiry.certificates.*` need updating to `cert_lifecycle.certificates.*`. The old top-level key is no longer emitted.
 
-Fields added during the rename: `cn`, `sans`, `issuer`, `serial`, `not_before`, `not_after`, `is_ca`. The `expires` and `days_remaining` fields from `cert_expiry` are preserved for straightforward migration.
+Fields added during the rename: `cn`, `sans`, `issuer`, `serial`, `not_before`, `not_after`, `is_ca`. The `expires` field from `cert_expiry` is preserved for straightforward migration; `days_remaining` is no longer emitted (the server derives it from `not_after`).
 
 ## Classification
 

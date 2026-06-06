@@ -12,9 +12,12 @@ classification); see Spike Findings.** Proto + server + agent shipped (`82a24b5e
 / `4df7ca36` / `c850416b`); the inventory cache is bounded to the live fleet via
 `FleetIndex` lifecycle eviction (0.74.12); and both the unary and stream check-in
 paths split (stream-path split shipped 0.74.13 — the gate moved behind interior
-mutability so the `&self` stream builder shares it). Remaining follow-up:
-`cert_lifecycle.days_remaining` server-side derivation + the FleetIndex-partition
-optimization.
+mutability so the `&self` stream builder shares it); and `cert_lifecycle` no
+longer emits `days_remaining` (0.74.14 — derived server-side from `not_after` via
+`server/certexpiry`, so the collector is deterministic and stops flapping the
+inventory hash daily). The FleetIndex-partition optimization is deferred
+(network-bound server, idle CPU — see deferred.md); a separate array-ordering
+determinism audit is tracked in pending.
 **Date:** 2026-06-04
 
 ## Context
