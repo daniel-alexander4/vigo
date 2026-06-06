@@ -94,6 +94,15 @@ type PeerTracker struct {
 	// seeds maps sha256 → SeedState for envoy-originated blobs.
 	seeds map[string]SeedState
 
+	// revoked is a membership index of the sha256s whose seed is currently
+	// Revoked, kept so RevokedSeeds() — called on every swarm-carrying
+	// check-in — returns in O(revoked) instead of scanning all seeds. The
+	// invariant (revoked[x] present iff seeds[x].Revoked) is maintained at
+	// exactly the three sites that change revoked status: RevokeSeed (add),
+	// RegisterSeed's re-activation branch (remove), and RemoveSeed (remove).
+	// Any future code that flips a seed's Revoked must update this too.
+	revoked map[string]struct{}
+
 	// brokenSeeds maps envoyID → list of broken seed files (refreshed each check-in).
 	brokenSeeds map[string][]BrokenSeed
 
@@ -119,6 +128,7 @@ func NewPeerTracker(staleThreshold time.Duration) *PeerTracker {
 		peers:          make(map[string]map[string]*PeerState),
 		skipped:        make(map[string]map[string]string),
 		seeds:          make(map[string]SeedState),
+		revoked:        make(map[string]struct{}),
 		brokenSeeds:    make(map[string][]BrokenSeed),
 		staleThreshold: staleThreshold,
 	}
@@ -393,11 +403,12 @@ func (t *PeerTracker) MarkEvicted(envoyID, sha256 string) {
 func (t *PeerTracker) RevokedSeeds() []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	var out []string
-	for sha, seed := range t.seeds {
-		if seed.Revoked {
-			out = append(out, sha)
-		}
+	if len(t.revoked) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(t.revoked))
+	for sha := range t.revoked {
+		out = append(out, sha)
 	}
 	return out
 }
@@ -475,6 +486,7 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 			// re-distribute, which is misleading and confusing.
 			delete(t.peers, sha256)
 			delete(t.skipped, sha256)
+			delete(t.revoked, sha256)
 			state.DistributedAt = time.Now()
 			t.seeds[sha256] = state
 			return true
@@ -675,6 +687,7 @@ func (t *PeerTracker) RevokeSeed(sha256 string) {
 		s.Revoked = true
 		s.RevokedAt = time.Now()
 		t.seeds[sha256] = s
+		t.revoked[sha256] = struct{}{}
 	}
 }
 
@@ -683,6 +696,7 @@ func (t *PeerTracker) RemoveSeed(sha256 string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.seeds, sha256)
+	delete(t.revoked, sha256)
 }
 
 // SetChunkSources records where an envoy downloaded its chunks from.

@@ -208,6 +208,54 @@ func TestRevokedSeeds_ReturnsOnlyRevoked(t *testing.T) {
 	}
 }
 
+// TestRevokedSeeds_IndexConsistencyAcrossTransitions exercises the revoked
+// membership index through every status transition that maintains it:
+// revoke (add), re-register / reactivation (remove), and RemoveSeed (remove).
+// The index must agree with the seeds map's Revoked flags at each step — a
+// drift here would either miss evictions (false negative) or scan phantom
+// hashes forever (false positive).
+func TestRevokedSeeds_IndexConsistencyAcrossTransitions(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	a := evictionTestSHA("a00000")
+	b := evictionTestSHA("b00000")
+
+	assertRevoked := func(step string, want ...string) {
+		t.Helper()
+		got := map[string]bool{}
+		for _, sha := range pt.RevokedSeeds() {
+			got[sha] = true
+		}
+		if len(got) != len(want) {
+			t.Fatalf("%s: RevokedSeeds = %d entries, want %d", step, len(got), len(want))
+		}
+		for _, sha := range want {
+			if !got[sha] {
+				t.Errorf("%s: RevokedSeeds missing %s", step, sha[:6])
+			}
+		}
+	}
+
+	pt.RegisterSeed(a, SeedState{SeederID: "s", DistributedAt: time.Now()})
+	pt.RegisterSeed(b, SeedState{SeederID: "s", DistributedAt: time.Now()})
+	assertRevoked("after register (none revoked)")
+
+	pt.RevokeSeed(a)
+	pt.RevokeSeed(b)
+	assertRevoked("after revoke both", a, b)
+
+	// Re-registering a revoked seed reactivates it — index must drop it.
+	pt.RegisterSeed(a, SeedState{SeederID: "s", DistributedAt: time.Now()})
+	assertRevoked("after reactivating a", b)
+
+	// Removing the remaining revoked seed must drop it from the index too.
+	pt.RemoveSeed(b)
+	assertRevoked("after removing b")
+
+	// And the index recovers — re-revoking the reactivated seed re-adds it.
+	pt.RevokeSeed(a)
+	assertRevoked("after re-revoking a", a)
+}
+
 // TestHasPeerRecord verifies the helper used by ingestSwarmTraits to decide
 // whether a missing hash in a trait report represents a fresh eviction.
 func TestHasPeerRecord(t *testing.T) {

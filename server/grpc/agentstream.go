@@ -1047,6 +1047,12 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, swarmRaw json.RawMessag
 	// cache. Flip the per-envoy status to "revoked" so the operator sees
 	// eviction progress advance. Bounded by manifest size (revoked seeds
 	// only, not the full blob space).
+	// The common case is no revoked seeds — RevokedSeeds() is O(1) then,
+	// so check it first and skip building the present-set entirely.
+	revoked := s.peerTracker.RevokedSeeds()
+	if len(revoked) == 0 {
+		return
+	}
 	present := make(map[string]bool, len(swarmData.Blobs)+len(swarmData.Downloading))
 	for _, hash := range swarmData.Blobs {
 		present[hash] = true
@@ -1054,7 +1060,7 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, swarmRaw json.RawMessag
 	for hash := range swarmData.Downloading {
 		present[hash] = true
 	}
-	for _, revokedHash := range s.peerTracker.RevokedSeeds() {
+	for _, revokedHash := range revoked {
 		if present[revokedHash] {
 			continue
 		}
