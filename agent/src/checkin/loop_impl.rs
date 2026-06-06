@@ -1198,11 +1198,15 @@ pub async fn daemon_loop(
                         policy_state.module_cache.hashes(),
                         caps,
                     );
+                    // ADR-033: record the inventory the server now holds + honor a
+                    // resend, once the handshake response is in.
+                    let inv_hash = stream_req.inventory_hash.clone();
 
                     let mut agent_client = client.agent_client();
                     match stream::open(&mut agent_client, stream_req).await {
                         Ok((mut handle, initial_resp)) => {
                             info!("promoted stream connected");
+                            client.commit_inventory(&inv_hash, initial_resp.resend_inventory);
 
                             // Deliver pending offline results on reconnect.
                             if !pending_delivered {
@@ -1732,9 +1736,13 @@ async fn stream_loop(
                         policy_state.version,
                         policy_state.module_cache.hashes(),
                     );
+                    // ADR-033: record the inventory the server now holds + honor a
+                    // resend, once the response is in (the builder is `&self`).
+                    let inv_hash = req.inventory_hash.clone();
 
                     match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
                         Ok(resp) => {
+                            client.commit_inventory(&inv_hash, resp.resend_inventory);
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }
@@ -1877,9 +1885,13 @@ async fn stream_loop(
                         policy_state.version,
                         policy_state.module_cache.hashes(),
                     );
+                    // ADR-033: record the inventory the server now holds + honor a
+                    // resend, once the response is in (the builder is `&self`).
+                    let inv_hash = req.inventory_hash.clone();
 
                     match stream::StreamHandle::check_in(request_tx, check_in_resp_rx, done, req).await {
                         Ok(resp) => {
+                            client.commit_inventory(&inv_hash, resp.resend_inventory);
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }

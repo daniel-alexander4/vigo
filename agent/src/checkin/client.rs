@@ -61,6 +61,18 @@ fn sha256_hex(data: &[u8]) -> String {
     hex::encode(Sha256::digest(data))
 }
 
+/// ADR-033 conditional-traits gate state (behind `Client.inventory_gate`).
+#[derive(Default)]
+struct InventoryGate {
+    /// Hash of the inventory the server last accepted from us; None until the
+    /// first inventory is sent. A vitals-only check-in is safe only when this
+    /// matches the agent's current inventory hash.
+    last_hash: Option<String>,
+    /// Set when the server returned `resend_inventory` — forces the next
+    /// check-in to ship the full inventory even if its hash is unchanged.
+    force_resend: bool,
+}
+
 pub struct Client {
     agent: VigoAgentClient<Channel>,
     envoy_id: String,
@@ -93,12 +105,16 @@ pub struct Client {
     /// stream loop). Lock is held for nanoseconds and uncontended.
     last_checkin_instant: std::sync::Mutex<Option<std::time::Instant>>,
 
-    /// ADR-033 conditional traits: hash of the inventory the server last
-    /// accepted from us, and whether the server asked us to resend it
-    /// (`resend_inventory`). The unary check-in ships vitals every cycle and
-    /// the full inventory only when its hash changes or a resend is pending.
-    last_inventory_hash: Option<String>,
-    force_resend_inventory: bool,
+    /// ADR-033 conditional-traits gate. Behind a `Mutex` for interior mutability
+    /// so the stream-path request builder (`&self`, reached through immutable
+    /// borrows in the lock-step stream loop) can read it — mirroring
+    /// `last_checkin_instant`. `prepare_split` reads it to decide whether to ship
+    /// the inventory; `commit_inventory` records the accepted hash + resend flag
+    /// after the response. Shared across the unary and stream paths (so a
+    /// unary→stream promotion doesn't re-send the inventory the unary cycle just
+    /// sent). Never accessed concurrently — the agent builds check-ins from one
+    /// loop at a time — but the lock keeps it sound regardless.
+    inventory_gate: std::sync::Mutex<InventoryGate>,
 }
 
 impl Client {
@@ -151,8 +167,7 @@ impl Client {
             tls_identity: identity_pem,
             agent_version: String::new(),
             last_checkin_instant: std::sync::Mutex::new(None),
-            last_inventory_hash: None,
-            force_resend_inventory: false,
+            inventory_gate: std::sync::Mutex::new(InventoryGate::default()),
         })
     }
 
@@ -419,6 +434,41 @@ impl Client {
         }
     }
 
+    /// ADR-033: partition the full traits payload into (vitals, inventory,
+    /// inventory_hash) and decide whether to ship the inventory this cycle.
+    /// Vitals ride every check-in; the inventory rides only when its hash changed
+    /// or the server requested a resend. A payload that can't be split (None /
+    /// not a JSON object) yields all-empty — the server skips traits that cycle.
+    /// Pure read of the gate; the caller records the outcome via
+    /// `commit_inventory` once it holds the response.
+    fn prepare_split(&self, traits_json: Option<Vec<u8>>) -> (Vec<u8>, Vec<u8>, String) {
+        let (vitals, inventory) = match traits_json.as_deref().and_then(split_traits) {
+            Some(pair) => pair,
+            None => return (Vec::new(), Vec::new(), String::new()),
+        };
+        let hash = sha256_hex(&inventory);
+        let send_inventory = {
+            let gate = self.inventory_gate.lock().unwrap();
+            gate.force_resend || gate.last_hash.as_deref() != Some(hash.as_str())
+        };
+        let inv = if send_inventory { inventory } else { Vec::new() };
+        (vitals, inv, hash)
+    }
+
+    /// ADR-033: after a check-in response, record the inventory the server now
+    /// holds and honor a resend request. `sent_hash` is the inventory hash the
+    /// request carried (empty when no traits were sent). Recording only after the
+    /// response — never optimistically in the builder — means a failed send never
+    /// advances the gate, so the inventory is re-shipped next cycle. Called by
+    /// both the unary and stream paths.
+    pub(crate) fn commit_inventory(&self, sent_hash: &str, resend: bool) {
+        let mut gate = self.inventory_gate.lock().unwrap();
+        if !sent_hash.is_empty() {
+            gate.last_hash = Some(sent_hash.to_string());
+        }
+        gate.force_resend = resend;
+    }
+
     /// CheckIn calls the server's CheckIn RPC with ED25519-signed request.
     pub async fn check_in(
         &mut self,
@@ -431,25 +481,9 @@ impl Client {
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
         let (traceparent, trace_id) = super::traceparent::generate();
 
-        // ADR-033 conditional traits: split the full payload into vitals (sent
-        // every check-in) and inventory (sent only when its hash changes or the
-        // server requested a resend). A payload that can't be split (None / not
-        // an object) sends nothing — the server skips traits that cycle.
-        let (vitals_json, inventory_json, inventory_hash) =
-            match traits_json.as_deref().and_then(split_traits) {
-                Some((vitals, inventory)) => {
-                    let hash = sha256_hex(&inventory);
-                    let send_inventory = self.force_resend_inventory
-                        || self.last_inventory_hash.as_deref() != Some(hash.as_str());
-                    let inv = if send_inventory {
-                        inventory
-                    } else {
-                        Vec::new()
-                    };
-                    (vitals, inv, hash)
-                }
-                None => (Vec::new(), Vec::new(), String::new()),
-            };
+        // ADR-033 conditional traits: vitals every check-in, inventory only when
+        // changed or the server requested a resend (see prepare_split).
+        let (vitals_json, inventory_json, inventory_hash) = self.prepare_split(traits_json);
 
         let req = CheckInRequest {
             envoy_id: self.envoy_id.clone(),
@@ -480,10 +514,7 @@ impl Client {
             .into_inner();
 
         // Record what the server now holds, and honor a resend request next cycle.
-        if !inventory_hash.is_empty() {
-            self.last_inventory_hash = Some(inventory_hash);
-        }
-        self.force_resend_inventory = resp.resend_inventory;
+        self.commit_inventory(&inventory_hash, resp.resend_inventory);
 
         Ok(resp)
     }
@@ -727,12 +758,17 @@ impl Client {
         let sig = signer::sign_payload(state_fingerprint.as_bytes(), &ts, &self.signing_key);
         let (traceparent, _) = super::traceparent::generate();
 
+        // ADR-033: split like the unary path — vitals every check-in, inventory
+        // only on change/resend. The caller records the outcome via
+        // `commit_inventory` once it has the response (the builder is `&self`).
+        let (vitals_json, inventory_json, inventory_hash) = self.prepare_split(traits_json);
+
         CheckInRequest {
             envoy_id: self.envoy_id.clone(),
             state_fingerprint: state_fingerprint.to_string(),
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
-            traits_json: traits_json.unwrap_or_default(),
+            traits_json: Vec::new(), // split mode: payload rides vitals + inventory
             policy_version,
             policy_mode: true,
             cached_configcrate_hashes: cached_configcrate_hashes.unwrap_or_default(),
@@ -741,9 +777,9 @@ impl Client {
             ip_address: crate::platform::net::get_outbound_ip(),
             last_checkin_delta_ms: self.next_checkin_delta_ms(),
             traceparent,
-            // ADR-033: the stream path keeps sending the full traits_json for now
-            // (the server handles both shapes); the unary check_in does the split.
-            ..Default::default()
+            vitals_json,
+            inventory_json,
+            inventory_hash,
         }
     }
 
@@ -804,8 +840,7 @@ impl Client {
             tls_identity: None,
             agent_version: String::new(),
             last_checkin_instant: std::sync::Mutex::new(None),
-            last_inventory_hash: None,
-            force_resend_inventory: false,
+            inventory_gate: std::sync::Mutex::new(InventoryGate::default()),
         }
     }
 }
@@ -825,6 +860,34 @@ mod tests {
         assert!(v.get("packages").is_none());
         assert!(i.get("packages").is_some());
         assert!(i.get("loadavg").is_none() && i.get("uptime").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_stream_builder_gates_inventory_via_commit() {
+        // ADR-033 #2: the stream builder splits like the unary path, gated by the
+        // shared inventory_gate. prepare_split only reads; commit_inventory records
+        // after the response — so the inventory rides only on change / resend.
+        let client = Client::new_for_test("https://localhost:1", vec![]);
+        let traits = br#"{"loadavg":{"load1":1.0},"packages":["a","b"]}"#.to_vec();
+
+        // First build ships the full inventory (gate empty).
+        let req1 = client.build_check_in_request("", Some(traits.clone()), 0, None);
+        assert!(req1.traits_json.is_empty(), "split mode leaves traits_json empty");
+        assert!(!req1.vitals_json.is_empty(), "vitals always sent");
+        assert!(!req1.inventory_json.is_empty(), "first inventory sent");
+        assert!(!req1.inventory_hash.is_empty());
+
+        // Server accepted it; unchanged traits now ship vitals only.
+        client.commit_inventory(&req1.inventory_hash, false);
+        let req2 = client.build_check_in_request("", Some(traits.clone()), 0, None);
+        assert!(!req2.vitals_json.is_empty());
+        assert!(req2.inventory_json.is_empty(), "unchanged inventory not resent");
+        assert_eq!(req2.inventory_hash, req1.inventory_hash);
+
+        // A resend request forces the inventory back onto the next check-in.
+        client.commit_inventory(&req2.inventory_hash, true);
+        let req3 = client.build_check_in_request("", Some(traits), 0, None);
+        assert!(!req3.inventory_json.is_empty(), "resend forces inventory");
     }
 
     #[test]

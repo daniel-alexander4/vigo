@@ -10,8 +10,11 @@ fleet is rebuilt/redeployed. **Spike (2026-06-04) refined the decision from delt
 encoding to a stable/volatile split (the agent already maintains the
 classification); see Spike Findings.** Proto + server + agent shipped (`82a24b5e`
 / `4df7ca36` / `c850416b`); the inventory cache is bounded to the live fleet via
-`FleetIndex` lifecycle eviction (0.74.12). The stream-path check-in still sends
-full `traits_json` — tracked as a follow-up.
+`FleetIndex` lifecycle eviction (0.74.12); and both the unary and stream check-in
+paths split (stream-path split shipped 0.74.13 — the gate moved behind interior
+mutability so the `&self` stream builder shares it). Remaining follow-up:
+`cert_lifecycle.days_remaining` server-side derivation + the FleetIndex-partition
+optimization.
 **Date:** 2026-06-04
 
 ## Context
