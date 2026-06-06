@@ -6,6 +6,8 @@ package grpc
 import (
 	"encoding/json"
 	"testing"
+
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // TestMergeTraitsObjects covers the byte-level join of the disjoint inventory
@@ -75,5 +77,30 @@ func TestReconstructTraits(t *testing.T) {
 	// Unknown envoy, vitals-only → resend.
 	if _, resend4 := s.reconstructTraits("e2", vit, nil, "h1"); !resend4 {
 		t.Error("cache miss should request resend")
+	}
+}
+
+// TestInventoryEvictedOnEnvoyRemoval verifies the lifecycle wiring (ADR-033 #1):
+// the inventory cache is tied to fleet membership via FleetIndex.SetOnRemove, so
+// removing an envoy drops its cached inventory and the next vitals-only check-in
+// falls back to requesting a resend.
+func TestInventoryEvictedOnEnvoyRemoval(t *testing.T) {
+	s := &AgentService{}
+	fi := fleet.NewFleetIndex()
+	// Mirror the production wiring in grpc/server.go.
+	fi.SetOnRemove(func(id string) { s.inventoryCache.Delete(id) })
+
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
+
+	// First contact caches the inventory; a vitals-only check-in then hits.
+	s.reconstructTraits("e1", []byte(`{"loadavg":1}`), []byte(`{"packages":["a"]}`), "h1")
+	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":2}`), nil, "h1"); resend {
+		t.Fatal("cache hit expected before removal")
+	}
+
+	// Removing the envoy evicts its inventory; the next vitals-only check-in misses.
+	fi.RemoveEnvoy("e1")
+	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":3}`), nil, "h1"); !resend {
+		t.Fatal("inventory should be evicted after envoy removal → resend expected")
 	}
 }

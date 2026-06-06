@@ -287,6 +287,14 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		reportCap = defaultReportResultConcurrency
 	}
 	agentSvc.reportResultSem = make(chan struct{}, reportCap)
+	// Tie the ADR-033 inventory cache's lifetime to fleet membership: when an
+	// envoy leaves the index (delete / force-reregister to another bolt), drop
+	// its cached inventory so departed envoys can't accumulate ~213 KB each
+	// without bound. Eviction is self-healing — if the envoy ever returns, its
+	// next vitals-only check-in misses the cache and the server requests a resend.
+	if cfg.FleetIndex != nil {
+		cfg.FleetIndex.SetOnRemove(func(id string) { agentSvc.inventoryCache.Delete(id) })
+	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {
 			agentSvc.bundlePubKeyPEM = pem

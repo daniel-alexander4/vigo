@@ -44,8 +44,13 @@ type AgentService struct {
 	// inventoryCache holds the last full inventory_json + its hash per envoy for
 	// ADR-033 conditional-traits reconstruction: a split agent sends vitals every
 	// check-in and inventory only on change, so the server merges fresh vitals
-	// with the cached inventory. Keyed envoy_id → *inventoryEntry. Unbounded in
-	// v1 (a bounded LRU is the production follow-up; see ADR-033).
+	// with the cached inventory. Keyed envoy_id → *inventoryEntry. Bounded to the
+	// live fleet: FleetIndex.SetOnRemove (wired in grpc/server.go) evicts an
+	// envoy's entry when it leaves the index, so departed envoys can't accumulate
+	// unbounded. A server restart drops the cache; the first vitals-only check-in
+	// then misses and the server requests a resend (see reconstructTraits). The
+	// live working set itself (~213 KB × fleet) is inherent to reconstruct-and-
+	// reuse — shrinking that is the FleetIndex-partition follow-up (ADR-033 #4).
 	inventoryCache sync.Map
 	policyCache    *policyCache
 	streamMgr      *streamManager

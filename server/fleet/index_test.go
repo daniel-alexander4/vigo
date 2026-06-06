@@ -54,6 +54,32 @@ func TestAddGetRemoveLifecycle(t *testing.T) {
 	}
 }
 
+func TestRemoveEnvoyFiresOnRemove(t *testing.T) {
+	fi := NewFleetIndex()
+	var got []string
+	fi.SetOnRemove(func(id string) { got = append(got, id) })
+
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, genKey(t))
+
+	// Removing an absent envoy must NOT fire the hook — nothing was removed.
+	fi.RemoveEnvoy("missing")
+	if len(got) != 0 {
+		t.Fatalf("hook fired for absent envoy: %v", got)
+	}
+
+	// Removing a present envoy fires the hook exactly once with its id.
+	fi.RemoveEnvoy("t1")
+	if len(got) != 1 || got[0] != "t1" {
+		t.Fatalf("hook = %v, want [t1]", got)
+	}
+
+	// A second removal of the now-gone envoy is a no-op.
+	fi.RemoveEnvoy("t1")
+	if len(got) != 1 {
+		t.Fatalf("hook fired again on repeat remove: %v", got)
+	}
+}
+
 func TestPubKeyLookup(t *testing.T) {
 	fi := NewFleetIndex()
 	pubKey := genKey(t)

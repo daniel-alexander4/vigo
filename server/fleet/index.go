@@ -214,6 +214,20 @@ type FleetIndex struct {
 	// Wake channels — separate mutex so blocking Wake RPCs don't hold the main lock.
 	wakeMu    sync.Mutex
 	wakeChans map[string]chan struct{} // envoy_id → signal channel
+
+	// onRemove, if set, is invoked once after an envoy is actually removed from
+	// the index (delete / force-reregister-cleanup), outside all index locks.
+	// It lets per-envoy server caches tie their lifetime to fleet membership —
+	// the AgentService registers it to evict the departed envoy's ADR-033
+	// inventory cache. Set once at construction before serving, so no lock guards
+	// the field itself.
+	onRemove func(id string)
+}
+
+// SetOnRemove registers a callback fired once whenever an envoy is removed from
+// the index. Call before the server starts serving; the last registration wins.
+func (f *FleetIndex) SetOnRemove(fn func(id string)) {
+	f.onRemove = fn
 }
 
 // lockFor returns the stripe mutex that guards per-envoy field writes for
@@ -662,6 +676,15 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 
 // RemoveEnvoy removes a envoy from the index entirely.
 func (f *FleetIndex) RemoveEnvoy(id string) {
+	// Registered first → runs last (LIFO), after every unlock defer below — so the
+	// callback fires with no index lock held, and only when a removal happened.
+	removed := false
+	defer func() {
+		if removed && f.onRemove != nil {
+			f.onRemove(id)
+		}
+	}()
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	// Lock-ordering: f.mu → byTraitMu → byStatusMu (see field comment).
@@ -691,6 +714,7 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 	}
 	delete(f.envoys, id)
 	f.dirty.Delete(id)
+	removed = true
 }
 
 // SetOffline updates an envoy's offline state without changing its convergence status.

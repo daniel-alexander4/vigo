@@ -9,8 +9,9 @@ SPDX-License-Identifier: LicenseRef-Proprietary
 fleet is rebuilt/redeployed. **Spike (2026-06-04) refined the decision from delta
 encoding to a stable/volatile split (the agent already maintains the
 classification); see Spike Findings.** Proto + server + agent shipped (`82a24b5e`
-/ `4df7ca36` / `c850416b`); the stream-path check-in still sends full `traits_json`
-and the server's `inventoryCache` is unbounded — both tracked as follow-ups.
+/ `4df7ca36` / `c850416b`); the inventory cache is bounded to the live fleet via
+`FleetIndex` lifecycle eviction (0.74.12). The stream-path check-in still sends
+full `traits_json` — tracked as a follow-up.
 **Date:** 2026-06-04
 
 ## Context
