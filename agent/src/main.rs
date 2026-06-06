@@ -953,9 +953,10 @@ async fn run_once(
                 })
                 .collect();
 
+            let total = proto_results.len() as i32;
             match tokio::time::timeout(
                 std::time::Duration::from_secs(10),
-                client.report_result(&run_id, proto_results),
+                client.report_result(&run_id, proto_results, total),
             ).await {
                 Ok(Ok(_)) => {}
                 Ok(Err(e)) => warn!(error = %e, "failed to report results to server"),

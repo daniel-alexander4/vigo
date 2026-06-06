@@ -11,7 +11,7 @@ use crate::checkin::configcratecache::{merge_stubs, ConfigcrateCache};
 use crate::checkin::stream;
 use crate::checkin::verify;
 use crate::customtraits;
-use crate::executors::{Executor, ResourceResult};
+use crate::executors::{Action, Executor, ResourceResult};
 use crate::proto::{
     agent_stream_message, delta_event, AgentStreamMessage, CheckInResponse, CustomTraitEntry,
     DeltaEvent, HeartbeatDelta, ResourceRunResult, PolicyBundle, ProxiedDevice, RunCompleted,
@@ -223,22 +223,40 @@ async fn wake_or_sleep(client: &mut Client, timeout: Duration) {
 }
 
 /// Convert agent ResourceResults to protobuf ResourceRunResults.
+fn result_to_proto(r: &ResourceResult) -> ResourceRunResult {
+    ResourceRunResult {
+        configcrate_name: r.configcrate_name.clone(),
+        resource_type: r.resource_type.clone(),
+        resource_name: r.resource_name.clone(),
+        action_taken: r.action.to_string(),
+        changed: r.changed,
+        error_message: r.error.clone().unwrap_or_default(),
+        duration_ms: r.duration_ms,
+        previous_content: r.previous_content.clone().unwrap_or_default(),
+        content_hash: r.content_hash.clone().unwrap_or_default(),
+        file_path: r.file_path.clone().unwrap_or_default(),
+    }
+}
+
 fn results_to_proto(results: &[ResourceResult]) -> Vec<ResourceRunResult> {
-    results
+    results.iter().map(result_to_proto).collect()
+}
+
+/// reportable_results prepares a unary ReportResult payload: it drops settled
+/// no-ops (unchanged, no error, Action::None) and returns (rows, total_count).
+/// The server records `total_count` as the run's resource total and folds the
+/// elided no-ops into skipped, so only the changed/failed/blocked rows cross
+/// the wire and hit the run_results table — the dominant steady-state upload on
+/// the poll path. Blocked resources (Action::Blocked) are retained, unlike the
+/// stream delta filter.
+fn reportable_results(results: &[ResourceResult]) -> (Vec<ResourceRunResult>, i32) {
+    let total = results.len() as i32;
+    let rows = results
         .iter()
-        .map(|r| ResourceRunResult {
-            configcrate_name: r.configcrate_name.clone(),
-            resource_type: r.resource_type.clone(),
-            resource_name: r.resource_name.clone(),
-            action_taken: r.action.to_string(),
-            changed: r.changed,
-            error_message: r.error.clone().unwrap_or_default(),
-            duration_ms: r.duration_ms,
-            previous_content: r.previous_content.clone().unwrap_or_default(),
-            content_hash: r.content_hash.clone().unwrap_or_default(),
-            file_path: r.file_path.clone().unwrap_or_default(),
-        })
-        .collect()
+        .filter(|r| r.changed || r.error.is_some() || r.action != Action::None)
+        .map(result_to_proto)
+        .collect();
+    (rows, total)
 }
 
 /// Strip _secret_triggered from cached bundle to prevent re-firing on
@@ -695,8 +713,8 @@ pub async fn run_once_with_update(
     // Report results back to server (skip in dry-run mode).
     if !dry_run && !rr.results.is_empty() {
         let run_id = uuid::Uuid::new_v4().to_string();
-        let proto_results = results_to_proto(&rr.results);
-        if let Err(e) = client.report_result(&run_id, proto_results).await {
+        let (proto_results, total) = reportable_results(&rr.results);
+        if let Err(e) = client.report_result(&run_id, proto_results, total).await {
             warn!(error = %e, "failed to report results");
         }
     }
@@ -853,7 +871,10 @@ async fn deliver_pending(client: &mut Client, store: &StateStore) {
     for delta in &pending {
         if let Some(delta_event::Event::Run(ref run)) = delta.event {
             let proto_results = run.results.clone();
-            if let Err(e) = client.report_result(&run.run_id, proto_results).await {
+            if let Err(e) = client
+                .report_result(&run.run_id, proto_results, run.total_count)
+                .await
+            {
                 warn!(run_id = %run.run_id, error = %e, "failed to deliver pending result");
             }
         }
@@ -1536,8 +1557,8 @@ async fn stream_loop(
                   client: &Client,
                   results: &[ResourceResult]| {
         let run_id = uuid::Uuid::new_v4().to_string();
-        let proto_results = results_to_proto(results);
-        let req = client.build_report_result_request(&run_id, proto_results);
+        let (proto_results, total) = reportable_results(results);
+        let req = client.build_report_result_request(&run_id, proto_results, total);
         let tx = request_tx.clone();
         async move {
             if let Err(e) = stream::StreamHandle::report_result(&tx, req).await {
@@ -2157,9 +2178,9 @@ async fn converge_proxied_devices(
 
         // Report results under the device's envoy_id.
         if !results.is_empty() {
-            let proto_results = results_to_proto(&results);
+            let (proto_results, total) = reportable_results(&results);
             if let Err(e) = client
-                .report_result_for(&run_id, device_id, proto_results)
+                .report_result_for(&run_id, device_id, proto_results, total)
                 .await
             {
                 warn!(

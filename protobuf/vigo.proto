@@ -452,10 +452,14 @@ message PolicyResource {
 message ReportResultRequest {
   string run_id = 1;
   string envoy_id = 2;
-  repeated ResourceRunResult results = 3;
+  repeated ResourceRunResult results = 3;  // only changed/failed/blocked (settled no-ops elided); total carried in total_count
   bytes signature = 4;
   google.protobuf.Timestamp timestamp = 5;
   string traceparent = 6;  // W3C traceparent (ADR-028)
+  // total_count is the full resource count for the run, including the settled
+  // no-op resources elided from `results`. 0 means "not reported" (older agent
+  // that sent every result) — the server falls back to len(results).
+  int32 total_count = 7;
 }
 
 message ResourceRunResult {

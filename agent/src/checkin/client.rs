@@ -610,6 +610,7 @@ impl Client {
         &mut self,
         run_id: &str,
         results: Vec<ResourceRunResult>,
+        total_count: i32,
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
@@ -622,6 +623,7 @@ impl Client {
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
             traceparent,
+            total_count,
         };
 
         let span = tracing::info_span!("report_result", trace_id = %trace_id, run_id = %run_id);
@@ -641,6 +643,7 @@ impl Client {
         run_id: &str,
         envoy_id: &str,
         results: Vec<ResourceRunResult>,
+        total_count: i32,
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
@@ -653,6 +656,7 @@ impl Client {
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
             traceparent,
+            total_count,
         };
 
         let span = tracing::info_span!("report_result_for", trace_id = %trace_id, run_id = %run_id);
@@ -793,6 +797,7 @@ impl Client {
         &self,
         run_id: &str,
         results: Vec<ResourceRunResult>,
+        total_count: i32,
     ) -> ReportResultRequest {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
@@ -805,6 +810,7 @@ impl Client {
             signature: sig,
             timestamp: Some(Self::now_timestamp()),
             traceparent,
+            total_count,
         }
     }
 

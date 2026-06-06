@@ -93,6 +93,18 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		runStatus = "blocked"
 	}
 
+	// Resource total. Newer agents elide settled no-op results from the wire and
+	// report the real total in total_count; the per-result loop above already
+	// counted changed/failed/blocked/skipped over the rows that ARE present, so
+	// the only adjustment is to fold the elided no-ops into skipped. Older agents
+	// send every result and leave total_count 0 → total falls back to len and the
+	// adjustment is a no-op (identical to the pre-elision behavior).
+	resourceCount := int64(req.GetTotalCount())
+	if resourceCount < int64(len(req.GetResults())) {
+		resourceCount = int64(len(req.GetResults()))
+	}
+	skippedCount += resourceCount - int64(len(req.GetResults()))
+
 	// Persist the whole run atomically (run row + results + finish) in one
 	// transaction on the single writer — no orphaned "running" row if a write
 	// fails partway, and one write-lock acquisition instead of three.
@@ -101,7 +113,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			EnvoyID:       envoyID,
 			Status:        "running",
 			Trigger:       trigger,
-			ResourceCount: int64(len(req.GetResults())),
+			ResourceCount: resourceCount,
 		},
 		Results: batch,
 		Finish: db.FinishRunParams{
@@ -142,8 +154,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	// Update FleetIndex with run status + append to recent runs.
 	if s.fleetIndex != nil {
 		now := time.Now()
-		moduleCount := int64(len(req.GetResults()))
-		s.fleetIndex.UpdateRunStatus(envoyID, runID, runStatus, changedCount, failedCount, moduleCount, now)
+		s.fleetIndex.UpdateRunStatus(envoyID, runID, runStatus, changedCount, failedCount, resourceCount, now)
 		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
 			RunID:        runID,
 			EnvoyID:      envoyID,

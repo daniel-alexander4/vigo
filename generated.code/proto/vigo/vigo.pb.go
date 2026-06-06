@@ -1562,13 +1562,17 @@ func (x *PolicyResource) GetWatchSecret() []string {
 }
 
 type ReportResultRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	EnvoyId       string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	Results       []*ResourceRunResult   `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
-	Signature     []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
-	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	Traceparent   string                 `protobuf:"bytes,6,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	RunId       string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	EnvoyId     string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
+	Results     []*ResourceRunResult   `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"` // only changed/failed/blocked (settled no-ops elided); total carried in total_count
+	Signature   []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
+	Timestamp   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Traceparent string                 `protobuf:"bytes,6,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
+	// total_count is the full resource count for the run, including the settled
+	// no-op resources elided from `results`. 0 means "not reported" (older agent
+	// that sent every result) — the server falls back to len(results).
+	TotalCount    int32 `protobuf:"varint,7,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1643,6 +1647,13 @@ func (x *ReportResultRequest) GetTraceparent() string {
 		return x.Traceparent
 	}
 	return ""
+}
+
+func (x *ReportResultRequest) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
 }
 
 type ResourceRunResult struct {
@@ -7785,14 +7796,16 @@ const file_vigo_proto_rawDesc = "" +
 	"\fwatch_secret\x18\a \x03(\tR\vwatchSecret\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf7\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x98\x02\n" +
 	"\x13ReportResultRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x19\n" +
 	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x124\n" +
 	"\aresults\x18\x03 \x03(\v2\x1a.vigo.v1.ResourceRunResultR\aresults\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12 \n" +
-	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\"\xf6\x02\n" +
+	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\x12\x1f\n" +
+	"\vtotal_count\x18\a \x01(\x05R\n" +
+	"totalCount\"\xf6\x02\n" +
 	"\x11ResourceRunResult\x12)\n" +
 	"\x10configcrate_name\x18\x01 \x01(\tR\x0fconfigcrateName\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12#\n" +
