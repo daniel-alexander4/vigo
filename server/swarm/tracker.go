@@ -159,7 +159,13 @@ func (t *PeerTracker) envoyActive(envoyID string) bool {
 func (t *PeerTracker) ReportChunks(envoyID, sha256, address string, chunks []uint32, complete bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.reportChunksLocked(envoyID, sha256, address, chunks, complete)
+}
 
+// reportChunksLocked is the body of ReportChunks; the caller must hold the
+// write lock. Split out so ReportBlobs can apply a whole check-in's worth of
+// updates under a single lock acquisition.
+func (t *PeerTracker) reportChunksLocked(envoyID, sha256, address string, chunks []uint32, complete bool) {
 	blobPeers, ok := t.peers[sha256]
 	if !ok {
 		blobPeers = make(map[string]*PeerState)
@@ -186,6 +192,39 @@ func (t *PeerTracker) ReportChunks(envoyID, sha256, address string, chunks []uin
 // ReportComplete marks an envoy as having the full blob.
 func (t *PeerTracker) ReportComplete(envoyID, sha256, address string) {
 	t.ReportChunks(envoyID, sha256, address, nil, true)
+}
+
+// BlobUpdate is one blob's worth of availability + chunk-source data reported
+// by an envoy in a single check-in. Sources/Details/ActiveDownloadMs are
+// applied only when Sources is non-empty, mirroring the per-blob path.
+type BlobUpdate struct {
+	SHA256           string
+	Chunks           []uint32 // nil = complete (all chunks); non-nil = partial
+	Complete         bool
+	Sources          map[string]int // source address → chunk count; nil/empty = no chunk-source update
+	Details          []ChunkDetail
+	ActiveDownloadMs int64
+}
+
+// ReportBlobs applies all of an envoy's blob updates from one check-in under a
+// single write-lock acquisition, instead of one Lock per blob (and a second
+// per blob for chunk sources). Semantically identical to calling
+// ReportChunks + SetChunkSources per update in slice order — kept on the
+// swarm-ingest hot path to cut lock churn. Updates apply in the given order,
+// so callers that may report the same hash twice (e.g. complete then partial)
+// must order them the way the final state should resolve.
+func (t *PeerTracker) ReportBlobs(envoyID, address string, updates []BlobUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, u := range updates {
+		t.reportChunksLocked(envoyID, u.SHA256, address, u.Chunks, u.Complete)
+		if len(u.Sources) > 0 {
+			t.setChunkSourcesLocked(envoyID, u.SHA256, u.Sources, u.Details, u.ActiveDownloadMs)
+		}
+	}
 }
 
 // ReportSkipped records that an envoy skipped a blob (e.g., insufficient disk).
@@ -705,6 +744,13 @@ func (t *PeerTracker) RemoveSeed(sha256 string) {
 func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int, details []ChunkDetail, activeDownloadMs int64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.setChunkSourcesLocked(envoyID, sha256, sources, details, activeDownloadMs)
+}
+
+// setChunkSourcesLocked is the body of SetChunkSources; the caller must hold
+// the write lock. Split out so ReportBlobs can apply it under the same lock as
+// the chunk update.
+func (t *PeerTracker) setChunkSourcesLocked(envoyID, sha256 string, sources map[string]int, details []ChunkDetail, activeDownloadMs int64) {
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		if ps := blobPeers[envoyID]; ps != nil {
 			ps.ChunkSources = sources

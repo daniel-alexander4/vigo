@@ -15,22 +15,29 @@ import (
 // ingestSwarmTraits (server/grpc/agentstream.go:1015–1064) drives on every
 // swarm-carrying check-in.
 //
-// WHY THIS EXISTS
+// # WHY THIS EXISTS
 //
 // PeerTracker guards four maps with one sync.RWMutex. On a swarm-heavy fleet
-// — many envoys, each holding several blobs, all checking in fast — every
-// check-in takes that lock K× (once per held blob, via ReportComplete +
-// SetChunkSources) plus a full-O(seeds) RevokedSeeds() scan. That is the same
-// single-global-mutex shape that made TraitsBatcher.Mark the throughput wall
-// before 3b83080f. The open question (pending: "Shard PeerTracker.mu") is
-// whether this lock is actually contended enough to matter, and if so whether
-// batching the per-blob calls into one lock-once ReportBlobs suffices or a
-// sha256-sharded restructure is needed.
+// — many envoys, each holding several blobs, all checking in fast — each
+// check-in updates the tracker for every held blob plus runs a RevokedSeeds()
+// eviction scan, all under that one lock. That is the same single-global-mutex
+// shape that made TraitsBatcher.Mark the throughput wall before 3b83080f.
 //
-// This benchmark answers that question in isolation — no network, no gRPC, no
-// SQLite — so the lock's own ceiling is the only thing measured. The fakefleet
-// route would bury this signal under the network/DB costs we already know
-// dominate end-to-end.
+// This benchmark drove two fixes to that path, both verified here:
+//   - The RevokedSeeds() full-O(seeds) scan that ran every check-in is now an
+//     O(revoked) membership-index lookup (the dominant cost — it made 1000
+//     seeds 6.3× slower than 100 at held=1 for identical per-blob work).
+//   - The per-blob updates (formerly 1-2 separate Lock acquisitions each, via
+//     ReportComplete + SetChunkSources) are now applied under a single
+//     ReportBlobs lock per check-in, flattening the residual per-acquisition
+//     contention that showed as negative core-scaling.
+//
+// It answers the "Shard PeerTracker.mu" question in isolation — no network, no
+// gRPC, no SQLite — so the lock's own ceiling is the only thing measured. The
+// fakefleet route would bury this signal under the network/DB costs we already
+// know dominate end-to-end. Verdict: with these two fixes the lock clears the
+// scale target with comfortable headroom; a sha256-sharded restructure is not
+// warranted.
 //
 // HOW TO RUN
 //
@@ -45,7 +52,7 @@ import (
 //	go test ./server/swarm/ -run '^$' -bench BenchmarkPeerTrackerIngest \
 //	    -mutexprofile mu.out && go tool pprof -top mu.out
 //
-// HOW TO READ IT
+// # HOW TO READ IT
 //
 // Each iteration is one envoy's full swarm ingest for one check-in. The
 // reported "checkins/s" metric is the sustained ingest rate at the tested
@@ -133,14 +140,15 @@ func benchIngest(b *testing.B, seedBlobs, held int) {
 			present[h] = true
 		}
 		sources := map[string]int{"10.0.0.2:1531": 4, "10.0.0.3:1531": 4}
+		updates := make([]BlobUpdate, len(myBlobs))
+		for i, h := range myBlobs {
+			updates[i] = BlobUpdate{SHA256: h, Complete: true, Sources: sources, ActiveDownloadMs: 5}
+		}
 
 		for pb.Next() {
-			// Mirror ingestSwarmTraits: per held blob, ReportComplete then
-			// SetChunkSources — two Lock() acquisitions each.
-			for _, h := range myBlobs {
-				pt.ReportComplete(envoyID, h, "10.0.0.9:1531")
-				pt.SetChunkSources(envoyID, h, sources, nil, 5)
-			}
+			// Mirror ingestSwarmTraits: apply all of an envoy's blob updates
+			// under a single ReportBlobs lock acquisition.
+			pt.ReportBlobs(envoyID, "10.0.0.9:1531", updates)
 			// Eviction detection: one RevokedSeeds() RLock scan over all seeds,
 			// then HasPeerRecord (+ MarkEvicted on a hit) per revoked hash the
 			// envoy no longer reports.

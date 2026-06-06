@@ -1012,18 +1012,22 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, swarmRaw json.RawMessag
 		}
 	}
 
+	// Collect this envoy's blob updates and apply them under a single tracker
+	// lock (ReportBlobs) instead of 1-2 Lock acquisitions per blob. Complete
+	// blobs first, then in-progress downloads — preserving the prior apply
+	// order so a hash reported as both resolves to its downloading state.
+	updates := make([]swarm.BlobUpdate, 0, len(swarmData.Blobs)+len(swarmData.Downloading))
 	for _, hash := range swarmData.Blobs {
 		if swarm.IsValidHash(hash) {
-			s.peerTracker.ReportComplete(envoyID, hash, peerAddr)
-			// Store chunk source data and download duration if reported.
-			if sources, ok := swarmData.ChunkSources[hash]; ok && len(sources) > 0 {
-				details := swarmData.ChunkDetails[hash]  // may be nil
-				dlMs := swarmData.ActiveDownloadMs[hash] // 0 if not reported
-				s.peerTracker.SetChunkSources(envoyID, hash, sources, details, dlMs)
-			}
+			updates = append(updates, swarm.BlobUpdate{
+				SHA256:           hash,
+				Complete:         true,                         // nil chunks = complete
+				Sources:          swarmData.ChunkSources[hash], // nil/empty = no chunk-source update
+				Details:          swarmData.ChunkDetails[hash],
+				ActiveDownloadMs: swarmData.ActiveDownloadMs[hash],
+			})
 		}
 	}
-
 	// Report in-progress downloads so status shows "downloading" with progress.
 	for hash, chunksHave := range swarmData.Downloading {
 		if swarm.IsValidHash(hash) && chunksHave > 0 {
@@ -1031,14 +1035,16 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, swarmRaw json.RawMessag
 			for i := range chunks {
 				chunks[i] = uint32(i)
 			}
-			s.peerTracker.ReportChunks(envoyID, hash, peerAddr, chunks, false)
-			if sources, ok := swarmData.ChunkSources[hash]; ok && len(sources) > 0 {
-				details := swarmData.ChunkDetails[hash]
-				dlMs := swarmData.ActiveDownloadMs[hash]
-				s.peerTracker.SetChunkSources(envoyID, hash, sources, details, dlMs)
-			}
+			updates = append(updates, swarm.BlobUpdate{
+				SHA256:           hash,
+				Chunks:           chunks,
+				Sources:          swarmData.ChunkSources[hash],
+				Details:          swarmData.ChunkDetails[hash],
+				ActiveDownloadMs: swarmData.ActiveDownloadMs[hash],
+			})
 		}
 	}
+	s.peerTracker.ReportBlobs(envoyID, peerAddr, updates)
 
 	// Eviction detection for revoked seeds. If the tracker still has a
 	// per-envoy record for a revoked seed but the envoy's latest trait

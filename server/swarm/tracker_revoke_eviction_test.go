@@ -256,6 +256,59 @@ func TestRevokedSeeds_IndexConsistencyAcrossTransitions(t *testing.T) {
 	assertRevoked("after re-revoking a", a)
 }
 
+// TestReportBlobs_EquivalentToPerBlobCalls verifies that ReportBlobs produces
+// the same tracker state as the per-blob ReportComplete/ReportChunks +
+// SetChunkSources sequence it replaces — across complete, downloading, and
+// with/without chunk-sources — so the lock-once batching is a pure efficiency
+// change with no behavioral drift.
+func TestReportBlobs_EquivalentToPerBlobCalls(t *testing.T) {
+	complete := evictionTestSHA("c0")      // complete, with sources
+	completeNoSrc := evictionTestSHA("c1") // complete, no sources
+	downloading := evictionTestSHA("d0")   // partial, with sources
+	addr := "10.0.0.1:1531"
+	srcs := map[string]int{"10.0.0.2:1531": 3, "10.0.0.3:1531": 2}
+	details := []ChunkDetail{{Chunk: 0, Source: "10.0.0.2:1531", DurationMs: 12}}
+
+	// Reference tracker: the old per-blob path.
+	ref := NewPeerTracker(60 * time.Second)
+	ref.ReportComplete("envoy-a", complete, addr)
+	ref.SetChunkSources("envoy-a", complete, srcs, details, 5000)
+	ref.ReportComplete("envoy-a", completeNoSrc, addr)
+	ref.ReportChunks("envoy-a", downloading, addr, []uint32{0, 1}, false)
+	ref.SetChunkSources("envoy-a", downloading, srcs, nil, 1500)
+
+	// Batched tracker: one ReportBlobs call with the same data in the same order.
+	got := NewPeerTracker(60 * time.Second)
+	got.ReportBlobs("envoy-a", addr, []BlobUpdate{
+		{SHA256: complete, Complete: true, Sources: srcs, Details: details, ActiveDownloadMs: 5000},
+		{SHA256: completeNoSrc, Complete: true},
+		{SHA256: downloading, Chunks: []uint32{0, 1}, Sources: srcs, ActiveDownloadMs: 1500},
+	})
+
+	for _, sha := range []string{complete, completeNoSrc, downloading} {
+		r := ref.peers[sha]["envoy-a"]
+		g := got.peers[sha]["envoy-a"]
+		if r == nil || g == nil {
+			t.Fatalf("%s: ref=%v got=%v — one path created no PeerState", sha[:2], r, g)
+		}
+		if g.Complete != r.Complete || len(g.Chunks) != len(r.Chunks) ||
+			g.ActiveDownloadMs != r.ActiveDownloadMs || len(g.ChunkSources) != len(r.ChunkSources) ||
+			len(g.ChunkDetails) != len(r.ChunkDetails) || g.Address != r.Address {
+			t.Errorf("%s: batched PeerState diverges from per-blob:\n ref=%+v\n got=%+v", sha[:2], r, g)
+		}
+	}
+}
+
+// TestReportBlobs_EmptyIsNoop verifies ReportBlobs with no updates touches
+// nothing (the common no-swarm-blobs check-in skips the lock entirely).
+func TestReportBlobs_EmptyIsNoop(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	pt.ReportBlobs("envoy-a", "10.0.0.1:1531", nil)
+	if len(pt.peers) != 0 {
+		t.Errorf("empty ReportBlobs created %d peer entries, want 0", len(pt.peers))
+	}
+}
+
 // TestHasPeerRecord verifies the helper used by ingestSwarmTraits to decide
 // whether a missing hash in a trait report represents a fresh eviction.
 func TestHasPeerRecord(t *testing.T) {
