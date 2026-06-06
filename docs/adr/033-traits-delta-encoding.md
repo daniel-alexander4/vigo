@@ -5,9 +5,12 @@ SPDX-License-Identifier: LicenseRef-Proprietary
 
 # ADR-033: Conditional traits transmission — vitals/inventory split
 
-**Status:** Proposed 2026-06-04. **Updated 2026-06-04 with spike findings — the
-decision is refined from delta encoding to a stable/volatile split (the agent
-already maintains the classification); see Spike Findings.** Still pre-implementation.
+**Status:** Accepted — implemented (first cut) 2026-06-04, dormant until the
+fleet is rebuilt/redeployed. **Spike (2026-06-04) refined the decision from delta
+encoding to a stable/volatile split (the agent already maintains the
+classification); see Spike Findings.** Proto + server + agent shipped (`82a24b5e`
+/ `4df7ca36` / `c850416b`); the stream-path check-in still sends full `traits_json`
+and the server's `inventoryCache` is unbounded — both tracked as follow-ups.
 **Date:** 2026-06-04
 
 ## Context
