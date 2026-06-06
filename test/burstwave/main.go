@@ -59,7 +59,7 @@ func main() {
 	count := flag.Int("count", 1000, "envoys in the first burst (cohort A)")
 	secondCount := flag.Int("second-count", 0, "envoys in the second burst (cohort B); 0 = same as --count")
 	interval := flag.Duration("interval", 5*time.Second, "per-envoy cycle interval (one CheckIn + one ReportResult)")
-	resultsPerReport := flag.Int("results-per-report", 12, "ConfigcrateResults per ReportResult (run_result rows written per report)")
+	resultsPerReport := flag.Int("results-per-report", 12, "ResourceRunResults per ReportResult (run_result rows written per report)")
 	changedRatio := flag.Float64("changed-ratio", 0.15, "fraction of results with changed=true")
 	errorRatio := flag.Float64("error-ratio", 0.02, "fraction of results carrying an error_message")
 	snapshotBytes := flag.Int("snapshot-bytes", 0, "if >0, changed file results carry this many bytes of previous_content")
@@ -286,7 +286,7 @@ func runWave(ctx context.Context, opts waveOpts) {
 				opts.snapshotBytes, rand.New(rand.NewSource(int64(i)+1)))
 			rows := int64(len(tmpl))
 			wg.Add(1)
-			go func(e *testEnvoy, tmpl []*pb.ConfigcrateResult, rows int64) {
+			go func(e *testEnvoy, tmpl []*pb.ResourceRunResult, rows int64) {
 				defer wg.Done()
 				runAgentLoop(ctxRun, reportLoopArgs{
 					grpcAddr: opts.grpcAddr, e: e, tmpl: tmpl, rows: rows,
@@ -414,7 +414,7 @@ done:
 type reportLoopArgs struct {
 	grpcAddr             string
 	e                    *testEnvoy
-	tmpl                 []*pb.ConfigcrateResult
+	tmpl                 []*pb.ResourceRunResult
 	rows                 int64
 	interval, rpcTimeout time.Duration
 	m                    *waveMetrics
@@ -519,7 +519,7 @@ func runAgentLoop(ctx context.Context, a reportLoopArgs) {
 	}
 }
 
-func buildResultTemplate(n int, changedRatio, errorRatio float64, snapshotBytes int, rng *rand.Rand) []*pb.ConfigcrateResult {
+func buildResultTemplate(n int, changedRatio, errorRatio float64, snapshotBytes int, rng *rand.Rand) []*pb.ResourceRunResult {
 	types := []string{"file", "package", "service"}
 	var snap []byte
 	if snapshotBytes > 0 {
@@ -528,7 +528,7 @@ func buildResultTemplate(n int, changedRatio, errorRatio float64, snapshotBytes 
 			snap[i] = 'x'
 		}
 	}
-	out := make([]*pb.ConfigcrateResult, n)
+	out := make([]*pb.ResourceRunResult, n)
 	for j := 0; j < n; j++ {
 		rt := types[j%len(types)]
 		changed := rng.Float64() < changedRatio
@@ -536,13 +536,13 @@ func buildResultTemplate(n int, changedRatio, errorRatio float64, snapshotBytes 
 		if changed {
 			action = "updated"
 		}
-		mr := &pb.ConfigcrateResult{
-			ConfigcrateName:   fmt.Sprintf("mod-%02d", j),
-			ResourceType: rt,
-			ResourceName: fmt.Sprintf("res-%02d", j),
-			ActionTaken:  action,
-			Changed:      changed,
-			DurationMs:   int32(rng.Intn(50)),
+		mr := &pb.ResourceRunResult{
+			ConfigcrateName: fmt.Sprintf("mod-%02d", j),
+			ResourceType:    rt,
+			ResourceName:    fmt.Sprintf("res-%02d", j),
+			ActionTaken:     action,
+			Changed:         changed,
+			DurationMs:      int32(rng.Intn(50)),
 		}
 		if rng.Float64() < errorRatio {
 			mr.ErrorMessage = "simulated convergence error"

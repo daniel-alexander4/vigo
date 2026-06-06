@@ -335,13 +335,13 @@ func runSpannerBoltRuns(cmd *cobra.Command, args []string) error {
 
 	var resp struct {
 		Runs []struct {
-			ID               string `json:"id"`
-			EnvoyID          string `json:"envoy_id"`
-			Status           string `json:"status"`
-			ConfigcrateCount int32  `json:"configcrate_count"`
-			ChangedCount     int32  `json:"changed_count"`
-			FailedCount      int32  `json:"failed_count"`
-			StartedAt        string `json:"started_at,omitempty"`
+			ID            string `json:"id"`
+			EnvoyID       string `json:"envoy_id"`
+			Status        string `json:"status"`
+			ResourceCount int32  `json:"resource_count"`
+			ChangedCount  int32  `json:"changed_count"`
+			FailedCount   int32  `json:"failed_count"`
+			StartedAt     string `json:"started_at,omitempty"`
 		} `json:"runs"`
 	}
 
@@ -358,7 +358,7 @@ func runSpannerBoltRuns(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ENVOY"), header("STATUS"), header("CONFIGCRATES"), header("CHANGED"), header("FAILED"))
 	for _, r := range resp.Runs {
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%d\t%d\t%d\n",
-			r.ID, r.EnvoyID, r.Status, r.ConfigcrateCount, r.ChangedCount, r.FailedCount)
+			r.ID, r.EnvoyID, r.Status, r.ResourceCount, r.ChangedCount, r.FailedCount)
 	}
 	w.Flush()
 	return nil

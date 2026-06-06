@@ -63,13 +63,13 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		}
 
 		batch = append(batch, db.CreateRunResultParams{
-			ConfigcrateName:   result.GetConfigcrateName(),
-			ResourceType: result.GetResourceType(),
-			ResourceName: result.GetResourceName(),
-			ActionTaken:  result.GetActionTaken(),
-			Changed:      changed,
-			ErrorMessage: errMsg,
-			DurationMs:   int64(result.GetDurationMs()),
+			ConfigcrateName: result.GetConfigcrateName(),
+			ResourceType:    result.GetResourceType(),
+			ResourceName:    result.GetResourceName(),
+			ActionTaken:     result.GetActionTaken(),
+			Changed:         changed,
+			ErrorMessage:    errMsg,
+			DurationMs:      int64(result.GetDurationMs()),
 		})
 
 		if result.GetChanged() {
@@ -98,10 +98,10 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	// fails partway, and one write-lock acquisition instead of three.
 	run, err := s.runStore.RecordRun(ctx, db.RecordRunParams{
 		Run: db.CreateRunParams{
-			EnvoyID:     envoyID,
-			Status:      "running",
-			Trigger:     trigger,
-			ConfigcrateCount: int64(len(req.GetResults())),
+			EnvoyID:       envoyID,
+			Status:        "running",
+			Trigger:       trigger,
+			ResourceCount: int64(len(req.GetResults())),
 		},
 		Results: batch,
 		Finish: db.FinishRunParams{
@@ -234,9 +234,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 						Summary:   fmt.Sprintf("%s/%s blocked: %s", result.GetConfigcrateName(), result.GetResourceName(), result.GetErrorMessage()),
 						Details: map[string]any{
 							"configcrate": result.GetConfigcrateName(),
-							"resource": result.GetResourceName(),
-							"trace_id": traceID,
-							"error":    result.GetErrorMessage(),
+							"resource":    result.GetResourceName(),
+							"trace_id":    traceID,
+							"error":       result.GetErrorMessage(),
 						},
 					})
 				}

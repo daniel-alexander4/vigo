@@ -36,8 +36,8 @@ func TestClassifyStatus(t *testing.T) {
 		{"unknown", StatusNoData},
 		{"online", StatusNoData},
 		{"offline", StatusNoData},
-		{"relapsed", StatusNoData},  // legacy vocabulary, dropped
-		{"diverged", StatusNoData},  // belongs to drift axis now
+		{"relapsed", StatusNoData}, // legacy vocabulary, dropped
+		{"diverged", StatusNoData}, // belongs to drift axis now
 	}
 	for _, tc := range cases {
 		if got := ClassifyStatus(tc.in); got != tc.want {
@@ -60,9 +60,9 @@ func TestComputeStatus(t *testing.T) {
 		ri   RunInfo
 		want Status
 	}{
-		{"clean success", RunInfo{Status: "success", ChangedCount: 0, FailedCount: 0, ConfigcrateCount: 10}, StatusConverged},
-		{"agent failure with low fail pct -> degraded by counts", RunInfo{Status: "failure", FailedCount: 1, ConfigcrateCount: 100}, StatusDegraded},
-		{"degraded", RunInfo{Status: "success", FailedCount: 5, ConfigcrateCount: 10}, StatusDegraded},
+		{"clean success", RunInfo{Status: "success", ChangedCount: 0, FailedCount: 0, ResourceCount: 10}, StatusConverged},
+		{"agent failure with low fail pct -> degraded by counts", RunInfo{Status: "failure", FailedCount: 1, ResourceCount: 100}, StatusDegraded},
+		{"degraded", RunInfo{Status: "success", FailedCount: 5, ResourceCount: 10}, StatusDegraded},
 		{"empty", RunInfo{}, StatusNoData},
 		{"blocked is failed", RunInfo{Status: "blocked"}, StatusFailed},
 	}

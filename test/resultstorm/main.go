@@ -6,7 +6,7 @@
 // CheckIn-only harnesses (test/loadtest, test/burst) never exercise.
 //
 // N enrolled envoys each fire ReportResult at a fixed interval; every
-// report carries M ConfigcrateResults. The server, per report, creates a run
+// report carries M ResourceRunResults. The server, per report, creates a run
 // row, batch-inserts M run_result rows, finishes the run, updates the
 // in-memory fleet index, dispatches integration events, and (when
 // --snapshot-bytes>0 on changed file results) inserts a file snapshot.
@@ -53,7 +53,7 @@ func main() {
 	apiAddr := flag.String("api", "https://localhost:8443", "REST API base (enroll + cleanup)")
 	count := flag.Int("count", 1000, "number of simulated envoys")
 	interval := flag.Duration("interval", 5*time.Second, "per-envoy ReportResult interval")
-	resultsPerReport := flag.Int("results-per-report", 12, "ConfigcrateResults per report (= run_result rows written per report)")
+	resultsPerReport := flag.Int("results-per-report", 12, "ResourceRunResults per report (= run_result rows written per report)")
 	changedRatio := flag.Float64("changed-ratio", 0.15, "fraction of results with changed=true (drives drift.detected + DriftDetected metric + snapshot eligibility)")
 	errorRatio := flag.Float64("error-ratio", 0.02, "fraction of results carrying an error_message (drives 'failure' run status)")
 	snapshotBytes := flag.Int("snapshot-bytes", 0, "if >0, changed file results carry this many bytes of previous_content → exercises the InsertFileSnapshot write path (heavier; off by default)")
@@ -264,7 +264,7 @@ func runStorm(ctx context.Context, opts stormOpts) {
 			opts.snapshotBytes, rand.New(rand.NewSource(int64(i)+1)))
 		rows := countRows(tmpl)
 		wg.Add(1)
-		go func(e *testEnvoy, tmpl []*pb.ConfigcrateResult, rows int64) {
+		go func(e *testEnvoy, tmpl []*pb.ResourceRunResult, rows int64) {
 			defer wg.Done()
 			runReportLoop(ctxStorm, reportLoopArgs{
 				grpcAddr: opts.grpcAddr, e: e, tmpl: tmpl, rows: rows,
@@ -381,7 +381,7 @@ done:
 type reportLoopArgs struct {
 	grpcAddr                   string
 	e                          *testEnvoy
-	tmpl                       []*pb.ConfigcrateResult
+	tmpl                       []*pb.ResourceRunResult
 	rows                       int64
 	interval, rpcTimeout       time.Duration
 	perSecond, measured        *Histogram
@@ -479,9 +479,9 @@ func runReportLoop(ctx context.Context, a reportLoopArgs) {
 }
 
 // buildResultTemplate constructs one envoy's fixed per-report payload of
-// M ConfigcrateResults with a randomized changed/error mix. Reused on every
+// M ResourceRunResults with a randomized changed/error mix. Reused on every
 // report so the client stays allocation-light.
-func buildResultTemplate(m int, changedRatio, errorRatio float64, snapshotBytes int, rng *rand.Rand) []*pb.ConfigcrateResult {
+func buildResultTemplate(m int, changedRatio, errorRatio float64, snapshotBytes int, rng *rand.Rand) []*pb.ResourceRunResult {
 	types := []string{"file", "package", "service"}
 	var snap []byte
 	if snapshotBytes > 0 {
@@ -490,7 +490,7 @@ func buildResultTemplate(m int, changedRatio, errorRatio float64, snapshotBytes 
 			snap[i] = 'x'
 		}
 	}
-	out := make([]*pb.ConfigcrateResult, m)
+	out := make([]*pb.ResourceRunResult, m)
 	for j := 0; j < m; j++ {
 		rt := types[j%len(types)]
 		changed := rng.Float64() < changedRatio
@@ -498,13 +498,13 @@ func buildResultTemplate(m int, changedRatio, errorRatio float64, snapshotBytes 
 		if changed {
 			action = "updated"
 		}
-		mr := &pb.ConfigcrateResult{
-			ConfigcrateName:   fmt.Sprintf("mod-%02d", j),
-			ResourceType: rt,
-			ResourceName: fmt.Sprintf("res-%02d", j),
-			ActionTaken:  action,
-			Changed:      changed,
-			DurationMs:   int32(rng.Intn(50)),
+		mr := &pb.ResourceRunResult{
+			ConfigcrateName: fmt.Sprintf("mod-%02d", j),
+			ResourceType:    rt,
+			ResourceName:    fmt.Sprintf("res-%02d", j),
+			ActionTaken:     action,
+			Changed:         changed,
+			DurationMs:      int32(rng.Intn(50)),
 		}
 		// error_message with a non-blocked action → server counts a
 		// failed result → "failure" run status.
@@ -521,7 +521,7 @@ func buildResultTemplate(m int, changedRatio, errorRatio float64, snapshotBytes 
 	return out
 }
 
-func countRows(tmpl []*pb.ConfigcrateResult) int64 { return int64(len(tmpl)) }
+func countRows(tmpl []*pb.ResourceRunResult) int64 { return int64(len(tmpl)) }
 
 func signWith(e *testEnvoy, msg []byte) []byte { return ed25519.Sign(e.signingKey, msg) }
 

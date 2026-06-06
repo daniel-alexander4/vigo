@@ -196,7 +196,7 @@ func ScoreEnvoy(es EnvoyInput, baseInterval, offlineThreshold time.Duration) Env
 		r.Factors = append(r.Factors, Factor{"Convergence Failed", 15, "last run had failures"})
 	case convergence.StatusDegraded:
 		score += 10
-		r.Factors = append(r.Factors, Factor{"Degraded", 10, "1-79% of modules failed in the last run"})
+		r.Factors = append(r.Factors, Factor{"Degraded", 10, "1-79% of resources failed in the last run"})
 	}
 
 	// --- Drift axis: persistent mutation across many recent runs ---

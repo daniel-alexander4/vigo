@@ -25,11 +25,11 @@ func (q *Queries) SetForcePushAllActive(ctx context.Context) (int64, error) {
 // changed count. Used by GetConvergenceSummary to eliminate the N+1 query.
 type EnvoyWithLatestRun struct {
 	Envoy
-	LatestRunID           sql.NullString
-	LatestRunStatus       sql.NullString
-	LatestRunChangedCount sql.NullInt64
-	LatestRunFailedCount  sql.NullInt64
-	LatestRunModuleCount  sql.NullInt64
+	LatestRunID            sql.NullString
+	LatestRunStatus        sql.NullString
+	LatestRunChangedCount  sql.NullInt64
+	LatestRunFailedCount   sql.NullInt64
+	LatestRunResourceCount sql.NullInt64
 }
 
 // ListEnvoysWithLatestRun returns all non-revoked envoys joined with their
@@ -40,10 +40,10 @@ func (q *Queries) ListEnvoysWithLatestRun(ctx context.Context) ([]EnvoyWithLates
 SELECT n.id, n.hostname, n.ip_address, n.pubkey_pem, n.enrolled_at,
        n.last_seen, n.revoked, n.revoked_at, n.force_push, n.pending_rotated_secrets,
        n.maintenance_until,
-       lr.id, lr.status, lr.changed_count, lr.failed_count, lr.configcrate_count
+       lr.id, lr.status, lr.changed_count, lr.failed_count, lr.resource_count
 FROM envoys n
 LEFT JOIN (
-  SELECT id, envoy_id, status, changed_count, failed_count, configcrate_count,
+  SELECT id, envoy_id, status, changed_count, failed_count, resource_count,
          ROW_NUMBER() OVER (PARTITION BY envoy_id ORDER BY started_at DESC) AS rn
   FROM runs
 ) lr ON lr.envoy_id = n.id AND lr.rn = 1
@@ -64,7 +64,7 @@ ORDER BY n.enrolled_at DESC`
 			&i.EnrolledAt, &i.LastSeen, &i.Revoked, &i.RevokedAt, &i.ForcePush,
 			&i.PendingRotatedSecrets, &i.MaintenanceUntil,
 			&i.LatestRunID, &i.LatestRunStatus, &i.LatestRunChangedCount,
-			&i.LatestRunFailedCount, &i.LatestRunModuleCount,
+			&i.LatestRunFailedCount, &i.LatestRunResourceCount,
 		); err != nil {
 			return nil, err
 		}

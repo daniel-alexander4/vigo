@@ -11,7 +11,7 @@ import (
 // TestEnvoyDetailData_HeaderRowCarriesConvergence pins that the envoy
 // detail page header row is built through the canonical envoyRow
 // converter — it must carry the same convergence fields the envoys-page
-// row does (ConfigcrateCount / ChangedCount / FailedCount / Status / Drift /
+// row does (ResourceCount / ChangedCount / FailedCount / Status / Drift /
 // LastRunID), not the half-populated subset EnvoyDetailData used to
 // hand-build, which left the header pill permanently in the "no run
 // data" branch.
@@ -28,9 +28,9 @@ func TestEnvoyDetailData_HeaderRowCarriesConvergence(t *testing.T) {
 	}
 
 	e := data.Envoy
-	if e.ConfigcrateCount != 10 || e.ChangedCount != 3 || e.FailedCount != 1 {
+	if e.ResourceCount != 10 || e.ChangedCount != 3 || e.FailedCount != 1 {
 		t.Errorf("counts = %d/%d/%d, want 10/3/1 (module/changed/failed)",
-			e.ConfigcrateCount, e.ChangedCount, e.FailedCount)
+			e.ResourceCount, e.ChangedCount, e.FailedCount)
 	}
 	if e.Status != "degraded" {
 		t.Errorf("Status = %q, want \"degraded\"", e.Status)

@@ -16,27 +16,27 @@ import (
 
 // RunBatchResultParam holds per-resource result fields for deferred DB writes.
 type RunBatchResultParam struct {
-	ConfigcrateName   string
-	ResourceType string
-	ResourceName string
-	ActionTaken  string
-	Changed      bool
-	ErrorMessage string
-	DurationMs   int32
+	ConfigcrateName string
+	ResourceType    string
+	ResourceName    string
+	ActionTaken     string
+	Changed         bool
+	ErrorMessage    string
+	DurationMs      int32
 }
 
 // RunBatchEntry holds a single completed run to be persisted asynchronously.
 type RunBatchEntry struct {
-	RunID        string
-	EnvoyID     string
-	Hostname     string
-	Status       string
-	Trigger      string // "scheduled" | "force-push"; empty defaults to "scheduled"
-	ConfigcrateCount  int64
-	ChangedCount int64
-	FailedCount  int64
-	SkippedCount int64
-	DBResults    []RunBatchResultParam
+	RunID         string
+	EnvoyID       string
+	Hostname      string
+	Status        string
+	Trigger       string // "scheduled" | "force-push"; empty defaults to "scheduled"
+	ResourceCount int64
+	ChangedCount  int64
+	FailedCount   int64
+	SkippedCount  int64
+	DBResults     []RunBatchResultParam
 }
 
 // RunBatcher accumulates run results and flushes them to the database
@@ -121,10 +121,10 @@ func (rb *RunBatcher) persistEntry(ctx context.Context, entry RunBatchEntry) err
 		trigger = "scheduled"
 	}
 	run, err := rb.store.CreateRun(ctx, db.CreateRunParams{
-		EnvoyID:     entry.EnvoyID,
-		Status:      "running",
-		Trigger:     trigger,
-		ConfigcrateCount: entry.ConfigcrateCount,
+		EnvoyID:       entry.EnvoyID,
+		Status:        "running",
+		Trigger:       trigger,
+		ResourceCount: entry.ResourceCount,
 	})
 	if err != nil {
 		return err
@@ -142,14 +142,14 @@ func (rb *RunBatcher) persistEntry(ctx context.Context, entry RunBatchEntry) err
 				ch = 1
 			}
 			batch = append(batch, db.CreateRunResultParams{
-				RunID:        run.ID,
-				ConfigcrateName:   r.ConfigcrateName,
-				ResourceType: r.ResourceType,
-				ResourceName: r.ResourceName,
-				ActionTaken:  r.ActionTaken,
-				Changed:      ch,
-				ErrorMessage: errMsg,
-				DurationMs:   int64(r.DurationMs),
+				RunID:           run.ID,
+				ConfigcrateName: r.ConfigcrateName,
+				ResourceType:    r.ResourceType,
+				ResourceName:    r.ResourceName,
+				ActionTaken:     r.ActionTaken,
+				Changed:         ch,
+				ErrorMessage:    errMsg,
+				DurationMs:      int64(r.DurationMs),
 			})
 		}
 		if err := rb.store.BatchCreateRunResults(ctx, batch); err != nil {

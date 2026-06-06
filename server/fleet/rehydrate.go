@@ -60,10 +60,10 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		runs := make([]convergence.RunInfo, 0, len(fr.Runs))
 		for _, r := range fr.Runs {
 			runs = append(runs, convergence.RunInfo{
-				Status:       r.Status,
-				ChangedCount: r.ChangedCount,
-				FailedCount:  r.FailedCount,
-				ConfigcrateCount:  r.ConfigcrateCount,
+				Status:        r.Status,
+				ChangedCount:  r.ChangedCount,
+				FailedCount:   r.FailedCount,
+				ResourceCount: r.ResourceCount,
 			})
 		}
 		runsByEnvoy[fr.ID] = runs
@@ -96,10 +96,10 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		recent := runsByEnvoy[t.ID]
 		if recent == nil && twr.LatestRunStatus.Valid {
 			recent = []convergence.RunInfo{{
-				Status:       twr.LatestRunStatus.String,
-				ChangedCount: twr.LatestRunChangedCount.Int64,
-				FailedCount:  twr.LatestRunFailedCount.Int64,
-				ConfigcrateCount:  twr.LatestRunModuleCount.Int64,
+				Status:        twr.LatestRunStatus.String,
+				ChangedCount:  twr.LatestRunChangedCount.Int64,
+				FailedCount:   twr.LatestRunFailedCount.Int64,
+				ResourceCount: twr.LatestRunResourceCount.Int64,
 			}}
 		}
 		convStatus := convergence.ComputeConvergence(recent)
@@ -145,7 +145,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		var lastFailed, lastModules int64
 		if len(recent) > 0 {
 			lastFailed = recent[0].FailedCount
-			lastModules = recent[0].ConfigcrateCount
+			lastModules = recent[0].ResourceCount
 		}
 
 		ts := EnvoyState{
@@ -156,13 +156,13 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			EnrolledAt:            t.EnrolledAt,
 			LastSeen:              lastSeen,
 			Revoked:               t.Revoked != 0,
-			ConvergenceStatus:      convStatus,
+			ConvergenceStatus:     convStatus,
 			Drift:                 drift,
 			LastRunID:             lastRunID,
 			LastRunStatus:         nullStr(twr.LatestRunStatus),
 			LastRunChangedCount:   nullInt(twr.LatestRunChangedCount),
 			LastRunFailedCount:    lastFailed,
-			LastRunModuleCount:    lastModules,
+			LastRunResourceCount:  lastModules,
 			LastRunAt:             lastRunAt,
 			RecentRuns:            recent,
 			Traits:                traits,

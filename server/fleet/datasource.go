@@ -61,8 +61,8 @@ func (ds *DataSource) EnvoyDriftLabel(envoyID string) string {
 
 func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold time.Duration) ui.EnvoyRow {
 	var failurePct float64
-	if ts.LastRunModuleCount > 0 {
-		failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunModuleCount) * 100
+	if ts.LastRunResourceCount > 0 {
+		failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunResourceCount) * 100
 	}
 	observedCycle := ts.ObservedCycle()
 	lastSeenLabel, offline := ui.EnvoyFreshness(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
@@ -88,7 +88,7 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 		Drift:               ts.Drift,
 		DriftLabel:          ts.Drift.String(),
 		FailurePct:          failurePct,
-		ConfigcrateCount:         ts.LastRunModuleCount,
+		ResourceCount:       ts.LastRunResourceCount,
 		FailedCount:         ts.LastRunFailedCount,
 		ChangedCount:        ts.LastRunChangedCount,
 		ObserveOnly:         ts.ObserveOnly,
@@ -169,18 +169,18 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 	fleetRows := make([]ui.FleetRow, 0, len(worst))
 	for _, e := range worst {
 		row := ui.FleetRow{
-			ID:           e.ID,
-			Hostname:     e.Hostname,
-			IP:           e.IPAddress,
-			LastSeen:     e.LastSeen,
-			Status:       e.Status,
-			Drift:        e.Drift,
-			DriftLabel:   e.Drift.String(),
-			LastRunID:    e.LastRunID,
-			FailurePct:   e.FailurePct,
-			ChangedCount: e.ChangedCount,
-			FailedCount:  e.FailedCount,
-			ConfigcrateCount:  e.ConfigcrateCount,
+			ID:            e.ID,
+			Hostname:      e.Hostname,
+			IP:            e.IPAddress,
+			LastSeen:      e.LastSeen,
+			Status:        e.Status,
+			Drift:         e.Drift,
+			DriftLabel:    e.Drift.String(),
+			LastRunID:     e.LastRunID,
+			FailurePct:    e.FailurePct,
+			ChangedCount:  e.ChangedCount,
+			FailedCount:   e.FailedCount,
+			ResourceCount: e.ResourceCount,
 		}
 		// Agent Health column: route through the same fleetpressure SoT
 		// the /envoys table and /agent-health page consume. ok=false
@@ -325,7 +325,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 	var observing int
 	for _, e := range all {
 		fleetFailed += e.FailedCount
-		fleetTotal += e.ConfigcrateCount
+		fleetTotal += e.ResourceCount
 		if e.ObserveOnly {
 			observing++
 		}
@@ -352,42 +352,42 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 
 	counts := ds.fleet.ConvergenceSummary()
 	data := ui.EnvoysPageData{
-		PageData:         ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:           page,
-		EnvFilter:        envFilter,
-		TagFilter:        tagFilter,
-		RoleFilter:       roleFilter,
-		OSFilter:         osFilter,
-		ArchFilter:       archFilter,
-		ConfigcrateFilter:     moduleFilter,
-		ComplianceFilter: complianceFilter,
-		ConvFilter:       convFilter,
-		DriftFilter:    driftFilter,
-		ReachFilter:    reachFilter,
-		Search:         search,
-		SortColumn:     sortCol,
-		SortDir:        sortDir,
-		EnvoyCount:     len(page),
-		MatchingTotal:  total,
-		HasMore:        hasMore,
-		Offset:         offset,
-		Limit:          limit,
-		NextOffset:     offset + len(page),
-		TotalEnvoys:    counts.Total,
-		CountConverged: counts.Converged,
-		CountDegraded:  counts.Degraded,
-		CountFailed:    counts.Failed,
-		CountNoData:    counts.NoData,
-		CountChanged:   counts.Changed,
-		CountDiverged:  counts.Diverged,
-		CountOffline:   counts.Offline,
-		CountObserving: observing,
+		PageData:          ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:            page,
+		EnvFilter:         envFilter,
+		TagFilter:         tagFilter,
+		RoleFilter:        roleFilter,
+		OSFilter:          osFilter,
+		ArchFilter:        archFilter,
+		ConfigcrateFilter: moduleFilter,
+		ComplianceFilter:  complianceFilter,
+		ConvFilter:        convFilter,
+		DriftFilter:       driftFilter,
+		ReachFilter:       reachFilter,
+		Search:            search,
+		SortColumn:        sortCol,
+		SortDir:           sortDir,
+		EnvoyCount:        len(page),
+		MatchingTotal:     total,
+		HasMore:           hasMore,
+		Offset:            offset,
+		Limit:             limit,
+		NextOffset:        offset + len(page),
+		TotalEnvoys:       counts.Total,
+		CountConverged:    counts.Converged,
+		CountDegraded:     counts.Degraded,
+		CountFailed:       counts.Failed,
+		CountNoData:       counts.NoData,
+		CountChanged:      counts.Changed,
+		CountDiverged:     counts.Diverged,
+		CountOffline:      counts.Offline,
+		CountObserving:    observing,
 
 		FleetFailedConfigcrates: fleetFailed,
 		FleetTotalConfigcrates:  fleetTotal,
-		FilterAxes:         filterAxes,
-		ActiveFilterCount:  activeFilterCount,
-		BasePath:           "/envoys",
+		FilterAxes:              filterAxes,
+		ActiveFilterCount:       activeFilterCount,
+		BasePath:                "/envoys",
 	}
 	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
 	if data.TotalEnvoys > 0 {
@@ -929,7 +929,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 		var recent []convergence.RunInfo
 		runs, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{EnvoyID: envoyID, Limit: 1})
 		if err == nil && len(runs) > 0 {
-			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount, FailedCount: runs[0].FailedCount, ConfigcrateCount: runs[0].ConfigcrateCount}}
+			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount, FailedCount: runs[0].FailedCount, ResourceCount: runs[0].ResourceCount}}
 		}
 		convStatus := convergence.ComputeConvergence(recent)
 		ts = &EnvoyState{
@@ -948,7 +948,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 		if len(runs) > 0 {
 			ts.LastRunID = runs[0].ID
 			ts.LastRunAt = runs[0].StartedAt
-			ts.LastRunModuleCount = runs[0].ConfigcrateCount
+			ts.LastRunResourceCount = runs[0].ResourceCount
 			ts.LastRunChangedCount = runs[0].ChangedCount
 			ts.LastRunFailedCount = runs[0].FailedCount
 		}
@@ -997,13 +997,13 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 			errMsg = res.ErrorMessage.String
 		}
 		resultsByRun[res.RunID] = append(resultsByRun[res.RunID], ui.RunResultRow{
-			ConfigcrateName:   res.ConfigcrateName,
-			ResourceType: res.ResourceType,
-			ResourceName: res.ResourceName,
-			ActionTaken:  res.ActionTaken,
-			Changed:      res.Changed != 0,
-			ErrorMessage: errMsg,
-			DurationMs:   res.DurationMs,
+			ConfigcrateName: res.ConfigcrateName,
+			ResourceType:    res.ResourceType,
+			ResourceName:    res.ResourceName,
+			ActionTaken:     res.ActionTaken,
+			Changed:         res.Changed != 0,
+			ErrorMessage:    errMsg,
+			DurationMs:      res.DurationMs,
 		})
 	}
 
@@ -1011,19 +1011,19 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 	for _, r := range dbRuns {
 		runs = append(runs, ui.EnvoyDetailRunRow{
 			RunRow: ui.RunRow{
-				ID:           r.ID,
-				EnvoyID:      envoyID,
-				Hostname:     hostname,
-				StartedAt:    r.StartedAt,
-				Status:       r.Status,
-				ConfigcrateCount:  r.ConfigcrateCount,
-				ChangedCount: r.ChangedCount,
-				FailedCount:  r.FailedCount,
+				ID:            r.ID,
+				EnvoyID:       envoyID,
+				Hostname:      hostname,
+				StartedAt:     r.StartedAt,
+				Status:        r.Status,
+				ResourceCount: r.ResourceCount,
+				ChangedCount:  r.ChangedCount,
+				FailedCount:   r.FailedCount,
 				Outcome: convergence.ComputeStatus(convergence.RunInfo{
-					Status:       r.Status,
-					ChangedCount: r.ChangedCount,
-					FailedCount:  r.FailedCount,
-					ConfigcrateCount:  r.ConfigcrateCount,
+					Status:        r.Status,
+					ChangedCount:  r.ChangedCount,
+					FailedCount:   r.FailedCount,
+					ResourceCount: r.ResourceCount,
 				}).String(),
 				EnvoyDriftLabel: driftLabel,
 			},
@@ -1065,20 +1065,20 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 			driftLabel = ts.Drift.String()
 		}
 		rows = append(rows, ui.RunRow{
-			ID:           r.ID,
-			EnvoyID:      r.EnvoyID,
-			Hostname:     hostname,
-			StartedAt:    r.StartedAt,
-			Status:       r.Status,
-			ConfigcrateCount:  r.ConfigcrateCount,
-			ChangedCount: r.ChangedCount,
-			FailedCount:  r.FailedCount,
-			FailurePct:   convergence.FailurePct(r.FailedCount, r.ConfigcrateCount),
+			ID:            r.ID,
+			EnvoyID:       r.EnvoyID,
+			Hostname:      hostname,
+			StartedAt:     r.StartedAt,
+			Status:        r.Status,
+			ResourceCount: r.ResourceCount,
+			ChangedCount:  r.ChangedCount,
+			FailedCount:   r.FailedCount,
+			FailurePct:    convergence.FailurePct(r.FailedCount, r.ResourceCount),
 			Outcome: convergence.ComputeStatus(convergence.RunInfo{
-				Status:       r.Status,
-				ChangedCount: r.ChangedCount,
-				FailedCount:  r.FailedCount,
-				ConfigcrateCount:  r.ConfigcrateCount,
+				Status:        r.Status,
+				ChangedCount:  r.ChangedCount,
+				FailedCount:   r.FailedCount,
+				ResourceCount: r.ResourceCount,
 			}).String(),
 			EnvoyDriftLabel: driftLabel,
 		})
@@ -1126,13 +1126,13 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 			errMsg = res.ErrorMessage.String
 		}
 		results = append(results, ui.RunResultRow{
-			ConfigcrateName:   res.ConfigcrateName,
-			ResourceType: res.ResourceType,
-			ResourceName: res.ResourceName,
-			ActionTaken:  res.ActionTaken,
-			Changed:      res.Changed != 0,
-			ErrorMessage: errMsg,
-			DurationMs:   res.DurationMs,
+			ConfigcrateName: res.ConfigcrateName,
+			ResourceType:    res.ResourceType,
+			ResourceName:    res.ResourceName,
+			ActionTaken:     res.ActionTaken,
+			Changed:         res.Changed != 0,
+			ErrorMessage:    errMsg,
+			DurationMs:      res.DurationMs,
 		})
 	}
 
@@ -1146,7 +1146,7 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 			StartedAt:       r.StartedAt,
 			Status:          r.Status,
 			Trigger:         r.Trigger,
-			ConfigcrateCount:     r.ConfigcrateCount,
+			ResourceCount:   r.ResourceCount,
 			ChangedCount:    r.ChangedCount,
 			FailedCount:     r.FailedCount,
 			EnvoyDriftLabel: driftLabel,
@@ -1201,11 +1201,11 @@ func (ds *DataSource) PlanDetailData(planID string) (ui.PlanDetailPageData, erro
 	for _, r := range dbResults {
 		color := planActionColor(r.PlannedAction)
 		results = append(results, ui.PlanResultRow{
-			ConfigcrateName:    r.ConfigcrateName,
-			ResourceType:  r.ResourceType,
-			ResourceName:  r.ResourceName,
-			PlannedAction: r.PlannedAction,
-			ActionColor:   color,
+			ConfigcrateName: r.ConfigcrateName,
+			ResourceType:    r.ResourceType,
+			ResourceName:    r.ResourceName,
+			PlannedAction:   r.PlannedAction,
+			ActionColor:     color,
 		})
 		switch convergence.ClassifyAction(r.PlannedAction) {
 		case convergence.ActionCreate:

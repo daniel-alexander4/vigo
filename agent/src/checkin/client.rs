@@ -8,7 +8,7 @@
 
 use crate::auth::signer;
 use crate::proto::{
-    vigo_agent_client::VigoAgentClient, CheckInRequest, CheckInResponse, ConfigcrateResult,
+    vigo_agent_client::VigoAgentClient, CheckInRequest, CheckInResponse, ResourceRunResult,
     DownloadCustomTraitRequest, RegisterRequest, RegisterResponse, ReportResultRequest,
     ReportResultResponse, ReportTraitsRequest, WakeRequest, WakeResponse,
 };
@@ -604,7 +604,7 @@ impl Client {
     pub async fn report_result(
         &mut self,
         run_id: &str,
-        results: Vec<ConfigcrateResult>,
+        results: Vec<ResourceRunResult>,
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
@@ -635,7 +635,7 @@ impl Client {
         &mut self,
         run_id: &str,
         envoy_id: &str,
-        results: Vec<ConfigcrateResult>,
+        results: Vec<ResourceRunResult>,
     ) -> Result<ReportResultResponse> {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);
@@ -787,7 +787,7 @@ impl Client {
     pub fn build_report_result_request(
         &self,
         run_id: &str,
-        results: Vec<ConfigcrateResult>,
+        results: Vec<ResourceRunResult>,
     ) -> ReportResultRequest {
         let ts = Self::timestamp_str();
         let sig = signer::sign_payload(run_id.as_bytes(), &ts, &self.signing_key);

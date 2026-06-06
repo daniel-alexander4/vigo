@@ -88,12 +88,12 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 		trigger = "scheduled"
 	}
 	run := Run{
-		ID:          uuid.New().String(),
-		EnvoyID:     arg.EnvoyID,
-		StartedAt:   time.Now(),
-		Status:      arg.Status,
-		Trigger:     trigger,
-		ConfigcrateCount: arg.ConfigcrateCount,
+		ID:            uuid.New().String(),
+		EnvoyID:       arg.EnvoyID,
+		StartedAt:     time.Now(),
+		Status:        arg.Status,
+		Trigger:       trigger,
+		ResourceCount: arg.ResourceCount,
 	}
 
 	sh := s.shard(arg.EnvoyID)
@@ -119,16 +119,16 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 
 func (s *MemRunStore) CreateRunResult(_ context.Context, arg CreateRunResultParams) (RunResult, error) {
 	result := RunResult{
-		ID:           uuid.New().String(),
-		RunID:        arg.RunID,
-		ConfigcrateName:   arg.ConfigcrateName,
-		ResourceType: arg.ResourceType,
-		ResourceName: arg.ResourceName,
-		ActionTaken:  arg.ActionTaken,
-		Changed:      arg.Changed,
-		ErrorMessage: arg.ErrorMessage,
-		DurationMs:   arg.DurationMs,
-		CreatedAt:    time.Now(),
+		ID:              uuid.New().String(),
+		RunID:           arg.RunID,
+		ConfigcrateName: arg.ConfigcrateName,
+		ResourceType:    arg.ResourceType,
+		ResourceName:    arg.ResourceName,
+		ActionTaken:     arg.ActionTaken,
+		Changed:         arg.Changed,
+		ErrorMessage:    arg.ErrorMessage,
+		DurationMs:      arg.DurationMs,
+		CreatedAt:       time.Now(),
 	}
 
 	sh, _ := s.findRunShard(arg.RunID)
@@ -153,16 +153,16 @@ func (s *MemRunStore) BatchCreateRunResults(_ context.Context, args []CreateRunR
 	now := time.Now()
 	for _, a := range args {
 		byRun[a.RunID] = append(byRun[a.RunID], RunResult{
-			ID:           uuid.New().String(),
-			RunID:        a.RunID,
-			ConfigcrateName:   a.ConfigcrateName,
-			ResourceType: a.ResourceType,
-			ResourceName: a.ResourceName,
-			ActionTaken:  a.ActionTaken,
-			Changed:      a.Changed,
-			ErrorMessage: a.ErrorMessage,
-			DurationMs:   a.DurationMs,
-			CreatedAt:    now,
+			ID:              uuid.New().String(),
+			RunID:           a.RunID,
+			ConfigcrateName: a.ConfigcrateName,
+			ResourceType:    a.ResourceType,
+			ResourceName:    a.ResourceName,
+			ActionTaken:     a.ActionTaken,
+			Changed:         a.Changed,
+			ErrorMessage:    a.ErrorMessage,
+			DurationMs:      a.DurationMs,
+			CreatedAt:       now,
 		})
 	}
 	for runID, results := range byRun {

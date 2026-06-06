@@ -18,29 +18,29 @@ func TestRunBatcherSubmitAndFlush(t *testing.T) {
 
 	for i := range 3 {
 		rb.Submit(RunBatchEntry{
-			RunID:        "",
-			EnvoyID:     "envoy-1",
-			Hostname:     "web-1",
-			Status:       "success",
-			ConfigcrateCount:  2,
-			ChangedCount: 1,
-			FailedCount:  0,
-			SkippedCount: 1,
+			RunID:         "",
+			EnvoyID:       "envoy-1",
+			Hostname:      "web-1",
+			Status:        "success",
+			ResourceCount: 2,
+			ChangedCount:  1,
+			FailedCount:   0,
+			SkippedCount:  1,
 			DBResults: []RunBatchResultParam{
 				{
-					ConfigcrateName:   "nginx",
-					ResourceType: "package",
-					ResourceName: "nginx",
-					ActionTaken:  "none",
-					Changed:      false,
+					ConfigcrateName: "nginx",
+					ResourceType:    "package",
+					ResourceName:    "nginx",
+					ActionTaken:     "none",
+					Changed:         false,
 				},
 				{
-					ConfigcrateName:   "nginx",
-					ResourceType: "file",
-					ResourceName: "/etc/nginx.conf",
-					ActionTaken:  "updated",
-					Changed:      true,
-					DurationMs:   int32(10 * (i + 1)),
+					ConfigcrateName: "nginx",
+					ResourceType:    "file",
+					ResourceName:    "/etc/nginx.conf",
+					ActionTaken:     "updated",
+					Changed:         true,
+					DurationMs:      int32(10 * (i + 1)),
 				},
 			},
 		})
@@ -87,10 +87,10 @@ func TestRunBatcherShutdown(t *testing.T) {
 	rb := NewRunBatcher(store)
 
 	rb.Submit(RunBatchEntry{
-		EnvoyID:    "envoy-1",
-		Hostname:    "web-1",
-		Status:      "success",
-		ConfigcrateCount: 1,
+		EnvoyID:       "envoy-1",
+		Hostname:      "web-1",
+		Status:        "success",
+		ResourceCount: 1,
 	})
 
 	// Start with a context that we cancel immediately.
@@ -120,10 +120,10 @@ func TestRunBatcherConcurrent(t *testing.T) {
 			defer wg.Done()
 			for i := range 10 {
 				rb.Submit(RunBatchEntry{
-					EnvoyID:    "envoy-1",
-					Hostname:    "web-1",
-					Status:      "success",
-					ConfigcrateCount: int64(g*10 + i),
+					EnvoyID:       "envoy-1",
+					Hostname:      "web-1",
+					Status:        "success",
+					ResourceCount: int64(g*10 + i),
 				})
 			}
 		}(g)

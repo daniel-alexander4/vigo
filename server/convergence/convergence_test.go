@@ -17,22 +17,22 @@ func TestComputeConvergence(t *testing.T) {
 		{"unknown status with zero counts (running)", []RunInfo{{Status: "running"}}, "no data"},
 
 		// Failure-axis buckets — module counts decide, not the agent flag.
-		{"clean success", []RunInfo{{Status: "success", ChangedCount: 0, FailedCount: 0, ConfigcrateCount: 5}}, "converged"},
-		{"converged with changes — drift axis catches this, not failure", []RunInfo{{Status: "success", ChangedCount: 3, FailedCount: 0, ConfigcrateCount: 5}}, "converged"},
+		{"clean success", []RunInfo{{Status: "success", ChangedCount: 0, FailedCount: 0, ResourceCount: 5}}, "converged"},
+		{"converged with changes — drift axis catches this, not failure", []RunInfo{{Status: "success", ChangedCount: 3, FailedCount: 0, ResourceCount: 5}}, "converged"},
 		{"converged with changes across many runs", []RunInfo{
 			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2},
 			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
 			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
 		}, "converged"},
-		{"degraded 1/172 (0.58%) — any failure is at least degraded", []RunInfo{{Status: "partial", FailedCount: 1, ConfigcrateCount: 172}}, "degraded"},
-		{"degraded 1/59 (1.7%)", []RunInfo{{Status: "partial", FailedCount: 1, ConfigcrateCount: 59}}, "degraded"},
-		{"degraded 47/59 (79.7%)", []RunInfo{{Status: "partial", FailedCount: 47, ConfigcrateCount: 59}}, "degraded"},
-		{"failed 48/59 (81.4%)", []RunInfo{{Status: "partial", FailedCount: 48, ConfigcrateCount: 59}}, "failed"},
-		{"failed 59/59 (100%)", []RunInfo{{Status: "failure", FailedCount: 59, ConfigcrateCount: 59}}, "failed"},
+		{"degraded 1/172 (0.58%) — any failure is at least degraded", []RunInfo{{Status: "partial", FailedCount: 1, ResourceCount: 172}}, "degraded"},
+		{"degraded 1/59 (1.7%)", []RunInfo{{Status: "partial", FailedCount: 1, ResourceCount: 59}}, "degraded"},
+		{"degraded 47/59 (79.7%)", []RunInfo{{Status: "partial", FailedCount: 47, ResourceCount: 59}}, "degraded"},
+		{"failed 48/59 (81.4%)", []RunInfo{{Status: "partial", FailedCount: 48, ResourceCount: 59}}, "failed"},
+		{"failed 59/59 (100%)", []RunInfo{{Status: "failure", FailedCount: 59, ResourceCount: 59}}, "failed"},
 
 		// Bookkeeping anomalies — module counts override the agent flag.
 		{"failure status with zero counts is converged", []RunInfo{{Status: "failure"}}, "converged"},
-		{"failure status with low fail pct is degraded by counts", []RunInfo{{Status: "failure", FailedCount: 1, ConfigcrateCount: 100}}, "degraded"},
+		{"failure status with low fail pct is degraded by counts", []RunInfo{{Status: "failure", FailedCount: 1, ResourceCount: 100}}, "degraded"},
 
 		// Blocked is its own special case — modules didn't apply, treat
 		// as Failed on the failure axis regardless of counts.

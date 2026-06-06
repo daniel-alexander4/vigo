@@ -221,16 +221,16 @@ type RiskPostureHistory struct {
 }
 
 type Run struct {
-	ID               string       `json:"id"`
-	EnvoyID          string       `json:"envoy_id"`
-	StartedAt        time.Time    `json:"started_at"`
-	FinishedAt       sql.NullTime `json:"finished_at"`
-	Status           string       `json:"status"`
-	ConfigcrateCount int64        `json:"configcrate_count"`
-	ChangedCount     int64        `json:"changed_count"`
-	FailedCount      int64        `json:"failed_count"`
-	SkippedCount     int64        `json:"skipped_count"`
-	Trigger          string       `json:"trigger"`
+	ID            string       `json:"id"`
+	EnvoyID       string       `json:"envoy_id"`
+	StartedAt     time.Time    `json:"started_at"`
+	FinishedAt    sql.NullTime `json:"finished_at"`
+	Status        string       `json:"status"`
+	ResourceCount int64        `json:"resource_count"`
+	ChangedCount  int64        `json:"changed_count"`
+	FailedCount   int64        `json:"failed_count"`
+	SkippedCount  int64        `json:"skipped_count"`
+	Trigger       string       `json:"trigger"`
 }
 
 type RunResult struct {

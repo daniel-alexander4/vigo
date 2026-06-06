@@ -13,16 +13,16 @@ import (
 )
 
 const createRun = `-- name: CreateRun :one
-INSERT INTO runs (envoy_id, status, trigger, configcrate_count)
+INSERT INTO runs (envoy_id, status, trigger, resource_count)
 VALUES (?, ?, ?, ?)
-RETURNING id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
+RETURNING id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 `
 
 type CreateRunParams struct {
-	EnvoyID          string `json:"envoy_id"`
-	Status           string `json:"status"`
-	Trigger          string `json:"trigger"`
-	ConfigcrateCount int64  `json:"configcrate_count"`
+	EnvoyID       string `json:"envoy_id"`
+	Status        string `json:"status"`
+	Trigger       string `json:"trigger"`
+	ResourceCount int64  `json:"resource_count"`
 }
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
@@ -30,7 +30,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		arg.EnvoyID,
 		arg.Status,
 		arg.Trigger,
-		arg.ConfigcrateCount,
+		arg.ResourceCount,
 	)
 	var i Run
 	err := row.Scan(
@@ -39,7 +39,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
-		&i.ConfigcrateCount,
+		&i.ResourceCount,
 		&i.ChangedCount,
 		&i.FailedCount,
 		&i.SkippedCount,
@@ -161,7 +161,7 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 }
 
 const getNextSuccessfulRun = `-- name: GetNextSuccessfulRun :one
-SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE envoy_id = ?1 AND started_at > ?2 AND status = 'success'
 ORDER BY started_at ASC
@@ -182,7 +182,7 @@ func (q *Queries) GetNextSuccessfulRun(ctx context.Context, arg GetNextSuccessfu
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
-		&i.ConfigcrateCount,
+		&i.ResourceCount,
 		&i.ChangedCount,
 		&i.FailedCount,
 		&i.SkippedCount,
@@ -192,7 +192,7 @@ func (q *Queries) GetNextSuccessfulRun(ctx context.Context, arg GetNextSuccessfu
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE id = ?
 `
@@ -206,7 +206,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id string) (Run, error) {
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.Status,
-		&i.ConfigcrateCount,
+		&i.ResourceCount,
 		&i.ChangedCount,
 		&i.FailedCount,
 		&i.SkippedCount,
@@ -216,7 +216,7 @@ func (q *Queries) GetRunByID(ctx context.Context, id string) (Run, error) {
 }
 
 const listAllRuns = `-- name: ListAllRuns :many
-SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 ORDER BY started_at DESC
 LIMIT ?
@@ -237,7 +237,7 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
-			&i.ConfigcrateCount,
+			&i.ResourceCount,
 			&i.ChangedCount,
 			&i.FailedCount,
 			&i.SkippedCount,
@@ -257,7 +257,7 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 }
 
 const listFailedRunsForDate = `-- name: ListFailedRunsForDate :many
-SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE date(started_at) = ?1 AND status IN ('failure', 'partial')
 ORDER BY started_at ASC
@@ -278,7 +278,7 @@ func (q *Queries) ListFailedRunsForDate(ctx context.Context, startedAt time.Time
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
-			&i.ConfigcrateCount,
+			&i.ResourceCount,
 			&i.ChangedCount,
 			&i.FailedCount,
 			&i.SkippedCount,
@@ -537,7 +537,7 @@ func (q *Queries) ListRunResultsSinceByEnvoy(ctx context.Context, arg ListRunRes
 }
 
 const listRunsByEnvoy = `-- name: ListRunsByEnvoy :many
-SELECT id, envoy_id, started_at, finished_at, status, configcrate_count, changed_count, failed_count, skipped_count, trigger
+SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
 WHERE envoy_id = ?1
 ORDER BY started_at DESC
@@ -564,7 +564,7 @@ func (q *Queries) ListRunsByEnvoy(ctx context.Context, arg ListRunsByEnvoyParams
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.Status,
-			&i.ConfigcrateCount,
+			&i.ResourceCount,
 			&i.ChangedCount,
 			&i.FailedCount,
 			&i.SkippedCount,

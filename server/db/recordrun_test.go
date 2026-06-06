@@ -21,7 +21,7 @@ func TestDBRunStore_RecordRun_Success(t *testing.T) {
 	store := NewDBRunStore(New(sqlDB), sqlDB)
 
 	run, err := store.RecordRun(ctx, RecordRunParams{
-		Run:     CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ConfigcrateCount: 2},
+		Run:     CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ResourceCount: 2},
 		Results: []CreateRunResultParams{{ConfigcrateName: "m1", ResourceType: "file", ResourceName: "r1", ActionTaken: "updated", Changed: 1}, {ConfigcrateName: "m2", ResourceType: "service", ResourceName: "r2", ActionTaken: "settled"}},
 		Finish:  FinishRunParams{Status: "success", ChangedCount: 1},
 	})
@@ -69,7 +69,7 @@ func TestDBRunStore_RecordRun_RollsBackOnFailure(t *testing.T) {
 	store := NewDBRunStore(New(sqlDB), sqlDB)
 
 	_, err := store.RecordRun(ctx, RecordRunParams{
-		Run:     CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ConfigcrateCount: 1},
+		Run:     CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ResourceCount: 1},
 		Results: []CreateRunResultParams{{ConfigcrateName: "m1", ResourceType: "file", ResourceName: "r1", ActionTaken: "updated", Changed: 1}},
 		Finish:  FinishRunParams{Status: "definitely-not-a-valid-status"},
 	})
@@ -97,7 +97,7 @@ func TestMemRunStore_RecordRun(t *testing.T) {
 	store := NewMemRunStore(20)
 
 	run, err := store.RecordRun(ctx, RecordRunParams{
-		Run:     CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ConfigcrateCount: 2},
+		Run:     CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ResourceCount: 2},
 		Results: []CreateRunResultParams{{ConfigcrateName: "m1", ResourceType: "file", ResourceName: "r1", ActionTaken: "updated", Changed: 1}, {ConfigcrateName: "m2", ResourceType: "service", ResourceName: "r2", ActionTaken: "settled"}},
 		Finish:  FinishRunParams{Status: "success", ChangedCount: 1},
 	})
@@ -130,7 +130,7 @@ func TestMemRunStore_RecordRun(t *testing.T) {
 
 // TestLatestRunPerEnvoy_CarriesFailureCounts proves the fix for the
 // compliance-alerter miscount: ListEnvoysWithLatestRun (and thus
-// LatestRunPerEnvoy) must surface failed_count + configcrate_count, or a
+// LatestRunPerEnvoy) must surface failed_count + resource_count, or a
 // Status:"failure" run with those counts dropped is misclassified as
 // "converged" by convergence.ComputeConvergence (which keys off FailedCount).
 func TestLatestRunPerEnvoy_CarriesFailureCounts(t *testing.T) {
@@ -145,7 +145,7 @@ func TestLatestRunPerEnvoy_CarriesFailureCounts(t *testing.T) {
 
 	// A genuinely-failed run: 1 of 3 modules failed.
 	if _, err := store.RecordRun(ctx, RecordRunParams{
-		Run:    CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ConfigcrateCount: 3},
+		Run:    CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ResourceCount: 3},
 		Finish: FinishRunParams{Status: "failure", ChangedCount: 0, FailedCount: 1},
 	}); err != nil {
 		t.Fatalf("RecordRun: %v", err)
@@ -159,7 +159,7 @@ func TestLatestRunPerEnvoy_CarriesFailureCounts(t *testing.T) {
 	if !ok {
 		t.Fatal("no latest run for env-1")
 	}
-	if run.FailedCount != 1 || run.ConfigcrateCount != 3 {
-		t.Errorf("LatestRunPerEnvoy dropped counts: FailedCount=%d ConfigcrateCount=%d, want 1 and 3", run.FailedCount, run.ConfigcrateCount)
+	if run.FailedCount != 1 || run.ResourceCount != 3 {
+		t.Errorf("LatestRunPerEnvoy dropped counts: FailedCount=%d ResourceCount=%d, want 1 and 3", run.FailedCount, run.ResourceCount)
 	}
 }

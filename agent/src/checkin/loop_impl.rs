@@ -14,7 +14,7 @@ use crate::customtraits;
 use crate::executors::{Executor, ResourceResult};
 use crate::proto::{
     agent_stream_message, delta_event, AgentStreamMessage, CheckInResponse, CustomTraitEntry,
-    DeltaEvent, HeartbeatDelta, ConfigcrateResult, PolicyBundle, ProxiedDevice, RunCompleted,
+    DeltaEvent, HeartbeatDelta, ResourceRunResult, PolicyBundle, ProxiedDevice, RunCompleted,
     StreamCapabilities,
 };
 use crate::runner::{self, cache::ResultCache, RunOptions};
@@ -222,11 +222,11 @@ async fn wake_or_sleep(client: &mut Client, timeout: Duration) {
     }
 }
 
-/// Convert agent ResourceResults to protobuf ConfigcrateResults.
-fn results_to_proto(results: &[ResourceResult]) -> Vec<ConfigcrateResult> {
+/// Convert agent ResourceResults to protobuf ResourceRunResults.
+fn results_to_proto(results: &[ResourceResult]) -> Vec<ResourceRunResult> {
     results
         .iter()
-        .map(|r| ConfigcrateResult {
+        .map(|r| ResourceRunResult {
             configcrate_name: r.configcrate_name.clone(),
             resource_type: r.resource_type.clone(),
             resource_name: r.resource_name.clone(),
@@ -1440,10 +1440,10 @@ fn build_run_delta(results: &[ResourceResult], seq: i64, bundle_version: u64) ->
     let mut skipped_count: i32 = 0;
 
     // Filter to only changed/failed results (no-ops omitted).
-    let filtered: Vec<ConfigcrateResult> = results
+    let filtered: Vec<ResourceRunResult> = results
         .iter()
         .filter(|r| r.changed || r.error.is_some())
-        .map(|r| ConfigcrateResult {
+        .map(|r| ResourceRunResult {
             configcrate_name: r.configcrate_name.clone(),
             resource_type: r.resource_type.clone(),
             resource_name: r.resource_name.clone(),

@@ -30,12 +30,12 @@ type EnvoyRecentRuns struct {
 
 // RecentRun is a minimal run record for convergence computation.
 type RecentRun struct {
-	ID           string
-	Status       string
-	ChangedCount int64
-	FailedCount  int64
-	ConfigcrateCount  int64
-	StartedAt    time.Time
+	ID            string
+	Status        string
+	ChangedCount  int64
+	FailedCount   int64
+	ResourceCount int64
+	StartedAt     time.Time
 }
 
 // fleetConvergenceQuery fetches all active envoys with their last N runs in a
@@ -47,7 +47,7 @@ type RecentRun struct {
 var fleetConvergenceQuery = fmt.Sprintf(`
 SELECT
     e.id, e.hostname, e.ip_address, e.last_seen, e.agent_version,
-    r.id, r.status, r.changed_count, r.failed_count, r.configcrate_count, r.started_at
+    r.id, r.status, r.changed_count, r.failed_count, r.resource_count, r.started_at
 FROM envoys e
 LEFT JOIN runs r ON r.envoy_id = e.id
     AND r.id IN (
@@ -81,11 +81,11 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 			runStatus                   sql.NullString
 			runChanged                  sql.NullInt64
 			runFailed                   sql.NullInt64
-			runModules                  sql.NullInt64
+			runResources                sql.NullInt64
 			runStarted                  sql.NullTime
 		)
 		if err := rows.Scan(&eid, &hostname, &ip, &lastSeen, &agentVer,
-			&runID, &runStatus, &runChanged, &runFailed, &runModules, &runStarted); err != nil {
+			&runID, &runStatus, &runChanged, &runFailed, &runResources, &runStarted); err != nil {
 			return nil, err
 		}
 
@@ -103,12 +103,12 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 		}
 		if runID.Valid {
 			entry.Runs = append(entry.Runs, RecentRun{
-				ID:           runID.String,
-				Status:       runStatus.String,
-				ChangedCount: runChanged.Int64,
-				FailedCount:  runFailed.Int64,
-				ConfigcrateCount:  runModules.Int64,
-				StartedAt:    runStarted.Time,
+				ID:            runID.String,
+				Status:        runStatus.String,
+				ChangedCount:  runChanged.Int64,
+				FailedCount:   runFailed.Int64,
+				ResourceCount: runResources.Int64,
+				StartedAt:     runStarted.Time,
 			})
 		}
 	}
@@ -132,9 +132,9 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 // pill on the right rows.
 type ConfigcrateRunChange struct {
 	ConfigcrateName string
-	RunID      string
-	StartedAt  time.Time
-	AnyChanged bool
+	RunID           string
+	StartedAt       time.Time
+	AnyChanged      bool
 }
 
 // moduleChangesQuery returns rows for the last DivergedThreshold runs of
@@ -188,12 +188,12 @@ func (q *Queries) ListEnvoyModuleChangesRecent(ctx context.Context, envoyID stri
 
 // EnvoyPagedRow is an envoy with its latest run info, returned by the paged query.
 type EnvoyPagedRow struct {
-	ID             string
-	Hostname       string
-	IPAddress      string
-	EnrolledAt     time.Time
-	LastSeen       sql.NullTime
-	AgentVersion   string
+	ID           string
+	Hostname     string
+	IPAddress    string
+	EnrolledAt   time.Time
+	LastSeen     sql.NullTime
+	AgentVersion string
 	// Latest run (nullable).
 	LastRunID      sql.NullString
 	LastRunAt      sql.NullTime
@@ -206,7 +206,7 @@ type EnvoyPagedRow struct {
 const listEnvoysPagedWithRun = `
 SELECT
     e.id, e.hostname, e.ip_address, e.enrolled_at, e.last_seen, e.agent_version,
-    lr.id, lr.started_at, lr.status, lr.changed_count, lr.failed_count, lr.configcrate_count
+    lr.id, lr.started_at, lr.status, lr.changed_count, lr.failed_count, lr.resource_count
 FROM envoys e
 LEFT JOIN runs lr ON lr.envoy_id = e.id
     AND lr.started_at = (
@@ -246,23 +246,23 @@ func (q *Queries) ListEnvoysPagedWithRun(ctx context.Context, afterHostname, sea
 // ordered by created_at; empty when nothing failed in this run. Used to
 // cut down the click-to-triage path on the dashboard recent-activity list.
 type RunWithHostname struct {
-	ID              string
-	EnvoyID         string
-	Hostname        string
-	StartedAt       time.Time
-	FinishedAt      sql.NullTime
-	Status          string
-	Trigger         string
-	ConfigcrateCount     int64
-	ChangedCount    int64
-	FailedCount     int64
-	SkippedCount    int64
+	ID                   string
+	EnvoyID              string
+	Hostname             string
+	StartedAt            time.Time
+	FinishedAt           sql.NullTime
+	Status               string
+	Trigger              string
+	ResourceCount        int64
+	ChangedCount         int64
+	FailedCount          int64
+	SkippedCount         int64
 	TopFailedConfigcrate string
 }
 
 const listRunsWithHostname = `
 SELECT r.id, r.envoy_id, e.hostname, r.started_at, r.finished_at,
-       r.status, r.trigger, r.configcrate_count, r.changed_count, r.failed_count, r.skipped_count,
+       r.status, r.trigger, r.resource_count, r.changed_count, r.failed_count, r.skipped_count,
        COALESCE((
          SELECT rr.configcrate_name FROM run_results rr
          WHERE rr.run_id = r.id
@@ -291,7 +291,7 @@ func (q *Queries) ListRunsWithHostname(ctx context.Context, limit int64) ([]RunW
 	for rows.Next() {
 		var r RunWithHostname
 		if err := rows.Scan(&r.ID, &r.EnvoyID, &r.Hostname, &r.StartedAt, &r.FinishedAt,
-			&r.Status, &r.Trigger, &r.ConfigcrateCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount,
+			&r.Status, &r.Trigger, &r.ResourceCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount,
 			&r.TopFailedConfigcrate); err != nil {
 			return nil, err
 		}

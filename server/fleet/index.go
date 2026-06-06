@@ -57,13 +57,13 @@ type EnvoyState struct {
 	// Drift is the drift-axis bucket for this envoy — orthogonal to
 	// ConvergenceStatus. None / Changed / Diverged. Recomputed on every
 	// UpdateRunStatus from the trailing run history. See server/convergence.
-	Drift               convergence.DriftLevel
-	LastRunStatus       string
-	LastRunID           string
-	LastRunChangedCount int64
-	LastRunFailedCount  int64
-	LastRunModuleCount  int64
-	LastRunAt           time.Time
+	Drift                convergence.DriftLevel
+	LastRunStatus        string
+	LastRunID            string
+	LastRunChangedCount  int64
+	LastRunFailedCount   int64
+	LastRunResourceCount int64
+	LastRunAt            time.Time
 	// RecentRuns holds the most-recent-first trailing run history used to
 	// compute ConvergenceStatus. Bounded to [MaxRecentRuns] entries so
 	// drift detection (changed/diverged) has enough signal without
@@ -1326,14 +1326,14 @@ func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount, 
 	ts.LastRunStatus = runStatus
 	ts.LastRunChangedCount = changedCount
 	ts.LastRunFailedCount = failedCount
-	ts.LastRunModuleCount = moduleCount
+	ts.LastRunResourceCount = moduleCount
 	ts.LastRunAt = runAt
 	newRuns := make([]convergence.RunInfo, 0, MaxRecentRuns)
 	newRuns = append(newRuns, convergence.RunInfo{
-		Status:       runStatus,
-		ChangedCount: changedCount,
-		FailedCount:  failedCount,
-		ConfigcrateCount:  moduleCount,
+		Status:        runStatus,
+		ChangedCount:  changedCount,
+		FailedCount:   failedCount,
+		ResourceCount: moduleCount,
 	})
 	for i := 0; i < len(ts.RecentRuns) && len(newRuns) < MaxRecentRuns; i++ {
 		newRuns = append(newRuns, ts.RecentRuns[i])

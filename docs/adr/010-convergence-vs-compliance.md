@@ -1,7 +1,8 @@
 # ADR-010: Convergence vs compliance terminology
 
 **Status:** Accepted  
-**Date:** 2025-06-01 (retroactive)
+**Date:** 2025-06-01 (retroactive)  
+**Updated 2026-06-06:** terminology refresh — convergence is counted **per resource** (the run counts are over per-resource results, one per resource; Degraded↔Failed is `FailedCount/ResourceCount`). The convergence-vs-compliance distinction is unchanged; only the convergence granularity wording below is clarified (0.74.x `configcrate_count`→`resource_count` rename). Compliance stays configcrate/control-level.
 
 ## Context
 
@@ -11,7 +12,7 @@ Vigo tracks two distinct aspects of node health: whether the agent has successfu
 
 Convergence and compliance are formally distinct terms with separate code paths, database tables, and UI pages. They must never be crossed.
 
-- **Convergence** — configcrate convergence. Whether an envoy's assigned configcrates have been applied successfully. Failure axis: converged, degraded, failed, no data; drift axis: changed, diverged. "Degraded" means some configcrates failed but not all (partial run). Package: `server/convergence/`. Table: `convergence_history`.
+- **Convergence** — whether an envoy's assigned configcrates have been applied successfully, **counted per resource** (run results are one per resource). Failure axis: converged, degraded, failed, no data; drift axis: changed, diverged. "Degraded" means some resources failed but not all (partial run). Package: `server/convergence/`. Table: `convergence_history`.
 - **Compliance** — standards compliance. Whether an envoy's configcrates satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, etc.). Measured as coverage percentage per framework. Package: `server/config/` (ComplianceIndex).
 
 ## Consequences

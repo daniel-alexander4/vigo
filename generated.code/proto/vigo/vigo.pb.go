@@ -1557,7 +1557,7 @@ type ReportResultRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	EnvoyId       string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	Results       []*ConfigcrateResult   `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
+	Results       []*ResourceRunResult   `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	Signature     []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Traceparent   string                 `protobuf:"bytes,6,opt,name=traceparent,proto3" json:"traceparent,omitempty"` // W3C traceparent (ADR-028)
@@ -1609,7 +1609,7 @@ func (x *ReportResultRequest) GetEnvoyId() string {
 	return ""
 }
 
-func (x *ReportResultRequest) GetResults() []*ConfigcrateResult {
+func (x *ReportResultRequest) GetResults() []*ResourceRunResult {
 	if x != nil {
 		return x.Results
 	}
@@ -1637,7 +1637,7 @@ func (x *ReportResultRequest) GetTraceparent() string {
 	return ""
 }
 
-type ConfigcrateResult struct {
+type ResourceRunResult struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ConfigcrateName string                 `protobuf:"bytes,1,opt,name=configcrate_name,json=configcrateName,proto3" json:"configcrate_name,omitempty"`
 	ResourceType    string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
@@ -1653,20 +1653,20 @@ type ConfigcrateResult struct {
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *ConfigcrateResult) Reset() {
-	*x = ConfigcrateResult{}
+func (x *ResourceRunResult) Reset() {
+	*x = ResourceRunResult{}
 	mi := &file_vigo_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ConfigcrateResult) String() string {
+func (x *ResourceRunResult) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ConfigcrateResult) ProtoMessage() {}
+func (*ResourceRunResult) ProtoMessage() {}
 
-func (x *ConfigcrateResult) ProtoReflect() protoreflect.Message {
+func (x *ResourceRunResult) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1678,75 +1678,75 @@ func (x *ConfigcrateResult) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ConfigcrateResult.ProtoReflect.Descriptor instead.
-func (*ConfigcrateResult) Descriptor() ([]byte, []int) {
+// Deprecated: Use ResourceRunResult.ProtoReflect.Descriptor instead.
+func (*ResourceRunResult) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ConfigcrateResult) GetConfigcrateName() string {
+func (x *ResourceRunResult) GetConfigcrateName() string {
 	if x != nil {
 		return x.ConfigcrateName
 	}
 	return ""
 }
 
-func (x *ConfigcrateResult) GetResourceType() string {
+func (x *ResourceRunResult) GetResourceType() string {
 	if x != nil {
 		return x.ResourceType
 	}
 	return ""
 }
 
-func (x *ConfigcrateResult) GetResourceName() string {
+func (x *ResourceRunResult) GetResourceName() string {
 	if x != nil {
 		return x.ResourceName
 	}
 	return ""
 }
 
-func (x *ConfigcrateResult) GetActionTaken() string {
+func (x *ResourceRunResult) GetActionTaken() string {
 	if x != nil {
 		return x.ActionTaken
 	}
 	return ""
 }
 
-func (x *ConfigcrateResult) GetChanged() bool {
+func (x *ResourceRunResult) GetChanged() bool {
 	if x != nil {
 		return x.Changed
 	}
 	return false
 }
 
-func (x *ConfigcrateResult) GetErrorMessage() string {
+func (x *ResourceRunResult) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
 	}
 	return ""
 }
 
-func (x *ConfigcrateResult) GetDurationMs() int32 {
+func (x *ResourceRunResult) GetDurationMs() int32 {
 	if x != nil {
 		return x.DurationMs
 	}
 	return 0
 }
 
-func (x *ConfigcrateResult) GetPreviousContent() []byte {
+func (x *ResourceRunResult) GetPreviousContent() []byte {
 	if x != nil {
 		return x.PreviousContent
 	}
 	return nil
 }
 
-func (x *ConfigcrateResult) GetContentHash() string {
+func (x *ResourceRunResult) GetContentHash() string {
 	if x != nil {
 		return x.ContentHash
 	}
 	return ""
 }
 
-func (x *ConfigcrateResult) GetFilePath() string {
+func (x *ResourceRunResult) GetFilePath() string {
 	if x != nil {
 		return x.FilePath
 	}
@@ -2607,7 +2607,7 @@ type RunCompleted struct {
 	ChangedCount  int32                  `protobuf:"varint,4,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
 	FailedCount   int32                  `protobuf:"varint,5,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
 	SkippedCount  int32                  `protobuf:"varint,6,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
-	Results       []*ConfigcrateResult   `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // only changed/failed (no-ops omitted)
+	Results       []*ResourceRunResult   `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // only changed/failed (no-ops omitted)
 	BundleVersion uint64                 `protobuf:"varint,8,opt,name=bundle_version,json=bundleVersion,proto3" json:"bundle_version,omitempty"` // policy bundle version used for this run
 	Traceparent   string                 `protobuf:"bytes,9,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                           // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
@@ -2686,7 +2686,7 @@ func (x *RunCompleted) GetSkippedCount() int32 {
 	return 0
 }
 
-func (x *RunCompleted) GetResults() []*ConfigcrateResult {
+func (x *RunCompleted) GetResults() []*ResourceRunResult {
 	if x != nil {
 		return x.Results
 	}
@@ -4477,18 +4477,18 @@ func (x *ListRunsResponse) GetRuns() []*Run {
 }
 
 type Run struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	EnvoyId          string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	StartedAt        *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
-	Status           string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // running, success, failure, partial
-	ConfigcrateCount int32                  `protobuf:"varint,6,opt,name=configcrate_count,json=configcrateCount,proto3" json:"configcrate_count,omitempty"`
-	ChangedCount     int32                  `protobuf:"varint,7,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
-	FailedCount      int32                  `protobuf:"varint,8,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
-	SkippedCount     int32                  `protobuf:"varint,9,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	EnvoyId       string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // running, success, failure, partial
+	ResourceCount int32                  `protobuf:"varint,6,opt,name=resource_count,json=resourceCount,proto3" json:"resource_count,omitempty"`
+	ChangedCount  int32                  `protobuf:"varint,7,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
+	FailedCount   int32                  `protobuf:"varint,8,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
+	SkippedCount  int32                  `protobuf:"varint,9,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Run) Reset() {
@@ -4556,9 +4556,9 @@ func (x *Run) GetStatus() string {
 	return ""
 }
 
-func (x *Run) GetConfigcrateCount() int32 {
+func (x *Run) GetResourceCount() int32 {
 	if x != nil {
-		return x.ConfigcrateCount
+		return x.ResourceCount
 	}
 	return 0
 }
@@ -4631,7 +4631,7 @@ func (x *GetRunRequest) GetId() string {
 type GetRunResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Run           *Run                   `protobuf:"bytes,1,opt,name=run,proto3" json:"run,omitempty"`
-	Results       []*ConfigcrateResult   `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"`
+	Results       []*ResourceRunResult   `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4673,7 +4673,7 @@ func (x *GetRunResponse) GetRun() *Run {
 	return nil
 }
 
-func (x *GetRunResponse) GetResults() []*ConfigcrateResult {
+func (x *GetRunResponse) GetResults() []*ResourceRunResult {
 	if x != nil {
 		return x.Results
 	}
@@ -7780,11 +7780,11 @@ const file_vigo_proto_rawDesc = "" +
 	"\x13ReportResultRequest\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x19\n" +
 	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x124\n" +
-	"\aresults\x18\x03 \x03(\v2\x1a.vigo.v1.ConfigcrateResultR\aresults\x12\x1c\n" +
+	"\aresults\x18\x03 \x03(\v2\x1a.vigo.v1.ResourceRunResultR\aresults\x12\x1c\n" +
 	"\tsignature\x18\x04 \x01(\fR\tsignature\x128\n" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12 \n" +
 	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\"\xf6\x02\n" +
-	"\x11ConfigcrateResult\x12)\n" +
+	"\x11ResourceRunResult\x12)\n" +
 	"\x10configcrate_name\x18\x01 \x01(\tR\x0fconfigcrateName\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12#\n" +
 	"\rresource_name\x18\x03 \x01(\tR\fresourceName\x12!\n" +
@@ -7859,7 +7859,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\rchanged_count\x18\x04 \x01(\x05R\fchangedCount\x12!\n" +
 	"\ffailed_count\x18\x05 \x01(\x05R\vfailedCount\x12#\n" +
 	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x124\n" +
-	"\aresults\x18\a \x03(\v2\x1a.vigo.v1.ConfigcrateResultR\aresults\x12%\n" +
+	"\aresults\x18\a \x03(\v2\x1a.vigo.v1.ResourceRunResultR\aresults\x12%\n" +
 	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\x12 \n" +
 	"\vtraceparent\x18\t \x01(\tR\vtraceparent\"\xa0\x01\n" +
 	"\vTraitsDelta\x12;\n" +
@@ -7984,7 +7984,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"4\n" +
 	"\x10ListRunsResponse\x12 \n" +
-	"\x04runs\x18\x01 \x03(\v2\f.vigo.v1.RunR\x04runs\"\xda\x02\n" +
+	"\x04runs\x18\x01 \x03(\v2\f.vigo.v1.RunR\x04runs\"\xd4\x02\n" +
 	"\x03Run\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x129\n" +
@@ -7992,8 +7992,8 @@ const file_vigo_proto_rawDesc = "" +
 	"started_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x12\x16\n" +
-	"\x06status\x18\x05 \x01(\tR\x06status\x12+\n" +
-	"\x11configcrate_count\x18\x06 \x01(\x05R\x10configcrateCount\x12#\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12%\n" +
+	"\x0eresource_count\x18\x06 \x01(\x05R\rresourceCount\x12#\n" +
 	"\rchanged_count\x18\a \x01(\x05R\fchangedCount\x12!\n" +
 	"\ffailed_count\x18\b \x01(\x05R\vfailedCount\x12#\n" +
 	"\rskipped_count\x18\t \x01(\x05R\fskippedCount\"\x1f\n" +
@@ -8001,7 +8001,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"f\n" +
 	"\x0eGetRunResponse\x12\x1e\n" +
 	"\x03run\x18\x01 \x01(\v2\f.vigo.v1.RunR\x03run\x124\n" +
-	"\aresults\x18\x02 \x03(\v2\x1a.vigo.v1.ConfigcrateResultR\aresults\"\x16\n" +
+	"\aresults\x18\x02 \x03(\v2\x1a.vigo.v1.ResourceRunResultR\aresults\"\x16\n" +
 	"\x14GenerateTokenRequest\"-\n" +
 	"\x15GenerateTokenResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"U\n" +
@@ -8274,7 +8274,7 @@ var file_vigo_proto_goTypes = []any{
 	(*PolicyConfigcrate)(nil),             // 13: vigo.v1.PolicyConfigcrate
 	(*PolicyResource)(nil),                // 14: vigo.v1.PolicyResource
 	(*ReportResultRequest)(nil),           // 15: vigo.v1.ReportResultRequest
-	(*ConfigcrateResult)(nil),             // 16: vigo.v1.ConfigcrateResult
+	(*ResourceRunResult)(nil),             // 16: vigo.v1.ResourceRunResult
 	(*ReportResultResponse)(nil),          // 17: vigo.v1.ReportResultResponse
 	(*ReportTraitsRequest)(nil),           // 18: vigo.v1.ReportTraitsRequest
 	(*ReportTraitsResponse)(nil),          // 19: vigo.v1.ReportTraitsResponse
@@ -8395,7 +8395,7 @@ var file_vigo_proto_depIdxs = []int32{
 	7,   // 13: vigo.v1.PolicyBundle.custom_traits:type_name -> vigo.v1.CustomTraitEntry
 	14,  // 14: vigo.v1.PolicyConfigcrate.resources:type_name -> vigo.v1.PolicyResource
 	114, // 15: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
-	16,  // 16: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ConfigcrateResult
+	16,  // 16: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ResourceRunResult
 	118, // 17: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
 	118, // 18: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	2,   // 19: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
@@ -8419,7 +8419,7 @@ var file_vigo_proto_depIdxs = []int32{
 	27,  // 37: vigo.v1.DeltaEvent.run:type_name -> vigo.v1.RunCompleted
 	28,  // 38: vigo.v1.DeltaEvent.traits:type_name -> vigo.v1.TraitsDelta
 	29,  // 39: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
-	16,  // 40: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ConfigcrateResult
+	16,  // 40: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ResourceRunResult
 	115, // 41: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
 	116, // 42: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
 	118, // 43: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
@@ -8435,7 +8435,7 @@ var file_vigo_proto_depIdxs = []int32{
 	118, // 53: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
 	118, // 54: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
 	60,  // 55: vigo.v1.GetRunResponse.run:type_name -> vigo.v1.Run
-	16,  // 56: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ConfigcrateResult
+	16,  // 56: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ResourceRunResult
 	71,  // 57: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
 	71,  // 58: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
 	118, // 59: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp

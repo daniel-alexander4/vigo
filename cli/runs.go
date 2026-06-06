@@ -74,24 +74,24 @@ var runsShowCmd = &cobra.Command{
 		client := newAPIClient()
 		var resp struct {
 			Run struct {
-				ID           string `json:"id"`
-				EnvoyID      string `json:"envoyId"`
-				StartedAt    string `json:"startedAt"`
-				FinishedAt   string `json:"finishedAt"`
-				Status       string `json:"status"`
-				ConfigcrateCount  int32  `json:"moduleCount"`
-				ChangedCount int32  `json:"changedCount"`
-				FailedCount  int32  `json:"failedCount"`
-				SkippedCount int32  `json:"skippedCount"`
+				ID            string `json:"id"`
+				EnvoyID       string `json:"envoyId"`
+				StartedAt     string `json:"startedAt"`
+				FinishedAt    string `json:"finishedAt"`
+				Status        string `json:"status"`
+				ResourceCount int32  `json:"moduleCount"`
+				ChangedCount  int32  `json:"changedCount"`
+				FailedCount   int32  `json:"failedCount"`
+				SkippedCount  int32  `json:"skippedCount"`
 			} `json:"run"`
 			Results []struct {
-				ConfigcrateName   string `json:"moduleName"`
-				ResourceType string `json:"resourceType"`
-				ResourceName string `json:"resourceName"`
-				ActionTaken  string `json:"actionTaken"`
-				Changed      bool   `json:"changed"`
-				ErrorMessage string `json:"errorMessage"`
-				DurationMs   int32  `json:"durationMs"`
+				ConfigcrateName string `json:"moduleName"`
+				ResourceType    string `json:"resourceType"`
+				ResourceName    string `json:"resourceName"`
+				ActionTaken     string `json:"actionTaken"`
+				Changed         bool   `json:"changed"`
+				ErrorMessage    string `json:"errorMessage"`
+				DurationMs      int32  `json:"durationMs"`
 			} `json:"results"`
 		}
 		if err := client.get("/api/v1/runs/"+args[0], &resp); err != nil {
@@ -105,7 +105,7 @@ var runsShowCmd = &cobra.Command{
 		fmt.Printf("Finished: %s\n", formatTimestamp(r.FinishedAt))
 		fmt.Printf("Status:   %s\n", colorStatus(r.Status))
 		fmt.Printf("Configcrates:  %d total, %s changed, %s failed, %s skipped\n",
-			r.ConfigcrateCount, yellow(fmt.Sprintf("%d", r.ChangedCount)), red(fmt.Sprintf("%d", r.FailedCount)), dim(fmt.Sprintf("%d", r.SkippedCount)))
+			r.ResourceCount, yellow(fmt.Sprintf("%d", r.ChangedCount)), red(fmt.Sprintf("%d", r.FailedCount)), dim(fmt.Sprintf("%d", r.SkippedCount)))
 
 		if len(resp.Results) > 0 {
 			fmt.Println()
@@ -204,12 +204,12 @@ var runsDriftCmd = &cobra.Command{
 					Status    string `json:"status"`
 				} `json:"run"`
 				Results []struct {
-					ConfigcrateName   string `json:"moduleName"`
-					ResourceType string `json:"resourceType"`
-					ResourceName string `json:"resourceName"`
-					ActionTaken  string `json:"actionTaken"`
-					Changed      bool   `json:"changed"`
-					ErrorMessage string `json:"errorMessage"`
+					ConfigcrateName string `json:"moduleName"`
+					ResourceType    string `json:"resourceType"`
+					ResourceName    string `json:"resourceName"`
+					ActionTaken     string `json:"actionTaken"`
+					Changed         bool   `json:"changed"`
+					ErrorMessage    string `json:"errorMessage"`
 				} `json:"results"`
 			}
 			if err := client.get("/api/v1/runs/"+run.ID, &showResp); err != nil {

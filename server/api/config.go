@@ -551,10 +551,10 @@ type retractConfigcrateInput struct {
 type retractResponse struct {
 	Enabled bool                       `json:"enabled"`
 	Reason  string                     `json:"reason,omitempty"`
-	Results []retractConfigcrateResult `json:"results,omitempty"`
+	Results []retractResourceRunResult `json:"results,omitempty"`
 }
 
-type retractConfigcrateResult struct {
+type retractResourceRunResult struct {
 	Name        string                   `json:"name"`
 	RetractYAML string                   `json:"retract_yaml"`
 	Warnings    []publish.RetractWarning `json:"warnings"`
@@ -595,7 +595,7 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var results []retractConfigcrateResult
+	var results []retractResourceRunResult
 	moduleNames := make([]string, 0, len(req.Configcrates))
 	for _, mod := range req.Configcrates {
 		result := h.retractConfigcrate(r.Context(), mod)
@@ -612,8 +612,8 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *ConfigHandler) retractConfigcrate(ctx context.Context, mod retractConfigcrateInput) retractConfigcrateResult {
-	result := retractConfigcrateResult{Name: mod.Name}
+func (h *ConfigHandler) retractConfigcrate(ctx context.Context, mod retractConfigcrateInput) retractResourceRunResult {
+	result := retractResourceRunResult{Name: mod.Name}
 
 	// Step 1: Deterministic reversal.
 	draft, warnings, err := publish.GenerateRetractModule(mod.Name, []byte(mod.Content))

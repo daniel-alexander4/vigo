@@ -154,11 +154,11 @@ func (s *DBRunStore) LatestRunPerEnvoy(ctx context.Context, envoyIDs []string) (
 	for _, r := range rows {
 		if r.LatestRunStatus.Valid {
 			run := Run{
-				EnvoyID:      r.ID,
-				Status:       r.LatestRunStatus.String,
-				ChangedCount: r.LatestRunChangedCount.Int64,
-				FailedCount:  r.LatestRunFailedCount.Int64,
-				ConfigcrateCount:  r.LatestRunModuleCount.Int64,
+				EnvoyID:       r.ID,
+				Status:        r.LatestRunStatus.String,
+				ChangedCount:  r.LatestRunChangedCount.Int64,
+				FailedCount:   r.LatestRunFailedCount.Int64,
+				ResourceCount: r.LatestRunResourceCount.Int64,
 			}
 			result[r.ID] = &run
 		}

@@ -431,7 +431,7 @@ func (m *footprintMock) RunsData(s string) RunsPageData { return m.base.RunsData
 func (m *footprintMock) RunDetailData(id string) (RunDetailPageData, error) {
 	return m.base.RunDetailData(id)
 }
-func (m *footprintMock) EnvoyDriftLabel(id string) string  { return m.base.EnvoyDriftLabel(id) }
+func (m *footprintMock) EnvoyDriftLabel(id string) string            { return m.base.EnvoyDriftLabel(id) }
 func (m *footprintMock) ConfigData(h string) (ConfigPageData, error) { return m.base.ConfigData(h) }
 func (m *footprintMock) PlanDetailData(id string) (PlanDetailPageData, error) {
 	return m.base.PlanDetailData(id)
@@ -522,7 +522,7 @@ func TestRunsHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Table should have expected column headers
-	for _, col := range []string{"Run", "Hostname", "Status", "Configcrates"} {
+	for _, col := range []string{"Run", "Hostname", "Status", "Resources"} {
 		if !strings.Contains(body, col) {
 			t.Errorf("Runs page missing column header %q", col)
 		}
@@ -912,13 +912,13 @@ func (m *mockDataSource) DashboardData(baseInterval, offlineThreshold time.Durat
 	runs := make([]RunRow, 0, len(m.data.runs))
 	for _, r := range m.data.runs {
 		runs = append(runs, RunRow{
-			ID:           r.id.String(),
-			Hostname:     r.hostname,
-			StartedAt:    r.startedAt,
-			Status:       r.status,
-			ConfigcrateCount:  r.moduleCount,
-			ChangedCount: r.changedCount,
-			FailedCount:  r.failedCount,
+			ID:            r.id.String(),
+			Hostname:      r.hostname,
+			StartedAt:     r.startedAt,
+			Status:        r.status,
+			ResourceCount: r.moduleCount,
+			ChangedCount:  r.changedCount,
+			FailedCount:   r.failedCount,
 		})
 	}
 
@@ -1106,24 +1106,24 @@ func (m *mockDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, e
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
-					ConfigcrateName:   res.moduleName,
-					ResourceType: res.resourceType,
-					ResourceName: res.resourceName,
-					ActionTaken:  res.actionTaken,
-					Changed:      res.changed,
-					ErrorMessage: res.errorMessage,
-					DurationMs:   res.durationMs,
+					ConfigcrateName: res.moduleName,
+					ResourceType:    res.resourceType,
+					ResourceName:    res.resourceName,
+					ActionTaken:     res.actionTaken,
+					Changed:         res.changed,
+					ErrorMessage:    res.errorMessage,
+					DurationMs:      res.durationMs,
 				})
 			}
 			runs = append(runs, EnvoyDetailRunRow{
 				RunRow: RunRow{
-					ID:           r.id.String(),
-					Hostname:     r.hostname,
-					StartedAt:    r.startedAt,
-					Status:       r.status,
-					ConfigcrateCount:  r.moduleCount,
-					ChangedCount: r.changedCount,
-					FailedCount:  r.failedCount,
+					ID:            r.id.String(),
+					Hostname:      r.hostname,
+					StartedAt:     r.startedAt,
+					Status:        r.status,
+					ResourceCount: r.moduleCount,
+					ChangedCount:  r.changedCount,
+					FailedCount:   r.failedCount,
 				},
 				Results: results,
 			})
@@ -1152,13 +1152,13 @@ func (m *mockDataSource) RunsData(statusFilter string) RunsPageData {
 			continue
 		}
 		rows = append(rows, RunRow{
-			ID:           r.id.String(),
-			Hostname:     r.hostname,
-			StartedAt:    r.startedAt,
-			Status:       r.status,
-			ConfigcrateCount:  r.moduleCount,
-			ChangedCount: r.changedCount,
-			FailedCount:  r.failedCount,
+			ID:            r.id.String(),
+			Hostname:      r.hostname,
+			StartedAt:     r.startedAt,
+			Status:        r.status,
+			ResourceCount: r.moduleCount,
+			ChangedCount:  r.changedCount,
+			FailedCount:   r.failedCount,
 		})
 	}
 
@@ -1180,13 +1180,13 @@ func (m *mockDataSource) RunDetailData(runID string) (RunDetailPageData, error) 
 			var results []RunResultRow
 			for _, res := range r.results {
 				results = append(results, RunResultRow{
-					ConfigcrateName:   res.moduleName,
-					ResourceType: res.resourceType,
-					ResourceName: res.resourceName,
-					ActionTaken:  res.actionTaken,
-					Changed:      res.changed,
-					ErrorMessage: res.errorMessage,
-					DurationMs:   res.durationMs,
+					ConfigcrateName: res.moduleName,
+					ResourceType:    res.resourceType,
+					ResourceName:    res.resourceName,
+					ActionTaken:     res.actionTaken,
+					Changed:         res.changed,
+					ErrorMessage:    res.errorMessage,
+					DurationMs:      res.durationMs,
 				})
 			}
 			return RunDetailPageData{
@@ -1197,13 +1197,13 @@ func (m *mockDataSource) RunDetailData(runID string) (RunDetailPageData, error) 
 				},
 				EnvoyID: r.envoyID.String(),
 				Run: RunRow{
-					ID:           r.id.String(),
-					Hostname:     r.hostname,
-					StartedAt:    r.startedAt,
-					Status:       r.status,
-					ConfigcrateCount:  r.moduleCount,
-					ChangedCount: r.changedCount,
-					FailedCount:  r.failedCount,
+					ID:            r.id.String(),
+					Hostname:      r.hostname,
+					StartedAt:     r.startedAt,
+					Status:        r.status,
+					ResourceCount: r.moduleCount,
+					ChangedCount:  r.changedCount,
+					FailedCount:   r.failedCount,
 				},
 				Results: results,
 			}, nil
@@ -1244,11 +1244,11 @@ func (m *mockDataSource) PlanDetailData(planID string) (PlanDetailPageData, erro
 			for _, r := range p.results {
 				color := actionColor(r.plannedAction)
 				results = append(results, PlanResultRow{
-					ConfigcrateName:    r.moduleName,
-					ResourceType:  r.resourceType,
-					ResourceName:  r.resourceName,
-					PlannedAction: r.plannedAction,
-					ActionColor:   color,
+					ConfigcrateName: r.moduleName,
+					ResourceType:    r.resourceType,
+					ResourceName:    r.resourceName,
+					PlannedAction:   r.plannedAction,
+					ActionColor:     color,
 				})
 				switch r.plannedAction {
 				case "create":
@@ -1416,7 +1416,7 @@ func TestBuildDocsNavSkipsAssetOnlySubdirs(t *testing.T) {
 	mk("howto/operate/_index.md", "# Operate\n")
 	mk("howto/operate/set-up-monitoring.md", "# Monitoring\n")
 	mk("howto/grafana/vigo-overview.json", "{}\n") // asset-only: no .md
-	mk("howto/_pdf/install.pdf", "%PDF-1.4\n")      // asset-only: no .md
+	mk("howto/_pdf/install.pdf", "%PDF-1.4\n")     // asset-only: no .md
 
 	nav := buildDocsNav(docsDir)
 

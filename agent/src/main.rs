@@ -937,9 +937,9 @@ async fn run_once(
     // Report results back to server (only if connected).
     if !dry_run && !offline {
         if let Some(ref mut client) = maybe_client {
-            let proto_results: Vec<proto::ConfigcrateResult> = results
+            let proto_results: Vec<proto::ResourceRunResult> = results
                 .iter()
-                .map(|r| proto::ConfigcrateResult {
+                .map(|r| proto::ResourceRunResult {
                     configcrate_name: r.configcrate_name.clone(),
                     resource_type: r.resource_type.clone(),
                     resource_name: r.resource_name.clone(),

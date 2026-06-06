@@ -1087,13 +1087,13 @@ type FleetRow struct {
 	Status   string
 	// Drift mirrors EnvoyRow.Drift — drives the Diverged-row peach badge.
 	// DriftLabel is the precomputed string form so the template stays method-free.
-	Drift            convergence.DriftLevel
-	DriftLabel       string
-	LastRunID        string
-	FailurePct       float64
-	ChangedCount     int64
-	FailedCount      int64
-	ConfigcrateCount int64
+	Drift         convergence.DriftLevel
+	DriftLabel    string
+	LastRunID     string
+	FailurePct    float64
+	ChangedCount  int64
+	FailedCount   int64
+	ResourceCount int64
 	// HealthSeverity is the composite fleetpressure.EnvoyPressure.Health
 	// for this row — same SoT the /envoys "Agent Health" column and the
 	// /agent-health fleet page consume. Populated in datasource.go alongside
@@ -1116,11 +1116,11 @@ type RunRow struct {
 	// Trigger is what kicked off the run — "scheduled" (normal cycle)
 	// or "force-push" (operator-initiated). Lets the dashboard pick
 	// operator actions out of the scheduled heartbeat.
-	Trigger          string
-	ConfigcrateCount int64
-	ChangedCount     int64
-	FailedCount      int64
-	FailurePct       float64 // 0-100: failed_count / module_count * 100
+	Trigger       string
+	ResourceCount int64
+	ChangedCount  int64
+	FailedCount   int64
+	FailurePct    float64 // 0-100: failed_count / resource_count * 100
 	// Outcome is the per-run failure-axis bucket — "converged",
 	// "degraded", "failed", or "no data" — derived once at row build
 	// time via convergence.ComputeStatus so the dashboard can show the
@@ -1272,14 +1272,14 @@ type EnvoyRow struct {
 	// "changed" / "diverged") so the template never has to call a method on
 	// a typed int — `.DriftLabel` is a plain string field and reflection
 	// surprises are off the table.
-	Drift            convergence.DriftLevel
-	DriftLabel       string
-	FailurePct       float64 // 0-100: failed_count / module_count * 100
-	ConfigcrateCount int64
-	FailedCount      int64
-	ChangedCount     int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
-	Offline          bool
-	ObserveOnly      bool // observe-only mode: drift reporting only
+	Drift         convergence.DriftLevel
+	DriftLabel    string
+	FailurePct    float64 // 0-100: failed_count / resource_count * 100
+	ResourceCount int64
+	FailedCount   int64
+	ChangedCount  int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
+	Offline       bool
+	ObserveOnly   bool // observe-only mode: drift reporting only
 	// StaleThresholdLabel is the resolved per-envoy stale threshold
 	// (2.5× max(configured_interval, observed_cycle)) rendered in
 	// short form for tooltips. Empty when bootstrap (no observed
@@ -2566,8 +2566,8 @@ func (h *Handler) dashboardData() DashboardPageData {
 	data.RecentRuns = make([]RunRow, 0, len(allRuns))
 	for _, r := range allRuns {
 		var failPct float64
-		if r.ConfigcrateCount > 0 {
-			failPct = float64(r.FailedCount) / float64(r.ConfigcrateCount) * 100
+		if r.ResourceCount > 0 {
+			failPct = float64(r.FailedCount) / float64(r.ResourceCount) * 100
 		}
 		var finished time.Time
 		if r.FinishedAt.Valid {
@@ -2578,10 +2578,10 @@ func (h *Handler) dashboardData() DashboardPageData {
 			dur = FriendlyDurationLabel(finished.Sub(r.StartedAt))
 		}
 		outcome := convergence.ComputeStatus(convergence.RunInfo{
-			Status:           r.Status,
-			ChangedCount:     r.ChangedCount,
-			FailedCount:      r.FailedCount,
-			ConfigcrateCount: r.ConfigcrateCount,
+			Status:        r.Status,
+			ChangedCount:  r.ChangedCount,
+			FailedCount:   r.FailedCount,
+			ResourceCount: r.ResourceCount,
 		}).String()
 		data.RecentRuns = append(data.RecentRuns, RunRow{
 			ID:                   r.ID,
@@ -2591,7 +2591,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 			FinishedAt:           finished,
 			Status:               r.Status,
 			Trigger:              r.Trigger,
-			ConfigcrateCount:     r.ConfigcrateCount,
+			ResourceCount:        r.ResourceCount,
 			ChangedCount:         r.ChangedCount,
 			FailedCount:          r.FailedCount,
 			FailurePct:           failPct,
@@ -3761,16 +3761,16 @@ type EvidenceControlDoc struct {
 
 // EvidenceControlEnvoy is a single envoy's enforcement evidence for a control.
 type EvidenceControlEnvoy struct {
-	ID               string
-	Hostname         string
-	Module           string
-	Status           string
-	FailurePct       float64
-	FailedCount      int64
-	ConfigcrateCount int64
-	RunCount         int
-	FailureCount     int
-	LastRun          string
+	ID            string
+	Hostname      string
+	Module        string
+	Status        string
+	FailurePct    float64
+	FailedCount   int64
+	ResourceCount int64
+	RunCount      int
+	FailureCount  int
+	LastRun       string
 }
 
 // evidenceFrameworks returns the list of framework options for the dropdown.
@@ -4065,16 +4065,16 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 
 	// Get all envoys from fleet cache or fall back to DataSource.
 	type envoyInfo struct {
-		ID               string
-		Hostname         string
-		Status           string
-		FailurePct       float64
-		FailedCount      int64
-		ConfigcrateCount int64
+		ID            string
+		Hostname      string
+		Status        string
+		FailurePct    float64
+		FailedCount   int64
+		ResourceCount int64
 	}
 	var allEnvoys []envoyInfo
 	for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", "", "", "", "", "", "", "", 0, 0).Envoys {
-		allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ConfigcrateCount: e.ConfigcrateCount})
+		allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ResourceCount: e.ResourceCount})
 	}
 
 	for _, t := range allEnvoys {
@@ -4093,7 +4093,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 							status:      t.Status,
 							failurePct:  t.FailurePct,
 							failedCount: t.FailedCount,
-							moduleCount: t.ConfigcrateCount,
+							moduleCount: t.ResourceCount,
 						})
 					}
 				}
@@ -4104,13 +4104,13 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	var envoys []EvidenceControlEnvoy
 	for _, m := range matches {
 		envoys = append(envoys, EvidenceControlEnvoy{
-			ID:               m.envoyID,
-			Hostname:         m.hostname,
-			Module:           m.module,
-			Status:           m.status,
-			FailurePct:       m.failurePct,
-			FailedCount:      m.failedCount,
-			ConfigcrateCount: m.moduleCount,
+			ID:            m.envoyID,
+			Hostname:      m.hostname,
+			Module:        m.module,
+			Status:        m.status,
+			FailurePct:    m.failurePct,
+			FailedCount:   m.failedCount,
+			ResourceCount: m.moduleCount,
 		})
 	}
 

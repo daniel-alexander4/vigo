@@ -90,27 +90,27 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 		var dbResults []fleet.RunBatchResultParam
 		for _, r := range run.Results {
 			dbResults = append(dbResults, fleet.RunBatchResultParam{
-				ConfigcrateName:   r.GetConfigcrateName(),
-				ResourceType: r.GetResourceType(),
-				ResourceName: r.GetResourceName(),
-				ActionTaken:  r.GetActionTaken(),
-				Changed:      r.GetChanged(),
-				ErrorMessage: r.GetErrorMessage(),
-				DurationMs:   r.GetDurationMs(),
+				ConfigcrateName: r.GetConfigcrateName(),
+				ResourceType:    r.GetResourceType(),
+				ResourceName:    r.GetResourceName(),
+				ActionTaken:     r.GetActionTaken(),
+				Changed:         r.GetChanged(),
+				ErrorMessage:    r.GetErrorMessage(),
+				DurationMs:      r.GetDurationMs(),
 			})
 		}
 
 		s.runBatcher.Submit(fleet.RunBatchEntry{
-			RunID:        run.RunId,
-			EnvoyID:      envoyID,
-			Hostname:     hostname,
-			Status:       runStatus,
-			Trigger:      trigger,
-			ConfigcrateCount:  int64(run.TotalCount),
-			ChangedCount: changedCount,
-			FailedCount:  failedCount,
-			SkippedCount: skippedCount,
-			DBResults:    dbResults,
+			RunID:         run.RunId,
+			EnvoyID:       envoyID,
+			Hostname:      hostname,
+			Status:        runStatus,
+			Trigger:       trigger,
+			ResourceCount: int64(run.TotalCount),
+			ChangedCount:  changedCount,
+			FailedCount:   failedCount,
+			SkippedCount:  skippedCount,
+			DBResults:     dbResults,
 		})
 	}
 

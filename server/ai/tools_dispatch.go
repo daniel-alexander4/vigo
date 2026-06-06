@@ -215,25 +215,25 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 	}
 
 	type runInfo struct {
-		ID        string `json:"id"`
-		EnvoyID   string `json:"envoy_id"`
-		Status    string `json:"status"`
-		StartedAt string `json:"started_at"`
-		Changed   int64  `json:"changed"`
-		Failed    int64  `json:"failed"`
-		Configcrates   int64  `json:"configcrates"`
+		ID           string `json:"id"`
+		EnvoyID      string `json:"envoy_id"`
+		Status       string `json:"status"`
+		StartedAt    string `json:"started_at"`
+		Changed      int64  `json:"changed"`
+		Failed       int64  `json:"failed"`
+		Configcrates int64  `json:"configcrates"`
 	}
 
 	results := make([]runInfo, 0, len(runs))
 	for _, r := range runs {
 		results = append(results, runInfo{
-			ID:        r.ID,
-			EnvoyID:   r.EnvoyID,
-			Status:    r.Status,
-			StartedAt: r.StartedAt.Format(time.RFC3339),
-			Changed:   r.ChangedCount,
-			Failed:    r.FailedCount,
-			Configcrates:   r.ConfigcrateCount,
+			ID:           r.ID,
+			EnvoyID:      r.EnvoyID,
+			Status:       r.Status,
+			StartedAt:    r.StartedAt.Format(time.RFC3339),
+			Changed:      r.ChangedCount,
+			Failed:       r.FailedCount,
+			Configcrates: r.ResourceCount,
 		})
 	}
 
@@ -263,24 +263,24 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 	}
 
 	type resultInfo struct {
-		Configcrate     string `json:"configcrate"`
-		Type       string `json:"type"`
-		Name       string `json:"name"`
-		Action     string `json:"action"`
-		Changed    bool   `json:"changed"`
-		Error      string `json:"error,omitempty"`
-		DurationMs int64  `json:"duration_ms"`
+		Configcrate string `json:"configcrate"`
+		Type        string `json:"type"`
+		Name        string `json:"name"`
+		Action      string `json:"action"`
+		Changed     bool   `json:"changed"`
+		Error       string `json:"error,omitempty"`
+		DurationMs  int64  `json:"duration_ms"`
 	}
 
 	rr := make([]resultInfo, 0, len(results))
 	for _, r := range results {
 		ri := resultInfo{
-			Configcrate:     r.ConfigcrateName,
-			Type:       r.ResourceType,
-			Name:       r.ResourceName,
-			Action:     r.ActionTaken,
-			Changed:    r.Changed != 0,
-			DurationMs: r.DurationMs,
+			Configcrate: r.ConfigcrateName,
+			Type:        r.ResourceType,
+			Name:        r.ResourceName,
+			Action:      r.ActionTaken,
+			Changed:     r.Changed != 0,
+			DurationMs:  r.DurationMs,
 		}
 		if r.ErrorMessage.Valid {
 			ri.Error = r.ErrorMessage.String
@@ -289,15 +289,15 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 	}
 
 	return marshalResult(map[string]any{
-		"id":         run.ID,
-		"envoy_id":   run.EnvoyID,
-		"status":     run.Status,
-		"started_at": run.StartedAt.Format(time.RFC3339),
-		"configcrates":    run.ConfigcrateCount,
-		"changed":    run.ChangedCount,
-		"failed":     run.FailedCount,
-		"skipped":    run.SkippedCount,
-		"results":    rr,
+		"id":           run.ID,
+		"envoy_id":     run.EnvoyID,
+		"status":       run.Status,
+		"started_at":   run.StartedAt.Format(time.RFC3339),
+		"configcrates": run.ResourceCount,
+		"changed":      run.ChangedCount,
+		"failed":       run.FailedCount,
+		"skipped":      run.SkippedCount,
+		"results":      rr,
 	})
 }
 
@@ -320,7 +320,7 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[t.ID]; ok {
-			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ConfigcrateCount: run.ConfigcrateCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ResourceCount: run.ResourceCount}}
 		}
 		status := convergence.ComputeConvergence(recent)
 
@@ -357,7 +357,7 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 	for _, id := range ids {
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[id]; ok {
-			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ConfigcrateCount: run.ConfigcrateCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount, FailedCount: run.FailedCount, ResourceCount: run.ResourceCount}}
 		}
 		statuses = append(statuses, convergence.ComputeConvergence(recent))
 	}
@@ -547,7 +547,7 @@ func (d *toolDeps) listModules() (string, error) {
 	}
 	names := d.configStore.ListModuleNames()
 	return marshalResult(map[string]any{
-		"count":   len(names),
+		"count":        len(names),
 		"configcrates": names,
 	})
 }
@@ -575,9 +575,9 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 	cfg := d.configStore.Get(hostname)
 	if cfg == nil || len(cfg.Configcrates) == 0 {
 		return marshalResult(map[string]any{
-			"hostname": hostname,
-			"configcrates":  0,
-			"message":  "no config found for this envoy",
+			"hostname":     hostname,
+			"configcrates": 0,
+			"message":      "no config found for this envoy",
 		})
 	}
 
@@ -599,7 +599,7 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 	return marshalResult(map[string]any{
 		"hostname":        hostname,
 		"environment":     cfg.Environment,
-		"configcrates":         modules,
+		"configcrates":    modules,
 		"total_resources": countResources(cfg),
 	})
 }

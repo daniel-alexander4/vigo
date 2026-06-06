@@ -134,11 +134,11 @@ func checkInAndReport(cfg config, h *hostState, deltaMs uint32) error {
 // message is what the server classifies as a failed result → Degraded /
 // Failed). If the server returned no configcrates, a single fallback
 // result keyed on the planned configcrate keeps the run recordable.
-func buildResults(h *hostState, configcrates []*pb.Configcrate) []*pb.ConfigcrateResult {
-	var out []*pb.ConfigcrateResult
+func buildResults(h *hostState, configcrates []*pb.Configcrate) []*pb.ResourceRunResult {
+	var out []*pb.ResourceRunResult
 	for _, cc := range configcrates {
 		for _, r := range cc.GetResources() {
-			out = append(out, &pb.ConfigcrateResult{
+			out = append(out, &pb.ResourceRunResult{
 				ConfigcrateName: cc.GetName(),
 				ResourceType:    r.GetType(),
 				ResourceName:    r.GetName(),
@@ -149,7 +149,7 @@ func buildResults(h *hostState, configcrates []*pb.Configcrate) []*pb.Configcrat
 		}
 	}
 	if len(out) == 0 {
-		out = append(out, &pb.ConfigcrateResult{
+		out = append(out, &pb.ResourceRunResult{
 			ConfigcrateName: h.Configcrate,
 			ResourceType:    "exec",
 			ResourceName:    "synthetic-noop",

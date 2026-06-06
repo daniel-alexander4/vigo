@@ -122,7 +122,7 @@
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
             <td>{{if eq .Trigger "force-push"}}<span class="badge">force-push</span>{{else}}<span class="text-muted">scheduled</span>{{end}}</td>
             <td><span class="status-pill status-pill--{{statusColor .Outcome}}">{{.Outcome}}</span></td>
-            <td>{{if eq .ConfigcrateCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ConfigcrateCount}}">{{convergenceRatio .ChangedCount .FailedCount .ConfigcrateCount}}</span></a>{{end}}</td>
+            <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span></a>{{end}}</td>
             <td class="mono text-muted">{{if .TopFailedConfigcrate}}{{.TopFailedConfigcrate}}{{else}}-{{end}}</td>
             <td class="mono text-muted">{{if .DurationLabel}}{{.DurationLabel}}{{else}}-{{end}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>
@@ -155,12 +155,12 @@
                 <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}no agent-health traits reported yet{{end}}">{{severityLabel .HealthSeverity}}</span></a>
             </td>
             <td>
-                {{if eq .ConfigcrateCount 0}}
+                {{if eq .ResourceCount 0}}
                 <span class="badge badge--unknown" title="No run data yet">0/0/0</span>
                 {{else if .LastRunID}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ConfigcrateCount}}">{{convergenceRatio .ChangedCount .FailedCount .ConfigcrateCount}}</span></a>
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span></a>
                 {{else}}
-                <span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ConfigcrateCount}}">{{convergenceRatio .ChangedCount .FailedCount .ConfigcrateCount}}</span>
+                <span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span>
                 {{end}}
             </td>
         </tr>

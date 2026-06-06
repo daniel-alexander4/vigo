@@ -40,7 +40,7 @@ func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTi
 	}
 
 	_, err = sqlDB.Exec(
-		`INSERT INTO runs (id, envoy_id, status, configcrate_count) VALUES (?, ?, 'success', 2)`,
+		`INSERT INTO runs (id, envoy_id, status, resource_count) VALUES (?, ?, 'success', 2)`,
 		runID, envoyID,
 	)
 	if err != nil {

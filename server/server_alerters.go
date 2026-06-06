@@ -486,10 +486,10 @@ func (s *Server) complianceCheckTick(ctx context.Context, threshold int, wasBelo
 			continue // no run data → not converged
 		}
 		ri := convergence.RunInfo{
-			Status:           run.Status,
-			ChangedCount:     int64(run.ChangedCount),
-			FailedCount:      int64(run.FailedCount),
-			ConfigcrateCount: int64(run.ConfigcrateCount),
+			Status:        run.Status,
+			ChangedCount:  int64(run.ChangedCount),
+			FailedCount:   int64(run.FailedCount),
+			ResourceCount: int64(run.ResourceCount),
 		}
 		if convergence.ComputeStatus(ri) == convergence.StatusConverged {
 			compliantCount++
