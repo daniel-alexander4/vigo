@@ -160,6 +160,14 @@ func benchIngest(b *testing.B, seedBlobs, held int) {
 					pt.MarkEvicted(envoyID, rh)
 				}
 			}
+			// Mirror ingestSwarmSeeds' seeder path: a supersede FindSeedByLabel
+			// per reported seed + one SeedsForEnvoy unseed-detection call. Both
+			// were O(all-seeds) under RLock (FindSeedByLabel N× per check-in);
+			// the seedsByLabel/seedsByEnvoy indexes make them O(held)/O(1).
+			for _, h := range myBlobs {
+				_ = pt.FindSeedByLabel(h[:8])
+			}
+			_ = pt.SeedsForEnvoy(envoyID)
 		}
 	})
 	b.StopTimer()

@@ -215,6 +215,78 @@ func TestPeerTracker_SeedsForEnvoy(t *testing.T) {
 	}
 }
 
+// TestPeerTracker_SeedIndexInvariants exercises the seedsByEnvoy/seedsByLabel
+// indexes across the full seed lifecycle — revoke, re-activation under a
+// changed seeder+label, and remove — asserting stale keys never linger.
+func TestPeerTracker_SeedIndexInvariants(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "abc123" + pad(58)
+
+	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "e1"})
+	if got := pt.SeedsForEnvoy("e1"); len(got) != 1 || got[0] != sha {
+		t.Fatalf("SeedsForEnvoy(e1) = %v, want [%s]", got, sha)
+	}
+
+	// Revoke drops it from both active indexes.
+	pt.RevokeSeed(sha)
+	if got := pt.SeedsForEnvoy("e1"); len(got) != 0 {
+		t.Errorf("SeedsForEnvoy(e1) after revoke = %v, want empty", got)
+	}
+	if got := pt.FindSeedByLabel("app.bin"); got != "" {
+		t.Errorf("FindSeedByLabel after revoke = %q, want empty", got)
+	}
+
+	// Re-activation under a DIFFERENT seeder + label: old keys must not resolve.
+	pt.RegisterSeed(sha, SeedState{Label: "renamed.bin", SeederID: "e2"})
+	if got := pt.SeedsForEnvoy("e1"); len(got) != 0 {
+		t.Errorf("old seeder e1 still resolves after reseed under e2: %v", got)
+	}
+	if got := pt.SeedsForEnvoy("e2"); len(got) != 1 || got[0] != sha {
+		t.Errorf("SeedsForEnvoy(e2) = %v, want [%s]", got, sha)
+	}
+	if got := pt.FindSeedByLabel("app.bin"); got != "" {
+		t.Errorf("old label app.bin still resolves: %q", got)
+	}
+	if got := pt.FindSeedByLabel("renamed.bin"); got != sha {
+		t.Errorf("FindSeedByLabel(renamed.bin) = %q, want %q", got, sha)
+	}
+
+	// Remove of an active seed clears both indexes.
+	pt.RemoveSeed(sha)
+	if got := pt.SeedsForEnvoy("e2"); len(got) != 0 {
+		t.Errorf("SeedsForEnvoy(e2) after remove = %v, want empty", got)
+	}
+	if got := pt.FindSeedByLabel("renamed.bin"); got != "" {
+		t.Errorf("FindSeedByLabel after remove = %q, want empty", got)
+	}
+}
+
+// TestPeerTracker_FindSeedByLabel_MultipleActive locks in the set shape: two
+// active seeds can transiently share a label, so the label index must hold both
+// — the label stays resolvable until the last one drops. A scalar map[label]sha
+// would lose the first on the second register and fail this.
+func TestPeerTracker_FindSeedByLabel_MultipleActive(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha1 := "aaaaaa" + pad(58)
+	sha2 := "bbbbbb" + pad(58)
+	pt.RegisterSeed(sha1, SeedState{Label: "dup", SeederID: "e1"})
+	pt.RegisterSeed(sha2, SeedState{Label: "dup", SeederID: "e2"})
+
+	got := pt.FindSeedByLabel("dup")
+	if got != sha1 && got != sha2 {
+		t.Fatalf("FindSeedByLabel(dup) = %q, want one of the two active shas", got)
+	}
+	// Revoke whichever was returned; the other must still resolve.
+	other := sha1
+	if got == sha1 {
+		other = sha2
+	}
+	pt.RevokeSeed(got)
+	if got2 := pt.FindSeedByLabel("dup"); got2 != other {
+		t.Errorf("after revoking one, FindSeedByLabel(dup) = %q, want %q", got2, other)
+	}
+}
+
 func TestMatchTarget(t *testing.T) {
 	tests := []struct {
 		name     string

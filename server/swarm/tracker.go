@@ -103,6 +103,22 @@ type PeerTracker struct {
 	// Any future code that flips a seed's Revoked must update this too.
 	revoked map[string]struct{}
 
+	// seedsByEnvoy (seederID → set of shas) and seedsByLabel (label → set of
+	// shas) index the *active* (non-revoked) seeds so SeedsForEnvoy and
+	// FindSeedByLabel — both called per check-in from ingestSwarmSeeds, the
+	// latter once per reported seed — return without scanning the whole seeds
+	// map. Invariant: an entry is present iff seeds[sha] exists, is the matching
+	// seeder/label, and is NOT revoked. Maintained at the four sites that change
+	// a seed's existence or Revoked state: RegisterSeed (new + re-activation
+	// branches add; update branch is a no-op — SeederID/Label unchanged),
+	// RevokeSeed (remove), RemoveSeed (remove). TouchDistributedAt mutates only
+	// DistributedAt, so it is index-neutral. Sets (not scalars) because two
+	// active seeds can transiently share a label across registration paths
+	// before the supersede revoke drains them. Any future code touching a seed's
+	// existence/Revoked/SeederID/Label must keep these in sync.
+	seedsByEnvoy map[string]map[string]struct{}
+	seedsByLabel map[string]map[string]struct{}
+
 	// brokenSeeds maps envoyID → list of broken seed files (refreshed each check-in).
 	brokenSeeds map[string][]BrokenSeed
 
@@ -129,6 +145,8 @@ func NewPeerTracker(staleThreshold time.Duration) *PeerTracker {
 		skipped:        make(map[string]map[string]string),
 		seeds:          make(map[string]SeedState),
 		revoked:        make(map[string]struct{}),
+		seedsByEnvoy:   make(map[string]map[string]struct{}),
+		seedsByLabel:   make(map[string]map[string]struct{}),
 		brokenSeeds:    make(map[string][]BrokenSeed),
 		staleThreshold: staleThreshold,
 	}
@@ -528,6 +546,7 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 			delete(t.revoked, sha256)
 			state.DistributedAt = time.Now()
 			t.seeds[sha256] = state
+			t.addSeedIndex(state.SeederID, state.Label, sha256)
 			return true
 		}
 		// Update mutable fields. DistributedAt is NOT updated here —
@@ -541,6 +560,7 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 		return false
 	}
 	t.seeds[sha256] = state
+	t.addSeedIndex(state.SeederID, state.Label, sha256)
 	return true
 }
 
@@ -557,6 +577,8 @@ func (t *PeerTracker) TouchDistributedAt(sha256 string) {
 	if seed, ok := t.seeds[sha256]; ok {
 		seed.DistributedAt = time.Now()
 		t.seeds[sha256] = seed
+		// Index-neutral: SeederID/Label/Revoked unchanged, so seedsByEnvoy /
+		// seedsByLabel need no update.
 	}
 }
 
@@ -692,10 +714,8 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 func (t *PeerTracker) FindSeedByLabel(label string) string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	for sha256, s := range t.seeds {
-		if !s.Revoked && s.Label == label {
-			return sha256
-		}
+	for sha256 := range t.seedsByLabel[label] {
+		return sha256 // any active seed with this label (the sole caller only tests presence)
 	}
 	return ""
 }
@@ -705,11 +725,13 @@ func (t *PeerTracker) FindSeedByLabel(label string) string {
 func (t *PeerTracker) SeedsForEnvoy(envoyID string) []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	var out []string
-	for sha256, s := range t.seeds {
-		if !s.Revoked && s.SeederID == envoyID {
-			out = append(out, sha256)
-		}
+	set := t.seedsByEnvoy[envoyID]
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for sha256 := range set {
+		out = append(out, sha256)
 	}
 	return out
 }
@@ -727,6 +749,7 @@ func (t *PeerTracker) RevokeSeed(sha256 string) {
 		s.RevokedAt = time.Now()
 		t.seeds[sha256] = s
 		t.revoked[sha256] = struct{}{}
+		t.removeSeedIndex(s.SeederID, s.Label, sha256)
 	}
 }
 
@@ -734,8 +757,42 @@ func (t *PeerTracker) RevokeSeed(sha256 string) {
 func (t *PeerTracker) RemoveSeed(sha256 string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if s, ok := t.seeds[sha256]; ok {
+		// Read before delete to drop the active-seed index entries (a no-op
+		// for an already-revoked seed, which RevokeSeed already removed).
+		t.removeSeedIndex(s.SeederID, s.Label, sha256)
+	}
 	delete(t.seeds, sha256)
 	delete(t.revoked, sha256)
+}
+
+// addSeedIndex / removeSeedIndex keep seedsByEnvoy + seedsByLabel in sync with
+// the active-seed set. Callers must hold the write lock. removeSeedIndex prunes
+// emptied inner maps so the indexes don't accumulate dead seeder/label keys.
+func (t *PeerTracker) addSeedIndex(seederID, label, sha256 string) {
+	if t.seedsByEnvoy[seederID] == nil {
+		t.seedsByEnvoy[seederID] = make(map[string]struct{})
+	}
+	t.seedsByEnvoy[seederID][sha256] = struct{}{}
+	if t.seedsByLabel[label] == nil {
+		t.seedsByLabel[label] = make(map[string]struct{})
+	}
+	t.seedsByLabel[label][sha256] = struct{}{}
+}
+
+func (t *PeerTracker) removeSeedIndex(seederID, label, sha256 string) {
+	if m := t.seedsByEnvoy[seederID]; m != nil {
+		delete(m, sha256)
+		if len(m) == 0 {
+			delete(t.seedsByEnvoy, seederID)
+		}
+	}
+	if m := t.seedsByLabel[label]; m != nil {
+		delete(m, sha256)
+		if len(m) == 0 {
+			delete(t.seedsByLabel, label)
+		}
+	}
 }
 
 // SetChunkSources records where an envoy downloaded its chunks from.
