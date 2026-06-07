@@ -14,7 +14,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 - [Monitoring Stack](monitoring-stack.md) -- Prometheus, node_exporter, and Grafana
 - [Database Cluster](database-cluster.md) -- PostgreSQL with `secret:` references
 - [Kubernetes Nodes](kubernetes-nodes.md) -- OS-level k8s node config with rolling drain-and-reboot workflow
-- [Brown Noise Generator](brownnoise.md) -- Docker container with PulseAudio passthrough using `exec` resources
+- [Brown Noise Generator](brownnoise.md) -- locally-built Docker image run via the `container:` resource, with PulseAudio passthrough
 - [Disk Hygiene](disk-hygiene.md) -- Prevent disk exhaustion with journal caps, tmp aging, package cache cleanup, and Docker pruning
 - [Multi-Cloud Configuration](multi-cloud.md) -- Cloud-aware configcrates using IMDS traits across AWS, GCP, and Azure
 
