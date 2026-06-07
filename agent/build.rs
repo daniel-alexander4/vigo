@@ -17,8 +17,7 @@
 // emits an operator-actionable error pointing at `make build-agent
 // SIGN_KEY=<path>`. Attackers can't trigger the sentinel path at
 // runtime because the pubkey is a compile-time const.
-const SENTINEL_PUBKEY: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
+const SENTINEL_PUBKEY: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Emit a file_descriptor_set alongside the generated Rust stubs so

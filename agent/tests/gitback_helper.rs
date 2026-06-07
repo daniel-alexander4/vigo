@@ -24,10 +24,10 @@ use std::time::Duration;
 use tempfile::TempDir;
 use tokio_util::sync::CancellationToken;
 
+use vigo::swarm::anchor::tokens::{issue_bootstrap, project_id_for};
 use vigo::swarm::gitback::project_state::{
     hex_id, DrScope, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
 };
-use vigo::swarm::anchor::tokens::{issue_bootstrap, project_id_for};
 
 fn git_available() -> bool {
     Command::new("git")
@@ -109,9 +109,8 @@ async fn helper_daemon_push_and_clone_roundtrip() {
     // is exclusively about the local push/clone transport.
     let cancel = CancellationToken::new();
     let daemon_cancel = cancel.clone();
-    let daemon = tokio::spawn(async move {
-        vigo::swarm::gitback::helper::run(daemon_cancel, None).await
-    });
+    let daemon =
+        tokio::spawn(async move { vigo::swarm::gitback::helper::run(daemon_cancel, None).await });
 
     // Bound the bind wait so a stuck listener fails fast.
     let bind_deadline = std::time::Instant::now() + Duration::from_secs(2);
@@ -293,6 +292,11 @@ async fn run_with_timeout(
         }),
     )
     .await
-    .unwrap_or_else(|_| panic!("{} timed out — AF_UNIX wakeup race regression?", label_owned));
+    .unwrap_or_else(|_| {
+        panic!(
+            "{} timed out — AF_UNIX wakeup race regression?",
+            label_owned
+        )
+    });
     join.expect("join")
 }

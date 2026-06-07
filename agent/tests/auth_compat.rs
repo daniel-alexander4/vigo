@@ -133,7 +133,11 @@ func main() {
     std::fs::write(&go_file, go_prog).unwrap();
 
     let output = Command::new("go")
-        .args(["run", go_file.to_str().unwrap(), dir.path().to_str().unwrap()])
+        .args([
+            "run",
+            go_file.to_str().unwrap(),
+            dir.path().to_str().unwrap(),
+        ])
         .output()
         .expect("go must be available for this test");
 

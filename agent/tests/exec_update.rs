@@ -296,8 +296,9 @@ mod exec_update {
                 let arg2 = CString::new(
                     "count=$(ls /proc/self/fd 2>/dev/null | wc -l); \
                      echo FD_COUNT=$count; \
-                     echo STARTUP_OK"
-                ).unwrap();
+                     echo STARTUP_OK",
+                )
+                .unwrap();
                 nix::unistd::execv(&sh, &[&arg0, &arg1, &arg2]).expect("execv");
                 unreachable!();
             }
@@ -355,7 +356,12 @@ mod exec_update {
             .write(true)
             .open(&path)
             .expect("open lock file");
-        let ret = unsafe { libc::flock(std::os::unix::io::AsRawFd::as_raw_fd(&lock_file), libc::LOCK_EX | libc::LOCK_NB) };
+        let ret = unsafe {
+            libc::flock(
+                std::os::unix::io::AsRawFd::as_raw_fd(&lock_file),
+                libc::LOCK_EX | libc::LOCK_NB,
+            )
+        };
         assert_eq!(ret, 0, "parent should acquire lock");
 
         let (capture_r, capture_w) = pipe_cloexec();
@@ -633,8 +639,9 @@ mod exec_update {
                         let arg1 = CString::new("-c").unwrap();
                         let arg2 = CString::new(
                             "echo TOKIO_EXEC_OK; \
-                             echo FD_COUNT=$(ls /proc/self/fd 2>/dev/null | wc -l)"
-                        ).unwrap();
+                             echo FD_COUNT=$(ls /proc/self/fd 2>/dev/null | wc -l)",
+                        )
+                        .unwrap();
                         nix::unistd::execv(&sh, &[&arg0, &arg1, &arg2]).expect("execv");
                         unreachable!();
                     }
@@ -652,7 +659,10 @@ mod exec_update {
         });
 
         let (output, status) = result;
-        assert_eq!(status, 0, "child should exit cleanly after exec from tokio context");
+        assert_eq!(
+            status, 0,
+            "child should exit cleanly after exec from tokio context"
+        );
         assert!(
             output.contains("TOKIO_EXEC_OK"),
             "exec from tokio multi-thread runtime should work — got: {:?}",
@@ -722,7 +732,10 @@ mod exec_update {
         });
 
         let (output, status) = result;
-        assert_eq!(status, 0, "agent should start after exec from tokio runtime");
+        assert_eq!(
+            status, 0,
+            "agent should start after exec from tokio runtime"
+        );
         let version = output.trim();
         assert!(
             !version.is_empty() && version.contains('.'),
@@ -739,7 +752,7 @@ mod exec_update {
     /// handlers from working.
     #[test]
     fn signal_mask_survives_execv() {
-        use nix::sys::signal::{SigSet, SigmaskHow, sigprocmask};
+        use nix::sys::signal::{sigprocmask, SigSet, SigmaskHow};
 
         let (capture_r, capture_w) = pipe();
 
@@ -748,8 +761,7 @@ mod exec_update {
                 // Block SIGUSR1 in the child before exec.
                 let mut set = SigSet::empty();
                 set.add(nix::sys::signal::Signal::SIGUSR1);
-                sigprocmask(SigmaskHow::SIG_BLOCK, Some(&set), None)
-                    .expect("block SIGUSR1");
+                sigprocmask(SigmaskHow::SIG_BLOCK, Some(&set), None).expect("block SIGUSR1");
 
                 unsafe { libc::close(capture_r) };
                 unsafe { libc::dup2(capture_w, libc::STDOUT_FILENO) };
@@ -769,8 +781,9 @@ mod exec_update {
                          echo SIGUSR1_BLOCKED; \
                      else \
                          echo SIGUSR1_CLEAR; \
-                     fi"
-                ).unwrap();
+                     fi",
+                )
+                .unwrap();
                 nix::unistd::execv(&sh, &[&arg0, &arg1, &arg2]).expect("execv");
                 unreachable!();
             }
@@ -810,9 +823,7 @@ mod exec_update {
                 let sh = CString::new("/bin/sh").unwrap();
                 let arg0 = CString::new("sh").unwrap();
                 let arg1 = CString::new("-c").unwrap();
-                let arg2 = CString::new(
-                    "echo ENV_MARKER=$VIGO_EXEC_TEST_MARKER"
-                ).unwrap();
+                let arg2 = CString::new("echo ENV_MARKER=$VIGO_EXEC_TEST_MARKER").unwrap();
                 nix::unistd::execv(&sh, &[&arg0, &arg1, &arg2]).expect("execv");
                 unreachable!();
             }
