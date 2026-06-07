@@ -19,19 +19,26 @@ func runCreate(cfg config) {
 		die("admin token required (pass --admin-token or make --admin-token-file readable)")
 	}
 
-	plan := buildHostPlan(cfg.count, cfg.brokenCount)
-	fmt.Printf("planned %d synthetic envoys across %d regions (%d broken)\n", len(plan), len(synthRegions), cfg.brokenCount)
+	plan := buildHostPlan(cfg.count, cfg.namedCount, cfg.brokenCount, cfg.changedCount)
+	named := 0
+	for _, h := range plan {
+		if !strings.HasPrefix(h.Hostname, "worker-") {
+			named++
+		}
+	}
+	fmt.Printf("planned %d envoys across %d regions (%d named, %d worker; %d failed, %d changed)\n",
+		len(plan), len(synthRegions), named, len(plan)-named, cfg.brokenCount, cfg.changedCount)
 
 	cleanupDirs, err := writeConfigTree(cfg.stacksDir, cfg.fleetDir, plan)
 	if err != nil {
 		die("write config tree: %v", err)
 	}
-	fmt.Printf("wrote synthetic config under:\n  %s\n", strings.Join(cleanupDirs, "\n  "))
+	fmt.Printf("wrote fleet config under:\n  %s\n", strings.Join(cleanupDirs, "\n  "))
 
 	if err := publishConfig(cfg); err != nil {
-		die("publish synthetic config: %v", err)
+		die("publish fleet config: %v", err)
 	}
-	fmt.Println("published synthetic config")
+	fmt.Println("published fleet config")
 
 	hosts := make([]hostState, len(plan))
 	var firstErr struct {
@@ -81,17 +88,19 @@ func runCreate(cfg config) {
 	}
 	fmt.Printf("enrolled %d envoys; manifest at %s\n", len(enrolled), cfg.statePath)
 
-	fmt.Println("running first freshness tick...")
+	fmt.Println("running first report pass (populates convergence)...")
 	runTick(cfg)
 
 	fmt.Printf(`
-synthetic fleet is up. To keep it fresh across reboots and server
-restarts, install + enable the timer (units in test/fakefleet/):
+synthetic fleet is enrolled. Start the daemon to drive check-ins (default 1s
+cadence, persistent connection per envoy):
 
-  sudo cp test/fakefleet/vigo-fakefleet.{service,timer} /etc/systemd/system/
+  sudo cp test/fakefleet/vigo.service /etc/systemd/system/
   sudo systemctl daemon-reload
-  sudo systemctl enable --now vigo-fakefleet.timer
+  sudo systemctl enable --now vigo.service
 
-Tear down with:  vigo-fakefleet backout   (then: systemctl disable --now vigo-fakefleet.timer)
+Or run it in the foreground:  sudo vigo run
+
+Tear down with:  vigo backout   (then: systemctl disable --now vigo.service)
 `)
 }

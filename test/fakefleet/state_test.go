@@ -21,17 +21,17 @@ func TestStateRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	traits := json.RawMessage(`{"os":"linux","synthetic":true}`)
+	traits := json.RawMessage(`{"os":"linux","cloud_provider":"aws"}`)
 	in := &fleetState{
 		Version:   stateVersion,
 		Count:     1,
 		StacksDir: "/srv/vigo/stacks",
 		Hosts: []hostState{{
 			hostPlan: hostPlan{
-				Hostname:    "web-00001.us-east-1a.aws.synthetic",
-				Configcrate: "synthetic-web",
+				Hostname:    "web-prod-use1a-001",
+				Configcrate: "web",
 				TraitsJSON:  traits,
-				Broken:      true,
+				Outcome:     "failed",
 			},
 			EnvoyID:    "abc-123",
 			SigningKey: []byte(priv),
@@ -63,7 +63,7 @@ func TestStateRoundTrip(t *testing.T) {
 		t.Fatalf("got %d hosts", len(out.Hosts))
 	}
 	h := out.Hosts[0]
-	if h.EnvoyID != "abc-123" || h.Hostname != in.Hosts[0].Hostname || !h.Broken {
+	if h.EnvoyID != "abc-123" || h.Hostname != in.Hosts[0].Hostname || h.Outcome != "failed" {
 		t.Errorf("scalar fields did not round-trip: %+v", h)
 	}
 	if !bytes.Equal(h.SigningKey, []byte(priv)) {

@@ -1,0 +1,33 @@
+# Synthetic demo fleet — long-running freshness daemon. Build the binary first:
+#   go build -o /usr/local/bin/vigo ./test/fakefleet
+# (Distinct from the real agent at /usr/local/sbin/vigo and its
+# vigo-envoy.service — this is the demo-fleet driver, not an agent.)
+#
+# Holds one persistent mTLS connection per envoy and checks each in on the
+# --cadence interval (default 1s); reports a convergence result every
+# --report-cadence (default 5m), fire-and-forget, so writes never stall
+# check-ins. Reads the root-only local-admin token and the identity
+# manifest itself.
+#
+# Install + run:
+#   sudo cp test/fakefleet/vigo.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now vigo.service
+[Unit]
+Description=Vigo synthetic demo fleet — freshness daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vigo run
+Restart=on-failure
+RestartSec=5s
+# One persistent connection (socket + fd) per envoy — raise well above the
+# fleet size so a 13k+ fleet doesn't exhaust the descriptor table.
+LimitNOFILE=131072
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

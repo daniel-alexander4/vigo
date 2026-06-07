@@ -69,56 +69,75 @@ func runTick(cfg config) {
 	// from under us (e.g. a DB wipe). Exit non-zero so the operator sees
 	// it; `create` re-establishes the fleet.
 	if n > 0 && int(gone.Load()) == n {
-		die("every synthetic envoy is gone server-side — run `create` to re-establish the fleet")
+		die("every envoy is gone server-side — run `create` to re-establish the fleet")
 	}
 }
 
-// checkInAndReport runs one envoy's CheckIn + ReportResult over a
-// short-lived mTLS connection. A NotFound from CheckIn (deleted row) is
-// returned verbatim so the caller can count it; all other errors mean a
-// missed beat that the next tick retries.
-func checkInAndReport(cfg config, h *hostState, deltaMs uint32) error {
+// dialAgent opens a persistent mTLS gRPC connection for one envoy and
+// returns it with a VigoAgent client. grpc.NewClient is lazy — the TLS
+// handshake happens on the first RPC — so a caller that holds the
+// connection across many ticks (the `run` daemon) pays the handshake once
+// and reuses it, exactly as a real agent does, and grpc transparently
+// reconnects with backoff if the server restarts.
+func dialAgent(cfg config, h *hostState) (*grpc.ClientConn, pb.VigoAgentClient, error) {
 	tlsCfg, err := tlsConfigFor(h.CertPEM, h.KeyPEM, h.CACertPEM)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	conn, err := grpc.NewClient(cfg.grpcAddr, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer conn.Close()
-	client := pb.NewVigoAgentClient(conn)
+	return conn, pb.NewVigoAgentClient(conn), nil
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+// checkInOnce fires one envoy's CheckIn over an existing client and
+// returns the response. A NotFound (deleted row) is returned verbatim so
+// the caller can count it; any other error is a missed beat the next tick
+// retries. deltaMs is reported as the check-in cycle so the server's
+// freshness predicate sizes the stale window correctly.
+//
+// policyVersion is the server's last-reported config version echoed back:
+// when it equals the server's current version the server returns
+// no_change=true with a simple int compare and SKIPS bundle construction
+// — the cheap steady-state path real agents use (the fingerprint is a
+// secondary Merkle short-circuit). Passing 0/"" forces a full bundle (the
+// first tick, and the one-shot `tick` command); doing that every second at
+// fleet scale is what melts the server, so the daemon caches and echoes
+// both the version and the fingerprint instead.
+func checkInOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string) (*pb.CheckInResponse, error) {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-
-	// Empty state_fingerprint forces a full bundle every tick, so the
-	// returned configcrates are always present to report against — which
-	// keeps the tick stateless (no fingerprint to persist).
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
 	checkInSig := signWith(h.signingKey(), []byte(ts))
-	resp, err := client.CheckIn(ctx, &pb.CheckInRequest{
+	return client.CheckIn(cctx, &pb.CheckInRequest{
 		EnvoyId:            h.EnvoyID,
-		StateFingerprint:   "",
+		PolicyVersion:      policyVersion,
+		PolicyMode:         true,
+		StateFingerprint:   fingerprint,
 		Signature:          checkInSig,
 		Timestamp:          timestamppb.New(now),
 		TraitsJson:         h.TraitsJSON,
-		AgentVersion:       "vigo-fakefleet",
+		AgentVersion:       agentVersion,
 		IpAddress:          h.IP,
 		LastCheckinDeltaMs: deltaMs,
 	})
-	if err != nil {
-		return err
-	}
+}
 
-	results := buildResults(h, resp.GetConfigcrates())
-
-	now = time.Now()
-	ts = strconv.FormatInt(now.Unix(), 10)
+// reportOnce fires one envoy's ReportResult — the convergence run — for
+// the given bundle over an existing client. Split from the check-in so
+// the daemon can run reports on a slower cadence than check-ins (a run
+// per envoy per second at fleet scale would bury the run store).
+func reportOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, configcrates []*pb.Configcrate) error {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	results := buildResults(h, configcrates)
+	now := time.Now()
+	ts := strconv.FormatInt(now.Unix(), 10)
 	runID := h.EnvoyID + "-" + ts
 	reportSig := signWith(h.signingKey(), append([]byte(runID), ts...))
-	_, err = client.ReportResult(ctx, &pb.ReportResultRequest{
+	_, err := client.ReportResult(cctx, &pb.ReportResultRequest{
 		RunId:     runID,
 		EnvoyId:   h.EnvoyID,
 		Results:   results,
@@ -128,12 +147,33 @@ func checkInAndReport(cfg config, h *hostState, deltaMs uint32) error {
 	return err
 }
 
-// buildResults turns the resolved bundle into per-resource outcomes:
-// everything settled-with-no-change for a healthy host, or one resource
-// carrying an error for a broken host (a non-blocked action + an error
-// message is what the server classifies as a failed result → Degraded /
-// Failed). If the server returned no configcrates, a single fallback
-// result keyed on the planned configcrate keeps the run recordable.
+// checkInAndReport runs one envoy's CheckIn + ReportResult over a fresh
+// short-lived connection — the one-shot `tick` path, where each envoy is
+// visited once and the process then exits. The daemon (`run`) instead
+// holds the connection open and decouples the two cadences.
+func checkInAndReport(cfg config, h *hostState, deltaMs uint32) error {
+	conn, client, err := dialAgent(cfg, h)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	resp, err := checkInOnce(context.Background(), client, h, deltaMs, 0, "")
+	if err != nil {
+		return err
+	}
+	return reportOnce(context.Background(), client, h, resp.GetConfigcrates())
+}
+
+// buildResults turns the resolved bundle into per-resource outcomes,
+// keyed on the host's planned Outcome:
+//   - "ok"      → everything settled, no change → Converged.
+//   - "changed" → one resource re-applied (action updated, changed) → the
+//     host converges but reports drift (Changed, then Diverged after
+//     enough consecutive ticks).
+//   - "failed"  → one resource errored on an attempted change → Failed.
+//
+// If the server returned no configcrates, a single fallback result keyed
+// on the planned configcrate keeps the run recordable.
 func buildResults(h *hostState, configcrates []*pb.Configcrate) []*pb.ResourceRunResult {
 	var out []*pb.ResourceRunResult
 	for _, cc := range configcrates {
@@ -158,8 +198,16 @@ func buildResults(h *hostState, configcrates []*pb.Configcrate) []*pb.ResourceRu
 			DurationMs:      3,
 		})
 	}
-	if h.Broken {
+	switch h.Outcome {
+	case "changed":
+		out[0].ActionTaken = "updated"
+		out[0].Changed = true
+		out[0].DurationMs = 42
+	case "failed":
+		out[0].ActionTaken = "updated"
+		out[0].Changed = true
 		out[0].ErrorMessage = "synthetic convergence failure (demo fleet)"
+		out[0].DurationMs = 55
 	}
 	return out
 }

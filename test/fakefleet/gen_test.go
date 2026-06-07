@@ -29,7 +29,7 @@ func TestWriteConfigTreeNestsUnderFleetDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cleanup, err := writeConfigTree(stacks, "alexander4", buildHostPlan(400, 3))
+	cleanup, err := writeConfigTree(stacks, "alexander4", buildHostPlan(400, 5, 3, 20))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,8 +38,8 @@ func TestWriteConfigTreeNestsUnderFleetDir(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(stacks, "alexander4", "aws", "us-east-1", "us-east-1a", "envoys.vgo")); err != nil {
 		t.Errorf("expected nested zone hostcrate: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(stacks, synthTLD)); !os.IsNotExist(err) {
-		t.Errorf("a top-level %s/ dir must not be created", synthTLD)
+	if _, err := os.Stat(filepath.Join(stacks, svcSubdir)); !os.IsNotExist(err) {
+		t.Errorf("a top-level %s/ dir must not be created", svcSubdir)
 	}
 	// The operator's real file is untouched.
 	if _, err := os.Stat(realFile); err != nil {
@@ -47,9 +47,9 @@ func TestWriteConfigTreeNestsUnderFleetDir(t *testing.T) {
 	}
 	// Cleanup dirs are exactly the harness-owned ones, never the fleet dir.
 	want := map[string]bool{
-		filepath.Join(stacks, "configcrates", synthTLD): true,
-		filepath.Join(stacks, "alexander4", "aws"):      true,
-		filepath.Join(stacks, "alexander4", "gcp"):      true,
+		filepath.Join(stacks, "configcrates", svcSubdir): true,
+		filepath.Join(stacks, "alexander4", "aws"):       true,
+		filepath.Join(stacks, "alexander4", "gcp"):       true,
 	}
 	if len(cleanup) != len(want) {
 		t.Fatalf("cleanup dirs = %v, want the 3 harness-owned dirs", cleanup)
@@ -106,7 +106,7 @@ func TestEnvironmentsFileLintClean(t *testing.T) {
 func TestEnvAxisCovered(t *testing.T) {
 	valid := map[string]bool{"prod": true, "stage": true, "test": true}
 	counts := map[string]int{}
-	for _, h := range buildHostPlan(13647, 7) {
+	for _, h := range buildHostPlan(13647, 100, 20, 500) {
 		if !valid[h.Env] {
 			t.Fatalf("host %q has invalid env %q", h.Hostname, h.Env)
 		}
@@ -119,41 +119,51 @@ func TestEnvAxisCovered(t *testing.T) {
 	}
 }
 
-// TestHostPlanCountAndBroken verifies the plan lands the exact requested
-// count and exactly the requested number of broken hosts, for both the
-// default fleet size and an arbitrary one (distribution must always sum).
-func TestHostPlanCountAndBroken(t *testing.T) {
-	for _, tc := range []struct{ count, broken int }{
-		{13647, 7},
-		{1000, 5},
-		{100, 0},
+// TestHostPlanOutcomes verifies the plan lands the exact requested count
+// and exactly the requested failed/changed split (rest settled), for both
+// the default fleet size and arbitrary ones (distribution must always sum).
+func TestHostPlanOutcomes(t *testing.T) {
+	for _, tc := range []struct{ count, named, failed, changed int }{
+		{13647, 100, 20, 500},
+		{1000, 50, 5, 30},
+		{100, 0, 0, 0},
 	} {
-		plan := buildHostPlan(tc.count, tc.broken)
+		plan := buildHostPlan(tc.count, tc.named, tc.failed, tc.changed)
 		if len(plan) != tc.count {
 			t.Errorf("count=%d: got %d hosts", tc.count, len(plan))
 		}
-		nb := 0
+		got := map[string]int{}
 		for _, h := range plan {
-			if h.Broken {
-				nb++
-			}
+			got[h.Outcome]++
 		}
-		if nb != tc.broken {
-			t.Errorf("count=%d: got %d broken, want %d", tc.count, nb, tc.broken)
+		if got["failed"] != tc.failed || got["changed"] != tc.changed {
+			t.Errorf("count=%d: outcomes %v, want failed=%d changed=%d", tc.count, got, tc.failed, tc.changed)
+		}
+		if got["ok"] != tc.count-tc.failed-tc.changed {
+			t.Errorf("count=%d: ok=%d, want %d", tc.count, got["ok"], tc.count-tc.failed-tc.changed)
 		}
 	}
 }
 
-// TestEveryHostnameIsSynthetic is the safety invariant: every generated
-// hostname carries the reserved suffix, every host maps to a real
-// configcrate, and hostnames are unique.
-func TestEveryHostnameIsSynthetic(t *testing.T) {
-	plan := buildHostPlan(13647, 7)
+// TestEveryHostnameLooksSynthetic is the safety invariant: every generated
+// hostname is bare (no domain), is positively identified by looksSynthetic
+// (so backout's fallback finds it), maps to a real configcrate, and is
+// unique. It also confirms the named/worker split lands the requested
+// count of realistic service hostnames.
+func TestEveryHostnameLooksSynthetic(t *testing.T) {
+	const named = 100
+	plan := buildHostPlan(13647, named, 20, 500)
 	seen := make(map[string]bool, len(plan))
-	suffix := "." + synthTLD
+	gotNamed := 0
 	for _, h := range plan {
-		if !strings.HasSuffix(h.Hostname, suffix) {
-			t.Fatalf("hostname %q lacks %q suffix", h.Hostname, suffix)
+		if strings.Contains(h.Hostname, ".") {
+			t.Fatalf("hostname %q is not bare (carries a domain)", h.Hostname)
+		}
+		if !looksSynthetic(h.Hostname) {
+			t.Fatalf("hostname %q is not identified by looksSynthetic", h.Hostname)
+		}
+		if !strings.HasPrefix(h.Hostname, "worker-") {
+			gotNamed++
 		}
 		if h.Configcrate == "" {
 			t.Fatalf("host %q has no configcrate", h.Hostname)
@@ -166,24 +176,66 @@ func TestEveryHostnameIsSynthetic(t *testing.T) {
 		}
 		seen[h.Hostname] = true
 	}
+	if gotNamed != named {
+		t.Errorf("got %d named (non-worker) hosts, want %d", gotNamed, named)
+	}
 }
 
-// TestEveryMatchPatternIsSyntheticScoped is the other half of the safety
-// invariant: no generated hostcrate pattern can match a real host,
-// because every one ends in the reserved suffix.
-func TestEveryMatchPatternIsSyntheticScoped(t *testing.T) {
-	want := "." + synthTLD + `"`
+// TestEveryMatchPatternIsZoneScoped is the other half of the safety
+// invariant: every generated hostcrate pattern is anchored to a single
+// zone (contains that zone's code) and ends in a trailing wildcard, so
+// first-match-wins stays unambiguous and no pattern can match a host in
+// another zone — or, post-rename, a real host (verified by TestLooksSynthetic).
+func TestEveryMatchPatternIsZoneScoped(t *testing.T) {
 	for _, r := range synthRegions {
 		for _, az := range r.azs {
+			zc := azCode(r, az)
 			for _, line := range strings.Split(renderZoneHostcrate(r, az), "\n") {
 				line = strings.TrimSpace(line)
 				if !strings.HasPrefix(line, "- match:") {
 					continue
 				}
-				if !strings.HasSuffix(line, want) {
-					t.Errorf("%s/%s/%s: match pattern not synthetic-scoped: %q", r.cloud, r.name, az, line)
+				if !strings.HasSuffix(line, `-*"`) {
+					t.Errorf("%s/%s/%s: pattern lacks trailing wildcard: %q", r.cloud, r.name, az, line)
+				}
+				if !strings.Contains(line, "-"+zc+"-") {
+					t.Errorf("%s/%s/%s: pattern not scoped to zone %q: %q", r.cloud, r.name, az, zc, line)
+				}
+				if strings.Contains(line, "synthetic") {
+					t.Errorf("%s/%s/%s: pattern still carries the synthetic marker: %q", r.cloud, r.name, az, line)
 				}
 			}
+		}
+	}
+}
+
+// TestLooksSynthetic confirms the backout fallback's positive identifier:
+// generated names match, the operator's real hosts never do (even when
+// bare), and arbitrary non-generated names don't.
+func TestLooksSynthetic(t *testing.T) {
+	synthetic := []string{
+		"web-prod-use1a-007",
+		"postgres-stage-usw2b-003",
+		"worker-redis-stage-usw2b-01337",
+		"worker-nginx-test-euw4a-00001",
+	}
+	for _, h := range synthetic {
+		if !looksSynthetic(h) {
+			t.Errorf("looksSynthetic(%q) = false, want true", h)
+		}
+	}
+	notSynthetic := []string{
+		"danlap", "annlap", "girlslaptop", "plex", "raspberrypi",
+		"annlap.lan", "PLEX.local", // real hosts, with/without domain + case
+		"vigosrv-host", "localhost", "db-server-01",
+		"web-prod-use1a", "worker-redis-stage-usw2b", // too few parts
+		"web-prod-use1a-x07",        // non-numeric tail
+		"web-prod-zzz9z-007",        // unknown zone
+		"frobnicate-prod-use1a-007", // unknown class
+	}
+	for _, h := range notSynthetic {
+		if looksSynthetic(h) {
+			t.Errorf("looksSynthetic(%q) = true, want false", h)
 		}
 	}
 }

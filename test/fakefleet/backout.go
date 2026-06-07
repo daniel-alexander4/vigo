@@ -10,14 +10,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // runBackout removes every trace of the synthetic fleet: deletes the
-// envoys (keyed on the reserved `.synthetic` suffix so it can never touch
-// a real one), wipes the two synthetic config dirs and republishes, and
-// removes the state manifest. Safe to run whether or not the timer is
-// still firing — a tick that races the delete just logs NotFound.
+// envoys (from the manifest's ids, or — if the manifest is lost — every
+// server-side envoy whose name has the generated shape, never a real or
+// vigosrv-self host; see looksSynthetic), wipes the two synthetic config
+// dirs and republishes, and removes the state manifest. Safe to run
+// whether or not the timer is still firing — a tick that races the
+// delete just logs NotFound.
 func runBackout(cfg config) {
 	if cfg.adminToken == "" {
 		die("admin token required (pass --admin-token or make --admin-token-file readable)")
@@ -33,18 +34,18 @@ func runBackout(cfg config) {
 			ids = append(ids, h.EnvoyID)
 		}
 		cleanupDirs = st.CleanupDirs
-		fmt.Printf("manifest lists %d synthetic envoys\n", len(ids))
+		fmt.Printf("manifest lists %d fleet envoys\n", len(ids))
 	} else {
-		fmt.Println("no manifest — listing the server and filtering by suffix")
+		fmt.Println("no manifest — listing the server and filtering by name shape")
 		ids, err = listSyntheticEnvoyIDs(cfg)
 		if err != nil {
 			die("list envoys: %v", err)
 		}
-		fmt.Printf("found %d *.%s envoys server-side\n", len(ids), synthTLD)
+		fmt.Printf("found %d generated-name envoys server-side\n", len(ids))
 		// Recompute the harness-owned dirs from the flags. These are the
 		// only dirs create ever writes — never the fleet dir itself.
 		cleanupDirs = []string{
-			filepath.Join(cfg.stacksDir, "configcrates", synthTLD),
+			filepath.Join(cfg.stacksDir, "configcrates", svcSubdir),
 			filepath.Join(cfg.stacksDir, cfg.fleetDir, "aws"),
 			filepath.Join(cfg.stacksDir, cfg.fleetDir, "gcp"),
 		}
@@ -75,11 +76,12 @@ func runBackout(cfg config) {
 	}
 	os.Remove(filepath.Dir(cfg.statePath)) // best-effort: drop the dir if now empty
 
-	fmt.Printf("\nbackout complete. If the timer is installed, stop it:\n  sudo systemctl disable --now vigo-fakefleet.timer\n")
+	fmt.Printf("\nbackout complete. If the daemon is installed, stop it:\n  sudo systemctl disable --now vigo.service\n")
 }
 
 // listSyntheticEnvoyIDs GETs /api/v1/envoys and returns the ids of every
-// envoy whose hostname carries the reserved suffix.
+// envoy whose hostname has the generated synthetic shape (looksSynthetic)
+// — the manifest-less fallback. Real and vigosrv-self hosts never match.
 func listSyntheticEnvoyIDs(cfg config) ([]string, error) {
 	req, _ := http.NewRequest("GET", cfg.apiAddr+"/api/v1/envoys", nil)
 	req.Header.Set("Authorization", "Bearer "+cfg.adminToken)
@@ -101,10 +103,9 @@ func listSyntheticEnvoyIDs(cfg config) ([]string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return nil, err
 	}
-	suffix := "." + synthTLD
 	var ids []string
 	for _, e := range payload.Envoys {
-		if strings.HasSuffix(e.Hostname, suffix) {
+		if looksSynthetic(e.Hostname) {
 			ids = append(ids, e.ID)
 		}
 	}
