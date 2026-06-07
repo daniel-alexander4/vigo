@@ -56,6 +56,7 @@ type config struct {
 	reportConcurrency int
 	ramp              time.Duration
 	limit             int
+	stream            bool
 	vigocliBin        string
 	fleetDir          string
 	httpClient        *http.Client
@@ -126,6 +127,7 @@ func parseFlags(cmd string, args []string) config {
 	reportConcurrency := fs.Int("report-concurrency", 256, "max in-flight ReportResult writes across the fleet (fire-and-forget; a backlog skips a report round rather than stalling check-ins)")
 	ramp := fs.Duration("ramp", time.Minute, "startup window the run daemon staggers first check-ins over (spreads the initial full-bundle builds so the server isn't stormed)")
 	limit := fs.Int("limit", 0, "if >0, the run daemon drives only the first N envoys (testing)")
+	stream := fs.Bool("stream", false, "run daemon holds a real bidi AgentStream per envoy (exercises vigo_streams_active / the per-stream connection-RSS ceiling, checkin.max_connections) instead of unary check-ins")
 	vigocliBin := fs.String("vigocli", "vigocli", "vigocli binary used to publish the fleet config (stacks → .live)")
 	fleetDir := fs.String("fleet-dir", "alexander4", "stacks subdir the demo clouds nest under (e.g. alexander4); the harness owns <fleet-dir>/{aws,gcp} and removes only those on backout")
 	fs.Parse(args)
@@ -153,6 +155,7 @@ func parseFlags(cmd string, args []string) config {
 		reportConcurrency: *reportConcurrency,
 		ramp:              *ramp,
 		limit:             *limit,
+		stream:            *stream,
 		vigocliBin:        *vigocliBin,
 		fleetDir:          *fleetDir,
 		httpClient: &http.Client{

@@ -111,6 +111,14 @@ daemon**:
   spread smoothly instead of bunching on the same instant.
 - One connection = one file descriptor per envoy, so the unit raises
   `LimitNOFILE`; a **manual** `run` needs `ulimit -n` above the fleet size.
+- By default `run` drives **unary** CheckIn/ReportResult over the held
+  connection — that loads the check-in/report rate but leaves
+  `vigo_streams_active` at zero (the server only counts *promoted bidi
+  AgentStreams*). Pass **`--stream`** to make each envoy open and hold a real
+  `AgentStream` instead: that is the only mode that exercises the per-stream
+  connection-RSS ceiling (`checkin.max_connections`, ~220 KB server RSS per
+  held stream) and drives `vigo_streams_active` up to the fleet size. Use the
+  default for check-in-rate load; use `--stream` for connection-ceiling load.
 - **Resume across interruptions** falls out for free: a **vigosrv restart**
   leaves the envoy rows in SQLite (they rehydrate at boot) and grpc
   transparently reconnects the persistent conns; a **host reboot**
@@ -143,6 +151,7 @@ the manifest. Stop the daemon first so a tick doesn't race the delete
 | `--changed` | `500` | how many report drift → Changed/Diverged (`create`) |
 | `--cadence` | `1s` | check-in interval, also reported as the check-in cycle (`run`/`tick`) |
 | `--report-cadence` | `1m` | how often the daemon reports a convergence run per envoy (`run`) |
+| `--stream` | `false` | `run` holds a real bidi `AgentStream` per envoy instead of unary check-ins — the only mode that drives `vigo_streams_active` and the per-stream connection-RSS ceiling (`checkin.max_connections`) |
 | `--concurrency` | `64` | max in-flight enroll/checkin operations |
 | `--server` | `127.0.0.1:1530` | gRPC address |
 | `--api` | `https://127.0.0.1:8443` | REST API base |

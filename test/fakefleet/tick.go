@@ -105,45 +105,57 @@ func dialAgent(cfg config, h *hostState) (*grpc.ClientConn, pb.VigoAgentClient, 
 // first tick, and the one-shot `tick` command); doing that every second at
 // fleet scale is what melts the server, so the daemon caches and echoes
 // both the version and the fingerprint instead.
-func checkInOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string) (*pb.CheckInResponse, error) {
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+// buildCheckInReq assembles one signed CheckInRequest. Shared by the unary
+// checkInOnce path and the --stream daemon (which wraps it in an
+// AgentStreamMessage), so the signing / trait / version fields stay
+// single-sourced. A fresh timestamp + signature is minted per call so each
+// check-in lands inside the server's signature-validity window.
+func buildCheckInReq(h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string) *pb.CheckInRequest {
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
-	checkInSig := signWith(h.signingKey(), []byte(ts))
-	return client.CheckIn(cctx, &pb.CheckInRequest{
+	return &pb.CheckInRequest{
 		EnvoyId:            h.EnvoyID,
 		PolicyVersion:      policyVersion,
 		PolicyMode:         true,
 		StateFingerprint:   fingerprint,
-		Signature:          checkInSig,
+		Signature:          signWith(h.signingKey(), []byte(ts)),
 		Timestamp:          timestamppb.New(now),
 		TraitsJson:         h.TraitsJSON,
 		AgentVersion:       agentVersion,
 		IpAddress:          h.IP,
 		LastCheckinDeltaMs: deltaMs,
-	})
+	}
+}
+
+func checkInOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string) (*pb.CheckInResponse, error) {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return client.CheckIn(cctx, buildCheckInReq(h, deltaMs, policyVersion, fingerprint))
 }
 
 // reportOnce fires one envoy's ReportResult — the convergence run — for
 // the given bundle over an existing client. Split from the check-in so
 // the daemon can run reports on a slower cadence than check-ins (a run
 // per envoy per second at fleet scale would bury the run store).
-func reportOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, configcrates []*pb.Configcrate) error {
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	results := buildResults(h, configcrates)
+// buildReportReq assembles one signed ReportResultRequest (a convergence run).
+// Shared by the unary reportOnce path and the --stream daemon.
+func buildReportReq(h *hostState, configcrates []*pb.Configcrate) *pb.ReportResultRequest {
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
 	runID := h.EnvoyID + "-" + ts
-	reportSig := signWith(h.signingKey(), append([]byte(runID), ts...))
-	_, err := client.ReportResult(cctx, &pb.ReportResultRequest{
+	return &pb.ReportResultRequest{
 		RunId:     runID,
 		EnvoyId:   h.EnvoyID,
-		Results:   results,
-		Signature: reportSig,
+		Results:   buildResults(h, configcrates),
+		Signature: signWith(h.signingKey(), append([]byte(runID), ts...)),
 		Timestamp: timestamppb.New(now),
-	})
+	}
+}
+
+func reportOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, configcrates []*pb.Configcrate) error {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err := client.ReportResult(cctx, buildReportReq(h, configcrates))
 	return err
 }
 

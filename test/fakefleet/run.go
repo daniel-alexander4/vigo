@@ -45,6 +45,10 @@ import (
 // systemd unit raises LimitNOFILE accordingly, and a manual run needs
 // `ulimit -n` above the fleet size.
 func runRun(cfg config) {
+	if cfg.stream {
+		runStream(cfg)
+		return
+	}
 	st, err := loadState(cfg.statePath)
 	if err != nil {
 		if os.IsNotExist(err) {
