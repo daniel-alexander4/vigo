@@ -953,7 +953,7 @@ type DatabaseSection struct {
 	DSN          string `yaml:"dsn" doc:"Database DSN — sqlite3 file path or postgres connection URL (supports the secret: prefix)." example:"file:/srv/vigo/vigo.db, postgres://user@host:5432/vigo?sslmode=require, secret:vigo/db/dsn"`
 	Driver       string `yaml:"driver" doc:"Database driver." options:"sqlite|postgres" default:"sqlite" example:"sqlite (single-node), postgres (HA)"`
 	MaxOpenConns int    `yaml:"max_open_conns" doc:"Maximum concurrent database connections. SQLite: sizes the concurrent read pool — writes always serialize on a dedicated single-writer connection, so this caps reader concurrency and bounds CGO worker threads (an unbounded pool is what lets a write storm OS-thread-exhaust the server). Postgres: caps the single pool below the server's max_connections. 0 = auto (SQLite: CPU count, min 4; Postgres: 25)." default:"0" example:"0 (auto), 8, 16, 25"`
-	Retention    string `yaml:"retention" doc:"Age-based pruning for runs, tasks, and workflows (e.g. 90d, 2160h). Empty disables pruning." example:"2160h (90d), 720h (30d); no d unit — use hours"`
+	Retention    string `yaml:"retention" doc:"Age-based pruning for runs, tasks, and workflows (cascades to run_results via ON DELETE CASCADE). Empty disables pruning — leaving it unset lets run history grow without bound." example:"30d, 90d, 2160h (the d-suffix shorthand and Go duration strings both parse)"`
 }
 
 // CheckInSection holds check-in interval settings.
