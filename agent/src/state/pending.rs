@@ -18,6 +18,13 @@ const SEQ_KEY: &str = "__seq";
 /// Maximum pending entries before oldest are dropped.
 const MAX_PENDING: u64 = 1000;
 
+/// A pending entry: its storage key and the decoded delta. The key is carried
+/// so the caller can remove exactly the entries it successfully delivered.
+pub struct PendingEntry {
+    pub key: String,
+    pub delta: crate::proto::DeltaEvent,
+}
+
 /// LMDB-backed pending delta queue.
 pub struct PendingQueue {
     db: Database<Str, Bytes>,
@@ -109,40 +116,45 @@ impl PendingQueue {
         Ok(count)
     }
 
-    /// Drain all pending delta events in sequence order.
-    /// Returns the events and deletes them from the queue.
-    pub fn drain(
-        &self,
-        wtxn: &mut RwTxn<'_>,
-    ) -> Result<Vec<crate::proto::DeltaEvent>> {
-        let mut results = Vec::new();
-        let mut keys_to_delete = Vec::new();
-
-        {
-            let iter = self.db.iter(wtxn)?;
-            for item in iter {
-                let (k, v) = item?;
-                if !k.starts_with("d:") {
-                    continue;
-                }
-                match crate::proto::DeltaEvent::decode(v) {
-                    Ok(delta) => {
-                        keys_to_delete.push(k.to_string());
-                        results.push(delta);
-                    }
-                    Err(e) => {
-                        tracing::warn!(key = k, error = %e, "skipping corrupt pending entry");
-                        keys_to_delete.push(k.to_string());
-                    }
+    /// Peek all pending delta events in sequence order **without removing
+    /// them**. Returns the decoded entries (each with its storage key) plus the
+    /// keys of any corrupt/undecodable entries the caller should purge.
+    ///
+    /// Delivery works against this read-only snapshot with no transaction held
+    /// across the network RPCs; the caller then `remove`s only the keys it
+    /// delivered successfully. A failed delivery therefore leaves its entry
+    /// queued for the next reconnect (the queue's whole purpose), and because
+    /// the server keys runs by its own id — re-delivering a succeeded entry
+    /// would duplicate it — only delivered entries are ever removed.
+    pub fn peek(&self, rtxn: &RoTxn<'_>) -> Result<(Vec<PendingEntry>, Vec<String>)> {
+        let mut entries = Vec::new();
+        let mut corrupt = Vec::new();
+        for item in self.db.iter(rtxn)? {
+            let (k, v) = item?;
+            if !k.starts_with("d:") {
+                continue;
+            }
+            match crate::proto::DeltaEvent::decode(v) {
+                Ok(delta) => entries.push(PendingEntry {
+                    key: k.to_string(),
+                    delta,
+                }),
+                Err(e) => {
+                    tracing::warn!(key = k, error = %e, "purging corrupt pending entry");
+                    corrupt.push(k.to_string());
                 }
             }
         }
+        Ok((entries, corrupt))
+    }
 
-        for k in keys_to_delete {
-            self.db.delete(wtxn, &k)?;
+    /// Remove the given keys from the queue. Caller passes the keys it
+    /// successfully delivered (plus any corrupt keys from `peek`).
+    pub fn remove(&self, wtxn: &mut RwTxn<'_>, keys: &[String]) -> Result<()> {
+        for k in keys {
+            self.db.delete(wtxn, k)?;
         }
-
-        Ok(results)
+        Ok(())
     }
 }
 
@@ -162,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn enqueue_and_drain() {
+    fn peek_returns_all_in_order_without_removing() {
         let dir = tempfile::tempdir().unwrap();
         let store = crate::state::StateStore::open(dir.path()).unwrap();
 
@@ -173,37 +185,78 @@ mod tests {
         wtxn.commit().unwrap();
 
         let rtxn = store.read_txn().unwrap();
-        assert_eq!(store.pending.len(&rtxn).unwrap(), 3);
+        let (entries, corrupt) = store.pending.peek(&rtxn).unwrap();
         drop(rtxn);
-
-        let mut wtxn = store.write_txn().unwrap();
-        let drained = store.pending.drain(&mut wtxn).unwrap();
-        wtxn.commit().unwrap();
-
-        assert_eq!(drained.len(), 3);
-
-        // Verify run_ids from the RunCompleted events.
-        for (i, d) in drained.iter().enumerate() {
-            if let Some(delta_event::Event::Run(ref run)) = d.event {
+        assert_eq!(entries.len(), 3);
+        assert!(corrupt.is_empty());
+        for (i, e) in entries.iter().enumerate() {
+            if let Some(delta_event::Event::Run(ref run)) = e.delta.event {
                 assert_eq!(run.run_id, format!("run-{}", i + 1));
             } else {
                 panic!("expected RunCompleted event");
             }
         }
 
+        // peek must NOT delete — the queue is unchanged.
         let rtxn = store.read_txn().unwrap();
-        assert_eq!(store.pending.len(&rtxn).unwrap(), 0);
+        assert_eq!(store.pending.len(&rtxn).unwrap(), 3);
     }
 
+    // Regression test for the offline run-result data-loss bug: delivery removes
+    // ONLY the entries it succeeded on. A failed delivery (here: run-2 simulated
+    // as undelivered) must leave its entry queued for the next reconnect, never
+    // dropped. Before the fix, `drain` deleted every entry up front and committed
+    // regardless of delivery outcome, silently losing undelivered results.
     #[test]
-    fn drain_empty() {
+    fn remove_is_selective_failed_entries_survive() {
         let dir = tempfile::tempdir().unwrap();
         let store = crate::state::StateStore::open(dir.path()).unwrap();
 
         let mut wtxn = store.write_txn().unwrap();
-        let drained = store.pending.drain(&mut wtxn).unwrap();
+        store.pending.enqueue(&mut wtxn, &make_delta("run-1", 1)).unwrap();
+        store.pending.enqueue(&mut wtxn, &make_delta("run-2", 2)).unwrap();
+        store.pending.enqueue(&mut wtxn, &make_delta("run-3", 3)).unwrap();
         wtxn.commit().unwrap();
-        assert!(drained.is_empty());
+
+        // Simulate a delivery where run-2 (the middle entry) failed: remove only
+        // the keys for run-1 and run-3.
+        let rtxn = store.read_txn().unwrap();
+        let (entries, _) = store.pending.peek(&rtxn).unwrap();
+        drop(rtxn);
+        let delivered: Vec<String> = entries
+            .iter()
+            .filter(|e| match &e.delta.event {
+                Some(delta_event::Event::Run(run)) => run.run_id != "run-2",
+                _ => false,
+            })
+            .map(|e| e.key.clone())
+            .collect();
+        assert_eq!(delivered.len(), 2);
+
+        let mut wtxn = store.write_txn().unwrap();
+        store.pending.remove(&mut wtxn, &delivered).unwrap();
+        wtxn.commit().unwrap();
+
+        // run-2 must still be queued; run-1 and run-3 are gone.
+        let rtxn = store.read_txn().unwrap();
+        let (remaining, _) = store.pending.peek(&rtxn).unwrap();
+        assert_eq!(remaining.len(), 1);
+        if let Some(delta_event::Event::Run(ref run)) = remaining[0].delta.event {
+            assert_eq!(run.run_id, "run-2");
+        } else {
+            panic!("expected the failed run-2 to survive");
+        }
+    }
+
+    #[test]
+    fn peek_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let rtxn = store.read_txn().unwrap();
+        let (entries, corrupt) = store.pending.peek(&rtxn).unwrap();
+        assert!(entries.is_empty());
+        assert!(corrupt.is_empty());
     }
 
     #[test]
@@ -219,11 +272,10 @@ mod tests {
 
         {
             let store = crate::state::StateStore::open(dir.path()).unwrap();
-            let mut wtxn = store.write_txn().unwrap();
-            let drained = store.pending.drain(&mut wtxn).unwrap();
-            wtxn.commit().unwrap();
-            assert_eq!(drained.len(), 1);
-            if let Some(delta_event::Event::Run(ref run)) = drained[0].event {
+            let rtxn = store.read_txn().unwrap();
+            let (entries, _) = store.pending.peek(&rtxn).unwrap();
+            assert_eq!(entries.len(), 1);
+            if let Some(delta_event::Event::Run(ref run)) = entries[0].delta.event {
                 assert_eq!(run.run_id, "run-a");
             } else {
                 panic!("expected RunCompleted event");
@@ -263,11 +315,9 @@ mod tests {
         store.pending.enqueue(&mut wtxn, &heartbeat).unwrap();
         wtxn.commit().unwrap();
 
-        let mut wtxn = store.write_txn().unwrap();
-        let drained = store.pending.drain(&mut wtxn).unwrap();
-        wtxn.commit().unwrap();
-
-        assert_eq!(drained.len(), 1);
-        assert!(matches!(drained[0].event, Some(delta_event::Event::Heartbeat(_))));
+        let rtxn = store.read_txn().unwrap();
+        let (entries, _) = store.pending.peek(&rtxn).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(matches!(entries[0].delta.event, Some(delta_event::Event::Heartbeat(_))));
     }
 }

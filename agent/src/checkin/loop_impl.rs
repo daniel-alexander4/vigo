@@ -842,46 +842,75 @@ impl<'a> customtraits::Downloader for ClientDownloader<'a> {
 /// Deliver any pending delta events from offline convergence.
 /// Called on reconnect (both stream and polling modes).
 async fn deliver_pending(client: &mut Client, store: &StateStore) {
+    // Snapshot the queue read-only — no transaction is held across the
+    // delivery RPCs, and only the entries we deliver successfully are removed
+    // afterward. A failed report_result leaves its entry queued for the next
+    // reconnect (the queue exists precisely to survive this); and since the
+    // server keys runs by its own id, re-delivering a succeeded entry would
+    // duplicate it — so delete-on-success-only is the rule.
+    let (entries, corrupt) = {
+        let rtxn = match store.read_txn() {
+            Ok(t) => t,
+            Err(e) => {
+                warn!(error = %e, "failed to open read txn for pending delivery");
+                return;
+            }
+        };
+        match store.pending.peek(&rtxn) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(error = %e, "failed to read pending results");
+                return;
+            }
+        }
+    };
+
+    if entries.is_empty() && corrupt.is_empty() {
+        return;
+    }
+    if !entries.is_empty() {
+        info!(count = entries.len(), "delivering pending offline results");
+    }
+
+    // Corrupt entries are undeliverable garbage — purge them regardless.
+    let mut to_remove = corrupt;
+    for entry in &entries {
+        match &entry.delta.event {
+            Some(delta_event::Event::Run(run)) => {
+                match client
+                    .report_result(&run.run_id, run.results.clone(), run.total_count)
+                    .await
+                {
+                    Ok(_) => to_remove.push(entry.key.clone()),
+                    Err(e) => warn!(
+                        run_id = %run.run_id,
+                        error = %e,
+                        "failed to deliver pending result; leaving queued for next reconnect"
+                    ),
+                }
+            }
+            // Non-Run deltas (e.g. heartbeats) carry no run results to deliver;
+            // drop them rather than re-peek them every reconnect.
+            _ => to_remove.push(entry.key.clone()),
+        }
+    }
+
+    if to_remove.is_empty() {
+        return; // nothing delivered (server unreachable) — retry next reconnect.
+    }
     let mut wtxn = match store.write_txn() {
         Ok(t) => t,
         Err(e) => {
-            warn!(error = %e, "failed to open write txn for pending drain");
+            warn!(error = %e, "failed to open write txn to clear delivered results");
             return;
         }
     };
-
-    let pending = match store.pending.drain(&mut wtxn) {
-        Ok(p) => p,
-        Err(e) => {
-            warn!(error = %e, "failed to drain pending results");
-            return;
-        }
-    };
-
-    if pending.is_empty() {
-        let _ = wtxn.commit();
+    if let Err(e) = store.pending.remove(&mut wtxn, &to_remove) {
+        warn!(error = %e, "failed to remove delivered pending results");
         return;
     }
-
-    info!(count = pending.len(), "delivering pending offline results");
-
-    // Extract results from delta events and report via legacy RPC.
-    // (Pending delivery happens before stream is set up, so we use
-    // the unary ReportResult RPC for simplicity.)
-    for delta in &pending {
-        if let Some(delta_event::Event::Run(ref run)) = delta.event {
-            let proto_results = run.results.clone();
-            if let Err(e) = client
-                .report_result(&run.run_id, proto_results, run.total_count)
-                .await
-            {
-                warn!(run_id = %run.run_id, error = %e, "failed to deliver pending result");
-            }
-        }
-    }
-
     if let Err(e) = wtxn.commit() {
-        warn!(error = %e, "failed to commit pending drain");
+        warn!(error = %e, "failed to commit pending removal");
     }
 }
 
