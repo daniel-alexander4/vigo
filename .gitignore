@@ -11,6 +11,7 @@ signing.key
 # Build output
 bin/
 dist/
+out/
 
 # Vendor directory
 vendor/
@@ -51,6 +52,9 @@ deploy2AR.sh
 
 # Load test binary
 loadtest
+
+# fakefleet synthetic-fleet harness binary (go build -o fakefleet ./test/fakefleet)
+fakefleet
 
 # IDE
 .idea/
