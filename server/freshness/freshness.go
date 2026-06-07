@@ -78,6 +78,33 @@ func StaleThresholdFromCycle(configured, observed, offlineThreshold time.Duratio
 	return stale
 }
 
+// StaleScanInterval returns how often the background stale-checker sweep
+// should run. The sweep is a full-fleet pass, so its cost scales with
+// fleet size × frequency; coupling it to the check-in cadence made it run
+// every 1s at the default — far more often than the staleness threshold
+// can act on, for a marginal detection-latency gain. We instead derive the
+// cadence from the threshold: scanning at half the tightest stale boundary
+// keeps worst-case offline detection within ~1.5× the threshold while
+// cutting sweep frequency (15s vs 1s at the 1s default's 30s floor).
+//
+// tightest = offlineThreshold override if set, else MinStaleThreshold — the
+// floor is the smallest threshold any envoy can have on the default path,
+// so deriving from it never under-scans. Floored at baseInterval: detection
+// can't beat the check-in cadence anyway, and a sane config always has
+// threshold ≥ cadence so the floor only guards a pathological sub-cadence
+// override.
+func StaleScanInterval(baseInterval, offlineThreshold time.Duration) time.Duration {
+	tightest := MinStaleThreshold
+	if offlineThreshold > 0 {
+		tightest = offlineThreshold
+	}
+	scan := tightest / 2
+	if scan < baseInterval {
+		return baseInterval
+	}
+	return scan
+}
+
 // IsStaleFromCycle reports whether an envoy's last check-in is older
 // than its per-envoy stale threshold. A zero lastSeen is treated as
 // "not stale" rather than "infinitely stale" — fresh enrollments that

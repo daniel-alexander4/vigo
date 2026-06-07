@@ -249,13 +249,15 @@ func (s *Server) driftAlertTick(ctx context.Context, lastChecked time.Time) time
 // runStaleChecker fires a envoy.stale notification when a envoy
 // transitions from non-stale to stale. The "is stale" predicate lives in
 // package freshness (2.5× the base interval) and is shared with the UI,
-// doctor, and risk scorer. The checker runs at the base interval
-// frequency. It always updates the FleetIndex offline flag; SMTP
-// notifications are optional.
+// doctor, and risk scorer. Each tick is a full-fleet sweep, so it runs at
+// freshness.StaleScanInterval (derived from the staleness threshold, not
+// the check-in cadence) to avoid an O(fleet) pass every 1s at the default.
+// It always updates the FleetIndex offline flag; SMTP notifications are
+// optional.
 func (s *Server) runStaleChecker(ctx context.Context) {
 	wasStale := make(map[string]bool) // envoy ID → was stale last tick
 
-	ticker := time.NewTicker(s.baseInterval)
+	ticker := time.NewTicker(freshness.StaleScanInterval(s.baseInterval, s.offlineThreshold))
 	defer ticker.Stop()
 
 	for {

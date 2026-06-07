@@ -677,6 +677,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		"checkin.offline_threshold_override", s.cfg.CheckIn.OfflineThreshold,
 		"freshness.bootstrap_threshold", freshness.StaleThresholdFromCycle(s.baseInterval, 0, s.offlineThreshold),
 		"freshness.max_reported_cycle", freshness.MaxReportedCycle,
+		"freshness.stale_scan_interval", freshness.StaleScanInterval(s.baseInterval, s.offlineThreshold),
 	)
 
 	// --- Tuning durations (all optional; zero values use the listed defaults) ---

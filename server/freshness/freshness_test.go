@@ -35,6 +35,30 @@ func TestStaleThresholdFromCycle(t *testing.T) {
 	}
 }
 
+func TestStaleScanInterval(t *testing.T) {
+	tests := []struct {
+		name             string
+		baseInterval     time.Duration
+		offlineThreshold time.Duration
+		want             time.Duration
+	}{
+		{"1s default: half the 30s floor", 1 * time.Second, 0, 15 * time.Second},
+		{"5min interval: tightest/2 < baseInterval, floored to baseInterval", 5 * time.Minute, 0, 5 * time.Minute},
+		{"30s interval: tightest/2 (15s) < baseInterval, floored", 30 * time.Second, 0, 30 * time.Second},
+		{"10s interval: tightest/2 (15s) > baseInterval", 10 * time.Second, 0, 15 * time.Second},
+		{"tight override scales the sweep down", 1 * time.Second, 6 * time.Second, 3 * time.Second},
+		{"override below 2× baseInterval: floored to baseInterval", 1 * time.Second, 1 * time.Second, 1 * time.Second},
+		{"large override: half of it", 1 * time.Second, 5 * time.Minute, 150 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StaleScanInterval(tt.baseInterval, tt.offlineThreshold); got != tt.want {
+				t.Errorf("StaleScanInterval(%v, %v) = %v, want %v", tt.baseInterval, tt.offlineThreshold, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsStaleFromCycle(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
