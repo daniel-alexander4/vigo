@@ -36,7 +36,7 @@ The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (d
 | `vigo_checkin_age_seconds` | Histogram | | Distribution of seconds since last check-in across all envoys |
 | `vigo_envoy_state_transitions_total` | Counter | `transition` | Reachability edges: `offline` (non-stale→stale) and `online` (stale→non-stale). Rising `offline` transitions while envoys are live indicate the staleness floor is flapping them under load |
 
-The `vigo_checkin_age_seconds` histogram uses custom buckets: 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. This replaced per-envoy last-seen gauges to avoid cardinality explosion at scale.
+The `vigo_checkin_age_seconds` histogram uses custom buckets: 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. The sub-60s buckets straddle the 30s staleness floor (`freshness.MinStaleThreshold`) so the histogram can measure how close healthy check-ins get to the stale boundary under a fast (1s-default) cadence. This replaced per-envoy last-seen gauges to avoid cardinality explosion at scale.
 
 ### gRPC
 

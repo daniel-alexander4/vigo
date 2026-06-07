@@ -224,9 +224,14 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Help: "Fleet-wide convergence percentage (0.0 to 1.0).",
 		}),
 		CheckinAgeDist: f.NewHistogram(prometheus.HistogramOpts{
-			Name:    "vigo_checkin_age_seconds",
-			Help:    "Distribution of seconds since last check-in across all envoys.",
-			Buckets: []float64{60, 120, 300, 600, 900, 1800, 3600, 7200},
+			Name: "vigo_checkin_age_seconds",
+			Help: "Distribution of seconds since last check-in across all envoys.",
+			// Sub-60s buckets (5/15/30/45) straddle the 30s
+			// freshness.MinStaleThreshold floor so the histogram can
+			// measure how close healthy check-ins get to the stale
+			// boundary under a live 1s cadence — without them the
+			// finest bucket (60s) is 2× the floor and blind to margin.
+			Buckets: []float64{5, 15, 30, 45, 60, 120, 300, 600, 900, 1800, 3600, 7200},
 		}),
 		SigVerifyFailed: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_sig_verify_failed_total",
