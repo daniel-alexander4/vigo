@@ -101,9 +101,14 @@ func runRun(cfg config) {
 			}
 
 			// Per-envoy steady-state cache: echo the server's last policy
-			// version (and Merkle fingerprint) so unchanged check-ins
-			// short-circuit, and hold the last full bundle to report
-			// against — the server only re-sends configcrates on a change.
+			// version and Merkle fingerprint so unchanged check-ins
+			// short-circuit on the server's cheap path. fakefleet checks in
+			// in PolicyMode, so the resolved policy ships in the policy_bundle
+			// (proto field 7/26), never the legacy field-1 `configcrates` —
+			// `GetConfigcrates()` is always empty here, and reportOnce relies
+			// on buildResults' documented fallback to emit a recordable
+			// per-envoy result. We still capture field-1 in case a
+			// non-PolicyMode path ever populates it.
 			var pv uint64
 			var fp string
 			var bundle []*pb.Configcrate
@@ -124,7 +129,10 @@ func runRun(cfg config) {
 					if cc := resp.GetConfigcrates(); len(cc) > 0 {
 						bundle = cc
 					}
-					if now := time.Now(); now.Sub(lastReport) >= cfg.reportCadence && bundle != nil {
+					// Fire reports on the report-cadence regardless of field-1
+					// configcrates (always empty in PolicyMode); buildResults
+					// falls back to a synthetic result so the run is recordable.
+					if now := time.Now(); now.Sub(lastReport) >= cfg.reportCadence {
 						lastReport = now
 						b := bundle // capture for the fire-and-forget report
 						select {
