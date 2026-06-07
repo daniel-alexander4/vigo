@@ -54,7 +54,8 @@ deploy2AR.sh
 loadtest
 
 # fakefleet synthetic-fleet harness binary (go build -o fakefleet ./test/fakefleet)
-fakefleet
+# Anchored to repo root so it matches only the binary, not the test/fakefleet/ source dir.
+/fakefleet
 
 # IDE
 .idea/
