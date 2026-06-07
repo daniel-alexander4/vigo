@@ -32,11 +32,13 @@ func (s *AgentService) handleDelta(envoyID, hostname string, delta *pb.DeltaEven
 // handleRunDelta processes a RunCompleted delta: updates FleetIndex, records
 // metrics, dispatches webhooks/SMTP, and submits to the async RunBatcher.
 func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompleted) {
-	runStatus := run.Status
-	changedCount := int64(run.ChangedCount)
-	failedCount := int64(run.FailedCount)
-	skippedCount := int64(run.SkippedCount)
-	moduleCount := int64(run.TotalCount)
+	// Canonical counts + status from (results, total_count) — one blocked-aware
+	// derivation shared with the unary ReportResult path. The agent sends only
+	// non-no-op rows (blocked retained) + the true total; everything else is
+	// derived here, so a blocked resource surfaces as status="blocked" instead of
+	// being miscounted as skipped.
+	moduleCount, changedCount, failedCount, blockedCount, skippedCount, runStatus :=
+		summarizeResults(run.Results, run.TotalCount)
 	_, traceID := ParseOrGenerate(run.GetTraceparent())
 
 	// Attribute the run: "force-push" if the server force-pushed the
@@ -106,7 +108,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 			Hostname:      hostname,
 			Status:        runStatus,
 			Trigger:       trigger,
-			ResourceCount: int64(run.TotalCount),
+			ResourceCount: moduleCount,
 			ChangedCount:  changedCount,
 			FailedCount:   failedCount,
 			SkippedCount:  skippedCount,
@@ -121,6 +123,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
+		"blocked", blockedCount,
 		"skipped", skippedCount,
 	)
 
@@ -131,13 +134,14 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 			Timestamp: now,
 			Hostname:  hostname,
 			EnvoyID:   envoyID,
-			Summary:   fmt.Sprintf("run %s: %d changed, %d failed", runStatus, changedCount, failedCount),
+			Summary:   fmt.Sprintf("run %s: %d changed, %d failed, %d blocked", runStatus, changedCount, failedCount, blockedCount),
 			Details: map[string]any{
 				"run_id":   run.RunId,
 				"trace_id": traceID,
 				"status":   runStatus,
 				"changed":  changedCount,
 				"failed":   failedCount,
+				"blocked":  blockedCount,
 			},
 		})
 
@@ -150,6 +154,29 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 				Summary:   fmt.Sprintf("%d resources changed on %s", changedCount, hostname),
 				Details:   map[string]any{"run_id": run.RunId, "trace_id": traceID, "changed": changedCount},
 			})
+		}
+
+		// Fire resource.blocked for each blocked resource — mirrors the unary
+		// ReportResult path so guardrail blocks surface on the delta path too.
+		if blockedCount > 0 {
+			for _, result := range run.Results {
+				if result.GetActionTaken() != "blocked" {
+					continue
+				}
+				s.integrations.Dispatch(integrations.Event{
+					Name:      "resource.blocked",
+					Timestamp: now,
+					Hostname:  hostname,
+					EnvoyID:   envoyID,
+					Summary:   fmt.Sprintf("%s/%s blocked: %s", result.GetConfigcrateName(), result.GetResourceName(), result.GetErrorMessage()),
+					Details: map[string]any{
+						"configcrate": result.GetConfigcrateName(),
+						"resource":    result.GetResourceName(),
+						"trace_id":    traceID,
+						"error":       result.GetErrorMessage(),
+					},
+				})
+			}
 		}
 	}
 }

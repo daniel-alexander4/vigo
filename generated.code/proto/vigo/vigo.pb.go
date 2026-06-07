@@ -2621,12 +2621,8 @@ func (*DeltaEvent_Heartbeat) isDeltaEvent_Event() {}
 type RunCompleted struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // success, failure
-	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
-	ChangedCount  int32                  `protobuf:"varint,4,opt,name=changed_count,json=changedCount,proto3" json:"changed_count,omitempty"`
-	FailedCount   int32                  `protobuf:"varint,5,opt,name=failed_count,json=failedCount,proto3" json:"failed_count,omitempty"`
-	SkippedCount  int32                  `protobuf:"varint,6,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`
-	Results       []*ResourceRunResult   `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // only changed/failed (no-ops omitted)
+	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`          // full resource count; settled no-ops elided from results
+	Results       []*ResourceRunResult   `protobuf:"bytes,7,rep,name=results,proto3" json:"results,omitempty"`                                   // non-no-op rows (changed/failed/blocked); settled no-ops omitted
 	BundleVersion uint64                 `protobuf:"varint,8,opt,name=bundle_version,json=bundleVersion,proto3" json:"bundle_version,omitempty"` // policy bundle version used for this run
 	Traceparent   string                 `protobuf:"bytes,9,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                           // W3C traceparent (ADR-028)
 	unknownFields protoimpl.UnknownFields
@@ -2670,37 +2666,9 @@ func (x *RunCompleted) GetRunId() string {
 	return ""
 }
 
-func (x *RunCompleted) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
 func (x *RunCompleted) GetTotalCount() int32 {
 	if x != nil {
 		return x.TotalCount
-	}
-	return 0
-}
-
-func (x *RunCompleted) GetChangedCount() int32 {
-	if x != nil {
-		return x.ChangedCount
-	}
-	return 0
-}
-
-func (x *RunCompleted) GetFailedCount() int32 {
-	if x != nil {
-		return x.FailedCount
-	}
-	return 0
-}
-
-func (x *RunCompleted) GetSkippedCount() int32 {
-	if x != nil {
-		return x.SkippedCount
 	}
 	return 0
 }
@@ -7872,18 +7840,14 @@ const file_vigo_proto_rawDesc = "" +
 	"\x03run\x18\x02 \x01(\v2\x15.vigo.v1.RunCompletedH\x00R\x03run\x12.\n" +
 	"\x06traits\x18\x03 \x01(\v2\x14.vigo.v1.TraitsDeltaH\x00R\x06traits\x127\n" +
 	"\theartbeat\x18\x04 \x01(\v2\x17.vigo.v1.HeartbeatDeltaH\x00R\theartbeatB\a\n" +
-	"\x05event\"\xca\x02\n" +
+	"\x05event\"\x91\x02\n" +
 	"\fRunCompleted\x12\x15\n" +
-	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1f\n" +
+	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1f\n" +
 	"\vtotal_count\x18\x03 \x01(\x05R\n" +
-	"totalCount\x12#\n" +
-	"\rchanged_count\x18\x04 \x01(\x05R\fchangedCount\x12!\n" +
-	"\ffailed_count\x18\x05 \x01(\x05R\vfailedCount\x12#\n" +
-	"\rskipped_count\x18\x06 \x01(\x05R\fskippedCount\x124\n" +
+	"totalCount\x124\n" +
 	"\aresults\x18\a \x03(\v2\x1a.vigo.v1.ResourceRunResultR\aresults\x12%\n" +
 	"\x0ebundle_version\x18\b \x01(\x04R\rbundleVersion\x12 \n" +
-	"\vtraceparent\x18\t \x01(\tR\vtraceparent\"\xa0\x01\n" +
+	"\vtraceparent\x18\t \x01(\tR\vtraceparentJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\x06statusR\rchanged_countR\ffailed_countR\rskipped_count\"\xa0\x01\n" +
 	"\vTraitsDelta\x12;\n" +
 	"\achanged\x18\x01 \x03(\v2!.vigo.v1.TraitsDelta.ChangedEntryR\achanged\x12\x18\n" +
 	"\aremoved\x18\x02 \x03(\tR\aremoved\x1a:\n" +

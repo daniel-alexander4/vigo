@@ -47,9 +47,15 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		trigger = s.fleetIndex.ConsumeRunTrigger(envoyID)
 	}
 
-	// Build batch of results and compute counts in a single pass. RunID is
-	// stamped by RecordRun from the run it creates, so it's left blank here.
-	var changedCount, failedCount, skippedCount, blockedCount int64
+	// Canonical counts + status from (results, total_count) — the same blocked-aware
+	// derivation the delta path uses (summarizeResults). Newer agents elide settled
+	// no-ops and report the real total in total_count; older agents send every row
+	// and leave total_count 0, so it falls back to len(results).
+	resourceCount, changedCount, failedCount, blockedCount, skippedCount, runStatus :=
+		summarizeResults(req.GetResults(), req.GetTotalCount())
+
+	// Build the per-result DB rows. RunID is stamped by RecordRun from the run it
+	// creates, so it's left blank here.
 	batch := make([]db.CreateRunResultParams, 0, len(req.GetResults()))
 	for _, result := range req.GetResults() {
 		errMsg := sql.NullString{}
@@ -71,39 +77,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			ErrorMessage:    errMsg,
 			DurationMs:      int64(result.GetDurationMs()),
 		})
-
-		if result.GetChanged() {
-			changedCount++
-		}
-		if result.GetActionTaken() == "blocked" {
-			blockedCount++
-		} else if result.GetErrorMessage() != "" {
-			failedCount++
-		}
-		if result.GetActionTaken() == "settled" && !result.GetChanged() {
-			skippedCount++
-		}
 	}
-
-	// Compute run status: failures → "failure", blocked-only → "blocked", else "success".
-	runStatus := "success"
-	if failedCount > 0 {
-		runStatus = "failure"
-	} else if blockedCount > 0 {
-		runStatus = "blocked"
-	}
-
-	// Resource total. Newer agents elide settled no-op results from the wire and
-	// report the real total in total_count; the per-result loop above already
-	// counted changed/failed/blocked/skipped over the rows that ARE present, so
-	// the only adjustment is to fold the elided no-ops into skipped. Older agents
-	// send every result and leave total_count 0 → total falls back to len and the
-	// adjustment is a no-op (identical to the pre-elision behavior).
-	resourceCount := int64(req.GetTotalCount())
-	if resourceCount < int64(len(req.GetResults())) {
-		resourceCount = int64(len(req.GetResults()))
-	}
-	skippedCount += resourceCount - int64(len(req.GetResults()))
 
 	// Persist the whole run atomically (run row + results + finish) in one
 	// transaction on the single writer — no orphaned "running" row if a write

@@ -567,14 +567,16 @@ message DeltaEvent {
 // resources (no-ops omitted). Replaces ReportResult on the delta path.
 message RunCompleted {
   string run_id = 1;
-  string status = 2;           // success, failure
-  int32 total_count = 3;
-  int32 changed_count = 4;
-  int32 failed_count = 5;
-  int32 skipped_count = 6;
-  repeated ResourceRunResult results = 7;  // only changed/failed (no-ops omitted)
+  int32 total_count = 3;       // full resource count; settled no-ops elided from results
+  repeated ResourceRunResult results = 7;  // non-no-op rows (changed/failed/blocked); settled no-ops omitted
   uint64 bundle_version = 8;         // policy bundle version used for this run
   string traceparent = 9;            // W3C traceparent (ADR-028)
+  // Status + changed/failed/skipped counts are derived server-side from
+  // (results, total_count) via the shared summarizeResults — one blocked-aware
+  // definition for both the unary ReportResult and this delta path. The agent
+  // no longer sends them.
+  reserved 2, 4, 5, 6;
+  reserved "status", "changed_count", "failed_count", "skipped_count";
 }
 
 // TraitsDelta reports changed/removed traits (reserved for future use).

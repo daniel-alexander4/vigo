@@ -1456,56 +1456,17 @@ fn is_reenroll_required(err: &anyhow::Error) -> bool {
 /// Includes bundle_version so the server can correlate results to policy versions.
 fn build_run_delta(results: &[ResourceResult], seq: i64, bundle_version: u64) -> (DeltaEvent, String) {
     let run_id = uuid::Uuid::new_v4().to_string();
-    let mut changed_count: i32 = 0;
-    let mut failed_count: i32 = 0;
-    let mut skipped_count: i32 = 0;
-
-    // Filter to only changed/failed results (no-ops omitted).
-    let filtered: Vec<ResourceRunResult> = results
-        .iter()
-        .filter(|r| r.changed || r.error.is_some())
-        .map(|r| ResourceRunResult {
-            configcrate_name: r.configcrate_name.clone(),
-            resource_type: r.resource_type.clone(),
-            resource_name: r.resource_name.clone(),
-            action_taken: r.action.to_string(),
-            changed: r.changed,
-            error_message: r.error.clone().unwrap_or_default(),
-            duration_ms: r.duration_ms,
-            previous_content: r.previous_content.clone().unwrap_or_default(),
-            content_hash: r.content_hash.clone().unwrap_or_default(),
-            file_path: r.file_path.clone().unwrap_or_default(),
-        })
-        .collect();
-
-    for r in results {
-        if r.changed {
-            changed_count += 1;
-        }
-        if r.error.is_some() {
-            failed_count += 1;
-        }
-        if !r.changed && r.error.is_none() {
-            skipped_count += 1;
-        }
-    }
-
-    let status = if failed_count > 0 {
-        "failure".to_string()
-    } else {
-        "success".to_string()
-    };
-
+    // Same filter the unary path uses: drop settled no-ops, retain
+    // changed/failed/blocked rows, carry the true total. The server derives
+    // counts + status from (results, total_count) via summarizeResults — one
+    // blocked-aware definition for both report paths.
+    let (filtered, total_count) = reportable_results(results);
     let (traceparent, _) = crate::checkin::traceparent::generate();
     let delta = DeltaEvent {
         sequence: seq,
         event: Some(delta_event::Event::Run(RunCompleted {
             run_id: run_id.clone(),
-            status,
-            total_count: results.len() as i32,
-            changed_count,
-            failed_count,
-            skipped_count,
+            total_count,
             results: filtered,
             bundle_version,
             traceparent,
@@ -2589,8 +2550,46 @@ mod tests {
         match delta.event {
             Some(delta_event::Event::Run(ref run)) => {
                 assert_eq!(run.bundle_version, 42);
-                assert_eq!(run.changed_count, 1);
-                assert_eq!(run.status, "success");
+                assert_eq!(run.total_count, 1);
+                assert_eq!(run.results.len(), 1); // the changed row is retained
+            }
+            _ => panic!("expected RunCompleted delta event"),
+        }
+    }
+
+    #[test]
+    fn build_run_delta_retains_blocked() {
+        use crate::executors::Action;
+
+        let results = vec![
+            ResourceResult {
+                configcrate_name: "hardening".into(),
+                resource_type: "exec".into(),
+                resource_name: "danger".into(),
+                action: Action::Blocked,
+                changed: false,
+                error: None,
+                duration_ms: 1,
+                ..Default::default()
+            },
+            ResourceResult {
+                configcrate_name: "base".into(),
+                resource_type: "file".into(),
+                resource_name: "/etc/ok".into(),
+                action: Action::None, // settled no-op — elided
+                changed: false,
+                error: None,
+                duration_ms: 1,
+                ..Default::default()
+            },
+        ];
+
+        let (delta, _) = build_run_delta(&results, 1, 0);
+        match delta.event {
+            Some(delta_event::Event::Run(ref run)) => {
+                assert_eq!(run.total_count, 2); // both resources counted
+                assert_eq!(run.results.len(), 1); // only the blocked row kept
+                assert_eq!(run.results[0].action_taken, "blocked");
             }
             _ => panic!("expected RunCompleted delta event"),
         }

@@ -155,9 +155,7 @@ mod tests {
             sequence: seq,
             event: Some(delta_event::Event::Run(RunCompleted {
                 run_id: run_id.into(),
-                status: "success".into(),
                 total_count: 1,
-                changed_count: 1,
                 ..Default::default()
             })),
         }

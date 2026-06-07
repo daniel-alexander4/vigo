@@ -39,11 +39,7 @@ func TestHandleRunDelta(t *testing.T) {
 		Event: &pb.DeltaEvent_Run{
 			Run: &pb.RunCompleted{
 				RunId:         "run-abc",
-				Status:        "success",
-				TotalCount:    5,
-				ChangedCount:  2,
-				FailedCount:   0,
-				SkippedCount:  3,
+				TotalCount:    5, // 2 changed rows below; 3 settled no-ops elided
 				BundleVersion: 7,
 				Results: []*pb.ResourceRunResult{
 					{
@@ -161,12 +157,8 @@ func TestDeltaRunFailure(t *testing.T) {
 		Sequence: 1,
 		Event: &pb.DeltaEvent_Run{
 			Run: &pb.RunCompleted{
-				RunId:        "run-fail",
-				Status:       "failure",
-				TotalCount:   3,
-				ChangedCount: 1,
-				FailedCount:  1,
-				SkippedCount: 1,
+				RunId:      "run-fail",
+				TotalCount: 3, // 1 failed row below; 2 settled no-ops elided
 				Results: []*pb.ResourceRunResult{
 					{
 						ConfigcrateName: "apt",
@@ -185,5 +177,38 @@ func TestDeltaRunFailure(t *testing.T) {
 	ts := idx.GetEnvoy("envoy-1")
 	if ts.LastRunStatus != "failure" {
 		t.Errorf("expected last_run_status=failure, got %s", ts.LastRunStatus)
+	}
+}
+
+// TestDeltaRunBlocked verifies the delta path now surfaces a guardrail-blocked
+// resource as status="blocked" — previously build_run_delta dropped the blocked
+// row and handleRunDelta counted it as skipped (never "blocked").
+func TestDeltaRunBlocked(t *testing.T) {
+	svc, idx, _ := newTestDeltaService()
+
+	delta := &pb.DeltaEvent{
+		Sequence: 1,
+		Event: &pb.DeltaEvent_Run{
+			Run: &pb.RunCompleted{
+				RunId:      "run-blocked",
+				TotalCount: 4, // 1 blocked row below; 3 settled no-ops elided
+				Results: []*pb.ResourceRunResult{
+					{
+						ConfigcrateName: "hardening",
+						ResourceType:    "exec",
+						ResourceName:    "rm-rf-danger",
+						ActionTaken:     "blocked",
+						ErrorMessage:    "guardrail: dangerous command",
+					},
+				},
+			},
+		},
+	}
+
+	svc.handleDelta("envoy-1", "web-1", delta)
+
+	ts := idx.GetEnvoy("envoy-1")
+	if ts.LastRunStatus != "blocked" {
+		t.Errorf("expected last_run_status=blocked, got %s", ts.LastRunStatus)
 	}
 }
