@@ -6,23 +6,24 @@ use serde_json::{json, Value};
 use std::process::Command;
 
 pub fn collect() -> Result<Value> {
-    // Try nvidia-smi first.
-    if let Some(devices) = nvidia_smi_devices() {
-        return Ok(json!({
-            "count": devices.len(),
-            "devices": devices,
-        }));
-    }
-
-    // Fallback to /sys/class/drm scan.
-    let mut devices = drm_devices();
-
-    // ARM SBC fallback: Raspberry Pi VideoCore via vcgencmd.
-    if devices.is_empty() {
-        if let Some(vc) = videocore_device() {
-            devices.push(vc);
+    // Try nvidia-smi first; fall back to /sys/class/drm scan, then to the
+    // Raspberry Pi VideoCore probe.
+    let mut devices = match nvidia_smi_devices() {
+        Some(d) => d,
+        None => {
+            let mut d = drm_devices();
+            if d.is_empty() {
+                if let Some(vc) = videocore_device() {
+                    d.push(vc);
+                }
+            }
+            d
         }
-    }
+    };
+
+    // Sort by stable identity so the emitted array is byte-identical between
+    // refreshes regardless of nvidia-smi/sysfs enumeration order (ADR-033).
+    devices.sort_by_key(device_key);
 
     Ok(json!({
         "count": devices.len(),
@@ -30,10 +31,18 @@ pub fn collect() -> Result<Value> {
     }))
 }
 
+/// Stable ordering key spanning the three device shapes: drm devices carry
+/// `device` (cardN), nvidia/VideoCore carry `name`, and `pci_device`
+/// disambiguates otherwise-identical entries.
+fn device_key(d: &Value) -> String {
+    let pick = |k: &str| d.get(k).and_then(|v| v.as_str()).unwrap_or("");
+    format!("{}|{}|{}", pick("device"), pick("name"), pick("pci_device"))
+}
+
 fn nvidia_smi_devices() -> Option<Vec<Value>> {
     let output = Command::new("nvidia-smi")
         .args([
-            "--query-gpu=name,driver_version,vbios_version,memory.total,temperature.gpu,utilization.gpu",
+            "--query-gpu=name,driver_version,vbios_version,memory.total",
             "--format=csv,noheader,nounits",
         ])
         .output()
@@ -48,15 +57,13 @@ fn nvidia_smi_devices() -> Option<Vec<Value>> {
 
     for line in stdout.lines() {
         let parts: Vec<&str> = line.split(", ").collect();
-        if parts.len() >= 6 {
+        if parts.len() >= 4 {
             devices.push(json!({
                 "vendor": "nvidia",
                 "name": parts[0].trim(),
                 "driver_version": parts[1].trim(),
                 "vbios_version": parts[2].trim(),
                 "memory_mb": parts[3].trim(),
-                "temperature_c": parts[4].trim(),
-                "utilization_pct": parts[5].trim(),
             }));
         }
     }
@@ -201,31 +208,6 @@ fn videocore_device() -> Option<Value> {
                 if let Ok(mb) = val.parse::<u64>() {
                     dev.insert("memory_mb".into(), json!(mb));
                 }
-            }
-        }
-    }
-
-    // Clock speed.
-    if let Ok(clk_out) = Command::new("vcgencmd").args(["measure_clock", "core"]).output() {
-        if clk_out.status.success() {
-            let s = String::from_utf8_lossy(&clk_out.stdout);
-            // Output: "frequency(48)=500000000" (Hz)
-            if let Some(eq_pos) = s.find('=') {
-                if let Ok(hz) = s[eq_pos + 1..].trim().parse::<u64>() {
-                    dev.insert("clock_mhz".into(), json!(hz / 1_000_000));
-                }
-            }
-        }
-    }
-
-    // Temperature.
-    if let Ok(temp_out) = Command::new("vcgencmd").args(["measure_temp"]).output() {
-        if temp_out.status.success() {
-            let s = String::from_utf8_lossy(&temp_out.stdout);
-            // Output: "temp=42.0'C"
-            if let Some(val) = s.trim().strip_prefix("temp=") {
-                let val = val.trim_end_matches("'C").trim();
-                dev.insert("temperature_c".into(), json!(val));
             }
         }
     }

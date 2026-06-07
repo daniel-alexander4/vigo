@@ -45,11 +45,15 @@ fn collect_running_containers() -> Vec<String> {
         _ => return vec![],
     };
 
-    output
+    let mut names: Vec<String> = output
         .lines()
         .filter(|l| !l.is_empty())
         .map(String::from)
-        .collect()
+        .collect();
+    // Sort so the list is byte-identical between refreshes regardless of
+    // `docker ps` ordering (ADR-033).
+    names.sort();
+    names
 }
 
 fn run_docker(args: &[&str]) -> String {

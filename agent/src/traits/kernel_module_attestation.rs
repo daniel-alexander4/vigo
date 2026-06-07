@@ -53,6 +53,15 @@ fn collect_from_roots(proc_modules: &str, sys_module_root: &str) -> Vec<Value> {
             }));
         }
     }
+    // Sort by module name so the array is byte-identical between refreshes —
+    // /proc/modules is in load order, which changes as modules load/unload
+    // (ADR-033).
+    out.sort_by(|a, b| {
+        a["name"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["name"].as_str().unwrap_or(""))
+    });
     out
 }
 
@@ -220,14 +229,15 @@ bad_mod 1024 0 - Live 0x0000000000000000
             sys.to_str().unwrap(),
         );
 
+        // Emitted in sorted-by-name order: bad_mod, ext4, nvidia.
         assert_eq!(modules.len(), 3);
-        assert_eq!(modules[0]["name"], "ext4");
-        assert_eq!(modules[0]["signature_status"], "signed");
-        assert_eq!(modules[1]["name"], "nvidia");
-        assert_eq!(modules[1]["signature_status"], "unsigned");
-        assert_eq!(modules[1]["taint"], "POE");
-        assert_eq!(modules[2]["name"], "bad_mod");
-        assert_eq!(modules[2]["signature_status"], "bad_signature");
+        assert_eq!(modules[0]["name"], "bad_mod");
+        assert_eq!(modules[0]["signature_status"], "bad_signature");
+        assert_eq!(modules[1]["name"], "ext4");
+        assert_eq!(modules[1]["signature_status"], "signed");
+        assert_eq!(modules[2]["name"], "nvidia");
+        assert_eq!(modules[2]["signature_status"], "unsigned");
+        assert_eq!(modules[2]["taint"], "POE");
 
         let summary = summarize(&modules);
         assert_eq!(summary["total"], 3);

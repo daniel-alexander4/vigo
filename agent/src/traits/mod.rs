@@ -974,4 +974,50 @@ mod tests {
         let result = collect_all(&collectors).await;
         assert!(result.is_object());
     }
+
+    /// ADR-033 determinism guard: every inventory collector must serialize
+    /// byte-identically across two back-to-back collections. Anything that
+    /// differs between two immediate calls is volatile content that would
+    /// flap the inventory hash on every refresh (the `gpu` telemetry bug).
+    /// This catches future HashMap→array-without-sort regressions in CI.
+    ///
+    /// Scoped to pure-parse collectors of stable host state — excludes ones
+    /// that legitimately change moment-to-moment (ports, running containers,
+    /// unit transitions) or shell out to nondeterministic external tools.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_inventory_collectors_deterministic_between_refreshes() {
+        let deterministic = [
+            CollectorKind::Os,
+            CollectorKind::Kernel,
+            CollectorKind::Dmi,
+            CollectorKind::Processors,
+            CollectorKind::Identity,
+            CollectorKind::Timezone,
+            CollectorKind::Locale,
+            CollectorKind::SecureBoot,
+            CollectorKind::KernelModuleAttestation,
+            CollectorKind::Gpu,
+            CollectorKind::Network,
+            CollectorKind::Packages,
+            CollectorKind::BlockDevices,
+            CollectorKind::Virtual,
+        ];
+
+        for kind in deterministic {
+            // Skip collectors that can't run in this environment — the guard
+            // is about determinism, not availability.
+            let first = match kind.collect() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let second = kind.collect().expect("collector succeeded once, must succeed again");
+            assert_eq!(
+                serde_json::to_string(&first).unwrap(),
+                serde_json::to_string(&second).unwrap(),
+                "collector {:?} is not byte-identical between refreshes",
+                kind,
+            );
+        }
+    }
 }

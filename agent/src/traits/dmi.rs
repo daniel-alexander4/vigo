@@ -71,6 +71,14 @@ fn collect_memory_devices(entries_dir: &Path) -> Vec<Value> {
             }
         }
     }
+    // Sort by slot locator so the array is byte-identical between refreshes
+    // regardless of read_dir enumeration order (ADR-033).
+    out.sort_by(|a, b| {
+        a["locator"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["locator"].as_str().unwrap_or(""))
+    });
     out
 }
 

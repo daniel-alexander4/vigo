@@ -111,6 +111,11 @@ fn collect_interfaces() -> (Vec<String>, Vec<String>) {
         }
     }
 
+    // Sort so both lists are byte-identical between refreshes regardless of
+    // /sys/class/net enumeration order (ADR-033).
+    ips.sort();
+    macs.sort();
+
     (ips, macs)
 }
 

@@ -7,7 +7,7 @@ use anyhow::Result;
 use serde_json::{json, Value};
 
 pub fn collect() -> Result<Value> {
-    let packages = match std::env::consts::OS {
+    let mut packages = match std::env::consts::OS {
         "freebsd" => pkg_info_packages(),
         "openbsd" => pkg_info_packages(),
         "netbsd" => pkgin_packages(),
@@ -15,6 +15,18 @@ pub fn collect() -> Result<Value> {
         "illumos" => ips_packages(),
         _ => Vec::new(),
     };
+
+    // Sort by (name, version) so the list is byte-identical between refreshes
+    // regardless of package-manager output order (ADR-033).
+    packages.sort_by(|a, b| {
+        let key = |v: &Value| {
+            (
+                v["name"].as_str().unwrap_or("").to_string(),
+                v["version"].as_str().unwrap_or("").to_string(),
+            )
+        };
+        key(a).cmp(&key(b))
+    });
 
     Ok(json!({
         "count": packages.len(),
