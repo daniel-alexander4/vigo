@@ -488,6 +488,48 @@ func (f *FleetIndex) AllEnvoys() []EnvoyState {
 	return result
 }
 
+// StaleView is the minimal per-envoy snapshot the stale-checker needs: just
+// the fields its freshness predicate, transition detection, and notification
+// dispatch read. Revoked and never-seen (zero LastSeen) envoys are omitted —
+// they are never stale candidates.
+type StaleView struct {
+	ID       string
+	Hostname string
+	LastSeen time.Time
+	Cycle    time.Duration // smoothed observed check-in cadence
+	Offline  bool          // current Offline flag, so callers act only on transitions
+}
+
+// StaleViews returns one StaleView per non-revoked, already-seen envoy in a
+// single read pass. It replaces AllEnvoys()+EnvoyCycle() in the stale-checker
+// hot path: that copied the whole ~500-byte EnvoyState and re-locked each
+// envoy a second time for the cycle, just to read five fields. The caller flips
+// Offline only for envoys whose staleness actually changed (via SetOffline,
+// the sole convergence-offline-counter mutator), so the steady-state majority
+// costs nothing beyond this walk.
+func (f *FleetIndex) StaleViews() []StaleView {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	views := make([]StaleView, 0, len(f.envoys))
+	for id, ts := range f.envoys {
+		lk := f.lockFor(id)
+		lk.Lock()
+		if ts.Revoked || ts.LastSeen.IsZero() {
+			lk.Unlock()
+			continue
+		}
+		views = append(views, StaleView{
+			ID:       id,
+			Hostname: ts.Hostname,
+			LastSeen: ts.LastSeen,
+			Cycle:    ts.ObservedCycle(),
+			Offline:  ts.Offline,
+		})
+		lk.Unlock()
+	}
+	return views
+}
+
 // PaginatedEnvoys returns up to `limit` non-revoked envoys, sorted by hostname,
 // starting after `afterHostname` (exclusive). Pass "" to start from the beginning.
 // Returns the envoys and whether there are more results.

@@ -336,14 +336,19 @@ func (s *Server) staleScanTick(wasStale map[string]bool) map[string]bool {
 	integ := s.integrations
 	canNotify := integ != nil
 
-	allEnvoys := s.fleetIndex.AllEnvoys()
+	// One light read pass: StaleViews returns just the fields this loop needs
+	// (already filtering revoked/never-seen) instead of copying the whole
+	// EnvoyState and re-locking each envoy for its cycle. SetOffline — the sole
+	// convergence-offline-counter mutator — is called only when an envoy's
+	// staleness actually flipped, so the steady-state majority costs nothing
+	// beyond the walk.
+	views := s.fleetIndex.StaleViews()
 	nowStale := make(map[string]bool, len(wasStale))
-	for _, ts := range allEnvoys {
-		if ts.Revoked || ts.LastSeen.IsZero() {
-			continue
+	for _, ts := range views {
+		stale := freshness.IsStaleFromCycle(ts.LastSeen, s.baseInterval, ts.Cycle, s.offlineThreshold)
+		if stale != ts.Offline {
+			s.fleetIndex.SetOffline(ts.ID, stale)
 		}
-		stale := freshness.IsStaleFromCycle(ts.LastSeen, s.baseInterval, s.fleetIndex.EnvoyCycle(ts.ID), s.offlineThreshold)
-		s.fleetIndex.SetOffline(ts.ID, stale)
 		if !stale {
 			continue
 		}
