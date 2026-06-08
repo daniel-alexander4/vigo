@@ -2534,9 +2534,12 @@ func (h *Handler) dashboardData() DashboardPageData {
 	// license cap. Orange at ≥90% of cap, red at 100% (next enrollment
 	// will be rejected by the hard gate). Free tier is still subject to
 	// the same rules — a community user at the cap should see the banner too.
+	// ActiveEnvoys is the enforcer's mode-aware count (the licensed-count SoT:
+	// local FleetIndex locally, spanner-wide in aggregate mode) so the banner
+	// agrees with the /license page and header warning frame-for-frame.
 	if h.enforcer != nil {
 		if st := h.enforcer.GetStatus(); st.MaxEnvoys > 0 {
-			active := data.TotalEnvoys
+			active := st.ActiveEnvoys
 			max := st.MaxEnvoys
 			data.LicenseCapacityActive = active
 			data.LicenseCapacityMax = max
@@ -6839,12 +6842,12 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 		s := h.enforcer.GetStatus()
 		data.StageNum = int(s.Stage)
 		data.Stage = s.Stage.String()
-		// Source ActiveEnvoys from the live FleetIndex so this page
-		// agrees with the dashboard's License Capacity banner
-		// frame-for-frame. The enforcer's own counter runs an
-		// independent CountActiveEnvoys query which can lag the
-		// in-memory index by a few seconds after enrollment events.
-		data.ActiveEnvoys = h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold).TotalEnvoys
+		// ActiveEnvoys is the enforcer's mode-aware count (the licensed-count
+		// SoT) — the local FleetIndex count in local mode, the spanner-wide
+		// aggregate in aggregate mode — so the page reflects what the license
+		// actually gates and agrees with the dashboard capacity banner +
+		// header warning, which read the same GetStatus() value.
+		data.ActiveEnvoys = s.ActiveEnvoys
 		data.MaxEnvoys = s.MaxEnvoys
 		data.ExpiresAt = s.ExpiresAt
 		data.DaysRemaining = s.DaysRemaining
