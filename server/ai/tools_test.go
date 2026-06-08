@@ -16,7 +16,7 @@ import (
 
 func TestToolDefs_Count(t *testing.T) {
 	defs := toolDefs()
-	assert.Equal(t, 14, len(defs), "expected 14 tool definitions")
+	assert.Equal(t, 13, len(defs), "expected 13 tool definitions")
 }
 
 func TestToolDefs_UniqueNames(t *testing.T) {

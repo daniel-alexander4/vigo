@@ -64,8 +64,6 @@ func (d *toolDeps) dispatchTool(ctx context.Context, name, argsJSON string) (str
 		return d.getConfig(ctx, args)
 	case "query_inventory":
 		return d.queryInventory(ctx, args)
-	case "list_package_drift":
-		return d.listPackageDrift(ctx, args)
 	case "get_configcrate_definition":
 		return d.getConfigcrateDefinition(args)
 	case "list_configcrates":
@@ -449,43 +447,6 @@ func (d *toolDeps) queryInventory(ctx context.Context, args map[string]any) (str
 	return marshalResult(map[string]any{
 		"count":  len(results),
 		"envoys": results,
-	})
-}
-
-func (d *toolDeps) listPackageDrift(ctx context.Context, _ map[string]any) (string, error) {
-	if d.queries == nil {
-		return marshalResult(map[string]any{"count": 0, "package_drift": []any{}})
-	}
-	drift, err := d.queries.ListPackageDrift(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	type driftInfo struct {
-		Package          string `json:"package"`
-		Hostname         string `json:"hostname"`
-		InstalledVersion string `json:"installed_version,omitempty"`
-		DesiredVersion   string `json:"desired_version,omitempty"`
-	}
-
-	results := make([]driftInfo, 0, len(drift))
-	for _, row := range drift {
-		info := driftInfo{
-			Package:  row.PackageName,
-			Hostname: row.Hostname,
-		}
-		if row.InstalledVersion.Valid {
-			info.InstalledVersion = row.InstalledVersion.String
-		}
-		if row.DesiredVersion.Valid {
-			info.DesiredVersion = row.DesiredVersion.String
-		}
-		results = append(results, info)
-	}
-
-	return marshalResult(map[string]any{
-		"count":         len(results),
-		"package_drift": results,
 	})
 }
 

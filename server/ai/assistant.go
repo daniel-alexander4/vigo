@@ -508,11 +508,6 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 			parts = append(parts, "## Roles\n"+data)
 		}
 	}
-	if containsAny(lower, "package", "drift", "version") {
-		if data, err := a.tools.listPackageDrift(ctx, nil); err == nil {
-			parts = append(parts, "## Package Drift\n"+data)
-		}
-	}
 
 	return strings.Join(parts, "\n\n")
 }

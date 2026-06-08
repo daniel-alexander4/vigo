@@ -3,7 +3,7 @@
 
 package ai
 
-// toolDefs returns the 14 tool definitions the LLM can call.
+// toolDefs returns the 13 tool definitions the LLM can call.
 func toolDefs() []ToolDef {
 	return []ToolDef{
 		{
@@ -99,14 +99,6 @@ func toolDefs() []ToolDef {
 						"description": "Trait dot-paths to include in output (e.g. 'os.distro', 'hardware.memory_mb')",
 					},
 				},
-			}),
-		},
-		{
-			Name:        "list_package_drift",
-			Description: "List packages that differ across envoys (installed on some but not others, or different versions).",
-			Parameters: jsonSchema(map[string]any{
-				"type":       "object",
-				"properties": map[string]any{},
 			}),
 		},
 		{

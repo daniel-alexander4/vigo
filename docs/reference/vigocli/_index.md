@@ -41,7 +41,7 @@ pages are linked under their parent.
 ### Traits & inventory
 | Command | Description |
 |---------|-------------|
-| [traits](traits.md) | Search + explore trait dot-paths — [`inventory`](inventory.md), [`livequery`](query.md), [`packages`](packages.md), `search` |
+| [traits](traits.md) | Search + explore trait dot-paths — [`inventory`](inventory.md), [`livequery`](query.md), `search` |
 
 ### Operations
 | Command | Description |

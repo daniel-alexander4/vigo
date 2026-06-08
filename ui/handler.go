@@ -6399,14 +6399,6 @@ func (h *Handler) BoltDetail(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "bolt-detail", data)
 }
 
-// SecurityDriftRow represents a package drift entry for the security page.
-type SecurityDriftRow struct {
-	Hostname         string
-	PackageName      string
-	InstalledVersion string
-	DesiredVersion   string
-}
-
 // SecurityScanPageData holds aggregated security scan results for the security page.
 type SecurityScanPageData struct {
 	// Unique CVE counts — distinct CVE IDs, deduplicated across the fleet
@@ -6487,29 +6479,6 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 
 	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
 
-	var driftRows []SecurityDriftRow
-	if h.queries != nil {
-		rows, err := h.queries.ListPackageDrift(ctx)
-		if err == nil {
-			for _, row := range rows {
-				installed := ""
-				if row.InstalledVersion.Valid {
-					installed = row.InstalledVersion.String
-				}
-				desired := ""
-				if row.DesiredVersion.Valid {
-					desired = row.DesiredVersion.String
-				}
-				driftRows = append(driftRows, SecurityDriftRow{
-					Hostname:         row.Hostname,
-					PackageName:      row.PackageName,
-					InstalledVersion: installed,
-					DesiredVersion:   desired,
-				})
-			}
-		}
-	}
-
 	secData := h.dataSource.SecurityScanData()
 	certData := h.dataSource.CertExpirySummary()
 
@@ -6543,8 +6512,6 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 		Changed         int64
 		Diverged        int64
 		Offline         int64
-		DriftCount      int
-		DriftRows       []SecurityDriftRow
 		Security        SecurityScanPageData
 		Certs           CertExpirySummary
 		QueryTimeoutSec int
@@ -6561,8 +6528,6 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 		Changed:         convData.Changed,
 		Diverged:        convData.Diverged,
 		Offline:         convData.Offline,
-		DriftCount:      len(driftRows),
-		DriftRows:       driftRows,
 		Security:        secData,
 		Certs:           certData,
 		QueryTimeoutSec: queryTimeoutSec,
@@ -6575,32 +6540,7 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 
 // SecurityStatus renders the convergence+security left-panel fragment for HTMX polling.
 func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
 	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
-
-	var driftRows []SecurityDriftRow
-	if h.queries != nil {
-		rows, err := h.queries.ListPackageDrift(ctx)
-		if err == nil {
-			for _, row := range rows {
-				installed := ""
-				if row.InstalledVersion.Valid {
-					installed = row.InstalledVersion.String
-				}
-				desired := ""
-				if row.DesiredVersion.Valid {
-					desired = row.DesiredVersion.String
-				}
-				driftRows = append(driftRows, SecurityDriftRow{
-					Hostname:         row.Hostname,
-					PackageName:      row.PackageName,
-					InstalledVersion: installed,
-					DesiredVersion:   desired,
-				})
-			}
-		}
-	}
 
 	secData := h.dataSource.SecurityScanData()
 	certData := h.dataSource.CertExpirySummary()
@@ -6627,8 +6567,6 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 		Changed        int64
 		Diverged       int64
 		Offline        int64
-		DriftCount     int
-		DriftRows      []SecurityDriftRow
 		Security       SecurityScanPageData
 		Certs          CertExpirySummary
 		CVETrend       []float64
@@ -6643,8 +6581,6 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 		Changed:        convData.Changed,
 		Diverged:       convData.Diverged,
 		Offline:        convData.Offline,
-		DriftCount:     len(driftRows),
-		DriftRows:      driftRows,
 		Security:       secData,
 		Certs:          certData,
 		CVETrend:       cveTrend,

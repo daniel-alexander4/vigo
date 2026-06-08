@@ -196,20 +196,6 @@ service VigoAdmin {
     };
   }
 
-  // ListPackages lists package audit records, optionally filtered by envoy.
-  rpc ListPackages(ListPackagesRequest) returns (ListPackagesResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/packages"
-    };
-  }
-
-  // ListPackageDrift lists packages where installed version differs from desired.
-  rpc ListPackageDrift(ListPackageDriftRequest) returns (ListPackageDriftResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/packages/drift"
-    };
-  }
-
   // EnrollEnvoy creates a envoy record directly (spanner-internal RPC).
   // Used during enrollment routing: the receiving bolt validates the
   // token, then calls this on the target bolt to create the envoy
@@ -900,41 +886,6 @@ message RollbackRequest {
 message RollbackResponse {
   bool success = 1;
   string message = 2;
-}
-
-// =============================================================================
-// Package audit messages
-// =============================================================================
-
-message ListPackagesRequest {
-  string envoy_id = 1;           // optional filter
-}
-
-message ListPackagesResponse {
-  repeated PackageInfo packages = 1;
-}
-
-message ListPackageDriftRequest {}
-
-message ListPackageDriftResponse {
-  repeated PackageDrift drifts = 1;
-}
-
-message PackageInfo {
-  string envoy_id = 1;
-  string hostname = 2;
-  string package_name = 3;
-  string installed_version = 4;
-  string desired_version = 5;
-}
-
-message PackageDrift {
-  string envoy_id = 1;
-  string hostname = 2;
-  string package_name = 3;
-  string installed_version = 4;
-  string desired_version = 5;
-  google.protobuf.Timestamp detected_at = 6;
 }
 
 // =============================================================================

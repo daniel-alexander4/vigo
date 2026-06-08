@@ -175,15 +175,6 @@ type MttrStat struct {
 	OpenIncidents  int64  `json:"open_incidents"`
 }
 
-type PackageAudit struct {
-	ID               string         `json:"id"`
-	EnvoyID          string         `json:"envoy_id"`
-	PackageName      string         `json:"package_name"`
-	InstalledVersion sql.NullString `json:"installed_version"`
-	DesiredVersion   sql.NullString `json:"desired_version"`
-	DetectedAt       time.Time      `json:"detected_at"`
-}
-
 type Plan struct {
 	ID           string    `json:"id"`
 	EnvoyID      string    `json:"envoy_id"`

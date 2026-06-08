@@ -393,61 +393,6 @@
         ]
       }
     },
-    "/api/v1/packages": {
-      "get": {
-        "summary": "ListPackages lists package audit records, optionally filtered by envoy.",
-        "operationId": "VigoAdmin_ListPackages",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListPackagesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "envoyId",
-            "description": "optional filter",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
-    },
-    "/api/v1/packages/drift": {
-      "get": {
-        "summary": "ListPackageDrift lists packages where installed version differs from desired.",
-        "operationId": "VigoAdmin_ListPackageDrift",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListPackageDriftResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
-    },
     "/api/v1/push": {
       "post": {
         "summary": "ForcePush triggers an immediate check-in for a envoy or all envoys.",
@@ -1065,30 +1010,6 @@
         }
       }
     },
-    "v1ListPackageDriftResponse": {
-      "type": "object",
-      "properties": {
-        "drifts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1PackageDrift"
-          }
-        }
-      }
-    },
-    "v1ListPackagesResponse": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1PackageInfo"
-          }
-        }
-      }
-    },
     "v1ListRunsResponse": {
       "type": "object",
       "properties": {
@@ -1110,50 +1031,6 @@
             "type": "object",
             "$ref": "#/definitions/v1WebhookInfo"
           }
-        }
-      }
-    },
-    "v1PackageDrift": {
-      "type": "object",
-      "properties": {
-        "envoyId": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        },
-        "packageName": {
-          "type": "string"
-        },
-        "installedVersion": {
-          "type": "string"
-        },
-        "desiredVersion": {
-          "type": "string"
-        },
-        "detectedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "v1PackageInfo": {
-      "type": "object",
-      "properties": {
-        "envoyId": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        },
-        "packageName": {
-          "type": "string"
-        },
-        "installedVersion": {
-          "type": "string"
-        },
-        "desiredVersion": {
-          "type": "string"
         }
       }
     },

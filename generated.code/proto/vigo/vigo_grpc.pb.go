@@ -484,8 +484,6 @@ const (
 	VigoAdmin_GetConvergenceSummary_FullMethodName = "/vigo.v1.VigoAdmin/GetConvergenceSummary"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
-	VigoAdmin_ListPackages_FullMethodName          = "/vigo.v1.VigoAdmin/ListPackages"
-	VigoAdmin_ListPackageDrift_FullMethodName      = "/vigo.v1.VigoAdmin/ListPackageDrift"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
 	VigoAdmin_SetReassignment_FullMethodName       = "/vigo.v1.VigoAdmin/SetReassignment"
 )
@@ -530,10 +528,6 @@ type VigoAdminClient interface {
 	GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error)
-	// ListPackages lists package audit records, optionally filtered by envoy.
-	ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error)
-	// ListPackageDrift lists packages where installed version differs from desired.
-	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
 	// EnrollEnvoy creates a envoy record directly (spanner-internal RPC).
 	// Used during enrollment routing: the receiving bolt validates the
 	// token, then calls this on the target bolt to create the envoy
@@ -732,26 +726,6 @@ func (c *vigoAdminClient) Rollback(ctx context.Context, in *RollbackRequest, opt
 	return out, nil
 }
 
-func (c *vigoAdminClient) ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListPackagesResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_ListPackages_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vigoAdminClient) ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListPackageDriftResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_ListPackageDrift_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vigoAdminClient) EnrollEnvoy(ctx context.Context, in *EnrollEnvoyRequest, opts ...grpc.CallOption) (*EnrollEnvoyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EnrollEnvoyResponse)
@@ -812,10 +786,6 @@ type VigoAdminServer interface {
 	GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
 	Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error)
-	// ListPackages lists package audit records, optionally filtered by envoy.
-	ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error)
-	// ListPackageDrift lists packages where installed version differs from desired.
-	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
 	// EnrollEnvoy creates a envoy record directly (spanner-internal RPC).
 	// Used during enrollment routing: the receiving bolt validates the
 	// token, then calls this on the target bolt to create the envoy
@@ -887,12 +857,6 @@ func (UnimplementedVigoAdminServer) GetEnvoyConvergence(context.Context, *GetEnv
 }
 func (UnimplementedVigoAdminServer) Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Rollback not implemented")
-}
-func (UnimplementedVigoAdminServer) ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListPackages not implemented")
-}
-func (UnimplementedVigoAdminServer) ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListPackageDrift not implemented")
 }
 func (UnimplementedVigoAdminServer) EnrollEnvoy(context.Context, *EnrollEnvoyRequest) (*EnrollEnvoyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnrollEnvoy not implemented")
@@ -1245,42 +1209,6 @@ func _VigoAdmin_Rollback_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_ListPackages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPackagesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).ListPackages(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_ListPackages_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).ListPackages(ctx, req.(*ListPackagesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _VigoAdmin_ListPackageDrift_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPackageDriftRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).ListPackageDrift(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_ListPackageDrift_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).ListPackageDrift(ctx, req.(*ListPackageDriftRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _VigoAdmin_EnrollEnvoy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EnrollEnvoyRequest)
 	if err := dec(in); err != nil {
@@ -1395,14 +1323,6 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Rollback",
 			Handler:    _VigoAdmin_Rollback_Handler,
-		},
-		{
-			MethodName: "ListPackages",
-			Handler:    _VigoAdmin_ListPackages_Handler,
-		},
-		{
-			MethodName: "ListPackageDrift",
-			Handler:    _VigoAdmin_ListPackageDrift_Handler,
 		},
 		{
 			MethodName: "EnrollEnvoy",
