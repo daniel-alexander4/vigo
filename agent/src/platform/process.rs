@@ -140,28 +140,48 @@ pub(crate) fn ioprio_for_nice(nice_level: i32) -> i32 {
 #[cfg(windows)]
 pub fn apply_nice_tokio(_cmd: &mut tokio::process::Command, _nice_level: i32) {}
 
-/// Default memory limit for exec resources (512 MiB).
-pub const DEFAULT_EXEC_MEMORY_LIMIT: u64 = 512 * 1024 * 1024;
+/// oom_score_adj value (max) applied to spawned external commands so the
+/// kernel OOM killer targets the agent's transient children before any of
+/// the host's own workloads — the "invisible on host" guarantee under
+/// memory pressure. Written as static bytes (with trailing newline) so the
+/// pre_exec write is async-signal-safe.
+///
+/// This replaces a former `RLIMIT_AS` (virtual address-space) cap of 512
+/// MiB. RLIMIT_AS bounds *virtual* address space, not RSS, so it never
+/// actually bounded real memory — and it crashed every Go/JVM CLI the
+/// agent shells out to (the `docker` client, etc.) at startup with
+/// "failed to reserve page summary memory", because those runtimes reserve
+/// a large virtual arena up front. oom_score_adj yields the same
+/// host-protection intent (host workloads win) without clipping runtimes;
+/// per-command timeouts + nice/ionice + capped concurrency bound the rest.
+const EXEC_OOM_SCORE_ADJ: &[u8] = b"1000\n";
 
-/// Apply a virtual memory limit to a std::process::Command via RLIMIT_AS.
-/// Set in pre_exec so the child inherits the limit. Non-fatal on error.
+/// Mark a spawned command as the first OOM-kill target (oom_score_adj=1000)
+/// so it yields before host workloads under memory pressure. Set in
+/// pre_exec so the child inherits it; non-fatal on error.
 #[cfg(unix)]
-pub fn apply_memory_limit(cmd: &mut std::process::Command, memory_bytes: u64) {
+pub fn apply_oom_score_adj(cmd: &mut std::process::Command) {
     use std::os::unix::process::CommandExt;
     unsafe {
-        cmd.pre_exec(move || {
-            let limit = libc::rlimit {
-                rlim_cur: memory_bytes,
-                rlim_max: memory_bytes,
-            };
-            libc::setrlimit(libc::RLIMIT_AS, &limit);
+        cmd.pre_exec(|| {
+            // Async-signal-safe: raw libc, static bytes, no allocation.
+            let path = b"/proc/self/oom_score_adj\0";
+            let fd = libc::open(path.as_ptr().cast(), libc::O_WRONLY);
+            if fd >= 0 {
+                libc::write(
+                    fd,
+                    EXEC_OOM_SCORE_ADJ.as_ptr().cast(),
+                    EXEC_OOM_SCORE_ADJ.len(),
+                );
+                libc::close(fd);
+            }
             Ok(())
         });
     }
 }
 
 #[cfg(not(unix))]
-pub fn apply_memory_limit(_cmd: &mut std::process::Command, _memory_bytes: u64) {}
+pub fn apply_oom_score_adj(_cmd: &mut std::process::Command) {}
 
 /// harden_process_memory reduces the chance that resolved-secret plaintext in
 /// agent memory reaches disk or another process. The SecretCache

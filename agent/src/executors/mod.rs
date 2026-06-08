@@ -328,11 +328,9 @@ pub fn run_command_niced(name: &str, args: &[&str], nice_level: i32) -> std::io:
     if nice_level > 0 {
         crate::platform::process::apply_nice(&mut cmd, nice_level);
     }
-    // SAFETY: Apply memory limit to prevent OOM from runaway scripts.
-    crate::platform::process::apply_memory_limit(
-        &mut cmd,
-        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
-    );
+    // Make this child the first OOM-kill target so host workloads win under
+    // memory pressure (do NOT cap RLIMIT_AS — it crashes Go/JVM CLIs).
+    crate::platform::process::apply_oom_score_adj(&mut cmd);
     cmd.output()
 }
 
@@ -363,11 +361,9 @@ pub fn run_command_with_stdin_niced(
     if nice_level > 0 {
         crate::platform::process::apply_nice(&mut cmd, nice_level);
     }
-    // SAFETY: Apply memory limit to prevent OOM from runaway scripts.
-    crate::platform::process::apply_memory_limit(
-        &mut cmd,
-        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
-    );
+    // Make this child the first OOM-kill target so host workloads win under
+    // memory pressure (do NOT cap RLIMIT_AS — it crashes Go/JVM CLIs).
+    crate::platform::process::apply_oom_score_adj(&mut cmd);
     let mut child = cmd.spawn()?;
 
     if let Some(ref mut stdin) = child.stdin {
@@ -412,10 +408,7 @@ pub fn run_command_niced_timeout(
             });
         }
     }
-    crate::platform::process::apply_memory_limit(
-        &mut cmd,
-        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
-    );
+    crate::platform::process::apply_oom_score_adj(&mut cmd);
 
     let child = cmd.spawn()?;
     let pid = child.id();
@@ -478,10 +471,7 @@ pub fn run_command_with_stdin_niced_timeout(
             });
         }
     }
-    crate::platform::process::apply_memory_limit(
-        &mut cmd,
-        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
-    );
+    crate::platform::process::apply_oom_score_adj(&mut cmd);
 
     let mut child = cmd.spawn()?;
     let pid = child.id();
@@ -532,11 +522,9 @@ pub fn run_command_with_stdin_timeout(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    // SAFETY: Apply memory limit to prevent OOM from runaway scripts.
-    crate::platform::process::apply_memory_limit(
-        &mut cmd,
-        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
-    );
+    // Make this child the first OOM-kill target so host workloads win under
+    // memory pressure (do NOT cap RLIMIT_AS — it crashes Go/JVM CLIs).
+    crate::platform::process::apply_oom_score_adj(&mut cmd);
     let mut child = cmd.spawn()?;
 
     if let Some(ref mut stdin) = child.stdin {
