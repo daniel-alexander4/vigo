@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	licfmt "git.alexander4.io/tessera/license/products/vigo"
 	"git.alexander4.io/vigo/server/metrics"
 )
@@ -674,6 +676,57 @@ func TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks(t *testing.T) {
 		t.Error("ServiceStop should reject even with an empty fleet")
 	} else if !errors.Is(err, ErrServiceStopping) {
 		t.Errorf("expected ErrServiceStopping, got %v", err)
+	}
+}
+
+// TestEnforcerRefreshMetrics verifies RefreshMetrics re-reads the live count
+// from the counter and re-sets the vigo_license_envoys_used gauge. This is the
+// path that keeps the gauge fresh on the metrics-collector cadence after a bulk
+// envoy deletion, instead of lagging until the hourly enforcement tick.
+func TestEnforcerRefreshMetrics(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+
+	payload := licfmt.Payload{
+		CustomerName: "Test",
+		CustomerID:   "test-001",
+		LicenseID:    "lic-test",
+		Tier:         "standard",
+		MaxEnvoys:    100,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+
+	dir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	origKey := licfmt.PublicKeyHex
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
+
+	// A mutable counter so we can simulate the fleet count dropping out from
+	// under a previously-set gauge (the bulk-delete scenario).
+	count := 90
+	counter := func(ctx context.Context) (int, error) { return count, nil }
+
+	m := metrics.NewTestMetrics()
+	e, err := NewEnforcer(dir, dir, "", counter, func() {}, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// NewEnforcer's initial evaluation set the gauge to the starting count.
+	if got := testutil.ToFloat64(m.LicenseEnvoysUsed); got != 90 {
+		t.Fatalf("initial LicenseEnvoysUsed = %v, want 90", got)
+	}
+
+	// Fleet shrinks (bulk delete). Without a refresh the gauge would stay at
+	// 90 until the hourly tick; RefreshMetrics pulls it current immediately.
+	count = 5
+	e.RefreshMetrics()
+
+	if got := testutil.ToFloat64(m.LicenseEnvoysUsed); got != 5 {
+		t.Fatalf("after RefreshMetrics LicenseEnvoysUsed = %v, want 5", got)
 	}
 }
 

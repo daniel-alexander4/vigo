@@ -412,8 +412,10 @@ func (e *Enforcer) evaluateLocked() error {
 	return nil
 }
 
-// updateMetrics sets Prometheus gauges for current license state.
-// Must be called with e.mu held.
+// updateMetrics sets Prometheus gauges for current license state. It only
+// reads enforcer fields and writes thread-safe gauges, so it must be called
+// with e.mu held for read or write (callers under evaluateLocked hold the
+// write lock; RefreshMetrics holds the read lock).
 func (e *Enforcer) updateMetrics() {
 	e.metrics.LicenseStage.Set(float64(e.stage))
 	if e.license != nil {
@@ -427,6 +429,21 @@ func (e *Enforcer) updateMetrics() {
 	if count, err := e.counter(context.Background()); err == nil {
 		e.metrics.LicenseEnvoysUsed.Set(float64(count))
 	}
+}
+
+// RefreshMetrics re-reads the live envoy count and re-sets the license gauges
+// from the enforcer's mode-aware counter. It is cheap — a counter read plus a
+// handful of gauge Sets, no license-file read or fingerprint recompute — so it
+// is safe to call on the metrics-collector cadence (default 30s) rather than
+// waiting for the hourly enforcement tick. Without this, vigo_license_envoys_used
+// lags up to an hour behind a bulk envoy deletion (the gauge's only consumer is
+// Prometheus; the UI already reads the live FleetIndex). updateMetrics only
+// reads enforcer state and writes thread-safe prometheus gauges, so a read lock
+// is sufficient.
+func (e *Enforcer) RefreshMetrics() {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	e.updateMetrics()
 }
 
 // FreeLicenseID is the license_id of the built-in community license.
