@@ -6,6 +6,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -116,6 +117,84 @@ func TestRetentionPruner_CascadeDeletesRunResults(t *testing.T) {
 	sqlDB.QueryRow("SELECT COUNT(*) FROM run_results").Scan(&resultsAfter)
 	if resultsAfter != 0 {
 		t.Errorf("run_results count = %d after prune, want 0 (cascade delete)", resultsAfter)
+	}
+}
+
+// TestRetentionPruner_DrainsBacklogLargerThanBatch proves the batched loop
+// runs more than one iteration: a backlog larger than retentionBatchSize is
+// fully drained, and the run_results cascade follows across batches.
+func TestRetentionPruner_DrainsBacklogLargerThanBatch(t *testing.T) {
+	sqlDB := openRetentionTestDB(t)
+	queries := New(sqlDB)
+	ctx := context.Background()
+
+	sqlDB.Exec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES ('t1', 'h1', '10.0.0.1', 'key')`)
+	old := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02 15:04:05")
+
+	const n = retentionBatchSize + 5 // forces a second (short) batch
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < n; i++ {
+		rid := fmt.Sprintf("r%d", i)
+		if _, err := tx.Exec(`INSERT INTO runs (id, envoy_id, started_at, status) VALUES (?, 't1', ?, 'success')`, rid, old); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec(`INSERT INTO run_results (run_id, configcrate_name, resource_type, resource_name, action_taken) VALUES (?, 'mod', 'file', 'conf', 'updated')`, rid); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	pruner := NewRetentionPruner(queries, sqlDB, 90*24*time.Hour)
+	res := pruner.Prune(ctx)
+
+	if res.Deleted["runs"] != int64(n) {
+		t.Errorf("pruned runs = %d, want %d", res.Deleted["runs"], n)
+	}
+	var runCount, resultCount int
+	sqlDB.QueryRow("SELECT COUNT(*) FROM runs").Scan(&runCount)
+	sqlDB.QueryRow("SELECT COUNT(*) FROM run_results").Scan(&resultCount)
+	if runCount != 0 {
+		t.Errorf("runs remaining = %d, want 0 (backlog fully drained)", runCount)
+	}
+	if resultCount != 0 {
+		t.Errorf("run_results remaining = %d, want 0 (cascade across batches)", resultCount)
+	}
+}
+
+// TestDeleteEnvoy_ClearsApprovedPatternUsedBy is the regression test for the
+// 000020 FK fix: deleting an envoy that consumed an approved pattern must
+// succeed (it previously failed with "FOREIGN KEY constraint failed"), and the
+// consumed-pattern record survives with used_by cleared (SET NULL).
+func TestDeleteEnvoy_ClearsApprovedPatternUsedBy(t *testing.T) {
+	sqlDB := openRetentionTestDB(t)
+	queries := New(sqlDB)
+	ctx := context.Background()
+
+	sqlDB.Exec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES ('e1', 'h1', '10.0.0.1', 'key')`)
+	if _, err := sqlDB.Exec(`INSERT INTO approved_patterns (id, pattern, token_hash, used_at, used_by) VALUES ('p1', '*.web', 'hash', datetime('now'), 'e1')`); err != nil {
+		t.Fatalf("insert approved_pattern: %v", err)
+	}
+
+	if err := queries.DeleteEnvoy(ctx, "e1"); err != nil {
+		t.Fatalf("DeleteEnvoy with a consumed approved_pattern: %v", err)
+	}
+
+	var count int
+	if err := sqlDB.QueryRow("SELECT COUNT(*) FROM approved_patterns WHERE id = 'p1'").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("approved_patterns row count = %d, want 1 (consumed-pattern record preserved)", count)
+	}
+	var usedBy sql.NullString
+	sqlDB.QueryRow("SELECT used_by FROM approved_patterns WHERE id = 'p1'").Scan(&usedBy)
+	if usedBy.Valid {
+		t.Errorf("used_by = %q, want NULL after envoy delete (SET NULL)", usedBy.String)
 	}
 }
 

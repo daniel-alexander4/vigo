@@ -183,11 +183,20 @@ func (q *Queries) ListComplianceSnapshotByDate(ctx context.Context, snapshotDate
 
 const pruneComplianceHistoryByAge = `-- name: PruneComplianceHistoryByAge :execrows
 DELETE FROM compliance_history
-WHERE snapshot_date < ?
+WHERE rowid IN (
+  SELECT t.rowid FROM compliance_history AS t
+  WHERE t.snapshot_date < ?
+  LIMIT ?
+)
 `
 
-func (q *Queries) PruneComplianceHistoryByAge(ctx context.Context, snapshotDate string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneComplianceHistoryByAge, snapshotDate)
+type PruneComplianceHistoryByAgeParams struct {
+	SnapshotDate string `json:"snapshot_date"`
+	Limit        int64  `json:"limit"`
+}
+
+func (q *Queries) PruneComplianceHistoryByAge(ctx context.Context, arg PruneComplianceHistoryByAgeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneComplianceHistoryByAge, arg.SnapshotDate, arg.Limit)
 	if err != nil {
 		return 0, err
 	}

@@ -36,4 +36,8 @@ ORDER BY framework;
 
 -- name: PruneComplianceHistoryByAge :execrows
 DELETE FROM compliance_history
-WHERE snapshot_date < ?;
+WHERE rowid IN (
+  SELECT t.rowid FROM compliance_history AS t
+  WHERE t.snapshot_date < ?
+  LIMIT ?
+);

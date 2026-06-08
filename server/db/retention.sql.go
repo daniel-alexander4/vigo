@@ -12,11 +12,20 @@ import (
 
 const pruneConvergenceHistoryByAge = `-- name: PruneConvergenceHistoryByAge :execrows
 DELETE FROM convergence_history
-WHERE recorded_at < ?
+WHERE rowid IN (
+  SELECT t.rowid FROM convergence_history AS t
+  WHERE t.recorded_at < ?
+  LIMIT ?
+)
 `
 
-func (q *Queries) PruneConvergenceHistoryByAge(ctx context.Context, recordedAt string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneConvergenceHistoryByAge, recordedAt)
+type PruneConvergenceHistoryByAgeParams struct {
+	RecordedAt string `json:"recorded_at"`
+	Limit      int64  `json:"limit"`
+}
+
+func (q *Queries) PruneConvergenceHistoryByAge(ctx context.Context, arg PruneConvergenceHistoryByAgeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneConvergenceHistoryByAge, arg.RecordedAt, arg.Limit)
 	if err != nil {
 		return 0, err
 	}
@@ -25,11 +34,20 @@ func (q *Queries) PruneConvergenceHistoryByAge(ctx context.Context, recordedAt s
 
 const pruneFileSnapshotsByAge = `-- name: PruneFileSnapshotsByAge :execrows
 DELETE FROM file_snapshots
-WHERE created_at < ?
+WHERE rowid IN (
+  SELECT t.rowid FROM file_snapshots AS t
+  WHERE t.created_at < ?
+  LIMIT ?
+)
 `
 
-func (q *Queries) PruneFileSnapshotsByAge(ctx context.Context, createdAt time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneFileSnapshotsByAge, createdAt)
+type PruneFileSnapshotsByAgeParams struct {
+	CreatedAt time.Time `json:"created_at"`
+	Limit     int64     `json:"limit"`
+}
+
+func (q *Queries) PruneFileSnapshotsByAge(ctx context.Context, arg PruneFileSnapshotsByAgeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneFileSnapshotsByAge, arg.CreatedAt, arg.Limit)
 	if err != nil {
 		return 0, err
 	}
@@ -38,12 +56,21 @@ func (q *Queries) PruneFileSnapshotsByAge(ctx context.Context, createdAt time.Ti
 
 const pruneRunsByAge = `-- name: PruneRunsByAge :execrows
 DELETE FROM runs
-WHERE started_at < ?
-  AND status NOT IN ('running', 'pending')
+WHERE rowid IN (
+  SELECT t.rowid FROM runs AS t
+  WHERE t.started_at < ?
+    AND t.status NOT IN ('running', 'pending')
+  LIMIT ?
+)
 `
 
-func (q *Queries) PruneRunsByAge(ctx context.Context, startedAt time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneRunsByAge, startedAt)
+type PruneRunsByAgeParams struct {
+	StartedAt time.Time `json:"started_at"`
+	Limit     int64     `json:"limit"`
+}
+
+func (q *Queries) PruneRunsByAge(ctx context.Context, arg PruneRunsByAgeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneRunsByAge, arg.StartedAt, arg.Limit)
 	if err != nil {
 		return 0, err
 	}
@@ -52,12 +79,21 @@ func (q *Queries) PruneRunsByAge(ctx context.Context, startedAt time.Time) (int6
 
 const pruneTaskRunsByAge = `-- name: PruneTaskRunsByAge :execrows
 DELETE FROM task_runs
-WHERE created_at < ?
-  AND status NOT IN ('running', 'pending')
+WHERE rowid IN (
+  SELECT t.rowid FROM task_runs AS t
+  WHERE t.created_at < ?
+    AND t.status NOT IN ('running', 'pending')
+  LIMIT ?
+)
 `
 
-func (q *Queries) PruneTaskRunsByAge(ctx context.Context, createdAt time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneTaskRunsByAge, createdAt)
+type PruneTaskRunsByAgeParams struct {
+	CreatedAt time.Time `json:"created_at"`
+	Limit     int64     `json:"limit"`
+}
+
+func (q *Queries) PruneTaskRunsByAge(ctx context.Context, arg PruneTaskRunsByAgeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneTaskRunsByAge, arg.CreatedAt, arg.Limit)
 	if err != nil {
 		return 0, err
 	}
@@ -66,12 +102,21 @@ func (q *Queries) PruneTaskRunsByAge(ctx context.Context, createdAt time.Time) (
 
 const pruneWorkflowRunsByAge = `-- name: PruneWorkflowRunsByAge :execrows
 DELETE FROM workflow_runs
-WHERE created_at < ?
-  AND status NOT IN ('running', 'pending')
+WHERE rowid IN (
+  SELECT t.rowid FROM workflow_runs AS t
+  WHERE t.created_at < ?
+    AND t.status NOT IN ('running', 'pending')
+  LIMIT ?
+)
 `
 
-func (q *Queries) PruneWorkflowRunsByAge(ctx context.Context, createdAt time.Time) (int64, error) {
-	result, err := q.db.ExecContext(ctx, pruneWorkflowRunsByAge, createdAt)
+type PruneWorkflowRunsByAgeParams struct {
+	CreatedAt time.Time `json:"created_at"`
+	Limit     int64     `json:"limit"`
+}
+
+func (q *Queries) PruneWorkflowRunsByAge(ctx context.Context, arg PruneWorkflowRunsByAgeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneWorkflowRunsByAge, arg.CreatedAt, arg.Limit)
 	if err != nil {
 		return 0, err
 	}

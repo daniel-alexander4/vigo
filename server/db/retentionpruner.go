@@ -74,6 +74,12 @@ func (r PruneResult) Total() int64 {
 	return n
 }
 
+// retentionBatchSize bounds how many rows each prune DELETE removes per
+// statement. A modest size keeps each (cascade-amplified) batch a sub-second
+// transaction so the single SQLite writer is released to queued check-in
+// writes between batches — see pruneBatched.
+const retentionBatchSize = 2000
+
 // Prune deletes old rows from all history tables and runs incremental VACUUM.
 // Returns per-table delete counts so callers can surface progress.
 func (p *RetentionPruner) Prune(ctx context.Context) PruneResult {
@@ -81,37 +87,38 @@ func (p *RetentionPruner) Prune(ctx context.Context) PruneResult {
 	slog.Info("retention pruner running", "cutoff", cutoff.Format(time.RFC3339), "retention", p.retention)
 
 	res := PruneResult{Deleted: make(map[string]int64)}
-
-	tables := []struct {
-		name  string
-		prune func(context.Context, time.Time) (int64, error)
-	}{
-		{"runs", p.queries.PruneRunsByAge},
-		{"task_runs", p.queries.PruneTaskRunsByAge},
-		{"workflow_runs", p.queries.PruneWorkflowRunsByAge},
-		{"file_snapshots", p.queries.PruneFileSnapshotsByAge},
-	}
-
-	for _, t := range tables {
-		n, err := t.prune(ctx, cutoff)
-		if err != nil {
-			slog.Error("retention pruner failed", "table", t.name, "error", err)
-			continue
-		}
-		res.Deleted[t.name] = n
-	}
-
-	// History tables use a string date, not time.Time.
+	// History tables compare against a string date, not time.Time.
 	cutoffDate := cutoff.Format("2006-01-02")
-	if n, err := p.queries.PruneConvergenceHistoryByAge(ctx, cutoffDate); err != nil {
-		slog.Error("retention pruner failed", "table", "convergence_history", "error", err)
-	} else {
-		res.Deleted["convergence_history"] = n
+
+	// One bounded batch per table. Each closure deletes up to
+	// retentionBatchSize rows older than the cutoff; pruneBatched loops it
+	// until the table is drained.
+	steps := []struct {
+		name string
+		one  func(context.Context) (int64, error)
+	}{
+		{"runs", func(ctx context.Context) (int64, error) {
+			return p.queries.PruneRunsByAge(ctx, PruneRunsByAgeParams{StartedAt: cutoff, Limit: retentionBatchSize})
+		}},
+		{"task_runs", func(ctx context.Context) (int64, error) {
+			return p.queries.PruneTaskRunsByAge(ctx, PruneTaskRunsByAgeParams{CreatedAt: cutoff, Limit: retentionBatchSize})
+		}},
+		{"workflow_runs", func(ctx context.Context) (int64, error) {
+			return p.queries.PruneWorkflowRunsByAge(ctx, PruneWorkflowRunsByAgeParams{CreatedAt: cutoff, Limit: retentionBatchSize})
+		}},
+		{"file_snapshots", func(ctx context.Context) (int64, error) {
+			return p.queries.PruneFileSnapshotsByAge(ctx, PruneFileSnapshotsByAgeParams{CreatedAt: cutoff, Limit: retentionBatchSize})
+		}},
+		{"convergence_history", func(ctx context.Context) (int64, error) {
+			return p.queries.PruneConvergenceHistoryByAge(ctx, PruneConvergenceHistoryByAgeParams{RecordedAt: cutoffDate, Limit: retentionBatchSize})
+		}},
+		{"compliance_history", func(ctx context.Context) (int64, error) {
+			return p.queries.PruneComplianceHistoryByAge(ctx, PruneComplianceHistoryByAgeParams{SnapshotDate: cutoffDate, Limit: retentionBatchSize})
+		}},
 	}
-	if n, err := p.queries.PruneComplianceHistoryByAge(ctx, cutoffDate); err != nil {
-		slog.Error("retention pruner failed", "table", "compliance_history", "error", err)
-	} else {
-		res.Deleted["compliance_history"] = n
+
+	for _, s := range steps {
+		res.Deleted[s.name] = p.pruneBatched(ctx, s.name, s.one)
 	}
 
 	// Reclaim space from deleted rows.
@@ -125,6 +132,32 @@ func (p *RetentionPruner) Prune(ctx context.Context) PruneResult {
 
 	slog.Info("retention pruner complete", "deleted_total", res.Total())
 	return res
+}
+
+// pruneBatched runs one bounded delete batch repeatedly until a short batch
+// (fewer than retentionBatchSize rows) signals the table is drained,
+// returning the total deleted. Batching keeps the unbounded first-enablement
+// backlog from holding the single SQLite writer for minutes: each batch is
+// its own implicit transaction, so the writer connection is released to
+// queued check-in (ReportResult) writes between iterations. A failed batch is
+// logged and ends the table with partial progress kept; ctx cancellation
+// (shutdown) stops the loop cleanly.
+func (p *RetentionPruner) pruneBatched(ctx context.Context, table string, one func(context.Context) (int64, error)) int64 {
+	var total int64
+	for {
+		if ctx.Err() != nil {
+			return total
+		}
+		n, err := one(ctx)
+		if err != nil {
+			slog.Error("retention pruner failed", "table", table, "error", err)
+			return total
+		}
+		total += n
+		if n < retentionBatchSize {
+			return total
+		}
+	}
 }
 
 // DatabaseSizeBytes returns the current database file size in bytes.
