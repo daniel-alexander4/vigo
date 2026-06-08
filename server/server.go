@@ -456,10 +456,21 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		s.readDB.SetMaxOpenConns(readN)
 		s.readDB.SetMaxIdleConns(readN)
 
-		// auto_vacuum is a persistent DB-level setting, not per-connection, so
-		// it's applied once on the write handle rather than via the DSN.
-		if _, err := s.db.ExecContext(ctx, "PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
-			return nil, fmt.Errorf("setting auto_vacuum: %w", err)
+		// journal_size_limit caps the on-disk WAL after a checkpoint resets it,
+		// so a write burst that outpaces the passive autocheckpoint can't leave
+		// a permanently bloated -wal file. Set on the single write connection
+		// (where write-triggered checkpoints run; MaxIdleConns=1 keeps it
+		// alive) rather than the DSN because mattn doesn't accept it as a DSN
+		// param. Best-effort, not a correctness pragma — if a reconnect drops
+		// it the only effect is the WAL isn't truncated that cycle.
+		//
+		// auto_vacuum is deliberately NOT set: it can't be enabled
+		// post-creation in WAL mode, and incremental_vacuum is ineffective for
+		// the retention pruner's delete-oldest pattern. The file plateaus at
+		// its working-set size and reuses its freelist in place; `vigocli db
+		// vacuum` is the operator reclaim. See docs/reference/vigocli/db.md.
+		if _, err := s.db.ExecContext(ctx, "PRAGMA journal_size_limit = 67108864"); err != nil {
+			return nil, fmt.Errorf("setting journal_size_limit: %w", err)
 		}
 	}
 
@@ -1653,8 +1664,9 @@ func (s *Server) Close() error {
 // mattn/go-sqlite3 applies these to every connection it opens, so both pools
 // get foreign keys, WAL, the 5s busy timeout, etc. — unlike a one-shot
 // `PRAGMA` ExecContext, which only configures whichever pooled connection it
-// happened to run on. auto_vacuum is omitted here (persistent, DB-level —
-// applied once on the write handle).
+// happened to run on. journal_size_limit is set on the write handle instead
+// (mattn doesn't accept it as a DSN param); auto_vacuum is intentionally never
+// set — see the write-handle setup for why.
 func sqliteDSN(base string) string {
 	sep := "?"
 	for i := 0; i < len(base); i++ {

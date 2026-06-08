@@ -121,17 +121,60 @@ func (p *RetentionPruner) Prune(ctx context.Context) PruneResult {
 		res.Deleted[s.name] = p.pruneBatched(ctx, s.name, s.one)
 	}
 
-	// Reclaim space from deleted rows.
-	if p.isPostgres {
-		// Postgres handles vacuuming via autovacuum; no manual action needed.
-	} else {
-		if _, err := p.sqlDB.ExecContext(ctx, "PRAGMA incremental_vacuum(1000)"); err != nil {
-			slog.Error("incremental vacuum failed", "error", err)
-		}
+	// Deleted pages go to the freelist and are reused in place by future
+	// inserts — the file holds at its working-set high-water mark. SQLite has
+	// no effective online shrink under WAL (auto_vacuum can't be enabled
+	// post-creation in WAL mode, and incremental_vacuum is ineffective for the
+	// delete-oldest pattern), so a large freed backlog is reclaimed only by an
+	// operator `vigocli db vacuum`. Postgres reclaims via autovacuum.
+	if !p.isPostgres {
+		p.recommendVacuumIfBloated(ctx)
 	}
 
 	slog.Info("retention pruner complete", "deleted_total", res.Total())
 	return res
+}
+
+// Vacuum is recommended only when the freelist is both a large fraction of the
+// file and large in absolute terms — a small freelist is healthy reuse slack,
+// not worth a locking full VACUUM.
+const (
+	vacuumBloatPct   = 25        // freelist as a percentage of total pages
+	vacuumMinReclaim = 100 << 20 // and at least this many bytes reclaimable
+)
+
+// vacuumRecommended reports whether the freelist is large enough that an
+// operator VACUUM would meaningfully shrink the file.
+func vacuumRecommended(freelistPages, pageCount, pageSize int64) bool {
+	if freelistPages <= 0 || pageCount <= 0 {
+		return false
+	}
+	if freelistPages*pageSize < vacuumMinReclaim {
+		return false
+	}
+	return freelistPages*100 >= pageCount*vacuumBloatPct
+}
+
+// recommendVacuumIfBloated logs a one-line recommendation to run
+// `vigocli db vacuum` when the freelist has grown large. Advisory only — the
+// pruner never VACUUMs itself (exclusive lock + 2× disk is an operator call).
+func (p *RetentionPruner) recommendVacuumIfBloated(ctx context.Context) {
+	var freelist, pageCount, pageSize int64
+	if err := p.sqlDB.QueryRowContext(ctx, "PRAGMA freelist_count").Scan(&freelist); err != nil {
+		return
+	}
+	if err := p.sqlDB.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return
+	}
+	if err := p.sqlDB.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
+		return
+	}
+	if vacuumRecommended(freelist, pageCount, pageSize) {
+		slog.Warn("database freelist is large; run `vigocli db vacuum` to reclaim disk space",
+			"freelist_pages", freelist,
+			"reclaimable_mb", freelist*pageSize>>20,
+			"bloat_pct", freelist*100/pageCount)
+	}
 }
 
 // pruneBatched runs one bounded delete batch repeatedly until a short batch

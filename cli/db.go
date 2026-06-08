@@ -40,6 +40,9 @@ var dbStatsCmd = &cobra.Command{
 		if v, ok := stats["page_count"]; ok {
 			fmt.Printf("Pages:      %v (size: %v bytes)\n", v, stats["page_size"])
 		}
+		if v, ok := stats["freelist_count"]; ok {
+			fmt.Printf("Free pages: %v (reused in place; run `db vacuum` only if large)\n", v)
+		}
 		if tables, ok := stats["tables"].(map[string]any); ok && len(tables) > 0 {
 			fmt.Printf("\n%-30s %s\n", "TABLE", "ROWS")
 			fmt.Printf("%-30s %s\n", "-----", "----")
@@ -329,7 +332,6 @@ tokens, users, audit history. This action cannot be undone.`,
 				return nil
 			}
 		}
-
 
 		// Get database path from server stats.
 		client := newAPIClient()

@@ -73,6 +73,13 @@ func (h *DatabaseHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 			stats["page_count"] = pageCount
 			stats["page_size"] = pageSize
 		}
+
+		// Free pages reusable in place. Non-zero is healthy slack, not a leak;
+		// only a large freelist warrants an operator `db vacuum`.
+		var freelistCount int64
+		if h.sqlDB.QueryRow("PRAGMA freelist_count").Scan(&freelistCount) == nil {
+			stats["freelist_count"] = freelistCount
+		}
 	}
 
 	// Table row counts.

@@ -198,6 +198,32 @@ func TestDeleteEnvoy_ClearsApprovedPatternUsedBy(t *testing.T) {
 	}
 }
 
+func TestVacuumRecommended(t *testing.T) {
+	const pageSize = 4096
+	cases := []struct {
+		name      string
+		freelist  int64
+		pageCount int64
+		want      bool
+	}{
+		// >25% of pages AND >100 MiB reclaimable → recommend.
+		{"bloated", 40000, 100000, true},
+		// Large fraction but tiny DB (<100 MiB freelist) → healthy slack, no.
+		{"small db high pct", 2000, 4000, false},
+		// Large absolute freelist but <25% of a big DB → reuse slack, no.
+		{"large db low pct", 30000, 620000, false}, // ~the live-DB shape (~4.5%)
+		{"empty freelist", 0, 100000, false},
+		{"empty db", 0, 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := vacuumRecommended(c.freelist, c.pageCount, pageSize); got != c.want {
+				t.Errorf("vacuumRecommended(%d, %d, %d) = %v, want %v", c.freelist, c.pageCount, pageSize, got, c.want)
+			}
+		})
+	}
+}
+
 func TestDatabaseSizeBytes(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 	sqlDB, err := sql.Open("sqlite3", dbPath)
