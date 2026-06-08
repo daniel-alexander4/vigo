@@ -1231,6 +1231,19 @@ type ConfigcrateRef struct {
 	ForEach string `yaml:"foreach,omitempty"` // var name (a list) — instantiate once per item
 	Key     string `yaml:"key,omitempty"`     // item field providing the instance suffix (map lists)
 
+	// State retracts the whole configcrate when "absent": every resource it
+	// manages resolves to its retracted form (stateful types → absent/stopped,
+	// command types → revert:). "" (the default) and "present" enforce it.
+	// Precedence across carriers is most-specific-wins (see Tier).
+	State string `yaml:"state,omitempty"`
+
+	// Tier is the carrier that produced this ref, set by tagCarrierTiers at
+	// load. State precedence compares Tier (most-specific wins) rather than
+	// list position, so it survives any reordering of the resolution pipeline.
+	// Not serialized; a ref reaching resolution with TierUnset is a bug and is
+	// rejected loudly.
+	Tier Tier `yaml:"-"`
+
 	// Set by expandForeachConfigcrateRefs when a foreach: ref is expanded into
 	// per-item instances. BaseName is the original module name (for moduleDefs
 	// lookup); EachItem is this instance's list item; InstanceKey is the
@@ -1239,6 +1252,29 @@ type ConfigcrateRef struct {
 	EachItem    any    `yaml:"-"`
 	InstanceKey string `yaml:"-"`
 }
+
+// Configcrate retraction states for ConfigcrateRef.State.
+const (
+	ConfigcrateStatePresent = "present"
+	ConfigcrateStateAbsent  = "absent"
+)
+
+// Tier ranks the carriers that can declare a configcrate ref's State, from
+// least to most specific. State precedence is most-specific-wins: a finer
+// carrier's explicit state overrides a coarser one (e.g. a match-block
+// `present` un-retracts a `common.vgo` `absent`). Resolution compares Tier, not
+// list order, so the precedence cannot silently invert if the pipeline is
+// reordered. The zero value TierUnset is invalid — every ref is tagged at load
+// by tagCarrierTiers, and an untagged ref reaching resolution fails loudly.
+type Tier int
+
+const (
+	TierUnset  Tier = iota // zero value — untagged ref (a tagging bug; caught at resolve)
+	TierRole               // role-provided (least specific)
+	TierCommon             // common.vgo directory inheritance
+	TierMatch              // hostcrate match block
+	TierEnv                // environments.vgo per-env override (most specific)
+)
 
 // UnmarshalYAML implements yaml.Unmarshaler for ConfigcrateRef. It handles two forms:
 //   - Scalar string: "nginx" -> ConfigcrateRef{Name: "nginx"}

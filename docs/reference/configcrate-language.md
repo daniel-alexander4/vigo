@@ -1799,6 +1799,50 @@ The cheapest way to retract a resource is to **flip its `state`** — change `st
 
 Reach for the heavier retract-configcrate machinery below only when a flip isn't enough — removing a **whole set** of resources at once, uninstalling packages, or reversing `exec` actions that have no inverse `state`. One caveat on the flip: `state: absent` **deletes**, it does not revert. For a file Vigo *created* (motd, an app config) that's exactly right; for a file Vigo only edits the *content* of while the OS owns it (e.g. `/etc/ssh/sshd_config`), `absent` removes the file rather than restoring the original — revert the `content:` instead.
 
+## Per-configcrate `state:` (inline retraction)
+
+To retract a **whole configcrate** declaratively — without the `.retract` file dance below — set `state: absent` on the configcrate reference itself. Every resource the configcrate manages resolves to its retracted form (stateful types flip to `absent`/`stopped`, `revert:`-capable command types reverse via their `on_revert:`) on the next convergence:
+
+```yaml
+envoys:
+  # Retract docker everywhere it matches here — packages removed, services
+  # stopped+disabled, files deleted — while leaving nginx enforced.
+  - match: "*.legacy.example.com"
+    configcrates:
+      - {name: docker, state: absent}
+      - nginx
+```
+
+`state:` accepts `present` (the default; a bare string `docker` is always `present`) or `absent`. It works on a reference in **any** carrier — a hostcrate match block, `common.vgo`, a role, or an `environments.vgo` per-environment block.
+
+**Precedence is most-specific-wins.** When the same configcrate is referenced from more than one carrier with a different `state:`, the most specific carrier wins, in this order:
+
+```
+environments.vgo  >  match block  >  common.vgo  >  role
+```
+
+So a coarse retraction can be un-retracted at a finer level. A common pattern — retract fleet-wide, exempt one host:
+
+```yaml
+# stacks/datacenter-west/common.vgo
+configcrates:
+  - {name: docker, state: absent}      # retract docker across the subtree
+
+# stacks/datacenter-west/envoys.vgo
+envoys:
+  - match: "build01.dc-west.example.com"
+    configcrates:
+      - {name: docker, state: present}  # …except build01 (match > common)
+```
+
+**Limits.**
+
+- `state:` is only valid on `configcrates:` references, not `usercrates:` — usercrate retraction would remove the user, which is intentionally not an inline operation.
+- A configcrate that contains a resource type Vigo can't yet reverse (e.g. the cisco/junos stanza setters, Windows-only policy setters) **errors at publish**, naming the resource and type. Use a `.retract` configcrate (below) for those.
+- A command-type resource (`exec`, `replace`, …) inside an `absent` configcrate must already declare an `on_revert:` command, or publish errors — there's no generic inverse for an arbitrary command.
+
+This is the declarative complement to the AI-assisted `.retract` workflow below: the inline flag covers the common case (reverse a configcrate built from reversible resources) with version-controlled intent that flips with the config; the `.retract` generator handles arbitrary resources the AI must reason about.
+
 ## Configcrate Retraction
 
 Configcrate retraction automatically generates `.retract` files --- the reverse of each configcrate --- so you always have a clean undo ready. When enabled, `vigocli config publish` generates a retract configcrate for every new or changed configcrate, and shows affected envoys when a configcrate is removed.

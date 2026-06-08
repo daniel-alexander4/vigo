@@ -2504,6 +2504,14 @@ func (cs *ConfigStore) loadAllInner() error {
 		return err
 	}
 
+	// Stamp every configcrate/usercrate ref with its carrier tier BEFORE
+	// inheritance flattens the carriers into entry.Configcrates. State
+	// precedence is then resolved by comparing tiers (most-specific wins),
+	// not list position, and a ref that reaches resolution untagged is caught
+	// loudly. Done here, once, so the Get() root-common fallback (which skips
+	// applyInheritance) inherits the same tags via cs.commonConfigs.
+	tagCarrierTiers(envoyEntries, roleDefs, commonConfigs, perEnvOverrides)
+
 	// Apply directory inheritance: prepend inherited configcrates/roles/vars
 	// from common.vgo files in ancestor directories. Usercrates auto-apply
 	// from any usercrates/ subdir in the entry's ancestor chain.
@@ -2725,9 +2733,27 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 	}
 
 	// Collect module refs: roles first (with includes), then direct modules.
-	// First ref wins for conditional fields (matching existing var merge behavior).
+	// First ref wins for the definition + conditional fields (matching the
+	// existing var merge behavior). State is the one exception — it is
+	// most-specific-wins across carriers, resolved by comparing tiers (not list
+	// position) so the precedence survives any pipeline reordering. See [Tier].
 	var moduleRefs []ConfigcrateRef
-	seen := make(map[string]bool)
+	seen := make(map[string]int)       // name → index into moduleRefs
+	stateTier := make(map[string]Tier) // name → tier that set the winning State
+	addRef := func(ref ConfigcrateRef) {
+		if idx, ok := seen[ref.Name]; ok {
+			if ref.State != "" && ref.Tier >= stateTier[ref.Name] {
+				moduleRefs[idx].State = ref.State
+				stateTier[ref.Name] = ref.Tier
+			}
+			return
+		}
+		seen[ref.Name] = len(moduleRefs)
+		if ref.State != "" {
+			stateTier[ref.Name] = ref.Tier
+		}
+		moduleRefs = append(moduleRefs, ref)
+	}
 	for _, roleRef := range entry.Roles {
 		role, ok := roleDefs[roleRef.Name]
 		if !ok {
@@ -2744,94 +2770,73 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 					notFoundHint(incName, roleCandidates(roleDefs), ""))
 			}
 			for _, ref := range inc.Configcrates {
-				if !seen[ref.Name] {
-					seen[ref.Name] = true
-					mref := ref
-					// When inheritance: module's own when > included role when >
-					// parent role when > role ref when. Most specific wins.
-					if mref.When == "" {
-						if inc.When != "" {
-							mref.When = inc.When
-						} else if role.When != "" {
-							mref.When = role.When
-						} else if roleRef.When != "" {
-							mref.When = roleRef.When
-						}
+				mref := ref
+				// When inheritance: module's own when > included role when >
+				// parent role when > role ref when. Most specific wins.
+				if mref.When == "" {
+					if inc.When != "" {
+						mref.When = inc.When
+					} else if role.When != "" {
+						mref.When = role.When
+					} else if roleRef.When != "" {
+						mref.When = roleRef.When
 					}
-					moduleRefs = append(moduleRefs, mref)
 				}
+				addRef(mref)
 			}
 			for _, ref := range inc.Usercrates {
-				if !seen[ref.Name] {
-					seen[ref.Name] = true
-					mref := ref
-					if mref.When == "" {
-						if inc.When != "" {
-							mref.When = inc.When
-						} else if role.When != "" {
-							mref.When = role.When
-						} else if roleRef.When != "" {
-							mref.When = roleRef.When
-						}
+				mref := ref
+				if mref.When == "" {
+					if inc.When != "" {
+						mref.When = inc.When
+					} else if role.When != "" {
+						mref.When = role.When
+					} else if roleRef.When != "" {
+						mref.When = roleRef.When
 					}
-					moduleRefs = append(moduleRefs, mref)
 				}
+				addRef(mref)
 			}
 		}
 		for _, ref := range role.Configcrates {
-			if !seen[ref.Name] {
-				seen[ref.Name] = true
-				mref := ref
-				if mref.When == "" {
-					if role.When != "" {
-						mref.When = role.When
-					} else if roleRef.When != "" {
-						mref.When = roleRef.When
-					}
+			mref := ref
+			if mref.When == "" {
+				if role.When != "" {
+					mref.When = role.When
+				} else if roleRef.When != "" {
+					mref.When = roleRef.When
 				}
-				moduleRefs = append(moduleRefs, mref)
 			}
+			addRef(mref)
 		}
 		for _, ref := range role.Usercrates {
-			if !seen[ref.Name] {
-				seen[ref.Name] = true
-				mref := ref
-				if mref.When == "" {
-					if role.When != "" {
-						mref.When = role.When
-					} else if roleRef.When != "" {
-						mref.When = roleRef.When
-					}
+			mref := ref
+			if mref.When == "" {
+				if role.When != "" {
+					mref.When = role.When
+				} else if roleRef.When != "" {
+					mref.When = roleRef.When
 				}
-				moduleRefs = append(moduleRefs, mref)
 			}
+			addRef(mref)
 		}
 		// Expand conditional cases. Each case's when: is applied to
 		// all its modules that don't have their own when: condition.
 		for _, c := range role.Case {
 			for _, ref := range c.Configcrates {
-				if !seen[ref.Name] {
-					seen[ref.Name] = true
-					mref := ref
-					if mref.When == "" {
-						mref.When = c.When
-					}
-					moduleRefs = append(moduleRefs, mref)
+				mref := ref
+				if mref.When == "" {
+					mref.When = c.When
 				}
+				addRef(mref)
 			}
 		}
 	}
 	for _, ref := range entry.Configcrates {
-		if !seen[ref.Name] {
-			seen[ref.Name] = true
-			moduleRefs = append(moduleRefs, ref)
-		}
+		addRef(ref)
 	}
 	for _, ref := range entry.Usercrates {
-		if !seen[ref.Name] {
-			seen[ref.Name] = true
-			moduleRefs = append(moduleRefs, ref)
-		}
+		addRef(ref)
 	}
 
 	// Expand module refs carrying foreach: into one synthetic ref per list item
@@ -2840,6 +2845,16 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 	moduleRefs, err := expandForeachConfigcrateRefs(moduleRefs, moduleDefs, entry.Vars)
 	if err != nil {
 		return nil, err
+	}
+
+	// Backstop: every ref must carry a carrier tier by now. An untagged ref
+	// means a tagging site was missed (a code bug, not operator error) — fail
+	// this entry's resolution loudly rather than let state precedence silently
+	// default. tagCarrierTiers + the all-refs-tagged test should prevent it.
+	for _, ref := range moduleRefs {
+		if ref.Tier == TierUnset {
+			return nil, fmt.Errorf("internal: configcrate ref %q resolved without a carrier tier — a ref injection site is missing tier tagging", ref.Name)
+		}
 	}
 
 	// Resolve module definitions into Configcrates, carrying conditional fields.
@@ -2858,6 +2873,15 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 			return nil, fmt.Errorf("configcrate %q%s does not exist%s",
 				defName, via,
 				notFoundHint(defName, moduleCandidates(moduleDefs), "add a configcrate definition to configcrates/"))
+		}
+		// Validate the retraction state: lever, if set.
+		if ref.State != "" {
+			if def.Kind == ConfigcrateKindUsercrate {
+				return nil, fmt.Errorf("usercrate %q: state: is not supported on usercrate references — usercrate retraction would remove the user; drop the reference instead", ref.Name)
+			}
+			if ref.State != ConfigcrateStatePresent && ref.State != ConfigcrateStateAbsent {
+				return nil, fmt.Errorf("configcrate %q: invalid state %q — use %q or %q", ref.Name, ref.State, ConfigcrateStatePresent, ConfigcrateStateAbsent)
+			}
 		}
 		// Shallow-clone the inherited-compliance map so later mutation
 		// of one doesn't leak into the other. InheritedCompliance carries
@@ -2881,6 +2905,16 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Con
 				return nil, fmt.Errorf("configcrate %q instance [%s]: %w", ref.BaseName, ref.InstanceKey, rerr)
 			}
 			resources = expanded
+		}
+		// Configcrate-level retraction: flip every resource to its retracted
+		// form so a single ref reverses the whole configcrate. Shares the
+		// reversal SoT (validate) with the .retract generator.
+		if ref.State == ConfigcrateStateAbsent {
+			for j := range resources {
+				if rerr := retractResourceInPlace(&resources[j]); rerr != nil {
+					return nil, fmt.Errorf("configcrate %q marked state: absent: %w", modName, rerr)
+				}
+			}
 		}
 		modules = append(modules, Configcrate{
 			Name:       modName,
@@ -3556,6 +3590,81 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 // override parent vars. exclude_modules strips specific inherited
 // modules. Usercrates are NOT auto-applied — they require an explicit
 // positive include via a carrier's `usercrates:` field (see step 3+).
+// tagRefs stamps a carrier tier onto every ref in the slice, in place.
+func tagRefs(refs []ConfigcrateRef, tier Tier) {
+	for i := range refs {
+		refs[i].Tier = tier
+	}
+}
+
+// tagCarrierTiers stamps each configcrate/usercrate ref with the tier of the
+// carrier that declared it (role / common.vgo / match block / environments).
+// Called once per reload before applyInheritance, while each ref still sits in
+// its own typed source struct and its carrier is unambiguous. Downstream
+// flattening and dedup carry the tag forward, so state precedence is resolved
+// by tier (most-specific wins) regardless of resolution order. See [Tier].
+func tagCarrierTiers(
+	envoyEntries []EnvoyEntry,
+	roleDefs map[string]*RoleDefinition,
+	commonConfigs map[string]*CommonConfig,
+	perEnvOverrides map[string]map[string]*PerEnvOverrideBlock,
+) {
+	for _, role := range roleDefs {
+		tagRefs(role.Configcrates, TierRole)
+		tagRefs(role.Usercrates, TierRole)
+		for i := range role.Case {
+			tagRefs(role.Case[i].Configcrates, TierRole)
+		}
+	}
+	for _, cc := range commonConfigs {
+		tagRefs(cc.Configcrates, TierCommon)
+		tagRefs(cc.Usercrates, TierCommon)
+	}
+	for i := range envoyEntries {
+		tagRefs(envoyEntries[i].Configcrates, TierMatch)
+		tagRefs(envoyEntries[i].Usercrates, TierMatch)
+	}
+	for _, envMap := range perEnvOverrides {
+		for _, block := range envMap {
+			tagRefs(block.Configcrates, TierEnv)
+			tagRefs(block.Usercrates, TierEnv)
+		}
+	}
+}
+
+// retractResourceInPlace rewrites a resource to its retracted form so a
+// configcrate referenced with state: absent reverses everything it manages.
+// State-managed types flip via the shared reversal SoT (validate); command and
+// value-setter types revert via revert:/on_revert:. Types that can't be
+// reversed in this build (e.g. cisco/junos stanza setters, Windows-only
+// policy setters) return a legible error naming the resource and type — the
+// operator falls back to a .retract configcrate for those.
+func retractResourceInPlace(res *ResourceConfig) error {
+	if res.Attributes == nil {
+		res.Attributes = make(map[string]any)
+	}
+	if attrs, ok := validate.RetractedStateAttrs(res.Type); ok {
+		for k, v := range attrs {
+			res.Attributes[k] = v
+		}
+		return nil
+	}
+	if validate.CommandReversibleTypes[res.Type] {
+		if s, _ := res.Attributes["on_revert"].(string); strings.TrimSpace(s) == "" {
+			return fmt.Errorf("resource %q (type %q) needs an on_revert: command before it can be retracted", res.Name, res.Type)
+		}
+		res.Attributes["revert"] = true
+		return nil
+	}
+	if validate.ReversibleTypes[res.Type] {
+		// Group B value-setter (hostname, timezone): reverts by restoring a
+		// snapshotted prior value — no on_revert: required.
+		res.Attributes["revert"] = true
+		return nil
+	}
+	return fmt.Errorf("resource %q (type %q) is not reversible — it cannot be retracted by state: absent; use a .retract configcrate or drop the reference", res.Name, res.Type)
+}
+
 func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEnvOverrides map[string]map[string]*PerEnvOverrideBlock) {
 	// Snapshot the entry's own configcrates/roles/usercrates/vars before merging.
 	entry.OwnConfigcrates = append([]ConfigcrateRef(nil), entry.Configcrates...)

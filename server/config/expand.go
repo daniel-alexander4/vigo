@@ -229,6 +229,8 @@ func expandForeachConfigcrateRefs(refs []ConfigcrateRef, defs map[string]*Config
 			out = append(out, ConfigcrateRef{
 				Name:        r.Name + "[" + key + "]",
 				When:        r.When,
+				State:       r.State,
+				Tier:        r.Tier,
 				BaseName:    r.Name,
 				EachItem:    item,
 				InstanceKey: key,
