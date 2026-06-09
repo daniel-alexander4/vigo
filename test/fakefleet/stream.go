@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"sync"
@@ -101,34 +102,67 @@ func streamEnvoy(ctx context.Context, cfg config, h *hostState, deltaMs uint32, 
 	case <-time.After(off):
 	}
 
-	sctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	stream, err := client.AgentStream(sctx)
-	if err != nil {
-		c.checkinFails.Add(1)
-		return
-	}
-
-	// Handshake: the first message must be a CheckIn. The server validates it,
-	// registers the held stream, and replies with the initial CheckInResponse.
-	if err := stream.Send(&pb.AgentStreamMessage{
-		Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: buildCheckInReq(h, deltaMs, 0, "")},
-	}); err != nil {
-		if status.Code(err) == codes.NotFound {
-			c.gone.Add(1)
-		} else {
-			c.checkinFails.Add(1)
+	// Handshake with retry. The first message must be a CheckIn; the server
+	// validates it, registers the held stream, and replies with the initial
+	// CheckInResponse. Under a connect storm the server sheds the (CPU-heavy)
+	// fresh-envoy bundle build via checkin.max_concurrent and TERMINATES the
+	// stream with ResourceExhausted — which surfaces on Recv, not Send. A real
+	// agent reconnects with backoff; mirror that so the harness measures the
+	// true held-stream ceiling instead of a no-retry floor. Confirm admission
+	// by reading the first response (where the shed lands), then hand the live
+	// stream to the steady send/recv loops below.
+	var stream pb.VigoAgent_AgentStreamClient
+	var sctx context.Context
+	var cancel context.CancelFunc
+	var pv0 uint64
+	var fp0 string
+	var bo streamBackoff
+	for {
+		var err error
+		sctx, cancel = context.WithCancel(ctx)
+		if stream, err = client.AgentStream(sctx); err == nil {
+			if err = stream.Send(&pb.AgentStreamMessage{
+				Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: buildCheckInReq(h, deltaMs, 0, "")},
+			}); err == nil || err == io.EOF {
+				var resp *pb.ServerStreamMessage
+				if resp, err = stream.Recv(); err == nil {
+					if r := resp.GetCheckInResponse(); r != nil {
+						pv0, fp0 = r.GetPolicyVersion(), r.GetResponseFingerprint()
+					}
+				}
+			}
 		}
-		return
+		if err == nil {
+			c.checkins.Add(1)
+			break // admitted — held stream is live
+		}
+		cancel()
+		switch {
+		case ctx.Err() != nil:
+			return
+		case status.Code(err) == codes.NotFound:
+			c.gone.Add(1)
+			return
+		case status.Code(err) == codes.ResourceExhausted:
+			// Shed by the connect-admission gate — back off and retry.
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(bo.next()):
+			}
+		default:
+			c.checkinFails.Add(1)
+			return
+		}
 	}
-	c.checkins.Add(1)
+	defer cancel()
 
 	// Steady-state cache, written by the recv goroutine and read by the send
 	// loop, so subsequent check-ins echo the server's version+fingerprint and
-	// hit the cheap no_change path (the same shape a real agent uses).
+	// hit the cheap no_change path (the same shape a real agent uses). Seeded
+	// from the handshake response above.
 	var mu sync.Mutex
-	var pv uint64
-	var fp string
+	pv, fp := pv0, fp0
 
 	go func() {
 		for {
