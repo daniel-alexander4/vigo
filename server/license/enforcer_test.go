@@ -586,6 +586,56 @@ func TestRegistrationAllowedAt_HardNodeLimit(t *testing.T) {
 	}
 }
 
+// TestCurrentCount_DelegatesToCounter verifies the enforcer surfaces its
+// injected mode-aware counter through CurrentCount — the value the enrollment
+// gate reads before RegistrationAllowedAt, so the gate enforces against the
+// licensed-count source of truth rather than a separate local count. Both the
+// success and the error pass-through are covered.
+func TestCurrentCount_DelegatesToCounter(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	payload := licfmt.Payload{
+		CustomerName: "Test",
+		CustomerID:   "test-001",
+		LicenseID:    "lic-current-count",
+		Tier:         "standard",
+		MaxEnvoys:    50,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+	dir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
+
+	t.Run("returns the counter value", func(t *testing.T) {
+		counter := func(ctx context.Context) (int, error) { return 37, nil }
+		e, err := NewEnforcer(dir, dir, "", counter, func() {}, metrics.NewTestMetrics())
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := e.CurrentCount(context.Background())
+		if err != nil {
+			t.Fatalf("CurrentCount: %v", err)
+		}
+		if got != 37 {
+			t.Errorf("CurrentCount = %d, want 37", got)
+		}
+	})
+
+	t.Run("propagates the counter error", func(t *testing.T) {
+		wantErr := errors.New("count source unavailable")
+		counter := func(ctx context.Context) (int, error) { return 0, wantErr }
+		e, err := NewEnforcer(dir, dir, "", counter, func() {}, metrics.NewTestMetrics())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.CurrentCount(context.Background()); !errors.Is(err, wantErr) {
+			t.Errorf("CurrentCount err = %v, want %v", err, wantErr)
+		}
+	})
+}
+
 // TestRegistrationAllowedAt_DowngradeGraceStillBlocksHardLimit verifies that
 // a post-install license downgrade (where the enforcer enters Stage 1 Grace
 // because existing count > new max) still rejects new enrollments via the

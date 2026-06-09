@@ -429,7 +429,7 @@ license:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `mode` | `local` | `local`: count nodes on this server. `aggregate`: every spanner bolt sums the fleet-wide node count from the gossip-replicated roster and enforces independently. Requires `spanner.mode: spanner` — rejected at config load on a standalone server. |
+| `mode` | `local` | `local`: count nodes on this server. `aggregate`: every spanner bolt sums the fleet-wide node count from the gossip-replicated roster and gates enrollment against it independently. Best-effort: the count comes from eventually-consistent gossip, so simultaneous enrollments on different bolts near the cap can both pass — the fleet-wide limit is a soft cap, not a hard guarantee (consensus-free by design, ADR-026). Requires `spanner.mode: spanner` — rejected at config load on a standalone server. |
 
 ## publish
 

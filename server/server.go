@@ -542,39 +542,13 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		s.licenseMode = "local"
 	}
 
-	// envoyCounter closes over *Server. s.spannerAdmin and s.fleetIndex
-	// stay nil through the license-enforcer assignment and are populated
-	// later in NewServer (fleet-rehydrate + spanner-admin stages). The
-	// enforcement loop runs on a 1-hour ticker, so the real values are
-	// in place well before the first call.
-	envoyCounter := func(ctx context.Context) (int, error) {
-		// Aggregate mode: sum the whole spanner. AggregateEnvoysLocal
-		// folds the local fleet index together with every gossiped peer
-		// roster, so each bolt computes the same fleet-wide count.
-		if s.licenseMode == "aggregate" && s.spannerAdmin != nil {
-			envoys, _ := s.spannerAdmin.AggregateEnvoysLocal()
-			total := 0
-			for _, e := range envoys {
-				if !e.Revoked {
-					total++
-				}
-			}
-			return total, nil
-		}
-
-		// Local mode (default): the in-memory FleetIndex is the source of
-		// truth. It's seeded from the DB at startup via Rehydrate, and
-		// every enrollment/revocation goes through the registry under its
-		// serialization mutex which keeps the index in sync. Reading it
-		// here is O(1) and can be called from the hot path without a
-		// ListEnvoys scan.
-		if s.fleetIndex == nil {
-			return 0, nil // pre-rehydrate — gate runs later
-		}
-		return s.fleetIndex.ActiveCount(), nil
-	}
-
-	s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile, envoyCounter, func() { s.cancel() }, s.metrics)
+	// s.envoyCount is the mode-aware licensed-count source of truth (see the
+	// method). It closes over *Server: s.spannerAdmin and s.fleetIndex stay
+	// nil through this assignment and are populated later in NewServer
+	// (fleet-rehydrate + spanner-admin stages), but the method reads them at
+	// call time, and the first call (enforcement ticker / first enrollment)
+	// lands well after they're set.
+	s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile, s.envoyCount, func() { s.cancel() }, s.metrics)
 	if err != nil {
 		return nil, fmt.Errorf("license: %w", err)
 	}
@@ -1602,6 +1576,38 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 // helpers. The split keeps server.go focused on construction
 // (NewServer) + teardown (Close) without bloating past the readable
 // line-count budget.
+
+// envoyCount returns the licensed-count source of truth, mode-aware. It is
+// the EnvoyCounter handed to the license enforcer and, via the enforcer's
+// CurrentCount, the count the enrollment gate enforces against.
+//
+// Aggregate mode (spanner): AggregateEnvoysLocal folds this bolt's fleet
+// index together with every gossiped peer roster, so each bolt computes the
+// same fleet-wide count and enforces the global node limit independently
+// (ADR-026 peer-equal — no designated enforcer). The count is best-effort:
+// it reflects the gossip cache, so concurrent enrollments across bolts at
+// fleet−1 can both pass. That softness is inherent to consensus-free
+// aggregation, not a defect of the gate.
+//
+// Local mode (default): the in-memory FleetIndex is the source of truth —
+// seeded from the DB at startup via Rehydrate and kept in sync by the
+// registry's serialized enrollment path. O(1), safe on the enrollment path.
+func (s *Server) envoyCount(_ context.Context) (int, error) {
+	if s.licenseMode == "aggregate" && s.spannerAdmin != nil {
+		envoys, _ := s.spannerAdmin.AggregateEnvoysLocal()
+		total := 0
+		for _, e := range envoys {
+			if !e.Revoked {
+				total++
+			}
+		}
+		return total, nil
+	}
+	if s.fleetIndex == nil {
+		return 0, nil // pre-rehydrate — gate runs later
+	}
+	return s.fleetIndex.ActiveCount(), nil
+}
 
 // emitStartupHardeningFindings runs the defense-in-depth detectors
 // (DetectDebugger, DetectInjection) and records each finding as a

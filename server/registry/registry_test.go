@@ -970,15 +970,36 @@ func TestCreateEnvoyDuplicateHostnameRejected(t *testing.T) {
 // --- License enrollment gate tests ---
 
 // stubGate is a minimal EnrollmentGate for tests. It records every call and
-// can be configured to accept, reject, or fail closed on unknown count.
+// can be configured to accept, reject, or fail closed on either the count
+// read or the policy check.
+//
+// count is the mode-aware count source the gate reports via CurrentCount —
+// modeling the enforcer's EnvoyCounter. newRegistryWithGate defaults it to the
+// wired FleetIndex's ActiveCount (local-mode parity, what every gate test
+// other than the aggregate-divergence one wants); a test can override it to
+// report a fleet-wide count divergent from the local fleet (aggregate mode).
 type stubGate struct {
-	maxAllowed   int  // reject if currentCount >= maxAllowed (set to -1 to always allow)
-	errorOnCheck bool // if true, simulates a counter-unavailable internal error
+	maxAllowed   int        // reject if currentCount >= maxAllowed (set to -1 to always allow)
+	count        func() int // mode-aware count source; defaulted to fi.ActiveCount by the helper
+	errorOnCount bool       // if true, CurrentCount fails (counter unavailable)
+	errorOnCheck bool       // if true, RegistrationAllowedAt fails (gate internal error)
 
+	countCalls    int
 	calls         int
 	blockedCalls  int
 	errorCalls    int
 	rejectedCount int // count passed on the most recent rejection
+}
+
+func (s *stubGate) CurrentCount(_ context.Context) (int, error) {
+	s.countCalls++
+	if s.errorOnCount {
+		return 0, fmt.Errorf("stub: count unavailable")
+	}
+	if s.count != nil {
+		return s.count(), nil
+	}
+	return 0, nil
 }
 
 func (s *stubGate) RegistrationAllowedAt(currentCount int) error {
@@ -1000,6 +1021,9 @@ func newRegistryWithGate(t *testing.T, gate *stubGate) (*registry.Registry, *fle
 	t.Helper()
 	reg := newTestRegistry(t)
 	fi := fleet.NewFleetIndex()
+	if gate.count == nil {
+		gate.count = fi.ActiveCount // local-mode parity: gate counts the live fleet
+	}
 	reg.SetFleetIndex(fi)
 	reg.SetEnrollmentGate(gate)
 	return reg, fi
@@ -1079,6 +1103,70 @@ func TestCreateEnvoy_GateFailsClosedOnError(t *testing.T) {
 	}
 	if fi.ActiveCount() != 0 {
 		t.Errorf("expected no fleet additions on gate error, got ActiveCount=%d", fi.ActiveCount())
+	}
+}
+
+// TestCreateEnvoy_GateEnforcesModeAwareCount is the regression guard for the
+// aggregate-license enforcement fix: the registry must source the count from
+// the gate's mode-aware CurrentCount, NOT its own local FleetIndex. Here the
+// gate reports a fleet-wide count at the limit while this bolt's local fleet is
+// empty (the spanner aggregate-mode shape) — enrollment must still be rejected.
+// Before the fix the registry passed fleet.ActiveCount() (0) and would have let
+// the enrollment through, defeating the fleet-wide cap.
+func TestCreateEnvoy_GateEnforcesModeAwareCount(t *testing.T) {
+	gate := &stubGate{maxAllowed: 100, count: func() int { return 100 }}
+	reg, fi := newRegistryWithGate(t, gate)
+	ctx := context.Background()
+
+	if fi.ActiveCount() != 0 {
+		t.Fatalf("precondition: local fleet should be empty, got %d", fi.ActiveCount())
+	}
+
+	_, err := reg.CreateEnvoy(ctx, "agg-over.example.com", "10.0.0.9", "pk-agg", false)
+	if err == nil {
+		t.Fatal("expected rejection: fleet-wide count is at the limit even though the local fleet is empty")
+	}
+	if !strings.Contains(err.Error(), "node limit") {
+		t.Errorf("expected node-limit rejection, got: %v", err)
+	}
+	if gate.countCalls != 1 {
+		t.Errorf("expected CurrentCount consulted exactly once, got %d", gate.countCalls)
+	}
+	if gate.rejectedCount != 100 {
+		t.Errorf("gate should have been handed the fleet-wide count 100, got %d", gate.rejectedCount)
+	}
+	if gate.blockedCalls != 1 {
+		t.Errorf("expected 1 RecordEnrollmentBlocked, got %d", gate.blockedCalls)
+	}
+	if fi.ActiveCount() != 0 {
+		t.Errorf("no envoy should be created on rejection, got %d", fi.ActiveCount())
+	}
+}
+
+// TestCreateEnvoy_GateFailsClosedOnCountError verifies that when the mode-aware
+// count source itself errors (e.g. the aggregate cache is unavailable), the
+// registry fails closed: no policy check, no envoy, an enforcement error
+// recorded. The count read and the policy check are distinct failure surfaces.
+func TestCreateEnvoy_GateFailsClosedOnCountError(t *testing.T) {
+	gate := &stubGate{maxAllowed: 5, errorOnCount: true}
+	reg, fi := newRegistryWithGate(t, gate)
+	ctx := context.Background()
+
+	_, err := reg.CreateEnvoy(ctx, "count-err.example.com", "10.0.0.1", "pk-ce", false)
+	if err == nil {
+		t.Fatal("expected failure when the count source errors")
+	}
+	if !strings.Contains(err.Error(), "count unavailable") {
+		t.Errorf("expected count-unavailable error, got: %v", err)
+	}
+	if gate.calls != 0 {
+		t.Errorf("RegistrationAllowedAt must not run when the count read fails, got %d calls", gate.calls)
+	}
+	if gate.errorCalls != 1 {
+		t.Errorf("expected 1 RecordEnforcementError, got %d", gate.errorCalls)
+	}
+	if fi.ActiveCount() != 0 {
+		t.Errorf("no envoy should be created on count error, got %d", fi.ActiveCount())
 	}
 }
 

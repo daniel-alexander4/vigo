@@ -53,6 +53,14 @@ var (
 // interface to avoid a registry → license import cycle and to make the
 // registry unit-testable with a trivial stub.
 type EnrollmentGate interface {
+	// CurrentCount returns the licensed-count source of truth: the local
+	// fleet count in local mode, the gossip-aggregated fleet-wide count in
+	// aggregate mode. The registry reads it here (rather than off its own
+	// FleetIndex) so the gate enforces against the correct count for the
+	// license mode, then passes the result to RegistrationAllowedAt under
+	// the same mutex.
+	CurrentCount(ctx context.Context) (int, error)
+
 	// RegistrationAllowedAt returns nil if a new envoy may be registered
 	// given the supplied live active count, or an error describing why it
 	// is blocked. Implementations must not read the count themselves —
@@ -279,7 +287,16 @@ func (r *Registry) insertEnvoyLocked(ctx context.Context, hostname, ip, pubkeyPE
 			r.gate.RecordEnforcementError()
 			return "", fmt.Errorf("license enforcement: fleet index not wired up")
 		}
-		currentCount := r.fleet.ActiveCount()
+		// Source the count from the gate's mode-aware counter, not the local
+		// FleetIndex directly: in aggregate mode (spanner) the gate must
+		// enforce against the gossip-wide fleet count, not just this bolt's
+		// partition. In local mode this resolves to the same FleetIndex count.
+		// Read under enrollMu so the check and the DB+index insert stay atomic.
+		currentCount, err := r.gate.CurrentCount(ctx)
+		if err != nil {
+			r.gate.RecordEnforcementError()
+			return "", fmt.Errorf("license enforcement: count unavailable: %w", err)
+		}
 		if err := r.gate.RegistrationAllowedAt(currentCount); err != nil {
 			r.gate.RecordEnrollmentBlocked()
 			return "", err

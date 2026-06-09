@@ -137,6 +137,21 @@ func (e *Enforcer) Reload() error {
 	return e.loadAndCheckLocked()
 }
 
+// CurrentCount returns the live active-envoy count from the mode-aware
+// counter the enforcer was constructed with: the local FleetIndex count in
+// local mode, the gossip-aggregated fleet-wide count in aggregate mode. It is
+// the licensed-count source of truth — the same value GetStatus, the UI, and
+// the bootstrap response report. The enrollment gate calls this immediately
+// before RegistrationAllowedAt (under the registry's enrollMu) so the count
+// it checks reflects the license mode rather than always the local fleet.
+//
+// No enforcer lock is taken: counter is set once at construction and reads
+// its own concurrency-safe sources (FleetIndex / spanner observability cache),
+// independent of the mu-protected enforcement state.
+func (e *Enforcer) CurrentCount(ctx context.Context) (int, error) {
+	return e.counter(ctx)
+}
+
 // RegistrationAllowedAt returns nil if a new envoy registration is permitted
 // given the supplied live active envoy count, or a sentinel error wrapped with
 // context if it is blocked. The count is passed in (not read inside this
