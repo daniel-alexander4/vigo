@@ -658,9 +658,12 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	// bootstrap script can print a heads-up as the fleet approaches the
 	// license cap. Pure read — no enforcement action here, the gate already
 	// ran inside the registry.
-	if h.licenseEnforcer != nil && h.fleetIndex != nil {
+	if h.licenseEnforcer != nil {
 		if st := h.licenseEnforcer.GetStatus(); st.MaxEnvoys > 0 {
-			active := h.fleetIndex.ActiveCount()
+			// Mode-aware count (local FleetIndex locally, spanner-wide in
+			// aggregate mode) — the licensed-count SoT, same value every
+			// other license surface reports.
+			active := st.ActiveEnvoys
 			remaining := st.MaxEnvoys - active
 			if remaining < 0 {
 				remaining = 0

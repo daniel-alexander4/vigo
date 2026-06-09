@@ -99,6 +99,13 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, fmt.Errorf("parsing server config: %w", err)
 	}
 
+	// license.mode: aggregate sums the fleet-wide roster across spanner bolts;
+	// it is meaningless on a standalone server (no peers to aggregate) and
+	// would silently fall back to local counting. Fail fast rather than mislead.
+	if cfg.License.Mode == "aggregate" && cfg.Spanner.Mode != ModeSpanner {
+		return nil, fmt.Errorf("license.mode: aggregate requires spanner.mode: spanner — aggregate counting sums the fleet-wide node count across spanner bolts and has no effect on a standalone server; set spanner.mode: spanner, or use license.mode: local")
+	}
+
 	// Resolve secret: prefixes in config values.
 	if err := resolveServerSecrets(&cfg, provider, backend); err != nil {
 		return nil, fmt.Errorf("resolving server config secrets: %w", err)

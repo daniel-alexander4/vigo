@@ -563,7 +563,8 @@ watcher:
 #   mode: "local"      # "local" (default): count nodes on this server
 #                      # "aggregate": every spanner bolt sums the fleet-wide
 #                      #   node count from the gossip-replicated roster and
-#                      #   enforces independently. Spanner mode only.
+#                      #   enforces independently. Requires spanner.mode:
+#                      #   spanner — rejected at load on a standalone server.
 
 
 # ── Branding ──────────────────────────────────────────────────────────

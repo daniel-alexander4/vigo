@@ -429,7 +429,7 @@ license:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `mode` | `local` | `local`: count nodes on this server. `aggregate`: every spanner bolt sums the fleet-wide node count from the gossip-replicated roster and enforces independently |
+| `mode` | `local` | `local`: count nodes on this server. `aggregate`: every spanner bolt sums the fleet-wide node count from the gossip-replicated roster and enforces independently. Requires `spanner.mode: spanner` — rejected at config load on a standalone server. |
 
 ## publish
 

@@ -683,9 +683,11 @@ type SnipeITIntegration struct {
 type LicenseSection struct {
 	// Mode controls how nodes are counted for license enforcement.
 	// "local" (default): count enrolled nodes on this server only.
-	// "aggregate": count nodes across all spanner bolts (hub only).
-	// In aggregate mode, bolts skip license enforcement entirely.
-	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local" example:"aggregate (hub in a spanner deployment)"`
+	// "aggregate": every spanner bolt sums the fleet-wide node count from
+	// the gossip-replicated roster and enforces against it independently —
+	// no designated enforcer (peer-equal, post-ADR-026). Spanner mode only;
+	// rejected at load outside spanner mode.
+	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local" example:"aggregate (spanner deployment)"`
 }
 
 // BrandingSection configures custom branding for the web UI.
