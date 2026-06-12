@@ -104,13 +104,20 @@ func streamEnvoy(ctx context.Context, cfg config, h *hostState, deltaMs uint32, 
 
 	// Handshake with retry. The first message must be a CheckIn; the server
 	// validates it, registers the held stream, and replies with the initial
-	// CheckInResponse. Under a connect storm the server sheds the (CPU-heavy)
-	// fresh-envoy bundle build via checkin.max_concurrent and TERMINATES the
-	// stream with ResourceExhausted — which surfaces on Recv, not Send. A real
-	// agent reconnects with backoff; mirror that so the harness measures the
-	// true held-stream ceiling instead of a no-retry floor. Confirm admission
-	// by reading the first response (where the shed lands), then hand the live
-	// stream to the steady send/recv loops below.
+	// CheckInResponse. Two ways the handshake fails transiently: the server
+	// sheds the (CPU-heavy) fresh-envoy bundle build via checkin.max_concurrent
+	// and TERMINATES the stream with ResourceExhausted (a clean shed), OR — when
+	// a co-located load generator and the server compete for the same RAM — a
+	// late handshake fails with a raw transport error (Unavailable, connection
+	// reset, EOF) that surfaces on Recv as some other code. The real agent
+	// reconnects with backoff on every error except NotFound (agent/src/checkin/
+	// loop_impl.rs); mirror that — retry by default, give up only when the envoy
+	// is genuinely unknown — so neither a clean shed nor a transient transport
+	// blip permanently abandons an envoy short of the true held-stream ceiling.
+	// An earlier no-retry version, then a retry-only-on-ResourceExhausted
+	// version, each capped the harness below the server's real wall. Confirm
+	// admission by reading the first response (where the shed lands), then hand
+	// the live stream to the steady send/recv loops below.
 	var stream pb.VigoAgent_AgentStreamClient
 	var sctx context.Context
 	var cancel context.CancelFunc
@@ -141,18 +148,19 @@ func streamEnvoy(ctx context.Context, cfg config, h *hostState, deltaMs uint32, 
 		case ctx.Err() != nil:
 			return
 		case status.Code(err) == codes.NotFound:
+			// The server doesn't know this envoy (deleted/never enrolled) — a
+			// stale manifest entry; stop, don't spin.
 			c.gone.Add(1)
 			return
-		case status.Code(err) == codes.ResourceExhausted:
-			// Shed by the connect-admission gate — back off and retry.
+		default:
+			// ResourceExhausted (connect-admission shed) or a transport error
+			// (Unavailable, reset, EOF) under co-located memory pressure — both
+			// transient. Back off and retry, mirroring a real agent's reconnect.
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(bo.next()):
 			}
-		default:
-			c.checkinFails.Add(1)
-			return
 		}
 	}
 	defer cancel()
