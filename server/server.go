@@ -22,7 +22,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 
-	licfmt "git.alexander4.io/tessera/license/products/vigo"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/migrations"
 	vigoai "git.alexander4.io/vigo/server/ai"
@@ -107,6 +106,8 @@ type Server struct {
 	agentDir        string
 	licenseDir      string
 	licenseGraceDir string
+	liveDir         string // serverRoot/.live — validated published config the server reads
+	historyDir      string // serverRoot/config-history — rollback snapshots
 
 	// --- Identity / secrets ---
 	provider     secrets.Provider
@@ -278,6 +279,15 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		serverRoot: filepath.Dir(configFile),
 		cancel:     cancel,
 	}
+	// Resolve serverRoot to an absolute path so every serverRoot-anchored dir
+	// (tls/, puddle/, tls-tickets/, cli-admin-token, .live/, license/) is
+	// cwd-independent and logs clearly. In the default deployment configFile is
+	// "server.yaml" run from /srv/vigo, so this resolves to /srv/vigo — paths
+	// unchanged. An ephemeral instance points configFile at its own dir and
+	// keeps its whole tree there, never touching /srv/vigo.
+	if abs, err := filepath.Abs(s.serverRoot); err == nil {
+		s.serverRoot = abs
+	}
 
 	// Per-instance prometheus registry + collector set. Two *Server
 	// instances in one Go test process never share collector state —
@@ -309,20 +319,25 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		}
 
 		// Service-account puddle identity (ADR-025 Slice 1). Generated on
-		// first boot under /srv/vigo/puddle/ and unwrapped via HKDF over
+		// first boot under <serverRoot>/puddle/ and unwrapped via HKDF over
 		// the secrets master key — no operator unlock required. Held in
 		// memory for sibling subsystems that sign as the vigosrv puddle
 		// (gitback push of the ops-puddle's stacks project, friendly-
 		// name claim, etc.). Isopass and other non-local backends cannot
 		// host the service-account puddle in v1; vigosrv runs without one
-		// in that mode.
-		s.puddleID, err = puddle.EnsureIdentity(local, puddle.DefaultDir)
+		// in that mode. Anchored on serverRoot — like tls/ and cli-admin-token
+		// above — not the absolute puddle.DefaultDir, so the whole self-init
+		// tree relocates as one unit when configFile points elsewhere (a temp
+		// instance never touches /srv/vigo). In the default deployment
+		// serverRoot resolves to /srv/vigo, so the path is unchanged.
+		puddleDir := filepath.Join(s.serverRoot, "puddle")
+		s.puddleID, err = puddle.EnsureIdentity(local, puddleDir)
 		if err != nil {
 			return nil, fmt.Errorf("service-account puddle: %w", err)
 		}
 		slog.Info("service-account puddle ready",
 			"pubkey", s.puddleID.PublicKeyText,
-			"dir", puddle.DefaultDir,
+			"dir", puddleDir,
 		)
 
 		// Persistent TLS 1.3 session-ticket keys. Without persistence Go's
@@ -331,11 +346,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// forces a full handshake on the next CheckIn from every envoy.
 		// Same HKDF root as puddle/bolt, distinct purpose so the
 		// derivations don't cross. Keys are rotated daily in Run().
-		s.ticketsStore, err = tickets.EnsureStore(local, tickets.DefaultDir)
+		ticketsDir := filepath.Join(s.serverRoot, "tls-tickets")
+		s.ticketsStore, err = tickets.EnsureStore(local, ticketsDir)
 		if err != nil {
 			return nil, fmt.Errorf("tls ticket-key store: %w", err)
 		}
-		slog.Info("tls ticket-key store ready", "dir", tickets.DefaultDir, "keys", len(s.ticketsStore.Keys()))
+		slog.Info("tls ticket-key store ready", "dir", ticketsDir, "keys", len(s.ticketsStore.Keys()))
 	}
 
 	// Load full server config with secret resolution (second pass).
@@ -347,12 +363,20 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// Resolve directory paths: env var > server.yaml paths: > default.
 	// (Migrations are embedded in the binary — see migrations.FS — so there's
 	// no migrations path to resolve.)
+	// The published-config tree (.live/) and its rollback snapshots
+	// (config-history/) anchor on serverRoot, like tls/ and the identity
+	// stores above — so an instance whose configFile lives outside /srv/vigo
+	// keeps its whole tree self-contained and never reads or writes the
+	// default /srv/vigo paths. In the standard deployment serverRoot is
+	// /srv/vigo, so these equal the publish.Default* constants.
+	s.liveDir = filepath.Join(s.serverRoot, ".live")
+	s.historyDir = filepath.Join(s.serverRoot, "config-history")
 	s.traitsDir = envOrDefault("VIGO_CUSTOM_TRAITS_DIR", stringOrDefault(s.cfg.Paths.CustomTraits, "custom-traits"))
 	s.docsDir = envOrDefault("VIGO_DOCS_DIR", stringOrDefault(s.cfg.Paths.Docs, "/seed/docs"))
-	s.taskDir = envOrDefault("VIGO_TASK_DIR", stringOrDefault(s.cfg.Paths.Tasks, filepath.Join(publish.DefaultLiveDir, "tasks")))
-	s.workflowsDir = envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(s.cfg.Paths.Workflows, filepath.Join(publish.DefaultLiveDir, "workflows")))
+	s.taskDir = envOrDefault("VIGO_TASK_DIR", stringOrDefault(s.cfg.Paths.Tasks, filepath.Join(s.liveDir, "tasks")))
+	s.workflowsDir = envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(s.cfg.Paths.Workflows, filepath.Join(s.liveDir, "workflows")))
 	s.agentDir = envOrDefault("VIGO_AGENT_DIR", stringOrDefault(s.cfg.Paths.AgentDist, "dist/agent"))
-	s.licenseDir = stringOrDefault(s.cfg.Paths.LicenseDir, licfmt.DefaultLicenseDir)
+	s.licenseDir = stringOrDefault(s.cfg.Paths.LicenseDir, filepath.Join(s.serverRoot, "license"))
 	s.licenseGraceDir = s.licenseDir
 
 	// Determine spanner mode.
@@ -365,7 +389,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// Phase 1 (ADR-spanner): per-bolt Ed25519 identity. Generated on
-	// first boot under /srv/vigo/bolt/, wrapped via HKDF purpose
+	// first boot under <serverRoot>/bolt/, wrapped via HKDF purpose
 	// `vigo-bolt-wrap-v1` over the secrets master key. Used by the
 	// reporter to sign every announcement so peers can verify + pin
 	// (spanner_id, bolt_pubkey). Only required in spanner mode +
@@ -374,7 +398,8 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// pinning).
 	if s.mode != config.ModeStandalone {
 		if local, ok := s.provider.(*secrets.LocalProvider); ok {
-			id, err := bolt.EnsureIdentity(local, bolt.DefaultDir)
+			boltDir := filepath.Join(s.serverRoot, "bolt")
+			id, err := bolt.EnsureIdentity(local, boltDir)
 			if err != nil {
 				return nil, fmt.Errorf("bolt identity: %w", err)
 			}
@@ -382,7 +407,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			slog.Info("bolt identity ready",
 				"pubkey", id.PublicKeyText,
 				"spanner_id", s.cfg.Spanner.SpannerID,
-				"dir", bolt.DefaultDir,
+				"dir", boltDir,
 			)
 		} else {
 			slog.Warn("bolt identity skipped — non-local secrets backend; reports will be unsigned (mixed-version-compatible)",
@@ -597,13 +622,13 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	s.publishState = &publish.State{}
 
 	// Warn if .live directory has overly permissive permissions.
-	if warning := publish.CheckLivePermissions(publish.DefaultLiveDir); warning != "" {
+	if warning := publish.CheckLivePermissions(s.liveDir); warning != "" {
 		slog.Warn(warning)
 	}
 
-	s.configStore, err = config.NewConfigStore(publish.DefaultLiveDir, s.provider, false)
+	s.configStore, err = config.NewConfigStore(s.liveDir, s.provider, false)
 	if err != nil {
-		return nil, fmt.Errorf("config load failed at startup: %w — fix %s and restart (typically: vigocli config publish)", err, publish.DefaultLiveDir)
+		return nil, fmt.Errorf("config load failed at startup: %w — fix %s and restart (typically: vigocli config publish)", err, s.liveDir)
 	}
 	s.configStore.SetBackend(s.secretsCfg.Backend)
 	s.configStore.SetServerYamlPath(configFile)
@@ -843,7 +868,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			s.stacksWatcher = stackswatch.New(
 				"/var/lib/vigo/swarm/gitback/projects",
 				pid,
-				publish.DefaultLiveDir,
+				s.liveDir,
 				s.configStore,
 			)
 		} else {
@@ -1367,7 +1392,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			slog.Info("curator S3 credential store ready")
 		}
 
-		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.promReg, s.metrics, gwOpts...)
+		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.liveDir, s.historyDir, s.promReg, s.metrics, gwOpts...)
 		if gwErr != nil {
 			return nil, fmt.Errorf("creating REST gateway: %w", gwErr)
 		}

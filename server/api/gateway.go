@@ -41,7 +41,7 @@ import (
 // reg is the per-instance prometheus registry whose collectors the /metrics
 // endpoint exposes; m is the same registry's collector set, threaded into
 // subhandlers (bootstrap, etc.) that emit metrics.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -85,7 +85,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	// Mount config publish history, versioning, rollback, and reload.
 	// Spanner-mode stacks distribution is gitback-driven (ADR-025
 	// Slice 4).
-	configHandler := NewConfigHandler(queries, configStore, fleetIndex, publishState, publish.DefaultLiveDir, publish.DefaultHistoryDir)
+	configHandler := NewConfigHandler(queries, configStore, fleetIndex, publishState, liveDir, historyDir)
 	configHandler.SetAuditWriter(aw)
 	configHandler.SetMetrics(m)
 	if assistant != nil {
@@ -94,7 +94,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	if publishCfg.ConvergenceThreshold > 0 && fleetIndex != nil {
 		monitor := publish.NewConvergenceMonitor(fleetIndex, func() error {
 			return configStore.Reload()
-		}, publish.DefaultLiveDir, publish.DefaultHistoryDir)
+		}, liveDir, historyDir)
 		configHandler.SetConvergenceMonitor(monitor, publishCfg)
 	}
 	configHandler.RegisterRoutes(mux)
