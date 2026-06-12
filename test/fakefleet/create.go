@@ -29,16 +29,25 @@ func runCreate(cfg config) {
 	fmt.Printf("planned %d envoys across %d regions (%d named, %d worker; %d failed, %d changed)\n",
 		len(plan), len(synthRegions), named, len(plan)-named, cfg.brokenCount, cfg.changedCount)
 
-	cleanupDirs, err := writeConfigTree(cfg.stacksDir, cfg.fleetDir, plan)
-	if err != nil {
-		die("write config tree: %v", err)
-	}
-	fmt.Printf("wrote fleet config under:\n  %s\n", strings.Join(cleanupDirs, "\n  "))
+	// --skip-publish enrolls against whatever config the target server
+	// already serves — used by the ephemeral CLI smoke harness, whose
+	// co-located vigocli config publish is hardwired to /srv/vigo and would
+	// otherwise read prod stacks + write prod .live. Skip both the config-tree
+	// write and the publish; the synthetic envoys still enroll and report.
+	var cleanupDirs []string
+	if !cfg.skipPublish {
+		var err error
+		cleanupDirs, err = writeConfigTree(cfg.stacksDir, cfg.fleetDir, plan)
+		if err != nil {
+			die("write config tree: %v", err)
+		}
+		fmt.Printf("wrote fleet config under:\n  %s\n", strings.Join(cleanupDirs, "\n  "))
 
-	if err := publishConfig(cfg); err != nil {
-		die("publish fleet config: %v", err)
+		if err := publishConfig(cfg); err != nil {
+			die("publish fleet config: %v", err)
+		}
+		fmt.Println("published fleet config")
 	}
-	fmt.Println("published fleet config")
 
 	hosts := make([]hostState, len(plan))
 	var firstErr struct {

@@ -57,6 +57,7 @@ type config struct {
 	ramp              time.Duration
 	limit             int
 	stream            bool
+	skipPublish       bool
 	vigocliBin        string
 	fleetDir          string
 	httpClient        *http.Client
@@ -129,6 +130,7 @@ func parseFlags(cmd string, args []string) config {
 	limit := fs.Int("limit", 0, "if >0, the run daemon drives only the first N envoys (testing)")
 	stream := fs.Bool("stream", false, "run daemon holds a real bidi AgentStream per envoy (exercises vigo_streams_active / the per-stream connection-RSS ceiling, checkin.max_connections) instead of unary check-ins")
 	vigocliBin := fs.String("vigocli", "vigocli", "vigocli binary used to publish the fleet config (stacks → .live)")
+	skipPublish := fs.Bool("skip-publish", false, "create only: enroll + first-report without publishing a config tree — for an ephemeral instance whose vigocli config publish is hardwired to /srv/vigo. Envoys converge against whatever .live the target server already has")
 	fleetDir := fs.String("fleet-dir", "alexander4", "stacks subdir the demo clouds nest under (e.g. alexander4); the harness owns <fleet-dir>/{aws,gcp} and removes only those on backout")
 	fs.Parse(args)
 
@@ -156,6 +158,7 @@ func parseFlags(cmd string, args []string) config {
 		ramp:              *ramp,
 		limit:             *limit,
 		stream:            *stream,
+		skipPublish:       *skipPublish,
 		vigocliBin:        *vigocliBin,
 		fleetDir:          *fleetDir,
 		httpClient: &http.Client{
