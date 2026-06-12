@@ -287,6 +287,9 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	checkinCap := cfg.MaxConcurrentCheckIns
 	if checkinCap <= 0 {
 		checkinCap = defaultCheckInConcurrency()
+		slog.Info("checkin admission cap auto-derived from CPU", "max_concurrent", checkinCap)
+	} else {
+		slog.Info("checkin admission cap set by operator", "max_concurrent", checkinCap)
 	}
 	agentSvc.checkInSem = make(chan struct{}, checkinCap)
 	// ReportResult is always admission-capped — a queue-depth bound in front of

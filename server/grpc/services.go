@@ -116,13 +116,17 @@ type AgentService struct {
 // checkin.max_concurrent is unset (0). Unlike defaultReportResultConcurrency
 // (which bounds a queue in front of a fixed single-writer resource), the
 // CheckIn bottleneck is CPU — each stale-fingerprint CheckIn forces a full
-// policy-bundle build — so the default scales with available cores rather than
-// being a fixed queue depth. Floor 128 so small boxes still tolerate steady-
-// state bursts (typical concurrent CheckIns are double-digits even at large
-// fleet scale; the cap only matters under a wave). Operators can override the
-// knob, but it's never disabled.
+// policy-bundle build — so the default scales with available CPU rather than
+// being a fixed queue depth. It reads runtime.GOMAXPROCS, not runtime.NumCPU:
+// since Go 1.25 the runtime derives the default GOMAXPROCS from the cgroup CPU
+// bandwidth limit (rounded up, capped at host cores, updated live), so a
+// CPU-limited container sizes its cap to the quota it can actually use instead
+// of the host's core count — exactly the CPU-cascade the cap exists to prevent.
+// Floor 128 so small boxes still tolerate steady-state bursts (typical
+// concurrent CheckIns are double-digits even at large fleet scale; the cap only
+// matters under a wave). Operators can override the knob, but it's never disabled.
 func defaultCheckInConcurrency() int {
-	n := runtime.NumCPU() * 16
+	n := runtime.GOMAXPROCS(0) * 16
 	if n < 128 {
 		n = 128
 	}

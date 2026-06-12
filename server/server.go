@@ -448,7 +448,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		}
 		readN := s.cfg.Database.MaxOpenConns
 		if readN <= 0 {
-			readN = runtime.NumCPU()
+			// GOMAXPROCS, not NumCPU: Go 1.25 derives it from the cgroup CPU
+			// limit, so a CPU-limited container sizes its read pool to the
+			// parallelism it can actually schedule, not the host core count.
+			readN = runtime.GOMAXPROCS(0)
 			if readN < 4 {
 				readN = 4
 			}
