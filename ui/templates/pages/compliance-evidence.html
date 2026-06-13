@@ -1,17 +1,17 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="page-header__breadcrumb">
-        <a href="/compliance">&larr; Back to Compliance</a>
+        <a href="/compliance">&larr; {{T $.Locale "compliance_evidence.back_to_compliance"}}</a>
     </div>
-    <h1>Audit Evidence Center</h1>
+    <h1>{{T $.Locale "compliance_evidence.title"}}</h1>
     <div class="page-header__actions">
-        <a id="bundle-link" href="/compliance/evidence/bundle?framework={{.FrameworkSlug}}&from={{.DateFrom}}&to={{.DateTo}}" class="btn btn--sm btn--primary" download>Download Evidence Bundle</a>
+        <a id="bundle-link" href="/compliance/evidence/bundle?framework={{.FrameworkSlug}}&from={{.DateFrom}}&to={{.DateTo}}" class="btn btn--sm btn--primary" download>{{T $.Locale "compliance_evidence.download_bundle"}}</a>
     </div>
 </div>
 
 <form class="filter-bar mb-2" action="/compliance/evidence" method="get">
     <div class="form-group u-m-0">
-        <label class="u-fs-12px" for="ev-framework">Framework</label>
+        <label class="u-fs-12px" for="ev-framework">{{T $.Locale "compliance_evidence.framework"}}</label>
         <select id="ev-framework" name="framework" class="form-input u-w-auto">
             {{range .Frameworks}}
             <option value="{{.Slug}}"{{if eq .Slug $.FrameworkSlug}} selected{{end}}>{{.Name}}</option>
@@ -19,49 +19,49 @@
         </select>
     </div>
     <div class="form-group u-m-0">
-        <label class="u-fs-12px" for="ev-from">From</label>
+        <label class="u-fs-12px" for="ev-from">{{T $.Locale "compliance_evidence.from"}}</label>
         <input type="date" id="ev-from" name="from" class="form-input u-w-auto" value="{{.DateFrom}}">
     </div>
     <div class="form-group u-m-0">
-        <label class="u-fs-12px" for="ev-to">To</label>
+        <label class="u-fs-12px" for="ev-to">{{T $.Locale "compliance_evidence.to"}}</label>
         <input type="date" id="ev-to" name="to" class="form-input u-w-auto" value="{{.DateTo}}">
     </div>
-    <button type="submit" class="btn btn--sm btn--primary">Apply</button>
+    <button type="submit" class="btn btn--sm btn--primary">{{T $.Locale "btn.apply"}}</button>
 </form>
 
 <div id="evidence-snapshot"
      hx-get="/ui/fragments/evidence-snapshot?date={{.DateTo}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <p class="text-muted">Loading snapshot...</p>
+    <p class="text-muted">{{T $.Locale "compliance_evidence.loading_snapshot"}}</p>
 </div>
 
 <div id="evidence-mttr"
      hx-get="/ui/fragments/evidence-mttr?from={{.DateFrom}}&to={{.DateTo}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <p class="text-muted">Loading remediation metrics...</p>
+    <p class="text-muted">{{T $.Locale "compliance_evidence.loading_remediation"}}</p>
 </div>
 
 <div id="evidence-controls"
      hx-get="/ui/fragments/evidence-controls/{{.FrameworkSlug}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <p class="text-muted">Loading controls...</p>
+    <p class="text-muted">{{T $.Locale "compliance_evidence.loading_controls"}}</p>
 </div>
 
 <div id="evidence-coverage"
      hx-get="/ui/fragments/evidence-coverage/{{.FrameworkSlug}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <p class="text-muted">Loading fleet coverage...</p>
+    <p class="text-muted">{{T $.Locale "compliance_evidence.loading_coverage"}}</p>
 </div>
 
 <div id="evidence-audit"
      hx-get="/ui/fragments/evidence-audit"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <p class="text-muted">Verifying audit chain...</p>
+    <p class="text-muted">{{T $.Locale "compliance_evidence.verifying_audit"}}</p>
 </div>
 {{end}}
 
@@ -72,7 +72,7 @@
         <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}">
             {{printf "%.0f" .ConvergencePct}}%
         </span>
-        <span class="compliance-gauge__label">compliant on {{.SnapshotDate}}</span>
+        <span class="compliance-gauge__label">{{T $.Locale "compliance_evidence.compliant_on"}} {{.SnapshotDate}}</span>
     </div>
     <div class="compliance-gauge__bar">
         <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}} w-pct-{{wbucket .ConvergencePct}}"
@@ -80,82 +80,82 @@
     </div>
 </div>
 <div class="breakdown">
-    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Converged}}</div><div class="breakdown__status">Converged</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Relapsed}}</div><div class="breakdown__status">Relapsed</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-peach">{{.Diverged}}</div><div class="breakdown__status">Diverged</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Failed}}</div><div class="breakdown__status">Errors</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Offline}}</div><div class="breakdown__status">Offline</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.NoData}}</div><div class="breakdown__status">No Data</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Converged}}</div><div class="breakdown__status">{{T $.Locale "enum.converged"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Relapsed}}</div><div class="breakdown__status">{{T $.Locale "compliance_evidence.relapsed"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-peach">{{.Diverged}}</div><div class="breakdown__status">{{T $.Locale "enum.diverged"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Failed}}</div><div class="breakdown__status">{{T $.Locale "compliance_evidence.errors"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Offline}}</div><div class="breakdown__status">{{T $.Locale "enum.offline"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.NoData}}</div><div class="breakdown__status">{{T $.Locale "enum.no_data"}}</div></div>
 </div>
 {{else}}
-<p class="text-muted">No compliance snapshot data available for this date.</p>
+<p class="text-muted">{{T $.Locale "compliance_evidence.no_snapshot"}}</p>
 {{end}}
 {{end}}
 
 {{define "evidence-mttr"}}
-<h3 class="section-heading">Remediation Metrics</h3>
+<h3 class="section-heading">{{T $.Locale "compliance_evidence.remediation_metrics"}}</h3>
 <div class="stat-cards mb-2">
-    {{template "stat-card" dict "Value" .MTTRDisplay "Label" "Avg MTTR" "Color" "brand"}}
-    {{template "stat-card" dict "Value" .P50Display "Label" "P50 MTTR" "Color" "brand"}}
-    {{template "stat-card" dict "Value" .P95Display "Label" "P95 MTTR" "Color" "warning"}}
-    {{template "stat-card" dict "Value" .TotalIncidents "Label" "Drift Events" "Color" "warning"}}
-    {{template "stat-card" dict "Value" .Resolved "Label" "Resolved" "Color" "success"}}
-    {{template "stat-card" dict "Value" .OpenIncidents "Label" "Open" "Color" "danger"}}
+    {{template "stat-card" dict "Value" .MTTRDisplay "Label" (T $.Locale "compliance_evidence.avg_mttr") "Color" "brand"}}
+    {{template "stat-card" dict "Value" .P50Display "Label" (T $.Locale "compliance_evidence.p50_mttr") "Color" "brand"}}
+    {{template "stat-card" dict "Value" .P95Display "Label" (T $.Locale "compliance_evidence.p95_mttr") "Color" "warning"}}
+    {{template "stat-card" dict "Value" .TotalIncidents "Label" (T $.Locale "compliance_evidence.drift_events") "Color" "warning"}}
+    {{template "stat-card" dict "Value" .Resolved "Label" (T $.Locale "compliance_evidence.resolved") "Color" "success"}}
+    {{template "stat-card" dict "Value" .OpenIncidents "Label" (T $.Locale "compliance_evidence.open") "Color" "danger"}}
 </div>
 {{end}}
 
 {{define "evidence-controls"}}
-<h3 class="section-heading">{{if .FrameworkTitle}}{{.FrameworkTitle}} {{end}}Controls</h3>
+<h3 class="section-heading">{{if .FrameworkTitle}}{{.FrameworkTitle}} {{end}}{{T $.Locale "compliance_evidence.controls"}}</h3>
 
 {{if gt .TotalWaivers 0}}
 <div class="waiver-banner">
-    <div class="waiver-banner__title">{{.TotalWaivers}} active waiver{{if ne .TotalWaivers 1}}s{{end}}</div>
+    <div class="waiver-banner__title">{{.TotalWaivers}} {{T $.Locale "compliance_evidence.active_waivers"}}</div>
     <div class="waiver-banner__detail">
-        {{if gt .EnforcedWaived 0}}{{.EnforcedWaived}} enforced + waived{{end}}
+        {{if gt .EnforcedWaived 0}}{{.EnforcedWaived}} {{T $.Locale "compliance_evidence.enforced_waived"}}{{end}}
         {{if and (gt .EnforcedWaived 0) (gt .WaivedOnly 0)}} &middot; {{end}}
-        {{if gt .WaivedOnly 0}}{{.WaivedOnly}} waived only{{end}}
-        {{if gt .ExpiringSoon 0}} &middot; <span class="text-warning">{{.ExpiringSoon}} expiring within 30 days</span>{{end}}
+        {{if gt .WaivedOnly 0}}{{.WaivedOnly}} {{T $.Locale "compliance_evidence.waived_only"}}{{end}}
+        {{if gt .ExpiringSoon 0}} &middot; <span class="text-warning">{{.ExpiringSoon}} {{T $.Locale "compliance_evidence.expiring_30_days"}}</span>{{end}}
     </div>
 </div>
 {{end}}
 
 <div class="filter-tabs" id="evidence-filter">
-    <button class="filter-tab filter-tab--active" data-action="filter-controls" data-filter="all">All</button>
-    <button class="filter-tab" data-action="filter-controls" data-filter="satisfied">Satisfied</button>
-    <button class="filter-tab" data-action="filter-controls" data-filter="waived">Waived</button>
-    <button class="filter-tab" data-action="filter-controls" data-filter="not_satisfied">Not Met</button>
+    <button class="filter-tab filter-tab--active" data-action="filter-controls" data-filter="all">{{T $.Locale "filter.all"}}</button>
+    <button class="filter-tab" data-action="filter-controls" data-filter="satisfied">{{T $.Locale "compliance_evidence.satisfied"}}</button>
+    <button class="filter-tab" data-action="filter-controls" data-filter="waived">{{T $.Locale "compliance_evidence.waived"}}</button>
+    <button class="filter-tab" data-action="filter-controls" data-filter="not_satisfied">{{T $.Locale "compliance_evidence.not_met"}}</button>
 </div>
 
 <div class="table-container">
     <table class="table" id="controls-table">
-        <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Evidence</th><th>Waiver</th><th></th></tr></thead>
+        <thead><tr><th>{{T $.Locale "compliance_evidence.control"}}</th><th>{{T $.Locale "compliance_evidence.col_title"}}</th><th>{{T $.Locale "th.status"}}</th><th>{{T $.Locale "compliance_evidence.evidence"}}</th><th>{{T $.Locale "compliance_evidence.waiver"}}</th><th></th></tr></thead>
         <tbody>
             {{range .Controls}}
             <tr data-status="{{if .HasWaiver}}waived{{else}}{{.Status}}{{end}}">
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
-                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "waived"}}badge--info{{else if eq .Status "partial"}}badge--relapsed{{else}}badge--failed{{end}}">{{.Status}}</span></td>
+                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "waived"}}badge--info{{else if eq .Status "partial"}}badge--relapsed{{else}}badge--failed{{end}}">{{tEnum $.Locale .Status}}</span></td>
                 <td class="text-muted">{{.Evidence}}</td>
                 <td>
                     {{if .HasWaiver}}
                     <div class="waiver-detail">
-                        <span class="badge badge--info">waived</span>
+                        <span class="badge badge--info">{{tEnum $.Locale "waived"}}</span>
                         <div class="waiver-detail__meta">{{.WaiverReason}}</div>
-                        <div class="waiver-detail__meta">by {{.WaiverBy}}{{if .WaiverExpiry}} &middot; expires {{.WaiverExpiry}}{{end}}</div>
+                        <div class="waiver-detail__meta">{{T $.Locale "compliance_evidence.waiver_by"}} {{.WaiverBy}}{{if .WaiverExpiry}} &middot; {{T $.Locale "compliance_evidence.waiver_expires"}} {{.WaiverExpiry}}{{end}}</div>
                     </div>
                     {{else if ne .Status "satisfied"}}
                     <button class="btn btn--sm btn--text"
                             hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
                             hx-target="#drill-{{.ControlID | cssClass}}"
                             hx-swap="innerHTML"
-                            data-action="show-waiver">Add Waiver</button>
+                            data-action="show-waiver">{{T $.Locale "compliance_evidence.add_waiver"}}</button>
                     {{end}}
                 </td>
                 <td>
                     <button class="btn btn--sm"
                             hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
                             hx-target="#drill-{{.ControlID | cssClass}}"
-                            hx-swap="innerHTML">Drill Down</button>
+                            hx-swap="innerHTML">{{T $.Locale "compliance_evidence.drill_down"}}</button>
                 </td>
             </tr>
             <tr>
@@ -171,7 +171,7 @@
 {{if .Envoys}}
 <div class="u-p-8px-16px-bg-var-color-bg">
     <table class="table u-fs-12px">
-        <thead><tr><th>Hostname</th><th>Configcrate</th><th>Configcrate Status</th><th>Runs (period)</th><th>Failures</th><th>Last Run</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "th.hostname"}}</th><th>Configcrate</th><th>{{T $.Locale "compliance_evidence.configcrate_status"}}</th><th>{{T $.Locale "compliance_evidence.runs_period"}}</th><th>{{T $.Locale "compliance_evidence.failures"}}</th><th>{{T $.Locale "compliance_evidence.last_run"}}</th></tr></thead>
         <tbody>
             {{range .Envoys}}
             <tr>
@@ -188,14 +188,14 @@
 </div>
 {{else}}
 <div class="u-p-12px-16px-bg-var-color-bg">
-    <p class="text-muted u-m-0">No envoys enforce configcrates mapped to this control.</p>
+    <p class="text-muted u-m-0">{{T $.Locale "compliance_evidence.no_envoys_control"}}</p>
 </div>
 {{end}}
 <div class="u-p-8px-16px-12px-bg-var-color-bg">
-    <h4 class="u-blk8">Supporting Documentation</h4>
+    <h4 class="u-blk8">{{T $.Locale "compliance_evidence.supporting_docs"}}</h4>
     {{if .Docs}}
     <table class="table u-fs-12px">
-        <thead><tr><th>Filename</th><th>Type</th><th>MIME</th><th>Size</th><th>SHA-256</th><th>Uploaded By</th><th>Uploaded</th><th></th></tr></thead>
+        <thead><tr><th>{{T $.Locale "compliance_evidence.filename"}}</th><th>{{T $.Locale "th.type"}}</th><th>{{T $.Locale "compliance_evidence.mime"}}</th><th>{{T $.Locale "compliance_evidence.size"}}</th><th>SHA-256</th><th>{{T $.Locale "compliance_evidence.uploaded_by"}}</th><th>{{T $.Locale "compliance_evidence.uploaded"}}</th><th></th></tr></thead>
         <tbody>
             {{range .Docs}}
             <tr>
@@ -206,23 +206,23 @@
                 <td class="mono" title="{{.SHA256}}">{{slice .SHA256 0 12}}</td>
                 <td>{{.UploadedBy}}</td>
                 <td class="text-muted">{{.UploadedAt}}</td>
-                <td><a class="btn btn--sm" href="/api/v1/compliance/docs/{{.ID}}/download">Download</a></td>
+                <td><a class="btn btn--sm" href="/api/v1/compliance/docs/{{.ID}}/download">{{T $.Locale "btn.download"}}</a></td>
             </tr>
             {{end}}
         </tbody>
     </table>
     {{else}}
-    <p class="text-muted u-m-0-0-8px-fs-12px">No documents attached. Upload evidence via the CLI to satisfy this control.</p>
+    <p class="text-muted u-m-0-0-8px-fs-12px">{{T $.Locale "compliance_evidence.no_docs_attached"}}</p>
     {{end}}
-    <p class="text-muted u-fs-11px">The web UI is read-only. Upload evidence with <code>vigocli compliance docs upload &lt;file&gt; --type "BAA" --link {{.Slug}}:{{.ControlID}}</code>.</p>
+    <p class="text-muted u-fs-11px">{{T $.Locale "compliance_evidence.web_ui_readonly"}} <code>vigocli compliance docs upload &lt;file&gt; --type "BAA" --link {{.Slug}}:{{.ControlID}}</code>.</p>
 </div>
 {{end}}
 
 {{define "evidence-coverage"}}
-<h3 class="section-heading">Fleet Coverage</h3>
+<h3 class="section-heading">{{T $.Locale "compliance_evidence.fleet_coverage"}}</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Hostname</th><th>Coverage</th><th>Controls</th><th>Missing</th><th>Last Seen</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "th.hostname"}}</th><th>{{T $.Locale "compliance_evidence.coverage"}}</th><th>{{T $.Locale "compliance_evidence.controls"}}</th><th>{{T $.Locale "compliance_evidence.missing"}}</th><th>{{T $.Locale "compliance_evidence.last_seen"}}</th></tr></thead>
         <tbody>
             {{range .Fleet}}
             <tr>
@@ -245,16 +245,16 @@
 {{end}}
 
 {{define "evidence-audit"}}
-<h3 class="section-heading">Audit Chain</h3>
+<h3 class="section-heading">{{T $.Locale "compliance_evidence.audit_chain"}}</h3>
 {{if .Valid}}
   {{if eq .EntryCount 0}}
-<div class="audit-banner u-bg-var-color-muted-bg"><strong>Audit Chain:</strong> No audit entries recorded.</div>
+<div class="audit-banner u-bg-var-color-muted-bg"><strong>{{T $.Locale "compliance_evidence.audit_chain"}}:</strong> {{T $.Locale "compliance_evidence.audit_no_entries"}}</div>
   {{else}}
-<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; {{.EntryCount}} entries, integrity intact.</div>
+<div class="audit-banner audit-banner--pass"><strong>{{T $.Locale "compliance_evidence.audit_chain"}}:</strong> {{T $.Locale "compliance_evidence.audit_verified"}} &mdash; {{.EntryCount}} {{T $.Locale "compliance_evidence.audit_entries_intact"}}</div>
   {{end}}
 {{else if eq .Error ""}}
-<div class="audit-banner u-bg-var-color-muted-bg"><strong>Audit Chain:</strong> Verifying&hellip; (chain check in progress)</div>
+<div class="audit-banner u-bg-var-color-muted-bg"><strong>{{T $.Locale "compliance_evidence.audit_chain"}}:</strong> {{T $.Locale "compliance_evidence.audit_verifying"}}</div>
 {{else}}
-<div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED{{if .Error}} &mdash; {{.Error}}{{end}}</div>
+<div class="audit-banner audit-banner--fail"><strong>{{T $.Locale "compliance_evidence.audit_chain"}}:</strong> {{T $.Locale "compliance_evidence.audit_failed"}}{{if .Error}} &mdash; {{.Error}}{{end}}</div>
 {{end}}
 {{end}}

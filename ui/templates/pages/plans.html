@@ -1,43 +1,43 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/envoys">Envoys</a> &rsaquo; {{.Hostname}} &rsaquo; Plan
+        <a href="/envoys">Envoys</a> &rsaquo; {{.Hostname}} &rsaquo; {{T $.Locale "plans.breadcrumb"}}
     </div>
-    <h1>Plan {{truncUUID .PlanID}}</h1>
+    <h1>{{T $.Locale "plans.title"}} {{truncUUID .PlanID}}</h1>
     <p>
         Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a>
-        &middot; Created: {{formatTime .CreatedAt}}
+        &middot; {{T $.Locale "plans.created"}} {{formatTime .CreatedAt}}
     </p>
 </div>
 
 <div class="stat-cards mb-2">
     <div class="stat-card stat-card--brand">
         <div class="stat-card__value">{{.TotalCount}}</div>
-        <div class="stat-card__label">Total Resources</div>
+        <div class="stat-card__label">{{T $.Locale "plans.total_resources"}}</div>
     </div>
     <div class="stat-card stat-card--success">
         <div class="stat-card__value">{{.CreateCount}}</div>
-        <div class="stat-card__label">Creates</div>
+        <div class="stat-card__label">{{T $.Locale "plans.creates"}}</div>
     </div>
     <div class="stat-card stat-card--brand">
         <div class="stat-card__value">{{.UpdateCount}}</div>
-        <div class="stat-card__label">Updates</div>
+        <div class="stat-card__label">{{T $.Locale "plans.updates"}}</div>
     </div>
     <div class="stat-card stat-card--danger">
         <div class="stat-card__value">{{.DeleteCount}}</div>
-        <div class="stat-card__label">Deletes</div>
+        <div class="stat-card__label">{{T $.Locale "plans.deletes"}}</div>
     </div>
 </div>
 
 <div class="table-container">
-    <h3>Planned Actions</h3>
+    <h3>{{T $.Locale "plans.planned_actions"}}</h3>
     <table class="table">
         <thead>
             <tr>
                 <th>Configcrate</th>
-                <th>Type</th>
-                <th>Resource</th>
-                <th>Planned Action</th>
+                <th>{{T $.Locale "th.type"}}</th>
+                <th>{{T $.Locale "plans.th.resource"}}</th>
+                <th>{{T $.Locale "plans.th.planned_action"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -48,14 +48,14 @@
                 <td class="mono">{{.ResourceName}}</td>
                 <td>
                     <span class="badge badge--{{.ActionColor}}">
-                        {{.PlannedAction}}
+                        {{tEnum $.Locale .PlannedAction}}
                     </span>
                 </td>
             </tr>
             {{end}}
             {{if not .Results}}
             <tr>
-                <td colspan="4" class="text-muted u-ta-center-p-40px">No planned actions.</td>
+                <td colspan="4" class="text-muted u-ta-center-p-40px">{{T $.Locale "plans.no_actions"}}</td>
             </tr>
             {{end}}
         </tbody>

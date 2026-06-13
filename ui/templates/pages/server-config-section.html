@@ -1,45 +1,45 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="u-blk26">
-        <a href="/server/config" class="btn btn--sm">← All sections</a>
+        <a href="/server/config" class="btn btn--sm">← {{T $.Locale "server_config_section.all_sections"}}</a>
         <h1 class="u-m-0"><code>{{.Section}}</code></h1>
         {{if .Enabled}}
-        <span class="status-pill status-pill--converged">enabled</span>
+        <span class="status-pill status-pill--converged">{{T $.Locale "server_config_section.enabled"}}</span>
         {{else if .Present}}
-        <span class="status-pill status-pill--no-data">disabled</span>
+        <span class="status-pill status-pill--no-data">{{T $.Locale "server_config_section.disabled"}}</span>
         {{else}}
-        <span class="status-pill status-pill--no-data">disabled</span>
+        <span class="status-pill status-pill--no-data">{{T $.Locale "server_config_section.disabled"}}</span>
         {{end}}
     </div>
     {{if .Description}}
-    <p class="u-mt-8px">{{.Description}}{{if .DocsURL}} <a href="/docs/{{.DocsURL}}">Read the documentation →</a>{{end}}</p>
+    <p class="u-mt-8px">{{.Description}}{{if .DocsURL}} <a href="/docs/{{.DocsURL}}">{{T $.Locale "server_config_section.read_docs"}}</a>{{end}}</p>
     {{else if .DocsURL}}
-    <p class="u-mt-8px"><a href="/docs/{{.DocsURL}}">Read the documentation →</a></p>
+    <p class="u-mt-8px"><a href="/docs/{{.DocsURL}}">{{T $.Locale "server_config_section.read_docs"}}</a></p>
     {{end}}
 </div>
 
 <div class="card u-bg-var-color-surface-muted-mb-16px">
     <p class="u-m-0-c-var-color-text-muted">
-        Values are read from the live <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> on every page load. The running server uses the copy it loaded at startup — edits here are not active until you restart <code>vigosrv</code>.
-        <code>secret:</code> references are shown as the literal reference string and never resolved.
+        {{T $.Locale "server_config_section.live_notice_pre"}} <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> {{T $.Locale "server_config_section.live_notice_mid"}} <code>vigosrv</code>.
+        {{T $.Locale "server_config_section.secret_notice"}}
     </p>
 </div>
 
 <div class="card mt-2">
-    <h2 class="u-m-0-0-12px">Current Config</h2>
+    <h2 class="u-m-0-0-12px">{{T $.Locale "server_config_section.current_config"}}</h2>
     {{if .CurrentYAML}}
     <pre class="server-config-yaml"><code>{{.CurrentYAML}}</code></pre>
     {{else}}
-    <p class="text-muted u-m-0"><em>(not configured — this section is absent or explicitly disabled in the live file)</em></p>
+    <p class="text-muted u-m-0"><em>{{T $.Locale "server_config_section.not_configured"}}</em></p>
     {{end}}
 </div>
 
 {{if and (not .CurrentYAML) .ExampleYAML}}
 <div class="card mt-2">
-    <h2 class="u-m-0-0-6px">Example Config</h2>
-    <p class="u-c-var-color-text-muted-m-0-0-12px">Annotated starter template. Lines with defaults are commented out; uncomment to override. Sub-sections (opt-in feature blocks) are commented out as a whole; uncomment the block to enable.</p>
+    <h2 class="u-m-0-0-6px">{{T $.Locale "server_config_section.example_config"}}</h2>
+    <p class="u-c-var-color-text-muted-m-0-0-12px">{{T $.Locale "server_config_section.example_desc"}}</p>
     <div class="yaml-block">
-        <button type="button" class="btn btn--sm yaml-block__copy" data-copy-target="example-yaml-main">Copy</button>
+        <button type="button" class="btn btn--sm yaml-block__copy" data-copy-target="example-yaml-main">{{T $.Locale "btn.copy"}}</button>
         <pre class="server-config-yaml"><code id="example-yaml-main">{{.ExampleYAML}}</code></pre>
     </div>
 </div>
@@ -47,8 +47,8 @@
 
 {{if .Available}}
 <div class="card mt-2">
-    <h2 class="u-m-0-0-12px">Options</h2>
-    <p class="u-c-var-color-text-muted-m-0-0-16px">Every field this section accepts. Add them to <code>server.yaml</code> under <code>{{.Section}}:</code> to customize.</p>
+    <h2 class="u-m-0-0-12px">{{T $.Locale "server_config_section.options"}}</h2>
+    <p class="u-c-var-color-text-muted-m-0-0-16px">{{T $.Locale "server_config_section.options_desc_pre"}} <code>server.yaml</code> {{T $.Locale "server_config_section.options_desc_mid"}} <code>{{.Section}}:</code> {{T $.Locale "server_config_section.options_desc_post"}}</p>
     <div class="config-option-list">
         {{range .Available}}
         <div class="config-option">
@@ -59,9 +59,9 @@
             {{if .Description}}<p class="config-option__desc">{{.Description}}</p>{{end}}
             {{if or .Default .Options .Example}}
             <div class="config-option__meta-row">
-                {{if .Default}}<span class="config-option__meta"><strong>Default:</strong> <code>{{.Default}}</code></span>{{end}}
-                {{if .Options}}<span class="config-option__meta"><strong>Values:</strong> <code>{{.Options}}</code></span>{{end}}
-                {{if .Example}}<span class="config-option__meta"><strong>Example:</strong> <code>{{.Example}}</code></span>{{end}}
+                {{if .Default}}<span class="config-option__meta"><strong>{{T $.Locale "server_config_section.default"}}</strong> <code>{{.Default}}</code></span>{{end}}
+                {{if .Options}}<span class="config-option__meta"><strong>{{T $.Locale "server_config_section.values"}}</strong> <code>{{.Options}}</code></span>{{end}}
+                {{if .Example}}<span class="config-option__meta"><strong>{{T $.Locale "server_config_section.example"}}</strong> <code>{{.Example}}</code></span>{{end}}
             </div>
             {{end}}
         </div>
@@ -72,17 +72,17 @@
 
 {{if .Subsections}}
 <div class="card mt-2">
-    <h2 class="u-m-0-0-16px">Sub-sections</h2>
+    <h2 class="u-m-0-0-16px">{{T $.Locale "server_config_section.subsections"}}</h2>
     {{range .Subsections}}
     <div class="server-config-subsection">
         <div class="u-blk27">
             <h3 class="u-m-0"><code>{{$.Section}}.{{.Name}}</code></h3>
             {{if .Enabled}}
-            <span class="status-pill status-pill--converged">enabled</span>
+            <span class="status-pill status-pill--converged">{{T $.Locale "server_config_section.enabled"}}</span>
             {{else if .Present}}
-            <span class="status-pill status-pill--no-data">disabled</span>
+            <span class="status-pill status-pill--no-data">{{T $.Locale "server_config_section.disabled"}}</span>
             {{else}}
-            <span class="status-pill status-pill--no-data">disabled</span>
+            <span class="status-pill status-pill--no-data">{{T $.Locale "server_config_section.disabled"}}</span>
             {{end}}
         </div>
         {{if .Description}}
@@ -102,9 +102,9 @@
                 {{if .Description}}<p class="config-option__desc">{{.Description}}</p>{{end}}
                 {{if or .Default .Options .Example}}
                 <div class="config-option__meta-row">
-                    {{if .Default}}<span class="config-option__meta"><strong>Default:</strong> <code>{{.Default}}</code></span>{{end}}
-                    {{if .Options}}<span class="config-option__meta"><strong>Values:</strong> <code>{{.Options}}</code></span>{{end}}
-                    {{if .Example}}<span class="config-option__meta"><strong>Example:</strong> <code>{{.Example}}</code></span>{{end}}
+                    {{if .Default}}<span class="config-option__meta"><strong>{{T $.Locale "server_config_section.default"}}</strong> <code>{{.Default}}</code></span>{{end}}
+                    {{if .Options}}<span class="config-option__meta"><strong>{{T $.Locale "server_config_section.values"}}</strong> <code>{{.Options}}</code></span>{{end}}
+                    {{if .Example}}<span class="config-option__meta"><strong>{{T $.Locale "server_config_section.example"}}</strong> <code>{{.Example}}</code></span>{{end}}
                 </div>
                 {{end}}
             </div>

@@ -48,6 +48,7 @@ func (h *Handler) puddleList(w http.ResponseWriter, r *http.Request) {
 		data.Error = "puddle aggregator not available"
 		data.Health = finalizeHealthBanner("Puddles", nil, "Aggregator unavailable")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "puddle", data)
 		return
 	}
@@ -56,11 +57,13 @@ func (h *Handler) puddleList(w http.ResponseWriter, r *http.Request) {
 		data.Error = err.Error()
 		data.Health = finalizeHealthBanner("Puddles", nil, "Snapshot failed")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "puddle", data)
 		return
 	}
 	data.Fleet = fleet
 	data.Health = buildPuddleHealth(fleet)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "puddle", data)
 }
 
@@ -90,6 +93,7 @@ func (h *Handler) puddleDetail(w http.ResponseWriter, r *http.Request, id string
 	}
 	data.Puddle = summary
 	data.Health = buildPuddleSummaryHealth(summary)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "puddle", data)
 }
 

@@ -24,31 +24,31 @@ Callers that don't already have these fields on their data should pass
 them via `dict` (see dashboard.html, envoys-tree.html).
 */}}
 {{define "envoy-filter-bar"}}
-<div class="filter-bar-group__title">Fleet Envoy Status</div>
+<div class="filter-bar-group__title">{{T $.Locale "envoy_filter_bar.fleet_envoy_status"}}</div>
 <div class="filter-bar-group flex flex-wrap items-end gap-2">
     <div class="filter-bar-axis">
-        <span class="filter-bar-axis__label">Convergence</span>
+        <span class="filter-bar-axis__label">{{T $.Locale "filter.convergence"}}</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys" "Active" (and (eq .ConvFilter "") (eq .DriftFilter "") (eq .ReachFilter "") (eq .Search "")) "Label" "All" "Count" .TotalEnvoys "CountClass" ""}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=converged" "Active" (eq .ConvFilter "converged") "Label" "Converged" "Count" .CountConverged "CountClass" "filter-count--success"}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=no+data" "Active" (eq .ConvFilter "no data") "Label" "No Data" "Count" .CountNoData "CountClass" "filter-count--muted"}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=degraded" "Active" (eq .ConvFilter "degraded") "Label" "Degraded" "Count" .CountDegraded "CountClass" "filter-count--warning"}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=failed" "Active" (eq .ConvFilter "failed") "Label" "Failed" "Count" .CountFailed "CountClass" "filter-count--danger" "Tooltip" "Latest run failed (≥80% configcrate failures or agent blocked)"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys" "Active" (and (eq .ConvFilter "") (eq .DriftFilter "") (eq .ReachFilter "") (eq .Search "")) "Label" (T $.Locale "filter.all") "Count" .TotalEnvoys "CountClass" ""}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=converged" "Active" (eq .ConvFilter "converged") "Label" (T $.Locale "enum.converged") "Count" .CountConverged "CountClass" "filter-count--success"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=no+data" "Active" (eq .ConvFilter "no data") "Label" (T $.Locale "enum.no_data") "Count" .CountNoData "CountClass" "filter-count--muted"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=degraded" "Active" (eq .ConvFilter "degraded") "Label" (T $.Locale "enum.degraded") "Count" .CountDegraded "CountClass" "filter-count--warning"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?conv=failed" "Active" (eq .ConvFilter "failed") "Label" (T $.Locale "enum.failed") "Count" .CountFailed "CountClass" "filter-count--danger" "Tooltip" (T $.Locale "envoy_filter_bar.tooltip_failed")}}
         </div>
     </div>
     <div class="filter-bar-axis">
-        <span class="filter-bar-axis__label" title="Configcrates that change across recent runs. Diverged ⊆ Changed.">Drift</span>
+        <span class="filter-bar-axis__label" title="{{T $.Locale "envoy_filter_bar.drift_axis_hint"}}">{{T $.Locale "filter.drift"}}</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=changed" "Active" (eq .DriftFilter "changed") "Label" "Changed" "Count" .CountChanged "CountClass" "filter-count--info" "Tooltip" "Last run made changes"}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=diverged" "Active" (eq .DriftFilter "diverged") "Label" "Diverged" "Count" .CountDiverged "CountClass" "filter-count--peach" "Tooltip" "5+ consecutive runs with changes"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=changed" "Active" (eq .DriftFilter "changed") "Label" (T $.Locale "enum.changed") "Count" .CountChanged "CountClass" "filter-count--info" "Tooltip" (T $.Locale "envoy_filter_bar.tooltip_changed")}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?drift=diverged" "Active" (eq .DriftFilter "diverged") "Label" (T $.Locale "enum.diverged") "Count" .CountDiverged "CountClass" "filter-count--peach" "Tooltip" (T $.Locale "envoy_filter_bar.tooltip_diverged")}}
         </div>
     </div>
     <div class="filter-bar-axis">
-        <span class="filter-bar-axis__label">Reachability</span>
+        <span class="filter-bar-axis__label">{{T $.Locale "filter.reachability"}}</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=offline" "Active" (eq .ReachFilter "offline") "Label" "Offline" "Count" .CountOffline "CountClass" "filter-count--muted" "Tooltip" (printf "Envoys silent past their per-envoy stale threshold (2.5× the agent's observed inter-CheckIn cadence; floor of %s when no cadence has been reported yet)." .OfflineThresholdLabel)}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=offline" "Active" (eq .ReachFilter "offline") "Label" (T $.Locale "enum.offline") "Count" .CountOffline "CountClass" "filter-count--muted" "Tooltip" (printf (T $.Locale "envoy_filter_bar.tooltip_offline") .OfflineThresholdLabel)}}
             {{if gt .CountObserving 0}}
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=observing" "Active" (eq .ReachFilter "observing") "Label" "Observing" "Count" .CountObserving "CountClass" "filter-count--info" "Tooltip" "Envoys in observe-only mode (drift reported, no enforcement)"}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=observing" "Active" (eq .ReachFilter "observing") "Label" (T $.Locale "enum.observing") "Count" .CountObserving "CountClass" "filter-count--info" "Tooltip" (T $.Locale "envoy_filter_bar.tooltip_observing")}}
             {{end}}
         </div>
     </div>

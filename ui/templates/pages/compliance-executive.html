@@ -1,13 +1,13 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="page-header__breadcrumb">
-        <a href="/compliance">&larr; Back to Compliance</a>
+        <a href="/compliance">&larr; {{T $.Locale "compliance_executive.back_to_compliance"}}</a>
     </div>
-    <h1>Executive Summary</h1>
+    <h1>{{T $.Locale "compliance_executive.title"}}</h1>
     <div class="page-header__actions">
-        <a href="/api/v1/report/executive" class="btn btn--sm" download>Download JSON</a>
-        <a href="/api/v1/report/executive.html?download=1" class="btn btn--sm" download>Download HTML</a>
-        <a href="/api/v1/report/executive.html" target="_blank" class="btn btn--sm btn--primary">Print Report</a>
+        <a href="/api/v1/report/executive" class="btn btn--sm" download>{{T $.Locale "compliance_executive.download_json"}}</a>
+        <a href="/api/v1/report/executive.html?download=1" class="btn btn--sm" download>{{T $.Locale "compliance_executive.download_html"}}</a>
+        <a href="/api/v1/report/executive.html" target="_blank" class="btn btn--sm btn--primary">{{T $.Locale "compliance_executive.print_report"}}</a>
     </div>
 </div>
 
@@ -15,7 +15,7 @@
      hx-get="/ui/fragments/compliance-executive"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <div class="fw-grid__loading">Loading executive summary&hellip;</div>
+    <div class="fw-grid__loading">{{T $.Locale "compliance_executive.loading"}}</div>
 </div>
 {{end}}
 
@@ -36,40 +36,40 @@
 {{end}}
 
 {{with .Fleet}}
-<h3 class="section-heading u-mt-16px">Fleet Convergence</h3>
+<h3 class="section-heading u-mt-16px">{{T $.Locale "compliance_executive.fleet_convergence"}}</h3>
 <div class="breakdown">
-    <div class="breakdown__item"><div class="breakdown__count">{{.Total}}</div><div class="breakdown__status">Total Nodes</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-success">{{.FullyConverged}}</div><div class="breakdown__status">Converged</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.ConfigChanges}}</div><div class="breakdown__status">Drifted</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Failed}}</div><div class="breakdown__status">Errors</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Unreachable}}</div><div class="breakdown__status">Unreachable</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.PendingData}}</div><div class="breakdown__status">No Data</div></div>
+    <div class="breakdown__item"><div class="breakdown__count">{{.Total}}</div><div class="breakdown__status">{{T $.Locale "compliance_executive.total_nodes"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-success">{{.FullyConverged}}</div><div class="breakdown__status">{{T $.Locale "enum.converged"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.ConfigChanges}}</div><div class="breakdown__status">{{T $.Locale "compliance_executive.drifted"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Failed}}</div><div class="breakdown__status">{{T $.Locale "compliance_executive.errors"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Unreachable}}</div><div class="breakdown__status">{{T $.Locale "compliance_executive.unreachable"}}</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.PendingData}}</div><div class="breakdown__status">{{T $.Locale "common.no_data"}}</div></div>
 </div>
 {{end}}
 
 {{with .AuditChain}}
 {{if .Valid}}
-<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; {{.EntryCount}} entries, integrity intact.</div>
+<div class="audit-banner audit-banner--pass"><strong>{{T $.Locale "compliance_executive.audit_chain"}}</strong> {{T $.Locale "compliance_executive.audit_verified"}} &mdash; {{.EntryCount}} {{T $.Locale "compliance_executive.audit_entries_intact"}}</div>
 {{else}}
-<div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED{{if .Error}} &mdash; {{.Error}}{{end}}</div>
+<div class="audit-banner audit-banner--fail"><strong>{{T $.Locale "compliance_executive.audit_chain"}}</strong> {{T $.Locale "compliance_executive.audit_integrity_failed"}}{{if .Error}} &mdash; {{.Error}}{{end}}</div>
 {{end}}
 {{end}}
 
 {{if .TopIssues}}
-<h3 class="section-heading">Top Issues</h3>
+<h3 class="section-heading">{{T $.Locale "compliance_executive.top_issues"}}</h3>
 {{range .TopIssues}}
 <div class="exec-issue exec-issue--{{.Severity}}">
-    <span class="exec-issue__sev">{{.Severity}}</span>
+    <span class="exec-issue__sev">{{tEnum $.Locale .Severity}}</span>
     {{.Description}}
 </div>
 {{end}}
 {{end}}
 
 {{if .Frameworks}}
-<h3 class="section-heading">Framework Coverage</h3>
+<h3 class="section-heading">{{T $.Locale "compliance_executive.framework_coverage"}}</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Framework</th><th>Score</th><th class="u-w-35">Controls</th><th>Satisfied</th><th>Waived</th><th>Partial</th><th>Not Met</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "compliance_executive.th_framework"}}</th><th>{{T $.Locale "compliance_executive.th_score"}}</th><th class="u-w-35">{{T $.Locale "compliance_executive.th_controls"}}</th><th>{{T $.Locale "compliance_executive.th_satisfied"}}</th><th>{{T $.Locale "compliance_executive.th_waived"}}</th><th>{{T $.Locale "compliance_executive.th_partial"}}</th><th>{{T $.Locale "compliance_executive.th_not_met"}}</th></tr></thead>
         <tbody>
             {{range .Frameworks}}
             {{$slug := fwSlug .Name}}

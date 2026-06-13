@@ -2,14 +2,14 @@
 <span data-ai-page="compliance-report" data-ai-framework="{{.FrameworkSlug}}" hidden></span>
 <div class="page-header">
     <div class="page-header__breadcrumb">
-        <a href="/compliance">&larr; Back to Compliance</a>
+        <a href="/compliance">&larr; {{T $.Locale "compliance_report.back"}}</a>
     </div>
     <h1>{{.FrameworkTitle}}</h1>
     <div class="page-header__actions">
-        <a href="/compliance/{{.FrameworkSlug}}/viz" class="btn btn--sm">Viz View</a>
-        <a href="/api/v1/report/{{.FrameworkSlug}}" class="btn btn--sm" download>Download JSON</a>
-        <a href="/api/v1/report/{{.FrameworkSlug}}.html?download=1" class="btn btn--sm" download>Download HTML</a>
-        <a href="/api/v1/report/{{.FrameworkSlug}}.html" target="_blank" class="btn btn--sm btn--primary">Print Report</a>
+        <a href="/compliance/{{.FrameworkSlug}}/viz" class="btn btn--sm">{{T $.Locale "compliance_report.viz_view"}}</a>
+        <a href="/api/v1/report/{{.FrameworkSlug}}" class="btn btn--sm" download>{{T $.Locale "compliance_report.download_json"}}</a>
+        <a href="/api/v1/report/{{.FrameworkSlug}}.html?download=1" class="btn btn--sm" download>{{T $.Locale "compliance_report.download_html"}}</a>
+        <a href="/api/v1/report/{{.FrameworkSlug}}.html" target="_blank" class="btn btn--sm btn--primary">{{T $.Locale "compliance_report.print_report"}}</a>
     </div>
 </div>
 
@@ -17,7 +17,7 @@
      hx-get="/ui/fragments/compliance-report/{{.FrameworkSlug}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <div class="fw-grid__loading">Loading report data&hellip;</div>
+    <div class="fw-grid__loading">{{T $.Locale "compliance_report.loading"}}</div>
 </div>
 {{end}}
 
@@ -34,7 +34,7 @@
         <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt $covPct 80.0}}success{{else if gt $covPct 50.0}}warning{{else}}danger{{end}}">
             {{printf "%.1f" $covPct}}%
         </span>
-        <span class="compliance-gauge__label">fleet average coverage &middot; {{$total}} controls &middot; {{.Satisfied}} covered{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} missing</span>
+        <span class="compliance-gauge__label">{{T $.Locale "compliance_report.fleet_average_coverage"}} &middot; {{$total}} {{T $.Locale "compliance_report.controls_lc"}} &middot; {{.Satisfied}} {{T $.Locale "compliance_report.covered_lc"}}{{if gt .Waived 0}} &middot; {{.Waived}} {{T $.Locale "compliance_report.waived_lc"}}{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} {{T $.Locale "compliance_report.partial_lc"}}{{end}} &middot; {{.NotSatisfied}} {{T $.Locale "compliance_report.missing_lc"}}</span>
     </div>
     <div class="fw-card__bar u-h-12px">
         {{if gt $satPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green w-pct-{{wbucket $satPct}}"></div>{{end}}
@@ -47,31 +47,31 @@
 
 {{with .AuditChain}}
 {{if .Valid}}
-<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; {{.EntryCount}} entries, integrity intact.</div>
+<div class="audit-banner audit-banner--pass"><strong>{{T $.Locale "compliance_report.audit_chain"}}:</strong> {{T $.Locale "compliance_report.audit_verified"}} &mdash; {{.EntryCount}} {{T $.Locale "compliance_report.entries_integrity_intact"}}</div>
 {{else}}
-<div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED{{if .Error}} &mdash; {{.Error}}{{end}}</div>
+<div class="audit-banner audit-banner--fail"><strong>{{T $.Locale "compliance_report.audit_chain"}}:</strong> {{T $.Locale "compliance_report.integrity_check_failed"}}{{if .Error}} &mdash; {{.Error}}{{end}}</div>
 {{end}}
 {{end}}
 
 {{if .Controls}}
-<h3 class="section-heading">{{if .FrameworkName}}{{.FrameworkName}}{{else}}{{.Title}}{{end}} Controls</h3>
+<h3 class="section-heading">{{if .FrameworkName}}{{.FrameworkName}}{{else}}{{.Title}}{{end}} {{T $.Locale "compliance_report.controls"}}</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Title</th><th>Nature</th><th>Fleet Coverage</th><th>Documents</th><th>Evidence</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "compliance_report.th_control"}}</th><th>{{T $.Locale "compliance_report.th_title"}}</th><th>{{T $.Locale "compliance_report.th_nature"}}</th><th>{{T $.Locale "compliance_report.th_fleet_coverage"}}</th><th>{{T $.Locale "compliance_report.th_documents"}}</th><th>{{T $.Locale "compliance_report.th_evidence"}}</th></tr></thead>
         <tbody>
             {{range .Controls}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
                 <td>
-                    <span class="badge {{controlNatureClass .Scope}}" title="scope: {{.Scope}}">{{controlNature .Scope}}</span>
+                    <span class="badge {{controlNatureClass .Scope}}" title="{{T $.Locale "compliance_report.scope_label"}}: {{.Scope}}">{{controlNature .Scope}}</span>
                 </td>
                 <td>
                     {{if gt .FleetTotal 0}}
                     {{/* Waived controls paint with the waiver color regardless of percent —
                          a 100%-waived control is not the same signal as 100%-enforced. */}}
                     <span class="badge {{if eq .Status "waived"}}badge--info{{else if ge .FleetPercent 95.0}}badge--compliant{{else if ge .FleetPercent 50.0}}badge--relapsed{{else}}badge--failed{{end}}">
-                        {{if eq .Status "waived"}}waived{{else}}{{printf "%.1f" .FleetPercent}}%{{end}}
+                        {{if eq .Status "waived"}}{{T $.Locale "compliance_report.waived_lc"}}{{else}}{{printf "%.1f" .FleetPercent}}%{{end}}
                     </span>
                     <span class="text-muted u-fs-0-85em">{{.FleetCovered}}/{{.FleetTotal}}</span>
                     {{else}}
@@ -86,7 +86,7 @@
                             hx-target="#docs-row-{{cssClass .ControlID}}"
                             hx-swap="innerHTML"
                             data-action="toggle-docs-row" data-target="docs-row-{{cssClass .ControlID}}">
-                        &#128206; {{.DocCount}} attached
+                        &#128206; {{.DocCount}} {{T $.Locale "compliance_report.attached"}}
                     </button>
                     {{else if eq .Scope "documented"}}
                     <button type="button"
@@ -95,8 +95,8 @@
                             hx-target="#docs-row-{{cssClass .ControlID}}"
                             hx-swap="innerHTML"
                             data-action="toggle-docs-row" data-target="docs-row-{{cssClass .ControlID}}"
-                            title="No docs uploaded — click to upload">
-                        Upload
+                            title="{{T $.Locale "compliance_report.no_docs_uploaded"}}">
+                        {{T $.Locale "compliance_report.upload"}}
                     </button>
                     {{else}}
                     <span class="text-muted">&mdash;</span>
@@ -118,10 +118,10 @@
 {{end}}
 
 {{if .Fleet}}
-<h3 class="section-heading">Fleet Coverage</h3>
+<h3 class="section-heading">{{T $.Locale "compliance_report.fleet_coverage"}}</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Hostname</th><th>Coverage</th><th>Controls</th><th>Waived</th><th>Partial</th><th>Missing</th><th>Last Seen</th><th></th></tr></thead>
+        <thead><tr><th>{{T $.Locale "th.hostname"}}</th><th>{{T $.Locale "compliance_report.th_coverage"}}</th><th>{{T $.Locale "compliance_report.controls"}}</th><th>{{T $.Locale "compliance_report.th_waived"}}</th><th>{{T $.Locale "compliance_report.th_partial"}}</th><th>{{T $.Locale "compliance_report.th_missing"}}</th><th>{{T $.Locale "compliance_report.th_last_seen"}}</th><th></th></tr></thead>
         <tbody>
             {{range .Fleet}}
             <tr>
@@ -138,7 +138,7 @@
                 <td>{{if gt .PartialCount 0}}<span class="badge badge--relapsed">{{.PartialCount}}</span>{{else if gt .TotalControls 0}}<span class="text-muted">0</span>{{else}}-{{end}}</td>
                 <td>{{if gt .MissingCount 0}}<span class="text-danger">{{.MissingCount}}</span>{{else if gt .TotalControls 0}}<span class="text-success">0</span>{{else}}-{{end}}</td>
                 <td class="text-muted">{{if .LastSeen}}{{.LastSeen}}{{else}}-{{end}}</td>
-                <td>{{if .ID}}<a href="/envoys/{{.ID}}/compliance/{{$.Slug}}" class="btn btn--sm">Details</a>{{end}}</td>
+                <td>{{if .ID}}<a href="/envoys/{{.ID}}/compliance/{{$.Slug}}" class="btn btn--sm">{{T $.Locale "th.details"}}</a>{{end}}</td>
             </tr>
             {{end}}
         </tbody>

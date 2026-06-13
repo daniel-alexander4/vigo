@@ -2,11 +2,11 @@
 <span data-ai-page="config-trace" data-ai-envoy="{{.Hostname}}" hidden></span>
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/envoys">Envoys</a> &rsaquo; <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a> &rsaquo; Config Trace
+        <a href="/envoys">Envoys</a> &rsaquo; <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a> &rsaquo; {{T $.Locale "envoy_trace.config_trace"}}
     </div>
-    <h1>Config Trace: {{.Hostname}}</h1>
+    <h1>{{T $.Locale "envoy_trace.config_trace"}}: {{.Hostname}}</h1>
     <div class="page-header__actions">
-        <a href="/envoys/{{.EnvoyID}}/trace/viz" class="btn btn--sm">Viz View</a>
+        <a href="/envoys/{{.EnvoyID}}/trace/viz" class="btn btn--sm">{{T $.Locale "envoy_trace.viz_view"}}</a>
     </div>
 </div>
 {{template "trace-body" .}}
@@ -20,7 +20,7 @@
 {{if not .Trace.Matched}}
 <div class="card">
     <div class="card__body">
-        <p class="text-muted">No config entry matches hostname <strong>{{.Hostname}}</strong></p>
+        <p class="text-muted">{{T $.Locale "envoy_trace.no_match_prefix"}} <strong>{{.Hostname}}</strong></p>
     </div>
 </div>
 {{else}}
@@ -28,18 +28,18 @@
 
 <div class="trace-summary">
     <div class="trace-summary__item">
-        <span class="trace-summary__label">Match:</span>
+        <span class="trace-summary__label">{{T $.Locale "envoy_trace.match"}}:</span>
         <code class="trace-summary__value">{{.MatchPattern}}</code>
         <span class="text-muted">({{.PatternType}})</span>
     </div>
     {{if .Environment}}
     <div class="trace-summary__item">
-        <span class="trace-summary__label">Environment:</span>
+        <span class="trace-summary__label">{{T $.Locale "envoy_trace.environment"}}:</span>
         <span class="trace-summary__value">{{.Environment}}</span>
     </div>
     {{end}}
     <div class="trace-summary__item">
-        <span class="trace-summary__label">Resources:</span>
+        <span class="trace-summary__label">{{T $.Locale "envoy_trace.resources"}}:</span>
         <span class="trace-summary__value">{{.ResourceCount}}</span>
     </div>
     <div class="trace-summary__item">
@@ -53,7 +53,7 @@
 
 <!-- Path Inheritance -->
 <div class="trace-group">
-    <h3 class="trace-group__title">Path Inheritance</h3>
+    <h3 class="trace-group__title">{{T $.Locale "envoy_trace.path_inheritance"}}</h3>
     <div class="trace-section__body u-blk14">
         {{tracePathTree .Inheritance .EnvoyWaiverFiles}}
     </div>
@@ -88,7 +88,7 @@
 {{$moduleLevels := traceModuleLevels .Inheritance}}
 {{$mTotal := len $moduleLevels}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Configcrate Inheritance</h3>
+    <h3 class="trace-group__title">{{T $.Locale "envoy_trace.configcrate_inheritance"}}</h3>
     <div class="trace-chain">
     {{range $i, $lvl := $moduleLevels}}
         {{if or $lvl.Configcrates $lvl.Roles (isLastIndex $i $mTotal)}}
@@ -130,7 +130,7 @@
 {{range .Inheritance}}{{if .Vars}}{{$hasVars = true}}{{end}}{{end}}
 {{if or $hasVars .VarSources}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Variable Inheritance</h3>
+    <h3 class="trace-group__title">{{T $.Locale "envoy_trace.variable_inheritance"}}</h3>
     <div class="trace-chain">
     {{range $i, $lvl := .Inheritance}}
         {{if $lvl.Vars}}
@@ -144,7 +144,7 @@
                 <span class="trace-card__var-key">{{$key}}</span>
                 <span class="trace-card__label">=</span>
                 <span class="trace-card__var-val">{{maskSecret $val}}</span>
-                {{if inSlice $key $lvl.Overrides}}<span class="trace-card__override">overrides</span>{{end}}
+                {{if inSlice $key $lvl.Overrides}}<span class="trace-card__override">{{T $.Locale "envoy_trace.overrides"}}</span>{{end}}
             </div>
             {{end}}
         </div>
@@ -158,9 +158,9 @@
 
     {{if .VarSources}}
     <div class="u-mt-12px">
-        <h4 class="u-mb-8px">Variable Final Resolution</h4>
+        <h4 class="u-mb-8px">{{T $.Locale "envoy_trace.variable_final_resolution"}}</h4>
         <table class="table">
-            <thead><tr><th>Variable</th><th>Value</th><th>Source</th></tr></thead>
+            <thead><tr><th>{{T $.Locale "envoy_trace.th.variable"}}</th><th>{{T $.Locale "th.value"}}</th><th>{{T $.Locale "envoy_trace.th.source"}}</th></tr></thead>
             <tbody>
             {{range .VarSources}}
             <tr>
@@ -181,14 +181,14 @@
 <!-- Password Inheritance -->
 {{if .SecretRefs}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Password Inheritance{{if .SecretsProvider}} <span class="trace-source u-fw-400-fs-12px">provider: {{.SecretsProvider}}</span>{{end}}</h3>
+    <h3 class="trace-group__title">{{T $.Locale "envoy_trace.password_inheritance"}}{{if .SecretsProvider}} <span class="trace-source u-fw-400-fs-12px">{{T $.Locale "envoy_trace.provider"}}: {{.SecretsProvider}}</span>{{end}}</h3>
     <div class="trace-section__body">
         <table>
             <tr>
-                <th>Key</th>
-                <th>Value</th>
-                <th>Path</th>
-                <th>Source</th>
+                <th>{{T $.Locale "th.key"}}</th>
+                <th>{{T $.Locale "th.value"}}</th>
+                <th>{{T $.Locale "envoy_trace.th.path"}}</th>
+                <th>{{T $.Locale "envoy_trace.th.source"}}</th>
                 <th>Configcrate</th>
             </tr>
             {{range .SecretRefs}}
@@ -208,7 +208,7 @@
 <!-- Compliance Inheritance -->
 {{if .ComplianceTags}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Compliance Inheritance</h3>
+    <h3 class="trace-group__title">{{T $.Locale "envoy_trace.compliance_inheritance"}}</h3>
     <div class="trace-section__body">
         {{range $ct := .ComplianceTags}}
         <div class="u-mb-10px">
@@ -228,7 +228,7 @@
 <!-- Compliance Sources (modules-tree compliance.vgo provenance) -->
 {{if .ConfigcrateComplianceFiles}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Compliance Sources</h3>
+    <h3 class="trace-group__title">{{T $.Locale "envoy_trace.compliance_sources"}}</h3>
     <div class="trace-chain">
         {{$mcTotal := len .ConfigcrateComplianceFiles}}
         {{range $i, $mcf := .ConfigcrateComplianceFiles}}
@@ -260,7 +260,7 @@
 <!-- Waivers Inheritance -->
 {{if .EnvoyWaivers}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Waivers Inheritance</h3>
+    <h3 class="trace-group__title">{{T $.Locale "envoy_trace.waivers_inheritance"}}</h3>
     <div class="trace-chain">
         {{$waiverFiles := groupWaiversByFile .EnvoyWaivers}}
         {{$wTotal := len $waiverFiles}}
@@ -273,10 +273,10 @@
             <div class="trace-card__row">
                 <span class="trace-comp-fw">{{.Framework}}/{{.Control}}</span>
                 <span class="text-muted u-ml-8px">{{.Reason}}</span>
-                {{if .Expires}}<span class="trace-source u-ml-8px">expires {{.Expires}}</span>{{end}}
+                {{if .Expires}}<span class="trace-source u-ml-8px">{{T $.Locale "envoy_trace.expires"}} {{.Expires}}</span>{{end}}
             </div>
             <div class="trace-card__row u-pl-12px">
-                <span class="trace-source">approved by: {{.ApprovedBy}}</span>
+                <span class="trace-source">{{T $.Locale "envoy_trace.approved_by"}}: {{.ApprovedBy}}</span>
             </div>
             {{end}}
         </div>

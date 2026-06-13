@@ -2,44 +2,44 @@
 <span data-ai-page="run-detail" data-ai-envoy="{{.Run.Hostname}}" data-ai-run="{{.Run.ID}}" hidden></span>
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/runs">Runs</a> &rsaquo; {{truncUUID .Run.ID}}
+        <a href="/runs">{{T $.Locale "run_detail.runs"}}</a> &rsaquo; {{truncUUID .Run.ID}}
     </div>
-    <h1>Run {{truncUUID .Run.ID}}</h1>
+    <h1>{{T $.Locale "run_detail.title"}} {{truncUUID .Run.ID}}</h1>
     <p>
         Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Run.Hostname}}</a>
         &middot; {{if gt .Run.ResourceCount 0}}<span class="badge {{convergenceBadgeClass .Run.Outcome .Run.EnvoyDriftLabel}}" title="{{convergenceHover .Run.ChangedCount .Run.FailedCount .Run.ResourceCount}}">{{convergenceRatio .Run.ChangedCount .Run.FailedCount .Run.ResourceCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
         &middot; {{formatTime .Run.StartedAt}}
-        &middot; {{if eq .Run.Trigger "force-push"}}<span class="badge">force-push</span>{{else}}<span class="text-muted">scheduled</span>{{end}}
+        &middot; {{if eq .Run.Trigger "force-push"}}<span class="badge">{{tEnum $.Locale .Run.Trigger}}</span>{{else}}<span class="text-muted">{{tEnum $.Locale .Run.Trigger}}</span>{{end}}
     </p>
 </div>
 
 <div class="stat-cards mb-2">
     <div class="stat-card stat-card--brand">
         <div class="stat-card__value">{{.Run.ResourceCount}}</div>
-        <div class="stat-card__label">Resources</div>
+        <div class="stat-card__label">{{T $.Locale "run_detail.resources"}}</div>
     </div>
     <div class="stat-card stat-card--success">
         <div class="stat-card__value">{{.Run.ChangedCount}}</div>
-        <div class="stat-card__label">Changed</div>
+        <div class="stat-card__label">{{T $.Locale "run_detail.changed"}}</div>
     </div>
     <div class="stat-card stat-card--danger">
         <div class="stat-card__value">{{.Run.FailedCount}}</div>
-        <div class="stat-card__label">Failed</div>
+        <div class="stat-card__label">{{T $.Locale "run_detail.failed"}}</div>
     </div>
 </div>
 
 <div class="table-container">
-    <h3>Resource Results</h3>
+    <h3>{{T $.Locale "run_detail.resource_results"}}</h3>
     <table class="table">
         <thead>
             <tr>
                 <th>Configcrate</th>
-                <th>Type</th>
-                <th>Resource</th>
-                <th>Action</th>
-                <th>Changed</th>
-                <th>Error</th>
-                <th>Duration</th>
+                <th>{{T $.Locale "th.type"}}</th>
+                <th>{{T $.Locale "run_detail.th.resource"}}</th>
+                <th>{{T $.Locale "run_detail.th.action"}}</th>
+                <th>{{T $.Locale "run_detail.changed"}}</th>
+                <th>{{T $.Locale "run_detail.th.error"}}</th>
+                <th>{{T $.Locale "th.duration"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -53,14 +53,14 @@
                         {{actionLabel .ActionTaken .DriftLabel}}
                     </span>
                 </td>
-                <td>{{if .Changed}}yes{{else}}-{{end}}</td>
+                <td>{{if .Changed}}{{T $.Locale "common.yes"}}{{else}}-{{end}}</td>
                 <td>{{if .ErrorMessage}}<span class="text-danger">{{.ErrorMessage}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
                 <td class="mono">{{.DurationMs}}ms</td>
             </tr>
             {{end}}
             {{if not .Results}}
             <tr>
-                <td colspan="7" class="table__empty-cell">No configcrate results recorded.</td>
+                <td colspan="7" class="table__empty-cell">{{T $.Locale "run_detail.no_results"}}</td>
             </tr>
             {{end}}
         </tbody>
@@ -73,12 +73,12 @@
     <thead>
         <tr>
             <th>Configcrate</th>
-            <th>Type</th>
-            <th>Resource</th>
-            <th>Action</th>
-            <th>Changed</th>
-            <th>Error</th>
-            <th>Duration</th>
+            <th>{{T $.Locale "th.type"}}</th>
+            <th>{{T $.Locale "run_detail.th.resource"}}</th>
+            <th>{{T $.Locale "run_detail.th.action"}}</th>
+            <th>{{T $.Locale "run_detail.changed"}}</th>
+            <th>{{T $.Locale "run_detail.th.error"}}</th>
+            <th>{{T $.Locale "th.duration"}}</th>
         </tr>
     </thead>
     <tbody>
@@ -92,14 +92,14 @@
                     {{actionLabel .ActionTaken .DriftLabel}}
                 </span>
             </td>
-            <td>{{if .Changed}}yes{{else}}-{{end}}</td>
+            <td>{{if .Changed}}{{T $.Locale "common.yes"}}{{else}}-{{end}}</td>
             <td>{{if .ErrorMessage}}<span class="text-danger">{{.ErrorMessage}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
             <td class="mono">{{.DurationMs}}ms</td>
         </tr>
         {{end}}
         {{if not .Results}}
         <tr>
-            <td colspan="7" class="table__empty-cell">No configcrate results recorded.</td>
+            <td colspan="7" class="table__empty-cell">{{T $.Locale "run_detail.no_results"}}</td>
         </tr>
         {{end}}
     </tbody>

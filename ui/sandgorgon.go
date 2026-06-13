@@ -112,6 +112,7 @@ func (h *Handler) SandgorgonAssetsFragment(w http.ResponseWriter, r *http.Reques
 		StateFilter: stateFilter,
 		Search:      q,
 	}
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "sandgorgon", "sandgorgon-assets-fragment", data)
 }
 

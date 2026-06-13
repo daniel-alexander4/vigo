@@ -3,11 +3,11 @@
 <div class="page-header">
     <h1>Envoys</h1>
     <div class="page-header__actions">
-        <a href="/envoys/tree" class="btn btn--sm">Tree view</a>
-        <a href="/runs" class="btn btn--sm">Fleet-wide Runs</a>
-        <a href="/api/v1/export/cmdb" class="btn btn--sm" target="_blank" rel="noopener">CMDB Export</a>
+        <a href="/envoys/tree" class="btn btn--sm">{{T $.Locale "envoys.tree_view"}}</a>
+        <a href="/runs" class="btn btn--sm">{{T $.Locale "envoys.fleet_wide_runs"}}</a>
+        <a href="/api/v1/export/cmdb" class="btn btn--sm" target="_blank" rel="noopener">{{T $.Locale "envoys.cmdb_export"}}</a>
     </div>
-    <p>Managed nodes reporting to this server{{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
+    <p>{{T $.Locale "envoys.subtitle"}}{{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
 </div>
 
 {{$qs := ""}}{{if .ConvFilter}}{{$qs = printf "%s&conv=%s" $qs .ConvFilter}}{{end}}{{if .DriftFilter}}{{$qs = printf "%s&drift=%s" $qs .DriftFilter}}{{end}}{{if .ReachFilter}}{{$qs = printf "%s&reach=%s" $qs .ReachFilter}}{{end}}{{if .EnvFilter}}{{$qs = printf "%s&env=%s" $qs .EnvFilter}}{{end}}{{if .TagFilter}}{{$qs = printf "%s&tag=%s" $qs .TagFilter}}{{end}}{{if .RoleFilter}}{{$qs = printf "%s&role=%s" $qs .RoleFilter}}{{end}}{{if .OSFilter}}{{$qs = printf "%s&os=%s" $qs .OSFilter}}{{end}}{{if .ArchFilter}}{{$qs = printf "%s&arch=%s" $qs .ArchFilter}}{{end}}{{if .ConfigcrateFilter}}{{$qs = printf "%s&configcrate=%s" $qs .ConfigcrateFilter}}{{end}}{{if .ComplianceFilter}}{{$qs = printf "%s&compliance=%s" $qs .ComplianceFilter}}{{end}}
@@ -26,12 +26,12 @@
         <button type="button" class="btn btn--sm envoys-toolbar__filter-button"
                 data-action="toggle-filter-drawer"
                 aria-controls="envoy-filter-drawer"
-                aria-label="Open filter drawer">
-            Filter
-            {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} active</span>{{end}}
+                aria-label="{{T $.Locale "envoys.open_filter_drawer"}}">
+            {{T $.Locale "btn.filter"}}
+            {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} {{T $.Locale "envoys.active"}}</span>{{end}}
         </button>
         {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}}
-        <a href="/envoys" class="btn btn--sm">Clear</a>
+        <a href="/envoys" class="btn btn--sm">{{T $.Locale "btn.clear"}}</a>
         {{end}}
     </div>
     <form action="/envoys" method="get" hx-boost="false" class="envoys-toolbar__sort">
@@ -46,13 +46,13 @@
         {{if .ArchFilter}}<input type="hidden" name="arch" value="{{.ArchFilter}}">{{end}}
         {{if .ConfigcrateFilter}}<input type="hidden" name="configcrate" value="{{.ConfigcrateFilter}}">{{end}}
         {{if .ComplianceFilter}}<input type="hidden" name="compliance" value="{{.ComplianceFilter}}">{{end}}
-        <label class="envoys-toolbar__label" for="envoys-sort">Sort</label>
+        <label class="envoys-toolbar__label" for="envoys-sort">{{T $.Locale "envoys.sort"}}</label>
         <select id="envoys-sort" name="sort" data-change="submit-form" class="input input--sm">
-            <option value="status"{{if eq .SortColumn "status"}} selected{{end}}>Worst first</option>
-            <option value="last_run"{{if eq .SortColumn "last_run"}} selected{{end}}>Last run (newest)</option>
-            <option value="last_seen"{{if eq .SortColumn "last_seen"}} selected{{end}}>Last seen (newest)</option>
-            <option value="hostname"{{if eq .SortColumn "hostname"}} selected{{end}}>Hostname (A→Z)</option>
-            <option value="ip"{{if eq .SortColumn "ip"}} selected{{end}}>IP address</option>
+            <option value="status"{{if eq .SortColumn "status"}} selected{{end}}>{{T $.Locale "envoys.sort_worst_first"}}</option>
+            <option value="last_run"{{if eq .SortColumn "last_run"}} selected{{end}}>{{T $.Locale "envoys.sort_last_run"}}</option>
+            <option value="last_seen"{{if eq .SortColumn "last_seen"}} selected{{end}}>{{T $.Locale "envoys.sort_last_seen"}}</option>
+            <option value="hostname"{{if eq .SortColumn "hostname"}} selected{{end}}>{{T $.Locale "envoys.sort_hostname"}}</option>
+            <option value="ip"{{if eq .SortColumn "ip"}} selected{{end}}>{{T $.Locale "envoys.sort_ip"}}</option>
         </select>
     </form>
 </div>
@@ -72,8 +72,8 @@
 
 {{define "envoys-stats"}}
 <div class="stat-cards stat-cards--compact mb-2">
-    {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
-    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" "Envoys that checked in within 2.5× the agent check-in interval (set in server.yaml as checkin.interval)."}}
+    {{template "stat-card" dict "Value" .TotalEnvoys "Label" (T $.Locale "envoys.total_envoys") "Color" "brand"}}
+    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" (T $.Locale "envoys.reachable") "Color" "success" "Tooltip" (T $.Locale "envoys.reachable_tooltip")}}
 </div>
 {{template "envoy-filter-bar" dict
     "TotalEnvoys"           .TotalEnvoys
@@ -98,13 +98,13 @@
 <table class="table envoys-table" aria-rowcount="{{.MatchingTotal}}">
     <thead>
         <tr>
-            {{sortHeader "Hostname" "hostname" .SortColumn .SortDir $base}}
-            {{sortHeader "IP Address" "ip" .SortColumn .SortDir $base}}
-            <th>Agent</th>
-            {{sortHeader "Last Check-in" "last_seen" .SortColumn .SortDir $base}}
-            {{sortHeader "Last Convergence" "last_run" .SortColumn .SortDir $base}}
-            <th title="Composite agent-health: FDs, host FD%, OOM-recent, rootfs %, inode %, repo-health. Click a pill to see the fleet breakdown.">Agent Health</th>
-            {{sortHeader "Convergence" "status" .SortColumn .SortDir $base}}
+            {{sortHeader (T $.Locale "th.hostname") "hostname" .SortColumn .SortDir $base}}
+            {{sortHeader (T $.Locale "th.ip_address") "ip" .SortColumn .SortDir $base}}
+            <th>{{T $.Locale "envoys.agent"}}</th>
+            {{sortHeader (T $.Locale "th.last_checkin") "last_seen" .SortColumn .SortDir $base}}
+            {{sortHeader (T $.Locale "envoys.last_convergence") "last_run" .SortColumn .SortDir $base}}
+            <th title="{{T $.Locale "envoys.agent_health_tooltip"}}">{{T $.Locale "th.agent_health"}}</th>
+            {{sortHeader (T $.Locale "th.convergence") "status" .SortColumn .SortDir $base}}
         </tr>
     </thead>
     <tbody id="envoys-table-body">
@@ -112,17 +112,17 @@
         {{range .Envoys}}
         {{$rowIndex = add $rowIndex 1}}
         <tr aria-rowindex="{{$rowIndex}}">
-            <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}</td>
+            <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="{{T $.Locale "envoys.observe_only_tooltip"}}">{{T $.Locale "envoys.obs"}}</span>{{end}}</td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}{{if .StaleThresholdLabel}} &middot; stale threshold: {{.StaleThresholdLabel}}{{end}}">{{.LastSeenLabel}}</span></td>
-            <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}{{if .StaleThresholdLabel}} &middot; {{T $.Locale "envoys.stale_threshold"}}: {{.StaleThresholdLabel}}{{end}}">{{.LastSeenLabel}}</span></td>
+            <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgoL $.Locale .LastRunAt}}</a>{{end}}</td>
             <td>
-                <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}no agent-health traits reported yet{{end}}">{{severityLabel .HealthSeverity}}</span></a>
+                <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}{{T $.Locale "envoys.no_health_traits"}}{{end}}">{{tEnum $.Locale (severityLabel .HealthSeverity)}}</span></a>
             </td>
             <td>
                 {{if eq .ResourceCount 0}}
-                <span class="badge badge--unknown" title="No run data yet">0/0/0</span>
+                <span class="badge badge--unknown" title="{{T $.Locale "envoys.no_run_data"}}">0/0/0</span>
                 {{else if .LastRunID}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span></a>
                 {{else}}
@@ -133,13 +133,13 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="7" class="table__empty-cell">No envoys{{if or $.ConvFilter $.DriftFilter $.ReachFilter}} matching the active filter{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.ConvFilter $.DriftFilter $.ReachFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
+            <td colspan="7" class="table__empty-cell">{{T $.Locale "envoys.empty_no_envoys"}}{{if or $.ConvFilter $.DriftFilter $.ReachFilter}} {{T $.Locale "envoys.empty_matching_filter"}}{{end}}{{if $.Search}} {{T $.Locale "envoys.empty_matching_search"}} "{{$.Search}}"{{end}}.{{if or $.ConvFilter $.DriftFilter $.ReachFilter $.Search}} <a href="/envoys">{{T $.Locale "envoys.clear_filter"}}</a>.{{end}}</td>
         </tr>
         {{end}}
         {{if .RenderedCap}}
         <tr class="envoys-table__cap-sentinel">
             <td colspan="7">
-                <strong>Showing {{.RenderedCapMax}} of {{.MatchingTotal}}.</strong> The list stops growing here so the page stays responsive — refine your filter or search to see the rest.
+                <strong>{{T $.Locale "envoys.showing_prefix"}} {{.RenderedCapMax}} {{T $.Locale "envoys.showing_of"}} {{.MatchingTotal}}.</strong> {{T $.Locale "envoys.cap_explainer"}}
             </td>
         </tr>
         {{else if .HasMore}}
@@ -148,7 +148,7 @@
             hx-trigger="revealed"
             hx-swap="outerHTML"
             hx-select="tbody > tr">
-            <td colspan="7" class="envoys-table__loadmore-cell">Loading more…</td>
+            <td colspan="7" class="envoys-table__loadmore-cell">{{T $.Locale "envoys.loading_more"}}</td>
         </tr>
         {{end}}
     </tbody>

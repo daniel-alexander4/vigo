@@ -1,33 +1,33 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Tasks &amp; Workflows</h1>
-    <p>Ad-hoc commands dispatched to envoys and multi-step workflow executions</p>
+    <h1>{{T $.Locale "operations.heading"}}</h1>
+    <p>{{T $.Locale "operations.subtitle"}}</p>
 </div>
 
 <div class="filter-bar mb-2">
-    <a href="/operations?tab=tasks" class="btn btn--sm{{if eq .Tab "tasks"}} btn--primary{{end}}">Tasks ({{.TaskCount}})</a>
-    <a href="/operations?tab=workflows" class="btn btn--sm{{if eq .Tab "workflows"}} btn--primary{{end}}">Workflows ({{.WorkflowCount}})</a>
+    <a href="/operations?tab=tasks" class="btn btn--sm{{if eq .Tab "tasks"}} btn--primary{{end}}">{{T $.Locale "nav.tasks"}} ({{.TaskCount}})</a>
+    <a href="/operations?tab=workflows" class="btn btn--sm{{if eq .Tab "workflows"}} btn--primary{{end}}">{{T $.Locale "nav.workflows"}} ({{.WorkflowCount}})</a>
 </div>
 
 {{if eq .Tab "tasks"}}
 <div class="filter-bar mb-2">
-    <a href="/operations?tab=tasks" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/operations?tab=tasks&status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">Running</a>
-    <a href="/operations?tab=tasks&status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">Complete</a>
-    <a href="/operations?tab=tasks&status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed</a>
+    <a href="/operations?tab=tasks" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">{{T $.Locale "filter.all"}}</a>
+    <a href="/operations?tab=tasks&status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">{{T $.Locale "operations.status.running"}}</a>
+    <a href="/operations?tab=tasks&status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">{{T $.Locale "operations.status.complete"}}</a>
+    <a href="/operations?tab=tasks&status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">{{T $.Locale "enum.failed"}}</a>
 </div>
 
 <div class="table-container">
     <table class="table">
         <thead>
             <tr>
-                <th>Task</th>
-                <th>Command</th>
-                <th>Target</th>
-                <th>Status</th>
-                <th>Targets</th>
-                <th>Operator</th>
-                <th>Created</th>
+                <th>{{T $.Locale "operations.th.task"}}</th>
+                <th>{{T $.Locale "operations.th.command"}}</th>
+                <th>{{T $.Locale "operations.th.target"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "operations.th.targets"}}</th>
+                <th>{{T $.Locale "operations.th.operator"}}</th>
+                <th>{{T $.Locale "th.created"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -44,7 +44,7 @@
             {{end}}
             {{if not .Tasks}}
             <tr>
-                <td colspan="7" class="text-muted u-ta-center-p-40px">No tasks found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
+                <td colspan="7" class="text-muted u-ta-center-p-40px">{{T $.Locale "operations.empty.tasks"}}{{if .StatusFilter}} {{T $.Locale "operations.empty.with_status"}} "{{.StatusFilter}}"{{end}}.</td>
             </tr>
             {{end}}
         </tbody>
@@ -54,22 +54,22 @@
 
 {{if eq .Tab "workflows"}}
 <div class="filter-bar mb-2">
-    <a href="/operations?tab=workflows" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/operations?tab=workflows&status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">Running</a>
-    <a href="/operations?tab=workflows&status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">Complete</a>
-    <a href="/operations?tab=workflows&status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed</a>
+    <a href="/operations?tab=workflows" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">{{T $.Locale "filter.all"}}</a>
+    <a href="/operations?tab=workflows&status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">{{T $.Locale "operations.status.running"}}</a>
+    <a href="/operations?tab=workflows&status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">{{T $.Locale "operations.status.complete"}}</a>
+    <a href="/operations?tab=workflows&status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">{{T $.Locale "enum.failed"}}</a>
 </div>
 
 <div class="table-container">
     <table class="table">
         <thead>
             <tr>
-                <th>Workflow</th>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Steps</th>
-                <th>Operator</th>
-                <th>Created</th>
+                <th>{{T $.Locale "operations.th.workflow"}}</th>
+                <th>{{T $.Locale "th.name"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "operations.th.steps"}}</th>
+                <th>{{T $.Locale "operations.th.operator"}}</th>
+                <th>{{T $.Locale "th.created"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -85,7 +85,7 @@
             {{end}}
             {{if not .Workflows}}
             <tr>
-                <td colspan="6" class="text-muted u-ta-center-p-40px">No workflows found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
+                <td colspan="6" class="text-muted u-ta-center-p-40px">{{T $.Locale "operations.empty.workflows"}}{{if .StatusFilter}} {{T $.Locale "operations.empty.with_status"}} "{{.StatusFilter}}"{{end}}.</td>
             </tr>
             {{end}}
         </tbody>

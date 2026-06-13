@@ -1,50 +1,50 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>{{if .Asset.Hostname}}{{.Asset.Hostname}}{{else}}Asset {{.Asset.ID}}{{end}}</h1>
-    <p>Bare metal asset detail</p>
+    <h1>{{if .Asset.Hostname}}{{.Asset.Hostname}}{{else}}{{T $.Locale "sandgorgon_asset.asset"}} {{.Asset.ID}}{{end}}</h1>
+    <p>{{T $.Locale "sandgorgon_asset.subtitle"}}</p>
     <div class="page-header__actions">
-        <a href="/api/v1/sandgorgon/report/{{.Asset.ID}}/html" target="_blank" class="btn btn--sm">Lifecycle Report</a>
+        <a href="/api/v1/sandgorgon/report/{{.Asset.ID}}/html" target="_blank" class="btn btn--sm">{{T $.Locale "sandgorgon_asset.lifecycle_report"}}</a>
     </div>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__label">State</div>
-        <div class="stat-card__value"><span class="status-pill status-pill--{{lifecycleClass .Asset.LifecycleState}}">{{.Asset.LifecycleState}}</span></div>
+        <div class="stat-card__label">{{T $.Locale "th.state"}}</div>
+        <div class="stat-card__value"><span class="status-pill status-pill--{{lifecycleClass .Asset.LifecycleState}}">{{tEnum $.Locale .Asset.LifecycleState}}</span></div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Serial Number</div>
+        <div class="stat-card__label">{{T $.Locale "sandgorgon_asset.serial_number"}}</div>
         <div class="stat-card__value u-fs-1em">{{.Asset.SerialNumber}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Model</div>
+        <div class="stat-card__label">{{T $.Locale "sandgorgon_asset.model"}}</div>
         <div class="stat-card__value u-fs-1em">{{.Asset.Model}}</div>
     </div>
 </div>
 
 <div class="card mt-2">
-    <h2>Hardware Details</h2>
+    <h2>{{T $.Locale "sandgorgon_asset.hardware_details"}}</h2>
     <table class="table">
-        <tr><th class="u-w-200px">BMC Address</th><td>{{.Asset.BmcAddress}}</td></tr>
-        <tr><th>Asset Tag</th><td>{{.Asset.AssetTag}}</td></tr>
-        <tr><th>Rack Location</th><td>{{.Asset.RackLocation}}</td></tr>
-        {{if .Asset.EnvoyID.Valid}}<tr><th>Linked Envoy</th><td><a href="/envoys/{{.Asset.EnvoyID.String}}">{{.Asset.EnvoyID.String}}</a></td></tr>{{end}}
-        <tr><th>Commissioned</th><td>{{if .Asset.CommissionedAt.Valid}}{{formatTime .Asset.CommissionedAt.Time}}{{else}}&mdash;{{end}}</td></tr>
-        <tr><th>Decommissioned</th><td>{{if .Asset.DecommissionedAt.Valid}}{{formatTime .Asset.DecommissionedAt.Time}}{{else}}&mdash;{{end}}</td></tr>
+        <tr><th class="u-w-200px">{{T $.Locale "sandgorgon_asset.bmc_address"}}</th><td>{{.Asset.BmcAddress}}</td></tr>
+        <tr><th>{{T $.Locale "sandgorgon_asset.asset_tag"}}</th><td>{{.Asset.AssetTag}}</td></tr>
+        <tr><th>{{T $.Locale "sandgorgon_asset.rack_location"}}</th><td>{{.Asset.RackLocation}}</td></tr>
+        {{if .Asset.EnvoyID.Valid}}<tr><th>{{T $.Locale "sandgorgon_asset.linked_envoy"}}</th><td><a href="/envoys/{{.Asset.EnvoyID.String}}">{{.Asset.EnvoyID.String}}</a></td></tr>{{end}}
+        <tr><th>{{T $.Locale "sandgorgon_asset.commissioned"}}</th><td>{{if .Asset.CommissionedAt.Valid}}{{formatTime .Asset.CommissionedAt.Time}}{{else}}&mdash;{{end}}</td></tr>
+        <tr><th>{{T $.Locale "sandgorgon_asset.decommissioned"}}</th><td>{{if .Asset.DecommissionedAt.Valid}}{{formatTime .Asset.DecommissionedAt.Time}}{{else}}&mdash;{{end}}</td></tr>
     </table>
 </div>
 
 {{if .Certificates}}
 <div class="card mt-2">
-    <h2>NIST 800-88 Certificates</h2>
+    <h2>{{T $.Locale "sandgorgon_asset.nist_certificates"}}</h2>
     <div class="table-container">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Method</th>
-                    <th>Result</th>
-                    <th>Technician</th>
-                    <th>Issued</th>
+                    <th>{{T $.Locale "sandgorgon_asset.method"}}</th>
+                    <th>{{T $.Locale "sandgorgon_asset.result"}}</th>
+                    <th>{{T $.Locale "sandgorgon_asset.technician"}}</th>
+                    <th>{{T $.Locale "sandgorgon_asset.issued"}}</th>
                     <th></th>
                 </tr>
             </thead>
@@ -52,10 +52,10 @@
                 {{range .Certificates}}
                 <tr>
                     <td>{{.SanitizationMethod}}</td>
-                    <td><span class="status-pill status-pill--{{verificationClass .VerificationResult}}">{{.VerificationResult}}</span></td>
+                    <td><span class="status-pill status-pill--{{verificationClass .VerificationResult}}">{{tEnum $.Locale .VerificationResult}}</span></td>
                     <td>{{.Technician}}</td>
                     <td>{{formatTime .CreatedAt}}</td>
-                    <td><a href="/api/v1/sandgorgon/certificates/{{.ID}}.html" target="_blank" class="btn btn--sm">View</a></td>
+                    <td><a href="/api/v1/sandgorgon/certificates/{{.ID}}.html" target="_blank" class="btn btn--sm">{{T $.Locale "btn.view"}}</a></td>
                 </tr>
                 {{end}}
             </tbody>
@@ -66,14 +66,14 @@
 
 {{if .Events}}
 <div class="card mt-2">
-    <h2>Lifecycle Events</h2>
+    <h2>{{T $.Locale "sandgorgon_asset.lifecycle_events"}}</h2>
     <div class="table-container">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Time</th>
-                    <th>Event</th>
-                    <th>Detail</th>
+                    <th>{{T $.Locale "th.time"}}</th>
+                    <th>{{T $.Locale "sandgorgon_asset.event"}}</th>
+                    <th>{{T $.Locale "sandgorgon_asset.detail"}}</th>
                 </tr>
             </thead>
             <tbody>

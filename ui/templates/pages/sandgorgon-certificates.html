@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>NIST 800-88 Certificates</h1>
-    <p>Media sanitization certificates for decommissioned hardware</p>
+    <h1>{{T $.Locale "sandgorgon_certificates.title"}}</h1>
+    <p>{{T $.Locale "sandgorgon_certificates.subtitle"}}</p>
 </div>
 
 {{if .Certificates}}
@@ -10,13 +10,13 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Hostname</th>
-                    <th>Serial</th>
-                    <th>Method</th>
-                    <th>Media</th>
-                    <th>Verification</th>
-                    <th>Technician</th>
-                    <th>Issued</th>
+                    <th>{{T $.Locale "th.hostname"}}</th>
+                    <th>{{T $.Locale "sandgorgon_certificates.th.serial"}}</th>
+                    <th>{{T $.Locale "sandgorgon_certificates.th.method"}}</th>
+                    <th>{{T $.Locale "sandgorgon_certificates.th.media"}}</th>
+                    <th>{{T $.Locale "sandgorgon_certificates.th.verification"}}</th>
+                    <th>{{T $.Locale "sandgorgon_certificates.th.technician"}}</th>
+                    <th>{{T $.Locale "sandgorgon_certificates.th.issued"}}</th>
                     <th></th>
                 </tr>
             </thead>
@@ -30,7 +30,7 @@
                     <td><span class="status-pill status-pill--{{verificationClass .VerificationResult}}">{{.VerificationResult}}</span></td>
                     <td>{{.Technician}}</td>
                     <td>{{formatTime .CreatedAt}}</td>
-                    <td><a href="/api/v1/sandgorgon/certificates/{{.ID}}.html" target="_blank" class="btn btn--sm">View</a></td>
+                    <td><a href="/api/v1/sandgorgon/certificates/{{.ID}}.html" target="_blank" class="btn btn--sm">{{T $.Locale "btn.view"}}</a></td>
                 </tr>
                 {{end}}
             </tbody>
@@ -39,7 +39,7 @@
 </div>
 {{else}}
 <div class="card">
-    <p>No certificates yet. Certificates are generated when hardware is decommissioned via <code>vigocli sandgorgon decommission</code>.</p>
+    <p>{{T $.Locale "sandgorgon_certificates.empty_prefix"}} <code>vigocli sandgorgon decommission</code>.</p>
 </div>
 {{end}}
 {{end}}

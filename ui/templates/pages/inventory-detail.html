@@ -2,10 +2,10 @@
 <span data-ai-page="inventory-detail" data-ai-envoy="{{.Hostname}}" hidden></span>
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/inventory">Inventory</a> &rsaquo; {{.Hostname}}
+        <a href="/inventory">{{T $.Locale "nav.inventory"}}</a> &rsaquo; {{.Hostname}}
     </div>
     <h1>{{.Hostname}}</h1>
-    <p class="mono">{{.IP}} &middot; {{.Total}} traits collected</p>
+    <p class="mono">{{.IP}} &middot; {{.Total}} {{T $.Locale "inventory_detail.traits_collected"}}</p>
 </div>
 
 {{if .Groups}}
@@ -14,7 +14,7 @@
     <div class="card u-mb-16px">
         <h3 class="u-mb-8px">{{.Name}}</h3>
         <table class="table">
-            <thead><tr><th>Trait</th><th>Value</th></tr></thead>
+            <thead><tr><th>{{T $.Locale "inventory_detail.trait"}}</th><th>{{T $.Locale "th.value"}}</th></tr></thead>
             <tbody>
             {{range .Traits}}
             <tr>
@@ -28,6 +28,6 @@
     {{end}}
 </div>
 {{else}}
-<p class="text-muted u-p-20px">No traits collected for this envoy yet.</p>
+<p class="text-muted u-p-20px">{{T $.Locale "inventory_detail.no_traits"}}</p>
 {{end}}
 {{end}}

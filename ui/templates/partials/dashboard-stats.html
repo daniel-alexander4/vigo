@@ -1,55 +1,55 @@
 {{define "dashboard-stats"}}
 <div class="dash-columns">
-    <a class="dash-column dash-column--link" href="/envoys" aria-label="Fleet health summary — open envoys list">
-        <h3 class="dash-column__title">Fleet Health</h3>
+    <a class="dash-column dash-column--link" href="/envoys" aria-label="{{T $.Locale "dashboard_stats.fleet_health_aria"}}">
+        <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.fleet_health"}}</h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
-            {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
+            {{template "stat-card" dict "Value" .TotalEnvoys "Label" (T $.Locale "dashboard_stats.total_envoys") "Color" "brand"}}
+            {{template "stat-card" dict "Value" .ActiveEnvoys "Label" (T $.Locale "dashboard_stats.active_1h") "Color" "success"}}
             <div class="stat-card stat-card--{{pctAccentInv .ConvergencePct}}">
                 <div class="stat-card__value">{{printf "%.0f%%" .ConvergencePct}}</div>
-                <div class="stat-card__label">{{.Converged}} of {{.TotalEnvoys}} converged</div>
+                <div class="stat-card__label">{{printf (T $.Locale "dashboard_stats.n_of_n_converged") .Converged .TotalEnvoys}}</div>
             </div>
         </div>
     </a>
-    <a class="dash-column dash-column--link" href="/security" aria-label="Security posture summary — open security drawer">
-        <h3 class="dash-column__title">Security Posture</h3>
+    <a class="dash-column dash-column--link" href="/security" aria-label="{{T $.Locale "dashboard_stats.security_posture_aria"}}">
+        <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.security_posture"}}</h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" .UniqueCVEs "Label" "Unique CVEs" "Color" "danger"}}
+            {{template "stat-card" dict "Value" .UniqueCVEs "Label" (T $.Locale "dashboard_stats.unique_cves") "Color" "danger"}}
             {{if gt .CertsExpired 0}}
-                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "danger"}}
+                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" (T $.Locale "dashboard_stats.certs_30d") "Color" "danger"}}
             {{else if gt .CertsExpiringSoon 0}}
-                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "warning"}}
+                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" (T $.Locale "dashboard_stats.certs_30d") "Color" "warning"}}
             {{else}}
-                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "brand"}}
+                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" (T $.Locale "dashboard_stats.certs_30d") "Color" "brand"}}
             {{end}}
-            {{template "stat-card" dict "Value" .RootkitWarnings "Label" "Rootkit Warns" "Color" "danger"}}
+            {{template "stat-card" dict "Value" .RootkitWarnings "Label" (T $.Locale "dashboard_stats.rootkit_warns") "Color" "danger"}}
             {{if gt .RunningCVEsCritical 0}}
-                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" "Running CVEs" "Color" "danger"}}
+                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" (T $.Locale "dashboard_stats.running_cves") "Color" "danger"}}
             {{else if gt .RunningCVEsHigh 0}}
-                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" "Running CVEs" "Color" "warning"}}
+                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" (T $.Locale "dashboard_stats.running_cves") "Color" "warning"}}
             {{else}}
-                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" "Running CVEs" "Color" "brand"}}
+                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" (T $.Locale "dashboard_stats.running_cves") "Color" "brand"}}
             {{end}}
         </div>
     </a>
-    <a class="dash-column dash-column--link" href="/compliance" aria-label="Standards compliance summary — open compliance page">
-        <h3 class="dash-column__title">Standards Compliance</h3>
+    <a class="dash-column dash-column--link" href="/compliance" aria-label="{{T $.Locale "dashboard_stats.standards_compliance_aria"}}">
+        <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.standards_compliance"}}</h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" .PartialControls "Label" "Partial" "Color" "warning"}}
-            {{template "stat-card" dict "Value" .NotSatisfiedControls "Label" "Not Met" "Color" "danger"}}
-            {{template "stat-card" dict "Value" (printf "%.0f%%" .StandardsPct) "Label" (printf "%d of %d covered" (add .SatisfiedControls .WaivedControls) .TotalControls) "Color" "success"}}
+            {{template "stat-card" dict "Value" .PartialControls "Label" (T $.Locale "dashboard_stats.partial") "Color" "warning"}}
+            {{template "stat-card" dict "Value" .NotSatisfiedControls "Label" (T $.Locale "dashboard_stats.not_met") "Color" "danger"}}
+            {{template "stat-card" dict "Value" (printf "%.0f%%" .StandardsPct) "Label" (printf (T $.Locale "dashboard_stats.n_of_n_covered") (add .SatisfiedControls .WaivedControls) .TotalControls) "Color" "success"}}
         </div>
     </a>
-    <a class="dash-column dash-column--link" href="/risk" aria-label="Risk posture summary — open risk page">
-        <h3 class="dash-column__title">Risk Posture</h3>
+    <a class="dash-column dash-column--link" href="/risk" aria-label="{{T $.Locale "dashboard_stats.risk_posture_aria"}}">
+        <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.risk_posture"}}</h3>
         <div class="stat-cards">
             <div class="stat-card stat-card--{{pctAccent .RiskAvgScore}}">
                 <div class="stat-card__value">{{.RiskAvgScore}}</div>
-                <div class="stat-card__label">Avg Risk Score</div>
+                <div class="stat-card__label">{{T $.Locale "dashboard_stats.avg_risk_score"}}</div>
             </div>
-            {{template "stat-card" dict "Value" .RiskCritical "Label" "Critical" "Color" "danger"}}
-            {{template "stat-card" dict "Value" .RiskHigh "Label" "High" "Color" "warning"}}
-            {{template "stat-card" dict "Value" .RiskMedium "Label" "Medium" "Color" "brand"}}
+            {{template "stat-card" dict "Value" .RiskCritical "Label" (T $.Locale "sev.critical") "Color" "danger"}}
+            {{template "stat-card" dict "Value" .RiskHigh "Label" (T $.Locale "sev.high") "Color" "warning"}}
+            {{template "stat-card" dict "Value" .RiskMedium "Label" (T $.Locale "sev.medium") "Color" "brand"}}
         </div>
     </a>
 </div>

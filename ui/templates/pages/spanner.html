@@ -1,33 +1,33 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Spanner</h1>
-    <p>Peer-equal federation status — one row per bolt, from gossip-backed observability</p>
+    <p>{{T $.Locale "spanner.subtitle"}}</p>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__value">{{.BoltCount}}</div>
-        <div class="stat-card__label">Peer Bolts</div>
+        <div class="stat-card__label">{{T $.Locale "spanner.peer_bolts"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">{{.TotalEnvoys}}</div>
-        <div class="stat-card__label">Total Envoys</div>
+        <div class="stat-card__label">{{T $.Locale "spanner.total_envoys"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-success">{{.TotalConverged}}</div>
-        <div class="stat-card__label">Converged</div>
+        <div class="stat-card__label">{{T $.Locale "enum.converged"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-warning">{{.TotalDegraded}}</div>
-        <div class="stat-card__label">Degraded</div>
+        <div class="stat-card__label">{{T $.Locale "enum.degraded"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-danger">{{.TotalFailed}}</div>
-        <div class="stat-card__label">Failed</div>
+        <div class="stat-card__label">{{T $.Locale "enum.failed"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">{{printf "%.1f" .ConvergencePct}}%</div>
-        <div class="stat-card__label">Compliance</div>
+        <div class="stat-card__label">{{T $.Locale "nav.compliance"}}</div>
     </div>
 </div>
 
@@ -36,14 +36,14 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Bolt</th>
-                <th>Envoys</th>
-                <th>Converged</th>
-                <th>Degraded</th>
-                <th>Failed</th>
-                <th>Offline</th>
-                <th>Compliance</th>
-                <th>Snapshot Age</th>
+                <th>{{T $.Locale "spanner.th.bolt"}}</th>
+                <th>{{T $.Locale "spanner.th.envoys"}}</th>
+                <th>{{T $.Locale "enum.converged"}}</th>
+                <th>{{T $.Locale "enum.degraded"}}</th>
+                <th>{{T $.Locale "enum.failed"}}</th>
+                <th>{{T $.Locale "enum.offline"}}</th>
+                <th>{{T $.Locale "nav.compliance"}}</th>
+                <th>{{T $.Locale "spanner.th.snapshot_age"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -56,40 +56,40 @@
                 <td class="text-danger">{{.Failed}}</td>
                 <td class="text-muted">{{.Offline}}</td>
                 <td>{{printf "%.1f" .ConvergencePct}}%</td>
-                <td class="text-muted">{{.SnapshotAgeSeconds}}s ago</td>
+                <td class="text-muted">{{.SnapshotAgeSeconds}}{{T $.Locale "spanner.seconds_ago"}}</td>
             </tr>
             {{end}}
         </tbody>
     </table>
 </div>
 {{else}}
-<p class="text-muted">No peer bolts have reported yet. Gossip snapshots arrive within one Tier-2 interval of a peer joining the spanner.</p>
+<p class="text-muted">{{T $.Locale "spanner.empty"}}</p>
 {{end}}
 
 {{if .PeerEnabled}}
-<h3 class="u-mt-24px">HA Replication</h3>
+<h3 class="u-mt-24px">{{T $.Locale "spanner.ha_replication"}}</h3>
 <div class="stat-cards u-mb-16px">
     <div class="stat-card">
         <div class="stat-card__value">{{.PeerRole}}</div>
-        <div class="stat-card__label">Role</div>
+        <div class="stat-card__label">{{T $.Locale "th.role"}}</div>
     </div>
     {{if .PeerPrimaryAddr}}
     <div class="stat-card">
         <div class="stat-card__value text-muted u-fs-13px">{{.PeerPrimaryAddr}}</div>
-        <div class="stat-card__label">Primary Address</div>
+        <div class="stat-card__label">{{T $.Locale "spanner.primary_address"}}</div>
     </div>
     {{end}}
     <div class="stat-card">
         <div class="stat-card__value">{{.PeerFilesSynced}}</div>
-        <div class="stat-card__label">Files Synced</div>
+        <div class="stat-card__label">{{T $.Locale "spanner.files_synced"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-muted u-fs-13px">{{.PeerLastSync}}</div>
-        <div class="stat-card__label">Last Sync</div>
+        <div class="stat-card__label">{{T $.Locale "spanner.last_sync"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">v{{.PeerConfigVersion}}</div>
-        <div class="stat-card__label">Config Version</div>
+        <div class="stat-card__label">{{T $.Locale "spanner.config_version"}}</div>
     </div>
 </div>
 {{end}}

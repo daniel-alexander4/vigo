@@ -12,6 +12,7 @@ import "fmt"
 // operator "is anything broken, and where" before any totals or
 // browse tables.
 type HealthBanner struct {
+	Locale   string // per-request locale for {{T}} inside the health-banner partial
 	Level    string // "ok" | "warn" | "err"
 	Headline string
 	Problems []HealthProblem

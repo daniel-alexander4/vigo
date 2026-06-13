@@ -916,6 +916,11 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 
 // ComplianceReport is the JSON format for a compliance report.
 type ComplianceReport struct {
+	// Locale is the resolved per-request locale, stamped by the ui report
+	// builder closures so the compliance-report-content / evidence-coverage
+	// fragments (which receive this struct as their template dot) can read
+	// $.Locale. Not serialized — it's a render-time concern only.
+	Locale        string                  `json:"-"`
 	Title         string                  `json:"title"`
 	FrameworkName string                  `json:"framework_name,omitempty"`
 	Slug          string                  `json:"slug,omitempty"`
@@ -3984,6 +3989,11 @@ func (h *ReportHandler) handleIEC62443ReportHTML(w http.ResponseWriter, r *http.
 
 // ExecutiveReport is the JSON format for the executive summary report.
 type ExecutiveReport struct {
+	// Locale is the resolved per-request locale, stamped by the ui report
+	// builder closures so the compliance-frameworks / compliance-executive-content
+	// fragments (which receive this struct as their template dot) can read
+	// $.Locale. Not serialized — it's a render-time concern only.
+	Locale      string             `json:"-"`
 	GeneratedAt string             `json:"generated_at"`
 	GeneratedBy string             `json:"generated_by"`
 	Score       ExecutiveScore     `json:"score"`

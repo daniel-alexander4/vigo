@@ -1,9 +1,9 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/envoys">Envoys</a> &rsaquo; {{.Hostname}} &rsaquo; Config
+        <a href="/envoys">Envoys</a> &rsaquo; {{.Hostname}} &rsaquo; {{T $.Locale "nav.group.config"}}
     </div>
-    <h1>Config: {{.Hostname}}</h1>
+    <h1>{{T $.Locale "config.heading"}} {{.Hostname}}</h1>
 </div>
 
 <div class="code-block">
@@ -11,6 +11,6 @@
 </div>
 
 <p class="text-muted u-fs-12px">
-    Showing raw configuration. Secret references (<code>secret:...</code>) are not resolved for security.
+    {{T $.Locale "config.raw_notice_pre"}} (<code>secret:...</code>) {{T $.Locale "config.raw_notice_post"}}
 </p>
 {{end}}

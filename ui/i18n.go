@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"sort"
 	"strings"
@@ -71,11 +72,22 @@ func init() {
 	}
 }
 
+// localeStr coerces a template-supplied locale argument to a string. The
+// locale arrives as $.Locale, which is a string on PageData-backed renders
+// but nil when a partial is invoked with a dict (a map with no "Locale" key)
+// or any data lacking the field — coercing to "" there yields the English
+// fallback instead of a render error.
+func localeStr(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
 // catalogT resolves a translation key for a locale, falling back to the
 // English (source) value and finally to the key itself. Registered in the
 // template FuncMap as "T"; templates call {{T $.Locale "some.key"}} — using
 // $.Locale (root scope) so it stays correct inside {{range}}/{{with}} blocks.
-func catalogT(locale, key string) string {
+func catalogT(localeArg any, key string) string {
+	locale := localeStr(localeArg)
 	if m, ok := catalogs[locale]; ok {
 		if s, ok := m[key]; ok && s != "" {
 			return s
@@ -87,6 +99,18 @@ func catalogT(locale, key string) string {
 		}
 	}
 	return key
+}
+
+// catalogTSafe is the FuncMap entry "tSafe": like "T" but returns the
+// resolved translation as template.HTML, so authored catalog punctuation
+// (apostrophes, ampersands, em-dashes) renders literally rather than being
+// re-escaped by html/template. Catalog values are trusted, author-controlled
+// chrome — never user data. Use {{tSafe}} only when a translated string is
+// emitted directly into HTML text content; {{T}} (plain string) remains the
+// default and is required wherever the value feeds a string-typed helper
+// (sortHeader, printf format, dict label, …).
+func catalogTSafe(localeArg any, key string) template.HTML {
+	return template.HTML(catalogT(localeArg, key)) //nolint:gosec // trusted authored catalog strings, not user input
 }
 
 // LocaleChoice is one option in the topbar language picker.
@@ -170,6 +194,13 @@ func (h *Handler) localeChoices() []LocaleChoice {
 // per-request work beyond this short-circuit. This is the single resolution
 // point — every full page (and the docs handler) routes through
 // setCommonWithRequest, which calls this; no middleware is needed.
+// LocaleFromRequest is the exported wrapper around localeFromRequest, used
+// by server/api report builders (which import ui) to stamp the resolved
+// locale onto report payloads rendered through ui fragment templates.
+func (h *Handler) LocaleFromRequest(r *http.Request) string {
+	return h.localeFromRequest(r)
+}
+
 func (h *Handler) localeFromRequest(r *http.Request) string {
 	def := h.defaultLocale()
 	if !h.i18n.Enabled {

@@ -5,8 +5,8 @@
 {{$p := .Pressure}}
 <a class="stat-card stat-card--link stat-card--{{severityColor $p.WorstSeverity}}"
    href="/agent-health"
-   title="FDs · host FD% · OOMs · rootfs% · inode% · repo health — click for the per-envoy breakdown">
+   title="{{T $.Locale "dashboard_pressure.card_title"}}">
     <div class="stat-card__value">{{$p.DegradedCount}}</div>
-    <div class="stat-card__label">Agent Health{{if gt $p.DegradedCount 0}} ({{$p.DegradedCount}} degraded){{else if eq $p.TotalReporting 0}} (no data){{else}} ({{$p.TotalReporting}} healthy){{end}}</div>
+    <div class="stat-card__label">{{T $.Locale "th.agent_health"}}{{if gt $p.DegradedCount 0}} ({{$p.DegradedCount}} {{T $.Locale "dashboard_pressure.degraded_suffix"}}){{else if eq $p.TotalReporting 0}} ({{T $.Locale "dashboard_pressure.no_data_suffix"}}){{else}} ({{$p.TotalReporting}} {{T $.Locale "dashboard_pressure.healthy_suffix"}}){{end}}</div>
 </a>
 {{end}}

@@ -1,22 +1,22 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Server Config</h1>
-    <p>Top-level sections of <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> — enabled sections are present in the live file and not explicitly disabled.</p>
+    <h1>{{T $.Locale "nav.server_config"}}</h1>
+    <p>{{T $.Locale "server_config.sections_of"}} <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> {{T $.Locale "server_config.sections_present"}}</p>
 </div>
 
 <div class="stat-cards u-mb-24px">
     <div class="stat-card stat-card--success">
         <div class="stat-card__value">{{.Enabled}}</div>
-        <div class="stat-card__label">Enabled</div>
+        <div class="stat-card__label">{{T $.Locale "common.enabled"}}</div>
     </div>
     <div class="stat-card stat-card--brand">
         <div class="stat-card__value">{{.Available}}</div>
-        <div class="stat-card__label">Available</div>
+        <div class="stat-card__label">{{T $.Locale "server_config.available"}}</div>
     </div>
 </div>
 
 <div class="card">
-    <p class="u-c-var-color-text-muted-m-0-0-16px">Click a section to see its current values (when enabled) and every option it supports. The server runs the copy of <code>server.yaml</code> loaded at startup — edits to the file are not active until the server is restarted.</p>
+    <p class="u-c-var-color-text-muted-m-0-0-16px">{{T $.Locale "server_config.click_section"}} <code>server.yaml</code> {{T $.Locale "server_config.loaded_at_startup"}}</p>
 
     <div class="server-config-grid">
         {{range .Cards}}
@@ -24,11 +24,11 @@
             <div class="server-config-card__header">
                 <span class="server-config-card__name">{{.Name}}</span>
                 {{if .Enabled}}
-                <span class="status-pill status-pill--converged">enabled</span>
+                <span class="status-pill status-pill--converged">{{T $.Locale "common.enabled"}}</span>
                 {{else if .Present}}
-                <span class="status-pill status-pill--no-data">disabled</span>
+                <span class="status-pill status-pill--no-data">{{T $.Locale "common.disabled"}}</span>
                 {{else}}
-                <span class="status-pill status-pill--no-data">disabled</span>
+                <span class="status-pill status-pill--no-data">{{T $.Locale "common.disabled"}}</span>
                 {{end}}
             </div>
             {{if .Description}}

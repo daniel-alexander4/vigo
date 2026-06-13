@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Inventory</h1>
-    <p>Fleet hardware and software inventory &mdash; {{.Total}} envoys reporting traits</p>
+    <h1>{{T $.Locale "nav.inventory"}}</h1>
+    <p>{{T $.Locale "inventory.subtitle_prefix"}} &mdash; {{.Total}} {{T $.Locale "inventory.subtitle_suffix"}}</p>
 </div>
 
 <!-- Fleet health alerts -->
@@ -11,7 +11,7 @@
     <details class="card alert-band {{if eq .Level "danger"}}alert-band--danger{{else}}alert-band--warning{{end}}">
         <summary class="u-cur-pointer-fw-600">
             {{if eq .Level "danger"}}&#x26A0;{{else}}&#x26A0;{{end}}
-            {{.Title}} &mdash; <strong>{{.Count}}</strong> machine{{if ne .Count 1}}s{{end}}
+            {{.Title}} &mdash; <strong>{{.Count}}</strong> {{if ne .Count 1}}{{T $.Locale "inventory.machines"}}{{else}}{{T $.Locale "inventory.machine"}}{{end}}
         </summary>
         <ul class="u-blk18">
             {{range .Hosts}}<li>{{.}}</li>{{end}}
@@ -35,28 +35,28 @@
     {{end}}
     <div class="stat-card">
         <div class="stat-card__value">{{.UniqueOS}}</div>
-        <div class="stat-card__label">OS Versions</div>
+        <div class="stat-card__label">{{T $.Locale "inventory.os_versions"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value{{if gt .StaleCount 0}} text-warning{{end}}">{{.StaleCount}}</div>
-        <div class="stat-card__label">Stale (7+ days)</div>
+        <div class="stat-card__label">{{T $.Locale "inventory.stale_7_days"}}</div>
     </div>
 </div>
 
 <!-- Trait search -->
 <div class="card u-mb-24px">
-    <h2 class="u-m-0-0-8px">Trait Search</h2>
+    <h2 class="u-m-0-0-8px">{{T $.Locale "inventory.trait_search"}}</h2>
     <button class="btn btn--sm"
             hx-get="/ui/fragments/inventory-trait-index"
             hx-target="#trait-index-modal"
-            hx-swap="innerHTML">Search Traits</button>
+            hx-swap="innerHTML">{{T $.Locale "inventory.search_traits"}}</button>
     <div id="trait-explore-panel"></div>
 </div>
 <div id="trait-index-modal"></div>
 
 <!-- Export -->
 <div class="u-ta-right">
-    <a href="/ui/export/inventory.csv" class="btn btn--sm btn--primary">Export CSV (Audit)</a>
-    <a href="/api/v1/inventory" class="btn btn--sm" download="fleet-inventory.json">Export JSON</a>
+    <a href="/ui/export/inventory.csv" class="btn btn--sm btn--primary">{{T $.Locale "inventory.export_csv_audit"}}</a>
+    <a href="/api/v1/inventory" class="btn btn--sm" download="fleet-inventory.json">{{T $.Locale "inventory.export_json"}}</a>
 </div>
 {{end}}

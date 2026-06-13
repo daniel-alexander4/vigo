@@ -1,26 +1,26 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Workflows</h1>
-    <p>{{.WorkflowCount}} workflow runs</p>
+    <h1>{{T $.Locale "nav.workflows"}}</h1>
+    <p>{{.WorkflowCount}} {{T $.Locale "workflows.workflow_runs"}}</p>
 </div>
 
 <div class="filter-bar mb-2">
-    <a href="/workflows" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/workflows?status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">Running</a>
-    <a href="/workflows?status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">Complete</a>
-    <a href="/workflows?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed</a>
+    <a href="/workflows" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">{{T $.Locale "filter.all"}}</a>
+    <a href="/workflows?status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">{{T $.Locale "workflows.running"}}</a>
+    <a href="/workflows?status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">{{T $.Locale "workflows.complete"}}</a>
+    <a href="/workflows?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">{{T $.Locale "enum.failed"}}</a>
 </div>
 
 <div class="table-container">
     <table class="table">
         <thead>
             <tr>
-                <th>Workflow</th>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Steps</th>
-                <th>Operator</th>
-                <th>Created</th>
+                <th>{{T $.Locale "workflows.workflow"}}</th>
+                <th>{{T $.Locale "th.name"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "workflows.steps"}}</th>
+                <th>{{T $.Locale "workflows.operator"}}</th>
+                <th>{{T $.Locale "th.created"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -36,7 +36,7 @@
             {{end}}
             {{if not .Workflows}}
             <tr>
-                <td colspan="6" class="text-muted u-ta-center-p-40px">No workflows found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
+                <td colspan="6" class="text-muted u-ta-center-p-40px">{{T $.Locale "workflows.none_found"}}{{if .StatusFilter}} {{T $.Locale "workflows.with_status"}} "{{.StatusFilter}}"{{end}}.</td>
             </tr>
             {{end}}
         </tbody>

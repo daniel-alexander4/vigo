@@ -1,38 +1,38 @@
 {{define "page-content"}}
 <span data-ai-page="risk" hidden></span>
 <div class="page-header">
-    <h1>Risk Posture</h1>
-    <p>Fleet-wide risk scoring and contributing factors</p>
+    <h1>{{T $.Locale "nav.risk"}}</h1>
+    <p>{{T $.Locale "risk.subtitle"}}</p>
     <div class="page-header__actions">
-        <a href="/api/v1/risk/insurance.html" target="_blank" class="btn btn--sm">View Attestation</a>
-        <a href="/api/v1/risk/insurance.pdf" class="btn btn--sm btn--primary" download>Download PDF</a>
-        <a href="/api/v1/risk/insurance.html?download=1" class="btn btn--sm" download>Download HTML</a>
+        <a href="/api/v1/risk/insurance.html" target="_blank" class="btn btn--sm">{{T $.Locale "risk.view_attestation"}}</a>
+        <a href="/api/v1/risk/insurance.pdf" class="btn btn--sm btn--primary" download>{{T $.Locale "risk.download_pdf"}}</a>
+        <a href="/api/v1/risk/insurance.html?download=1" class="btn btn--sm" download>{{T $.Locale "risk.download_html"}}</a>
     </div>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__label">Average Score</div>
+        <div class="stat-card__label">{{T $.Locale "risk.average_score"}}</div>
         <div class="stat-card__value {{pctClass .AvgScore}}">{{.AvgScore}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Max Score</div>
+        <div class="stat-card__label">{{T $.Locale "risk.max_score"}}</div>
         <div class="stat-card__value {{pctClass .MaxScore}}">{{.MaxScore}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Critical</div>
+        <div class="stat-card__label">{{T $.Locale "sev.critical"}}</div>
         <div class="stat-card__value text-danger">{{.Critical}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">High</div>
+        <div class="stat-card__label">{{T $.Locale "sev.high"}}</div>
         <div class="stat-card__value text-warning">{{.High}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Medium</div>
+        <div class="stat-card__label">{{T $.Locale "sev.medium"}}</div>
         <div class="stat-card__value text-brand">{{.Medium}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Low</div>
+        <div class="stat-card__label">{{T $.Locale "sev.low"}}</div>
         <div class="stat-card__value text-success">{{.Low}}</div>
     </div>
 </div>
@@ -40,7 +40,7 @@
 {{if .SparklineData}}
 <div class="card mb-2">
     <div class="card-body">
-        <strong>{{.SparklineDays}}-Day Risk Trend</strong>
+        <strong>{{.SparklineDays}}{{T $.Locale "risk.day_risk_trend_suffix"}}</strong>
         <span class="text-muted u-ml-12px-fs-0-85em">{{.SparklineStart}} &mdash; {{.SparklineEnd}}</span>
         <div class="u-blk23">
             <div class="u-blk24">
@@ -58,10 +58,10 @@
 {{end}}
 
 {{if .TopFactors}}
-<h3 class="section-heading">Top Contributing Factors</h3>
+<h3 class="section-heading">{{T $.Locale "risk.top_contributing_factors"}}</h3>
 <div class="table-container mb-2">
     <table class="table">
-        <thead><tr><th>Factor</th><th>Total Points</th><th>Envoys Affected</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "risk.th.factor"}}</th><th>{{T $.Locale "risk.th.total_points"}}</th><th>{{T $.Locale "risk.th.envoys_affected"}}</th></tr></thead>
         <tbody>
             {{range .TopFactors}}
             <tr>
@@ -75,13 +75,13 @@
 </div>
 {{end}}
 
-<h3 class="section-heading">All Envoys by Risk</h3>
+<h3 class="section-heading">{{T $.Locale "risk.all_envoys_by_risk"}}</h3>
 <div class="filter-bar mb-2">
-    <a href="/risk" class="btn btn--sm{{if eq .LevelFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/risk?level=critical" class="btn btn--sm{{if eq .LevelFilter "critical"}} btn--primary{{end}}">Critical</a>
-    <a href="/risk?level=high" class="btn btn--sm{{if eq .LevelFilter "high"}} btn--primary{{end}}">High</a>
-    <a href="/risk?level=medium" class="btn btn--sm{{if eq .LevelFilter "medium"}} btn--primary{{end}}">Medium</a>
-    <a href="/risk?level=low" class="btn btn--sm{{if eq .LevelFilter "low"}} btn--primary{{end}}">Low</a>
+    <a href="/risk" class="btn btn--sm{{if eq .LevelFilter ""}} btn--primary{{end}}">{{T $.Locale "filter.all"}}</a>
+    <a href="/risk?level=critical" class="btn btn--sm{{if eq .LevelFilter "critical"}} btn--primary{{end}}">{{T $.Locale "sev.critical"}}</a>
+    <a href="/risk?level=high" class="btn btn--sm{{if eq .LevelFilter "high"}} btn--primary{{end}}">{{T $.Locale "sev.high"}}</a>
+    <a href="/risk?level=medium" class="btn btn--sm{{if eq .LevelFilter "medium"}} btn--primary{{end}}">{{T $.Locale "sev.medium"}}</a>
+    <a href="/risk?level=low" class="btn btn--sm{{if eq .LevelFilter "low"}} btn--primary{{end}}">{{T $.Locale "sev.low"}}</a>
 </div>
 
 {{if .Envoys}}
@@ -89,10 +89,10 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Hostname</th>
-                <th>Score</th>
-                <th>Level</th>
-                <th>Top Factor</th>
+                <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "risk.th.score"}}</th>
+                <th>{{T $.Locale "risk.th.level"}}</th>
+                <th>{{T $.Locale "risk.th.top_factor"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -101,7 +101,7 @@
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
                 <td><strong class="{{pctClass .Score}}">{{.Score}}</strong></td>
                 <td>
-                    <span class="badge badge--{{if eq .Level "critical"}}errors{{else if eq .Level "high"}}diverged{{else if eq .Level "medium"}}relapsed{{else}}compliant{{end}}">{{.Level}}</span>
+                    <span class="badge badge--{{if eq .Level "critical"}}errors{{else if eq .Level "high"}}diverged{{else if eq .Level "medium"}}relapsed{{else}}compliant{{end}}">{{tEnum $.Locale .Level}}</span>
                 </td>
                 <td class="text-muted">{{.TopFactor}}</td>
             </tr>
@@ -110,6 +110,6 @@
     </table>
 </div>
 {{else}}
-<p class="text-muted u-ta-center-p-40px">No envoys scored.</p>
+<p class="text-muted u-ta-center-p-40px">{{T $.Locale "risk.no_envoys_scored"}}</p>
 {{end}}
 {{end}}

@@ -1,31 +1,31 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="page-header__breadcrumb">
-        <a href="/compliance">&larr; Back to Compliance</a>
+        <a href="/compliance">&larr; {{T $.Locale "compliance_waivers.back_to_compliance"}}</a>
     </div>
-    <h2>Compliance Waivers</h2>
-    <p class="text-muted">Active waivers from envoys-tree <code>compliance.vgo</code> files. Waived controls count as accepted in compliance scoring.</p>
+    <h2>{{T $.Locale "compliance_waivers.title"}}</h2>
+    <p class="text-muted">{{T $.Locale "compliance_waivers.intro_pre"}} <code>compliance.vgo</code> {{T $.Locale "compliance_waivers.intro_post"}}</p>
 </div>
 
 <div class="card mb-2">
     <div class="card-body u-fs-0-9em">
-        <strong>Enforcement types:</strong>
+        <strong>{{T $.Locale "compliance_waivers.enforcement_types"}}</strong>
         <ul class="u-m-6px-0-0-0-pl-18px">
-            <li><span class="badge badge--compliant">enforced + waived</span> &mdash; A configcrate actively enforces this control <em>and</em> a waiver is in place. The control is covered by policy regardless of the waiver. If the waiver expires, compliance scoring is unaffected.</li>
-            <li><span class="badge badge--info">waived only</span> &mdash; No configcrate enforces this control. The waiver is the only reason it counts as accepted. If the waiver expires, this control becomes a gap in compliance scoring.</li>
+            <li><span class="badge badge--compliant">{{T $.Locale "compliance_waivers.enforced_waived"}}</span> &mdash; {{T $.Locale "compliance_waivers.enforced_waived_desc"}}</li>
+            <li><span class="badge badge--info">{{T $.Locale "compliance_waivers.waived_only"}}</span> &mdash; {{T $.Locale "compliance_waivers.waived_only_desc"}}</li>
         </ul>
     </div>
 </div>
 
 {{if .Frameworks}}
 <div class="filter-bar mb-2">
-    <a href="/compliance/waivers" class="btn btn--sm{{if and (eq .FwFilter "") (eq .TypeFilter "")}} btn--primary{{end}}">All</a>
+    <a href="/compliance/waivers" class="btn btn--sm{{if and (eq .FwFilter "") (eq .TypeFilter "")}} btn--primary{{end}}">{{T $.Locale "filter.all"}}</a>
     {{range .Frameworks}}
     <a href="/compliance/waivers?framework={{.}}" class="btn btn--sm{{if eq $.FwFilter .}} btn--primary{{end}}">{{.}}</a>
     {{end}}
     <span class="u-ml-12px"></span>
-    <a href="/compliance/waivers?type=enforced{{if $.FwFilter}}&framework={{$.FwFilter}}{{end}}" class="btn btn--sm{{if eq .TypeFilter "enforced"}} btn--primary{{end}}">Enforced + Waived</a>
-    <a href="/compliance/waivers?type=waived-only{{if $.FwFilter}}&framework={{$.FwFilter}}{{end}}" class="btn btn--sm{{if eq .TypeFilter "waived-only"}} btn--primary{{end}}">Waived Only</a>
+    <a href="/compliance/waivers?type=enforced{{if $.FwFilter}}&framework={{$.FwFilter}}{{end}}" class="btn btn--sm{{if eq .TypeFilter "enforced"}} btn--primary{{end}}">{{T $.Locale "compliance_waivers.filter_enforced_waived"}}</a>
+    <a href="/compliance/waivers?type=waived-only{{if $.FwFilter}}&framework={{$.FwFilter}}{{end}}" class="btn btn--sm{{if eq .TypeFilter "waived-only"}} btn--primary{{end}}">{{T $.Locale "compliance_waivers.filter_waived_only"}}</a>
 </div>
 {{end}}
 
@@ -34,12 +34,12 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Framework</th>
-                <th>Control</th>
-                <th>Reason</th>
-                <th>Approved By</th>
-                <th>Expires</th>
-                <th>Enforcement</th>
+                <th>{{T $.Locale "compliance_waivers.th_framework"}}</th>
+                <th>{{T $.Locale "compliance_waivers.th_control"}}</th>
+                <th>{{T $.Locale "compliance_waivers.th_reason"}}</th>
+                <th>{{T $.Locale "compliance_waivers.th_approved_by"}}</th>
+                <th>{{T $.Locale "compliance_waivers.th_expires"}}</th>
+                <th>{{T $.Locale "compliance_waivers.th_enforcement"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -58,9 +58,9 @@
                 </td>
                 <td>
                     {{if .Enforced}}
-                        <span class="badge badge--compliant">enforced + waived</span>
+                        <span class="badge badge--compliant">{{T $.Locale "compliance_waivers.enforced_waived"}}</span>
                     {{else}}
-                        <span class="badge badge--info">waived only</span>
+                        <span class="badge badge--info">{{T $.Locale "compliance_waivers.waived_only"}}</span>
                     {{end}}
                 </td>
             </tr>
@@ -69,6 +69,6 @@
     </table>
 </div>
 {{else}}
-<p class="text-muted">No active waivers. Add waivers to a <code>compliance.vgo</code> file in your config directory (outside <code>configcrates/</code>).</p>
+<p class="text-muted">{{T $.Locale "compliance_waivers.empty_pre"}} <code>compliance.vgo</code> {{T $.Locale "compliance_waivers.empty_mid"}} <code>configcrates/</code>{{T $.Locale "compliance_waivers.empty_post"}}</p>
 {{end}}
 {{end}}

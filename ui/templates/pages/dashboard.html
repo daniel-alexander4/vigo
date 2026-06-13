@@ -1,25 +1,25 @@
 {{define "page-content"}}
 <span data-ai-page="dashboard" hidden></span>
 <div class="page-header">
-    <h1>Dashboard</h1>
+    <h1>{{T $.Locale "nav.dashboard"}}</h1>
     <div class="page-header__meta">
         <span class="meta-chip">
-            <span class="meta-chip__label">Server</span>
+            <span class="meta-chip__label">{{T $.Locale "dashboard.meta.server"}}</span>
             <span class="meta-chip__value mono">v{{.Version}}</span>
         </span>
         <span class="meta-chip">
-            <span class="meta-chip__label">Agent</span>
+            <span class="meta-chip__label">{{T $.Locale "dashboard.meta.agent"}}</span>
             <span class="meta-chip__value mono">v{{.AgentVersion}}</span>
         </span>
         {{if .CheckInInterval}}
         <span class="meta-chip">
-            <span class="meta-chip__label">Check-in</span>
+            <span class="meta-chip__label">{{T $.Locale "dashboard.meta.checkin"}}</span>
             <span class="meta-chip__value mono">{{.CheckInInterval}}</span>
         </span>
         {{end}}
         {{if .AgentPlatforms}}
         <span class="meta-chip">
-            <span class="meta-chip__label">Platforms</span>
+            <span class="meta-chip__label">{{T $.Locale "dashboard.meta.platforms"}}</span>
             <span class="meta-chip__value mono">{{range $i, $p := .AgentPlatforms}}{{if $i}}, {{end}}{{osLabel $p.OS}}/{{$p.Arch}}{{end}}</span>
         </span>
         {{end}}
@@ -35,27 +35,27 @@
     </svg>
     <div class="license-banner__body">
         <div class="license-banner__title">
-            {{if eq .LicenseCapacityLevel "critical"}}License at capacity{{else}}License nearing capacity{{end}}
+            {{if eq .LicenseCapacityLevel "critical"}}{{T $.Locale "dashboard.license.at_capacity"}}{{else}}{{T $.Locale "dashboard.license.nearing_capacity"}}{{end}}
         </div>
         <div class="license-banner__message">{{.LicenseCapacityMessage}}</div>
     </div>
     <div class="license-banner__actions">
-        <a href="/license" class="btn btn--sm">View License</a>
+        <a href="/license" class="btn btn--sm">{{T $.Locale "chrome.view_license"}}</a>
     </div>
 </div>
 {{end}}
 
 {{if .NoEnvoys}}
 <div class="welcome-card">
-    <h2>No envoys enrolled yet</h2>
-    <p>Vigo manages a fleet of <em>envoys</em>, and there are none yet. Start by enrolling this server's own host as the first envoy. Run this <strong>on the server host</strong> — enrollment from the local network auto-signs, no token needed:</p>
+    <h2>{{T $.Locale "dashboard.welcome.heading"}}</h2>
+    <p>{{T $.Locale "dashboard.welcome.intro_pre"}}<em>envoys</em>{{T $.Locale "dashboard.welcome.intro_post"}} <strong>{{T $.Locale "dashboard.welcome.on_server_host"}}</strong>{{T $.Locale "dashboard.welcome.intro_tail"}}</p>
     <div class="yaml-block">
-        <button type="button" class="btn btn--sm yaml-block__copy" data-copy-target="bootstrap-cmd">Copy</button>
+        <button type="button" class="btn btn--sm yaml-block__copy" data-copy-target="bootstrap-cmd">{{T $.Locale "btn.copy"}}</button>
         <pre class="server-config-yaml"><code id="bootstrap-cmd">{{.BootstrapCommand}}</code></pre>
     </div>
-    <p>It installs the <code>vigo</code> agent on this host and enrolls it into the fleet. Once it checks in, this page becomes your fleet dashboard.</p>
+    <p>{{T $.Locale "dashboard.welcome.installs_pre"}}<code>vigo</code>{{T $.Locale "dashboard.welcome.installs_post"}}</p>
     <p class="welcome-card__cta">
-        {{if .DocsEnabled}}<a href="/docs" class="btn btn--sm">Documentation</a> {{end}}<a href="/support" class="btn btn--sm">Support</a>
+        {{if .DocsEnabled}}<a href="/docs" class="btn btn--sm">{{T $.Locale "nav.documentation"}}</a> {{end}}<a href="/support" class="btn btn--sm">{{T $.Locale "nav.support"}}</a>
     </p>
 </div>
 {{else}}
@@ -74,7 +74,7 @@
      hx-swap="morph:innerHTML"
      hx-disinherit="*"
      aria-live="polite">
-    <div class="stat-card stat-card--brand" aria-label="Agent Health loading"><div class="stat-card__value">…</div><div class="stat-card__label">Agent Health</div></div>
+    <div class="stat-card stat-card--brand" aria-label="{{T $.Locale "dashboard.agent_health_loading"}}"><div class="stat-card__value">…</div><div class="stat-card__label">{{T $.Locale "th.agent_health"}}</div></div>
 </div>
 
 {{template "dashboard-fleet" .}}
@@ -101,18 +101,18 @@
 
 {{define "dashboard-activity"}}
 {{if .RecentRuns}}
-<h3>Recent Activity</h3>
+<h3>{{T $.Locale "common.recent_activity"}}</h3>
 <table class="table">
     <thead>
         <tr>
-            <th>Run</th>
-            <th>Host</th>
-            <th>Trigger</th>
-            <th>Outcome</th>
-            <th title="changed · failed / total — color reflects failed/total">Convergence</th>
-            <th>Top failure</th>
-            <th>Duration</th>
-            <th>Time</th>
+            <th>{{T $.Locale "th.run"}}</th>
+            <th>{{T $.Locale "th.host"}}</th>
+            <th>{{T $.Locale "th.trigger"}}</th>
+            <th>{{T $.Locale "th.outcome"}}</th>
+            <th title="{{T $.Locale "dashboard.convergence_hover.run"}}">{{T $.Locale "th.convergence"}}</th>
+            <th>{{T $.Locale "th.top_failure"}}</th>
+            <th>{{T $.Locale "th.duration"}}</th>
+            <th>{{T $.Locale "th.time"}}</th>
         </tr>
     </thead>
     <tbody>
@@ -120,12 +120,12 @@
         <tr>
             <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-            <td>{{if eq .Trigger "force-push"}}<span class="badge">force-push</span>{{else}}<span class="text-muted">scheduled</span>{{end}}</td>
-            <td><span class="status-pill status-pill--{{statusColor .Outcome}}">{{.Outcome}}</span></td>
-            <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span></a>{{end}}</td>
+            <td>{{if eq .Trigger "force-push"}}<span class="badge">{{tEnum $.Locale "force-push"}}</span>{{else}}<span class="text-muted">{{tEnum $.Locale "scheduled"}}</span>{{end}}</td>
+            <td><span class="status-pill status-pill--{{statusColor .Outcome}}">{{tEnum $.Locale .Outcome}}</span></td>
+            <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="{{T $.Locale "dashboard.no_run_data"}}">0/0/0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span></a>{{end}}</td>
             <td class="mono text-muted">{{if .TopFailedConfigcrate}}{{.TopFailedConfigcrate}}{{else}}-{{end}}</td>
             <td class="mono text-muted">{{if .DurationLabel}}{{.DurationLabel}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgoL $.Locale .StartedAt}}</span></td>
         </tr>
         {{end}}
     </tbody>
@@ -134,15 +134,15 @@
 {{end}}
 
 {{define "dashboard-fleet"}}
-<h3>Fleet Status{{if .FleetRowsCapped}} <span class="dashboard-fleet__cap-note">(worst {{len .FleetRows}} of {{.TotalEnvoys}})</span>{{end}}</h3>
+<h3>{{T $.Locale "common.fleet_status"}}{{if .FleetRowsCapped}} <span class="dashboard-fleet__cap-note">{{T $.Locale "dashboard.fleet.worst_of_pre"}}{{len .FleetRows}}{{T $.Locale "dashboard.fleet.worst_of_mid"}}{{.TotalEnvoys}}{{T $.Locale "dashboard.fleet.worst_of_post"}}</span>{{end}}</h3>
 <table class="table">
     <thead>
         <tr>
-            <th>Hostname</th>
-            <th>IP Address</th>
-            <th>Last Check-in</th>
-            <th title="Composite agent-health: FDs, host FD%, OOM-recent, rootfs %, inode %, repo-health. Click for the per-envoy breakdown.">Agent Health</th>
-            <th title="changed / failed / total — color reflects the envoy's failure bucket (converged / degraded / failed)">Convergence</th>
+            <th>{{T $.Locale "th.hostname"}}</th>
+            <th>{{T $.Locale "th.ip_address"}}</th>
+            <th>{{T $.Locale "th.last_checkin"}}</th>
+            <th title="{{T $.Locale "dashboard.agent_health_hover"}}">{{T $.Locale "th.agent_health"}}</th>
+            <th title="{{T $.Locale "dashboard.convergence_hover.fleet"}}">{{T $.Locale "th.convergence"}}</th>
         </tr>
     </thead>
     <tbody>
@@ -150,13 +150,13 @@
         <tr>
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IP}}</td>
-            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgoL $.Locale .LastSeen}}</span></td>
             <td>
-                <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}no agent-health traits reported yet{{end}}">{{severityLabel .HealthSeverity}}</span></a>
+                <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}{{T $.Locale "dashboard.no_health_traits"}}{{end}}">{{tEnum $.Locale (severityLabel .HealthSeverity)}}</span></a>
             </td>
             <td>
                 {{if eq .ResourceCount 0}}
-                <span class="badge badge--unknown" title="No run data yet">0/0/0</span>
+                <span class="badge badge--unknown" title="{{T $.Locale "dashboard.no_run_data"}}">0/0/0</span>
                 {{else if .LastRunID}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status .DriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span></a>
                 {{else}}
@@ -168,6 +168,6 @@
     </tbody>
 </table>
 {{if .FleetRowsCapped}}
-<p class="dashboard-fleet__view-all"><a href="/envoys" class="btn btn--sm">View all {{.TotalEnvoys}} envoys</a></p>
+<p class="dashboard-fleet__view-all"><a href="/envoys" class="btn btn--sm">{{T $.Locale "dashboard.fleet.view_all_pre"}}{{.TotalEnvoys}}{{T $.Locale "dashboard.fleet.view_all_post"}}</a></p>
 {{end}}
 {{end}}

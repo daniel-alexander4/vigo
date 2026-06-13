@@ -2,18 +2,18 @@
 <span data-ai-page="compliance-viz" data-ai-framework="{{.FrameworkSlug}}" hidden></span>
 <div class="page-header">
     <div class="page-header__breadcrumb">
-        <a href="/compliance">&larr; Back to Compliance</a>
+        <a href="/compliance">&larr; {{T $.Locale "compliance_viz.back_to_compliance"}}</a>
     </div>
     <h1>{{.FrameworkTitle}}</h1>
     <div class="page-header__actions">
-        <a href="/compliance/{{.FrameworkSlug}}" class="btn btn--sm">Table View</a>
+        <a href="/compliance/{{.FrameworkSlug}}" class="btn btn--sm">{{T $.Locale "compliance_viz.table_view"}}</a>
     </div>
 </div>
 
 {{if .DonutSegments}}
 <div class="card mt-2 u-blk6">
     <div>
-        <h3 class="u-mb-8px">Control Status</h3>
+        <h3 class="u-mb-8px">{{T $.Locale "compliance_viz.control_status"}}</h3>
         <svg class="u-w-140px-h-140px" viewBox="0 0 140 140">
             {{range .DonutSegments}}
             <path d="{{donutArc 70 70 60 .StartAngle .EndAngle}}" fill="{{.Color}}">
@@ -32,9 +32,9 @@
 
 {{if .HeatmapRows}}
 <div class="card mt-2">
-    <h3 class="u-mb-12px">Fleet Coverage Heatmap</h3>
+    <h3 class="u-mb-12px">{{T $.Locale "compliance_viz.fleet_coverage_heatmap"}}</h3>
     {{if .VizCapped}}
-    <p class="u-blk7">Showing {{len .HeatmapRows}} of {{.VizTotal}} envoys (worst coverage first)</p>
+    <p class="u-blk7">{{T $.Locale "compliance_viz.showing"}} {{len .HeatmapRows}} {{T $.Locale "compliance_viz.of"}} {{.VizTotal}} {{T $.Locale "compliance_viz.envoys_worst_coverage_first"}}</p>
     {{end}}
     <div class="u-ovx-auto">
         <svg class="u-w-100-maxh-600px" viewBox="0 0 {{add (mul .HeatmapColMax 5) 130}} {{add (mul (len .HeatmapRows) 18) 4}}" preserveAspectRatio="xMinYMin meet">
@@ -49,17 +49,17 @@
         </svg>
     </div>
     <div class="swarm-legend u-mt-8px">
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-a6e3a1"></div> Satisfied (&ge;95%)</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-f9e2af"></div> Partial (50-95%)</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-f38ba8"></div> Not Satisfied (&lt;50%)</div>
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-45475a"></div> No Coverage</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-a6e3a1"></div> {{T $.Locale "compliance_viz.satisfied_ge95"}}</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-f9e2af"></div> {{T $.Locale "compliance_viz.partial_50_95"}}</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-f38ba8"></div> {{T $.Locale "compliance_viz.not_satisfied_lt50"}}</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch u-bg-45475a"></div> {{T $.Locale "compliance_viz.no_coverage"}}</div>
     </div>
 </div>
 {{end}}
 
 {{if not .HeatmapRows}}{{if not .DonutSegments}}
 <div class="card mt-2">
-    <p class="text-muted u-ta-center-p-40px">No compliance data available for this framework.</p>
+    <p class="text-muted u-ta-center-p-40px">{{T $.Locale "compliance_viz.no_data_for_framework"}}</p>
 </div>
 {{end}}{{end}}
 {{end}}

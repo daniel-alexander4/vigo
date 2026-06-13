@@ -1,76 +1,76 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Swarm</h1>
-    <p>Envoy peer-to-peer substrate. Filecast, Gitback, Longdrawer, and Lockbox all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
+    <p>{{T $.Locale "swarm.intro"}} <a href="/docs/engineering/subsystems/swarm">{{T $.Locale "swarm.what_is_this"}}</a></p>
 </div>
 
 {{if not .Status.GeneratedAt.IsZero}}
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__label">Envoys Online</div>
+        <div class="stat-card__label">{{T $.Locale "swarm.envoys_online"}}</div>
         <div class="stat-card__value">{{.Status.EnvoysOnline}}<span class="u-fs-14px-c-var-subtext0"> / {{.Status.EnvoysTotal}}</span></div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Substrate Active</div>
+        <div class="stat-card__label">{{T $.Locale "swarm.substrate_active"}}</div>
         <div class="stat-card__value text-brand">{{.Status.EnvoysSubstrateActive}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Seeding Envoys</div>
+        <div class="stat-card__label">{{T $.Locale "swarm.seeding_envoys"}}</div>
         <div class="stat-card__value">{{.Status.EnvoysSeeding}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Fleet Footprint</div>
+        <div class="stat-card__label">{{T $.Locale "swarm.fleet_footprint"}}</div>
         <div class="stat-card__value">{{.StatusHuman.TotalFootprint}}</div>
     </div>
 </div>
 
 <div class="card mt-2">
-    <h2 class="u-m-0-0-16px">Content Subsystems</h2>
-    <p class="u-c-var-subtext0-mb-12px">Active blobs by subsystem, counted server-side from the manifest CRDT. Longdrawer and Lockbox are per-user content and don't surface as blob counts here — use their dedicated pages for user-level detail.</p>
+    <h2 class="u-m-0-0-16px">{{T $.Locale "swarm.content_subsystems"}}</h2>
+    <p class="u-c-var-subtext0-mb-12px">{{T $.Locale "swarm.content_subsystems_desc"}}</p>
     <div class="table-container">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Subsystem</th>
-                    <th>Active Blobs</th>
-                    <th>Page</th>
+                    <th>{{T $.Locale "swarm.th.subsystem"}}</th>
+                    <th>{{T $.Locale "swarm.th.active_blobs"}}</th>
+                    <th>{{T $.Locale "swarm.th.page"}}</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Filecast</strong> <span class="u-c-var-subtext0">— admin-pushed file fan-out</span></td>
+                    <td><strong>Filecast</strong> <span class="u-c-var-subtext0">— {{T $.Locale "swarm.filecast_desc"}}</span></td>
                     <td>{{.Status.BlobsByKind.Filecast}}</td>
                     <td><a href="/swarm/filecast">/filecast</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Gitback</strong> <span class="u-c-var-subtext0">— personal-DR repo mirrors</span></td>
+                    <td><strong>Gitback</strong> <span class="u-c-var-subtext0">— {{T $.Locale "swarm.gitback_desc"}}</span></td>
                     <td>{{.Status.BlobsByKind.Gitback}}</td>
                     <td><a href="/swarm/gitback">/gitback</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Longdrawer</strong> <span class="u-c-var-subtext0">— per-user plaintext sync</span></td>
+                    <td><strong>Longdrawer</strong> <span class="u-c-var-subtext0">— {{T $.Locale "swarm.longdrawer_desc"}}</span></td>
                     <td>—</td>
                     <td><a href="/swarm/longdrawer">/longdrawer</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Lockbox</strong> <span class="u-c-var-subtext0">— per-user encrypted sync</span></td>
+                    <td><strong>Lockbox</strong> <span class="u-c-var-subtext0">— {{T $.Locale "swarm.lockbox_desc"}}</span></td>
                     <td>—</td>
                     <td><a href="/swarm/lockbox">/lockbox</a></td>
                 </tr>
             </tbody>
         </table>
     </div>
-    <p class="u-c-var-subtext0-mt-12px">Manifest entries: {{.Status.ManifestEntriesActive}} active, {{.Status.ManifestEntriesRevoked}} revoked.</p>
+    <p class="u-c-var-subtext0-mt-12px">{{T $.Locale "swarm.manifest_entries"}} {{.Status.ManifestEntriesActive}} {{T $.Locale "swarm.active"}}, {{.Status.ManifestEntriesRevoked}} {{T $.Locale "swarm.revoked"}}.</p>
 </div>
 
 <div class="card mt-2">
     <div class="u-blk15">
-        <h2 class="u-m-0">Peers</h2>
+        <h2 class="u-m-0">{{T $.Locale "swarm.peers"}}</h2>
         <div class="u-blk16">
-            <span>Sort:</span>
-            <a href="/swarm?sort=footprint&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "footprint"}} btn--active{{end}}">Footprint</a>
-            <a href="/swarm?sort=blobs&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "blobs"}} btn--active{{end}}">Blobs</a>
-            <a href="/swarm?sort=hostname&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "hostname"}} btn--active{{end}}">Hostname</a>
+            <span>{{T $.Locale "swarm.sort"}}</span>
+            <a href="/swarm?sort=footprint&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "footprint"}} btn--active{{end}}">{{T $.Locale "swarm.sort.footprint"}}</a>
+            <a href="/swarm?sort=blobs&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "blobs"}} btn--active{{end}}">{{T $.Locale "swarm.sort.blobs"}}</a>
+            <a href="/swarm?sort=hostname&amp;limit={{.Limit}}" class="btn btn--sm{{if eq .Sort "hostname"}} btn--active{{end}}">{{T $.Locale "swarm.sort.hostname"}}</a>
         </div>
     </div>
     <div class="table-container">
@@ -78,21 +78,21 @@
             <thead>
                 <tr>
                     <th>Envoy</th>
-                    <th>Status</th>
-                    <th>Substrate</th>
-                    <th>Seeding</th>
-                    <th>Cached</th>
-                    <th>Downloading</th>
-                    <th>Footprint</th>
-                    <th>Last Seen</th>
+                    <th>{{T $.Locale "th.status"}}</th>
+                    <th>{{T $.Locale "swarm.th.substrate"}}</th>
+                    <th>{{T $.Locale "swarm.th.seeding"}}</th>
+                    <th>{{T $.Locale "swarm.th.cached"}}</th>
+                    <th>{{T $.Locale "swarm.th.downloading"}}</th>
+                    <th>{{T $.Locale "swarm.th.footprint"}}</th>
+                    <th>{{T $.Locale "swarm.th.last_seen"}}</th>
                 </tr>
             </thead>
             <tbody>
                 {{range .PeerRows}}
                 <tr>
                     <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
-                    <td>{{if .Online}}<span class="status-pill status-pill--converged">online</span>{{else}}<span class="status-pill status-pill--failed">offline</span>{{end}}</td>
-                    <td>{{if .SubstrateActive}}<span class="status-pill status-pill--converged">active</span>{{else}}<span class="status-pill status-pill--superseded">idle</span>{{end}}</td>
+                    <td>{{if .Online}}<span class="status-pill status-pill--converged">{{T $.Locale "swarm.online"}}</span>{{else}}<span class="status-pill status-pill--failed">{{T $.Locale "swarm.offline"}}</span>{{end}}</td>
+                    <td>{{if .SubstrateActive}}<span class="status-pill status-pill--converged">{{T $.Locale "swarm.active_pill"}}</span>{{else}}<span class="status-pill status-pill--superseded">{{T $.Locale "swarm.idle"}}</span>{{end}}</td>
                     <td>{{.SeedingCount}}</td>
                     <td>{{.CachedCount}}</td>
                     <td>{{.DownloadingCount}}</td>
@@ -101,21 +101,21 @@
                 </tr>
                 {{else}}
                 <tr>
-                    <td class="u-c-var-subtext0" colspan="8">No envoys reporting on the substrate yet.</td>
+                    <td class="u-c-var-subtext0" colspan="8">{{T $.Locale "swarm.no_peers"}}</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
     </div>
     {{if .Truncated}}
-    <p class="u-blk17">Showing top {{.ReturnedPeers}} of {{.TotalPeers}} envoys (sorted by {{.Sort}}). Use <code>?limit=</code> to show more.</p>
+    <p class="u-blk17">{{T $.Locale "swarm.showing_top"}} {{.ReturnedPeers}} {{T $.Locale "swarm.of"}} {{.TotalPeers}} {{T $.Locale "swarm.envoys_sorted_by"}} {{.Sort}}). {{T $.Locale "swarm.use_limit_prefix"}} <code>?limit=</code> {{T $.Locale "swarm.use_limit_suffix"}}</p>
     {{else}}
-    <p class="u-blk17">{{.ReturnedPeers}} envoys.</p>
+    <p class="u-blk17">{{.ReturnedPeers}} {{T $.Locale "swarm.envoys_word"}}</p>
     {{end}}
 </div>
 {{else}}
 <div class="card mt-2">
-    <p>Swarm substrate is not enabled on this server. Set <code>swarm.enabled: true</code> in <code>server.yaml</code> and restart.</p>
+    <p>{{T $.Locale "swarm.not_enabled_prefix"}} <code>swarm.enabled: true</code> {{T $.Locale "swarm.not_enabled_mid"}} <code>server.yaml</code> {{T $.Locale "swarm.not_enabled_suffix"}}</p>
 </div>
 {{end}}
 {{end}}

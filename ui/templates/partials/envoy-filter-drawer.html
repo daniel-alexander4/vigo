@@ -15,14 +15,14 @@ Required fields on the data context:
 {{define "envoy-filter-drawer"}}
 <aside class="envoy-filter-drawer" id="envoy-filter-drawer" data-base-path="{{.BasePath}}">
     <div class="envoy-filter-drawer__header">
-        <span class="envoy-filter-drawer__title">Filter envoys</span>
-        <button type="button" class="envoy-filter-drawer__close" data-action="toggle-filter-drawer" aria-label="Close filter drawer">&times;</button>
+        <span class="envoy-filter-drawer__title">{{T $.Locale "envoy_filter_drawer.title"}}</span>
+        <button type="button" class="envoy-filter-drawer__close" data-action="toggle-filter-drawer" aria-label="{{T $.Locale "envoy_filter_drawer.close"}}">&times;</button>
     </div>
     <div class="envoy-filter-drawer__body">
         <form action="{{.BasePath}}" method="get" hx-boost="false" class="envoy-filter-drawer__search-form">
-            <label for="envoy-filter-drawer-search" class="envoy-filter-drawer__section-label">Hostname</label>
+            <label for="envoy-filter-drawer-search" class="envoy-filter-drawer__section-label">{{T $.Locale "th.hostname"}}</label>
             <input type="search" id="envoy-filter-drawer-search" name="search" value="{{.Search}}"
-                   placeholder="hostname (web,db)"
+                   placeholder="{{T $.Locale "envoy_filter_drawer.hostname_placeholder"}}"
                    class="input input--sm envoy-filter-drawer__search-input"
                    autocomplete="off" />
             {{if .ConvFilter}}<input type="hidden" name="conv" value="{{.ConvFilter}}">{{end}}
@@ -44,7 +44,7 @@ Required fields on the data context:
                 <span class="envoy-filter-drawer__section-label">{{.Label}}</span>
                 {{if gt (len .Choices) 12}}
                 <input type="search" class="input input--sm envoy-filter-drawer__pill-search"
-                       placeholder="Search {{.Label}}…"
+                       placeholder="{{T $.Locale "btn.search"}} {{.Label}}…"
                        data-input="filter-pills"
                        autocomplete="off" />
                 {{end}}
@@ -54,7 +54,7 @@ Required fields on the data context:
                 <a href="{{if .URL}}{{$.BasePath}}{{.URL}}{{else}}{{$.BasePath}}{{end}}"
                    class="btn btn--sm envoy-filter-drawer__pill{{if .Selected}} btn--primary envoy-filter-drawer__pill--selected{{end}}"
                    data-pill-label="{{.Value}}"
-                   title="{{.Count}} matching">
+                   title="{{.Count}} {{T $.Locale "envoy_filter_drawer.matching"}}">
                     <span class="envoy-filter-drawer__pill-value">{{.Value}}</span>
                     <span class="filter-count">{{.Count}}</span>
                 </a>
@@ -65,7 +65,7 @@ Required fields on the data context:
         {{end}}
     </div>
     <div class="envoy-filter-drawer__footer">
-        <a href="{{.BasePath}}" class="btn btn--sm">Clear all</a>
+        <a href="{{.BasePath}}" class="btn btn--sm">{{T $.Locale "envoy_filter_drawer.clear_all"}}</a>
     </div>
 </aside>
 {{end}}

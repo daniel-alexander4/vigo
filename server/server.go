@@ -1419,10 +1419,18 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// Wire report builder into UI handler for HTMX fragment rendering.
 		uiHandler.SetReportBuilder(&ui.ReportBuilder{
 			Executive: func(r *http.Request) (any, error) {
-				return s.reportHandler.BuildExecutiveReport(r)
+				rep, err := s.reportHandler.BuildExecutiveReport(r)
+				if rep != nil {
+					rep.Locale = uiHandler.LocaleFromRequest(r)
+				}
+				return rep, err
 			},
 			Framework: func(r *http.Request, slug string) (any, error) {
-				return s.reportHandler.BuildFrameworkReport(r, slug)
+				rep, err := s.reportHandler.BuildFrameworkReport(r, slug)
+				if rep != nil {
+					rep.Locale = uiHandler.LocaleFromRequest(r)
+				}
+				return rep, err
 			},
 			EnvoyFrameworkStatus: s.reportHandler.ComputeEnvoyFrameworkStatus,
 			EnvoyFrameworkDetail: s.reportHandler.ComputeEnvoyFrameworkDetail,

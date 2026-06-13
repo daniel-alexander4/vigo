@@ -1,19 +1,19 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Lockbox</h1>
-    <p>Per-user encrypted home-directory sync over the swarm substrate. Membership = the user's puddle. <a href="/docs/engineering/subsystems/swarm/lockbox">What is this?</a></p>
+    <p>{{T $.Locale "lockbox.subtitle"}} <a href="/docs/engineering/subsystems/swarm/lockbox">{{T $.Locale "lockbox.what_is_this"}}</a></p>
 </div>
 
 {{template "health-banner" .Health}}
 
 {{if .Error}}
-    <div class="alert alert--warn">Lockbox aggregator: {{.Error}}</div>
+    <div class="alert alert--warn">{{T $.Locale "lockbox.aggregator_error"}} {{.Error}}</div>
 {{else if or (not .Crypt) (eq (len .Crypt.Users) 0)}}
     {{template "empty-state" dict "Message" "No users with lockbox state observed across the fleet."}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">
-            <div class="stat-card__label">Users</div>
+            <div class="stat-card__label">{{T $.Locale "lockbox.users"}}</div>
             <div class="stat-card__value">{{.Crypt.Totals.Users}}</div>
         </div>
         <div class="stat-card">
@@ -21,38 +21,38 @@
             <div class="stat-card__value">{{.Crypt.Totals.Envoys}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Files</div>
+            <div class="stat-card__label">{{T $.Locale "lockbox.files"}}</div>
             <div class="stat-card__value">{{.Crypt.Totals.Files}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Tombstones</div>
+            <div class="stat-card__label">{{T $.Locale "lockbox.tombstones"}}</div>
             <div class="stat-card__value">{{.Crypt.Totals.Tombstones}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Divergences</div>
+            <div class="stat-card__label">{{T $.Locale "lockbox.divergences"}}</div>
             <div class="stat-card__value {{if gt .Crypt.Totals.Divergences 0}}text-warn{{end}}">{{.Crypt.Totals.Divergences}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Failed (unencrypted)</div>
+            <div class="stat-card__label">{{T $.Locale "lockbox.failed_unencrypted"}}</div>
             <div class="stat-card__value {{if gt .Crypt.Totals.FailedFiles 0}}text-danger{{end}}">{{.Crypt.Totals.FailedFiles}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Recipient drift</div>
+            <div class="stat-card__label">{{T $.Locale "lockbox.recipient_drift"}}</div>
             <div class="stat-card__value {{if gt .Crypt.Totals.RecipientDrifts 0}}text-warn{{end}}">{{.Crypt.Totals.RecipientDrifts}}</div>
         </div>
     </div>
 
     <div class="card">
-        <h3 class="u-m-0-0-12px">Users</h3>
+        <h3 class="u-m-0-0-12px">{{T $.Locale "lockbox.users"}}</h3>
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Files</th>
-                    <th>Tombstones</th>
+                    <th>{{T $.Locale "th.name"}}</th>
+                    <th>{{T $.Locale "lockbox.files"}}</th>
+                    <th>{{T $.Locale "lockbox.tombstones"}}</th>
                     <th>Envoys</th>
-                    <th>Drift</th>
-                    <th>Status</th>
+                    <th>{{T $.Locale "filter.drift"}}</th>
+                    <th>{{T $.Locale "th.status"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -64,16 +64,16 @@
                     <td>{{len .Envoys}}</td>
                     <td>
                         {{if .RecipientDrift}}
-                            <span class="badge badge--warn">drift</span>
+                            <span class="badge badge--warn">{{T $.Locale "lockbox.badge.drift"}}</span>
                         {{else}}
-                            <span class="badge badge--ok">ok</span>
+                            <span class="badge badge--ok">{{T $.Locale "lockbox.badge.ok"}}</span>
                         {{end}}
                     </td>
                     <td>
                         {{if gt (len .Divergences) 0}}
-                            <span class="badge badge--err">{{len .Divergences}} divergent</span>
+                            <span class="badge badge--err">{{len .Divergences}} {{T $.Locale "lockbox.badge.divergent"}}</span>
                         {{else}}
-                            <span class="badge badge--ok">consistent</span>
+                            <span class="badge badge--ok">{{T $.Locale "lockbox.badge.consistent"}}</span>
                         {{end}}
                     </td>
                 </tr>
@@ -92,9 +92,7 @@
 
     {{if .User.RecipientDrift}}
     <div class="alert alert--warn mb-2">
-        <strong>Recipient drift detected.</strong> Two or more envoys in this user's puddle
-        report different peer sets. New files encrypted on envoys with the smaller recipient
-        view will not be decryptable on newly-added peers until recipients reconverge.
+        <strong>{{T $.Locale "lockbox.drift_alert_title"}}</strong> {{T $.Locale "lockbox.drift_alert_body"}}
     </div>
     {{end}}
 
@@ -102,12 +100,12 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Hostname</th>
-                <th>Status</th>
-                <th>Files</th>
-                <th>Tombstones</th>
-                <th>Files digest</th>
-                <th>Recipients digest</th>
+                <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "lockbox.files"}}</th>
+                <th>{{T $.Locale "lockbox.tombstones"}}</th>
+                <th>{{T $.Locale "lockbox.files_digest"}}</th>
+                <th>{{T $.Locale "lockbox.recipients_digest"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -115,9 +113,9 @@
             <tr>
                 <td>{{.Hostname}}</td>
                 <td>
-                    {{if eq .Status "reporting"}}<span class="badge badge--ok">reporting</span>
-                    {{else if eq .Status "stale"}}<span class="badge badge--warn">stale</span>
-                    {{else}}<span class="badge badge--neutral">not reporting</span>{{end}}
+                    {{if eq .Status "reporting"}}<span class="badge badge--ok">{{T $.Locale "lockbox.status.reporting"}}</span>
+                    {{else if eq .Status "stale"}}<span class="badge badge--warn">{{T $.Locale "enum.stale"}}</span>
+                    {{else}}<span class="badge badge--neutral">{{T $.Locale "lockbox.status.not_reporting"}}</span>{{end}}
                 </td>
                 <td>{{.FileCount}}</td>
                 <td>{{.TombstoneCount}}</td>
@@ -129,13 +127,13 @@
     </table>
 
     {{if gt (len .User.Files) 0}}
-    <h4 class="mt-2">File presence ({{len .User.Files}})</h4>
+    <h4 class="mt-2">{{T $.Locale "lockbox.file_presence"}} ({{len .User.Files}})</h4>
     <table class="table">
         <thead>
             <tr>
-                <th>Filename</th>
-                <th>Status</th>
-                <th>Present on</th>
+                <th>{{T $.Locale "lockbox.filename"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "lockbox.present_on"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -143,10 +141,10 @@
             <tr>
                 <td><code>{{.Name}}</code></td>
                 <td>
-                    {{if eq .Status "live"}}<span class="badge badge--ok">live</span>
-                    {{else if eq .Status "tombstoned"}}<span class="badge badge--neutral">tombstoned</span>
-                    {{else if eq .Status "partial"}}<span class="badge badge--warn">partial</span>
-                    {{else if eq .Status "divergent"}}<span class="badge badge--err">divergent</span>
+                    {{if eq .Status "live"}}<span class="badge badge--ok">{{T $.Locale "lockbox.file.live"}}</span>
+                    {{else if eq .Status "tombstoned"}}<span class="badge badge--neutral">{{T $.Locale "lockbox.file.tombstoned"}}</span>
+                    {{else if eq .Status "partial"}}<span class="badge badge--warn">{{T $.Locale "lockbox.file.partial"}}</span>
+                    {{else if eq .Status "divergent"}}<span class="badge badge--err">{{T $.Locale "lockbox.file.divergent"}}</span>
                     {{else}}<span class="badge">{{.Status}}</span>{{end}}
                 </td>
                 <td>
@@ -163,13 +161,13 @@
     {{end}}
 
     {{if gt (len .User.Tombstones) 0}}
-    <h4 class="mt-2">Tombstones ({{len .User.Tombstones}})</h4>
+    <h4 class="mt-2">{{T $.Locale "lockbox.tombstones"}} ({{len .User.Tombstones}})</h4>
     <table class="table">
         <thead>
             <tr>
-                <th>Filename</th>
-                <th>Deletion time</th>
-                <th>Known on</th>
+                <th>{{T $.Locale "lockbox.filename"}}</th>
+                <th>{{T $.Locale "lockbox.deletion_time"}}</th>
+                <th>{{T $.Locale "lockbox.known_on"}}</th>
             </tr>
         </thead>
         <tbody>

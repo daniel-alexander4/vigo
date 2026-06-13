@@ -1,19 +1,19 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Longdrawer</h1>
-    <p>Per-user LAN home-directory sync over the swarm substrate. Sync set = the envoys on the user's LAN that hold a <code>~/longdrawer/</code> directory. <a href="/docs/engineering/subsystems/swarm/longdrawer">What is this?</a></p>
+    <p>{{T $.Locale "longdrawer.subtitle_pre"}} <code>~/longdrawer/</code> {{T $.Locale "longdrawer.subtitle_post"}} <a href="/docs/engineering/subsystems/swarm/longdrawer">{{T $.Locale "longdrawer.what_is_this"}}</a></p>
 </div>
 
 {{template "health-banner" .Health}}
 
 {{if .Error}}
-    <div class="alert alert--warn">Longdrawer aggregator: {{.Error}}</div>
+    <div class="alert alert--warn">{{T $.Locale "longdrawer.aggregator_error"}} {{.Error}}</div>
 {{else if or (not .Sync) (eq (len .Sync.Users) 0)}}
-    {{template "empty-state" dict "Message" "No users with longdrawer state observed across the fleet."}}
+    {{template "empty-state" dict "Message" (T $.Locale "longdrawer.empty")}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">
-            <div class="stat-card__label">Users</div>
+            <div class="stat-card__label">{{T $.Locale "longdrawer.users"}}</div>
             <div class="stat-card__value">{{.Sync.Totals.Users}}</div>
         </div>
         <div class="stat-card">
@@ -21,29 +21,29 @@
             <div class="stat-card__value">{{.Sync.Totals.Envoys}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Files</div>
+            <div class="stat-card__label">{{T $.Locale "longdrawer.files"}}</div>
             <div class="stat-card__value">{{.Sync.Totals.Files}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Revoked</div>
+            <div class="stat-card__label">{{T $.Locale "longdrawer.revoked"}}</div>
             <div class="stat-card__value">{{.Sync.Totals.Tombstones}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Divergences</div>
+            <div class="stat-card__label">{{T $.Locale "longdrawer.divergences"}}</div>
             <div class="stat-card__value {{if gt .Sync.Totals.Divergences 0}}text-warn{{end}}">{{.Sync.Totals.Divergences}}</div>
         </div>
     </div>
 
     <div class="card">
-        <h3 class="u-m-0-0-12px">Users</h3>
+        <h3 class="u-m-0-0-12px">{{T $.Locale "longdrawer.users"}}</h3>
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Files</th>
-                    <th>Revoked</th>
+                    <th>{{T $.Locale "th.name"}}</th>
+                    <th>{{T $.Locale "longdrawer.files"}}</th>
+                    <th>{{T $.Locale "longdrawer.revoked"}}</th>
                     <th>Envoys</th>
-                    <th>Status</th>
+                    <th>{{T $.Locale "th.status"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -55,9 +55,9 @@
                     <td>{{len .Envoys}}</td>
                     <td>
                         {{if gt (len .Divergences) 0}}
-                            <span class="badge badge--err">{{len .Divergences}} divergent</span>
+                            <span class="badge badge--err">{{len .Divergences}} {{T $.Locale "longdrawer.divergent"}}</span>
                         {{else}}
-                            <span class="badge badge--ok">consistent</span>
+                            <span class="badge badge--ok">{{T $.Locale "longdrawer.consistent"}}</span>
                         {{end}}
                     </td>
                 </tr>
@@ -78,11 +78,11 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Hostname</th>
-                <th>Status</th>
-                <th>Files</th>
-                <th>Revoked</th>
-                <th>Digest</th>
+                <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "longdrawer.files"}}</th>
+                <th>{{T $.Locale "longdrawer.revoked"}}</th>
+                <th>{{T $.Locale "longdrawer.digest"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -90,9 +90,9 @@
             <tr>
                 <td>{{.Hostname}}</td>
                 <td>
-                    {{if eq .Status "reporting"}}<span class="badge badge--ok">reporting</span>
-                    {{else if eq .Status "stale"}}<span class="badge badge--warn">stale</span>
-                    {{else}}<span class="badge badge--neutral">not reporting</span>{{end}}
+                    {{if eq .Status "reporting"}}<span class="badge badge--ok">{{T $.Locale "longdrawer.reporting"}}</span>
+                    {{else if eq .Status "stale"}}<span class="badge badge--warn">{{T $.Locale "enum.stale"}}</span>
+                    {{else}}<span class="badge badge--neutral">{{T $.Locale "longdrawer.not_reporting"}}</span>{{end}}
                 </td>
                 <td>{{.FileCount}}</td>
                 <td>{{.TombstoneCount}}</td>
@@ -103,13 +103,13 @@
     </table>
 
     {{if gt (len .User.Files) 0}}
-    <h4 class="mt-2">File presence ({{len .User.Files}})</h4>
+    <h4 class="mt-2">{{T $.Locale "longdrawer.file_presence"}} ({{len .User.Files}})</h4>
     <table class="table">
         <thead>
             <tr>
-                <th>Filename</th>
-                <th>Status</th>
-                <th>Present on</th>
+                <th>{{T $.Locale "longdrawer.filename"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "longdrawer.present_on"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -117,10 +117,10 @@
             <tr>
                 <td><code>{{.Name}}</code></td>
                 <td>
-                    {{if eq .Status "live"}}<span class="badge badge--ok">live</span>
-                    {{else if eq .Status "tombstoned"}}<span class="badge badge--neutral">revoked</span>
-                    {{else if eq .Status "partial"}}<span class="badge badge--warn">partial</span>
-                    {{else if eq .Status "divergent"}}<span class="badge badge--err">divergent</span>
+                    {{if eq .Status "live"}}<span class="badge badge--ok">{{T $.Locale "longdrawer.live"}}</span>
+                    {{else if eq .Status "tombstoned"}}<span class="badge badge--neutral">{{T $.Locale "longdrawer.revoked_status"}}</span>
+                    {{else if eq .Status "partial"}}<span class="badge badge--warn">{{T $.Locale "longdrawer.partial"}}</span>
+                    {{else if eq .Status "divergent"}}<span class="badge badge--err">{{T $.Locale "longdrawer.divergent"}}</span>
                     {{else}}<span class="badge">{{.Status}}</span>{{end}}
                 </td>
                 <td>
@@ -137,13 +137,13 @@
     {{end}}
 
     {{if gt (len .User.Tombstones) 0}}
-    <h4 class="mt-2">Revoked ({{len .User.Tombstones}})</h4>
+    <h4 class="mt-2">{{T $.Locale "longdrawer.revoked"}} ({{len .User.Tombstones}})</h4>
     <table class="table">
         <thead>
             <tr>
-                <th>Filename</th>
-                <th>Deletion time</th>
-                <th>Known on</th>
+                <th>{{T $.Locale "longdrawer.filename"}}</th>
+                <th>{{T $.Locale "longdrawer.deletion_time"}}</th>
+                <th>{{T $.Locale "longdrawer.known_on"}}</th>
             </tr>
         </thead>
         <tbody>

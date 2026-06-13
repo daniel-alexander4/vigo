@@ -106,6 +106,7 @@ func (h *Handler) curatorList(w http.ResponseWriter, r *http.Request) {
 		data.Error = "curator aggregator not available"
 		data.Health = finalizeHealthBanner("Curator", nil, "Aggregator unavailable")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "curator", data)
 		return
 	}
@@ -115,12 +116,14 @@ func (h *Handler) curatorList(w http.ResponseWriter, r *http.Request) {
 		data.Error = err.Error()
 		data.Health = finalizeHealthBanner("Curator", nil, "Snapshot failed")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "curator", data)
 		return
 	}
 	data.Catalog = cat
 	data.Blocked = blocked
 	data.Health = buildCuratorHealth(cat, blocked)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "curator", data)
 }
 
@@ -161,6 +164,7 @@ func (h *Handler) curatorDetail(w http.ResponseWriter, r *http.Request, id strin
 	view := buildCuratorArtifactView(matchedID, entry, blockedSet, targetEnvoys)
 	data.Artifact = view
 	data.Health = buildCuratorArtifactHealth(view)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "curator", data)
 }
 

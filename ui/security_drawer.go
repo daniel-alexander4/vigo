@@ -275,6 +275,7 @@ type ChkrootkitRow struct {
 // dispatch succeeded and Detail is populated; Live=false means the drawer
 // shows only the instant summary with a "Fetch Live Detail" button.
 type SecurityDrawerData struct {
+	Locale   string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	EnvoyID  string
 	Hostname string
 	Live     bool                  // true when live-dispatch completed successfully
@@ -338,7 +339,7 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 	}
 	hostname, flat, ok := h.dataSource.SecurityScanContext(envoyID)
 	if !ok {
-		data := SecurityDrawerData{EnvoyID: envoyID, Hostname: hostname}
+		data := SecurityDrawerData{EnvoyID: envoyID, Hostname: hostname, Locale: h.localeFromRequest(r)}
 		h.renderer.RenderFragment(w, "security", "security-drawer-empty", data)
 		return
 	}
@@ -408,6 +409,7 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 	// the tab keeps its cached-summary pane when the live response didn't
 	// carry that scanner — see SecuritySection.HasLive.
 	data.Sections = drawerSections(data.Cached, data.Detail)
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "security", "security-drawer-fragment", data)
 }
 

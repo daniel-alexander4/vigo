@@ -17,14 +17,14 @@
 </div>
 {{if .Problems}}
 <div class="card mt-1">
-    <h3 class="u-m-0-0-12px">Problems ({{len .Problems}})</h3>
+    <h3 class="u-m-0-0-12px">{{T $.Locale "health_banner.problems"}} ({{len .Problems}})</h3>
     <div class="table-container">
         <table class="table">
             <thead>
                 <tr>
-                    <th>Kind</th>
-                    <th>Subject</th>
-                    <th>Detail</th>
+                    <th>{{T $.Locale "health_banner.kind"}}</th>
+                    <th>{{T $.Locale "health_banner.subject"}}</th>
+                    <th>{{T $.Locale "health_banner.detail"}}</th>
                 </tr>
             </thead>
             <tbody>

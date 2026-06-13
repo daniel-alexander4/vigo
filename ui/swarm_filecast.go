@@ -184,6 +184,7 @@ func (h *Handler) filecastList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "filecast", data)
 }
 
@@ -247,6 +248,7 @@ func (h *Handler) filecastDetail(w http.ResponseWriter, r *http.Request, sha str
 	data.BlobDetail = detail
 
 	h.setCommonWithRequest(&data.PageData, r)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "filecast", data)
 }
 
@@ -314,6 +316,7 @@ func (h *Handler) FilecastEnvoysFragment(w http.ResponseWriter, r *http.Request)
 	data := FilecastPageData{BlobDetail: detail}
 	h.populateVizData(&data, statuses, chunks)
 
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "filecast", "filecast-envoys-fragment", data)
 }
 

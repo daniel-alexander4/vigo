@@ -51,6 +51,7 @@ func (h *Handler) gitbackList(w http.ResponseWriter, r *http.Request) {
 		data.Error = "gitback aggregator not available"
 		data.Health = finalizeHealthBanner("Gitback", nil, "Aggregator unavailable")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "gitback", data)
 		return
 	}
@@ -60,11 +61,13 @@ func (h *Handler) gitbackList(w http.ResponseWriter, r *http.Request) {
 		data.Error = err.Error()
 		data.Health = finalizeHealthBanner("Gitback", nil, "Snapshot failed")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "gitback", data)
 		return
 	}
 	data.Fleet = fleet
 	data.Health = buildGitbackHealth(fleet)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "gitback", data)
 }
 
@@ -96,6 +99,7 @@ func (h *Handler) gitbackDetail(w http.ResponseWriter, r *http.Request, id strin
 	}
 	data.Project = summary
 	data.Health = buildGitbackProjectHealth(summary)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "gitback", data)
 }
 

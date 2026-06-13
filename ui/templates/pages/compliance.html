@@ -1,11 +1,11 @@
 {{define "page-content"}}
 <span data-ai-page="compliance" hidden></span>
 <div class="page-header">
-    <h1>Compliance</h1>
+    <h1>{{T $.Locale "nav.compliance"}}</h1>
     <div class="page-header__actions">
-        <a href="/api/v1/export/oscal" class="btn btn--sm" target="_blank" rel="noopener">OSCAL Export</a>
+        <a href="/api/v1/export/oscal" class="btn btn--sm" target="_blank" rel="noopener">{{T $.Locale "compliance.oscal_export"}}</a>
     </div>
-    <p>Fleet compliance overview and reporting</p>
+    <p>{{T $.Locale "compliance.subtitle"}}</p>
 </div>
 
 <div id="compliance-status"
@@ -19,26 +19,26 @@
 
 <div class="fw-executive">
     <a href="/compliance/executive" class="fw-executive__link">
-        <span class="fw-executive__title">Executive Summary</span>
-        <span class="fw-executive__desc">Print-ready overview for leadership and auditors</span>
-        <span class="fw-executive__action">View Report &rarr;</span>
+        <span class="fw-executive__title">{{T $.Locale "compliance.executive_summary"}}</span>
+        <span class="fw-executive__desc">{{T $.Locale "compliance.executive_desc"}}</span>
+        <span class="fw-executive__action">{{T $.Locale "compliance.view_report"}} &rarr;</span>
     </a>
 </div>
 
 <div class="fw-executive">
     <a href="/compliance/evidence" class="fw-executive__link">
-        <span class="fw-executive__title">Audit Evidence Center</span>
-        <span class="fw-executive__desc">Gather proof for compliance audits with downloadable evidence bundles</span>
-        <span class="fw-executive__action">Open Evidence Center &rarr;</span>
+        <span class="fw-executive__title">{{T $.Locale "compliance.evidence_center"}}</span>
+        <span class="fw-executive__desc">{{T $.Locale "compliance.evidence_desc"}}</span>
+        <span class="fw-executive__action">{{T $.Locale "compliance.open_evidence_center"}} &rarr;</span>
     </a>
 </div>
 
-<h3 class="section-heading">Frameworks</h3>
+<h3 class="section-heading">{{T $.Locale "compliance.frameworks"}}</h3>
 <div class="fw-grid" id="fw-grid"
      hx-get="/ui/fragments/compliance-frameworks"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <div class="fw-grid__loading">Loading framework data&hellip;</div>
+    <div class="fw-grid__loading">{{T $.Locale "compliance.loading_frameworks"}}&hellip;</div>
 </div>
 {{end}}
 
@@ -49,62 +49,62 @@
         <span class="compliance-gauge__pct compliance-gauge__pct--{{pctAccentInv .StandardsPct}}">
             {{printf "%.0f" .StandardsPct}}%
         </span>
-        <span class="compliance-gauge__label">compliance score &middot; mean of active framework scores &middot; {{.TotalControls}} controls across frameworks</span>
+        <span class="compliance-gauge__label">{{T $.Locale "compliance.score_label_prefix"}} &middot; {{T $.Locale "compliance.score_label_mean"}} &middot; {{.TotalControls}} {{T $.Locale "compliance.controls_across_frameworks"}}</span>
     </div>
     <div class="compliance-gauge__bar">
         {{if gt .TotalControls 0}}
-        <div class="compliance-gauge__fill compliance-gauge__fill--success w-pct-{{wbucket (pct .SatisfiedControls .TotalControls)}}" title="{{.SatisfiedControls}} satisfied"></div>
-        {{if gt .WaivedControls 0}}<div class="compliance-gauge__fill w-pct-{{wbucket (pct .WaivedControls .TotalControls)}} bg-brand" title="{{.WaivedControls}} waived"></div>{{end}}
-        <div class="compliance-gauge__fill compliance-gauge__fill--warning w-pct-{{wbucket (pct .PartialControls .TotalControls)}}" title="{{.PartialControls}} partial"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--success w-pct-{{wbucket (pct .SatisfiedControls .TotalControls)}}" title="{{.SatisfiedControls}} {{T $.Locale "compliance.satisfied_lc"}}"></div>
+        {{if gt .WaivedControls 0}}<div class="compliance-gauge__fill w-pct-{{wbucket (pct .WaivedControls .TotalControls)}} bg-brand" title="{{.WaivedControls}} {{T $.Locale "compliance.waived_lc"}}"></div>{{end}}
+        <div class="compliance-gauge__fill compliance-gauge__fill--warning w-pct-{{wbucket (pct .PartialControls .TotalControls)}}" title="{{.PartialControls}} {{T $.Locale "compliance.partial_lc"}}"></div>
         {{else}}
         <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}} w-pct-{{wbucket .StandardsPct}}"
             ></div>
         {{end}}
     </div>
     <div class="gauge-legend">
-        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--success"></div> Satisfied</div>
-        {{if gt .WaivedControls 0}}<div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--info"></div> Waived</div>{{end}}
-        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--warning"></div> Partial</div>
-        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--danger"></div> Not Met</div>
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--success"></div> {{T $.Locale "compliance.satisfied"}}</div>
+        {{if gt .WaivedControls 0}}<div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--info"></div> {{T $.Locale "compliance.waived"}}</div>{{end}}
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--warning"></div> {{T $.Locale "compliance.partial"}}</div>
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--danger"></div> {{T $.Locale "compliance.not_met"}}</div>
     </div>
 </div>
 <div class="breakdown">
     <div class="breakdown__item">
         <div class="breakdown__count text-success">{{.SatisfiedControls}}</div>
-        <div class="breakdown__status">Satisfied</div>
+        <div class="breakdown__status">{{T $.Locale "compliance.satisfied"}}</div>
     </div>
     {{if gt .WaivedControls 0}}
     <div class="breakdown__item">
         <div class="breakdown__count text-info">{{.WaivedControls}}</div>
-        <div class="breakdown__status">Waived</div>
+        <div class="breakdown__status">{{T $.Locale "compliance.waived"}}</div>
     </div>
     {{end}}
     <div class="breakdown__item">
         <div class="breakdown__count text-warning">{{.PartialControls}}</div>
-        <div class="breakdown__status">Partial</div>
+        <div class="breakdown__status">{{T $.Locale "compliance.partial"}}</div>
     </div>
     <div class="breakdown__item">
         <div class="breakdown__count text-danger">{{.NotSatisfiedControls}}</div>
-        <div class="breakdown__status">Not Met</div>
+        <div class="breakdown__status">{{T $.Locale "compliance.not_met"}}</div>
     </div>
     <div class="breakdown__item">
         <div class="breakdown__count">{{.TotalControls}}</div>
-        <div class="breakdown__status">Total</div>
+        <div class="breakdown__status">{{T $.Locale "compliance.total"}}</div>
     </div>
 </div>
 {{if gt .TotalActiveWaivers 0}}
 <div class="waiver-banner mt-1">
-    <div class="waiver-banner__title">{{.TotalActiveWaivers}} active waiver{{if ne .TotalActiveWaivers 1}}s{{end}}{{if gt .ExpiringWaivers 0}} &middot; <span class="text-warning">{{.ExpiringWaivers}} expiring within 30 days</span>{{end}}</div>
-    <div class="waiver-banner__detail"><a href="/compliance/waivers">View all waivers &rarr;</a></div>
+    <div class="waiver-banner__title">{{.TotalActiveWaivers}} {{T $.Locale "compliance.active_waivers"}}{{if ne .TotalActiveWaivers 1}}s{{end}}{{if gt .ExpiringWaivers 0}} &middot; <span class="text-warning">{{.ExpiringWaivers}} {{T $.Locale "compliance.expiring_within_30_days"}}</span>{{end}}</div>
+    <div class="waiver-banner__detail"><a href="/compliance/waivers">{{T $.Locale "compliance.view_all_waivers"}} &rarr;</a></div>
 </div>
 {{end}}
 {{else}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">
         <span class="compliance-gauge__pct compliance-gauge__pct--muted">&mdash;</span>
-        <span class="compliance-gauge__label">standards compliance</span>
+        <span class="compliance-gauge__label">{{T $.Locale "compliance.standards_compliance"}}</span>
     </div>
-    <p class="text-muted mt-1">No compliance frameworks configured. Add compliance tags to your configcrates to enable standards tracking.</p>
+    <p class="text-muted mt-1">{{T $.Locale "compliance.none_configured"}}</p>
 </div>
 {{end}}
 {{end}}
@@ -127,11 +127,11 @@
         {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow w-pct-{{wbucket $yPct}}"></div>{{end}}
         {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red w-pct-{{wbucket $rPct}}"></div>{{end}}
     </div>
-    <div class="fw-card__counts">{{.Satisfied}} satisfied{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} not met</div>
-    <div class="fw-card__action">View Report &rarr;</div>
+    <div class="fw-card__counts">{{.Satisfied}} {{T $.Locale "compliance.satisfied_lc"}}{{if gt .Waived 0}} &middot; {{.Waived}} {{T $.Locale "compliance.waived_lc"}}{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} {{T $.Locale "compliance.partial_lc"}}{{end}} &middot; {{.NotSatisfied}} {{T $.Locale "compliance.not_met_lc"}}</div>
+    <div class="fw-card__action">{{T $.Locale "compliance.view_report"}} &rarr;</div>
 </a>
 {{end}}
 {{else}}
-<p class="text-muted">No framework data available.</p>
+<p class="text-muted">{{T $.Locale "compliance.no_framework_data"}}</p>
 {{end}}
 {{end}}

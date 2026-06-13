@@ -1,28 +1,28 @@
 {{define "page-content"}}
 <div class="breadcrumb mb-1">
-    <a href="/security">Security</a> &rsaquo; Certificates &rsaquo; {{.Hostname}}
+    <a href="/security">{{T $.Locale "nav.security"}}</a> &rsaquo; {{T $.Locale "security_certs.certificates"}} &rsaquo; {{.Hostname}}
 </div>
 
 <div class="page-header">
-    <h1>Certificates — {{.Hostname}}</h1>
-    <p>Per-cert expiry for <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a>. Certs with 30+ days remaining are hidden.</p>
+    <h1>{{T $.Locale "security_certs.certificates"}} — {{.Hostname}}</h1>
+    <p>{{T $.Locale "security_certs.per_cert_expiry_for"}} <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a>. {{T $.Locale "security_certs.hidden_note"}}</p>
 </div>
 
 <div class="stat-cards mb-2">
     <a href="/security/certs/{{.EnvoyID}}?bucket=expired" class="stat-card stat-card--danger{{if eq .Bucket "expired"}} stat-card--active{{end}} u-td-none">
-        <div class="stat-card__label">Expired</div>
+        <div class="stat-card__label">{{T $.Locale "security_certs.expired"}}</div>
         <div class="stat-card__value {{if .Expired}}text-danger{{end}}">{{.Expired}}</div>
     </a>
     <a href="/security/certs/{{.EnvoyID}}?bucket=7d" class="stat-card stat-card--warning{{if eq .Bucket "7d"}} stat-card--active{{end}} u-td-none">
-        <div class="stat-card__label">≤ 7 days</div>
+        <div class="stat-card__label">{{T $.Locale "security_certs.le_7_days"}}</div>
         <div class="stat-card__value {{if .ExpiringIn7}}text-warning{{end}}">{{.ExpiringIn7}}</div>
     </a>
     <a href="/security/certs/{{.EnvoyID}}?bucket=30d" class="stat-card{{if eq .Bucket "30d"}} stat-card--active{{end}} u-td-none">
-        <div class="stat-card__label">≤ 30 days</div>
+        <div class="stat-card__label">{{T $.Locale "security_certs.le_30_days"}}</div>
         <div class="stat-card__value">{{.ExpiringIn30}}</div>
     </a>
     <a href="/security/certs/{{.EnvoyID}}" class="stat-card stat-card--brand{{if eq .Bucket ""}} stat-card--active{{end}} u-td-none">
-        <div class="stat-card__label">All &lt; 30 days</div>
+        <div class="stat-card__label">{{T $.Locale "security_certs.all_lt_30_days"}}</div>
         <div class="stat-card__value">{{len .AllCerts}}</div>
     </a>
 </div>
@@ -30,30 +30,30 @@
 <div class="card">
     <div class="card-heading-row">
         <h3 class="u-m-0">
-            {{if eq .Bucket "expired"}}Expired certificates ({{len .Certs}})
-            {{else if eq .Bucket "7d"}}Expiring within 7 days ({{len .Certs}})
-            {{else if eq .Bucket "30d"}}Expiring within 30 days ({{len .Certs}})
-            {{else}}All certificates expiring within 30 days ({{len .Certs}}){{end}}
+            {{if eq .Bucket "expired"}}{{T $.Locale "security_certs.expired_certificates"}} ({{len .Certs}})
+            {{else if eq .Bucket "7d"}}{{T $.Locale "security_certs.expiring_within_7_days"}} ({{len .Certs}})
+            {{else if eq .Bucket "30d"}}{{T $.Locale "security_certs.expiring_within_30_days"}} ({{len .Certs}})
+            {{else}}{{T $.Locale "security_certs.all_expiring_within_30_days"}} ({{len .Certs}}){{end}}
         </h3>
-        <a href="/security" class="btn btn--sm">Back to Security</a>
+        <a href="/security" class="btn btn--sm">{{T $.Locale "security_certs.back_to_security"}}</a>
     </div>
 
     {{if not .Certs}}
         {{if .AllCerts}}
-        {{template "empty-state" dict "Message" "No certs match this bucket on this host." "Hint" "Clear the filter via the cards above to see the full expiring set."}}
+        {{template "empty-state" dict "Message" (T $.Locale "security_certs.empty_bucket") "Hint" (T $.Locale "security_certs.empty_bucket_hint")}}
         {{else}}
-        {{template "empty-state" dict "Message" "No certificates expiring within 30 days on this host."}}
+        {{template "empty-state" dict "Message" (T $.Locale "security_certs.empty_host")}}
         {{end}}
     {{else}}
     <table class="table">
         <thead>
             <tr>
-                <th>Path</th>
-                <th>Common Name</th>
-                <th>SANs</th>
-                <th>Issuer</th>
-                <th>Expires</th>
-                <th>Days</th>
+                <th>{{T $.Locale "security_certs.th_path"}}</th>
+                <th>{{T $.Locale "security_certs.th_common_name"}}</th>
+                <th>{{T $.Locale "security_certs.th_sans"}}</th>
+                <th>{{T $.Locale "security_certs.th_issuer"}}</th>
+                <th>{{T $.Locale "security_certs.th_expires"}}</th>
+                <th>{{T $.Locale "security_certs.th_days"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -64,14 +64,14 @@
                 <td>
                     {{if .SANs}}
                         {{range $i, $san := .SANs}}{{if lt $i 3}}{{if $i}}, {{end}}<code>{{$san}}</code>{{end}}{{end}}
-                        {{if gt (len .SANs) 3}} <span class="text-muted">+{{sub (len .SANs) 3}} more</span>{{end}}
+                        {{if gt (len .SANs) 3}} <span class="text-muted">+{{sub (len .SANs) 3}} {{T $.Locale "security_certs.more"}}</span>{{end}}
                     {{else}}<span class="text-muted">&mdash;</span>{{end}}
                 </td>
                 <td><span class="text-muted u-fs-0-9em">{{.Issuer}}</span></td>
                 <td class="u-ws-nowrap">{{.NotAfter}}</td>
                 <td class="u-ws-nowrap">
                     {{if lt .DaysRemaining 0}}
-                    <span class="badge badge--danger">{{.DaysRemaining}}d (expired)</span>
+                    <span class="badge badge--danger">{{.DaysRemaining}}d ({{T $.Locale "security_certs.expired_lower"}})</span>
                     {{else if lt .DaysRemaining 7}}
                     <span class="badge badge--warn">{{.DaysRemaining}}d</span>
                     {{else}}

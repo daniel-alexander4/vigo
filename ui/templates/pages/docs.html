@@ -2,7 +2,7 @@
 <div class="docs-layout">
     <aside class="docs-nav">
         <div class="docs-nav__search">
-            <input type="text" id="docs-search" class="docs-nav__search-input" placeholder="Search docs..." autocomplete="off" spellcheck="false">
+            <input type="text" id="docs-search" class="docs-nav__search-input" placeholder="{{T $.Locale "docs.search_placeholder"}}" autocomplete="off" spellcheck="false">
         </div>
         <div id="docs-search-results" class="docs-nav__search-results u-d-none"></div>
         <div id="docs-nav-tree">
@@ -13,7 +13,7 @@
                 {{.Title}}
             </button>
             <div class="docs-nav__pages u-d-none"{{if ne $.CurrentSection .Path}}{{end}}>
-                <a href="/docs/{{.Path}}" class="docs-nav__page">Overview</a>
+                <a href="/docs/{{.Path}}" class="docs-nav__page">{{T $.Locale "common.overview"}}</a>
                 {{range .Pages}}
                 <a href="/docs/{{.Path}}" class="docs-nav__page{{if eq $.CurrentPath .Path}} docs-nav__page--active{{end}}">{{.Title}}</a>
                 {{end}}
@@ -35,7 +35,7 @@
     <article class="docs-content" data-docs-page="{{.Title}}" data-docs-path="{{.CurrentPath}}">
         {{if .Breadcrumbs}}
         <nav class="docs-breadcrumbs">
-            <a href="/docs">Documentation</a>
+            <a href="/docs">{{T $.Locale "nav.documentation"}}</a>
             {{range .Breadcrumbs}}
             <span class="docs-breadcrumbs__sep">/</span>
             {{if .Path}}<a href="/docs/{{.Path}}">{{.Title}}</a>{{else}}<span>{{.Title}}</span>{{end}}
@@ -45,7 +45,7 @@
         <div class="docs-body">
             <img src="/static/img/logo.svg" alt="Vigo" class="docs-logo">
             {{.Content}}
-            <div class="docs-confidential">Confidential &mdash; Alexander4, LLC. Not for redistribution.</div>
+            <div class="docs-confidential">{{T $.Locale "docs.confidential"}}</div>
         </div>
     </article>
 </div>

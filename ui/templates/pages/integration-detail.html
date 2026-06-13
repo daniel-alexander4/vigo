@@ -2,7 +2,7 @@
 <span data-ai-page="integration-detail" hidden></span>
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/integrations">Integrations</a> &rsaquo; {{.Integration.Name}}
+        <a href="/integrations">{{T $.Locale "nav.integrations"}}</a> &rsaquo; {{.Integration.Name}}
     </div>
     <h1>{{.Integration.Name}}</h1>
     <p>{{.Integration.Description}}</p>
@@ -10,28 +10,28 @@
 
 <div class="stat-cards mb-2">
     <div class="stat-card stat-card--brand">
-        <div class="stat-card__value">{{if .Enabled}}<span class="badge badge--converged">Enabled</span>{{else}}<span class="badge badge--stale">Disabled</span>{{end}}</div>
-        <div class="stat-card__label">Status</div>
+        <div class="stat-card__value">{{if .Enabled}}<span class="badge badge--converged">{{T $.Locale "common.enabled"}}</span>{{else}}<span class="badge badge--stale">{{T $.Locale "common.disabled"}}</span>{{end}}</div>
+        <div class="stat-card__label">{{T $.Locale "th.status"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">{{.Integration.Events}}</div>
-        <div class="stat-card__label">Supported Events</div>
+        <div class="stat-card__label">{{T $.Locale "integration_detail.supported_events"}}</div>
     </div>
     {{if .Enabled}}
     <div class="stat-card">
         <div class="stat-card__value">{{.EventCount}}</div>
-        <div class="stat-card__label">Configured Events</div>
+        <div class="stat-card__label">{{T $.Locale "integration_detail.configured_events"}}</div>
     </div>
     {{end}}
 </div>
 
 {{if .Enabled}}
-<h3 class="section-heading">Active Configuration</h3>
-<p class="text-muted mb-1">Sensitive values are masked. Edit <code>server.yaml</code> to change settings.</p>
+<h3 class="section-heading">{{T $.Locale "integration_detail.active_configuration"}}</h3>
+<p class="text-muted mb-1">{{T $.Locale "integration_detail.masked_prefix"}} <code>server.yaml</code> {{T $.Locale "integration_detail.masked_suffix"}}</p>
 <pre class="u-blk30"><code>{{.LiveYAML}}</code></pre>
 {{end}}
 
-<h3 class="section-heading">Example server.yaml</h3>
-<p class="text-muted mb-1">Copy this block into your <code>server.yaml</code> to enable this integration.</p>
+<h3 class="section-heading">{{T $.Locale "integration_detail.example_serveryaml"}}</h3>
+<p class="text-muted mb-1">{{T $.Locale "integration_detail.copy_prefix"}} <code>server.yaml</code> {{T $.Locale "integration_detail.copy_suffix"}}</p>
 <pre class="u-blk30"><code>{{.Integration.ExampleYAML}}</code></pre>
 {{end}}

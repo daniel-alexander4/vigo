@@ -34,6 +34,7 @@ func (h *Handler) Lockbox(w http.ResponseWriter, r *http.Request) {
 		data.Error = "mesh aggregator not available"
 		data.Health = finalizeHealthBanner("Lockbox", nil, "Aggregator unavailable")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "lockbox", data)
 		return
 	}
@@ -43,11 +44,13 @@ func (h *Handler) Lockbox(w http.ResponseWriter, r *http.Request) {
 		data.Error = err.Error()
 		data.Health = finalizeHealthBanner("Lockbox", nil, "Snapshot failed")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "lockbox", data)
 		return
 	}
 	data.Crypt = fleet
 	data.Health = buildLockboxHealth(fleet)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "lockbox", data)
 }
 
@@ -76,9 +79,10 @@ func (h *Handler) LockboxUserDrilldown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	frag := struct {
-		User *lockboxmesh.UserSummary
-		Now  time.Time
-	}{User: summary, Now: time.Now()}
+		User   *lockboxmesh.UserSummary
+		Now    time.Time
+		Locale string
+	}{User: summary, Now: time.Now(), Locale: h.localeFromRequest(r)}
 	h.renderer.RenderFragment(w, "lockbox", "lockbox-user-fragment", frag)
 }
 

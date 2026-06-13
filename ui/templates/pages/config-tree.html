@@ -1,13 +1,13 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Config Tree</h1>
-    <p>Published configuration tree{{if .LiveDir}} at <code>{{.LiveDir}}</code>{{end}}. Edits under <code>stacks/</code> are not active until <code>vigocli config publish</code>.</p>
+    <h1>{{T $.Locale "nav.config_tree"}}</h1>
+    <p>{{T $.Locale "config_tree.published_tree"}}{{if .LiveDir}} {{T $.Locale "config_tree.at"}} <code>{{.LiveDir}}</code>{{end}}. {{T $.Locale "config_tree.edits_under"}} <code>stacks/</code> {{T $.Locale "config_tree.not_active_until"}} <code>vigocli config publish</code>.</p>
 </div>
 
 {{if .Missing}}
 <div class="card">
     <div class="card__body">
-        <p class="text-muted">No published configuration. Run <code>vigocli config publish</code> to publish the editable stacks to <code>.live/</code>.</p>
+        <p class="text-muted">{{T $.Locale "config_tree.no_published"}} <code>vigocli config publish</code> {{T $.Locale "config_tree.no_published_suffix"}} <code>.live/</code>.</p>
     </div>
 </div>
 {{else if .Root}}
@@ -25,8 +25,8 @@
         <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--hostcrate"></span>envoys.vgo (hostcrate)</span>
         <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--configcrate"></span>configcrate</span>
         <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--usercrate"></span>usercrate</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--vgo"></span>other .vgo</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--other"></span>other</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--vgo"></span>{{T $.Locale "config_tree.legend_other_vgo"}}</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--other"></span>{{T $.Locale "config_tree.legend_other"}}</span>
     </div>
 </div>
 {{end}}

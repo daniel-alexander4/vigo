@@ -11,78 +11,78 @@
      hx-get="/ui/fragments/envoy-standard-coverage/{{.EnvoyID}}/{{.FrameworkSlug}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <div class="fw-grid__loading">Loading coverage data&hellip;</div>
+    <div class="fw-grid__loading">{{T $.Locale "envoy_compliance_detail.loading_coverage"}}&hellip;</div>
 </div>
 {{end}}
 
 {{define "envoy-standard-coverage-fragment"}}
 {{if .Unavailable}}
-<p class="text-muted u-p-20px">No compliance data available for {{.FrameworkTitle}}.</p>
+<p class="text-muted u-p-20px">{{T $.Locale "envoy_compliance_detail.no_data_prefix"}} {{.FrameworkTitle}}.</p>
 {{else}}
 
 <!-- Summary cards: partition buckets from the unified scorer -->
 <div class="stat-cards u-mb-24px">
     <div class="stat-card">
         <div class="stat-card__value {{if ge .ConfigcratePct 95.0}}text-success{{else if ge .ConfigcratePct 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .ConfigcratePct}}%</div>
-        <div class="stat-card__label">Convergence</div>
+        <div class="stat-card__label">{{T $.Locale "th.convergence"}}</div>
         <div class="text-muted u-fs-11px-mt-4px">{{.ConfigcrateConvergence}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value {{if ge .Status.CoveragePercent 95.0}}text-success{{else if ge .Status.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Status.CoveragePercent}}%</div>
         <div class="stat-card__label">{{.FrameworkTitle}}</div>
-        <div class="text-muted u-fs-11px-mt-4px">{{.Status.Covered}}/{{.Status.Total}} controls</div>
+        <div class="text-muted u-fs-11px-mt-4px">{{.Status.Covered}}/{{.Status.Total}} {{T $.Locale "envoy_compliance_detail.controls_suffix"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-success">{{.Status.Covered}}</div>
-        <div class="stat-card__label">Covered</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_compliance_detail.covered"}}</div>
     </div>
     {{if gt .Status.Waived 0}}
     <div class="stat-card">
         <div class="stat-card__value text-info">{{.Status.Waived}}</div>
-        <div class="stat-card__label">Waived</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_compliance_detail.waived"}}</div>
     </div>
     {{end}}
     {{if gt .Status.Partial 0}}
     <div class="stat-card">
         <div class="stat-card__value text-warning">{{.Status.Partial}}</div>
-        <div class="stat-card__label">Partial</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_compliance_detail.partial"}}</div>
     </div>
     {{end}}
     <div class="stat-card">
         <div class="stat-card__value text-danger">{{.Status.Missing}}</div>
-        <div class="stat-card__label">Missing</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_compliance_detail.missing"}}</div>
     </div>
 </div>
 
 <!-- Controls list: every control with its partition status -->
-<h3 class="section-heading">{{.FrameworkTitle}} Controls</h3>
+<h3 class="section-heading">{{.FrameworkTitle}} {{T $.Locale "envoy_compliance_detail.controls_heading"}}</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Title</th><th>Scope</th><th>Status</th><th>Detail</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "envoy_compliance_detail.th.control"}}</th><th>{{T $.Locale "envoy_compliance_detail.th.title"}}</th><th>{{T $.Locale "envoy_compliance_detail.th.scope"}}</th><th>{{T $.Locale "th.status"}}</th><th>{{T $.Locale "envoy_compliance_detail.th.detail"}}</th></tr></thead>
         <tbody>
             {{range .Controls}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
                 <td>
-                    {{if eq .Scope "enforced"}}<span class="badge badge--info">enforced</span>
-                    {{else if eq .Scope "attested"}}<span class="badge badge--info">attested</span>
-                    {{else if eq .Scope "documented"}}<span class="badge badge--info">documented</span>
+                    {{if eq .Scope "enforced"}}<span class="badge badge--info">{{tEnum $.Locale "enforced"}}</span>
+                    {{else if eq .Scope "attested"}}<span class="badge badge--info">{{tEnum $.Locale "attested"}}</span>
+                    {{else if eq .Scope "documented"}}<span class="badge badge--info">{{tEnum $.Locale "documented"}}</span>
                     {{else if eq .Scope "not_applicable"}}<span class="badge">N/A</span>
                     {{else}}<span class="badge">—</span>{{end}}
                 </td>
                 <td>
-                    {{if eq .Status "covered"}}<span class="badge badge--compliant">covered</span>
-                    {{else if eq .Status "waived"}}<span class="badge badge--info">waived</span>
-                    {{else if eq .Status "partial"}}<span class="badge badge--relapsed">partial</span>
-                    {{else}}<span class="badge badge--failed">missing</span>{{end}}
+                    {{if eq .Status "covered"}}<span class="badge badge--compliant">{{tEnum $.Locale "covered"}}</span>
+                    {{else if eq .Status "waived"}}<span class="badge badge--info">{{tEnum $.Locale "waived"}}</span>
+                    {{else if eq .Status "partial"}}<span class="badge badge--relapsed">{{tEnum $.Locale "partial"}}</span>
+                    {{else}}<span class="badge badge--failed">{{tEnum $.Locale "missing"}}</span>{{end}}
                 </td>
                 <td>
                     {{if eq .Status "covered"}}{{if .Configcrates}}{{joinStrings .Configcrates ", "}}{{else}}<span class="text-muted">{{.Evidence}}</span>{{end}}
                     {{else if eq .Status "waived"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Status "partial"}}<span class="text-muted">{{.Evidence}}</span>
-                    {{else if eq .Scope "documented"}}<span class="text-warning">requires uploaded documentation</span>
-                    {{else}}{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no configcrate available</span>{{end}}
+                    {{else if eq .Scope "documented"}}<span class="text-warning">{{T $.Locale "envoy_compliance_detail.requires_documentation"}}</span>
+                    {{else}}{{if .RecommendedModules}}<span class="text-warning">{{T $.Locale "envoy_compliance_detail.assign"}} {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">{{T $.Locale "envoy_compliance_detail.no_configcrate"}}</span>{{end}}
                     {{end}}
                 </td>
             </tr>

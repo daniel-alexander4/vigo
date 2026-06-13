@@ -63,6 +63,7 @@ func (h *Handler) poolqList(w http.ResponseWriter, r *http.Request) {
 		data.Error = "poolq aggregator not available"
 		data.Health = finalizeHealthBanner("Poolq", nil, "Aggregator unavailable")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "poolq", data)
 		return
 	}
@@ -72,12 +73,14 @@ func (h *Handler) poolqList(w http.ResponseWriter, r *http.Request) {
 		data.Error = err.Error()
 		data.Health = finalizeHealthBanner("Poolq", nil, "Snapshot failed")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "poolq", data)
 		return
 	}
 	data.Snap = snap
 	data.Blocked = blocked
 	data.Health = buildPoolqHealth(snap, blocked)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "poolq", data)
 }
 
@@ -119,6 +122,7 @@ func (h *Handler) poolqDetail(w http.ResponseWriter, r *http.Request, id string)
 	}
 	data.Topic = &view
 	data.Health = buildPoolqTopicHealth(&view)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "poolq", data)
 }
 

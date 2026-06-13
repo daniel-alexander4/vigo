@@ -9,7 +9,7 @@
         <a href="/scrier/{{.Envoy.ID}}?protocol=vnc" target="_blank" class="btn btn--sm u-fs-12px">Shadow</a>
     </div>
     {{end}}
-    <p class="mono">{{.Envoy.IPAddress}} &middot; {{if eq .Envoy.ResourceCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else if .Envoy.LastRunID}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Envoy.Status .Envoy.DriftLabel}}" title="{{convergenceHover .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}">{{convergenceRatio .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}</span></a>{{else}}<span class="badge {{convergenceBadgeClass .Envoy.Status .Envoy.DriftLabel}}" title="{{convergenceHover .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}">{{convergenceRatio .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}</span>{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen <span class="time-relative" title="{{formatTime .Envoy.LastSeen}}">{{timeAgo .Envoy.LastSeen}}</span>{{if .UptimeSecs.Present}} &middot; Agent up {{humanUptime .UptimeSecs}}{{end}}</p>
+    <p class="mono">{{.Envoy.IPAddress}} &middot; {{if eq .Envoy.ResourceCount 0}}<span class="badge badge--unknown" title="{{T $.Locale "envoy_detail.no_run_data"}}">0/0/0</span>{{else if .Envoy.LastRunID}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Envoy.Status .Envoy.DriftLabel}}" title="{{convergenceHover .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}">{{convergenceRatio .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}</span></a>{{else}}<span class="badge {{convergenceBadgeClass .Envoy.Status .Envoy.DriftLabel}}" title="{{convergenceHover .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}">{{convergenceRatio .Envoy.ChangedCount .Envoy.FailedCount .Envoy.ResourceCount}}</span>{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; {{T $.Locale "envoy_detail.enrolled"}} {{formatTime .Envoy.EnrolledAt}} &middot; {{T $.Locale "envoy_detail.last_seen"}} <span class="time-relative" title="{{formatTime .Envoy.LastSeen}}">{{timeAgoL $.Locale .Envoy.LastSeen}}</span>{{if .UptimeSecs.Present}} &middot; {{T $.Locale "envoy_detail.agent_up"}} {{humanUptime .UptimeSecs}}{{end}}</p>
     {{if .CloudProvider}}
     <p class="mono u-mt-4px">{{.CloudProvider}}{{if .CloudRegion}} &middot; {{.CloudRegion}}{{end}}{{if .CloudZone}} ({{.CloudZone}}){{end}}{{if .CloudInstanceType}} &middot; {{.CloudInstanceType}}{{end}}{{if .CloudInstanceID}} &middot; {{.CloudInstanceID}}{{end}}{{if .CloudAccountID}} &middot; Account {{.CloudAccountID}}{{end}}</p>
     {{end}}
@@ -20,53 +20,53 @@
             hx-get="/ui/fragments/envoy-footprint/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Agent Health</button>
+            data-action="set-active-tab">{{T $.Locale "th.agent_health"}}</button>
     <button class="btn btn--sm" id="tab-traits"
             hx-get="/ui/fragments/envoy-traits/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Traits</button>
+            data-action="set-active-tab">{{T $.Locale "envoy_detail.tab_traits"}}</button>
     <button class="btn btn--sm" id="tab-config"
             hx-get="/ui/fragments/envoy-config/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">View Config</button>
+            data-action="set-active-tab">{{T $.Locale "envoy_detail.tab_view_config"}}</button>
     <button class="btn btn--sm" id="tab-trace"
             hx-get="/ui/fragments/envoy-trace/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Config Trace</button>
+            data-action="set-active-tab">{{T $.Locale "envoy_detail.tab_config_trace"}}</button>
     <button class="btn btn--sm" id="tab-runs"
             hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Recent Runs</button>
+            data-action="set-active-tab">{{T $.Locale "envoy_detail.recent_runs"}}</button>
     <button class="btn btn--sm" id="tab-swarm-load"
             hx-get="/ui/fragments/envoy-swarm-load/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Swarm</button>
+            data-action="set-active-tab">Swarm</button> {{/* product noun — untranslated */}}
     <button class="btn btn--sm" id="tab-attack-surface"
             hx-get="/ui/fragments/envoy-attack-surface/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Attack Surface</button>
+            data-action="set-active-tab">{{T $.Locale "envoy_detail.attack_surface"}}</button>
     <button class="btn btn--sm" id="tab-compliance"
             hx-get="/ui/fragments/envoy-compliance/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Standards Compliance</button>
+            data-action="set-active-tab">{{T $.Locale "envoy_detail.standards_compliance"}}</button>
     {{if .ScrierEnabled}}
     <button class="btn btn--sm" id="tab-sessions"
             hx-get="/ui/fragments/envoy-sessions/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            data-action="set-active-tab">Sessions</button>
+            data-action="set-active-tab">{{T $.Locale "envoy_detail.sessions"}}</button>
     {{end}}
 </div>
 
 <div id="envoy-content" hx-swap="innerHTML">
-    <div class="loading-skeleton">Loading…</div>
+    <div class="loading-skeleton">{{T $.Locale "common.loading"}}</div>
 </div>
 
 {{end}}
@@ -74,18 +74,18 @@
 {{define "envoy-runs-fragment"}}
 <div class="table-container">
     <div class="u-blk20">
-        <h3 class="u-m-0">Recent Runs</h3>
-        <a href="/runs" class="btn btn--sm">View fleet-wide runs</a>
+        <h3 class="u-m-0">{{T $.Locale "envoy_detail.recent_runs"}}</h3>
+        <a href="/runs" class="btn btn--sm">{{T $.Locale "envoy_detail.view_fleet_runs"}}</a>
     </div>
     <table class="table">
         <thead>
             <tr>
-                <th>Run</th>
-                <th>Status</th>
-                <th>Resources</th>
-                <th>Changed</th>
-                <th>Failed</th>
-                <th>Time</th>
+                <th>{{T $.Locale "th.run"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "envoy_detail.th_resources"}}</th>
+                <th>{{T $.Locale "envoy_detail.th_changed"}}</th>
+                <th>{{T $.Locale "envoy_detail.th_failed"}}</th>
+                <th>{{T $.Locale "th.time"}}</th>
                 <th></th>
             </tr>
         </thead>
@@ -93,14 +93,14 @@
             {{range .Runs}}
             <tr>
                 <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
-                <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span>{{end}}</td>
+                <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="{{T $.Locale "envoy_detail.no_run_data"}}">0/0/0</span>{{else}}<span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span>{{end}}</td>
                 <td>{{.ResourceCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>
                 <td class="text-muted">{{formatTime .StartedAt}}</td>
                 <td>
                     <button class="btn btn--sm"
-                            data-action="toggle-run-results" data-run-id="{{.ID}}">Details</button>
+                            data-action="toggle-run-results" data-run-id="{{.ID}}">{{T $.Locale "th.details"}}</button>
                 </td>
             </tr>
             <tr class="run-results-row">
@@ -109,7 +109,7 @@
             {{end}}
             {{if not .Runs}}
             <tr>
-                <td colspan="7" class="text-muted u-ta-center-p-40px">No runs recorded for this envoy.</td>
+                <td colspan="7" class="text-muted u-ta-center-p-40px">{{T $.Locale "envoy_detail.no_runs"}}</td>
             </tr>
             {{end}}
         </tbody>
@@ -119,35 +119,35 @@
 
 {{define "envoy-traits-fragment"}}
 {{if not .HasData}}
-<p class="text-muted u-p-20px">No traits collected yet — the agent has not reported a trait payload.</p>
+<p class="text-muted u-p-20px">{{T $.Locale "envoy_detail.no_traits"}}</p>
 {{else}}
 {{$s := .Summary}}
 {{$envoyID := .EnvoyID}}
 <div class="stat-cards stat-cards--compact mb-2 traits-summary">
     <div class="stat-card">
-        <div class="stat-card__label">OS</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.stat_os"}}</div>
         <div class="stat-card__value">{{if $s.OS}}{{$s.OS}}{{else}}&mdash;{{end}}</div>
         {{if $s.Kernel}}<div class="stat-card__sub mono">{{$s.Kernel}}{{if $s.Arch}} &middot; {{$s.Arch}}{{end}}</div>{{end}}
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">CPU</div>
-        <div class="stat-card__value">{{if $s.CPUCores}}{{$s.CPUCores}} cores{{else}}&mdash;{{end}}</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.stat_cpu"}}</div>
+        <div class="stat-card__value">{{if $s.CPUCores}}{{$s.CPUCores}} {{T $.Locale "envoy_detail.cores"}}{{else}}&mdash;{{end}}</div>
         {{if $s.CPUModel}}<div class="stat-card__sub mono" title="{{$s.CPUModel}}">{{$s.CPUModel}}</div>{{end}}
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Memory</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.stat_memory"}}</div>
         <div class="stat-card__value">{{if $s.MemoryHuman}}{{$s.MemoryHuman}}{{else}}&mdash;{{end}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Leaves</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.stat_leaves"}}</div>
         <div class="stat-card__value">{{.LeafCount}}</div>
-        <div class="stat-card__sub">collected <span class="time-relative" title="{{formatTime .CollectedAt}}">{{timeAgo .CollectedAt}}</span></div>
+        <div class="stat-card__sub">{{T $.Locale "envoy_detail.collected"}} <span class="time-relative" title="{{formatTime .CollectedAt}}">{{timeAgoL $.Locale .CollectedAt}}</span></div>
     </div>
 </div>
 
 <div class="traits-toolbar">
     <input type="search" class="traits-filter" id="traits-filter" name="q"
-           placeholder="Filter by key (e.g. cpu.model, network)"
+           placeholder="{{T $.Locale "envoy_detail.traits_filter_placeholder"}}"
            autocomplete="off" spellcheck="false"
            hx-get="/ui/fragments/envoy-traits/{{$envoyID}}"
            hx-trigger="input changed delay:200ms, search"
@@ -157,12 +157,12 @@
 
 <div class="traits-tree" id="traits-tree">
     {{range .Tree}}
-        {{template "trait-group-shell" dict "Node" . "EnvoyID" $envoyID}}
+        {{template "trait-group-shell" dict "Node" . "EnvoyID" $envoyID "Locale" $.Locale}}
     {{end}}
 </div>
 
 <details class="traits-raw">
-    <summary>Raw JSON</summary>
+    <summary>{{T $.Locale "envoy_detail.raw_json"}}</summary>
     <pre class="traits-raw__pre mono">{{.RawJSON}}</pre>
 </details>
 {{end}}
@@ -174,7 +174,7 @@
      KB (just the group headers). Each shell carries its own envoy ID so
      the per-group fragment endpoint knows which envoy to look up. */}}
 {{define "trait-group-shell"}}
-{{$n := .Node}}{{$envoyID := .EnvoyID}}
+{{$n := .Node}}{{$envoyID := .EnvoyID}}{{$loc := .Locale}}
 {{if $n.Children}}
 <details class="trait-group" data-trait-group data-trait-path="{{$n.Path}}">
     <summary class="trait-group__summary"
@@ -183,10 +183,10 @@
              hx-target="next .trait-group__body"
              hx-swap="innerHTML">
         <span class="trait-group__key mono">{{$n.Key}}</span>
-        <span class="trait-group__count text-muted">{{$n.LeafCount}}{{if $n.IsArray}} entries{{else}} leaves{{end}}</span>
+        <span class="trait-group__count text-muted">{{$n.LeafCount}}{{if $n.IsArray}} {{T $loc "envoy_detail.entries"}}{{else}} {{T $loc "envoy_detail.leaves"}}{{end}}</span>
     </summary>
     <div class="trait-group__body">
-        <div class="loading-skeleton">Loading…</div>
+        <div class="loading-skeleton">{{T $loc "common.loading"}}</div>
     </div>
 </details>
 {{else}}
@@ -205,7 +205,7 @@
      the operator typically wants to scan its full subtree without
      additional round-trips. */}}
 {{define "envoy-trait-group-fragment"}}
-{{range .Children}}{{template "trait-node" .}}{{end}}
+{{range .Children}}{{template "trait-node" dict "Node" . "Locale" $.Locale}}{{end}}
 {{end}}
 
 {{/* envoy-traits-filter-fragment renders a flat list of matching leaves
@@ -214,7 +214,7 @@
      shells via the same endpoint with empty q. */}}
 {{define "envoy-traits-filter-fragment"}}
 {{if .Matches}}
-<p class="text-muted traits-filter-count">{{len .Matches}} / {{.Total}} leaves matching "{{.Query}}"</p>
+<p class="text-muted traits-filter-count">{{len .Matches}} / {{.Total}} {{T $.Locale "envoy_detail.leaves_matching"}} "{{.Query}}"</p>
 {{range .Matches}}
 <div class="trait-leaf" data-trait-leaf data-trait-path="{{.Path}}">
     <span class="trait-leaf__key mono">{{.Path}}</span>
@@ -222,36 +222,37 @@
 </div>
 {{end}}
 {{else}}
-<p class="text-muted u-p-20px">No traits match "{{.Query}}" ({{.Total}} leaves searched).</p>
+<p class="text-muted u-p-20px">{{T $.Locale "envoy_detail.no_traits_match"}} "{{.Query}}" ({{.Total}} {{T $.Locale "envoy_detail.leaves_searched"}}).</p>
 {{end}}
 {{end}}
 
 {{define "trait-node"}}
-{{if .Children}}
-<details class="trait-group trait-group--nested" data-trait-group data-trait-path="{{.Path}}">
+{{$n := .Node}}{{$loc := .Locale}}
+{{if $n.Children}}
+<details class="trait-group trait-group--nested" data-trait-group data-trait-path="{{$n.Path}}">
     <summary class="trait-group__summary">
-        <span class="trait-group__key mono">{{.Key}}</span>
-        <span class="trait-group__count text-muted">{{.LeafCount}}{{if .IsArray}} entries{{else}} leaves{{end}}</span>
+        <span class="trait-group__key mono">{{$n.Key}}</span>
+        <span class="trait-group__count text-muted">{{$n.LeafCount}}{{if $n.IsArray}} {{T $loc "envoy_detail.entries"}}{{else}} {{T $loc "envoy_detail.leaves"}}{{end}}</span>
     </summary>
     <div class="trait-group__body">
-    {{if and .IsArray (gt (len .Children) 50)}}
+    {{if and $n.IsArray (gt (len $n.Children) 50)}}
         <details class="trait-group trait-group--array-overflow">
             <summary class="trait-group__summary">
-                <span class="text-muted">Show all {{len .Children}} entries</span>
+                <span class="text-muted">{{T $loc "envoy_detail.show_all"}} {{len $n.Children}} {{T $loc "envoy_detail.entries"}}</span>
             </summary>
             <div class="trait-group__body">
-            {{range .Children}}{{template "trait-node" .}}{{end}}
+            {{range $n.Children}}{{template "trait-node" dict "Node" . "Locale" $loc}}{{end}}
             </div>
         </details>
     {{else}}
-        {{range .Children}}{{template "trait-node" .}}{{end}}
+        {{range $n.Children}}{{template "trait-node" dict "Node" . "Locale" $loc}}{{end}}
     {{end}}
     </div>
 </details>
 {{else}}
-<div class="trait-leaf" data-trait-leaf data-trait-path="{{.Path}}">
-    <span class="trait-leaf__key mono">{{.Key}}</span>
-    <span class="trait-leaf__val mono">{{.Value}}</span>
+<div class="trait-leaf" data-trait-leaf data-trait-path="{{$n.Path}}">
+    <span class="trait-leaf__key mono">{{$n.Key}}</span>
+    <span class="trait-leaf__val mono">{{$n.Value}}</span>
 </div>
 {{end}}
 {{end}}
@@ -262,16 +263,16 @@
     {{highlightYAML .RawYAML}}
 </div>
 <p class="text-muted u-fs-12px">
-    Secret references (<code>secret:...</code>) are not resolved for security.
+    {{T $.Locale "envoy_detail.secret_refs_unresolved_pre"}} (<code>secret:...</code>) {{T $.Locale "envoy_detail.secret_refs_unresolved_post"}}
 </p>
 {{else}}
-<p class="text-muted u-p-20px">No configuration found for <strong>{{.Hostname}}</strong>.</p>
+<p class="text-muted u-p-20px">{{T $.Locale "envoy_detail.no_config_for"}} <strong>{{.Hostname}}</strong>.</p>
 {{end}}
 {{end}}
 
 {{define "envoy-compliance-fragment"}}
-<h3>Standards Compliance</h3>
-<p class="text-muted mb-2">Per-envoy control coverage. This envoy is <strong>{{.Status}}</strong>.</p>
+<h3>{{T $.Locale "envoy_detail.standards_compliance"}}</h3>
+<p class="text-muted mb-2">{{T $.Locale "envoy_detail.per_envoy_coverage"}} {{T $.Locale "envoy_detail.this_envoy_is"}} <strong>{{tEnum $.Locale .Status}}</strong>.</p>
 {{if .Frameworks}}
 <div class="fw-grid">
     {{range .Frameworks}}
@@ -289,46 +290,46 @@
             {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow w-pct-{{wbucket $yPct}}"></div>{{end}}
             {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red w-pct-{{wbucket $rPct}}"></div>{{end}}
         </div>
-        <div class="fw-card__counts">{{.Satisfied}} satisfied{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} not met</div>
-        <div class="fw-card__action">View Report &rarr;</div>
+        <div class="fw-card__counts">{{.Satisfied}} {{T $.Locale "envoy_detail.satisfied"}}{{if gt .Waived 0}} &middot; {{.Waived}} {{T $.Locale "envoy_detail.waived"}}{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} {{T $.Locale "envoy_detail.partial"}}{{end}} &middot; {{.NotSatisfied}} {{T $.Locale "envoy_detail.not_met"}}</div>
+        <div class="fw-card__action">{{T $.Locale "envoy_detail.view_report"}} &rarr;</div>
     </a>
     {{end}}
 </div>
 {{else}}
-<p class="text-muted u-p-20px">Compliance data not available.</p>
+<p class="text-muted u-p-20px">{{T $.Locale "envoy_detail.compliance_unavailable"}}</p>
 {{end}}
 {{end}}
 
 {{define "envoy-attack-surface-fragment"}}
 <div class="stat-cards stat-cards--linkable u-mb-20px">
-    <a href="{{.RiskURL}}" class="stat-card stat-card--link" title="See other envoys at this risk level">
-        <div class="stat-card__value {{if eq .RiskLevel "critical"}}text-danger{{else if eq .RiskLevel "high"}}text-warning{{else}}text-success{{end}}">{{.RiskLevel}}</div>
-        <div class="stat-card__label">Risk Level</div>
+    <a href="{{.RiskURL}}" class="stat-card stat-card--link" title="{{T $.Locale "envoy_detail.risk_level_hint"}}">
+        <div class="stat-card__value {{if eq .RiskLevel "critical"}}text-danger{{else if eq .RiskLevel "high"}}text-warning{{else}}text-success{{end}}">{{tEnum $.Locale .RiskLevel}}</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.risk_level"}}</div>
     </a>
-    <a href="{{.RiskURL}}" class="stat-card stat-card--link" title="See other envoys at this risk level">
+    <a href="{{.RiskURL}}" class="stat-card stat-card--link" title="{{T $.Locale "envoy_detail.risk_level_hint"}}">
         <div class="stat-card__value">{{.RiskScore}}</div>
-        <div class="stat-card__label">Risk Score</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.risk_score"}}</div>
     </a>
-    <a href="{{.CVEHighURL}}" class="stat-card stat-card--link" title="High CVEs across the fleet">
+    <a href="{{.CVEHighURL}}" class="stat-card stat-card--link" title="{{T $.Locale "envoy_detail.high_cves_hint"}}">
         <div class="stat-card__value text-warning">{{.CVEHigh}}</div>
-        <div class="stat-card__label">High CVEs</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.high_cves"}}</div>
     </a>
-    <a href="{{.HardeningURL}}" class="stat-card stat-card--link" title="Hardening scores across the fleet">
+    <a href="{{.HardeningURL}}" class="stat-card stat-card--link" title="{{T $.Locale "envoy_detail.hardening_hint"}}">
         <div class="stat-card__value">{{.HardeningScore}}</div>
-        <div class="stat-card__label">Hardening</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.hardening"}}</div>
     </a>
-    <a href="#attack-surface-ports" class="stat-card stat-card--link" title="Jump to the listening ports table">
+    <a href="#attack-surface-ports" class="stat-card stat-card--link" title="{{T $.Locale "envoy_detail.open_ports_hint"}}">
         <div class="stat-card__value">{{.ListeningPorts}}</div>
-        <div class="stat-card__label">Open Ports</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.open_ports"}}</div>
     </a>
 </div>
 
 {{if .Factors}}
-<h3 class="section-heading">Risk Factors</h3>
-<p class="text-muted u-fs-12px-mb-8px">Same breakdown that drives this envoy's row on <a href="/risk">/risk</a>. Points sum to the score above. Each factor links to the page where the supporting evidence lives.</p>
+<h3 class="section-heading">{{T $.Locale "envoy_detail.risk_factors"}}</h3>
+<p class="text-muted u-fs-12px-mb-8px">{{T $.Locale "envoy_detail.risk_factors_desc_pre"}} <a href="/risk">/risk</a>. {{T $.Locale "envoy_detail.risk_factors_desc_post"}}</p>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Factor</th><th>Points</th><th>Detail</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "envoy_detail.th_factor"}}</th><th>{{T $.Locale "envoy_detail.th_points"}}</th><th>{{T $.Locale "envoy_detail.th_detail"}}</th></tr></thead>
         <tbody>
             {{range .Factors}}
             <tr>
@@ -343,11 +344,11 @@
 {{end}}
 
 {{if .Ports}}
-<h3 class="section-heading" id="attack-surface-ports">Listening Ports</h3>
-<p class="text-muted u-fs-12px-mb-8px">From the agent's <code>ports.listening</code> trait — same source counted by the Open Ports risk factor.</p>
+<h3 class="section-heading" id="attack-surface-ports">{{T $.Locale "envoy_detail.listening_ports"}}</h3>
+<p class="text-muted u-fs-12px-mb-8px">{{T $.Locale "envoy_detail.listening_ports_desc_pre"}} <code>ports.listening</code> {{T $.Locale "envoy_detail.listening_ports_desc_post"}}</p>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Port</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "envoy_detail.th_port"}}</th></tr></thead>
         <tbody>
             {{range .Ports}}
             <tr>
@@ -360,58 +361,58 @@
 {{end}}
 
 {{if .Vulnerabilities}}
-<h3 class="section-heading">Vulnerability Summary</h3>
-<p class="text-muted u-fs-12px-mb-8px">Unique CVE counts after cross-scanner dedup — the same numbers consumed by the Critical / High / Medium CVE risk factors above. Severities with a fleet-wide drill-down on <a href="/security">/security</a> are linked.</p>
+<h3 class="section-heading">{{T $.Locale "envoy_detail.vuln_summary"}}</h3>
+<p class="text-muted u-fs-12px-mb-8px">{{T $.Locale "envoy_detail.vuln_summary_desc_pre"}} <a href="/security">/security</a> {{T $.Locale "envoy_detail.vuln_summary_desc_post"}}</p>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Severity</th><th>Unique CVEs</th></tr></thead>
+        <thead><tr><th>{{T $.Locale "envoy_detail.th_severity"}}</th><th>{{T $.Locale "envoy_detail.th_unique_cves"}}</th></tr></thead>
         <tbody>
-            {{if .CVECritical}}<tr><td class="text-danger"><a href="{{.CVECriticalURL}}">Critical</a></td><td>{{.CVECritical}}</td></tr>{{end}}
-            {{if .CVEHigh}}<tr><td class="text-warning"><a href="{{.CVEHighURL}}">High</a></td><td>{{.CVEHigh}}</td></tr>{{end}}
-            {{if .CVEMedium}}<tr><td>Medium</td><td>{{.CVEMedium}}</td></tr>{{end}}
-            {{if .CVELow}}<tr><td class="text-muted">Low</td><td>{{.CVELow}}</td></tr>{{end}}
+            {{if .CVECritical}}<tr><td class="text-danger"><a href="{{.CVECriticalURL}}">{{T $.Locale "sev.critical"}}</a></td><td>{{.CVECritical}}</td></tr>{{end}}
+            {{if .CVEHigh}}<tr><td class="text-warning"><a href="{{.CVEHighURL}}">{{T $.Locale "sev.high"}}</a></td><td>{{.CVEHigh}}</td></tr>{{end}}
+            {{if .CVEMedium}}<tr><td>{{T $.Locale "sev.medium"}}</td><td>{{.CVEMedium}}</td></tr>{{end}}
+            {{if .CVELow}}<tr><td class="text-muted">{{T $.Locale "sev.low"}}</td><td>{{.CVELow}}</td></tr>{{end}}
         </tbody>
     </table>
 </div>
 {{end}}
 
 {{if not .HasData}}
-<p class="text-muted u-p-20px">No security scan data available for this envoy.</p>
+<p class="text-muted u-p-20px">{{T $.Locale "envoy_detail.no_scan_data"}}</p>
 {{end}}
 {{end}}
 
 {{define "envoy-swarm-load-fragment"}}
 <div class="mt-1">
-    <p>Disk footprint this envoy holds across the four swarm subsystems. Each section is sorted largest first so the biggest consumers surface at the top.</p>
+    <p>{{T $.Locale "envoy_detail.swarm_footprint_desc"}}</p>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__label">Total Swarm Footprint</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.total_swarm_footprint"}}</div>
         <div class="stat-card__value">{{humanBytes .GrandTotal}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Filecast (admin file fan-out)</div>
+        <div class="stat-card__label">Filecast ({{T $.Locale "envoy_detail.filecast_sub"}})</div>
         <div class="stat-card__value">{{humanBytes .FilecastTotal}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Gitback (bare repos)</div>
+        <div class="stat-card__label">Gitback ({{T $.Locale "envoy_detail.gitback_sub"}})</div>
         <div class="stat-card__value">{{humanBytes .GitbackTotal}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Longdrawer (plaintext sync)</div>
+        <div class="stat-card__label">Longdrawer ({{T $.Locale "envoy_detail.longdrawer_sub"}})</div>
         <div class="stat-card__value">{{humanBytes .LongdrawerTotal}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Lockbox (encrypted sync)</div>
+        <div class="stat-card__label">Lockbox ({{T $.Locale "envoy_detail.lockbox_sub"}})</div>
         <div class="stat-card__value">{{humanBytes .LockboxTotal}}</div>
     </div>
 </div>
 
-{{template "swarm-load-section" dict "Title" "Filecast" "Subtitle" "Admin-distributed filecasts cached on this envoy (includes gitback bundle content while it sits in .blobs/)." "Rows" .Filecast}}
-{{template "swarm-load-section" dict "Title" "Gitback" "Subtitle" "Materialized bare git repos under /var/lib/vigo/swarm/gitback/mirrors/." "Rows" .Gitback}}
-{{template "swarm-load-section" dict "Title" "Longdrawer" "Subtitle" "Per-user LAN plaintext sync files under ~user/longdrawer/." "Rows" .Longdrawer}}
-{{template "swarm-load-section" dict "Title" "Lockbox" "Subtitle" "Per-user encrypted sync files under ~user/lockbox/ (sizes are ciphertext-on-disk)." "Rows" .Lockbox}}
+{{template "swarm-load-section" dict "Title" "Filecast" "Subtitle" (T $.Locale "envoy_detail.filecast_section_sub") "Rows" .Filecast "Locale" $.Locale}}
+{{template "swarm-load-section" dict "Title" "Gitback" "Subtitle" (T $.Locale "envoy_detail.gitback_section_sub") "Rows" .Gitback "Locale" $.Locale}}
+{{template "swarm-load-section" dict "Title" "Longdrawer" "Subtitle" (T $.Locale "envoy_detail.longdrawer_section_sub") "Rows" .Longdrawer "Locale" $.Locale}}
+{{template "swarm-load-section" dict "Title" "Lockbox" "Subtitle" (T $.Locale "envoy_detail.lockbox_section_sub") "Rows" .Lockbox "Locale" $.Locale}}
 {{end}}
 
 {{define "swarm-load-section"}}
@@ -423,11 +424,11 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Size</th>
-                    <th>Status</th>
-                    <th>Progress</th>
-                    <th>When</th>
+                    <th>{{T $.Locale "th.name"}}</th>
+                    <th>{{T $.Locale "envoy_detail.th_size"}}</th>
+                    <th>{{T $.Locale "th.status"}}</th>
+                    <th>{{T $.Locale "envoy_detail.th_progress"}}</th>
+                    <th>{{T $.Locale "envoy_detail.th_when"}}</th>
                 </tr>
             </thead>
             <tbody>
@@ -438,7 +439,7 @@
                         {{if .Detail}}<div class="u-c-var-subtext0-fs-0-9em">{{.Detail}}</div>{{end}}
                     </td>
                     <td class="u-ws-nowrap">{{.SizeHuman}}</td>
-                    <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
+                    <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{tEnum $.Locale .Status}}</span></td>
                     <td>{{if .Progress}}{{.Progress}}{{else}}—{{end}}</td>
                     <td class="u-ws-nowrap">{{.When}}</td>
                 </tr>
@@ -447,7 +448,7 @@
         </table>
     </div>
     {{else}}
-    <p class="u-c-var-subtext0">Nothing on this envoy.</p>
+    <p class="u-c-var-subtext0">{{T $.Locale "envoy_detail.nothing_on_envoy"}}</p>
     {{end}}
 </div>
 {{end}}
@@ -455,23 +456,23 @@
 {{define "envoy-footprint-fragment"}}
 {{$p := .Pressure}}
 <div class="stat-cards stat-cards--compact mb-2">
-    <a class="stat-card stat-card--{{severityColor $p.Health}} stat-card--link" href="/agent-health" title="Composite is the worst signal across agent FDs, host FD%, OOM-recent, rootfs %, inode %, battery, and repo health. Click for fleet view.">
-        <div class="stat-card__value {{severityTextClass $p.Health}}">{{severityLabel $p.Health}}</div>
-        <div class="stat-card__label">Agent Health</div>
+    <a class="stat-card stat-card--{{severityColor $p.Health}} stat-card--link" href="/agent-health" title="{{T $.Locale "envoy_detail.composite_hint"}}">
+        <div class="stat-card__value {{severityTextClass $p.Health}}">{{tEnum $.Locale (severityLabel $p.Health)}}</div>
+        <div class="stat-card__label">{{T $.Locale "th.agent_health"}}</div>
         {{if not .HasData}}
-        <p class="text-muted u-m-8px-0-0-fs-12px">No agent or host telemetry yet — values appear after the next check-in.</p>
+        <p class="text-muted u-m-8px-0-0-fs-12px">{{T $.Locale "envoy_detail.no_telemetry"}}</p>
         {{end}}
     </a>
     {{if $p.HostUptimeSecs.Present}}
     <div class="stat-card">
         <div class="stat-card__value">{{humanUptime $p.HostUptimeSecs}}</div>
-        <div class="stat-card__label">System uptime</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.system_uptime"}}</div>
     </div>
     {{end}}
     {{if $p.UptimeSecs.Present}}
     <div class="stat-card">
         <div class="stat-card__value">{{humanUptime $p.UptimeSecs}}</div>
-        <div class="stat-card__label">Agent uptime</div>
+        <div class="stat-card__label">{{T $.Locale "envoy_detail.agent_uptime"}}</div>
     </div>
     {{end}}
 </div>
@@ -480,69 +481,69 @@
 <div class="card">
     <div class="agent-health-groups">
         <section class="agent-health-group">
-            <h3 class="agent-health-group__title">Agent Process</h3>
+            <h3 class="agent-health-group__title">{{T $.Locale "envoy_detail.agent_process"}}</h3>
             <dl class="agent-health-kv">
                 <div class="agent-health-kv__row">
-                    <dt>Resident memory</dt>
+                    <dt>{{T $.Locale "envoy_detail.resident_memory"}}</dt>
                     <dd><span class="{{metricPillClass $p.RSSBytes.Severity}} status-pill--metric">{{humanRSS $p.RSSBytes}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt title="warn > 250 · fail > 500">Open file descriptors</dt>
-                    <dd><span class="{{metricPillClass $p.OpenFDs.Severity}} status-pill--metric" title="warn > 250 · fail > 500">{{humanMetric $p.OpenFDs}}</span></dd>
+                    <dt title="{{T $.Locale "envoy_detail.warn_250_fail_500"}}">{{T $.Locale "envoy_detail.open_fds"}}</dt>
+                    <dd><span class="{{metricPillClass $p.OpenFDs.Severity}} status-pill--metric" title="{{T $.Locale "envoy_detail.warn_250_fail_500"}}">{{humanMetric $p.OpenFDs}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt>Threads</dt>
+                    <dt>{{T $.Locale "envoy_detail.threads"}}</dt>
                     <dd><span class="status-pill status-pill--no-data status-pill--metric">{{humanMetric $p.Threads}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt>Child processes</dt>
+                    <dt>{{T $.Locale "envoy_detail.child_processes"}}</dt>
                     <dd><span class="status-pill status-pill--no-data status-pill--metric">{{humanMetric $p.Descendants}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt title="warn > 200 · fail > 500">FDs across children</dt>
-                    <dd><span class="{{metricPillClass $p.DescendantOpenFDs.Severity}} status-pill--metric" title="warn > 200 · fail > 500">{{humanMetric $p.DescendantOpenFDs}}</span></dd>
+                    <dt title="{{T $.Locale "envoy_detail.warn_200_fail_500"}}">{{T $.Locale "envoy_detail.fds_across_children"}}</dt>
+                    <dd><span class="{{metricPillClass $p.DescendantOpenFDs.Severity}} status-pill--metric" title="{{T $.Locale "envoy_detail.warn_200_fail_500"}}">{{humanMetric $p.DescendantOpenFDs}}</span></dd>
                 </div>
             </dl>
         </section>
 
         <section class="agent-health-group">
-            <h3 class="agent-health-group__title">Host Pressure</h3>
+            <h3 class="agent-health-group__title">{{T $.Locale "envoy_detail.host_pressure"}}</h3>
             <dl class="agent-health-kv">
                 <div class="agent-health-kv__row">
-                    <dt title="warn > 50% · fail > 80%">Host FD usage</dt>
-                    <dd><span class="{{metricPillClass $p.FDPct.Severity}} status-pill--metric" title="warn > 50% · fail > 80%{{if $p.FDUsed.Present}} · {{$p.FDUsed.Value}}{{if $p.FDMax.Present}} / {{$p.FDMax.Value}}{{end}} fds in use{{end}}">{{humanFDPct $p.FDPct}}</span></dd>
+                    <dt title="{{T $.Locale "envoy_detail.warn_50_fail_80"}}">{{T $.Locale "envoy_detail.host_fd_usage"}}</dt>
+                    <dd><span class="{{metricPillClass $p.FDPct.Severity}} status-pill--metric" title="{{T $.Locale "envoy_detail.warn_50_fail_80"}}{{if $p.FDUsed.Present}} · {{$p.FDUsed.Value}}{{if $p.FDMax.Present}} / {{$p.FDMax.Value}}{{end}} {{T $.Locale "envoy_detail.fds_in_use"}}{{end}}">{{humanFDPct $p.FDPct}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt>Total processes</dt>
+                    <dt>{{T $.Locale "envoy_detail.total_processes"}}</dt>
                     <dd><span class="status-pill status-pill--no-data status-pill--metric">{{humanMetric $p.ProcCount}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt title="kern.log oom-killer events in the recent window">Recent OOM events</dt>
-                    <dd><span class="{{metricPillClass $p.OomRecent.Severity}} status-pill--metric" title="kern.log oom-killer events in the recent window">{{humanMetric $p.OomRecent}}</span></dd>
+                    <dt title="{{T $.Locale "envoy_detail.oom_hint"}}">{{T $.Locale "envoy_detail.recent_oom"}}</dt>
+                    <dd><span class="{{metricPillClass $p.OomRecent.Severity}} status-pill--metric" title="{{T $.Locale "envoy_detail.oom_hint"}}">{{humanMetric $p.OomRecent}}</span></dd>
                 </div>
                 {{if $p.BatteryHealth.Present}}
                 <div class="agent-health-kv__row">
-                    <dt title="battery wear: full ÷ design capacity · warn < 80% · fail < 70%">Battery health</dt>
-                    <dd><span class="{{metricPillClass $p.BatteryHealth.Severity}} status-pill--metric" title="warn &lt; 80% · fail &lt; 70%">{{humanFDPct $p.BatteryHealth}}</span></dd>
+                    <dt title="{{T $.Locale "envoy_detail.battery_hint"}}">{{T $.Locale "envoy_detail.battery_health"}}</dt>
+                    <dd><span class="{{metricPillClass $p.BatteryHealth.Severity}} status-pill--metric" title="{{T $.Locale "envoy_detail.warn_80_fail_70"}}">{{humanFDPct $p.BatteryHealth}}</span></dd>
                 </div>
                 {{end}}
             </dl>
         </section>
 
         <section class="agent-health-group">
-            <h3 class="agent-health-group__title">Disk &amp; Repos</h3>
+            <h3 class="agent-health-group__title">{{T $.Locale "envoy_detail.disk_repos"}}</h3>
             <dl class="agent-health-kv">
                 <div class="agent-health-kv__row">
-                    <dt title="warn > 80% · fail > 90%">Rootfs (<code>/</code>)</dt>
-                    <dd><span class="{{metricPillClass $p.RootfsPct.Severity}} status-pill--metric" title="warn > 80% · fail > 90%">{{humanFDPct $p.RootfsPct}}</span></dd>
+                    <dt title="{{T $.Locale "envoy_detail.warn_80_fail_90"}}">{{T $.Locale "envoy_detail.rootfs"}} (<code>/</code>)</dt>
+                    <dd><span class="{{metricPillClass $p.RootfsPct.Severity}} status-pill--metric" title="{{T $.Locale "envoy_detail.warn_80_fail_90"}}">{{humanFDPct $p.RootfsPct}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt title="warn > 80% · fail > 90%">Inode (<code>/</code>)</dt>
-                    <dd><span class="{{metricPillClass $p.InodePct.Severity}} status-pill--metric" title="warn > 80% · fail > 90%">{{humanFDPct $p.InodePct}}</span></dd>
+                    <dt title="{{T $.Locale "envoy_detail.warn_80_fail_90"}}">{{T $.Locale "envoy_detail.inode"}} (<code>/</code>)</dt>
+                    <dd><span class="{{metricPillClass $p.InodePct.Severity}} status-pill--metric" title="{{T $.Locale "envoy_detail.warn_80_fail_90"}}">{{humanFDPct $p.InodePct}}</span></dd>
                 </div>
                 <div class="agent-health-kv__row">
-                    <dt>Package repositories</dt>
-                    <dd><span class="{{metricPillClass $p.RepoHealth.Severity}}"{{if $p.RepoHealth.Present}} title="{{$p.RepoHealth.Warnings}} warning(s) · {{$p.RepoHealth.Errors}} error(s)"{{end}}>{{severityLabel $p.RepoHealth.Severity}}</span></dd>
+                    <dt>{{T $.Locale "envoy_detail.package_repos"}}</dt>
+                    <dd><span class="{{metricPillClass $p.RepoHealth.Severity}}"{{if $p.RepoHealth.Present}} title="{{$p.RepoHealth.Warnings}} {{T $.Locale "envoy_detail.warnings"}} · {{$p.RepoHealth.Errors}} {{T $.Locale "envoy_detail.errors"}}"{{end}}>{{tEnum $.Locale (severityLabel $p.RepoHealth.Severity)}}</span></dd>
                 </div>
             </dl>
         </section>

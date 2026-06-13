@@ -36,6 +36,7 @@ func (h *Handler) Longdrawer(w http.ResponseWriter, r *http.Request) {
 		data.Error = "mesh aggregator not available"
 		data.Health = finalizeHealthBanner("Longdrawer", nil, "Aggregator unavailable")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "longdrawer", data)
 		return
 	}
@@ -45,11 +46,13 @@ func (h *Handler) Longdrawer(w http.ResponseWriter, r *http.Request) {
 		data.Error = err.Error()
 		data.Health = finalizeHealthBanner("Longdrawer", nil, "Snapshot failed")
 		data.Health.Level = "warn"
+		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "longdrawer", data)
 		return
 	}
 	data.Sync = fleet
 	data.Health = buildEchoHealth(fleet)
+	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "longdrawer", data)
 }
 
@@ -79,9 +82,10 @@ func (h *Handler) EchoUserDrilldown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	frag := struct {
-		User *longdrawermesh.UserSummary
-		Now  time.Time
-	}{User: summary, Now: time.Now()}
+		User   *longdrawermesh.UserSummary
+		Now    time.Time
+		Locale string
+	}{User: summary, Now: time.Now(), Locale: h.localeFromRequest(r)}
 	h.renderer.RenderFragment(w, "longdrawer", "longdrawer-user-fragment", frag)
 }
 

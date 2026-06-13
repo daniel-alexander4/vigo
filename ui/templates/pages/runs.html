@@ -1,15 +1,15 @@
 {{define "page-content"}}
 <span data-ai-page="runs" hidden></span>
 <div class="page-header">
-    <h1>Runs</h1>
-    <p>Convergence runs reported by agents after each check-in cycle</p>
+    <h1>{{T $.Locale "runs.heading"}}</h1>
+    <p>{{T $.Locale "runs.subheading"}}</p>
 </div>
 
 <div class="filter-bar mb-2">
-    <a href="/runs" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/runs?status=success" class="btn btn--sm{{if eq .StatusFilter "success"}} btn--primary{{end}}">Success</a>
-    <a href="/runs?status=failure" class="btn btn--sm{{if eq .StatusFilter "failure"}} btn--primary{{end}}">Failure</a>
-    <a href="/runs?status=partial" class="btn btn--sm{{if eq .StatusFilter "partial"}} btn--primary{{end}}">Partial</a>
+    <a href="/runs" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">{{T $.Locale "filter.all"}}</a>
+    <a href="/runs?status=success" class="btn btn--sm{{if eq .StatusFilter "success"}} btn--primary{{end}}">{{T $.Locale "runs.filter_success"}}</a>
+    <a href="/runs?status=failure" class="btn btn--sm{{if eq .StatusFilter "failure"}} btn--primary{{end}}">{{T $.Locale "runs.filter_failure"}}</a>
+    <a href="/runs?status=partial" class="btn btn--sm{{if eq .StatusFilter "partial"}} btn--primary{{end}}">{{T $.Locale "runs.filter_partial"}}</a>
 </div>
 
 {{$base := "/runs?"}}{{if .StatusFilter}}{{$base = printf "%sstatus=%s&" $base .StatusFilter}}{{end}}
@@ -17,13 +17,13 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Run</th>
-                {{sortHeader "Hostname" "hostname" .SortColumn .SortDir $base}}
-                {{sortHeader "Status" "status" .SortColumn .SortDir $base}}
-                <th>Resources</th>
-                {{sortHeader "Changed" "changed" .SortColumn .SortDir $base}}
-                {{sortHeader "Failed" "failed" .SortColumn .SortDir $base}}
-                {{sortHeader "Time" "time" .SortColumn .SortDir $base}}
+                <th>{{T $.Locale "th.run"}}</th>
+                {{sortHeader (T $.Locale "th.hostname") "hostname" .SortColumn .SortDir $base}}
+                {{sortHeader (T $.Locale "th.status") "status" .SortColumn .SortDir $base}}
+                <th>{{T $.Locale "runs.th_resources"}}</th>
+                {{sortHeader (T $.Locale "enum.changed") "changed" .SortColumn .SortDir $base}}
+                {{sortHeader (T $.Locale "enum.failed") "failed" .SortColumn .SortDir $base}}
+                {{sortHeader (T $.Locale "th.time") "time" .SortColumn .SortDir $base}}
             </tr>
         </thead>
         <tbody>
@@ -31,16 +31,16 @@
             <tr>
                 <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-                <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span>{{end}}</td>
+                <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="{{T $.Locale "runs.no_run_data"}}">0/0/0</span>{{else}}<span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span>{{end}}</td>
                 <td>{{.ResourceCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>
-                <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>
+                <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgoL $.Locale .StartedAt}}</span></td>
             </tr>
             {{end}}
             {{if not .Runs}}
             <tr>
-                <td colspan="7" class="table__empty-cell">No runs found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
+                <td colspan="7" class="table__empty-cell">{{T $.Locale "runs.empty"}}{{if .StatusFilter}} {{T $.Locale "runs.empty_with_status"}} "{{.StatusFilter}}"{{end}}.</td>
             </tr>
             {{end}}
         </tbody>

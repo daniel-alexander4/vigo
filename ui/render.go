@@ -57,6 +57,9 @@ func isCRUDAction(action string) bool {
 func funcMap() template.FuncMap {
 	return template.FuncMap{
 		"T":                     catalogT,
+		"tSafe":                 catalogTSafe,
+		"timeAgoL":              timeAgoL,
+		"tEnum":                 tEnum,
 		"statusColor":           statusColor,
 		"sparklineSVG":          SparklineSVG,
 		"sparklineSVGColor":     SparklineSVGColor,
@@ -944,6 +947,66 @@ func timeAgo(t time.Time) string {
 	default:
 		return t.Local().Format("2006-01-02")
 	}
+}
+
+// timeAgoL is the locale-aware relative-time helper. English delegates to
+// timeAgo (the single source of the English buckets); other locales branch
+// here. Relative time carries an interpolated count, which the flat string
+// catalog can't express, so the small fixed locale set is branched in code —
+// the eventual CLDR generalization (golang.org/x/text/message) would replace
+// this. Templates call {{timeAgoL $.Locale .When}}.
+func timeAgoL(localeArg any, t time.Time) string {
+	locale := localeStr(localeArg)
+	if locale != "fr" {
+		return timeAgo(t)
+	}
+	if t.IsZero() {
+		return "-"
+	}
+	d := time.Since(t)
+	switch {
+	case d < 90*time.Second:
+		if d < 30*time.Second {
+			return "à l'instant"
+		}
+		return "il y a 1 min"
+	case d < 60*time.Minute:
+		return fmt.Sprintf("il y a %d min", int(d.Minutes()))
+	case d < 90*time.Minute:
+		return "il y a 1 h"
+	case d < 24*time.Hour:
+		return fmt.Sprintf("il y a %d h", int(d.Hours()))
+	case d < 48*time.Hour:
+		return "hier"
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("il y a %d j", int(d.Hours()/24))
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("il y a %d sem", int(d.Hours()/(24*7)))
+	default:
+		return t.Local().Format("2006-01-02")
+	}
+}
+
+// tEnum localizes a data-derived enum value (a run outcome, convergence
+// status, agent-health severity label, …) by looking up enum.<value> in the
+// catalog, normalizing the value to a key token (lowercased, spaces→_). An
+// unmapped value passes through unchanged — so Vigo-specific or unexpected
+// values, and the English source casing, are preserved. Chrome *literals*
+// (headers, buttons, filter-pill labels) use {{T}} instead; tEnum is only for
+// values that arrive as data.
+func tEnum(localeArg any, value string) string {
+	locale := localeStr(localeArg)
+	// English (and the default/empty locale) passes through untouched, so a
+	// disabled or English deployment renders the exact source value — the
+	// enum.* English entries exist only for catalog symmetry, never runtime.
+	if value == "" || locale == "" || locale == defaultLocaleFallback {
+		return value
+	}
+	key := "enum." + strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), " ", "_"))
+	if s := catalogT(locale, key); s != key {
+		return s
+	}
+	return value
 }
 
 // EnvoyFreshness pairs the canonical freshness predicate with the

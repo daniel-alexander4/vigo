@@ -14,34 +14,34 @@
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-{{if ge .ConvergencePct 90.0}}success{{else if ge .ConvergencePct 50.0}}warning{{else}}danger{{end}}">{{printf "%.1f%%" .ConvergencePct}}</div>
-        <div class="stat-card__label">Compliance</div>
+        <div class="stat-card__label">{{T $.Locale "nav.compliance"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-muted">{{.SnapshotAgeSeconds}}s</div>
-        <div class="stat-card__label">Snapshot Age</div>
+        <div class="stat-card__label">{{T $.Locale "bolt_detail.snapshot_age"}}</div>
     </div>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__value text-success">{{.Converged}}</div>
-        <div class="stat-card__label">Converged</div>
+        <div class="stat-card__label">{{T $.Locale "enum.converged"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-warning">{{.Degraded}}</div>
-        <div class="stat-card__label">Degraded</div>
+        <div class="stat-card__label">{{T $.Locale "enum.degraded"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-danger">{{.Failed}}</div>
-        <div class="stat-card__label">Failed</div>
+        <div class="stat-card__label">{{T $.Locale "enum.failed"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-warning">{{.Offline}}</div>
-        <div class="stat-card__label">Offline</div>
+        <div class="stat-card__label">{{T $.Locale "enum.offline"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-muted">{{.NoData}}</div>
-        <div class="stat-card__label">No Data</div>
+        <div class="stat-card__label">{{T $.Locale "enum.no_data"}}</div>
     </div>
 </div>
 
@@ -50,10 +50,10 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Hostname</th>
-                <th>IP Address</th>
-                <th>Last Seen</th>
-                <th>Status</th>
+                <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "th.ip_address"}}</th>
+                <th>{{T $.Locale "bolt_detail.last_seen"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -64,16 +64,16 @@
                 <td class="text-muted">{{.LastSeen}}</td>
                 <td>
                     {{if .Revoked}}
-                        <span class="badge badge--danger">revoked</span>
+                        <span class="badge badge--danger">{{tEnum $.Locale "revoked"}}</span>
                     {{else}}
-                        <span class="badge badge--success">active</span>
+                        <span class="badge badge--success">{{tEnum $.Locale "active"}}</span>
                     {{end}}
                 </td>
             </tr>
             {{end}}
             {{if not .Envoys}}
             <tr>
-                <td colspan="4" class="text-muted u-ta-center-p-40px">No envoys on this bolt.</td>
+                <td colspan="4" class="text-muted u-ta-center-p-40px">{{T $.Locale "bolt_detail.no_envoys"}}</td>
             </tr>
             {{end}}
         </tbody>

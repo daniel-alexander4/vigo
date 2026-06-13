@@ -12,9 +12,9 @@ Required fields on the data context: standard EnvoyRow.
 {{$statusClass := .Status}}{{if eq $statusClass "no data"}}{{$statusClass = "no-data"}}{{end}}
 <li class="envoys-tree__envoy envoys-tree__envoy--{{$statusClass}}">
     <a href="/envoys/{{.ID}}" class="envoys-tree__envoy-link">{{.Hostname}}</a>
-    <span class="status-pill status-pill--{{$statusClass}} envoys-tree__envoy-status" title="{{.Status}}">{{.Status}}</span>
-    {{if .Offline}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--offline" title="Offline past stale threshold">offline</span>{{end}}
-    {{if .ObserveOnly}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--observing" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}
-    {{if ne .DriftLabel "none"}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--drift envoys-tree__envoy-flag--drift-{{.DriftLabel}}" title="Drift: {{.DriftLabel}}">{{.DriftLabel}}</span>{{end}}
+    <span class="status-pill status-pill--{{$statusClass}} envoys-tree__envoy-status" title="{{tEnum $.Locale .Status}}">{{tEnum $.Locale .Status}}</span>
+    {{if .Offline}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--offline" title="{{T $.Locale "envoy_tree_row.offline_title"}}">{{T $.Locale "envoy_tree_row.offline_flag"}}</span>{{end}}
+    {{if .ObserveOnly}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--observing" title="{{T $.Locale "envoy_tree_row.observe_title"}}">{{T $.Locale "envoy_tree_row.observe_flag"}}</span>{{end}}
+    {{if ne .DriftLabel "none"}}<span class="envoys-tree__envoy-flag envoys-tree__envoy-flag--drift envoys-tree__envoy-flag--drift-{{.DriftLabel}}" title="{{T $.Locale "filter.drift"}}: {{tEnum $.Locale .DriftLabel}}">{{tEnum $.Locale .DriftLabel}}</span>{{end}}
 </li>
 {{end}}

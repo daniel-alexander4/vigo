@@ -1,17 +1,17 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Vigo Health</h1>
-    <p>Server diagnostics, database status, and peer replication</p>
+    <h1>{{T $.Locale "nav.vigo_health"}}</h1>
+    <p>{{T $.Locale "health.subtitle"}}</p>
 </div>
 
 <div hx-get="/ui/fragments/health" hx-trigger="load" hx-swap="outerHTML">
-    <div class="loading">Loading diagnostics...</div>
+    <div class="loading">{{T $.Locale "health.loading_diagnostics"}}</div>
 </div>
 
 {{if .GrafanaDashboards}}
 <div class="card u-mt-1rem">
-    <h3>Grafana dashboards</h3>
-    <p>Metric dashboards for this fleet, served by your configured Grafana instance.</p>
+    <h3>{{T $.Locale "health.grafana_dashboards"}}</h3>
+    <p>{{T $.Locale "health.grafana_desc"}}</p>
     <ul>
         {{range .GrafanaDashboards}}
         <li><a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a></li>

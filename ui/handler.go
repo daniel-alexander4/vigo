@@ -1201,6 +1201,7 @@ type ComplianceReportPageData struct {
 
 // DashboardStatsFragmentData holds data for the stats fragment (HTMX auto-refresh).
 type DashboardStatsFragmentData struct {
+	Locale          string // per-request locale for {{T}}/{{tEnum}} in the polled fragment
 	TotalEnvoys     int
 	ActiveEnvoys    int
 	RecentFailures  int
@@ -1470,7 +1471,8 @@ type EnvoyTracePageData struct {
 
 // EnvoyRunsFragmentData holds data for the lazy-loaded runs fragment.
 type EnvoyRunsFragmentData struct {
-	Runs []EnvoyDetailRunRow
+	Locale string // per-request locale for {{T}}/{{tEnum}} in the fragment
+	Runs   []EnvoyDetailRunRow
 }
 
 // EnvoyTraitsFragmentData holds data for the lazy-loaded traits fragment.
@@ -1479,6 +1481,7 @@ type EnvoyRunsFragmentData struct {
 // power users a copy-paste escape hatch. EnvoyID is the dotted-path URL
 // segment templates use to construct per-group lazy-load hx-get URLs.
 type EnvoyTraitsFragmentData struct {
+	Locale      string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	EnvoyID     string
 	Tree        []TraitNode
 	LeafCount   int
@@ -1493,6 +1496,7 @@ type EnvoyTraitsFragmentData struct {
 // existing `trait-node` template — only what's inside this group, never
 // the rest of the tree.
 type EnvoyTraitGroupFragmentData struct {
+	Locale   string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	EnvoyID  string
 	Path     string
 	Children []TraitNode
@@ -1504,6 +1508,7 @@ type EnvoyTraitGroupFragmentData struct {
 // `.trait-leaf` rows inside `#traits-tree`, replacing the collapsed
 // tree while a query is active.
 type EnvoyTraitsFilterFragmentData struct {
+	Locale  string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	Query   string
 	Matches []TraitNode
 	Total   int // total leaves searched, for the "N / M" counter
@@ -2647,6 +2652,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 // DashboardStats renders just the stat cards fragment for HTMX polling.
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold)
+	data.Locale = h.localeFromRequest(r)
 
 	sec := h.dataSource.SecurityScanData()
 	data.CVECritical = sec.UniqueCritical
@@ -2694,12 +2700,14 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 // DashboardFleet renders the fleet status table fragment for HTMX polling.
 func (h *Handler) DashboardFleet(w http.ResponseWriter, r *http.Request) {
 	data := h.dashboardData()
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-fleet", data)
 }
 
 // DashboardActivity renders the recent activity table fragment for HTMX polling.
 func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-activity", data)
 }
 
@@ -2714,6 +2722,7 @@ type IntegrationStatusRow struct {
 
 // DashboardIntegrationsData holds integration status for the dashboard fragment.
 type DashboardIntegrationsData struct {
+	Locale       string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	Integrations []IntegrationStatusRow
 	TotalEnabled int
 }
@@ -2789,6 +2798,7 @@ func (h *Handler) DashboardIntegrationsFragment(w http.ResponseWriter, r *http.R
 	}
 
 	data := DashboardIntegrationsData{
+		Locale:       h.localeFromRequest(r),
 		Integrations: rows,
 		TotalEnabled: enabled,
 	}
@@ -2981,6 +2991,7 @@ func (h *Handler) IntegrationDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	example.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "integrations", "integration-detail-fragment", example)
 }
 
@@ -3189,6 +3200,7 @@ func (h *Handler) integrationLiveConfig(slug string) (bool, int, string) {
 
 // IntegrationExample holds display data for an integration detail view.
 type IntegrationExample struct {
+	Locale      string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	Name        string
 	Slug        string
 	Description string
@@ -3352,6 +3364,7 @@ func (h *Handler) PlatformCompliance(w http.ResponseWriter, r *http.Request) {
 // ComplianceStatus renders the standards compliance gauge/breakdown fragment for HTMX polling.
 func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
 	data := h.standardsData()
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
 }
 
@@ -3717,6 +3730,7 @@ type EvidenceCenterPageData struct {
 
 // EvidenceSnapshotData holds data for the compliance snapshot fragment.
 type EvidenceSnapshotData struct {
+	Locale         string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	SnapshotDate   string
 	ConvergencePct float64
 	Converged      int64
@@ -3730,6 +3744,7 @@ type EvidenceSnapshotData struct {
 
 // EvidenceMTTRData holds data for the MTTR metrics fragment.
 type EvidenceMTTRData struct {
+	Locale         string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	MTTRDisplay    string
 	P50Display     string
 	P95Display     string
@@ -3752,6 +3767,7 @@ type EvidenceControlsData struct {
 
 // EvidenceControlDrillData holds data for the per-control drill-down fragment.
 type EvidenceControlDrillData struct {
+	Locale    string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	Slug      string
 	ControlID string
 	Envoys    []EvidenceControlEnvoy
@@ -3874,6 +3890,7 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 			Diverged:       summary.Diverged,
 			Offline:        summary.Offline,
 		}
+		data.Locale = h.localeFromRequest(r)
 		h.renderer.RenderFragment(w, "compliance-evidence", "evidence-snapshot", data)
 		return
 	}
@@ -3894,6 +3911,7 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 		Diverged:       snapshot.Diverged,
 		Offline:        snapshot.Offline,
 	}
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-snapshot", data)
 }
 
@@ -3944,6 +3962,7 @@ func (h *Handler) EvidenceMTTRFragment(w http.ResponseWriter, r *http.Request) {
 		data.P95Display = "-"
 	}
 
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-mttr", data)
 }
 
@@ -4005,6 +4024,7 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 	}
 
 	data := struct {
+		Locale         string
 		Slug           string
 		FrameworkTitle string
 		Controls       []controlWithWaiver
@@ -4014,6 +4034,7 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 		WaivedOnly     int // controls waived but not enforced
 		ExpiringSoon   int // waivers expiring within 30 days
 	}{
+		Locale:         h.localeFromRequest(r),
 		Slug:           slug,
 		FrameworkTitle: standardDisplayNameFromSlug(slug),
 	}
@@ -4058,7 +4079,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	_ = slug // framework context (used if we need framework-specific logic later)
 
 	if h.configStore == nil {
-		h.renderer.RenderFragment(w, "compliance-evidence", "evidence-control-drill", EvidenceControlDrillData{})
+		h.renderer.RenderFragment(w, "compliance-evidence", "evidence-control-drill", EvidenceControlDrillData{Locale: h.localeFromRequest(r)})
 		return
 	}
 
@@ -4127,7 +4148,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		})
 	}
 
-	data := EvidenceControlDrillData{Slug: slug, ControlID: controlID, Envoys: envoys}
+	data := EvidenceControlDrillData{Locale: h.localeFromRequest(r), Slug: slug, ControlID: controlID, Envoys: envoys}
 
 	// Resolve the compliance tag key for the URL slug so doc lookups
 	// match how compliance.vgo and module tags reference frameworks
@@ -4506,6 +4527,7 @@ func (h *Handler) EnvoyRunsFragment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
 	}
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-runs-fragment", data)
 }
 
@@ -4534,8 +4556,10 @@ func (h *Handler) EnvoyTraitsFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.EnvoyID = idStr
+	data.Locale = h.localeFromRequest(r)
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
 		h.renderer.RenderFragment(w, "envoy-detail", "envoy-traits-filter-fragment", EnvoyTraitsFilterFragmentData{
+			Locale:  h.localeFromRequest(r),
 			Query:   q,
 			Matches: flattenMatchingLeaves(data.Tree, q),
 			Total:   data.LeafCount,
@@ -4573,6 +4597,7 @@ func (h *Handler) EnvoyTraitGroupFragment(w http.ResponseWriter, r *http.Request
 		return
 	}
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-trait-group-fragment", EnvoyTraitGroupFragmentData{
+		Locale:   h.localeFromRequest(r),
 		EnvoyID:  idStr,
 		Path:     path,
 		Children: node.Children,
@@ -4645,11 +4670,14 @@ func (h *Handler) EnvoyConfigFragment(w http.ResponseWriter, r *http.Request) {
 	}
 	cfgData, err := h.dataSource.ConfigData(detail.Envoy.Hostname)
 	if err != nil {
-		h.renderer.RenderFragment(w, "envoy-detail", "envoy-config-fragment", ConfigPageData{
+		errData := ConfigPageData{
 			Hostname: detail.Envoy.Hostname,
-		})
+		}
+		errData.Locale = h.localeFromRequest(r)
+		h.renderer.RenderFragment(w, "envoy-detail", "envoy-config-fragment", errData)
 		return
 	}
+	cfgData.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-config-fragment", cfgData)
 }
 
@@ -4671,11 +4699,13 @@ func (h *Handler) EnvoyTraceFragment(w http.ResponseWriter, r *http.Request) {
 		EnvoyID:  idStr,
 		Trace:    trace,
 	}
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "envoy-trace", "envoy-trace-fragment", data)
 }
 
 // EnvoyComplianceData holds data for the per-envoy compliance tab.
 type EnvoyComplianceData struct {
+	Locale     string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	EnvoyID    string
 	Hostname   string
 	Status     string
@@ -4716,6 +4746,7 @@ type MissingControlRec struct {
 // numbers match the Standards tab card that linked to it; Covered +
 // Waived + Partial + Missing = Total by construction.
 type EnvoyStandardCoverageData struct {
+	Locale                 string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	EnvoyID                string
 	Hostname               string
 	FrameworkTitle         string
@@ -4738,6 +4769,7 @@ type EnvoyStandardCoverageData struct {
 // CVE / hardening / rootkit / malware / cert factors, /envoys/{id}/trace
 // for convergence factors.
 type AttackSurfaceData struct {
+	Locale          string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	Hostname        string
 	EnvoyID         string
 	RiskLevel       string
@@ -4899,6 +4931,7 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 	data.Vulnerabilities = data.CVECritical+data.CVEHigh+data.CVEMedium+data.CVELow > 0
 	data.HasData = data.RiskScore > 0 || data.Vulnerabilities || data.HardeningScore > 0 || len(data.Ports) > 0
 
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-attack-surface-fragment", data)
 }
 
@@ -4994,6 +5027,7 @@ func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request
 	}
 
 	data := EnvoyComplianceData{
+		Locale:   h.localeFromRequest(r),
 		EnvoyID:  idStr,
 		Hostname: detail.Envoy.Hostname,
 		Status:   detail.Envoy.Status,
@@ -5113,6 +5147,7 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 	}
 
 	data := EnvoyStandardCoverageData{
+		Locale:                 h.localeFromRequest(r),
 		EnvoyID:                idStr,
 		Hostname:               detail.Envoy.Hostname,
 		FrameworkTitle:         standardDisplayNameFromSlug(fw),
@@ -5245,6 +5280,7 @@ func (h *Handler) RunResultsFragment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "run not found", http.StatusNotFound)
 		return
 	}
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "run-detail", "run-results-fragment", data)
 }
 
@@ -5469,6 +5505,7 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 		sortCol, sortDir, offset,
 	)
 	h.enrichEnvoyRows(data.Envoys)
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
 
@@ -6568,6 +6605,7 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
+		Locale         string
 		ConvergencePct float64
 		Total          int64
 		Converged      int64
@@ -6582,6 +6620,7 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 		CVETrend       []float64
 		HardeningTrend []float64
 	}{
+		Locale:         h.localeFromRequest(r),
 		ConvergencePct: convData.ConvergencePct,
 		Total:          convData.Total,
 		Converged:      convData.Converged,

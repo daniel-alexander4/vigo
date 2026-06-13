@@ -1,10 +1,10 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/inventory">Inventory</a> &rsaquo; {{.TypeLabel}}
+        <a href="/inventory">{{T $.Locale "nav.inventory"}}</a> &rsaquo; {{.TypeLabel}}
     </div>
     <h1>{{.Label}}</h1>
-    <p>{{.TypeLabel}} &mdash; installed on {{.Count}} envoy{{if ne .Count 1}}s{{end}}</p>
+    <p>{{.TypeLabel}} &mdash; {{T $.Locale "inventory_hardware.installed_on"}} {{.Count}} envoy{{if ne .Count 1}}s{{end}}</p>
 </div>
 
 <div class="card">
@@ -12,8 +12,8 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Hostname</th>
-                <th>IP Address</th>
+                <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "th.ip_address"}}</th>
                 {{range .Cols}}<th>{{.Header}}</th>{{end}}
             </tr>
         </thead>
@@ -28,11 +28,11 @@
         </tbody>
     </table>
     {{else}}
-    <p class="text-muted u-p-20px-ta-center">No envoys found with this hardware.</p>
+    <p class="text-muted u-p-20px-ta-center">{{T $.Locale "inventory_hardware.empty"}}</p>
     {{end}}
 </div>
 
 <div class="u-mt-16px">
-    <a href="/inventory?group={{.HWType}}" class="btn btn--sm">&larr; Back to {{.TypeLabel}} grouping</a>
+    <a href="/inventory?group={{.HWType}}" class="btn btn--sm">&larr; {{T $.Locale "inventory_hardware.back_to_grouping_prefix"}} {{.TypeLabel}} {{T $.Locale "inventory_hardware.back_to_grouping_suffix"}}</a>
 </div>
 {{end}}

@@ -1,8 +1,8 @@
 {{define "page-content"}}
 <span data-ai-page="security" hidden></span>
 <div class="page-header">
-    <h1>Security</h1>
-    <p>Fleet security posture, vulnerability scanning, and threat detection</p>
+    <h1>{{T $.Locale "nav.security"}}</h1>
+    <p>{{T $.Locale "security.subtitle"}}</p>
 </div>
 
 <div class="security-dashboard">
@@ -28,9 +28,9 @@
      Minimal vanilla JS (ui/static/js/security-drawer.js) handles open/close
      CSS class toggling and in-page severity filter UI state only — no data
      fetching lives in client code. */}}
-<div class="sec-drawer" id="sec-drawer" role="dialog" aria-label="Security scan details" aria-live="polite">
+<div class="sec-drawer" id="sec-drawer" role="dialog" aria-label="{{T $.Locale "security.drawer_aria"}}" aria-live="polite">
     <div class="sec-drawer__content" id="sec-drawer-content">
-        <p class="text-muted">Click a hostname in the security panels above.</p>
+        <p class="text-muted">{{T $.Locale "security.drawer_hint"}}</p>
     </div>
 </div>
 <div class="sec-drawer-overlay" id="sec-drawer-overlay"></div>
@@ -42,15 +42,15 @@
 {{define "security-status"}}
         {{/* CVE Impact Analysis */}}
         <div class="security-section">
-            <h3>CVE Impact Analysis</h3>
+            <h3>{{T $.Locale "security.cve_impact"}}</h3>
             <form class="u-blk2" hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML">
                 <input type="text" name="cve" placeholder="CVE-2024-..." class="input input--sm u-w-220px">
                 <label class="u-blk3">
                     <input type="checkbox" name="running_only" value="true">
-                    Running only
-                    <span class="text-muted" title="Restrict results to hosts where the CVE affects a currently-executing binary (requires cve_running_correlation trait).">ⓘ</span>
+                    {{T $.Locale "security.running_only"}}
+                    <span class="text-muted" title="{{T $.Locale "security.running_only_tip"}}">ⓘ</span>
                 </label>
-                <button type="submit" class="btn btn--sm btn--primary">Search Fleet</button>
+                <button type="submit" class="btn btn--sm btn--primary">{{T $.Locale "security.search_fleet"}}</button>
             </form>
             <div id="cve-results"></div>
         </div>
@@ -58,16 +58,16 @@
         {{/* Security Posture Trends */}}
         {{if or .CVETrend .HardeningTrend}}
         <div class="security-section">
-            <h3>Security Posture Trends (30 days)</h3>
+            <h3>{{T $.Locale "security.posture_trends"}}</h3>
             {{if .CVETrend}}
             <div class="u-mb-16px">
-                <h4 class="u-blk4">Critical + High CVEs</h4>
+                <h4 class="u-blk4">{{T $.Locale "security.critical_high_cves"}}</h4>
                 {{sparklineSVG .CVETrend 400 50}}
             </div>
             {{end}}
             {{if .HardeningTrend}}
             <div>
-                <h4 class="u-blk4">Avg Hardening Score</h4>
+                <h4 class="u-blk4">{{T $.Locale "security.avg_hardening_score"}}</h4>
                 {{sparklineSVGBounded .HardeningTrend 400 50 "var(--color-success)" 0 100}}
             </div>
             {{end}}
@@ -77,39 +77,39 @@
         {{/* Security scanning */}}
         {{if .Security.ScannedHosts}}
         <div class="security-section">
-            <h3>Security Scanning <span class="security-badge security-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
+            <h3>{{T $.Locale "security.scanning"}} <span class="security-badge security-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} {{T $.Locale "security.hosts"}}</span></h3>
 
             <div class="security-stats">
-                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-high" title="Unique CVE IDs across all hosts (deduplicated)">
+                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-high" title="{{T $.Locale "security.unique_cves_tip"}}">
                     <span class="security-stat__val">{{.Security.UniqueCVEs}}</span>
-                    <span class="security-stat__lbl">Unique CVEs</span>
+                    <span class="security-stat__lbl">{{T $.Locale "security.unique_cves"}}</span>
                 </div>
-                <div class="security-stat security-stat--info sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-lynis" title="Click to view Lynis scores by host">
+                <div class="security-stat security-stat--info sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-lynis" title="{{T $.Locale "security.lynis_scores_tip"}}">
                     <span class="security-stat__val">{{.Security.LynisAvgScore}}</span>
-                    <span class="security-stat__lbl">Avg Lynis Score</span>
+                    <span class="security-stat__lbl">{{T $.Locale "security.avg_lynis_score"}}</span>
                 </div>
-                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-rootkit" title="Click to view rootkit details">
+                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-rootkit" title="{{T $.Locale "security.rootkit_details_tip"}}">
                     <span class="security-stat__val">{{.Security.RootkitWarning}}</span>
-                    <span class="security-stat__lbl">Rootkit Warnings</span>
+                    <span class="security-stat__lbl">{{T $.Locale "security.rootkit_warnings"}}</span>
                 </div>
-                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-malware" title="Click to view malware details">
+                <div class="security-stat security-stat--danger sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-malware" title="{{T $.Locale "security.malware_details_tip"}}">
                     <span class="security-stat__val">{{.Security.ClamavInfected}}</span>
-                    <span class="security-stat__lbl">Malware Detected</span>
+                    <span class="security-stat__lbl">{{T $.Locale "security.malware_detected"}}</span>
                 </div>
-                <div class="security-stat security-stat--warning sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-integrity" title="Click to view integrity changes">
+                <div class="security-stat security-stat--warning sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-integrity" title="{{T $.Locale "security.integrity_changes_tip"}}">
                     <span class="security-stat__val">{{.Security.AideChanged}}</span>
-                    <span class="security-stat__lbl">Integrity Changes</span>
+                    <span class="security-stat__lbl">{{T $.Locale "security.integrity_changes"}}</span>
                 </div>
                 {{$certTone := "info"}}
                 {{if gt .Certs.Expired 0}}{{$certTone = "danger"}}{{else if gt .Certs.ExpiringIn7 0}}{{$certTone = "warning"}}{{end}}
-                <div class="security-stat security-stat--{{$certTone}} sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-certs" title="Click to view certs expiring within 30 days (and expired)">
+                <div class="security-stat security-stat--{{$certTone}} sec-stat-click" data-action="sec-toggle" data-panel="sec-panel-certs" title="{{T $.Locale "security.certs_30d_tip"}}">
                     <span class="security-stat__val">{{.Certs.ExpiringSoon}}</span>
-                    <span class="security-stat__lbl">Certs ≤30d</span>
+                    <span class="security-stat__lbl">{{T $.Locale "security.certs_30d"}}</span>
                 </div>
             </div>
 
             {{if .Security.ScapScanned}}
-            <p class="text-muted u-fs-12px-m-4px-0-0">SCAP / STIG: {{.Security.ScapScanned}} scanned &middot; <span class="text-success">{{.Security.ScapClean}} clean</span> &middot; <span class="{{if .Security.ScapHighFail}}text-danger{{end}}">{{.Security.ScapHighFail}} with high-severity failures</span></p>
+            <p class="text-muted u-fs-12px-m-4px-0-0">SCAP / STIG: {{.Security.ScapScanned}} {{T $.Locale "security.scap_scanned"}} &middot; <span class="text-success">{{.Security.ScapClean}} {{T $.Locale "security.scap_clean"}}</span> &middot; <span class="{{if .Security.ScapHighFail}}text-danger{{end}}">{{.Security.ScapHighFail}} {{T $.Locale "security.scap_high_fail"}}</span></p>
             {{end}}
 
             {{/* ── Unique CVEs by Host panel ──
@@ -119,13 +119,13 @@
                  severities so the panel matches the stat-card's count —
                  a host with only Medium/Low CVEs still appears here. */}}
             <div class="sec-detail" id="sec-panel-high">
-                <h4>Unique CVEs by Host</h4>
+                <h4>{{T $.Locale "security.unique_cves_by_host"}}</h4>
                 {{if .Security.AnyTruncated}}
-                <p class="alert alert--warn u-fs-12px-mb-8px">One or more hosts have more CVEs than the agent's per-host wire cap (200). Per-host columns below remain agent-authoritative full counts; only the fleet-wide "Unique CVEs" stat may undercount the long tail. Raise <code>MAX_CVES</code> in <code>agent/src/traits/security_scan.rs</code> if you need wider coverage.</p>
+                <p class="alert alert--warn u-fs-12px-mb-8px">{{T $.Locale "security.cves_truncated_warn"}} <code>MAX_CVES</code> {{T $.Locale "security.cves_truncated_warn2"}} <code>agent/src/traits/security_scan.rs</code>{{T $.Locale "security.cves_truncated_warn3"}}</p>
                 {{end}}
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
-                        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
+                        <thead><tr><th>{{T $.Locale "th.host"}}</th><th>{{T $.Locale "sev.critical"}}</th><th>{{T $.Locale "sev.high"}}</th><th>{{T $.Locale "sev.medium"}}</th><th>{{T $.Locale "sev.low"}}</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if or .UniqueCritical .UniqueHigh .UniqueMedium .UniqueLow}}
                             <tr>
@@ -134,7 +134,7 @@
                                 <td class="{{if .UniqueHigh}}text-warning{{else}}text-success{{end}}">{{.UniqueHigh}}</td>
                                 <td>{{.UniqueMedium}}</td>
                                 <td>{{.UniqueLow}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="cves">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="cves">{{T $.Locale "security.scan_details"}}</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -144,10 +144,10 @@
 
             {{/* ── Lynis panel ── */}}
             <div class="sec-detail" id="sec-panel-lynis">
-                <h4>Lynis Hardening Scores</h4>
+                <h4>{{T $.Locale "security.lynis_hardening_scores"}}</h4>
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
-                        <thead><tr><th>Host</th><th>Score</th><th>Warnings</th><th>Suggestions</th><th></th></tr></thead>
+                        <thead><tr><th>{{T $.Locale "th.host"}}</th><th>{{T $.Locale "security.score"}}</th><th>{{T $.Locale "security.warnings"}}</th><th>{{T $.Locale "security.suggestions"}}</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if .LynisScore}}
                             <tr>
@@ -155,7 +155,7 @@
                                 <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
                                 <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
                                 <td>{{.LynisSuggestions}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="lynis">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="lynis">{{T $.Locale "security.scan_details"}}</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -165,18 +165,18 @@
 
             {{/* ── Rootkit panel ── */}}
             <div class="sec-detail" id="sec-panel-rootkit">
-                <h4>Rootkit Detection</h4>
+                <h4>{{T $.Locale "security.rootkit_detection"}}</h4>
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
-                        <thead><tr><th>Host</th><th>Status</th><th>rkhunter Warnings</th><th>chkrootkit Infected</th><th></th></tr></thead>
+                        <thead><tr><th>{{T $.Locale "th.host"}}</th><th>{{T $.Locale "th.status"}}</th><th>rkhunter {{T $.Locale "security.warnings"}}</th><th>chkrootkit {{T $.Locale "security.infected"}}</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .RootkitClean}}
                             <tr>
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="text-danger">Warning</td>
+                                <td class="text-danger">{{T $.Locale "security.warning"}}</td>
                                 <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
                                 <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="{{if .ChkrootkitInfected}}chkrootkit{{else}}rkhunter{{end}}">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="{{if .ChkrootkitInfected}}chkrootkit{{else}}rkhunter{{end}}">{{T $.Locale "security.scan_details"}}</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -186,17 +186,17 @@
 
             {{/* ── Malware panel ── */}}
             <div class="sec-detail" id="sec-panel-malware">
-                <h4>Malware Detection (ClamAV)</h4>
+                <h4>{{T $.Locale "security.malware_detection_clamav"}}</h4>
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
-                        <thead><tr><th>Host</th><th>Status</th><th>Infected Files</th><th></th></tr></thead>
+                        <thead><tr><th>{{T $.Locale "th.host"}}</th><th>{{T $.Locale "th.status"}}</th><th>{{T $.Locale "security.infected_files"}}</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .ClamavClean}}
                             <tr>
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="text-danger">Infected</td>
+                                <td class="text-danger">{{T $.Locale "security.infected"}}</td>
                                 <td class="text-danger">{{.ClamavInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="clamav">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="clamav">{{T $.Locale "security.scan_details"}}</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -216,15 +216,14 @@
                  tab — the drawer is a fixed overlay outside the polling
                  fragment, so it doesn't blink. */}}
             <div class="sec-detail" id="sec-panel-certs">
-                <h4>Certificates Expiring Soon</h4>
+                <h4>{{T $.Locale "security.certs_expiring_soon"}}</h4>
                 {{if .Certs.PerHost}}
                 <p class="text-muted u-fs-13px-mb-8px">
-                    {{.Certs.HostsAffected}} host{{if ne .Certs.HostsAffected 1}}s{{end}} with expiring or expired certs.
-                    Counts are per-cert (a host can hold multiple). Click a hostname or count to see which certs.
+                    {{.Certs.HostsAffected}} {{T $.Locale "security.certs_hosts_affected"}}
                 </p>
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
-                        <thead><tr><th>Host</th><th>Expired</th><th>≤7 days</th><th>≤30 days</th><th></th></tr></thead>
+                        <thead><tr><th>{{T $.Locale "th.host"}}</th><th>{{T $.Locale "security.expired"}}</th><th>{{T $.Locale "security.le_7_days"}}</th><th>{{T $.Locale "security.le_30_days"}}</th><th></th></tr></thead>
                         <tbody>
                             {{range .Certs.PerHost}}
                             <tr>
@@ -241,23 +240,23 @@
                                     {{if .ExpiringIn30}}<a href="/security/certs/{{.ID}}?bucket=30d">{{.ExpiringIn30}}</a>
                                     {{else}}0{{end}}
                                 </td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="certs">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="certs">{{T $.Locale "security.scan_details"}}</button></td>
                             </tr>
                             {{end}}
                         </tbody>
                     </table>
                 </div>
                 {{else}}
-                <p class="text-success">No certs expiring within 30 days. Fleet is clean.</p>
+                <p class="text-success">{{T $.Locale "security.no_certs_30d"}}</p>
                 {{end}}
             </div>
 
             {{/* ── Integrity panel ── */}}
             <div class="sec-detail" id="sec-panel-integrity">
-                <h4>File Integrity (AIDE)</h4>
+                <h4>{{T $.Locale "security.file_integrity_aide"}}</h4>
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
-                        <thead><tr><th>Host</th><th>Added</th><th>Removed</th><th>Changed</th><th></th></tr></thead>
+                        <thead><tr><th>{{T $.Locale "th.host"}}</th><th>{{T $.Locale "security.added"}}</th><th>{{T $.Locale "security.removed"}}</th><th>{{T $.Locale "security.changed"}}</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .AideClean}}
                             <tr>
@@ -265,7 +264,7 @@
                                 <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
                                 <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
                                 <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="aide">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="aide">{{T $.Locale "security.scan_details"}}</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -293,21 +292,21 @@
 
 {{define "security-drawer-empty"}}
 <div class="sec-drawer__header">
-    <span class="sec-drawer__title">{{if .Hostname}}{{.Hostname}}{{else}}Security Details{{end}}</span>
+    <span class="sec-drawer__title">{{if .Hostname}}{{.Hostname}}{{else}}{{T $.Locale "security.details"}}{{end}}</span>
     <div>
-        {{if .EnvoyID}}<a href="/envoys/{{.EnvoyID}}" class="btn btn--sm u-mr-8px">View Envoy</a>{{end}}
-        <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="Close drawer">&times;</button>
+        {{if .EnvoyID}}<a href="/envoys/{{.EnvoyID}}" class="btn btn--sm u-mr-8px">{{T $.Locale "security.view_envoy"}}</a>{{end}}
+        <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="{{T $.Locale "security.close_drawer"}}">&times;</button>
     </div>
 </div>
-<p class="text-muted">No security scan data for this host.</p>
+<p class="text-muted">{{T $.Locale "security.no_scan_data"}}</p>
 {{end}}
 
 {{define "security-drawer-fragment"}}
 <div class="sec-drawer__header">
-    <span class="sec-drawer__title">{{.Hostname}} — Security Details</span>
+    <span class="sec-drawer__title">{{.Hostname}} — {{T $.Locale "security.details"}}</span>
     <div>
-        <a href="/envoys/{{.EnvoyID}}" class="btn btn--sm u-mr-8px">View Envoy</a>
-        <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="Close drawer">&times;</button>
+        <a href="/envoys/{{.EnvoyID}}" class="btn btn--sm u-mr-8px">{{T $.Locale "security.view_envoy"}}</a>
+        <button class="sec-drawer__close" data-action="close-sec-drawer" aria-label="{{T $.Locale "security.close_drawer"}}">&times;</button>
     </div>
 </div>
 
@@ -329,33 +328,33 @@
 <div class="sec-cached-summary">
     {{if not .EnvoyResponsive}}
     <div class="alert alert--warn u-mb-8px-fs-12px">
-        Envoy hasn't checked in for {{timeAgo .EnvoyLastSeen}}. Live fetch will likely fail — it returns when the agent next checks in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).
+        {{tSafe $.Locale "security.envoy_no_checkin_pre"}} {{timeAgoL $.Locale .EnvoyLastSeen}}. {{tSafe $.Locale "security.envoy_no_checkin_post"}} ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).
     </div>
     {{end}}
     {{if .LiveNoData}}
     <div class="alert alert--warn u-mb-8px-fs-12px">
-        Agent has no security scan data — install scanners (trivy / lynis / chkrootkit / rkhunter / clamav / aide / debsecan) and arrange a periodic run so their output lands in <code>/var/lib/vigo/security/</code>.
+        {{T $.Locale "security.agent_no_scan_data_pre"}} <code>/var/lib/vigo/security/</code>{{T $.Locale "security.agent_no_scan_data_post"}}
     </div>
     {{end}}
     <div class="u-blk5">
-        <h4 class="u-m-0">{{if .Live}}Live Scanner Detail{{else}}Scanner Findings{{end}}</h4>
+        <h4 class="u-m-0">{{if .Live}}{{T $.Locale "security.live_scanner_detail"}}{{else}}{{T $.Locale "security.scanner_findings"}}{{end}}</h4>
         <button class="btn btn--sm btn--outline"
                 hx-get="/ui/fragments/security-envoy/{{.EnvoyID}}?live=true"
                 hx-target="#sec-drawer-content"
                 hx-swap="innerHTML"
                 hx-disabled-elt="this"
                 hx-indicator="#sec-live-spinner">
-            {{if .Live}}Refresh Live Detail{{else}}Fetch Live Detail{{end}}
+            {{if .Live}}{{T $.Locale "security.refresh_live_detail"}}{{else}}{{T $.Locale "security.fetch_live_detail"}}{{end}}
         </button>
     </div>
     <div id="sec-live-spinner" class="sec-live-spinner htmx-indicator">
-        <p class="text-muted u-fs-11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).</p>
+        <p class="text-muted u-fs-11px">{{T $.Locale "security.querying_agent"}} ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).</p>
         <div class="sec-spinner" aria-hidden="true"></div>
     </div>
-    {{if .Live}}<p class="text-muted u-fs-11px-m-0-0-8px">Live detail{{if .LiveFromCache}} from {{timeAgo .LiveFetchedAt}} — "Refresh Live Detail" re-runs the scan query{{else}} — fetched just now{{end}}.</p>{{end}}
+    {{if .Live}}<p class="text-muted u-fs-11px-m-0-0-8px">{{if .LiveFromCache}}{{T $.Locale "security.live_detail_from"}} {{timeAgoL $.Locale .LiveFetchedAt}} {{T $.Locale "security.live_detail_from_suffix"}}{{else}}{{T $.Locale "security.live_detail_just_now"}}{{end}}</p>{{end}}
 
     {{if not .Sections}}
-    <p class="text-muted">No security scan data for this host.</p>
+    <p class="text-muted">{{T $.Locale "security.no_scan_data"}}</p>
     {{else}}
     <nav class="sec-drawer__tabs" role="tablist">
         {{range .Sections}}<a class="sec-tab" href="#sec-pane-{{.Slug}}" role="tab" id="sec-tab-{{.Slug}}">{{.Label}}</a>{{end}}
@@ -365,17 +364,17 @@
         {{if eq .Slug "cves"}}{{template "sec-pane-cves" $}}
         {{else if eq .Slug "certs"}}{{template "sec-pane-certs" $}}
         {{else if .HasLive}}
-            {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Detail" $.Detail.Trivy "Hostname" $.Hostname}}
-            {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Detail" $.Detail.Debsecan "Hostname" $.Hostname}}
-            {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Detail" $.Detail.Lynis "Hostname" $.Hostname}}
-            {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan "Hostname" $.Hostname}}
-            {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan "Hostname" $.Hostname}}
-            {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" dict "Detail" $.Detail.ClamAV "Hostname" $.Hostname}}
-            {{else if eq .Slug "aide"}}{{template "sec-section-aide" dict "Detail" $.Detail.AIDE "Hostname" $.Hostname}}
-            {{else if eq .Slug "defender"}}{{template "sec-section-defender" dict "Detail" $.Detail.Defender "Hostname" $.Hostname}}
-            {{else if eq .Slug "scap"}}{{template "sec-section-scap" dict "Detail" $.Detail.SCAP "Hostname" $.Hostname}}
+            {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Detail" $.Detail.Trivy "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Detail" $.Detail.Debsecan "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Detail" $.Detail.Lynis "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" dict "Detail" $.Detail.ClamAV "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "aide"}}{{template "sec-section-aide" dict "Detail" $.Detail.AIDE "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "defender"}}{{template "sec-section-defender" dict "Detail" $.Detail.Defender "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "scap"}}{{template "sec-section-scap" dict "Detail" $.Detail.SCAP "Hostname" $.Hostname "Locale" $.Locale}}
             {{end}}
-        {{else}}{{template "sec-pane-cached-scanner" dict "Slug" .Slug "Cached" $.Cached "Hostname" $.Hostname}}
+        {{else}}{{template "sec-pane-cached-scanner" dict "Slug" .Slug "Cached" $.Cached "Hostname" $.Hostname "Locale" $.Locale}}
         {{end}}
     </section>
     {{end}}
@@ -390,9 +389,9 @@
      and debsecan per-package vulns live in their own tabs. */}}
 {{define "sec-pane-cves"}}
 {{with .Cached.Unique}}
-<p class="text-muted u-fs-11px-m-0-0-4px">Distinct CVE IDs, deduplicated across all scanners.</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">{{T $.Locale "security.distinct_cve_ids"}}</p>
 <table class="security-drift-table">
-    <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
+    <thead><tr><th>{{T $.Locale "sev.critical"}}</th><th>{{T $.Locale "sev.high"}}</th><th>{{T $.Locale "sev.medium"}}</th><th>{{T $.Locale "sev.low"}}</th><th>{{T $.Locale "security.total"}}</th></tr></thead>
     <tbody><tr>
         <td class="{{if .Critical}}text-danger{{else}}text-success{{end}}">{{.Critical}}</td>
         <td class="{{if .High}}text-warning{{else}}text-success{{end}}">{{.High}}</td>
@@ -403,14 +402,14 @@
 </table>
 {{end}}
 {{if .Cached.CVEs}}
-<h4 class="u-mt-12px">{{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique CVE{{if ne (len .Cached.CVEs) 1}}s{{end}}{{if .Cached.CVEsTruncated}} — showing first {{len .Cached.CVEs}}{{end}}</h4>
+<h4 class="u-mt-12px">{{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} {{T $.Locale "security.unique_cve_label"}}{{if .Cached.CVEsTruncated}} {{T $.Locale "security.showing_first"}} {{len .Cached.CVEs}}{{end}}</h4>
 {{range .Cached.CVEs}}
 <div class="sec-card {{secSeverityClass .Severity}}">
     <div class="sec-card__header">
         <a href="{{cveURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
-        <span class="sec-card__sev">{{.Severity}}</span>
+        <span class="sec-card__sev">{{tEnum $.Locale .Severity}}</span>
     </div>
-    {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
+    {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} {{T $.Locale "security.packages"}})</span></div>{{end}}
     {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
     {{/* Ask-AI hidden until a live fetch has succeeded. Per-CVE join was tried
          and reverted in 0.53.5 — the agent's live response can't enumerate every
@@ -418,13 +417,13 @@
          live source), so per-CVE gating produced mostly-hidden buttons. */}}
     {{if $.Live}}
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{cachedCVEAIQ $.Hostname .}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
     {{end}}
 </div>
 {{end}}
 {{else}}
-<p class="text-muted u-mt-8px">No CVEs reported.</p>
+<p class="text-muted u-mt-8px">{{T $.Locale "security.no_cves_reported"}}</p>
 {{end}}
 {{end}}
 
@@ -433,14 +432,14 @@
      30 days (the same scope as /security's cert panel). Always present. */}}
 {{define "sec-pane-certs"}}
 {{if .Certs}}
-<p class="text-muted u-fs-11px-m-0-0-4px">{{len .Certs}} certificate{{if ne (len .Certs) 1}}s{{end}} expiring or expired within 30 days.</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">{{len .Certs}} {{T $.Locale "security.certs_expiring_within_30d"}}</p>
 <table class="security-drift-table">
-    <thead><tr><th>Certificate</th><th>Days left</th><th>Expires</th><th>Issuer</th></tr></thead>
+    <thead><tr><th>{{T $.Locale "security.certificate"}}</th><th>{{T $.Locale "security.days_left"}}</th><th>{{T $.Locale "security.expires"}}</th><th>{{T $.Locale "security.issuer"}}</th></tr></thead>
     <tbody>
     {{range .Certs}}
     <tr>
         <td>{{if .CN}}{{.CN}}{{else}}<span class="text-muted mono">{{.Path}}</span>{{end}}{{if .IsCA}} <span class="text-muted">(CA)</span>{{end}}</td>
-        <td class="{{if lt .DaysRemaining 0}}text-danger{{else if lt .DaysRemaining 7}}text-warning{{end}}">{{if lt .DaysRemaining 0}}expired{{else}}{{.DaysRemaining}}{{end}}</td>
+        <td class="{{if lt .DaysRemaining 0}}text-danger{{else if lt .DaysRemaining 7}}text-warning{{end}}">{{if lt .DaysRemaining 0}}{{T $.Locale "security.expired_lc"}}{{else}}{{.DaysRemaining}}{{end}}</td>
         <td>{{.NotAfter}}</td>
         <td class="text-muted">{{.Issuer}}</td>
     </tr>
@@ -448,7 +447,7 @@
     </tbody>
 </table>
 {{else}}
-<p class="text-success u-mt-8px">No certificates expiring within 30 days.</p>
+<p class="text-success u-mt-8px">{{T $.Locale "security.no_certs_within_30d"}}</p>
 {{end}}
 {{end}}
 
@@ -458,9 +457,9 @@
      Arg: dict "Slug" <slug> "Cached" <SecurityDrawerCached> "Hostname" <h>. */}}
 {{define "sec-pane-cached-scanner"}}
 {{if eq .Slug "trivy"}}{{with .Cached.Trivy}}
-<p class="text-muted u-fs-11px-m-0-0-4px">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">Trivy — {{.Total}} {{T $.Locale "security.package_level_matches"}}{{if .LastScan}} · {{T $.Locale "security.scanned_lc"}} {{.LastScan}}{{end}}</p>
 <table class="security-drift-table">
-    <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
+    <thead><tr><th>{{T $.Locale "sev.critical"}}</th><th>{{T $.Locale "sev.high"}}</th><th>{{T $.Locale "sev.medium"}}</th><th>{{T $.Locale "sev.low"}}</th></tr></thead>
     <tbody><tr>
         <td class="text-danger">{{.Critical}}</td>
         <td class="text-warning">{{.High}}</td>
@@ -470,9 +469,9 @@
 </table>
 {{end}}
 {{else if eq .Slug "debsecan"}}{{with .Cached.Debsecan}}
-<p class="text-muted u-fs-11px-m-0-0-4px">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+<p class="text-muted u-fs-11px-m-0-0-4px">debsecan ({{T $.Locale "security.debian_security_tracker"}}) — {{.Total}} {{T $.Locale "security.package_level_matches"}}{{if .LastScan}} · {{T $.Locale "security.scanned_lc"}} {{.LastScan}}{{end}}</p>
 <table class="security-drift-table">
-    <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
+    <thead><tr><th>{{T $.Locale "sev.high"}}</th><th>{{T $.Locale "sev.medium"}}</th><th>{{T $.Locale "sev.low"}}</th><th>{{T $.Locale "security.unassigned"}}</th></tr></thead>
     <tbody><tr>
         <td class="text-warning">{{.High}}</td>
         <td>{{.Medium}}</td>
@@ -484,66 +483,66 @@
 {{else if eq .Slug "lynis"}}{{with .Cached.Lynis}}
 <div class="sec-card {{if eq .Warnings 0}}sec-card--info{{else}}sec-card--high{{end}}">
     <div class="sec-card__header">
-        <span class="sec-card__cve">Lynis Hardening</span>
-        <span class="sec-card__sev">Score: {{.Score}}/100</span>
+        <span class="sec-card__cve">{{T $.Locale "security.lynis_hardening"}}</span>
+        <span class="sec-card__sev">{{T $.Locale "security.score"}}: {{.Score}}/100</span>
     </div>
-    <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
+    <div class="sec-card__body">{{T $.Locale "security.warnings"}}: {{.Warnings}} &middot; {{T $.Locale "security.suggestions"}}: {{.Suggestions}}</div>
 </div>
 {{end}}
 {{else if eq .Slug "scap"}}{{with .Cached.Scap}}
 <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
     <div class="sec-card__header">
         <span class="sec-card__cve">SCAP / STIG{{if .Profile}} &mdash; {{.Profile}}{{end}}</span>
-        <span class="sec-card__sev">Score: {{.Score}}/100</span>
+        <span class="sec-card__sev">{{T $.Locale "security.score"}}: {{.Score}}/100</span>
     </div>
     <div class="sec-card__body">
-        <span class="text-success">{{.Pass}} pass</span> &middot;
-        <span class="{{if .Fail}}text-danger{{end}}">{{.Fail}} fail</span> &middot;
+        <span class="text-success">{{.Pass}} {{T $.Locale "security.pass_lc"}}</span> &middot;
+        <span class="{{if .Fail}}text-danger{{end}}">{{.Fail}} {{T $.Locale "security.fail_lc"}}</span> &middot;
         {{.NotApplicable}} N/A &middot;
-        {{.TotalRules}} total rule{{if ne .TotalRules 1}}s{{end}}
+        {{.TotalRules}} {{T $.Locale "security.total_rules_lc"}}
     </div>
-    {{if .Fail}}<div class="sec-card__body">Failures by severity &mdash; High: <span class="text-danger">{{.HighFail}}</span> &middot; Medium: <span class="text-warning">{{.MediumFail}}</span> &middot; Low: {{.LowFail}}</div>{{end}}
-    {{if .LastScan}}<div class="sec-card__body text-muted u-fs-11px">Last scan: {{.LastScan}}</div>{{end}}
+    {{if .Fail}}<div class="sec-card__body">{{T $.Locale "security.failures_by_severity"}} &mdash; {{T $.Locale "sev.high"}}: <span class="text-danger">{{.HighFail}}</span> &middot; {{T $.Locale "sev.medium"}}: <span class="text-warning">{{.MediumFail}}</span> &middot; {{T $.Locale "sev.low"}}: {{.LowFail}}</div>{{end}}
+    {{if .LastScan}}<div class="sec-card__body text-muted u-fs-11px">{{T $.Locale "security.last_scan"}}: {{.LastScan}}</div>{{end}}
 </div>
 {{end}}
 {{else if eq .Slug "chkrootkit"}}{{with .Cached.Chkrootkit}}
 <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
     <div class="sec-card__header">
         <span class="sec-card__cve">chkrootkit</span>
-        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+        <span class="sec-card__sev">{{if .Clean}}{{T $.Locale "security.clean"}}{{else}}{{T $.Locale "security.infected"}}{{end}}</span>
     </div>
-    {{if not .Clean}}<div class="sec-card__body text-danger">{{.Issues}} suspicious finding{{if ne .Issues 1}}s{{end}}</div>{{end}}
+    {{if not .Clean}}<div class="sec-card__body text-danger">{{.Issues}} {{T $.Locale "security.suspicious_findings"}}</div>{{end}}
 </div>
 {{end}}
 {{else if eq .Slug "rkhunter"}}{{with .Cached.Rkhunter}}
 <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
     <div class="sec-card__header">
         <span class="sec-card__cve">rkhunter</span>
-        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Warning{{end}}</span>
+        <span class="sec-card__sev">{{if .Clean}}{{T $.Locale "security.clean"}}{{else}}{{T $.Locale "security.warning"}}{{end}}</span>
     </div>
-    {{if not .Clean}}<div class="sec-card__body">{{.Issues}} warning{{if ne .Issues 1}}s{{end}}</div>{{end}}
+    {{if not .Clean}}<div class="sec-card__body">{{.Issues}} {{T $.Locale "security.warnings_lc"}}</div>{{end}}
 </div>
 {{end}}
 {{else if eq .Slug "clamav"}}{{with .Cached.ClamAV}}
 <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
     <div class="sec-card__header">
-        <span class="sec-card__cve">ClamAV Malware Scan</span>
-        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+        <span class="sec-card__cve">{{T $.Locale "security.clamav_malware_scan"}}</span>
+        <span class="sec-card__sev">{{if .Clean}}{{T $.Locale "security.clean"}}{{else}}{{T $.Locale "security.infected"}}{{end}}</span>
     </div>
-    {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file{{if ne .Infected 1}}s{{end}}</div>{{end}}
+    {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} {{T $.Locale "security.infected_files_lc"}}</div>{{end}}
 </div>
 {{end}}
 {{else if eq .Slug "aide"}}{{with .Cached.AIDE}}
 <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
     <div class="sec-card__header">
-        <span class="sec-card__cve">AIDE File Integrity</span>
-        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
+        <span class="sec-card__cve">{{T $.Locale "security.aide_file_integrity"}}</span>
+        <span class="sec-card__sev">{{if .Clean}}{{T $.Locale "security.clean"}}{{else}}{{T $.Locale "security.changed"}}{{end}}</span>
     </div>
-    {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
+    {{if not .Clean}}<div class="sec-card__body">{{T $.Locale "security.added"}}: {{.Added}} &middot; {{T $.Locale "security.removed"}}: {{.Removed}} &middot; {{T $.Locale "security.changed"}}: {{.Changed}}</div>{{end}}
 </div>
 {{end}}
 {{end}}
-<p class="text-muted u-fs-11px-mt-8px">Fetch Live Detail above for individual findings — official-page links and Ask AI.</p>
+<p class="text-muted u-fs-11px-mt-8px">{{T $.Locale "security.fetch_live_hint"}}</p>
 {{end}}
 
 
@@ -551,12 +550,12 @@
 
 {{define "sec-section-trivy"}}
 {{if or (not .Detail) (not .Detail.Vulnerabilities)}}
-<p class="text-success">No vulnerabilities found.</p>
-<p class="text-muted">Last scan: {{if .Detail}}{{.Detail.LastScan}}{{else}}unknown{{end}}</p>
+<p class="text-success">{{T $.Locale "security.no_vulns_found"}}</p>
+<p class="text-muted">{{T $.Locale "security.last_scan"}}: {{if .Detail}}{{.Detail.LastScan}}{{else}}{{T $.Locale "security.unknown_lc"}}{{end}}</p>
 {{else}}
-<p class="text-muted">{{len .Detail.Vulnerabilities}} affected packages (grouped by package — the same CVE may appear once per package it affects){{if .Detail.Truncated}} (truncated){{end}} &middot; Last scan: {{.Detail.LastScan}}</p>
+<p class="text-muted">{{len .Detail.Vulnerabilities}} {{T $.Locale "security.affected_packages_grouped"}}{{if .Detail.Truncated}} {{T $.Locale "security.truncated_paren"}}{{end}} &middot; {{T $.Locale "security.last_scan"}}: {{.Detail.LastScan}}</p>
 <div class="sec-filter">
-    <button type="button" class="sec-filter__btn sec-filter__btn--active" data-sev="all">All ({{len .Detail.Vulnerabilities}})</button>
+    <button type="button" class="sec-filter__btn sec-filter__btn--active" data-sev="all">{{T $.Locale "filter.all"}} ({{len .Detail.Vulnerabilities}})</button>
     {{range trivySevCounts .Detail.Vulnerabilities}}
     <button type="button" class="sec-filter__btn" data-sev="{{.Sev}}">{{.Label}} ({{.Count}})</button>
     {{end}}
@@ -565,17 +564,17 @@
 <div class="sec-card {{secSeverityClass .Severity}}" data-sev="{{secSeverityNorm .Severity}}">
     <div class="sec-card__header">
         <a href="{{cveURL .CVEID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.CVEID}}</a>
-        <span class="sec-card__sev">{{.Severity}}</span>
+        <span class="sec-card__sev">{{tEnum $.Locale .Severity}}</span>
     </div>
     <div class="sec-card__body">
         <span class="mono">{{.Package}}</span>
         <span class="text-danger">{{.Installed}}</span>
         {{if .Fixed}}<span class="text-muted">→</span> <span class="text-success">{{.Fixed}}</span>{{end}}
-        {{if .Others}}<span class="text-muted">(+{{.Others}} more CVE{{if ne .Others 1}}s{{end}} in this package)</span>{{end}}
+        {{if .Others}}<span class="text-muted">(+{{.Others}} {{T $.Locale "security.more_cves_in_package"}})</span>{{end}}
     </div>
     {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{trivyAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{trivyAIQ $.Hostname .}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}
@@ -584,11 +583,11 @@
 
 {{define "sec-section-debsecan"}}
 {{if or (not .Detail) (not .Detail.Vulnerabilities)}}
-<p class="text-success">No vulnerabilities found.</p>
+<p class="text-success">{{T $.Locale "security.no_vulns_found"}}</p>
 {{else}}
-<p class="text-muted">{{len .Detail.Vulnerabilities}} affected packages (grouped by package) &middot; Last scan: {{.Detail.LastScan}}</p>
+<p class="text-muted">{{len .Detail.Vulnerabilities}} {{T $.Locale "security.affected_packages_grouped_short"}} &middot; {{T $.Locale "security.last_scan"}}: {{.Detail.LastScan}}</p>
 <div class="sec-filter">
-    <button type="button" class="sec-filter__btn sec-filter__btn--active" data-sev="all">All ({{len .Detail.Vulnerabilities}})</button>
+    <button type="button" class="sec-filter__btn sec-filter__btn--active" data-sev="all">{{T $.Locale "filter.all"}} ({{len .Detail.Vulnerabilities}})</button>
     {{range debsecanUrgencyCounts .Detail.Vulnerabilities}}
     <button type="button" class="sec-filter__btn" data-sev="{{.Sev}}">{{.Label}} ({{.Count}})</button>
     {{end}}
@@ -601,7 +600,7 @@
     </div>
     <div class="sec-card__body"><span class="mono">{{.Package}}</span></div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{debsecanAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{debsecanAIQ $.Hostname .}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}
@@ -610,35 +609,35 @@
 
 {{define "sec-section-lynis"}}
 <div class="sec-card sec-card--info">
-    <div class="sec-card__header"><span class="sec-card__cve">Hardening Score</span><span class="sec-card__sev">{{.Detail.Score}}/100</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">{{T $.Locale "security.hardening_score"}}</span><span class="sec-card__sev">{{.Detail.Score}}/100</span></div>
 </div>
-<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
+<p class="text-muted">{{T $.Locale "security.last_scan"}}: {{.Detail.LastScan}}</p>
 {{if .Detail.Warnings}}
-<h4>Warnings ({{len .Detail.Warnings}})</h4>
+<h4>{{T $.Locale "security.warnings"}} ({{len .Detail.Warnings}})</h4>
 {{range .Detail.Warnings}}
 <div class="sec-card sec-card--high">
     <div class="sec-card__header">
         <a href="{{lynisControlURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
-        <span class="sec-card__sev">Warning</span>
+        <span class="sec-card__sev">{{T $.Locale "security.warning"}}</span>
     </div>
     <div class="sec-card__desc">{{.Text}}</div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{lynisWarnAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{lynisWarnAIQ $.Hostname .}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}
 {{end}}
 {{if .Detail.Suggestions}}
-<h4>Suggestions ({{len .Detail.Suggestions}})</h4>
+<h4>{{T $.Locale "security.suggestions"}} ({{len .Detail.Suggestions}})</h4>
 {{range .Detail.Suggestions}}
 <div class="sec-card sec-card--low">
     <div class="sec-card__header">
         <a href="{{lynisControlURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
-        <span class="sec-card__sev">Suggestion</span>
+        <span class="sec-card__sev">{{T $.Locale "security.suggestion"}}</span>
     </div>
     <div class="sec-card__desc">{{.Text}}</div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{lynisSugAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{lynisSugAIQ $.Hostname .}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}
@@ -646,19 +645,19 @@
 {{end}}
 
 {{define "sec-section-rkhunter"}}
-<p class="text-muted">Last scan: {{.LastScan}}</p>
+<p class="text-muted">{{T $.Locale "security.last_scan"}}: {{.LastScan}}</p>
 {{if not .Rows}}
-<p class="text-success">Clean — no warnings found.</p>
+<p class="text-success">{{T $.Locale "security.clean_no_warnings"}}</p>
 {{else}}
-<h4>Warnings ({{len .Rows}})</h4>
+<h4>{{T $.Locale "security.warnings"}} ({{len .Rows}})</h4>
 {{range .Rows}}
 <div class="sec-card sec-card--high">
     <div class="sec-card__header">
         <a href="{{ddgLink (printf "rkhunter %s" .File)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.File}}</a>
-        <span class="sec-card__sev">Warning</span>
+        <span class="sec-card__sev">{{T $.Locale "security.warning"}}</span>
     </div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{rkhunterAIQ $.Hostname .File}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{rkhunterAIQ $.Hostname .File}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}
@@ -666,20 +665,20 @@
 {{end}}
 
 {{define "sec-section-chkrootkit"}}
-<p class="text-muted">Last scan: {{.LastScan}}</p>
+<p class="text-muted">{{T $.Locale "security.last_scan"}}: {{.LastScan}}</p>
 {{if not .Rows}}
-<p class="text-success">Clean — no infections found.</p>
+<p class="text-success">{{T $.Locale "security.clean_no_infections"}}</p>
 {{else}}
-<h4>Infected ({{len .Rows}})</h4>
+<h4>{{T $.Locale "security.infected"}} ({{len .Rows}})</h4>
 {{range .Rows}}
 <div class="sec-card sec-card--critical">
     <div class="sec-card__header">
         <a href="{{ddgLink (printf "chkrootkit %s" .Check)}}" target="_blank" rel="noopener" class="sec-card__cve">{{.Check}}</a>
-        <span class="sec-card__sev">INFECTED</span>
+        <span class="sec-card__sev">{{T $.Locale "security.infected_caps"}}</span>
     </div>
-    {{if .Files}}<div class="sec-card__body"><span class="text-muted">Suspect files:</span> <span class="mono">{{.Files}}</span></div>{{end}}
+    {{if .Files}}<div class="sec-card__body"><span class="text-muted">{{T $.Locale "security.suspect_files"}}:</span> <span class="mono">{{.Files}}</span></div>{{end}}
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{chkrootkitAIQ $.Hostname .Check .Files}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{chkrootkitAIQ $.Hostname .Check .Files}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}
@@ -687,16 +686,16 @@
 {{end}}
 
 {{define "sec-section-clamav"}}
-<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
+<p class="text-muted">{{T $.Locale "security.last_scan"}}: {{.Detail.LastScan}}</p>
 {{if not .Detail.Findings}}
-<p class="text-success">Clean — no malware found.</p>
+<p class="text-success">{{T $.Locale "security.clean_no_malware"}}</p>
 {{else}}
 {{range .Detail.Findings}}
 <div class="sec-card sec-card--critical">
     <div class="sec-card__header"><span class="sec-card__cve mono">{{.Path}}</span></div>
-    <div class="sec-card__desc">Signature: <a href="{{ddgLink (printf "ClamAV %s" .Signature)}}" target="_blank" rel="noopener" class="sec-card__cve">{{.Signature}}</a></div>
+    <div class="sec-card__desc">{{T $.Locale "security.signature"}}: <a href="{{ddgLink (printf "ClamAV %s" .Signature)}}" target="_blank" rel="noopener" class="sec-card__cve">{{.Signature}}</a></div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{clamavAIQ $.Hostname .}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{clamavAIQ $.Hostname .}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}
@@ -704,59 +703,59 @@
 {{end}}
 
 {{define "sec-section-aide"}}
-<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
+<p class="text-muted">{{T $.Locale "security.last_scan"}}: {{.Detail.LastScan}}</p>
 {{if .Detail.Clean}}
-<p class="text-success">Clean — no integrity changes detected.</p>
+<p class="text-success">{{T $.Locale "security.clean_no_integrity_changes"}}</p>
 {{else}}
-{{if .Detail.Added}}<h4>Added ({{len .Detail.Added}})</h4>{{range .Detail.Added}}<div class="sec-card sec-card--medium"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "added" .}}">Ask AI</button></div></div>{{end}}{{end}}
-{{if .Detail.Removed}}<h4>Removed ({{len .Detail.Removed}})</h4>{{range .Detail.Removed}}<div class="sec-card sec-card--critical"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "removed" .}}">Ask AI</button></div></div>{{end}}{{end}}
-{{if .Detail.Changed}}<h4>Changed ({{len .Detail.Changed}})</h4>{{range .Detail.Changed}}<div class="sec-card sec-card--high"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "changed" .}}">Ask AI</button></div></div>{{end}}{{end}}
+{{if .Detail.Added}}<h4>{{T $.Locale "security.added"}} ({{len .Detail.Added}})</h4>{{range .Detail.Added}}<div class="sec-card sec-card--medium"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "added" .}}">{{T $.Locale "security.ask_ai"}}</button></div></div>{{end}}{{end}}
+{{if .Detail.Removed}}<h4>{{T $.Locale "security.removed"}} ({{len .Detail.Removed}})</h4>{{range .Detail.Removed}}<div class="sec-card sec-card--critical"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "removed" .}}">{{T $.Locale "security.ask_ai"}}</button></div></div>{{end}}{{end}}
+{{if .Detail.Changed}}<h4>{{T $.Locale "security.changed"}} ({{len .Detail.Changed}})</h4>{{range .Detail.Changed}}<div class="sec-card sec-card--high"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{aideAIQ $.Hostname "changed" .}}">{{T $.Locale "security.ask_ai"}}</button></div></div>{{end}}{{end}}
 {{end}}
 {{end}}
 
 {{define "sec-section-defender"}}
-<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
+<p class="text-muted">{{T $.Locale "security.last_scan"}}: {{.Detail.LastScan}}</p>
 <div class="sec-card sec-card--info">
-    <div class="sec-card__header"><span class="sec-card__cve">Protection Status</span><span class="sec-card__sev">{{if .Detail.RealtimeProtection}}Active{{else}}DISABLED{{end}}</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">{{T $.Locale "security.protection_status"}}</span><span class="sec-card__sev">{{if .Detail.RealtimeProtection}}{{T $.Locale "security.active"}}{{else}}{{T $.Locale "security.disabled_caps"}}{{end}}</span></div>
     <div class="sec-card__body">
-        Antivirus: {{if .Detail.Enabled}}Enabled{{else}}<span class="text-danger">Disabled</span>{{end}} &middot;
-        Real-time: {{if .Detail.RealtimeProtection}}On{{else}}<span class="text-danger">Off</span>{{end}} &middot;
-        Signatures: {{.Detail.SignatureAgeDays}} days old
+        {{T $.Locale "security.antivirus"}}: {{if .Detail.Enabled}}{{T $.Locale "common.enabled"}}{{else}}<span class="text-danger">{{T $.Locale "common.disabled"}}</span>{{end}} &middot;
+        {{T $.Locale "security.realtime"}}: {{if .Detail.RealtimeProtection}}{{T $.Locale "security.on"}}{{else}}<span class="text-danger">{{T $.Locale "security.off"}}</span>{{end}} &middot;
+        {{T $.Locale "security.signatures"}}: {{.Detail.SignatureAgeDays}} {{T $.Locale "security.days_old"}}
     </div>
 </div>
 {{if gt .Detail.ThreatsDetected 0}}
 <div class="sec-card sec-card--critical">
-    <div class="sec-card__header"><span class="sec-card__cve">Threats Detected</span><span class="sec-card__sev">{{.Detail.ThreatsDetected}}</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">{{T $.Locale "security.threats_detected"}}</span><span class="sec-card__sev">{{.Detail.ThreatsDetected}}</span></div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{defenderAIQ .Hostname .Detail.ThreatsDetected}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{defenderAIQ .Hostname .Detail.ThreatsDetected}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{else}}
-<p class="text-success">Clean — no threats detected.</p>
+<p class="text-success">{{T $.Locale "security.clean_no_threats"}}</p>
 {{end}}
 {{end}}
 
 {{define "sec-section-scap"}}
-<p class="text-muted">Profile: {{.Detail.Profile}} &middot; Last scan: {{.Detail.LastScan}}</p>
+<p class="text-muted">{{T $.Locale "security.profile"}}: {{.Detail.Profile}} &middot; {{T $.Locale "security.last_scan"}}: {{.Detail.LastScan}}</p>
 <div class="sec-card sec-card--info">
-    <div class="sec-card__header"><span class="sec-card__cve">Compliance Score</span><span class="sec-card__sev">{{.Detail.Score}}%</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">{{T $.Locale "security.compliance_score"}}</span><span class="sec-card__sev">{{.Detail.Score}}%</span></div>
     <div class="sec-card__body">
-        <span class="text-success">{{.Detail.Pass}} pass</span> &middot;
-        <span class="text-danger">{{.Detail.Fail}} fail</span> &middot;
+        <span class="text-success">{{.Detail.Pass}} {{T $.Locale "security.pass_lc"}}</span> &middot;
+        <span class="text-danger">{{.Detail.Fail}} {{T $.Locale "security.fail_lc"}}</span> &middot;
         {{.Detail.NotApplicable}} N/A &middot;
-        {{.Detail.TotalRules}} total rules
+        {{.Detail.TotalRules}} {{T $.Locale "security.total_rules_lc2"}}
     </div>
 </div>
 {{if gt .Detail.Fail 0}}
 <div class="sec-card sec-card--high">
-    <div class="sec-card__header"><span class="sec-card__cve">Failed Rules</span><span class="sec-card__sev">{{.Detail.Fail}}</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">{{T $.Locale "security.failed_rules"}}</span><span class="sec-card__sev">{{.Detail.Fail}}</span></div>
     <div class="sec-card__body">
-        High: <span class="text-danger">{{.Detail.HighFail}}</span> &middot;
-        Medium: <span class="text-warning">{{.Detail.MediumFail}}</span> &middot;
-        Low: {{.Detail.LowFail}}
+        {{T $.Locale "sev.high"}}: <span class="text-danger">{{.Detail.HighFail}}</span> &middot;
+        {{T $.Locale "sev.medium"}}: <span class="text-warning">{{.Detail.MediumFail}}</span> &middot;
+        {{T $.Locale "sev.low"}}: {{.Detail.LowFail}}
     </div>
     <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{scapAIQ .Hostname .Detail}}">Ask AI</button>
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" data-action="ai-suggest" data-question="{{scapAIQ .Hostname .Detail}}">{{T $.Locale "security.ask_ai"}}</button>
     </div>
 </div>
 {{end}}

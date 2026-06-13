@@ -1,17 +1,17 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Envoys (tree view)</h1>
+    <h1>{{T $.Locale "envoys_tree.heading"}}</h1>
     <p>
-        Envoys grouped by the directory of the hostcrate that matched them — the
-        same <code>.live/</code> shape <a href="/fleet/config-tree">Config Tree</a> renders.
-        Use this view to navigate massive fleets; <a href="/envoys">flat view</a> for at-a-glance status.
+        {{T $.Locale "envoys_tree.intro_grouped"}}
+        <code>.live/</code> <a href="/fleet/config-tree">{{T $.Locale "nav.config_tree"}}</a>.
+        {{T $.Locale "envoys_tree.intro_navigate"}} <a href="/envoys">{{T $.Locale "envoys_tree.flat_view"}}</a> {{T $.Locale "envoys_tree.intro_glance"}}
     </p>
 </div>
 
 {{if .Missing}}
 <div class="card">
     <div class="card__body">
-        <p class="text-muted">No published configuration. Run <code>vigocli config publish</code> to publish the editable stacks to <code>.live/</code>.</p>
+        <p class="text-muted">{{T $.Locale "envoys_tree.no_config_before"}} <code>vigocli config publish</code> {{T $.Locale "envoys_tree.no_config_after"}} <code>.live/</code>.</p>
     </div>
 </div>
 {{else}}
@@ -21,16 +21,16 @@
         <button type="button" class="btn btn--sm envoys-toolbar__filter-button"
                 data-action="toggle-filter-drawer"
                 aria-controls="envoy-filter-drawer"
-                aria-label="Open filter drawer">
-            Filter
-            {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} active</span>{{end}}
+                aria-label="{{T $.Locale "envoys_tree.open_filter_drawer"}}">
+            {{T $.Locale "btn.filter"}}
+            {{if gt .ActiveFilterCount 0}}<span class="filter-count">{{.ActiveFilterCount}} {{T $.Locale "envoys_tree.active"}}</span>{{end}}
         </button>
         {{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}}
-        <a href="/envoys/tree" class="btn btn--sm">Clear</a>
+        <a href="/envoys/tree" class="btn btn--sm">{{T $.Locale "btn.clear"}}</a>
         {{end}}
     </div>
     <div class="envoys-toolbar__counts">
-        <span class="text-muted">{{.MatchingTotal}} of {{.TotalEnvoys}} envoys</span>
+        <span class="text-muted">{{.MatchingTotal}} {{T $.Locale "envoys_tree.of"}} {{.TotalEnvoys}} envoys</span>
     </div>
 </div>
 
@@ -71,11 +71,11 @@
         <span class="envoys-tree__dir-name">{{.Name}}{{if not (eq .Name "(unmatched)")}}/{{end}}</span>
         {{if gt .Total 0}}
         <span class="envoys-tree__rollup">
-            <span class="envoys-tree__rollup-total" title="Envoys in this branch (this directory and all descendants)">{{.Total}} envoy{{if ne .Total 1}}s{{end}}</span>
-            {{if gt .CountConverged 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--converged" title="Converged">{{.CountConverged}}</span>{{end}}
-            {{if gt .CountDegraded 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--degraded" title="Degraded">{{.CountDegraded}}</span>{{end}}
-            {{if gt .CountFailed 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--failed" title="Failed">{{.CountFailed}}</span>{{end}}
-            {{if gt .CountNoData 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--nodata" title="No data">{{.CountNoData}}</span>{{end}}
+            <span class="envoys-tree__rollup-total" title="{{T $.Locale "envoys_tree.branch_total_title"}}">{{.Total}} envoy{{if ne .Total 1}}s{{end}}</span>
+            {{if gt .CountConverged 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--converged" title="{{T $.Locale "enum.converged"}}">{{.CountConverged}}</span>{{end}}
+            {{if gt .CountDegraded 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--degraded" title="{{T $.Locale "enum.degraded"}}">{{.CountDegraded}}</span>{{end}}
+            {{if gt .CountFailed 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--failed" title="{{T $.Locale "enum.failed"}}">{{.CountFailed}}</span>{{end}}
+            {{if gt .CountNoData 0}}<span class="envoys-tree__rollup-stat envoys-tree__rollup-stat--nodata" title="{{T $.Locale "common.no_data"}}">{{.CountNoData}}</span>{{end}}
         </span>
         {{end}}
     </summary>
@@ -86,7 +86,7 @@
         {{end}}
         {{if gt .EnvoyOverflow 0}}
         <li class="envoys-tree__overflow">
-            <a href="/envoys" class="envoys-tree__overflow-link">+ {{.EnvoyOverflow}} more — view in flat list</a>
+            <a href="/envoys" class="envoys-tree__overflow-link">+ {{.EnvoyOverflow}} {{T $.Locale "envoys_tree.more_flat_list"}}</a>
         </li>
         {{end}}
     </ul>

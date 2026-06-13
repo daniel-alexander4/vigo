@@ -2,12 +2,12 @@
 <span data-ai-page="task-detail" hidden></span>
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/task">Tasks</a> &rsaquo; {{truncUUID .Task.ID}}
+        <a href="/task">{{T $.Locale "nav.tasks"}}</a> &rsaquo; {{truncUUID .Task.ID}}
     </div>
-    <h1>Task {{truncUUID .Task.ID}}</h1>
+    <h1>{{T $.Locale "task_detail.title"}} {{truncUUID .Task.ID}}</h1>
     <p>
         {{template "status-badge" dict "Status" .Task.Status}}
-        &middot; Target: <code>{{.Task.Target}}</code>
+        &middot; {{T $.Locale "task_detail.target"}} <code>{{.Task.Target}}</code>
         &middot; {{.Task.Operator}}
         &middot; {{formatTime .Task.CreatedAt}}
     </p>
@@ -16,37 +16,37 @@
 <div class="stat-cards mb-2">
     <div class="stat-card stat-card--brand">
         <div class="stat-card__value">{{.Task.TotalTargets}}</div>
-        <div class="stat-card__label">Targets</div>
+        <div class="stat-card__label">{{T $.Locale "task_detail.targets"}}</div>
     </div>
     {{if .Task.BatchSize}}
     <div class="stat-card stat-card--info">
         <div class="stat-card__value">{{.Task.BatchSize}}</div>
-        <div class="stat-card__label">Batch Size</div>
+        <div class="stat-card__label">{{T $.Locale "task_detail.batch_size"}}</div>
     </div>
     {{end}}
     {{if .Task.MaxFailures}}
     <div class="stat-card stat-card--warning">
         <div class="stat-card__value">{{.Task.MaxFailures}}</div>
-        <div class="stat-card__label">Max Failures</div>
+        <div class="stat-card__label">{{T $.Locale "task_detail.max_failures"}}</div>
     </div>
     {{end}}
 </div>
 
 <div class="detail-section mb-2">
-    <h3>Command</h3>
+    <h3>{{T $.Locale "task_detail.command"}}</h3>
     <pre class="code-block">{{.Task.Command}}</pre>
 </div>
 
 <div class="table-container"{{if .IsRunning}} hx-get="/task/{{.Task.ID}}" hx-trigger="every 5s" hx-select=".table-container" hx-swap="morph:outerHTML" hx-disinherit="*" aria-live="polite"{{end}}>
-    <h3>Per-Envoy Results</h3>
+    <h3>{{T $.Locale "task_detail.per_envoy_results"}}</h3>
     <table class="table">
         <thead>
             <tr>
-                <th>Hostname</th>
-                <th>Status</th>
-                <th>Exit</th>
-                <th>Duration</th>
-                <th>Error</th>
+                <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "th.status"}}</th>
+                <th>{{T $.Locale "task_detail.exit"}}</th>
+                <th>{{T $.Locale "th.duration"}}</th>
+                <th>{{T $.Locale "task_detail.error"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -81,7 +81,7 @@
             {{end}}
             {{if not .Targets}}
             <tr>
-                <td colspan="5" class="text-muted u-ta-center-p-40px">No targets.</td>
+                <td colspan="5" class="text-muted u-ta-center-p-40px">{{T $.Locale "task_detail.no_targets"}}</td>
             </tr>
             {{end}}
         </tbody>

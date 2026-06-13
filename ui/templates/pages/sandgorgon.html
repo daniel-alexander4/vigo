@@ -2,38 +2,38 @@
 <div class="page-header">
     <h1>Sandgorgon</h1>
     <div class="page-header__actions">
-        <a href="/sandgorgon/certificates" class="btn btn--sm">Certificates</a>
+        <a href="/sandgorgon/certificates" class="btn btn--sm">{{T $.Locale "sandgorgon.certificates"}}</a>
     </div>
-    <p>Bare metal lifecycle management</p>
+    <p>{{T $.Locale "sandgorgon.subtitle"}}</p>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__label">Total Assets</div>
+        <div class="stat-card__label">{{T $.Locale "sandgorgon.total_assets"}}</div>
         <div class="stat-card__value">{{.TotalAssets}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Available</div>
+        <div class="stat-card__label">{{T $.Locale "sandgorgon.available"}}</div>
         <div class="stat-card__value text-brand">{{.Available}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Commissioned</div>
+        <div class="stat-card__label">{{T $.Locale "sandgorgon.commissioned"}}</div>
         <div class="stat-card__value text-success">{{.Commissioned}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Retired</div>
+        <div class="stat-card__label">{{T $.Locale "sandgorgon.retired"}}</div>
         <div class="stat-card__value">{{.Retired}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Certificates</div>
+        <div class="stat-card__label">{{T $.Locale "sandgorgon.certificates"}}</div>
         <div class="stat-card__value">{{.CertificateCount}}</div>
     </div>
 </div>
 
 <div class="card mt-2">
     <div class="card-heading-row">
-        <h2 class="u-m-0">Hardware Assets</h2>
-        <input type="text" name="q" placeholder="Search hostname, serial, tag..."
+        <h2 class="u-m-0">{{T $.Locale "sandgorgon.hardware_assets"}}</h2>
+        <input type="text" name="q" placeholder="{{T $.Locale "sandgorgon.search_placeholder"}}"
                class="input u-maxw-300px"
                hx-get="/ui/fragments/sandgorgon-assets"
                hx-trigger="input changed delay:200ms"
@@ -43,11 +43,11 @@
                autocomplete="off"
                value="{{.Search}}">
         <div class="btn-group u-gap-4px">
-            <a href="/sandgorgon" class="btn btn--sm{{if eq .StateFilter ""}} btn--active{{end}}">All</a>
-            <a href="/sandgorgon?state=available" class="btn btn--sm{{if eq .StateFilter "available"}} btn--active{{end}}">Available</a>
-            <a href="/sandgorgon?state=commissioned" class="btn btn--sm{{if eq .StateFilter "commissioned"}} btn--active{{end}}">Commissioned</a>
-            <a href="/sandgorgon?state=active" class="btn btn--sm{{if eq .StateFilter "active"}} btn--active{{end}}">Active</a>
-            <a href="/sandgorgon?state=retired" class="btn btn--sm{{if eq .StateFilter "retired"}} btn--active{{end}}">Retired</a>
+            <a href="/sandgorgon" class="btn btn--sm{{if eq .StateFilter ""}} btn--active{{end}}">{{T $.Locale "filter.all"}}</a>
+            <a href="/sandgorgon?state=available" class="btn btn--sm{{if eq .StateFilter "available"}} btn--active{{end}}">{{T $.Locale "sandgorgon.available"}}</a>
+            <a href="/sandgorgon?state=commissioned" class="btn btn--sm{{if eq .StateFilter "commissioned"}} btn--active{{end}}">{{T $.Locale "sandgorgon.commissioned"}}</a>
+            <a href="/sandgorgon?state=active" class="btn btn--sm{{if eq .StateFilter "active"}} btn--active{{end}}">{{T $.Locale "sandgorgon.active"}}</a>
+            <a href="/sandgorgon?state=retired" class="btn btn--sm{{if eq .StateFilter "retired"}} btn--active{{end}}">{{T $.Locale "sandgorgon.retired"}}</a>
         </div>
         <input type="hidden" name="state" value="{{.StateFilter}}">
     </div>
@@ -64,22 +64,22 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Hostname</th>
-                <th>BMC Address</th>
-                <th>Serial</th>
-                <th>Manufacturer</th>
-                <th>State</th>
-                <th>Rack</th>
+                <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "sandgorgon.bmc_address"}}</th>
+                <th>{{T $.Locale "sandgorgon.serial"}}</th>
+                <th>{{T $.Locale "sandgorgon.manufacturer"}}</th>
+                <th>{{T $.Locale "th.state"}}</th>
+                <th>{{T $.Locale "sandgorgon.rack"}}</th>
             </tr>
         </thead>
         <tbody>
             {{range .Assets}}
             <tr>
-                <td><a href="/sandgorgon/assets/{{.ID}}">{{if .Hostname}}{{.Hostname}}{{else}}<em>unassigned</em>{{end}}</a></td>
+                <td><a href="/sandgorgon/assets/{{.ID}}">{{if .Hostname}}{{.Hostname}}{{else}}<em>{{T $.Locale "sandgorgon.unassigned"}}</em>{{end}}</a></td>
                 <td>{{.BmcAddress}}</td>
                 <td>{{.SerialNumber}}</td>
                 <td>{{.Manufacturer}}</td>
-                <td><span class="status-pill status-pill--{{lifecycleClass .LifecycleState}}">{{.LifecycleState}}</span></td>
+                <td><span class="status-pill status-pill--{{lifecycleClass .LifecycleState}}">{{tEnum $.Locale .LifecycleState}}</span></td>
                 <td>{{.RackLocation}}</td>
             </tr>
             {{end}}
@@ -87,6 +87,6 @@
     </table>
 </div>
 {{else}}
-<p>No assets found.{{if not .StateFilter}} Use <code>vigocli sandgorgon commission</code> or <code>vigocli sandgorgon import</code> to add assets.{{end}}</p>
+<p>{{T $.Locale "sandgorgon.no_assets"}}{{if not .StateFilter}} {{T $.Locale "sandgorgon.no_assets_hint_pre"}} <code>vigocli sandgorgon commission</code> {{T $.Locale "sandgorgon.no_assets_hint_or"}} <code>vigocli sandgorgon import</code> {{T $.Locale "sandgorgon.no_assets_hint_post"}}{{end}}</p>
 {{end}}
 {{end}}

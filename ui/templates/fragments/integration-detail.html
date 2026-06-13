@@ -2,8 +2,8 @@
 <div class="card u-mt-1rem">
     <h3>{{.Name}}</h3>
     <p>{{.Description}}</p>
-    <p><strong>Supported events:</strong> {{.Events}}</p>
-    <h4>Example server.yaml</h4>
+    <p><strong>{{T $.Locale "integration_detail.supported_events"}}</strong> {{.Events}}</p>
+    <h4>{{T $.Locale "integration_detail.example"}} server.yaml</h4>
     <pre class="u-blk1"><code>{{.ExampleYAML}}</code></pre>
 </div>
 {{end}}
