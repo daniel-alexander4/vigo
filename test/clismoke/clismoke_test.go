@@ -128,17 +128,18 @@ func run(m *testing.M) (code int) {
 	}
 	cliEnv = append(os.Environ(), "VIGO_CONFIG_DIR="+cfgDir)
 
-	// Enroll a small synthetic fleet — no publish (the temp instance already
-	// serves the seeded .live, and vigocli config publish is hardwired to
-	// /srv/vigo). create runs a first report tick, so envoys land with traits
-	// and a convergence run for the read surface to show.
+	// Enroll a small synthetic fleet. --server-root anchors fakefleet's whole
+	// flow on tmp: it writes the config tree under tmp/stacks and publishes it
+	// through the real operator path (`vigocli config publish --server-root tmp`
+	// → tmp/.live → reload) before enrolling, so the envoys converge against a
+	// real published tree — no --skip-publish, no hand-seeded .live. create also
+	// runs a first report tick, so envoys land with traits + a convergence run.
 	statePath := filepath.Join(tmp, "fleet", "state.json")
 	ff := exec.Command(ffBin, "create",
-		"--skip-publish",
 		"--api", srvURL,
 		"--server", fmt.Sprintf("127.0.0.1:%d", grpcPort),
 		"--admin-token", strings.TrimSpace(string(tok)),
-		"--stacks-dir", filepath.Join(tmp, "stacks"),
+		"--server-root", tmp,
 		"--state", statePath,
 		"--vigocli", cliBin,
 		"--count", "5", "--named", "5", "--broken", "1", "--changed", "1",
@@ -379,6 +380,26 @@ func TestCLIConfigPublish(t *testing.T) {
 	}
 }
 
+// TestCLIPublishedConfigServed proves the tree fakefleet published via
+// `config publish --server-root <tmp>` actually reached and is served by the
+// running server — not merely written to disk and dropped by a warn-only reload
+// failure. `config trace` resolves a host against the server's loaded config: a
+// real published hostcrate yields a match with resolved resources, whereas an
+// empty or unreloaded config prints "No config entry matches". This is the
+// end-to-end signal that the relocated publish path round-trips.
+func TestCLIPublishedConfigServed(t *testing.T) {
+	out, err := runCLI(t, "config", "trace", "--host", sampleHostname)
+	if err != nil {
+		t.Fatalf("config trace --host %s failed: %v\n%s", sampleHostname, err, truncate(out, 1500))
+	}
+	if strings.Contains(out, "No config entry matches") {
+		t.Fatalf("server is not serving the published config — host %q resolved to nothing:\n%s", sampleHostname, truncate(out, 1500))
+	}
+	if !strings.Contains(out, "Resources:") {
+		t.Errorf("config trace for %q showed no resolved config (publish may not have reached the server):\n%s", sampleHostname, truncate(out, 1500))
+	}
+}
+
 // ---------- helpers ----------
 
 // writeStacksFile writes content to <stacks>/<rel>, creating parents.
@@ -549,12 +570,14 @@ func readSampleEnvoy(statePath string) (id, hostname string, err error) {
 }
 
 // writeFixture lays down the minimal temp serverRoot: a server.yaml on random
-// ports with every writable path pointed inside tmp, plus a seeded .live so
-// the config store has a valid published tree to load at boot.
+// ports with every writable path pointed inside tmp, plus an empty .live dir.
+// The .live is not seeded — the server boots cleanly on an empty config tree
+// (it tolerates an empty .live but errors on a missing one at startup), and
+// fakefleet then publishes the real tree via `config publish --server-root tmp`
+// before enrolling.
 func writeFixture(tmp string, apiPort, grpcPort int) error {
 	for _, d := range []string{
-		filepath.Join(tmp, ".live", "stacks"),
-		filepath.Join(tmp, ".live", "configcrates"),
+		filepath.Join(tmp, ".live"),
 		filepath.Join(tmp, "secrets"),
 		filepath.Join(tmp, "fleet"),
 		filepath.Join(tmp, "docs"),
@@ -597,14 +620,7 @@ compliance:
 		filepath.Join(tmp, "secrets"),
 		filepath.Join(tmp, "compliance-docs"),
 	)
-	if err := os.WriteFile(filepath.Join(tmp, "server.yaml"), []byte(yaml), 0o600); err != nil {
-		return err
-	}
-
-	// One hostcrate matching every hostname, so enrolled envoys resolve to a
-	// (empty) config and the read surface has something to trace.
-	envoys := "envoys:\n  - match: \"*\"\n    roles: []\n"
-	return os.WriteFile(filepath.Join(tmp, ".live", "stacks", "envoys.vgo"), []byte(envoys), 0o600)
+	return os.WriteFile(filepath.Join(tmp, "server.yaml"), []byte(yaml), 0o600)
 }
 
 func findRepoRoot() string {

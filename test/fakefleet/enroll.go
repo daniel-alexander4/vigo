@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 // enrolled is the material a single synthetic envoy needs to act: its
@@ -120,9 +121,29 @@ func signWith(key ed25519.PrivateKey, msg []byte) []byte { return ed25519.Sign(k
 // keeps this on the exact operator path rather than re-implementing the
 // publish/validate/sync machinery here.
 func publishConfig(cfg config) error {
-	cmd := exec.Command(cfg.vigocliBin, "config", "publish", "--skip-url-check", "--operator", "vigo")
+	cmd := exec.Command(cfg.vigocliBin, "config", "publish",
+		"--skip-url-check", "--operator", "vigo",
+		"--server", cfg.apiAddr,
+		"--server-root", cfg.serverRoot)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	// vigocli authenticates from VIGO_CONFIG_DIR/token (then the server-host
+	// local-admin file). On the server host the file path resolves and the
+	// inherited env is enough; against an ephemeral instance we hold the token
+	// as a string, so stage it in a throwaway config dir for this one call.
+	if cfg.adminToken != "" {
+		dir, err := os.MkdirTemp("", "fakefleet-cliconfig-*")
+		if err != nil {
+			return fmt.Errorf("staging cli token dir: %w", err)
+		}
+		defer os.RemoveAll(dir)
+		if err := os.WriteFile(filepath.Join(dir, "token"), []byte(cfg.adminToken), 0o600); err != nil {
+			return fmt.Errorf("writing cli token: %w", err)
+		}
+		cmd.Env = append(os.Environ(), "VIGO_CONFIG_DIR="+dir)
+	}
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s config publish: %w", cfg.vigocliBin, err)
 	}

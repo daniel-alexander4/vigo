@@ -30,6 +30,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"git.alexander4.io/vigo/server/publish"
 )
 
 const toolVersion = "0.2"
@@ -44,7 +46,8 @@ type config struct {
 	grpcAddr          string
 	apiAddr           string
 	adminToken        string
-	stacksDir         string
+	serverRoot        string // server root holding stacks/, .live/, config-history/
+	stacksDir         string // derived: <serverRoot>/stacks (where the fleet tree is written)
 	statePath         string
 	count             int
 	namedCount        int
@@ -116,7 +119,7 @@ func parseFlags(cmd string, args []string) config {
 	apiAddr := fs.String("api", "https://127.0.0.1:8443", "REST API base (enroll, publish, delete)")
 	adminToken := fs.String("admin-token", "", "admin bearer token; defaults to the contents of --admin-token-file")
 	tokenFile := fs.String("admin-token-file", "/srv/vigo/cli-admin-token", "root-only local-admin token file, read when --admin-token is empty")
-	stacksDir := fs.String("stacks-dir", "/srv/vigo/stacks", "operator stacks tree; fleet config is written under it")
+	serverRoot := fs.String("server-root", publish.DefaultServerRoot, "server root holding stacks/, .live/, config-history/; the fleet tree is written under <root>/stacks and published with `vigocli config publish --server-root <root>`")
 	statePath := fs.String("state", "/srv/vigo/fleet/state.json", "fleet identity manifest (0600); resume reads it")
 	count := fs.Int("count", 13647, "number of envoys (create only)")
 	named := fs.Int("named", 100, "how many keep a realistic service hostname; the rest are worker-NNNNN (create only)")
@@ -130,7 +133,7 @@ func parseFlags(cmd string, args []string) config {
 	limit := fs.Int("limit", 0, "if >0, the run daemon drives only the first N envoys (testing)")
 	stream := fs.Bool("stream", false, "run daemon holds a real bidi AgentStream per envoy (exercises vigo_streams_active / the per-stream connection-RSS ceiling, checkin.max_connections) instead of unary check-ins")
 	vigocliBin := fs.String("vigocli", "vigocli", "vigocli binary used to publish the fleet config (stacks → .live)")
-	skipPublish := fs.Bool("skip-publish", false, "create only: enroll + first-report without publishing a config tree — for an ephemeral instance whose vigocli config publish is hardwired to /srv/vigo. Envoys converge against whatever .live the target server already has")
+	skipPublish := fs.Bool("skip-publish", false, "create only: enroll + first-report without writing or publishing a config tree — envoys converge against whatever .live the target server already serves")
 	fleetDir := fs.String("fleet-dir", "alexander4", "stacks subdir the demo clouds nest under (e.g. alexander4); the harness owns <fleet-dir>/{aws,gcp} and removes only those on backout")
 	fs.Parse(args)
 
@@ -141,11 +144,17 @@ func parseFlags(cmd string, args []string) config {
 		}
 	}
 
+	// The fleet tree is written under <server-root>/stacks — the same dir
+	// `vigocli config publish --server-root <root>` reads from, so a single
+	// knob keeps the write and the publish in lockstep. PathsUnder is the SoT.
+	stacksDir, _, _ := publish.PathsUnder(*serverRoot)
+
 	return config{
 		grpcAddr:          *grpcAddr,
 		apiAddr:           *apiAddr,
 		adminToken:        tok,
-		stacksDir:         *stacksDir,
+		serverRoot:        *serverRoot,
+		stacksDir:         stacksDir,
 		statePath:         *statePath,
 		count:             *count,
 		namedCount:        *named,

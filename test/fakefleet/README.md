@@ -155,7 +155,7 @@ the manifest. Stop the daemon first so a tick doesn't race the delete
 | `--concurrency` | `64` | max in-flight enroll/checkin operations |
 | `--server` | `127.0.0.1:1530` | gRPC address |
 | `--api` | `https://127.0.0.1:8443` | REST API base |
-| `--stacks-dir` | `/srv/vigo/stacks` | operator stacks tree |
+| `--server-root` | `/srv/vigo` | server root holding `stacks/`, `.live/`, `config-history/`; the fleet tree is written under `<root>/stacks` and published with `vigocli config publish --server-root <root>` |
 | `--fleet-dir` | `alexander4` | stacks subdir the fake `aws`/`gcp` clouds nest under |
 | `--state` | `/srv/vigo/fakefleet/state.json` | identity manifest |
 | `--admin-token` / `--admin-token-file` | (file) `/srv/vigo/cli-admin-token` | admin auth |
