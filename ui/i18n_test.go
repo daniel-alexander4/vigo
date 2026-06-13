@@ -1,0 +1,166 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: LicenseRef-Proprietary
+
+package ui
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"git.alexander4.io/vigo/server/config"
+)
+
+// TestCatalogCompleteness is the drift guard for the chrome catalogs: every
+// key in the English (source) catalog must exist in every other locale, and
+// no locale may carry an orphan key the English catalog doesn't define.
+// English is the fallback, so a missing key degrades to English silently —
+// this test makes that drift loud at build time instead.
+func TestCatalogCompleteness(t *testing.T) {
+	en, ok := catalogs[defaultLocaleFallback]
+	if !ok {
+		t.Fatalf("no %q catalog loaded", defaultLocaleFallback)
+	}
+	if len(en) == 0 {
+		t.Fatal("English catalog is empty")
+	}
+	for locale, m := range catalogs {
+		if locale == defaultLocaleFallback {
+			continue
+		}
+		for key := range en {
+			if _, ok := m[key]; !ok {
+				t.Errorf("locale %q missing key %q (present in English)", locale, key)
+			}
+		}
+		for key := range m {
+			if _, ok := en[key]; !ok {
+				t.Errorf("locale %q has orphan key %q (not in English)", locale, key)
+			}
+		}
+	}
+}
+
+func TestCatalogT(t *testing.T) {
+	// A key present in both: French wins for fr.
+	if got := catalogT("fr", "chrome.sign_out"); got != "Se déconnecter" {
+		t.Errorf("catalogT(fr, chrome.sign_out) = %q, want French", got)
+	}
+	// English for the default locale.
+	if got := catalogT("en", "chrome.sign_out"); got != "Sign out" {
+		t.Errorf("catalogT(en, chrome.sign_out) = %q, want English", got)
+	}
+	// Unknown locale falls back to English.
+	if got := catalogT("de", "chrome.sign_out"); got != "Sign out" {
+		t.Errorf("catalogT(de, ...) = %q, want English fallback", got)
+	}
+	// Unknown key surfaces the key itself (loud, not blank).
+	if got := catalogT("fr", "no.such.key"); got != "no.such.key" {
+		t.Errorf("catalogT(fr, no.such.key) = %q, want the key echoed back", got)
+	}
+}
+
+func TestLocaleFromRequest(t *testing.T) {
+	enabled := &Handler{i18n: config.I18nSection{
+		Enabled:          true,
+		DefaultLocale:    "en",
+		SupportedLocales: []string{"en", "fr"},
+	}}
+	disabled := &Handler{i18n: config.I18nSection{
+		Enabled:          false,
+		DefaultLocale:    "en",
+		SupportedLocales: []string{"en", "fr"},
+	}}
+
+	newReq := func(cookie, acceptLang string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: localeCookieName, Value: cookie})
+		}
+		if acceptLang != "" {
+			r.Header.Set("Accept-Language", acceptLang)
+		}
+		return r
+	}
+
+	tests := []struct {
+		name       string
+		h          *Handler
+		cookie     string
+		acceptLang string
+		want       string
+	}{
+		{"disabled ignores everything", disabled, "fr", "fr-CA,fr;q=0.9", "en"},
+		{"cookie wins", enabled, "fr", "en", "fr"},
+		{"unsupported cookie falls through to header", enabled, "de", "fr", "fr"},
+		{"accept-language primary subtag", enabled, "", "fr-CA,fr;q=0.9,en;q=0.8", "fr"},
+		{"unsupported accept-language uses default", enabled, "", "de,es;q=0.9", "en"},
+		{"nothing set uses default", enabled, "", "", "en"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.h.localeFromRequest(newReq(tc.cookie, tc.acceptLang))
+			if got != tc.want {
+				t.Errorf("localeFromRequest = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRenderLocale is the end-to-end proof: the same page template renders
+// English chrome at Locale "en" (byte-for-byte the original strings, so a
+// disabled-i18n deployment is unchanged) and French chrome at Locale "fr".
+func TestRenderLocale(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	// NoEnvoys collapses the nav to the brand block, avoiding nil-CurrentUser
+	// derefs in the permission-gated nav links — keeps this a pure chrome test.
+	render := func(locale string) string {
+		data := SupportPageData{PageData: PageData{
+			Title:    "Support",
+			NoEnvoys: true,
+			Theme:    "light",
+			Locale:   locale,
+		}}
+		rec := httptest.NewRecorder()
+		r.Render(rec, "support", data)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("render(%q) status = %d", locale, rec.Code)
+		}
+		return rec.Body.String()
+	}
+
+	en := render("en")
+	if !strings.Contains(en, "Support tiers") {
+		t.Error("en render missing original English heading 'Support tiers'")
+	}
+	if strings.Contains(en, "Niveaux d'assistance") {
+		t.Error("en render unexpectedly contains French")
+	}
+
+	fr := render("fr")
+	if !strings.Contains(fr, "Niveaux d&#39;assistance") && !strings.Contains(fr, "Niveaux d'assistance") {
+		t.Error("fr render missing French heading 'Niveaux d'assistance'")
+	}
+	if strings.Contains(fr, "Support tiers") {
+		t.Error("fr render still shows English heading 'Support tiers'")
+	}
+}
+
+func TestLocaleChoicesHiddenWhenDisabled(t *testing.T) {
+	disabled := &Handler{i18n: config.I18nSection{Enabled: false, SupportedLocales: []string{"en", "fr"}}}
+	if got := disabled.localeChoices(); got != nil {
+		t.Errorf("localeChoices() with i18n disabled = %v, want nil", got)
+	}
+	single := &Handler{i18n: config.I18nSection{Enabled: true, SupportedLocales: []string{"en"}}}
+	if got := single.localeChoices(); got != nil {
+		t.Errorf("localeChoices() with one locale = %v, want nil (no picker)", got)
+	}
+	multi := &Handler{i18n: config.I18nSection{Enabled: true, SupportedLocales: []string{"en", "fr"}}}
+	if got := multi.localeChoices(); len(got) != 2 {
+		t.Errorf("localeChoices() = %v, want 2 options", got)
+	}
+}

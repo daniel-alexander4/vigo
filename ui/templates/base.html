@@ -34,6 +34,13 @@
             {{if .AuthEnabled}}{{if .CurrentUser}}
             <header class="topbar">
                 <div class="topbar__right">
+                    {{if gt (len .Locales) 1}}
+                    <select id="locale-picker" data-change="set-locale" class="input input--sm topbar__locale" aria-label="{{T $.Locale "chrome.language"}}">
+                        {{range .Locales}}
+                        <option value="{{.Code}}"{{if eq .Code $.Locale}} selected{{end}}>{{.Label}}</option>
+                        {{end}}
+                    </select>
+                    {{end}}
                     <button type="button" class="topbar__theme-toggle" id="theme-toggle" aria-label="Toggle color theme" title="Toggle color theme">
                         <svg class="topbar__theme-icon topbar__theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
                         <svg class="topbar__theme-icon topbar__theme-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -43,7 +50,7 @@
                         <span class="topbar__username">{{if .CurrentUser.DisplayName}}{{.CurrentUser.DisplayName}}{{else}}{{.CurrentUser.Username}}{{end}}</span>
                     </div>
                     <form method="POST" action="/logout" hx-boost="false">
-                        <button type="submit" class="topbar__logout">Sign out</button>
+                        <button type="submit" class="topbar__logout">{{T $.Locale "chrome.sign_out"}}</button>
                     </form>
                 </div>
             </header>
@@ -51,7 +58,7 @@
             {{if .LicenseWarning}}
             <div class="license-banner">
                 <span class="license-banner__text">{{.LicenseWarning}}</span>
-                <a href="/license" class="license-banner__link">View license</a>
+                <a href="/license" class="license-banner__link">{{T $.Locale "chrome.view_license"}}</a>
             </div>
             {{end}}
             {{block "page-content" .}}{{end}}
@@ -60,16 +67,16 @@
     {{if .AIEnabled}}
     <aside class="ai-panel" id="ai-panel" data-provider="{{.AIProviderName}}">
         <div class="ai-panel__header">
-            <span class="ai-panel__title">Ask {{.AIProviderName}}</span>
+            <span class="ai-panel__title">{{T $.Locale "chrome.ai.ask"}} {{.AIProviderName}}</span>
             <button class="ai-panel__close" data-action="toggle-ai-chat" aria-label="Close AI chat panel">&times;</button>
         </div>
         <div class="ai-panel__messages" id="ai-drawer-messages">
             <div class="ai-panel__welcome">
-                <p>Ask anything about your fleet, convergence, or configuration.</p>
+                <p>{{T $.Locale "chrome.ai.welcome"}}</p>
                 <div class="ai-panel__suggestions">
-                    <button class="chat-suggestion" data-action="ai-suggest">How many envoys?</button>
-                    <button class="chat-suggestion" data-action="ai-suggest" data-question="Which envoys have failed convergence and why?">Failed envoys?</button>
-                    <button class="chat-suggestion" data-action="ai-suggest" data-question="Show the fleet convergence summary with breakdown by status.">Convergence summary</button>
+                    <button class="chat-suggestion" data-action="ai-suggest">{{T $.Locale "chrome.ai.suggest_envoys"}}</button>
+                    <button class="chat-suggestion" data-action="ai-suggest" data-question="Which envoys have failed convergence and why?">{{T $.Locale "chrome.ai.suggest_failed"}}</button>
+                    <button class="chat-suggestion" data-action="ai-suggest" data-question="Show the fleet convergence summary with breakdown by status.">{{T $.Locale "chrome.ai.suggest_convergence"}}</button>
                 </div>
             </div>
         </div>
@@ -77,7 +84,7 @@
             <div class="chat-input-wrapper">
                 <textarea class="chat-input" id="ai-drawer-input" placeholder="Ask a question..." rows="1"
                     data-input="ai-autosize" data-keydown="ai-enter-submit"></textarea>
-                <button class="chat-send" type="submit" id="ai-drawer-send">Send</button>
+                <button class="chat-send" type="submit" id="ai-drawer-send">{{T $.Locale "chrome.ai.send"}}</button>
             </div>
         </form>
     </aside>

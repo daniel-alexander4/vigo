@@ -518,6 +518,25 @@ grafana:
 |-------|---------|-------------|
 | `url` | (none) | Base URL of a Grafana instance. When set, the `/health` page links to each bundled dashboard at `<url>/d/<uid>`. Unset = no links shown. |
 
+## i18n
+
+Optional web UI localization. Off by default: with i18n disabled the UI renders in English with zero overhead and no language picker. When enabled, each request's locale is resolved **cookie → `Accept-Language` → `default_locale`**: the operator's saved choice (a cookie set from the top-navbar language picker, like the theme toggle) wins, then the browser's `Accept-Language` header (matched on the primary subtag, so `fr-CA` matches `fr`), then the configured default. Translations are key-based with English fallback — a missing string degrades to English rather than a blank.
+
+Operator-authored data (envoy names, run results, audit entries) and all commands, flags, and config keys stay English regardless of locale; localization covers UI chrome (nav, labels, buttons) and the in-app docs.
+
+```yaml
+i18n:
+  enabled: false
+  default_locale: "en"
+  supported_locales: ["en", "fr"]
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `false` | Enable non-English locales and the top-navbar language picker. When false the UI is English-only with no per-request locale work. |
+| `default_locale` | `en` | Locale used when no cookie or `Accept-Language` match applies, and the fallback for any untranslated string. |
+| `supported_locales` | all bundled | Locales offered in the picker and matched against `Accept-Language`. Empty = every locale with a bundled catalog. Always include `default_locale`. |
+
 ## swarm
 
 Peer-to-peer content distribution (six content subsystems: filecast, gitback, longdrawer, lockbox, curator, poolq). Each subsystem documents the full field set in its howto — the section below covers **poolq** (ADR-029); see [`server.yaml.example`](https://github.com/alexander4/vigo/blob/main/server/config/server.yaml.example) for the full template plus the other subsystems.

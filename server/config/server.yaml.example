@@ -587,6 +587,19 @@ watcher:
 #   url: "https://grafana.example.com:3000"
 
 
+# ── i18n / Localization ──────────────────────────────────────────────
+# Optional. Off by default — the UI renders in English with zero overhead
+# and no language picker. When enabled, per-request locale is resolved
+# cookie (top-navbar picker) → Accept-Language → default_locale, and
+# translations fall back to English per missing key. Covers UI chrome and
+# in-app docs; operator data, commands, flags, and config keys stay English.
+#
+# i18n:
+#   enabled: false
+#   default_locale: "en"
+#   supported_locales: ["en", "fr"]
+
+
 # ── GRC Integration ──────────────────────────────────────────────────
 # Push compliance evidence to external GRC platforms on a schedule.
 # Each integration runs independently with its own endpoint and interval.

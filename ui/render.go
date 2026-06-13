@@ -56,6 +56,7 @@ func isCRUDAction(action string) bool {
 // funcMap returns the template FuncMap used across all templates.
 func funcMap() template.FuncMap {
 	return template.FuncMap{
+		"T":                     catalogT,
 		"statusColor":           statusColor,
 		"sparklineSVG":          SparklineSVG,
 		"sparklineSVGColor":     SparklineSVGColor,

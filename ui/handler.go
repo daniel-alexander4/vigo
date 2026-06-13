@@ -271,6 +271,7 @@ type Handler struct {
 	integrationsCfg   config.IntegrationsSection
 	grcCfg            config.GRCSection
 	branding          config.BrandingSection
+	i18n              config.I18nSection
 	grafana           config.GrafanaSection
 	cveSearcher       CVESearcher
 	healthChecker     HealthChecker
@@ -835,6 +836,13 @@ type PageData struct {
 	CustomLogo     bool   // true when a custom logo path is configured
 	CustomFavicon  bool   // true when a custom favicon path is configured
 	Theme          string // "light" (default), "dark", or "auto"
+	// Locale is the resolved per-request locale (set in setCommonWithRequest);
+	// templates read it as $.Locale for the {{T}} helper. Empty falls back to
+	// English. Locales is the topbar picker's option set — nil (the default,
+	// and whenever i18n is disabled or only one locale is available) hides the
+	// picker.
+	Locale  string
+	Locales []LocaleChoice
 }
 
 // LicensePageData holds data for the license status page.
@@ -2225,6 +2233,7 @@ func (h *Handler) setCommon(pd *PageData) {
 	if pd.Theme == "" {
 		pd.Theme = "light"
 	}
+	pd.Locales = h.localeChoices()
 
 	// NoEnvoys gates the first-run UI — empty nav + dashboard enrollment panel.
 	pd.NoEnvoys = h.noEnvoys()
@@ -2288,6 +2297,7 @@ func (h *Handler) agentPlatforms() []AgentPlatform {
 // setCommonWithRequest applies common fields and extracts the current user from context.
 func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 	h.setCommon(pd)
+	pd.Locale = h.localeFromRequest(r)
 	if h.authEnabled {
 		if u := auth.UserFromContext(r.Context()); u != nil {
 			pd.CurrentUser = &AuthUser{

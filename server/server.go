@@ -1407,6 +1407,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// Wire branding, hostname, observe-only, and CVE searcher into UI handler.
 		uiHandler.SetAgentVersion(s.agentVersion)
 		uiHandler.SetBranding(s.cfg.Branding)
+		uiHandler.SetI18n(s.cfg.I18n)
 		uiHandler.SetGrafana(s.cfg.Grafana)
 		uiHandler.SetTraitQueryDispatcher(&traitQueryAdapter{agentSvc: s.agentSvc})
 		uiHandler.SetServerHostname(s.cfg.Server.Hostname)

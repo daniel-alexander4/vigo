@@ -132,6 +132,14 @@
         var el = e.target.closest("[data-change]");
         if (!el) return;
         if (el.dataset.change === "submit-form" && el.form) el.form.submit();
+        // Locale picker: a display preference, like the theme toggle — set a
+        // server-readable cookie client-side and reload so the next render
+        // picks the chosen locale. No POST (the UI is observability-only).
+        else if (el.dataset.change === "set-locale") {
+            document.cookie = "vigo_lang=" + encodeURIComponent(el.value) +
+                "; path=/; max-age=31536000; samesite=lax";
+            window.location.reload();
+        }
     });
 
     // --- submit (data-submit) ------------------------------------------------

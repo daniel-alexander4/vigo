@@ -1,6 +1,6 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Support</h1>
+    <h1>{{T $.Locale "support.title"}}</h1>
 </div>
 
 {{/* Resolve the current Tier row once so the hero can read SupportLevel,
@@ -19,10 +19,10 @@
 {{- end -}}
 
 <div class="card u-p-1-75rem-1-5rem">
-    <div class="u-blk11">Your plan</div>
+    <div class="u-blk11">{{T $.Locale "support.your_plan"}}</div>
     <div class="u-blk12">
-        <h2 class="u-fs-1-8rem-m-0">{{if $active}}{{$active}}{{else}}Unlicensed{{end}}</h2>
-        {{if $level}}<span class="badge badge--info">{{$level}} support</span>{{end}}
+        <h2 class="u-fs-1-8rem-m-0">{{if $active}}{{$active}}{{else}}{{T $.Locale "support.unlicensed"}}{{end}}</h2>
+        {{if $level}}<span class="badge badge--info">{{$level}} {{T $.Locale "support.level_suffix"}}</span>{{end}}
     </div>
     {{if $response}}<div class="u-fs-1-05rem-mb-1rem">{{$response}} via {{$channel}}</div>{{end}}
     <div class="u-blk13">
@@ -41,16 +41,16 @@
 {{end}}
 
 <div class="card mt-3">
-    <h2>Support tiers</h2>
+    <h2>{{T $.Locale "support.tiers_heading"}}</h2>
     <p>All paid tiers include bug triage, configuration guidance, and upgrade assistance. Response times are service targets, not guaranteed SLAs &mdash; custom SLAs with service credits are available as part of enterprise agreements.</p>
     <table class="table">
         <thead>
             <tr>
-                <th>Tier</th>
-                <th>Nodes</th>
-                <th>Support level</th>
-                <th>Response time</th>
-                <th>Channel</th>
+                <th>{{T $.Locale "support.th.tier"}}</th>
+                <th>{{T $.Locale "support.th.nodes"}}</th>
+                <th>{{T $.Locale "support.th.support_level"}}</th>
+                <th>{{T $.Locale "support.th.response_time"}}</th>
+                <th>{{T $.Locale "support.th.channel"}}</th>
             </tr>
         </thead>
         <tbody>
@@ -68,7 +68,7 @@
 </div>
 
 <div class="card mt-3">
-    <h2>Filing a ticket</h2>
+    <h2>{{T $.Locale "support.filing_heading"}}</h2>
     <p>Email <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a>. Include:</p>
     <ul>
         <li>License ID <code>{{if .LicenseID}}{{.LicenseID}}{{else}}(no license installed){{end}}</code>{{if .CustomerName}} ({{.CustomerName}}){{end}}</li>

@@ -171,6 +171,7 @@ type ServerConfig struct {
 	Scrier       ScrierSection       `yaml:"scrier" docs:"reference/server-yaml#scrier" doc:"Scrier browser-based remote access — SSH and RDP via guacd tunnel." long:"Browser-based remote access to any enrolled envoy — interactive SSH, Windows RDP, or console-shadow VNC, all routed through the envoy's outbound agent stream so no inbound ports are required on the target side. Every session is logged in scrier_sessions and an audit event is emitted on disconnect. Configure this when administrators need ad-hoc access to envoys behind customer firewalls without punching holes in them."`
 	Swarm        SwarmSection        `yaml:"swarm" docs:"reference/server-yaml#swarm" doc:"Peer-to-peer content distribution — seed directory, port, bandwidth cap." long:"Peer-to-peer content distribution between envoys over mTLS on port 1531 (agent-to-agent, not server-to-agent). Configures the seed directory the server writes into and the bandwidth cap as a percentage of detected link speed (so swarm transfers don't starve real workloads). Essential for fleets large enough that pulling every blob from the server would saturate its uplink."`
 	Grafana      GrafanaSection      `yaml:"grafana" docs:"reference/server-yaml#grafana" doc:"Optional Grafana URL — surfaces dashboard links on the /health page." long:"Points the web UI at an external Grafana instance so the /health page can link operators straight to the bundled Vigo dashboards. Vigo does not run, manage, or authenticate against Grafana — the only field is a base URL, and it is purely a link target. Leave unset if you don't run Grafana or prefer not to advertise it in the UI."`
+	I18n         I18nSection         `yaml:"i18n" docs:"reference/server-yaml#i18n" doc:"Web UI localization — enable non-English locales and the topbar language picker." long:"Opt-in localization of the web UI chrome (nav, buttons, labels) and the in-app docs. Off by default: with i18n disabled the UI renders in English with zero overhead and no language picker. When enabled, each request's locale is chosen by the operator's saved choice (a persistent cookie set from the topbar picker) first, then the browser's Accept-Language header, then the configured default. Translations are key-based with English fallback, so a missing string degrades to English rather than a blank. Operator-authored data (envoy names, run results, audit entries) and all commands/flags stay English regardless of locale."`
 }
 
 // SwarmSection configures peer-to-peer content distribution. The four
@@ -706,6 +707,16 @@ type BrandingSection struct {
 // target only.
 type GrafanaSection struct {
 	URL string `yaml:"url" doc:"Base URL of a Grafana instance. When set, the /health page links to the bundled Vigo dashboards at <url>/d/<uid>. Unset = no links shown." example:"https://grafana.example.com:3000"`
+}
+
+// I18nSection configures web UI localization. Off by default — the UI
+// renders English with no overhead and no language picker. When enabled,
+// per-request locale is resolved cookie > Accept-Language > default, and
+// translations fall back to English (the source language) per missing key.
+type I18nSection struct {
+	Enabled          bool     `yaml:"enabled" doc:"Enable non-English locales and the topbar language picker. When false the UI is English-only with zero overhead." default:"false" example:"true"`
+	DefaultLocale    string   `yaml:"default_locale" doc:"Locale used when no cookie or Accept-Language match applies, and the fallback for any untranslated string." default:"en" example:"en, fr"`
+	SupportedLocales []string `yaml:"supported_locales" doc:"Locales offered in the picker and matched against Accept-Language. Empty = every locale with a bundled catalog. Always include default_locale." example:"[en, fr]"`
 }
 
 // GRCSection configures GRC platform integrations for pushing compliance
