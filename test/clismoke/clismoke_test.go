@@ -333,7 +333,65 @@ func TestCLIErrorSurface(t *testing.T) {
 	}
 }
 
+// TestCLIConfigPublish proves `config publish --server-root` is relocatable:
+// the CLI validates a stacks tree under an arbitrary root and writes .live +
+// a config-history snapshot under that same root — never /srv/vigo. It runs
+// against an isolated throwaway root (not the enrolled instance's), so it
+// can't disturb the other tests; the only thing it borrows from the running
+// server is the post-publish reload trigger (a harmless no-op, since the
+// server reads its own root). This is the surface clismoke could not reach
+// while publish was hardwired to /srv/vigo.
+func TestCLIConfigPublish(t *testing.T) {
+	root := t.TempDir()
+	// Publish locks .live read-only (lockdownLiveDir). Registered after
+	// t.TempDir(), this cleanup runs first (LIFO) and loosens the tree so
+	// TempDir's RemoveAll can delete it.
+	t.Cleanup(func() {
+		_ = filepath.Walk(filepath.Join(root, ".live"), func(p string, _ os.FileInfo, _ error) error {
+			_ = os.Chmod(p, 0o755)
+			return nil
+		})
+	})
+	stacks := filepath.Join(root, "stacks")
+	for _, sub := range []string{"configcrates", "templates", "usercrates", "envoys", "roles"} {
+		if err := os.MkdirAll(filepath.Join(stacks, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A minimal valid tree: one configcrate referenced by one envoy match.
+	writeStacksFile(t, stacks, "configcrates/nginx.vgo", "name: nginx\nresources:\n  - name: install-nginx\n    type: package\n    package: nginx\n    state: present\n")
+	writeStacksFile(t, stacks, "envoys/web.vgo", "envoys:\n  - match: \"web.example.com\"\n    configcrates: [nginx]\n")
+
+	// --skip-url-check: the fixture references no URLs, and offline is faster.
+	out, err := runCLI(t, "config", "publish", "--server-root", root, "--skip-url-check")
+	if err != nil {
+		t.Fatalf("config publish --server-root %s failed: %v\n%s", root, err, truncate(out, 1500))
+	}
+
+	// LiveDir honored: the validated tree landed under <root>/.live.
+	if _, err := os.Stat(filepath.Join(root, ".live", "configcrates", "nginx.vgo")); err != nil {
+		t.Errorf("published .live not found under --server-root: %v\n%s", err, truncate(out, 1500))
+	}
+	// HistoryDir honored: a rollback snapshot was written under <root>/config-history.
+	snaps, _ := filepath.Glob(filepath.Join(root, "config-history", "*.tar.gz"))
+	if len(snaps) == 0 {
+		t.Errorf("no config-history snapshot under --server-root after publish\n%s", truncate(out, 1500))
+	}
+}
+
 // ---------- helpers ----------
+
+// writeStacksFile writes content to <stacks>/<rel>, creating parents.
+func writeStacksFile(t *testing.T, stacks, rel, content string) {
+	t.Helper()
+	path := filepath.Join(stacks, rel)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // runCLI runs vigocli against the temp server with the temp admin token.
 // --server goes last, matching the persistent-flag usage operators copy.

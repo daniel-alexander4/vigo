@@ -365,6 +365,7 @@ vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 | `--diff` | `false` | Show line-level diff for each changed file |
 | `--ask-ai` | `false` | Ask AI to suggest fixes for validation errors |
 | `--no-prune` | `false` | Publish every file in `stacks/` verbatim — skip the reachability prune |
+| `--server-root` | `/srv/vigo` | Server root holding `stacks/`, `.live/`, and `config-history/`. Override to publish a non-default instance (the three dirs are always siblings under it). |
 
 ### Examples
 

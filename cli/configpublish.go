@@ -44,6 +44,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 		askAI, _ := cmd.Flags().GetBool("ask-ai")
 		filePath, _ := cmd.Flags().GetString("file")
 		noPrune, _ := cmd.Flags().GetBool("no-prune")
+		serverRoot, _ := cmd.Flags().GetString("server-root")
 
 		if operator == "" {
 			if u, err := user.Current(); err == nil {
@@ -51,7 +52,16 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			}
 		}
 
+		// Anchor the three publish dirs on --server-root (default /srv/vigo),
+		// mirroring the server's 0.75.8 serverRoot anchoring. PathsUnder is the
+		// single SoT for the layout, so an ephemeral instance is fully
+		// self-contained and never reads or writes the prod /srv/vigo tree.
+		stacksDir, liveDir, historyDir := publish.PathsUnder(serverRoot)
+
 		opts := publish.Options{
+			StacksDir:  stacksDir,
+			LiveDir:    liveDir,
+			HistoryDir: historyDir,
 			CheckURLs:  !skipURLCheck,
 			URLTimeout: urlTimeout,
 			Operator:   operator,
@@ -66,12 +76,12 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			}
 			res, err := publish.PublishFile(filePath, opts, nil)
 			if err != nil {
-				suggestFixes(err, !askAI)
+				suggestFixes(err, !askAI, opts)
 				return err
 			}
 			fmt.Printf("Published: %s\n", filePath)
 			recordPublish(operator, res)
-			reloadServer()
+			reloadServer(stacksDir)
 			return nil
 		}
 
@@ -83,7 +93,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 		if dryRun {
 			res, err := publish.ValidateSource(opts)
 			if err != nil {
-				suggestFixes(err, !askAI)
+				suggestFixes(err, !askAI, opts)
 				return err
 			}
 			defer res.Cleanup()
@@ -98,7 +108,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 
 		res, err := publish.Publish(opts, nil)
 		if err != nil {
-			suggestFixes(err, !askAI)
+			suggestFixes(err, !askAI, opts)
 			return err
 		}
 		printFileList(res)
@@ -118,15 +128,15 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 		}
 
 		recordPublish(operator, res)
-		reloadServer()
+		reloadServer(stacksDir)
 
 		// Module retraction: generate retract modules for removed modules
 		// (show affected envoys) and for new/changed modules (pre-build).
 		if len(res.RemovedModuleContent) > 0 {
-			handleRetraction(res)
+			handleRetraction(res, stacksDir)
 		}
 		if len(res.ChangedModuleContent) > 0 {
-			handleRetractionPregen(res)
+			handleRetractionPregen(res, stacksDir)
 		}
 
 		return nil
@@ -203,8 +213,10 @@ func printPublishSummary(res *publish.Result) {
 
 // suggestFixes asks the AI assistant to suggest fixes for config errors.
 // Handles both idempotency errors (with per-module YAML) and generic parse
-// errors (extracts file path from error message).
-func suggestFixes(err error, disabled bool) {
+// errors (extracts file path from error message). opts carries the resolved
+// publish dirs so the generic path confines file reads to the active config
+// tree (honoring --server-root), not the hardcoded /srv/vigo.
+func suggestFixes(err error, disabled bool, opts publish.Options) {
 	if disabled {
 		return
 	}
@@ -240,7 +252,7 @@ func suggestFixes(err error, disabled bool) {
 	} else {
 		// Generic error (YAML parse, missing fields, renamed keys, etc.)
 		// Try to extract a file path from the error and include its content.
-		question = buildGenericFixPrompt(err)
+		question = buildGenericFixPrompt(err, opts)
 	}
 
 	if question == "" {
@@ -252,7 +264,7 @@ func suggestFixes(err error, disabled bool) {
 
 // buildGenericFixPrompt extracts file paths from error messages and builds
 // an AI prompt with the error and file content.
-func buildGenericFixPrompt(err error) string {
+func buildGenericFixPrompt(err error, opts publish.Options) string {
 	errMsg := err.Error()
 
 	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stacks/configcrates/foo.vgo: ...")
@@ -270,9 +282,11 @@ func buildGenericFixPrompt(err error) string {
 	b.WriteString("Show the corrected YAML. Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
 
 	if filePath != "" {
-		// Only read files within the config tree to prevent information disclosure.
+		// Only read files within the active config tree to prevent information
+		// disclosure. The roots come from opts (--server-root-resolved), not
+		// the hardcoded defaults, so this stays correct off /srv/vigo.
 		cleaned := filepath.Clean(filePath)
-		if strings.HasPrefix(cleaned, publish.DefaultStacksDir) || strings.HasPrefix(cleaned, publish.DefaultLiveDir) {
+		if strings.HasPrefix(cleaned, opts.StacksDir) || strings.HasPrefix(cleaned, opts.LiveDir) {
 			data, readErr := os.ReadFile(cleaned)
 			if readErr == nil {
 				fmt.Fprintf(&b, "File: %s\n```yaml\n%s```\n", cleaned, string(data))
@@ -366,8 +380,9 @@ func streamPublishSSE(body io.Reader) error {
 // or through the spanner-mode gitback push (which is what triggers
 // the stacks watcher's bare→.live pull + reload). Detection is
 // via /api/v1/spanner/status; failure to detect falls back to the
-// legacy path so misconfigured deployments still get something.
-func reloadServer() {
+// legacy path so misconfigured deployments still get something. stacksDir is
+// the --server-root-resolved source the spanner-mode mirror pushes from.
+func reloadServer(stacksDir string) {
 	client := newAPIClient()
 	var status struct {
 		Role string `json:"role"`
@@ -382,7 +397,7 @@ func reloadServer() {
 		legacyReloadServer()
 		return
 	}
-	if err := publishViaGitback(); err != nil {
+	if err := publishViaGitback(stacksDir); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: spanner gitback publish failed: %v\n", err)
 	}
 }
@@ -400,7 +415,7 @@ func legacyReloadServer() {
 // push via file://, then poll the server's config version until the
 // stacks watcher's bare→.live pull + Reload increments it. The
 // version-poll is the operator-visible signal that the publish landed.
-func publishViaGitback() error {
+func publishViaGitback(stacksDir string) error {
 	opsDir := puddle.OpsDefaultDir
 	projectIDHex, err := publishLookupStacksProjectID(opsDir)
 	if err != nil {
@@ -426,8 +441,8 @@ func publishViaGitback() error {
 		return fmt.Errorf("cloning bare repo: %w", err)
 	}
 
-	// Mirror /srv/vigo/stacks/ → workTree (delete-aware).
-	if err := publishMirrorIntoWorkTree(publish.DefaultStacksDir, workTree); err != nil {
+	// Mirror the (--server-root-resolved) stacks tree → workTree (delete-aware).
+	if err := publishMirrorIntoWorkTree(stacksDir, workTree); err != nil {
 		return fmt.Errorf("mirroring stacks into work tree: %w", err)
 	}
 
@@ -624,8 +639,9 @@ type retractAPIResult struct {
 }
 
 // handleRetraction calls the server's retract endpoint for removed modules,
-// writes .retract files, and prints a summary for the operator.
-func handleRetraction(res *publish.Result) {
+// writes .retract files, and prints a summary for the operator. stacksDir is
+// the --server-root-resolved tree the .retract files are written into.
+func handleRetraction(res *publish.Result, stacksDir string) {
 	// Build request with removed module names and content.
 	type modInput struct {
 		Name    string `json:"name"`
@@ -657,14 +673,14 @@ func handleRetraction(res *publish.Result) {
 
 	fmt.Println()
 	for _, result := range resp.Results {
-		printRetractionResult(result)
+		printRetractionResult(result, stacksDir)
 	}
 }
 
 // handleRetractionPregen calls the server's retract endpoint for new/changed
 // modules to pre-generate .retract files. These sit alongside the modules,
 // ready for use if the module is later removed from a node's config.
-func handleRetractionPregen(res *publish.Result) {
+func handleRetractionPregen(res *publish.Result, stacksDir string) {
 	type modInput struct {
 		Name    string `json:"name"`
 		Content string `json:"content"`
@@ -690,7 +706,7 @@ func handleRetractionPregen(res *publish.Result) {
 		if result.RetractYAML == "" {
 			continue
 		}
-		retractPath := filepath.Join(publish.DefaultStacksDir, "configcrates", result.Name+".retract")
+		retractPath := filepath.Join(stacksDir, "configcrates", result.Name+".retract")
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
 			continue
@@ -703,9 +719,9 @@ func handleRetractionPregen(res *publish.Result) {
 	}
 }
 
-func printRetractionResult(result retractAPIResult) {
-	// Write the .retract file to stacks/modules/.
-	retractPath := filepath.Join(publish.DefaultStacksDir, "configcrates", result.Name+".retract")
+func printRetractionResult(result retractAPIResult, stacksDir string) {
+	// Write the .retract file to the active stacks tree's configcrates/.
+	retractPath := filepath.Join(stacksDir, "configcrates", result.Name+".retract")
 	if result.RetractYAML != "" {
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
@@ -800,6 +816,7 @@ func init() {
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
 	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stacks/)")
 	configPublishCmd.Flags().Bool("no-prune", false, "publish every file in stacks/ verbatim — skip the reachability prune that drops configcrates, usercrates, and templates no carrier references")
+	configPublishCmd.Flags().String("server-root", publish.DefaultServerRoot, "server root holding stacks/, .live/, config-history/ — override to publish a non-default instance")
 
 	configCmd.AddCommand(configPublishCmd)
 }

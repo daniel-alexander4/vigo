@@ -29,25 +29,40 @@ import (
 )
 
 const (
-	// DefaultStacksDir is where operators edit .vgo files — the config tree
-	// root (configcrates/, usercrates/, templates/, tasks/, workflows/,
-	// roles.vgo, …). It is the gitback "stacks" project. Generated output
-	// (.live/) and read-only reference templates (stacks-examples/) are
-	// siblings under /srv/vigo, NOT children of this tree, so the publish
-	// walker rooted here sees only operator content.
-	DefaultStacksDir = "/srv/vigo/stacks"
-
-	// DefaultLiveDir is the validated output directory the server reads.
-	// Only the publish command writes here.
-	DefaultLiveDir = "/srv/vigo/.live"
+	// DefaultServerRoot is the on-disk root every vigosrv anchors on. The
+	// stacks/.live/config-history dirs are siblings under it; PathsUnder is
+	// the single source of truth for that layout. The server derives its own
+	// root from the server.yaml location (0.75.8); vigocli config publish
+	// derives it from --server-root (default below).
+	DefaultServerRoot = "/srv/vigo"
 
 	// DefaultStacksExamplesDir holds read-only reference templates seeded
-	// from the image. Operators copy from it into DefaultStacksDir.
-	DefaultStacksExamplesDir = "/srv/vigo/stacks-examples"
-
-	// DefaultHistoryDir is the directory for config snapshots used by rollback.
-	DefaultHistoryDir = "/srv/vigo/config-history"
+	// from the image. Operators copy from it into DefaultStacksDir. It is a
+	// sibling of the stacks tree, not a child, so the publish walker rooted on
+	// stacks/ never sees it.
+	DefaultStacksExamplesDir = DefaultServerRoot + "/stacks-examples"
 )
+
+// PathsUnder returns the publish directories anchored under root: the operator
+// stacks tree (.vgo source), the validated .live tree the server reads, and
+// the config-history snapshot dir rollback restores from. It is the single
+// source of truth for the on-disk layout — the Default*Dir values below are
+// PathsUnder(DefaultServerRoot), and the CLI's --server-root threads any other
+// root through the same function so the three stay siblings.
+func PathsUnder(root string) (stacks, live, history string) {
+	return filepath.Join(root, "stacks"),
+		filepath.Join(root, ".live"),
+		filepath.Join(root, "config-history")
+}
+
+// Default publish directories, anchored under DefaultServerRoot. vars (not
+// consts) because they derive from PathsUnder; nothing reads them in a const
+// context. Empty Options path fields fall back to these via resolvePaths.
+//   - DefaultStacksDir: where operators edit .vgo files (the gitback "stacks"
+//     project) — configcrates/, usercrates/, templates/, roles.vgo, …
+//   - DefaultLiveDir: the validated output dir the server reads; only publish writes here.
+//   - DefaultHistoryDir: config snapshots rollback restores from.
+var DefaultStacksDir, DefaultLiveDir, DefaultHistoryDir = PathsUnder(DefaultServerRoot)
 
 // skipDirs are directories that should not be synced from the stacks tree
 // to .live/. The publish walker roots at StacksDir, and .live/ +
