@@ -1,0 +1,211 @@
+<!-- vigo-i18n source_sha:c4f8cda642af25cb8fecca092bfea43bb669843171be5faf1bc0171a9c8cf097 -->
+
+# Stack de supervision
+
+Cet exemple met en place le node_exporter de Prometheus, le serveur Prometheus et Grafana selon le modèle package-config-service.
+
+## Configcrate Node Exporter
+
+Déployé sur chaque Envoy pour la collecte des métriques.
+
+`stacks/configcrates/node-exporter.vgo` :
+
+```yaml
+name: node-exporter
+vars:
+  node_exporter_port: "9100"
+resources:
+  - name: node-exporter-package
+    type: package
+    package: prometheus-node-exporter
+    state: present
+    when: "os_family('debian')"
+
+  - name: node-exporter-package-rhel
+    type: package
+    package: node_exporter
+    state: present
+    when: "!os_family('debian')"
+
+  - name: node-exporter-config
+    type: file
+    target_path: /etc/default/prometheus-node-exporter
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      ARGS="--web.listen-address=:{{ .Vars.node_exporter_port }}"
+    notify:
+      - node-exporter-service
+
+  - name: node-exporter-service
+    type: service
+    service: prometheus-node-exporter
+    state: running
+    enabled: true
+```
+
+## Configcrate Prometheus
+
+Déployé sur les serveurs de supervision.
+
+`stacks/configcrates/prometheus.vgo` :
+
+```yaml
+name: prometheus
+vars:
+  prometheus_port: "9090"
+  prometheus_retention: 30d
+  prometheus_scrape_interval: 15s
+resources:
+  - name: prometheus-package
+    type: package
+    package: prometheus
+    state: present
+
+  - name: prometheus-config
+    type: file
+    target_path: /etc/prometheus/prometheus.yml
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+    content: |
+      global:
+        scrape_interval: {{ .Vars.prometheus_scrape_interval }}
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: prometheus
+          static_configs:
+            - targets: ['localhost:{{ .Vars.prometheus_port }}']
+
+        - job_name: node
+          file_sd_configs:
+            - files:
+                - /etc/prometheus/targets/*.json
+              refresh_interval: 30s
+
+        - job_name: vigo
+          static_configs:
+            - targets: ['{{ .Vars.vigo_server }}:8443']
+    notify:
+      - prometheus-service
+
+  - name: prometheus-targets-dir
+    type: directory
+    path: /etc/prometheus/targets
+    owner: prometheus
+    group: prometheus
+    mode: "0755"
+
+  - name: prometheus-service
+    type: service
+    service: prometheus
+    state: running
+    enabled: true
+```
+
+## Configcrate Grafana
+
+`stacks/configcrates/grafana.vgo` :
+
+```yaml
+name: grafana
+depends_on:
+  - prometheus
+vars:
+  grafana_port: "3000"
+  grafana_admin_user: admin
+resources:
+  - name: grafana-package
+    type: package
+    package: grafana
+    state: present
+
+  - name: grafana-config
+    type: file
+    target_path: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: "0640"
+    content: |
+      [server]
+      http_port = {{ .Vars.grafana_port }}
+
+      [security]
+      admin_user = {{ .Vars.grafana_admin_user }}
+
+      [auth.anonymous]
+      enabled = false
+    notify:
+      - grafana-service
+
+  - name: grafana-datasource
+    type: file
+    target_path: /etc/grafana/provisioning/datasources/prometheus.yaml
+    owner: root
+    group: grafana
+    mode: "0640"
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://localhost:{{ .Vars.prometheus_port }}
+          isDefault: true
+          access: proxy
+    notify:
+      - grafana-service
+
+  - name: grafana-service
+    type: service
+    service: grafana-server
+    state: running
+    enabled: true
+```
+
+## Définition du rôle
+
+`stacks/roles/monitoring.vgo` :
+
+```yaml
+name: monitoring
+configcrates:
+  - node-exporter
+  - prometheus
+  - grafana
+```
+
+## Affectation des nœuds
+
+`stacks/envoys/envoys.vgo` :
+
+
+```yaml
+envoys:
+  # All servers get node_exporter
+  - match: "*.example.com"
+    configcrates:
+      - node-exporter
+
+  # Monitoring servers get the full stack
+  - match: "mon-*.example.com"
+    environment: production
+    roles: [monitoring]
+    vars:
+      vigo_server: vigo.internal
+      prometheus_retention: 90d
+      grafana_port: "3000"
+```
+
+## Ordre d'exécution
+
+1. **node-exporter** -- aucune dépendance, s'exécute en premier
+2. **prometheus** -- pas de dépendance explicite vis-à-vis de node-exporter (il découvre les cibles via file_sd)
+3. **grafana** -- dépend de prometheus (a besoin que la source de données soit disponible)
+
+## Ajout des métriques Vigo
+
+Pointez Prometheus vers le point de terminaison `/metrics` du serveur Vigo pour superviser le système de gestion de configuration lui-même. Consultez [Métriques Prometheus](../howto/operate/set-up-monitoring.md) pour les métriques disponibles et des suggestions de tableaux de bord Grafana.
+---
+*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../legal/license.md).*
