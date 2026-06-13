@@ -112,7 +112,7 @@
 {{if .Error}}
     <div class="alert alert--warn">{{T $.Locale "gitback.aggregator_error"}} {{.Error}}</div>
 {{else if or (not .Fleet) (eq (len .Fleet.Projects) 0)}}
-    {{template "empty-state" dict "Message" (T $.Locale "gitback.empty_message") "Hint" (T $.Locale "gitback.empty_hint")}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "gitback.empty_message") "Hint" (T $.Locale "gitback.empty_hint")}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card" title="{{T $.Locale "gitback.tip.projects"}}">

@@ -75,7 +75,7 @@
 {{if .Error}}
     <div class="alert alert--warn">{{T $.Locale "poolq.aggregator"}}: {{.Error}}</div>
 {{else if or (not .Snap) (eq (len .Snap.Topics) 0)}}
-    {{template "empty-state" dict "Message" (T $.Locale "poolq.empty_message") "Hint" (T $.Locale "poolq.empty_hint")}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "poolq.empty_message") "Hint" (T $.Locale "poolq.empty_hint")}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card" title="{{T $.Locale "poolq.stat_topics_title"}}">

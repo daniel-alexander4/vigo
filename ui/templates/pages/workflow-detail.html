@@ -6,7 +6,7 @@
     </div>
     <h1>{{.Workflow.WorkflowName}}</h1>
     <p>
-        {{template "status-badge" dict "Status" .Workflow.Status}}
+        {{template "status-badge" dict "Locale" $.Locale "Status" .Workflow.Status}}
         &middot; {{T $.Locale "workflow_detail.step"}} {{.Workflow.CurrentStep}}/{{.Workflow.TotalSteps}}
         &middot; {{.Workflow.Operator}}
         &middot; {{formatTime .Workflow.CreatedAt}}
@@ -47,7 +47,7 @@
             <tr>
                 <td>{{.StepIndex}}</td>
                 <td>{{.StepName}}</td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{template "status-badge" dict "Locale" $.Locale "Status" .Status}}</td>
                 <td class="mono">
                     {{if .TaskRunID}}<a href="/task/{{.TaskRunID}}">{{truncUUID .TaskRunID}}</a>{{else}}-{{end}}
                 </td>

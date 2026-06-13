@@ -9,7 +9,7 @@
 {{if .Error}}
     <div class="alert alert--warn">{{T $.Locale "longdrawer.aggregator_error"}} {{.Error}}</div>
 {{else if or (not .Sync) (eq (len .Sync.Users) 0)}}
-    {{template "empty-state" dict "Message" (T $.Locale "longdrawer.empty")}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "longdrawer.empty")}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">

@@ -76,7 +76,7 @@
 {{if .Error}}
     <div class="alert alert--warn">{{T $.Locale "puddle.aggregator"}}: {{.Error}}</div>
 {{else if or (not .Fleet) (eq (len .Fleet.Puddles) 0)}}
-    {{template "empty-state" dict "Message" (T $.Locale "puddle.empty_message") "Hint" (T $.Locale "puddle.empty_hint")}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "puddle.empty_message") "Hint" (T $.Locale "puddle.empty_hint")}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card" title="{{T $.Locale "puddle.tip_puddles"}}">

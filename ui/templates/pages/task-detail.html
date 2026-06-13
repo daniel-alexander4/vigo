@@ -6,7 +6,7 @@
     </div>
     <h1>{{T $.Locale "task_detail.title"}} {{truncUUID .Task.ID}}</h1>
     <p>
-        {{template "status-badge" dict "Status" .Task.Status}}
+        {{template "status-badge" dict "Locale" $.Locale "Status" .Task.Status}}
         &middot; {{T $.Locale "task_detail.target"}} <code>{{.Task.Target}}</code>
         &middot; {{.Task.Operator}}
         &middot; {{formatTime .Task.CreatedAt}}
@@ -53,7 +53,7 @@
             {{range .Targets}}
             <tr>
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{template "status-badge" dict "Locale" $.Locale "Status" .Status}}</td>
                 <td class="mono">{{if .ExitCode}}{{.ExitCode}}{{else}}-{{end}}</td>
                 <td class="mono">{{if .DurationMs}}{{.DurationMs}}ms{{else}}-{{end}}</td>
                 <td>{{if .ErrorMsg}}<span class="text-danger">{{.ErrorMsg}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>

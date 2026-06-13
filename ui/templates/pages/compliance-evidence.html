@@ -95,12 +95,12 @@
 {{define "evidence-mttr"}}
 <h3 class="section-heading">{{T $.Locale "compliance_evidence.remediation_metrics"}}</h3>
 <div class="stat-cards mb-2">
-    {{template "stat-card" dict "Value" .MTTRDisplay "Label" (T $.Locale "compliance_evidence.avg_mttr") "Color" "brand"}}
-    {{template "stat-card" dict "Value" .P50Display "Label" (T $.Locale "compliance_evidence.p50_mttr") "Color" "brand"}}
-    {{template "stat-card" dict "Value" .P95Display "Label" (T $.Locale "compliance_evidence.p95_mttr") "Color" "warning"}}
-    {{template "stat-card" dict "Value" .TotalIncidents "Label" (T $.Locale "compliance_evidence.drift_events") "Color" "warning"}}
-    {{template "stat-card" dict "Value" .Resolved "Label" (T $.Locale "compliance_evidence.resolved") "Color" "success"}}
-    {{template "stat-card" dict "Value" .OpenIncidents "Label" (T $.Locale "compliance_evidence.open") "Color" "danger"}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .MTTRDisplay "Label" (T $.Locale "compliance_evidence.avg_mttr") "Color" "brand"}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .P50Display "Label" (T $.Locale "compliance_evidence.p50_mttr") "Color" "brand"}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .P95Display "Label" (T $.Locale "compliance_evidence.p95_mttr") "Color" "warning"}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .TotalIncidents "Label" (T $.Locale "compliance_evidence.drift_events") "Color" "warning"}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .Resolved "Label" (T $.Locale "compliance_evidence.resolved") "Color" "success"}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .OpenIncidents "Label" (T $.Locale "compliance_evidence.open") "Color" "danger"}}
 </div>
 {{end}}
 
@@ -177,7 +177,7 @@
             <tr>
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
                 <td class="mono">{{.Configcrate}}</td>
-                <td>{{if gt .ResourceCount 0}}<span class="badge {{pctClassBg .FailurePct}} {{pctClass .FailurePct}}">{{.FailedCount}}/{{.ResourceCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
+                <td>{{if gt .ResourceCount 0}}<span class="badge {{pctClassBg .FailurePct}} {{pctClass .FailurePct}}">{{.FailedCount}}/{{.ResourceCount}}</span>{{else}}{{template "status-badge" dict "Locale" $.Locale "Status" .Status}}{{end}}</td>
                 <td>{{.RunCount}}</td>
                 <td>{{if gt .FailureCount 0}}<span class="text-danger">{{.FailureCount}}</span>{{else}}<span class="text-success">0</span>{{end}}</td>
                 <td class="text-muted">{{.LastRun}}</td>

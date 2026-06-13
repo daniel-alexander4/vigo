@@ -110,7 +110,7 @@
         </table>
     </div>
     {{else}}
-    {{template "empty-state" dict "Message" (T $.Locale "filecast.empty_message") "Hint" (T $.Locale "filecast.empty_hint")}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "filecast.empty_message") "Hint" (T $.Locale "filecast.empty_hint")}}
     {{end}}
 </div>
 {{end}}

@@ -40,9 +40,9 @@
 
     {{if not .Certs}}
         {{if .AllCerts}}
-        {{template "empty-state" dict "Message" (T $.Locale "security_certs.empty_bucket") "Hint" (T $.Locale "security_certs.empty_bucket_hint")}}
+        {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "security_certs.empty_bucket") "Hint" (T $.Locale "security_certs.empty_bucket_hint")}}
         {{else}}
-        {{template "empty-state" dict "Message" (T $.Locale "security_certs.empty_host")}}
+        {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "security_certs.empty_host")}}
         {{end}}
     {{else}}
     <table class="table">

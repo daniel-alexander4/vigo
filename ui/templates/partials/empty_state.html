@@ -9,11 +9,11 @@
                includes <code>…</code> for CLI verbs
 
   Usage (plain hint):
-    {{template "empty-state" dict "Message" "No users with longdrawer state observed."}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" "No users with longdrawer state observed."}}
 
   Usage (hint with markup — pass template.HTML from Go):
     data.EmptyHint := template.HTML("Use <code>vigocli swarm distribute</code>.")
-    {{template "empty-state" dict "Message" "No filecasts." "Hint" .EmptyHint}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" "No filecasts." "Hint" .EmptyHint}}
 */}}
 {{define "empty-state"}}
 <div class="card empty-state">

@@ -28,7 +28,7 @@
             <tr>
                 <td class="mono"><a href="/workflows/{{.ID}}">{{truncUUID .ID}}</a></td>
                 <td>{{.WorkflowName}}</td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{template "status-badge" dict "Locale" $.Locale "Status" .Status}}</td>
                 <td>{{.CurrentStep}}/{{.TotalSteps}}</td>
                 <td>{{.Operator}}</td>
                 <td class="text-muted">{{formatTime .CreatedAt}}</td>

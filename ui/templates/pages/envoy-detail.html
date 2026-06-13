@@ -157,7 +157,7 @@
 
 <div class="traits-tree" id="traits-tree">
     {{range .Tree}}
-        {{template "trait-group-shell" dict "Node" . "EnvoyID" $envoyID "Locale" $.Locale}}
+        {{template "trait-group-shell" dict "Locale" $.Locale "Node" . "EnvoyID" $envoyID "Locale" $.Locale}}
     {{end}}
 </div>
 
@@ -205,7 +205,7 @@
      the operator typically wants to scan its full subtree without
      additional round-trips. */}}
 {{define "envoy-trait-group-fragment"}}
-{{range .Children}}{{template "trait-node" dict "Node" . "Locale" $.Locale}}{{end}}
+{{range .Children}}{{template "trait-node" dict "Locale" $.Locale "Node" . "Locale" $.Locale}}{{end}}
 {{end}}
 
 {{/* envoy-traits-filter-fragment renders a flat list of matching leaves
@@ -241,11 +241,11 @@
                 <span class="text-muted">{{T $loc "envoy_detail.show_all"}} {{len $n.Children}} {{T $loc "envoy_detail.entries"}}</span>
             </summary>
             <div class="trait-group__body">
-            {{range $n.Children}}{{template "trait-node" dict "Node" . "Locale" $loc}}{{end}}
+            {{range $n.Children}}{{template "trait-node" dict "Locale" $.Locale "Node" . "Locale" $loc}}{{end}}
             </div>
         </details>
     {{else}}
-        {{range $n.Children}}{{template "trait-node" dict "Node" . "Locale" $loc}}{{end}}
+        {{range $n.Children}}{{template "trait-node" dict "Locale" $.Locale "Node" . "Locale" $loc}}{{end}}
     {{end}}
     </div>
 </details>
@@ -409,10 +409,10 @@
     </div>
 </div>
 
-{{template "swarm-load-section" dict "Title" "Filecast" "Subtitle" (T $.Locale "envoy_detail.filecast_section_sub") "Rows" .Filecast "Locale" $.Locale}}
-{{template "swarm-load-section" dict "Title" "Gitback" "Subtitle" (T $.Locale "envoy_detail.gitback_section_sub") "Rows" .Gitback "Locale" $.Locale}}
-{{template "swarm-load-section" dict "Title" "Longdrawer" "Subtitle" (T $.Locale "envoy_detail.longdrawer_section_sub") "Rows" .Longdrawer "Locale" $.Locale}}
-{{template "swarm-load-section" dict "Title" "Lockbox" "Subtitle" (T $.Locale "envoy_detail.lockbox_section_sub") "Rows" .Lockbox "Locale" $.Locale}}
+{{template "swarm-load-section" dict "Locale" $.Locale "Title" "Filecast" "Subtitle" (T $.Locale "envoy_detail.filecast_section_sub") "Rows" .Filecast "Locale" $.Locale}}
+{{template "swarm-load-section" dict "Locale" $.Locale "Title" "Gitback" "Subtitle" (T $.Locale "envoy_detail.gitback_section_sub") "Rows" .Gitback "Locale" $.Locale}}
+{{template "swarm-load-section" dict "Locale" $.Locale "Title" "Longdrawer" "Subtitle" (T $.Locale "envoy_detail.longdrawer_section_sub") "Rows" .Longdrawer "Locale" $.Locale}}
+{{template "swarm-load-section" dict "Locale" $.Locale "Title" "Lockbox" "Subtitle" (T $.Locale "envoy_detail.lockbox_section_sub") "Rows" .Lockbox "Locale" $.Locale}}
 {{end}}
 
 {{define "swarm-load-section"}}

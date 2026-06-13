@@ -78,7 +78,7 @@
 </div>
 
 {{template "dashboard-fleet" .}}
-{{template "envoy-filter-bar" dict
+{{template "envoy-filter-bar" dict "Locale" $.Locale
     "TotalEnvoys"           .TotalEnvoys
     "CountConverged"        .Converged
     "CountDegraded"         .Degraded

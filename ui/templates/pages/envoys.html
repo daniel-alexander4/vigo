@@ -72,10 +72,10 @@
 
 {{define "envoys-stats"}}
 <div class="stat-cards stat-cards--compact mb-2">
-    {{template "stat-card" dict "Value" .TotalEnvoys "Label" (T $.Locale "envoys.total_envoys") "Color" "brand"}}
-    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" (T $.Locale "envoys.reachable") "Color" "success" "Tooltip" (T $.Locale "envoys.reachable_tooltip")}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .TotalEnvoys "Label" (T $.Locale "envoys.total_envoys") "Color" "brand"}}
+    {{template "stat-card" dict "Locale" $.Locale "Value" .ActiveEnvoys "Label" (T $.Locale "envoys.reachable") "Color" "success" "Tooltip" (T $.Locale "envoys.reachable_tooltip")}}
 </div>
-{{template "envoy-filter-bar" dict
+{{template "envoy-filter-bar" dict "Locale" $.Locale
     "TotalEnvoys"           .TotalEnvoys
     "CountConverged"        .CountConverged
     "CountDegraded"         .CountDegraded

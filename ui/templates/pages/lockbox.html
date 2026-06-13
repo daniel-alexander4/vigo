@@ -9,7 +9,7 @@
 {{if .Error}}
     <div class="alert alert--warn">{{T $.Locale "lockbox.aggregator_error"}} {{.Error}}</div>
 {{else if or (not .Crypt) (eq (len .Crypt.Users) 0)}}
-    {{template "empty-state" dict "Message" "No users with lockbox state observed across the fleet."}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" "No users with lockbox state observed across the fleet."}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">

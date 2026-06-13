@@ -36,7 +36,7 @@
                 <td class="mono"><a href="/task/{{.ID}}">{{truncUUID .ID}}</a></td>
                 <td class="mono" title="{{.Command}}">{{truncCommand .Command}}</td>
                 <td>{{.Target}}</td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{template "status-badge" dict "Locale" $.Locale "Status" .Status}}</td>
                 <td>{{.TotalTargets}}</td>
                 <td>{{.Operator}}</td>
                 <td class="text-muted">{{formatTime .CreatedAt}}</td>
@@ -77,7 +77,7 @@
             <tr>
                 <td class="mono"><a href="/workflows/{{.ID}}">{{truncUUID .ID}}</a></td>
                 <td>{{.WorkflowName}}</td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{template "status-badge" dict "Locale" $.Locale "Status" .Status}}</td>
                 <td>{{.CurrentStep}}/{{.TotalSteps}}</td>
                 <td>{{.Operator}}</td>
                 <td class="text-muted">{{formatTime .CreatedAt}}</td>

@@ -364,17 +364,17 @@
         {{if eq .Slug "cves"}}{{template "sec-pane-cves" $}}
         {{else if eq .Slug "certs"}}{{template "sec-pane-certs" $}}
         {{else if .HasLive}}
-            {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Detail" $.Detail.Trivy "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Detail" $.Detail.Debsecan "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Detail" $.Detail.Lynis "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" dict "Detail" $.Detail.ClamAV "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "aide"}}{{template "sec-section-aide" dict "Detail" $.Detail.AIDE "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "defender"}}{{template "sec-section-defender" dict "Detail" $.Detail.Defender "Hostname" $.Hostname "Locale" $.Locale}}
-            {{else if eq .Slug "scap"}}{{template "sec-section-scap" dict "Detail" $.Detail.SCAP "Hostname" $.Hostname "Locale" $.Locale}}
+            {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Locale" $.Locale "Detail" $.Detail.Trivy "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Locale" $.Locale "Detail" $.Detail.Debsecan "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Locale" $.Locale "Detail" $.Detail.Lynis "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Locale" $.Locale "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Locale" $.Locale "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" dict "Locale" $.Locale "Detail" $.Detail.ClamAV "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "aide"}}{{template "sec-section-aide" dict "Locale" $.Locale "Detail" $.Detail.AIDE "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "defender"}}{{template "sec-section-defender" dict "Locale" $.Locale "Detail" $.Detail.Defender "Hostname" $.Hostname "Locale" $.Locale}}
+            {{else if eq .Slug "scap"}}{{template "sec-section-scap" dict "Locale" $.Locale "Detail" $.Detail.SCAP "Hostname" $.Hostname "Locale" $.Locale}}
             {{end}}
-        {{else}}{{template "sec-pane-cached-scanner" dict "Slug" .Slug "Cached" $.Cached "Hostname" $.Hostname "Locale" $.Locale}}
+        {{else}}{{template "sec-pane-cached-scanner" dict "Locale" $.Locale "Slug" .Slug "Cached" $.Cached "Hostname" $.Hostname "Locale" $.Locale}}
         {{end}}
     </section>
     {{end}}

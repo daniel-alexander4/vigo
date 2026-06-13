@@ -147,7 +147,7 @@
 {{if .Error}}
     <div class="alert alert--warn">{{T $.Locale "curator.aggregator_error"}} {{.Error}}</div>
 {{else if or (not .Catalog) (eq (len .Catalog.Artifacts) 0)}}
-    {{template "empty-state" dict "Message" (T $.Locale "curator.empty_message") "Hint" (T $.Locale "curator.empty_hint")}}
+    {{template "empty-state" dict "Locale" $.Locale "Message" (T $.Locale "curator.empty_message") "Hint" (T $.Locale "curator.empty_hint")}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card" title="{{T $.Locale "curator.stat.artifacts_title"}}">
