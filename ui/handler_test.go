@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"git.alexander4.io/vigo/server/fleetpressure"
+	"git.alexander4.io/vigo/server/i18n"
 )
 
 func TestDashboardHandler(t *testing.T) {
@@ -1370,7 +1371,7 @@ func TestDocsPageRefusesNonPublishedSection(t *testing.T) {
 
 	h := newTestHandler(t)
 	h.docsDir = docsDir
-	h.docsNav = buildDocsNav(docsDir)
+	h.docsNavByLocale = buildDocsNavByLocale(docsDir)
 
 	// internal.docs / adr must 404 by direct URL even though they exist.
 	for _, p := range []string{"internal.docs", "internal.docs/strategy/pricing", "adr", "adr/_index"} {
@@ -1418,7 +1419,7 @@ func TestBuildDocsNavSkipsAssetOnlySubdirs(t *testing.T) {
 	mk("howto/grafana/vigo-overview.json", "{}\n") // asset-only: no .md
 	mk("howto/_pdf/install.pdf", "%PDF-1.4\n")     // asset-only: no .md
 
-	nav := buildDocsNav(docsDir)
+	nav := buildDocsNav(docsDir, i18n.DefaultLocaleFallback)
 
 	var howto *DocsNavSection
 	for i := range nav {

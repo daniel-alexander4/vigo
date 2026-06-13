@@ -62,6 +62,19 @@ func TestDocLinksNotBroken(t *testing.T) {
 			}
 			return nil
 		}
+		// docs/fr/ is the generated French mirror (i18n): it preserves the English
+		// link targets byte-for-byte, so link validity is already covered by the
+		// English tree above. Links into untranslated subtrees (e.g. the gated
+		// docs/reference/) resolve to no docs/fr/ file but the docs handler falls
+		// back to the English page per-file at runtime — a filesystem walk can't
+		// see that fallback, so checking fr/ links here yields false positives.
+		// Drift of fr/ vs en/ is guarded separately by TestFrenchDocsNotStale.
+		if rel == "fr" || strings.HasPrefix(rel, "fr"+string(filepath.Separator)) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if info.IsDir() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}

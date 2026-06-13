@@ -262,7 +262,7 @@ type Handler struct {
 	assistant         *ai.Assistant
 	spannerAdmin      *spanner.SpannerAdmin
 	docsDir           string
-	docsNav           []DocsNavSection
+	docsNavByLocale   map[string][]DocsNavSection
 	enforcer          *license.Enforcer
 	peerSvc           *peer.Service
 	authEnabled       bool
@@ -555,7 +555,7 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 	}
 
 	if docsDir != "" {
-		h.docsNav = buildDocsNav(docsDir)
+		h.docsNavByLocale = buildDocsNavByLocale(docsDir)
 	}
 
 	return h, nil
@@ -1822,8 +1822,80 @@ func buildDocsBreadcrumbs(pagePath string, nav []DocsNavSection) ([]DocsCrumb, s
 	return breadcrumbs, currentSection
 }
 
-// buildDocsNav walks the docs directory and builds a nav tree.
-func buildDocsNav(docsDir string) []DocsNavSection {
+// docsNavForLocale returns the prebuilt nav tree for a locale, falling back to
+// the default-locale nav when no localized nav was built.
+func (h *Handler) docsNavForLocale(locale string) []DocsNavSection {
+	if nav, ok := h.docsNavByLocale[locale]; ok {
+		return nav
+	}
+	return h.docsNavByLocale[i18n.DefaultLocaleFallback]
+}
+
+// buildDocsNavByLocale builds one nav tree per available locale. The default
+// ("en") nav is always built; for each locale subdirectory present under
+// docsDir (e.g. docs/fr/) a parallel nav is built whose page STRUCTURE/URLs
+// are identical to English — only the displayed titles (and search text)
+// differ, sourced from the localized file when it exists and falling back to
+// the English file otherwise. The doc tree is ~70 pages, so building a handful
+// of navs at startup is cheap.
+func buildDocsNavByLocale(docsDir string) map[string][]DocsNavSection {
+	out := map[string][]DocsNavSection{
+		i18n.DefaultLocaleFallback: buildDocsNav(docsDir, i18n.DefaultLocaleFallback),
+	}
+	entries, err := os.ReadDir(docsDir)
+	if err != nil {
+		return out
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		loc := entry.Name()
+		if loc == i18n.DefaultLocaleFallback {
+			continue
+		}
+		// Only treat top-level dirs that look like locale codes (i.e. not a
+		// docs section) as locale roots. A locale dir mirrors the English
+		// tree; a docs section (start/, howto/, …) is in docsSectionOrder.
+		if isPublishedDocsSection(loc) {
+			continue
+		}
+		out[loc] = buildDocsNav(docsDir, loc)
+	}
+	return out
+}
+
+// docsNavTitle returns the title for a docs page in the given locale: the
+// localized file's first `#` heading when docs/<locale>/<relPath> exists,
+// else the English file's. relPath is relative to docsDir (e.g.
+// "start/overview.md").
+func docsNavTitle(docsDir, locale, relPath string) string {
+	if locale != i18n.DefaultLocaleFallback {
+		if t := extractMDTitle(filepath.Join(docsDir, locale, relPath)); t != "" {
+			return t
+		}
+	}
+	return extractMDTitle(filepath.Join(docsDir, relPath))
+}
+
+// docsNavText returns the search-index plain text for a docs page in the given
+// locale, preferring the localized file's content and falling back to English.
+func docsNavText(docsDir, locale, relPath string) string {
+	if locale != i18n.DefaultLocaleFallback {
+		if raw, err := os.ReadFile(filepath.Join(docsDir, locale, relPath)); err == nil {
+			return stripMarkdown(stripDocI18nMarker(string(raw)))
+		}
+	}
+	if raw, err := os.ReadFile(filepath.Join(docsDir, relPath)); err == nil {
+		return stripMarkdown(string(raw))
+	}
+	return ""
+}
+
+// buildDocsNav walks the docs directory and builds a nav tree. The page
+// structure/URLs are always sourced from the English tree; titles and search
+// text are resolved per-locale (localized file when present, English fallback).
+func buildDocsNav(docsDir, locale string) []DocsNavSection {
 	info, err := os.Stat(docsDir)
 	if err != nil || !info.IsDir() {
 		return nil
@@ -1843,7 +1915,7 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 		}
 
 		sectionPath := entry.Name()
-		sectionTitle := extractMDTitle(filepath.Join(docsDir, sectionPath, "_index.md"))
+		sectionTitle := docsNavTitle(docsDir, locale, filepath.Join(sectionPath, "_index.md"))
 		if sectionTitle == "" {
 			sectionTitle = strings.ReplaceAll(sectionPath, "-", " ")
 			sectionTitle = titleCaser.String(sectionTitle)
@@ -1867,7 +1939,7 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 				// dashboard JSON, howto/_pdf/ rendered PDFs) would otherwise
 				// render as empty nav entries; they stay reachable by direct
 				// link via DocsPage's static-asset branch, just not in the nav.
-				sub := buildSubsection(docsDir, sectionPath, pf.Name())
+				sub := buildSubsection(docsDir, locale, sectionPath, pf.Name())
 				if len(sub.Pages) > 0 {
 					subsections = append(subsections, sub)
 				}
@@ -1878,17 +1950,15 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 			}
 
 			pageName := strings.TrimSuffix(pf.Name(), ".md")
-			pageTitle := extractMDTitle(filepath.Join(docsDir, sectionPath, pf.Name()))
+			relPath := filepath.Join(sectionPath, pf.Name())
+			pageTitle := docsNavTitle(docsDir, locale, relPath)
 			if pageTitle == "" {
 				pageTitle = strings.ReplaceAll(pageName, "-", " ")
 				pageTitle = strings.ReplaceAll(pageTitle, "_", " ")
 			}
 
 			// Read file content for full-text search index.
-			var plainText string
-			if raw, err := os.ReadFile(filepath.Join(docsDir, sectionPath, pf.Name())); err == nil {
-				plainText = stripMarkdown(string(raw))
-			}
+			plainText := docsNavText(docsDir, locale, relPath)
 
 			pages = append(pages, DocsNavPage{
 				Title: pageTitle,
@@ -1921,10 +1991,12 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 	return nav
 }
 
-// buildSubsection builds a DocsNavSection for a nested directory within a section.
-func buildSubsection(docsDir, parentPath, dirName string) DocsNavSection {
+// buildSubsection builds a DocsNavSection for a nested directory within a
+// section. Page structure comes from the English tree; titles/text resolve
+// per-locale (localized file when present, English fallback).
+func buildSubsection(docsDir, locale, parentPath, dirName string) DocsNavSection {
 	subPath := parentPath + "/" + dirName
-	subTitle := extractMDTitle(filepath.Join(docsDir, subPath, "_index.md"))
+	subTitle := docsNavTitle(docsDir, locale, filepath.Join(subPath, "_index.md"))
 	if subTitle == "" {
 		subTitle = strings.ReplaceAll(dirName, "-", " ")
 		subTitle = titleCaser.String(subTitle)
@@ -1942,16 +2014,14 @@ func buildSubsection(docsDir, parentPath, dirName string) DocsNavSection {
 		}
 
 		pageName := strings.TrimSuffix(pf.Name(), ".md")
-		pageTitle := extractMDTitle(filepath.Join(docsDir, subPath, pf.Name()))
+		relPath := filepath.Join(subPath, pf.Name())
+		pageTitle := docsNavTitle(docsDir, locale, relPath)
 		if pageTitle == "" {
 			pageTitle = strings.ReplaceAll(pageName, "-", " ")
 			pageTitle = strings.ReplaceAll(pageTitle, "_", " ")
 		}
 
-		var plainText string
-		if raw, err := os.ReadFile(filepath.Join(docsDir, subPath, pf.Name())); err == nil {
-			plainText = stripMarkdown(string(raw))
-		}
+		plainText := docsNavText(docsDir, locale, relPath)
 
 		pages = append(pages, DocsNavPage{
 			Title: pageTitle,
@@ -1987,6 +2057,51 @@ func extractMDTitle(path string) string {
 		}
 	}
 	return ""
+}
+
+// docI18nMarkerRe matches the leading provenance marker that the French-doc
+// generator writes as the first line of every translated file:
+//
+//	<!-- vigo-i18n source_sha:HEX -->
+//
+// HEX is the lowercase sha256 of the English source's raw bytes (the drift
+// audit checks it; see test/audit TestFrenchDocsNotStale).
+var docI18nMarkerRe = regexp.MustCompile(`^<!-- vigo-i18n source_sha:[0-9a-fA-F]+ -->[ \t]*\r?\n`)
+
+// stripDocI18nMarker removes a leading `<!-- vigo-i18n source_sha:... -->`
+// marker line (and a single following blank line, if present) so the comment
+// never renders and extractMDTitle still finds the first `#` heading. Files
+// without the marker pass through unchanged.
+func stripDocI18nMarker(s string) string {
+	loc := docI18nMarkerRe.FindStringIndex(s)
+	if loc == nil {
+		return s
+	}
+	s = s[loc[1]:]
+	// Drop one immediately-following blank line.
+	if strings.HasPrefix(s, "\r\n") {
+		return s[2:]
+	}
+	if strings.HasPrefix(s, "\n") {
+		return s[1:]
+	}
+	return s
+}
+
+// readDocFile reads a docs markdown file for the given locale. For a
+// non-default locale it tries docs/<locale>/<relPath> first and falls back to
+// the English docs/<relPath>. relPath is relative to docsDir. Returns the raw
+// bytes and whether a file was found.
+func (h *Handler) readDocFile(locale, relPath string) ([]byte, bool) {
+	if locale != i18n.DefaultLocaleFallback {
+		if raw, err := os.ReadFile(filepath.Join(h.docsDir, locale, relPath)); err == nil {
+			return raw, true
+		}
+	}
+	if raw, err := os.ReadFile(filepath.Join(h.docsDir, relPath)); err == nil {
+		return raw, true
+	}
+	return nil, false
 }
 
 // stripMarkdown removes markdown syntax to produce plain text for search indexing.
@@ -2110,15 +2225,15 @@ func rewriteDocsLinks(html string, baseDir string) string {
 
 // DocsIndex renders the docs landing page.
 func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
+	locale := h.localeFromRequest(r)
 	content := ""
-	indexPath := filepath.Join(h.docsDir, "_index.md")
-	if raw, err := os.ReadFile(indexPath); err == nil {
-		content = rewriteDocsLinks(RenderMarkdown(string(raw)), "")
+	if raw, ok := h.readDocFile(locale, "_index.md"); ok {
+		content = rewriteDocsLinks(RenderMarkdown(stripDocI18nMarker(string(raw))), "")
 	} else {
 		content = "<h1>Documentation</h1><p>No docs found. Place markdown files in the docs directory.</p>"
 	}
 
-	nav := h.docsNav
+	nav := h.docsNavForLocale(locale)
 
 	data := DocsPageData{
 		PageData:        PageData{Title: "Documentation", ActiveNav: "docs"},
@@ -2171,30 +2286,35 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try exact .md file first, then _index.md for directories.
+	locale := h.localeFromRequest(r)
+
+	// Try exact .md file first, then _index.md for directories. Each attempt
+	// prefers the localized file (docs/<locale>/<relPath>) and falls back to
+	// English; the chosen file determines baseDir for relative-link resolution.
+	// URLs stay locale-free — the request locale (cookie) selects the content.
 	var raw []byte
-	var err error
 	var baseDir string // directory for resolving relative links
-	mdPath := filepath.Join(h.docsDir, pagePath+".md")
-	if raw, err = os.ReadFile(mdPath); err != nil {
-		mdPath = filepath.Join(h.docsDir, pagePath, "_index.md")
-		if raw, err = os.ReadFile(mdPath); err != nil {
-			http.Error(w, "page not found", http.StatusNotFound)
-			return
-		}
-		baseDir = pagePath // _index.md: relative links resolve from this dir
-	} else {
+	if r2, ok := h.readDocFile(locale, pagePath+".md"); ok {
+		raw = r2
 		baseDir = path.Dir(pagePath) // regular file: resolve from parent dir
 		if baseDir == "." {
 			baseDir = ""
 		}
+	} else if r2, ok := h.readDocFile(locale, filepath.Join(pagePath, "_index.md")); ok {
+		raw = r2
+		baseDir = pagePath // _index.md: relative links resolve from this dir
+	} else {
+		http.Error(w, "page not found", http.StatusNotFound)
+		return
 	}
 
-	content := rewriteDocsLinks(RenderMarkdown(string(raw)), baseDir)
+	// Strip the i18n provenance marker BEFORE rendering and title extraction so
+	// the comment never renders and the first `#` heading is still the title.
+	content := rewriteDocsLinks(RenderMarkdown(stripDocI18nMarker(string(raw))), baseDir)
 
-	breadcrumbs, currentSection := buildDocsBreadcrumbs(pagePath, h.docsNav)
+	nav := h.docsNavForLocale(locale)
 
-	nav := h.docsNav
+	breadcrumbs, currentSection := buildDocsBreadcrumbs(pagePath, nav)
 
 	data := DocsPageData{
 		PageData:        PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
