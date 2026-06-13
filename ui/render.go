@@ -22,6 +22,7 @@ import (
 	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/httpsec"
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/swarm/poolqmesh"
@@ -56,8 +57,8 @@ func isCRUDAction(action string) bool {
 // funcMap returns the template FuncMap used across all templates.
 func funcMap() template.FuncMap {
 	return template.FuncMap{
-		"T":                     catalogT,
-		"tSafe":                 catalogTSafe,
+		"T":                     i18n.CatalogT,
+		"tSafe":                 i18n.CatalogTSafe,
 		"timeAgoL":              timeAgoL,
 		"tEnum":                 tEnum,
 		"statusColor":           statusColor,
@@ -956,7 +957,7 @@ func timeAgo(t time.Time) string {
 // the eventual CLDR generalization (golang.org/x/text/message) would replace
 // this. Templates call {{timeAgoL $.Locale .When}}.
 func timeAgoL(localeArg any, t time.Time) string {
-	locale := localeStr(localeArg)
+	locale := i18n.LocaleStr(localeArg)
 	if locale != "fr" {
 		return timeAgo(t)
 	}
@@ -995,15 +996,15 @@ func timeAgoL(localeArg any, t time.Time) string {
 // (headers, buttons, filter-pill labels) use {{T}} instead; tEnum is only for
 // values that arrive as data.
 func tEnum(localeArg any, value string) string {
-	locale := localeStr(localeArg)
+	locale := i18n.LocaleStr(localeArg)
 	// English (and the default/empty locale) passes through untouched, so a
 	// disabled or English deployment renders the exact source value — the
 	// enum.* English entries exist only for catalog symmetry, never runtime.
-	if value == "" || locale == "" || locale == defaultLocaleFallback {
+	if value == "" || locale == "" || locale == i18n.DefaultLocaleFallback {
 		return value
 	}
 	key := "enum." + strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), " ", "_"))
-	if s := catalogT(locale, key); s != key {
+	if s := i18n.CatalogT(locale, key); s != key {
 		return s
 	}
 	return value

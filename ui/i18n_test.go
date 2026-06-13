@@ -10,56 +10,8 @@ import (
 	"testing"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/i18n"
 )
-
-// TestCatalogCompleteness is the drift guard for the chrome catalogs: every
-// key in the English (source) catalog must exist in every other locale, and
-// no locale may carry an orphan key the English catalog doesn't define.
-// English is the fallback, so a missing key degrades to English silently —
-// this test makes that drift loud at build time instead.
-func TestCatalogCompleteness(t *testing.T) {
-	en, ok := catalogs[defaultLocaleFallback]
-	if !ok {
-		t.Fatalf("no %q catalog loaded", defaultLocaleFallback)
-	}
-	if len(en) == 0 {
-		t.Fatal("English catalog is empty")
-	}
-	for locale, m := range catalogs {
-		if locale == defaultLocaleFallback {
-			continue
-		}
-		for key := range en {
-			if _, ok := m[key]; !ok {
-				t.Errorf("locale %q missing key %q (present in English)", locale, key)
-			}
-		}
-		for key := range m {
-			if _, ok := en[key]; !ok {
-				t.Errorf("locale %q has orphan key %q (not in English)", locale, key)
-			}
-		}
-	}
-}
-
-func TestCatalogT(t *testing.T) {
-	// A key present in both: French wins for fr.
-	if got := catalogT("fr", "chrome.sign_out"); got != "Se déconnecter" {
-		t.Errorf("catalogT(fr, chrome.sign_out) = %q, want French", got)
-	}
-	// English for the default locale.
-	if got := catalogT("en", "chrome.sign_out"); got != "Sign out" {
-		t.Errorf("catalogT(en, chrome.sign_out) = %q, want English", got)
-	}
-	// Unknown locale falls back to English.
-	if got := catalogT("de", "chrome.sign_out"); got != "Sign out" {
-		t.Errorf("catalogT(de, ...) = %q, want English fallback", got)
-	}
-	// Unknown key surfaces the key itself (loud, not blank).
-	if got := catalogT("fr", "no.such.key"); got != "no.such.key" {
-		t.Errorf("catalogT(fr, no.such.key) = %q, want the key echoed back", got)
-	}
-}
 
 func TestLocaleFromRequest(t *testing.T) {
 	enabled := &Handler{i18n: config.I18nSection{
@@ -76,7 +28,7 @@ func TestLocaleFromRequest(t *testing.T) {
 	newReq := func(cookie, acceptLang string) *http.Request {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		if cookie != "" {
-			r.AddCookie(&http.Cookie{Name: localeCookieName, Value: cookie})
+			r.AddCookie(&http.Cookie{Name: i18n.LocaleCookieName, Value: cookie})
 		}
 		if acceptLang != "" {
 			r.Header.Set("Accept-Language", acceptLang)
