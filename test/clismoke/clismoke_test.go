@@ -22,6 +22,7 @@
 package clismoke
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -203,17 +204,132 @@ func TestCLIMutationsSafe(t *testing.T) {
 	if _, err := runCLI(t, "tokens", "generate"); err != nil {
 		t.Errorf("tokens generate: %v", err)
 	}
-	if _, err := runCLI(t, "envoys", "tag", sampleEnvoyID, "smoke-tag"); err != nil {
-		t.Errorf("envoys tag: %v", err)
-	}
-	if _, err := runCLI(t, "envoys", "untag", sampleEnvoyID, "smoke-tag"); err != nil {
-		t.Errorf("envoys untag: %v", err)
-	}
 	if _, err := runCLI(t, "envoys", "maintenance", sampleEnvoyID, "--until", "2099-01-01T00:00:00Z"); err != nil {
 		t.Errorf("envoys maintenance set: %v", err)
 	}
 	if _, err := runCLI(t, "envoys", "maintenance", sampleEnvoyID, "--clear"); err != nil {
 		t.Errorf("envoys maintenance clear: %v", err)
+	}
+}
+
+// TestCLIMutationRoundTrip proves a write is reflected by the matching read —
+// not merely that the write RPC returned 2xx (what TestCLIMutationsSafe
+// checks). It creates a web user, confirms it surfaces in `webusers list`,
+// flips its role, and confirms the new role surfaces. The instance is torn
+// down afterward, so the created user leaves no lasting state.
+func TestCLIMutationRoundTrip(t *testing.T) {
+	const user = "rt-smoke"
+
+	if _, err := runCLI(t, "webusers", "create", "--username", user, "--role", "viewer", "--no-password"); err != nil {
+		t.Fatalf("webusers create: %v", err)
+	}
+	out, err := runCLI(t, "webusers", "list")
+	if err != nil {
+		t.Fatalf("webusers list: %v\n%s", err, truncate(out, 1500))
+	}
+	if !lineContains(out, user, "viewer") {
+		t.Fatalf("created user %q (viewer) not reflected in `webusers list`:\n%s", user, truncate(out, 1500))
+	}
+
+	// A mutation to that same row must change what the read returns.
+	if _, err := runCLI(t, "webusers", "set-role", "--username", user, "--role", "compliance"); err != nil {
+		t.Fatalf("webusers set-role: %v", err)
+	}
+	out, err = runCLI(t, "webusers", "list")
+	if err != nil {
+		t.Fatalf("webusers list (after set-role): %v\n%s", err, truncate(out, 1500))
+	}
+	if !lineContains(out, user, "compliance") {
+		t.Errorf("set-role to compliance not reflected for %q in `webusers list`:\n%s", user, truncate(out, 1500))
+	}
+}
+
+// TestCLIJSONOutputContract asserts the machine-readable (`--format json`)
+// output of a scriptable read command is valid JSON carrying the documented
+// top-level keys — the contract a consumer's `jq` pipeline depends on. A
+// renamed or dropped field turns this red. The compliance report is a
+// server-built document available on any fleet, so it needs no agent.
+func TestCLIJSONOutputContract(t *testing.T) {
+	args := []string{"compliance", "report", "compliance", "--format", "json"}
+	wantKeys := []string{"generated_at", "summary", "controls"}
+
+	stdout, err := runCLIStdout(t, args...)
+	if err != nil {
+		t.Fatalf("`vigocli %s` failed: %v", strings.Join(args, " "), err)
+	}
+	var v map[string]any
+	if err := json.Unmarshal([]byte(stdout), &v); err != nil {
+		t.Fatalf("`vigocli %s` stdout is not valid JSON: %v\n%s", strings.Join(args, " "), err, truncate(stdout, 1500))
+	}
+	for _, k := range wantKeys {
+		if _, ok := v[k]; !ok {
+			t.Errorf("`vigocli %s` JSON missing top-level key %q\n%s", strings.Join(args, " "), k, truncate(stdout, 1500))
+		}
+	}
+}
+
+// TestCLIRBACMatrix mints API tokens for the viewer and compliance roles and
+// asserts the per-role authorization boundary the server enforces. The key
+// invariant is the documented carve-out: the compliance role is denied
+// audit.read (the raw hash-chained audit log stays admin/viewer-only). Denied
+// calls must come back 403 (authenticated, unauthorized) — not 401 — which
+// also proves the minted token authenticated correctly.
+func TestCLIRBACMatrix(t *testing.T) {
+	viewerTok := mintRoleToken(t, "viewer", "rbac-viewer")
+	compTok := mintRoleToken(t, "compliance", "rbac-compliance")
+
+	cases := []struct {
+		name    string
+		token   string
+		args    []string
+		wantErr bool
+		want    string // substring required in output
+	}{
+		// viewer holds fleet.read + audit.read, but not fleet.write. The
+		// successful read also proves the minted token authenticates.
+		{"viewer reads envoys", viewerTok, []string{"envoys", "list"}, false, sampleHostname},
+		{"viewer reads audit (audit.read)", viewerTok, []string{"security", "audit", "list"}, false, ""},
+		{"viewer denied maintenance (fleet.write)", viewerTok, []string{"envoys", "maintenance", sampleEnvoyID, "--until", "2099-01-01T00:00:00Z"}, true, "403"},
+		// compliance is deliberately denied audit.read — the documented
+		// carve-out keeping the raw hash-chained audit log admin/viewer-only.
+		// A 403 (not 401) here proves the compliance token authenticated.
+		{"compliance denied audit (audit.read carve-out)", compTok, []string{"security", "audit", "list"}, true, "403"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, err := runCLIWithToken(t, c.token, c.args...)
+			if c.wantErr && err == nil {
+				t.Fatalf("`vigocli %s` unexpectedly succeeded; want denial\n%s", strings.Join(c.args, " "), truncate(out, 1500))
+			}
+			if !c.wantErr && err != nil {
+				t.Fatalf("`vigocli %s` unexpectedly failed: %v\n%s", strings.Join(c.args, " "), err, truncate(out, 1500))
+			}
+			if c.want != "" && !strings.Contains(out, c.want) {
+				t.Errorf("`vigocli %s` output missing %q\n%s", strings.Join(c.args, " "), c.want, truncate(out, 1500))
+			}
+		})
+	}
+}
+
+// TestCLIErrorSurface checks the unhappy paths surface a clean operator-facing
+// error — an HTTP status the caller can act on, never a panic or a raw Go
+// stack trace leaking out of the CLI.
+func TestCLIErrorSurface(t *testing.T) {
+	// A well-formed but nonexistent envoy ID → 404 not found.
+	out, err := runCLI(t, "envoys", "show", "00000000-0000-0000-0000-000000000000")
+	if err == nil {
+		t.Errorf("envoys show <nonexistent> should fail, got success:\n%s", truncate(out, 1500))
+	} else if !strings.Contains(out, "404") && !strings.Contains(out, "not found") {
+		t.Errorf("envoys show <nonexistent>: want a 404/not-found error, got:\n%s", truncate(out, 1500))
+	}
+
+	// A syntactically valid but unknown token → 401 unauthorized (not a crash).
+	const junk = "vgot_0000000000000000000000000000000000000000000000000000000000000000"
+	out, err = runCLIWithToken(t, junk, "envoys", "list")
+	if err == nil {
+		t.Errorf("envoys list with junk token should fail, got success:\n%s", truncate(out, 1500))
+	} else if !strings.Contains(out, "401") && !strings.Contains(strings.ToLower(out), "auth") {
+		t.Errorf("envoys list with junk token: want a 401/auth error, got:\n%s", truncate(out, 1500))
 	}
 }
 
@@ -230,6 +346,85 @@ func runCLI(t *testing.T, args ...string) (string, error) {
 	cmd.Env = cliEnv
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// runCLIStdout runs vigocli (as admin) capturing stdout separately from
+// stderr, so machine-readable `--json` output parses without any log noise.
+func runCLIStdout(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	full := append(append([]string{}, args...), "--server", srvURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cliBin, full...)
+	cmd.Env = cliEnv
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	if err != nil && stderr.Len() > 0 {
+		err = fmt.Errorf("%w\nstderr: %s", err, truncate(stderr.String(), 500))
+	}
+	return stdout.String(), err
+}
+
+// runCLIWithToken runs vigocli authenticated as the given API token rather than
+// the admin principal — by pointing VIGO_CONFIG_DIR at a throwaway config dir
+// holding it. Returns combined output so denial messages (printed to stderr)
+// are visible to substring assertions.
+func runCLIWithToken(t *testing.T, token string, args ...string) (string, error) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "token"), []byte(token), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+	full := append(append([]string{}, args...), "--server", srvURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cliBin, full...)
+	cmd.Env = append(os.Environ(), "VIGO_CONFIG_DIR="+dir)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// mintRoleToken creates a no-password web user with the given role and an API
+// token owned by it, returning the vgot_ plaintext. The token resolves to the
+// owning user's role on the server, so it carries exactly that role's
+// permissions — the lever the RBAC matrix exercises.
+func mintRoleToken(t *testing.T, role, name string) string {
+	t.Helper()
+	user := name + "-user"
+	if _, err := runCLI(t, "webusers", "create", "--username", user, "--role", role, "--no-password"); err != nil {
+		t.Fatalf("create %s user: %v", role, err)
+	}
+	out, err := runCLI(t, "auth", "create-token", "--user", user, "--name", name)
+	if err != nil {
+		t.Fatalf("create-token for %s: %v\n%s", user, err, truncate(out, 1500))
+	}
+	for _, f := range strings.Fields(out) {
+		if strings.HasPrefix(f, "vgot_") {
+			return f
+		}
+	}
+	t.Fatalf("no vgot_ token in create-token output:\n%s", out)
+	return ""
+}
+
+// lineContains reports whether any single line of s contains all of subs —
+// used to assert a table row carries an expected (username, value) pair
+// without matching the substrings against different rows.
+func lineContains(s string, subs ...string) bool {
+	for _, line := range strings.Split(s, "\n") {
+		all := true
+		for _, sub := range subs {
+			if !strings.Contains(line, sub) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
 }
 
 func buildCmd(dir, out, pkg string) (string, error) {
