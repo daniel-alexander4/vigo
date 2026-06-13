@@ -55,9 +55,9 @@
                 </div>
             </header>
             {{end}}{{end}}
-            {{if .LicenseWarning}}
+            {{if or .LicenseWarning .LicenseNearLimit}}
             <div class="license-banner">
-                <span class="license-banner__text">{{.LicenseWarning}}</span>
+                <span class="license-banner__text">{{if .LicenseWarning}}{{.LicenseWarning}}{{else}}{{printf (T $.Locale "license.approaching_limit") .LicenseActive .LicenseMax .LicensePct}}{{end}}</span>
                 <a href="/license" class="license-banner__link">{{T $.Locale "chrome.view_license"}}</a>
             </div>
             {{end}}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
@@ -51,7 +52,7 @@ func (h *Handler) Longdrawer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.Sync = fleet
-	data.Health = buildEchoHealth(fleet)
+	data.Health = buildEchoHealth(data.Locale, fleet)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "longdrawer", data)
 }
@@ -93,7 +94,7 @@ func (h *Handler) EchoUserDrilldown(w http.ResponseWriter, r *http.Request) {
 // existing fields: any user with non-empty Divergences is "err"; any
 // envoy in "stale" state is "warn". Sorted by severity so err rows
 // surface first.
-func buildEchoHealth(f *longdrawermesh.Fleet) HealthBanner {
+func buildEchoHealth(locale string, f *longdrawermesh.Fleet) HealthBanner {
 	if f == nil {
 		return finalizeHealthBanner("Longdrawer", nil, "No data")
 	}
@@ -128,7 +129,7 @@ func buildEchoHealth(f *longdrawermesh.Fleet) HealthBanner {
 			})
 		}
 	}
-	headline := fmt.Sprintf("%d user(s), %d envoy(s), %d file(s). No divergences, no stale envoys.",
+	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.longdrawer.headline"),
 		f.Totals.Users, f.Totals.Envoys, f.Totals.Files)
 	return finalizeHealthBanner("Longdrawer", problems, headline)
 }

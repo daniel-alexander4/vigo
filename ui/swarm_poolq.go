@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 )
 
@@ -79,7 +80,7 @@ func (h *Handler) poolqList(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Snap = snap
 	data.Blocked = blocked
-	data.Health = buildPoolqHealth(snap, blocked)
+	data.Health = buildPoolqHealth(data.Locale, snap, blocked)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "poolq", data)
 }
@@ -121,7 +122,7 @@ func (h *Handler) poolqDetail(w http.ResponseWriter, r *http.Request, id string)
 		}
 	}
 	data.Topic = &view
-	data.Health = buildPoolqTopicHealth(&view)
+	data.Health = buildPoolqTopicHealth(data.Locale, &view)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "poolq", data)
 }
@@ -163,7 +164,7 @@ func lookupPoolqByName(snap *poolqmesh.Snapshot, target string) (*poolqmesh.Topi
 // whose topic isn't in the current snapshot — typically the founder
 // scrubbed `~/.vigo-poolq/<topic_id>/` directly). Mirrors the curator
 // health-builder's shape.
-func buildPoolqHealth(snap *poolqmesh.Snapshot, blocked []db.PoolqBlockedTopic) HealthBanner {
+func buildPoolqHealth(locale string, snap *poolqmesh.Snapshot, blocked []db.PoolqBlockedTopic) HealthBanner {
 	if snap == nil {
 		return finalizeHealthBanner("Poolq", nil, "No data")
 	}
@@ -201,7 +202,7 @@ func buildPoolqHealth(snap *poolqmesh.Snapshot, blocked []db.PoolqBlockedTopic) 
 		totalMsgs += snap.Topics[i].Count
 	}
 	headline := fmt.Sprintf(
-		"%d topic(s), %d message(s) across %d participating envoy(s); %d operator-block(s) in effect.",
+		i18n.CatalogT(locale, "swarm.poolq.headline"),
 		len(snap.Topics),
 		totalMsgs,
 		len(snap.Participants),
@@ -210,7 +211,7 @@ func buildPoolqHealth(snap *poolqmesh.Snapshot, blocked []db.PoolqBlockedTopic) 
 	return finalizeHealthBanner("Poolq", problems, headline)
 }
 
-func buildPoolqTopicHealth(t *poolqmesh.Topic) HealthBanner {
+func buildPoolqTopicHealth(locale string, t *poolqmesh.Topic) HealthBanner {
 	if t == nil {
 		return finalizeHealthBanner("Poolq", nil, "No data")
 	}
@@ -223,7 +224,7 @@ func buildPoolqTopicHealth(t *poolqmesh.Topic) HealthBanner {
 			Severity: "warn",
 		})
 	}
-	headline := fmt.Sprintf("%s: %d message(s), head seq %d.", t.TopicName, t.Count, t.HeadSeq)
+	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.poolq.topic_headline"), t.TopicName, t.Count, t.HeadSeq)
 	return finalizeHealthBanner(t.TopicName, problems, headline)
 }
 

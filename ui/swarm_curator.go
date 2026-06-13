@@ -11,6 +11,7 @@ import (
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 )
 
@@ -122,7 +123,7 @@ func (h *Handler) curatorList(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Catalog = cat
 	data.Blocked = blocked
-	data.Health = buildCuratorHealth(cat, blocked)
+	data.Health = buildCuratorHealth(data.Locale, cat, blocked)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "curator", data)
 }
@@ -312,7 +313,7 @@ func buildCuratorArtifactView(artifactID string, e *curatormesh.CatalogEntry, bl
 // rows whose entry the publisher has since `rm`'d). Dangling tags are
 // per-artifact warnings, surfaced on the detail page rather than the
 // fleet rollup — a fleet-wide tally would just be noise.
-func buildCuratorHealth(cat *curatormesh.Catalog, blocked []db.CuratorBlockedArtifact) HealthBanner {
+func buildCuratorHealth(locale string, cat *curatormesh.Catalog, blocked []db.CuratorBlockedArtifact) HealthBanner {
 	if cat == nil {
 		return finalizeHealthBanner("Curator", nil, "No data")
 	}
@@ -356,7 +357,7 @@ func buildCuratorHealth(cat *curatormesh.Catalog, blocked []db.CuratorBlockedArt
 	}
 
 	headline := fmt.Sprintf(
-		"%d artifact(s) across %d participating envoy(s); %d operator-block(s) in effect.",
+		i18n.CatalogT(locale, "swarm.curator.headline"),
 		len(cat.Artifacts),
 		len(cat.Participants),
 		len(blocked),

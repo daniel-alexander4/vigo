@@ -38,6 +38,7 @@ import (
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleetpressure"
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/risk"
@@ -831,8 +832,15 @@ type PageData struct {
 	// and the dashboard renders the enrollment panel.
 	NoEnvoys       bool
 	CurrentUser    *AuthUser
-	LicenseWarning string // non-empty when license is near or over limits
-	OrgName        string // custom org name from branding config
+	LicenseWarning string // non-empty when an enforcement violation is active (server-supplied string)
+	// LicenseNearLimit gates the "approaching limit" banner, built in the
+	// template from the raw counts below so the sentence localizes via
+	// {{T}}. Mutually exclusive with LicenseWarning (the violation path).
+	LicenseNearLimit bool
+	LicenseActive    int // active node count, for the approaching-limit banner
+	LicenseMax       int // licensed node cap, for the approaching-limit banner
+	LicensePct       int // active/max as a whole percent, for the approaching-limit banner
+	OrgName          string // custom org name from branding config
 	CustomLogo     bool   // true when a custom logo path is configured
 	CustomFavicon  bool   // true when a custom favicon path is configured
 	Theme          string // "light" (default), "dark", or "auto"
@@ -944,10 +952,13 @@ type DashboardPageData struct {
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
 	// notice (100% of cap — next enrollment will be rejected).
-	LicenseCapacityLevel   string // "", "warning", or "critical"
-	LicenseCapacityMessage string
-	LicenseCapacityActive  int
-	LicenseCapacityMax     int
+	LicenseCapacityLevel string // "", "warning", or "critical"
+	LicenseCapacityActive int
+	LicenseCapacityMax    int
+	// LicenseCapacitySlotsRemaining is max-active, shown in the
+	// "nearing capacity" message; the template builds the localized
+	// sentence from these raw counts via {{T}} + printf.
+	LicenseCapacitySlotsRemaining int
 	RecentRuns             []RunRow
 	FleetRows              []FleetRow
 	FleetRowsCapped        bool // true when fleet table is capped (more envoys exist)
@@ -1108,9 +1119,15 @@ type FleetRow struct {
 	// the rest of the row so the dashboard, envoys, and agent-health
 	// surfaces can never disagree on severity.
 	HealthSeverity fleetpressure.Severity
-	// HealthSummary is the one-line per-axis breakdown shown on the
-	// pill's hover title; empty when HealthSeverity is Unknown.
+	// HealthSummary is the English one-line per-axis breakdown; kept for
+	// callers/tests that read the precomputed string. Templates render the
+	// hover title via {{healthSummaryL $.Locale .Pressure}} off Pressure
+	// instead, so the title localizes per request.
 	HealthSummary string
+	// Pressure is the raw per-envoy fleetpressure projection backing the
+	// Agent Health pill's localized hover title; nil when no agent-health
+	// trait has been reported (HealthSeverity Unknown).
+	Pressure *fleetpressure.EnvoyPressure
 }
 
 // RunRow is a single run displayed in a table.
@@ -1302,10 +1319,15 @@ type EnvoyRow struct {
 	// /envoys "Agent Health" pill color; the pill links to /agent-health.
 	// Unknown when no agent-health trait has been reported yet.
 	HealthSeverity fleetpressure.Severity
-	// HealthSummary is the one-line per-axis breakdown shown on the
-	// pill's hover title (e.g. "rootfs 19%, repos ok, fd 12%, no OOM").
-	// Empty when HealthSeverity is Unknown.
+	// HealthSummary is the English one-line per-axis breakdown; kept for
+	// callers/tests that read the precomputed string. Templates render the
+	// hover title via {{healthSummaryL $.Locale .Pressure}} off Pressure
+	// so the title localizes per request.
 	HealthSummary string
+	// Pressure is the raw per-envoy fleetpressure projection backing the
+	// Agent Health pill's localized hover title; nil when no agent-health
+	// trait has been reported (HealthSeverity Unknown).
+	Pressure *fleetpressure.EnvoyPressure
 
 	// Slice-2 envoy-filter axes (ADR-032). All populated by the envoyRow
 	// builder so the canonical row stays the SoT for what every envoys-
@@ -2250,8 +2272,10 @@ func (h *Handler) setCommon(pd *PageData) {
 		} else if s.MaxEnvoys > 0 {
 			threshold := float64(s.MaxEnvoys) * 0.9
 			if float64(s.ActiveEnvoys) >= threshold {
-				pd.LicenseWarning = fmt.Sprintf("License usage at %d/%d nodes (%d%%) — approaching limit",
-					s.ActiveEnvoys, s.MaxEnvoys, s.ActiveEnvoys*100/s.MaxEnvoys)
+				pd.LicenseNearLimit = true
+				pd.LicenseActive = s.ActiveEnvoys
+				pd.LicenseMax = s.MaxEnvoys
+				pd.LicensePct = s.ActiveEnvoys * 100 / s.MaxEnvoys
 			}
 		}
 	}
@@ -2561,10 +2585,9 @@ func (h *Handler) dashboardData() DashboardPageData {
 			switch {
 			case active >= max:
 				data.LicenseCapacityLevel = "critical"
-				data.LicenseCapacityMessage = fmt.Sprintf("License at capacity: %d / %d nodes. New enrollments will be rejected until you decommission a node or upgrade your license.", active, max)
 			case active*10 >= max*9: // ≥90%
 				data.LicenseCapacityLevel = "warning"
-				data.LicenseCapacityMessage = fmt.Sprintf("License nearing capacity: %d / %d nodes (%d slots remaining). Plan an upgrade before you hit the limit.", active, max, max-active)
+				data.LicenseCapacitySlotsRemaining = max - active
 			}
 		}
 	}
@@ -7762,45 +7785,57 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 				rows[i].HealthSeverity = p.Health
 				if p.Health != fleetpressure.Unknown {
 					rows[i].HealthSummary = HealthSummary(p)
+					pCopy := p
+					rows[i].Pressure = &pCopy
 				}
 			}
 		}
 	}
 }
 
-// HealthSummary renders the one-line per-axis breakdown shown on
+// HealthSummary renders the English one-line per-axis breakdown shown on
 // every Agent Health pill hover (envoys table, dashboard fleet table,
 // per-envoy footprint status card). Only axes the agent actually
 // reported (Present) appear; the order matches the /agent-health
 // table columns for operator muscle memory. Exported so the
 // FleetRow builder in server/fleet/datasource.go can populate the
-// hover-title without a parallel formatter.
+// raw row without a parallel formatter; the templates render the
+// hover-title via the locale-aware healthSummaryL helper off the
+// row's *Pressure field, so this English form is the fallback only.
 func HealthSummary(p fleetpressure.EnvoyPressure) string {
+	return healthSummaryLocale("", p)
+}
+
+// healthSummaryLocale is the locale-aware core. The axis labels carry
+// interpolated counts, so each is a printf-style catalog key (en + fr);
+// the empty/English locale keeps the output byte-identical to the
+// original source via the symmetric en.* entries.
+func healthSummaryLocale(locale string, p fleetpressure.EnvoyPressure) string {
 	var parts []string
 	if p.RootfsPct.Present {
-		parts = append(parts, fmt.Sprintf("rootfs %.0f%%", p.RootfsPct.Value))
+		parts = append(parts, fmt.Sprintf(i18n.CatalogT(locale, "health_summary.rootfs"), p.RootfsPct.Value))
 	}
 	if p.InodePct.Present {
-		parts = append(parts, fmt.Sprintf("inode %.0f%%", p.InodePct.Value))
+		parts = append(parts, fmt.Sprintf(i18n.CatalogT(locale, "health_summary.inode"), p.InodePct.Value))
 	}
 	if p.RepoHealth.Present {
 		switch {
 		case p.RepoHealth.Errors > 0:
-			parts = append(parts, fmt.Sprintf("repos %d broken", p.RepoHealth.Errors))
+			parts = append(parts, fmt.Sprintf(i18n.CatalogT(locale, "health_summary.repos_broken"), p.RepoHealth.Errors))
 		case p.RepoHealth.Warnings > 0:
-			parts = append(parts, fmt.Sprintf("repos %d warn", p.RepoHealth.Warnings))
+			parts = append(parts, fmt.Sprintf(i18n.CatalogT(locale, "health_summary.repos_warn"), p.RepoHealth.Warnings))
 		default:
-			parts = append(parts, "repos ok")
+			parts = append(parts, i18n.CatalogT(locale, "health_summary.repos_ok"))
 		}
 	}
 	if p.OpenFDs.Present {
-		parts = append(parts, fmt.Sprintf("fds %d", p.OpenFDs.Value))
+		parts = append(parts, fmt.Sprintf(i18n.CatalogT(locale, "health_summary.fds"), p.OpenFDs.Value))
 	}
 	if p.FDPct.Present {
-		parts = append(parts, fmt.Sprintf("host fd %.0f%%", p.FDPct.Value))
+		parts = append(parts, fmt.Sprintf(i18n.CatalogT(locale, "health_summary.host_fd"), p.FDPct.Value))
 	}
 	if p.OomRecent.Present && p.OomRecent.Value > 0 {
-		parts = append(parts, "recent OOM")
+		parts = append(parts, i18n.CatalogT(locale, "health_summary.recent_oom"))
 	}
 	return strings.Join(parts, ", ")
 }

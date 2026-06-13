@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/swarm"
 )
 
@@ -175,7 +176,7 @@ func (h *Handler) filecastList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data.Health = buildFilecastHealth(data.Blobs)
+	data.Health = buildFilecastHealth(h.localeFromRequest(r), data.Blobs)
 
 	data.TotalBlobs = len(data.Blobs)
 	data.TotalSizeHuman = humanSize(totalSize)
@@ -489,7 +490,7 @@ func formatRetention(d time.Duration) string {
 // Pending is usually in-flight and not a problem by itself, so it's
 // left informational. Revoking/revoked counts are cleanup, not a
 // health concern.
-func buildFilecastHealth(blobs []FilecastBlobEntry) HealthBanner {
+func buildFilecastHealth(locale string, blobs []FilecastBlobEntry) HealthBanner {
 	var problems []HealthProblem
 	var active int
 	for _, b := range blobs {
@@ -505,13 +506,13 @@ func buildFilecastHealth(blobs []FilecastBlobEntry) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "skipped",
 				Subject:  label,
-				Detail:   fmt.Sprintf("%d envoy(s) matched the target but couldn't receive (out of disk, unreachable, or offline)", b.Summary.Skipped),
+				Detail:   fmt.Sprintf(i18n.CatalogT(locale, "swarm.filecast.skipped_detail"), b.Summary.Skipped),
 				Link:     "/swarm/filecast/" + b.SHA256,
 				Severity: "warn",
 			})
 		}
 	}
-	headline := fmt.Sprintf("%d payload(s) active, %d revoked. No delivery failures.",
+	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.filecast.headline"),
 		active, len(blobs)-active)
 	return finalizeHealthBanner("Filecast", problems, headline)
 }

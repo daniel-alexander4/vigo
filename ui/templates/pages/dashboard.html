@@ -37,7 +37,7 @@
         <div class="license-banner__title">
             {{if eq .LicenseCapacityLevel "critical"}}{{T $.Locale "dashboard.license.at_capacity"}}{{else}}{{T $.Locale "dashboard.license.nearing_capacity"}}{{end}}
         </div>
-        <div class="license-banner__message">{{.LicenseCapacityMessage}}</div>
+        <div class="license-banner__message">{{if eq .LicenseCapacityLevel "critical"}}{{printf (T $.Locale "dashboard.license.at_capacity_msg") .LicenseCapacityActive .LicenseCapacityMax}}{{else}}{{printf (T $.Locale "dashboard.license.nearing_capacity_msg") .LicenseCapacityActive .LicenseCapacityMax .LicenseCapacitySlotsRemaining}}{{end}}</div>
     </div>
     <div class="license-banner__actions">
         <a href="/license" class="btn btn--sm">{{T $.Locale "chrome.view_license"}}</a>
@@ -152,7 +152,7 @@
             <td class="mono">{{.IP}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgoL $.Locale .LastSeen}}</span></td>
             <td>
-                <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{if .HealthSummary}}{{.HealthSummary}}{{else}}{{T $.Locale "dashboard.no_health_traits"}}{{end}}">{{tEnum $.Locale (severityLabel .HealthSeverity)}}</span></a>
+                <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{$hs := healthSummaryL $.Locale .Pressure}}{{if $hs}}{{$hs}}{{else}}{{T $.Locale "dashboard.no_health_traits"}}{{end}}">{{tEnum $.Locale (severityLabel .HealthSeverity)}}</span></a>
             </td>
             <td>
                 {{if eq .ResourceCount 0}}

@@ -297,7 +297,7 @@ func TestBuildCuratorHealth(t *testing.T) {
 		Participants: []string{"a", "b"},
 	}
 	// Clean.
-	hb := buildCuratorHealth(cat, nil)
+	hb := buildCuratorHealth("", cat, nil)
 	if hb.Level != "ok" {
 		t.Errorf("clean catalog should be ok, got level %s", hb.Level)
 	}
@@ -305,7 +305,7 @@ func TestBuildCuratorHealth(t *testing.T) {
 		t.Errorf("expected artifact count in headline, got: %s", hb.Headline)
 	}
 	// One live block + one orphan.
-	hb = buildCuratorHealth(cat, []db.CuratorBlockedArtifact{
+	hb = buildCuratorHealth("", cat, []db.CuratorBlockedArtifact{
 		{ArtifactID: liveID, Reason: "supply-chain"},
 		{ArtifactID: strings.Repeat("9", 64), Reason: "stale"},
 	})

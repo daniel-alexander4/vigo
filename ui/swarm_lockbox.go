@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 )
 
@@ -49,7 +50,7 @@ func (h *Handler) Lockbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.Crypt = fleet
-	data.Health = buildLockboxHealth(fleet)
+	data.Health = buildLockboxHealth(data.Locale, fleet)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "lockbox", data)
 }
@@ -89,7 +90,7 @@ func (h *Handler) LockboxUserDrilldown(w http.ResponseWriter, r *http.Request) {
 // buildLockboxHealth — divergences = err, recipient drift = warn,
 // stale envoys = warn. The unlocked-sessions tile on the page stays
 // informational (an unlocked session isn't a problem by itself).
-func buildLockboxHealth(f *lockboxmesh.Fleet) HealthBanner {
+func buildLockboxHealth(locale string, f *lockboxmesh.Fleet) HealthBanner {
 	if f == nil {
 		return finalizeHealthBanner("Lockbox", nil, "No data")
 	}
@@ -107,7 +108,7 @@ func buildLockboxHealth(f *lockboxmesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "failed",
 				Subject:  u.User,
-				Detail:   fmt.Sprintf("%d file(s) failed to encrypt and sit in plaintext, never syncing — check `journalctl -u vigo-envoy | grep lockbox`", u.FailedFiles),
+				Detail:   fmt.Sprintf(i18n.CatalogT(locale, "swarm.lockbox.failed_detail"), u.FailedFiles),
 				Severity: "err",
 			})
 		}
@@ -138,7 +139,7 @@ func buildLockboxHealth(f *lockboxmesh.Fleet) HealthBanner {
 			})
 		}
 	}
-	headline := fmt.Sprintf("%d user(s), %d envoy(s), %d file(s). No divergences, no drift, no stale envoys.",
+	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.lockbox.headline"),
 		f.Totals.Users, f.Totals.Envoys, f.Totals.Files)
 	return finalizeHealthBanner("Lockbox", problems, headline)
 }

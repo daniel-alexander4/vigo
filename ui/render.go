@@ -61,6 +61,7 @@ func funcMap() template.FuncMap {
 		"tSafe":                 i18n.CatalogTSafe,
 		"timeAgoL":              timeAgoL,
 		"tEnum":                 tEnum,
+		"healthSummaryL":        healthSummaryL,
 		"statusColor":           statusColor,
 		"sparklineSVG":          SparklineSVG,
 		"sparklineSVGColor":     SparklineSVGColor,
@@ -1008,6 +1009,17 @@ func tEnum(localeArg any, value string) string {
 		return s
 	}
 	return value
+}
+
+// healthSummaryL renders the locale-aware Agent Health pill hover title from
+// the row's raw *fleetpressure.EnvoyPressure. nil (no agent-health trait
+// reported) yields the empty string so the template falls back to the
+// "no traits" message. Templates call {{healthSummaryL $.Locale .Pressure}}.
+func healthSummaryL(localeArg any, p *fleetpressure.EnvoyPressure) string {
+	if p == nil {
+		return ""
+	}
+	return healthSummaryLocale(i18n.LocaleStr(localeArg), *p)
 }
 
 // EnvoyFreshness pairs the canonical freshness predicate with the

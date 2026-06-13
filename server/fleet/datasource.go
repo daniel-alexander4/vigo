@@ -191,6 +191,8 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 			row.HealthSeverity = p.Health
 			if p.Health != fleetpressure.Unknown {
 				row.HealthSummary = ui.HealthSummary(p)
+				pCopy := p
+				row.Pressure = &pCopy
 			}
 		}
 		fleetRows = append(fleetRows, row)
