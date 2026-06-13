@@ -607,7 +607,9 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := vigoauth.NewUserStore(queries)
 		tokenStore := vigoauth.NewTokenStore(queries, localAdminToken, m)
-		return vigoauth.NewBasicProvider(sessions, userStore, tokenStore, secretsProvider), nil
+		bp := vigoauth.NewBasicProvider(sessions, userStore, tokenStore, secretsProvider)
+		bp.SetI18n(cfg.I18n)
+		return bp, nil
 
 	case "oidc":
 		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
@@ -625,9 +627,14 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := vigoauth.NewUserStore(queries)
 		tokenStore := vigoauth.NewTokenStore(queries, localAdminToken, m)
-		return vigoauth.NewIsowebauthProvider(vigoauth.IsowebauthConfig{
+		iwa, err := vigoauth.NewIsowebauthProvider(vigoauth.IsowebauthConfig{
 			Namespace: cfg.Auth.Isowebauth.Namespace,
 		}, sessions, userStore, tokenStore)
+		if err != nil {
+			return nil, err
+		}
+		iwa.SetI18n(cfg.I18n)
+		return iwa, nil
 
 	default:
 		return nil, fmt.Errorf("unknown auth method: %q (must be basic, oidc, or isowebauth)", method)

@@ -319,14 +319,14 @@ func TestBasicLogin_NoPasswordStored_Fails(t *testing.T) {
 // 'unsafe-inline') and contain zero inline style= attributes — they style
 // exclusively via the shared stylesheet + classes.
 func TestLoginPages_CSPAndNoInlineStyles(t *testing.T) {
-	pages := map[string]func(http.ResponseWriter, string){
+	pages := map[string]func(http.ResponseWriter, string, string){
 		"login": serveLoginPage,
 		"totp":  serveTOTPPage,
 	}
 	for name, serve := range pages {
 		t.Run(name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			serve(rec, "an error message") // exercise the error branch too
+			serve(rec, "en", "auth.err.invalid_request") // exercise the error branch too
 			res := rec.Result()
 
 			csp := res.Header.Get("Content-Security-Policy")

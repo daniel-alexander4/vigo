@@ -12,7 +12,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/httpsec"
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/secrets"
 )
 
@@ -43,6 +45,7 @@ type BasicProvider struct {
 	tokenStore  *TokenStore
 	secrets     secrets.Provider
 	auditWriter auditRecorder
+	i18n        config.I18nSection
 }
 
 // NewBasicProvider creates a BasicProvider.
@@ -57,6 +60,10 @@ func NewBasicProvider(sessions *SessionManager, userStore *UserStore, tokenStore
 
 // SetAuditWriter sets the audit writer for recording auth events.
 func (p *BasicProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
+
+// SetI18n sets the i18n config so the login/TOTP pages can resolve the
+// per-request locale (cookie > Accept-Language > default).
+func (p *BasicProvider) SetI18n(cfg config.I18nSection) { p.i18n = cfg }
 
 // Sessions exposes the SCS session manager so handlers that need to
 // invalidate cached sessions (e.g. on role change or user delete) can
@@ -146,12 +153,13 @@ func (p *BasicProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	serveLoginPage(w, "")
+	serveLoginPage(w, i18n.LocaleFromRequest(p.i18n, r), "")
 }
 
 func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
+	locale := i18n.LocaleFromRequest(p.i18n, r)
 	if err := r.ParseForm(); err != nil {
-		serveLoginPage(w, "Invalid request")
+		serveLoginPage(w, locale, "auth.err.invalid_request")
 		return
 	}
 
@@ -159,7 +167,7 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	if username == "" || password == "" {
-		serveLoginPage(w, "Username and password are required")
+		serveLoginPage(w, locale, "auth.err.credentials_required")
 		return
 	}
 
@@ -167,12 +175,12 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	user, err := p.userStore.GetByUsername(r.Context(), username)
 	if err != nil {
 		slog.Error("user lookup failed", "error", err)
-		serveLoginPage(w, "An internal error occurred")
+		serveLoginPage(w, locale, "auth.err.internal")
 		return
 	}
 	if user == nil {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "unknown user", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		serveLoginPage(w, "Invalid username or password")
+		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return
 	}
 
@@ -185,19 +193,19 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Debug("no password secret for user", "username", username, "error", err)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		serveLoginPage(w, "Invalid username or password")
+		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return
 	}
 	if stored == "" {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		serveLoginPage(w, "Invalid username or password")
+		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return
 	}
 
 	// Constant-time compare against the stored value.
 	if subtle.ConstantTimeCompare([]byte(stored), []byte(password)) != 1 {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "bad password", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		serveLoginPage(w, "Invalid username or password")
+		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return
 	}
 
@@ -229,12 +237,13 @@ func (p *BasicProvider) handleTOTPPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
-	serveTOTPPage(w, "")
+	serveTOTPPage(w, i18n.LocaleFromRequest(p.i18n, r), "")
 }
 
 func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request) {
+	locale := i18n.LocaleFromRequest(p.i18n, r)
 	if err := r.ParseForm(); err != nil {
-		serveTOTPPage(w, "Invalid request")
+		serveTOTPPage(w, locale, "auth.err.invalid_request")
 		return
 	}
 
@@ -247,7 +256,7 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 
 	code := r.FormValue("code")
 	if code == "" {
-		serveTOTPPage(w, "Code is required")
+		serveTOTPPage(w, locale, "auth.err.code_required")
 		return
 	}
 
@@ -262,7 +271,7 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 	totpSecret, err := p.secrets.Get(r.Context(), fmt.Sprintf("vigo/web/auth/totp/%s", user.Username))
 	if err != nil || totpSecret == "" {
 		slog.Error("totp secret not found", "username", user.Username, "error", err)
-		serveTOTPPage(w, "TOTP configuration error")
+		serveTOTPPage(w, locale, "auth.err.totp_config")
 		return
 	}
 
@@ -293,7 +302,7 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 	}
 
 	recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "bad totp code", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-	serveTOTPPage(w, "Invalid code")
+	serveTOTPPage(w, locale, "auth.err.invalid_code")
 }
 
 func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -307,39 +316,42 @@ func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
-// serveLoginPage renders the login form with an optional error message.
-func serveLoginPage(w http.ResponseWriter, errMsg string) {
+// serveLoginPage renders the login form. locale selects the catalog language;
+// errKey is a catalog key ("" = no error) whose resolved text is shown in the
+// error banner.
+func serveLoginPage(w http.ResponseWriter, locale, errKey string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	httpsec.Headers(w)
+	t := func(key string) string { return html.EscapeString(i18n.CatalogT(locale, key)) }
 	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
+<html lang="` + html.EscapeString(locale) + `">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vigo - Sign In</title>
+    <title>` + t("auth.login.title") + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
             <img src="/static/img/logo.svg" alt="Vigo" class="login-logo">
-            <p class="login-subtitle">Sign in to continue</p>`))
-	if errMsg != "" {
-		w.Write([]byte(`<p class="login-error">` + html.EscapeString(errMsg) + `</p>`))
+            <p class="login-subtitle">` + t("auth.login.subtitle") + `</p>`))
+	if errKey != "" {
+		w.Write([]byte(`<p class="login-error">` + t(errKey) + `</p>`))
 	}
 	w.Write([]byte(`
             <form method="POST" action="/login">
                 <div class="form-group">
-                    <label for="username">Username</label>
+                    <label for="username">` + t("auth.label.username") + `</label>
                     <input type="text" id="username" name="username" required autofocus
-                           class="form-input" placeholder="Enter your username">
+                           class="form-input" placeholder="` + t("auth.placeholder.username") + `">
                 </div>
                 <div class="form-group">
-                    <label for="password">Password</label>
+                    <label for="password">` + t("auth.label.password") + `</label>
                     <input type="password" id="password" name="password" required
-                           class="form-input" placeholder="Enter your password">
+                           class="form-input" placeholder="` + t("auth.placeholder.password") + `">
                 </div>
-                <button type="submit" class="btn btn--primary btn--full">Sign In</button>
+                <button type="submit" class="btn btn--primary btn--full">` + t("auth.btn.sign_in") + `</button>
             </form>
         </div>
     </div>
@@ -347,38 +359,40 @@ func serveLoginPage(w http.ResponseWriter, errMsg string) {
 </html>`))
 }
 
-// serveTOTPPage renders the TOTP challenge form.
-func serveTOTPPage(w http.ResponseWriter, errMsg string) {
+// serveTOTPPage renders the TOTP challenge form. See serveLoginPage for the
+// locale / errKey contract.
+func serveTOTPPage(w http.ResponseWriter, locale, errKey string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	httpsec.Headers(w)
+	t := func(key string) string { return html.EscapeString(i18n.CatalogT(locale, key)) }
 	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
+<html lang="` + html.EscapeString(locale) + `">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vigo - Two-Factor Authentication</title>
+    <title>` + t("auth.totp.title") + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
             <img src="/static/img/logo.svg" alt="Vigo" class="login-logo">
-            <p class="login-subtitle">Two-factor authentication</p>`))
-	if errMsg != "" {
-		w.Write([]byte(`<p class="login-error">` + html.EscapeString(errMsg) + `</p>`))
+            <p class="login-subtitle">` + t("auth.totp.subtitle") + `</p>`))
+	if errKey != "" {
+		w.Write([]byte(`<p class="login-error">` + t(errKey) + `</p>`))
 	}
 	w.Write([]byte(`
             <form method="POST" action="/totp">
                 <div class="form-group">
-                    <label for="code">Authentication code</label>
+                    <label for="code">` + t("auth.totp.code_label") + `</label>
                     <input type="text" id="code" name="code" required autofocus
-                           class="form-input" placeholder="6-digit code or recovery code"
+                           class="form-input" placeholder="` + t("auth.totp.code_placeholder") + `"
                            autocomplete="one-time-code" inputmode="numeric" pattern="[0-9A-Fa-f]*">
                 </div>
-                <button type="submit" class="btn btn--primary btn--full">Verify</button>
+                <button type="submit" class="btn btn--primary btn--full">` + t("auth.totp.verify") + `</button>
             </form>
             <p class="login-hint">
-                Enter the code from your authenticator app, or a recovery code.
+                ` + t("auth.totp.hint") + `
             </p>
         </div>
     </div>

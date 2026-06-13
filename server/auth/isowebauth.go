@@ -8,12 +8,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/i18n"
 )
 
 // IsowebauthProvider implements Provider using SSH key-based signing via
@@ -24,6 +28,7 @@ type IsowebauthProvider struct {
 	tokenStore  *TokenStore
 	namespace   string
 	auditWriter auditRecorder
+	i18n        config.I18nSection
 }
 
 // IsowebauthConfig holds the isowebauth configuration from server.yaml.
@@ -54,6 +59,10 @@ func NewIsowebauthProvider(cfg IsowebauthConfig, sessions *SessionManager, userS
 
 // SetAuditWriter sets the audit writer for recording auth events.
 func (p *IsowebauthProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
+
+// SetI18n sets the i18n config so the login page can resolve the per-request
+// locale (cookie > Accept-Language > default).
+func (p *IsowebauthProvider) SetI18n(cfg config.I18nSection) { p.i18n = cfg }
 
 // Sessions exposes the SCS session manager so handlers that need to
 // invalidate cached sessions (e.g. on role change or user delete) can
@@ -123,7 +132,7 @@ func (p *IsowebauthProvider) RegisterRoutes(mux *http.ServeMux) {
 func (p *IsowebauthProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	// Serve the login page — the isowebauth JS flow is embedded in the template.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(isowebauthLoginHTML))
+	w.Write([]byte(isowebauthLoginPage(i18n.LocaleFromRequest(p.i18n, r))))
 }
 
 func (p *IsowebauthProvider) handleChallenge(w http.ResponseWriter, r *http.Request) {
@@ -270,32 +279,38 @@ func verifySSHSignature(username, pubkey, challenge, signature, namespace string
 	return nil
 }
 
-// isowebauthLoginHTML is a self-contained login page for the isowebauth flow.
-const isowebauthLoginHTML = `<!DOCTYPE html>
-<html lang="en">
+// isowebauthLoginPage renders the self-contained isowebauth login page in the
+// given locale. The static visible text routes through the catalog; the inline
+// <script>'s JS-literal strings (button labels mutated at runtime, error
+// messages) stay English — that script already violates the locked CSP and is
+// out of scope for localization here.
+func isowebauthLoginPage(locale string) string {
+	t := func(key string) string { return html.EscapeString(i18n.CatalogT(locale, key)) }
+	return `<!DOCTYPE html>
+<html lang="` + html.EscapeString(locale) + `">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vigo - Sign In</title>
+    <title>` + t("auth.login.title") + `</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
             <h1 class="login-title">Vigo</h1>
-            <p class="login-subtitle">Sign in with your SSH key</p>
+            <p class="login-subtitle">` + t("auth.iwa.subtitle") + `</p>
             <form id="login-form" onsubmit="return handleLogin(event)">
                 <div class="form-group">
-                    <label for="username">Username</label>
+                    <label for="username">` + t("auth.label.username") + `</label>
                     <input type="text" id="username" name="username" required autofocus
-                           class="form-input" placeholder="Enter your username">
+                           class="form-input" placeholder="` + t("auth.placeholder.username") + `">
                 </div>
                 <button type="submit" class="btn btn--primary btn--full" id="login-btn">
-                    Sign In
+                    ` + t("auth.btn.sign_in") + `
                 </button>
                 <p class="login-error" id="login-error" style="display:none"></p>
                 <p class="login-hint">
-                    Requires the <a href="https://github.com/vigo/isowebauth" target="_blank">isowebauth</a> app running on your machine.
+                    ` + t("auth.iwa.hint_pre") + ` <a href="https://github.com/vigo/isowebauth" target="_blank">isowebauth</a> ` + t("auth.iwa.hint_post") + `
                 </p>
             </form>
         </div>
@@ -353,3 +368,4 @@ const isowebauthLoginHTML = `<!DOCTYPE html>
     </script>
 </body>
 </html>`
+}
