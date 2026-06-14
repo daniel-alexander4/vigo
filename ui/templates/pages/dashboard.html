@@ -88,7 +88,7 @@
     "CountFailed"           .CompFailed
     "CountOffline"          .Offline
     "CountObserving"        .Observing
-    "OfflineThresholdLabel" .OfflineThresholdLabel
+    "OfflineThreshold"      .OfflineThreshold
     "ConvFilter"            ""
     "DriftFilter"           ""
     "ReachFilter"           ""
@@ -124,7 +124,7 @@
             <td><span class="status-pill status-pill--{{statusColor .Outcome}}">{{tEnum $.Locale .Outcome}}</span></td>
             <td>{{if eq .ResourceCount 0}}<span class="badge badge--unknown" title="{{T $.Locale "dashboard.no_run_data"}}">0/0/0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Outcome .EnvoyDriftLabel}}" title="{{convergenceHover .ChangedCount .FailedCount .ResourceCount}}">{{convergenceRatio .ChangedCount .FailedCount .ResourceCount}}</span></a>{{end}}</td>
             <td class="mono text-muted">{{if .TopFailedConfigcrate}}{{.TopFailedConfigcrate}}{{else}}-{{end}}</td>
-            <td class="mono text-muted">{{if .DurationLabel}}{{.DurationLabel}}{{else}}-{{end}}</td>
+            <td class="mono text-muted">{{if .Duration}}{{friendlyDurationL $.Locale .Duration}}{{else}}-{{end}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgoL $.Locale .StartedAt}}</span></td>
         </tr>
         {{end}}

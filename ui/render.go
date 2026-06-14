@@ -60,6 +60,7 @@ func funcMap() template.FuncMap {
 		"T":                     i18n.CatalogT,
 		"tSafe":                 i18n.CatalogTSafe,
 		"timeAgoL":              timeAgoL,
+		"friendlyDurationL":     friendlyDurationL,
 		"tEnum":                 tEnum,
 		"healthSummaryL":        healthSummaryL,
 		"statusColor":           statusColor,
@@ -1022,38 +1023,54 @@ func healthSummaryL(localeArg any, p *fleetpressure.EnvoyPressure) string {
 	return healthSummaryLocale(i18n.LocaleStr(localeArg), *p)
 }
 
-// EnvoyFreshness pairs the canonical freshness predicate with the
-// matching human-readable last-seen label. The threshold derives
-// per-envoy from freshness.IsStaleFromCycle: 2.5 × max(configured,
-// observed) where observed is the agent's smoothed inter-CheckIn
-// cadence pulled from FleetIndex. Every surface that classifies an
-// envoy as stale routes through this so the label, cell color, pill
-// count, doctor check, risk "Lost contact" factor, and stale-notifier
-// always agree.
+// EnvoyStale is the canonical freshness predicate for the UI. The
+// threshold derives per-envoy from freshness.IsStaleFromCycle: 2.5 ×
+// max(configured, observed) where observed is the agent's smoothed
+// inter-CheckIn cadence pulled from FleetIndex. Every surface that
+// classifies an envoy as stale routes through this so the cell color,
+// pill count, doctor check, risk "Lost contact" factor, and
+// stale-notifier always agree. The human-readable last-seen text is
+// rendered separately by {{timeAgoL}} off the raw LastSeen timestamp.
 //
 // observedCycle = 0 means bootstrap (no agent-reported cadence yet) —
-// predicate falls back to configured interval alone.
-//
-// The label override below exists because timeAgo's "just now" bucket
-// is fixed at 30 s. At fast check-in intervals (e.g. 5 s configured →
-// 12.5 s threshold under bootstrap) an envoy that's already stale
-// would otherwise render as "just now" in the staleness color.
-// Printing precise seconds in that window keeps label and color
-// consistent.
-func EnvoyFreshness(lastSeen time.Time, baseInterval, offlineThreshold, observedCycle time.Duration) (label string, stale bool) {
+// predicate falls back to configured interval alone. A zero lastSeen
+// (never checked in) is treated as not-stale rather than infinitely old.
+func EnvoyStale(lastSeen time.Time, baseInterval, offlineThreshold, observedCycle time.Duration) bool {
 	if lastSeen.IsZero() {
-		return "-", false
+		return false
 	}
-	stale = freshness.IsStaleFromCycle(lastSeen, baseInterval, observedCycle, offlineThreshold)
-	age := time.Since(lastSeen)
-	if stale && age < 30*time.Second {
-		secs := int(age.Seconds())
-		if secs < 1 {
-			secs = 1
+	return freshness.IsStaleFromCycle(lastSeen, baseInterval, observedCycle, offlineThreshold)
+}
+
+// friendlyDurationL is the locale-aware companion to FriendlyDurationLabel.
+// English (and any non-French locale) delegates to it directly; French
+// mirrors its bucket structure but renders spaced French units (s / min /
+// h), so a stale threshold like "15m" reads as "15 min" — consistent with
+// the French units timeAgoL renders in the same cells. FriendlyDurationLabel
+// never emits days, so only s/min/h need translating. Templates call
+// {{friendlyDurationL $.Locale .Duration}}.
+func friendlyDurationL(localeArg any, d time.Duration) string {
+	if i18n.LocaleStr(localeArg) != "fr" {
+		return FriendlyDurationLabel(d)
+	}
+	d = d.Round(time.Second)
+	if d < time.Minute {
+		return fmt.Sprintf("%d s", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		if d%time.Minute == 0 {
+			return fmt.Sprintf("%d min", int(d.Minutes()))
 		}
-		return fmt.Sprintf("%ds ago", secs), true
+		m := int(d / time.Minute)
+		s := int((d % time.Minute) / time.Second)
+		return fmt.Sprintf("%d min %d s", m, s)
 	}
-	return timeAgo(lastSeen), stale
+	if d%time.Hour == 0 {
+		return fmt.Sprintf("%d h", int(d.Hours()))
+	}
+	h := int(d / time.Hour)
+	m := int((d % time.Hour) / time.Minute)
+	return fmt.Sprintf("%d h %d min", h, m)
 }
 
 // toFloat64 converts any numeric type to float64 for template functions.

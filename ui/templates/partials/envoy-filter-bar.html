@@ -17,7 +17,7 @@ Two render modes, selected by .ReadOnly:
 Required fields on the data context:
   .TotalEnvoys, .CountConverged, .CountDegraded, .CountNoData,
   .CountChanged, .CountDiverged, .CountFailed,
-  .CountOffline, .CountObserving, .OfflineThresholdLabel,
+  .CountOffline, .CountObserving, .OfflineThreshold,
   .ConvFilter, .DriftFilter, .ReachFilter, .Search, .ReadOnly
 
 Callers that don't already have these fields on their data should pass
@@ -46,7 +46,7 @@ them via `dict` (see dashboard.html, envoys-tree.html).
     <div class="filter-bar-axis">
         <span class="filter-bar-axis__label">{{T $.Locale "filter.reachability"}}</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=offline" "Active" (eq .ReachFilter "offline") "Label" (T $.Locale "enum.offline") "Count" .CountOffline "CountClass" "filter-count--muted" "Tooltip" (printf (T $.Locale "envoy_filter_bar.tooltip_offline") .OfflineThresholdLabel)}}
+            {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=offline" "Active" (eq .ReachFilter "offline") "Label" (T $.Locale "enum.offline") "Count" .CountOffline "CountClass" "filter-count--muted" "Tooltip" (printf (T $.Locale "envoy_filter_bar.tooltip_offline") (friendlyDurationL $.Locale .OfflineThreshold))}}
             {{if gt .CountObserving 0}}
             {{template "envoy-filter-bar__pill" dict "ReadOnly" .ReadOnly "Href" "/envoys?reach=observing" "Active" (eq .ReachFilter "observing") "Label" (T $.Locale "enum.observing") "Count" .CountObserving "CountClass" "filter-count--info" "Tooltip" (T $.Locale "envoy_filter_bar.tooltip_observing")}}
             {{end}}

@@ -85,7 +85,7 @@
     "CountFailed"           .CountFailed
     "CountOffline"          .CountOffline
     "CountObserving"        .CountObserving
-    "OfflineThresholdLabel" .OfflineThresholdLabel
+    "OfflineThreshold"      .OfflineThreshold
     "ConvFilter"            .ConvFilter
     "DriftFilter"           .DriftFilter
     "ReachFilter"           .ReachFilter
@@ -115,7 +115,7 @@
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="{{T $.Locale "envoys.observe_only_tooltip"}}">{{T $.Locale "envoys.obs"}}</span>{{end}}</td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}{{if .StaleThresholdLabel}} &middot; {{T $.Locale "envoys.stale_threshold"}}: {{.StaleThresholdLabel}}{{end}}">{{timeAgoL $.Locale .LastSeen}}</span></td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}{{if .StaleThreshold}} &middot; {{T $.Locale "envoys.stale_threshold"}}: {{friendlyDurationL $.Locale .StaleThreshold}}{{end}}">{{timeAgoL $.Locale .LastSeen}}</span></td>
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgoL $.Locale .LastRunAt}}</a>{{end}}</td>
             <td>
                 <a href="/envoys/{{.ID}}#footprint" class="badge-link"><span class="{{severityPillClass .HealthSeverity}}" title="{{$hs := healthSummaryL $.Locale .Pressure}}{{if $hs}}{{$hs}}{{else}}{{T $.Locale "envoys.no_health_traits"}}{{end}}">{{tEnum $.Locale (severityLabel .HealthSeverity)}}</span></a>

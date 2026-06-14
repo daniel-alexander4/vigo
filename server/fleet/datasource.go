@@ -65,7 +65,7 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 		failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunResourceCount) * 100
 	}
 	observedCycle := ts.ObservedCycle()
-	lastSeenLabel, offline := ui.EnvoyFreshness(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
+	offline := ui.EnvoyStale(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
 	// ADR-032 slice 2 axes sourced from EnvoyState — Tags is already a
 	// slice; OS/Arch live in the flat-trait map. Roles/Configcrates/
 	// Environment/ComplianceFrameworks need a ConfigStore lookup and
@@ -75,28 +75,27 @@ func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold ti
 		tags = append(tags, ts.Tags...)
 	}
 	return ui.EnvoyRow{
-		ID:                  ts.ID,
-		Hostname:            ts.Hostname,
-		IPAddress:           ts.IP,
-		EnrolledAt:          ts.EnrolledAt,
-		LastSeen:            ts.LastSeen,
-		LastSeenLabel:       lastSeenLabel,
-		Offline:             offline,
-		LastRunAt:           ts.LastRunAt,
-		LastRunID:           ts.LastRunID,
-		Status:              ts.ConvergenceStatus,
-		Drift:               ts.Drift,
-		DriftLabel:          ts.Drift.String(),
-		FailurePct:          failurePct,
-		ResourceCount:       ts.LastRunResourceCount,
-		FailedCount:         ts.LastRunFailedCount,
-		ChangedCount:        ts.LastRunChangedCount,
-		ObserveOnly:         ts.ObserveOnly,
-		StaleThresholdLabel: ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, observedCycle, offlineThreshold)),
-		AgentVersion:        ts.AgentVersion,
-		Tags:                tags,
-		OS:                  ts.Traits["os.distro"],
-		Arch:                ts.Traits["arch"],
+		ID:             ts.ID,
+		Hostname:       ts.Hostname,
+		IPAddress:      ts.IP,
+		EnrolledAt:     ts.EnrolledAt,
+		LastSeen:       ts.LastSeen,
+		Offline:        offline,
+		LastRunAt:      ts.LastRunAt,
+		LastRunID:      ts.LastRunID,
+		Status:         ts.ConvergenceStatus,
+		Drift:          ts.Drift,
+		DriftLabel:     ts.Drift.String(),
+		FailurePct:     failurePct,
+		ResourceCount:  ts.LastRunResourceCount,
+		FailedCount:    ts.LastRunFailedCount,
+		ChangedCount:   ts.LastRunChangedCount,
+		ObserveOnly:    ts.ObserveOnly,
+		StaleThreshold: freshness.StaleThresholdFromCycle(baseInterval, observedCycle, offlineThreshold),
+		AgentVersion:   ts.AgentVersion,
+		Tags:           tags,
+		OS:             ts.Traits["os.distro"],
+		Arch:           ts.Traits["arch"],
 	}
 }
 
@@ -199,22 +198,22 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 	}
 
 	data := ui.DashboardPageData{
-		PageData:              ui.PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalEnvoys:           summary.Total,
-		ActiveEnvoys:          summary.Total - summary.Offline,
-		RecentFailures:        summary.Failed,
-		DriftRate:             driftRate,
-		ConvergencePct:        convPct,
-		Converged:             summary.Converged,
-		Degraded:              summary.Degraded,
-		Diverged:              summary.Diverged,
-		CompFailed:            summary.Failed,
-		Offline:               summary.Offline,
-		NoData:                summary.NoData,
-		Changed:               summary.Changed,
-		Observing:             observing,
-		OfflineThresholdLabel: ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold)),
-		FleetRows:             fleetRows,
+		PageData:         ui.PageData{Title: "Dashboard", ActiveNav: "dashboard"},
+		TotalEnvoys:      summary.Total,
+		ActiveEnvoys:     summary.Total - summary.Offline,
+		RecentFailures:   summary.Failed,
+		DriftRate:        driftRate,
+		ConvergencePct:   convPct,
+		Converged:        summary.Converged,
+		Degraded:         summary.Degraded,
+		Diverged:         summary.Diverged,
+		CompFailed:       summary.Failed,
+		Offline:          summary.Offline,
+		NoData:           summary.NoData,
+		Changed:          summary.Changed,
+		Observing:        observing,
+		OfflineThreshold: freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold),
+		FleetRows:        fleetRows,
 	}
 	data.FleetRowsCapped = capped
 	if capped {
@@ -398,7 +397,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 	if data.FleetTotalConfigcrates > 0 {
 		data.ConfigcrateHealthPct = float64(data.FleetFailedConfigcrates) / float64(data.FleetTotalConfigcrates) * 100
 	}
-	data.OfflineThresholdLabel = ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold))
+	data.OfflineThreshold = freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold)
 	return data
 }
 

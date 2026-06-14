@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 )
 
 // EnvoyTreeNode is one directory node in the envoy-tree view. Each node
@@ -57,22 +58,22 @@ const envoyTreeRenderCap = 50
 // (env/tag/role/os/arch/module/compliance) on top of the original 4.
 type EnvoyTreePageData struct {
 	PageData
-	Root             *EnvoyTreeNode
-	Unmatched        *EnvoyTreeNode // synthetic node for envoys with no matched hostcrate; nil when empty
-	Missing          bool           // .live/ doesn't exist (no published config yet)
-	TotalEnvoys      int            // total in the fleet (pre-filter)
-	MatchingTotal    int            // surviving the chip filters
-	ConvFilter       string
-	DriftFilter      string
-	ReachFilter      string
-	Search           string
-	EnvFilter        string
-	TagFilter        string
-	RoleFilter       string
-	OSFilter         string
-	ArchFilter       string
-	ConfigcrateFilter     string
-	ComplianceFilter string
+	Root              *EnvoyTreeNode
+	Unmatched         *EnvoyTreeNode // synthetic node for envoys with no matched hostcrate; nil when empty
+	Missing           bool           // .live/ doesn't exist (no published config yet)
+	TotalEnvoys       int            // total in the fleet (pre-filter)
+	MatchingTotal     int            // surviving the chip filters
+	ConvFilter        string
+	DriftFilter       string
+	ReachFilter       string
+	Search            string
+	EnvFilter         string
+	TagFilter         string
+	RoleFilter        string
+	OSFilter          string
+	ArchFilter        string
+	ConfigcrateFilter string
+	ComplianceFilter  string
 	// Filter drawer state — mirrored from the EnvoysPageData built by
 	// EnvoysData so the tree view shares the same pill enumeration and
 	// active-count logic.
@@ -84,7 +85,7 @@ type EnvoyTreePageData struct {
 	CountConverged, CountDegraded, CountFailed, CountNoData int
 	CountChanged, CountDiverged                             int
 	CountOffline, CountObserving                            int
-	OfflineThresholdLabel                                   string
+	OfflineThreshold                                        time.Duration
 }
 
 // EnvoyTree renders the envoy-tree navigation view at /envoys/tree.
@@ -95,18 +96,18 @@ type EnvoyTreePageData struct {
 func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	data := EnvoyTreePageData{
-		PageData:         PageData{Title: "Envoys (tree)", ActiveNav: "envoys"},
-		ConvFilter:       q.Get("conv"),
-		DriftFilter:      q.Get("drift"),
-		ReachFilter:      q.Get("reach"),
-		Search:           q.Get("search"),
-		EnvFilter:        q.Get("env"),
-		TagFilter:        q.Get("tag"),
-		RoleFilter:       q.Get("role"),
-		OSFilter:         q.Get("os"),
-		ArchFilter:       q.Get("arch"),
-		ConfigcrateFilter:     q.Get("configcrate"),
-		ComplianceFilter: q.Get("compliance"),
+		PageData:          PageData{Title: "Envoys (tree)", ActiveNav: "envoys"},
+		ConvFilter:        q.Get("conv"),
+		DriftFilter:       q.Get("drift"),
+		ReachFilter:       q.Get("reach"),
+		Search:            q.Get("search"),
+		EnvFilter:         q.Get("env"),
+		TagFilter:         q.Get("tag"),
+		RoleFilter:        q.Get("role"),
+		OSFilter:          q.Get("os"),
+		ArchFilter:        q.Get("arch"),
+		ConfigcrateFilter: q.Get("configcrate"),
+		ComplianceFilter:  q.Get("compliance"),
 	}
 
 	if h.configStore == nil {
@@ -147,7 +148,7 @@ func (h *Handler) EnvoyTree(w http.ResponseWriter, r *http.Request) {
 	data.CountDiverged = envoyData.CountDiverged
 	data.CountOffline = envoyData.CountOffline
 	data.CountObserving = envoyData.CountObserving
-	data.OfflineThresholdLabel = envoyData.OfflineThresholdLabel
+	data.OfflineThreshold = envoyData.OfflineThreshold
 
 	// Per-envoy DirPath lookup via the existing MatchDirPaths SoT.
 	// MatchDirPaths returns pattern → DirPath; we look up each envoy's

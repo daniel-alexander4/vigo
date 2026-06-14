@@ -837,13 +837,13 @@ type PageData struct {
 	// template from the raw counts below so the sentence localizes via
 	// {{T}}. Mutually exclusive with LicenseWarning (the violation path).
 	LicenseNearLimit bool
-	LicenseActive    int // active node count, for the approaching-limit banner
-	LicenseMax       int // licensed node cap, for the approaching-limit banner
-	LicensePct       int // active/max as a whole percent, for the approaching-limit banner
+	LicenseActive    int    // active node count, for the approaching-limit banner
+	LicenseMax       int    // licensed node cap, for the approaching-limit banner
+	LicensePct       int    // active/max as a whole percent, for the approaching-limit banner
 	OrgName          string // custom org name from branding config
-	CustomLogo     bool   // true when a custom logo path is configured
-	CustomFavicon  bool   // true when a custom favicon path is configured
-	Theme          string // "light" (default), "dark", or "auto"
+	CustomLogo       bool   // true when a custom logo path is configured
+	CustomFavicon    bool   // true when a custom favicon path is configured
+	Theme            string // "light" (default), "dark", or "auto"
 	// Locale is the resolved per-request locale (set in setCommonWithRequest);
 	// templates read it as $.Locale for the {{T}} helper. Empty falls back to
 	// English. Locales is the topbar picker's option set — nil (the default,
@@ -952,17 +952,17 @@ type DashboardPageData struct {
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
 	// notice (100% of cap — next enrollment will be rejected).
-	LicenseCapacityLevel string // "", "warning", or "critical"
+	LicenseCapacityLevel  string // "", "warning", or "critical"
 	LicenseCapacityActive int
 	LicenseCapacityMax    int
 	// LicenseCapacitySlotsRemaining is max-active, shown in the
 	// "nearing capacity" message; the template builds the localized
 	// sentence from these raw counts via {{T}} + printf.
 	LicenseCapacitySlotsRemaining int
-	RecentRuns             []RunRow
-	FleetRows              []FleetRow
-	FleetRowsCapped        bool // true when fleet table is capped (more envoys exist)
-	FleetRowsRemaining     int  // how many envoys not shown
+	RecentRuns                    []RunRow
+	FleetRows                     []FleetRow
+	FleetRowsCapped               bool // true when fleet table is capped (more envoys exist)
+	FleetRowsRemaining            int  // how many envoys not shown
 	// Security posture
 	CVECritical     int64
 	CVEHigh         int64
@@ -980,12 +980,12 @@ type DashboardPageData struct {
 	Offline        int
 	// Additional fields needed by the envoy-filter-bar partial when
 	// rendered on the dashboard. The partial reads .Count* / .NoData /
-	// .Changed / .Observing / .OfflineThresholdLabel; the dashboard call
+	// .Changed / .Observing / .OfflineThreshold; the dashboard call
 	// site remaps the existing fields via `dict` and supplies these.
-	NoData                int
-	Changed               int // drift-axis: last run had changes (Diverged ⊆ Changed)
-	Observing             int
-	OfflineThresholdLabel string
+	NoData           int
+	Changed          int // drift-axis: last run had changes (Diverged ⊆ Changed)
+	Observing        int
+	OfflineThreshold time.Duration
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
@@ -1136,7 +1136,7 @@ type RunRow struct {
 	EnvoyID    string
 	Hostname   string
 	StartedAt  time.Time
-	FinishedAt time.Time // zero when still running; powers DurationLabel
+	FinishedAt time.Time // zero when still running; powers Duration
 	Status     string
 	// Trigger is what kicked off the run — "scheduled" (normal cycle)
 	// or "force-push" (operator-initiated). Lets the dashboard pick
@@ -1164,9 +1164,10 @@ type RunRow struct {
 	// db.ListRunsWithHostname's subquery; lets operators triage from
 	// the dashboard without clicking into run-detail.
 	TopFailedConfigcrate string
-	// DurationLabel is StartedAt → FinishedAt rendered as a compact
-	// human-readable string ("47s", "2m13s"); empty when still running.
-	DurationLabel string
+	// Duration is StartedAt → FinishedAt, carried raw so the dashboard
+	// can render it locale-aware via {{friendlyDurationL}} ("2m13s" /
+	// "2 min 13 s"); zero when still running.
+	Duration time.Duration
 }
 
 // ConvergencePageData holds module convergence data (envoy enforcement status).
@@ -1280,15 +1281,9 @@ type EnvoyRow struct {
 	IPAddress  string
 	EnrolledAt time.Time
 	LastSeen   time.Time
-	// LastSeenLabel is the precomputed "just now" / "Ns ago" / "Nm ago"
-	// rendering keyed off the same threshold that drives Offline below.
-	// Templates render this directly so the label and the staleness
-	// color can't disagree. Source of truth is envoyFreshness in
-	// render.go.
-	LastSeenLabel string
-	LastRunAt     time.Time
-	LastRunID     string
-	Status        string
+	LastRunAt  time.Time
+	LastRunID  string
+	Status     string
 	// Drift is the canonical drift-axis bucket from convergence.ComputeDrift
 	// (None / Changed / Diverged). Carried alongside Status so the table can
 	// render the Diverged-envoy's convergence ratio in the same orange the
@@ -1306,13 +1301,12 @@ type EnvoyRow struct {
 	ChangedCount  int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
 	Offline       bool
 	ObserveOnly   bool // observe-only mode: drift reporting only
-	// StaleThresholdLabel is the resolved per-envoy stale threshold
-	// (2.5× max(configured_interval, observed_cycle)) rendered in
-	// short form for tooltips. Empty when bootstrap (no observed
-	// cadence yet) — the table renders the page-level
-	// OfflineThresholdLabel in that case.
-	StaleThresholdLabel string
-	AgentVersion        string
+	// StaleThreshold is the resolved per-envoy stale threshold (2.5×
+	// max(configured_interval, observed_cycle)), carried raw so the
+	// template can render it locale-aware via {{friendlyDurationL}}.
+	// Zero only if never derivable; the table guards with {{if}}.
+	StaleThreshold time.Duration
+	AgentVersion   string
 	// HealthSeverity is the composite fleetpressure.EnvoyPressure.Health
 	// for this row — the worst severity across FDs, host FD%,
 	// OOM-recent, rootfs %, inode %, and repo-health. Drives the
@@ -1426,12 +1420,12 @@ type EnvoysPageData struct {
 	FleetFailedConfigcrates int64
 	FleetTotalConfigcrates  int64
 	ConfigcrateHealthPct    float64
-	// OfflineThresholdLabel is the resolved staleness threshold
-	// rendered as a human-friendly duration ("75s", "15m"). Drives the
-	// Offline pill's title so operators can see how long an envoy must
-	// have been silent to land in that bucket without consulting
-	// server.yaml.
-	OfflineThresholdLabel string
+	// OfflineThreshold is the resolved staleness threshold, carried raw
+	// so the Offline pill's title can render it locale-aware via
+	// {{friendlyDurationL}} ("15m" / "15 min") — letting operators see
+	// how long an envoy must have been silent to land in that bucket
+	// without consulting server.yaml.
+	OfflineThreshold time.Duration
 	// FilterAxes is the per-axis pill data rendered inside the filter
 	// drawer. Built by fleet.EnumerateFilterAxes from the filtered row
 	// set + the request's query params; drawer template renders each
@@ -2734,9 +2728,9 @@ func (h *Handler) dashboardData() DashboardPageData {
 		if r.FinishedAt.Valid {
 			finished = r.FinishedAt.Time
 		}
-		var dur string
+		var dur time.Duration
 		if !finished.IsZero() && !r.StartedAt.IsZero() {
-			dur = FriendlyDurationLabel(finished.Sub(r.StartedAt))
+			dur = finished.Sub(r.StartedAt)
 		}
 		outcome := convergence.ComputeStatus(convergence.RunInfo{
 			Status:        r.Status,
@@ -2759,7 +2753,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 			Outcome:              outcome,
 			EnvoyDriftLabel:      h.dataSource.EnvoyDriftLabel(r.EnvoyID),
 			TopFailedConfigcrate: r.TopFailedConfigcrate,
-			DurationLabel:        dur,
+			Duration:             dur,
 		})
 	}
 
