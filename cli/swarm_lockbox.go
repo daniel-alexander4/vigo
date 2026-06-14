@@ -397,9 +397,12 @@ func runLockboxEvict(host, user string, allUsers, yes bool) error {
 }
 
 func shellQuote(s string) string {
-	// Minimal quoting — task dispatch splits on whitespace. For typical
-	// usernames and hostnames (alphanumeric + hyphen), no quoting needed.
-	return s
+	// POSIX single-quote escaping: the dispatched command runs via `sh -c`
+	// on the fleet, so any shell metacharacter in a user- or
+	// server-supplied value must be neutralized. Wrap in single quotes
+	// and replace each embedded single quote with the '\'' sequence
+	// (close-quote, escaped quote, reopen-quote).
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func init() {

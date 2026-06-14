@@ -612,6 +612,12 @@ fn process_revoke_sentinel(
         .with_context(|| format!("read {}", path.display()))?;
     let envelope: envelopes::RevokeEnvelope = serde_json::from_slice(&bytes)
         .with_context(|| format!("parse revoke envelope at {}", path.display()))?;
+    // A1: authorize before persisting — the signer must hold Admin
+    // authority chaining back to the project founder. Without this any
+    // puddle-key holder could forge a REVOKE for an arbitrary token_id.
+    envelope
+        .verify_revoke_authority()
+        .with_context(|| format!("unauthorized revoke envelope at {}", path.display()))?;
     envelopes::save_revoke(gitback_base, &envelope)
         .with_context(|| format!("persist revoke envelope from {}", path.display()))?;
     let _ = std::fs::remove_file(path);
@@ -672,6 +678,32 @@ mod tests {
         SigningKey::generate(&mut OsRng)
     }
 
+    /// Mint a founder-signed, admin-authorized REVOKE for `handle`'s
+    /// project. Returns `(project_id, token_id, envelope)`. The
+    /// envelope carries a valid single-link authority chain (the
+    /// founder's own bootstrap is an Admin token), so it passes
+    /// `verify_revoke_authority` — the A1 receive-path check.
+    fn authorized_revoke(
+        founder: &SigningKey,
+        handle: &str,
+        token_id: [u8; tokens::ID_LEN],
+        revoked_at: i64,
+        reason: &str,
+    ) -> ([u8; tokens::ID_LEN], [u8; tokens::ID_LEN], envelopes::RevokeEnvelope) {
+        let founder_pub = founder.verifying_key().to_bytes();
+        let project_id = tokens::project_id_for(&founder_pub, handle);
+        let bootstrap = tokens::issue_bootstrap(founder, handle, revoked_at - 1, None).unwrap();
+        let env = envelopes::RevokeEnvelope::build(
+            founder,
+            &project_id,
+            &token_id,
+            revoked_at,
+            reason,
+        )
+        .with_authority(vec![bootstrap], vec![]);
+        (project_id, token_id, env)
+    }
+
     #[test]
     fn leave_sentinel_persists_and_unlinks() {
         let base = tempfile::tempdir().unwrap();
@@ -700,20 +732,14 @@ mod tests {
     fn revoke_sentinel_persists_and_unlinks() {
         let base = tempfile::tempdir().unwrap();
         let user_dir = tempfile::tempdir().unwrap();
-        let project_id = [0xBBu8; tokens::ID_LEN];
-        let project_dir = user_dir.path().join(super::project_state::hex_id(&project_id));
-        std::fs::create_dir_all(&project_dir).unwrap();
-        let sentinel = project_dir.join("revoke.pending");
 
         let admin = fresh_key();
         let token_id = [0x42u8; tokens::ID_LEN];
-        let env = envelopes::RevokeEnvelope::build(
-            &admin,
-            &project_id,
-            &token_id,
-            1_700_000_000,
-            "compromised",
-        );
+        let (project_id, _tid, env) =
+            authorized_revoke(&admin, "bb-proj", token_id, 1_700_000_000, "compromised");
+        let project_dir = user_dir.path().join(super::project_state::hex_id(&project_id));
+        std::fs::create_dir_all(&project_dir).unwrap();
+        let sentinel = project_dir.join("revoke.pending");
         std::fs::write(&sentinel, serde_json::to_vec(&env).unwrap()).unwrap();
 
         process_revoke_sentinel(base.path(), user_dir.path(), &sentinel, None)
@@ -748,22 +774,18 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let user_dir = tempfile::tempdir().unwrap();
         let pid_a = [0x01u8; tokens::ID_LEN];
-        let pid_b = [0x02u8; tokens::ID_LEN];
+
+        let leaver = fresh_key();
+        let admin = fresh_key();
+        let (pid_b, _tid, revoke_env) =
+            authorized_revoke(&admin, "scan-proj", [0x99u8; tokens::ID_LEN], 200, "rotation");
+
         let dir_a = user_dir.path().join(super::project_state::hex_id(&pid_a));
         let dir_b = user_dir.path().join(super::project_state::hex_id(&pid_b));
         std::fs::create_dir_all(&dir_a).unwrap();
         std::fs::create_dir_all(&dir_b).unwrap();
 
-        let leaver = fresh_key();
-        let admin = fresh_key();
         let leave_env = envelopes::LeaveEnvelope::build(&leaver, &pid_a, 100);
-        let revoke_env = envelopes::RevokeEnvelope::build(
-            &admin,
-            &pid_b,
-            &[0x99u8; tokens::ID_LEN],
-            200,
-            "rotation",
-        );
         std::fs::write(
             dir_a.join("leave.pending"),
             serde_json::to_vec(&leave_env).unwrap(),

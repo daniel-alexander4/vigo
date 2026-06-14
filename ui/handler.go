@@ -5447,6 +5447,24 @@ func (h *Handler) adminOnly(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+// requireAuditRead blocks users without audit.read with a 403 and
+// renders nothing. The raw hash-chained audit log is admin/viewer-only
+// (the compliance role is denied audit.read); the nav hides the link
+// but the handler must gate it too. Mirrors the REST audit handler,
+// which gates on auth.PermAuditRead. Returns true when the handler
+// should continue; false when it should return.
+func (h *Handler) requireAuditRead(w http.ResponseWriter, r *http.Request) bool {
+	if !h.authEnabled {
+		return true
+	}
+	u := auth.UserFromContext(r.Context())
+	if u == nil || !u.HasPermission(auth.PermAuditRead) {
+		http.Error(w, "audit.read permission required", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 // ServerConfig renders the card grid at /server/config. One card per
 // top-level section of server.yaml — enabled or disabled based on the live
 // on-disk file.
@@ -6187,6 +6205,9 @@ func (h *Handler) WorkflowDetail(w http.ResponseWriter, r *http.Request) {
 
 // Audit renders the audit log page with chain verification status.
 func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAuditRead(w, r) {
+		return
+	}
 	ctx := r.Context()
 	typeFilter := r.URL.Query().Get("type")
 
@@ -6328,6 +6349,9 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 // AuditVerify returns an HTML fragment showing the hash chain verification
 // result with individual entries. Called via HTMX from the Verify Chain button.
 func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAuditRead(w, r) {
+		return
+	}
 	ctx := r.Context()
 
 	result, err := audit.VerifyFull(ctx, h.queries)

@@ -259,6 +259,38 @@ func TestLint_RepairUnquotedBooleans(t *testing.T) {
 	}
 }
 
+// TestLint_RepairUnquotedBooleans_SkipsBlockScalar verifies that a
+// bool-like token inside a `content: |` block scalar is NOT rewritten —
+// the block bytes are literal payload shipped to the fleet (e.g.
+// `PasswordAuthentication no` inside sshd_config), and rewriting them
+// would corrupt the delivered file.
+func TestLint_RepairUnquotedBooleans_SkipsBlockScalar(t *testing.T) {
+	input := "name: ssh\nresources:\n" +
+		"  - name: sshd-config\n" +
+		"    type: file\n" +
+		"    target_path: /etc/ssh/sshd_config\n" +
+		"    owner: root\n" +
+		"    group: root\n" +
+		"    mode: '0644'\n" +
+		"    content: |\n" +
+		"      PasswordAuthentication: no\n" +
+		"      PermitRootLogin: yes\n" +
+		"    state: present\n"
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected no errors, got: %v", r.Errors)
+	}
+	if !strings.Contains(r.Output, "PasswordAuthentication: no") {
+		t.Errorf("block-scalar 'no' was rewritten — output:\n%s", r.Output)
+	}
+	if !strings.Contains(r.Output, "PermitRootLogin: yes") {
+		t.Errorf("block-scalar 'yes' was rewritten — output:\n%s", r.Output)
+	}
+	if containsWarning(r, "converted unquoted") {
+		t.Errorf("did not expect a boolean-conversion warning for block-scalar content")
+	}
+}
+
 func TestLint_MissingName(t *testing.T) {
 	input := "resources:\n  - name: pkg\n    type: package\n    package: vim\n"
 	r := Lint([]byte(input), Options{})

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/auth"
@@ -39,6 +40,10 @@ type SpannerOpsPuddleHandler struct {
 	provider    secrets.Provider
 	opsDir      string
 	auditWriter auditRecorder
+	// claimMu serializes the load→check-used→mark-used→append critical
+	// section so two concurrent valid-code requests can't both pass the
+	// pending.Used check and each claim the same 5-minute code.
+	claimMu sync.Mutex
 }
 
 // NewSpannerOpsPuddleHandler constructs the handler with everything
@@ -106,6 +111,12 @@ func (h *SpannerOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Serialize the load→check-used→mark-used→append critical section so
+	// two concurrent valid-code requests can't both pass the pending.Used
+	// check before either marks the code used.
+	h.claimMu.Lock()
+	defer h.claimMu.Unlock()
+
 	pending, err := puddle.LoadPendingPair(h.opsDir)
 	if err != nil {
 		slog.Warn("ops-puddle pair-claim: load pending failed", "error", err)
@@ -136,6 +147,17 @@ func (h *SpannerOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Mark the code used BEFORE returning the seed. Fail-closed: if we
+	// can't persist the single-use marker we must not hand out the seed,
+	// or a crash/retry between here and the response could replay the
+	// same code. The mutex above guarantees no concurrent claim observed
+	// the not-used record before this write lands.
+	if err := puddle.MarkPendingPairUsed(h.opsDir); err != nil {
+		slog.Error("ops-puddle pair-claim: failed to mark pending used", "error", err)
+		writeError(w, http.StatusInternalServerError, "marking pair code used: "+err.Error())
+		return
+	}
+
 	ops, err := puddle.LoadOpsPuddle(deriver, h.opsDir)
 	if err != nil {
 		slog.Error("ops-puddle pair-claim: load ops-puddle failed", "error", err)
@@ -148,15 +170,6 @@ func (h *SpannerOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http
 		slog.Error("ops-puddle pair-claim: append member failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "appending member: "+err.Error())
 		return
-	}
-
-	if err := puddle.MarkPendingPairUsed(h.opsDir); err != nil {
-		// Member is already persisted; the failure to mark used
-		// matters only for replay prevention. Log loud, succeed
-		// the call — the next claim attempt will hit the still-
-		// not-used record and the operator must mint a fresh code
-		// anyway after operator-visible success here.
-		slog.Error("ops-puddle pair-claim: failed to mark pending used after successful claim", "error", err)
 	}
 
 	seedB64 := base64.StdEncoding.EncodeToString(ops.SigningKey.Seed())

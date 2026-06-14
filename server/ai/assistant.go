@@ -509,7 +509,11 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 		}
 	}
 
-	return strings.Join(parts, "\n\n")
+	// Scrub resolved secret values before the prefetched data reaches the
+	// LLM — the tool-use loop strips each tool result, and the prefetch
+	// path builds its blocks from the same tool functions, so it must do
+	// the same.
+	return stripSecrets(strings.Join(parts, "\n\n"))
 }
 
 // isStructuredFindingQuestion reports whether the question matches the

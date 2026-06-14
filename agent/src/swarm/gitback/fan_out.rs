@@ -917,6 +917,17 @@ impl EnvelopesBundle {
         let mut revokes_applied = 0;
         let mut leaves_applied = 0;
         for r in &self.revokes {
+            // A1: authorize before persisting a gossiped revoke — the
+            // signer must hold Admin authority chaining back to the
+            // founder. An unauthorized (forged) revoke is dropped here.
+            if let Err(e) = r.verify_revoke_authority() {
+                tracing::warn!(
+                    token_id = %r.token_id,
+                    error = %e,
+                    "envelope merge: dropping unauthorized revoke"
+                );
+                continue;
+            }
             match super::envelopes::save_revoke(gitback_base, r) {
                 Ok(true) => revokes_applied += 1,
                 Ok(false) => {}
@@ -1141,6 +1152,17 @@ fn build_push_agent(tls: &crate::update::TlsCerts) -> Result<ureq::Agent> {
         // issued for the agent UUID, not the DNS name. Peer identity
         // is established by client-cert chain back to the fleet CA;
         // hostname-on-cert would require parallel issuance.
+        //
+        // NOTE: `disable_verification(true)` skips the *server* cert
+        // chain entirely (ureq 3.3 exposes no skip-hostname-only knob —
+        // see the A8 note in lockbox/pusher.rs::build_agent). This is
+        // intentionally lax here: gitback fan-out is an availability
+        // path and every gitback object pulled is independently
+        // chain-verified (signatures over the bundle / commit objects),
+        // so a LAN MITM cannot inject content this code would accept.
+        // The content planes that carry only magic-checked blobs
+        // (lockbox, peer_client) are the ones that need the stricter
+        // chain-verifying verifier.
         .disable_verification(true)
         .build();
 
@@ -1455,17 +1477,21 @@ mod tests {
     fn envelopes_bundle_merge_is_idempotent() {
         let src = tempfile::tempdir().unwrap();
         let dst = tempfile::tempdir().unwrap();
-        let admin = fresh_key();
+        // Founder-signed revoke so it passes the A1 authorization check
+        // in merge_into. The founder bootstrap is itself an Admin token.
+        let founder = fresh_key();
         let leaver = fresh_key();
-        let pid = [0x99u8; ID_LEN];
+        let pid = project_id_for(&pub_bytes(&founder), "merge-proj");
+        let bootstrap = issue_bootstrap(&founder, "merge-proj", 99, None).unwrap();
 
         let r1 = super::super::envelopes::RevokeEnvelope::build(
-            &admin,
+            &founder,
             &pid,
             &[0x01u8; ID_LEN],
             100,
             "",
-        );
+        )
+        .with_authority(vec![bootstrap], vec![]);
         let l1 = super::super::envelopes::LeaveEnvelope::build(&leaver, &pid, 200);
         super::super::envelopes::save_revoke(src.path(), &r1).unwrap();
         super::super::envelopes::save_leave(src.path(), &l1).unwrap();

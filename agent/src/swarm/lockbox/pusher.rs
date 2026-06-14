@@ -690,6 +690,24 @@ fn build_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
     let key = client_key.context("no private key found in client key PEM")?;
     let client_id = ureq::tls::ClientCert::new_with_certs(&client_certs, key);
 
+    // A8 (server cert verification disabled): pulled lockbox blobs /
+    // file-lists are only age-magic-checked, so a LAN MITM that can
+    // answer on a peer's IP could inject ciphertext this client would
+    // accept. The correct fix is a custom rustls `ServerCertVerifier`
+    // that chains the server cert to the fleet CA (reuse the CA-loading
+    // above) but skips ONLY the hostname/SAN check — envoy certs are
+    // CN'd by IP, which is why verification was turned off wholesale.
+    //
+    // BLOCKED on the ureq API: ureq 3.3 (latest) exposes only
+    // `disable_verification(bool)` — there is NO hook to inject a custom
+    // verifier or a pre-built rustls `ClientConfig`, and its
+    // `RustlsConnector` / `RustlsTransport` / `TransportAdapter` types
+    // are `pub(crate)`, so a from-scratch `Connector` cannot be built
+    // outside the crate either. Closing A8 therefore requires either
+    // (a) replacing ureq with a direct tokio-rustls/rustls HTTP client
+    // on this path (and peer_client.rs) so we own the `ClientConfig`,
+    // or (b) an upstream ureq change adding a custom-verifier hook.
+    // Left lax pending that decision rather than shipping a half-fix.
     let tls_cfg = ureq::tls::TlsConfig::builder()
         .root_certs(root_certs)
         .client_cert(Some(client_id))

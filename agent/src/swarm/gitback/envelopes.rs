@@ -166,11 +166,29 @@ pub struct RevokeEnvelope {
     #[serde(default)]
     pub reason: String,
     /// Hex-encoded puddle pubkey that signed this envelope. Must be an
-    /// authorized admin in the project's token tree (caller verifies
-    /// after signature passes — see module docs).
+    /// authorized admin in the project's token tree (verified by
+    /// [`verify_revoke_authority`] against `authority_chain`).
     pub signer_puddle_pubkey: String,
     /// Hex-encoded 64-byte Ed25519 signature.
     pub signature: String,
+    /// The signer's authority chain — root (founder bootstrap) first,
+    /// the signer's own token last — proving the signer holds Admin
+    /// authority on this project. Mirrors the `X-Vigo-Chain` header on
+    /// the git-push receive path: the receiver runs
+    /// [`crate::swarm::anchor::tokens::verify_chain`] over it and
+    /// asserts the leaf is `Role::Admin` with `subject ==
+    /// signer_puddle_pubkey`. Without this an attacker could forge a
+    /// REVOKE for any `token_id` by signing with any puddle key and
+    /// gossip it fleet-wide (A1).
+    #[serde(default)]
+    pub authority_chain: Vec<crate::swarm::anchor::tokens::Token>,
+    /// The founder's delegation chain (ADR-019) needed to chain a
+    /// post-rekey admin leaf back to the genesis founder pubkey baked
+    /// into `project_id`. Empty for pre-rekey projects. Threaded into
+    /// `verify_chain` exactly like the push path's
+    /// `PushChain.delegations`.
+    #[serde(default)]
+    pub authority_delegations: Vec<crate::swarm::anchor::envelopes::DelegationEnvelope>,
 }
 
 /// Decoded raw form of a [`RevokeEnvelope`] — bytes ready for
@@ -203,7 +221,27 @@ impl RevokeEnvelope {
             reason: reason.to_string(),
             signer_puddle_pubkey: hex_id(&signer_pub),
             signature: hex::encode(sig.to_bytes()),
+            authority_chain: Vec::new(),
+            authority_delegations: Vec::new(),
         }
+    }
+
+    /// Attach the signer's authority proof (the admin's token chain +
+    /// the founder delegation chain) to a freshly-built envelope. The
+    /// canonical signed bytes do NOT cover these fields — the chain is
+    /// self-authenticating (every token carries its own Ed25519
+    /// signature, verified by `verify_chain`), so tampering with it
+    /// can only make [`verify_revoke_authority`] reject, never forge a
+    /// new authorization. Returns `self` for chaining off `build` /
+    /// `build_with`.
+    pub fn with_authority(
+        mut self,
+        authority_chain: Vec<crate::swarm::anchor::tokens::Token>,
+        authority_delegations: Vec<crate::swarm::anchor::envelopes::DelegationEnvelope>,
+    ) -> Self {
+        self.authority_chain = authority_chain;
+        self.authority_delegations = authority_delegations;
+        self
     }
 
     /// Build a REVOKE where signing is delegated to a closure (e.g.
@@ -237,6 +275,8 @@ impl RevokeEnvelope {
             reason: reason.to_string(),
             signer_puddle_pubkey: hex_id(signer_puddle_pubkey),
             signature: hex::encode(sig),
+            authority_chain: Vec::new(),
+            authority_delegations: Vec::new(),
         };
         env.verify_signature()
             .context("freshly-built revoke envelope failed self-verification")?;
@@ -282,6 +322,77 @@ impl RevokeEnvelope {
         vk.verify(&msg, &sig)
             .map_err(|e| anyhow!("signature verification failed: {}", e))?;
         Ok(raw)
+    }
+
+    /// Verify that the signer of this REVOKE is authorized to revoke on
+    /// the project — i.e. holds Admin authority that chains back to the
+    /// genesis founder pubkey baked into `project_id`. This is the
+    /// authorization step the receive paths MUST run before persisting
+    /// a gossiped REVOKE; without it any puddle-key holder could forge
+    /// and gossip a REVOKE for an attacker-chosen `token_id` and deny
+    /// tokens fleet-wide (A1).
+    ///
+    /// Mirrors the git-push receive path
+    /// ([`crate::swarm::gitback::fan_out::verify_chain_for_push`]):
+    ///
+    /// 1. Signature over the envelope itself verifies (re-run here so
+    ///    this is a complete, standalone authorization check).
+    /// 2. `authority_chain` is a valid token chain rooted at the
+    ///    genesis founder — `verify_chain` recomputes `founder =
+    ///    chain[0].signer_puddle_pubkey`, checks
+    ///    `sha256(founder ‖ handle) == project_id`, and walks every
+    ///    link. Evaluated at `revoked_at` so the founder authority
+    ///    window (ADR-019 delegations) and token expiry are judged as
+    ///    of when the revoke was issued.
+    /// 3. The chain's leaf is `Role::Admin` (only admins may revoke —
+    ///    same rule the local `cmd_revoke` enforces; the founder's own
+    ///    bootstrap token is itself an Admin token, so this covers the
+    ///    founder case too).
+    /// 4. The leaf's `subject_puddle_pubkey` equals this envelope's
+    ///    `signer_puddle_pubkey` — the chain proves *this* signer is the
+    ///    admin, not merely that *some* admin exists.
+    pub fn verify_revoke_authority(&self) -> Result<()> {
+        use crate::swarm::anchor::tokens::{verify_chain, Role};
+
+        let raw = self
+            .verify_signature()
+            .context("revoke envelope signature")?;
+
+        let root = self.authority_chain.first().ok_or_else(|| {
+            anyhow!(
+                "revoke for token {} carries no authority chain — unauthorized",
+                self.token_id
+            )
+        })?;
+        // verify_chain re-derives the founder from chain[0] and binds
+        // project_id == sha256(founder ‖ handle); we pass the same value
+        // to keep the call shape identical to the push path.
+        let founder = root.body.signer_puddle_pubkey;
+
+        verify_chain(
+            &raw.project_id,
+            &founder,
+            &self.authority_delegations,
+            &self.authority_chain,
+            self.revoked_at,
+        )
+        .map_err(|e| anyhow!("revoke authority chain verification: {}", e))?;
+
+        // verify_chain guarantees the chain is non-empty, so last() is Some.
+        let leaf = self
+            .authority_chain
+            .last()
+            .ok_or_else(|| anyhow!("revoke authority chain is empty"))?;
+        if leaf.body.role != Role::Admin {
+            bail!(
+                "revoke signer holds a {:?} token; only admins can revoke",
+                leaf.body.role
+            );
+        }
+        if leaf.body.subject_puddle_pubkey != raw.signer_puddle_pubkey {
+            bail!("revoke authority chain leaf does not authorize the signing puddle");
+        }
+        Ok(())
     }
 }
 
@@ -744,6 +855,105 @@ mod tests {
         let newer = RevokeEnvelope::build(&admin, &sample_pid(), &sample_tid(), 1_700_000_010, "v2");
         save_revoke(dir.path(), &newer).unwrap();
         assert!(!save_revoke(dir.path(), &older).unwrap());
+    }
+
+    // ---- revoke authorization (A1) ----
+
+    use crate::swarm::anchor::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
+
+    #[test]
+    fn revoke_authority_accepts_founder_signed_chain() {
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder), "auth-proj");
+        let bootstrap = issue_bootstrap(&founder, "auth-proj", 99, None).unwrap();
+        let env = RevokeEnvelope::build(&founder, &pid, &sample_tid(), 100, "compromised")
+            .with_authority(vec![bootstrap], vec![]);
+        env.verify_revoke_authority()
+            .expect("founder-signed revoke must be authorized");
+    }
+
+    #[test]
+    fn revoke_authority_accepts_admin_child_chain() {
+        // An admin (non-founder) the founder delegated Admin to can revoke.
+        let founder = fresh_key();
+        let admin = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder), "auth-proj");
+        let bootstrap = issue_bootstrap(&founder, "auth-proj", 99, None).unwrap();
+        let admin_tok =
+            issue_child(&founder, &bootstrap, &pub_bytes(&admin), Role::Admin, 99, None).unwrap();
+        let env = RevokeEnvelope::build(&admin, &pid, &sample_tid(), 100, "rotate")
+            .with_authority(vec![bootstrap, admin_tok], vec![]);
+        env.verify_revoke_authority()
+            .expect("admin-child-signed revoke must be authorized");
+    }
+
+    #[test]
+    fn revoke_authority_rejects_missing_chain() {
+        // The forged-revoke attack: any key, no authority proof.
+        let attacker = fresh_key();
+        let env = RevokeEnvelope::build(&attacker, &sample_pid(), &sample_tid(), 100, "evil");
+        assert!(
+            env.verify_revoke_authority().is_err(),
+            "a revoke with no authority chain must be rejected"
+        );
+    }
+
+    #[test]
+    fn revoke_authority_rejects_member_leaf() {
+        // A Member token holder must not be able to revoke.
+        let founder = fresh_key();
+        let member = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder), "auth-proj");
+        let bootstrap = issue_bootstrap(&founder, "auth-proj", 99, None).unwrap();
+        let member_tok =
+            issue_child(&founder, &bootstrap, &pub_bytes(&member), Role::Member, 99, None).unwrap();
+        let env = RevokeEnvelope::build(&member, &pid, &sample_tid(), 100, "nope")
+            .with_authority(vec![bootstrap, member_tok], vec![]);
+        let err = env.verify_revoke_authority().unwrap_err();
+        assert!(
+            err.to_string().contains("only admins"),
+            "member-signed revoke must be rejected: {err}"
+        );
+    }
+
+    #[test]
+    fn revoke_authority_rejects_chain_for_other_project() {
+        // Attacker mints a valid chain for THEIR OWN project, then
+        // signs a revoke claiming the victim's project_id. The signed
+        // bytes bind to the victim project_id, so verify_chain's
+        // sha256(founder ‖ handle) binding rejects.
+        let attacker = fresh_key();
+        let victim_founder = fresh_key();
+        let victim_pid = project_id_for(&pub_bytes(&victim_founder), "victim-proj");
+        let attacker_bootstrap = issue_bootstrap(&attacker, "attacker-proj", 99, None).unwrap();
+        let env = RevokeEnvelope::build(&attacker, &victim_pid, &sample_tid(), 100, "evil")
+            .with_authority(vec![attacker_bootstrap], vec![]);
+        assert!(
+            env.verify_revoke_authority().is_err(),
+            "a chain rooted at a different founder must not authorize a revoke for the victim project"
+        );
+    }
+
+    #[test]
+    fn revoke_authority_rejects_signer_pubkey_mismatch() {
+        // Valid founder chain, but the envelope is signed by a
+        // different key than the chain leaf authorizes. The leaf
+        // subject != signer check must reject. (Signature still has to
+        // verify against signer_puddle_pubkey, so we sign with the
+        // mismatched key honestly.)
+        let founder = fresh_key();
+        let other = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder), "auth-proj");
+        let bootstrap = issue_bootstrap(&founder, "auth-proj", 99, None).unwrap();
+        // Signed by `other`, but the only authority chain is the
+        // founder's bootstrap whose subject is the founder.
+        let env = RevokeEnvelope::build(&other, &pid, &sample_tid(), 100, "evil")
+            .with_authority(vec![bootstrap], vec![]);
+        let err = env.verify_revoke_authority().unwrap_err();
+        assert!(
+            err.to_string().contains("does not authorize the signing puddle"),
+            "signer/leaf mismatch must be rejected: {err}"
+        );
     }
 
     // ---- leave ----

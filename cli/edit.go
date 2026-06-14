@@ -13,9 +13,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// vigoConfigRoot is the base directory for .vgo config files.
-// edit only allows editing files within this tree.
-const vigoConfigRoot = "/srv/vigo"
+// vigoConfigRoot is the base directory for the operator stacks tree.
+// `config edit` only allows editing .vgo files within this tree —
+// scoping to stacks/ (not /srv/vigo) keeps wrapped secrets under
+// /srv/vigo/secrets/ and other sibling material out of $EDITOR reach.
+const vigoConfigRoot = "/srv/vigo/stacks"
 
 var configEditCmd = &cobra.Command{
 	Use:               "edit <name-or-path>",
@@ -68,7 +70,7 @@ func findModuleByName(name string) (string, error) {
 		name += ".vgo"
 	}
 
-	stacksDir := filepath.Join(vigoConfigRoot, "stacks")
+	stacksDir := vigoConfigRoot
 
 	var matches []string
 	_ = filepath.WalkDir(stacksDir, func(path string, d os.DirEntry, err error) error {
@@ -107,17 +109,26 @@ func resolveVigoPath(input string) (string, error) {
 		if _, err := os.Stat(input); err == nil {
 			absPath, _ = filepath.Abs(input)
 		} else {
-			// Resolve relative to stacks/ directory.
-			absPath = filepath.Join(vigoConfigRoot, "stacks", input)
+			// Resolve relative to the stacks/ directory.
+			absPath = filepath.Join(vigoConfigRoot, input)
 		}
 	}
 
-	// Resolve symlinks to get the real path.
-	realPath, err := filepath.EvalSymlinks(filepath.Dir(absPath))
-	if err != nil {
-		realPath = filepath.Dir(absPath)
+	// Resolve symlinks on the FULL path, including the final component, so
+	// a symlinked .vgo pointing outside the stacks tree (e.g. at
+	// /srv/vigo/secrets/.master.key) is rejected by the containment check
+	// below. EvalSymlinks requires the path to exist; if it doesn't,
+	// resolve the parent and re-attach the (non-existent) base — the
+	// os.Stat below will then surface the not-found error.
+	if resolved, err := filepath.EvalSymlinks(absPath); err == nil {
+		absPath = resolved
+	} else {
+		realDir, derr := filepath.EvalSymlinks(filepath.Dir(absPath))
+		if derr != nil {
+			realDir = filepath.Dir(absPath)
+		}
+		absPath = filepath.Join(realDir, filepath.Base(absPath))
 	}
-	absPath = filepath.Join(realPath, filepath.Base(absPath))
 
 	// Ensure the resolved path is within the allowed root.
 	relPath, err := filepath.Rel(vigoConfigRoot, absPath)

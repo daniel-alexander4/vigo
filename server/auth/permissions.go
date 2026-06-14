@@ -45,9 +45,11 @@ var ViewerPermissions = []string{
 
 // CompliancePermissions is the default set for the compliance role —
 // GRC staff and compliance-document uploaders. Deliberately excludes
-// PermAuditRead (the raw audit-log chain stays admin-only); the
-// compliance role reaches audit evidence only through the audit-bundle
-// endpoint, which is gated on PermComplianceRead.
+// PermAuditRead (the raw audit-log chain stays admin-only). The
+// compliance role can download the audit-bundle (gated on
+// PermComplianceRead), but the bundle's raw audit-log.csv is itself
+// PermAuditRead-gated, so the compliance role never receives the
+// hash-chained log through it.
 var CompliancePermissions = []string{
 	PermComplianceRead, PermComplianceDocsWrite,
 }

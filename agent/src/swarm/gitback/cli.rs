@@ -1985,6 +1985,14 @@ fn cmd_revoke(args: &[String]) -> Result<()> {
         bail!("this fleet holds a {:?} token on '{}'; only admins can revoke", leaf.body.role, cfg.handle);
     }
 
+    // ADR-019: the founder's delegation chain rides alongside the
+    // token chain so a post-rekey admin leaf chains back to the
+    // genesis founder pubkey baked into project_id. Missing file =
+    // founder never rekeyed = empty (behaviorally pre-ADR-019).
+    let delegations = DelegationChain::load(&caller.home, &project_id)?
+        .map(|c| c.delegations)
+        .unwrap_or_default();
+
     // Sign the REVOKE envelope inline via the user's puddle
     // session helper. The leaf admin token's subject_puddle_pubkey IS
     // this user's puddle pubkey (verified above by the role check) —
@@ -1999,7 +2007,11 @@ fn cmd_revoke(args: &[String]) -> Result<()> {
         &reason,
         &admin_pub,
         sign_with_session,
-    )?;
+    )?
+    // A1: attach the signer's admin authority chain (+ founder
+    // delegations) so every receive path can authorize this revoke,
+    // not just trust its self-signature.
+    .with_authority(chain.chain.clone(), delegations);
     write_sentinel(&caller.home, &project_id, "revoke.pending", &envelope)?;
     println!("queued REVOKE of token {} on project '{}'", hex_id(&token_id), cfg.handle);
     println!();

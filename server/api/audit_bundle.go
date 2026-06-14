@@ -64,9 +64,11 @@ func (h *ReportHandler) registerAuditBundleRoute(mux *http.ServeMux) {
 // intermediate file. SHA-256 of each entry is captured during write
 // via an io.MultiWriter into the hash + the zip-entry writer.
 //
-// Permission: audit.read (gated above) + compliance.read (no docs
-// returned for callers without it). The download itself records an
-// audit-chain entry.
+// Permission: compliance.read (gated on the route). The raw
+// audit-log.csv (hash-chained chain incl. prev_hash/hash/payload) is
+// included only when the caller also holds audit.read — the
+// compliance role is denied that capability and must not see the raw
+// chain. The download itself records an audit-chain entry.
 func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	period, err := parseAuditBundlePeriod(r.URL.Query().Get("period"))
@@ -87,8 +89,13 @@ func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request
 	// + the docs/ directory but keep the rest of the bundle so audit
 	// and ops still get value.
 	includeDocs := false
-	if u := auth.UserFromContext(r.Context()); u != nil && u.HasPermission(auth.PermComplianceRead) {
-		includeDocs = true
+	includeAudit := false
+	if u := auth.UserFromContext(r.Context()); u != nil {
+		includeDocs = u.HasPermission(auth.PermComplianceRead)
+		// The raw hash-chained audit log (prev_hash/hash/payload) is
+		// admin/viewer-only — the compliance role is denied audit.read
+		// and must not receive the chain through this bundle.
+		includeAudit = u.HasPermission(auth.PermAuditRead)
 	}
 	if !includeDocs {
 		report.Documents = nil
@@ -166,26 +173,30 @@ func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request
 	}
 
 	// 5. audit-log.csv — audit-chain entries since (now - period).
-	if entries, err := h.queries.ListAuditEntriesSince(r.Context(), since); err == nil {
-		csvBuf := &bytes.Buffer{}
-		cw := csv.NewWriter(csvBuf)
-		_ = cw.Write([]string{"id", "timestamp", "event_type", "actor", "source", "summary", "payload", "prev_hash", "hash"})
-		for _, e := range entries {
-			_ = cw.Write([]string{
-				strconv.FormatInt(e.ID, 10),
-				e.Timestamp.UTC().Format(time.RFC3339),
-				e.EventType,
-				e.Actor,
-				e.Source,
-				e.Summary,
-				e.Payload,
-				e.PrevHash,
-				e.Hash,
-			})
-		}
-		cw.Flush()
-		if hash, err := writeBundleEntry(zw, "audit-log.csv", csvBuf.Bytes()); err == nil {
-			manifest.Artifacts = append(manifest.Artifacts, bundleArtifact{Path: "audit-log.csv", SizeBytes: int64(csvBuf.Len()), SHA256: hash, MimeType: "text/csv"})
+	// Only for callers with audit.read; the compliance role is denied
+	// the raw chain.
+	if includeAudit {
+		if entries, err := h.queries.ListAuditEntriesSince(r.Context(), since); err == nil {
+			csvBuf := &bytes.Buffer{}
+			cw := csv.NewWriter(csvBuf)
+			_ = cw.Write([]string{"id", "timestamp", "event_type", "actor", "source", "summary", "payload", "prev_hash", "hash"})
+			for _, e := range entries {
+				_ = cw.Write([]string{
+					strconv.FormatInt(e.ID, 10),
+					e.Timestamp.UTC().Format(time.RFC3339),
+					e.EventType,
+					e.Actor,
+					e.Source,
+					e.Summary,
+					e.Payload,
+					e.PrevHash,
+					e.Hash,
+				})
+			}
+			cw.Flush()
+			if hash, err := writeBundleEntry(zw, "audit-log.csv", csvBuf.Bytes()); err == nil {
+				manifest.Artifacts = append(manifest.Artifacts, bundleArtifact{Path: "audit-log.csv", SizeBytes: int64(csvBuf.Len()), SHA256: hash, MimeType: "text/csv"})
+			}
 		}
 	}
 
@@ -224,7 +235,7 @@ func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request
 	// errors — the operator did download a bundle).
 	recordAudit(r.Context(), h.auditWriter(), "compliance.bundle.download", actorFromRequest(r), "report",
 		fmt.Sprintf("downloaded audit bundle for %s (period=%dd)", slug, manifest.PeriodDays),
-		fmt.Sprintf(`{"slug":%q,"period_days":%d,"artifact_count":%d,"include_docs":%t}`, slug, manifest.PeriodDays, len(manifest.Artifacts), includeDocs))
+		fmt.Sprintf(`{"slug":%q,"period_days":%d,"artifact_count":%d,"include_docs":%t,"include_audit":%t}`, slug, manifest.PeriodDays, len(manifest.Artifacts), includeDocs, includeAudit))
 }
 
 // auditWriter returns the report handler's audit writer. Indirection

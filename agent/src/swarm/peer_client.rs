@@ -227,6 +227,13 @@ pub fn build_peer_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
     // Peers connect by IP but certs have hostname SANs — mismatch is expected.
     // Safety: blob integrity is guaranteed by SHA256 hash verification, and the
     // peer server still verifies our client cert against the CA.
+    //
+    // A8: this also skips the server cert *chain* check, not just the
+    // hostname — the control-plane responses pulled here (e.g. manifest
+    // JSON) are NOT all hash-pinned, so a LAN MITM could inject. Same
+    // ureq-3.3 API limitation blocks the proper fix here as in
+    // lockbox/pusher.rs::build_agent — see the A8 note there for the
+    // custom-verifier design and why it can't be wired through ureq.
     let tls_cfg = ureq::tls::TlsConfig::builder()
         .root_certs(root_certs)
         .client_cert(Some(client_id))

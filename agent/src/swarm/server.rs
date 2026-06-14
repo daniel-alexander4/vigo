@@ -259,8 +259,18 @@ async fn handle_request(
 
         // Longdrawer: serve raw file bytes from a user's ~/longdrawer/ directory.
         // /longdrawer/{user}/{filename}
+        //
+        // Gated: a peer must not be able to pull file content or the
+        // per-user UserState JSON from an envoy where longdrawer is
+        // disabled. We consult the daemon-canonical swarm state mirror
+        // (swarm AND longdrawer) before serving; 403 when off — same
+        // fail mode the longdrawer gate promises (gate.rs).
         (&Method::GET, p) if p.starts_with("/swarm/longdrawer/") => {
-            tokio::task::block_in_place(|| crate::swarm::longdrawer::server::handle(p))
+            if !longdrawer_active() {
+                forbidden("longdrawer disabled on this envoy")
+            } else {
+                tokio::task::block_in_place(|| crate::swarm::longdrawer::server::handle(p))
+            }
         }
 
         // Longdrawer cross-subnet announce. Source envoys POST their
@@ -270,7 +280,11 @@ async fn handle_request(
         // announcement into the same reconciler path that multicast
         // uses. Returns 503 if longdrawer isn't running on this envoy.
         (&Method::POST, "/swarm/longdrawer/announce") => {
-            handle_echo_announce(req, peer_addr).await
+            if !longdrawer_active() {
+                forbidden("longdrawer disabled on this envoy")
+            } else {
+                handle_echo_announce(req, peer_addr).await
+            }
         }
 
         // Gitback cross-subnet push (Phase 7). Source envoys POST
@@ -947,6 +961,12 @@ async fn handle_envelope_post(
                         "envelope project_id does not match URL"
                     ));
                 }
+                // A1: authorize before persisting — signer must hold
+                // Admin authority chaining back to the founder. Rejects
+                // a forged REVOKE pushed over the envelope-gossip REST
+                // endpoint.
+                env.verify_revoke_authority()
+                    .map_err(|e| anyhow::anyhow!("unauthorized revoke: {}", e))?;
                 let changed =
                     crate::swarm::gitback::envelopes::save_revoke(&gitback_base, &env)?;
                 Ok(changed)
@@ -1058,6 +1078,25 @@ fn forbidden(msg: &str) -> Response<Full<Bytes>> {
         .status(StatusCode::FORBIDDEN)
         .body(Full::new(Bytes::from(msg.to_string())))
         .unwrap()
+}
+
+/// Whether longdrawer is active for this envoy right now, for the
+/// peer-server serve/announce routes.
+///
+/// The swarm peer server holds no LMDB handle, so we read the
+/// daemon-canonical swarm state mirror (`/var/lib/vigo/swarm/state.json`,
+/// rewritten on every accepted bundle) instead of
+/// [`crate::swarm::gates::substrate_active`]. Same AND semantics
+/// (`swarm` global kill AND per-substrate `longdrawer`) and the same
+/// fail-open default: a missing/unreadable mirror (fresh enrollment,
+/// no bundle yet) keeps longdrawer serving until the server says
+/// otherwise — matching the gate semantics documented in
+/// `longdrawer/gate.rs`.
+fn longdrawer_active() -> bool {
+    match crate::swarm::state_mirror::read(&crate::swarm::state_mirror::default_path()) {
+        Ok(state) => state.gates.swarm && state.gates.longdrawer,
+        Err(_) => true,
+    }
 }
 
 fn payload_too_large(msg: &str) -> Response<Full<Bytes>> {

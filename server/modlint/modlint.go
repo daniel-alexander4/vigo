@@ -457,21 +457,56 @@ func isBlockIntroducer(l string) bool {
 	return strings.TrimSpace(l[colon+1:]) == ""
 }
 
+// blockScalarOpenRe matches a `key: |` or `key: >` block-scalar
+// introducer (with optional chomping/indentation indicators and an
+// optional trailing comment). The captured indent of the key line
+// bounds the block: every following line indented deeper than the key
+// belongs to the scalar and must be left untouched by the bool rewrite.
+var blockScalarOpenRe = regexp.MustCompile(`^(\s*)\S.*:\s*[|>][+-]?\d*\s*(?:#.*)?$`)
+
+// fixUnquotedSpecials rewrites unquoted YAML 1.1 booleans (yes/no/on/off)
+// to true/false in `key: value` scalar positions. Block-scalar regions
+// (`content: |`, etc.) are skipped — their bytes are literal payload
+// shipped to the fleet, and rewriting a colon-form line like
+// `PasswordAuthentication: no` inside an sshd_config block would corrupt
+// the delivered file.
 func fixUnquotedSpecials(text string, r *Result) string {
-	return yamlBoolPattern.ReplaceAllStringFunc(text, func(match string) string {
-		parts := yamlBoolPattern.FindStringSubmatch(match)
-		if len(parts) < 3 {
-			return match
+	lines := strings.Split(text, "\n")
+	// blockIndent is the indent of the current block scalar's introducer
+	// key, or -1 when not inside a block scalar. A line strictly more
+	// indented than blockIndent (or blank) stays inside the block.
+	blockIndent := -1
+	for i, line := range lines {
+		if blockIndent >= 0 {
+			trimmed := strings.TrimSpace(line)
+			indent := len(line) - len(strings.TrimLeft(line, " "))
+			if trimmed == "" || indent > blockIndent {
+				// Still inside the block scalar — leave the line verbatim.
+				continue
+			}
+			// Dedent back to the key level (or shallower) ends the block.
+			blockIndent = -1
 		}
-		prefix, val, suffix := parts[1], parts[2], parts[3]
-		replacement := "true"
-		lower := strings.ToLower(val)
-		if lower == "no" || lower == "off" {
-			replacement = "false"
+		if m := blockScalarOpenRe.FindStringSubmatch(line); m != nil {
+			blockIndent = len(m[1])
+			continue
 		}
-		r.warnf(0, "repair-unquoted-bool", "converted unquoted %q to %s", val, replacement)
-		return prefix + replacement + suffix
-	})
+		lines[i] = yamlBoolPattern.ReplaceAllStringFunc(line, func(match string) string {
+			parts := yamlBoolPattern.FindStringSubmatch(match)
+			if len(parts) < 3 {
+				return match
+			}
+			prefix, val, suffix := parts[1], parts[2], parts[3]
+			replacement := "true"
+			lower := strings.ToLower(val)
+			if lower == "no" || lower == "off" {
+				replacement = "false"
+			}
+			r.warnf(0, "repair-unquoted-bool", "converted unquoted %q to %s", val, replacement)
+			return prefix + replacement + suffix
+		})
+	}
+	return strings.Join(lines, "\n")
 }
 
 // --- Step 2: Parse ---
