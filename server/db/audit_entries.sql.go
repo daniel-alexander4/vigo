@@ -22,7 +22,7 @@ func (q *Queries) CountAuditEntries(ctx context.Context) (int64, error) {
 }
 
 const getAuditEntry = `-- name: GetAuditEntry :one
-SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version
 FROM audit_entries
 WHERE id = ?
 `
@@ -40,12 +40,13 @@ func (q *Queries) GetAuditEntry(ctx context.Context, id int64) (AuditEntry, erro
 		&i.Source,
 		&i.Summary,
 		&i.Payload,
+		&i.HashVersion,
 	)
 	return i, err
 }
 
 const getLastAuditEntry = `-- name: GetLastAuditEntry :one
-SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version
 FROM audit_entries
 ORDER BY id DESC
 LIMIT 1
@@ -64,25 +65,27 @@ func (q *Queries) GetLastAuditEntry(ctx context.Context) (AuditEntry, error) {
 		&i.Source,
 		&i.Summary,
 		&i.Payload,
+		&i.HashVersion,
 	)
 	return i, err
 }
 
 const insertAuditEntry = `-- name: InsertAuditEntry :one
-INSERT INTO audit_entries (prev_hash, hash, timestamp, event_type, actor, source, summary, payload)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+INSERT INTO audit_entries (prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version
 `
 
 type InsertAuditEntryParams struct {
-	PrevHash  string    `json:"prev_hash"`
-	Hash      string    `json:"hash"`
-	Timestamp time.Time `json:"timestamp"`
-	EventType string    `json:"event_type"`
-	Actor     string    `json:"actor"`
-	Source    string    `json:"source"`
-	Summary   string    `json:"summary"`
-	Payload   string    `json:"payload"`
+	PrevHash    string    `json:"prev_hash"`
+	Hash        string    `json:"hash"`
+	Timestamp   time.Time `json:"timestamp"`
+	EventType   string    `json:"event_type"`
+	Actor       string    `json:"actor"`
+	Source      string    `json:"source"`
+	Summary     string    `json:"summary"`
+	Payload     string    `json:"payload"`
+	HashVersion int64     `json:"hash_version"`
 }
 
 func (q *Queries) InsertAuditEntry(ctx context.Context, arg InsertAuditEntryParams) (AuditEntry, error) {
@@ -95,6 +98,7 @@ func (q *Queries) InsertAuditEntry(ctx context.Context, arg InsertAuditEntryPara
 		arg.Source,
 		arg.Summary,
 		arg.Payload,
+		arg.HashVersion,
 	)
 	var i AuditEntry
 	err := row.Scan(
@@ -107,12 +111,13 @@ func (q *Queries) InsertAuditEntry(ctx context.Context, arg InsertAuditEntryPara
 		&i.Source,
 		&i.Summary,
 		&i.Payload,
+		&i.HashVersion,
 	)
 	return i, err
 }
 
 const listAuditEntries = `-- name: ListAuditEntries :many
-SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version
 FROM audit_entries
 ORDER BY id DESC
 LIMIT ?
@@ -137,6 +142,7 @@ func (q *Queries) ListAuditEntries(ctx context.Context, limit int64) ([]AuditEnt
 			&i.Source,
 			&i.Summary,
 			&i.Payload,
+			&i.HashVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -152,7 +158,7 @@ func (q *Queries) ListAuditEntries(ctx context.Context, limit int64) ([]AuditEnt
 }
 
 const listAuditEntriesAfterID = `-- name: ListAuditEntriesAfterID :many
-SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version
 FROM audit_entries
 WHERE id > ?1
 ORDER BY id ASC
@@ -177,6 +183,7 @@ func (q *Queries) ListAuditEntriesAfterID(ctx context.Context, id int64) ([]Audi
 			&i.Source,
 			&i.Summary,
 			&i.Payload,
+			&i.HashVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -192,7 +199,7 @@ func (q *Queries) ListAuditEntriesAfterID(ctx context.Context, id int64) ([]Audi
 }
 
 const listAuditEntriesAsc = `-- name: ListAuditEntriesAsc :many
-SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version
 FROM audit_entries
 ORDER BY id ASC
 `
@@ -216,6 +223,7 @@ func (q *Queries) ListAuditEntriesAsc(ctx context.Context) ([]AuditEntry, error)
 			&i.Source,
 			&i.Summary,
 			&i.Payload,
+			&i.HashVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -231,7 +239,7 @@ func (q *Queries) ListAuditEntriesAsc(ctx context.Context) ([]AuditEntry, error)
 }
 
 const listAuditEntriesSince = `-- name: ListAuditEntriesSince :many
-SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version
 FROM audit_entries
 WHERE timestamp >= ?1
 ORDER BY id ASC
@@ -256,6 +264,7 @@ func (q *Queries) ListAuditEntriesSince(ctx context.Context, timestamp time.Time
 			&i.Source,
 			&i.Summary,
 			&i.Payload,
+			&i.HashVersion,
 		); err != nil {
 			return nil, err
 		}

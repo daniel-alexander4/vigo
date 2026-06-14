@@ -5,8 +5,11 @@ package audit
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"testing"
+	"time"
 
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/testutil"
@@ -225,6 +228,120 @@ func TestVerifier_CatchesTamperAfterCheckpoint(t *testing.T) {
 	}
 	if res.Valid || res.FirstBroken != 3 {
 		t.Fatalf("incremental Verify = %+v, want invalid first_broken 3", res)
+	}
+}
+
+// insertV1Entry hand-writes a row using the legacy V1 (bare-concatenation)
+// scheme and hash_version=1, simulating a row recorded before the version
+// column existed. Returns the stored hash so the caller can chain the next.
+func insertV1Entry(t *testing.T, sqlDB *sql.DB, ctx context.Context, prevHash, eventType, actor, source, summary, payload string) string {
+	t.Helper()
+	ts := time.Now().UTC().Truncate(time.Second)
+	tsStr := ts.Format(timestampFormat)
+	hash := computeHashV1(prevHash, tsStr, eventType, actor, source, summary, payload)
+	_, err := sqlDB.ExecContext(ctx,
+		`INSERT INTO audit_entries (prev_hash, hash, timestamp, event_type, actor, source, summary, payload, hash_version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+		prevHash, hash, ts, eventType, actor, source, summary, payload)
+	if err != nil {
+		t.Fatalf("insert V1 entry: %v", err)
+	}
+	return hash
+}
+
+func TestMixedV1V2ChainVerifies(t *testing.T) {
+	sqlDB, queries := setupTestDB(t)
+	ctx := context.Background()
+
+	// Pre-existing V1 rows (recorded before the format bump).
+	prev := ""
+	prev = insertV1Entry(t, sqlDB, ctx, prev, "legacy.event", "old", "boot", "first", "{}")
+	prev = insertV1Entry(t, sqlDB, ctx, prev, "legacy.event", "old", "boot", "second", "{}")
+
+	// New writer picks up the chain head and appends V2 rows.
+	w := NewWriter(queries)
+	if w.prevHash != prev {
+		t.Fatalf("writer prevHash = %q, want %q (chain head from V1 rows)", w.prevHash, prev)
+	}
+	recordN(t, w, ctx, 3)
+
+	res, err := VerifyFull(ctx, queries)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !res.Valid {
+		t.Fatalf("expected valid mixed V1/V2 chain, got: %+v", res)
+	}
+	if res.EntryCount != 5 {
+		t.Fatalf("expected 5 entries, got %d", res.EntryCount)
+	}
+
+	// Confirm the new rows were persisted as V2 and the old ones stayed V1.
+	all, err := queries.ListAuditEntriesAsc(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, e := range all {
+		want := hashVersionV2
+		if e.ID <= 2 {
+			want = hashVersionV1
+		}
+		if e.HashVersion != want {
+			t.Fatalf("entry %d hash_version = %d, want %d", e.ID, e.HashVersion, want)
+		}
+	}
+}
+
+func TestVerifyDetectsTamperOnV2Row(t *testing.T) {
+	sqlDB, queries := setupTestDB(t)
+	ctx := context.Background()
+
+	w := NewWriter(queries)
+	recordN(t, w, ctx, 3) // all V2
+
+	// Tamper a V2 row's field — the recomputed V2 hash must no longer match.
+	if _, err := sqlDB.ExecContext(ctx, "UPDATE audit_entries SET summary='tampered' WHERE id=2"); err != nil {
+		t.Fatalf("tamper: %v", err)
+	}
+
+	res, err := VerifyFull(ctx, queries)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if res.Valid {
+		t.Fatal("expected broken chain after tampering a V2 row, got valid")
+	}
+	if res.FirstBroken != 2 {
+		t.Fatalf("expected first broken at entry 2, got %d", res.FirstBroken)
+	}
+}
+
+// TestV1HashByteIdentical guards the frozen invariant: V1 recompute must equal
+// the original bare-concatenation digest. If anyone "improves" computeHashV1,
+// every pre-existing audit row in the field stops verifying — this catches it.
+func TestV1HashByteIdentical(t *testing.T) {
+	h := sha256.New()
+	for _, s := range []string{"prev", "2026-01-01T00:00:00Z", "evt", "actor", "src", "sum", "pay"} {
+		h.Write([]byte(s))
+	}
+	want := hex.EncodeToString(h.Sum(nil))
+	got := computeHashV1("prev", "2026-01-01T00:00:00Z", "evt", "actor", "src", "sum", "pay")
+	if got != want {
+		t.Fatalf("V1 hash drifted from frozen concatenation: got %s want %s", got, want)
+	}
+}
+
+// TestV2DisambiguatesFieldBoundaries proves V2 fixes the V1 collision:
+// (actor="ab",source="c") and (actor="a",source="bc") must hash differently.
+func TestV2DisambiguatesFieldBoundaries(t *testing.T) {
+	a := computeHashV2("p", "t", "e", "ab", "c", "s", "y")
+	b := computeHashV2("p", "t", "e", "a", "bc", "s", "y")
+	if a == b {
+		t.Fatal("V2 hashes collide across a shifted field boundary")
+	}
+	// And confirm V1 actually does collide here (the bug V2 fixes).
+	if computeHashV1("p", "t", "e", "ab", "c", "s", "y") != computeHashV1("p", "t", "e", "a", "bc", "s", "y") {
+		t.Fatal("expected V1 to collide on shifted boundary (sanity check of the documented weakness)")
 	}
 }
 

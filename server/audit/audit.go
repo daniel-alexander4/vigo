@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -18,6 +19,21 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+)
+
+// Audit hash-scheme versions. The scheme is recorded per-row (audit_entries.
+// hash_version) so the chain can evolve forward without rehashing — and thus
+// invalidating — existing entries.
+//
+//   - V1: legacy bare concatenation of fields. Ambiguous, because adjacent
+//     fields run together with no delimiter (actor="ab",source="c" hashes
+//     identically to actor="a",source="bc"). Frozen byte-for-byte: old rows
+//     are stored with this scheme and must keep verifying.
+//   - V2: length-prefixed scheme — each field is preceded by its big-endian
+//     uint64 byte length, so no field boundary is ambiguous. All new rows.
+const (
+	hashVersionV1 int64 = 1
+	hashVersionV2 int64 = 2
 )
 
 // auditLoadTimeout bounds the startup-time DB lookup of the previous
@@ -88,8 +104,8 @@ func NewWriter(queries *db.Queries) *Writer {
 // truncation.
 const timestampFormat = time.RFC3339
 
-// Record appends an audit entry to the hash chain. The entry's hash is
-// computed as SHA256(prevHash || timestamp || eventType || actor || source || summary || payload).
+// Record appends an audit entry to the hash chain. New entries are written
+// with the V2 (length-prefixed) hash scheme; see computeHashV2.
 func (w *Writer) Record(ctx context.Context, eventType, actor, source, summary, payload string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -116,17 +132,19 @@ func (w *Writer) Record(ctx context.Context, eventType, actor, source, summary, 
 func (w *Writer) recordLocked(ctx context.Context, eventType, actor, source, summary, payload string) error {
 	now := time.Now().UTC().Truncate(time.Second)
 	tsStr := now.Format(timestampFormat)
-	hash := computeHash(w.prevHash, tsStr, eventType, actor, source, summary, payload)
+	// All new entries use V2 (length-prefixed); old rows keep their stored V1.
+	hash := computeHashV2(w.prevHash, tsStr, eventType, actor, source, summary, payload)
 
 	entry, err := w.queries.InsertAuditEntry(ctx, db.InsertAuditEntryParams{
-		PrevHash:  w.prevHash,
-		Hash:      hash,
-		Timestamp: now,
-		EventType: eventType,
-		Actor:     actor,
-		Source:    source,
-		Summary:   summary,
-		Payload:   payload,
+		PrevHash:    w.prevHash,
+		Hash:        hash,
+		Timestamp:   now,
+		EventType:   eventType,
+		Actor:       actor,
+		Source:      source,
+		Summary:     summary,
+		Payload:     payload,
+		HashVersion: hashVersionV2,
 	})
 	if err != nil {
 		return fmt.Errorf("inserting audit entry: %w", err)
@@ -147,8 +165,21 @@ func (w *Writer) recordLocked(ctx context.Context, eventType, actor, source, sum
 	return nil
 }
 
-// computeHash produces the SHA-256 hex digest for a chain entry.
-func computeHash(prevHash, timestamp, eventType, actor, source, summary, payload string) string {
+// computeHashForVersion dispatches to the hash scheme a row was recorded with.
+// Unknown versions fall back to V1 (the historical default) so a future
+// downgrade can't silently report a clean chain by skipping verification.
+func computeHashForVersion(version int64, prevHash, timestamp, eventType, actor, source, summary, payload string) string {
+	if version == hashVersionV2 {
+		return computeHashV2(prevHash, timestamp, eventType, actor, source, summary, payload)
+	}
+	return computeHashV1(prevHash, timestamp, eventType, actor, source, summary, payload)
+}
+
+// computeHashV1 is the legacy bare-concatenation scheme. FROZEN: it must remain
+// byte-for-byte identical to the original computeHash so rows recorded before
+// the version column (defaulted to hash_version=1) still verify against their
+// stored hash. Do not add delimiters or change field order here.
+func computeHashV1(prevHash, timestamp, eventType, actor, source, summary, payload string) string {
 	h := sha256.New()
 	h.Write([]byte(prevHash))
 	h.Write([]byte(timestamp))
@@ -157,6 +188,20 @@ func computeHash(prevHash, timestamp, eventType, actor, source, summary, payload
 	h.Write([]byte(source))
 	h.Write([]byte(summary))
 	h.Write([]byte(payload))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// computeHashV2 is the collision-resistant scheme: each field is preceded by
+// its big-endian uint64 byte length, so field boundaries are unambiguous and no
+// two distinct field tuples can hash alike. Used for all new entries.
+func computeHashV2(prevHash, timestamp, eventType, actor, source, summary, payload string) string {
+	h := sha256.New()
+	for _, field := range []string{prevHash, timestamp, eventType, actor, source, summary, payload} {
+		var lenPrefix [8]byte
+		binary.BigEndian.PutUint64(lenPrefix[:], uint64(len(field)))
+		h.Write(lenPrefix[:])
+		h.Write([]byte(field))
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -177,7 +222,10 @@ type VerifyResult struct {
 func verifyChainSegment(entries []db.AuditEntry, startPrevHash string) (lastHash string, firstBroken int64, errMsg string) {
 	prevHash := startPrevHash
 	for _, e := range entries {
-		expected := computeHash(prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Source, e.Summary, e.Payload)
+		// Recompute with the scheme this row was recorded under. The stored
+		// hash never changes, so V1 rows verify with V1 and V2 rows with V2 —
+		// the chain stays continuous across the format bump.
+		expected := computeHashForVersion(e.HashVersion, prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Source, e.Summary, e.Payload)
 		if e.Hash != expected {
 			return prevHash, e.ID, fmt.Sprintf("hash mismatch at entry %d: expected %s, got %s", e.ID, truncHash(expected), truncHash(e.Hash))
 		}

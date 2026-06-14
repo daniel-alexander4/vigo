@@ -29,15 +29,16 @@ type ApprovedPattern struct {
 }
 
 type AuditEntry struct {
-	ID        int64     `json:"id"`
-	PrevHash  string    `json:"prev_hash"`
-	Hash      string    `json:"hash"`
-	Timestamp time.Time `json:"timestamp"`
-	EventType string    `json:"event_type"`
-	Actor     string    `json:"actor"`
-	Source    string    `json:"source"`
-	Summary   string    `json:"summary"`
-	Payload   string    `json:"payload"`
+	ID          int64     `json:"id"`
+	PrevHash    string    `json:"prev_hash"`
+	Hash        string    `json:"hash"`
+	Timestamp   time.Time `json:"timestamp"`
+	EventType   string    `json:"event_type"`
+	Actor       string    `json:"actor"`
+	Source      string    `json:"source"`
+	Summary     string    `json:"summary"`
+	Payload     string    `json:"payload"`
+	HashVersion int64     `json:"hash_version"`
 }
 
 type ComplianceDoc struct {
