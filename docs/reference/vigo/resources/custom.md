@@ -5,7 +5,13 @@ Runs external scripts that implement the Vigo executor protocol via JSON over st
 
 ## Parameters
 
-All parameters from the resource definition are passed to the script. The executor itself does not interpret any specific parameters -- they are forwarded verbatim.
+All parameters from the resource definition are passed to the script. The executor itself interprets only one:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `timeout` (alias `timeout_secs`) | duration | Maximum run time for the script. Bare integers are seconds; `s`/`m`/`h` suffixes are accepted (e.g. `30s`, `5m`). On expiry the script's whole process group is killed (SIGTERM, then SIGKILL after a short grace) and the resource is reported as a failure. When unset, the agent applies its per-resource default timeout so a hung script can never block the convergence cycle. |
+
+Every other parameter is forwarded verbatim in the `params` object.
 
 ## Protocol
 
@@ -94,5 +100,6 @@ Cross-platform. Scripts must be executable and available at the configured path.
 - The script receives all resource parameters in the `params` object.
 - Errors from the script (non-zero exit, invalid JSON, or a non-empty `error` field) are reported as resource failures.
 - Scripts should respect the `dry_run` flag and avoid mutating system state when it is `true`.
+- A script that hangs is killed on `timeout` expiry (or the per-resource default if `timeout` is unset) and reported as a timeout failure -- a wedged custom script cannot stall convergence.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

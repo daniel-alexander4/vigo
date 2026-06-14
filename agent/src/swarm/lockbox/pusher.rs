@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::update::TlsCerts;
+use super::blobsig;
 use super::config;
 use super::state::{PeerTable, STALE_SECS};
 use super::tombstones::{self, DeleteEnvelope, Tombstone, TombstoneTable};
@@ -105,7 +106,35 @@ pub fn spawn(
 }
 
 async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
-    let PushJob { user, filename, bytes } = job;
+    let PushJob { user, filename, bytes, mtime } = job;
+
+    // Sign the blob content so receivers can authenticate the sender and
+    // detect a swapped/replayed blob. The descriptor binds user, filename,
+    // mtime (LWW version), and a SHA-256 of the ciphertext under this
+    // envoy's Ed25519 signing key. Missing key = cold-boot race before
+    // enrollment finished; skip the push (the receiver would reject an
+    // unsigned blob anyway) and let catch-up converge once the key exists.
+    let hostname = super::read_hostname();
+    let signing_key = match super::load_local_signing_key(&user) {
+        Ok(k) => k,
+        Err(e) => {
+            warn!(
+                user = %user,
+                filename = %filename,
+                error = %e,
+                "pusher: cannot load signing key; skipping push (catch-up will converge)"
+            );
+            return Ok(());
+        }
+    };
+    let blob_sig = blobsig::build(&signing_key, &hostname, &user, &filename, mtime, &bytes);
+    let blob_sig_header = match serde_json::to_string(&blob_sig) {
+        Ok(s) => std::sync::Arc::new(s),
+        Err(e) => {
+            warn!(error = %e, "pusher: serializing blob signature failed; skipping push");
+            return Ok(());
+        }
+    };
 
     // Collect targets: LAN peers from peers.json + cross_subnet_peers from
     // the user's config.yaml.
@@ -142,8 +171,9 @@ async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
         let user = user.clone();
         let filename = filename.clone();
         let bytes = std::sync::Arc::clone(&bytes);
+        let blob_sig_header = std::sync::Arc::clone(&blob_sig_header);
         handles.push(tokio::task::spawn_blocking(move || {
-            push_one(&agent, &target, &user, &filename, &bytes)
+            push_one(&agent, &target, &user, &filename, &bytes, &blob_sig_header)
         }));
     }
     for h in handles {
@@ -325,6 +355,7 @@ fn push_one(
     user: &str,
     filename: &str,
     bytes: &[u8],
+    blob_sig_header: &str,
 ) -> Result<()> {
     // Pre-flight disk-pressure probe. Peers at or below the free-%
     // threshold get skipped here so we never put bytes on the wire.
@@ -360,6 +391,7 @@ fn push_one(
     let resp = agent
         .post(&url)
         .header("Content-Type", "application/octet-stream")
+        .header(blobsig::BLOBSIG_HEADER, blob_sig_header)
         .send(bytes)
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
@@ -690,13 +722,19 @@ fn build_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
     let key = client_key.context("no private key found in client key PEM")?;
     let client_id = ureq::tls::ClientCert::new_with_certs(&client_certs, key);
 
-    // A8 (server cert verification disabled): pulled lockbox blobs /
-    // file-lists are only age-magic-checked, so a LAN MITM that can
-    // answer on a peer's IP could inject ciphertext this client would
-    // accept. The correct fix is a custom rustls `ServerCertVerifier`
-    // that chains the server cert to the fleet CA (reuse the CA-loading
-    // above) but skips ONLY the hostname/SAN check — envoy certs are
-    // CN'd by IP, which is why verification was turned off wholesale.
+    // A8 (server cert verification disabled): this client does not pin
+    // the peer's server cert to the fleet CA, so a LAN MITM that can
+    // answer on a peer's IP terminates the TLS connection. Blob INJECTION
+    // via that vector is now closed at the application layer: pulled blobs
+    // carry an Ed25519 `BlobSig` (see `blobsig.rs`) verified against the
+    // signer's peer-table pubkey over the ciphertext hash — a MITM with no
+    // peer-table identity cannot forge it, so injected/swapped ciphertext
+    // is rejected before it lands. The remaining residual is the missing
+    // server-cert pinning itself (transport-level peer identity); the
+    // correct fix is a custom rustls `ServerCertVerifier` that chains the
+    // server cert to the fleet CA (reuse the CA-loading above) but skips
+    // ONLY the hostname/SAN check — envoy certs are CN'd by IP, which is
+    // why verification was turned off wholesale.
     //
     // BLOCKED on the ureq API: ureq 3.3 (latest) exposes only
     // `disable_verification(bool)` — there is NO hook to inject a custom

@@ -38,6 +38,7 @@ use hyper::{Request, Response, StatusCode};
 
 use crate::platform::users::user_home;
 
+use super::blobsig;
 use super::leaves::{self, LeaveEnvelope};
 use super::resurrects::{self, ResurrectEnvelope, ResurrectRecord, ResurrectsTable};
 use super::state::PeerTable;
@@ -200,6 +201,13 @@ pub async fn handle_push(
         }
     }
 
+    // Capture the blob-signature header before the body consumes `req`.
+    let blob_sig_hdr: Option<String> = req
+        .headers()
+        .get(blobsig::BLOBSIG_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
     // Drain body with streaming cap.
     let body = req.into_body();
     let collected = match body.collect().await {
@@ -216,6 +224,55 @@ pub async fn handle_push(
     const AGE_MAGIC: &[u8] = b"age-encryption.org/v1\n";
     if bytes.len() < AGE_MAGIC.len() || &bytes[..AGE_MAGIC.len()] != AGE_MAGIC {
         return bad_request("pushed body is not age-encrypted");
+    }
+
+    // Authenticate the blob CONTENT. age gives confidentiality but not
+    // sender authentication, and recipient pubkeys are broadcast in
+    // cleartext — so a peer that can write to this endpoint could
+    // otherwise inject attacker-chosen plaintext the victim trusts.
+    // Mirror the control-envelope auth (`handle_tombstone_delete`):
+    // parse the signed descriptor from the header, resolve the sender's
+    // signing pubkey from the local peer table (never the wire), and
+    // verify the signature over the recomputed ciphertext hash. Reject
+    // 403 on missing/unknown-sender/bad-signature.
+    let blob_sig: blobsig::BlobSig = match blob_sig_hdr.as_deref() {
+        Some(s) => match serde_json::from_str(s) {
+            Ok(sig) => sig,
+            Err(e) => return forbidden(&format!("malformed blob signature: {}", e)),
+        },
+        None => {
+            tracing::warn!(
+                user = %user,
+                filename = %name,
+                "lockbox: push rejected — missing blob signature header"
+            );
+            return forbidden("missing blob signature");
+        }
+    };
+    {
+        let table = PeerTable::load(&user);
+        let expected_pubkey = match table.sign_pubkey_for(&blob_sig.signer_hostname) {
+            Some(s) if !s.is_empty() => s.to_string(),
+            _ => {
+                tracing::warn!(
+                    user = %user,
+                    filename = %name,
+                    sender = %blob_sig.signer_hostname,
+                    "lockbox: push rejected — sender unknown to peer table or has no signing pubkey"
+                );
+                return forbidden("unknown sender or no signing pubkey");
+            }
+        };
+        if let Err(e) = blobsig::verify(&blob_sig, &expected_pubkey, &user, &name, &bytes) {
+            tracing::warn!(
+                user = %user,
+                filename = %name,
+                sender = %blob_sig.signer_hostname,
+                error = %e,
+                "lockbox: push rejected — blob signature verification failed"
+            );
+            return forbidden("blob signature verification failed");
+        }
     }
 
     // Anti-resurrection — if this filename is effectively tombstoned
@@ -257,6 +314,26 @@ pub async fn handle_push(
     }
 
     let target = content_dir.join(&name);
+
+    // Replay defense (last-write-wins). The blob signature covers the
+    // sender-asserted mtime; if we already hold this filename at an mtime
+    // at or newer than the signed one, a replayed OLDER genuine blob would
+    // overwrite current content with stale ciphertext. Refuse it. (A fresh
+    // file — no local copy — always passes.)
+    if let Some(local_mtime) = local_ciphertext_mtime(&target) {
+        if blobsig::is_replay(blob_sig.mtime, local_mtime) {
+            tracing::warn!(
+                user = %user,
+                filename = %name,
+                sender = %blob_sig.signer_hostname,
+                signed_mtime = blob_sig.mtime,
+                local_mtime = local_mtime,
+                "lockbox: push rejected — signed blob older than local copy (replay/LWW)"
+            );
+            return conflict_stale(&name, local_mtime);
+        }
+    }
+
     let tmp: PathBuf = content_dir.join(format!(".{}.lockbox.push.tmp", name));
     if let Err(e) = write_tmp(&tmp, &bytes) {
         tracing::warn!(
@@ -782,7 +859,50 @@ pub fn handle_files_list(path: &str) -> Response<Full<Bytes>> {
         Some(h) => h,
         None => return not_found(),
     };
-    let files = super::snapshot::local_files_for_user(&user, &home);
+    let mut files = super::snapshot::local_files_for_user(&user, &home);
+
+    // Attach a blob-content signature to each entry so the puller can
+    // authenticate every blob it fetches via `GET /pull/...`. The serving
+    // envoy signs with its own Ed25519 key; the puller resolves THIS
+    // envoy's pubkey from its peer table and verifies. We must read the
+    // actual ciphertext to bind its hash + the on-disk mtime (the
+    // snapshot's sha is cache-derived, so we recompute from bytes to be
+    // certain the signature covers exactly what `/pull/` will serve).
+    // Missing signing key (cold boot) → entries go out unsigned and the
+    // puller skips them, converging on a later cycle.
+    if let Ok(signing_key) = super::load_local_signing_key(&user) {
+        let hostname = super::read_hostname();
+        let content_dir = home.join("lockbox");
+        for f in &mut files {
+            let path = content_dir.join(&f.name);
+            match fs::read(&path) {
+                Ok(bytes) => {
+                    f.blobsig = Some(super::blobsig::build(
+                        &signing_key,
+                        &hostname,
+                        &user,
+                        &f.name,
+                        f.mtime,
+                        &bytes,
+                    ));
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        user = %user,
+                        name = %f.name,
+                        error = %e,
+                        "lockbox: files-list: cannot read ciphertext to sign; entry served unsigned"
+                    );
+                }
+            }
+        }
+    } else {
+        tracing::debug!(
+            user = %user,
+            "lockbox: files-list: no signing key; entries served unsigned"
+        );
+    }
+
     match serde_json::to_vec(&files) {
         Ok(body) => Response::builder()
             .status(StatusCode::OK)
@@ -852,6 +972,20 @@ fn valid_filename(name: &str) -> bool {
         return false;
     }
     !name.contains('/') && !name.contains('\\') && !name.contains('\0')
+}
+
+/// Local ciphertext mtime (unix seconds) for `path`, or `None` if the
+/// file doesn't exist / can't be stat'd. The last-write-wins version
+/// the replay check compares the signed `mtime` against. Same derivation
+/// (`modified()` → unix seconds) used in `snapshot::local_files_for_user`,
+/// so a blob's signed mtime and the receiver's stored mtime are
+/// comparable.
+fn local_ciphertext_mtime(path: &std::path::Path) -> Option<i64> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
 }
 
 fn percent_decode(s: &str) -> Option<String> {
@@ -942,6 +1076,21 @@ fn gone_with_tombstone(filename: &str, deletion_time: i64) -> Response<Full<Byte
     );
     Response::builder()
         .status(StatusCode::GONE)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(body)))
+        .unwrap()
+}
+
+/// 409 Conflict for a blob whose signed mtime is older than the copy we
+/// already hold — last-write-wins rejecting a replayed older genuine blob.
+fn conflict_stale(filename: &str, local_mtime: i64) -> Response<Full<Bytes>> {
+    let body = format!(
+        r#"{{"status":"stale","filename":"{}","local_mtime":{}}}"#,
+        filename.replace('"', "'"),
+        local_mtime,
+    );
+    Response::builder()
+        .status(StatusCode::CONFLICT)
         .header("Content-Type", "application/json")
         .body(Full::new(Bytes::from(body)))
         .unwrap()

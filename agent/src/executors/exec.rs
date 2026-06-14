@@ -212,7 +212,7 @@ fn exit_code_acceptable(output: &std::process::Output, acceptable: &[i32]) -> bo
 /// as unset rather than failing the whole run — same ergonomics as
 /// `nice:`/`retries:`/etc. in this file. A zero or negative value
 /// also returns `None` to avoid zero-timeout logic traps.
-fn parse_duration(s: &str) -> Option<std::time::Duration> {
+pub(crate) fn parse_duration(s: &str) -> Option<std::time::Duration> {
     let s = s.trim();
     if s.is_empty() {
         return None;

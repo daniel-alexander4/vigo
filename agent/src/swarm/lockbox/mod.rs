@@ -26,6 +26,7 @@
 //! daemon lifecycle. Session helper + remaining verbs follow in week 3.
 
 pub mod auto_encrypt;
+pub mod blobsig;
 pub mod cli;
 pub mod config;
 pub mod crypt;
@@ -1407,7 +1408,7 @@ async fn catchup_files_from(
         if local_sha.get(&rf.name).map(|s| s == &rf.sha256).unwrap_or(false) {
             continue; // already have it with the same sha
         }
-        if let Err(e) = pull_one_file(&agent, source_addr, user, &rf.name).await {
+        if let Err(e) = pull_one_file(&agent, source_addr, user, rf).await {
             debug!(
                 user = %user,
                 name = %rf.name,
@@ -1449,8 +1450,22 @@ async fn pull_one_file(
     agent: &ureq::Agent,
     source_addr: std::net::SocketAddr,
     user: &str,
-    name: &str,
+    entry: &snapshot::FileEntry,
 ) -> Result<()> {
+    let name = &entry.name;
+
+    // Blob CONTENT authentication on the pull path, mirroring the push
+    // handler: the file-list entry carries a signature minted by the
+    // serving envoy. Resolve that envoy's signing pubkey from OUR peer
+    // table (never the wire) and verify it over the pulled ciphertext
+    // hash before we accept a single byte. An unsigned entry, an unknown
+    // signer, or a bad signature is refused — keeps the pull path in
+    // lockstep with `handle_push`.
+    let blob_sig = entry
+        .blobsig
+        .clone()
+        .context("catch-up file-list entry carries no blob signature; refusing to pull")?;
+
     let pull_url = format!(
         "https://{}/swarm/lockbox/pull/{}/{}",
         source_addr,
@@ -1486,6 +1501,20 @@ async fn pull_one_file(
         anyhow::bail!("pulled body is not age-encrypted");
     }
 
+    // Verify the blob signature over the bytes we actually received.
+    let expected_pubkey = {
+        let table = PeerTable::load(user);
+        match table.sign_pubkey_for(&blob_sig.signer_hostname) {
+            Some(s) if !s.is_empty() => s.to_string(),
+            _ => anyhow::bail!(
+                "catch-up: signer {} unknown to peer table or has no signing pubkey",
+                blob_sig.signer_hostname
+            ),
+        }
+    };
+    blobsig::verify(&blob_sig, &expected_pubkey, user, name, &bytes)
+        .context("catch-up: blob signature verification failed")?;
+
     let home = home_for_user(user).context("no home for user")?;
     let content_dir = config::content_dir(&home);
     if !content_dir.is_dir() {
@@ -1497,6 +1526,23 @@ async fn pull_one_file(
     let user_string = user.to_string();
     let name_string = name.to_string();
     let target = content_dir.join(&name_string);
+
+    // Replay defense (last-write-wins) on the pull path, mirroring the
+    // push handler: if we already hold this filename at an mtime at or
+    // newer than the signed one, refuse a replayed older genuine blob.
+    if let Some(local_mtime) = local_ciphertext_mtime(&target) {
+        if blobsig::is_replay(blob_sig.mtime, local_mtime) {
+            debug!(
+                user = %user,
+                name = %name,
+                signed_mtime = blob_sig.mtime,
+                local_mtime = local_mtime,
+                "lockbox: catch-up skip — signed blob older than local copy (replay/LWW)"
+            );
+            return Ok(());
+        }
+    }
+
     let tmp = content_dir.join(format!(".{}.lockbox.catchup.tmp", name_string));
     tokio::task::spawn_blocking(move || -> Result<()> {
         write_tmp_0600(&tmp, &bytes)
@@ -1510,6 +1556,19 @@ async fn pull_one_file(
     .await
     .context("write join")??;
     Ok(())
+}
+
+/// Local ciphertext mtime (unix seconds) for `path`, or `None` if the
+/// file is absent / un-stattable. The last-write-wins version the
+/// catch-up replay check compares the signed `mtime` against. Same
+/// derivation used by `snapshot::local_files_for_user` and the push
+/// handler, so the two mtimes are directly comparable.
+fn local_ciphertext_mtime(path: &std::path::Path) -> Option<i64> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
 }
 
 fn write_tmp_0600(tmp: &std::path::Path, data: &[u8]) -> std::io::Result<()> {

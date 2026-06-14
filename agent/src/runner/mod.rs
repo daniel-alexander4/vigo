@@ -1096,9 +1096,9 @@ pub fn load_custom_executors(
         info!(name = %name, path = %path.display(), "loaded custom executor");
         executors.insert(
             name,
-            Box::new(crate::executors::custom::CustomExecutor {
-                script_path: path.to_string_lossy().to_string(),
-            }),
+            Box::new(crate::executors::custom::CustomExecutor::new(
+                path.to_string_lossy().to_string(),
+            )),
         );
     }
 }

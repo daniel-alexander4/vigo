@@ -6,15 +6,28 @@
 //! The script receives `{"params": {...}, "dry_run": bool}` on stdin and must
 //! write `{"action": "...", "changed": bool, "error": "..."}` to stdout.
 
-use super::{Action, Executor, ResourceResult};
+use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use std::collections::HashMap;
-use std::io::Write;
-use std::process::{Command, Stdio};
 use std::time::Instant;
 
 /// Runs an external script with JSON stdin/stdout protocol.
 pub struct CustomExecutor {
     pub script_path: String,
+    /// Command runner — routes the spawn through the kill-capable
+    /// `run_with_stdin_niced_timeout` so a hung operator script can't
+    /// block the convergence cycle. `DefaultRunner` in production;
+    /// overridable in tests.
+    pub runner: Box<dyn CommandRunner>,
+}
+
+impl CustomExecutor {
+    /// Construct with the real, kill-capable runner.
+    pub fn new(script_path: String) -> Self {
+        Self {
+            script_path,
+            runner: Box::new(DefaultRunner),
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -53,50 +66,70 @@ impl Executor for CustomExecutor {
             }
         };
 
-        // Retry spawn on ETXTBSY — a kernel race on tmpfs where the
-        // executable inode is briefly held after a recent write/rename.
-        let mut child = None;
+        // Per-process timeout — the kill path. A hung operator script
+        // must not block the convergence cycle, so route the spawn through
+        // the runner's `run_with_stdin_niced_timeout` (setpgid + SIGTERM→
+        // grace→SIGKILL of the whole process tree on expiry). Honor an
+        // explicit `timeout:`/`timeout_secs:` on the resource, else fall
+        // back to the runner-injected `_default_timeout_secs` — same
+        // precedence the exec executor uses (see exec.rs).
+        let timeout = params
+            .get("timeout")
+            .or_else(|| params.get("timeout_secs"))
+            .and_then(|s| super::exec::parse_duration(s))
+            .or_else(|| {
+                params
+                    .get("_default_timeout_secs")
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .filter(|&n| n > 0)
+                    .map(std::time::Duration::from_secs)
+            });
+
+        // Retry on ETXTBSY — a kernel race on tmpfs where the executable
+        // inode is briefly held after a recent write/rename.
         let mut last_err = None;
+        let mut output = None;
         for attempt in 0..5 {
-            match Command::new(&self.script_path)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-            {
-                Ok(c) => { child = Some(c); break; }
+            let res = match timeout {
+                Some(dur) => self.runner.run_with_stdin_niced_timeout(
+                    &input_json,
+                    &self.script_path,
+                    &[],
+                    0,
+                    dur,
+                ),
+                None => self
+                    .runner
+                    .run_with_stdin(&input_json, &self.script_path, &[]),
+            };
+            match res {
+                Ok(o) => {
+                    output = Some(o);
+                    break;
+                }
                 Err(e) if e.raw_os_error() == Some(26) && attempt < 4 => {
                     // ETXTBSY (26) — brief retry.
                     last_err = Some(e);
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
                 Err(e) => {
+                    // Includes the timeout case: the runner returns
+                    // io::ErrorKind::TimedOut after killing the process
+                    // tree, which surfaces here as a reported error.
                     result.error = Some(format!("running {}: {}", self.script_path, e));
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
             }
         }
-        let mut child = match child {
-            Some(c) => c,
+        let output = match output {
+            Some(o) => o,
             None => {
-                let e = last_err.map(|e| e.to_string()).unwrap_or_else(|| "unknown".into());
-                result.error = Some(format!("running {} after 5 retries: {}", self.script_path, e));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-        };
-
-        if let Some(ref mut stdin) = child.stdin {
-            let _ = stdin.write_all(&input_json);
-        }
-        // Close stdin so the script knows input is complete.
-        drop(child.stdin.take());
-
-        let output = match child.wait_with_output() {
-            Ok(o) => o,
-            Err(e) => {
-                result.error = Some(format!("running {}: {}", self.script_path, e));
+                let e = last_err
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "unknown".into());
+                result.error =
+                    Some(format!("running {} after 5 retries: {}", self.script_path, e));
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
@@ -179,9 +212,7 @@ mod tests {
 
     #[test]
     fn missing_script_errors() {
-        let exec = CustomExecutor {
-            script_path: "/tmp/vigo-test-nonexistent-script-12345".into(),
-        };
+        let exec = CustomExecutor::new("/tmp/vigo-test-nonexistent-script-12345".into());
         let result = exec.execute(&make_params(&[("name", "test")]), false);
         assert!(result.error.is_some());
         assert!(
@@ -199,7 +230,7 @@ mod tests {
             "changed.sh",
             r#"echo '{"action":"created","changed":true,"error":""}'"#,
         );
-        let exec = CustomExecutor { script_path: script };
+        let exec = CustomExecutor::new(script);
         let result = exec.execute(&make_params(&[("name", "test")]), false);
         assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
         assert!(result.changed);
@@ -214,7 +245,7 @@ mod tests {
             "unchanged.sh",
             r#"echo '{"action":"none","changed":false,"error":""}'"#,
         );
-        let exec = CustomExecutor { script_path: script };
+        let exec = CustomExecutor::new(script);
         let result = exec.execute(&make_params(&[("name", "test")]), false);
         assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
         assert!(!result.changed);
@@ -229,7 +260,7 @@ mod tests {
             "error.sh",
             r#"echo '{"action":"","changed":false,"error":"something failed"}'"#,
         );
-        let exec = CustomExecutor { script_path: script };
+        let exec = CustomExecutor::new(script);
         let result = exec.execute(&make_params(&[("name", "test")]), false);
         assert!(result.error.is_some());
         assert_eq!(result.error.as_deref().unwrap(), "something failed");
@@ -243,7 +274,7 @@ mod tests {
             "fail.sh",
             "echo 'boom' >&2\nexit 1\n",
         );
-        let exec = CustomExecutor { script_path: script };
+        let exec = CustomExecutor::new(script);
         let result = exec.execute(&make_params(&[("name", "test")]), false);
         assert!(result.error.is_some());
         assert!(
@@ -251,5 +282,66 @@ mod tests {
             "unexpected error: {:?}",
             result.error
         );
+    }
+
+    // A hung custom script (no output, never exits) must be killed by the
+    // runner-injected default timeout rather than blocking the convergence
+    // cycle. Mirrors exec.rs's `default_timeout_kills_hung_subprocess`.
+    #[test]
+    fn default_timeout_kills_hung_subprocess() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // Reads stdin then sleeps forever — simulates an operator script
+        // that wedges after receiving its JSON input.
+        let script = write_script(dir.path(), "hang.sh", "cat >/dev/null\nsleep 60\n");
+        let exec = CustomExecutor::new(script);
+        let start = Instant::now();
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "test"),
+                // Simulates the runner injecting its per-resource default
+                // for a custom resource that set no timeout itself.
+                ("_default_timeout_secs", "1"),
+            ]),
+            false,
+        );
+        let elapsed = start.elapsed();
+        // Killed at ~1s + a 5s SIGTERM→SIGKILL grace; generous slack for CI.
+        assert!(
+            elapsed < std::time::Duration::from_secs(20),
+            "hung custom script should be killed via default timeout, took {:?}",
+            elapsed
+        );
+        assert!(
+            result.error.is_some(),
+            "timed-out custom script should report an error"
+        );
+        let err = result.error.unwrap();
+        assert!(
+            err.contains("timed out"),
+            "error should mention timeout, got: {}",
+            err
+        );
+    }
+
+    // An explicit `timeout:` on the resource wins over the injected default.
+    #[test]
+    fn explicit_timeout_kills_hung_subprocess() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let script = write_script(dir.path(), "hang2.sh", "cat >/dev/null\nsleep 60\n");
+        let exec = CustomExecutor::new(script);
+        let start = Instant::now();
+        let result = exec.execute(
+            &make_params(&[
+                ("name", "test"),
+                ("timeout", "1"),
+                ("_default_timeout_secs", "300"),
+            ]),
+            false,
+        );
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(20),
+            "explicit timeout should win and kill the hung script"
+        );
+        assert!(result.error.as_deref().unwrap().contains("timed out"));
     }
 }

@@ -42,6 +42,15 @@ pub struct FileEntry {
     pub size: u64,
     pub mtime: i64,
     pub sha256: String,
+    /// Blob-content signature, attached ONLY when this entry is served by
+    /// the catch-up file-list endpoint (`GET /swarm/lockbox/files/<user>`)
+    /// so the puller can authenticate each blob before accepting it. Left
+    /// `None` (and skipped on the wire) everywhere else — the trait
+    /// snapshot path keeps `FileEntry` lean and the `files_digest` stays
+    /// content-only, so adding this field doesn't perturb the ADR-033
+    /// inventory hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blobsig: Option<super::blobsig::BlobSig>,
 }
 
 /// A tombstone serialized for the trait payload. Mirrors the local
@@ -276,7 +285,7 @@ pub(super) fn local_files_for_user(user: &str, home: &Path) -> Vec<FileEntry> {
                 s
             }
         };
-        out.push(FileEntry { name, size, mtime, sha256: sha });
+        out.push(FileEntry { name, size, mtime, sha256: sha, blobsig: None });
     }
     if cache_dirty {
         if let Err(e) = cache.save(user) {
@@ -453,12 +462,12 @@ mod tests {
     #[test]
     fn digest_stable_under_enum_order() {
         let a = vec![
-            FileEntry { name: "a".into(), size: 1, mtime: 1, sha256: "sha_a".into() },
-            FileEntry { name: "b".into(), size: 2, mtime: 2, sha256: "sha_b".into() },
+            FileEntry { name: "a".into(), size: 1, mtime: 1, sha256: "sha_a".into(), blobsig: None },
+            FileEntry { name: "b".into(), size: 2, mtime: 2, sha256: "sha_b".into(), blobsig: None },
         ];
         let b = vec![
-            FileEntry { name: "b".into(), size: 2, mtime: 2, sha256: "sha_b".into() },
-            FileEntry { name: "a".into(), size: 1, mtime: 1, sha256: "sha_a".into() },
+            FileEntry { name: "b".into(), size: 2, mtime: 2, sha256: "sha_b".into(), blobsig: None },
+            FileEntry { name: "a".into(), size: 1, mtime: 1, sha256: "sha_a".into(), blobsig: None },
         ];
         assert_eq!(digest_files(&a), digest_files(&b));
     }
@@ -470,12 +479,14 @@ mod tests {
             size: 1,
             mtime: 1,
             sha256: "sha_a".into(),
+            blobsig: None,
         }];
         let b = vec![FileEntry {
             name: "foo".into(),
             size: 1,
             mtime: 1,
             sha256: "sha_b".into(),
+            blobsig: None,
         }];
         assert_ne!(digest_files(&a), digest_files(&b));
     }

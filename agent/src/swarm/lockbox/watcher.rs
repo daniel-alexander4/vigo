@@ -60,6 +60,11 @@ pub struct PushJob {
     pub user: String,
     pub filename: String,
     pub bytes: Arc<Vec<u8>>,
+    /// Ciphertext mtime (unix seconds) captured when the job was
+    /// emitted. Carried so the pusher can bind it into the signed
+    /// [`super::blobsig::BlobSig`] descriptor — the last-write-wins
+    /// version the receiver checks to reject a replayed older blob.
+    pub mtime: i64,
 }
 
 /// A deletion ready to propagate to peers. Emitted when the watcher
@@ -329,10 +334,25 @@ fn emit_push_for_ciphertext(
         return;
     }
     let size = bytes.len();
+    // Capture mtime for the signed blob descriptor (last-write-wins
+    // version). Falls back to wall-clock now if the stat fails — a
+    // monotonic-enough stand-in that still beats a stale 0.
+    let mtime = std::fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0)
+        });
     let job = PushJob {
         user: user.to_string(),
         filename: filename.to_string(),
         bytes: Arc::new(bytes),
+        mtime,
     };
     if let Err(e) = out_tx.try_send(job) {
         warn!(
