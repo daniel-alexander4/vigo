@@ -54,7 +54,7 @@
                 <td><span class="{{metricPillClass .FDPct.Severity}} status-pill--metric">{{humanFDPct .FDPct}}</span></td>
                 <td><span class="{{metricPillClass .RootfsPct.Severity}} status-pill--metric">{{humanFDPct .RootfsPct}}</span></td>
                 <td><span class="{{metricPillClass .InodePct.Severity}} status-pill--metric">{{humanFDPct .InodePct}}</span></td>
-                <td><span class="{{metricPillClass .RepoHealth.Severity}}"{{if .RepoHealth.Present}} title="{{.RepoHealth.Warnings}} warning(s) · {{.RepoHealth.Errors}} error(s)"{{end}}>{{tEnum $.Locale (severityLabel .RepoHealth.Severity)}}</span></td>
+                <td><span class="{{metricPillClass .RepoHealth.Severity}}"{{if .RepoHealth.Present}} title="{{.RepoHealth.Warnings}} {{T $.Locale "agent_health.warning_count"}} · {{.RepoHealth.Errors}} {{T $.Locale "agent_health.error_count"}}"{{end}}>{{tEnum $.Locale (severityLabel .RepoHealth.Severity)}}</span></td>
                 <td><span class="{{metricPillClass .BatteryHealth.Severity}} status-pill--metric">{{humanFDPct .BatteryHealth}}</span></td>
                 <td><span class="{{severityPillClass .Health}}">{{tEnum $.Locale (severityLabel .Health)}}</span></td>
             </tr>

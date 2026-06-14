@@ -7,7 +7,7 @@
         <a href="/runs" class="btn btn--sm">{{T $.Locale "envoys.fleet_wide_runs"}}</a>
         <a href="/api/v1/export/cmdb" class="btn btn--sm" target="_blank" rel="noopener">{{T $.Locale "envoys.cmdb_export"}}</a>
     </div>
-    <p>{{T $.Locale "envoys.subtitle"}}{{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
+    <p>{{T $.Locale "envoys.subtitle"}}{{if or .ConvFilter .DriftFilter .ReachFilter .Search .EnvFilter .TagFilter .RoleFilter .OSFilter .ArchFilter .ConfigcrateFilter .ComplianceFilter}} &mdash; {{.MatchingTotal}} {{T $.Locale "envoys.matches_of"}} {{.TotalEnvoys}}{{end}}</p>
 </div>
 
 {{$qs := ""}}{{if .ConvFilter}}{{$qs = printf "%s&conv=%s" $qs .ConvFilter}}{{end}}{{if .DriftFilter}}{{$qs = printf "%s&drift=%s" $qs .DriftFilter}}{{end}}{{if .ReachFilter}}{{$qs = printf "%s&reach=%s" $qs .ReachFilter}}{{end}}{{if .EnvFilter}}{{$qs = printf "%s&env=%s" $qs .EnvFilter}}{{end}}{{if .TagFilter}}{{$qs = printf "%s&tag=%s" $qs .TagFilter}}{{end}}{{if .RoleFilter}}{{$qs = printf "%s&role=%s" $qs .RoleFilter}}{{end}}{{if .OSFilter}}{{$qs = printf "%s&os=%s" $qs .OSFilter}}{{end}}{{if .ArchFilter}}{{$qs = printf "%s&arch=%s" $qs .ArchFilter}}{{end}}{{if .ConfigcrateFilter}}{{$qs = printf "%s&configcrate=%s" $qs .ConfigcrateFilter}}{{end}}{{if .ComplianceFilter}}{{$qs = printf "%s&compliance=%s" $qs .ComplianceFilter}}{{end}}

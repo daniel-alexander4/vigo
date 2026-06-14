@@ -42,7 +42,7 @@
             <text x="0" y="{{add (mul $row 18) 13}}" font-size="11" fill="var(--color-text)" font-family="monospace">{{$envoy.Hostname}}</text>
             {{range $col, $cell := $envoy.Cells}}
             <rect x="{{add (mul $col 5) 130}}" y="{{add (mul $row 18) 2}}" width="4" height="14" rx="1" fill="{{$cell.Color}}">
-                <title>{{$envoy.Hostname}}: {{printf "%.1f" $envoy.CoveragePct}}% coverage</title>
+                <title>{{$envoy.Hostname}}: {{printf "%.1f" $envoy.CoveragePct}}% {{T $.Locale "compliance_viz.coverage"}}</title>
             </rect>
             {{end}}
             {{end}}

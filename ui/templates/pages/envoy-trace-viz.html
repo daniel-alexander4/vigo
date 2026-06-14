@@ -43,7 +43,7 @@
             {{/* Roles */}}
             {{if $lvl.Roles}}
             <text x="70" y="{{add $lvl.Y (mul (len $lvl.Configcrates) 16) 34}}" font-size="10" fill="var(--color-text)" font-family="monospace">
-                {{T $.Locale "envoy_trace_viz.roles_label"}} {{joinStrings $lvl.Roles ", "}}
+                roles: {{joinStrings $lvl.Roles ", "}}
             </text>
             {{end}}
             {{/* Connector arrow to next level */}}
