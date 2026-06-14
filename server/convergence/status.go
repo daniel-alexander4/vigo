@@ -14,7 +14,7 @@ type Status int
 const (
 	StatusNoData    Status = iota // no run data available
 	StatusConverged               // last run had zero failures
-	StatusDegraded                // 1-79% of modules failed in the last run
+	StatusDegraded                // 1-79% of resources failed in the last run
 	StatusFailed                  // last run failed outright (>=80% failures, or status="blocked")
 )
 

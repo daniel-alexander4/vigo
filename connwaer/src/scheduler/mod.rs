@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::alerting::AlertDispatcher;
 use crate::capability::{self, CapabilityContext, CapabilityKind};
 use crate::config::ConnwaerConfig;
 use crate::results;
@@ -81,6 +82,10 @@ pub async fn run(
         order.join(" → "),
     );
 
+    // Alert dispatcher lives across the whole loop so its dedup window and
+    // recovery-tracking state persist between cycles.
+    let mut alerts = AlertDispatcher::new(cfg.alerting.clone());
+
     let mut shutdown = shutdown;
 
     loop {
@@ -145,20 +150,24 @@ pub async fn run(
                         "status": cap_result.status.to_string(),
                     });
                     let _ = trends.record_run(name, &cap_result.status.to_string(), &metrics);
+                    alerts.evaluate(&cap_result);
                 }
                 Ok(Ok(Err(e))) => {
                     tracing::error!("{name}: verification error: {e:#}");
-                    write_error_result(name, &e, elapsed, &results_dir, &hostname, &platform, version, &controls);
+                    let r = write_error_result(name, &e, elapsed, &results_dir, &hostname, &platform, version, &controls);
+                    alerts.evaluate(&r);
                 }
                 Ok(Err(e)) => {
                     tracing::error!("{name}: task panicked: {e}");
                     let err = anyhow::anyhow!("task panicked: {e}");
-                    write_error_result(name, &err, elapsed, &results_dir, &hostname, &platform, version, &controls);
+                    let r = write_error_result(name, &err, elapsed, &results_dir, &hostname, &platform, version, &controls);
+                    alerts.evaluate(&r);
                 }
                 Err(_) => {
                     tracing::error!("{name}: timed out after {}s", timeout.as_secs());
                     let err = anyhow::anyhow!("timed out after {}s", timeout.as_secs());
-                    write_error_result(name, &err, elapsed, &results_dir, &hostname, &platform, version, &controls);
+                    let r = write_error_result(name, &err, elapsed, &results_dir, &hostname, &platform, version, &controls);
+                    alerts.evaluate(&r);
                 }
             }
         }
@@ -190,6 +199,8 @@ pub async fn run(
     Ok(())
 }
 
+/// Build and persist an Error-status result, returning it so the caller can
+/// also feed it to the alert dispatcher.
 fn write_error_result(
     name: &str,
     err: &anyhow::Error,
@@ -199,7 +210,7 @@ fn write_error_result(
     platform: &str,
     version: &str,
     controls: &[String],
-) {
+) -> capability::CapabilityResult {
     let error_result = capability::CapabilityResult {
         capability: name.to_string(),
         status: capability::VerificationStatus::Error,
@@ -215,4 +226,5 @@ fn write_error_result(
         error: Some(format!("{err:#}")),
     };
     let _ = results::write_result(results_dir, &error_result);
+    error_result
 }

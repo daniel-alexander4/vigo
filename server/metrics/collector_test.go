@@ -130,13 +130,12 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 		t.Errorf("EnvoysActive = %v, want 3", gotActive)
 	}
 
-	// ConvergencePct = compliant / totalNonRevoked.
-	// Non-revoked: t-0, t-1, t-2, t-3 (4 total).
-	// recentlyActive among non-revoked: t-0, t-1 (2 compliant).
-	// ConvergencePct = 2/4 = 0.5.
+	// ConvergencePct is now derived from the convergence SoT
+	// (ConvergenceSummary), not a DB "recently active" proxy. This collector
+	// has a nil fleetSource, so the gauge is left at its default 0.
 	gotPct := testutil.ToFloat64(m.ConvergencePct)
-	if math.Abs(gotPct-0.5) > 0.001 {
-		t.Errorf("ConvergencePct = %v, want 0.5", gotPct)
+	if math.Abs(gotPct-0) > 0.001 {
+		t.Errorf("ConvergencePct = %v, want 0 (no fleetSource)", gotPct)
 	}
 }
 

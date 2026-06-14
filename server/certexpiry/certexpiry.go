@@ -38,7 +38,20 @@ func DaysRemaining(notAfter string, now time.Time) (days int, ok bool) {
 	if err != nil {
 		return 0, false
 	}
-	return int(t.Sub(now) / (24 * time.Hour)), true
+	d := t.Sub(now)
+	// Integer division truncates toward zero, so a cert that expired
+	// less than 24h ago would land at days==0 and mis-bucket as "expiring
+	// soon" rather than Expired. Any already-expired cert (not_after at or
+	// before now) must report a negative day count so the Expired bucket
+	// (days < 0) is reachable in the first 24h after expiry.
+	if d <= 0 {
+		days := int(d / (24 * time.Hour))
+		if days >= 0 {
+			days = -1
+		}
+		return days, true
+	}
+	return int(d / (24 * time.Hour)), true
 }
 
 // Buckets accumulates certificates into the standard expiry buckets. A cert

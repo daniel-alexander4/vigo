@@ -1,5 +1,10 @@
 // isowebauth.js — Client-side flow for SSH key-based authentication.
 // Communicates with the isowebauth desktop app on localhost:7890.
+//
+// This is the source of truth for the isowebauth login flow. The login page
+// (server/auth/isowebauth.go) references it via <script src="/static/js/
+// isowebauth.js">; the CSP forbids inline scripts and inline event handlers,
+// so the form is wired here via addEventListener keyed off the form id.
 
 async function handleIsowebauthLogin(e) {
     e.preventDefault();
@@ -50,3 +55,10 @@ async function handleIsowebauthLogin(e) {
         btn.textContent = 'Sign In';
     }
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('login-form');
+    if (form) {
+        form.addEventListener('submit', handleIsowebauthLogin);
+    }
+});

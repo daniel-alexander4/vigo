@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/httpsec"
 	"git.alexander4.io/vigo/server/i18n"
 )
 
@@ -130,7 +131,9 @@ func (p *IsowebauthProvider) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (p *IsowebauthProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) {
-	// Serve the login page — the isowebauth JS flow is embedded in the template.
+	// Serve the login page — the isowebauth JS flow lives in the external
+	// /static/js/isowebauth.js (no inline script, per the locked CSP).
+	httpsec.Headers(w)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(isowebauthLoginPage(i18n.LocaleFromRequest(p.i18n, r))))
 }
@@ -279,11 +282,11 @@ func verifySSHSignature(username, pubkey, challenge, signature, namespace string
 	return nil
 }
 
-// isowebauthLoginPage renders the self-contained isowebauth login page in the
-// given locale. The static visible text routes through the catalog; the inline
-// <script>'s JS-literal strings (button labels mutated at runtime, error
-// messages) stay English — that script already violates the locked CSP and is
-// out of scope for localization here.
+// isowebauthLoginPage renders the isowebauth login page in the given locale.
+// The static visible text routes through the catalog. The login flow lives in
+// the external /static/js/isowebauth.js (CSP forbids inline scripts); its
+// JS-literal strings (button labels mutated at runtime, error messages) stay
+// English and are out of scope for localization here.
 func isowebauthLoginPage(locale string) string {
 	t := func(key string) string { return html.EscapeString(i18n.CatalogT(locale, key)) }
 	return `<!DOCTYPE html>
@@ -299,7 +302,7 @@ func isowebauthLoginPage(locale string) string {
         <div class="login-card">
             <h1 class="login-title">Vigo</h1>
             <p class="login-subtitle">` + t("auth.iwa.subtitle") + `</p>
-            <form id="login-form" onsubmit="return handleLogin(event)">
+            <form id="login-form">
                 <div class="form-group">
                     <label for="username">` + t("auth.label.username") + `</label>
                     <input type="text" id="username" name="username" required autofocus
@@ -315,57 +318,7 @@ func isowebauthLoginPage(locale string) string {
             </form>
         </div>
     </div>
-    <script>
-    async function handleLogin(e) {
-        e.preventDefault();
-        const btn = document.getElementById('login-btn');
-        const errEl = document.getElementById('login-error');
-        const username = document.getElementById('username').value.trim();
-        if (!username) return;
-
-        btn.disabled = true;
-        btn.textContent = 'Signing...';
-        errEl.style.display = 'none';
-
-        try {
-            // 1. Get challenge from server.
-            const challengeResp = await fetch('/auth/isowebauth/challenge');
-            if (!challengeResp.ok) throw new Error('Failed to get challenge');
-            const { challenge, namespace } = await challengeResp.json();
-
-            // 2. Ask isowebauth app to sign.
-            let signResp;
-            try {
-                signResp = await fetch('http://127.0.0.1:7890/sign', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ challenge, namespace }),
-                });
-            } catch (err) {
-                throw new Error('Cannot connect to isowebauth app. Is it running?');
-            }
-            const signData = await signResp.json();
-            if (!signData.ok) throw new Error(signData.error || 'Signing refused');
-
-            // 3. Verify signature with server.
-            const verifyResp = await fetch('/auth/isowebauth/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ challenge, signature: signData.signature, username }),
-            });
-            const verifyData = await verifyResp.json();
-            if (!verifyResp.ok) throw new Error(verifyData.error || 'Verification failed');
-
-            // Success — redirect to dashboard.
-            window.location.href = '/';
-        } catch (err) {
-            errEl.textContent = err.message;
-            errEl.style.display = 'block';
-            btn.disabled = false;
-            btn.textContent = 'Sign In';
-        }
-    }
-    </script>
+    <script src="/static/js/isowebauth.js"></script>
 </body>
 </html>`
 }

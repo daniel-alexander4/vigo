@@ -26,14 +26,14 @@ import (
 //
 // This rule is the gate that enforces the 0.66.57 shape against the
 // pre-0.66.48 shape. Top-level `provides:` / `bundle:` (the 0.66.48
-// shape) are caught by rule_module_top_level_provides_bundle.
+// shape) are caught by rule_configcrate_top_level_provides_bundle.
 //
 // Directory-level `compliance.vgo` files still carry the framework→
 // control shape — that's a different file kind with its own decoder
 // (server/config.loadComplianceConfigs); this rule never sees them.
 type moduleComplianceKeyRetiredRule struct{}
 
-func (moduleComplianceKeyRetiredRule) id() string { return "module-compliance-key-retired" }
+func (moduleComplianceKeyRetiredRule) id() string { return "configcrate-compliance-key-retired" }
 
 func (moduleComplianceKeyRetiredRule) apply(mod *module, _ Options) []Finding {
 	if len(mod.ComplianceUnknownSubKeys) == 0 {
@@ -45,7 +45,7 @@ func (moduleComplianceKeyRetiredRule) apply(mod *module, _ Options) []Finding {
 		Severity: Error,
 		Line:     mod.Line,
 		Column:   mod.Column,
-		RuleID:   "module-compliance-key-retired",
+		RuleID:   "configcrate-compliance-key-retired",
 		Message: fmt.Sprintf(
 			"`compliance:` contains framework→control entries (%s) — that shape was retired in 0.66.48. "+
 				"Per-module compliance is now declared as `compliance: { provides: [<tag>], bundle: [<id>] }` "+

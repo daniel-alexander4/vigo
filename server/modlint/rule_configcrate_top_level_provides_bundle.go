@@ -18,7 +18,7 @@ import "fmt"
 // without re-introducing the per-module cross-walk burden.
 type moduleTopLevelProvidesBundleRule struct{}
 
-func (moduleTopLevelProvidesBundleRule) id() string { return "module-top-level-provides-bundle" }
+func (moduleTopLevelProvidesBundleRule) id() string { return "configcrate-top-level-provides-bundle" }
 
 func (moduleTopLevelProvidesBundleRule) apply(mod *module, _ Options) []Finding {
 	if mod.TopLevelProvidesLine == 0 && mod.TopLevelBundleLine == 0 {
@@ -44,7 +44,7 @@ func (moduleTopLevelProvidesBundleRule) apply(mod *module, _ Options) []Finding 
 		Severity: Error,
 		Line:     line,
 		Column:   1,
-		RuleID:   "module-top-level-provides-bundle",
+		RuleID:   "configcrate-top-level-provides-bundle",
 		Message: fmt.Sprintf(
 			"top-level %s is retired (0.66.57) — fold under a `compliance:` parent block "+
 				"(e.g. `compliance: { provides: [<tag>], bundle: [<id>] }`). "+

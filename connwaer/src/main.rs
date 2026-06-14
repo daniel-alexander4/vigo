@@ -213,6 +213,10 @@ fn run_once(cfg: &ConnwaerConfig, trends: &Arc<TrendStore>) -> Result<()> {
     let hostname = os_info::hostname();
     let platform_name = os_info::platform_name().to_string();
 
+    // Fire alerts on failures even in single-cycle mode. Dedup/recovery state
+    // doesn't carry between invocations here, but a Fail/Error still notifies.
+    let mut alerts = alerting::AlertDispatcher::new(cfg.alerting.clone());
+
     // Resolve execution order.
     let dep_map: std::collections::HashMap<String, Vec<String>> = cfg.capabilities.iter()
         .filter(|(_, e)| e.enabled)
@@ -265,6 +269,7 @@ fn run_once(cfg: &ConnwaerConfig, trends: &Arc<TrendStore>) -> Result<()> {
                     "status": result.status.to_string(),
                 });
                 let _ = trends.record_run(name, &result.status.to_string(), &metrics);
+                alerts.evaluate(&result);
             }
             Err(e) => {
                 let elapsed = start.elapsed();
@@ -284,6 +289,7 @@ fn run_once(cfg: &ConnwaerConfig, trends: &Arc<TrendStore>) -> Result<()> {
                     error: Some(format!("{e:#}")),
                 };
                 let _ = results::write_result(&results_dir, &error_result);
+                alerts.evaluate(&error_result);
             }
         }
         count += 1;

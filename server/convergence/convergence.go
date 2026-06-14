@@ -127,11 +127,11 @@ func ComputeDrift(recentRuns []RunInfo) DriftLevel {
 
 // FailurePct computes the failure percentage for a run (0-100).
 // Returns 0 if ResourceCount is 0.
-func FailurePct(failedCount, moduleCount int64) float64 {
-	if moduleCount <= 0 {
+func FailurePct(failedCount, resourceCount int64) float64 {
+	if resourceCount <= 0 {
 		return 0
 	}
-	return float64(failedCount) / float64(moduleCount) * 100
+	return float64(failedCount) / float64(resourceCount) * 100
 }
 
 // Summary aggregates a slice of status strings into counts by status.

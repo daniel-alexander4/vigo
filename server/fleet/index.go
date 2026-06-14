@@ -426,7 +426,6 @@ type TargetInfo struct {
 func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 	f.mu.RLock()
 	c := f.convergence
-	f.mu.RUnlock()
 	c.Offline = int(f.convergenceOffline.Load())
 	c.Converged = int(f.convergenceConverged.Load())
 	c.Degraded = int(f.convergenceDegraded.Load())
@@ -434,6 +433,7 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 	c.NoData = int(f.convergenceNoData.Load())
 	c.Changed = int(f.convergenceChanged.Load())
 	c.Diverged = int(f.convergenceDiverged.Load())
+	f.mu.RUnlock()
 	return c
 }
 
@@ -1030,16 +1030,24 @@ func (f *FleetIndex) SetAgentVersion(id, version string) bool {
 	return true
 }
 
-// SetForcePush sets the ForcePush flag.
+// SetForcePush sets the ForcePush flag. Mutates only the per-envoy
+// EnvoyState field, so it takes the global RLock to read the map and the
+// per-envoy stripe lock for the write — matching SetIP — rather than
+// blocking every concurrent check-in on the global write lock. The dirty
+// mark is a sync.Map store, safe under RLock.
 func (f *FleetIndex) SetForcePush(id string, val bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.ForcePush = val
+	lk.Unlock()
+
 	f.dirty.Store(id, struct{}{})
 }
 
@@ -1086,16 +1094,20 @@ func (f *FleetIndex) ConsumeRunTrigger(id string) string {
 	return "force-push"
 }
 
-// SetForceUpdate sets the ForceUpdate flag on a single envoy.
+// SetForceUpdate sets the ForceUpdate flag on a single envoy. Per-envoy
+// field only; RLock + stripe lock, mirroring SetIP.
 func (f *FleetIndex) SetForceUpdate(id string, val bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.ForceUpdate = val
+	lk.Unlock()
 }
 
 // SetForceUpdateAll sets ForceUpdate on all non-revoked envoys. Returns count.
@@ -1132,15 +1144,19 @@ func (f *FleetIndex) SetForcePushAll() int {
 }
 
 // SetStreamRequested sets the StreamRequested flag (ephemeral, not flushed to DB).
+// Per-envoy field only; RLock + stripe lock, mirroring SetIP.
 func (f *FleetIndex) SetStreamRequested(id string, val bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.StreamRequested = val
+	lk.Unlock()
 	// No dirty mark — this is ephemeral and not persisted to DB.
 }
 
@@ -1149,15 +1165,20 @@ func (f *FleetIndex) ClearStreamRequested(id string) {
 	f.SetStreamRequested(id, false)
 }
 
-// SetTunnelRequested sets the TunnelRequested flag (Scrier).
+// SetTunnelRequested sets the TunnelRequested flag (Scrier). Per-envoy
+// field only; RLock + stripe lock, mirroring SetIP.
 func (f *FleetIndex) SetTunnelRequested(id string, val bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.TunnelRequested = val
+	lk.Unlock()
 }
 
 // ClearTunnelRequested clears the TunnelRequested flag.
@@ -1169,25 +1190,35 @@ func (f *FleetIndex) ClearTunnelRequested(id string) {
 // the agent to come back in 1 second. Any subsystem that needs urgent
 // agent contact can call this (Scrier tunnels, task dispatch, secret
 // rotation, etc.). The flag is cleared when the check-in response is built.
+// Per-envoy field only; RLock + stripe lock, mirroring SetIP.
 func (f *FleetIndex) SetFastPoll(id string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.FastPoll = true
+	lk.Unlock()
 }
 
-// ClearFastPoll clears the FastPoll flag.
+// ClearFastPoll clears the FastPoll flag. Per-envoy field only; RLock +
+// stripe lock, mirroring SetIP.
 func (f *FleetIndex) ClearFastPoll(id string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	ts, ok := f.envoys[id]
-	if !ok {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
 		return
 	}
+
+	lk := f.lockFor(id)
+	lk.Lock()
 	ts.FastPoll = false
+	lk.Unlock()
 }
 
 // RegisterWake creates a wake channel for an envoy. The Wake RPC handler

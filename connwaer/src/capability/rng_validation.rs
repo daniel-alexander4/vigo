@@ -87,17 +87,26 @@ fn run_rng_validation(
         detail: format!("Significance level: {alpha}"),
     });
 
-    // Read random data from source.
-    let data = std::fs::read(source)
-        .or_else(|_| {
-            // If source is a device, read exactly sample_bytes.
-            use std::io::Read;
-            let mut f = std::fs::File::open(source)?;
-            let mut buf = vec![0u8; sample_bytes];
-            f.read_exact(&mut buf)?;
-            Ok::<Vec<u8>, std::io::Error>(buf)
-        })
-        .with_context(|| format!("reading RNG source: {source}"))?;
+    // Read random data from source. Only whole-file `read` a regular file —
+    // a character device like /dev/urandom never EOFs, so an unbounded read
+    // would grow until RLIMIT_AS kills the process. For anything that isn't a
+    // regular file, read exactly `sample_bytes` and stop.
+    let is_regular_file = std::fs::metadata(source)
+        .map(|m| m.is_file())
+        .with_context(|| format!("stat RNG source: {source}"))?;
+
+    let data = if is_regular_file {
+        std::fs::read(source)
+            .with_context(|| format!("reading RNG source: {source}"))?
+    } else {
+        use std::io::Read;
+        let mut f = std::fs::File::open(source)
+            .with_context(|| format!("opening RNG source: {source}"))?;
+        let mut buf = vec![0u8; sample_bytes];
+        f.read_exact(&mut buf)
+            .with_context(|| format!("reading {sample_bytes} bytes from RNG source: {source}"))?;
+        buf
+    };
 
     let data = if data.len() > sample_bytes { &data[..sample_bytes] } else { &data };
     let bits = rng::bytes_to_bits(data);

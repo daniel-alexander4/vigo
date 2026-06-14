@@ -155,30 +155,16 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
-	var activeCount, totalNonRevoked, convergedCount int
+	var activeCount int
 	for _, n := range envoys {
-		recentlyActive := n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo)
-
-		if recentlyActive {
+		if n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo) {
 			activeCount++
 		}
 		if n.LastSeen.Valid {
 			c.metrics.CheckinAgeDist.Observe(now.Sub(n.LastSeen.Time).Seconds())
 		}
-		if n.Revoked == 0 {
-			totalNonRevoked++
-			if recentlyActive {
-				convergedCount++
-			}
-		}
 	}
 	c.metrics.EnvoysActive.Set(float64(activeCount))
-
-	if totalNonRevoked > 0 {
-		c.metrics.ConvergencePct.Set(float64(convergedCount) / float64(totalNonRevoked))
-	} else {
-		c.metrics.ConvergencePct.Set(0)
-	}
 
 	// Update database size metric.
 	if c.sqlDB != nil {
@@ -198,6 +184,20 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		c.metrics.ConvergenceChanged.Set(float64(summary.Changed))
 		c.metrics.ConvergenceDiverged.Set(float64(summary.Diverged))
 		c.metrics.ConvergenceOffline.Set(float64(summary.Offline))
+
+		// Fleet-wide convergence fraction (0.0-1.0), derived from the same
+		// convergence SoT and denominator the /convergence page uses:
+		// Converged / (Total - Offline). The failure axis sums to the fleet
+		// total, so Total = Converged+Degraded+Failed+NoData. Offline envoys
+		// are excluded — they are powered-off/decommissioned nodes, not
+		// convergence failures.
+		total := summary.Converged + summary.Degraded + summary.Failed + summary.NoData
+		activeTotal := total - summary.Offline
+		if activeTotal > 0 {
+			c.metrics.ConvergencePct.Set(float64(summary.Converged) / float64(activeTotal))
+		} else {
+			c.metrics.ConvergencePct.Set(0)
+		}
 
 		// Single snapshot — one RLock, reused for security + risk.
 		allEnvoys := c.fleetSource.AllEnvoySnapshots()

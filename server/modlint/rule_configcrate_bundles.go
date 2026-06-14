@@ -29,7 +29,7 @@ import (
 // remain valid — but the noise hides the operator's actual intent.
 type moduleBundleRule struct{}
 
-func (moduleBundleRule) id() string { return "module-bundle" }
+func (moduleBundleRule) id() string { return "configcrate-bundle" }
 
 func (moduleBundleRule) apply(mod *module, _ Options) []Finding {
 	if len(mod.Bundle) == 0 {
@@ -51,7 +51,7 @@ func (moduleBundleRule) apply(mod *module, _ Options) []Finding {
 				Severity: Error,
 				Line:     mod.Line,
 				Column:   mod.Column,
-				RuleID:   "module-bundle",
+				RuleID:   "configcrate-bundle",
 				Message: fmt.Sprintf(
 					"bundle %q is not in the catalog — did you mean %q? Run `vigocli compliance bundles` to list known tags.",
 					b, guess,
@@ -62,7 +62,7 @@ func (moduleBundleRule) apply(mod *module, _ Options) []Finding {
 				Severity: Error,
 				Line:     mod.Line,
 				Column:   mod.Column,
-				RuleID:   "module-bundle",
+				RuleID:   "configcrate-bundle",
 				Message: fmt.Sprintf(
 					"bundle %q is not in the catalog. Run `vigocli compliance bundles` to list known tags.",
 					b,

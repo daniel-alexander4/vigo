@@ -60,10 +60,7 @@ func (ds *DataSource) EnvoyDriftLabel(envoyID string) string {
 }
 
 func (ds *DataSource) envoyRow(ts *EnvoyState, baseInterval, offlineThreshold time.Duration) ui.EnvoyRow {
-	var failurePct float64
-	if ts.LastRunResourceCount > 0 {
-		failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunResourceCount) * 100
-	}
+	failurePct := convergence.FailurePct(ts.LastRunFailedCount, ts.LastRunResourceCount)
 	observedCycle := ts.ObservedCycle()
 	offline := ui.EnvoyStale(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
 	// ADR-032 slice 2 axes sourced from EnvoyState — Tags is already a

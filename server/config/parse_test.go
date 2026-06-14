@@ -170,7 +170,7 @@ func TestParseModuleFile_EmptyDocument(t *testing.T) {
 
 // TestParseModuleFile_RetiredTopLevelProvides pins the defensive
 // hard-error from 0.66.72. modlint
-// (rule_module_top_level_provides_bundle) catches this at publish
+// (rule_configcrate_top_level_provides_bundle) catches this at publish
 // time, but parseModuleYAML is now the parallel rejection point for
 // direct-decode callers that bypass modlint. The matching
 // UnmarshalYAML test below pins the second decode path.

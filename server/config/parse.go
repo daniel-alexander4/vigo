@@ -90,7 +90,7 @@ func ParseModuleFile(data []byte) (*ConfigcrateDefinition, error) {
 			// Defense-in-depth against the 0.66.48-through-0.66.56
 			// authoring shape — see errRetiredTopLevelComplianceKey
 			// in types.go for the rationale. modlint
-			// (rule_module_top_level_provides_bundle) catches this at
+			// (rule_configcrate_top_level_provides_bundle) catches this at
 			// publish time; this arm is the parallel rejection for
 			// direct-decode callers that bypass modlint.
 			return nil, errRetiredTopLevelComplianceKey(key)

@@ -1129,7 +1129,7 @@ type ConfigcrateDefinition struct {
 	// modlint enforces the shape:
 	//   - rule_configcrate_compliance_key_retired errors when `compliance:`
 	//     carries the pre-0.66.48 framework→control list shape.
-	//   - rule_module_top_level_provides_bundle errors when the
+	//   - rule_configcrate_top_level_provides_bundle errors when the
 	//     0.66.48-style top-level `provides:` / `bundle:` keys appear
 	//     on a module.
 	Compliance ComplianceClaims `yaml:"compliance"`
@@ -1206,7 +1206,7 @@ func (m *ConfigcrateDefinition) UnmarshalYAML(value *yaml.Node) error {
 		case "provides", "bundle":
 			// Defense-in-depth against the 0.66.48-through-0.66.56
 			// authoring shape. modlint catches this at publish-time
-			// via rule_module_top_level_provides_bundle, but the
+			// via rule_configcrate_top_level_provides_bundle, but the
 			// loader also has direct-decode paths (test fixtures,
 			// hand-rolled callers of parseModuleYAML) that don't
 			// pass through modlint — Go's YAML decoder would silently
@@ -1225,7 +1225,7 @@ func (m *ConfigcrateDefinition) UnmarshalYAML(value *yaml.Node) error {
 // retired in 0.66.57 in favor of a single `compliance:` parent block.
 // Both YAML decode paths (ConfigcrateDefinition.UnmarshalYAML in this file,
 // parseModuleYAML in parse.go) call this so the wording can't drift.
-// Message mirrors modlint/rule_module_top_level_provides_bundle.go so
+// Message mirrors modlint/rule_configcrate_top_level_provides_bundle.go so
 // operators see the same diagnostic from either gate.
 func errRetiredTopLevelComplianceKey(key string) error {
 	return fmt.Errorf(

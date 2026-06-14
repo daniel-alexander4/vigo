@@ -32,7 +32,7 @@ import (
 // inline-list discipline that applies to server/api stays intact.
 type moduleProvisionsRule struct{}
 
-func (moduleProvisionsRule) id() string { return "module-provisions" }
+func (moduleProvisionsRule) id() string { return "configcrate-provisions" }
 
 func (moduleProvisionsRule) apply(mod *module, _ Options) []Finding {
 	if len(mod.Provides) == 0 {
@@ -55,7 +55,7 @@ func (moduleProvisionsRule) apply(mod *module, _ Options) []Finding {
 				Severity: Error,
 				Line:     mod.Line,
 				Column:   mod.Column,
-				RuleID:   "module-provisions",
+				RuleID:   "configcrate-provisions",
 				Message: fmt.Sprintf(
 					"provision %q is not in the catalog — did you mean %q? Run `vigocli compliance provisions` to list known tags.",
 					prov, guess,
@@ -66,7 +66,7 @@ func (moduleProvisionsRule) apply(mod *module, _ Options) []Finding {
 				Severity: Error,
 				Line:     mod.Line,
 				Column:   mod.Column,
-				RuleID:   "module-provisions",
+				RuleID:   "configcrate-provisions",
 				Message: fmt.Sprintf(
 					"provision %q is not in the catalog. Run `vigocli compliance provisions` to list known tags.",
 					prov,

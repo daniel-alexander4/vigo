@@ -238,7 +238,7 @@ type module struct {
 	// TopLevelProvidesLine / TopLevelBundleLine record the YAML line of
 	// a top-level `provides:` or `bundle:` key (the retired 0.66.48-
 	// through-0.66.56 authoring shape). 0 = absent.
-	// rule_module_top_level_provides_bundle uses these to fire.
+	// rule_configcrate_top_level_provides_bundle uses these to fire.
 	TopLevelProvidesLine int
 	TopLevelBundleLine   int
 	Vars                 map[string]any
@@ -585,7 +585,7 @@ func parse(data []byte) (*module, error) {
 		case "provides":
 			// Top-level `provides:` was the 0.66.48-through-0.66.56
 			// authoring shape; retired in 0.66.57. Record the line so
-			// rule_module_top_level_provides_bundle can point at it.
+			// rule_configcrate_top_level_provides_bundle can point at it.
 			mod.TopLevelProvidesLine = keyNode.Line
 		case "bundle":
 			// Top-level `bundle:` — same retirement as `provides:` above.

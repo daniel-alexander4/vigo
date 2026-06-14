@@ -18,8 +18,6 @@ func ParseTimestamp(ts string) (time.Time, error) {
 	for _, layout := range []string{
 		time.RFC3339Nano,
 		time.RFC3339,
-		"2006-01-02T15:04:05Z",
-		"2006-01-02T15:04:05.000Z",
 	} {
 		if t, err := time.Parse(layout, ts); err == nil {
 			return t, nil

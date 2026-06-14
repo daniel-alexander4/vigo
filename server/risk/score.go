@@ -116,7 +116,7 @@ func ScoreEnvoy(es EnvoyInput, baseInterval, offlineThreshold time.Duration) Env
 		pts := clamp(100 - int(lynis))
 		if pts > 0 {
 			score += pts
-			r.Factors = append(r.Factors, Factor{"Hardening Gap", pts, "Lynis score " + itoa(int(lynis)) + "/100"})
+			r.Factors = append(r.Factors, Factor{"Hardening Gap", pts, "Lynis score " + strconv.Itoa(int(lynis)) + "/100"})
 		}
 	}
 
@@ -342,10 +342,10 @@ func certExpiryDetail(expired, in7, in30 int) string {
 		parts = append(parts, pluralize(expired, "expired cert"))
 	}
 	if in7 > 0 {
-		parts = append(parts, itoa(in7)+" <7d")
+		parts = append(parts, strconv.Itoa(in7)+" <7d")
 	}
 	if in30 > 0 {
-		parts = append(parts, itoa(in30)+" <30d")
+		parts = append(parts, strconv.Itoa(in30)+" <30d")
 	}
 	return strings.Join(parts, ", ")
 }
@@ -355,13 +355,13 @@ func certExpiryDetail(expired, in7, in30 int) string {
 func runningCVEDetail(critical, high, medium int) string {
 	var parts []string
 	if critical > 0 {
-		parts = append(parts, itoa(critical)+" critical")
+		parts = append(parts, strconv.Itoa(critical)+" critical")
 	}
 	if high > 0 {
-		parts = append(parts, itoa(high)+" high")
+		parts = append(parts, strconv.Itoa(high)+" high")
 	}
 	if medium > 0 {
-		parts = append(parts, itoa(medium)+" medium")
+		parts = append(parts, strconv.Itoa(medium)+" medium")
 	}
 	if len(parts) == 0 {
 		return ""
@@ -379,33 +379,10 @@ func clamp(n int) int {
 
 // pluralize returns "N thing" or "N things".
 func pluralize(n int, thing string) string {
-	s := itoa(n) + " " + thing
+	s := strconv.Itoa(n) + " " + thing
 	if n != 1 {
 		s += "s"
 	}
 	return s
 }
 
-// itoa is a minimal int-to-string without importing strconv.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := false
-	if n < 0 {
-		neg = true
-		n = -n
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
-}
