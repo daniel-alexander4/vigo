@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 )
@@ -41,7 +42,7 @@ var configRollbackCmd = &cobra.Command{
 			return nil
 		}
 
-		if err := client.post("/api/v1/config/rollback/"+version, nil, nil); err != nil {
+		if err := client.post("/api/v1/config/rollback/"+url.PathEscape(version), nil, nil); err != nil {
 			return err
 		}
 		fmt.Printf("%s Rolled back to version %s\n", green("OK"), dim(version))

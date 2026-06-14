@@ -246,7 +246,7 @@ func runRiskExport() error {
 
 	var w io.Writer = os.Stdout
 	if riskOutput != "" {
-		f, err := os.Create(riskOutput)
+		f, err := os.OpenFile(riskOutput, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
 			return fmt.Errorf("creating output file: %w", err)
 		}

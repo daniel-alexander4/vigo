@@ -98,6 +98,12 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
+	// /api/v1/ask requires admin query.execute — attach the same bearer
+	// token every other command uses (per-user token, then server-host
+	// local-admin token). Without this the request always 401s.
+	if token := loadAuthToken(); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	client := &http.Client{Timeout: 5 * time.Minute}
 	if isLocalhost(serverURL) {

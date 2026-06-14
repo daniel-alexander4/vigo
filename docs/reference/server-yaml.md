@@ -518,6 +518,19 @@ grafana:
 |-------|---------|-------------|
 | `url` | (none) | Base URL of a Grafana instance. When set, the `/health` page links to each bundled dashboard at `<url>/d/<uid>`. Unset = no links shown. |
 
+## sandgorgon
+
+Optional. Gates the sandgorgon bare-metal lifecycle REST surface (Redfish BMC power/disk control, the NIST 800-88 decommission workflow, CSV/NetBox asset import). The subsystem is **deferred until after Vigo 1.0** and exposes destructive BMC operations against plaintext-stored BMC credentials, so its routes are **not mounted unless explicitly enabled**. Leave off.
+
+```yaml
+sandgorgon:
+  enabled: false
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `false` | Mount the sandgorgon REST routes. Deferred post-v1; off by default. |
+
 ## i18n
 
 Optional web UI localization. Off by default: with i18n disabled the UI renders in English with zero overhead and no language picker. When enabled, each request's locale is resolved **cookie → `Accept-Language` → `default_locale`**: the operator's saved choice (a cookie set from the top-navbar language picker, like the theme toggle) wins, then the browser's `Accept-Language` header (matched on the primary subtag, so `fr-CA` matches `fr`), then the configured default. Translations are key-based with English fallback — a missing string degrades to English rather than a blank.

@@ -74,8 +74,7 @@ var workflowRunCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Println("\nTimed out waiting for workflow completion.")
-		return nil
+		return fmt.Errorf("\ntimed out waiting for workflow %s to complete", resp.ID)
 	},
 }
 

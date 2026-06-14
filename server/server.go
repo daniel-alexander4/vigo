@@ -1392,7 +1392,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			slog.Info("curator S3 credential store ready")
 		}
 
-		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.liveDir, s.historyDir, s.promReg, s.metrics, gwOpts...)
+		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.cfg.Sandgorgon.Enabled, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.liveDir, s.historyDir, s.promReg, s.metrics, gwOpts...)
 		if gwErr != nil {
 			return nil, fmt.Errorf("creating REST gateway: %w", gwErr)
 		}

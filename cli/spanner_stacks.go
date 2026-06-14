@@ -135,18 +135,18 @@ func runSpannerStacksInit(cmd *cobra.Command, _ []string) error {
 	// the wrong thing.
 	client := newAPIClient()
 	var status struct {
-		Role string `json:"role"`
+		Mode string `json:"mode"`
 	}
 	if err := client.get("/api/v1/spanner/status", &status); err != nil {
 		return fmt.Errorf(
-			"cannot reach local vigosrv to check spanner role: %w (the stacks project is for spanner-mode deployments only — standalone keeps local-write + SIGHUP)",
+			"cannot reach local vigosrv to check spanner mode: %w (the stacks project is for spanner-mode deployments only — standalone keeps local-write + SIGHUP)",
 			err,
 		)
 	}
-	if status.Role == "" || status.Role == "standalone" {
+	if status.Mode == "" || status.Mode == "standalone" {
 		return fmt.Errorf(
-			"this vigosrv is %q — the stacks gitback project is only for spanner-mode deployments (role: hub or spoke)",
-			status.Role,
+			"this vigosrv is %q — the stacks gitback project is only for spanner-mode deployments (mode: spanner)",
+			status.Mode,
 		)
 	}
 
@@ -364,15 +364,15 @@ func runSpannerStacksJoin(cmd *cobra.Command, _ []string) error {
 	// Precondition: spanner mode (not standalone).
 	client := newAPIClient()
 	var status struct {
-		Role string `json:"role"`
+		Mode string `json:"mode"`
 	}
 	if err := client.get("/api/v1/spanner/status", &status); err != nil {
-		return fmt.Errorf("cannot reach local vigosrv to check spanner role: %w", err)
+		return fmt.Errorf("cannot reach local vigosrv to check spanner mode: %w", err)
 	}
-	if status.Role == "" || status.Role == "standalone" {
+	if status.Mode == "" || status.Mode == "standalone" {
 		return fmt.Errorf(
 			"this vigosrv is %q — stacks join only applies in spanner mode",
-			status.Role,
+			status.Mode,
 		)
 	}
 

@@ -51,7 +51,7 @@ Examples:
 
 			var w io.Writer = os.Stdout
 			if output != "" {
-				f, err := os.Create(output)
+				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
 					return fmt.Errorf("creating output file: %w", err)
 				}
@@ -75,7 +75,7 @@ Examples:
 
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
-			if err := os.WriteFile(output, append(data, '\n'), 0644); err != nil {
+			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
 				return fmt.Errorf("writing output: %w", err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
@@ -118,7 +118,7 @@ Examples:
 
 			var w io.Writer = os.Stdout
 			if output != "" {
-				f, err := os.Create(output)
+				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
 					return fmt.Errorf("creating output file: %w", err)
 				}
@@ -141,7 +141,7 @@ Examples:
 
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
-			if err := os.WriteFile(output, append(data, '\n'), 0644); err != nil {
+			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
 				return fmt.Errorf("writing output: %w", err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
@@ -182,7 +182,7 @@ Examples:
 			defer resp.Body.Close()
 			var w io.Writer = os.Stdout
 			if output != "" {
-				f, err := os.Create(output)
+				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
 					return fmt.Errorf("creating output file: %w", err)
 				}
@@ -204,7 +204,7 @@ Examples:
 		}
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
-			if err := os.WriteFile(output, append(data, '\n'), 0644); err != nil {
+			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
 				return fmt.Errorf("writing output: %w", err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
@@ -245,7 +245,7 @@ Examples:
 			defer resp.Body.Close()
 			var w io.Writer = os.Stdout
 			if output != "" {
-				f, err := os.Create(output)
+				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
 					return fmt.Errorf("creating output file: %w", err)
 				}
@@ -267,7 +267,7 @@ Examples:
 		}
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
-			if err := os.WriteFile(output, append(data, '\n'), 0644); err != nil {
+			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
 				return fmt.Errorf("writing output: %w", err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
@@ -301,7 +301,7 @@ func makeReportCmd(use, short, apiPath string) *cobra.Command {
 				defer resp.Body.Close()
 				var w io.Writer = os.Stdout
 				if output != "" {
-					f, err := os.Create(output)
+					f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 					if err != nil {
 						return fmt.Errorf("creating output file: %w", err)
 					}
@@ -323,7 +323,7 @@ func makeReportCmd(use, short, apiPath string) *cobra.Command {
 			}
 			data, _ := json.MarshalIndent(report, "", "  ")
 			if output != "" {
-				if err := os.WriteFile(output, append(data, '\n'), 0644); err != nil {
+				if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
 					return fmt.Errorf("writing output: %w", err)
 				}
 				fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
@@ -387,7 +387,7 @@ Examples:
 			defer resp.Body.Close()
 			var w io.Writer = os.Stdout
 			if output != "" {
-				f, err := os.Create(output)
+				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
 					return fmt.Errorf("creating output file: %w", err)
 				}
@@ -409,7 +409,7 @@ Examples:
 		}
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
-			if err := os.WriteFile(output, append(data, '\n'), 0644); err != nil {
+			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
 				return fmt.Errorf("writing output: %w", err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
@@ -531,7 +531,7 @@ Examples:
 		if output == "" {
 			output = fmt.Sprintf("vigo-audit-bundle-%s.zip", slug)
 		}
-		f, err := os.Create(output)
+		f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
 			return fmt.Errorf("creating output file: %w", err)
 		}

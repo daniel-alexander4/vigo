@@ -4,12 +4,9 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -312,27 +309,15 @@ Examples:
 
 var dbResetCmd = &cobra.Command{
 	Use:   "reset",
-	Short: "Drop all tables and recreate the schema from scratch (DESTROYS ALL DATA)",
-	Long: `Deletes the SQLite database file and WAL. The server will recreate the
-database from migrations on next restart.
+	Short: "Print the manual steps for wiping and recreating the database",
+	Long: `Print instructions for resetting the SQLite database from scratch.
 
-WARNING: This permanently destroys all data — envoys, runs, traits,
-tokens, users, audit history. This action cannot be undone.`,
+This command does NOT delete anything itself: the database file is held
+open by the running server, so it cannot be removed while the server is
+up. Instead it verifies the driver is SQLite and prints the manual steps
+(stop the server, delete the db file, restart) — the server recreates the
+database from migrations on the next startup.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		force, _ := cmd.Flags().GetBool("force")
-		if !force {
-			fmt.Println("WARNING: This will permanently delete ALL data in the database.")
-			fmt.Println("All envoys, runs, traits, tokens, users, and audit history will be lost.")
-			fmt.Println("The server must be restarted after reset.")
-			fmt.Print("\nType 'yes' to confirm: ")
-			reader := bufio.NewReader(os.Stdin)
-			answer, _ := reader.ReadString('\n')
-			if strings.TrimSpace(answer) != "yes" {
-				fmt.Println("Cancelled.")
-				return nil
-			}
-		}
-
 		// Get database path from server stats.
 		client := newAPIClient()
 		var stats map[string]any
@@ -358,7 +343,6 @@ tokens, users, audit history. This action cannot be undone.`,
 
 func init() {
 	dbVacuumCmd.Flags().Bool("force", false, "skip confirmation prompt")
-	dbResetCmd.Flags().Bool("force", false, "skip confirmation prompt")
 	dbPruneCmd.Flags().String("older-than", "", "age cutoff (e.g. 30d, 720h); rows older than this are deleted")
 	dbPruneCmd.Flags().Bool("force", false, "skip confirmation prompt")
 

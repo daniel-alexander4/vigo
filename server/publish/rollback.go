@@ -155,6 +155,14 @@ func RollbackToVersion(historyDir, version, liveDir string) error {
 
 		target := filepath.Join(tmpDir, header.Name)
 
+		// Zip-Slip containment: reject any entry whose cleaned target escapes
+		// tmpDir (e.g. "../../etc/passwd" or an absolute path). filepath.Join
+		// already cleans, so compare the cleaned target against the dir prefix.
+		cleanRoot := filepath.Clean(tmpDir) + string(os.PathSeparator)
+		if !strings.HasPrefix(filepath.Clean(target)+string(os.PathSeparator), cleanRoot) {
+			return fmt.Errorf("rollback: refusing path traversal in archive entry %q", header.Name)
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0o755); err != nil {
@@ -171,6 +179,11 @@ func RollbackToVersion(historyDir, version, liveDir string) error {
 			if err := os.WriteFile(target, data, os.FileMode(header.Mode)); err != nil {
 				return err
 			}
+		default:
+			// Skip symlinks, hardlinks, devices, FIFOs, etc. — only plain
+			// directories and regular files belong in a config snapshot, and a
+			// symlink entry is another traversal/escape vector.
+			continue
 		}
 	}
 

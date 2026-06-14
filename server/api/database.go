@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/auth"
@@ -24,11 +25,63 @@ type DatabaseHandler struct {
 	driver      string // "sqlite" or "postgres"
 	dsn         string // for file size (SQLite only)
 	auditWriter auditRecorder
+
+	// roDB is a dedicated read-only handle used exclusively by /db/query.
+	// On SQLite it is opened with query_only/immutable-equivalent flags so
+	// the connection itself rejects any write — the keyword denylist in
+	// handleQuery is only defense-in-depth (it's bypassable via CTEs and
+	// multi-statement SQL). Lazily opened on first query; nil falls back to
+	// sqlDB. On Postgres a true RO connection needs server-side role/txn
+	// setup, so it stays nil and the denylist remains the only guard there
+	// (the supported release is SQLite-only).
+	roDB    *sql.DB
+	roOnce  sync.Once
+	roDBErr error
 }
 
 // NewDatabaseHandler creates a database operations handler.
 func NewDatabaseHandler(sqlDB *sql.DB, queries *db.Queries, driver, dsn string) *DatabaseHandler {
 	return &DatabaseHandler{sqlDB: sqlDB, queries: queries, driver: driver, dsn: dsn}
+}
+
+// readOnlyDB returns a SQLite connection on which writes are rejected at the
+// connection level (mattn's _query_only pragma + immutable busy/timeout
+// pragmas). Opened once, lazily. Returns (nil, nil) for non-SQLite drivers so
+// the caller falls back to the shared handle + keyword denylist.
+func (h *DatabaseHandler) readOnlyDB() (*sql.DB, error) {
+	if h.driver != "sqlite" {
+		return nil, nil
+	}
+	h.roOnce.Do(func() {
+		// _query_only=on makes the connection refuse writes even via
+		// ATTACH/CTE/trigger paths — this is the authoritative guard. The
+		// file: URI form is required for mode= params; a bare path or an
+		// in-memory ":memory:" name gets the prefix, an already-file: DSN
+		// (e.g. a shared-cache test DB) keeps its own.
+		base := h.dsn
+		if !strings.HasPrefix(base, "file:") {
+			base = "file:" + base
+		}
+		sep := "?"
+		if strings.ContainsRune(base, '?') {
+			sep = "&"
+		}
+		// mode=ro can't apply to a private in-memory DB (it would open a
+		// distinct empty DB); rely on _query_only there.
+		roDSN := base + sep + "_query_only=on&_busy_timeout=5000&_foreign_keys=on"
+		if !strings.Contains(base, "mode=memory") && !strings.Contains(base, ":memory:") {
+			roDSN += "&mode=ro"
+		}
+		conn, err := sql.Open("sqlite3", roDSN)
+		if err != nil {
+			h.roDBErr = err
+			return
+		}
+		conn.SetMaxOpenConns(2)
+		conn.SetMaxIdleConns(1)
+		h.roDB = conn
+	})
+	return h.roDB, h.roDBErr
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
@@ -374,7 +427,18 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Block write operations.
+	// Reject multiple statements outright — a single trailing/leading ";" is
+	// fine, but interior semicolons let a "SELECT ...; DELETE ..." sneak a
+	// write past the keyword prefix check. The read-only connection below is
+	// the real guard; this keeps the error legible.
+	if strings.Contains(strings.TrimRight(strings.TrimSpace(req.SQL), ";"), ";") {
+		writeError(w, http.StatusBadRequest, "multiple statements are not allowed — submit a single SELECT")
+		return
+	}
+
+	// Defense-in-depth keyword prefix denylist. The authoritative guard is the
+	// query_only read-only connection acquired below; this prefix check stays
+	// for a clearer error on the obvious cases (it is bypassable via CTEs).
 	upper := strings.ToUpper(strings.TrimSpace(req.SQL))
 	for _, prefix := range []string{"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "ATTACH", "DETACH", "REINDEX", "VACUUM", "PRAGMA"} {
 		if strings.HasPrefix(upper, prefix) {
@@ -383,7 +447,18 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := h.sqlDB.Query(req.SQL)
+	// Execute on a genuinely read-only connection (query_only=on) so a write
+	// that slips past the denylist (WITH ... DELETE, etc.) fails at the engine.
+	queryDB, err := h.readOnlyDB()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("opening read-only connection: %v", err))
+		return
+	}
+	if queryDB == nil {
+		queryDB = h.sqlDB // non-SQLite: fall back to shared handle + denylist
+	}
+
+	rows, err := queryDB.Query(req.SQL)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("query failed: %v", err))
 		return

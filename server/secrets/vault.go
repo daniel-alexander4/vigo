@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -25,6 +26,7 @@ type VaultProvider struct {
 func NewVaultProvider(url, token, mount string, skipTLS bool) (*VaultProvider, error) {
 	transport := &http.Transport{}
 	if skipTLS {
+		slog.Warn("vault TLS verification disabled — connections are vulnerable to MITM attacks; use a proper CA cert for production")
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 	return &VaultProvider{

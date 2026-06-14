@@ -171,6 +171,7 @@ type ServerConfig struct {
 	Scrier       ScrierSection       `yaml:"scrier" docs:"reference/server-yaml#scrier" doc:"Scrier browser-based remote access — SSH and RDP via guacd tunnel." long:"Browser-based remote access to any enrolled envoy — interactive SSH, Windows RDP, or console-shadow VNC, all routed through the envoy's outbound agent stream so no inbound ports are required on the target side. Every session is logged in scrier_sessions and an audit event is emitted on disconnect. Configure this when administrators need ad-hoc access to envoys behind customer firewalls without punching holes in them."`
 	Swarm        SwarmSection        `yaml:"swarm" docs:"reference/server-yaml#swarm" doc:"Peer-to-peer content distribution — seed directory, port, bandwidth cap." long:"Peer-to-peer content distribution between envoys over mTLS on port 1531 (agent-to-agent, not server-to-agent). Configures the seed directory the server writes into and the bandwidth cap as a percentage of detected link speed (so swarm transfers don't starve real workloads). Essential for fleets large enough that pulling every blob from the server would saturate its uplink."`
 	Grafana      GrafanaSection      `yaml:"grafana" docs:"reference/server-yaml#grafana" doc:"Optional Grafana URL — surfaces dashboard links on the /health page." long:"Points the web UI at an external Grafana instance so the /health page can link operators straight to the bundled Vigo dashboards. Vigo does not run, manage, or authenticate against Grafana — the only field is a base URL, and it is purely a link target. Leave unset if you don't run Grafana or prefer not to advertise it in the UI."`
+	Sandgorgon   SandgorgonSection   `yaml:"sandgorgon" docs:"reference/server-yaml#sandgorgon" doc:"Bare-metal lifecycle (Redfish BMC, decommission, NIST 800-88 wipe). Deferred post-v1 — default off." long:"Gates the sandgorgon bare-metal lifecycle REST surface (Redfish BMC power/disk control, the NIST 800-88 decommission workflow, CSV/NetBox asset import). The subsystem is deferred until after Vigo 1.0 and exposes destructive BMC operations against plaintext-stored BMC credentials, so the routes are NOT mounted unless this is explicitly enabled. Leave off."`
 	I18n         I18nSection         `yaml:"i18n" docs:"reference/server-yaml#i18n" doc:"Web UI localization — enable non-English locales and the topbar language picker." long:"Opt-in localization of the web UI chrome (nav, buttons, labels) and the in-app docs. Off by default: with i18n disabled the UI renders in English with zero overhead and no language picker. When enabled, each request's locale is chosen by the operator's saved choice (a persistent cookie set from the topbar picker) first, then the browser's Accept-Language header, then the configured default. Translations are key-based with English fallback, so a missing string degrades to English rather than a blank. Operator-authored data (envoy names, run results, audit entries) and all commands/flags stay English regardless of locale."`
 }
 
@@ -281,6 +282,16 @@ type FilecastSection struct {
 type SwarmLockboxSection struct {
 	MaxFileBytes      int64  `yaml:"max_file_bytes" doc:"Per-file cap on lockbox ciphertext (auto-encrypt + push). 0 = no cap. Authorization derives from puddle.enabled per ADR-020." default:"1073741824" example:"1073741824 (1 GiB), 0 (uncapped)"`
 	EnvelopeRetention string `yaml:"envelope_retention" doc:"Retention window for LEAVE/RESURRECT/TOMBSTONE envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
+}
+
+// SandgorgonSection gates the sandgorgon bare-metal lifecycle subsystem.
+// Deferred post-v1: the REST routes (Redfish BMC power/disk-wipe, the
+// NIST 800-88 decommission workflow, asset import) are mounted only when
+// Enabled is true. Default false. BMC passwords are currently stored
+// plaintext (see server/sandgorgon/import.go) — another reason the surface
+// stays off until that's wrapped via the secrets provider.
+type SandgorgonSection struct {
+	Enabled bool `yaml:"enabled" doc:"Mount the sandgorgon bare-metal lifecycle REST routes (Redfish BMC, decommission, asset import). Deferred post-v1; exposes destructive BMC operations against plaintext-stored credentials." default:"false" example:"true"`
 }
 
 // ScrierSection configures the Scrier remote access feature.

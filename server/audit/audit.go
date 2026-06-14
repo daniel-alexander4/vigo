@@ -34,6 +34,14 @@ type Writer struct {
 	mu       sync.Mutex
 	prevHash string // hash of the last entry (empty string for first entry)
 
+	// chainResetPending is set when NewWriter failed to load the prior chain
+	// head (timeout / corruption / schema mismatch) and started a fresh chain
+	// instead of pinning startup. The first Record writes an in-band
+	// `audit.chain_reset` marker (empty prev_hash) before the real event so the
+	// discontinuity is visible in the audit log itself — not only in slog.
+	chainResetPending bool
+	chainResetErr     string
+
 	// OnRecord, when set, is invoked after a successful chain-write with the
 	// same fields that were persisted. The server wires this to the
 	// integrations dispatcher so audit rows surface as `audit.<eventType>`
@@ -67,6 +75,8 @@ func NewWriter(queries *db.Queries) *Writer {
 			"error", err,
 			"timeout", auditLoadTimeout,
 		)
+		w.chainResetPending = true
+		w.chainResetErr = err.Error()
 	}
 
 	return w
@@ -84,6 +94,26 @@ func (w *Writer) Record(ctx context.Context, eventType, actor, source, summary, 
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Fail-open boundary marker: if NewWriter started a fresh chain after a
+	// load error, the very first recorded event gets an in-band
+	// `audit.chain_reset` entry ahead of it (empty prev_hash) so a reviewer
+	// walking the chain sees the discontinuity in the log, not just in slog.
+	if w.chainResetPending {
+		// Clear first so a marker-insert failure doesn't loop on every Record.
+		w.chainResetPending = false
+		marker := "audit chain reset after load failure on boot: " + w.chainResetErr
+		if err := w.recordLocked(ctx, "audit.chain_reset", "system", "audit", marker, ""); err != nil {
+			// Best-effort: log and continue to the real event rather than
+			// dropping it. The slog.Error from NewWriter already flagged the gap.
+			slog.Error("audit: failed to write chain_reset marker", "error", err)
+		}
+	}
+
+	return w.recordLocked(ctx, eventType, actor, source, summary, payload)
+}
+
+// recordLocked appends a single entry to the chain. The caller must hold w.mu.
+func (w *Writer) recordLocked(ctx context.Context, eventType, actor, source, summary, payload string) error {
 	now := time.Now().UTC().Truncate(time.Second)
 	tsStr := now.Format(timestampFormat)
 	hash := computeHash(w.prevHash, tsStr, eventType, actor, source, summary, payload)

@@ -50,11 +50,10 @@ var envoysRevertCmd = &cobra.Command{
 			return err
 		}
 
-		if resp.Success {
-			fmt.Printf("Rollback successful: %s\n", resp.Message)
-		} else {
-			fmt.Printf("Rollback failed: %s\n", resp.Message)
+		if !resp.Success {
+			return fmt.Errorf("rollback failed: %s", resp.Message)
 		}
+		fmt.Printf("Rollback successful: %s\n", resp.Message)
 		return nil
 	},
 }

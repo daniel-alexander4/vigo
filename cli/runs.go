@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -186,7 +187,7 @@ var runsDriftCmd = &cobra.Command{
 					FailedCount  int32  `json:"failedCount"`
 				} `json:"runs"`
 			}
-			if err := client.get(fmt.Sprintf("/api/v1/runs?envoy_id=%s&limit=1", t.id), &listResp); err != nil {
+			if err := client.get("/api/v1/runs?"+url.Values{"envoy_id": {t.id}, "limit": {"1"}}.Encode(), &listResp); err != nil {
 				continue
 			}
 			if len(listResp.Runs) == 0 {

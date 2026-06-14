@@ -20,6 +20,9 @@ import (
 var sandgorgonCmd = &cobra.Command{
 	Use:   "sandgorgon",
 	Short: "Bare metal lifecycle — commission, decommission, and NIST 800-88 certificates",
+	// Deferred to post-v1 (server REST routes are gated off by default).
+	// Hide from --help so it isn't advertised while unsupported.
+	Hidden: true,
 }
 
 var sandgorgonStatusCmd = &cobra.Command{

@@ -139,15 +139,17 @@ var complianceDocsDownloadCmd = &cobra.Command{
 		}
 		defer resp.Body.Close()
 		if output == "" {
-			// Default to the server-provided filename.
+			// Default to the server-provided filename. The filename comes
+			// from a server header — strip any directory components so a
+			// malicious/buggy Content-Disposition can't write outside cwd.
 			if cd := resp.Header.Get("Content-Disposition"); strings.Contains(cd, "filename=") {
-				output = strings.Trim(strings.SplitN(cd, "filename=", 2)[1], `"`)
+				output = filepath.Base(strings.Trim(strings.SplitN(cd, "filename=", 2)[1], `"`))
 			}
-			if output == "" {
+			if output == "" || output == "." || output == "/" {
 				output = id
 			}
 		}
-		f, err := os.Create(output)
+		f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
 			return err
 		}

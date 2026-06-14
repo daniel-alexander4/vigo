@@ -41,7 +41,7 @@ import (
 // reg is the per-instance prometheus registry whose collectors the /metrics
 // endpoint exposes; m is the same registry's collector set, threaded into
 // subhandlers (bootstrap, etc.) that emit metrics.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, sandgorgonEnabled bool, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -118,10 +118,16 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	riskHandler.SetBranding(brandingCfg)
 	riskHandler.RegisterRoutes(mux)
 
-	// Mount sandgorgon (bare metal lifecycle) endpoints.
-	sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "", serverAddr)
-	sandgorgonHandler.SetAuditWriter(aw)
-	sandgorgonHandler.RegisterRoutes(mux)
+	// Mount sandgorgon (bare metal lifecycle) endpoints — gated behind
+	// sandgorgon.enabled (default false). The subsystem is deferred post-v1
+	// and exposes destructive BMC power/disk-wipe operations against
+	// plaintext-stored BMC credentials, so the routes stay unmounted unless
+	// an operator explicitly opts in.
+	if sandgorgonEnabled {
+		sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "", serverAddr)
+		sandgorgonHandler.SetAuditWriter(aw)
+		sandgorgonHandler.RegisterRoutes(mux)
+	}
 
 	// Mount compliance docs (operator-uploaded artifacts for
 	// documented-scope controls). Always mount the routes — the

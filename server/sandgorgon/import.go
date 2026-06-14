@@ -19,10 +19,10 @@ import (
 
 // ImportResult tracks outcomes of a bulk import.
 type ImportResult struct {
-	Created  int      `json:"created"`
-	Updated  int      `json:"updated"`
-	Skipped  int      `json:"skipped"`
-	Errors   []string `json:"errors,omitempty"`
+	Created int      `json:"created"`
+	Updated int      `json:"updated"`
+	Skipped int      `json:"skipped"`
+	Errors  []string `json:"errors,omitempty"`
 }
 
 // ImportCSV reads a CSV file and creates/updates sandgorgon assets.
@@ -112,9 +112,13 @@ func (m *Manager) ImportCSVReader(ctx context.Context, r io.Reader, fleetIndex *
 		}
 
 		_, err = m.queries.CreateSandgorgonAsset(ctx, db.CreateSandgorgonAssetParams{
-			Hostname:       hostname,
-			BmcAddress:     bmcAddr,
-			BmcUsername:    getCol(row, colIdx, "bmc_username"),
+			Hostname:    hostname,
+			BmcAddress:  bmcAddr,
+			BmcUsername: getCol(row, colIdx, "bmc_username"),
+			// SECURITY (deferred): BMC password is stored PLAINTEXT in the DB.
+			// Before sandgorgon is un-deferred (sandgorgon.enabled), wrap this
+			// via the secrets provider — store a secret: ref, not the value.
+			// Tracked separately; do NOT attempt the schema migration here.
 			BmcPassword:    getCol(row, colIdx, "bmc_password"),
 			SerialNumber:   getCol(row, colIdx, "serial_number"),
 			Manufacturer:   getCol(row, colIdx, "manufacturer"),

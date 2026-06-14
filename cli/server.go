@@ -63,12 +63,11 @@ func runServerPromote(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("promote failed: %w", err)
 	}
 
-	if resp.Success {
-		fmt.Printf("  %s\n", green("Promoted to primary."))
-	} else {
-		fmt.Printf("  %s %s\n", red("Promotion failed:"), resp.Message)
+	if !resp.Success {
+		return fmt.Errorf("promotion failed: %s", resp.Message)
 	}
 
+	fmt.Printf("  %s\n", green("Promoted to primary."))
 	if resp.Message != "" {
 		fmt.Printf("  %s\n", resp.Message)
 	}

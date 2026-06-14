@@ -182,13 +182,14 @@ var taskRunCmd = &cobra.Command{
 			return nil
 		}
 
-		// Timed out waiting — show current state.
+		// Timed out waiting — show current state, then exit non-zero so
+		// scripts can detect that the task did not finish in time.
 		resp, err := fetchTaskRun(client, dispatchResp.ID)
 		if err != nil {
 			return err
 		}
 		printTaskResults(resp)
-		return nil
+		return fmt.Errorf("timed out waiting for task %s to complete", dispatchResp.ID)
 	},
 }
 

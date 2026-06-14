@@ -587,6 +587,16 @@ watcher:
 #   url: "https://grafana.example.com:3000"
 
 
+# ── Sandgorgon / Bare-metal lifecycle ────────────────────────────────
+# Optional. Gates the sandgorgon REST surface (Redfish BMC power/disk
+# control, NIST 800-88 decommission, CSV/NetBox asset import). DEFERRED
+# post-v1 and exposes destructive BMC operations against plaintext-stored
+# BMC credentials, so the routes are NOT mounted unless enabled. Leave off.
+#
+# sandgorgon:
+#   enabled: false
+
+
 # ── i18n / Localization ──────────────────────────────────────────────
 # Optional. Off by default — the UI renders in English with zero overhead
 # and no language picker. When enabled, per-request locale is resolved

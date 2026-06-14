@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -26,16 +27,18 @@ var auditListCmd = &cobra.Command{
 		eventType, _ := cmd.Flags().GetString("type")
 		limit, _ := cmd.Flags().GetInt("limit")
 
-		path := fmt.Sprintf("/api/v1/audit?limit=%d", limit)
+		params := url.Values{}
+		params.Set("limit", fmt.Sprintf("%d", limit))
 		if since != "" {
-			path += "&since=" + since
+			params.Set("since", since)
 		}
 		if operator != "" {
-			path += "&operator=" + operator
+			params.Set("operator", operator)
 		}
 		if eventType != "" {
-			path += "&type=" + eventType
+			params.Set("type", eventType)
 		}
+		path := "/api/v1/audit?" + params.Encode()
 
 		var resp struct {
 			Events []struct {

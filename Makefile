@@ -23,7 +23,7 @@ export CGO_CFLAGS := -D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2
 export CGO_LDFLAGS := -Wl,-z,relro,-z,now,-z,noexecstack
 
 build: build-agent schemas
-	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
+	go build -ldflags="-X main.version=$(VERSION) -X git.alexander4.io/vigo/server/hardening.serverSigningPubKey=$(VIGO_AGENT_SIGNING_PUBKEY)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigocli ./cli
 
 # ADR-031 detached-ED25519 signing key. Consumed by two paths:
@@ -42,6 +42,15 @@ SIGN_KEY ?= signing.key
 # pubkey; the resulting agent boots fine but refuses to self-update at
 # runtime with an operator-actionable error pointing back here.
 VIGO_AGENT_SIGNING_PUBKEY := $(shell test -f $(SIGN_KEY) && go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -pubkey-only 2>/dev/null)
+
+# Anti-tamper: bake the same pubkey into vigosrv so the startup
+# VerifyBinarySignature gate verifies the binary's detached .sig against THIS
+# key rather than the (attacker-controllable) pubkey carried in the .sig file.
+# Defined after VIGO_AGENT_SIGNING_PUBKEY (which it references) and applied to
+# the hardened server dist build below; empty in the keyless dev case →
+# corruption-detection mode (see server/hardening/hardening.go). Server only —
+# vigocli has no such gate, so the symbol stays off the CLI build.
+GO_SERVER_HARDENED := -buildmode=pie -trimpath -ldflags="-s -w -buildid= $(GO_VERSION_FLAG) -X git.alexander4.io/vigo/server/hardening.serverSigningPubKey=$(VIGO_AGENT_SIGNING_PUBKEY)"
 
 build-agent:
 	cd agent && VIGO_AGENT_SIGNING_PUBKEY="$(VIGO_AGENT_SIGNING_PUBKEY)" cargo build --release
@@ -94,7 +103,7 @@ lint-agent:
 #
 # To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
 dist: dist-agent schemas notices
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_SERVER_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
 	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigocli ./cli
 
 # Regenerate the third-party attribution files (THIRD-PARTY-NOTICES.{go,rust}.txt)

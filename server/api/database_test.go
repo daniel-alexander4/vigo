@@ -16,12 +16,18 @@ import (
 	"git.alexander4.io/vigo/server/db"
 )
 
+// dbTestDSN is the shared-cache in-memory DSN used by database handler tests.
+// It is the value passed to NewDatabaseHandler so the handler's read-only
+// /db/query connection reopens the *same* shared-cache DB (mirroring how, in
+// production, the RO handle reopens the same file path).
+const dbTestDSN = "file:dbtest?mode=memory&cache=shared&_foreign_keys=on"
+
 // openDatabaseTestDB creates a shared-cache in-memory SQLite database with
 // a simple table for database handler tests. The file: URI with mode=memory
 // and shared cache ensures all connections in the pool see the same data.
 func openDatabaseTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", "file:dbtest?mode=memory&cache=shared&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite3", dbTestDSN)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -44,7 +50,7 @@ func openDatabaseTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 func TestDatabase_Stats(t *testing.T) {
 	sqlDB, queries := openDatabaseTestDB(t)
 
-	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", ":memory:")
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -73,7 +79,7 @@ func TestDatabase_Stats(t *testing.T) {
 func TestDatabase_Integrity(t *testing.T) {
 	sqlDB, queries := openDatabaseTestDB(t)
 
-	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", ":memory:")
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -101,7 +107,7 @@ func TestDatabase_Integrity(t *testing.T) {
 func TestDatabase_Checkpoint(t *testing.T) {
 	sqlDB, queries := openDatabaseTestDB(t)
 
-	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", ":memory:")
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -123,7 +129,7 @@ func TestDatabase_Checkpoint(t *testing.T) {
 func TestDatabase_QueryReadOnly(t *testing.T) {
 	sqlDB, queries := openDatabaseTestDB(t)
 
-	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", ":memory:")
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -155,7 +161,7 @@ func TestDatabase_QueryReadOnly(t *testing.T) {
 func TestDatabase_QueryBlocksWrites(t *testing.T) {
 	sqlDB, queries := openDatabaseTestDB(t)
 
-	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", ":memory:")
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -179,10 +185,70 @@ func TestDatabase_QueryBlocksWrites(t *testing.T) {
 	}
 }
 
+// TestDatabase_QueryReadOnlyBlocksCTEWrite proves the C22 fix: a write that
+// slips past the keyword-prefix denylist (it starts with WITH, not DELETE) is
+// still rejected because the query runs on a query_only=on connection.
+func TestDatabase_QueryReadOnlyBlocksCTEWrite(t *testing.T) {
+	sqlDB, queries := openDatabaseTestDB(t)
+
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Starts with WITH so the prefix denylist passes it through; the RO
+	// connection must reject the embedded DELETE.
+	body := `{"sql":"WITH x AS (DELETE FROM test_items RETURNING *) SELECT * FROM x"}`
+	req := httptest.NewRequest("POST", "/api/v1/db/query", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected the write to be rejected, got 200: %s", rec.Body.String())
+	}
+
+	// And the data must be untouched.
+	if got := countTestItems(t, sqlDB); got != 3 {
+		t.Fatalf("expected 3 rows intact after blocked write, got %d", got)
+	}
+}
+
+// TestDatabase_QueryRejectsMultipleStatements proves interior-semicolon
+// multi-statement input is refused before execution.
+func TestDatabase_QueryRejectsMultipleStatements(t *testing.T) {
+	sqlDB, queries := openDatabaseTestDB(t)
+
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"sql":"SELECT 1; DELETE FROM test_items"}`
+	req := httptest.NewRequest("POST", "/api/v1/db/query", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for multi-statement, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := countTestItems(t, sqlDB); got != 3 {
+		t.Fatalf("expected 3 rows intact, got %d", got)
+	}
+}
+
+func countTestItems(t *testing.T, sqlDB *sql.DB) int {
+	t.Helper()
+	var n int
+	if err := sqlDB.QueryRow("SELECT COUNT(*) FROM test_items").Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	return n
+}
+
 func TestDatabase_QueryMissingSQL(t *testing.T) {
 	sqlDB, queries := openDatabaseTestDB(t)
 
-	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", ":memory:")
+	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", dbTestDSN)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

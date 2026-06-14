@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 )
@@ -39,7 +40,7 @@ Examples:
 				Sample string `json:"sample"`
 			} `json:"keys"`
 		}
-		if err := client.get("/api/v1/inventory/keys?q="+keyword, &resp); err != nil {
+		if err := client.get("/api/v1/inventory/keys?"+url.Values{"q": {keyword}}.Encode(), &resp); err != nil {
 			return err
 		}
 

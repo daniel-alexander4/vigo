@@ -18,10 +18,38 @@ import (
 	"strings"
 )
 
+// serverSigningPubKey is the ED25519 public key (hex) the running binary's
+// detached signature must verify against. It is baked in at build time via
+//
+//	go build -ldflags "-X git.alexander4.io/vigo/server/hardening.serverSigningPubKey=<hex>"
+//
+// mirroring how the Rust agent bakes in VIGO_AGENT_SIGNING_PUBKEY. When SET,
+// the .sig file's second line (the pubkey it carries) is ignored entirely and
+// the signature is verified against THIS key — so a tampered binary re-signed
+// with an attacker key (and an attacker pubkey written into the .sig) is
+// rejected. When UNSET (the common dev build), we fall back to trusting the
+// pubkey embedded in the .sig: that detects corruption but not tampering, and
+// we log that anti-tamper is in corruption-detection mode.
+//
+// BUILD-WIRING TODO: the Makefile derives the agent pubkey from SIGN_KEY
+// (VIGO_AGENT_SIGNING_PUBKEY) but the vigosrv `build`/`dist` targets do not yet
+// inject this -X flag. To enable tamper-evident mode, add to the vigosrv
+// go-build ldflags:
+//
+//	-X git.alexander4.io/vigo/server/hardening.serverSigningPubKey=$(VIGO_AGENT_SIGNING_PUBKEY)
+//
+// (reuse the same signing key the agent uses, or a server-specific one).
+var serverSigningPubKey = ""
+
 // VerifyBinarySignature checks a detached ED25519 signature file (.sig) against
 // the running binary. The .sig file must be adjacent to the binary and contain
 // a hex-encoded signature on the first line, followed by the hex-encoded public
 // key on the second line.
+//
+// If serverSigningPubKey is baked in at build time, the signature is verified
+// against that key (true anti-tamper — the .sig's own pubkey line is ignored).
+// Otherwise it verifies against the pubkey carried in the .sig (corruption
+// detection only), logging that downgrade.
 //
 // Returns nil if no .sig file exists (signature verification is optional).
 // Returns an error if the .sig file exists but verification fails.
@@ -51,7 +79,17 @@ func VerifyBinarySignature() error {
 		return fmt.Errorf("hardening: invalid signature hex: %w", err)
 	}
 
-	pubKeyBytes, err := hex.DecodeString(strings.TrimSpace(lines[1]))
+	// Select the verifying key. When a pubkey is baked in at build time, use
+	// it and ignore the .sig's own pubkey line — that's the difference between
+	// tamper-evidence and mere corruption detection. Otherwise trust the .sig.
+	pubKeyHex := strings.TrimSpace(lines[1])
+	if serverSigningPubKey != "" {
+		pubKeyHex = serverSigningPubKey
+	} else {
+		slog.Warn("hardening: no baked-in signing pubkey — anti-tamper is in corruption-detection mode only (a re-signed binary would pass); see serverSigningPubKey build wiring")
+	}
+
+	pubKeyBytes, err := hex.DecodeString(pubKeyHex)
 	if err != nil {
 		return fmt.Errorf("hardening: invalid public key hex: %w", err)
 	}
