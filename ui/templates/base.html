@@ -41,7 +41,7 @@
                         {{end}}
                     </select>
                     {{end}}
-                    <button type="button" class="topbar__theme-toggle" id="theme-toggle" aria-label="Toggle color theme" title="Toggle color theme">
+                    <button type="button" class="topbar__theme-toggle" id="theme-toggle" aria-label="{{T $.Locale "chrome.toggle_theme"}}" title="{{T $.Locale "chrome.toggle_theme"}}">
                         <svg class="topbar__theme-icon topbar__theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
                         <svg class="topbar__theme-icon topbar__theme-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                     </button>
@@ -68,7 +68,7 @@
     <aside class="ai-panel" id="ai-panel" data-provider="{{.AIProviderName}}">
         <div class="ai-panel__header">
             <span class="ai-panel__title">{{T $.Locale "chrome.ai.ask"}} {{.AIProviderName}}</span>
-            <button class="ai-panel__close" data-action="toggle-ai-chat" aria-label="Close AI chat panel">&times;</button>
+            <button class="ai-panel__close" data-action="toggle-ai-chat" aria-label="{{T $.Locale "chrome.ai.close"}}">&times;</button>
         </div>
         <div class="ai-panel__messages" id="ai-drawer-messages">
             <div class="ai-panel__welcome">
@@ -82,13 +82,13 @@
         </div>
         <form class="ai-panel__form" id="ai-drawer-form" hx-boost="false" data-submit="ai-submit">
             <div class="chat-input-wrapper">
-                <textarea class="chat-input" id="ai-drawer-input" placeholder="Ask a question..." rows="1"
+                <textarea class="chat-input" id="ai-drawer-input" placeholder="{{T $.Locale "chrome.ai.placeholder"}}" rows="1"
                     data-input="ai-autosize" data-keydown="ai-enter-submit"></textarea>
                 <button class="chat-send" type="submit" id="ai-drawer-send">{{T $.Locale "chrome.ai.send"}}</button>
             </div>
         </form>
     </aside>
-    <button class="ai-toggle" id="ai-fab" data-action="toggle-ai-chat" title="Ask {{.AIProviderName}}" aria-label="Ask {{.AIProviderName}}">
+    <button class="ai-toggle" id="ai-fab" data-action="toggle-ai-chat" title="{{T $.Locale "chrome.ai.ask"}} {{.AIProviderName}}" aria-label="{{T $.Locale "chrome.ai.ask"}} {{.AIProviderName}}">
         <svg class="ai-toggle__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>

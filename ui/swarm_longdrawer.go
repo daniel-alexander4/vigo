@@ -34,8 +34,8 @@ func (h *Handler) Longdrawer(w http.ResponseWriter, r *http.Request) {
 	h.setCommonWithRequest(&data.PageData, r)
 
 	if h.mesh == nil {
-		data.Error = "mesh aggregator not available"
-		data.Health = finalizeHealthBanner("Longdrawer", nil, "Aggregator unavailable")
+		data.Error = i18n.CatalogT(data.Locale, "health_banner.mesh_unavailable")
+		data.Health = finalizeHealthBanner(data.Locale, "Longdrawer", nil, i18n.CatalogT(data.Locale, "health_banner.aggregator_unavailable"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "longdrawer", data)
@@ -45,7 +45,7 @@ func (h *Handler) Longdrawer(w http.ResponseWriter, r *http.Request) {
 	fleet, err := h.mesh.SyncSnapshot(r.Context())
 	if err != nil {
 		data.Error = err.Error()
-		data.Health = finalizeHealthBanner("Longdrawer", nil, "Snapshot failed")
+		data.Health = finalizeHealthBanner(data.Locale, "Longdrawer", nil, i18n.CatalogT(data.Locale, "health_banner.snapshot_failed"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "longdrawer", data)
@@ -96,7 +96,7 @@ func (h *Handler) EchoUserDrilldown(w http.ResponseWriter, r *http.Request) {
 // surface first.
 func buildEchoHealth(locale string, f *longdrawermesh.Fleet) HealthBanner {
 	if f == nil {
-		return finalizeHealthBanner("Longdrawer", nil, "No data")
+		return finalizeHealthBanner(locale, "Longdrawer", nil, i18n.CatalogT(locale, "health_banner.no_data"))
 	}
 	var problems []HealthProblem
 	for _, u := range f.Users {
@@ -106,7 +106,7 @@ func buildEchoHealth(locale string, f *longdrawermesh.Fleet) HealthBanner {
 		problems = append(problems, HealthProblem{
 			Kind:     "divergent",
 			Subject:  u.User,
-			Detail:   fmt.Sprintf("%d file(s) disagree across envoys: %s", len(u.Divergences), joinFirstN(u.Divergences, 3)),
+			Detail:   fmt.Sprintf(i18n.CatalogT(locale, "swarm.longdrawer.divergent_detail"), len(u.Divergences), joinFirstN(u.Divergences, 3)),
 			Link:     "/longdrawer#user-" + u.User,
 			Severity: "err",
 		})
@@ -124,14 +124,14 @@ func buildEchoHealth(locale string, f *longdrawermesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "stale",
 				Subject:  ep.Hostname,
-				Detail:   "longdrawer trait not refreshed within the last 5 minutes",
+				Detail:   i18n.CatalogT(locale, "swarm.longdrawer.stale_detail"),
 				Severity: "warn",
 			})
 		}
 	}
 	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.longdrawer.headline"),
 		f.Totals.Users, f.Totals.Envoys, f.Totals.Files)
-	return finalizeHealthBanner("Longdrawer", problems, headline)
+	return finalizeHealthBanner(locale, "Longdrawer", problems, headline)
 }
 
 func joinFirstN(ss []string, n int) string {

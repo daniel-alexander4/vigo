@@ -7114,6 +7114,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- Fleet health alerts ---
+	locale := h.localeFromRequest(r)
 	type healthAlert struct {
 		Level string // "danger", "warning"
 		Title string
@@ -7137,10 +7138,10 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(eolHosts) > 0 {
-		alerts = append(alerts, healthAlert{Level: "danger", Title: "End-of-life OS", Count: len(eolHosts), Hosts: eolHosts})
+		alerts = append(alerts, healthAlert{Level: "danger", Title: i18n.CatalogT(locale, "health_alert.eol_os"), Count: len(eolHosts), Hosts: eolHosts})
 	}
 	if len(eolSoonHosts) > 0 {
-		alerts = append(alerts, healthAlert{Level: "warning", Title: "OS end-of-life within 6 months", Count: len(eolSoonHosts), Hosts: eolSoonHosts})
+		alerts = append(alerts, healthAlert{Level: "warning", Title: i18n.CatalogT(locale, "health_alert.eol_os_soon"), Count: len(eolSoonHosts), Hosts: eolSoonHosts})
 	}
 
 	// Disk usage >90% check.
@@ -7156,7 +7157,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(diskFullHosts) > 0 {
-		alerts = append(alerts, healthAlert{Level: "warning", Title: "Disk usage above 90%", Count: len(diskFullHosts), Hosts: diskFullHosts})
+		alerts = append(alerts, healthAlert{Level: "warning", Title: i18n.CatalogT(locale, "health_alert.disk_high"), Count: len(diskFullHosts), Hosts: diskFullHosts})
 	}
 
 	// Fleet diversity score.

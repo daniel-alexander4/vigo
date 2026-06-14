@@ -17,7 +17,7 @@
             <div class="stat-card__value">{{.Sync.Totals.Users}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Envoys</div>
+            <div class="stat-card__label">{{T $.Locale "common.envoys"}}</div>
             <div class="stat-card__value">{{.Sync.Totals.Envoys}}</div>
         </div>
         <div class="stat-card">
@@ -42,7 +42,7 @@
                     <th>{{T $.Locale "th.name"}}</th>
                     <th>{{T $.Locale "longdrawer.files"}}</th>
                     <th>{{T $.Locale "longdrawer.revoked"}}</th>
-                    <th>Envoys</th>
+                    <th>{{T $.Locale "common.envoys"}}</th>
                     <th>{{T $.Locale "th.status"}}</th>
                 </tr>
             </thead>

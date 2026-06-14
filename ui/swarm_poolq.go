@@ -61,8 +61,8 @@ func (h *Handler) poolqList(w http.ResponseWriter, r *http.Request) {
 	h.setCommonWithRequest(&data.PageData, r)
 
 	if h.poolqFleet == nil {
-		data.Error = "poolq aggregator not available"
-		data.Health = finalizeHealthBanner("Poolq", nil, "Aggregator unavailable")
+		data.Error = i18n.CatalogT(data.Locale, "health_banner.mesh_unavailable")
+		data.Health = finalizeHealthBanner(data.Locale, "Poolq", nil, i18n.CatalogT(data.Locale, "health_banner.aggregator_unavailable"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "poolq", data)
@@ -72,7 +72,7 @@ func (h *Handler) poolqList(w http.ResponseWriter, r *http.Request) {
 	snap, blocked, err := h.poolqFleet.FleetSnapshot(r.Context())
 	if err != nil {
 		data.Error = err.Error()
-		data.Health = finalizeHealthBanner("Poolq", nil, "Snapshot failed")
+		data.Health = finalizeHealthBanner(data.Locale, "Poolq", nil, i18n.CatalogT(data.Locale, "health_banner.snapshot_failed"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "poolq", data)
@@ -166,7 +166,7 @@ func lookupPoolqByName(snap *poolqmesh.Snapshot, target string) (*poolqmesh.Topi
 // health-builder's shape.
 func buildPoolqHealth(locale string, snap *poolqmesh.Snapshot, blocked []db.PoolqBlockedTopic) HealthBanner {
 	if snap == nil {
-		return finalizeHealthBanner("Poolq", nil, "No data")
+		return finalizeHealthBanner(locale, "Poolq", nil, i18n.CatalogT(locale, "health_banner.no_data"))
 	}
 	var problems []HealthProblem
 	liveIDs := make(map[string]string, len(snap.Topics)) // lower-hex → name
@@ -192,7 +192,7 @@ func buildPoolqHealth(locale string, snap *poolqmesh.Snapshot, blocked []db.Pool
 		problems = append(problems, HealthProblem{
 			Kind:     "blocked-orphan",
 			Subject:  fmt.Sprintf("%d topic_id(s)", n),
-			Detail:   "operator-blocked but no current snapshot entry — the founder scrubbed their ~/.vigo-poolq/ state",
+			Detail:   i18n.CatalogT(locale, "swarm.poolq.orphans_detail"),
 			Severity: "warn",
 		})
 	}
@@ -208,24 +208,24 @@ func buildPoolqHealth(locale string, snap *poolqmesh.Snapshot, blocked []db.Pool
 		len(snap.Participants),
 		len(blocked),
 	)
-	return finalizeHealthBanner("Poolq", problems, headline)
+	return finalizeHealthBanner(locale, "Poolq", problems, headline)
 }
 
 func buildPoolqTopicHealth(locale string, t *poolqmesh.Topic) HealthBanner {
 	if t == nil {
-		return finalizeHealthBanner("Poolq", nil, "No data")
+		return finalizeHealthBanner(locale, "Poolq", nil, i18n.CatalogT(locale, "health_banner.no_data"))
 	}
 	var problems []HealthProblem
 	if t.Blocked {
 		problems = append(problems, HealthProblem{
 			Kind:     "blocked",
 			Subject:  t.TopicName,
-			Detail:   "operator-blocked — the server refuses to serve /range and /log for this topic",
+			Detail:   i18n.CatalogT(locale, "swarm.poolq.topic_blocked_detail"),
 			Severity: "warn",
 		})
 	}
 	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.poolq.topic_headline"), t.TopicName, t.Count, t.HeadSeq)
-	return finalizeHealthBanner(t.TopicName, problems, headline)
+	return finalizeHealthBanner(locale, t.TopicName, problems, headline)
 }
 
 func poolqBlockReasonText(b db.PoolqBlockedTopic) string {

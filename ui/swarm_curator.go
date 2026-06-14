@@ -104,8 +104,8 @@ func (h *Handler) curatorList(w http.ResponseWriter, r *http.Request) {
 	h.setCommonWithRequest(&data.PageData, r)
 
 	if h.curatorFleet == nil {
-		data.Error = "curator aggregator not available"
-		data.Health = finalizeHealthBanner("Curator", nil, "Aggregator unavailable")
+		data.Error = i18n.CatalogT(data.Locale, "health_banner.mesh_unavailable")
+		data.Health = finalizeHealthBanner(data.Locale, "Curator", nil, i18n.CatalogT(data.Locale, "health_banner.aggregator_unavailable"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "curator", data)
@@ -115,7 +115,7 @@ func (h *Handler) curatorList(w http.ResponseWriter, r *http.Request) {
 	cat, blocked, err := h.curatorFleet.FleetSnapshot(r.Context())
 	if err != nil {
 		data.Error = err.Error()
-		data.Health = finalizeHealthBanner("Curator", nil, "Snapshot failed")
+		data.Health = finalizeHealthBanner(data.Locale, "Curator", nil, i18n.CatalogT(data.Locale, "health_banner.snapshot_failed"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "curator", data)
@@ -164,7 +164,7 @@ func (h *Handler) curatorDetail(w http.ResponseWriter, r *http.Request, id strin
 	targetEnvoys := h.resolveCuratorTargetEnvoys(entry.Body.Target)
 	view := buildCuratorArtifactView(matchedID, entry, blockedSet, targetEnvoys)
 	data.Artifact = view
-	data.Health = buildCuratorArtifactHealth(view)
+	data.Health = buildCuratorArtifactHealth(data.Locale, view)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "curator", data)
 }
@@ -315,7 +315,7 @@ func buildCuratorArtifactView(artifactID string, e *curatormesh.CatalogEntry, bl
 // fleet rollup — a fleet-wide tally would just be noise.
 func buildCuratorHealth(locale string, cat *curatormesh.Catalog, blocked []db.CuratorBlockedArtifact) HealthBanner {
 	if cat == nil {
-		return finalizeHealthBanner("Curator", nil, "No data")
+		return finalizeHealthBanner(locale, "Curator", nil, i18n.CatalogT(locale, "health_banner.no_data"))
 	}
 	var problems []HealthProblem
 	blockedSet := make(map[string]db.CuratorBlockedArtifact, len(blocked))
@@ -351,7 +351,7 @@ func buildCuratorHealth(locale string, cat *curatormesh.Catalog, blocked []db.Cu
 		problems = append(problems, HealthProblem{
 			Kind:     "blocked-orphan",
 			Subject:  fmt.Sprintf("%d artifact_id(s)", n),
-			Detail:   "operator-blocked but no current catalog entry — the publisher rm'd it",
+			Detail:   i18n.CatalogT(locale, "swarm.curator.orphans_detail"),
 			Severity: "warn",
 		})
 	}
@@ -362,16 +362,16 @@ func buildCuratorHealth(locale string, cat *curatormesh.Catalog, blocked []db.Cu
 		len(cat.Participants),
 		len(blocked),
 	)
-	return finalizeHealthBanner("Curator", problems, headline)
+	return finalizeHealthBanner(locale, "Curator", problems, headline)
 }
 
-func buildCuratorArtifactHealth(v *curatorArtifactView) HealthBanner {
+func buildCuratorArtifactHealth(locale string, v *curatorArtifactView) HealthBanner {
 	var problems []HealthProblem
 	if v.Blocked {
 		problems = append(problems, HealthProblem{
 			Kind:     "blocked",
 			Subject:  v.Name,
-			Detail:   "operator-blocked — the server refuses to resolve or relay this artifact",
+			Detail:   i18n.CatalogT(locale, "swarm.curator.artifact_blocked_detail"),
 			Severity: "warn",
 		})
 	}
@@ -383,7 +383,7 @@ func buildCuratorArtifactHealth(v *curatorArtifactView) HealthBanner {
 		problems = append(problems, HealthProblem{
 			Kind:     "dangling-tag",
 			Subject:  v.Name,
-			Detail:   fmt.Sprintf("%d tag(s) point at a non-existent version: %s", len(v.DanglingTags), strings.Join(s, ", ")),
+			Detail:   fmt.Sprintf(i18n.CatalogT(locale, "swarm.curator.dangling_tags_detail"), len(v.DanglingTags), strings.Join(s, ", ")),
 			Severity: "warn",
 		})
 	}
@@ -391,9 +391,9 @@ func buildCuratorArtifactHealth(v *curatorArtifactView) HealthBanner {
 	for _, ver := range v.Versions {
 		platCount += len(ver.Platforms)
 	}
-	headline := fmt.Sprintf("%s: %d version(s), %d platform build(s).",
+	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.curator.artifact_headline"),
 		v.Name, len(v.Versions), platCount)
-	return finalizeHealthBanner(v.Name, problems, headline)
+	return finalizeHealthBanner(locale, v.Name, problems, headline)
 }
 
 func blockReasonText(b db.CuratorBlockedArtifact) string {

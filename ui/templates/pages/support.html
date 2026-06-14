@@ -34,15 +34,15 @@
 
 {{if .IsFreeTier}}
 <div class="card mt-3">
-    <h2>Community &mdash; best-effort only</h2>
-    <p>The Community tier is provided free of charge with <strong>no support obligation</strong>. Email is monitored on a voluntary, best-effort basis; messages may be deprioritized or left unanswered at any time. Alexander4, LLC's total aggregate liability to Community tier users is capped at $50. See the LICENSE file for full terms.</p>
-    <p>If you need guaranteed response times or configuration assistance, <a href="/license">upgrade to a paid tier</a>.</p>
+    <h2>{{T $.Locale "support.community_heading"}}</h2>
+    <p>{{tSafe $.Locale "support.community_body"}}</p>
+    <p>{{tSafe $.Locale "support.community_upgrade"}}</p>
 </div>
 {{end}}
 
 <div class="card mt-3">
     <h2>{{T $.Locale "support.tiers_heading"}}</h2>
-    <p>All paid tiers include bug triage, configuration guidance, and upgrade assistance. Response times are service targets, not guaranteed SLAs &mdash; custom SLAs with service credits are available as part of enterprise agreements.</p>
+    <p>{{T $.Locale "support.tiers_body"}}</p>
     <table class="table">
         <thead>
             <tr>
@@ -69,25 +69,25 @@
 
 <div class="card mt-3">
     <h2>{{T $.Locale "support.filing_heading"}}</h2>
-    <p>Email <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a>. Include:</p>
+    <p>{{T $.Locale "support.filing_email_prefix"}} <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a>. {{T $.Locale "support.filing_include"}}</p>
     <ul>
-        <li>License ID <code>{{if .LicenseID}}{{.LicenseID}}{{else}}(no license installed){{end}}</code>{{if .CustomerName}} ({{.CustomerName}}){{end}}</li>
-        <li>Vigo server version (visible in the sidebar)</li>
-        <li>What you tried, what you expected, what happened</li>
-        <li>Relevant log excerpts &mdash; <code>docker logs vigo</code> or <code>/var/log/vigo-agent.log</code></li>
+        <li>{{T $.Locale "support.filing_li_license"}} <code>{{if .LicenseID}}{{.LicenseID}}{{else}}{{T $.Locale "support.filing_no_license"}}{{end}}</code>{{if .CustomerName}} ({{.CustomerName}}){{end}}</li>
+        <li>{{T $.Locale "support.filing_li_version"}}</li>
+        <li>{{T $.Locale "support.filing_li_tried"}}</li>
+        <li>{{T $.Locale "support.filing_li_logs"}} &mdash; <code>docker logs vigo</code> or <code>/var/log/vigo-agent.log</code></li>
     </ul>
-    <p>Support covers configuration guidance, bug triage, and upgrade assistance. It does not cover writing your configcrates, managing your infrastructure, or general systems administration.</p>
+    <p>{{T $.Locale "support.filing_scope"}}</p>
 </div>
 
 <div class="card mt-3">
-    <h2>Critical Support add-on{{if .CriticalEligible}} <span class="badge badge--info">eligible</span>{{end}}</h2>
-    <p>Extended-hours coverage layered on top of any paid tier at {{.CriticalFrom}} or above &mdash; for production-down and service-degraded issues only, not configuration questions or feature requests.</p>
-    <p><strong>{{.CriticalResponse}}</strong> response, <strong>{{.CriticalHours}}</strong>. Channel: {{.CriticalChannel}}. Pricing: {{.CriticalPricing}}. Eligible from {{.CriticalFrom}} tier and above.</p>
+    <h2>{{T $.Locale "support.critical_heading"}}{{if .CriticalEligible}} <span class="badge badge--info">{{T $.Locale "support.critical_eligible_badge"}}</span>{{end}}</h2>
+    <p>{{T $.Locale "support.critical_body_prefix"}} {{.CriticalFrom}} {{T $.Locale "support.critical_body_suffix"}}</p>
+    <p><strong>{{.CriticalResponse}}</strong> {{T $.Locale "support.critical_response_word"}}, <strong>{{.CriticalHours}}</strong>. {{T $.Locale "support.critical_channel_label"}} {{.CriticalChannel}}. {{T $.Locale "support.critical_pricing_label"}} {{.CriticalPricing}}. {{T $.Locale "support.critical_eligible_from_prefix"}} {{.CriticalFrom}} {{T $.Locale "support.critical_eligible_from_suffix"}}</p>
     {{if .CriticalEligible}}
-    <p>To add Critical Support to your contract, email <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a> referencing your License ID.</p>
+    <p>{{T $.Locale "support.critical_add_prefix"}} <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a> {{T $.Locale "support.critical_add_suffix"}}</p>
     {{else}}
-    <p>Your current tier does not qualify. Critical Support is available once you move to {{.CriticalFrom}} or higher.</p>
+    <p>{{T $.Locale "support.critical_noqualify_prefix"}} {{.CriticalFrom}} {{T $.Locale "support.critical_noqualify_suffix"}}</p>
     {{end}}
-    <p>24/7 support with guaranteed SLAs is available as a custom engagement for Enterprise and Scale tier customers.</p>
+    <p>{{T $.Locale "support.critical_247"}}</p>
 </div>
 {{end}}

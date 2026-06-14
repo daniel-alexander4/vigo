@@ -30,7 +30,7 @@
             <tbody>
                 {{range .Problems}}
                 <tr>
-                    <td><span class="badge badge--{{if eq .Severity "err"}}err{{else}}warn{{end}}">{{.Kind}}</span></td>
+                    <td><span class="badge badge--{{if eq .Severity "err"}}err{{else}}warn{{end}}">{{tEnum $.Locale .Kind}}</span></td>
                     <td>{{if .Link}}<a href="{{.Link}}"><strong>{{.Subject}}</strong></a>{{else}}<strong>{{.Subject}}</strong>{{end}}</td>
                     <td>{{.Detail}}</td>
                 </tr>

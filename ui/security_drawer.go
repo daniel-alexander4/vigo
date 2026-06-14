@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/freshness"
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/traits"
 	"github.com/google/uuid"
 )
@@ -113,7 +114,7 @@ type ClamAVCached struct {
 }
 
 type AIDECached struct {
-	Clean                  bool
+	Clean                   bool
 	Added, Removed, Changed int
 }
 
@@ -134,16 +135,16 @@ type CachedCVE struct {
 // `security_scan_detail` trait path. Matches the nine scanner sections the
 // drawer renders as tabs.
 type SecurityScanDetail struct {
-	Available bool             `json:"available"`
-	Trivy     *TrivyDetail     `json:"trivy,omitempty"`
-	Debsecan  *DebsecanDetail  `json:"debsecan,omitempty"`
-	Lynis     *LynisDetail     `json:"lynis,omitempty"`
-	Rkhunter  *RkhunterDetail  `json:"rkhunter,omitempty"`
+	Available  bool              `json:"available"`
+	Trivy      *TrivyDetail      `json:"trivy,omitempty"`
+	Debsecan   *DebsecanDetail   `json:"debsecan,omitempty"`
+	Lynis      *LynisDetail      `json:"lynis,omitempty"`
+	Rkhunter   *RkhunterDetail   `json:"rkhunter,omitempty"`
 	Chkrootkit *ChkrootkitDetail `json:"chkrootkit,omitempty"`
-	ClamAV    *ClamAVDetail    `json:"clamav,omitempty"`
-	AIDE      *AIDEDetail      `json:"aide,omitempty"`
-	Defender  *DefenderDetail  `json:"windows_defender,omitempty"`
-	SCAP      *SCAPDetail      `json:"scap,omitempty"`
+	ClamAV     *ClamAVDetail     `json:"clamav,omitempty"`
+	AIDE       *AIDEDetail       `json:"aide,omitempty"`
+	Defender   *DefenderDetail   `json:"windows_defender,omitempty"`
+	SCAP       *SCAPDetail       `json:"scap,omitempty"`
 }
 
 // hasData reports whether the decoded detail carries any recognizable
@@ -196,10 +197,10 @@ type DebsecanVuln struct {
 }
 
 type LynisDetail struct {
-	Score       int           `json:"score"`
-	Warnings    []LynisEntry  `json:"warnings"`
-	Suggestions []LynisEntry  `json:"suggestions"`
-	LastScan    string        `json:"last_scan"`
+	Score       int          `json:"score"`
+	Warnings    []LynisEntry `json:"warnings"`
+	Suggestions []LynisEntry `json:"suggestions"`
+	LastScan    string       `json:"last_scan"`
 }
 
 type LynisEntry struct {
@@ -239,10 +240,10 @@ type AIDEDetail struct {
 }
 
 type DefenderDetail struct {
-	RealtimeProtection bool `json:"realtime_protection"`
-	Enabled            bool `json:"enabled"`
-	SignatureAgeDays   int  `json:"signature_age_days"`
-	ThreatsDetected    int  `json:"threats_detected"`
+	RealtimeProtection bool   `json:"realtime_protection"`
+	Enabled            bool   `json:"enabled"`
+	SignatureAgeDays   int    `json:"signature_age_days"`
+	ThreatsDetected    int    `json:"threats_detected"`
 	LastScan           string `json:"last_scan"`
 }
 
@@ -278,15 +279,15 @@ type SecurityDrawerData struct {
 	Locale   string // per-request locale for {{T}}/{{tEnum}} in the fragment
 	EnvoyID  string
 	Hostname string
-	Live     bool                  // true when live-dispatch completed successfully
-	Timeout  int                   // seconds; exposed to the template for the spinner hint
+	Live     bool // true when live-dispatch completed successfully
+	Timeout  int  // seconds; exposed to the template for the spinner hint
 	Cached   SecurityDrawerCached
 	// Certs are this host's certificates expiring or expired within 30 days
 	// (via DataSource.EnvoyCertDetails) — feeds the always-present "Certs"
 	// tab. Empty means none expiring (the pane self-reports that).
-	Certs    []CertDetail
-	Detail   *SecurityScanDetail   // only populated on Live=true
-	Error    string                // set when dispatch timed out or the envoy was offline
+	Certs  []CertDetail
+	Detail *SecurityScanDetail // only populated on Live=true
+	Error  string              // set when dispatch timed out or the envoy was offline
 	// LiveNoData is true when the live dispatch completed cleanly but the
 	// agent reported no scanner output for this host (SCAN_DIR missing or
 	// every per-scanner file unreadable). Drives the info banner that
@@ -376,11 +377,11 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 		value, outcome, err := h.traitQuery.DispatchTraitQuery(ctx, "security_scan_detail", hostname, time.Duration(securityLiveTimeoutSec)*time.Second)
 		switch {
 		case err != nil:
-			data.Error = "dispatch failed: " + err.Error()
+			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_dispatch_failed"), err.Error())
 		case outcome == DispatchOffline:
-			data.Error = "Envoy is offline — last check-in " + timeAgo(data.EnvoyLastSeen) + ". Cached summary shown."
+			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_envoy_offline"), timeAgo(data.EnvoyLastSeen))
 		case outcome == DispatchTimeout:
-			data.Error = "Agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
+			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_no_response"), securityLiveTimeoutSec)
 		case outcome == DispatchNoData:
 			// Agent answered with found=false (latent in current agent code,
 			// but the outcome enum is the right home for it).
@@ -430,7 +431,7 @@ func applyLiveDetail(data *SecurityDrawerData, raw string, fetchedAt time.Time, 
 	jerr := json.Unmarshal([]byte(raw), &detail)
 	switch {
 	case jerr != nil && !detail.hasScannerData():
-		data.Error = "could not parse agent response: " + jerr.Error()
+		data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_parse_failed"), jerr.Error())
 	case !detail.hasScannerData():
 		// Clean parse but no scanner data — the explicit "no security
 		// scanners on this host" outcome. Flagged so the template can
@@ -444,7 +445,7 @@ func applyLiveDetail(data *SecurityDrawerData, raw string, fetchedAt time.Time, 
 		data.LiveFetchedAt = fetchedAt
 		data.LiveFromCache = fromCache
 		if jerr != nil {
-			data.Error = "some scan fields couldn't be parsed (showing what was returned): " + jerr.Error()
+			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_partial_parse"), jerr.Error())
 		}
 	}
 }

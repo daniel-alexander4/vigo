@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 )
 
@@ -48,8 +49,8 @@ func (h *Handler) gitbackList(w http.ResponseWriter, r *http.Request) {
 	h.setCommonWithRequest(&data.PageData, r)
 
 	if h.gitbackFleet == nil {
-		data.Error = "gitback aggregator not available"
-		data.Health = finalizeHealthBanner("Gitback", nil, "Aggregator unavailable")
+		data.Error = i18n.CatalogT(data.Locale, "health_banner.mesh_unavailable")
+		data.Health = finalizeHealthBanner(data.Locale, "Gitback", nil, i18n.CatalogT(data.Locale, "health_banner.aggregator_unavailable"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "gitback", data)
@@ -59,14 +60,14 @@ func (h *Handler) gitbackList(w http.ResponseWriter, r *http.Request) {
 	fleet, err := h.gitbackFleet.FleetSnapshot(r.Context())
 	if err != nil {
 		data.Error = err.Error()
-		data.Health = finalizeHealthBanner("Gitback", nil, "Snapshot failed")
+		data.Health = finalizeHealthBanner(data.Locale, "Gitback", nil, i18n.CatalogT(data.Locale, "health_banner.snapshot_failed"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "gitback", data)
 		return
 	}
 	data.Fleet = fleet
-	data.Health = buildGitbackHealth(fleet)
+	data.Health = buildGitbackHealth(data.Locale, fleet)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "gitback", data)
 }
@@ -98,7 +99,7 @@ func (h *Handler) gitbackDetail(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 	data.Project = summary
-	data.Health = buildGitbackProjectHealth(summary)
+	data.Health = buildGitbackProjectHealth(data.Locale, summary)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "gitback", data)
 }
@@ -108,9 +109,9 @@ func (h *Handler) gitbackDetail(w http.ResponseWriter, r *http.Request, id strin
 // model. Divergent refs mean some host fell behind and hasn't caught
 // up via fan-out; non-unanimous envelope digests mean revoke / leave
 // gossip hasn't fully propagated.
-func buildGitbackHealth(f *gitbackmesh.Fleet) HealthBanner {
+func buildGitbackHealth(locale string, f *gitbackmesh.Fleet) HealthBanner {
 	if f == nil {
-		return finalizeHealthBanner("Gitback", nil, "No data")
+		return finalizeHealthBanner(locale, "Gitback", nil, i18n.CatalogT(locale, "health_banner.no_data"))
 	}
 	var problems []HealthProblem
 	nonUnanimousProjects := 0
@@ -121,7 +122,7 @@ func buildGitbackHealth(f *gitbackmesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "divergent",
 				Subject:  p.Handle,
-				Detail:   fmt.Sprintf("%d ref(s) where hosts disagree on the head sha", len(p.DivergentRefs)),
+				Detail:   fmt.Sprintf(i18n.CatalogT(locale, "swarm.gitback.divergent_detail"), len(p.DivergentRefs)),
 				Link:     link,
 				Severity: "warn",
 			})
@@ -131,29 +132,29 @@ func buildGitbackHealth(f *gitbackmesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "envelope-divergent",
 				Subject:  p.Handle,
-				Detail:   "envelope digests differ — revoke / leave gossip hasn't propagated to all hosts",
+				Detail:   i18n.CatalogT(locale, "swarm.gitback.envelope_divergent_detail"),
 				Link:     link,
 				Severity: "warn",
 			})
 		}
 	}
 	headline := fmt.Sprintf(
-		"%d project(s) across %d host(s); %d divergent ref(s); %d project(s) with envelope-digest skew.",
+		i18n.CatalogT(locale, "swarm.gitback.headline"),
 		f.Totals.Projects,
 		f.Totals.Hosts,
 		f.Totals.DivergentRefs,
 		nonUnanimousProjects,
 	)
-	return finalizeHealthBanner("Gitback", problems, headline)
+	return finalizeHealthBanner(locale, "Gitback", problems, headline)
 }
 
-func buildGitbackProjectHealth(p *gitbackmesh.ProjectSummary) HealthBanner {
+func buildGitbackProjectHealth(locale string, p *gitbackmesh.ProjectSummary) HealthBanner {
 	var problems []HealthProblem
 	if len(p.DivergentRefs) > 0 {
 		problems = append(problems, HealthProblem{
 			Kind:     "divergent",
 			Subject:  p.Handle,
-			Detail:   fmt.Sprintf("%d ref(s) divergent across hosts", len(p.DivergentRefs)),
+			Detail:   fmt.Sprintf(i18n.CatalogT(locale, "swarm.gitback.project_divergent_detail"), len(p.DivergentRefs)),
 			Severity: "warn",
 		})
 	}
@@ -161,11 +162,11 @@ func buildGitbackProjectHealth(p *gitbackmesh.ProjectSummary) HealthBanner {
 		problems = append(problems, HealthProblem{
 			Kind:     "envelope-divergent",
 			Subject:  p.Handle,
-			Detail:   "envelope digests differ across hosts",
+			Detail:   i18n.CatalogT(locale, "swarm.gitback.project_envelope_divergent_detail"),
 			Severity: "warn",
 		})
 	}
-	headline := fmt.Sprintf("%s: %d host(s), %d member fleet(s).",
+	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.gitback.project_headline"),
 		p.Handle, p.HostCount, p.MemberFleetCount)
-	return finalizeHealthBanner(p.Handle, problems, headline)
+	return finalizeHealthBanner(locale, p.Handle, problems, headline)
 }

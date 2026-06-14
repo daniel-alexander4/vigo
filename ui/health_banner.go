@@ -3,7 +3,11 @@
 
 package ui
 
-import "fmt"
+import (
+	"fmt"
+
+	"git.alexander4.io/vigo/server/i18n"
+)
 
 // HealthBanner carries the engineer-first status strip rendered at the
 // top of every /payload, /longdrawer, /gitback, /lockbox page. The
@@ -31,10 +35,14 @@ type HealthProblem struct {
 
 // finalizeHealthBanner picks the page-wide Level from the worst problem
 // severity and composes the headline. "err" wins over "warn"; an empty
-// problems slice is the healthy case.
-func finalizeHealthBanner(scope string, problems []HealthProblem, healthyHeadline string) HealthBanner {
+// problems slice is the healthy case. The "scope: N problem(s)" headline
+// is locale-aware (one/many keys carry the interpolated count, which the
+// flat catalog can't pluralize on its own); scope is the subsystem proper
+// name and stays English. Locale is stamped on the banner so the
+// health-banner partial's {{T}}/{{tEnum}} calls resolve.
+func finalizeHealthBanner(locale, scope string, problems []HealthProblem, healthyHeadline string) HealthBanner {
 	if len(problems) == 0 {
-		return HealthBanner{Level: "ok", Headline: healthyHeadline}
+		return HealthBanner{Level: "ok", Headline: healthyHeadline, Locale: locale}
 	}
 	level := "warn"
 	for _, p := range problems {
@@ -43,9 +51,10 @@ func finalizeHealthBanner(scope string, problems []HealthProblem, healthyHeadlin
 			break
 		}
 	}
-	headline := fmt.Sprintf("%s: %d problem", scope, len(problems))
-	if len(problems) != 1 {
-		headline += "s"
+	key := "health_banner.problems_many"
+	if len(problems) == 1 {
+		key = "health_banner.problems_one"
 	}
-	return HealthBanner{Level: level, Headline: headline, Problems: problems}
+	headline := fmt.Sprintf(i18n.CatalogT(locale, key), scope, len(problems))
+	return HealthBanner{Level: level, Headline: headline, Problems: problems, Locale: locale}
 }

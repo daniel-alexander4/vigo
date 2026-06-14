@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/swarm/puddlemesh"
 )
 
@@ -45,8 +46,8 @@ func (h *Handler) puddleList(w http.ResponseWriter, r *http.Request) {
 	h.setCommonWithRequest(&data.PageData, r)
 
 	if h.puddleFleet == nil {
-		data.Error = "puddle aggregator not available"
-		data.Health = finalizeHealthBanner("Puddles", nil, "Aggregator unavailable")
+		data.Error = i18n.CatalogT(data.Locale, "health_banner.mesh_unavailable")
+		data.Health = finalizeHealthBanner(data.Locale, "Puddles", nil, i18n.CatalogT(data.Locale, "health_banner.aggregator_unavailable"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "puddle", data)
@@ -55,14 +56,14 @@ func (h *Handler) puddleList(w http.ResponseWriter, r *http.Request) {
 	fleet, err := h.puddleFleet.FleetSnapshot(r.Context())
 	if err != nil {
 		data.Error = err.Error()
-		data.Health = finalizeHealthBanner("Puddles", nil, "Snapshot failed")
+		data.Health = finalizeHealthBanner(data.Locale, "Puddles", nil, i18n.CatalogT(data.Locale, "health_banner.snapshot_failed"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "puddle", data)
 		return
 	}
 	data.Fleet = fleet
-	data.Health = buildPuddleHealth(fleet)
+	data.Health = buildPuddleHealth(data.Locale, fleet)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "puddle", data)
 }
@@ -92,16 +93,16 @@ func (h *Handler) puddleDetail(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	data.Puddle = summary
-	data.Health = buildPuddleSummaryHealth(summary)
+	data.Health = buildPuddleSummaryHealth(data.Locale, summary)
 	data.Health.Locale = data.Locale
 	h.renderer.Render(w, "puddle", data)
 }
 
 // buildPuddleHealth surfaces every puddle whose health band is not
 // healthy as a banner problem, with the underlying reasons.
-func buildPuddleHealth(f *puddlemesh.Fleet) HealthBanner {
+func buildPuddleHealth(locale string, f *puddlemesh.Fleet) HealthBanner {
 	if f == nil {
-		return finalizeHealthBanner("Puddles", nil, "No data")
+		return finalizeHealthBanner(locale, "Puddles", nil, i18n.CatalogT(locale, "health_banner.no_data"))
 	}
 	var problems []HealthProblem
 	for i := range f.Puddles {
@@ -118,13 +119,13 @@ func buildPuddleHealth(f *puddlemesh.Fleet) HealthBanner {
 		})
 	}
 	headline := fmt.Sprintf(
-		"%d puddle(s) across %d envoy(s); %d named; %d unlocked; %d need attention.",
+		i18n.CatalogT(locale, "swarm.puddle.headline"),
 		f.Totals.Puddles, f.Totals.Envoys, f.Totals.Named, f.Totals.Unlocked, f.Totals.Unhealthy,
 	)
-	return finalizeHealthBanner("Puddles", problems, headline)
+	return finalizeHealthBanner(locale, "Puddles", problems, headline)
 }
 
-func buildPuddleSummaryHealth(p *puddlemesh.PuddleSummary) HealthBanner {
+func buildPuddleSummaryHealth(locale string, p *puddlemesh.PuddleSummary) HealthBanner {
 	var problems []HealthProblem
 	if p.Health.Band != puddlemesh.HealthHealthy {
 		problems = append(problems, HealthProblem{
@@ -134,8 +135,8 @@ func buildPuddleSummaryHealth(p *puddlemesh.PuddleSummary) HealthBanner {
 			Severity: puddleSeverity(p.Health.Band),
 		})
 	}
-	headline := fmt.Sprintf("%s: %d envoy(s).", puddleSubject(p), p.EnvoyCount)
-	return finalizeHealthBanner(puddleSubject(p), problems, headline)
+	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.puddle.summary_headline"), puddleSubject(p), p.EnvoyCount)
+	return finalizeHealthBanner(locale, puddleSubject(p), problems, headline)
 }
 
 // puddleSubject is the human label for a puddle: its owner name, or a

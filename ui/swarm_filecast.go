@@ -514,7 +514,7 @@ func buildFilecastHealth(locale string, blobs []FilecastBlobEntry) HealthBanner 
 	}
 	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.filecast.headline"),
 		active, len(blobs)-active)
-	return finalizeHealthBanner("Filecast", problems, headline)
+	return finalizeHealthBanner(locale, "Filecast", problems, headline)
 }
 
 func humanSize(bytes int64) string {

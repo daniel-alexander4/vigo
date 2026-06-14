@@ -32,8 +32,8 @@ func (h *Handler) Lockbox(w http.ResponseWriter, r *http.Request) {
 	h.setCommonWithRequest(&data.PageData, r)
 
 	if h.mesh == nil {
-		data.Error = "mesh aggregator not available"
-		data.Health = finalizeHealthBanner("Lockbox", nil, "Aggregator unavailable")
+		data.Error = i18n.CatalogT(data.Locale, "health_banner.mesh_unavailable")
+		data.Health = finalizeHealthBanner(data.Locale, "Lockbox", nil, i18n.CatalogT(data.Locale, "health_banner.aggregator_unavailable"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "lockbox", data)
@@ -43,7 +43,7 @@ func (h *Handler) Lockbox(w http.ResponseWriter, r *http.Request) {
 	fleet, err := h.mesh.CryptSnapshot(r.Context())
 	if err != nil {
 		data.Error = err.Error()
-		data.Health = finalizeHealthBanner("Lockbox", nil, "Snapshot failed")
+		data.Health = finalizeHealthBanner(data.Locale, "Lockbox", nil, i18n.CatalogT(data.Locale, "health_banner.snapshot_failed"))
 		data.Health.Level = "warn"
 		data.Health.Locale = data.Locale
 		h.renderer.Render(w, "lockbox", data)
@@ -92,7 +92,7 @@ func (h *Handler) LockboxUserDrilldown(w http.ResponseWriter, r *http.Request) {
 // informational (an unlocked session isn't a problem by itself).
 func buildLockboxHealth(locale string, f *lockboxmesh.Fleet) HealthBanner {
 	if f == nil {
-		return finalizeHealthBanner("Lockbox", nil, "No data")
+		return finalizeHealthBanner(locale, "Lockbox", nil, i18n.CatalogT(locale, "health_banner.no_data"))
 	}
 	var problems []HealthProblem
 	for _, u := range f.Users {
@@ -100,7 +100,7 @@ func buildLockboxHealth(locale string, f *lockboxmesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "divergent",
 				Subject:  u.User,
-				Detail:   fmt.Sprintf("%d file(s) disagree across envoys: %s", len(u.Divergences), joinFirstN(u.Divergences, 3)),
+				Detail:   fmt.Sprintf(i18n.CatalogT(locale, "swarm.lockbox.divergent_detail"), len(u.Divergences), joinFirstN(u.Divergences, 3)),
 				Severity: "err",
 			})
 		}
@@ -116,7 +116,7 @@ func buildLockboxHealth(locale string, f *lockboxmesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "drift",
 				Subject:  u.User,
-				Detail:   "peer set differs across envoys; newly-encrypted files won't decrypt on unknown peers",
+				Detail:   i18n.CatalogT(locale, "swarm.lockbox.drift_detail"),
 				Severity: "warn",
 			})
 		}
@@ -134,12 +134,12 @@ func buildLockboxHealth(locale string, f *lockboxmesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "stale",
 				Subject:  ep.Hostname,
-				Detail:   "lockbox trait not refreshed within the last 5 minutes",
+				Detail:   i18n.CatalogT(locale, "swarm.lockbox.stale_detail"),
 				Severity: "warn",
 			})
 		}
 	}
 	headline := fmt.Sprintf(i18n.CatalogT(locale, "swarm.lockbox.headline"),
 		f.Totals.Users, f.Totals.Envoys, f.Totals.Files)
-	return finalizeHealthBanner("Lockbox", problems, headline)
+	return finalizeHealthBanner(locale, "Lockbox", problems, headline)
 }
