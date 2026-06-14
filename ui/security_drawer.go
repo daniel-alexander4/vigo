@@ -379,7 +379,7 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 		case err != nil:
 			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_dispatch_failed"), err.Error())
 		case outcome == DispatchOffline:
-			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_envoy_offline"), timeAgo(data.EnvoyLastSeen))
+			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_envoy_offline"), timeAgoL(data.Locale, data.EnvoyLastSeen))
 		case outcome == DispatchTimeout:
 			data.Error = fmt.Sprintf(i18n.CatalogT(data.Locale, "security_drawer.err_no_response"), securityLiveTimeoutSec)
 		case outcome == DispatchNoData:

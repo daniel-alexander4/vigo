@@ -70,7 +70,6 @@ func funcMap() template.FuncMap {
 		"formatTime":            formatTime,
 		"formatUnixTime":        formatUnixTime,
 		"truncGitSha":           truncGitSha,
-		"timeAgo":               timeAgo,
 		"sortHeader":            sortHeader,
 		"pctAccent":             pctAccent,
 		"pctAccentInv":          pctAccentInv,
@@ -920,71 +919,36 @@ func formatUnixTime(secs int64) string {
 	return formatTime(time.Unix(secs, 0))
 }
 
-// timeAgo renders a time.Time as a human-readable relative string ("2m ago", "3h ago").
-// Returns "-" for zero times. Used in table columns where recency matters more than
-// exact timestamps (the absolute time is shown via title tooltip in the template).
-func timeAgo(t time.Time) string {
-	if t.IsZero() {
-		return "-"
-	}
-	d := time.Since(t)
-	switch {
-	case d < 0:
-		return "just now"
-	case d < 30*time.Second:
-		return "just now"
-	case d < 90*time.Second:
-		return "1m ago"
-	case d < 60*time.Minute:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 90*time.Minute:
-		return "1h ago"
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	case d < 48*time.Hour:
-		return "yesterday"
-	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dw ago", int(d.Hours()/(24*7)))
-	default:
-		return t.Local().Format("2006-01-02")
-	}
-}
-
-// timeAgoL is the locale-aware relative-time helper. English delegates to
-// timeAgo (the single source of the English buckets); other locales branch
-// here. Relative time carries an interpolated count, which the flat string
-// catalog can't express, so the small fixed locale set is branched in code —
-// the eventual CLDR generalization (golang.org/x/text/message) would replace
-// this. Templates call {{timeAgoL $.Locale .When}}.
+// timeAgoL renders a time as a locale-aware relative string ("2m ago" /
+// "il y a 2 min"). The bucket boundaries are locale-independent; each
+// bucket's phrasing comes from the catalog (timeago.*), so a new locale
+// needs only catalog entries, never a code branch. The unit forms are
+// abbreviations that don't inflect, so no plural handling is required.
+// Returns "-" for zero times; the absolute time is shown via title tooltip
+// in the template. Templates call {{timeAgoL $.Locale .When}}.
 func timeAgoL(localeArg any, t time.Time) string {
 	locale := i18n.LocaleStr(localeArg)
-	if locale != "fr" {
-		return timeAgo(t)
-	}
 	if t.IsZero() {
 		return "-"
 	}
 	d := time.Since(t)
 	switch {
+	case d < 30*time.Second:
+		return i18n.CatalogT(locale, "timeago.just_now")
 	case d < 90*time.Second:
-		if d < 30*time.Second {
-			return "à l'instant"
-		}
-		return "il y a 1 min"
+		return fmt.Sprintf(i18n.CatalogT(locale, "timeago.minute"), 1)
 	case d < 60*time.Minute:
-		return fmt.Sprintf("il y a %d min", int(d.Minutes()))
+		return fmt.Sprintf(i18n.CatalogT(locale, "timeago.minute"), int(d.Minutes()))
 	case d < 90*time.Minute:
-		return "il y a 1 h"
+		return fmt.Sprintf(i18n.CatalogT(locale, "timeago.hour"), 1)
 	case d < 24*time.Hour:
-		return fmt.Sprintf("il y a %d h", int(d.Hours()))
+		return fmt.Sprintf(i18n.CatalogT(locale, "timeago.hour"), int(d.Hours()))
 	case d < 48*time.Hour:
-		return "hier"
+		return i18n.CatalogT(locale, "timeago.yesterday")
 	case d < 7*24*time.Hour:
-		return fmt.Sprintf("il y a %d j", int(d.Hours()/24))
+		return fmt.Sprintf(i18n.CatalogT(locale, "timeago.day"), int(d.Hours()/24))
 	case d < 30*24*time.Hour:
-		return fmt.Sprintf("il y a %d sem", int(d.Hours()/(24*7)))
+		return fmt.Sprintf(i18n.CatalogT(locale, "timeago.week"), int(d.Hours()/(24*7)))
 	default:
 		return t.Local().Format("2006-01-02")
 	}
@@ -1042,35 +1006,27 @@ func EnvoyStale(lastSeen time.Time, baseInterval, offlineThreshold, observedCycl
 	return freshness.IsStaleFromCycle(lastSeen, baseInterval, observedCycle, offlineThreshold)
 }
 
-// friendlyDurationL is the locale-aware companion to FriendlyDurationLabel.
-// English (and any non-French locale) delegates to it directly; French
-// mirrors its bucket structure but renders spaced French units (s / min /
-// h), so a stale threshold like "15m" reads as "15 min" — consistent with
-// the French units timeAgoL renders in the same cells. FriendlyDurationLabel
-// never emits days, so only s/min/h need translating. Templates call
-// {{friendlyDurationL $.Locale .Duration}}.
+// friendlyDurationL renders a compact, locale-aware duration ("15m" /
+// "15 min", "1h30m" / "1 h 30 min"). Like timeAgoL, the bucket logic is
+// locale-independent and each unit form comes from the catalog
+// (duration.*), so a new locale needs only catalog entries, never a code
+// branch. Never emits days. Templates call {{friendlyDurationL $.Locale .Duration}}.
 func friendlyDurationL(localeArg any, d time.Duration) string {
-	if i18n.LocaleStr(localeArg) != "fr" {
-		return FriendlyDurationLabel(d)
-	}
+	locale := i18n.LocaleStr(localeArg)
 	d = d.Round(time.Second)
 	if d < time.Minute {
-		return fmt.Sprintf("%d s", int(d.Seconds()))
+		return fmt.Sprintf(i18n.CatalogT(locale, "duration.seconds"), int(d.Seconds()))
 	}
 	if d < time.Hour {
 		if d%time.Minute == 0 {
-			return fmt.Sprintf("%d min", int(d.Minutes()))
+			return fmt.Sprintf(i18n.CatalogT(locale, "duration.minutes"), int(d.Minutes()))
 		}
-		m := int(d / time.Minute)
-		s := int((d % time.Minute) / time.Second)
-		return fmt.Sprintf("%d min %d s", m, s)
+		return fmt.Sprintf(i18n.CatalogT(locale, "duration.min_sec"), int(d/time.Minute), int((d%time.Minute)/time.Second))
 	}
 	if d%time.Hour == 0 {
-		return fmt.Sprintf("%d h", int(d.Hours()))
+		return fmt.Sprintf(i18n.CatalogT(locale, "duration.hours"), int(d.Hours()))
 	}
-	h := int(d / time.Hour)
-	m := int((d % time.Hour) / time.Minute)
-	return fmt.Sprintf("%d h %d min", h, m)
+	return fmt.Sprintf(i18n.CatalogT(locale, "duration.hour_min"), int(d/time.Hour), int((d%time.Hour)/time.Minute))
 }
 
 // toFloat64 converts any numeric type to float64 for template functions.

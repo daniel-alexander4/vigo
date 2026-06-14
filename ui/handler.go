@@ -4567,32 +4567,6 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, e
 	return data
 }
 
-// FriendlyDurationLabel renders a Duration in the most compact form
-// that's still operator-readable. Bare seconds for sub-minute values,
-// bare minutes for round minutes, "MmSs" for the awkward middle, hours
-// where appropriate. Used by the Offline pill title and any other
-// surface that needs a short threshold display.
-func FriendlyDurationLabel(d time.Duration) string {
-	d = d.Round(time.Second)
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		if d%time.Minute == 0 {
-			return fmt.Sprintf("%dm", int(d.Minutes()))
-		}
-		m := int(d / time.Minute)
-		s := int((d % time.Minute) / time.Second)
-		return fmt.Sprintf("%dm%ds", m, s)
-	}
-	if d%time.Hour == 0 {
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	}
-	h := int(d / time.Hour)
-	m := int((d % time.Hour) / time.Minute)
-	return fmt.Sprintf("%dh%dm", h, m)
-}
-
 // EnvoyDetail renders the envoy detail page shell. Runs and traits are loaded
 // asynchronously via HTMX fragment endpoints for instant page rendering.
 func (h *Handler) EnvoyDetail(w http.ResponseWriter, r *http.Request) {
