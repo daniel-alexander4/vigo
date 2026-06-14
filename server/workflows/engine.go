@@ -162,12 +162,38 @@ func (e *Engine) Load(dir string) error {
 			}
 		}
 
+		// Reject branch authoring errors at publish time: a self-referential
+		// on_success/on_failure (step branching to itself) is an unconditional
+		// infinite loop. The runtime step-execution cap is the backstop for
+		// multi-step cycles; this catches the obvious one early.
+		if err := validateBranchGraph(&def); err != nil {
+			return err
+		}
+
 		workflows[def.Name] = &def
 	}
 
 	e.mu.Lock()
 	e.workflows = workflows
 	e.mu.Unlock()
+	return nil
+}
+
+// validateBranchGraph rejects obvious cyclic branch authoring in a workflow
+// definition. A step whose on_success or on_failure names itself is an
+// unconditional infinite loop and is rejected here. Branch targets that
+// don't resolve to a known step are left alone — the runtime treats an
+// unknown target as "fall through to the next step" (see executeWorkflow),
+// which is a documented no-op, not a loop.
+func validateBranchGraph(def *WorkflowDef) error {
+	for i, step := range def.Steps {
+		if step.OnSuccess == step.Name && step.OnSuccess != "" {
+			return fmt.Errorf("workflow %q step %d (%s): on_success references itself — infinite loop", def.Name, i+1, step.Name)
+		}
+		if step.OnFailure == step.Name && step.OnFailure != "" {
+			return fmt.Errorf("workflow %q step %d (%s): on_failure references itself — infinite loop", def.Name, i+1, step.Name)
+		}
+	}
 	return nil
 }
 
@@ -296,7 +322,27 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		stepIndex[step.Name] = i
 	}
 
+	// Step-execution cap. on_success/on_failure can form a back-edge
+	// (step → earlier step), and without a bound a cyclic branch graph
+	// loops forever in this detached goroutine. Cap total step executions
+	// at a generous multiple of the step count (plus a floor) and fail the
+	// run with a clear reason if exceeded — the backstop for any cycle that
+	// slips past Load-time validation. Load (see validateBranchGraph)
+	// already rejects self-referential branches.
+	const branchStepFactor = 100
+	maxStepExecutions := len(def.Steps) * branchStepFactor
+	if maxStepExecutions < 1000 {
+		maxStepExecutions = 1000
+	}
+	stepExecutions := 0
+
 	for currentIdx < len(def.Steps) {
+		stepExecutions++
+		if stepExecutions > maxStepExecutions {
+			e.failWorkflow(ctx, runID, currentIdx,
+				fmt.Sprintf("step-execution cap (%d) exceeded — likely a cyclic on_success/on_failure branch", maxStepExecutions))
+			return
+		}
 		step := def.Steps[currentIdx]
 
 		// Engine.Close() cancellation — exit cleanly before the next

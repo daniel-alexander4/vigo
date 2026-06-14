@@ -364,6 +364,10 @@ fn handle_present(
             .map_err(|e| format!("create temp file in {}: {}", dir.display(), e))?;
         tmp.write_all(content.as_bytes())
             .map_err(|e| format!("write temp file: {}", e))?;
+        // fsync before rename so a crash window can't leave a truncated/empty
+        // file (matches executors/atomic.rs).
+        tmp.sync_all()
+            .map_err(|e| format!("sync temp file: {}", e))?;
     }
 
     // Set permissions before rename.

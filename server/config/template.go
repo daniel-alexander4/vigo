@@ -36,73 +36,6 @@ func RenderTemplate(tmpl string, traits map[string]any, vars map[string]any) (st
 	return buf.String(), nil
 }
 
-// evalBuiltinsServerSide evaluates when expressions containing builtin
-// functions by looking up trait values directly. Handles the common cases
-// needed for match vars (distro, arch, os_family, version_ge).
-//
-// Supports "and" (AND), "or" (OR), and "!" / "not" (NOT). Uses the same
-// keyword operators as the main parser and the Rust agent parser.
-func evalBuiltinsServerSide(when string, traits map[string]any) bool {
-	// Handle "and" / "&&" — all parts must be true.
-	// Use word-boundary-aware split to avoid matching "and" inside identifiers.
-	if strings.Contains(when, " && ") {
-		parts := strings.Split(when, " && ")
-		for _, part := range parts {
-			if !evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
-				return false
-			}
-		}
-		return true
-	}
-	if containsWord(when, " and ") {
-		parts := strings.Split(when, " and ")
-		for _, part := range parts {
-			if !evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
-				return false
-			}
-		}
-		return true
-	}
-
-	// Handle "or" / "||" — any part true is enough.
-	if strings.Contains(when, " || ") {
-		parts := strings.Split(when, " || ")
-		for _, part := range parts {
-			if evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
-				return true
-			}
-		}
-		return false
-	}
-	if containsWord(when, " or ") {
-		parts := strings.Split(when, " or ")
-		for _, part := range parts {
-			if evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// Handle "!" or "not " prefix.
-	trimmed := strings.TrimSpace(when)
-	if strings.HasPrefix(trimmed, "!") {
-		return !evalBuiltinsServerSide(strings.TrimPrefix(trimmed, "!"), traits)
-	}
-	if strings.HasPrefix(trimmed, "not ") {
-		return !evalBuiltinsServerSide(strings.TrimPrefix(trimmed, "not "), traits)
-	}
-
-	// Extract function call: name('arg')
-	if idx := strings.Index(trimmed, "("); idx > 0 {
-		funcName := trimmed[:idx]
-		argStr := strings.Trim(trimmed[idx:], "()'\"")
-		return evalTraitFunc(funcName, argStr, traits)
-	}
-
-	return false
-}
-
 // traitValue looks up a trait by dotted key in a traits map that may be flat
 // ("os.family" keys, agent check-in format) or nested ({"os": {"family": ...}}).
 func traitValue(traits map[string]any, key string) string {
@@ -188,9 +121,4 @@ func RenderVars(vars map[string]any, traits map[string]any, varOrder []string) (
 		result[k] = rendered
 	}
 	return result, nil
-}
-
-// containsWord checks if s contains the exact substring sub.
-func containsWord(s, sub string) bool {
-	return strings.Contains(s, sub)
 }

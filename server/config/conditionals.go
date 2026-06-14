@@ -5,7 +5,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"git.alexander4.io/vigo/server/conditionals"
 )
@@ -73,6 +72,7 @@ func ShouldIncludeModule(mod Configcrate, vars map[string]any) bool {
 
 // serverSideBuiltins are functions the server can evaluate using traits.
 // Agent-only functions (has_command, file_exists, etc.) are not in this set.
+// This must stay in lockstep with the cases evalTraitFunc handles.
 var serverSideBuiltins = map[string]bool{
 	"os_family":   true,
 	"distro":      true,
@@ -82,95 +82,90 @@ var serverSideBuiltins = map[string]bool{
 	"has_display": true,
 }
 
-// isFullyServerResolvable returns true if all function calls in the when
-// expression can be evaluated server-side. If any agent-only function is
-// present (has_command, file_exists, etc.), returns false.
-func isFullyServerResolvable(when string) bool {
-	// Scan for function calls: name(
-	rest := when
-	for {
-		idx := strings.Index(rest, "(")
-		if idx <= 0 {
-			return true
-		}
-		// Extract function name (alphanumeric + underscore before the paren).
-		nameStart := idx - 1
-		for nameStart >= 0 && (rest[nameStart] == '_' || (rest[nameStart] >= 'a' && rest[nameStart] <= 'z') || (rest[nameStart] >= 'A' && rest[nameStart] <= 'Z') || (rest[nameStart] >= '0' && rest[nameStart] <= '9')) {
-			nameStart--
-		}
-		funcName := rest[nameStart+1 : idx]
-		if funcName != "" && !serverSideBuiltins[funcName] {
-			return false
-		}
-		rest = rest[idx+1:]
-	}
-}
-
-// EvalModuleWhenServerSide evaluates a module-level when: expression using
-// traits. Handles builtin functions (os_family, distro, arch, etc.) and
-// boolean operators (and/or/&&/||/!/not). Returns true if the module should
-// be included.
+// EvalModuleWhenServerSide evaluates a module- or resource-level when:
+// expression server-side against the envoy's traits. It routes through the
+// canonical AST parser in server/conditionals (the same parser the agent
+// uses) so server and agent agree on precedence, parentheses, and operator
+// semantics — the previous string-split evaluator diverged on all three.
 //
-// For compound expressions (&&/||), each part is evaluated independently:
-//   - && (and): if ANY server-resolvable part is false, the whole expression
-//     is false (short-circuit). Remaining agent-only parts are passed through.
-//   - || (or): if ANY server-resolvable part is true, the whole expression
-//     is true (short-circuit). Remaining agent-only parts are dropped.
+// Semantics preserved exactly:
+//   - Server-resolvable builtins (os_family/distro/arch/os/version_ge/
+//     has_display) are evaluated here against traits.
+//   - Agent-only builtins (has_command, file_exists, …) are left unknown.
+//   - If the whole expression reduces to a definite value, return
+//     (result, "") — the module/resource is included or dropped here.
+//   - If trait-dependent parts remain unknown after short-circuit reduction,
+//     return (true, <residual expression>) so the agent re-evaluates the
+//     remainder against its own traits — exactly as before.
+//
+// A parse error is treated conservatively as "defer to the agent" (include
+// with the original expression), so a malformed expression can never silently
+// drop a module server-side; the agent (and publish-time validation) surface
+// the error.
 func EvalModuleWhenServerSide(when string, traits map[string]any) (include bool, agentWhen string) {
 	if when == "" {
 		return true, ""
 	}
 
-	// If fully server-resolvable, evaluate directly.
-	if isFullyServerResolvable(when) {
-		return evalBuiltinsServerSide(when, traits), ""
+	expr, err := conditionals.ParseWhenExpr(when)
+	if err != nil {
+		return true, when
 	}
 
-	// Mixed expression — try to short-circuit on && and ||.
-	// Agent parser uses "and"/"or" keywords (not &&/||), so remaining
-	// parts are always joined with " and " / " or ".
-	for _, sep := range []string{" && ", " and "} {
-		if strings.Contains(when, sep) {
-			parts := strings.Split(when, sep)
-			var remaining []string
-			for _, part := range parts {
-				part = strings.TrimSpace(part)
-				if isFullyServerResolvable(part) {
-					if !evalBuiltinsServerSide(part, traits) {
-						return false, "" // short-circuit: one false → all false
-					}
-				} else {
-					remaining = append(remaining, part)
-				}
+	// Reduce server-resolvable function calls against traits; agent-only
+	// calls and any var refs are left in place for TristateEval to mark
+	// unknown.
+	reduced := reduceServerSideFuncs(expr, traits)
+
+	if result := conditionals.TristateEval(reduced); result != nil {
+		return *result, ""
+	}
+
+	// Some trait-dependent (agent-only) part remains — pass the residual
+	// expression through for the agent to finish. ExprString renders the
+	// canonical form (keywords, parens where needed) the agent parser reads.
+	return true, conditionals.ExprString(reduced)
+}
+
+// reduceServerSideFuncs walks a when AST and replaces every
+// server-resolvable builtin FuncCallExpr with a concrete BoolLitExpr
+// (evaluated against traits). Agent-only builtins, var refs, and string
+// literals are left untouched so TristateEval can treat them as unknown.
+func reduceServerSideFuncs(expr conditionals.WhenExpr, traits map[string]any) conditionals.WhenExpr {
+	switch e := expr.(type) {
+	case *conditionals.FuncCallExpr:
+		if serverSideBuiltins[e.Name] {
+			arg := ""
+			if len(e.Args) > 0 {
+				arg = e.Args[0]
 			}
-			if len(remaining) == 0 {
-				return true, ""
-			}
-			return true, strings.Join(remaining, " and ")
+			return &conditionals.BoolLitExpr{Value: evalTraitFunc(e.Name, arg, traits)}
 		}
-	}
-
-	for _, sep := range []string{" || ", " or "} {
-		if strings.Contains(when, sep) {
-			parts := strings.Split(when, sep)
-			var remaining []string
-			for _, part := range parts {
-				part = strings.TrimSpace(part)
-				if isFullyServerResolvable(part) {
-					if evalBuiltinsServerSide(part, traits) {
-						return true, "" // short-circuit: one true → all true
-					}
-				} else {
-					remaining = append(remaining, part)
-				}
-			}
-			if len(remaining) == 0 {
-				return false, ""
-			}
-			return true, strings.Join(remaining, " or ")
+		return e
+	case *conditionals.NotWhenExpr:
+		return &conditionals.NotWhenExpr{Operand: reduceServerSideFuncs(e.Operand, traits)}
+	case *conditionals.AndWhenExpr:
+		return &conditionals.AndWhenExpr{
+			Left:  reduceServerSideFuncs(e.Left, traits),
+			Right: reduceServerSideFuncs(e.Right, traits),
 		}
+	case *conditionals.OrWhenExpr:
+		return &conditionals.OrWhenExpr{
+			Left:  reduceServerSideFuncs(e.Left, traits),
+			Right: reduceServerSideFuncs(e.Right, traits),
+		}
+	case *conditionals.EqExpr:
+		return &conditionals.EqExpr{
+			Left:  reduceServerSideFuncs(e.Left, traits),
+			Right: reduceServerSideFuncs(e.Right, traits),
+		}
+	case *conditionals.NeqExpr:
+		return &conditionals.NeqExpr{
+			Left:  reduceServerSideFuncs(e.Left, traits),
+			Right: reduceServerSideFuncs(e.Right, traits),
+		}
+	default:
+		// BoolLitExpr, VarRefExpr, StringLitExpr — pass through unchanged.
+		return expr
 	}
-
-	// Single agent-only function — pass through.
-	return true, when
 }

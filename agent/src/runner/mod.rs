@@ -740,6 +740,18 @@ fn execute_resource(
             .and_then(|v| v.parse().ok())
             .unwrap_or(default_timeout);
 
+        // Pass the computed default down so subprocess-spawning executors can
+        // enforce a kill-on-timeout ceiling internally rather than relying on
+        // the recv_timeout below — which detects a timeout but cannot kill the
+        // hung child, blocking the whole convergence cycle at scope exit. The
+        // exec executor consults this for its no-explicit-`timeout:` path; a
+        // resource that sets its own `timeout:` already wins via that param, so
+        // injecting the default is harmless there.
+        params.insert(
+            "_default_timeout_secs".to_string(),
+            timeout_secs.to_string(),
+        );
+
         // Execute with timeout using a scoped thread + channel.
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::scope(|s| {

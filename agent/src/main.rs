@@ -1101,15 +1101,54 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         }
     };
 
-    let mut client = checkin::client::Client::connect(
-        &addr,
-        ca.as_deref(),
-        cert.as_deref(),
-        key.as_deref(),
-        &envoy_id,
-        priv_key,
-    )
-    .await?;
+    // Set up cancellation on SIGINT/SIGTERM before the initial connect so a
+    // server that's down at agent boot can be retried (and cancelled) rather
+    // than exiting the process. The in-loop Backoff only engages after the
+    // first connect succeeds, so we mirror it here for the boot-time path.
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let cancel_clone = cancel.clone();
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        info!("received shutdown signal");
+        cancel_clone.cancel();
+    });
+
+    // Initial connect with cancel-aware exponential backoff. A boot-time
+    // server outage is retried indefinitely (the agent must never crash on
+    // server unavailability) until the server returns or shutdown is
+    // requested. Behavior once connected is unchanged.
+    let mut client = {
+        let mut bo = checkin::backoff::Backoff::new();
+        loop {
+            if cancel.is_cancelled() {
+                info!("shutdown requested before initial connect; exiting");
+                return Ok(());
+            }
+            match checkin::client::Client::connect(
+                &addr,
+                ca.as_deref(),
+                cert.as_deref(),
+                key.as_deref(),
+                &envoy_id,
+                priv_key.clone(),
+            )
+            .await
+            {
+                Ok(c) => break c,
+                Err(e) => {
+                    let wait = bo.next_backoff();
+                    warn!(error = %e, retry_in = ?wait, "initial server connect failed; retrying");
+                    tokio::select! {
+                        _ = cancel.cancelled() => {
+                            info!("shutdown requested during initial connect backoff; exiting");
+                            return Ok(());
+                        }
+                        _ = tokio::time::sleep(wait) => {}
+                    }
+                }
+            }
+        }
+    };
 
     client.set_agent_version(VERSION);
 
@@ -1144,14 +1183,8 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let mut executors = runner::build_executors_with_snapshots(&os_family, &os_distro, Some(snapshot_mgr));
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
 
-    // Set up cancellation on SIGINT/SIGTERM.
-    let cancel = tokio_util::sync::CancellationToken::new();
-    let cancel_clone = cancel.clone();
-    tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
-        info!("received shutdown signal");
-        cancel_clone.cancel();
-    });
+    // (Cancellation token + signal handler were set up before the initial
+    // connect above so a boot-time outage is retried rather than fatal.)
 
     // Open persistent state store for offline convergence.
     let state_dir = platform::paths::default_state_dir();

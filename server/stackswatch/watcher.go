@@ -134,9 +134,22 @@ func (w *Watcher) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			slog.Info("stackswatch: stopping")
 			return nil
-		case _, ok := <-watcher.Events:
+		case ev, ok := <-watcher.Events:
 			if !ok {
 				return errors.New("stackswatch: watcher channel closed")
+			}
+			// A renamed/recreated refs subdir (e.g. refs/heads replaced
+			// during a gc, or a namespace dir appearing later) drops the
+			// boot-time inotify watch on the old inode. On a CREATE for a
+			// directory under refs/, re-Add the watch so updates keep
+			// flowing. Errors are best-effort (the dir may vanish again).
+			if ev.Op.Has(fsnotify.Create) {
+				if info, statErr := os.Stat(ev.Name); statErr == nil && info.IsDir() {
+					if err := watcher.Add(ev.Name); err != nil {
+						slog.Warn("stackswatch: failed to re-watch created subdir",
+							"path", ev.Name, "error", err)
+					}
+				}
 			}
 			if quiesce == nil {
 				quiesce = time.NewTimer(QuiesceDebounce)

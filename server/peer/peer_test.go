@@ -214,6 +214,37 @@ func TestServiceSyncStream(t *testing.T) {
 	}
 }
 
+// TestServiceSyncStreamPrimaryRejectsPush pins B12: a primary must reject
+// an incoming replication push from another (superseded) primary, rather
+// than write it to disk — otherwise two primaries overwrite each other's
+// stacks/secrets/TLS state (split-brain).
+func TestServiceSyncStreamPrimaryRejectsPush(t *testing.T) {
+	root := t.TempDir()
+	svc := NewService(root, "primary", nil)
+
+	stream := newMockSyncStream(context.Background())
+	stream.recvCh <- &pb.PeerSyncMessage{
+		Payload: &pb.PeerSyncMessage_FileChange{
+			FileChange: &pb.PeerFileChange{
+				Path:    "stacks/modules/nginx.vgo",
+				Content: []byte("package: nginx\n"),
+				Mode:    0o644,
+			},
+		},
+	}
+	stream.close()
+
+	err := svc.SyncStream(stream)
+	if err == nil {
+		t.Fatal("expected SyncStream to reject incoming push on a primary")
+	}
+
+	// The file must NOT have been written.
+	if _, statErr := os.Stat(filepath.Join(root, "stacks/modules/nginx.vgo")); statErr == nil {
+		t.Error("primary wrote an incoming replicated file — split-brain protection failed")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestServiceSyncStreamDeletion
 // ---------------------------------------------------------------------------

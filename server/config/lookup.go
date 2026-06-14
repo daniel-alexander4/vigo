@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -315,7 +316,20 @@ func ResolveLookupsInAttributes(attrs map[string]any, hostname string, tags []st
 		if !IsLookupTable(v) {
 			continue
 		}
-		resolved, err := ResolveLookup(v.(map[string]any), nil, hostname, tags, traits)
+		table := v.(map[string]any)
+		// The lookup table is a YAML-decoded map[string]any with no
+		// preserved key order, so same-specificity scalar arms would
+		// tie-break on Go map iteration order — nondeterministic across
+		// check-ins. Pass a stable (sorted) key order so ties resolve
+		// deterministically. (List lookups union all arms order-
+		// independently, so they are unaffected by the order; sorting is
+		// harmless there.)
+		keyOrder := make([]string, 0, len(table))
+		for tk := range table {
+			keyOrder = append(keyOrder, tk)
+		}
+		sort.Strings(keyOrder)
+		resolved, err := ResolveLookup(table, keyOrder, hostname, tags, traits)
 		if err != nil {
 			return fmt.Errorf("attribute %q: %w", k, err)
 		}

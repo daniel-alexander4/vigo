@@ -113,6 +113,14 @@ func (s *Service) SyncStream(stream grpc.BidiStreamingServer[pb.PeerSyncMessage,
 
 		switch p := msg.Payload.(type) {
 		case *pb.PeerSyncMessage_FileChange:
+			// Split-brain guard: a primary must never accept replication
+			// from another primary — that would let a superseded primary
+			// overwrite the live primary's stacks/secrets/TLS state. Reject
+			// the push; the sender is expected to detect it's been
+			// superseded and fall back to peer mode.
+			if s.Role() == "primary" {
+				return fmt.Errorf("refusing incoming sync: this server is primary (split-brain protection)")
+			}
 			fc := p.FileChange
 			ack := s.handleFileChange(fc, &needsConfigReload)
 			if sendErr := stream.Send(&pb.PeerSyncMessage{
@@ -122,6 +130,9 @@ func (s *Service) SyncStream(stream grpc.BidiStreamingServer[pb.PeerSyncMessage,
 			}
 
 		case *pb.PeerSyncMessage_FullSync:
+			if s.Role() == "primary" {
+				return fmt.Errorf("refusing incoming full sync: this server is primary (split-brain protection)")
+			}
 			fs := p.FullSync
 			slog.Info("peer full sync received", "file_count", len(fs.GetFiles()))
 			for _, fc := range fs.GetFiles() {

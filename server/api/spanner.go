@@ -122,8 +122,8 @@ func (h *SpannerHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 				NoData:     p.Convergence.NoData,
 				Offline:    p.Convergence.Offline,
 			}
-			if !p.UpdatedAt.IsZero() {
-				view.SnapshotAgeSeconds = int64(now.Sub(p.UpdatedAt).Seconds())
+			if u := p.UpdatedAt(); !u.IsZero() {
+				view.SnapshotAgeSeconds = int64(now.Sub(u).Seconds())
 			}
 			resp.PeerObservability = append(resp.PeerObservability, view)
 		}
@@ -292,8 +292,8 @@ func (h *SpannerHandler) handlePeerBoltDetail(w http.ResponseWriter, r *http.Req
 		NoData:     p.Convergence.NoData,
 		Offline:    p.Convergence.Offline,
 	}
-	if !p.UpdatedAt.IsZero() {
-		view.SnapshotAgeSeconds = int64(time.Since(p.UpdatedAt).Seconds())
+	if u := p.UpdatedAt(); !u.IsZero() {
+		view.SnapshotAgeSeconds = int64(time.Since(u).Seconds())
 	}
 	writeJSON(w, r, http.StatusOK, view)
 }

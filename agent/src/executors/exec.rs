@@ -404,15 +404,33 @@ fn execute_exec(
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(nice_default);
 
-    // Parse optional per-process timeout. No default — operator sets it
-    // explicitly per resource because realistic scan durations span three
-    // orders of magnitude (seconds for chkrootkit, hours for aide on a
-    // big disk). When set, foreground execs get killed on expiry; a
-    // background exec gets killed by its reaper thread, which then
-    // clears the bg_pids slot so the next cycle respawns.
+    // Parse optional per-process timeout. The operator-facing `timeout:` has
+    // no default — realistic scan durations span three orders of magnitude
+    // (seconds for chkrootkit, hours for aide on a big disk). When set,
+    // foreground execs get killed on expiry; a background exec gets killed by
+    // its reaper thread, which then clears the bg_pids slot so the next cycle
+    // respawns.
+    //
+    // When `timeout:` is unset, foreground execs fall back to the runner's
+    // computed per-resource default, injected as `_default_timeout_secs`. This
+    // is the kill-on-timeout backstop for the hot convergence path: without it
+    // a hung child under `Command::output()` would block the whole cycle (the
+    // runner's recv_timeout detects the timeout but cannot kill the child).
+    // Background execs are exempt — they return immediately and self-reap.
     let timeout_dur = params
         .get("timeout")
-        .and_then(|s| parse_duration(s));
+        .and_then(|s| parse_duration(s))
+        .or_else(|| {
+            if background {
+                None
+            } else {
+                params
+                    .get("_default_timeout_secs")
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .filter(|&n| n > 0)
+                    .map(std::time::Duration::from_secs)
+            }
+        });
 
     // Background mode: spawn the command without waiting for completion.
     if background {
@@ -1728,5 +1746,66 @@ mod tests {
         assert!(!err.contains("secret-cmd"), "command should be suppressed: {}", err);
         assert!(!err.contains("secret-err"), "output should be suppressed: {}", err);
         assert_eq!(result.resource_name, "[sensitive]");
+    }
+
+    // B10: a hung subprocess with no explicit `timeout:` must be killed by the
+    // runner-injected `_default_timeout_secs` ceiling rather than blocking
+    // forever under Command::output(). Uses a real DefaultRunner so an actual
+    // child is spawned and killed.
+    #[cfg(unix)]
+    #[test]
+    fn default_timeout_kills_hung_subprocess() {
+        let exec = ExecExecutor::new();
+        let start = Instant::now();
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "sleep 60"),
+                // Simulates the runner injecting its computed per-resource
+                // default for an exec resource that set no `timeout:` itself.
+                ("_default_timeout_secs", "1"),
+            ]),
+            false,
+        );
+        let elapsed = start.elapsed();
+        // Must have returned well before the 60s sleep — killed at ~1s + a
+        // 5s SIGTERM→SIGKILL grace, so allow generous slack for CI.
+        assert!(
+            elapsed < std::time::Duration::from_secs(20),
+            "hung subprocess should be killed via default timeout, took {:?}",
+            elapsed
+        );
+        assert!(result.error.is_some(), "timed-out exec should report an error");
+        let err = result.error.unwrap();
+        assert!(
+            err.contains("timed out"),
+            "error should mention timeout, got: {}",
+            err
+        );
+    }
+
+    // B10 precedence: an explicit `timeout:` still wins over the injected
+    // runner default. With timeout:1 the command is killed at ~1s regardless
+    // of a larger injected default.
+    #[cfg(unix)]
+    #[test]
+    fn explicit_timeout_wins_over_default() {
+        let exec = ExecExecutor::new();
+        let start = Instant::now();
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "sleep 60"),
+                ("timeout", "1"),
+                ("_default_timeout_secs", "300"),
+            ]),
+            false,
+        );
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_secs(20),
+            "explicit timeout:1 should kill regardless of larger default, took {:?}",
+            elapsed
+        );
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("timed out"));
     }
 }

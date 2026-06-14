@@ -33,8 +33,8 @@ func TestObservabilityCacheUpdateAndGet(t *testing.T) {
 	if got.Convergence.Total != 1 || got.Convergence.Converged != 1 {
 		t.Errorf("counters not stored: %+v", got.Convergence)
 	}
-	if !got.UpdatedAt.Equal(now) {
-		t.Errorf("UpdatedAt = %v, want %v", got.UpdatedAt, now)
+	if !got.UpdatedAt().Equal(now) {
+		t.Errorf("UpdatedAt = %v, want %v", got.UpdatedAt(), now)
 	}
 }
 
@@ -96,6 +96,44 @@ func TestObservabilityCacheUpdateCountersOnly(t *testing.T) {
 	gotB := c.Get("peerB")
 	if gotB == nil || gotB.Convergence.Total != 7 || len(gotB.Envoys) != 0 {
 		t.Errorf("new-peer counter entry wrong: %+v", gotB)
+	}
+}
+
+// TestObservabilityCacheDualClock verifies a fast Tier-1 counter update
+// (stamped SentAt) cannot permanently block the slower Tier-2 full roster
+// snapshot (stamped ServedAt) — the dual-clock LWW fix. Before it, a single
+// shared UpdatedAt let a newer counter timestamp reject every later roster.
+func TestObservabilityCacheDualClock(t *testing.T) {
+	c := NewObservabilityCache()
+	t0 := time.Now()
+
+	// A full snapshot establishes the roster at t0.
+	c.UpdateFull("peerA", []EnvoyLite{{ID: "e1"}}, ConvergenceCounters{Total: 1}, t0)
+
+	// A fast Tier-1 counter digest lands with a NEWER timestamp (t0+5s).
+	if !c.UpdateCounters("peerA", ConvergenceCounters{Total: 1, Failed: 1}, t0.Add(5*time.Second)) {
+		t.Fatal("newer counter update should be accepted")
+	}
+
+	// A Tier-2 roster snapshot that is newer than the original roster but
+	// OLDER than the counter digest must still replace the roster — it is
+	// gated on its own roster clock, not the counter clock.
+	if !c.UpdateFull("peerA", []EnvoyLite{{ID: "e1"}, {ID: "e2"}}, ConvergenceCounters{Total: 2}, t0.Add(2*time.Second)) {
+		t.Fatal("a roster snapshot newer than the prior roster must land even when a faster counter update raced ahead")
+	}
+	got := c.Get("peerA")
+	if len(got.Envoys) != 2 {
+		t.Errorf("roster snapshot was wrongly rejected by the counter clock: %+v", got.Envoys)
+	}
+	// The newer counter value should be preserved (counters are LWW on
+	// their own clock; the roster snapshot's counters were older).
+	if got.Convergence.Failed != 1 {
+		t.Errorf("newer counters clobbered by older roster snapshot: %+v", got.Convergence)
+	}
+
+	// A stale roster (older than the current roster clock) is still dropped.
+	if c.UpdateFull("peerA", []EnvoyLite{{ID: "stale"}}, ConvergenceCounters{}, t0.Add(time.Second)) {
+		t.Error("a roster snapshot older than the roster clock must be rejected")
 	}
 }
 

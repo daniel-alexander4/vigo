@@ -87,13 +87,38 @@ func (c ConvergenceCounters) Add(o ConvergenceCounters) ConvergenceCounters {
 }
 
 // PeerObservability is one peer bolt's last-known fleet state. It is
-// replaced wholesale on each gossip update — never merged. UpdatedAt
-// is the snapshot's ServedAt (the publishing bolt's clock), the
-// last-writer-wins ordering key.
+// replaced wholesale on each gossip update — never merged.
+//
+// Two LWW clocks are tracked separately so a fast Tier-1 counter update
+// can never block the slower Tier-2 full roster snapshot (and vice
+// versa):
+//
+//   - RosterUpdatedAt is gated and written only by UpdateFull (the
+//     Tier-2 roster snapshot's ServedAt). It is the LWW key for the
+//     envoy roster.
+//   - CountersUpdatedAt is gated and written by UpdateCounters (the
+//     Tier-1 counter digest's SentAt), and also bumped by UpdateFull
+//     since a full snapshot carries fresh counters too.
+//
+// Each path guards only against its own clock running backwards.
+// UpdatedAt is the freshness signal surfaced to operators — the more
+// recent of the two.
 type PeerObservability struct {
 	Envoys      []EnvoyLite
 	Convergence ConvergenceCounters
-	UpdatedAt   time.Time
+
+	RosterUpdatedAt   time.Time
+	CountersUpdatedAt time.Time
+}
+
+// UpdatedAt returns the freshness of this entry — the more recent of the
+// roster and counter clocks. Surfaced in admin responses (OldestUpdate)
+// so operators see how fresh a gossip-aggregated answer is.
+func (p *PeerObservability) UpdatedAt() time.Time {
+	if p.CountersUpdatedAt.After(p.RosterUpdatedAt) {
+		return p.CountersUpdatedAt
+	}
+	return p.RosterUpdatedAt
 }
 
 // ObservabilityCache is the in-memory, mutex-guarded store of every
@@ -119,13 +144,26 @@ func NewObservabilityCache() *ObservabilityCache {
 func (c *ObservabilityCache) UpdateFull(boltPubkeyHex string, envoys []EnvoyLite, conv ConvergenceCounters, servedAt time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if existing, ok := c.peers[boltPubkeyHex]; ok && servedAt.Before(existing.UpdatedAt) {
+	// Gate only against the roster clock — a fresh full snapshot must be
+	// able to land even if a faster counter update bumped CountersUpdatedAt
+	// past servedAt.
+	if existing, ok := c.peers[boltPubkeyHex]; ok && servedAt.Before(existing.RosterUpdatedAt) {
 		return false
 	}
+	// The roster always takes this snapshot. Counters are LWW on their own
+	// clock: a full snapshot carries fresh counters, but if a faster Tier-1
+	// digest already wrote newer counters, keep those.
+	countersAt := servedAt
+	counters := conv
+	if existing, ok := c.peers[boltPubkeyHex]; ok && existing.CountersUpdatedAt.After(countersAt) {
+		countersAt = existing.CountersUpdatedAt
+		counters = existing.Convergence
+	}
 	c.peers[boltPubkeyHex] = &PeerObservability{
-		Envoys:      envoys,
-		Convergence: conv,
-		UpdatedAt:   servedAt,
+		Envoys:            envoys,
+		Convergence:       counters,
+		RosterUpdatedAt:   servedAt,
+		CountersUpdatedAt: countersAt,
 	}
 	return true
 }
@@ -140,18 +178,20 @@ func (c *ObservabilityCache) UpdateCounters(boltPubkeyHex string, conv Convergen
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	existing, ok := c.peers[boltPubkeyHex]
-	if ok && servedAt.Before(existing.UpdatedAt) {
+	// Gate only against the counter clock — a counter update must never be
+	// blocked by (nor advance) the roster clock.
+	if ok && servedAt.Before(existing.CountersUpdatedAt) {
 		return false
 	}
 	if !ok {
 		c.peers[boltPubkeyHex] = &PeerObservability{
-			Convergence: conv,
-			UpdatedAt:   servedAt,
+			Convergence:       conv,
+			CountersUpdatedAt: servedAt,
 		}
 		return true
 	}
 	existing.Convergence = conv
-	existing.UpdatedAt = servedAt
+	existing.CountersUpdatedAt = servedAt
 	return true
 }
 
@@ -216,8 +256,9 @@ func (c *ObservabilityCache) OldestUpdate() time.Time {
 	defer c.mu.RUnlock()
 	var oldest time.Time
 	for _, p := range c.peers {
-		if oldest.IsZero() || p.UpdatedAt.Before(oldest) {
-			oldest = p.UpdatedAt
+		u := p.UpdatedAt()
+		if oldest.IsZero() || u.Before(oldest) {
+			oldest = u
 		}
 	}
 	return oldest
@@ -229,8 +270,9 @@ func copyPeer(p *PeerObservability) *PeerObservability {
 	envoys := make([]EnvoyLite, len(p.Envoys))
 	copy(envoys, p.Envoys)
 	return &PeerObservability{
-		Envoys:      envoys,
-		Convergence: p.Convergence,
-		UpdatedAt:   p.UpdatedAt,
+		Envoys:            envoys,
+		Convergence:       p.Convergence,
+		RosterUpdatedAt:   p.RosterUpdatedAt,
+		CountersUpdatedAt: p.CountersUpdatedAt,
 	}
 }

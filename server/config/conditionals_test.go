@@ -6,8 +6,30 @@ package config
 import (
 	"testing"
 
+	"git.alexander4.io/vigo/server/conditionals"
 	"gopkg.in/yaml.v3"
 )
+
+// conditionalsParse parses a when expression via the canonical parser.
+func conditionalsParse(when string) (conditionals.WhenExpr, error) {
+	return conditionals.ParseWhenExpr(when)
+}
+
+// conditionalsEvalFuncs fully evaluates an expression via the canonical
+// parser, resolving the server-side builtins against traits (mirroring what
+// EvalModuleWhenServerSide resolves) and treating var refs as false.
+func conditionalsEvalFuncs(expr conditionals.WhenExpr, traits map[string]any) (bool, error) {
+	return conditionals.EvalWhenExprWithFuncs(expr,
+		func(string) bool { return false },
+		func(name string, args []string) (bool, error) {
+			arg := ""
+			if len(args) > 0 {
+				arg = args[0]
+			}
+			return evalTraitFunc(name, arg, traits), nil
+		},
+	)
+}
 
 // --- EvaluateResourceWhen tests ---
 
@@ -323,5 +345,102 @@ configcrates:
 	}
 	if out.Configcrates[1].When != "is_debian" {
 		t.Errorf("Configcrates[1].When = %q, want is_debian", out.Configcrates[1].When)
+	}
+}
+
+// --- EvalModuleWhenServerSide canonical-parser agreement (B20) ---
+
+// evalCanonical fully evaluates a when: expression through the canonical
+// server/conditionals AST parser, resolving the same server-side builtins
+// EvalModuleWhenServerSide resolves. It is the oracle these tests check the
+// server-side filter against — proving the filter now shares the canonical
+// parser's precedence/parenthesization semantics instead of the old
+// string-split evaluator's.
+func evalCanonical(t *testing.T, when string, traits map[string]any) bool {
+	t.Helper()
+	expr, err := conditionalsParse(when)
+	if err != nil {
+		t.Fatalf("canonical parse of %q failed: %v", when, err)
+	}
+	result, err := conditionalsEvalFuncs(expr, traits)
+	if err != nil {
+		t.Fatalf("canonical eval of %q failed: %v", when, err)
+	}
+	return result
+}
+
+func TestEvalModuleWhenServerSide_AgreesWithCanonicalParser(t *testing.T) {
+	traits := map[string]any{
+		"os.family": "debian",
+		"os.distro": "ubuntu",
+		"os.arch":   "amd64",
+	}
+
+	// All builtins are server-resolvable, so EvalModuleWhenServerSide must
+	// return a definite (include, "") and that include must match the
+	// canonical parser's full evaluation. Precedence and parens are the
+	// cases the old string-split evaluator got wrong.
+	cases := []string{
+		"os_family('debian')",
+		"os_family('rhel')",
+		"os_family('debian') and arch('amd64')",
+		"os_family('rhel') or arch('amd64')",
+		// Precedence: `and` binds tighter than `or`, so this is
+		// (rhel and amd64) or ubuntu == false or true == true.
+		"os_family('rhel') and arch('amd64') or distro('ubuntu')",
+		// Same operands, parenthesized to force the other grouping:
+		// rhel and (amd64 or ubuntu) == false and true == false.
+		"os_family('rhel') and (arch('amd64') or distro('ubuntu'))",
+		"not os_family('rhel')",
+		"not (os_family('debian') and arch('arm64'))",
+		"(os_family('debian') or os_family('rhel')) and arch('amd64')",
+	}
+
+	for _, when := range cases {
+		t.Run(when, func(t *testing.T) {
+			include, agentWhen := EvalModuleWhenServerSide(when, traits)
+			if agentWhen != "" {
+				t.Fatalf("expected fully server-resolved (empty agentWhen), got residual %q", agentWhen)
+			}
+			want := evalCanonical(t, when, traits)
+			if include != want {
+				t.Errorf("EvalModuleWhenServerSide(%q) = %v, canonical parser = %v", when, include, want)
+			}
+		})
+	}
+}
+
+// TestEvalModuleWhenServerSide_DefersAgentBuiltins pins the preserved
+// deferral behavior: an expression with an agent-only builtin that can't be
+// short-circuited server-side must be passed through unchanged (include=true,
+// non-empty residual) for the agent to finish.
+func TestEvalModuleWhenServerSide_DefersAgentBuiltins(t *testing.T) {
+	traits := map[string]any{"os.family": "debian"}
+
+	// Pure agent-only builtin: deferred.
+	include, agentWhen := EvalModuleWhenServerSide("has_command('docker')", traits)
+	if !include || agentWhen == "" {
+		t.Errorf("agent-only builtin should defer: include=%v agentWhen=%q", include, agentWhen)
+	}
+
+	// AND short-circuit: a server-false part makes the whole expression
+	// false without deferring.
+	include, agentWhen = EvalModuleWhenServerSide("os_family('rhel') and has_command('docker')", traits)
+	if include || agentWhen != "" {
+		t.Errorf("server-false AND part should drop without deferral: include=%v agentWhen=%q", include, agentWhen)
+	}
+
+	// OR short-circuit: a server-true part makes the whole expression true
+	// without deferring.
+	include, agentWhen = EvalModuleWhenServerSide("os_family('debian') or has_command('docker')", traits)
+	if !include || agentWhen != "" {
+		t.Errorf("server-true OR part should include without deferral: include=%v agentWhen=%q", include, agentWhen)
+	}
+
+	// Mixed AND where the server part is true: the agent-only remainder is
+	// deferred (include=true, residual contains the agent builtin).
+	include, agentWhen = EvalModuleWhenServerSide("os_family('debian') and has_command('docker')", traits)
+	if !include || agentWhen == "" {
+		t.Errorf("server-true AND agent-builtin should defer remainder: include=%v agentWhen=%q", include, agentWhen)
 	}
 }

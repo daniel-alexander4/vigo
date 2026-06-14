@@ -19,7 +19,7 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `logoutput` | No | `true` | When `false`, suppress stdout/stderr in error messages. |
 | `background` | No | `false` | When `true`, spawn the command and return immediately without waiting for completion. Guards still run synchronously. No output capture or exit code checking. Background commands auto-nice to 19 unless overridden by `nice`. |
 | `nice` | No | `0` | CPU/IO priority level 0–19 (0 = normal, 19 = lowest). Background execs default to 19. On Linux, also sets I/O priority: `nice >= 15` drops into the ionice `idle` class (only runs I/O when nothing else wants the disk); `nice < 15` uses ionice best-effort with a proportional level. |
-| `timeout` | No | -- | Per-process execution ceiling. No default — unset means no timeout. Accepts a bare integer (seconds) or a duration suffix: `s`, `m`, `h` (e.g., `"30s"`, `"45m"`, `"4h"`). On expiry the agent SIGTERMs the child's process group, waits 5s, then SIGKILLs. Background execs release their PID tracking on timeout so the next convergence cycle is free to respawn. |
+| `timeout` | No | -- | Per-process execution ceiling. No operator-facing default — but when unset, foreground execs still inherit the runner's per-resource default ceiling (300s for `exec`) so a wedged child can't freeze the convergence cycle; set `timeout:` explicitly to raise or lower it. Accepts a bare integer (seconds) or a duration suffix: `s`, `m`, `h` (e.g., `"30s"`, `"45m"`, `"4h"`). On expiry the agent SIGTERMs the child's process group, waits 5s, then SIGKILLs. Background execs are exempt from the default and run unbounded unless `timeout:` is set; they release their PID tracking on timeout so the next convergence cycle is free to respawn. |
 | `retries` | No | `0` | Number of retry attempts on failure. Only the command is retried — guards are not re-evaluated. Background execs are not retried. |
 | `retry_delay` | No | `5` | Seconds to wait between retry attempts. |
 | `sensitive` | No | `false` | When `true`, suppress the command string from result names, logs, and error messages. Distinct from `logoutput: false` which only suppresses stdout/stderr. |
@@ -174,8 +174,10 @@ resources:
 ### With timeout
 
 Kill the command (and its whole process group) if it runs longer than the
-given duration. Unset by default — the agent will wait forever without
-`timeout:`. For background scans this is how you keep a wedged scan from
+given duration. When unset, a foreground exec falls back to the runner's
+per-resource default ceiling (300s for `exec`); set `timeout:` to raise it for
+long-running work like a full backup, or lower it for a quick command. Background
+execs are exempt from the default — set `timeout:` to keep a wedged scan from
 lingering across cycles.
 
 ```yaml

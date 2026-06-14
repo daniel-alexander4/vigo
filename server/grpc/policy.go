@@ -204,10 +204,36 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 		return bundle
 	}
 
-	filtered := &pb.PolicyBundle{
-		VarsJson:      bundle.VarsJson,
-		PolicyVersion: bundle.PolicyVersion,
+	// Short-circuit: if no configcrate (or any of its resources) carries a
+	// when:, there is nothing to filter — return the input bundle unchanged
+	// and avoid the clone. (A resource-level when: still requires the filter
+	// pass even when the module has none.)
+	needsFilter := false
+	for _, mod := range bundle.Configcrates {
+		if mod.When != "" {
+			needsFilter = true
+			break
+		}
+		for _, res := range mod.Resources {
+			if res.When != "" {
+				needsFilter = true
+				break
+			}
+		}
+		if needsFilter {
+			break
+		}
 	}
+	if !needsFilter {
+		return bundle
+	}
+
+	// Clone the whole bundle so every signed/scalar field (MerkleRoot,
+	// VarOrder, CustomTraits, MatchedPattern, Environment, Roles,
+	// StreamEdit*, SecretsEpoch, …) is preserved; only the Configcrates
+	// slice is rebuilt from the trait-filtered set below.
+	filtered := proto.Clone(bundle).(*pb.PolicyBundle)
+	filtered.Configcrates = nil
 
 	for _, mod := range bundle.Configcrates {
 		// Module-level when: filtering.

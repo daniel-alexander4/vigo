@@ -227,6 +227,32 @@ steps:
 	}
 }
 
+// TestEngine_LoadRejectsSelfReferentialBranch pins B11: a step whose
+// on_success names itself is an unconditional infinite loop and must be
+// rejected at Load, not discovered at runtime (where it would spin a
+// detached goroutine forever until the step-execution cap trips).
+func TestEngine_LoadRejectsSelfReferentialBranch(t *testing.T) {
+	dir := t.TempDir()
+	writeWorkflow(t, dir, "loop.vgo", `
+name: loop
+steps:
+  - name: spin
+    command: echo hi
+    target: "*"
+    on_success: spin
+`)
+
+	engine := NewEngine(nil, nil, nil)
+	t.Cleanup(engine.Close)
+	err := engine.Load(dir)
+	if err == nil {
+		t.Fatal("expected Load to reject a self-referential on_success branch")
+	}
+	if !strings.Contains(err.Error(), "loop") || !strings.Contains(err.Error(), "spin") {
+		t.Errorf("expected error to name workflow + step, got: %v", err)
+	}
+}
+
 // TestEngine_LoadAllowsNamedTaskSteps pins the boundary: workflow load
 // validates only step.Command. step.Task references stay opaque here —
 // task-store-load enforces the same rule on the referenced script's

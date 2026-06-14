@@ -6485,8 +6485,8 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 		if active := row.EnvoyCount - row.Offline; active > 0 {
 			row.ConvergencePct = float64(row.Converged) / float64(active) * 100
 		}
-		if !p.UpdatedAt.IsZero() {
-			row.SnapshotAgeSeconds = int64(now.Sub(p.UpdatedAt).Seconds())
+		if u := p.UpdatedAt(); !u.IsZero() {
+			row.SnapshotAgeSeconds = int64(now.Sub(u).Seconds())
 		}
 		bolts = append(bolts, row)
 		totalEnvoys += row.EnvoyCount
@@ -6600,8 +6600,8 @@ func (h *Handler) BoltDetail(w http.ResponseWriter, r *http.Request) {
 	if active := data.EnvoyCount - data.Offline; active > 0 {
 		data.ConvergencePct = float64(data.Converged) / float64(active) * 100
 	}
-	if !p.UpdatedAt.IsZero() {
-		data.SnapshotAgeSeconds = int64(time.Since(p.UpdatedAt).Seconds())
+	if u := p.UpdatedAt(); !u.IsZero() {
+		data.SnapshotAgeSeconds = int64(time.Since(u).Seconds())
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "bolt-detail", data)

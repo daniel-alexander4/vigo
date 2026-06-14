@@ -206,9 +206,25 @@ func (h *ConfigHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 // that watches fleet compliance for the rollback window. If compliance drops
 // below the threshold, the previous config snapshot is automatically restored.
 func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
-	if err := h.configStore.Reload(); err != nil {
+	if err := h.reloadAfterChange(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
 		return
+	}
+
+	// Record tamper-evident audit event.
+	recordAudit(r.Context(), h.auditWriter, "config.reload", actorFromRequest(r), "rest", "config reloaded", "")
+
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// reloadAfterChange reloads the config store and runs the post-reload
+// side-effects every config-changing endpoint needs: bump the publish
+// counter, refresh the compliance snapshot, and (re)start the blast-radius
+// convergence monitor. Shared by ReloadConfig and Rollback so a manual
+// rollback applies live exactly the way a publish does.
+func (h *ConfigHandler) reloadAfterChange(ctx context.Context) error {
+	if err := h.configStore.Reload(); err != nil {
+		return err
 	}
 	if h.metrics != nil {
 		h.metrics.ConfigPublishesTotal.Inc()
@@ -232,11 +248,7 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		h.convergenceMonitor.Start(h.publishCfg.ConvergenceThreshold, window)
 	}
-
-	// Record tamper-evident audit event.
-	recordAudit(r.Context(), h.auditWriter, "config.reload", actorFromRequest(r), "rest", "config reloaded", "")
-
-	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
+	return nil
 }
 
 // SecretRotated marks a secret as rotated, triggering watch_secret resources
@@ -526,6 +538,15 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 
 	if err := publish.RollbackToVersion(h.historyDir, version, h.liveDir); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Reload so live check-ins immediately serve the rolled-back config —
+	// without this the store keeps serving the pre-rollback config from
+	// memory. Same reload + side-effects the ReloadConfig handler performs
+	// (and the auto-rollback path in server/publish/compliance_monitor.go).
+	if err := h.reloadAfterChange(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "rollback applied but config reload failed: "+err.Error())
 		return
 	}
 

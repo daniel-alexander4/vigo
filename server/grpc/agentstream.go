@@ -172,6 +172,28 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				return
 			}
 
+			// Re-check the revoked bit before processing any transacting
+			// message. The handshake validated the envoy once; a mid-stream
+			// revocation (vigocli envoys revoke) must stop the envoy from
+			// continuing to transact. O(1) lookup against the in-memory
+			// fleet index — mirrors the unary CheckIn revoked gate
+			// (checkin.go). Non-transacting control messages (TaskAck,
+			// TaskResult, QueryResponse) are server-initiated work the
+			// agent is merely completing, so they're exempt.
+			switch msg.GetMsg().(type) {
+			case *pb.AgentStreamMessage_CheckIn,
+				*pb.AgentStreamMessage_ReportResult,
+				*pb.AgentStreamMessage_ReportTraits,
+				*pb.AgentStreamMessage_Delta:
+				if s.fleetIndex != nil {
+					if _, exists, revoked := s.fleetIndex.GetEnvoyLite(envoyID); !exists || revoked {
+						slog.Warn("stream message from revoked/removed envoy; closing stream", "envoy_id", envoyID)
+						errCh <- status.Error(codes.PermissionDenied, "envoy is revoked")
+						return
+					}
+				}
+			}
+
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
 				if _, err := verifyCheckIn(stream.Context(), s.queries, m.CheckIn, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
@@ -273,6 +295,11 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				s.streamMgr.workCompleted(envoyID)
 
 			case *pb.AgentStreamMessage_Delta:
+				// Delta carries no per-message signature: the stream is
+				// mTLS-bound to this envoy at handshake (verifyCheckIn +
+				// GetEnvoyLite above), so handshake-binding is the accepted
+				// identity model for Delta. The revocation re-check above
+				// still gates it.
 				ack := s.handleDelta(envoyID, envoy.Hostname, m.Delta)
 				if err := stream.Send(&pb.ServerStreamMessage{
 					Msg: &pb.ServerStreamMessage_DeltaAck{DeltaAck: ack},
