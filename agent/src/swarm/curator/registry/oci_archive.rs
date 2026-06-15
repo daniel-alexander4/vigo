@@ -43,6 +43,12 @@ pub const INDEX_FILE: &str = "index.json";
 /// Top-level file present in legacy `docker save` archives; absent from OCI.
 pub const DOCKER_SAVE_MANIFEST: &str = "manifest.json";
 
+/// Upper bound on the up-front allocation for a single tar entry. The entries
+/// the shim reads (index.json, manifests, configs) are kilobytes; this only
+/// caps the pre-allocation against a crafted header declaring a huge size on a
+/// tiny entry — the read still grows to the real content if it's larger.
+const MAX_PREALLOC_BYTES: u64 = 8 * 1024 * 1024;
+
 /// Distinguishes the two tarball flavors `docker save` can produce. We only
 /// support [`ArchiveFormat::Oci`]; [`ArchiveFormat::DockerSave`] is rejected at
 /// the publish gate and again at registry-request time.
@@ -160,7 +166,13 @@ fn read_named_entry<R: Read + Seek>(reader: R, name: &str) -> Result<Option<Vec<
         let path = ent.path().context("reading tar entry path")?;
         let same = path.to_str().map(|p| p == name).unwrap_or(false);
         if same {
-            let mut buf = Vec::with_capacity(ent.size() as usize);
+            // Cap the pre-allocation by the attacker-declared tar size: a
+            // crafted header can claim a huge size on a tiny entry and OOM
+            // the agent on this single allocation. read_to_end still reads
+            // the real content (growing as needed), so honest entries larger
+            // than the cap are unaffected — only the up-front reserve is bounded.
+            let cap = (ent.size()).min(MAX_PREALLOC_BYTES) as usize;
+            let mut buf = Vec::with_capacity(cap);
             ent.read_to_end(&mut buf)?;
             return Ok(Some(buf));
         }
