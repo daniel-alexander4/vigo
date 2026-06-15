@@ -268,7 +268,6 @@ type Handler struct {
 	authEnabled       bool
 	authMethod        string
 	reportBuilder     *ReportBuilder
-	auditWriter       auditRecorder
 	integrationsCfg   config.IntegrationsSection
 	grcCfg            config.GRCSection
 	branding          config.BrandingSection
@@ -571,13 +570,6 @@ func (h *Handler) SetPeerService(svc *peer.Service) {
 // Call after NewHandler to avoid import cycles between ui and server/api.
 func (h *Handler) SetReportBuilder(rb *ReportBuilder) {
 	h.reportBuilder = rb
-}
-
-// SetAuditWriter wires the tamper-evident audit writer so privileged
-// UI handlers (waiver create/delete, etc.) can record events to the
-// hash chain. Nil is a no-op via the recordAudit helper.
-func (h *Handler) SetAuditWriter(w auditRecorder) {
-	h.auditWriter = w
 }
 
 // SetIntegrationsConfig stores the integrations config for dashboard status display.

@@ -135,7 +135,7 @@ func parseFlags(cmd string, args []string) config {
 	vigocliBin := fs.String("vigocli", "vigocli", "vigocli binary used to publish the fleet config (stacks → .live)")
 	skipPublish := fs.Bool("skip-publish", false, "create only: enroll + first-report without writing or publishing a config tree — envoys converge against whatever .live the target server already serves")
 	fleetDir := fs.String("fleet-dir", "alexander4", "stacks subdir the demo clouds nest under (e.g. alexander4); the harness owns <fleet-dir>/{aws,gcp} and removes only those on backout")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	tok := *adminToken
 	if tok == "" {

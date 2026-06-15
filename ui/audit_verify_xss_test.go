@@ -37,7 +37,8 @@ func TestAuditVerify_EscapesEntryContent(t *testing.T) {
 			actor       TEXT NOT NULL DEFAULT '',
 			source      TEXT NOT NULL DEFAULT '',
 			summary     TEXT NOT NULL DEFAULT '',
-			payload     TEXT NOT NULL DEFAULT '{}'
+			payload     TEXT NOT NULL DEFAULT '{}',
+			hash_version INTEGER NOT NULL DEFAULT 1
 		);`); err != nil {
 		t.Fatalf("create schema: %v", err)
 	}
