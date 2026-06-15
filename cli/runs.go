@@ -80,13 +80,13 @@ var runsShowCmd = &cobra.Command{
 				StartedAt     string `json:"startedAt"`
 				FinishedAt    string `json:"finishedAt"`
 				Status        string `json:"status"`
-				ResourceCount int32  `json:"moduleCount"`
+				ResourceCount int32  `json:"resourceCount"`
 				ChangedCount  int32  `json:"changedCount"`
 				FailedCount   int32  `json:"failedCount"`
 				SkippedCount  int32  `json:"skippedCount"`
 			} `json:"run"`
 			Results []struct {
-				ConfigcrateName string `json:"moduleName"`
+				ConfigcrateName string `json:"configcrateName"`
 				ResourceType    string `json:"resourceType"`
 				ResourceName    string `json:"resourceName"`
 				ActionTaken     string `json:"actionTaken"`
@@ -205,7 +205,7 @@ var runsDriftCmd = &cobra.Command{
 					Status    string `json:"status"`
 				} `json:"run"`
 				Results []struct {
-					ConfigcrateName string `json:"moduleName"`
+					ConfigcrateName string `json:"configcrateName"`
 					ResourceType    string `json:"resourceType"`
 					ResourceName    string `json:"resourceName"`
 					ActionTaken     string `json:"actionTaken"`

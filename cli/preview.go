@@ -56,7 +56,7 @@ func previewNode(idOrHostname string) error {
 	}
 	var resp struct {
 		Actions []struct {
-			ConfigcrateName    string `json:"moduleName"`
+			ConfigcrateName    string `json:"configcrateName"`
 			ResourceType  string `json:"resourceType"`
 			ResourceName  string `json:"resourceName"`
 			PlannedAction string `json:"plannedAction"`
