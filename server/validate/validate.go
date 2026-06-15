@@ -63,6 +63,14 @@ type Resource struct {
 	Notify      []string
 	Subscribes  []string
 	WatchSecret []string
+	// Case/CaseMatch carry a per-OS conditional block (`case:` selector +
+	// `match:` branches). The branch attributes live here, NOT in
+	// Attributes — so without them the required-attribute check could only
+	// see the base attrs and a branch omitting a required attr (e.g. the
+	// mandatory `state`) would slip through publish. CaseMatch maps each
+	// branch selector to that branch's attribute overlay.
+	Case      string
+	CaseMatch map[string]map[string]any
 }
 
 // Configcrate mirrors config.ConfigcrateDefinition for validation purposes.
@@ -697,10 +705,13 @@ func validateSchema(base Finding, res Resource) []Finding {
 
 	var findings []Finding
 
-	// Check required attributes. Skip if:
-	// - resource uses case/match (required attrs are inside conditional blocks)
-	// - state is "absent" (resource is being deleted, attributes are meaningless)
-	hasCase := res.Attributes["case"] != nil
+	// Check required attributes. A resource with a case/match block carries
+	// its required attrs inside the branches, so validate each branch's
+	// merged attributes (base ∪ branch) instead of the bare base — a branch
+	// omitting a required attr (e.g. the mandatory `state`) would otherwise
+	// slip through publish. (res.Attributes["case"] is the modlint adapter
+	// path, where case/match land untyped in Attributes.)
+	hasCase := len(res.CaseMatch) > 0 || res.Attributes["case"] != nil
 	isAbsent := attrString(res.Attributes, "state") == "absent"
 	if !hasCase && !isAbsent {
 		for attr, spec := range schema.Attrs {
@@ -714,6 +725,9 @@ func validateSchema(base Finding, res Resource) []Finding {
 				findings = append(findings, f)
 			}
 		}
+	}
+	if len(res.CaseMatch) > 0 {
+		findings = append(findings, validateCaseBranches(base, res, schema)...)
 	}
 
 	// Check absolute paths and modes.
@@ -741,6 +755,44 @@ func validateSchema(base Finding, res Resource) []Finding {
 		}
 	}
 
+	return findings
+}
+
+// validateCaseBranches checks required attributes against each case/match
+// branch's merged attributes (base ∪ branch), the same merge ExpandCase does
+// at check-in. Without this, branch-only required attrs (incl. the mandatory
+// `state`) are never validated at publish. An absent-state branch is skipped
+// (the resource is being deleted there, so its attrs are meaningless).
+func validateCaseBranches(base Finding, res Resource, schema TypeSchema) []Finding {
+	var findings []Finding
+	for branch, branchAttrs := range res.CaseMatch {
+		merged := make(map[string]any, len(res.Attributes)+len(branchAttrs))
+		for k, v := range res.Attributes {
+			// case/match are structural, not real attrs (they only appear in
+			// Attributes on the modlint adapter path) — never merge them.
+			if k == "case" || k == "match" {
+				continue
+			}
+			merged[k] = v
+		}
+		for k, v := range branchAttrs {
+			merged[k] = v
+		}
+		if attrString(merged, "state") == "absent" {
+			continue
+		}
+		for attr, spec := range schema.Attrs {
+			if !spec.Required {
+				continue
+			}
+			if attrString(merged, attr) == "" {
+				f := base
+				f.Severity = SeverityError
+				f.Message = fmt.Sprintf("%s resource missing required attribute %q in case branch %q", res.Type, attr, branch)
+				findings = append(findings, f)
+			}
+		}
+	}
 	return findings
 }
 

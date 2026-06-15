@@ -4673,6 +4673,8 @@ func moduleToValidate(def *ConfigcrateDefinition) validate.Configcrate {
 			Notify:      r.Notify,
 			Subscribes:  r.Subscribes,
 			WatchSecret: r.WatchSecret,
+			Case:        r.Case,
+			CaseMatch:   r.CaseMatch,
 		})
 	}
 	return mod

@@ -4,6 +4,7 @@
 package validate
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -902,6 +903,66 @@ func TestStateMandatoryForStateTypes(t *testing.T) {
 		if generatedStateTypes[typ] {
 			t.Errorf("%s is a schema false-positive and must not be in generatedStateTypes", typ)
 		}
+	}
+}
+
+// TestCaseBranchRequiredAttrs pins the case/match branch validation: a branch
+// that omits a required attribute (incl. the mandatory `state`) must error at
+// publish, and a resource whose branches all satisfy the requirements must
+// pass. Guards the blind spot where case/match resources skipped required-attr
+// checks entirely.
+func TestCaseBranchRequiredAttrs(t *testing.T) {
+	hasBranchErr := func(findings []Finding, attr, branch string) bool {
+		want := fmt.Sprintf("missing required attribute %q in case branch %q", attr, branch)
+		for _, f := range findings {
+			if f.Severity == SeverityError && strings.Contains(f.Message, want) {
+				return true
+			}
+		}
+		return false
+	}
+	check := func(base map[string]any, cm map[string]map[string]any) []Finding {
+		return ValidateConfigcrate(Configcrate{Name: "m", Resources: []Resource{
+			{Name: "r", Type: "file", Attributes: base, Case: "{{.Traits.os_family}}", CaseMatch: cm},
+		}})
+	}
+
+	// A branch missing `state` (and content) → error naming that branch.
+	findings := check(
+		map[string]any{"target_path": "/etc/x", "owner": "root", "group": "root", "mode": "0644"},
+		map[string]map[string]any{
+			"debian":  {"state": "present", "content": "deb"},
+			"default": {"content": "y"}, // omits state
+		},
+	)
+	if !hasBranchErr(findings, "state", "default") {
+		t.Errorf("expected missing-state error for the default branch, got: %v", findings)
+	}
+
+	// Every branch satisfies the requirements (state via branch, rest via base) → clean.
+	findings = check(
+		map[string]any{"target_path": "/etc/x", "owner": "root", "group": "root", "mode": "0644", "content": "y"},
+		map[string]map[string]any{
+			"debian":  {"state": "present"},
+			"default": {"state": "present"},
+		},
+	)
+	for _, f := range findings {
+		if f.Severity == SeverityError && strings.Contains(f.Message, "case branch") {
+			t.Errorf("expected no branch errors when all branches satisfied, got: %s", f.Message)
+		}
+	}
+
+	// An absent-state branch is being deleted → its other attrs aren't required.
+	findings = check(
+		map[string]any{"target_path": "/etc/x", "owner": "root", "group": "root", "mode": "0644"},
+		map[string]map[string]any{
+			"debian":  {"state": "present", "content": "deb"},
+			"default": {"state": "absent"},
+		},
+	)
+	if hasBranchErr(findings, "content", "default") {
+		t.Error("absent-state branch should not require content")
 	}
 }
 

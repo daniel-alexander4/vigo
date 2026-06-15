@@ -720,6 +720,7 @@ func extractKeyOrder(node *yaml.Node) []string {
 func toValidateModule(mod *module) vigovalidate.Configcrate {
 	vm := vigovalidate.Configcrate{Name: mod.Name}
 	for _, res := range mod.Resources {
+		caseExpr, caseMatch := extractCaseMatch(res.Attrs)
 		vm.Resources = append(vm.Resources, vigovalidate.Resource{
 			Name:       res.Name,
 			Type:       res.Type,
@@ -729,9 +730,31 @@ func toValidateModule(mod *module) vigovalidate.Configcrate {
 			Before:     res.Before,
 			Notify:     res.Notify,
 			Subscribes: res.Subscribes,
+			Case:       caseExpr,
+			CaseMatch:  caseMatch,
 		})
 	}
 	return vm
+}
+
+// extractCaseMatch pulls the typed case/match block out of modlint's untyped
+// Attrs map so the shared validator can check each branch's required attrs.
+// (The loader parses case/match into dedicated fields; modlint's parser lands
+// them in Attrs.) Returns the case expression and a branch→attrs map, or ""
+// and nil when no match block is present.
+func extractCaseMatch(attrs map[string]any) (string, map[string]map[string]any) {
+	caseExpr, _ := attrs["case"].(string)
+	raw, ok := attrs["match"].(map[string]any)
+	if !ok {
+		return caseExpr, nil
+	}
+	cm := make(map[string]map[string]any, len(raw))
+	for branch, v := range raw {
+		if bm, ok := v.(map[string]any); ok {
+			cm[branch] = bm
+		}
+	}
+	return caseExpr, cm
 }
 
 // --- Step 4: Render ---
