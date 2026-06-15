@@ -373,6 +373,9 @@ func TestExecuteWorkflow_RespectsAbortFlag(t *testing.T) {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
 
+	// Mark the run live (RunWorkflow does this before returning the ID in
+	// production) so Abort applies — Abort is a no-op for non-live runs.
+	engine.liveRuns.Store(run.ID, struct{}{})
 	// Set abort flag before execution starts.
 	engine.Abort(run.ID)
 
