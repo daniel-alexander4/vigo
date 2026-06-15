@@ -11,6 +11,10 @@ FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC;
 SELECT id, user_id, name, token_hash, created_at, last_used_at, expires_at
 FROM api_tokens WHERE token_hash = ?;
 
+-- name: GetAPITokenByID :one
+SELECT id, user_id, name, token_hash, created_at, last_used_at, expires_at
+FROM api_tokens WHERE id = ?;
+
 -- name: UpdateAPITokenLastUsed :exec
 UPDATE api_tokens SET last_used_at = datetime('now') WHERE id = ?;
 

@@ -65,7 +65,7 @@ func signCheckIn(envoyID, fingerprint string, ts time.Time, priv ed25519.Private
 	tsStr := fmt.Sprintf("%d", ts.Unix())
 	sig := signPayload([]byte(fingerprint), tsStr, priv)
 	return &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: fingerprint,
 		Signature:        sig,
 		Timestamp:        timestamppb.New(ts),
@@ -77,7 +77,7 @@ func signReportResult(envoyID, runID string, ts time.Time, priv ed25519.PrivateK
 	tsStr := fmt.Sprintf("%d", ts.Unix())
 	sig := signPayload([]byte(runID), tsStr, priv)
 	return &pb.ReportResultRequest{
-		EnvoyId:  envoyID,
+		EnvoyId:   envoyID,
 		RunId:     runID,
 		Signature: sig,
 		Timestamp: timestamppb.New(ts),
@@ -89,7 +89,7 @@ func signReportTraits(envoyID string, traitsJSON []byte, ts time.Time, priv ed25
 	tsStr := fmt.Sprintf("%d", ts.Unix())
 	sig := signPayload(traitsJSON, tsStr, priv)
 	return &pb.ReportTraitsRequest{
-		EnvoyId:   envoyID,
+		EnvoyId:    envoyID,
 		TraitsJson: traitsJSON,
 		Signature:  sig,
 		Timestamp:  timestamppb.New(ts),
@@ -230,7 +230,7 @@ func TestInterceptorCheckInExpiredTimestamp(t *testing.T) {
 // TestInterceptorCheckInWrongKey verifies that signing with a different key
 // than the one registered causes signature verification failure.
 func TestInterceptorCheckInWrongKey(t *testing.T) {
-	pub, _, pubPEM := genKeyPair(t)       // key A — registered
+	pub, _, pubPEM := genKeyPair(t)  // key A — registered
 	_, wrongPriv, _ := genKeyPair(t) // key B — used for signing
 	envoyID := uuid.New().String()
 
@@ -283,7 +283,7 @@ func TestInterceptorCheckInTamperedPayload(t *testing.T) {
 	sig := signPayload([]byte("original-fp"), tsStr, priv)
 
 	req := &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "tampered-fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -529,7 +529,7 @@ func TestInterceptorCheckInMissingTimestamp(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp",
 		Signature:        []byte("fake"),
 		Timestamp:        nil, // deliberately missing
@@ -557,7 +557,7 @@ func TestInterceptorCheckInMalformedUUID(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.CheckInRequest{
-		EnvoyId:         "not-a-valid-uuid",
+		EnvoyId:          "not-a-valid-uuid",
 		StateFingerprint: "fp",
 		Signature:        []byte("fake"),
 		Timestamp:        timestamppb.Now(),
@@ -580,7 +580,7 @@ func TestInterceptorCheckInMalformedUUID(t *testing.T) {
 // TestInterceptorReportResultWrongKey verifies that ReportResult also rejects
 // a signature from the wrong key.
 func TestInterceptorReportResultWrongKey(t *testing.T) {
-	pub, _, pubPEM := genKeyPair(t)     // key A — registered
+	pub, _, pubPEM := genKeyPair(t)  // key A — registered
 	_, wrongPriv, _ := genKeyPair(t) // key B — used for signing
 	envoyID := uuid.New().String()
 
@@ -762,7 +762,7 @@ func TestInterceptorReportResultMissingTimestamp(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportResultRequest{
-		EnvoyId:  envoyID,
+		EnvoyId:   envoyID,
 		RunId:     "run-1",
 		Signature: []byte("fake"),
 		Timestamp: nil,
@@ -799,7 +799,7 @@ func TestInterceptorReportTraitsMissingTimestamp(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportTraitsRequest{
-		EnvoyId:   envoyID,
+		EnvoyId:    envoyID,
 		TraitsJson: []byte(`{}`),
 		Signature:  []byte("fake"),
 		Timestamp:  nil,
@@ -827,7 +827,7 @@ func TestInterceptorReportResultMalformedUUID(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportResultRequest{
-		EnvoyId:  "bad-uuid",
+		EnvoyId:   "bad-uuid",
 		RunId:     "run-1",
 		Signature: []byte("fake"),
 		Timestamp: timestamppb.Now(),
@@ -855,7 +855,7 @@ func TestInterceptorReportTraitsMalformedUUID(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportTraitsRequest{
-		EnvoyId:   "bad-uuid",
+		EnvoyId:    "bad-uuid",
 		TraitsJson: []byte(`{}`),
 		Signature:  []byte("fake"),
 		Timestamp:  timestamppb.Now(),
@@ -930,7 +930,7 @@ func TestInterceptorEmptySignature(t *testing.T) {
 	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp",
 		Signature:        nil, // empty signature
 		Timestamp:        timestamppb.Now(),
@@ -947,5 +947,70 @@ func TestInterceptorEmptySignature(t *testing.T) {
 	}
 	if st.Code() != codes.Unauthenticated {
 		t.Errorf("expected Unauthenticated, got %v: %s", st.Code(), st.Message())
+	}
+}
+
+// signWake builds a signed WakeRequest. WakeRequest uses a string timestamp
+// (like ResolveSecrets) and signs over the envoy_id bytes — mirroring
+// agent/src/checkin/client.rs.
+func signWake(envoyID string, ts time.Time, priv ed25519.PrivateKey) *pb.WakeRequest {
+	tsStr := fmt.Sprintf("%d", ts.Unix())
+	sig := signPayload([]byte(envoyID), tsStr, priv)
+	return &pb.WakeRequest{
+		EnvoyId:   envoyID,
+		Signature: sig,
+		Timestamp: tsStr,
+	}
+}
+
+// TestInterceptorWakeValidSignature verifies a properly signed WakeRequest
+// passes verification.
+func TestInterceptorWakeValidSignature(t *testing.T) {
+	pub, priv, pubPEM := genKeyPair(t)
+	envoyID := uuid.New().String()
+
+	fi := fleet.NewFleetIndex()
+	fi.AddEnvoy(fleet.EnvoyState{ID: envoyID, Hostname: "web01.example.com", PubkeyPEM: pubPEM}, pub)
+
+	queries := db.New(testDB)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
+
+	req := signWake(envoyID, time.Now(), priv)
+	info := makeInfo(pb.VigoAgent_Wake_FullMethodName)
+
+	called := false
+	_, err := interceptor(context.Background(), req, info, func(ctx context.Context, r any) (any, error) {
+		called = true
+		return r, nil
+	})
+	if err != nil {
+		t.Fatalf("expected Wake to pass with valid signature, got: %v", err)
+	}
+	if !called {
+		t.Fatal("handler was not called for valid Wake")
+	}
+}
+
+// TestInterceptorWakeTamperedSignature verifies a WakeRequest signed by the
+// wrong key is rejected — i.e. one envoy can't consume another's wake channel.
+func TestInterceptorWakeTamperedSignature(t *testing.T) {
+	pub, _, pubPEM := genKeyPair(t)
+	_, attackerPriv, _ := genKeyPair(t)
+	envoyID := uuid.New().String()
+
+	fi := fleet.NewFleetIndex()
+	fi.AddEnvoy(fleet.EnvoyState{ID: envoyID, Hostname: "web01.example.com", PubkeyPEM: pubPEM}, pub)
+
+	queries := db.New(testDB)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
+
+	// Attacker knows the envoy_id but signs with their own key.
+	req := signWake(envoyID, time.Now(), attackerPriv)
+	info := makeInfo(pb.VigoAgent_Wake_FullMethodName)
+
+	_, err := interceptor(context.Background(), req, info, noopHandler)
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unauthenticated {
+		t.Fatalf("expected Unauthenticated for wrong-key Wake, got: %v", err)
 	}
 }

@@ -236,6 +236,55 @@ func TestTokens_DeleteToken(t *testing.T) {
 	}
 }
 
+// TestTokens_DeleteAuthz verifies the owner-or-admin delete boundary: a
+// non-owner non-admin (viewer) is denied 403, but the owner and an admin can
+// both delete. Guards against the IDOR where any authenticated user could
+// revoke another user's (incl. an admin's) token by ID.
+func TestTokens_DeleteAuthz(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	aliceID := insertTestUser(t, sqlDB, "alice", "admin")
+	bobID := insertTestUser(t, sqlDB, "bob", "viewer")
+
+	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// alice creates a token.
+	req := tokenRequestWithUser("POST", "/api/v1/auth/tokens", []byte(`{"name":"alices"}`), aliceID, "alice", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: expected 201, got %d", rec.Code)
+	}
+	var created createTokenResponse
+	json.NewDecoder(rec.Body).Decode(&created)
+
+	del := func(userID, username, role string) int {
+		r := tokenRequestWithUser("DELETE", "/api/v1/auth/tokens/"+created.ID, nil, userID, username, role)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		return w.Code
+	}
+
+	// bob (viewer, not the owner) is denied.
+	if code := del(bobID, "bob", "viewer"); code != http.StatusForbidden {
+		t.Fatalf("non-owner viewer: expected 403, got %d", code)
+	}
+	// A nonexistent token id → 404.
+	r := tokenRequestWithUser("DELETE", "/api/v1/auth/tokens/does-not-exist", nil, bobID, "bob", "viewer")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("missing token: expected 404, got %d", w.Code)
+	}
+	// An admin who is not the owner can delete (offboarding).
+	if code := del(bobID, "bob", "admin"); code != http.StatusNoContent {
+		t.Fatalf("admin: expected 204, got %d", code)
+	}
+}
+
 func TestTokens_UnauthorizedWithoutUser(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 

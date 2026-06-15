@@ -78,41 +78,14 @@ secrets:
   tls_skip_verify: false
 ```
 
-```yaml
-# HashiCorp Vault (KV v2)
-secrets:
-  backend: vault
-  url: "https://vault.example.com:8200"
-  token_file: "/srv/vigo/vault-token"
-  mount_path: "secret"
-
-# AWS Secrets Manager
-secrets:
-  backend: aws
-  region: "us-east-1"
-
-# Azure Key Vault
-secrets:
-  backend: azure
-  vault_name: "mycompany-vigo"
-
-# GCP Secret Manager
-secrets:
-  backend: gcp
-  project_id: "my-project-123"
-```
-
 | Field | Default | Description |
 |-------|---------|-------------|
-| `backend` | `local` | `local`, `isopass`, `vault`, `aws`, `azure`, or `gcp` |
+| `backend` | `local` | `local` or `isopass` |
 | `key_file` | (auto-generated) | AES-256-GCM encryption key for local backend |
 | `secrets_dir` | `/srv/vigo/secrets` | Directory for encrypted secret files |
-| `url` | (required for isopass/vault) | API base URL |
-| `token_file` | (optional) | Bearer/Vault token file path (0600) |
-| `mount_path` | `secret` | Vault KV v2 engine mount path |
-| `region` | `us-east-1` | AWS region |
-| `vault_name` | (required for azure) | Azure Key Vault name |
-| `project_id` | (required for gcp) | GCP project ID |
+| `url` | (required for isopass) | Isopass API base URL |
+| `token_file` | (required for isopass) | Bearer token file path (0600) |
+| `tls_skip_verify` | `false` | Isopass: skip TLS verification (dev only) |
 
 ## checkin
 

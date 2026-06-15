@@ -149,6 +149,12 @@ func (ts *TokenStore) ListByUser(ctx context.Context, userID string) ([]db.ListA
 	return ts.queries.ListAPITokensByUser(ctx, userID)
 }
 
+// GetByID returns a token's metadata by ID. Returns sql.ErrNoRows if absent —
+// callers (handleDelete) use it to authorize the owner before deleting.
+func (ts *TokenStore) GetByID(ctx context.Context, id string) (db.ApiToken, error) {
+	return ts.queries.GetAPITokenByID(ctx, id)
+}
+
 // Delete removes a token by ID.
 func (ts *TokenStore) Delete(ctx context.Context, id string) error {
 	return ts.queries.DeleteAPIToken(ctx, id)

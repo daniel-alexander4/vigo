@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -438,7 +439,13 @@ func deriveKey(raw []byte) ([]byte, error) {
 		return raw, nil
 	}
 
-	// Anything else: SHA-256 hash to get 32 bytes.
+	// Anything else: SHA-256 hash to get 32 bytes. A corrupted or truncated
+	// key file silently lands here and yields a different-but-valid-looking
+	// key, surfacing only as opaque GCM decryption failures on every secret —
+	// warn so the cause is visible. Never log the key material or its hash.
+	slog.Warn("master key is not 32 raw bytes or 64 hex chars — deriving via SHA-256; "+
+		"a corrupted or truncated key file will silently produce a different key and fail all decryption",
+		"length", len(raw))
 	hash := sha256.Sum256(raw)
 	return hash[:], nil
 }

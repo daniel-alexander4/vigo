@@ -4,7 +4,9 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -182,6 +184,27 @@ func (h *TokensHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
+
+	// Authorize: a caller may delete its own token, or any token if it is an
+	// admin (offboarding a departed user). Without this, the auth-only (not
+	// admin-only) route lets any authenticated user — incl. a viewer — revoke
+	// another user's token, including an admin's, by guessing its ID.
+	tok, err := h.tokenStore.GetByID(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "token not found")
+		return
+	}
+	if err != nil {
+		slog.Error("looking up api token", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tok.UserID != u.ID && !u.IsAdmin() {
+		recordAudit(r.Context(), h.auditWriter, "token.revoke_denied", u.Username, "rest", fmt.Sprintf("denied revoke of token %s owned by another user", id), "")
+		writeError(w, http.StatusForbidden, "not your token")
+		return
+	}
+
 	if err := h.tokenStore.Delete(r.Context(), id); err != nil {
 		slog.Error("deleting api token", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to delete token")

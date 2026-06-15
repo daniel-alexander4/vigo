@@ -91,9 +91,10 @@ func TestNewFromConfigLocalDefaultSecretsDir(t *testing.T) {
 }
 
 func TestNewFromConfigUnknownBackend(t *testing.T) {
+	// vault/aws/azure/gcp are retired — only local + isopass are supported.
 	_, err := NewFromConfig(Config{Backend: "vault"})
 	if err == nil {
-		t.Fatal("expected error for unknown backend")
+		t.Fatal("expected error for unsupported backend")
 	}
 }
 

@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/metrics"
+	"github.com/google/uuid"
 	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -79,6 +79,10 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 				return nil, err
 			}
 			ctx = newCtx
+		case *pb.WakeRequest:
+			if err := verifyWake(ctx, queries, r, sigWindow, fleetIdx, m); err != nil {
+				return nil, err
+			}
 		default:
 			// Admin RPCs and unknown types pass through without agent signature checks.
 		}
@@ -248,6 +252,44 @@ func verifyResolveSecretsCtx(ctx context.Context, queries *db.Queries, req *pb.R
 	return db.ContextWithEnvoy(ctx, envoy), nil
 }
 
+// verifyWake validates the signature on a WakeRequest. WakeRequest carries a
+// string timestamp (like ResolveSecrets, not a protobuf Timestamp), and the
+// agent signs over the envoy_id bytes (agent/src/checkin/client.rs). No
+// envoy-context reuse downstream, so it returns only error; wake.go keeps its
+// own revoked check (none of the verify paths inspect revocation).
+func verifyWake(ctx context.Context, queries *db.Queries, req *pb.WakeRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) error {
+	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
+		return status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
+	}
+	envoyID := req.GetEnvoyId()
+
+	_, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
+	if err != nil {
+		return err
+	}
+
+	tsStr := req.GetTimestamp()
+	if tsStr == "" {
+		return status.Error(codes.InvalidArgument, "timestamp is required")
+	}
+	tsUnix, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "invalid timestamp: %v", err)
+	}
+	if err := checkTimestamp(time.Unix(tsUnix, 0), sigWindow); err != nil {
+		m.SigVerifyFailed.WithLabelValues("timestamp_skew").Inc()
+		return err
+	}
+
+	payload := []byte(envoyID)
+	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey, envoyID, fleetIdx) {
+		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
+		return status.Error(codes.Unauthenticated, "signature verification failed")
+	}
+
+	return nil
+}
+
 // lookupEnvoyAndPubKey retrieves a envoy and its parsed ED25519 public key.
 // When a FleetIndex is available, the parsed pubkey is served from memory (O(1),
 // no PEM parse). Falls back to direct DB query.
@@ -303,10 +345,10 @@ func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID stri
 // compatibility with code that expects the DB model.
 func fleetEnvoyToDB(ts *fleet.EnvoyState) db.Envoy {
 	t := db.Envoy{
-		ID:        ts.ID,
-		Hostname:  ts.Hostname,
-		IpAddress: ts.IP,
-		PubkeyPem: ts.PubkeyPEM,
+		ID:         ts.ID,
+		Hostname:   ts.Hostname,
+		IpAddress:  ts.IP,
+		PubkeyPem:  ts.PubkeyPEM,
 		EnrolledAt: ts.EnrolledAt,
 	}
 	if !ts.LastSeen.IsZero() {

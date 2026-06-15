@@ -34,6 +34,26 @@ func (q *Queries) DeleteAPITokensForUser(ctx context.Context, userID string) err
 	return err
 }
 
+const getAPITokenByID = `-- name: GetAPITokenByID :one
+SELECT id, user_id, name, token_hash, created_at, last_used_at, expires_at
+FROM api_tokens WHERE id = ?
+`
+
+func (q *Queries) GetAPITokenByID(ctx context.Context, id string) (ApiToken, error) {
+	row := q.db.QueryRowContext(ctx, getAPITokenByID, id)
+	var i ApiToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.TokenHash,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const insertAPIToken = `-- name: InsertAPIToken :one
 INSERT INTO api_tokens (user_id, name, token_hash, expires_at)
 VALUES (?, ?, ?, ?)
