@@ -1363,5 +1363,3 @@ func parseRetentionDuration(s string) time.Duration {
 	d, _ := time.ParseDuration(s)
 	return d
 }
-
-// parseBlobSource extracts the SHA256 hash from a "blob:sha256:<hex>" source URI.

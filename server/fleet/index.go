@@ -11,7 +11,6 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
 	"path/filepath"
 	"sort"
@@ -234,9 +233,15 @@ func (f *FleetIndex) SetOnRemove(fn func(id string)) {
 // the given envoy ID. Hash-and-mask is O(len(id)) but the IDs are short
 // fixed-length UUIDs, so this is sub-100ns per call.
 func (f *FleetIndex) lockFor(id string) *sync.Mutex {
-	h := fnv.New32a()
-	h.Write([]byte(id))
-	return &f.envoyLocks[h.Sum32()&(envoyStripes-1)]
+	// Inline FNV-1a — fnv.New32a() heap-allocates a hasher on every call, and
+	// this is on the hot path (every per-envoy setter + each snapshot-loop
+	// iteration).
+	var h uint32 = 2166136261 // FNV-1a 32-bit offset basis
+	for i := 0; i < len(id); i++ {
+		h ^= uint32(id[i])
+		h *= 16777619 // FNV-1a 32-bit prime
+	}
+	return &f.envoyLocks[h&(envoyStripes-1)]
 }
 
 // NewFleetIndex creates an empty FleetIndex.
@@ -475,6 +480,12 @@ func (f *FleetIndex) ConvergenceSparkline() []ConvergenceSnapshot {
 }
 
 // AllEnvoys returns a copy of all EnvoyState values.
+//
+// Invariant: the shallow copy (`*ts`) shares the backing Traits map with the
+// live state, which is safe only because every Traits writer (UpdateTraits)
+// pointer-swaps the whole map under the stripe lock rather than mutating it in
+// place — so a returned snapshot never observes a torn map. Any future writer
+// that mutates Traits in place would have to deep-copy here instead.
 func (f *FleetIndex) AllEnvoys() []EnvoyState {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -579,6 +590,9 @@ func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilt
 // single read lock. Each EnvoyState already carries the canonical
 // convergence classification (ConvergenceStatus, Drift) computed at
 // run-ingest — callers read it rather than re-deriving from run history.
+//
+// Shares the Traits map with the live state — safe under the same pointer-swap
+// invariant documented on AllEnvoys.
 func (f *FleetIndex) SnapshotEnvoys() []EnvoyState {
 	f.mu.RLock()
 	defer f.mu.RUnlock()

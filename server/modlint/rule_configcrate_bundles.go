@@ -11,22 +11,16 @@ import (
 	"git.alexander4.io/vigo/server/compliance"
 )
 
-// moduleBundleRule validates a module's `bundle:` list against the
-// Vigo-curated catalog at server/compliance/bundles.go and flags
-// redundant declarations where the same (framework, control) pair is
-// also listed in the module's explicit `compliance:` block. Sibling
-// rule to moduleProvisionsRule — provisions and bundles split into two
-// catalogs intentionally; the modlint surface mirrors the split so
-// operators see the same error shape regardless of which catalog
-// rejected their tag.
+// moduleBundleRule validates a configcrate's `bundle:` list against the
+// Vigo-curated catalog at server/compliance/bundles.go. Sibling rule to
+// moduleProvisionsRule — provisions and bundles split into two catalogs
+// intentionally; the modlint surface mirrors the split so operators see the
+// same error shape regardless of which catalog rejected their tag.
 //
 // Unknown bundle tag → Error with did-you-mean. The loader treats
 // unknowns as zero contribution (ResolveBundle returns nil), so an
-// unchecked typo silently de-tags the module from a framework section.
+// unchecked typo silently de-tags the configcrate from a framework section.
 // Error severity catches that at publish time.
-//
-// Redundant declaration → Warning. Block isn't broken — explicit claims
-// remain valid — but the noise hides the operator's actual intent.
 type moduleBundleRule struct{}
 
 func (moduleBundleRule) id() string { return "configcrate-bundle" }

@@ -11,20 +11,14 @@ import (
 	"git.alexander4.io/vigo/server/compliance"
 )
 
-// moduleProvisionsRule validates a module's `provides:` list against
-// the Vigo-curated catalog at server/compliance/provisions.go, and
-// flags redundant declarations where a module also lists the same
-// (framework, control) pair in its `compliance:` block.
+// moduleProvisionsRule validates a configcrate's `provides:` list against
+// the Vigo-curated catalog at server/compliance/provisions.go.
 //
 // Unknown provision tag → Error with did-you-mean. The agent's
 // compliance index treats an unknown tag as zero contribution
 // (resolves to nil in compliance.ResolveProvision), so an unchecked
-// typo silently de-tags the module from a framework. Error severity
+// typo silently de-tags the configcrate from a framework. Error severity
 // catches that at publish time rather than at audit time.
-//
-// Redundant declaration → Warning. The block isn't broken — explicit
-// claims remain valid — but the noise hides the operator's actual
-// intent. A warning surfaces it without blocking publish.
 //
 // Importing compliance keeps the catalog in one place: the
 // modlint-rule and the loader resolve the same set, by construction.

@@ -4045,3 +4045,27 @@ envoys:
 		})
 	}
 }
+
+// TestRenderVars_PreservesSecretMarkers guards a security-load-bearing
+// invariant: the __VIGO_SECRET__…__END_VIGO_SECRET__ placeholder must survive
+// Go-template rendering byte-for-byte, both as a literal var value and when
+// reached through a {{ .Vars.x }} reference. The exact-string entitlement
+// extractor downstream depends on it; a future delimiter change to template-
+// active characters would silently break it without this test.
+func TestRenderVars_PreservesSecretMarkers(t *testing.T) {
+	marker := secretPlaceholderBegin + "vigo/db/dsn" + secretPlaceholderEnd
+	vars := map[string]any{
+		"dsn":   marker,
+		"alias": "{{ .Vars.dsn }}",
+	}
+	out, err := RenderVars(vars, nil, []string{"dsn", "alias"})
+	if err != nil {
+		t.Fatalf("RenderVars: %v", err)
+	}
+	if out["dsn"] != marker {
+		t.Errorf("marker mangled by render: got %q want %q", out["dsn"], marker)
+	}
+	if out["alias"] != marker {
+		t.Errorf("marker via {{ .Vars }} reference mangled: got %q want %q", out["alias"], marker)
+	}
+}

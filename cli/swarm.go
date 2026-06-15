@@ -24,15 +24,15 @@ import (
 // `filecast distribute`.
 
 type swarmStatusFleet struct {
-	GeneratedAt            time.Time             `json:"generated_at"`
-	EnvoysTotal            int                   `json:"envoys_total"`
-	EnvoysOnline           int                   `json:"envoys_online"`
-	EnvoysSubstrateActive  int                   `json:"envoys_substrate_active"`
-	EnvoysSeeding          int                   `json:"envoys_seeding"`
-	ManifestEntriesActive  int                   `json:"manifest_entries_active"`
-	ManifestEntriesRevoked int                   `json:"manifest_entries_revoked"`
-	BlobsByKind            swarmBlobCounts       `json:"blobs_by_kind"`
-	TotalFootprintBytes    int64                 `json:"total_footprint_bytes"`
+	GeneratedAt            time.Time       `json:"generated_at"`
+	EnvoysTotal            int             `json:"envoys_total"`
+	EnvoysOnline           int             `json:"envoys_online"`
+	EnvoysSubstrateActive  int             `json:"envoys_substrate_active"`
+	EnvoysSeeding          int             `json:"envoys_seeding"`
+	ManifestEntriesActive  int             `json:"manifest_entries_active"`
+	ManifestEntriesRevoked int             `json:"manifest_entries_revoked"`
+	BlobsByKind            swarmBlobCounts `json:"blobs_by_kind"`
+	TotalFootprintBytes    int64           `json:"total_footprint_bytes"`
 }
 
 type swarmBlobCounts struct {
@@ -41,12 +41,12 @@ type swarmBlobCounts struct {
 }
 
 type swarmPeersFleet struct {
-	GeneratedAt time.Time       `json:"generated_at"`
-	Total       int             `json:"total"`
-	Returned    int             `json:"returned"`
-	Sort        string          `json:"sort"`
-	Limit       int             `json:"limit"`
-	Envoys      []swarmPeerRow  `json:"envoys"`
+	GeneratedAt time.Time      `json:"generated_at"`
+	Total       int            `json:"total"`
+	Returned    int            `json:"returned"`
+	Sort        string         `json:"sort"`
+	Limit       int            `json:"limit"`
+	Envoys      []swarmPeerRow `json:"envoys"`
 }
 
 type swarmPeerRow struct {
@@ -65,7 +65,7 @@ var swarmCmd = &cobra.Command{
 	Use:   "swarm",
 	Short: "Substrate-level view of the envoy P2P network",
 	Long: `Read-only admin view of the swarm substrate — the envoy P2P network
-four content subsystems ride on.
+six content subsystems ride on.
 
 This command is the SUBSTRATE. For the content verbs that used to live
 under 'vigocli swarm distribute' etc., see:

@@ -31,6 +31,10 @@ func (r *Reaper) Start(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
+	// Sweep once on startup so runs that expired while the server was down
+	// are reaped immediately, not up to 30s later on the first tick.
+	daemon.Guard("task-reaper", func() { r.reap(ctx) })
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -52,8 +56,12 @@ func (r *Reaper) reap(ctx context.Context) {
 	}
 
 	for _, id := range ids {
-		_ = r.queries.TimeoutTaskRunTargets(ctx, id)
-		_ = r.queries.TimeoutTaskRun(ctx, id)
+		if err := r.queries.TimeoutTaskRunTargets(ctx, id); err != nil {
+			slog.Error("task reaper: timing out run targets", "run_id", id, "error", err)
+		}
+		if err := r.queries.TimeoutTaskRun(ctx, id); err != nil {
+			slog.Error("task reaper: timing out run", "run_id", id, "error", err)
+		}
 	}
 	slog.Info("task reaper: timed out expired runs", "count", len(ids))
 }

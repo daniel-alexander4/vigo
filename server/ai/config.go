@@ -48,7 +48,7 @@ func withDefaults(c config.AISection) config.AISection {
 		case "ollama":
 			c.Model = "qwen2.5:7b"
 		case "claude":
-			c.Model = "claude-sonnet-4-20250514"
+			c.Model = "claude-sonnet-4-6"
 		case "openai":
 			c.Model = "gpt-4o"
 		}

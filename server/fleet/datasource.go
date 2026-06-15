@@ -1622,13 +1622,11 @@ func (ds *DataSource) RiskPostureData(baseInterval, offlineThreshold time.Durati
 	}
 }
 
+// parseInt64 parses an agent trait count, returning 0 on any malformed value.
+// Uses strconv (like its risk/metrics siblings) rather than a hand-rolled
+// digit loop that mis-parsed "-5"→5 and "12x"→12 and wrapped on overflow.
 func parseInt64(s string) int64 {
-	var n int64
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int64(c-'0')
-		}
-	}
+	n, _ := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	return n
 }
 

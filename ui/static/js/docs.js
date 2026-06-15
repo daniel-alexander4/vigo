@@ -15,6 +15,18 @@
     // Expose for the AI drawer's docs context (preserves prior behavior).
     window._vigoDocsPages = pages;
 
+    // Escape text before it goes into innerHTML. The JSON island is already
+    // json.Marshal-escaped and titles derive from filenames, so this is
+    // defense-in-depth — but the search result HTML is built by string
+    // concatenation, so anything not pre-escaped (title, section) must be.
+    function esc(s) {
+        return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
     var input = document.getElementById("docs-search");
     var results = document.getElementById("docs-search-results");
     var tree = document.getElementById("docs-nav-tree");
@@ -72,9 +84,9 @@
             var p = hits[h].page;
             var section = p.p.split("/")[0].replace(/-/g, " ");
             var snip = hits[h].titleMatch ? "" : snippet(p.x, terms);
-            html += '<a href="/docs/' + p.p + '" class="docs-nav__search-hit">' +
-                '<span class="docs-nav__search-hit-title">' + p.t + "</span>" +
-                '<span class="docs-nav__search-hit-section">' + section + "</span>" +
+            html += '<a href="/docs/' + encodeURI(p.p) + '" class="docs-nav__search-hit">' +
+                '<span class="docs-nav__search-hit-title">' + esc(p.t) + "</span>" +
+                '<span class="docs-nav__search-hit-section">' + esc(section) + "</span>" +
                 (snip ? '<span class="docs-nav__search-hit-snippet">' + snip + "</span>" : "") +
                 "</a>";
         }

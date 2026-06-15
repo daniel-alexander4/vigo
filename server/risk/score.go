@@ -202,13 +202,13 @@ func ScoreEnvoy(es EnvoyInput, baseInterval, offlineThreshold time.Duration) Env
 	// --- Drift axis: persistent mutation across many recent runs ---
 	if es.Drift == convergence.DriftDiverged {
 		score += 15
-		r.Factors = append(r.Factors, Factor{"Diverged", 15, "modules keep mutating across recent runs"})
+		r.Factors = append(r.Factors, Factor{"Diverged", 15, "configcrates keep mutating across recent runs"})
 	}
 
 	// --- Stale check-in: +20 if offline ---
 	if freshness.IsStaleFromCycle(es.LastSeen, baseInterval, es.ObservedCycle, offlineThreshold) {
 		score += 20
-		r.Factors = append(r.Factors, Factor{"Offline", 20, "no check-in within 2.5× cadence"})
+		r.Factors = append(r.Factors, Factor{"Offline", 20, "no recent check-in (past the offline threshold)"})
 	}
 
 	// Note: Windows/debsecan CVEs are now included in the unique_* counts above
@@ -385,4 +385,3 @@ func pluralize(n int, thing string) string {
 	}
 	return s
 }
-

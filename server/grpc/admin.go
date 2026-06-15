@@ -908,5 +908,3 @@ func dbRunsToProto(runs []db.Run) []*pb.Run {
 	}
 	return result
 }
-
-// validateWebhookURL checks that a webhook URL is safe to deliver to.
