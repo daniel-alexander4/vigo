@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-// TestExampleModulesLintClean walks every shipped .vgo.example under
+// TestExampleConfigcratesLintClean walks every shipped .vgo.example under
 // example-configs/ and asserts modlint produces no Error-severity
 // findings. Gates the schema/executor/example triangle so the bug class
 // that surfaced ~30 lint failures during the 2026-05-17 GCP install
@@ -53,7 +53,7 @@ func TestExampleConfigcratesLintClean(t *testing.T) {
 			// can match the same names publish.go uses.
 			effective := strings.TrimSuffix(filepath.Base(path), ".example")
 			// compliance.vgo + common.vgo are processed by the config
-			// loader, not modlint. publish.go's lintModules() filters
+			// loader, not modlint. publish.go's lintConfigcrates() filters
 			// them out before dispatch (compliance.vgo via an explicit
 			// continue; common.vgo because filterBySubdir+filterUser-
 			// crates+filterScaffoldingFiles never picks it up). Mirror
@@ -63,7 +63,7 @@ func TestExampleConfigcratesLintClean(t *testing.T) {
 				return nil
 			}
 			// tasks/ and workflows/ hold task/workflow definitions, not
-			// configcrates — publish.go's lintModules never feeds them to
+			// configcrates — publish.go's lintConfigcrates never feeds them to
 			// modlint (they're not configcrates/usercrates/scaffolding); the
 			// loader/task engine validates them instead. Skip here too.
 			slashed := filepath.ToSlash(path)

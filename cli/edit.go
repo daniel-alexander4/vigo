@@ -22,7 +22,7 @@ const vigoConfigRoot = "/srv/vigo/stacks"
 var configEditCmd = &cobra.Command{
 	Use:               "edit <name-or-path>",
 	Short:             "Open a .vgo config file in an editor with YAML validation on save",
-	ValidArgsFunction: completeModuleNames,
+	ValidArgsFunction: completeConfigcrateNames,
 	Long: `Opens a .vgo file in the specified editor with validation.
 
 Accepts a configcrate name, a relative path, or an absolute path. Configcrate names
@@ -61,7 +61,7 @@ Examples:
 	},
 }
 
-// findModuleByName searches the entire stacks/ tree recursively for a
+// findConfigcrateByName searches the entire stacks/ tree recursively for a
 // .vgo file by name. Accepts "nginx", "nginx.vgo", or "danlap" — returns
 // the absolute path.
 func findConfigcrateByName(name string) (string, error) {

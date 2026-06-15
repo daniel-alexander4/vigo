@@ -104,7 +104,7 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 
 	// Verify counters can be incremented without panic.
 	m.CheckinsTotal.WithLabelValues("success").Inc()
-	m.DriftDetected.WithLabelValues("testnode", "testmodule").Inc()
+	m.DriftDetected.WithLabelValues("testnode", "testconfigcrate").Inc()
 	m.ConfigcrateActions.WithLabelValues("file", "create").Inc()
 	m.GRPCRequestsTotal.WithLabelValues("/vigo.VigoAgent/CheckIn", "OK").Inc()
 	m.TaskRunsTotal.WithLabelValues("complete").Inc()

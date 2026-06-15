@@ -92,7 +92,7 @@ func TestExpandForeachConfigcrateRefs_NoForeachPassthrough(t *testing.T) {
 	}
 }
 
-// --- unit tests: expandModuleInstanceResources ---
+// --- unit tests: expandConfigcrateInstanceResources ---
 
 func TestExpandConfigcrateInstanceResources_MapItem(t *testing.T) {
 	resources := []ResourceConfig{

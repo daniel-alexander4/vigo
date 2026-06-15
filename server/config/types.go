@@ -1079,7 +1079,7 @@ type ResourceConfig struct {
 }
 
 // ConfigcrateKind distinguishes a regular module definition from a usercrate.
-// Both share one namespace and one map (moduleDefs); Kind is how the
+// Both share one namespace and one map (configcrateDefs); Kind is how the
 // resolver enforces that `modules:` only takes Module-kind defs and
 // `usercrates:` only takes Usercrate-kind defs.
 type ConfigcrateKind string
@@ -1140,7 +1140,7 @@ type ConfigcrateDefinition struct {
 
 	// InheritedCompliance is the framework → control IDs map populated
 	// by the loader from directory-level `compliance.vgo` inheritance
-	// files (`loadComplianceConfigs` + `applyModuleComplianceInheritance`).
+	// files (`loadComplianceConfigs` + `applyConfigcrateComplianceInheritance`).
 	// Never written by operator YAML — the inheritance file is a
 	// different file kind with its own decoder. Internal to the loader;
 	// buildComplianceIndex reads it alongside Compliance.Provides /
@@ -1212,7 +1212,7 @@ func (m *ConfigcrateDefinition) UnmarshalYAML(value *yaml.Node) error {
 			// authoring shape. modlint catches this at publish-time
 			// via rule_configcrate_top_level_provides_bundle, but the
 			// loader also has direct-decode paths (test fixtures,
-			// hand-rolled callers of parseModuleYAML) that don't
+			// hand-rolled callers of parseConfigcrateYAML) that don't
 			// pass through modlint — Go's YAML decoder would silently
 			// drop the unknown keys without this arm.
 			return errRetiredTopLevelComplianceKey(key)
@@ -1228,7 +1228,7 @@ func (m *ConfigcrateDefinition) UnmarshalYAML(value *yaml.Node) error {
 // at the top level — the authoring shape introduced in 0.66.48 and
 // retired in 0.66.57 in favor of a single `compliance:` parent block.
 // Both YAML decode paths (ConfigcrateDefinition.UnmarshalYAML in this file,
-// parseModuleYAML in parse.go) call this so the wording can't drift.
+// parseConfigcrateYAML in parse.go) call this so the wording can't drift.
 // Message mirrors modlint/rule_configcrate_top_level_provides_bundle.go so
 // operators see the same diagnostic from either gate.
 func errRetiredTopLevelComplianceKey(key string) error {
@@ -1273,7 +1273,7 @@ type ConfigcrateRef struct {
 	Tier Tier `yaml:"-"`
 
 	// Set by expandForeachConfigcrateRefs when a foreach: ref is expanded into
-	// per-item instances. BaseName is the original module name (for moduleDefs
+	// per-item instances. BaseName is the original module name (for configcrateDefs
 	// lookup); EachItem is this instance's list item; InstanceKey is the
 	// resolved suffix. Empty/nil for an ordinary ref.
 	BaseName    string `yaml:"-"`

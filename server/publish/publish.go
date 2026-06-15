@@ -160,12 +160,12 @@ type Result struct {
 	// can still proceed (the config store loads empty).
 	ValidationErrors []FileError
 
-	// RemovedModuleContent holds the YAML content of modules that were removed
+	// RemovedConfigcrateContent holds the YAML content of modules that were removed
 	// during this publish (read from .live/ before sync). Keyed by relative path.
 	// Used by the retraction feature to generate retract modules.
 	RemovedConfigcrateContent map[string][]byte `json:"-"`
 
-	// ChangedModuleContent holds the YAML content of modules that were added
+	// ChangedConfigcrateContent holds the YAML content of modules that were added
 	// or modified during this publish (read from stacks). Keyed by relative
 	// path. Used by the retraction feature to pre-generate retract modules.
 	ChangedConfigcrateContent map[string][]byte `json:"-"`
@@ -618,7 +618,7 @@ func filterUsercrates(paths []string) []string {
 // hostcrates (envoys.vgo), role definitions (roles.vgo), compliance
 // waivers (waivers.vgo), and per-environment overrides
 // (environments.vgo). Each gets its own modlint entry point; this set
-// drives the dispatch in lintModules.
+// drives the dispatch in lintConfigcrates.
 var scaffoldingFileBasenames = map[string]bool{
 	"envoys.vgo":       true,
 	"roles.vgo":        true,
@@ -726,7 +726,7 @@ func probeURL(client *http.Client, rawURL string) error {
 	return nil
 }
 
-// moduleFile is a minimal struct for parsing module YAML to extract URLs.
+// configcrateFile is a minimal struct for parsing module YAML to extract URLs.
 type configcrateFile struct {
 	Resources []struct {
 		Name  string         `yaml:"name"`
@@ -1103,7 +1103,7 @@ func normalizeStacksPermissions(dir string) error {
 // comments and all content (see modlint.FormatSource). Idempotent — a file is
 // only rewritten when its labels actually change. Scaffolding, compliance, and
 // invalid files are returned unchanged by FormatSource, so they're never
-// written here; validation errors surface later in lintModules.
+// written here; validation errors surface later in lintConfigcrates.
 func formatSourceLabels(dir string) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -1208,7 +1208,7 @@ func normalizeWhitespace(dir string) error {
 
 var _ secrets.Provider = (*stubProvider)(nil)
 
-// lintModules runs the modlint pipeline on the given module files (relative
+// lintConfigcrates runs the modlint pipeline on the given module files (relative
 // paths like "configcrates/nginx.vgo") and returns the linted bytes for each file
 // whose content differs from the source. It does NOT modify any file under
 // baseDir — stacks is operator territory and must stay byte-stable across

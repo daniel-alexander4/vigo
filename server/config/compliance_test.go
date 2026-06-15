@@ -537,7 +537,7 @@ envoys:
 		}
 	}
 	if !danFound || !aliceFound {
-		t.Errorf("expected both dan (defaulted name) and alice in resolved config; got modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("expected both dan (defaulted name) and alice in resolved config; got modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -604,14 +604,14 @@ envoys:
 		}
 	}
 	if !aliceFound || !rootAdminInA {
-		t.Errorf("a01 should have both alice and globaladmin; got %v", moduleNames(cfgA.Configcrates))
+		t.Errorf("a01 should have both alice and globaladmin; got %v", configcrateNames(cfgA.Configcrates))
 	}
 
 	// root01 sees only globaladmin (no claim), NOT alice.
 	cfgR := store.Get("root01")
 	for _, mod := range cfgR.Configcrates {
 		if mod.Name == "alice" {
-			t.Errorf("root01 must not see customerA's alice; got modules = %v", moduleNames(cfgR.Configcrates))
+			t.Errorf("root01 must not see customerA's alice; got modules = %v", configcrateNames(cfgR.Configcrates))
 		}
 		if mod.Name == "globaladmin" {
 			if _, ok := mod.Compliance["pci-dss"]; ok {
@@ -682,14 +682,14 @@ envoys:
 	cfg := store.Get("any.host")
 	for _, mod := range cfg.Configcrates {
 		if mod.Name == "compliance" {
-			t.Errorf("compliance.vgo was parsed as a usercrate named 'compliance'; modules = %v", moduleNames(cfg.Configcrates))
+			t.Errorf("compliance.vgo was parsed as a usercrate named 'compliance'; modules = %v", configcrateNames(cfg.Configcrates))
 		}
 	}
 }
 
 // Case U5: the config-trace "Compliance Sources" list shows each
 // compliance.vgo once. Regression for the duplicate-card bug — a
-// usercrates/compliance.vgo was collected by loadModuleComplianceConfigs and
+// usercrates/compliance.vgo was collected by loadConfigcrateComplianceConfigs and
 // a redundant loadUsercrateComplianceConfigs, whose source slices were
 // concatenated without dedup, producing two identical trace entries.
 func TestCompliance_TraceListsEachComplianceSourceOnce(t *testing.T) {

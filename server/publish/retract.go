@@ -17,7 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// RetractedModule holds the generated retract module and metadata.
+// RetractedConfigcrate holds the generated retract module and metadata.
 type RetractedConfigcrate struct {
 	// OriginalName is the module name that was removed (e.g., "nginx").
 	OriginalName string
@@ -59,12 +59,12 @@ type retractResource struct {
 	Attrs      map[string]any `yaml:",inline"`
 }
 
-// DetectRemovedModules filters a list of removed file paths for module .vgo files.
+// DetectRemovedConfigcrates filters a list of removed file paths for module .vgo files.
 func DetectRemovedConfigcrates(removed []string) []string {
 	return filterConfigcratePaths(removed)
 }
 
-// DetectChangedModules filters a list of changed file paths for module .vgo files.
+// DetectChangedConfigcrates filters a list of changed file paths for module .vgo files.
 // Changed includes both new and modified modules.
 func DetectChangedConfigcrates(changed []string) []string {
 	return filterConfigcratePaths(changed)
@@ -80,13 +80,13 @@ func filterConfigcratePaths(paths []string) []string {
 	return configcrates
 }
 
-// ReadRemovedModuleContent reads the content of removed modules from the live
+// ReadRemovedConfigcrateContent reads the content of removed modules from the live
 // directory before sync overwrites it. Returns a map of relPath → content.
 func ReadRemovedConfigcrateContent(liveDir string, relPaths []string) map[string][]byte {
 	return readConfigcrateContent(liveDir, relPaths)
 }
 
-// ReadChangedModuleContent reads the content of new/changed modules from the
+// ReadChangedConfigcrateContent reads the content of new/changed modules from the
 // stacks directory. Returns a map of relPath → content.
 func ReadChangedConfigcrateContent(stacksDir string, relPaths []string) map[string][]byte {
 	return readConfigcrateContent(stacksDir, relPaths)
@@ -103,7 +103,7 @@ func readConfigcrateContent(baseDir string, relPaths []string) map[string][]byte
 	return content
 }
 
-// GenerateRetractModule creates an idempotent retract module from the
+// GenerateRetractConfigcrate creates an idempotent retract module from the
 // original module content. Each resource is reversed to its absent/stopped state.
 // Returns the generated YAML and a list of warnings for resources that need review.
 func GenerateRetractConfigcrate(name string, content []byte) (string, []RetractWarning, error) {

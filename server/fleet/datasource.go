@@ -122,11 +122,11 @@ func (ds *DataSource) envoyRows(baseInterval, offlineThreshold time.Duration) []
 				rows[i].Roles = append(rows[i].Roles, cfg.Roles...)
 			}
 			if len(cfg.Configcrates) > 0 {
-				moduleNames := make([]string, 0, len(cfg.Configcrates))
+				configcrateNames := make([]string, 0, len(cfg.Configcrates))
 				for _, m := range cfg.Configcrates {
-					moduleNames = append(moduleNames, m.Name)
+					configcrateNames = append(configcrateNames, m.Name)
 				}
-				rows[i].Configcrates = moduleNames
+				rows[i].Configcrates = configcrateNames
 			}
 		}
 		rows[i].ComplianceFrameworks = ds.configStore.EnvoyFrameworks(rows[i].Hostname)
@@ -406,7 +406,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 //   - reachFilter: "" / "offline" / "observing"
 //
 // search and the 7 ADR-032 slice-2 axes (envFilter, tagFilter,
-// roleFilter, osFilter, archFilter, moduleFilter, complianceFilter)
+// roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter)
 // are case-insensitive substring matches. Each accepts comma-separated
 // values for OR-within-axis: `?env=prod,staging` matches either; AND
 // holds across axes.

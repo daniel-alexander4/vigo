@@ -940,7 +940,7 @@ envoys:
 	}
 }
 
-// TestFleetFindings_SkipsUnreachableModules verifies that fleet
+// TestFleetFindings_SkipsUnreachableConfigcrates verifies that fleet
 // collision checks ignore modules no carrier can route to an envoy: a
 // clash among unreachable modules can't physically happen, so it must
 // not generate publish-time noise. A clash among reachable modules

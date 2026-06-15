@@ -716,7 +716,7 @@ func extractKeyOrder(node *yaml.Node) []string {
 // rule in order and aggregates findings; adding a new check is a
 // matter of dropping in a new rule_*.go that calls register() in init().
 
-// toValidateModule converts a modlint module to a validate.Configcrate.
+// toValidateConfigcrate converts a modlint module to a validate.Configcrate.
 func toValidateConfigcrate(mod *configcrate) vigovalidate.Configcrate {
 	vm := vigovalidate.Configcrate{Name: mod.Name}
 	for _, res := range mod.Resources {
@@ -1080,7 +1080,7 @@ func writeAttrNode(b *strings.Builder, key string, node *yaml.Node, indent int) 
 
 // --- Comment generation ---
 
-// generateModuleComment creates a block-level #~ comment describing the module.
+// generateConfigcrateComment creates a block-level #~ comment describing the module.
 func generateConfigcrateComment(mod *configcrate) string {
 	if len(mod.Resources) == 0 {
 		return mod.Name

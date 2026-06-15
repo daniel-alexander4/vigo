@@ -268,9 +268,9 @@ func funcMap() template.FuncMap {
 		"joinStrings": func(ss []string, sep string) string {
 			return strings.Join(ss, sep)
 		},
-		"groupWaiversByFile": groupWaiversByFile,
-		"traceUsercrates":    traceUsercrates,
-		"traceModuleLevels":  traceModuleLevels,
+		"groupWaiversByFile":     groupWaiversByFile,
+		"traceUsercrates":        traceUsercrates,
+		"traceConfigcrateLevels": traceConfigcrateLevels,
 		"filterConds": func(conds []config.ConditionalTraceEntry, side string) []config.ConditionalTraceEntry {
 			var out []config.ConditionalTraceEntry
 			for _, c := range conds {
@@ -1389,10 +1389,10 @@ func traceUsercrates(levels []config.InheritanceLevel) []usercrateScope {
 	return scopes
 }
 
-// traceModuleLevels filters out usercrate entries from inheritance levels.
+// traceConfigcrateLevels filters out usercrate entries from inheritance levels.
 // The dedicated Usercrates section renders those separately; without this
 // filter the Configcrate Inheritance cards would show duplicate entries.
-func traceModuleLevels(levels []config.InheritanceLevel) []config.InheritanceLevel {
+func traceConfigcrateLevels(levels []config.InheritanceLevel) []config.InheritanceLevel {
 	out := make([]config.InheritanceLevel, 0, len(levels))
 	for _, lvl := range levels {
 		if lvl.File == "usercrates/" {

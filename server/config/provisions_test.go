@@ -74,7 +74,7 @@ func TestBuildComplianceIndex_UnknownProvisionNoop(t *testing.T) {
 	}
 }
 
-// TestBuildComplianceIndex_TwoModulesSameProvision pins the
+// TestBuildComplianceIndex_TwoConfigcratesSameProvision pins the
 // "no-drift" property the catalog model exists to enforce: two
 // modules that both claim the same provision both appear in the
 // per-control owner list — the original "chrony vs ntp" drift cause

@@ -234,7 +234,7 @@ envoys:
 	if result.UnusedUsercrates[0].Name != "bob" {
 		t.Errorf("expected 'bob' to be unused, got %q", result.UnusedUsercrates[0].Name)
 	}
-	// alice is in usercrates — never in UnusedModules.
+	// alice is in usercrates — never in UnusedConfigcrates.
 	for _, m := range result.UnusedConfigcrates {
 		if m.Name == "alice" || m.Name == "bob" {
 			t.Errorf("usercrate %q surfaced as unused module — module/usercrate channels must be separate", m.Name)

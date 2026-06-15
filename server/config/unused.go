@@ -9,7 +9,7 @@ import (
 	"sort"
 )
 
-// UnusedModule describes a module defined but never referenced.
+// UnusedConfigcrate describes a module defined but never referenced.
 type UnusedConfigcrate struct {
 	Name       string `json:"name"`
 	SourceFile string `json:"source_file"` // stacks-relative path, e.g. "configcrates/system/cleanup.vgo"
@@ -38,7 +38,7 @@ type UnusedHostcrate struct {
 
 // UnusedResult holds all unused defs and hostcrates.
 type UnusedResult struct {
-	UnusedConfigcrates []UnusedConfigcrate `json:"unused_modules"`
+	UnusedConfigcrates []UnusedConfigcrate `json:"unused_configcrates"`
 	UnusedUsercrates   []UnusedUsercrate   `json:"unused_usercrates"`
 	UnusedTemplates    []UnusedTemplate    `json:"unused_templates"`
 
@@ -59,7 +59,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 
 	// --- Unused modules + usercrates ---
 
-	// Split definitions by kind. Configcrates and usercrates share cs.moduleDefs
+	// Split definitions by kind. Configcrates and usercrates share cs.configcrateDefs
 	// but each kind has its own ref set; reporting them separately matches
 	// the carrier-field shape (modules: vs usercrates:).
 	definedConfigcrates := make(map[string]bool)

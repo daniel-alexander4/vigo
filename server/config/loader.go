@@ -128,7 +128,7 @@ type IdempotencyErrors struct {
 	Configcrates []IdempotencyConfigcrateError
 }
 
-// IdempotencyModuleError holds validation findings for a single module file.
+// IdempotencyConfigcrateError holds validation findings for a single module file.
 type IdempotencyConfigcrateError struct {
 	Configcrate string
 	Path        string
@@ -212,7 +212,7 @@ type ConfigStore struct {
 	envoyEntries    []EnvoyEntry                      // original entries for tracing
 	roleDefs        map[string]*RoleDefinition        // loaded roles for tracing
 	configcrateDefs map[string]*ConfigcrateDefinition // loaded modules for tracing
-	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
+	complianceIndex map[string]map[string][]string    // standard → control_id → []configcrate_name
 	// coverageCache memoizes EnvoyStandardCoverage results at publish
 	// time keyed by (hostcrate entry index, standard). Each entry's
 	// module set is fixed by the publish-time hostcrate resolution, so
@@ -429,8 +429,8 @@ func (cs *ConfigStore) Stats() ConfigStats {
 	}
 }
 
-// ListModuleNames returns the sorted names of all loaded modules.
-func (cs *ConfigStore) ListModuleNames() []string {
+// ListConfigcrateNames returns the sorted names of all loaded modules.
+func (cs *ConfigStore) ListConfigcrateNames() []string {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 	names := make([]string, 0, len(cs.rawConfigcrates))
@@ -706,7 +706,7 @@ type ConfigTrace struct {
 	Conditionals []ConditionalTraceEntry `json:"conditionals,omitempty"`
 }
 
-// FilterByModule returns a copy of the trace filtered to only show
+// FilterByConfigcrate returns a copy of the trace filtered to only show
 // inheritance levels, modules, and role expansions relevant to the
 // given module name. Vars are kept unfiltered since they apply globally.
 func (t *ConfigTrace) FilterByConfigcrate(configcrate string) *ConfigTrace {
@@ -1628,7 +1628,7 @@ func varSourcePriority(source string) int {
 	}
 }
 
-// RecommendModulesForControl returns module names that cover the given
+// RecommendConfigcratesForControl returns module names that cover the given
 // control ID for a standard. Checks both loaded modules and example modules.
 func (cs *ConfigStore) RecommendConfigcratesForControl(standard, controlID string) []string {
 	cs.mu.RLock()
@@ -1642,7 +1642,7 @@ func (cs *ConfigStore) RecommendConfigcratesForControl(standard, controlID strin
 	return nil
 }
 
-// ComplianceControlIndex returns the control_id → module_names map for a standard.
+// ComplianceControlIndex returns the control_id → configcrate_names map for a standard.
 // Returns nil if the standard has no entries in the compliance index.
 func (cs *ConfigStore) ComplianceControlIndex(standard string) map[string][]string {
 	cs.mu.RLock()
@@ -1690,7 +1690,7 @@ var SlugForStandardKey = func() map[string]string {
 // explicit `compliance:` block, the controls implied by each
 // `provides:` tag (resolved through compliance.ConfigcrateProvisions), and
 // the controls implied by each `bundle:` tag (resolved through
-// compliance.ConfigcrateBundles). The per-control []module_names slice is
+// compliance.ConfigcrateBundles). The per-control []configcrate_names slice is
 // deduped — without that, a module declaring the same
 // (framework, control) via two paths would appear twice in coverage
 // drilldowns.
@@ -1806,7 +1806,7 @@ func (cs *ConfigStore) EnvoyFrameworks(hostname string) []string {
 	return out
 }
 
-// computeStandardCoverage walks (entryModules × controlIndex) once to
+// computeStandardCoverage walks (entryConfigcrates × controlIndex) once to
 // produce a single StandardCoverage. Pure function — used by
 // buildCoverageCache at publish time. Kept exported-ish (lowercase but
 // in the same package) so tests can re-derive coverage independently
@@ -2436,7 +2436,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	// Discover usercrates — structurally identical to modules but living
-	// under stacks/**/usercrates/ directories. Merged into moduleDefs so
+	// under stacks/**/usercrates/ directories. Merged into configcrateDefs so
 	// resolveEntry looks them up the same way. Name collisions with
 	// regular modules are fatal: usercrates share the same name namespace
 	// because they resolve through the same module-ref path.
@@ -2604,7 +2604,7 @@ func (cs *ConfigStore) loadAllInner() error {
 }
 
 // unreferencedUsercrates returns the sorted names of Usercrate-kind defs
-// in moduleDefs whose names do not appear in any envoy's resolved module
+// in configcrateDefs whose names do not appear in any envoy's resolved module
 // list. Surfaced as a publish-time warning so operators notice dead
 // drop-ins (a usercrate file the loader picked up but no envoy actually
 // includes).
@@ -2738,7 +2738,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 	// most-specific-wins across carriers, resolved by comparing tiers (not list
 	// position) so the precedence survives any pipeline reordering. See [Tier].
 	var configcrateRefs []ConfigcrateRef
-	seen := make(map[string]int)       // name → index into moduleRefs
+	seen := make(map[string]int)       // name → index into configcrateRefs
 	stateTier := make(map[string]Tier) // name → tier that set the winning State
 	addRef := func(ref ConfigcrateRef) {
 		if idx, ok := seen[ref.Name]; ok {
@@ -2886,7 +2886,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 		// Shallow-clone the inherited-compliance map so later mutation
 		// of one doesn't leak into the other. InheritedCompliance carries
 		// any unioned ancestor compliance.vgo claims from
-		// applyModuleComplianceInheritance; the operator-facing per-module
+		// applyConfigcrateComplianceInheritance; the operator-facing per-module
 		// compliance attribution (Compliance.Provides + Compliance.Bundle)
 		// is unioned separately by the trace builder.
 		var compliance map[string][]string
@@ -2989,12 +2989,12 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 
 	// Extract module definition names for var collection below. A foreach
 	// instance's var defaults come from the base module definition.
-	moduleNames := make([]string, len(configcrateRefs))
+	configcrateNames := make([]string, len(configcrateRefs))
 	for i, ref := range configcrateRefs {
 		if ref.BaseName != "" {
-			moduleNames[i] = ref.BaseName
+			configcrateNames[i] = ref.BaseName
 		} else {
-			moduleNames[i] = ref.Name
+			configcrateNames[i] = ref.Name
 		}
 	}
 
@@ -3002,7 +3002,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
 	var varOrder []string
-	for _, name := range moduleNames {
+	for _, name := range configcrateNames {
 		for k, v := range configcrateDefs[name].Vars {
 			if _, exists := vars[k]; !exists {
 				varOrder = append(varOrder, k)
@@ -3337,7 +3337,7 @@ func (cs *ConfigStore) EffectiveConfigYAML(hostname string) (string, error) {
 
 // --- internal helpers ---
 
-// loadModuleDefs reads all config files from the modules directory.
+// loadConfigcrateDefs reads all config files from the modules directory.
 func loadConfigcrateDefs(dir string, dangerous bool) (map[string]*ConfigcrateDefinition, error) {
 	paths, err := walkConfigFiles(dir)
 	if err != nil {
@@ -4065,7 +4065,7 @@ func unionDedupeStrings(a, b []string) []string {
 	return out
 }
 
-// applyModuleComplianceInheritance unions claims from every ancestor
+// applyConfigcrateComplianceInheritance unions claims from every ancestor
 // compliance.vgo in the modules tree into each module's own Compliance
 // block. For a module at configcrates/users/dan.vgo, this walks ["configcrates/users",
 // "configcrates"] and unions each matching directory's claims into def.Compliance.
@@ -4358,7 +4358,7 @@ func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretE
 	return errs
 }
 
-// resolveModuleSecrets resolves secret: prefixes in module resource attributes.
+// resolveConfigcrateSecrets resolves secret: prefixes in module resource attributes.
 // It collects all failures rather than stopping at the first. Both whole-value
 // (`password: secret:vigo/db/pw`) and embedded (`env: "PW=secret:vigo/db/pw,DB=app"`)
 // occurrences are substituted via resolveSecretsInValue.
@@ -4546,7 +4546,7 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 	return nil
 }
 
-// moduleDefReferencesSecret checks if a module definition's resources contain
+// configcrateDefReferencesSecret checks if a module definition's resources contain
 // the given secret reference string.
 func configcrateDefReferencesSecret(def *ConfigcrateDefinition, needle string) bool {
 	for _, v := range def.Vars {
@@ -4659,7 +4659,7 @@ func appendUnique(slice []string, val string) []string {
 	return append(slice, val)
 }
 
-// moduleToValidate converts a ConfigcrateDefinition to a validate.Configcrate.
+// configcrateToValidate converts a ConfigcrateDefinition to a validate.Configcrate.
 func configcrateToValidate(def *ConfigcrateDefinition) validate.Configcrate {
 	mod := validate.Configcrate{Name: def.Name}
 	for _, r := range def.Resources {

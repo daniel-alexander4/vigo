@@ -475,7 +475,7 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 
 	// Try subdirectories if not at top level.
 	if found == "" {
-		// WalkDir errors only on an unreadable modulesDir; the callback
+		// WalkDir errors only on an unreadable configcratesDir; the callback
 		// never returns one. A bad root leaves found "" → caller reports
 		// not-found.
 		_ = filepath.WalkDir(configcratesDir, func(path string, entry os.DirEntry, err error) error {
@@ -506,7 +506,7 @@ func (d *toolDeps) listConfigcrates() (string, error) {
 	if d.configStore == nil {
 		return marshalResult(map[string]any{"count": 0, "configcrates": []string{}})
 	}
-	names := d.configStore.ListModuleNames()
+	names := d.configStore.ListConfigcrateNames()
 	return marshalResult(map[string]any{
 		"count":        len(names),
 		"configcrates": names,

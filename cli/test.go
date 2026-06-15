@@ -219,13 +219,13 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 	}
 
 	// Check expected modules.
-	moduleNames := make(map[string]bool)
+	configcrateNames := make(map[string]bool)
 	for _, m := range cfg.Configcrates {
-		moduleNames[m.Name] = true
+		configcrateNames[m.Name] = true
 	}
 	for _, want := range td.Expect.Configcrates {
-		if !moduleNames[want] {
-			failures = append(failures, fmt.Sprintf("configcrate %q not found (have: %s)", want, joinKeys(moduleNames)))
+		if !configcrateNames[want] {
+			failures = append(failures, fmt.Sprintf("configcrate %q not found (have: %s)", want, joinKeys(configcrateNames)))
 		}
 	}
 

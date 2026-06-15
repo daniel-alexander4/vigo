@@ -85,7 +85,7 @@
 {{end}}
 
 <!-- Configcrate Inheritance -->
-{{$moduleLevels := traceModuleLevels .Inheritance}}
+{{$moduleLevels := traceConfigcrateLevels .Inheritance}}
 {{$mTotal := len $moduleLevels}}
 <div class="trace-group">
     <h3 class="trace-group__title">{{T $.Locale "envoy_trace.configcrate_inheritance"}}</h3>
@@ -242,10 +242,10 @@
                 <span class="trace-comp-ids">{{joinStrings (index $mcf.Compliance $fw) ", "}}</span>
             </div>
             {{end}}
-            {{if $mcf.CoveredModules}}
+            {{if $mcf.CoveredConfigcrates}}
             <div class="trace-card__row u-pl-0">
                 <span class="text-muted">configcrates:</span>
-                <span class="u-ml-8px">{{joinStrings $mcf.CoveredModules ", "}}</span>
+                <span class="u-ml-8px">{{joinStrings $mcf.CoveredConfigcrates ", "}}</span>
             </div>
             {{end}}
         </div>

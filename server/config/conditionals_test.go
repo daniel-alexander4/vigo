@@ -17,7 +17,7 @@ func conditionalsParse(when string) (conditionals.WhenExpr, error) {
 
 // conditionalsEvalFuncs fully evaluates an expression via the canonical
 // parser, resolving the server-side builtins against traits (mirroring what
-// EvalModuleWhenServerSide resolves) and treating var refs as false.
+// EvalConfigcrateWhenServerSide resolves) and treating var refs as false.
 func conditionalsEvalFuncs(expr conditionals.WhenExpr, traits map[string]any) (bool, error) {
 	return conditionals.EvalWhenExprWithFuncs(expr,
 		func(string) bool { return false },
@@ -197,7 +197,7 @@ func TestEvaluateResourceWhen_BuiltinShortCircuitFalse(t *testing.T) {
 	}
 }
 
-// --- ShouldIncludeModule tests ---
+// --- ShouldIncludeConfigcrate tests ---
 
 func TestShouldIncludeConfigcrate_NoConditionals(t *testing.T) {
 	mod := Configcrate{Name: "basic"}
@@ -348,11 +348,11 @@ configcrates:
 	}
 }
 
-// --- EvalModuleWhenServerSide canonical-parser agreement (B20) ---
+// --- EvalConfigcrateWhenServerSide canonical-parser agreement (B20) ---
 
 // evalCanonical fully evaluates a when: expression through the canonical
 // server/conditionals AST parser, resolving the same server-side builtins
-// EvalModuleWhenServerSide resolves. It is the oracle these tests check the
+// EvalConfigcrateWhenServerSide resolves. It is the oracle these tests check the
 // server-side filter against — proving the filter now shares the canonical
 // parser's precedence/parenthesization semantics instead of the old
 // string-split evaluator's.
@@ -376,7 +376,7 @@ func TestEvalConfigcrateWhenServerSide_AgreesWithCanonicalParser(t *testing.T) {
 		"os.arch":   "amd64",
 	}
 
-	// All builtins are server-resolvable, so EvalModuleWhenServerSide must
+	// All builtins are server-resolvable, so EvalConfigcrateWhenServerSide must
 	// return a definite (include, "") and that include must match the
 	// canonical parser's full evaluation. Precedence and parens are the
 	// cases the old string-split evaluator got wrong.
@@ -404,13 +404,13 @@ func TestEvalConfigcrateWhenServerSide_AgreesWithCanonicalParser(t *testing.T) {
 			}
 			want := evalCanonical(t, when, traits)
 			if include != want {
-				t.Errorf("EvalModuleWhenServerSide(%q) = %v, canonical parser = %v", when, include, want)
+				t.Errorf("EvalConfigcrateWhenServerSide(%q) = %v, canonical parser = %v", when, include, want)
 			}
 		})
 	}
 }
 
-// TestEvalModuleWhenServerSide_DefersAgentBuiltins pins the preserved
+// TestEvalConfigcrateWhenServerSide_DefersAgentBuiltins pins the preserved
 // deferral behavior: an expression with an agent-only builtin that can't be
 // short-circuited server-side must be passed through unchanged (include=true,
 // non-empty residual) for the agent to finish.

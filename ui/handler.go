@@ -4215,7 +4215,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	// Find envoys whose modules cover this control via compliance tags.
 	// Use fleet cache for the full envoy list (no 100-envoy cap) and
 	// avoid per-envoy run queries — the fleet cache already has status.
-	type envoyModule struct {
+	type envoyConfigcrate struct {
 		envoyID     string
 		hostname    string
 		configcrate string
@@ -4224,7 +4224,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		failedCount int64
 		moduleCount int64
 	}
-	var matches []envoyModule
+	var matches []envoyConfigcrate
 
 	// Get all envoys from fleet cache or fall back to DataSource.
 	type envoyInfo struct {
@@ -4249,7 +4249,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 			for _, ids := range ct.Frameworks {
 				for _, id := range ids {
 					if id == controlID {
-						matches = append(matches, envoyModule{
+						matches = append(matches, envoyConfigcrate{
 							envoyID:     t.ID,
 							hostname:    t.Hostname,
 							configcrate: ct.Configcrate,

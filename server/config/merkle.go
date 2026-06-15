@@ -19,7 +19,7 @@ import (
 //	       / | \
 //	    mod1 mod2 mod3
 //
-// Leaves are the per-module content hashes (already computed by HashModuleContent)
+// Leaves are the per-module content hashes (already computed by HashConfigcrateContent)
 // plus a vars leaf (SHA256 of the deterministic vars JSON). The root is a single
 // hash representing the entire envoy config — if it matches the agent's cached
 // root, the config hasn't changed and the server can skip bundle construction.
@@ -73,7 +73,7 @@ type kv struct {
 	V any    `json:"v"`
 }
 
-// hashModules builds a binary Merkle tree from module content hashes.
+// hashConfigcrates builds a binary Merkle tree from module content hashes.
 // Configcrates are processed in their DAG order (as stored in the slice).
 func hashConfigcrates(configcrates []Configcrate) string {
 	if len(configcrates) == 0 {

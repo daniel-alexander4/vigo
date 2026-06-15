@@ -137,7 +137,7 @@ type ConfigcrateRunChange struct {
 	AnyChanged      bool
 }
 
-// moduleChangesQuery returns rows for the last DivergedThreshold runs of
+// configcrateChangesQuery returns rows for the last DivergedThreshold runs of
 // a given envoy ending at or before a supplied anchor timestamp (the
 // run currently being viewed). One row per (module, run); `AnyChanged`
 // is true iff at least one resource on that module in that run reported
@@ -158,7 +158,7 @@ GROUP BY rr.configcrate_name, rr.run_id, r.started_at
 ORDER BY rr.configcrate_name, r.started_at DESC
 `, convergence.DivergedThreshold)
 
-// ListEnvoyModuleChangesRecent returns the module-change matrix for the
+// ListEnvoyConfigcrateChangesRecent returns the module-change matrix for the
 // last convergence.DivergedThreshold runs of `envoyID`, ending at the
 // run whose `startedAt` is supplied (inclusive). Rows are ordered so
 // each module's runs appear newest-first — directly feedable to
@@ -270,7 +270,7 @@ SELECT r.id, r.envoy_id, e.hostname, r.started_at, r.finished_at,
            AND rr.error_message <> ''
          ORDER BY rr.created_at
          LIMIT 1
-       ), '') AS top_failed_module
+       ), '') AS top_failed_configcrate
 FROM runs r
 JOIN envoys e ON e.id = r.envoy_id
 ORDER BY r.started_at DESC

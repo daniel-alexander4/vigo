@@ -110,7 +110,7 @@ func TestMerkleRootSingleConfigcrate(t *testing.T) {
 	}
 }
 
-func TestMerkleRootOddModuleCount(t *testing.T) {
+func TestMerkleRootOddConfigcrateCount(t *testing.T) {
 	// Odd number of modules — the tree must handle the unpaired node.
 	configcrates := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},

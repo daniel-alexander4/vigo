@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// TestNoRetiredModuleVocabularyInTemplates guards the 0.71.0 module→configcrate
+// TestNoRetiredConfigcrateVocabularyInTemplates guards the 0.71.0 module→configcrate
 // rename on the UI's highest-churn surface — the HTML templates.
 //
 // "module" can't be banned globally (it collides with kernel_module, Go/Rust
@@ -23,7 +23,7 @@ import (
 // stripping {{...}} actions, class="..." values, and comments) so a reintroduced
 // "Module Inheritance" heading or `modules:` label fails `make test` instead of
 // shipping. Add a genuinely-legitimate term (e.g. a TPM trait label) to allowlist.
-func TestNoRetiredModuleVocabularyInTemplates(t *testing.T) {
+func TestNoRetiredConfigcrateVocabularyInTemplates(t *testing.T) {
 	// Substrings that legitimately contain "module" as visible template text.
 	// Empty today — templates are clean after the rename sweep.
 	allowlist := []string{}
@@ -31,7 +31,7 @@ func TestNoRetiredModuleVocabularyInTemplates(t *testing.T) {
 	reAction := regexp.MustCompile(`(?s)\{\{.*?\}\}`) // template actions / data refs
 	reClass := regexp.MustCompile(`class="[^"]*"`)    // CSS class names (e.g. trace-card__modules)
 	reHTMLComment := regexp.MustCompile(`(?s)<!--.*?-->`)
-	reModule := regexp.MustCompile(`(?i)\bmodules?\b`)
+	reConfigcrate := regexp.MustCompile(`(?i)\bmodules?\b`)
 
 	err := filepath.WalkDir("templates", func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -49,7 +49,7 @@ func TestNoRetiredModuleVocabularyInTemplates(t *testing.T) {
 		visible = reAction.ReplaceAllString(visible, "")
 		visible = reClass.ReplaceAllString(visible, "")
 
-		for _, loc := range reModule.FindAllStringIndex(visible, -1) {
+		for _, loc := range reConfigcrate.FindAllStringIndex(visible, -1) {
 			start := loc[0] - 25
 			if start < 0 {
 				start = 0

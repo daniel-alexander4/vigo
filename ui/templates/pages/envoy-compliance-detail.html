@@ -82,7 +82,7 @@
                     {{else if eq .Status "waived"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Status "partial"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Scope "documented"}}<span class="text-warning">{{T $.Locale "envoy_compliance_detail.requires_documentation"}}</span>
-                    {{else}}{{if .RecommendedModules}}<span class="text-warning">{{T $.Locale "envoy_compliance_detail.assign"}} {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">{{T $.Locale "envoy_compliance_detail.no_configcrate"}}</span>{{end}}
+                    {{else}}{{if .RecommendedConfigcrates}}<span class="text-warning">{{T $.Locale "envoy_compliance_detail.assign"}} {{joinStrings .RecommendedConfigcrates ", "}}</span>{{else}}<span class="text-muted">{{T $.Locale "envoy_compliance_detail.no_configcrate"}}</span>{{end}}
                     {{end}}
                 </td>
             </tr>

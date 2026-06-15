@@ -70,7 +70,7 @@ envoys:
 		t.Fatal("expected config")
 	}
 	if hasConfigcrate(cfg.Configcrates, "admin") {
-		t.Errorf("usercrate admin should NOT auto-apply; modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("usercrate admin should NOT auto-apply; modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -94,7 +94,7 @@ envoys:
 		t.Fatal("expected config")
 	}
 	if !hasConfigcrate(cfg.Configcrates, "admin") {
-		t.Errorf("usercrate admin should be included via match-block usercrates:; modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("usercrate admin should be included via match-block usercrates:; modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -124,7 +124,7 @@ envoys:
 		t.Fatal("expected config for a01")
 	}
 	if !hasConfigcrate(cfg.Configcrates, "admin") {
-		t.Errorf("usercrate admin should be inherited via common.vgo usercrates:; modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("usercrate admin should be inherited via common.vgo usercrates:; modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -153,7 +153,7 @@ envoys:
 		t.Fatal("expected config")
 	}
 	if !hasConfigcrate(cfg.Configcrates, "admin") {
-		t.Errorf("usercrate admin should be added by environments.vgo usercrates:; modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("usercrate admin should be added by environments.vgo usercrates:; modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -182,7 +182,7 @@ envoys:
 		t.Fatal("expected config")
 	}
 	if !hasConfigcrate(cfg.Configcrates, "admin") {
-		t.Errorf("usercrate admin should be included via role usercrates:; modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("usercrate admin should be included via role usercrates:; modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -303,7 +303,7 @@ envoys:
 	}
 	cfg := cs.Get("plex")
 	if cfg == nil || !hasConfigcrate(cfg.Configcrates, "dan") {
-		t.Errorf("usercrate dan should apply; modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("usercrate dan should apply; modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -352,7 +352,7 @@ envoys:
 		t.Fatal("expected config")
 	}
 	if !hasConfigcrate(cfg.Configcrates, "alice") {
-		t.Errorf("usercrate with defaulted name `alice` should resolve when included; modules = %v", moduleNames(cfg.Configcrates))
+		t.Errorf("usercrate with defaulted name `alice` should resolve when included; modules = %v", configcrateNames(cfg.Configcrates))
 	}
 }
 
@@ -442,7 +442,7 @@ func hasConfigcrate(mods []Configcrate, name string) bool {
 	return false
 }
 
-func moduleNames(mods []Configcrate) []string {
+func configcrateNames(mods []Configcrate) []string {
 	out := make([]string, 0, len(mods))
 	for _, m := range mods {
 		out = append(out, m.Name)

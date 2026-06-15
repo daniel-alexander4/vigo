@@ -11,7 +11,7 @@ import (
 	"git.alexander4.io/vigo/server/compliance"
 )
 
-// moduleProvisionsRule validates a configcrate's `provides:` list against
+// configcrateProvisionsRule validates a configcrate's `provides:` list against
 // the Vigo-curated catalog at server/compliance/provisions.go.
 //
 // Unknown provision tag → Error with did-you-mean. The agent's

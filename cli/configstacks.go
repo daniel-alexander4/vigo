@@ -52,7 +52,7 @@ Examples:
 	},
 }
 
-// stacksModule is a minimal struct for searching module content.
+// stacksConfigcrate is a minimal struct for searching module content.
 type stacksConfigcrate struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`

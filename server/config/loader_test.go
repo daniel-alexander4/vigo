@@ -2440,7 +2440,7 @@ envoys:
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
-    configcrates: [nonexistent_module_xyz]
+    configcrates: [nonexistent_configcrate_xyz]
 `)
 
 	// Reload should fail but old config preserved.
@@ -2883,23 +2883,23 @@ envoys:
 	}
 
 	// Should have inherited sshd + monitoring, plus own nginx.
-	var moduleNames []string
+	var configcrateNames []string
 	for _, m := range cfg.Configcrates {
-		moduleNames = append(moduleNames, m.Name)
+		configcrateNames = append(configcrateNames, m.Name)
 	}
 
-	if len(moduleNames) != 3 {
-		t.Fatalf("expected 3 modules, got %d: %v", len(moduleNames), moduleNames)
+	if len(configcrateNames) != 3 {
+		t.Fatalf("expected 3 modules, got %d: %v", len(configcrateNames), configcrateNames)
 	}
 	// Parent modules first, then own.
-	if moduleNames[0] != "sshd" {
-		t.Errorf("module[0] = %q, want sshd", moduleNames[0])
+	if configcrateNames[0] != "sshd" {
+		t.Errorf("module[0] = %q, want sshd", configcrateNames[0])
 	}
-	if moduleNames[1] != "monitoring" {
-		t.Errorf("module[1] = %q, want monitoring", moduleNames[1])
+	if configcrateNames[1] != "monitoring" {
+		t.Errorf("module[1] = %q, want monitoring", configcrateNames[1])
 	}
-	if moduleNames[2] != "nginx" {
-		t.Errorf("module[2] = %q, want nginx", moduleNames[2])
+	if configcrateNames[2] != "nginx" {
+		t.Errorf("module[2] = %q, want nginx", configcrateNames[2])
 	}
 }
 
@@ -3781,7 +3781,7 @@ envoys:
 // behavior that isn't implemented yet. They use t.Skip so CI stays green;
 // implementer removes the t.Skip line after wiring the feature.
 
-// TestResolveModuleSecrets_EmbeddedRefs_EmitsPlaceholders pins the post-
+// TestResolveConfigcrateSecrets_EmbeddedRefs_EmitsPlaceholders pins the post-
 // placeholder behavior: embedded `secret:<key>` refs inside compound
 // attribute values (env, environment, cron environment, container
 // labels, etc.) are substituted with `__VIGO_SECRET__<key>__END_VIGO_SECRET__`
@@ -3835,7 +3835,7 @@ envoys:
 	}
 }
 
-// TestResolveModuleSecrets_LiteralSecretColonInContent guards the inline
+// TestResolveConfigcrateSecrets_LiteralSecretColonInContent guards the inline
 // secret scanner against literal `secret:` text in a file resource's content.
 // The Prometheus alert-rules file (vigo-prometheus-alerts) ships a description
 // `A `+"`"+`secret:`+"`"+` reference failed to resolve` — the backtick after

@@ -11,7 +11,7 @@ import (
 	"sort"
 )
 
-// HashModuleContent computes a SHA256 hash of a Configcrate's content.
+// HashConfigcrateContent computes a SHA256 hash of a Configcrate's content.
 // The hash covers resources (name, type, attributes, when, notify, subscribes),
 // depends_on, and the module-level when expression — everything that affects
 // the module's behavior. The module name is NOT included (it's the cache key).

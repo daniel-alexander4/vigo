@@ -617,15 +617,15 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var results []retractResourceRunResult
-	moduleNames := make([]string, 0, len(req.Configcrates))
+	configcrateNames := make([]string, 0, len(req.Configcrates))
 	for _, mod := range req.Configcrates {
 		result := h.retractConfigcrate(r.Context(), mod)
 		results = append(results, result)
-		moduleNames = append(moduleNames, mod.Name)
+		configcrateNames = append(configcrateNames, mod.Name)
 	}
 
 	recordAudit(r.Context(), h.auditWriter, "config.retract", actorFromRequest(r), "rest",
-		fmt.Sprintf("generated retract configcrates for: %s", strings.Join(moduleNames, ", ")), "")
+		fmt.Sprintf("generated retract configcrates for: %s", strings.Join(configcrateNames, ", ")), "")
 
 	writeJSON(w, r, http.StatusOK, retractResponse{
 		Enabled: true,

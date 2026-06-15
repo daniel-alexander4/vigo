@@ -125,7 +125,7 @@ func HasCaseResources(cfg *EnvoyConfig) bool {
 	return false
 }
 
-// HasModuleWhens returns true if any module in the config has a module-level
+// HasConfigcrateWhens returns true if any module in the config has a module-level
 // when: expression. Such modules may be filtered during bundle building based
 // on traits, making the load-time Merkle root unreliable for fast-path comparison.
 func HasConfigcrateWhens(cfg *EnvoyConfig) bool {
@@ -178,7 +178,7 @@ func toSlice(v any) ([]any, error) {
 	}
 }
 
-// foreachModuleExpansionWarnThreshold: a foreach: ref that expands into more
+// foreachConfigcrateExpansionWarnThreshold: a foreach: ref that expands into more
 // module instances than this logs a warning — every instance is its own module
 // in the policy bundle, so it costs wire bytes, server memory, and a per-module
 // agent cache entry on every check-in.
@@ -187,7 +187,7 @@ const foreachConfigcrateExpansionWarnThreshold = 200
 // expandForeachConfigcrateRefs replaces any ConfigcrateRef carrying foreach: with one
 // synthetic per-item ref named "<module>[<key>]". The list comes from vars; the
 // item's fields land on the instance as {{ .Each.<field> }} (maps) or
-// {{ .Item }} (scalars) — see expandModuleInstanceResources. A scalar list is
+// {{ .Item }} (scalars) — see expandConfigcrateInstanceResources. A scalar list is
 // keyed by the value itself; a list of maps requires key: on the ref naming
 // which field supplies the suffix. Duplicate resolved keys are an error.
 func expandForeachConfigcrateRefs(refs []ConfigcrateRef, defs map[string]*ConfigcrateDefinition, vars map[string]any) ([]ConfigcrateRef, error) {
@@ -264,7 +264,7 @@ func foreachInstanceKey(item any, keyField string) (string, error) {
 	}
 }
 
-// expandModuleInstanceResources substitutes a foreach item's fields into a
+// expandConfigcrateInstanceResources substitutes a foreach item's fields into a
 // module instance's resources ({{ .Each.<field> }} for maps, {{ .Item }} for
 // scalars), then suffixes every resource name with [<key>] so instances don't
 // collide, rewriting intra-module depends_on/notify/subscribes/before

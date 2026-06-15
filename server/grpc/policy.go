@@ -361,7 +361,7 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 }
 
 // hashPolicyConfigcrate computes a content hash from a PolicyConfigcrate proto.
-// Delegates to config.HashModuleContent after converting to Configcrate.
+// Delegates to config.HashConfigcrateContent after converting to Configcrate.
 // Kept for backward compatibility with tests; production code uses
 // pre-computed Configcrate.ContentHash instead.
 func hashPolicyConfigcrate(mod *pb.PolicyConfigcrate) string {

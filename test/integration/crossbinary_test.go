@@ -126,9 +126,9 @@ func TestCrossBinary_RevokedAgent(t *testing.T) {
 	_ = output // Error is expected — agent exits non-zero.
 }
 
-// TestCrossBinary_MultiModule verifies the agent receives and processes
+// TestCrossBinary_MultiConfigcrate verifies the agent receives and processes
 // multiple modules in a single convergence cycle.
-func TestCrossBinary_MultiModule(t *testing.T) {
+func TestCrossBinary_MultiConfigcrate(t *testing.T) {
 	configcrates := map[string]string{
 		"base": `
 name: base

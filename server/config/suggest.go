@@ -65,7 +65,7 @@ func notFoundHint(ref string, candidates []string, fallback string) string {
 	return ""
 }
 
-// moduleCandidates returns a sorted slice of module names from a
+// configcrateCandidates returns a sorted slice of module names from a
 // module definition map, for deterministic suggestion ordering.
 func configcrateCandidates(defs map[string]*ConfigcrateDefinition) []string {
 	out := make([]string, 0, len(defs))

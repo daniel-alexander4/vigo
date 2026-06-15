@@ -437,7 +437,7 @@ func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
 	}
 }
 
-// renderModuleCards draws Section 2: box cards with modules and roles (no vars).
+// renderConfigcrateCards draws Section 2: box cards with modules and roles (no vars).
 func renderConfigcrateCards(levels []inheritanceLevel, roleExpansion []roleExpansionEntry, matchPattern string) {
 	total := len(levels)
 
@@ -712,7 +712,7 @@ func renderComplianceInheritance(tags []complianceTraceEntry) {
 	fmt.Println()
 }
 
-// renderModuleComplianceSources draws the Compliance Sources section: one
+// renderConfigcrateComplianceSources draws the Compliance Sources section: one
 // box card per modules-tree compliance.vgo file that attached claims to any
 // of the envoy's effective modules. Each card lists the frameworks + controls
 // the file contributed and the modules it covered, so an operator can see

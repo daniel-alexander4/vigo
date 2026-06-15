@@ -49,7 +49,7 @@ func EvaluateResourceWhen(when string, vars map[string]any) (shouldInclude bool,
 	return true, conditionals.ExprString(substituted), nil
 }
 
-// ShouldIncludeModule evaluates a module's When expression against the
+// ShouldIncludeConfigcrate evaluates a module's When expression against the
 // resolved vars map. Returns true if the module should be included.
 func ShouldIncludeConfigcrate(mod Configcrate, vars map[string]any) bool {
 	if mod.When == "" {
@@ -82,7 +82,7 @@ var serverSideBuiltins = map[string]bool{
 	"has_display": true,
 }
 
-// EvalModuleWhenServerSide evaluates a module- or resource-level when:
+// EvalConfigcrateWhenServerSide evaluates a module- or resource-level when:
 // expression server-side against the envoy's traits. It routes through the
 // canonical AST parser in server/conditionals (the same parser the agent
 // uses) so server and agent agree on precedence, parentheses, and operator

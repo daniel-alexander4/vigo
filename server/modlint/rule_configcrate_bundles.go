@@ -11,9 +11,9 @@ import (
 	"git.alexander4.io/vigo/server/compliance"
 )
 
-// moduleBundleRule validates a configcrate's `bundle:` list against the
+// configcrateBundleRule validates a configcrate's `bundle:` list against the
 // Vigo-curated catalog at server/compliance/bundles.go. Sibling rule to
-// moduleProvisionsRule — provisions and bundles split into two catalogs
+// configcrateProvisionsRule — provisions and bundles split into two catalogs
 // intentionally; the modlint surface mirrors the split so operators see the
 // same error shape regardless of which catalog rejected their tag.
 //

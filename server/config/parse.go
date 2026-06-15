@@ -25,7 +25,7 @@ func sanitizeYAML(data []byte) []byte {
 	return bytes.Join(lines, []byte("\n"))
 }
 
-// ParseModuleFile parses raw YAML bytes into a ConfigcrateDefinition, using the
+// ParseConfigcrateFile parses raw YAML bytes into a ConfigcrateDefinition, using the
 // same tolerant node-based parsing as the config loader. This handles cases
 // where resources have duplicate YAML keys (e.g., "name" as both resource
 // identifier and type-specific attribute) by manually walking the YAML nodes.

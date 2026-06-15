@@ -219,7 +219,7 @@ func TestConfigTrace_TraceNoSubject(t *testing.T) {
 	}
 }
 
-// TestConfigTrace_InverseModule exercises the inverse (subject-rooted) branch:
+// TestConfigTrace_InverseConfigcrate exercises the inverse (subject-rooted) branch:
 // ?configcrate= without a hostname returns an InverseTraceResult rather than a
 // forward ConfigTrace.
 func TestConfigTrace_InverseConfigcrate(t *testing.T) {
@@ -300,7 +300,7 @@ func TestConfigTrace_InverseIncludeTree(t *testing.T) {
 	}
 }
 
-// TestConfigTrace_InverseModuleUsercrateConflict confirms ?configcrate= and
+// TestConfigTrace_InverseConfigcrateUsercrateConflict confirms ?configcrate= and
 // ?usercrate= together are rejected — they each select a different subject.
 func TestConfigTrace_InverseConfigcrateUsercrateConflict(t *testing.T) {
 	store := newConfigTraceTestStore(t)

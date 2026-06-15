@@ -121,7 +121,7 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 	}
 }
 
-// formatModuleList formats a module list with color.
+// formatConfigcrateList formats a module list with color.
 // inherited=true uses dim (for common.vgo modules), false uses bold white.
 func formatConfigcrateList(configcrates []string, inherited bool) string {
 	if len(configcrates) == 0 {
