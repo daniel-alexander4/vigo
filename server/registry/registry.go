@@ -200,12 +200,24 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 			return "", err
 		}
 
-		// Mark pattern as used. Failure here leaves the envoy in the DB
-		// but not wired to a pattern, which matches the original behavior.
+		// Mark the one-time pattern consumed. If this fails the envoy is
+		// already created but the pattern stays unused — leaving the
+		// one-time token reusable (a Non-Negotiable: tokens are one-shot).
+		// Compensate by deleting the just-created envoy (DB + FleetIndex)
+		// so a failed enrollment leaves no trace and the token can't be
+		// replayed. Still under enrollMu, so no concurrent enrollment can
+		// observe the half-created state.
 		if err := r.queries.MarkPatternUsed(ctx, db.MarkPatternUsedParams{
 			ID:     p.ID,
 			UsedBy: sql.NullString{String: envoyID, Valid: true},
 		}); err != nil {
+			if delErr := r.queries.DeleteEnvoy(ctx, envoyID); delErr != nil {
+				slog.Error("registry: failed to roll back envoy after MarkPatternUsed failure — one-time token may be reusable",
+					"envoy_id", envoyID, "error", delErr)
+			}
+			if r.fleet != nil {
+				r.fleet.RemoveEnvoy(envoyID)
+			}
 			return "", fmt.Errorf("marking pattern used: %w", err)
 		}
 
