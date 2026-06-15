@@ -420,10 +420,6 @@ async fn handle_client(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        // Keep GIT_TRACE_PACKET on for one cycle so any residual
-        // protocol-level oddity surfaces in the WARN log on non-zero
-        // exit. Drop in a follow-up once pipe-shovel has soaked.
-        .env("GIT_TRACE_PACKET", "1")
         .kill_on_drop(true);
     let spawn_started = std::time::Instant::now();
     let mut child = cmd.spawn().with_context(|| {
@@ -516,7 +512,7 @@ async fn handle_client(
                     break;
                 }
             };
-            tracing::info!(uid, child_pid, n, total, "gitback shovel: stdout→socket read");
+            tracing::trace!(uid, child_pid, n, total, "gitback shovel: stdout→socket read");
             if let Err(e) = write_half.write_all(&buf[..n]).await {
                 tracing::warn!(uid, child_pid, total, error = %e, "gitback shovel: stdout→socket write err");
                 break;
@@ -526,7 +522,7 @@ async fn handle_client(
                 break;
             }
             total += n as u64;
-            tracing::info!(uid, child_pid, n, total, "gitback shovel: stdout→socket wrote+flushed");
+            tracing::trace!(uid, child_pid, n, total, "gitback shovel: stdout→socket wrote+flushed");
         }
         Ok::<u64, std::io::Error>(total)
     });

@@ -417,9 +417,13 @@ impl Client {
     /// Get current Unix timestamp as decimal string (matches Go's strconv.FormatInt).
     fn timestamp_str() -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
+        // unwrap_or_default (epoch) rather than unwrap: a pre-1970 wall clock
+        // (misconfigured RTC before NTP) would otherwise panic this hot path
+        // on every check-in. The server's timestamp-skew check rejects the
+        // bogus value, and the daemon loop handles that without crashing.
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
             .to_string()
     }
@@ -427,7 +431,7 @@ impl Client {
     /// Build a prost_types::Timestamp for the current time.
     fn now_timestamp() -> prost_types::Timestamp {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
         prost_types::Timestamp {
             seconds: d.as_secs() as i64,
             nanos: d.subsec_nanos() as i32,

@@ -381,13 +381,13 @@ fn handle_present(
     // `%` in the command string is replaced with the temp file path.
     if let Some(validate_cmd) = params.get("validate").filter(|s| !s.is_empty()) {
         let cmd_str = validate_cmd.replace('%', &tmp_path_str);
-        let output = std::process::Command::new("sh")
-            .args(["-c", &cmd_str])
-            .output()
-            .map_err(|e| {
-                let _ = fs::remove_file(&tmp_path);
-                format!("validate command failed to execute: {}", e)
-            })?;
+        // Niced + OOM-adjusted via the shared helper so a heavy validate
+        // command (e.g. a config linter) stays an invisible background citizen
+        // rather than spawning at full priority.
+        let output = super::run_command_niced("sh", &["-c", &cmd_str], 10).map_err(|e| {
+            let _ = fs::remove_file(&tmp_path);
+            format!("validate command failed to execute: {}", e)
+        })?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let _ = fs::remove_file(&tmp_path);

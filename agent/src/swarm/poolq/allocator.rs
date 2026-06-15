@@ -1,9 +1,14 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Per-topic gap-free seq allocator for poolq (ADR-029).
+//! Per-topic monotonic seq allocator for poolq (ADR-029).
 //!
 //! Each poolq topic has a monotonic `seq` that totally orders its messages.
+//! Seqs are monotonic but **not** strictly gap-free: `issue()` persists the
+//! bumped counter and releases the flock before the caller writes the message
+//! file, so a crash between allocation and the message landing burns that seq.
+//! That's benign — consumers range-query by seq and an absent seq is just a
+//! message that never landed, not a correctness violation.
 //! Founder-only posting in v1 means the founder is the sole writer, so a
 //! single-machine flock-protected counter is sufficient — there is no
 //! cross-envoy consensus problem to solve. The flock serializes concurrent

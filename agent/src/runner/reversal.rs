@@ -29,7 +29,7 @@
 //! — they revert in a structured (multi-field) or remote-device context this
 //! build doesn't cover.
 
-use crate::executors::{run_command, Action, Executor, ResourceResult};
+use crate::executors::{run_command_niced, Action, Executor, ResourceResult};
 use crate::state::reversal::{ReversalCache, ReversalEntry};
 use crate::state::StateStore;
 use std::collections::HashMap;
@@ -229,7 +229,9 @@ impl ReversibleExecutor {
                     ir.duration_ms = start.elapsed().as_millis() as i32;
                     return ir;
                 }
-                match run_command("sh", &["-c", cmd]) {
+                // Niced + OOM-adjusted like the exec path — on_revert is
+                // housekeeping and must stay an invisible background citizen.
+                match run_command_niced("sh", &["-c", cmd], 10) {
                     Ok(o) if o.status.success() => {
                         r.action = Action::Updated;
                         r.changed = true;

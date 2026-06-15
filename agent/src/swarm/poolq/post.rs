@@ -6,8 +6,9 @@
 //! Called from the Slice-4 `vigo swarm poolq post` CLI verb. Mirrors the
 //! shape `Message::issue_with` uses: the caller passes a `sign` closure so
 //! production code can thread the puddle session helper through it while
-//! tests pass an in-memory key. No `tokio`, no daemon — this is straight-
-//! line code under flock.
+//! tests pass an in-memory key. No `tokio`, no daemon — straight-line code;
+//! the seq allocator's flock guards only the counter bump, not the message
+//! write.
 //!
 //! ### Order of operations
 //!
@@ -15,9 +16,10 @@
 //! 2. Compute `topic_id = sha256(author_pubkey ‖ topic_name)` and ensure
 //!    the per-topic dir layout exists.
 //! 3. Acquire the per-topic seq allocator (flock-protected) and issue `seq`.
-//!    The flock is held until the message file lands so a concurrent poster
-//!    on the same envoy can't observe a published `seq` whose message file
-//!    is still in flight.
+//!    The flock is released as soon as `issue()` returns — it is NOT held
+//!    across the message write below. A crash between issuing `seq` and the
+//!    write landing burns that seq (a benign gap; consumers range-query and
+//!    skip absent seqs). It serializes only concurrent allocations.
 //! 4. Build the [`MessageBody`], hand it to the sign closure, assemble the
 //!    [`Message`].
 //! 5. Write the message file atomically (temp + rename).

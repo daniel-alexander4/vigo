@@ -7,7 +7,7 @@
 //! notify relationships, and produces a topologically sorted execution order.
 
 use crate::proto::Configcrate;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// A single resource in the execution DAG.
 #[derive(Debug, Clone)]
@@ -176,12 +176,12 @@ pub fn topo_sort(nodes: Vec<ResourceNode>) -> Result<Vec<ResourceNode>, String> 
         }
     }
 
-    // Start with zero-in-degree nodes.
-    let mut queue: Vec<usize> = (0..len).filter(|&i| in_degree[i] == 0).collect();
+    // Start with zero-in-degree nodes. VecDeque so the front-pop is O(1) —
+    // a Vec::remove(0) made the whole sort O(n²).
+    let mut queue: VecDeque<usize> = (0..len).filter(|&i| in_degree[i] == 0).collect();
 
     let mut sorted = Vec::with_capacity(len);
-    while let Some(idx) = queue.first().copied() {
-        queue.remove(0);
+    while let Some(idx) = queue.pop_front() {
         sorted.push(idx);
 
         // Collect neighbors whose in-degree drops to zero, sort for stability.

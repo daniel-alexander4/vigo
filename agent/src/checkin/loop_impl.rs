@@ -1413,17 +1413,25 @@ pub async fn daemon_loop(
                         // Enqueue delta for delivery on reconnect.
                         if !rr.results.is_empty() {
                             if let Ok(mut wtxn) = store.write_txn() {
-                                let seq = store.pending.next_seq(&mut wtxn).unwrap_or(1) as i64;
-                                let (delta, _run_id) = build_run_delta(&rr.results, seq, policy_state.version);
-                                match store.pending.enqueue(&mut wtxn, &delta) {
-                                    Ok(s) => {
-                                        if let Err(e) = wtxn.commit() {
-                                            warn!(error = %e, "failed to commit offline delta transaction");
-                                        } else {
-                                            info!(seq = s, "enqueued offline delta for later delivery");
+                                // A next_seq error must not collapse to seq 1 — that
+                                // risks colliding with an already-queued delta on the
+                                // offline path. Log and skip; the cached bundle re-
+                                // derives this delta on the next cycle.
+                                match store.pending.next_seq(&mut wtxn) {
+                                    Ok(seq) => {
+                                        let (delta, _run_id) = build_run_delta(&rr.results, seq as i64, policy_state.version);
+                                        match store.pending.enqueue(&mut wtxn, &delta) {
+                                            Ok(s) => {
+                                                if let Err(e) = wtxn.commit() {
+                                                    warn!(error = %e, "failed to commit offline delta transaction");
+                                                } else {
+                                                    info!(seq = s, "enqueued offline delta for later delivery");
+                                                }
+                                            }
+                                            Err(e) => warn!(error = %e, "failed to enqueue offline delta"),
                                         }
                                     }
-                                    Err(e) => warn!(error = %e, "failed to enqueue offline delta"),
+                                    Err(e) => warn!(error = %e, "failed to allocate offline delta seq — skipping enqueue this cycle"),
                                 }
                             }
                         }
