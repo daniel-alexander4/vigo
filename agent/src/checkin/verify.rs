@@ -120,7 +120,7 @@ pub fn assert_signed_field_set_matches_proto() {
 
     let from_proto: HashSet<u32> = msg
         .fields()
-        .filter(|f| is_signed_per_proto(f))
+        .filter(is_signed_per_proto)
         .map(|f| f.number())
         .collect();
     let from_code: HashSet<u32> = SIGNED_FIELD_TAGS.iter().copied().collect();

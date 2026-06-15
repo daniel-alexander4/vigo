@@ -238,10 +238,6 @@ fn result_to_proto(r: &ResourceResult) -> ResourceRunResult {
     }
 }
 
-fn results_to_proto(results: &[ResourceResult]) -> Vec<ResourceRunResult> {
-    results.iter().map(result_to_proto).collect()
-}
-
 /// reportable_results prepares a unary ReportResult payload: it drops settled
 /// no-ops (unchanged, no error, Action::None) and returns (rows, total_count).
 /// The server records `total_count` as the run's resource total and folds the
@@ -2293,25 +2289,39 @@ mod tests {
     }
 
     #[test]
-    fn results_to_proto_converts() {
+    fn reportable_results_converts_and_elides_noops() {
         use crate::executors::Action;
-        let results = vec![ResourceResult {
-            configcrate_name: "nginx".into(),
-            resource_type: "file".into(),
-            resource_name: "/etc/nginx.conf".into(),
-            action: Action::Updated,
-            changed: true,
-            error: None,
-            duration_ms: 42,
-            ..Default::default()
-        }];
+        let results = vec![
+            ResourceResult {
+                configcrate_name: "nginx".into(),
+                resource_type: "file".into(),
+                resource_name: "/etc/nginx.conf".into(),
+                action: Action::Updated,
+                changed: true,
+                error: None,
+                duration_ms: 42,
+                ..Default::default()
+            },
+            // A settled no-op (unchanged, no error, Action::None) — elided
+            // from the rows but still counted in total.
+            ResourceResult {
+                configcrate_name: "nginx".into(),
+                resource_type: "service".into(),
+                resource_name: "nginx".into(),
+                action: Action::None,
+                changed: false,
+                error: None,
+                ..Default::default()
+            },
+        ];
 
-        let proto = results_to_proto(&results);
-        assert_eq!(proto.len(), 1);
-        assert_eq!(proto[0].configcrate_name, "nginx");
-        assert_eq!(proto[0].action_taken, "updated");
-        assert!(proto[0].changed);
-        assert!(proto[0].error_message.is_empty());
+        let (rows, total) = reportable_results(&results);
+        assert_eq!(total, 2, "total counts every resource, incl. elided no-ops");
+        assert_eq!(rows.len(), 1, "the settled no-op is elided from the rows");
+        assert_eq!(rows[0].configcrate_name, "nginx");
+        assert_eq!(rows[0].action_taken, "updated");
+        assert!(rows[0].changed);
+        assert!(rows[0].error_message.is_empty());
     }
 
     #[test]
