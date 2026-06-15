@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:833ccc76a9210d5a73575daa3e4d69328fedd0ac963c0806ad36ebc64b974752 -->
+<!-- vigo-i18n source_sha:0018fc18c408a1a9f17b399f7a1cdb6b7d0dde02ad7ece8466cca534ab7a2bdd -->
 
 ---
 title: Authentification
@@ -153,9 +153,29 @@ oidc:
   redirect_url: "https://vigo.example.com:8443/auth/callback"
 ```
 
-### Amorçage du premier utilisateur
+### Amorçage du premier administrateur
 
-Le premier utilisateur à se connecter via OIDC est automatiquement promu **admin**. Tous les utilisateurs suivants sont créés en tant que **viewers** par défaut. Les administrateurs peuvent modifier les rôles depuis la page d'administration des utilisateurs.
+Les utilisateurs OIDC sont créés en tant que **viewers** par défaut — il n'y a pas de promotion automatique « le premier utilisateur devient admin » (cela donnerait les droits admin à quiconque se connecte en premier sur un IdP autorisant l'auto-inscription). Accordez le premier administrateur de l'une des deux façons suivantes :
+
+- **Amorçage opt-in (libre-service) :** nommez l'identité de l'administrateur prévu sous `oidc:` pour que sa première connexion le promeuve admin de manière déterministe :
+
+  ```yaml
+  oidc:
+    # ... issuer/client_id/etc ...
+    bootstrap_admin_email: "admin@example.com"   # correspondance sur la claim email
+    # ou, lorsque l'email de l'IdP n'est pas stable :
+    # bootstrap_admin_subject: "auth0|abc123"    # correspondance sur la claim sub
+  ```
+
+  Les deux vides (par défaut) = aucun admin automatique.
+
+- **CLI (hors bande) :** faites connecter l'utilisateur une fois (ce qui crée sa ligne viewer), puis promouvez-le depuis l'hôte du serveur :
+
+  ```bash
+  sudo vigocli webusers set-role --username <son-email> --role admin
+  ```
+
+Les administrateurs peuvent ensuite modifier les rôles depuis la page d'administration des utilisateurs.
 
 ## Isowebauth (basé sur clé SSH)
 
