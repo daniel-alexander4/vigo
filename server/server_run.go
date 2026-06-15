@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	vigoai "git.alexander4.io/vigo/server/ai"
@@ -179,8 +181,19 @@ func (s *Server) startRetentionAndBackup(ctx context.Context) {
 	}
 }
 
-// startGRPCServer binds the gRPC listener and starts the serve
-// goroutine. Returns an error if the listener cannot bind.
+// adminSocketPath is the local Unix-domain socket the grpc-gateway dials to
+// reach VigoAdmin. It is per-instance (rooted under serverRoot, alongside
+// bolt/ and puddle/) so concurrent servers — including the ephemeral ones in
+// the test harness — never collide on a shared global path. The operator
+// path rides this socket; the network gRPC port requires a signed
+// control-plane call for VigoAdmin/VigoPeer (see the SignatureVerifyInterceptor).
+func (s *Server) adminSocketPath() string {
+	return filepath.Join(s.serverRoot, "run", "admin.sock")
+}
+
+// startGRPCServer binds the gRPC listeners (network TCP + local operator UDS)
+// and starts a serve goroutine for each. Returns an error if either listener
+// cannot bind.
 func (s *Server) startGRPCServer(ctx context.Context) error {
 	grpcLis, err := net.Listen("tcp", s.cfg.Server.GRPCListen)
 	if err != nil {
@@ -191,6 +204,32 @@ func (s *Server) startGRPCServer(ctx context.Context) error {
 		slog.Info("gRPC server starting", "addr", s.cfg.Server.GRPCListen)
 		if err := s.grpcSrv.Serve(grpcLis); err != nil {
 			slog.Error("gRPC server error", "error", err)
+		}
+	}()
+
+	// Local operator socket. The grpc-gateway dials this to reach VigoAdmin
+	// without presenting a signed control-plane call (it is token+RBAC-authed
+	// at the REST layer). 0600 + root-owned: only the local server process can
+	// reach it. Remove any stale socket left by an unclean shutdown first.
+	sockPath := s.adminSocketPath()
+	if err := os.MkdirAll(filepath.Dir(sockPath), 0o700); err != nil {
+		return fmt.Errorf("creating admin socket dir: %w", err)
+	}
+	if err := os.Remove(sockPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing stale admin socket: %w", err)
+	}
+	udsLis, err := net.Listen("unix", sockPath)
+	if err != nil {
+		return fmt.Errorf("listening on admin socket %s: %w", sockPath, err)
+	}
+	if err := os.Chmod(sockPath, 0o600); err != nil {
+		return fmt.Errorf("chmod admin socket: %w", err)
+	}
+
+	go func() {
+		slog.Info("gRPC operator socket starting", "path", sockPath)
+		if err := s.grpcSrv.Serve(udsLis); err != nil {
+			slog.Error("gRPC operator socket error", "error", err)
 		}
 	}()
 	return nil

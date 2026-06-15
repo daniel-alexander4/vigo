@@ -7,11 +7,8 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
@@ -31,26 +28,26 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
-// at the given address using mTLS credentials. It registers the VigoAdmin
-// service handlers on /api/ paths and mounts the web UI on /.
+// at grpcAddr. grpcAddr is the local Unix-domain-socket endpoint
+// (unix:///…/admin.sock) the server also listens on; the gateway is the
+// operator/REST entry point and is already token+RBAC-authed at the REST
+// layer, so it reaches VigoAdmin over the local socket rather than the
+// network port (which requires a signed control-plane call). The socket is
+// 0600 and local-only, so the dial uses insecure transport credentials —
+// no TLS on the loopback hop. It registers the VigoAdmin service handlers on
+// /api/ paths and mounts the web UI on /.
 //
 // reg is the per-instance prometheus registry whose collectors the /metrics
 // endpoint exposes; m is the same registry's collector set, threaded into
 // subhandlers (bootstrap, etc.) that emit metrics.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, sandgorgonEnabled bool, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
-	// Build TLS credentials for the gateway's connection to gRPC.
-	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("building gateway TLS: %w", err)
-	}
-
+func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, sandgorgonEnabled bool, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
 	gwMux := runtime.NewServeMux()
 
-	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
+	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 
 	if err := pb.RegisterVigoAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
 		return nil, nil, nil, fmt.Errorf("registering admin gateway: %w", err)
@@ -209,30 +206,3 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// buildGatewayTLS creates TLS credentials for the gateway's connection back
-// to the gRPC server. The gateway acts as a client to gRPC, so it needs
-// a client certificate and the CA to verify the server.
-func buildGatewayTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("loading gateway cert/key: %w", err)
-	}
-
-	caCert, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, fmt.Errorf("reading CA file: %w", err)
-	}
-
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to add CA cert to pool")
-	}
-
-	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caPool,
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	return credentials.NewTLS(tlsCfg), nil
-}
