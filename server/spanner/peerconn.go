@@ -47,20 +47,25 @@ func (p *PeerConn) Close() {
 // PeerDialer holds the shared mTLS client credentials for bolt-to-bolt
 // admin gRPC and dials peer connections from them. One PeerDialer is
 // constructed per vigosrv; PeerConns are dialed lazily (gRPC.NewClient
-// never blocks — the TCP connection opens on the first RPC).
+// never blocks — the TCP connection opens on the first RPC). signer attaches
+// a per-call control-plane signature (this bolt's roster identity) so the
+// receiving bolt can authorize the admin RPC beyond bare mTLS.
 type PeerDialer struct {
-	creds credentials.TransportCredentials
-	mu    sync.Mutex
+	creds  credentials.TransportCredentials
+	signer credentials.PerRPCCredentials
+	mu     sync.Mutex
 }
 
 // NewPeerDialer builds the shared mTLS credentials for peer admin
-// connections from this vigosrv's fleet-CA-signed cert/key/CA chain.
-func NewPeerDialer(certFile, keyFile, caFile string) (*PeerDialer, error) {
+// connections from this vigosrv's fleet-CA-signed cert/key/CA chain. signer
+// signs each admin call with this bolt's roster (bolt) identity; the
+// receiving bolt verifies it against its admission roster.
+func NewPeerDialer(certFile, keyFile, caFile string, signer credentials.PerRPCCredentials) (*PeerDialer, error) {
 	creds, err := buildClientTLS(certFile, keyFile, caFile)
 	if err != nil {
 		return nil, fmt.Errorf("building peer TLS credentials: %w", err)
 	}
-	return &PeerDialer{creds: creds}, nil
+	return &PeerDialer{creds: creds, signer: signer}, nil
 }
 
 // Dial opens a lazy long-lived gRPC client connection to a peer
@@ -73,7 +78,10 @@ func (d *PeerDialer) Dial(id, addr string, patterns []string) (*PeerConn, error)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(d.creds))
+	conn, err := grpc.NewClient(addr,
+		grpc.WithTransportCredentials(d.creds),
+		grpc.WithPerRPCCredentials(d.signer),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to peer at %s: %w", addr, err)
 	}

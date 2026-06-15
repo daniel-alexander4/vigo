@@ -11,12 +11,14 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/cpauth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/metrics"
@@ -24,6 +26,7 @@ import (
 	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -53,6 +56,20 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 		// Skip signature verification for Register -- agent has no UUID yet.
 		if info.FullMethod == pb.VigoAgent_Register_FullMethodName {
 			return handler(ctx, req)
+		}
+
+		// Privileged control-plane RPCs (spanner VigoAdmin between roster
+		// bolts) must carry a signed call from an admitted roster bolt when
+		// they arrive over the network. The operator path reaches VigoAdmin
+		// over the local UDS (already token+RBAC-authed at the REST layer) and
+		// is exempt — a network caller cannot present a Unix-socket peer addr,
+		// so this transport check is the unforgeable boundary, not an
+		// exemption a forged request can satisfy.
+		if strings.HasPrefix(info.FullMethod, "/vigo.VigoAdmin/") && !isLocalSocket(ctx) {
+			if err := verifyRosterBoltCall(ctx, queries, sigWindow); err != nil {
+				slog.Warn("rejected control-plane RPC", "method", info.FullMethod, "error", err)
+				return nil, err
+			}
 		}
 
 		// Only verify agent RPCs that carry signatures.
@@ -106,6 +123,39 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 		}
 		return resp, err
 	}
+}
+
+// isLocalSocket reports whether the RPC arrived over the local operator
+// Unix-domain socket (the grpc-gateway path) rather than the network TCP
+// port. A network caller's peer addr is a *net.TCPAddr and can never be a
+// *net.UnixAddr, so this is an unforgeable transport boundary.
+func isLocalSocket(ctx context.Context) bool {
+	if p, ok := peer.FromContext(ctx); ok {
+		_, isUnix := p.Addr.(*net.UnixAddr)
+		return isUnix
+	}
+	return false
+}
+
+// verifyRosterBoltCall authorizes a privileged VigoAdmin RPC arriving over
+// the network: the caller must present a valid control-plane signature
+// (cpauth) whose public key is an admitted, non-revoked roster bolt. mTLS is
+// the transport floor; this is the identity gate on top of it.
+func verifyRosterBoltCall(ctx context.Context, queries *db.Queries, window time.Duration) error {
+	pubHex, err := cpauth.Verify(ctx, window)
+	if err != nil {
+		return status.Errorf(codes.Unauthenticated, "control-plane auth: %v", err)
+	}
+	bolts, err := queries.ListLiveBolts(ctx)
+	if err != nil {
+		return status.Errorf(codes.Internal, "roster lookup: %v", err)
+	}
+	for _, b := range bolts {
+		if b.Pubkey == pubHex {
+			return nil
+		}
+	}
+	return status.Error(codes.PermissionDenied, "caller is not an admitted roster bolt")
 }
 
 // verifyCheckIn validates the signature on a CheckInRequest. On success, it

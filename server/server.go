@@ -33,6 +33,7 @@ import (
 	"git.alexander4.io/vigo/server/ca"
 	"git.alexander4.io/vigo/server/compliancedocs"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/cpauth"
 	"git.alexander4.io/vigo/server/curators3"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -1167,7 +1168,8 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// through a PeerDialer. Attached to the AdminService so the
 		// three fleet-wide reads route through it instead of the
 		// pure-local path.
-		peerDialer, err := spanner.NewPeerDialer(s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile)
+		peerDialer, err := spanner.NewPeerDialer(s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile,
+			cpauth.Signer(boltSigningKeyOrNil(s.boltID), fullBoltPubkeyHex(s.boltID)))
 		if err != nil {
 			return nil, fmt.Errorf("building spanner peer dialer: %w", err)
 		}
