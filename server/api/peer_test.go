@@ -41,7 +41,7 @@ func TestPeerPromoteNotConfigured(t *testing.T) {
 }
 
 func TestPeerStatusConfigured(t *testing.T) {
-	svc := peer.NewService("/srv/vigo", "peer", nil)
+	svc := peer.NewService("/srv/vigo", "peer", nil, nil)
 	svc.SetPrimaryAddr("primary.example.com:1530")
 	svc.SetConfigVersion(42)
 
@@ -73,7 +73,7 @@ func TestPeerStatusConfigured(t *testing.T) {
 }
 
 func TestPeerPromoteConfigured(t *testing.T) {
-	svc := peer.NewService("/srv/vigo", "peer", nil)
+	svc := peer.NewService("/srv/vigo", "peer", nil, nil)
 
 	h := NewPeerHandler(svc)
 	mux := http.NewServeMux()

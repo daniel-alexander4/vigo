@@ -389,13 +389,18 @@ peers:
   role: primary
   servers:
     - addr: "peer1.example.com:1530"
+      pubkey: "ed25519:<peer1-pubkey-hex>"
     - addr: "peer2.example.com:1530"
+      pubkey: "ed25519:<peer2-pubkey-hex>"
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `role` | `primary` | `primary` or `peer` |
-| `servers` | (empty) | List of peer server addresses |
+| `servers` | (empty) | List of peer servers |
+| `servers[].addr` | (required) | Peer gRPC address (`host:port`) |
+| `servers[].sync_interval` | `10s` | Push interval to this peer |
+| `servers[].pubkey` | (required) | Peer's service-account (puddle) Ed25519 key, from its startup `puddle service-account identity ready` log line. Authorizes HA peer RPCs (SyncStream/Promote/Status); replication **fails closed** without it. Local secrets backend only. Configure the same `peers` block on every node. |
 
 ## license
 

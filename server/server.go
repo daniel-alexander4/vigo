@@ -21,6 +21,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/migrations"
@@ -829,8 +830,16 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			if err := s.configStore.Reload(); err != nil {
 				slog.Error("peer-triggered config reload failed", "error", err)
 			}
-		})
+		}, s.peerSigner())
 		s.peerService.SetAuditWriter(s.auditWriter)
+
+		// HA peer auth needs this server's service-account (puddle) identity,
+		// which only exists on the local secrets backend. Without it the
+		// peer-to-peer RPCs can't be signed/verified and replication fails
+		// closed — warn the operator loudly rather than silently degrade.
+		if s.puddleID == nil {
+			slog.Warn("peer replication configured but HA peer auth is unavailable (no service-account identity; non-local secrets backend) — peer RPCs will fail closed")
+		}
 
 		peerTLS, peerTLSErr := buildPeerTLS(s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile)
 		if peerTLSErr != nil {
@@ -838,11 +847,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		}
 		s.peerTLS = peerTLS
 
-		var peerAddrs []string
+		var peerAddrs, peerPubkeys []string
 		for _, entry := range s.cfg.Peers.Servers {
 			peerAddrs = append(peerAddrs, entry.Addr)
+			peerPubkeys = append(peerPubkeys, entry.Pubkey)
 		}
-		s.peerService.SetPeers(peerAddrs, peerTLS)
+		s.peerService.SetPeers(peerAddrs, peerPubkeys, peerTLS)
 	}
 
 	// --- NVD CVE enrichment (read-side construction only; the
@@ -1631,6 +1641,17 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 // Local mode (default): the in-memory FleetIndex is the source of truth —
 // seeded from the DB at startup via Rehydrate and kept in sync by the
 // registry's serialized enrollment path. O(1), safe on the enrollment path.
+// peerSigner returns the control-plane signer for HA peer RPCs, built from
+// this server's puddle service-account identity, or nil when no identity is
+// available (non-local secrets backend) — in which case HA peer auth is
+// inoperable and peer replication fails closed.
+func (s *Server) peerSigner() credentials.PerRPCCredentials {
+	if s.puddleID == nil {
+		return nil
+	}
+	return cpauth.Signer(s.puddleID.SigningKey, hex.EncodeToString(s.puddleID.PublicKey))
+}
+
 func (s *Server) envoyCount(_ context.Context) (int, error) {
 	if s.licenseMode == "aggregate" && s.spannerAdmin != nil {
 		envoys, _ := s.spannerAdmin.AggregateEnvoysLocal()

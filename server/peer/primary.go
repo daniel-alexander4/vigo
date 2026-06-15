@@ -43,6 +43,7 @@ type Primary struct {
 	serverRoot string
 	peers      []config.PeerEntry
 	tlsConfig  *tls.Config
+	signer     credentials.PerRPCCredentials
 
 	watcher *fsnotify.Watcher
 
@@ -62,12 +63,15 @@ type peerConn struct {
 }
 
 // NewPrimary creates a Primary that will sync files from serverRoot to the
-// given peers using mTLS.
-func NewPrimary(serverRoot string, peers []config.PeerEntry, tlsConfig *tls.Config) *Primary {
+// given peers using mTLS. signer attaches this server's control-plane identity
+// to the outbound SyncStream so each peer can authorize it; nil on a non-local
+// secrets backend (peers reject the unsigned stream — replication fails closed).
+func NewPrimary(serverRoot string, peers []config.PeerEntry, tlsConfig *tls.Config, signer credentials.PerRPCCredentials) *Primary {
 	return &Primary{
 		serverRoot: serverRoot,
 		peers:      peers,
 		tlsConfig:  tlsConfig,
+		signer:     signer,
 		stopped:    make(chan struct{}),
 	}
 }
@@ -387,10 +391,11 @@ func (p *Primary) peerLoop(ctx context.Context, pc *peerConn) {
 
 		slog.Info("peer primary: connecting to peer", "addr", pc.entry.Addr)
 
-		conn, err := grpc.NewClient(
-			pc.entry.Addr,
-			grpc.WithTransportCredentials(credentials.NewTLS(p.tlsConfig)),
-		)
+		dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(p.tlsConfig))}
+		if p.signer != nil {
+			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(p.signer))
+		}
+		conn, err := grpc.NewClient(pc.entry.Addr, dialOpts...)
 		if err != nil {
 			slog.Error("peer primary: dial failed", "addr", pc.entry.Addr, "error", err)
 			if !p.backoffSleep(ctx, backoff) {

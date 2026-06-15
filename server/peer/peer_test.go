@@ -166,7 +166,7 @@ func TestAtomicWrite(t *testing.T) {
 func TestServiceSyncStream(t *testing.T) {
 	root := t.TempDir()
 	var reloaded bool
-	svc := NewService(root, "peer", func() { reloaded = true })
+	svc := NewService(root, "peer", func() { reloaded = true }, nil)
 
 	stream := newMockSyncStream(context.Background())
 
@@ -220,7 +220,7 @@ func TestServiceSyncStream(t *testing.T) {
 // stacks/secrets/TLS state (split-brain).
 func TestServiceSyncStreamPrimaryRejectsPush(t *testing.T) {
 	root := t.TempDir()
-	svc := NewService(root, "primary", nil)
+	svc := NewService(root, "primary", nil, nil)
 
 	stream := newMockSyncStream(context.Background())
 	stream.recvCh <- &pb.PeerSyncMessage{
@@ -251,7 +251,7 @@ func TestServiceSyncStreamPrimaryRejectsPush(t *testing.T) {
 
 func TestServiceSyncStreamDeletion(t *testing.T) {
 	root := t.TempDir()
-	svc := NewService(root, "peer", nil)
+	svc := NewService(root, "peer", nil, nil)
 
 	// Pre-create the file to be deleted.
 	target := filepath.Join(root, "stacks/modules/old.vgo")
@@ -299,7 +299,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 
 func TestServiceSyncStreamFullSync(t *testing.T) {
 	root := t.TempDir()
-	svc := NewService(root, "peer", nil)
+	svc := NewService(root, "peer", nil, nil)
 
 	stream := newMockSyncStream(context.Background())
 
@@ -372,7 +372,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServicePromote(t *testing.T) {
-	svc := NewService("/srv/vigo", "peer", nil)
+	svc := NewService("/srv/vigo", "peer", nil, nil)
 	svc.SetPrimaryAddr("primary.example.com:1530")
 
 	resp, err := svc.Promote(context.Background(), &pb.PeerPromoteRequest{})
@@ -402,7 +402,7 @@ func TestServicePromote(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServiceStatus(t *testing.T) {
-	svc := NewService("/srv/vigo", "peer", nil)
+	svc := NewService("/srv/vigo", "peer", nil, nil)
 	svc.SetPrimaryAddr("primary.example.com:1530")
 	svc.SetConfigVersion(42)
 	svc.mu.Lock()
@@ -437,7 +437,7 @@ func TestServiceStatus(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServiceDemote(t *testing.T) {
-	svc := NewService("/srv/vigo", "primary", nil)
+	svc := NewService("/srv/vigo", "primary", nil, nil)
 
 	svc.Demote(context.Background(), "new-primary.example.com:1530")
 
@@ -458,7 +458,7 @@ func TestServiceDemote(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServicePromoteNoPeers(t *testing.T) {
-	svc := NewService("/srv/vigo", "peer", nil)
+	svc := NewService("/srv/vigo", "peer", nil, nil)
 	svc.SetPrimaryAddr("old-primary.example.com:1530")
 
 	// No SetPeers call — promotion should succeed unconditionally.
@@ -479,11 +479,11 @@ func TestServicePromoteNoPeers(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServicePromoteUnreachablePeer(t *testing.T) {
-	svc := NewService("/srv/vigo", "peer", nil)
+	svc := NewService("/srv/vigo", "peer", nil, nil)
 	svc.SetConfigVersion(10)
 
 	// Set an unreachable peer address.
-	svc.SetPeers([]string{"127.0.0.1:19999"}, &tls.Config{InsecureSkipVerify: true})
+	svc.SetPeers([]string{"127.0.0.1:19999"}, nil, &tls.Config{InsecureSkipVerify: true})
 
 	resp, err := svc.Promote(context.Background(), nil)
 	if err != nil {
@@ -503,7 +503,7 @@ func TestServicePromoteUnreachablePeer(t *testing.T) {
 
 func TestServiceRejectsPathTraversal(t *testing.T) {
 	root := t.TempDir()
-	svc := NewService(root, "peer", nil)
+	svc := NewService(root, "peer", nil, nil)
 
 	// Create a file outside the root that should NOT be affected.
 	outsideDir := t.TempDir()

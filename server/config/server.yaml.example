@@ -223,8 +223,14 @@ watcher:
 # peers:
 #   role: primary                              # primary (default) | peer
 #   servers:
+#     # pubkey is each peer's service-account (puddle) Ed25519 key, printed in
+#     # its startup "puddle service-account identity ready" log line. Required
+#     # to authorize HA peer RPCs — replication fails closed without it.
+#     # Local secrets backend only. Use the same peers block on every node.
 #     - addr: "peer1.example.com:1530"
+#       pubkey: "ed25519:<peer1-pubkey-hex>"
 #     - addr: "peer2.example.com:1530"
+#       pubkey: "ed25519:<peer2-pubkey-hex>"
 
 
 # ── AI Assistant ──────────────────────────────────────────────────────────

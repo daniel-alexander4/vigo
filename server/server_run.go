@@ -96,7 +96,7 @@ func (s *Server) startLicenseEnforcement(ctx context.Context) {
 			peerRole = "primary"
 		}
 		if peerRole == "primary" {
-			primary := peer.NewPrimary(s.serverRoot, s.cfg.Peers.Servers, s.peerTLS)
+			primary := peer.NewPrimary(s.serverRoot, s.cfg.Peers.Servers, s.peerTLS, s.peerSigner())
 			s.peerPrimary = primary
 			daemon.SafeGo("peer-primary", func() {
 				if err := primary.Start(ctx); err != nil && ctx.Err() == nil {

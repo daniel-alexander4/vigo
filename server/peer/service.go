@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,9 +15,17 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/cpauth"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
+
+// peerSigWindow bounds the freshness of a control-plane signed call from an
+// HA peer, matching the agent SEC-03 window.
+const peerSigWindow = 5 * time.Minute
 
 // auditRecorder is the interface for the tamper-evident audit writer.
 type auditRecorder interface {
@@ -44,6 +53,14 @@ type Service struct {
 	// resolution during Promote. If empty, promotion proceeds unconditionally.
 	peerAddrs []string
 	tlsConfig *tls.Config
+
+	// signer attaches this server's control-plane identity (the puddle
+	// service-account key) to outbound peer RPCs; nil on a non-local secrets
+	// backend, where HA peer auth is unavailable and peer replication fails
+	// closed. peerPubkeys is the set of configured peers' raw-hex Ed25519
+	// pubkeys an inbound network call is checked against.
+	signer      credentials.PerRPCCredentials
+	peerPubkeys map[string]struct{}
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
@@ -52,23 +69,67 @@ func (s *Service) SetAuditWriter(w auditRecorder) {
 }
 
 // NewService creates a new peer service. role is "primary" or "peer".
-// onConfigChange is called after writing files under stacks/ to trigger config reload.
-func NewService(serverRoot string, role string, onConfigChange func()) *Service {
+// onConfigChange is called after writing files under stacks/ to trigger config
+// reload. signer is the control-plane identity for outbound peer RPCs (nil on
+// a non-local secrets backend → HA peer auth unavailable, replication fails
+// closed).
+func NewService(serverRoot string, role string, onConfigChange func(), signer credentials.PerRPCCredentials) *Service {
 	return &Service{
 		serverRoot:     serverRoot,
 		role:           role,
 		onConfigChange: onConfigChange,
+		signer:         signer,
 	}
 }
 
-// SetPeers configures the peer addresses and TLS credentials used for
-// split-brain resolution during Promote. Must be called before the service
-// starts handling RPCs.
-func (s *Service) SetPeers(addrs []string, tlsConfig *tls.Config) {
+// SetPeers configures the peer addresses, their pinned pubkeys, and TLS
+// credentials used for split-brain resolution during Promote and for
+// authorizing inbound peer RPCs. pubkeys are the configured peers' Ed25519
+// public keys (any "ed25519:" prefix is stripped). Must be called before the
+// service starts handling RPCs.
+func (s *Service) SetPeers(addrs, pubkeys []string, tlsConfig *tls.Config) {
+	set := make(map[string]struct{}, len(pubkeys))
+	for _, p := range pubkeys {
+		if p = strings.TrimPrefix(strings.TrimSpace(p), "ed25519:"); p != "" {
+			set[p] = struct{}{}
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.peerAddrs = addrs
+	s.peerPubkeys = set
 	s.tlsConfig = tlsConfig
+}
+
+// authorizeIncoming gates an inbound VigoPeer RPC. In-process operator calls
+// (REST → Go method, no gRPC peer) and local-socket calls are exempt. A call
+// arriving over the network from another server must carry a control-plane
+// signed call (cpauth) whose pubkey is a configured HA peer. If this server
+// has no signing identity (non-local backend), HA peer auth is inoperable and
+// network peer calls fail closed.
+func (s *Service) authorizeIncoming(ctx context.Context) error {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil // in-process operator call (REST handler → Go method)
+	}
+	if _, isUnix := p.Addr.(*net.UnixAddr); isUnix {
+		return nil // local socket
+	}
+	s.mu.RLock()
+	pubkeys := s.peerPubkeys
+	haveIdentity := s.signer != nil
+	s.mu.RUnlock()
+	if !haveIdentity {
+		return status.Error(codes.Unavailable, "HA peer auth requires the local secrets backend")
+	}
+	pubHex, err := cpauth.Verify(ctx, peerSigWindow)
+	if err != nil {
+		return status.Errorf(codes.Unauthenticated, "peer auth: %v", err)
+	}
+	if _, ok := pubkeys[pubHex]; !ok {
+		return status.Error(codes.PermissionDenied, "caller is not a configured HA peer")
+	}
+	return nil
 }
 
 // SetPrimaryAddr sets the address of the current primary (used by peers for Status responses).
@@ -96,6 +157,10 @@ func (s *Service) Role() string {
 // The primary sends FileChange and FullSync messages; the peer writes files to disk
 // and sends back PeerSyncAck messages.
 func (s *Service) SyncStream(stream grpc.BidiStreamingServer[pb.PeerSyncMessage, pb.PeerSyncMessage]) error {
+	if err := s.authorizeIncoming(stream.Context()); err != nil {
+		slog.Warn("rejected peer SyncStream", "error", err)
+		return err
+	}
 	slog.Info("peer sync stream opened", "role", s.Role())
 
 	var needsConfigReload atomic.Bool
@@ -167,16 +232,21 @@ func (s *Service) SyncStream(stream grpc.BidiStreamingServer[pb.PeerSyncMessage,
 // primary, the server with the higher config version wins. If config versions
 // are equal, the existing primary keeps its role and the promotion is denied.
 func (s *Service) Promote(ctx context.Context, _ *pb.PeerPromoteRequest) (*pb.PeerPromoteResponse, error) {
+	if err := s.authorizeIncoming(ctx); err != nil {
+		slog.Warn("rejected peer Promote", "error", err)
+		return nil, err
+	}
 	s.mu.RLock()
 	localVersion := s.configVersion
 	peerAddrs := s.peerAddrs
 	tlsCfg := s.tlsConfig
+	signer := s.signer
 	s.mu.RUnlock()
 
 	// Split-brain resolution: check if any peer is already primary.
 	if len(peerAddrs) > 0 && tlsCfg != nil {
 		for _, addr := range peerAddrs {
-			remoteStatus, err := queryPeerStatus(ctx, addr, tlsCfg)
+			remoteStatus, err := queryPeerStatus(ctx, addr, tlsCfg, signer)
 			if err != nil {
 				slog.Warn("promote: cannot reach peer for split-brain check",
 					"addr", addr, "error", err)
@@ -263,12 +333,18 @@ func (s *Service) Demote(_ context.Context, primaryAddr string) {
 	slog.Info("peer demoted to peer role", "old_role", oldRole, "new_primary", primaryAddr)
 }
 
-// queryPeerStatus connects to a peer server and returns its status.
-func queryPeerStatus(ctx context.Context, addr string, tlsCfg *tls.Config) (*pb.PeerStatusResponse, error) {
+// queryPeerStatus connects to a peer server and returns its status. signer
+// attaches this server's control-plane identity so the peer can authorize the
+// call; nil on a non-local backend (the peer will reject the call).
+func queryPeerStatus(ctx context.Context, addr string, tlsCfg *tls.Config, signer credentials.PerRPCCredentials) (*pb.PeerStatusResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg))}
+	if signer != nil {
+		opts = append(opts, grpc.WithPerRPCCredentials(signer))
+	}
+	conn, err := grpc.NewClient(addr, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("dial %s: %w", addr, err)
 	}
@@ -299,7 +375,11 @@ func demotePeer(_ context.Context, addr string, _ *tls.Config) error {
 }
 
 // Status returns the server's current peer role and sync state.
-func (s *Service) Status(_ context.Context, _ *pb.PeerStatusRequest) (*pb.PeerStatusResponse, error) {
+func (s *Service) Status(ctx context.Context, _ *pb.PeerStatusRequest) (*pb.PeerStatusResponse, error) {
+	if err := s.authorizeIncoming(ctx); err != nil {
+		slog.Warn("rejected peer Status", "error", err)
+		return nil, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -329,6 +409,7 @@ func (s *Service) PeerStatuses(ctx context.Context) []PeerInfo {
 	s.mu.RLock()
 	addrs := append([]string(nil), s.peerAddrs...)
 	tlsCfg := s.tlsConfig
+	signer := s.signer
 	s.mu.RUnlock()
 
 	results := make([]PeerInfo, len(addrs))
@@ -339,7 +420,7 @@ func (s *Service) PeerStatuses(ctx context.Context) []PeerInfo {
 			defer wg.Done()
 			info := PeerInfo{Addr: a}
 			start := time.Now()
-			resp, err := queryPeerStatus(ctx, a, tlsCfg)
+			resp, err := queryPeerStatus(ctx, a, tlsCfg, signer)
 			info.LatencyMs = time.Since(start).Milliseconds()
 			if err != nil {
 				info.Error = err.Error()

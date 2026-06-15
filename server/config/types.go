@@ -821,6 +821,7 @@ type PeersSection struct {
 type PeerEntry struct {
 	Addr         string `yaml:"addr" doc:"Peer gRPC address (host:port)." example:"vigo-replica-1.example.com:1530"`
 	SyncInterval string `yaml:"sync_interval" doc:"Push interval to this peer as a Go duration string." default:"10s" example:"5s, 10s, 30s (accepts s, m)"`
+	Pubkey       string `yaml:"pubkey" doc:"Peer's service-account (puddle) Ed25519 public key, from its startup 'puddle service-account identity ready' log line. Required to authorize HA peer RPCs (SyncStream/Promote/Status); peer replication fails closed without it. Local secrets backend only." example:"ed25519:1a2b3c…"`
 }
 
 // TaskSection configures task dispatch behavior.
