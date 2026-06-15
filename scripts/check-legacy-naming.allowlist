@@ -88,3 +88,9 @@ test/swarm-substrate.sh:*:swarmgit
 server/grpc/agentstream.go:992:\bcairn\b
 server/swarm/manifest.go:54:\bcairn\b
 server/swarm/manifest.go:292:\bcairn\b
+
+# The 2026-06-14 per-subsystem code-review doc quotes the retired "swarmgit"
+# path in its description of finding U5 (a stale comment in tessera payload.go).
+# The code occurrence was fixed 2026-06-15; the review doc keeps the original
+# finding text as a historical record, so allowlist that one line.
+docs/internal.docs/code-review-by-subsystem-2026-06-14.md:405:\bswarmgit\b
