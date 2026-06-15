@@ -91,7 +91,7 @@ lint:
 # (`scripts/gen-executor-schemas.sh > server/validate/schemas_gen.go`)
 # if you've touched executor params.
 lint-examples:
-	go test ./server/modlint/... -run TestExampleModulesLintClean -count=1
+	go test ./server/modlint/... -run TestExampleConfigcratesLintClean -count=1
 
 lint-agent:
 	cd agent && cargo clippy -- -D warnings
