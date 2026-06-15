@@ -12,8 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"git.alexander4.io/vigo/server/db"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 )
 
@@ -25,6 +25,10 @@ type OIDCProvider struct {
 	oauth2Cfg   *oauth2.Config
 	verifier    *oidc.IDTokenVerifier
 	auditWriter auditRecorder
+	// bootstrapAdminEmail/Subject name the single OIDC identity provisioned
+	// as admin on first login. Both empty = no auto-admin (the default).
+	bootstrapAdminEmail   string
+	bootstrapAdminSubject string
 }
 
 // OIDCConfig holds the OIDC configuration from server.yaml.
@@ -34,6 +38,9 @@ type OIDCConfig struct {
 	ClientSecret string   `yaml:"client_secret"`
 	RedirectURL  string   `yaml:"redirect_url"`
 	Scopes       []string `yaml:"scopes"`
+
+	BootstrapAdminEmail   string `yaml:"bootstrap_admin_email"`
+	BootstrapAdminSubject string `yaml:"bootstrap_admin_subject"`
 }
 
 // NewOIDCProvider discovers the OIDC endpoints from the issuer and returns a
@@ -60,12 +67,30 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig, sessions *SessionManag
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 
 	return &OIDCProvider{
-		sessions:   sessions,
-		userStore:  userStore,
-		tokenStore: tokenStore,
-		oauth2Cfg:  oauth2Cfg,
-		verifier:   verifier,
+		sessions:              sessions,
+		userStore:             userStore,
+		tokenStore:            tokenStore,
+		oauth2Cfg:             oauth2Cfg,
+		verifier:              verifier,
+		bootstrapAdminEmail:   cfg.BootstrapAdminEmail,
+		bootstrapAdminSubject: cfg.BootstrapAdminSubject,
 	}, nil
+}
+
+// isBootstrapAdmin reports whether the OIDC identity (subject/email) matches
+// the configured bootstrap admin. Both config fields empty ⇒ never matches,
+// so new users default to viewer and admin is granted explicitly via
+// `vigocli webusers set-role`. This replaces the prior "first OIDC login when
+// admin count is zero" rule, which silently promoted whoever logged in first
+// on an IdP that allows self-registration.
+func (p *OIDCProvider) isBootstrapAdmin(subject, email string) bool {
+	if p.bootstrapAdminSubject != "" && subject == p.bootstrapAdminSubject {
+		return true
+	}
+	if p.bootstrapAdminEmail != "" && email == p.bootstrapAdminEmail {
+		return true
+	}
+	return false
 }
 
 // SetAuditWriter sets the audit writer for recording auth events.
@@ -199,17 +224,13 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user == nil {
-		// First-user-becomes-admin.
+		// New users default to viewer. Admin is granted only to the single
+		// configured bootstrap identity (opt-in); otherwise an operator
+		// promotes via `vigocli webusers set-role` on the server host.
 		role := "viewer"
-		adminCount, countErr := p.userStore.CountAdmins(r.Context())
-		if countErr != nil {
-			slog.Error("admin count failed", "error", countErr)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if adminCount == 0 {
+		if p.isBootstrapAdmin(claims.Subject, claims.Email) {
 			role = "admin"
-			slog.Info("first OIDC login — auto-promoting to admin", "subject", claims.Subject)
+			slog.Info("OIDC bootstrap admin matched — provisioning as admin", "subject", claims.Subject)
 		}
 
 		username := claims.Email
@@ -228,6 +249,9 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 			slog.Error("user creation failed", "error", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
+		}
+		if role == "admin" {
+			recordAudit(r.Context(), p.auditWriter, "user.role_change", username, "auth", fmt.Sprintf("%s provisioned as admin via OIDC bootstrap", username), fmt.Sprintf(`{"subject":%q}`, claims.Subject))
 		}
 	} else {
 		// Update display name and email from IdP on each login.

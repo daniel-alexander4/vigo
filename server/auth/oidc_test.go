@@ -113,3 +113,30 @@ func TestOIDCMiddleware_NoAuth_RemoteAPI_Returns401(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Nil(t, got)
 }
+
+// TestOIDCProvider_isBootstrapAdmin verifies the opt-in bootstrap-admin gate:
+// no match when unconfigured (default → viewer), match by subject or email
+// when configured.
+func TestOIDCProvider_isBootstrapAdmin(t *testing.T) {
+	// Unconfigured: never an admin (the default — replaces first-login auto-admin).
+	off := &OIDCProvider{}
+	if off.isBootstrapAdmin("auth0|abc", "anyone@example.com") {
+		t.Error("unconfigured provider must never bootstrap-admin")
+	}
+
+	bySub := &OIDCProvider{bootstrapAdminSubject: "auth0|abc"}
+	if !bySub.isBootstrapAdmin("auth0|abc", "") {
+		t.Error("expected match on configured subject")
+	}
+	if bySub.isBootstrapAdmin("auth0|other", "auth0|abc") {
+		t.Error("subject config must not match on the email field")
+	}
+
+	byEmail := &OIDCProvider{bootstrapAdminEmail: "admin@example.com"}
+	if !byEmail.isBootstrapAdmin("auth0|xyz", "admin@example.com") {
+		t.Error("expected match on configured email")
+	}
+	if byEmail.isBootstrapAdmin("auth0|xyz", "someone@example.com") {
+		t.Error("non-matching email must not bootstrap-admin")
+	}
+}

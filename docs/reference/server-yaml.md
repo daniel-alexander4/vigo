@@ -156,6 +156,10 @@ auth:
     client_secret: "secret:vigo/auth/oidc_client_secret"
     redirect_url: "https://localhost:8443/auth/callback"
     scopes: [openid, profile, email]
+    # Optional: provision exactly one identity as admin on its first login.
+    # Leave both unset (default) and all new OIDC users are viewers — grant
+    # admin explicitly with `vigocli webusers set-role --role admin`.
+    bootstrap_admin_email: "admin@example.com"
 
 # Disable auth (development only)
 auth:
@@ -166,6 +170,8 @@ auth:
 |-------|---------|-------------|
 | `method` | `basic` | `basic`, `oidc`, `isowebauth`, or `none` |
 | `session_idle_timeout` | `15m` | Idle timeout before session expires |
+| `oidc.bootstrap_admin_email` | (none) | Email of the OIDC identity to provision as admin on first login. Empty disables auto-admin. |
+| `oidc.bootstrap_admin_subject` | (none) | OIDC `sub` claim of the identity to provision as admin (use when email is not stable). |
 
 ## smtp
 

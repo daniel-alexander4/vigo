@@ -616,11 +616,13 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 		userStore := vigoauth.NewUserStore(queries)
 		tokenStore := vigoauth.NewTokenStore(queries, localAdminToken, m)
 		return vigoauth.NewOIDCProvider(ctx, vigoauth.OIDCConfig{
-			Issuer:       cfg.Auth.OIDC.Issuer,
-			ClientID:     cfg.Auth.OIDC.ClientID,
-			ClientSecret: cfg.Auth.OIDC.ClientSecret,
-			RedirectURL:  cfg.Auth.OIDC.RedirectURL,
-			Scopes:       cfg.Auth.OIDC.Scopes,
+			Issuer:                cfg.Auth.OIDC.Issuer,
+			ClientID:              cfg.Auth.OIDC.ClientID,
+			ClientSecret:          cfg.Auth.OIDC.ClientSecret,
+			RedirectURL:           cfg.Auth.OIDC.RedirectURL,
+			Scopes:                cfg.Auth.OIDC.Scopes,
+			BootstrapAdminEmail:   cfg.Auth.OIDC.BootstrapAdminEmail,
+			BootstrapAdminSubject: cfg.Auth.OIDC.BootstrapAdminSubject,
 		}, sessions, userStore, tokenStore)
 
 	case "isowebauth":

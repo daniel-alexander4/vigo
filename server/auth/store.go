@@ -157,6 +157,18 @@ func (s *UserStore) Create(ctx context.Context, params db.InsertUserParams) (*Us
 // the new canonical content.
 func (s *UserStore) Update(ctx context.Context, params db.UpdateUserParams) error {
 	params.UpdatedAtMs = time.Now().UnixMilli()
+
+	// oidc_subject is the OIDC login lookup key (identity-binding), not a
+	// normal editable field. An empty value here means "unchanged", never
+	// "clear it" — preserve the stored subject so a role/profile update (or
+	// the per-login refresh) can't strand an OIDC user by blanking the
+	// subject their next login matches on. (The UpdateUser SQL writes the
+	// column unconditionally, so an unset param would otherwise zero it.)
+	existing, exErr := s.queries.GetUserByID(ctx, params.ID)
+	if params.OidcSubject == "" && exErr == nil {
+		params.OidcSubject = existing.OidcSubject
+	}
+
 	if s.signer != nil {
 		row := UserRow{
 			ID:           params.ID,
@@ -168,10 +180,9 @@ func (s *UserStore) Update(ctx context.Context, params db.UpdateUserParams) erro
 			OIDCSubject:  params.OidcSubject,
 			UpdatedAtMs:  params.UpdatedAtMs,
 		}
-		// Pull the existing row to fill username (immutable, not in
-		// UpdateUserParams) so the signature covers the complete
-		// canonical content peers will verify against.
-		if existing, err := s.queries.GetUserByID(ctx, params.ID); err == nil {
+		// Fill username (immutable, not in UpdateUserParams) so the signature
+		// covers the complete canonical content peers will verify against.
+		if exErr == nil {
 			row.Username = existing.Username
 			row.DeletedAt = nullInt64ToInt64(existing.DeletedAt)
 		}

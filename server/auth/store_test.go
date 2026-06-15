@@ -132,6 +132,40 @@ func (f *fakeSigner) Sign(row *UserRow) (string, []byte, error) {
 // TestUserStore_Create_RejectsReservedUsername pins that the synthetic
 // local-admin identifier can't be taken by a real users-table row — the
 // guard covers every Create caller (REST, CLI-via-REST, OIDC JIT).
+// TestUserStore_Update_PreservesOIDCSubject guards the clobber bug: an Update
+// that doesn't carry oidc_subject (a role/profile edit) must not blank it, or
+// the OIDC user can no longer be matched on their next login.
+func TestUserStore_Update_PreservesOIDCSubject(t *testing.T) {
+	queries := setupTestDB(t)
+	store := NewUserStore(queries)
+	ctx := context.Background()
+
+	u, err := store.Create(ctx, db.InsertUserParams{
+		Username:    "sso-user@example.com",
+		Email:       "sso-user@example.com",
+		Role:        "viewer",
+		OidcSubject: "auth0|abc123",
+	})
+	require.NoError(t, err)
+
+	// A role-only update (e.g. webusers set-role) carries no oidc_subject.
+	err = store.Update(ctx, db.UpdateUserParams{
+		ID:          u.ID,
+		DisplayName: u.DisplayName,
+		Email:       u.Email,
+		Role:        "admin",
+		Permissions: PermissionsJSON("admin"),
+	})
+	require.NoError(t, err)
+
+	// The subject must survive so the next OIDC login still matches this row.
+	got, err := store.GetByOIDCSubject(ctx, "auth0|abc123")
+	require.NoError(t, err)
+	require.NotNil(t, got, "oidc_subject was blanked by a role update")
+	assert.Equal(t, u.ID, got.ID)
+	assert.Equal(t, "admin", got.Role)
+}
+
 func TestUserStore_Create_RejectsReservedUsername(t *testing.T) {
 	queries := setupTestDB(t)
 	store := NewUserStore(queries)
