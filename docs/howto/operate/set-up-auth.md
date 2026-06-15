@@ -152,9 +152,34 @@ oidc:
   redirect_url: "https://vigo.example.com:8443/auth/callback"
 ```
 
-### First-User Bootstrap
+### First-Admin Bootstrap
 
-The first user to log in via OIDC is automatically promoted to **admin**. All subsequent users are created as **viewers** by default. Admins can change roles from the Users admin page.
+OIDC users are created as **viewers** by default — there is no automatic
+"first user becomes admin" promotion (that would hand admin to whoever logs in
+first on an IdP that allows self-registration). Grant the first admin one of
+two ways:
+
+- **Opt-in bootstrap (self-service):** name the intended admin's identity under
+  `oidc:` so their first login lands as admin deterministically:
+
+  ```yaml
+  oidc:
+    # ... issuer/client_id/etc ...
+    bootstrap_admin_email: "admin@example.com"   # match on the email claim
+    # or, when the IdP's email isn't stable:
+    # bootstrap_admin_subject: "auth0|abc123"    # match on the sub claim
+  ```
+
+  Both empty (the default) means no auto-admin.
+
+- **CLI (out-of-band):** have the user log in once (creating their viewer row),
+  then promote them from the server host:
+
+  ```bash
+  sudo vigocli webusers set-role --username <their-email> --role admin
+  ```
+
+Admins can change roles from the Users admin page thereafter.
 
 ## Isowebauth (SSH Key-Based)
 
