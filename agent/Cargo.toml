@@ -45,8 +45,18 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 
-# HTTP (bootstrap + self-update only — blocking, no async runtime overhead)
+# HTTP (bootstrap + self-update + server-directed mTLS calls — blocking,
+# no async runtime overhead). Used where standard hostname verification is
+# correct (talks to the configured server, or pre-enrollment).
 ureq = { version = "3", features = ["rustls", "json"] }
+
+# HTTP (swarm peer-by-IP content plane). reqwest's blocking client lets us
+# inject a custom rustls ClientConfig via `use_preconfigured_tls` so peer
+# connections verify the server cert chains to the fleet CA while skipping
+# the hostname/SAN check (envoy certs are CN'd by IP) — see swarm/tls.rs.
+# ureq 3.3 has no custom-verifier hook, which is why this path can't reuse
+# it. Minimal features: blocking client over rustls with manual roots.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-manual-roots"] }
 
 # HTTP server (swarm peer serving on :1531)
 hyper = { version = "1", features = ["http1", "server"] }

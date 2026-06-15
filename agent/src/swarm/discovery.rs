@@ -103,7 +103,7 @@ const HEADER: &str = "VIGO-SWARM";
 /// If multicast setup fails, logs a warning and returns — the agent continues
 /// without multicast discovery.
 ///
-/// A single shared `ureq::Agent` is built once up front and handed to both
+/// A single shared `SwarmAgent` is built once up front and handed to both
 /// the listener-triggered bitmap probe path and the manifest sync path.
 /// Before this, every listener-initiated /meta probe called
 /// `peer_client::build_peer_agent` — which reads three PEM files from disk
@@ -137,7 +137,7 @@ pub fn spawn(
     // listener can clone it cheaply into the blocking tasks it spawns per
     // probe. `None` if TLS isn't configured (bootstrap agents before
     // enrollment) or agent construction failed; callers must handle that.
-    let shared_agent: Option<Arc<ureq::Agent>> = tls.as_ref().and_then(|t| {
+    let shared_agent: Option<Arc<crate::swarm::tls::SwarmAgent>> = tls.as_ref().and_then(|t| {
         match peer_client::build_peer_agent(t) {
             Ok(a) => Some(Arc::new(a)),
             Err(e) => {
@@ -204,7 +204,7 @@ pub fn spawn(
 async fn listen_loop(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
-    shared_agent: Option<Arc<ureq::Agent>>,
+    shared_agent: Option<Arc<crate::swarm::tls::SwarmAgent>>,
     cancel: tokio_util::sync::CancellationToken,
     gitback_peer_table: Option<Arc<GitbackPeerTable>>,
     gitback_claims_handle: Option<GitbackClaimsHandle>,
@@ -1083,7 +1083,7 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
 /// thread when the multicast listener sees a partial-blob sentinel and
 /// needs to resolve the actual chunks.
 ///
-/// Takes a shared `Arc<ureq::Agent>` built once at discovery spawn time so
+/// Takes a shared `Arc<SwarmAgent>` built once at discovery spawn time so
 /// we don't re-parse TLS certs on every probe. Issues a conditional GET
 /// using the stored ETag when available — unchanged peers respond with
 /// 304 Not Modified and no body, and we just refresh `bitmap_refreshed_at`
@@ -1092,7 +1092,7 @@ fn probe_peer_bitmap(
     peer_addr: &str,
     sha: &str,
     peer_map: &PeerMap,
-    agent: &Arc<ureq::Agent>,
+    agent: &Arc<crate::swarm::tls::SwarmAgent>,
     etag: Option<String>,
 ) {
     match peer_client::fetch_meta_conditional(agent, peer_addr, sha, etag.as_deref()) {
@@ -1132,7 +1132,7 @@ fn probe_peer_bitmap(
 /// Sync manifest from a peer over mTLS HTTPS. Called on a blocking thread
 /// when multicast announces a different manifest version. Takes the shared
 /// peer agent so this also avoids the per-call TLS rebuild.
-fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<ureq::Agent>, peer_map: &Arc<PeerMap>) {
+fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<crate::swarm::tls::SwarmAgent>, peer_map: &Arc<PeerMap>) {
     match peer_client::fetch_manifest(agent, peer_addr) {
         Ok(remote) => {
             let changed = manifest.merge(&remote);

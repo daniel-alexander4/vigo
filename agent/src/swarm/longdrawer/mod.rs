@@ -332,21 +332,25 @@ async fn run_extra_peer_pusher(
 /// Called on digest-mismatch in the multicast receiver; the peer returns
 /// the JSON body served by `GET /swarm/longdrawer/state/{user}` on its swarm
 /// peer server. Blocking I/O — caller wraps in `spawn_blocking`.
-fn pull_user_state(http: &ureq::Agent, peer_addr: &str, user: &str) -> Result<UserState, anyhow::Error> {
+fn pull_user_state(
+    http: &crate::swarm::tls::SwarmAgent,
+    peer_addr: &str,
+    user: &str,
+) -> Result<UserState, anyhow::Error> {
     let url = format!("https://{}/swarm/longdrawer/state/{}", peer_addr, user);
-    let resp = http.get(&url).call()?;
+    let resp = http.get(&url).send()?;
     let status = resp.status();
-    if status != 200 {
+    if status != reqwest::StatusCode::OK {
         anyhow::bail!("GET {} returned {}", url, status);
     }
-    let body = resp.into_body().read_to_vec()?;
+    let body = resp.bytes()?;
     let state: UserState = serde_json::from_slice(&body)
         .with_context(|| format!("parsing state JSON from {}", url))?;
     Ok(state)
 }
 
 fn push_announcement(
-    http: &ureq::Agent,
+    http: &crate::swarm::tls::SwarmAgent,
     host: &str,
     ann: &Announcement,
 ) -> Result<(), anyhow::Error> {
@@ -374,10 +378,11 @@ fn push_announcement(
     let resp = http
         .post(&url)
         .header("content-type", "application/json")
-        .send(&body[..])
+        .body(body)
+        .send()
         .map_err(|e| anyhow::anyhow!("POST {}: {}", url, e))?;
     let status = resp.status();
-    if status != 200 {
+    if status != reqwest::StatusCode::OK {
         anyhow::bail!("POST {} returned {}", url, status);
     }
     Ok(())
@@ -394,7 +399,7 @@ fn push_announcement(
 async fn handle_incoming(
     state_dir: &std::path::Path,
     incoming: IncomingAnnouncement,
-    http: Arc<ureq::Agent>,
+    http: Arc<crate::swarm::tls::SwarmAgent>,
 ) {
     let peer_ip = match incoming.from {
         std::net::SocketAddr::V4(v4) => v4.ip().to_string(),

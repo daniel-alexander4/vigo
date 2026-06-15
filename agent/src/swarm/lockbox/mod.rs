@@ -1010,18 +1010,18 @@ async fn catchup_tombstones_from(user: &str, source_hostname: &str, url: &str) -
     // Blocking HTTP call in spawn_blocking so we don't tie up the
     // tokio runtime.
     let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let mut resp = agent
+        let resp = agent
             .get(&url)
-            .call()
+            .send()
             .with_context(|| format!("GET {}", url))?;
         let status = resp.status();
         if !status.is_success() {
             anyhow::bail!("peer returned HTTP {}", status.as_u16());
         }
         let body = resp
-            .body_mut()
-            .read_to_vec()
-            .context("reading tombstones response body")?;
+            .bytes()
+            .context("reading tombstones response body")?
+            .to_vec();
         Ok(body)
     })
     .await
@@ -1108,18 +1108,18 @@ async fn catchup_leaves_from(user: &str, source_hostname: &str, url: &str) -> Re
     let url = url.to_string();
 
     let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let mut resp = agent
+        let resp = agent
             .get(&url)
-            .call()
+            .send()
             .with_context(|| format!("GET {}", url))?;
         let status = resp.status();
         if !status.is_success() {
             anyhow::bail!("peer returned HTTP {}", status.as_u16());
         }
         let body = resp
-            .body_mut()
-            .read_to_vec()
-            .context("reading leaves response body")?;
+            .bytes()
+            .context("reading leaves response body")?
+            .to_vec();
         Ok(body)
     })
     .await
@@ -1237,18 +1237,18 @@ async fn catchup_resurrects_from(user: &str, source_hostname: &str, url: &str) -
     let url = url.to_string();
 
     let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let mut resp = agent
+        let resp = agent
             .get(&url)
-            .call()
+            .send()
             .with_context(|| format!("GET {}", url))?;
         let status = resp.status();
         if !status.is_success() {
             anyhow::bail!("peer returned HTTP {}", status.as_u16());
         }
         let body = resp
-            .body_mut()
-            .read_to_vec()
-            .context("reading resurrects response body")?;
+            .bytes()
+            .context("reading resurrects response body")?
+            .to_vec();
         Ok(body)
     })
     .await
@@ -1358,18 +1358,18 @@ async fn catchup_files_from(
     let list_url_owned = list_url.to_string();
     let agent_for_list = agent.clone();
     let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let mut resp = agent_for_list
+        let resp = agent_for_list
             .get(&list_url_owned)
-            .call()
+            .send()
             .with_context(|| format!("GET {}", list_url_owned))?;
         let status = resp.status();
         if !status.is_success() {
             anyhow::bail!("peer returned HTTP {}", status.as_u16());
         }
         let body = resp
-            .body_mut()
-            .read_to_vec()
-            .context("reading files list response body")?;
+            .bytes()
+            .context("reading files list response body")?
+            .to_vec();
         Ok(body)
     })
     .await
@@ -1447,7 +1447,7 @@ fn valid_filename_for_catchup(name: &str) -> bool {
 }
 
 async fn pull_one_file(
-    agent: &ureq::Agent,
+    agent: &crate::swarm::tls::SwarmAgent,
     source_addr: std::net::SocketAddr,
     user: &str,
     entry: &snapshot::FileEntry,
@@ -1475,18 +1475,18 @@ async fn pull_one_file(
     let agent = agent.clone();
     let url_owned = pull_url.clone();
     let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let mut resp = agent
+        let resp = agent
             .get(&url_owned)
-            .call()
+            .send()
             .with_context(|| format!("GET {}", url_owned))?;
         let status = resp.status();
         if !status.is_success() {
             anyhow::bail!("peer returned HTTP {}", status.as_u16());
         }
         let body = resp
-            .body_mut()
-            .read_to_vec()
-            .context("reading file body")?;
+            .bytes()
+            .context("reading file body")?
+            .to_vec();
         Ok(body)
     })
     .await
@@ -2430,7 +2430,10 @@ async fn cross_subnet_peers_announce_loop(
     }
 }
 
-async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) -> Result<()> {
+async fn cross_subnet_peers_announce_once(
+    machine: &str,
+    agent: &crate::swarm::tls::SwarmAgent,
+) -> Result<()> {
     for user in enrolled_users()? {
         let home = match home_for_user(&user) {
             Some(h) => h,
@@ -2495,7 +2498,8 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
                 match agent
                     .post(&url)
                     .header("Content-Type", "application/json")
-                    .send(body)
+                    .body(body)
+                    .send()
                 {
                     Ok(r) if r.status().is_success() => {
                         debug!(host = %host, "cross_subnet_peers announce accepted");
@@ -2511,7 +2515,7 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
 
 /// Build the same mTLS agent the pusher uses. Private re-export of
 /// `pusher::build_agent` so we don't duplicate TLS setup.
-fn pusher_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
+fn pusher_agent(tls: &TlsCerts) -> Result<crate::swarm::tls::SwarmAgent> {
     // Delegate to pusher::build_agent via a private shim so the
     // crate-private function can be reused without a public API.
     pusher::build_agent_for_mod(tls)

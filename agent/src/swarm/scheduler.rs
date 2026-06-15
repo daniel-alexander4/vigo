@@ -392,7 +392,7 @@ fn available_peers_for_chunk(
 async fn run_endgame_round(
     sha256: &str,
     cache: &BlobCache,
-    peer_agent: &Option<ureq::Agent>,
+    peer_agent: &Option<crate::swarm::tls::SwarmAgent>,
     peer_map: &Arc<PeerMap>,
     remaining: &[u32],
     availability: &HashMap<u32, Vec<String>>,
@@ -583,7 +583,7 @@ async fn download_and_assemble(
     meta: &BlobMeta,
     cache: &BlobCache,
     peer_map: &Arc<PeerMap>,
-    peer_agent: &Option<ureq::Agent>,
+    peer_agent: &Option<crate::swarm::tls::SwarmAgent>,
     blacklisted_peers: &HashSet<String>,
     manifest: &Arc<Manifest>,
     announce: &Arc<AnnounceSignal>,

@@ -34,6 +34,8 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Result};
 use serde::Deserialize;
 
+use crate::swarm::tls::SwarmAgent;
+
 /// Minimum free-space percentage on the target filesystem below which
 /// pushes are skipped. 10% matches the guardrail spec. Compared
 /// strictly — a peer at exactly 10% is treated as pressured.
@@ -150,7 +152,7 @@ impl ProbeOutcome {
 /// `peer_addr` is a bare `host` or `host:port` — if the port is
 /// missing, [`PEER_PORT`] is added. Results are cached per
 /// `(peer_addr, purpose)` for [`CACHE_TTL`].
-pub fn probe(agent: &ureq::Agent, peer_addr: &str, purpose: &Purpose) -> ProbeOutcome {
+pub fn probe(agent: &SwarmAgent, peer_addr: &str, purpose: &Purpose) -> ProbeOutcome {
     let normalized = normalize_peer_addr(peer_addr);
     let key = cache_key(&normalized, purpose);
 
@@ -274,18 +276,18 @@ struct HealthResponse {
     free_pct: f64,
 }
 
-fn fetch(agent: &ureq::Agent, url: &str) -> Result<f64> {
+fn fetch(agent: &SwarmAgent, url: &str) -> Result<f64> {
     // Uses the caller's agent timeouts (typically 30s global from
     // `peer_client::build_peer_agent`). That's comfortably long for a
     // statvfs-backed probe and keeps this helper free of its own
     // config builder — one less place for per-call overrides to drift
     // from the rest of the peer-client code.
-    let mut resp = agent.get(url).call()?;
+    let resp = agent.get(url).send()?;
     let status = resp.status();
-    if status != 200 {
+    if status != reqwest::StatusCode::OK {
         bail!("status {}", status);
     }
-    let body = resp.body_mut().read_to_string()?;
+    let body = resp.text()?;
     let parsed: HealthResponse = serde_json::from_str(&body)?;
     if !parsed.free_pct.is_finite() {
         bail!("non-finite free_pct");
@@ -488,7 +490,7 @@ mod tests {
             );
         }
         // Agent is unused on a cache hit.
-        let agent = ureq::Agent::new_with_defaults();
+        let agent = reqwest::blocking::Client::new();
         let outcome = probe(&agent, "fake:1531", &Purpose::Swarm);
         assert!(matches!(outcome, ProbeOutcome::Ok { free_pct } if (free_pct - 42.0).abs() < 0.01));
 

@@ -11,11 +11,12 @@
 //! 2. Every `cross_subnet_peers:` hostname listed in the user's
 //!    `~/.lockbox/config.yaml`, resolved via DNS.
 //!
-//! Uses a dedicated `ureq::Agent` with a 5-minute global timeout —
-//! long enough for a 1 GiB push over a reasonable network, but
-//! bounded so a stuck connection can't pin the blocking pool
+//! Uses a dedicated `swarm::tls::SwarmAgent` with a 5-minute global
+//! timeout — long enough for a 1 GiB push over a reasonable network,
+//! but bounded so a stuck connection can't pin the blocking pool
 //! forever. Pushes run in `spawn_blocking` so the tokio runtime
-//! stays responsive.
+//! stays responsive. Server-cert verification chains to the fleet CA
+//! but skips the hostname check — see `swarm::tls::FleetCaVerifier`.
 //!
 //! No retry on failure: the receiver-side `maybe_catchup_files`
 //! handler in `mod.rs` watches the `files_digest` on every incoming
@@ -33,6 +34,7 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
+use crate::swarm::tls::{self, SwarmAgent};
 use crate::update::TlsCerts;
 use super::blobsig;
 use super::config;
@@ -105,7 +107,7 @@ pub fn spawn(
     });
 }
 
-async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
+async fn fan_out(agent: &SwarmAgent, job: PushJob) -> Result<()> {
     let PushJob { user, filename, bytes, mtime } = job;
 
     // Sign the blob content so receivers can authenticate the sender and
@@ -202,7 +204,7 @@ async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
 /// fanning out — the tombstone is still recorded locally so
 /// resurrection is blocked on THIS envoy. Recovery is automatic
 /// on the next announce cycle once the signing key is generated.
-async fn fan_out_delete(agent: &ureq::Agent, job: DeleteJob) -> Result<()> {
+async fn fan_out_delete(agent: &SwarmAgent, job: DeleteJob) -> Result<()> {
     let DeleteJob {
         user,
         filename,
@@ -314,7 +316,7 @@ async fn fan_out_delete(agent: &ureq::Agent, job: DeleteJob) -> Result<()> {
 
 /// One DELETE attempt. Blocking; runs inside `spawn_blocking`.
 fn push_delete_one(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     target: &PushTarget,
     envelope: &DeleteEnvelope,
 ) -> Result<()> {
@@ -333,7 +335,8 @@ fn push_delete_one(
     let resp = agent
         .post(&url)
         .header("Content-Type", "application/json")
-        .send(body)
+        .body(body)
+        .send()
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
@@ -350,7 +353,7 @@ fn push_delete_one(
 
 /// One push attempt. Blocking; runs inside `spawn_blocking`.
 fn push_one(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     target: &PushTarget,
     user: &str,
     filename: &str,
@@ -384,15 +387,15 @@ fn push_one(
         urlencode(user),
         urlencode(filename)
     );
-    // Pass the slice directly — ureq 3 accepts `&[u8]` as a send body
-    // without copying. Previously we called `bytes.to_vec()` here,
-    // which allocated a fresh heap Vec per target and defeated the
-    // point of passing the payload in as an `Arc<Vec<u8>>`.
+    // reqwest's blocking body takes an owned buffer, so this copies the
+    // slice once per target. The payload is still shared in as an
+    // `Arc<Vec<u8>>` by the caller; only the per-send body is owned.
     let resp = agent
         .post(&url)
         .header("Content-Type", "application/octet-stream")
         .header(blobsig::BLOBSIG_HEADER, blob_sig_header)
-        .send(bytes)
+        .body(bytes.to_vec())
+        .send()
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
@@ -507,7 +510,7 @@ fn urlencode(s: &str) -> String {
 
 /// Exposed to mod.rs for the cross_subnet_peers announce loop, which needs
 /// the same TLS-configured agent.
-pub(crate) fn build_agent_for_mod(tls: &TlsCerts) -> Result<ureq::Agent> {
+pub(crate) fn build_agent_for_mod(tls: &TlsCerts) -> Result<SwarmAgent> {
     build_agent(tls)
 }
 
@@ -566,7 +569,7 @@ pub async fn fan_out_leave(
 
 /// One LEAVE attempt. Blocking; runs inside `spawn_blocking`.
 fn push_leave_one(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     target: &PushTarget,
     envelope: &super::leaves::LeaveEnvelope,
 ) -> Result<()> {
@@ -579,7 +582,8 @@ fn push_leave_one(
     let resp = agent
         .post(&url)
         .header("Content-Type", "application/json")
-        .send(body)
+        .body(body)
+        .send()
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
@@ -659,7 +663,7 @@ pub async fn fan_out_resurrect(
 
 /// One RESURRECT attempt. Blocking; runs inside `spawn_blocking`.
 fn push_resurrect_one(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     target: &PushTarget,
     envelope: &super::resurrects::ResurrectEnvelope,
 ) -> Result<()> {
@@ -673,7 +677,8 @@ fn push_resurrect_one(
     let resp = agent
         .post(&url)
         .header("Content-Type", "application/json")
-        .send(body)
+        .body(body)
+        .send()
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
@@ -688,78 +693,16 @@ fn push_resurrect_one(
     Ok(())
 }
 
-/// Build the mTLS-configured ureq agent used for lockbox pushes.
+/// Build the mTLS-configured client used for lockbox pushes.
 /// Separate from swarm::peer_client's agent because we need a
 /// longer timeout (5 min vs. 30 s) to accommodate 1 GiB blobs.
-fn build_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
-    use ureq::tls::{parse_pem, PemItem};
-
-    let ca_pem = std::fs::read(&tls.ca_cert).context("read CA cert")?;
-    let cert_pem = std::fs::read(&tls.client_cert).context("read client cert")?;
-    let key_pem = std::fs::read(&tls.client_key).context("read client key")?;
-
-    let mut ca_certs = Vec::new();
-    for item in parse_pem(&ca_pem) {
-        if let Ok(PemItem::Certificate(c)) = item {
-            ca_certs.push(c);
-        }
-    }
-    let root_certs = ureq::tls::RootCerts::new_with_certs(&ca_certs);
-
-    let mut client_certs = Vec::new();
-    for item in parse_pem(&cert_pem) {
-        if let Ok(PemItem::Certificate(c)) = item {
-            client_certs.push(c);
-        }
-    }
-    let mut client_key = None;
-    for item in parse_pem(&key_pem) {
-        if let Ok(PemItem::PrivateKey(k)) = item {
-            client_key = Some(k);
-            break;
-        }
-    }
-    let key = client_key.context("no private key found in client key PEM")?;
-    let client_id = ureq::tls::ClientCert::new_with_certs(&client_certs, key);
-
-    // A8 (server cert verification disabled): this client does not pin
-    // the peer's server cert to the fleet CA, so a LAN MITM that can
-    // answer on a peer's IP terminates the TLS connection. Blob INJECTION
-    // via that vector is now closed at the application layer: pulled blobs
-    // carry an Ed25519 `BlobSig` (see `blobsig.rs`) verified against the
-    // signer's peer-table pubkey over the ciphertext hash — a MITM with no
-    // peer-table identity cannot forge it, so injected/swapped ciphertext
-    // is rejected before it lands. The remaining residual is the missing
-    // server-cert pinning itself (transport-level peer identity); the
-    // correct fix is a custom rustls `ServerCertVerifier` that chains the
-    // server cert to the fleet CA (reuse the CA-loading above) but skips
-    // ONLY the hostname/SAN check — envoy certs are CN'd by IP, which is
-    // why verification was turned off wholesale.
-    //
-    // BLOCKED on the ureq API: ureq 3.3 (latest) exposes only
-    // `disable_verification(bool)` — there is NO hook to inject a custom
-    // verifier or a pre-built rustls `ClientConfig`, and its
-    // `RustlsConnector` / `RustlsTransport` / `TransportAdapter` types
-    // are `pub(crate)`, so a from-scratch `Connector` cannot be built
-    // outside the crate either. Closing A8 therefore requires either
-    // (a) replacing ureq with a direct tokio-rustls/rustls HTTP client
-    // on this path (and peer_client.rs) so we own the `ClientConfig`,
-    // or (b) an upstream ureq change adding a custom-verifier hook.
-    // Left lax pending that decision rather than shipping a half-fix.
-    let tls_cfg = ureq::tls::TlsConfig::builder()
-        .root_certs(root_certs)
-        .client_cert(Some(client_id))
-        .disable_verification(true)
-        .build();
-
-    Ok(ureq::Agent::new_with_config(
-        ureq::config::Config::builder()
-            .tls_config(tls_cfg)
-            .timeout_connect(Some(Duration::from_secs(5)))
-            .timeout_global(Some(PUSH_TIMEOUT))
-            .timeout_send_body(Some(PUSH_TIMEOUT))
-            .build(),
-    ))
+///
+/// Server-cert verification chains the peer's cert to the fleet CA but
+/// skips the hostname/SAN check (envoy certs are CN'd by IP) — see
+/// `swarm::tls::FleetCaVerifier`. mTLS is preserved: the client presents
+/// this envoy's client cert, which the peer verifies against the same CA.
+fn build_agent(tls: &TlsCerts) -> Result<SwarmAgent> {
+    tls::build_client(tls, Duration::from_secs(5), PUSH_TIMEOUT)
 }
 
 #[cfg(test)]

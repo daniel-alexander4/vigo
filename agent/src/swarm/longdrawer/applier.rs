@@ -30,7 +30,7 @@ pub fn apply(
     sync_dir: &Path,
     user: &str,
     peer_addr: &str,
-    http: &ureq::Agent,
+    http: &crate::swarm::tls::SwarmAgent,
 ) -> Result<()> {
     match action {
         Action::Fetch { name, sha256, size, mtime } => {
@@ -47,7 +47,7 @@ pub fn apply(
 /// mismatch (sha256, size, oversized, I/O error) the temp file is removed and
 /// the operation fails without touching the target path.
 fn fetch_file(
-    http: &ureq::Agent,
+    http: &crate::swarm::tls::SwarmAgent,
     peer_addr: &str,
     user: &str,
     name: &str,
@@ -72,10 +72,10 @@ fn fetch_file(
 
     let mut resp = http
         .get(&url)
-        .call()
+        .send()
         .map_err(|e| anyhow::anyhow!("fetch {} from {} failed: {}", name, peer_addr, e))?;
 
-    if resp.status() != 200 {
+    if resp.status() != reqwest::StatusCode::OK {
         bail!("fetch {} from {} returned {}", name, peer_addr, resp.status());
     }
 
@@ -117,13 +117,15 @@ fn fetch_file(
 /// Enforces the expected size as an upper bound and rejects sha256 mismatch.
 /// Fsyncs on success so the temp file is durable before rename.
 fn stream_body_to_file(
-    resp: &mut ureq::http::Response<ureq::Body>,
+    resp: &mut reqwest::blocking::Response,
     tmp: &Path,
     expected_sha256: &str,
     expected_size: u64,
     name: &str,
 ) -> Result<()> {
-    let mut reader = resp.body_mut().as_reader();
+    // `reqwest::blocking::Response` implements `std::io::Read`, streaming
+    // the body off the socket — nothing buffered beyond `STREAM_CHUNK`.
+    let reader = resp;
     let mut file = fs::File::create(tmp)
         .with_context(|| format!("creating {}", tmp.display()))?;
     let mut hasher = Sha256::new();

@@ -529,7 +529,7 @@ pub fn fetch_bundle_from_peer(
     let resp = agent
         .get(&url)
         .header(CHAIN_HEADER, &chain_header)
-        .call()
+        .send()
         .with_context(|| format!("GET {}", url))?;
     let status = resp.status();
     if !status.is_success() {
@@ -538,10 +538,11 @@ pub fn fetch_bundle_from_peer(
     // Stream the response body straight to disk through `ingest_bundle`
     // (which caps it and runs `git bundle verify` before touching the
     // object store) — never buffer a multi-hundred-MB bundle in RAM.
+    // `reqwest::blocking::Response` is itself a `Read` over the socket.
     ingest_bundle(
         gitback_base,
         project_id,
-        resp.into_body().into_reader(),
+        resp,
         crate::swarm::runtime_limits::gitback_max_bundle_bytes(),
     )
 }
@@ -836,7 +837,8 @@ fn gossip_envelope_inner<T: serde::Serialize>(
         match agent
             .post(&url)
             .header("Content-Type", "application/json")
-            .send(&body[..])
+            .body(body.clone())
+            .send()
         {
             Ok(resp) if resp.status().is_success() => {
                 succeeded += 1;
@@ -1029,10 +1031,9 @@ pub fn reconcile_envelopes(
             crate::swarm::server::DEFAULT_PORT,
             pid_hex,
         );
-        let peer_digest: DigestResponse = match agent.get(&digest_url).call() {
+        let peer_digest: DigestResponse = match agent.get(&digest_url).send() {
             Ok(resp) if resp.status().is_success() => {
-                let mut body = resp.into_body();
-                let bytes = match body.read_to_vec() {
+                let bytes = match resp.bytes() {
                     Ok(b) => b,
                     Err(_) => continue,
                 };
@@ -1055,10 +1056,9 @@ pub fn reconcile_envelopes(
             crate::swarm::server::DEFAULT_PORT,
             pid_hex,
         );
-        let bundle: EnvelopesBundle = match agent.get(&all_url).call() {
+        let bundle: EnvelopesBundle = match agent.get(&all_url).send() {
             Ok(resp) if resp.status().is_success() => {
-                let mut body = resp.into_body();
-                let bytes = match body.read_to_vec() {
+                let bytes = match resp.bytes() {
                     Ok(b) => b,
                     Err(_) => continue,
                 };
@@ -1086,25 +1086,28 @@ pub fn reconcile_envelopes(
 }
 
 fn push_to_peer(
-    agent: &ureq::Agent,
+    agent: &crate::swarm::tls::SwarmAgent,
     url: &str,
     chain_header: &str,
     bundle_path: &Path,
 ) -> Result<bool> {
     let file = File::open(bundle_path)
         .with_context(|| format!("open {}", bundle_path.display()))?;
+    // `File: Into<reqwest::blocking::Body>` streams the bundle straight
+    // off disk — nothing buffered in RAM, matching the previous
+    // `SendBody::from_owned_reader`.
     let resp = agent
         .post(url)
         .header(CHAIN_HEADER, chain_header)
         .header("Content-Type", "application/x-git-bundle")
-        .send(ureq::SendBody::from_owned_reader(file))
+        .body(file)
+        .send()
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
         bail!("peer returned {}", status);
     }
-    let mut body = resp.into_body();
-    let body_bytes = body.read_to_vec().context("read response body")?;
+    let body_bytes = resp.bytes().context("read response body")?;
     let parsed: serde_json::Value =
         serde_json::from_slice(&body_bytes).context("parse JSON response")?;
     let refs_changed = parsed
@@ -1114,66 +1117,16 @@ fn push_to_peer(
     Ok(refs_changed)
 }
 
-fn build_push_agent(tls: &crate::update::TlsCerts) -> Result<ureq::Agent> {
-    use ureq::tls::{parse_pem, PemItem};
-
-    let ca_pem = std::fs::read(&tls.ca_cert).context("read CA cert")?;
-    let cert_pem = std::fs::read(&tls.client_cert).context("read client cert")?;
-    let key_pem = std::fs::read(&tls.client_key).context("read client key")?;
-
-    let mut ca_certs = Vec::new();
-    for item in parse_pem(&ca_pem) {
-        if let Ok(PemItem::Certificate(c)) = item {
-            ca_certs.push(c);
-        }
-    }
-    let root_certs = ureq::tls::RootCerts::new_with_certs(&ca_certs);
-
-    let mut client_certs = Vec::new();
-    for item in parse_pem(&cert_pem) {
-        if let Ok(PemItem::Certificate(c)) = item {
-            client_certs.push(c);
-        }
-    }
-    let mut client_key = None;
-    for item in parse_pem(&key_pem) {
-        if let Ok(PemItem::PrivateKey(k)) = item {
-            client_key = Some(k);
-            break;
-        }
-    }
-    let key = client_key.context("no private key found in client key PEM")?;
-    let client_id = ureq::tls::ClientCert::new_with_certs(&client_certs, key);
-
-    let tls_cfg = ureq::tls::TlsConfig::builder()
-        .root_certs(root_certs)
-        .client_cert(Some(client_id))
-        // Hostname verification is off because envoy mTLS certs are
-        // issued for the agent UUID, not the DNS name. Peer identity
-        // is established by client-cert chain back to the fleet CA;
-        // hostname-on-cert would require parallel issuance.
-        //
-        // NOTE: `disable_verification(true)` skips the *server* cert
-        // chain entirely (ureq 3.3 exposes no skip-hostname-only knob —
-        // see the A8 note in lockbox/pusher.rs::build_agent). This is
-        // intentionally lax here: gitback fan-out is an availability
-        // path and every gitback object pulled is independently
-        // chain-verified (signatures over the bundle / commit objects),
-        // so a LAN MITM cannot inject content this code would accept.
-        // The content planes that carry only magic-checked blobs
-        // (lockbox, peer_client) are the ones that need the stricter
-        // chain-verifying verifier.
-        .disable_verification(true)
-        .build();
-
-    Ok(ureq::Agent::new_with_config(
-        ureq::config::Config::builder()
-            .tls_config(tls_cfg)
-            .timeout_connect(Some(Duration::from_secs(5)))
-            .timeout_global(Some(PEER_PUSH_TIMEOUT))
-            .timeout_send_body(Some(PEER_PUSH_TIMEOUT))
-            .build(),
-    ))
+/// Build the mTLS-configured client used for gitback bundle fan-out.
+///
+/// Server-cert verification chains the peer's cert to the fleet CA but
+/// skips the hostname/SAN check — envoy certs are CN'd by agent UUID, not
+/// the dialed IP. See `swarm::tls::FleetCaVerifier`. Peer identity is the
+/// CA (mTLS in both directions); the gitback objects pushed/pulled are
+/// additionally chain-verified (signatures over the bundle / commit
+/// objects), so this path is doubly protected.
+fn build_push_agent(tls: &crate::update::TlsCerts) -> Result<crate::swarm::tls::SwarmAgent> {
+    crate::swarm::tls::build_client(tls, Duration::from_secs(5), PEER_PUSH_TIMEOUT)
 }
 
 #[cfg(test)]

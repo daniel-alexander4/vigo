@@ -58,6 +58,7 @@ pub mod server;
 pub mod state_mirror;
 pub mod hostdox;
 pub mod target;
+pub mod tls;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

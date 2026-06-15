@@ -3,13 +3,19 @@
 
 //! Client for downloading chunks from peer agents over mTLS HTTPS.
 //!
-//! Uses ureq (blocking, wrapped in spawn_blocking) with the same CA and
-//! client certs used for the gRPC connection to the server.
+//! Uses `swarm::tls::SwarmAgent` (a blocking reqwest client, wrapped in
+//! spawn_blocking) with the same CA and client certs used for the gRPC
+//! connection to the server. Server-cert verification chains to the fleet
+//! CA but skips the hostname check — see `swarm::tls::FleetCaVerifier`.
+
+use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use tracing::debug;
 
+use crate::swarm::tls::{self, SwarmAgent};
 use crate::update::TlsCerts;
 
 /// Metadata response from GET /blob/{sha256}/meta.
@@ -46,7 +52,7 @@ pub enum MetaResult {
 /// Fetch blob metadata from a peer (unconditional). Prefer
 /// `fetch_meta_conditional` when caching is in play.
 pub fn fetch_meta(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     peer_addr: &str,
     sha256: &str,
 ) -> Result<PeerBlobMeta> {
@@ -66,7 +72,7 @@ pub fn fetch_meta(
 /// `MetaResult::Fresh` carrying the decoded payload and the peer's ETag
 /// header (if present), which the caller should store for the next probe.
 pub fn fetch_meta_conditional(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     peer_addr: &str,
     sha256: &str,
     if_none_match: Option<&str>,
@@ -77,14 +83,14 @@ pub fn fetch_meta_conditional(
         req = req.header("If-None-Match", etag);
     }
     let resp = req
-        .call()
+        .send()
         .map_err(|e| anyhow::anyhow!("meta request to {} failed: {}", peer_addr, e))?;
 
     let status = resp.status();
-    if status == 304 {
+    if status == StatusCode::NOT_MODIFIED {
         return Ok(MetaResult::NotModified);
     }
-    if status != 200 {
+    if status != StatusCode::OK {
         bail!("meta request to {} returned {}", peer_addr, status);
     }
 
@@ -94,17 +100,16 @@ pub fn fetch_meta_conditional(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    let meta: PeerBlobMeta = resp
-        .into_body()
-        .read_json()
-        .context("parsing peer meta response")?;
+    let body = resp.bytes().context("reading peer meta response")?;
+    let meta: PeerBlobMeta =
+        serde_json::from_slice(&body).context("parsing peer meta response")?;
 
     Ok(MetaResult::Fresh { meta, etag })
 }
 
 /// Fetch a single chunk from a peer.
 pub fn fetch_chunk(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     peer_addr: &str,
     sha256: &str,
     index: u32,
@@ -115,10 +120,10 @@ pub fn fetch_chunk(
 
     let resp = agent
         .get(&url)
-        .call()
+        .send()
         .map_err(|e| anyhow::anyhow!("chunk {} from {} failed: {}", index, peer_addr, e))?;
 
-    if resp.status() != 200 {
+    if resp.status() != StatusCode::OK {
         bail!("chunk {} from {} returned {}", index, peer_addr, resp.status());
     }
 
@@ -136,22 +141,22 @@ pub fn fetch_chunk(
         .unwrap_or_default();
 
     let data = resp
-        .into_body()
-        .read_to_vec()
-        .context("reading chunk body from peer")?;
+        .bytes()
+        .context("reading chunk body from peer")?
+        .to_vec();
 
     Ok(ChunkResult { data, peers })
 }
 
 /// Fetch the manifest version from a peer.
-pub fn fetch_manifest_version(agent: &ureq::Agent, peer_addr: &str) -> Result<u64> {
+pub fn fetch_manifest_version(agent: &SwarmAgent, peer_addr: &str) -> Result<u64> {
     let url = format!("https://{}/manifest/version", peer_addr);
     let resp = agent
         .get(&url)
-        .call()
+        .send()
         .map_err(|e| anyhow::anyhow!("manifest version from {} failed: {}", peer_addr, e))?;
 
-    if resp.status() != 200 {
+    if resp.status() != StatusCode::OK {
         bail!("manifest version from {} returned {}", peer_addr, resp.status());
     }
 
@@ -159,93 +164,40 @@ pub fn fetch_manifest_version(agent: &ureq::Agent, peer_addr: &str) -> Result<u6
     struct VersionResp {
         version: u64,
     }
-    let v: VersionResp = resp
-        .into_body()
-        .read_json()
-        .context("parsing manifest version")?;
+    let body = resp.bytes().context("reading manifest version")?;
+    let v: VersionResp =
+        serde_json::from_slice(&body).context("parsing manifest version")?;
     Ok(v.version)
 }
 
 /// Fetch the full manifest from a peer.
 pub fn fetch_manifest(
-    agent: &ureq::Agent,
+    agent: &SwarmAgent,
     peer_addr: &str,
 ) -> Result<super::manifest::ManifestData> {
     let url = format!("https://{}/manifest", peer_addr);
     let resp = agent
         .get(&url)
-        .call()
+        .send()
         .map_err(|e| anyhow::anyhow!("manifest from {} failed: {}", peer_addr, e))?;
 
-    if resp.status() != 200 {
+    if resp.status() != StatusCode::OK {
         bail!("manifest from {} returned {}", peer_addr, resp.status());
     }
 
-    let data: super::manifest::ManifestData = resp
-        .into_body()
-        .read_json()
-        .context("parsing manifest data")?;
+    let body = resp.bytes().context("reading manifest data")?;
+    let data: super::manifest::ManifestData =
+        serde_json::from_slice(&body).context("parsing manifest data")?;
     Ok(data)
 }
 
-/// Build a ureq agent configured for mTLS peer connections.
+/// Build a mTLS client configured for peer-by-IP connections.
 /// 5s connect timeout, 30s transfer timeout.
-pub fn build_peer_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
-    use ureq::tls::{parse_pem, PemItem};
-
-    let ca_pem = std::fs::read(&tls.ca_cert).context("read CA cert")?;
-    let cert_pem = std::fs::read(&tls.client_cert).context("read client cert")?;
-    let key_pem = std::fs::read(&tls.client_key).context("read client key")?;
-
-    let mut ca_certs = Vec::new();
-    for item in parse_pem(&ca_pem) {
-        if let Ok(PemItem::Certificate(c)) = item {
-            ca_certs.push(c);
-        }
-    }
-    let root_certs = ureq::tls::RootCerts::new_with_certs(&ca_certs);
-
-    let mut client_certs = Vec::new();
-    for item in parse_pem(&cert_pem) {
-        if let Ok(PemItem::Certificate(c)) = item {
-            client_certs.push(c);
-        }
-    }
-
-    let mut client_key = None;
-    for item in parse_pem(&key_pem) {
-        if let Ok(PemItem::PrivateKey(k)) = item {
-            client_key = Some(k);
-            break;
-        }
-    }
-    let key = client_key.context("no private key found in client key PEM")?;
-
-    let client_id = ureq::tls::ClientCert::new_with_certs(&client_certs, key);
-
-    // Disable server cert hostname verification for peer connections.
-    // Peers connect by IP but certs have hostname SANs — mismatch is expected.
-    // Safety: blob integrity is guaranteed by SHA256 hash verification, and the
-    // peer server still verifies our client cert against the CA.
-    //
-    // A8: this also skips the server cert *chain* check, not just the
-    // hostname — the control-plane responses pulled here (e.g. manifest
-    // JSON) are NOT all hash-pinned, so a LAN MITM could inject. Same
-    // ureq-3.3 API limitation blocks the proper fix here as in
-    // lockbox/pusher.rs::build_agent — see the A8 note there for the
-    // custom-verifier design and why it can't be wired through ureq.
-    let tls_cfg = ureq::tls::TlsConfig::builder()
-        .root_certs(root_certs)
-        .client_cert(Some(client_id))
-        .disable_verification(true)
-        .build();
-
-    Ok(ureq::Agent::new_with_config(
-        ureq::config::Config::builder()
-            .tls_config(tls_cfg)
-            .timeout_connect(Some(std::time::Duration::from_secs(5)))
-            .timeout_global(Some(std::time::Duration::from_secs(30)))
-            .timeout_recv_body(Some(std::time::Duration::from_secs(30)))
-            .build(),
-    ))
+///
+/// Server-cert verification chains the peer's cert to the fleet CA but
+/// skips the hostname/SAN check — peers are dialed by IP while their certs
+/// are CN'd by agent UUID. See `swarm::tls::FleetCaVerifier`. mTLS is
+/// preserved: the client still presents this envoy's client cert.
+pub fn build_peer_agent(tls: &TlsCerts) -> Result<SwarmAgent> {
+    tls::build_client(tls, Duration::from_secs(5), Duration::from_secs(30))
 }

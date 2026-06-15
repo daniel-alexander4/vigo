@@ -448,17 +448,16 @@ fn cmd_join(args: &[String]) -> Result<()> {
     let resp = agent
         .post(&url)
         .header("Content-Type", "application/json")
-        .send(body)
+        .body(body)
+        .send()
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
         let code = status.as_u16();
-        let mut resp = resp;
-        let msg = resp.body_mut().read_to_string().unwrap_or_default();
+        let msg = resp.text().unwrap_or_default();
         bail!("pair-claim failed (HTTP {}): {}", code, msg.trim());
     }
-    let mut resp = resp;
-    let bytes = resp.body_mut().read_to_vec().context("reading response body")?;
+    let bytes = resp.bytes().context("reading response body")?.to_vec();
     let (salt, wrapped) = pair::parse_pair_response(&bytes)?;
 
     // Local passphrase prompt — never crosses the wire. We unwrap
@@ -1097,17 +1096,16 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     let resp = agent
         .post(&url)
         .header("Content-Type", "application/json")
-        .send(body)
+        .body(body)
+        .send()
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
         let code = status.as_u16();
-        let mut resp = resp;
-        let msg = resp.body_mut().read_to_string().unwrap_or_default();
+        let msg = resp.text().unwrap_or_default();
         bail!("rekey-claim failed (HTTP {}): {}", code, msg.trim());
     }
-    let mut resp = resp;
-    let bytes = resp.body_mut().read_to_vec().context("reading response body")?;
+    let bytes = resp.bytes().context("reading response body")?.to_vec();
     let (new_salt, new_blob) = codes::parse_response(&bytes)?;
 
     let new_key = unwrap_signing_key(&new_blob, passphrase.as_bytes(), &new_salt).context(
@@ -2184,7 +2182,7 @@ fn load_envoy_tls() -> Result<crate::update::TlsCerts> {
     })
 }
 
-fn build_mtls_agent(tls: &crate::update::TlsCerts) -> Result<ureq::Agent> {
+fn build_mtls_agent(tls: &crate::update::TlsCerts) -> Result<crate::swarm::tls::SwarmAgent> {
     crate::swarm::lockbox::pusher::build_agent_for_mod(tls)
 }
 
