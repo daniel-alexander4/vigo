@@ -39,7 +39,7 @@ Examples:
 		}
 
 		// Apply filters.
-		moduleFilter, _ := cmd.Flags().GetString("configcrate")
+		configcrateFilter, _ := cmd.Flags().GetString("configcrate")
 		varFilter, _ := cmd.Flags().GetString("var")
 
 		var filtered []struct {
@@ -51,7 +51,7 @@ Examples:
 		}
 
 		for _, f := range result.Findings {
-			if moduleFilter != "" && (f.Type != "configcrate" || f.Name != moduleFilter) {
+			if configcrateFilter != "" && (f.Type != "configcrate" || f.Name != configcrateFilter) {
 				continue
 			}
 			if varFilter != "" && (f.Type != "var" || f.Name != varFilter) {

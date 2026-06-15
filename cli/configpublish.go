@@ -132,10 +132,10 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 
 		// Module retraction: generate retract modules for removed modules
 		// (show affected envoys) and for new/changed modules (pre-build).
-		if len(res.RemovedModuleContent) > 0 {
+		if len(res.RemovedConfigcrateContent) > 0 {
 			handleRetraction(res, stacksDir)
 		}
-		if len(res.ChangedModuleContent) > 0 {
+		if len(res.ChangedConfigcrateContent) > 0 {
 			handleRetractionPregen(res, stacksDir)
 		}
 
@@ -647,17 +647,17 @@ func handleRetraction(res *publish.Result, stacksDir string) {
 		Name    string `json:"name"`
 		Content string `json:"content"`
 	}
-	var modules []modInput
-	for rel, content := range res.RemovedModuleContent {
+	var configcrates []modInput
+	for rel, content := range res.RemovedConfigcrateContent {
 		// Extract configcrate name from path: "configcrates/nginx.vgo" → "nginx"
 		base := filepath.Base(rel)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
-		modules = append(modules, modInput{Name: name, Content: string(content)})
+		configcrates = append(configcrates, modInput{Name: name, Content: string(content)})
 	}
 
 	client := newAPIClient()
 	var resp retractAPIResponse
-	err := client.post("/api/v1/config/retract", map[string]any{"configcrates": modules}, &resp)
+	err := client.post("/api/v1/config/retract", map[string]any{"configcrates": configcrates}, &resp)
 	if err != nil {
 		// Server unreachable or error — not fatal, just skip retraction.
 		return
@@ -685,16 +685,16 @@ func handleRetractionPregen(res *publish.Result, stacksDir string) {
 		Name    string `json:"name"`
 		Content string `json:"content"`
 	}
-	var modules []modInput
-	for rel, content := range res.ChangedModuleContent {
+	var configcrates []modInput
+	for rel, content := range res.ChangedConfigcrateContent {
 		base := filepath.Base(rel)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
-		modules = append(modules, modInput{Name: name, Content: string(content)})
+		configcrates = append(configcrates, modInput{Name: name, Content: string(content)})
 	}
 
 	client := newAPIClient()
 	var resp retractAPIResponse
-	if err := client.post("/api/v1/config/retract", map[string]any{"configcrates": modules}, &resp); err != nil {
+	if err := client.post("/api/v1/config/retract", map[string]any{"configcrates": configcrates}, &resp); err != nil {
 		return
 	}
 	if !resp.Enabled || len(resp.Results) == 0 {

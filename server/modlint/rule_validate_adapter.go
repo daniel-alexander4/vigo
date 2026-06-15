@@ -26,8 +26,8 @@ type validateAdapterRule struct{}
 
 func (validateAdapterRule) id() string { return "validate-adapter" }
 
-func (validateAdapterRule) apply(mod *module, _ Options) []Finding {
-	vm := toValidateModule(mod)
+func (validateAdapterRule) apply(mod *configcrate, _ Options) []Finding {
+	vm := toValidateConfigcrate(mod)
 	findings := vigovalidate.ValidateConfigcrate(vm)
 
 	// Build a name → line index once for O(1) lookup.

@@ -32,7 +32,7 @@ type modeOctalRule struct{}
 
 func (modeOctalRule) id() string { return "mode-octal" }
 
-func (modeOctalRule) apply(mod *module, _ Options) []Finding {
+func (modeOctalRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for i := range mod.Resources {
 		res := &mod.Resources[i]

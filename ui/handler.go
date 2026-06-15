@@ -64,7 +64,7 @@ type DataSource interface {
 	DashboardData(baseInterval, offlineThreshold time.Duration) DashboardPageData
 	ConvergenceData(baseInterval, offlineThreshold time.Duration) ConvergencePageData
 	DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData
-	EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir string, offset, limit int) EnvoysPageData
+	EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset, limit int) EnvoysPageData
 	EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error)
 	EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, error)
 	EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error)
@@ -237,13 +237,13 @@ type EnvoyFrameworkDetail struct {
 // alongside Status so an operator looking at a missing control sees
 // whether they need to assign a module or upload a document.
 type ControlStatusRow struct {
-	ControlID          string
-	Title              string
-	Status             string
-	Scope              string
-	Configcrates       []string // present when Status == "covered"
-	Evidence           string
-	RecommendedModules []string // present when Status == "missing"
+	ControlID               string
+	Title                   string
+	Status                  string
+	Scope                   string
+	Configcrates            []string // present when Status == "covered"
+	Evidence                string
+	RecommendedConfigcrates []string // present when Status == "missing"
 }
 
 // Handler serves all UI pages.
@@ -3921,7 +3921,7 @@ type EvidenceControlDoc struct {
 type EvidenceControlEnvoy struct {
 	ID            string
 	Hostname      string
-	Module        string
+	Configcrate   string
 	Status        string
 	FailurePct    float64
 	FailedCount   int64
@@ -4218,7 +4218,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	type envoyModule struct {
 		envoyID     string
 		hostname    string
-		module      string
+		configcrate string
 		status      string
 		failurePct  float64
 		failedCount int64
@@ -4252,7 +4252,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 						matches = append(matches, envoyModule{
 							envoyID:     t.ID,
 							hostname:    t.Hostname,
-							module:      ct.Configcrate,
+							configcrate: ct.Configcrate,
 							status:      t.Status,
 							failurePct:  t.FailurePct,
 							failedCount: t.FailedCount,
@@ -4269,7 +4269,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		envoys = append(envoys, EvidenceControlEnvoy{
 			ID:            m.envoyID,
 			Hostname:      m.hostname,
-			Module:        m.module,
+			Configcrate:   m.configcrate,
 			Status:        m.status,
 			FailurePct:    m.failurePct,
 			FailedCount:   m.failedCount,
@@ -4492,7 +4492,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	roleFilter := q.Get("role")
 	osFilter := q.Get("os")
 	archFilter := q.Get("arch")
-	moduleFilter := q.Get("configcrate")
+	configcrateFilter := q.Get("configcrate")
 	complianceFilter := q.Get("compliance")
 	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
@@ -4500,7 +4500,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir, offset)
+	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset)
 	h.enrichEnvoyRows(data.Envoys)
 
 	h.setCommonWithRequest(&data.PageData, r)
@@ -4534,7 +4534,7 @@ func normalizeEnvoySort(col, dir string) (string, string) {
 // in the pills above it. The hard render cap (envoysRenderedCap) is
 // applied here, handler-side: the request limit is clamped before the
 // data-source call and the load-more sentinel is set after.
-func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir string, offset int) EnvoysPageData {
+func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset int) EnvoysPageData {
 	// Cap the request at the hard render limit. Past envoysRenderedCap
 	// rows we stop emitting load-more triggers and surface a sentinel.
 	limit := envoysPageLimit
@@ -4545,7 +4545,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, e
 		}
 	}
 
-	data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir, offset, limit)
+	data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset, limit)
 
 	// Render-cap sentinel: when paging reaches the hard DOM cap, the
 	// footer renders a "refine your filter" notice instead of another
@@ -4840,8 +4840,8 @@ type EnvoyComplianceDetailPageData struct {
 
 // MissingControlRec is a missing control with recommended modules.
 type MissingControlRec struct {
-	ControlID          string
-	RecommendedModules []string
+	ControlID               string
+	RecommendedConfigcrates []string
 }
 
 // EnvoyStandardCoverageData holds data for the per-envoy standard coverage fragment.

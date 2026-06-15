@@ -214,8 +214,8 @@ func runOrganize(stacksDir string, exampleDirs ...string) error {
 		examplePaths[name] = destRel
 	}
 
-	modulesDir := filepath.Join(stacksDir, "configcrates")
-	entries, err := os.ReadDir(modulesDir)
+	configcratesDir := filepath.Join(stacksDir, "configcrates")
+	entries, err := os.ReadDir(configcratesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Println("No configcrates directory found.")

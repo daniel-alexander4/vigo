@@ -26,7 +26,7 @@ type packageStateLatestRule struct{}
 
 func (packageStateLatestRule) id() string { return "package-state-latest" }
 
-func (packageStateLatestRule) apply(mod *module, _ Options) []Finding {
+func (packageStateLatestRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for _, res := range mod.Resources {
 		if res.Type != "package" && res.Type != "nonrepo_package" {

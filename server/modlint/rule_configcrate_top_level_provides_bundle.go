@@ -20,7 +20,7 @@ type moduleTopLevelProvidesBundleRule struct{}
 
 func (moduleTopLevelProvidesBundleRule) id() string { return "configcrate-top-level-provides-bundle" }
 
-func (moduleTopLevelProvidesBundleRule) apply(mod *module, _ Options) []Finding {
+func (moduleTopLevelProvidesBundleRule) apply(mod *configcrate, _ Options) []Finding {
 	if mod.TopLevelProvidesLine == 0 && mod.TopLevelBundleLine == 0 {
 		return nil
 	}

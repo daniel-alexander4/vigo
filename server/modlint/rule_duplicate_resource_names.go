@@ -17,7 +17,7 @@ type duplicateResourceNamesRule struct{}
 
 func (duplicateResourceNamesRule) id() string { return "duplicate-resource-names" }
 
-func (duplicateResourceNamesRule) apply(mod *module, _ Options) []Finding {
+func (duplicateResourceNamesRule) apply(mod *configcrate, _ Options) []Finding {
 	seen := make(map[string]bool, len(mod.Resources))
 	var out []Finding
 	for _, res := range mod.Resources {

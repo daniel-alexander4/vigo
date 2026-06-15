@@ -103,7 +103,7 @@ func TestMain(m *testing.M) {
 
 // testEnv bundles everything a single test needs.
 type testEnv struct {
-	ServerAddr string            // gRPC address (127.0.0.1:<port>)
+	ServerAddr string // gRPC address (127.0.0.1:<port>)
 	Queries    *db.Queries
 	Registry   *registry.Registry
 	ConfigDir  string
@@ -112,7 +112,7 @@ type testEnv struct {
 
 // startServer creates a gRPC server with the given modules and envoy mappings.
 // It cleans tables, creates a ConfigStore, and listens on a random port.
-func startServer(t *testing.T, modules map[string]string, envoysYAML string) *testEnv {
+func startServer(t *testing.T, configcrates map[string]string, envoysYAML string) *testEnv {
 	t.Helper()
 	ctx := context.Background()
 
@@ -134,12 +134,12 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 	// config primitive (modules, hostcrates, etc.). Config extension is
 	// .vgo; .yaml is not recognized.
 	configDir := filepath.Join(t.TempDir(), "stacks")
-	modulesDir := filepath.Join(configDir, "configcrates")
+	configcratesDir := filepath.Join(configDir, "configcrates")
 	stacksDir := filepath.Join(configDir, "stacks")
-	os.MkdirAll(modulesDir, 0755)
+	os.MkdirAll(configcratesDir, 0755)
 	os.MkdirAll(stacksDir, 0755)
-	for name, content := range modules {
-		os.WriteFile(filepath.Join(modulesDir, name+".vgo"), []byte(content), 0644)
+	for name, content := range configcrates {
+		os.WriteFile(filepath.Join(configcratesDir, name+".vgo"), []byte(content), 0644)
 	}
 	if envoysYAML != "" {
 		os.WriteFile(filepath.Join(stacksDir, "envoys.vgo"), []byte(envoysYAML), 0644)

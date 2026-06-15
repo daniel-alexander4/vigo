@@ -55,7 +55,7 @@ func FormatSource(relPath string, data []byte, opts Options) ([]byte, *Result) {
 
 // labelInPlace inserts/refreshes the `#~` label lines in `text` using the
 // parsed module's source positions, touching nothing else.
-func labelInPlace(text string, mod *module) string {
+func labelInPlace(text string, mod *configcrate) string {
 	lines := strings.Split(text, "\n")
 
 	// Resources first, bottom-up, so each splice leaves the line indices of
@@ -76,7 +76,7 @@ func labelInPlace(text string, mod *module) string {
 	if mod.Name != "" {
 		for i, l := range lines {
 			if strings.HasPrefix(l, "name:") {
-				lines = spliceLabel(lines, i, "#~ "+generateModuleComment(mod))
+				lines = spliceLabel(lines, i, "#~ "+generateConfigcrateComment(mod))
 				break
 			}
 		}

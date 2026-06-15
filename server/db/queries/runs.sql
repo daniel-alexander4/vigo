@@ -80,7 +80,7 @@ WHERE envoy_id = ?1 AND started_at > ?2 AND status = 'success'
 ORDER BY started_at ASC
 LIMIT 1;
 
--- name: EnvoysWithModule :many
+-- name: EnvoysWithConfigcrate :many
 -- Find active envoys that have run a specific module, with the most recent run time.
 -- Used by module retraction to show which envoys are affected when a module is removed.
 SELECT e.id, e.hostname, MAX(r.started_at) AS last_run

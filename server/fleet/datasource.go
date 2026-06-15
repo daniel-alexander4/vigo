@@ -314,7 +314,7 @@ func (ds *DataSource) DashboardStatsData(baseInterval, offlineThreshold time.Dur
 // chip axes (env, tag, role, os, arch, module, compliance); each
 // accepts comma-separated values for OR-within-axis semantics; AND
 // across axes (the existing convFilter/driftFilter/reachFilter behavior).
-func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir string, offset, limit int) ui.EnvoysPageData {
+func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset, limit int) ui.EnvoysPageData {
 	all := ds.envoyRows(baseInterval, offlineThreshold)
 
 	// Fleet-wide Module Health + observe-only count over the full set,
@@ -329,9 +329,9 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 		}
 	}
 
-	filtered := filterEnvoyRows(all, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter)
+	filtered := filterEnvoyRows(all, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter)
 	total := len(filtered)
-	filterAxes, activeFilterCount := BuildEnvoyFilterAxes(filtered, ds.fleet.ConvergenceSummary(), observing, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter)
+	filterAxes, activeFilterCount := BuildEnvoyFilterAxes(filtered, ds.fleet.ConvergenceSummary(), observing, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter)
 	sortEnvoyRows(filtered, sortCol, sortDir)
 
 	if offset < 0 {
@@ -357,7 +357,7 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 		RoleFilter:        roleFilter,
 		OSFilter:          osFilter,
 		ArchFilter:        archFilter,
-		ConfigcrateFilter: moduleFilter,
+		ConfigcrateFilter: configcrateFilter,
 		ComplianceFilter:  complianceFilter,
 		ConvFilter:        convFilter,
 		DriftFilter:       driftFilter,
@@ -410,18 +410,18 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 // are case-insensitive substring matches. Each accepts comma-separated
 // values for OR-within-axis: `?env=prod,staging` matches either; AND
 // holds across axes.
-func filterEnvoyRows(rows []ui.EnvoyRow, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter string) []ui.EnvoyRow {
+func filterEnvoyRows(rows []ui.EnvoyRow, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter string) []ui.EnvoyRow {
 	searchLower := splitCommaLower(search)
 	envLower := splitCommaLower(envFilter)
 	tagLower := splitCommaLower(tagFilter)
 	roleLower := splitCommaLower(roleFilter)
 	osLower := splitCommaLower(osFilter)
 	archLower := splitCommaLower(archFilter)
-	moduleLower := splitCommaLower(moduleFilter)
+	configcrateLower := splitCommaLower(configcrateFilter)
 	complianceLower := splitCommaLower(complianceFilter)
 	out := make([]ui.EnvoyRow, 0, len(rows))
 	for _, e := range rows {
-		if matchesEnvoyFilter(e, convFilter, driftFilter, reachFilter, searchLower, envLower, tagLower, roleLower, osLower, archLower, moduleLower, complianceLower) {
+		if matchesEnvoyFilter(e, convFilter, driftFilter, reachFilter, searchLower, envLower, tagLower, roleLower, osLower, archLower, configcrateLower, complianceLower) {
 			out = append(out, e)
 		}
 	}
@@ -496,7 +496,7 @@ const envoyFilterAxisMaxPerAxis = 50
 // fleet's pre-computed ConvergenceSummary so they match the read-only
 // chip bar above the table; "observing" comes from the caller because
 // it's not part of ConvergenceCounters.
-func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observing int, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter string) ([]ui.FilterAxis, int) {
+func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observing int, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter string) ([]ui.FilterAxis, int) {
 	baseQS := map[string]string{}
 	put := func(k, v string) {
 		if v != "" {
@@ -512,7 +512,7 @@ func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observ
 	put("role", roleFilter)
 	put("os", osFilter)
 	put("arch", archFilter)
-	put("configcrate", moduleFilter)
+	put("configcrate", configcrateFilter)
 	put("compliance", complianceFilter)
 
 	specs := []FilterAxisSpec{
@@ -553,7 +553,7 @@ func BuildEnvoyFilterAxes(rows []ui.EnvoyRow, counts ConvergenceCounters, observ
 		{Key: "role", Label: "Role", Selected: roleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Roles }},
 		{Key: "os", Label: "OS", Selected: osFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.OS) }},
 		{Key: "arch", Label: "Arch", Selected: archFilter, Extract: func(r ui.EnvoyRow) []string { return strOrNil(r.Arch) }},
-		{Key: "configcrate", Label: "Configcrate", Selected: moduleFilter, Extract: func(r ui.EnvoyRow) []string { return r.Configcrates }},
+		{Key: "configcrate", Label: "Configcrate", Selected: configcrateFilter, Extract: func(r ui.EnvoyRow) []string { return r.Configcrates }},
 		{Key: "compliance", Label: "Compliance", Selected: complianceFilter, Extract: func(r ui.EnvoyRow) []string { return r.ComplianceFrameworks }},
 	}
 
@@ -765,7 +765,7 @@ func urlQueryEscapeKeepingCommas(s string) string {
 	return sb.String()
 }
 
-func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter string, searchLower, envLower, tagLower, roleLower, osLower, archLower, moduleLower, complianceLower []string) bool {
+func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter string, searchLower, envLower, tagLower, roleLower, osLower, archLower, configcrateLower, complianceLower []string) bool {
 	if convFilter != "" && e.Status != convFilter {
 		return false
 	}
@@ -815,7 +815,7 @@ func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter stri
 	if !anySubstringMatch(strings.ToLower(e.Arch), archLower) {
 		return false
 	}
-	if !anySubstringMatchInSlice(e.Configcrates, moduleLower) {
+	if !anySubstringMatchInSlice(e.Configcrates, configcrateLower) {
 		return false
 	}
 	if !anySubstringMatchInSlice(e.ComplianceFrameworks, complianceLower) {

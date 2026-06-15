@@ -25,7 +25,7 @@ type communityNoSecretsRule struct{}
 
 func (communityNoSecretsRule) id() string { return "community-no-secrets" }
 
-func (communityNoSecretsRule) apply(mod *module, opts Options) []Finding {
+func (communityNoSecretsRule) apply(mod *configcrate, opts Options) []Finding {
 	if !opts.CommunityUpload {
 		return nil
 	}

@@ -29,7 +29,7 @@ import (
 // the filename-stem fallback for `name:` matches the loader.
 //
 // Warnings are tolerated; Errors are not.
-func TestExampleModulesLintClean(t *testing.T) {
+func TestExampleConfigcratesLintClean(t *testing.T) {
 	root := exampleConfigsRoot(t)
 	walked := 0
 	failures := map[string][]string{}

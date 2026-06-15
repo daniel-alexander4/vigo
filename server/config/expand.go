@@ -128,7 +128,7 @@ func HasCaseResources(cfg *EnvoyConfig) bool {
 // HasModuleWhens returns true if any module in the config has a module-level
 // when: expression. Such modules may be filtered during bundle building based
 // on traits, making the load-time Merkle root unreliable for fast-path comparison.
-func HasModuleWhens(cfg *EnvoyConfig) bool {
+func HasConfigcrateWhens(cfg *EnvoyConfig) bool {
 	for _, mod := range cfg.Configcrates {
 		if mod.When != "" {
 			return true
@@ -182,7 +182,7 @@ func toSlice(v any) ([]any, error) {
 // module instances than this logs a warning — every instance is its own module
 // in the policy bundle, so it costs wire bytes, server memory, and a per-module
 // agent cache entry on every check-in.
-const foreachModuleExpansionWarnThreshold = 200
+const foreachConfigcrateExpansionWarnThreshold = 200
 
 // expandForeachConfigcrateRefs replaces any ConfigcrateRef carrying foreach: with one
 // synthetic per-item ref named "<module>[<key>]". The list comes from vars; the
@@ -236,9 +236,9 @@ func expandForeachConfigcrateRefs(refs []ConfigcrateRef, defs map[string]*Config
 				InstanceKey: key,
 			})
 		}
-		if n := len(items); n > foreachModuleExpansionWarnThreshold {
+		if n := len(items); n > foreachConfigcrateExpansionWarnThreshold {
 			slog.Warn("foreach: expands into a large number of module instances — large policy bundle",
-				"module", r.Name, "var", r.ForEach, "count", n, "threshold", foreachModuleExpansionWarnThreshold)
+				"module", r.Name, "var", r.ForEach, "count", n, "threshold", foreachConfigcrateExpansionWarnThreshold)
 		}
 	}
 	return out, nil
@@ -270,7 +270,7 @@ func foreachInstanceKey(item any, keyField string) (string, error) {
 // collide, rewriting intra-module depends_on/notify/subscribes/before
 // references to the suffixed names. A resource carrying its own foreach: is
 // left for the resource-level expansion (its .Each/.Item is its own item).
-func expandModuleInstanceResources(resources []ResourceConfig, item any, key string) ([]ResourceConfig, error) {
+func expandConfigcrateInstanceResources(resources []ResourceConfig, item any, key string) ([]ResourceConfig, error) {
 	suffix := "[" + key + "]"
 	itemMap, _ := item.(map[string]any)
 	itemStr := fmt.Sprintf("%v", item)

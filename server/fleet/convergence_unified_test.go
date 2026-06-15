@@ -22,7 +22,7 @@ func TestUpdateRunStatus_MatchesComputeConvergence(t *testing.T) {
 		runStatus    string
 		changed      int64
 		failed       int64
-		modules      int64
+		configcrates int64
 		wantStatus   string
 	}{
 		{"clean success", "success", 0, 0, 5, "converged"},
@@ -49,7 +49,7 @@ func TestUpdateRunStatus_MatchesComputeConvergence(t *testing.T) {
 				ConvergenceStatus: "no data",
 			}, nil)
 
-			fi.UpdateRunStatus("e1", "run-1", tc.runStatus, tc.changed, tc.failed, tc.modules, time.Now())
+			fi.UpdateRunStatus("e1", "run-1", tc.runStatus, tc.changed, tc.failed, tc.configcrates, time.Now())
 
 			got := fi.GetEnvoy("e1")
 			if got == nil {

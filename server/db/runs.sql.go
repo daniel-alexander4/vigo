@@ -92,7 +92,7 @@ func (q *Queries) CreateRunResult(ctx context.Context, arg CreateRunResultParams
 	return i, err
 }
 
-const envoysWithModule = `-- name: EnvoysWithModule :many
+const envoysWithConfigcrate = `-- name: EnvoysWithConfigcrate :many
 SELECT e.id, e.hostname, MAX(r.started_at) AS last_run
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
@@ -104,7 +104,7 @@ GROUP BY e.id, e.hostname
 ORDER BY e.hostname
 `
 
-type EnvoysWithModuleRow struct {
+type EnvoysWithConfigcrateRow struct {
 	ID       string      `json:"id"`
 	Hostname string      `json:"hostname"`
 	LastRun  interface{} `json:"last_run"`
@@ -112,15 +112,15 @@ type EnvoysWithModuleRow struct {
 
 // Find active envoys that have run a specific module, with the most recent run time.
 // Used by module retraction to show which envoys are affected when a module is removed.
-func (q *Queries) EnvoysWithModule(ctx context.Context, configcrateName string) ([]EnvoysWithModuleRow, error) {
-	rows, err := q.db.QueryContext(ctx, envoysWithModule, configcrateName)
+func (q *Queries) EnvoysWithConfigcrate(ctx context.Context, configcrateName string) ([]EnvoysWithConfigcrateRow, error) {
+	rows, err := q.db.QueryContext(ctx, envoysWithConfigcrate, configcrateName)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []EnvoysWithModuleRow{}
+	items := []EnvoysWithConfigcrateRow{}
 	for rows.Next() {
-		var i EnvoysWithModuleRow
+		var i EnvoysWithConfigcrateRow
 		if err := rows.Scan(&i.ID, &i.Hostname, &i.LastRun); err != nil {
 			return nil, err
 		}

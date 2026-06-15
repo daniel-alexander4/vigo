@@ -11,11 +11,11 @@ import (
 // TestConfigcrateProvisions_KnownTagPasses pins the happy path: a configcrate
 // declaring a provision the catalog knows about produces no findings.
 func TestConfigcrateProvisions_KnownTagPasses(t *testing.T) {
-	mod := &module{
+	mod := &configcrate{
 		Name:     "chrony",
 		Provides: []string{"time-sync"},
 	}
-	findings := moduleProvisionsRule{}.apply(mod, Options{})
+	findings := configcrateProvisionsRule{}.apply(mod, Options{})
 	if len(findings) != 0 {
 		t.Errorf("expected no findings, got %v", findings)
 	}
@@ -28,11 +28,11 @@ func TestConfigcrateProvisions_KnownTagPasses(t *testing.T) {
 // rule produces an Error with a did-you-mean suggestion when the typo
 // is close to a known tag.
 func TestConfigcrateProvisions_UnknownTagWithDidYouMean(t *testing.T) {
-	mod := &module{
+	mod := &configcrate{
 		Name:     "chrony",
 		Provides: []string{"time-syc"}, // typo: missing 'n'
 	}
-	findings := moduleProvisionsRule{}.apply(mod, Options{})
+	findings := configcrateProvisionsRule{}.apply(mod, Options{})
 	if len(findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d: %v", len(findings), findings)
 	}
@@ -57,11 +57,11 @@ func TestConfigcrateProvisions_UnknownTagWithDidYouMean(t *testing.T) {
 // only declare a `compliance.bundle:` (or no compliance at all) aren't
 // disturbed by the provisions rule.
 func TestConfigcrateProvisions_NoProvidesNoFindings(t *testing.T) {
-	mod := &module{
+	mod := &configcrate{
 		Name:   "bundle-only-module",
 		Bundle: []string{"cis-ubuntu-access"},
 	}
-	findings := moduleProvisionsRule{}.apply(mod, Options{})
+	findings := configcrateProvisionsRule{}.apply(mod, Options{})
 	if len(findings) != 0 {
 		t.Errorf("expected no findings for module without provides:, got %v", findings)
 	}

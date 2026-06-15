@@ -32,7 +32,7 @@ func toolDefs() []ToolDef {
 			Name:        "get_traits",
 			Description: "Get the latest discovered traits (facts) for a envoy — OS, hardware, network, packages, etc.",
 			Parameters: jsonSchema(map[string]any{
-				"type":     "object",
+				"type": "object",
 				"properties": map[string]any{
 					"hostname": map[string]any{"type": "string", "description": "Envoy hostname"},
 				},
@@ -54,7 +54,7 @@ func toolDefs() []ToolDef {
 			Name:        "get_run",
 			Description: "Get full details for a single run including per-resource results (action taken, errors, duration).",
 			Parameters: jsonSchema(map[string]any{
-				"type":     "object",
+				"type": "object",
 				"properties": map[string]any{
 					"run_id": map[string]any{"type": "string", "description": "Run UUID"},
 				},
@@ -75,7 +75,7 @@ func toolDefs() []ToolDef {
 			Name:        "get_config",
 			Description: "Get the effective resolved configuration for a envoy (secrets redacted). Shows configcrates, resources, vars.",
 			Parameters: jsonSchema(map[string]any{
-				"type":     "object",
+				"type": "object",
 				"properties": map[string]any{
 					"hostname": map[string]any{"type": "string", "description": "Envoy hostname"},
 				},
@@ -105,7 +105,7 @@ func toolDefs() []ToolDef {
 			Name:        "get_configcrate_definition",
 			Description: "Read the raw .vgo definition of a configcrate (resources, vars, depends_on).",
 			Parameters: jsonSchema(map[string]any{
-				"type":     "object",
+				"type": "object",
 				"properties": map[string]any{
 					"name": map[string]any{"type": "string", "description": "Module name"},
 				},
@@ -132,7 +132,7 @@ func toolDefs() []ToolDef {
 			Name:        "dry_run",
 			Description: "Compute a dry-run plan for a envoy — shows what would change without applying.",
 			Parameters: jsonSchema(map[string]any{
-				"type":     "object",
+				"type": "object",
 				"properties": map[string]any{
 					"hostname": map[string]any{"type": "string", "description": "Envoy hostname"},
 				},

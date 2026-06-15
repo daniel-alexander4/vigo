@@ -94,7 +94,7 @@ func TestExpandForeachConfigcrateRefs_NoForeachPassthrough(t *testing.T) {
 
 // --- unit tests: expandModuleInstanceResources ---
 
-func TestExpandModuleInstanceResources_MapItem(t *testing.T) {
+func TestExpandConfigcrateInstanceResources_MapItem(t *testing.T) {
 	resources := []ResourceConfig{
 		{Name: "vhost-docroot", Type: "directory", Attributes: map[string]any{"target_path": "/var/www/{{ .Each.server_name }}"}},
 		{
@@ -107,7 +107,7 @@ func TestExpandModuleInstanceResources_MapItem(t *testing.T) {
 	}
 	item := map[string]any{"server_name": "www.example.com"}
 
-	out, err := expandModuleInstanceResources(resources, item, "www.example.com")
+	out, err := expandConfigcrateInstanceResources(resources, item, "www.example.com")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,11 +132,11 @@ func TestExpandModuleInstanceResources_MapItem(t *testing.T) {
 	}
 }
 
-func TestExpandModuleInstanceResources_ScalarItem(t *testing.T) {
+func TestExpandConfigcrateInstanceResources_ScalarItem(t *testing.T) {
 	resources := []ResourceConfig{
 		{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "{{ .Item }}-server"}},
 	}
-	out, err := expandModuleInstanceResources(resources, "redis", "redis")
+	out, err := expandConfigcrateInstanceResources(resources, "redis", "redis")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,12 +145,12 @@ func TestExpandModuleInstanceResources_ScalarItem(t *testing.T) {
 	}
 }
 
-func TestExpandModuleInstanceResources_LeftoverRefIsError(t *testing.T) {
+func TestExpandConfigcrateInstanceResources_LeftoverRefIsError(t *testing.T) {
 	resources := []ResourceConfig{
 		{Name: "cfg", Type: "file", Attributes: map[string]any{"content": "port = {{ .Each.port }}"}},
 	}
 	// item has no "port" — the {{ .Each.port }} reference can't be resolved.
-	_, err := expandModuleInstanceResources(resources, map[string]any{"server_name": "a"}, "a")
+	_, err := expandConfigcrateInstanceResources(resources, map[string]any{"server_name": "a"}, "a")
 	if err == nil {
 		t.Fatal("expected error for unresolved .Each reference")
 	}
@@ -159,11 +159,11 @@ func TestExpandModuleInstanceResources_LeftoverRefIsError(t *testing.T) {
 	}
 }
 
-func TestExpandModuleInstanceResources_NestedForeachSkipped(t *testing.T) {
+func TestExpandConfigcrateInstanceResources_NestedForeachSkipped(t *testing.T) {
 	resources := []ResourceConfig{
 		{Name: "sub-{{ .Item }}", Type: "file", ForEach: "subpaths", Attributes: map[string]any{"target_path": "/x/{{ .Item }}"}},
 	}
-	out, err := expandModuleInstanceResources(resources, map[string]any{"server_name": "a"}, "a")
+	out, err := expandConfigcrateInstanceResources(resources, map[string]any{"server_name": "a"}, "a")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestExpandModuleInstanceResources_NestedForeachSkipped(t *testing.T) {
 
 // --- integration tests through NewConfigStore ---
 
-func writeVhostModule(t *testing.T, dir string) {
+func writeVhostConfigcrate(t *testing.T, dir string) {
 	t.Helper()
 	writeFile(t, filepath.Join(dir, "configcrates", "vhost.vgo"), `
 name: vhost
@@ -211,7 +211,7 @@ func storeFromDir(t *testing.T, dir string) *ConfigStore {
 
 func TestForeachConfigcrate_FromMatchBlock(t *testing.T) {
 	dir := setupDir(t)
-	writeVhostModule(t, dir)
+	writeVhostConfigcrate(t, dir)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01"
@@ -282,7 +282,7 @@ envoys:
 
 func TestForeachConfigcrate_FromRoleAndCommon(t *testing.T) {
 	dir := setupDir(t)
-	writeVhostModule(t, dir)
+	writeVhostConfigcrate(t, dir)
 	writeRoles(t, dir, `
 - name: webserver
   configcrates:
@@ -364,40 +364,40 @@ envoys:
 
 func TestForeachConfigcrate_LoadErrors(t *testing.T) {
 	cases := []struct {
-		name      string
-		moduleVgo string
-		envoysVgo string
-		want      string
+		name           string
+		configcrateVgo string
+		envoysVgo      string
+		want           string
 	}{
 		{
-			name:      "missing var",
-			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: nope\n",
-			want:      "foreach var \"nope\" not found",
+			name:           "missing var",
+			configcrateVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
+			envoysVgo:      "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: nope\n",
+			want:           "foreach var \"nope\" not found",
 		},
 		{
-			name:      "map list without key",
-			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n    vars:\n      items:\n        - {a: 1}\n        - {a: 2}\n",
-			want:      "add key:",
+			name:           "map list without key",
+			configcrateVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
+			envoysVgo:      "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n    vars:\n      items:\n        - {a: 1}\n        - {a: 2}\n",
+			want:           "add key:",
 		},
 		{
-			name:      "duplicate keys",
-			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: dup}\n        - {id: dup}\n",
-			want:      "same instance key",
+			name:           "duplicate keys",
+			configcrateVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n",
+			envoysVgo:      "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: dup}\n        - {id: dup}\n",
+			want:           "same instance key",
 		},
 		{
-			name:      "unresolved .Each in resource",
-			moduleVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x/{{ .Each.missing }}\n    content: ok\n",
-			envoysVgo: "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: a}\n",
-			want:      "doesn't provide",
+			name:           "unresolved .Each in resource",
+			configcrateVgo: "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x/{{ .Each.missing }}\n    content: ok\n",
+			envoysVgo:      "envoys:\n  - match: h\n    configcrates:\n      - name: m\n        foreach: items\n        key: id\n    vars:\n      items:\n        - {id: a}\n",
+			want:           "doesn't provide",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := setupDir(t)
-			writeFile(t, filepath.Join(dir, "configcrates", "m.vgo"), tc.moduleVgo)
+			writeFile(t, filepath.Join(dir, "configcrates", "m.vgo"), tc.configcrateVgo)
 			writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), tc.envoysVgo)
 			_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 			if err == nil {

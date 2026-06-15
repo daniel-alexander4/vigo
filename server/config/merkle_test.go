@@ -8,15 +8,15 @@ import (
 )
 
 func TestMerkleRootDeterministic(t *testing.T) {
-	modules := []Configcrate{
+	configcrates := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 		{Name: "b", ContentHash: "bbb"},
 	}
 	vars := map[string]any{"key": "val"}
 	varOrder := []string{"key"}
 
-	root1 := MerkleRoot(modules, vars, varOrder)
-	root2 := MerkleRoot(modules, vars, varOrder)
+	root1 := MerkleRoot(configcrates, vars, varOrder)
+	root2 := MerkleRoot(configcrates, vars, varOrder)
 	if root1 != root2 {
 		t.Fatalf("non-deterministic: %s != %s", root1, root2)
 	}
@@ -29,7 +29,7 @@ func TestMerkleRootDeterministic(t *testing.T) {
 	}
 }
 
-func TestMerkleRootChangesOnModuleChange(t *testing.T) {
+func TestMerkleRootChangesOnConfigcrateChange(t *testing.T) {
 	vars := map[string]any{"k": "v"}
 	varOrder := []string{"k"}
 
@@ -49,7 +49,7 @@ func TestMerkleRootChangesOnModuleChange(t *testing.T) {
 }
 
 func TestMerkleRootStableWhenUnchanged(t *testing.T) {
-	modules := []Configcrate{
+	configcrates := []Configcrate{
 		{Name: "x", ContentHash: "xxx"},
 		{Name: "y", ContentHash: "yyy"},
 		{Name: "z", ContentHash: "zzz"},
@@ -57,20 +57,20 @@ func TestMerkleRootStableWhenUnchanged(t *testing.T) {
 	vars := map[string]any{"a": 1, "b": "two"}
 	varOrder := []string{"a", "b"}
 
-	root1 := MerkleRoot(modules, vars, varOrder)
-	root2 := MerkleRoot(modules, vars, varOrder)
+	root1 := MerkleRoot(configcrates, vars, varOrder)
+	root2 := MerkleRoot(configcrates, vars, varOrder)
 	if root1 != root2 {
 		t.Fatalf("root changed without any input change: %s != %s", root1, root2)
 	}
 }
 
 func TestMerkleRootChangesOnVarsChange(t *testing.T) {
-	modules := []Configcrate{
+	configcrates := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 	}
 
-	root1 := MerkleRoot(modules, map[string]any{"k": "v1"}, []string{"k"})
-	root2 := MerkleRoot(modules, map[string]any{"k": "v2"}, []string{"k"})
+	root1 := MerkleRoot(configcrates, map[string]any{"k": "v1"}, []string{"k"})
+	root2 := MerkleRoot(configcrates, map[string]any{"k": "v2"}, []string{"k"})
 
 	if root1 == root2 {
 		t.Fatal("root did not change when vars changed")
@@ -78,13 +78,13 @@ func TestMerkleRootChangesOnVarsChange(t *testing.T) {
 }
 
 func TestMerkleRootVarsOnlyDiffers(t *testing.T) {
-	modules := []Configcrate{
+	configcrates := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 	}
 	varOrder := []string{"k"}
 
-	withVars := MerkleRoot(modules, map[string]any{"k": "v"}, varOrder)
-	noVars := MerkleRoot(modules, nil, nil)
+	withVars := MerkleRoot(configcrates, map[string]any{"k": "v"}, varOrder)
+	noVars := MerkleRoot(configcrates, nil, nil)
 
 	if withVars == noVars {
 		t.Fatal("root is same with and without vars")
@@ -101,7 +101,7 @@ func TestMerkleRootEmptyInputs(t *testing.T) {
 	}
 }
 
-func TestMerkleRootSingleModule(t *testing.T) {
+func TestMerkleRootSingleConfigcrate(t *testing.T) {
 	root := MerkleRoot([]Configcrate{
 		{Name: "only", ContentHash: "abc123"},
 	}, nil, nil)
@@ -112,18 +112,18 @@ func TestMerkleRootSingleModule(t *testing.T) {
 
 func TestMerkleRootOddModuleCount(t *testing.T) {
 	// Odd number of modules — the tree must handle the unpaired node.
-	modules := []Configcrate{
+	configcrates := []Configcrate{
 		{Name: "a", ContentHash: "aaa"},
 		{Name: "b", ContentHash: "bbb"},
 		{Name: "c", ContentHash: "ccc"},
 	}
-	root := MerkleRoot(modules, nil, nil)
+	root := MerkleRoot(configcrates, nil, nil)
 	if root == "" || len(root) != 64 {
 		t.Fatalf("bad root for odd module count: %q", root)
 	}
 }
 
-func TestMerkleRootModuleOrderMatters(t *testing.T) {
+func TestMerkleRootConfigcrateOrderMatters(t *testing.T) {
 	vars := map[string]any{"k": "v"}
 	varOrder := []string{"k"}
 

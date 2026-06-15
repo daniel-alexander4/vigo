@@ -18,14 +18,14 @@ var configTreeCmd = &cobra.Command{
 		client := newAPIClient()
 
 		var tree struct {
-			Dir      string `json:"dir"`
-			File     string `json:"file"`
-			Configcrates  []string `json:"configcrates"`
-			Roles    []string `json:"roles"`
-			Match    string `json:"match"`
-			Total    []string `json:"total"`
-			Excluded []string `json:"excluded"`
-			Children []treeNode `json:"children"`
+			Dir          string     `json:"dir"`
+			File         string     `json:"file"`
+			Configcrates []string   `json:"configcrates"`
+			Roles        []string   `json:"roles"`
+			Match        string     `json:"match"`
+			Total        []string   `json:"total"`
+			Excluded     []string   `json:"excluded"`
+			Children     []treeNode `json:"children"`
 		}
 
 		if err := client.get("/api/v1/config/tree", &tree); err != nil {
@@ -41,25 +41,25 @@ var configTreeCmd = &cobra.Command{
 }
 
 type treeNode struct {
-	Dir      string     `json:"dir"`
-	File     string     `json:"file"`
-	Configcrates  []string   `json:"configcrates"`
-	Roles    []string   `json:"roles"`
-	Match    string     `json:"match"`
-	Total    []string   `json:"total"`
-	Excluded []string   `json:"excluded"`
-	Children []treeNode `json:"children"`
+	Dir          string     `json:"dir"`
+	File         string     `json:"file"`
+	Configcrates []string   `json:"configcrates"`
+	Roles        []string   `json:"roles"`
+	Match        string     `json:"match"`
+	Total        []string   `json:"total"`
+	Excluded     []string   `json:"excluded"`
+	Children     []treeNode `json:"children"`
 }
 
 func printTreeRoot(node *treeNode) {
 	// Root level.
 	if node.File != "" {
-		modules := formatModuleList(node.Configcrates, true)
+		configcrates := formatConfigcrateList(node.Configcrates, true)
 		roles := ""
 		if len(node.Roles) > 0 {
 			roles = " roles:" + dim("["+strings.Join(node.Roles, ", ")+"]")
 		}
-		fmt.Printf("%s → %s%s\n", dim(node.File), modules, roles)
+		fmt.Printf("%s → %s%s\n", dim(node.File), configcrates, roles)
 	}
 
 	for i, child := range node.Children {
@@ -82,7 +82,7 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 			prefix, connector,
 			leafFileName(node),
 			yellow(node.Match),
-			formatModuleList(node.Configcrates, false))
+			formatConfigcrateList(node.Configcrates, false))
 
 		// Total line.
 		if len(node.Total) > 0 {
@@ -103,13 +103,13 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 		// Directory with optional common.vgo.
 		dirName := blue(lastSegment(node.Dir) + "/")
 		if node.File != "" {
-			modules := formatModuleList(node.Configcrates, true)
+			configcrates := formatConfigcrateList(node.Configcrates, true)
 			roles := ""
 			if len(node.Roles) > 0 {
 				roles = " roles:" + dim("["+strings.Join(node.Roles, ", ")+"]")
 			}
 			fmt.Printf("%s%s%s\n", prefix, connector, dirName)
-			fmt.Printf("%s%s%s → %s%s\n", prefix, childPrefix, dim(node.File), modules, roles)
+			fmt.Printf("%s%s%s → %s%s\n", prefix, childPrefix, dim(node.File), configcrates, roles)
 		} else {
 			fmt.Printf("%s%s%s\n", prefix, connector, dirName)
 		}
@@ -123,11 +123,11 @@ func printTreeNode(node *treeNode, prefix string, isLast bool) {
 
 // formatModuleList formats a module list with color.
 // inherited=true uses dim (for common.vgo modules), false uses bold white.
-func formatModuleList(modules []string, inherited bool) string {
-	if len(modules) == 0 {
+func formatConfigcrateList(configcrates []string, inherited bool) string {
+	if len(configcrates) == 0 {
 		return dim("(none)")
 	}
-	list := "[" + strings.Join(modules, ", ") + "]"
+	list := "[" + strings.Join(configcrates, ", ") + "]"
 	if inherited {
 		return dim(list)
 	}

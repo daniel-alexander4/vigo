@@ -38,14 +38,14 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
 `
 	os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(nodesYAML), 0644)
 
-	moduleYAML := `name: nginx
+	configcrateYAML := `name: nginx
 
 resources:
   - name: nginx-pkg
     type: package
     package: nginx
 `
-	os.WriteFile(filepath.Join(dir, "configcrates", "nginx.vgo"), []byte(moduleYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "configcrates", "nginx.vgo"), []byte(configcrateYAML), 0644)
 
 	pgYAML := `name: postgres
 
@@ -99,8 +99,8 @@ func TestPreview_AffectedEnvoys(t *testing.T) {
 	}
 
 	var resp struct {
-		Configcrate   string `json:"configcrate"`
-		Affected []struct {
+		Configcrate string `json:"configcrate"`
+		Affected    []struct {
 			Hostname string `json:"hostname"`
 			EnvoyID  string `json:"envoy_id"`
 		} `json:"affected"`
@@ -141,7 +141,7 @@ func TestPreview_NoAffectedEnvoys(t *testing.T) {
 	}
 }
 
-func TestPreview_MissingModuleParameter(t *testing.T) {
+func TestPreview_MissingConfigcrateParameter(t *testing.T) {
 	store, fi := newPreviewTestDeps(t)
 
 	handler := NewPreviewHandler(store, fi)

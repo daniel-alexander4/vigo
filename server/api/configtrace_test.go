@@ -41,14 +41,14 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
 	}
 
 	// Write a module.
-	moduleYAML := `name: nginx
+	configcrateYAML := `name: nginx
 
 resources:
   - name: nginx-pkg
     type: package
     package: nginx
 `
-	if err := os.WriteFile(filepath.Join(dir, "configcrates", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "configcrates", "nginx.vgo"), []byte(configcrateYAML), 0644); err != nil {
 		t.Fatalf("write nginx.vgo: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func TestConfigTrace_SearchByMatch(t *testing.T) {
 	}
 }
 
-func TestConfigTrace_SearchByModule(t *testing.T) {
+func TestConfigTrace_SearchByConfigcrate(t *testing.T) {
 	store := newConfigTraceTestStore(t)
 
 	handler := NewConfigTraceHandler(store, nil)
@@ -222,7 +222,7 @@ func TestConfigTrace_TraceNoSubject(t *testing.T) {
 // TestConfigTrace_InverseModule exercises the inverse (subject-rooted) branch:
 // ?configcrate= without a hostname returns an InverseTraceResult rather than a
 // forward ConfigTrace.
-func TestConfigTrace_InverseModule(t *testing.T) {
+func TestConfigTrace_InverseConfigcrate(t *testing.T) {
 	store := newConfigTraceTestStore(t)
 
 	handler := NewConfigTraceHandler(store, nil)
@@ -302,7 +302,7 @@ func TestConfigTrace_InverseIncludeTree(t *testing.T) {
 
 // TestConfigTrace_InverseModuleUsercrateConflict confirms ?configcrate= and
 // ?usercrate= together are rejected — they each select a different subject.
-func TestConfigTrace_InverseModuleUsercrateConflict(t *testing.T) {
+func TestConfigTrace_InverseConfigcrateUsercrateConflict(t *testing.T) {
 	store := newConfigTraceTestStore(t)
 
 	handler := NewConfigTraceHandler(store, nil)

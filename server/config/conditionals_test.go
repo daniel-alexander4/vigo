@@ -199,57 +199,57 @@ func TestEvaluateResourceWhen_BuiltinShortCircuitFalse(t *testing.T) {
 
 // --- ShouldIncludeModule tests ---
 
-func TestShouldIncludeModule_NoConditionals(t *testing.T) {
+func TestShouldIncludeConfigcrate_NoConditionals(t *testing.T) {
 	mod := Configcrate{Name: "basic"}
-	if !ShouldIncludeModule(mod, map[string]any{}) {
+	if !ShouldIncludeConfigcrate(mod, map[string]any{}) {
 		t.Error("expected true when no when expression set")
 	}
 }
 
-func TestShouldIncludeModule_WhenFalse(t *testing.T) {
+func TestShouldIncludeConfigcrate_WhenFalse(t *testing.T) {
 	mod := Configcrate{Name: "nginx", When: "is_debian"}
 	vars := map[string]any{"is_debian": "false"}
-	if ShouldIncludeModule(mod, vars) {
+	if ShouldIncludeConfigcrate(mod, vars) {
 		t.Error("expected false when when var is false")
 	}
 }
 
-func TestShouldIncludeModule_WhenTrue(t *testing.T) {
+func TestShouldIncludeConfigcrate_WhenTrue(t *testing.T) {
 	mod := Configcrate{Name: "nginx", When: "is_debian"}
 	vars := map[string]any{"is_debian": "true"}
-	if !ShouldIncludeModule(mod, vars) {
+	if !ShouldIncludeConfigcrate(mod, vars) {
 		t.Error("expected true when when var is true")
 	}
 }
 
-func TestShouldIncludeModule_WhenNotTrue(t *testing.T) {
+func TestShouldIncludeConfigcrate_WhenNotTrue(t *testing.T) {
 	mod := Configcrate{Name: "desktop-tools", When: "not is_container"}
 	vars := map[string]any{"is_container": "true"}
-	if ShouldIncludeModule(mod, vars) {
+	if ShouldIncludeConfigcrate(mod, vars) {
 		t.Error("expected false when not condition triggers")
 	}
 }
 
-func TestShouldIncludeModule_WhenNotFalse(t *testing.T) {
+func TestShouldIncludeConfigcrate_WhenNotFalse(t *testing.T) {
 	mod := Configcrate{Name: "desktop-tools", When: "not is_container"}
 	vars := map[string]any{"is_container": "false"}
-	if !ShouldIncludeModule(mod, vars) {
+	if !ShouldIncludeConfigcrate(mod, vars) {
 		t.Error("expected true when not condition doesn't trigger")
 	}
 }
 
-func TestShouldIncludeModule_WhenOrNoneTrue(t *testing.T) {
+func TestShouldIncludeConfigcrate_WhenOrNoneTrue(t *testing.T) {
 	mod := Configcrate{Name: "tool", When: "is_debian or is_ubuntu"}
 	vars := map[string]any{"is_debian": "false", "is_ubuntu": "false"}
-	if ShouldIncludeModule(mod, vars) {
+	if ShouldIncludeConfigcrate(mod, vars) {
 		t.Error("expected false when no OR vars are true")
 	}
 }
 
-func TestShouldIncludeModule_WhenAndNotAll(t *testing.T) {
+func TestShouldIncludeConfigcrate_WhenAndNotAll(t *testing.T) {
 	mod := Configcrate{Name: "tool", When: "not (is_legacy and is_deprecated)"}
 	vars := map[string]any{"is_legacy": "true", "is_deprecated": "true"}
-	if ShouldIncludeModule(mod, vars) {
+	if ShouldIncludeConfigcrate(mod, vars) {
 		t.Error("expected false when all conditions in NOT(AND) are true")
 	}
 }
@@ -369,7 +369,7 @@ func evalCanonical(t *testing.T, when string, traits map[string]any) bool {
 	return result
 }
 
-func TestEvalModuleWhenServerSide_AgreesWithCanonicalParser(t *testing.T) {
+func TestEvalConfigcrateWhenServerSide_AgreesWithCanonicalParser(t *testing.T) {
 	traits := map[string]any{
 		"os.family": "debian",
 		"os.distro": "ubuntu",
@@ -398,7 +398,7 @@ func TestEvalModuleWhenServerSide_AgreesWithCanonicalParser(t *testing.T) {
 
 	for _, when := range cases {
 		t.Run(when, func(t *testing.T) {
-			include, agentWhen := EvalModuleWhenServerSide(when, traits)
+			include, agentWhen := EvalConfigcrateWhenServerSide(when, traits)
 			if agentWhen != "" {
 				t.Fatalf("expected fully server-resolved (empty agentWhen), got residual %q", agentWhen)
 			}
@@ -414,32 +414,32 @@ func TestEvalModuleWhenServerSide_AgreesWithCanonicalParser(t *testing.T) {
 // deferral behavior: an expression with an agent-only builtin that can't be
 // short-circuited server-side must be passed through unchanged (include=true,
 // non-empty residual) for the agent to finish.
-func TestEvalModuleWhenServerSide_DefersAgentBuiltins(t *testing.T) {
+func TestEvalConfigcrateWhenServerSide_DefersAgentBuiltins(t *testing.T) {
 	traits := map[string]any{"os.family": "debian"}
 
 	// Pure agent-only builtin: deferred.
-	include, agentWhen := EvalModuleWhenServerSide("has_command('docker')", traits)
+	include, agentWhen := EvalConfigcrateWhenServerSide("has_command('docker')", traits)
 	if !include || agentWhen == "" {
 		t.Errorf("agent-only builtin should defer: include=%v agentWhen=%q", include, agentWhen)
 	}
 
 	// AND short-circuit: a server-false part makes the whole expression
 	// false without deferring.
-	include, agentWhen = EvalModuleWhenServerSide("os_family('rhel') and has_command('docker')", traits)
+	include, agentWhen = EvalConfigcrateWhenServerSide("os_family('rhel') and has_command('docker')", traits)
 	if include || agentWhen != "" {
 		t.Errorf("server-false AND part should drop without deferral: include=%v agentWhen=%q", include, agentWhen)
 	}
 
 	// OR short-circuit: a server-true part makes the whole expression true
 	// without deferring.
-	include, agentWhen = EvalModuleWhenServerSide("os_family('debian') or has_command('docker')", traits)
+	include, agentWhen = EvalConfigcrateWhenServerSide("os_family('debian') or has_command('docker')", traits)
 	if !include || agentWhen != "" {
 		t.Errorf("server-true OR part should include without deferral: include=%v agentWhen=%q", include, agentWhen)
 	}
 
 	// Mixed AND where the server part is true: the agent-only remainder is
 	// deferred (include=true, residual contains the agent builtin).
-	include, agentWhen = EvalModuleWhenServerSide("os_family('debian') and has_command('docker')", traits)
+	include, agentWhen = EvalConfigcrateWhenServerSide("os_family('debian') and has_command('docker')", traits)
 	if !include || agentWhen == "" {
 		t.Errorf("server-true AND agent-builtin should defer remainder: include=%v agentWhen=%q", include, agentWhen)
 	}

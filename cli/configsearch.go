@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	searchMatch  string
-	searchModule string
-	searchVar    string
+	searchMatch       string
+	searchConfigcrate string
+	searchVar         string
 )
 
 var configSearchCmd = &cobra.Command{
@@ -28,7 +28,7 @@ Examples:
   vigocli config search --configcrate nginx
   vigocli config search --var log_level`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if searchMatch == "" && searchModule == "" && searchVar == "" {
+		if searchMatch == "" && searchConfigcrate == "" && searchVar == "" {
 			return fmt.Errorf("at least one of --match, --configcrate, or --var is required")
 		}
 
@@ -38,8 +38,8 @@ Examples:
 		if searchMatch != "" {
 			params.Set("match", searchMatch)
 		}
-		if searchModule != "" {
-			params.Set("configcrate", searchModule)
+		if searchConfigcrate != "" {
+			params.Set("configcrate", searchConfigcrate)
 		}
 		if searchVar != "" {
 			params.Set("var", searchVar)
@@ -101,9 +101,9 @@ func printSearchEntry(e searchEntry) {
 			if dir == "" {
 				dir = "(root)"
 			}
-			modules := strings.Join(level.Configcrates, ", ")
-			if modules == "" {
-				modules = "(none)"
+			configcrates := strings.Join(level.Configcrates, ", ")
+			if configcrates == "" {
+				configcrates = "(none)"
 			}
 			roles := ""
 			if len(level.Roles) > 0 {
@@ -111,7 +111,7 @@ func printSearchEntry(e searchEntry) {
 			}
 			fmt.Printf("    %s/%s → %s%s\n",
 				blue(dir), dim(level.File),
-				dim(modules), dim(roles))
+				dim(configcrates), dim(roles))
 		}
 	}
 
@@ -147,7 +147,7 @@ func printSearchEntry(e searchEntry) {
 
 func init() {
 	configSearchCmd.Flags().StringVar(&searchMatch, "match", "", "Glob pattern to match against envoy match: patterns")
-	configSearchCmd.Flags().StringVar(&searchModule, "configcrate", "", "Find entries using this configcrate (inherited or direct)")
+	configSearchCmd.Flags().StringVar(&searchConfigcrate, "configcrate", "", "Find entries using this configcrate (inherited or direct)")
 	configSearchCmd.Flags().StringVar(&searchVar, "var", "", "Find entries that define this var")
 
 	configCmd.AddCommand(configSearchCmd)

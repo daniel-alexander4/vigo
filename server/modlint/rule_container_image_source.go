@@ -21,7 +21,7 @@ type containerImageSourceRule struct{}
 
 func (containerImageSourceRule) id() string { return "container-image-source" }
 
-func (containerImageSourceRule) apply(mod *module, _ Options) []Finding {
+func (containerImageSourceRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for _, res := range mod.Resources {
 		if res.Type != "container" {

@@ -53,7 +53,7 @@ Examples:
 }
 
 // stacksModule is a minimal struct for searching module content.
-type stacksModule struct {
+type stacksConfigcrate struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 	Resources   []struct {
@@ -64,11 +64,11 @@ type stacksModule struct {
 }
 
 func runStacksSearch(query, stacksDir string) error {
-	modulesDir := filepath.Join(stacksDir, "configcrates")
+	configcratesDir := filepath.Join(stacksDir, "configcrates")
 	query = strings.ToLower(query)
 
 	var results []searchResult
-	err := filepath.WalkDir(modulesDir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(configcratesDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".vgo") {
 			return err
 		}
@@ -79,7 +79,7 @@ func runStacksSearch(query, stacksDir string) error {
 		}
 
 		rel, _ := filepath.Rel(stacksDir, path)
-		matches := searchStacksModule(query, rel, data)
+		matches := searchStacksConfigcrate(query, rel, data)
 		if len(matches) > 0 {
 			results = append(results, searchResult{path: rel, matches: matches})
 		}
@@ -110,7 +110,7 @@ type searchResult struct {
 	matches []string
 }
 
-func searchStacksModule(query, relPath string, data []byte) []string {
+func searchStacksConfigcrate(query, relPath string, data []byte) []string {
 	var matches []string
 
 	// Match on filename.
@@ -118,7 +118,7 @@ func searchStacksModule(query, relPath string, data []byte) []string {
 		matches = append(matches, "filename match")
 	}
 
-	var mod stacksModule
+	var mod stacksConfigcrate
 	if err := yaml.Unmarshal(data, &mod); err != nil {
 		// Can't parse — fall back to raw text search.
 		if strings.Contains(strings.ToLower(string(data)), query) {

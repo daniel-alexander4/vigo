@@ -347,8 +347,8 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 	// Verify all files were written.
 	checks := map[string]string{
 		"stacks/modules/nginx.vgo": "nginx config",
-		"secrets/db/password":            "hunter2",
-		"server.yaml":                    "listen: :8443\n",
+		"secrets/db/password":      "hunter2",
+		"server.yaml":              "listen: :8443\n",
 	}
 	for rel, want := range checks {
 		got, err := os.ReadFile(filepath.Join(root, rel))

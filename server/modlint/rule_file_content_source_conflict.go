@@ -21,7 +21,7 @@ type fileContentSourceConflictRule struct{}
 
 func (fileContentSourceConflictRule) id() string { return "file-content-source-conflict" }
 
-func (fileContentSourceConflictRule) apply(mod *module, _ Options) []Finding {
+func (fileContentSourceConflictRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for _, res := range mod.Resources {
 		if res.Type != "file" {

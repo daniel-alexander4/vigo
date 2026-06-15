@@ -60,7 +60,7 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 		// Builtin functions (os_family, distro, arch, etc.) are resolved
 		// here so the agent doesn't need to support them.
 		if mod.When != "" && traits != nil {
-			include, _ := config.EvalModuleWhenServerSide(mod.When, traits)
+			include, _ := config.EvalConfigcrateWhenServerSide(mod.When, traits)
 			if !include {
 				continue // skip module entirely
 			}
@@ -143,7 +143,7 @@ func buildPolicyConfigcrate(mod config.Configcrate, seEnabled bool, seAllowed []
 		// file_exists), pass through to the agent.
 		resWhen := res.When
 		if resWhen != "" && traits != nil {
-			include, remaining := config.EvalModuleWhenServerSide(resWhen, traits)
+			include, remaining := config.EvalConfigcrateWhenServerSide(resWhen, traits)
 			if !include {
 				continue // skip this resource
 			}
@@ -151,12 +151,12 @@ func buildPolicyConfigcrate(mod config.Configcrate, seEnabled bool, seAllowed []
 		}
 
 		pbRes := &pb.PolicyResource{
-			Name:             res.Name,
-			Type:             res.Type,
-			Attributes:       attrs,
-			When:             resWhen,
-			Notify:           res.Notify,
-			Subscribes:       res.Subscribes,
+			Name:        res.Name,
+			Type:        res.Type,
+			Attributes:  attrs,
+			When:        resWhen,
+			Notify:      res.Notify,
+			Subscribes:  res.Subscribes,
 			WatchSecret: res.WatchSecret,
 		}
 		pbMod.Resources = append(pbMod.Resources, pbRes)
@@ -238,11 +238,11 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 	for _, mod := range bundle.Configcrates {
 		// Module-level when: filtering.
 		if mod.When != "" {
-			include, remaining := config.EvalModuleWhenServerSide(mod.When, traits)
+			include, remaining := config.EvalConfigcrateWhenServerSide(mod.When, traits)
 			if !include {
 				continue
 			}
-			mod = shallowCopyModule(mod)
+			mod = shallowCopyConfigcrate(mod)
 			mod.When = remaining
 		}
 
@@ -251,7 +251,7 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 			var kept []*pb.PolicyResource
 			for _, res := range mod.Resources {
 				if res.When != "" {
-					include, remaining := config.EvalModuleWhenServerSide(res.When, traits)
+					include, remaining := config.EvalConfigcrateWhenServerSide(res.When, traits)
 					if !include {
 						continue
 					}
@@ -261,7 +261,7 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 				kept = append(kept, res)
 			}
 			if mod.When != "" || len(kept) != len(mod.Resources) {
-				mod = shallowCopyModule(mod)
+				mod = shallowCopyConfigcrate(mod)
 			}
 			mod.Resources = kept
 		}
@@ -272,7 +272,7 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 	return filtered
 }
 
-func shallowCopyModule(m *pb.PolicyConfigcrate) *pb.PolicyConfigcrate {
+func shallowCopyConfigcrate(m *pb.PolicyConfigcrate) *pb.PolicyConfigcrate {
 	return proto.Clone(m).(*pb.PolicyConfigcrate)
 }
 
@@ -334,9 +334,9 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 		rotatedSet[p] = true
 	}
 	// Copy the modules slice so writes don't corrupt the shared policy cache.
-	modules := make([]*pb.PolicyConfigcrate, len(bundle.Configcrates))
-	copy(modules, bundle.Configcrates)
-	bundle.Configcrates = modules
+	configcrates := make([]*pb.PolicyConfigcrate, len(bundle.Configcrates))
+	copy(configcrates, bundle.Configcrates)
+	bundle.Configcrates = configcrates
 
 	for mi, mod := range bundle.Configcrates {
 		if mod.Stub {
@@ -375,14 +375,14 @@ func hashPolicyConfigcrate(mod *pb.PolicyConfigcrate) string {
 			attrs[k] = v
 		}
 		cfg.Resources = append(cfg.Resources, config.ResourceConfig{
-			Name:             res.Name,
-			Type:             res.Type,
-			When:             res.When,
-			Attributes:       attrs,
-			Notify:           res.Notify,
-			Subscribes:       res.Subscribes,
+			Name:        res.Name,
+			Type:        res.Type,
+			When:        res.When,
+			Attributes:  attrs,
+			Notify:      res.Notify,
+			Subscribes:  res.Subscribes,
 			WatchSecret: res.WatchSecret,
 		})
 	}
-	return config.HashModuleContent(cfg)
+	return config.HashConfigcrateContent(cfg)
 }

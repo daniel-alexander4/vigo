@@ -37,7 +37,7 @@ var universalAttrs = map[string]bool{
 	"case": true, "match": true, "watch_secret": true,
 }
 
-func (didYouMeanRule) apply(mod *module, _ Options) []Finding {
+func (didYouMeanRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for _, res := range mod.Resources {
 		// Unknown resource type → suggest from KnownTypes.

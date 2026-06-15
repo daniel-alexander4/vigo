@@ -24,11 +24,11 @@ import (
 // modlint-rule and the loader resolve the same set, by construction.
 // compliance is a data-only package (no server-runtime deps), so the
 // inline-list discipline that applies to server/api stays intact.
-type moduleProvisionsRule struct{}
+type configcrateProvisionsRule struct{}
 
-func (moduleProvisionsRule) id() string { return "configcrate-provisions" }
+func (configcrateProvisionsRule) id() string { return "configcrate-provisions" }
 
-func (moduleProvisionsRule) apply(mod *module, _ Options) []Finding {
+func (configcrateProvisionsRule) apply(mod *configcrate, _ Options) []Finding {
 	if len(mod.Provides) == 0 {
 		return nil
 	}
@@ -80,4 +80,4 @@ func (moduleProvisionsRule) apply(mod *module, _ Options) []Finding {
 	return out
 }
 
-func init() { register(moduleProvisionsRule{}) }
+func init() { register(configcrateProvisionsRule{}) }

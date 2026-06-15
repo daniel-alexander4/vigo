@@ -5,7 +5,7 @@ package config
 
 import "testing"
 
-func TestHashModuleContent_Deterministic(t *testing.T) {
+func TestHashConfigcrateContent_Deterministic(t *testing.T) {
 	mod := Configcrate{
 		Name:      "nginx",
 		DependsOn: []string{"base"},
@@ -23,8 +23,8 @@ func TestHashModuleContent_Deterministic(t *testing.T) {
 		},
 	}
 
-	hash1 := HashModuleContent(mod)
-	hash2 := HashModuleContent(mod)
+	hash1 := HashConfigcrateContent(mod)
+	hash2 := HashConfigcrateContent(mod)
 
 	if hash1 != hash2 {
 		t.Errorf("hash not deterministic: %q != %q", hash1, hash2)
@@ -34,7 +34,7 @@ func TestHashModuleContent_Deterministic(t *testing.T) {
 	}
 }
 
-func TestHashModuleContent_DifferentContent(t *testing.T) {
+func TestHashConfigcrateContent_DifferentContent(t *testing.T) {
 	mod1 := Configcrate{
 		Name:      "nginx",
 		Resources: []ResourceConfig{{Name: "conf", Type: "file", Attributes: map[string]any{"content": "v1"}}},
@@ -44,12 +44,12 @@ func TestHashModuleContent_DifferentContent(t *testing.T) {
 		Resources: []ResourceConfig{{Name: "conf", Type: "file", Attributes: map[string]any{"content": "v2"}}},
 	}
 
-	if HashModuleContent(mod1) == HashModuleContent(mod2) {
+	if HashConfigcrateContent(mod1) == HashConfigcrateContent(mod2) {
 		t.Error("different content should produce different hashes")
 	}
 }
 
-func TestHashModuleContent_AttributeOrderIrrelevant(t *testing.T) {
+func TestHashConfigcrateContent_AttributeOrderIrrelevant(t *testing.T) {
 	mod := Configcrate{
 		Name: "test",
 		Resources: []ResourceConfig{
@@ -65,15 +65,15 @@ func TestHashModuleContent_AttributeOrderIrrelevant(t *testing.T) {
 		},
 	}
 
-	first := HashModuleContent(mod)
+	first := HashConfigcrateContent(mod)
 	for i := 0; i < 50; i++ {
-		if h := HashModuleContent(mod); h != first {
+		if h := HashConfigcrateContent(mod); h != first {
 			t.Fatalf("hash changed on iteration %d", i)
 		}
 	}
 }
 
-func TestHashModuleContent_WhenAffectsHash(t *testing.T) {
+func TestHashConfigcrateContent_WhenAffectsHash(t *testing.T) {
 	base := Configcrate{
 		Name:      "test",
 		Resources: []ResourceConfig{{Name: "r", Type: "file", Attributes: map[string]any{"content": "x"}}},
@@ -82,12 +82,12 @@ func TestHashModuleContent_WhenAffectsHash(t *testing.T) {
 	withWhen := base
 	withWhen.When = "is_production"
 
-	if HashModuleContent(base) == HashModuleContent(withWhen) {
+	if HashConfigcrateContent(base) == HashConfigcrateContent(withWhen) {
 		t.Error("when expression should affect hash")
 	}
 }
 
-func TestHashModuleContent_DepsAffectHash(t *testing.T) {
+func TestHashConfigcrateContent_DepsAffectHash(t *testing.T) {
 	base := Configcrate{
 		Name:      "test",
 		Resources: []ResourceConfig{{Name: "r", Type: "file", Attributes: map[string]any{"content": "x"}}},
@@ -96,12 +96,12 @@ func TestHashModuleContent_DepsAffectHash(t *testing.T) {
 	withDeps := base
 	withDeps.DependsOn = []string{"other"}
 
-	if HashModuleContent(base) == HashModuleContent(withDeps) {
+	if HashConfigcrateContent(base) == HashConfigcrateContent(withDeps) {
 		t.Error("depends_on should affect hash")
 	}
 }
 
-func TestHashModuleContent_WatchSecretAffectsHash(t *testing.T) {
+func TestHashConfigcrateContent_WatchSecretAffectsHash(t *testing.T) {
 	base := Configcrate{
 		Name: "test",
 		Resources: []ResourceConfig{
@@ -121,7 +121,7 @@ func TestHashModuleContent_WatchSecretAffectsHash(t *testing.T) {
 		},
 	}
 
-	if HashModuleContent(base) == HashModuleContent(withSecret) {
+	if HashConfigcrateContent(base) == HashConfigcrateContent(withSecret) {
 		t.Error("watch_secret should affect hash")
 	}
 }

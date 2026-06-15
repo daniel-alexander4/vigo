@@ -142,10 +142,10 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		// Failed/module counts come from recent[0] — the trailing run window
 		// when present, else the latest-run fallback synthesised above (both
 		// now carry the counts).
-		var lastFailed, lastModules int64
+		var lastFailed, lastConfigcrates int64
 		if len(recent) > 0 {
 			lastFailed = recent[0].FailedCount
-			lastModules = recent[0].ResourceCount
+			lastConfigcrates = recent[0].ResourceCount
 		}
 
 		ts := EnvoyState{
@@ -162,7 +162,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			LastRunStatus:         nullStr(twr.LatestRunStatus),
 			LastRunChangedCount:   nullInt(twr.LatestRunChangedCount),
 			LastRunFailedCount:    lastFailed,
-			LastRunResourceCount:  lastModules,
+			LastRunResourceCount:  lastConfigcrates,
 			LastRunAt:             lastRunAt,
 			RecentRuns:            recent,
 			Traits:                traits,

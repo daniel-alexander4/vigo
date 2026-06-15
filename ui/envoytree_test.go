@@ -26,11 +26,11 @@ func TestBuildEnvoyTree_GroupsEnvoysUnderMatchingDirectories(t *testing.T) {
 	mustMkdir(t, filepath.Join(root, "dc2"))
 
 	envoysByDir := map[string][]EnvoyRow{
-		"":         {{ID: "r1", Hostname: "root1"}}, // matches root-level hostcrate
-		"dc1":      {{ID: "d1", Hostname: "dc1-shared"}},
-		"dc1/web":  {{ID: "w1", Hostname: "web02"}, {ID: "w2", Hostname: "web01"}}, // out-of-order to verify sort
-		"dc1/db":   {{ID: "b1", Hostname: "db01"}},
-		"dc2":      {{ID: "x1", Hostname: "dc2-one"}},
+		"":        {{ID: "r1", Hostname: "root1"}}, // matches root-level hostcrate
+		"dc1":     {{ID: "d1", Hostname: "dc1-shared"}},
+		"dc1/web": {{ID: "w1", Hostname: "web02"}, {ID: "w2", Hostname: "web01"}}, // out-of-order to verify sort
+		"dc1/db":  {{ID: "b1", Hostname: "db01"}},
+		"dc2":     {{ID: "x1", Hostname: "dc2-one"}},
 	}
 
 	keptDirs := map[string]bool{"": true, "dc1": true, "dc1/web": true, "dc1/db": true, "dc2": true}
@@ -236,7 +236,7 @@ func TestPruneEmptyBranches_RetainsBranchesWithSurvivingDescendants(t *testing.T
 		Children: []*EnvoyTreeNode{
 			{Name: "dc1", Children: []*EnvoyTreeNode{
 				{Name: "web", Envoys: []EnvoyRow{{Hostname: "web01"}}}, // surviving
-				{Name: "db"},  // empty leaf — drop
+				{Name: "db"}, // empty leaf — drop
 			}},
 			{Name: "dc2"}, // empty branch — drop
 		},

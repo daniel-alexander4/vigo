@@ -21,11 +21,11 @@ import (
 // unknowns as zero contribution (ResolveBundle returns nil), so an
 // unchecked typo silently de-tags the configcrate from a framework section.
 // Error severity catches that at publish time.
-type moduleBundleRule struct{}
+type configcrateBundleRule struct{}
 
-func (moduleBundleRule) id() string { return "configcrate-bundle" }
+func (configcrateBundleRule) id() string { return "configcrate-bundle" }
 
-func (moduleBundleRule) apply(mod *module, _ Options) []Finding {
+func (configcrateBundleRule) apply(mod *configcrate, _ Options) []Finding {
 	if len(mod.Bundle) == 0 {
 		return nil
 	}
@@ -74,4 +74,4 @@ func (moduleBundleRule) apply(mod *module, _ Options) []Finding {
 	return out
 }
 
-func init() { register(moduleBundleRule{}) }
+func init() { register(configcrateBundleRule{}) }

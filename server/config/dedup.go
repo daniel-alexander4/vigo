@@ -10,10 +10,10 @@ import (
 
 // DedupFinding describes a single redundancy in the config tree.
 type DedupFinding struct {
-	Type    string `json:"type"`    // "configcrate" or "var"
-	Name    string `json:"name"`    // module name or var key
-	File    string `json:"file"`    // file where the redundancy appears
-	Reason  string `json:"reason"`  // human-readable explanation
+	Type          string `json:"type"`           // "configcrate" or "var"
+	Name          string `json:"name"`           // module name or var key
+	File          string `json:"file"`           // file where the redundancy appears
+	Reason        string `json:"reason"`         // human-readable explanation
 	InheritedFrom string `json:"inherited_from"` // which ancestor already defines it
 }
 
@@ -33,7 +33,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 	result := &DedupResult{}
 
 	// Expand all role modules for lookup.
-	roleModules := make(map[string]map[string]bool)
+	roleConfigcrates := make(map[string]map[string]bool)
 	for name, role := range cs.roleDefs {
 		mods := make(map[string]bool)
 		for _, ref := range role.Configcrates {
@@ -51,7 +51,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 				}
 			}
 		}
-		roleModules[name] = mods
+		roleConfigcrates[name] = mods
 	}
 
 	// Check each envoy entry for redundant modules and vars.
@@ -59,8 +59,8 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 		chain := inheritanceChain(entry.DirPath, cs.commonConfigs)
 
 		// Build the set of modules inherited from the chain (common.vgo files).
-		inheritedModules := make(map[string]string) // module name → source file
-		inheritedVars := make(map[string]varOrigin)  // var key → origin
+		inheritedConfigcrates := make(map[string]string) // module name → source file
+		inheritedVars := make(map[string]varOrigin)      // var key → origin
 
 		for _, cc := range chain {
 			src := "common.vgo"
@@ -69,17 +69,17 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 			}
 
 			for _, ref := range cc.Configcrates {
-				if _, exists := inheritedModules[ref.Name]; !exists {
-					inheritedModules[ref.Name] = src
+				if _, exists := inheritedConfigcrates[ref.Name]; !exists {
+					inheritedConfigcrates[ref.Name] = src
 				}
 			}
 
 			// Configcrates from roles in common.vgo.
 			for _, roleRef := range cc.Roles {
-				if mods, ok := roleModules[roleRef.Name]; ok {
+				if mods, ok := roleConfigcrates[roleRef.Name]; ok {
 					for mod := range mods {
-						if _, exists := inheritedModules[mod]; !exists {
-							inheritedModules[mod] = src + " (role " + roleRef.Name + ")"
+						if _, exists := inheritedConfigcrates[mod]; !exists {
+							inheritedConfigcrates[mod] = src + " (role " + roleRef.Name + ")"
 						}
 					}
 				}
@@ -100,7 +100,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 
 		// Check entry's own modules for redundancy.
 		for _, ref := range entry.OwnConfigcrates {
-			if src, ok := inheritedModules[ref.Name]; ok {
+			if src, ok := inheritedConfigcrates[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
 					Type:          "configcrate",
 					Name:          ref.Name,
@@ -112,16 +112,16 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 		}
 
 		// Check if any directly listed module is also provided by a role on the same entry.
-		entryRoleModules := make(map[string]string)
+		entryRoleConfigcrates := make(map[string]string)
 		for _, roleRef := range entry.OwnRoles {
-			if mods, ok := roleModules[roleRef.Name]; ok {
+			if mods, ok := roleConfigcrates[roleRef.Name]; ok {
 				for mod := range mods {
-					entryRoleModules[mod] = roleRef.Name
+					entryRoleConfigcrates[mod] = roleRef.Name
 				}
 			}
 		}
 		for _, ref := range entry.OwnConfigcrates {
-			if roleName, ok := entryRoleModules[ref.Name]; ok {
+			if roleName, ok := entryRoleConfigcrates[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
 					Type:          "configcrate",
 					Name:          ref.Name,
@@ -159,7 +159,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 			parentChain = parentChain[:len(parentChain)-1]
 		}
 
-		parentModules := make(map[string]string)
+		parentConfigcrates := make(map[string]string)
 		parentVars := make(map[string]varOrigin)
 		for _, parent := range parentChain {
 			src := "common.vgo"
@@ -167,8 +167,8 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 				src = parent.DirPath + "/common.vgo"
 			}
 			for _, ref := range parent.Configcrates {
-				if _, exists := parentModules[ref.Name]; !exists {
-					parentModules[ref.Name] = src
+				if _, exists := parentConfigcrates[ref.Name]; !exists {
+					parentConfigcrates[ref.Name] = src
 				}
 			}
 			for k, v := range parent.Vars {
@@ -179,7 +179,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 		childFile := dirPath + "/common.vgo"
 
 		for _, ref := range cc.Configcrates {
-			if src, ok := parentModules[ref.Name]; ok {
+			if src, ok := parentConfigcrates[ref.Name]; ok {
 				result.Findings = append(result.Findings, DedupFinding{
 					Type:          "configcrate",
 					Name:          ref.Name,

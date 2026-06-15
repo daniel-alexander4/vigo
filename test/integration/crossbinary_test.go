@@ -12,7 +12,7 @@ import (
 // Go server starts → agent binary enrolls → checks in → receives policy →
 // applies resources (dry-run) → reports result back to server.
 func TestCrossBinary_RegisterCheckInConverge(t *testing.T) {
-	modules := map[string]string{
+	configcrates := map[string]string{
 		"testmod": `
 name: testmod
 resources:
@@ -27,7 +27,7 @@ envoys:
   - match: "*.integ.test"
     configcrates: [testmod]
 `
-	env := startServer(t, modules, envoys)
+	env := startServer(t, configcrates, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
@@ -47,7 +47,7 @@ envoys:
 // TestCrossBinary_ConsecutiveRuns verifies the agent can run multiple
 // consecutive convergence cycles against the same server.
 func TestCrossBinary_ConsecutiveRuns(t *testing.T) {
-	modules := map[string]string{
+	configcrates := map[string]string{
 		"testmod": `
 name: testmod
 resources:
@@ -62,7 +62,7 @@ envoys:
   - match: "*.integ.test"
     configcrates: [testmod]
 `
-	env := startServer(t, modules, envoys)
+	env := startServer(t, configcrates, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
@@ -129,7 +129,7 @@ func TestCrossBinary_RevokedAgent(t *testing.T) {
 // TestCrossBinary_MultiModule verifies the agent receives and processes
 // multiple modules in a single convergence cycle.
 func TestCrossBinary_MultiModule(t *testing.T) {
-	modules := map[string]string{
+	configcrates := map[string]string{
 		"base": `
 name: base
 resources:
@@ -153,7 +153,7 @@ envoys:
   - match: "*.integ.test"
     configcrates: [base, web]
 `
-	env := startServer(t, modules, envoys)
+	env := startServer(t, configcrates, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)
@@ -172,7 +172,7 @@ envoys:
 // TestCrossBinary_ForcePush verifies that setting force_push on a envoy
 // causes the server to re-deliver the full policy even on a no-change cycle.
 func TestCrossBinary_ForcePush(t *testing.T) {
-	modules := map[string]string{
+	configcrates := map[string]string{
 		"testmod": `
 name: testmod
 resources:
@@ -187,7 +187,7 @@ envoys:
   - match: "*.integ.test"
     configcrates: [testmod]
 `
-	env := startServer(t, modules, envoys)
+	env := startServer(t, configcrates, envoys)
 	defer env.Cleanup()
 
 	dataDir, pubPEM := prepareAgentDir(t)

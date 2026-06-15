@@ -51,7 +51,7 @@ Examples:
 		path, err := resolveVigoPath(args[0])
 		if err != nil {
 			// Not found as a path — try as a module name.
-			found, findErr := findModuleByName(args[0])
+			found, findErr := findConfigcrateByName(args[0])
 			if findErr != nil {
 				return findErr
 			}
@@ -64,7 +64,7 @@ Examples:
 // findModuleByName searches the entire stacks/ tree recursively for a
 // .vgo file by name. Accepts "nginx", "nginx.vgo", or "danlap" — returns
 // the absolute path.
-func findModuleByName(name string) (string, error) {
+func findConfigcrateByName(name string) (string, error) {
 	name = filepath.Base(name)
 	if !strings.HasSuffix(name, ".vgo") {
 		name += ".vgo"

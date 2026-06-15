@@ -318,7 +318,7 @@ func TestCheckInRevoked(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:           envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "test-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -376,7 +376,7 @@ func TestCheckInSuccess(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 
 	resp, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:           envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "some-fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -435,7 +435,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	sig := signPayload(payload, tsStr, wrongPriv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:           envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fingerprint",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -469,12 +469,12 @@ func generateTestCerts(dir string) error {
 	}
 
 	caTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "Test CA"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		IsCA:         true,
-		KeyUsage:     x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 	}
 
@@ -625,7 +625,7 @@ func TestCheckInStaleTimestamp(t *testing.T) {
 
 	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -681,7 +681,7 @@ func TestCheckInFutureTimestamp(t *testing.T) {
 
 	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -738,7 +738,7 @@ func TestCheckInTimestampBoundary(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp-ok",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(withinWindow),
@@ -754,7 +754,7 @@ func TestCheckInTimestampBoundary(t *testing.T) {
 	sig = signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp-fail",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(outsideWindow),
@@ -810,7 +810,7 @@ func TestCheckInTamperedSignature(t *testing.T) {
 
 	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -866,7 +866,7 @@ func TestCheckInTruncatedSignature(t *testing.T) {
 
 	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -923,7 +923,7 @@ func TestCheckInMissingTimestamp(t *testing.T) {
 
 	agentClient := pb.NewVigoAgentClient(conn)
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp",
 		Signature:        sig,
 		Timestamp:        nil, // deliberately missing
@@ -952,7 +952,7 @@ func TestCheckInMalformedUUID(t *testing.T) {
 
 	agentClient := pb.NewVigoAgentClient(conn)
 	_, err := agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         "not-a-uuid",
+		EnvoyId:          "not-a-uuid",
 		StateFingerprint: "fp",
 		Signature:        []byte("fake-sig"),
 		Timestamp:        timestamppb.New(now),
@@ -1091,7 +1091,7 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 	sig := signPayload(payload, tsStr, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp-before-revoke",
 		Signature:        sig,
 		Timestamp:        timestamppb.New(now),
@@ -1112,7 +1112,7 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 	sig2 := signPayload(payload2, tsStr2, priv)
 
 	_, err = agentClient.CheckIn(ctx, &pb.CheckInRequest{
-		EnvoyId:         envoyID,
+		EnvoyId:          envoyID,
 		StateFingerprint: "fp-after-revoke",
 		Signature:        sig2,
 		Timestamp:        timestamppb.New(now2),

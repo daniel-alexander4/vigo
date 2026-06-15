@@ -18,8 +18,8 @@ import (
 
 // AskRequest is the input to the assistant.
 type AskRequest struct {
-	Question string     `json:"question"`
-	Context  AskContext `json:"context,omitempty"`
+	Question string           `json:"question"`
+	Context  AskContext       `json:"context,omitempty"`
 	History  []HistoryMessage `json:"history,omitempty"`
 }
 
@@ -27,9 +27,9 @@ type AskRequest struct {
 // prefetch relevant data without relying on hostname extraction heuristics.
 type AskContext struct {
 	Envoy     string `json:"envoy,omitempty"`     // hostname of the envoy in focus
-	RunID     string `json:"run_id,omitempty"`     // run UUID when on run detail page
+	RunID     string `json:"run_id,omitempty"`    // run UUID when on run detail page
 	Framework string `json:"framework,omitempty"` // compliance framework slug
-	Page      string `json:"page,omitempty"`       // current UI page name (e.g. "dashboard", "risk")
+	Page      string `json:"page,omitempty"`      // current UI page name (e.g. "dashboard", "risk")
 }
 
 // HistoryMessage is a previous message in a multi-turn conversation.
@@ -499,7 +499,7 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 	}
 
 	if containsAny(lower, "configcrate", "configcrates", "module", "modules") {
-		if data, err := a.tools.listModules(); err == nil {
+		if data, err := a.tools.listConfigcrates(); err == nil {
 			parts = append(parts, "## Configcrates\n"+data)
 		}
 	}

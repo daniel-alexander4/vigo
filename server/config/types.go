@@ -1314,8 +1314,8 @@ func (m *ConfigcrateRef) UnmarshalYAML(value *yaml.Node) error {
 		return nil
 	case yaml.MappingNode:
 		// Use an alias to avoid infinite recursion in UnmarshalYAML.
-		type moduleRefAlias ConfigcrateRef
-		var alias moduleRefAlias
+		type configcrateRefAlias ConfigcrateRef
+		var alias configcrateRefAlias
 		if err := value.Decode(&alias); err != nil {
 			return err
 		}

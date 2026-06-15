@@ -21,7 +21,7 @@ func TestHashPolicyConfigcrate_Deterministic(t *testing.T) {
 				Type: "file",
 				Attributes: map[string]string{
 					"target_path": "/etc/nginx/nginx.conf",
-					"content":    "server { listen 80; }",
+					"content":     "server { listen 80; }",
 				},
 				Notify: []string{"nginx-svc"},
 			},
@@ -78,9 +78,9 @@ func TestHashPolicyConfigcrate_AttributeOrderIrrelevant(t *testing.T) {
 				Name: "r1",
 				Type: "file",
 				Attributes: map[string]string{
-					"zzz":  "last",
-					"aaa":  "first",
-					"mmm":  "middle",
+					"zzz": "last",
+					"aaa": "first",
+					"mmm": "middle",
 				},
 			},
 		},
@@ -95,18 +95,18 @@ func TestHashPolicyConfigcrate_AttributeOrderIrrelevant(t *testing.T) {
 	}
 }
 
-func TestBuildPolicyBundle_NoCachedHashes_FullModules(t *testing.T) {
+func TestBuildPolicyBundle_NoCachedHashes_FullConfigcrates(t *testing.T) {
 	mod := config.Configcrate{
 		Name: "nginx",
 		Resources: []config.ResourceConfig{
 			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "test"}},
 		},
 	}
-	mod.ContentHash = config.HashModuleContent(mod)
+	mod.ContentHash = config.HashConfigcrateContent(mod)
 
 	cfg := &config.EnvoyConfig{
 		MatchPattern: "*.web.example.com",
-		Configcrates:      []config.Configcrate{mod},
+		Configcrates: []config.Configcrate{mod},
 	}
 
 	bundle, err := buildPolicyBundle(cfg, 1, nil, nil)
@@ -137,7 +137,7 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "test"}},
 		},
 	}
-	nginxMod.ContentHash = config.HashModuleContent(nginxMod)
+	nginxMod.ContentHash = config.HashConfigcrateContent(nginxMod)
 
 	pgMod := config.Configcrate{
 		Name: "postgres",
@@ -145,7 +145,7 @@ func TestBuildPolicyBundle_CachedHashMatch_SendsStub(t *testing.T) {
 			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "pg"}},
 		},
 	}
-	pgMod.ContentHash = config.HashModuleContent(pgMod)
+	pgMod.ContentHash = config.HashConfigcrateContent(pgMod)
 
 	cfg := &config.EnvoyConfig{
 		Configcrates: []config.Configcrate{nginxMod, pgMod},
@@ -206,15 +206,15 @@ func TestInjectSecretTriggers(t *testing.T) {
 						Attributes: map[string]string{"content": "test"},
 					},
 					{
-						Name:             "grafana-set-password",
-						Type:             "exec",
-						Attributes:       map[string]string{"command": "grafana-cli reset"},
+						Name:        "grafana-set-password",
+						Type:        "exec",
+						Attributes:  map[string]string{"command": "grafana-cli reset"},
 						WatchSecret: []string{"vigo/grafana/admin-password"},
 					},
 					{
-						Name:             "grafana-tls",
-						Type:             "exec",
-						Attributes:       map[string]string{"command": "update-tls"},
+						Name:        "grafana-tls",
+						Type:        "exec",
+						Attributes:  map[string]string{"command": "update-tls"},
 						WatchSecret: []string{"vigo/grafana/tls-cert"},
 					},
 				},
@@ -242,7 +242,7 @@ func TestInjectSecretTriggers(t *testing.T) {
 	}
 }
 
-func TestInjectSecretTriggers_StubModuleSkipped(t *testing.T) {
+func TestInjectSecretTriggers_StubConfigcrateSkipped(t *testing.T) {
 	bundle := &pb.PolicyBundle{
 		Configcrates: []*pb.PolicyConfigcrate{
 			{
@@ -250,8 +250,8 @@ func TestInjectSecretTriggers_StubModuleSkipped(t *testing.T) {
 				Stub: true,
 				Resources: []*pb.PolicyResource{
 					{
-						Name:             "res",
-						Type:             "exec",
+						Name:        "res",
+						Type:        "exec",
 						WatchSecret: []string{"vigo/secret"},
 					},
 				},
@@ -272,14 +272,14 @@ func TestBuildPolicyBundle_WatchSecretSerialized(t *testing.T) {
 		Name: "grafana",
 		Resources: []config.ResourceConfig{
 			{
-				Name:             "set-pw",
-				Type:             "exec",
-				Attributes:       map[string]any{"command": "reset-pw"},
+				Name:        "set-pw",
+				Type:        "exec",
+				Attributes:  map[string]any{"command": "reset-pw"},
 				WatchSecret: []string{"vigo/grafana/admin-password"},
 			},
 		},
 	}
-	mod.ContentHash = config.HashModuleContent(mod)
+	mod.ContentHash = config.HashConfigcrateContent(mod)
 
 	cfg := &config.EnvoyConfig{Configcrates: []config.Configcrate{mod}}
 
@@ -331,7 +331,7 @@ func TestBuildPolicyBundle_CachedHashMismatch_SendsFull(t *testing.T) {
 			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "updated"}},
 		},
 	}
-	mod.ContentHash = config.HashModuleContent(mod)
+	mod.ContentHash = config.HashConfigcrateContent(mod)
 
 	cfg := &config.EnvoyConfig{
 		Configcrates: []config.Configcrate{mod},

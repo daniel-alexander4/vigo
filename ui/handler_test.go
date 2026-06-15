@@ -416,8 +416,8 @@ func (m *footprintMock) ConvergenceData(d, o time.Duration) ConvergencePageData 
 func (m *footprintMock) DashboardStatsData(d, o time.Duration) DashboardStatsFragmentData {
 	return m.base.DashboardStatsData(d, o)
 }
-func (m *footprintMock) EnvoysData(d, o time.Duration, conv, drift, reach, q, env, tag, role, os, arch, module, compliance, sortCol, sortDir string, offset, limit int) EnvoysPageData {
-	return m.base.EnvoysData(d, o, conv, drift, reach, q, env, tag, role, os, arch, module, compliance, sortCol, sortDir, offset, limit)
+func (m *footprintMock) EnvoysData(d, o time.Duration, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir string, offset, limit int) EnvoysPageData {
+	return m.base.EnvoysData(d, o, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir, offset, limit)
 }
 func (m *footprintMock) EnvoyDetailData(id string, d, o time.Duration) (EnvoyDetailPageData, error) {
 	return m.base.EnvoyDetailData(id, d, o)
@@ -1004,7 +1004,7 @@ func (m *mockDataSource) DashboardStatsData(baseInterval, offlineThreshold time.
 	}
 }
 
-func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter, sortCol, sortDir string, offset, limit int) EnvoysPageData {
+func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset, limit int) EnvoysPageData {
 	var rows []EnvoyRow
 	for _, c := range m.data.envoys {
 		if convFilter != "" && c.status != convFilter {
@@ -1034,7 +1034,7 @@ func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration
 	}
 
 	active := 0
-	for _, v := range []string{convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, moduleFilter, complianceFilter} {
+	for _, v := range []string{convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter} {
 		if v != "" {
 			active++
 		}

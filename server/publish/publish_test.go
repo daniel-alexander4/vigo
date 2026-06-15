@@ -311,7 +311,7 @@ envoys:
 	for _, want := range []string{
 		"# harden the daemon — keep this note",
 		"#owner: 0644",
-		"#~ ", // a Vigo label was added
+		"#~ ",                    // a Vigo label was added
 		"      # Authentication", // content data untouched
 	} {
 		if !strings.Contains(src, want) {
@@ -353,11 +353,11 @@ func TestHashTree_SkipsNestedLiveDir(t *testing.T) {
 	// Simulate the post-publish layout: .live sits inside stacks and
 	// holds a mirror of the modules. These files must NOT appear in the
 	// stacks hash.
-	liveModules := filepath.Join(stacks, ".live", "configcrates")
-	if err := os.MkdirAll(liveModules, 0o755); err != nil {
+	liveConfigcrates := filepath.Join(stacks, ".live", "configcrates")
+	if err := os.MkdirAll(liveConfigcrates, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(liveModules, "nginx.vgo"), "name: nginx-canonical\nresources: []\n")
+	writeFile(t, filepath.Join(liveConfigcrates, "nginx.vgo"), "name: nginx-canonical\nresources: []\n")
 
 	hashes, err := hashTree(stacks)
 	if err != nil {
@@ -714,7 +714,7 @@ envoys:
 	}
 }
 
-func TestCheckURLs_OnlyChecksChangedModules(t *testing.T) {
+func TestCheckURLs_OnlyChecksChangedConfigcrates(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -723,7 +723,7 @@ func TestCheckURLs_OnlyChecksChangedModules(t *testing.T) {
 	env := withTestDirs(t)
 
 	// Module with a bad URL — but it's already in live unchanged.
-	badModule := fmt.Sprintf(`
+	badConfigcrate := fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -732,9 +732,9 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL)
-	writeFile(t, filepath.Join(env.stacks, "configcrates", "download.vgo"), badModule)
+	writeFile(t, filepath.Join(env.stacks, "configcrates", "download.vgo"), badConfigcrate)
 	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
-	writeFile(t, filepath.Join(env.live, "configcrates", "download.vgo"), badModule) // same content
+	writeFile(t, filepath.Join(env.live, "configcrates", "download.vgo"), badConfigcrate) // same content
 
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
@@ -945,7 +945,7 @@ envoys:
 // clash among unreachable modules can't physically happen, so it must
 // not generate publish-time noise. A clash among reachable modules
 // still warns.
-func TestFleetFindings_SkipsUnreachableModules(t *testing.T) {
+func TestFleetFindings_SkipsUnreachableConfigcrates(t *testing.T) {
 	dir := t.TempDir()
 	mod := func(rel, pkg string) {
 		full := filepath.Join(dir, rel)

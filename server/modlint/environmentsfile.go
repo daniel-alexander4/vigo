@@ -59,15 +59,15 @@ func LintEnvironmentsFile(input []byte, _ Options) *Result {
 }
 
 type environmentEntry struct {
-	Name           string
-	HasModules     bool
-	NumModules     int
-	HasExcludes    bool
-	NumExcludes    int
-	HasVars        bool
-	UnknownKeys    []string
-	Line           int
-	Column         int
+	Name            string
+	HasConfigcrates bool
+	NumConfigcrates int
+	HasExcludes     bool
+	NumExcludes     int
+	HasVars         bool
+	UnknownKeys     []string
+	Line            int
+	Column          int
 }
 
 type environmentsFile struct {
@@ -121,9 +121,9 @@ func parseEnvironmentsFile(data []byte) (*environmentsFile, error) {
 				v := envValNode.Content[k+1]
 				switch key {
 				case "configcrates":
-					entry.HasModules = true
+					entry.HasConfigcrates = true
 					if v.Kind == yaml.SequenceNode {
-						entry.NumModules = len(v.Content)
+						entry.NumConfigcrates = len(v.Content)
 					}
 				case "exclude_configcrates":
 					entry.HasExcludes = true
@@ -166,7 +166,7 @@ func applyEnvironmentsFileRules(ef *environmentsFile) []Finding {
 		}
 
 		// Empty environment.
-		if !e.HasModules && !e.HasExcludes && !e.HasVars && len(e.UnknownKeys) == 0 {
+		if !e.HasConfigcrates && !e.HasExcludes && !e.HasVars && len(e.UnknownKeys) == 0 {
 			out = append(out, Finding{
 				Severity: Hint,
 				Line:     e.Line,

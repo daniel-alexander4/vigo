@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestParseModuleFile_BasicModule(t *testing.T) {
+func TestParseConfigcrateFile_BasicConfigcrate(t *testing.T) {
 	data := []byte(`
 name: nginx
 vars:
@@ -27,7 +27,7 @@ resources:
     subscribes: [nginx-conf]
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -56,7 +56,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_DuplicateKeyRejected(t *testing.T) {
+func TestParseConfigcrateFile_DuplicateKeyRejected(t *testing.T) {
 	data := []byte(`
 name: docker
 resources:
@@ -67,7 +67,7 @@ resources:
     state: present
 `)
 
-	_, err := ParseModuleFile(data)
+	_, err := ParseConfigcrateFile(data)
 	if err == nil {
 		t.Fatal("expected error for duplicate key, got nil")
 	}
@@ -76,7 +76,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_ExecWithGuards(t *testing.T) {
+func TestParseConfigcrateFile_ExecWithGuards(t *testing.T) {
 	data := []byte(`
 name: setup
 resources:
@@ -88,7 +88,7 @@ resources:
     notify: [some-service]
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -108,7 +108,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_BeforeAtModuleLevel(t *testing.T) {
+func TestParseConfigcrateFile_BeforeAtConfigcrateLevel(t *testing.T) {
 	data := []byte(`
 name: base-packages
 before: [app-config]
@@ -119,7 +119,7 @@ resources:
     state: present
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,7 +132,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_BeforeAtResourceLevel(t *testing.T) {
+func TestParseConfigcrateFile_BeforeAtResourceLevel(t *testing.T) {
 	data := []byte(`
 name: setup
 resources:
@@ -147,7 +147,7 @@ resources:
     state: present
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -161,8 +161,8 @@ resources:
 	}
 }
 
-func TestParseModuleFile_EmptyDocument(t *testing.T) {
-	_, err := ParseModuleFile([]byte(""))
+func TestParseConfigcrateFile_EmptyDocument(t *testing.T) {
+	_, err := ParseConfigcrateFile([]byte(""))
 	if err == nil {
 		t.Fatal("expected error for empty document")
 	}
@@ -174,7 +174,7 @@ func TestParseModuleFile_EmptyDocument(t *testing.T) {
 // time, but parseModuleYAML is now the parallel rejection point for
 // direct-decode callers that bypass modlint. The matching
 // UnmarshalYAML test below pins the second decode path.
-func TestParseModuleFile_RetiredTopLevelProvides(t *testing.T) {
+func TestParseConfigcrateFile_RetiredTopLevelProvides(t *testing.T) {
 	data := []byte(`
 name: legacy
 provides: [time-sync]
@@ -184,7 +184,7 @@ resources:
     package: chrony
     state: present
 `)
-	_, err := ParseModuleFile(data)
+	_, err := ParseConfigcrateFile(data)
 	if err == nil {
 		t.Fatal("expected error for top-level provides:")
 	}
@@ -195,7 +195,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_RetiredTopLevelBundle(t *testing.T) {
+func TestParseConfigcrateFile_RetiredTopLevelBundle(t *testing.T) {
 	data := []byte(`
 name: legacy
 bundle: [cis-ubuntu-access]
@@ -205,7 +205,7 @@ resources:
     package: nginx
     state: present
 `)
-	_, err := ParseModuleFile(data)
+	_, err := ParseConfigcrateFile(data)
 	if err == nil {
 		t.Fatal("expected error for top-level bundle:")
 	}
@@ -219,7 +219,7 @@ resources:
 // TestParseModuleFile_NestedComplianceShapeAccepted is the happy path:
 // the 0.66.57 nested shape must still load cleanly. Pins that the
 // retired-keys arm doesn't accidentally swallow valid keys.
-func TestParseModuleFile_NestedComplianceShapeAccepted(t *testing.T) {
+func TestParseConfigcrateFile_NestedComplianceShapeAccepted(t *testing.T) {
 	data := []byte(`
 name: chrony
 compliance:
@@ -231,7 +231,7 @@ resources:
     package: chrony
     state: present
 `)
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -269,7 +269,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_WatchSecret(t *testing.T) {
+func TestParseConfigcrateFile_WatchSecret(t *testing.T) {
 	data := []byte(`
 name: grafana
 resources:
@@ -279,7 +279,7 @@ resources:
     watch_secret: ["vigo/grafana/admin-password"]
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -296,7 +296,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_DefaultsInherited(t *testing.T) {
+func TestParseConfigcrateFile_DefaultsInherited(t *testing.T) {
 	data := []byte(`
 name: dotfiles
 defaults:
@@ -316,7 +316,7 @@ resources:
     content: "export PS1='$ '"
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -336,7 +336,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_DefaultsOverridden(t *testing.T) {
+func TestParseConfigcrateFile_DefaultsOverridden(t *testing.T) {
 	data := []byte(`
 name: dotfiles
 defaults:
@@ -356,7 +356,7 @@ resources:
     mode: "0755"
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -372,7 +372,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_DefaultsStructuralIgnored(t *testing.T) {
+func TestParseConfigcrateFile_DefaultsStructuralIgnored(t *testing.T) {
 	data := []byte(`
 name: test
 defaults:
@@ -387,7 +387,7 @@ resources:
     content: "test"
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -403,7 +403,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_EmptyDefaults(t *testing.T) {
+func TestParseConfigcrateFile_EmptyDefaults(t *testing.T) {
 	data := []byte(`
 name: test
 defaults: {}
@@ -415,7 +415,7 @@ resources:
     content: "test"
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -424,7 +424,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_Foreach(t *testing.T) {
+func TestParseConfigcrateFile_Foreach(t *testing.T) {
 	data := []byte(`
 name: dotfiles
 resources:
@@ -437,7 +437,7 @@ resources:
     owner: "{{ .Item }}"
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -450,7 +450,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_CaseWithMatch(t *testing.T) {
+func TestParseConfigcrateFile_CaseWithMatch(t *testing.T) {
 	data := []byte(`
 name: editor
 resources:
@@ -467,7 +467,7 @@ resources:
         package: vim
 `)
 
-	def, err := ParseModuleFile(data)
+	def, err := ParseConfigcrateFile(data)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -486,7 +486,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_CaseWithoutMatch(t *testing.T) {
+func TestParseConfigcrateFile_CaseWithoutMatch(t *testing.T) {
 	data := []byte(`
 name: test
 resources:
@@ -496,7 +496,7 @@ resources:
     case: "{{ .Traits.os_family }}"
 `)
 
-	_, err := ParseModuleFile(data)
+	_, err := ParseConfigcrateFile(data)
 	if err == nil {
 		t.Fatal("expected error when case has no match")
 	}
@@ -505,7 +505,7 @@ resources:
 	}
 }
 
-func TestParseModuleFile_MatchWithoutDefault(t *testing.T) {
+func TestParseConfigcrateFile_MatchWithoutDefault(t *testing.T) {
 	data := []byte(`
 name: test
 resources:
@@ -518,7 +518,7 @@ resources:
         package: vim-nox
 `)
 
-	_, err := ParseModuleFile(data)
+	_, err := ParseConfigcrateFile(data)
 	if err == nil {
 		t.Fatal("expected error when match has no default branch")
 	}

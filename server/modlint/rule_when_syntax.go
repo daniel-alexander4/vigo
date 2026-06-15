@@ -34,7 +34,7 @@ type whenSyntaxRule struct{}
 
 func (whenSyntaxRule) id() string { return "when-syntax" }
 
-func (whenSyntaxRule) apply(mod *module, _ Options) []Finding {
+func (whenSyntaxRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for _, res := range mod.Resources {
 		if res.When == "" {

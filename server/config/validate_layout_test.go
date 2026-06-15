@@ -97,7 +97,7 @@ func TestValidate_StrayClaimsFilename_Rejected(t *testing.T) {
 // Module files (with name:/resources:) carrying a top-level compliance:
 // block are NOT claims-only — they're module defs declaring their own
 // claims, and must NOT be rejected.
-func TestValidate_ModuleWithComplianceBlock_NotRejected(t *testing.T) {
+func TestValidate_ConfigcrateWithComplianceBlock_NotRejected(t *testing.T) {
 	dir := t.TempDir()
 	stacksDir := filepath.Join(dir, "configcrates")
 	_ = os.MkdirAll(stacksDir, 0o755)

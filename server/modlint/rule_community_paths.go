@@ -43,7 +43,7 @@ var kernelStatePrefixes = []string{"/proc/", "/sys/", "/dev/"}
 // has no portable reason to write here.
 var perHostPrefixes = []string{"/root/", "/home/", "/boot/"}
 
-func (communityPathsRule) apply(mod *module, opts Options) []Finding {
+func (communityPathsRule) apply(mod *configcrate, opts Options) []Finding {
 	if !opts.CommunityUpload {
 		return nil
 	}

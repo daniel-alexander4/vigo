@@ -13,20 +13,20 @@ import (
 // MerkleRoot computes a Merkle tree root hash over an envoy's resolved config.
 // The tree structure is:
 //
-//	       root
-//	      /    \
-//	   vars   modules
-//	          / | \
-//	       mod1 mod2 mod3
+//	    root
+//	   /    \
+//	vars   modules
+//	       / | \
+//	    mod1 mod2 mod3
 //
 // Leaves are the per-module content hashes (already computed by HashModuleContent)
 // plus a vars leaf (SHA256 of the deterministic vars JSON). The root is a single
 // hash representing the entire envoy config — if it matches the agent's cached
 // root, the config hasn't changed and the server can skip bundle construction.
-func MerkleRoot(modules []Configcrate, vars map[string]any, varOrder []string) string {
+func MerkleRoot(configcrates []Configcrate, vars map[string]any, varOrder []string) string {
 	varsHash := hashVars(vars, varOrder)
-	modulesHash := hashModules(modules)
-	return combinePair(varsHash, modulesHash)
+	configcratesHash := hashConfigcrates(configcrates)
+	return combinePair(varsHash, configcratesHash)
 }
 
 // hashVars produces a deterministic SHA256 of the vars map using the
@@ -75,13 +75,13 @@ type kv struct {
 
 // hashModules builds a binary Merkle tree from module content hashes.
 // Configcrates are processed in their DAG order (as stored in the slice).
-func hashModules(modules []Configcrate) string {
-	if len(modules) == 0 {
+func hashConfigcrates(configcrates []Configcrate) string {
+	if len(configcrates) == 0 {
 		return emptyHash()
 	}
 
-	leaves := make([]string, len(modules))
-	for i, mod := range modules {
+	leaves := make([]string, len(configcrates))
+	for i, mod := range configcrates {
 		if mod.ContentHash != "" {
 			leaves[i] = mod.ContentHash
 		} else {

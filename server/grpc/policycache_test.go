@@ -18,7 +18,7 @@ func makeTestConfig() *config.EnvoyConfig {
 			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"}},
 		},
 	}
-	nginx.ContentHash = config.HashModuleContent(nginx)
+	nginx.ContentHash = config.HashConfigcrateContent(nginx)
 
 	postgres := config.Configcrate{
 		Name: "postgres",
@@ -26,13 +26,13 @@ func makeTestConfig() *config.EnvoyConfig {
 			{Name: "conf", Type: "file", Attributes: map[string]any{"content": "listen = *"}},
 		},
 	}
-	postgres.ContentHash = config.HashModuleContent(postgres)
+	postgres.ContentHash = config.HashConfigcrateContent(postgres)
 
 	return &config.EnvoyConfig{
 		MatchPattern: "*.web.example.com",
 		Environment:  "production",
 		Roles:        []string{"webserver"},
-		Configcrates:      []config.Configcrate{nginx, postgres},
+		Configcrates: []config.Configcrate{nginx, postgres},
 		Vars:         map[string]any{"port": 8080},
 		VarOrder:     []string{"port"},
 	}
@@ -94,7 +94,7 @@ func TestPolicyCache_DifferentPatterns(t *testing.T) {
 	}
 }
 
-func TestCustomizeStubs_NoHashes_SharesModules(t *testing.T) {
+func TestCustomizeStubs_NoHashes_SharesConfigcrates(t *testing.T) {
 	pc := newPolicyCache()
 	cfg := makeTestConfig()
 

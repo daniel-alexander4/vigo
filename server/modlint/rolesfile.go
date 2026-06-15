@@ -48,21 +48,21 @@ func LintRolesFile(input []byte, _ Options) *Result {
 }
 
 type roleCase struct {
-	When    string
+	When         string
 	Configcrates []string
-	Line    int
-	Column  int
+	Line         int
+	Column       int
 }
 
 type roleEntry struct {
-	Name        string
-	When        string
-	Includes    []string
-	HasModules  bool // whether the modules: key was present (even if empty)
-	NumModules  int
-	Cases       []roleCase
-	Line        int
-	Column      int
+	Name            string
+	When            string
+	Includes        []string
+	HasConfigcrates bool // whether the modules: key was present (even if empty)
+	NumConfigcrates int
+	Cases           []roleCase
+	Line            int
+	Column          int
 }
 
 type rolesFile struct {
@@ -109,9 +109,9 @@ func parseRolesFile(data []byte) (*rolesFile, error) {
 						}
 					}
 				case "configcrates":
-					role.HasModules = true
+					role.HasConfigcrates = true
 					if v.Kind == yaml.SequenceNode {
-						role.NumModules = len(v.Content)
+						role.NumConfigcrates = len(v.Content)
 					}
 				case "case":
 					if v.Kind != yaml.SequenceNode {
@@ -226,7 +226,7 @@ func applyRolesFileRules(rf *rolesFile) []Finding {
 
 		// Empty role: no modules, no includes, no case → the role is
 		// a no-op. Probably an authoring mistake.
-		if role.NumModules == 0 && len(role.Includes) == 0 && len(role.Cases) == 0 {
+		if role.NumConfigcrates == 0 && len(role.Includes) == 0 && len(role.Cases) == 0 {
 			out = append(out, Finding{
 				Severity: Warning,
 				Line:     role.Line,

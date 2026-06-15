@@ -18,7 +18,7 @@ import (
 )
 
 // RetractedModule holds the generated retract module and metadata.
-type RetractedModule struct {
+type RetractedConfigcrate struct {
 	// OriginalName is the module name that was removed (e.g., "nginx").
 	OriginalName string
 	// RelPath is the relative path in the config tree (e.g., "configcrates/nginx.vgo").
@@ -60,39 +60,39 @@ type retractResource struct {
 }
 
 // DetectRemovedModules filters a list of removed file paths for module .vgo files.
-func DetectRemovedModules(removed []string) []string {
-	return filterModulePaths(removed)
+func DetectRemovedConfigcrates(removed []string) []string {
+	return filterConfigcratePaths(removed)
 }
 
 // DetectChangedModules filters a list of changed file paths for module .vgo files.
 // Changed includes both new and modified modules.
-func DetectChangedModules(changed []string) []string {
-	return filterModulePaths(changed)
+func DetectChangedConfigcrates(changed []string) []string {
+	return filterConfigcratePaths(changed)
 }
 
-func filterModulePaths(paths []string) []string {
-	var modules []string
+func filterConfigcratePaths(paths []string) []string {
+	var configcrates []string
 	for _, rel := range paths {
 		if strings.HasPrefix(rel, "configcrates"+string(os.PathSeparator)) && strings.HasSuffix(rel, ".vgo") {
-			modules = append(modules, rel)
+			configcrates = append(configcrates, rel)
 		}
 	}
-	return modules
+	return configcrates
 }
 
 // ReadRemovedModuleContent reads the content of removed modules from the live
 // directory before sync overwrites it. Returns a map of relPath → content.
-func ReadRemovedModuleContent(liveDir string, relPaths []string) map[string][]byte {
-	return readModuleContent(liveDir, relPaths)
+func ReadRemovedConfigcrateContent(liveDir string, relPaths []string) map[string][]byte {
+	return readConfigcrateContent(liveDir, relPaths)
 }
 
 // ReadChangedModuleContent reads the content of new/changed modules from the
 // stacks directory. Returns a map of relPath → content.
-func ReadChangedModuleContent(stacksDir string, relPaths []string) map[string][]byte {
-	return readModuleContent(stacksDir, relPaths)
+func ReadChangedConfigcrateContent(stacksDir string, relPaths []string) map[string][]byte {
+	return readConfigcrateContent(stacksDir, relPaths)
 }
 
-func readModuleContent(baseDir string, relPaths []string) map[string][]byte {
+func readConfigcrateContent(baseDir string, relPaths []string) map[string][]byte {
 	content := make(map[string][]byte, len(relPaths))
 	for _, rel := range relPaths {
 		data, err := os.ReadFile(filepath.Join(baseDir, rel))
@@ -106,7 +106,7 @@ func readModuleContent(baseDir string, relPaths []string) map[string][]byte {
 // GenerateRetractModule creates an idempotent retract module from the
 // original module content. Each resource is reversed to its absent/stopped state.
 // Returns the generated YAML and a list of warnings for resources that need review.
-func GenerateRetractModule(name string, content []byte) (string, []RetractWarning, error) {
+func GenerateRetractConfigcrate(name string, content []byte) (string, []RetractWarning, error) {
 	var mod retractConfigcrate
 	if err := yaml.Unmarshal(content, &mod); err != nil {
 		return "", nil, fmt.Errorf("parsing configcrate %s: %w", name, err)
@@ -209,14 +209,14 @@ func reverseFileResource(res retractResource) (*retractResource, *RetractWarning
 		}
 	}
 	return &retractResource{
-		Name:  "remove-" + res.Name,
-		Type:  res.Type,
-		When:  res.When,
-		Attrs: map[string]any{"target_path": targetPath, "state": "absent"},
-	}, &RetractWarning{
-		Resource: res.Name, Type: res.Type, Confidence: "high",
-		Message: fmt.Sprintf("delete %s", targetPath),
-	}
+			Name:  "remove-" + res.Name,
+			Type:  res.Type,
+			When:  res.When,
+			Attrs: map[string]any{"target_path": targetPath, "state": "absent"},
+		}, &RetractWarning{
+			Resource: res.Name, Type: res.Type, Confidence: "high",
+			Message: fmt.Sprintf("delete %s", targetPath),
+		}
 }
 
 func reversePackageResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -225,14 +225,14 @@ func reversePackageResource(res retractResource) (*retractResource, *RetractWarn
 		return nil, nil
 	}
 	return &retractResource{
-		Name:  "remove-" + res.Name,
-		Type:  "package",
-		When:  res.When,
-		Attrs: map[string]any{"package": pkg, "state": "absent"},
-	}, &RetractWarning{
-		Resource: res.Name, Type: "package", Confidence: "high",
-		Message: fmt.Sprintf("remove %s", pkg),
-	}
+			Name:  "remove-" + res.Name,
+			Type:  "package",
+			When:  res.When,
+			Attrs: map[string]any{"package": pkg, "state": "absent"},
+		}, &RetractWarning{
+			Resource: res.Name, Type: "package", Confidence: "high",
+			Message: fmt.Sprintf("remove %s", pkg),
+		}
 }
 
 func reverseServiceResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -241,14 +241,14 @@ func reverseServiceResource(res retractResource) (*retractResource, *RetractWarn
 		return nil, nil
 	}
 	return &retractResource{
-		Name:  "stop-" + res.Name,
-		Type:  res.Type,
-		When:  res.When,
-		Attrs: map[string]any{"service": svc, "state": "stopped", "enabled": false},
-	}, &RetractWarning{
-		Resource: res.Name, Type: res.Type, Confidence: "high",
-		Message: fmt.Sprintf("stop and disable %s", svc),
-	}
+			Name:  "stop-" + res.Name,
+			Type:  res.Type,
+			When:  res.When,
+			Attrs: map[string]any{"service": svc, "state": "stopped", "enabled": false},
+		}, &RetractWarning{
+			Resource: res.Name, Type: res.Type, Confidence: "high",
+			Message: fmt.Sprintf("stop and disable %s", svc),
+		}
 }
 
 func reverseUserResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -257,27 +257,27 @@ func reverseUserResource(res retractResource) (*retractResource, *RetractWarning
 		return nil, nil
 	}
 	return &retractResource{
-		Name:  "remove-" + res.Name,
-		Type:  res.Type,
-		When:  res.When,
-		Attrs: map[string]any{"username": username, "state": "absent"},
-	}, &RetractWarning{
-		Resource: res.Name, Type: res.Type, Confidence: "medium",
-		Message: fmt.Sprintf("remove user %s (home directory may contain data)", username),
-	}
+			Name:  "remove-" + res.Name,
+			Type:  res.Type,
+			When:  res.When,
+			Attrs: map[string]any{"username": username, "state": "absent"},
+		}, &RetractWarning{
+			Resource: res.Name, Type: res.Type, Confidence: "medium",
+			Message: fmt.Sprintf("remove user %s (home directory may contain data)", username),
+		}
 }
 
 func reverseCronResource(res retractResource) (*retractResource, *RetractWarning) {
 	// Cron resources use the resource name as the cron job identifier.
 	return &retractResource{
-		Name:  "remove-" + res.Name,
-		Type:  res.Type,
-		When:  res.When,
-		Attrs: map[string]any{"state": "absent"},
-	}, &RetractWarning{
-		Resource: res.Name, Type: res.Type, Confidence: "high",
-		Message: "remove cron job",
-	}
+			Name:  "remove-" + res.Name,
+			Type:  res.Type,
+			When:  res.When,
+			Attrs: map[string]any{"state": "absent"},
+		}, &RetractWarning{
+			Resource: res.Name, Type: res.Type, Confidence: "high",
+			Message: "remove cron job",
+		}
 }
 
 func reverseRepositoryResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -286,14 +286,14 @@ func reverseRepositoryResource(res retractResource) (*retractResource, *RetractW
 		return nil, nil
 	}
 	return &retractResource{
-		Name:  "remove-" + res.Name,
-		Type:  "repository",
-		When:  res.When,
-		Attrs: map[string]any{"repository": repo, "state": "absent"},
-	}, &RetractWarning{
-		Resource: res.Name, Type: "repository", Confidence: "high",
-		Message: "remove package repository",
-	}
+			Name:  "remove-" + res.Name,
+			Type:  "repository",
+			When:  res.When,
+			Attrs: map[string]any{"repository": repo, "state": "absent"},
+		}, &RetractWarning{
+			Resource: res.Name, Type: "repository", Confidence: "high",
+			Message: "remove package repository",
+		}
 }
 
 func reverseSysctlResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -302,14 +302,14 @@ func reverseSysctlResource(res retractResource) (*retractResource, *RetractWarni
 		return nil, nil
 	}
 	return &retractResource{
-		Name:  "reset-" + res.Name,
-		Type:  res.Type,
-		When:  res.When,
-		Attrs: map[string]any{"key": key, "state": "absent"},
-	}, &RetractWarning{
-		Resource: res.Name, Type: res.Type, Confidence: "high",
-		Message: fmt.Sprintf("reset %s to system default", key),
-	}
+			Name:  "reset-" + res.Name,
+			Type:  res.Type,
+			When:  res.When,
+			Attrs: map[string]any{"key": key, "state": "absent"},
+		}, &RetractWarning{
+			Resource: res.Name, Type: res.Type, Confidence: "high",
+			Message: fmt.Sprintf("reset %s to system default", key),
+		}
 }
 
 func reverseFirewallResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -321,14 +321,14 @@ func reverseFirewallResource(res retractResource) (*retractResource, *RetractWar
 		}
 	}
 	return &retractResource{
-		Name:  "remove-" + res.Name,
-		Type:  res.Type,
-		When:  res.When,
-		Attrs: attrs,
-	}, &RetractWarning{
-		Resource: res.Name, Type: res.Type, Confidence: "high",
-		Message: "remove firewall rule",
-	}
+			Name:  "remove-" + res.Name,
+			Type:  res.Type,
+			When:  res.When,
+			Attrs: attrs,
+		}, &RetractWarning{
+			Resource: res.Name, Type: res.Type, Confidence: "high",
+			Message: "remove firewall rule",
+		}
 }
 
 func reverseSourcePackageResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -340,14 +340,14 @@ func reverseSourcePackageResource(res retractResource) (*retractResource, *Retra
 		}
 	}
 	return &retractResource{
-		Name:  "remove-" + res.Name,
-		Type:  "file",
-		When:  res.When,
-		Attrs: map[string]any{"target_path": targetPath, "state": "absent"},
-	}, &RetractWarning{
-		Resource: res.Name, Type: "source_package", Confidence: "medium",
-		Message: fmt.Sprintf("delete %s (extracted contents not removed)", targetPath),
-	}
+			Name:  "remove-" + res.Name,
+			Type:  "file",
+			When:  res.When,
+			Attrs: map[string]any{"target_path": targetPath, "state": "absent"},
+		}, &RetractWarning{
+			Resource: res.Name, Type: "source_package", Confidence: "medium",
+			Message: fmt.Sprintf("delete %s (extracted contents not removed)", targetPath),
+		}
 }
 
 func reverseExecResource(res retractResource) (*retractResource, *RetractWarning) {
@@ -358,19 +358,19 @@ func reverseExecResource(res retractResource) (*retractResource, *RetractWarning
 	// Exec resources have no generic reverse. Return a placeholder that the
 	// AI will improve, or that the operator can edit manually.
 	return &retractResource{
-		Name: "undo-" + res.Name,
-		Type: "exec",
-		When: res.When,
-		Attrs: map[string]any{
-			"command": fmt.Sprintf("echo 'TODO: reverse of: %s'", sanitizeForShell(cmd)),
-			"onlyif":  "false",
-		},
-	}, &RetractWarning{
-		Resource:   res.Name,
-		Type:       "exec",
-		Confidence: "low",
-		Message:    fmt.Sprintf("exec %q — reversal unknown, AI will attempt to generate", cmd),
-	}
+			Name: "undo-" + res.Name,
+			Type: "exec",
+			When: res.When,
+			Attrs: map[string]any{
+				"command": fmt.Sprintf("echo 'TODO: reverse of: %s'", sanitizeForShell(cmd)),
+				"onlyif":  "false",
+			},
+		}, &RetractWarning{
+			Resource:   res.Name,
+			Type:       "exec",
+			Confidence: "low",
+			Message:    fmt.Sprintf("exec %q — reversal unknown, AI will attempt to generate", cmd),
+		}
 }
 
 // sanitizeForShell escapes single quotes in a string for use in shell commands.

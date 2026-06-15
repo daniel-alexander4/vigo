@@ -19,7 +19,7 @@ var configCmd = &cobra.Command{
 }
 
 var (
-	traceModuleFlag      string
+	traceConfigcrateFlag string
 	traceHostFlag        string
 	traceUsercrateFlag   string
 	traceIncludeTreeFlag bool
@@ -59,22 +59,22 @@ Examples:
 
 		// Exactly one subject required: host, --module (inverse), or --usercrate (inverse).
 		// --module *with* a host is the existing per-host filter, not a separate subject.
-		inverseModule := host == "" && traceModuleFlag != ""
+		inverseConfigcrate := host == "" && traceConfigcrateFlag != ""
 		inverseUsercrate := host == "" && traceUsercrateFlag != ""
 
 		switch {
-		case host == "" && traceModuleFlag == "" && traceUsercrateFlag == "":
+		case host == "" && traceConfigcrateFlag == "" && traceUsercrateFlag == "":
 			return fmt.Errorf("specify one of: <hostname>, --host, --configcrate, --usercrate")
 		case host != "" && traceUsercrateFlag != "":
 			return fmt.Errorf("--usercrate is an inverse subject; remove the hostname to query it")
-		case inverseModule && inverseUsercrate:
+		case inverseConfigcrate && inverseUsercrate:
 			return fmt.Errorf("--configcrate and --usercrate are mutually exclusive in inverse mode")
 		case traceIncludeTreeFlag && host != "":
 			return fmt.Errorf("--include-tree only applies to inverse mode (no hostname)")
 		}
 
-		if inverseModule || inverseUsercrate {
-			return runInverseTrace(inverseModule, inverseUsercrate)
+		if inverseConfigcrate || inverseUsercrate {
+			return runInverseTrace(inverseConfigcrate, inverseUsercrate)
 		}
 
 		// Forward (hostname-rooted) trace.
@@ -83,8 +83,8 @@ Examples:
 		var trace traceResult
 
 		apiURL := fmt.Sprintf("/api/v1/config/trace?hostname=%s", url.QueryEscape(host))
-		if traceModuleFlag != "" {
-			apiURL += "&configcrate=" + url.QueryEscape(traceModuleFlag)
+		if traceConfigcrateFlag != "" {
+			apiURL += "&configcrate=" + url.QueryEscape(traceConfigcrateFlag)
 		}
 
 		if err := client.get(apiURL, &trace); err != nil {
@@ -131,11 +131,11 @@ Examples:
 		// Section 2: Configcrate Inheritance (boxes with modules and roles, no vars).
 		// Usercrates already have their own section above — skip them here so
 		// they don't render twice as both a "Usercrates" row and a module box.
-		moduleLevels := levelsExcludingUsercrates(trace.Inheritance)
-		if len(moduleLevels) > 0 {
+		configcrateLevels := levelsExcludingUsercrates(trace.Inheritance)
+		if len(configcrateLevels) > 0 {
 			fmt.Println(bold("Configcrate Inheritance:"))
 			fmt.Println()
-			renderModuleCards(moduleLevels, trace.RoleExpansion, trace.MatchPattern)
+			renderConfigcrateCards(configcrateLevels, trace.RoleExpansion, trace.MatchPattern)
 		}
 
 		// Separator between modules and vars.
@@ -184,7 +184,7 @@ Examples:
 			fmt.Println()
 			fmt.Println(bold("Compliance Sources:"))
 			fmt.Println()
-			renderModuleComplianceSources(trace.ConfigcrateComplianceFiles)
+			renderConfigcrateComplianceSources(trace.ConfigcrateComplianceFiles)
 		}
 
 		// Section 7: Waivers Inheritance
@@ -234,17 +234,17 @@ type traceResult struct {
 	ConditionalVars []string `json:"conditional_vars"`
 	ResourceCount   int      `json:"resource_count"`
 
-	SecretRefs                 []secretTraceEntry          `json:"secret_refs"`
-	SecretsProvider            string                      `json:"secrets_provider"`
-	Dependencies               []dependencyTraceEntry      `json:"dependencies"`
-	ComplianceTags             []complianceTraceEntry      `json:"compliance_tags"`
-	ConfigcrateComplianceFiles []moduleComplianceFileEntry `json:"configcrate_compliance_files"`
-	EnvoyWaiverFiles           []string                    `json:"envoy_waiver_files"`
-	EnvoyWaivers               []envoyWaiverTraceEntry     `json:"envoy_waivers"`
-	Conditionals               []conditionalTraceEntry     `json:"conditionals"`
+	SecretRefs                 []secretTraceEntry               `json:"secret_refs"`
+	SecretsProvider            string                           `json:"secrets_provider"`
+	Dependencies               []dependencyTraceEntry           `json:"dependencies"`
+	ComplianceTags             []complianceTraceEntry           `json:"compliance_tags"`
+	ConfigcrateComplianceFiles []configcrateComplianceFileEntry `json:"configcrate_compliance_files"`
+	EnvoyWaiverFiles           []string                         `json:"envoy_waiver_files"`
+	EnvoyWaivers               []envoyWaiverTraceEntry          `json:"envoy_waivers"`
+	Conditionals               []conditionalTraceEntry          `json:"conditionals"`
 }
 
-type moduleComplianceFileEntry = struct {
+type configcrateComplianceFileEntry = struct {
 	SourceFile          string              `json:"source_file"`
 	Compliance          map[string][]string `json:"compliance"`
 	CoveredConfigcrates []string            `json:"covered_configcrates"`
@@ -438,14 +438,14 @@ func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
 }
 
 // renderModuleCards draws Section 2: box cards with modules and roles (no vars).
-func renderModuleCards(levels []inheritanceLevel, roleExpansion []roleExpansionEntry, matchPattern string) {
+func renderConfigcrateCards(levels []inheritanceLevel, roleExpansion []roleExpansionEntry, matchPattern string) {
 	total := len(levels)
 
 	// Build role → modules lookup.
-	roleModules := make(map[string][]string)
+	roleConfigcrates := make(map[string][]string)
 	roleIncludes := make(map[string][]string)
 	for _, re := range roleExpansion {
-		roleModules[re.Role] = re.Configcrates
+		roleConfigcrates[re.Role] = re.Configcrates
 		roleIncludes[re.Role] = re.Includes
 	}
 
@@ -488,7 +488,7 @@ func renderModuleCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 
 		// Roles with inline expansion.
 		for _, roleName := range lvl.Roles {
-			mods := roleModules[roleName]
+			mods := roleConfigcrates[roleName]
 			incl := roleIncludes[roleName]
 			label := teal(roleName)
 			if len(incl) > 0 {
@@ -617,20 +617,20 @@ func renderPasswordInheritance(refs []secretTraceEntry, provider string) {
 
 	// Group by module.
 	order := []string{}
-	byModule := map[string][]secretTraceEntry{}
+	byConfigcrate := map[string][]secretTraceEntry{}
 	for _, ref := range refs {
 		mod := ref.Configcrate
 		if mod == "" {
 			mod = "(envoy-level)"
 		}
-		if _, ok := byModule[mod]; !ok {
+		if _, ok := byConfigcrate[mod]; !ok {
 			order = append(order, mod)
 		}
-		byModule[mod] = append(byModule[mod], ref)
+		byConfigcrate[mod] = append(byConfigcrate[mod], ref)
 	}
 
 	for _, mod := range order {
-		modRefs := byModule[mod]
+		modRefs := byConfigcrate[mod]
 		fmt.Printf("  %s\n", amber(mod))
 		for _, ref := range modRefs {
 			fmt.Printf("    %s  %s  %s\n",
@@ -717,7 +717,7 @@ func renderComplianceInheritance(tags []complianceTraceEntry) {
 // of the envoy's effective modules. Each card lists the frameworks + controls
 // the file contributed and the modules it covered, so an operator can see
 // exactly why a given module carries a given compliance tag.
-func renderModuleComplianceSources(files []moduleComplianceFileEntry) {
+func renderConfigcrateComplianceSources(files []configcrateComplianceFileEntry) {
 	total := len(files)
 	for i, f := range files {
 		color := greenRamp(i, total)
@@ -946,14 +946,14 @@ type inverseTreeRef struct {
 
 // runInverseTrace fetches and renders an inverse trace — answers
 // "where is this module/usercrate applied?" across the fleet.
-func runInverseTrace(asModule, asUsercrate bool) error {
+func runInverseTrace(asConfigcrate, asUsercrate bool) error {
 	subject := "configcrate"
-	value := traceModuleFlag
+	value := traceConfigcrateFlag
 	if asUsercrate {
 		subject = "usercrate"
 		value = traceUsercrateFlag
 	}
-	_ = asModule
+	_ = asConfigcrate
 
 	params := url.Values{}
 	params.Set(subject, value)
@@ -1028,7 +1028,7 @@ func runInverseTrace(asModule, asUsercrate bool) error {
 }
 
 func init() {
-	configTraceCmd.Flags().StringVar(&traceModuleFlag, "configcrate", "", "With <hostname>: filter trace to this configcrate's branch. Without <hostname>: find where this configcrate is applied.")
+	configTraceCmd.Flags().StringVar(&traceConfigcrateFlag, "configcrate", "", "With <hostname>: filter trace to this configcrate's branch. Without <hostname>: find where this configcrate is applied.")
 	configTraceCmd.Flags().StringVar(&traceHostFlag, "host", "", "Hostname to trace (alias for the positional argument)")
 	configTraceCmd.Flags().StringVar(&traceUsercrateFlag, "usercrate", "", "Find where this usercrate is applied across the fleet")
 	configTraceCmd.Flags().BoolVar(&traceIncludeTreeFlag, "include-tree", false, "Inverse mode only: also include config-tree patterns no enrolled envoy matches")

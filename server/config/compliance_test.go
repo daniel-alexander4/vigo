@@ -142,7 +142,7 @@ waivers:
 
 // Case 4: modules/compliance.vgo with fleet-wide claims — every module
 // under modules/ inherits them.
-func TestCompliance_ModulesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
+func TestCompliance_ConfigcratesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `
@@ -187,7 +187,7 @@ envoys:
 // Case 5: modules/users/compliance.vgo in a subdirectory with
 // user-management-specific claims — only modules under modules/users/
 // inherit them.
-func TestCompliance_ModulesTreeSubdir_ClaimsScopedToSubtree(t *testing.T) {
+func TestCompliance_ConfigcratesTreeSubdir_ClaimsScopedToSubtree(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
@@ -246,7 +246,7 @@ envoys:
 // Post-0.66.57 the per-module framework→control attribution comes
 // through a sibling compliance.vgo file; the module YAML itself
 // carries only catalog-tag claims via `compliance: { provides, bundle }`.
-func TestCompliance_ModulesTree_UnionWithModuleOwnBlock(t *testing.T) {
+func TestCompliance_ConfigcratesTree_UnionWithConfigcrateOwnBlock(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `
@@ -307,7 +307,7 @@ envoys:
 // 0.29.1). Previously waivers: was silently ignored with a warning;
 // now it blocks load. validate_layout_test.go covers detailed error
 // shape; this test confirms the legacy NewConfigStore path refuses.
-func TestCompliance_ModulesTree_WaiversIgnored(t *testing.T) {
+func TestCompliance_ConfigcratesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "compliance.vgo"), `

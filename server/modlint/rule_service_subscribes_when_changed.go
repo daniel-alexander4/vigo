@@ -24,7 +24,7 @@ type serviceSubscribesWhenChangedRule struct{}
 
 func (serviceSubscribesWhenChangedRule) id() string { return "service-subscribes-when-changed" }
 
-func (serviceSubscribesWhenChangedRule) apply(mod *module, _ Options) []Finding {
+func (serviceSubscribesWhenChangedRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for i := range mod.Resources {
 		res := &mod.Resources[i]

@@ -31,7 +31,7 @@ type noResourcesRule struct{}
 
 func (noResourcesRule) id() string { return "no-resources" }
 
-func (noResourcesRule) apply(mod *module, _ Options) []Finding {
+func (noResourcesRule) apply(mod *configcrate, _ Options) []Finding {
 	if len(mod.Resources) > 0 {
 		return nil
 	}

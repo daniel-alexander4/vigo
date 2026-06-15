@@ -50,11 +50,11 @@ type testDef struct {
 }
 
 type testExpectations struct {
-	ConfigcrateCount   *int              `yaml:"configcrate_count"`
-	ResourceCount *int              `yaml:"resource_count"`
-	Configcrates       []string          `yaml:"configcrates"`
-	Resources     []expectResource  `yaml:"resources"`
-	Vars          map[string]string `yaml:"vars"`
+	ConfigcrateCount *int              `yaml:"configcrate_count"`
+	ResourceCount    *int              `yaml:"resource_count"`
+	Configcrates     []string          `yaml:"configcrates"`
+	Resources        []expectResource  `yaml:"resources"`
+	Vars             map[string]string `yaml:"vars"`
 }
 
 type expectResource struct {

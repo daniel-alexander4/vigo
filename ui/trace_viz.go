@@ -27,14 +27,14 @@ type TraceVizPageData struct {
 
 // InheritanceVizLevel is one level in the inheritance tree SVG.
 type InheritanceVizLevel struct {
-	Label     string // file path (dir/file)
-	Configcrates   []string
-	Roles     []string
-	VarCount  int
-	Overrides int
-	Color     string
-	Y         int // SVG Y position
-	BoxHeight int
+	Label        string // file path (dir/file)
+	Configcrates []string
+	Roles        []string
+	VarCount     int
+	Overrides    int
+	Color        string
+	Y            int // SVG Y position
+	BoxHeight    int
 }
 
 // DepNode is a node in the dependency graph (D3).
@@ -128,14 +128,14 @@ func (data *TraceVizPageData) buildInheritanceTree(trace *config.ConfigTrace) {
 		color := fmt.Sprintf("rgb(166, %d, 161)", green)
 
 		vizLevels[i] = InheritanceVizLevel{
-			Label:     label,
-			Configcrates:   lvl.Configcrates,
-			Roles:     lvl.Roles,
-			VarCount:  len(lvl.Vars),
-			Overrides: len(lvl.Overrides),
-			Color:     color,
-			Y:         y,
-			BoxHeight: boxHeight,
+			Label:        label,
+			Configcrates: lvl.Configcrates,
+			Roles:        lvl.Roles,
+			VarCount:     len(lvl.Vars),
+			Overrides:    len(lvl.Overrides),
+			Color:        color,
+			Y:            y,
+			BoxHeight:    boxHeight,
 		}
 		y += boxHeight + treeGap
 	}

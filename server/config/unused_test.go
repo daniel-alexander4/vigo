@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestUnusedModules(t *testing.T) {
+func TestUnusedConfigcrates(t *testing.T) {
 	dir := setupDir(t)
 
 	// Three modules defined: nginx, sshd, orphan.
@@ -49,14 +49,14 @@ envoys:
 	result := store.Unused([]string{"web-01.example.com", "db-01.example.com"})
 
 	// Only "orphan" should be unused.
-	if len(result.UnusedModules) != 1 {
-		t.Fatalf("expected 1 unused module, got %d: %+v", len(result.UnusedModules), result.UnusedModules)
+	if len(result.UnusedConfigcrates) != 1 {
+		t.Fatalf("expected 1 unused module, got %d: %+v", len(result.UnusedConfigcrates), result.UnusedConfigcrates)
 	}
-	if result.UnusedModules[0].Name != "orphan" {
-		t.Errorf("expected unused module 'orphan', got %q", result.UnusedModules[0].Name)
+	if result.UnusedConfigcrates[0].Name != "orphan" {
+		t.Errorf("expected unused module 'orphan', got %q", result.UnusedConfigcrates[0].Name)
 	}
-	if result.UnusedModules[0].SourceFile != "configcrates/orphan.vgo" {
-		t.Errorf("expected source file 'modules/orphan.vgo', got %q", result.UnusedModules[0].SourceFile)
+	if result.UnusedConfigcrates[0].SourceFile != "configcrates/orphan.vgo" {
+		t.Errorf("expected source file 'modules/orphan.vgo', got %q", result.UnusedConfigcrates[0].SourceFile)
 	}
 
 	// No unused hostcrates — both patterns match enrolled hostnames.
@@ -105,7 +105,7 @@ envoys:
 	}
 }
 
-func TestUnusedCommonModulesNotFlagged(t *testing.T) {
+func TestUnusedCommonConfigcratesNotFlagged(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "base.vgo"), `
@@ -139,15 +139,15 @@ envoys:
 
 	result := store.Unused([]string{"host-01.example.com"})
 
-	if len(result.UnusedModules) != 1 {
-		t.Fatalf("expected 1 unused module, got %d: %+v", len(result.UnusedModules), result.UnusedModules)
+	if len(result.UnusedConfigcrates) != 1 {
+		t.Fatalf("expected 1 unused module, got %d: %+v", len(result.UnusedConfigcrates), result.UnusedConfigcrates)
 	}
-	if result.UnusedModules[0].Name != "monitoring" {
-		t.Errorf("expected 'monitoring' to be unused, got %q", result.UnusedModules[0].Name)
+	if result.UnusedConfigcrates[0].Name != "monitoring" {
+		t.Errorf("expected 'monitoring' to be unused, got %q", result.UnusedConfigcrates[0].Name)
 	}
 }
 
-func TestUnusedRoleCaseModulesNotFlagged(t *testing.T) {
+func TestUnusedRoleCaseConfigcratesNotFlagged(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "ssl.vgo"), `
@@ -182,11 +182,11 @@ envoys:
 	result := store.Unused([]string{"web-01.example.com"})
 
 	// Only debug should be unused; ssl is referenced by role case.
-	if len(result.UnusedModules) != 1 {
-		t.Fatalf("expected 1 unused module, got %d: %+v", len(result.UnusedModules), result.UnusedModules)
+	if len(result.UnusedConfigcrates) != 1 {
+		t.Fatalf("expected 1 unused module, got %d: %+v", len(result.UnusedConfigcrates), result.UnusedConfigcrates)
 	}
-	if result.UnusedModules[0].Name != "debug" {
-		t.Errorf("expected 'debug' to be unused, got %q", result.UnusedModules[0].Name)
+	if result.UnusedConfigcrates[0].Name != "debug" {
+		t.Errorf("expected 'debug' to be unused, got %q", result.UnusedConfigcrates[0].Name)
 	}
 }
 
@@ -235,7 +235,7 @@ envoys:
 		t.Errorf("expected 'bob' to be unused, got %q", result.UnusedUsercrates[0].Name)
 	}
 	// alice is in usercrates — never in UnusedModules.
-	for _, m := range result.UnusedModules {
+	for _, m := range result.UnusedConfigcrates {
 		if m.Name == "alice" || m.Name == "bob" {
 			t.Errorf("usercrate %q surfaced as unused module — module/usercrate channels must be separate", m.Name)
 		}
@@ -305,8 +305,8 @@ envoys:
 
 	result := store.Unused([]string{"web-01.example.com"})
 
-	if len(result.UnusedModules) != 0 {
-		t.Errorf("expected 0 unused modules, got %d", len(result.UnusedModules))
+	if len(result.UnusedConfigcrates) != 0 {
+		t.Errorf("expected 0 unused modules, got %d", len(result.UnusedConfigcrates))
 	}
 	if len(result.UnusedHostcrates) != 0 {
 		t.Errorf("expected 0 unused hostcrates, got %d", len(result.UnusedHostcrates))

@@ -51,7 +51,7 @@ func EvaluateResourceWhen(when string, vars map[string]any) (shouldInclude bool,
 
 // ShouldIncludeModule evaluates a module's When expression against the
 // resolved vars map. Returns true if the module should be included.
-func ShouldIncludeModule(mod Configcrate, vars map[string]any) bool {
+func ShouldIncludeConfigcrate(mod Configcrate, vars map[string]any) bool {
 	if mod.When == "" {
 		return true
 	}
@@ -102,7 +102,7 @@ var serverSideBuiltins = map[string]bool{
 // with the original expression), so a malformed expression can never silently
 // drop a module server-side; the agent (and publish-time validation) surface
 // the error.
-func EvalModuleWhenServerSide(when string, traits map[string]any) (include bool, agentWhen string) {
+func EvalConfigcrateWhenServerSide(when string, traits map[string]any) (include bool, agentWhen string) {
 	if when == "" {
 		return true, ""
 	}

@@ -163,12 +163,12 @@ type Result struct {
 	// RemovedModuleContent holds the YAML content of modules that were removed
 	// during this publish (read from .live/ before sync). Keyed by relative path.
 	// Used by the retraction feature to generate retract modules.
-	RemovedModuleContent map[string][]byte `json:"-"`
+	RemovedConfigcrateContent map[string][]byte `json:"-"`
 
 	// ChangedModuleContent holds the YAML content of modules that were added
 	// or modified during this publish (read from stacks). Keyed by relative
 	// path. Used by the retraction feature to pre-generate retract modules.
-	ChangedModuleContent map[string][]byte `json:"-"`
+	ChangedConfigcrateContent map[string][]byte `json:"-"`
 }
 
 // Cleanup removes the staging directory created during ValidateSource.
@@ -254,7 +254,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	candidateLintable = append(candidateLintable, filterScaffoldingFiles(candidateChanged)...)
 	var lintedOverrides map[string][]byte
 	if len(candidateLintable) > 0 {
-		lintedOverrides, err = lintModules(opts.StacksDir, candidateLintable)
+		lintedOverrides, err = lintConfigcrates(opts.StacksDir, candidateLintable)
 		if err != nil {
 			return nil, fmt.Errorf("linting configcrates: %w", err)
 		}
@@ -328,7 +328,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// prune drops from .live anyway, don't generate publish-time noise.
 	// Warnings only; never block publish.
 	unreachable := make(map[string]bool)
-	for _, m := range unused.UnusedModules {
+	for _, m := range unused.UnusedConfigcrates {
 		unreachable[m.SourceFile] = true
 	}
 	for _, u := range unused.UnusedUsercrates {
@@ -381,7 +381,7 @@ func ValidateSource(opts Options) (*Result, error) {
 // that case so a {{...}}-templated source path can't deselect a file we
 // silently delete.
 func pruneStaging(stagingDir string, unused *config.UnusedResult) error {
-	for _, m := range unused.UnusedModules {
+	for _, m := range unused.UnusedConfigcrates {
 		if err := removeRelative(stagingDir, m.SourceFile); err != nil {
 			return err
 		}
@@ -469,15 +469,15 @@ func Publish(opts Options, state *State) (*Result, error) {
 
 	// Capture removed module content from .live/ before sync overwrites it.
 	// The retraction feature uses this to generate retract modules.
-	if removedMods := DetectRemovedModules(res.Removed); len(removedMods) > 0 {
-		res.RemovedModuleContent = ReadRemovedModuleContent(opts.LiveDir, removedMods)
+	if removedMods := DetectRemovedConfigcrates(res.Removed); len(removedMods) > 0 {
+		res.RemovedConfigcrateContent = ReadRemovedConfigcrateContent(opts.LiveDir, removedMods)
 	}
 
 	// Capture added/changed module content for pre-generating retract
 	// modules alongside the new modules. Reads from staging so the
 	// captured bytes match what's about to land in .live.
-	if changedMods := DetectChangedModules(res.Changed); len(changedMods) > 0 {
-		res.ChangedModuleContent = ReadChangedModuleContent(source, changedMods)
+	if changedMods := DetectChangedConfigcrates(res.Changed); len(changedMods) > 0 {
+		res.ChangedConfigcrateContent = ReadChangedConfigcrateContent(source, changedMods)
 	}
 
 	unlockLiveDir(opts.LiveDir)
@@ -643,20 +643,20 @@ func filterScaffoldingFiles(paths []string) []string {
 
 // urlRef is a URL found in a config file with context for error messages.
 type urlRef struct {
-	url      string
-	module   string
-	resource string
-	field    string
+	url         string
+	configcrate string
+	resource    string
+	field       string
 }
 
 // checkURLs extracts http/https URLs from the specified changed module files
 // and verifies they respond without 4xx/5xx errors.
-func checkURLs(sourceDir string, changedModulePaths []string, timeout time.Duration) error {
+func checkURLs(sourceDir string, changedConfigcratePaths []string, timeout time.Duration) error {
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
 
-	urls, err := extractURLsFromFiles(sourceDir, changedModulePaths)
+	urls, err := extractURLsFromFiles(sourceDir, changedConfigcratePaths)
 	if err != nil {
 		return fmt.Errorf("extracting URLs: %w", err)
 	}
@@ -689,7 +689,7 @@ func checkURLs(sourceDir string, changedModulePaths []string, timeout time.Durat
 	for _, r := range results {
 		if r.err != nil {
 			errs = append(errs, fmt.Sprintf("  %s/%s: %s %q: %v",
-				r.ref.module, r.ref.resource, r.ref.field, r.ref.url, r.err))
+				r.ref.configcrate, r.ref.resource, r.ref.field, r.ref.url, r.err))
 		}
 	}
 	if len(errs) > 0 {
@@ -727,7 +727,7 @@ func probeURL(client *http.Client, rawURL string) error {
 }
 
 // moduleFile is a minimal struct for parsing module YAML to extract URLs.
-type moduleFile struct {
+type configcrateFile struct {
 	Resources []struct {
 		Name  string         `yaml:"name"`
 		Type  string         `yaml:"type"`
@@ -754,7 +754,7 @@ func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error)
 			continue // file might not be a module; skip
 		}
 
-		var mf moduleFile
+		var mf configcrateFile
 		if err := yaml.Unmarshal(data, &mf); err != nil {
 			continue // structural errors caught by NewConfigStore
 		}
@@ -782,10 +782,10 @@ func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error)
 					continue
 				}
 				refs = append(refs, urlRef{
-					url:      urlStr,
-					module:   mf.Name,
-					resource: res.Name,
-					field:    field,
+					url:         urlStr,
+					configcrate: mf.Name,
+					resource:    res.Name,
+					field:       field,
 				})
 			}
 		}
@@ -1228,7 +1228,7 @@ var _ secrets.Provider = (*stubProvider)(nil)
 // compliance.vgo files under configcrates/ are directory-level compliance claim
 // declarations, not module definitions — they are validated by the config
 // loader instead and must be skipped here.
-func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
+func lintConfigcrates(baseDir string, relPaths []string) (map[string][]byte, error) {
 	overrides := make(map[string][]byte)
 	var lintErrors []string
 

@@ -220,7 +220,7 @@ func equalStrings(a, b []string) bool {
 	return true
 }
 
-func TestLoadModuleAndResolve(t *testing.T) {
+func TestLoadConfigcrateAndResolve(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
@@ -303,7 +303,7 @@ envoys:
 	}
 }
 
-func TestModuleDefaultVarsOverriddenByClient(t *testing.T) {
+func TestConfigcrateDefaultVarsOverriddenByClient(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
@@ -732,7 +732,7 @@ envoys:
 	}
 }
 
-func TestUnknownModuleError(t *testing.T) {
+func TestUnknownConfigcrateError(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
@@ -762,7 +762,7 @@ envoys:
 	}
 }
 
-func TestRoleReferencesUnknownModule(t *testing.T) {
+func TestRoleReferencesUnknownConfigcrate(t *testing.T) {
 	dir := setupDir(t)
 
 	writeRoles(t, dir, `
@@ -776,7 +776,7 @@ func TestRoleReferencesUnknownModule(t *testing.T) {
 	}
 }
 
-func TestDedupModules(t *testing.T) {
+func TestDedupConfigcrates(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "nginx.vgo"), `
@@ -1144,7 +1144,7 @@ func TestRenderVars(t *testing.T) {
 
 // --- Conditional Block Loader Integration Tests ---
 
-func TestLoadModuleConditionalBlockLoadsCorrectly(t *testing.T) {
+func TestLoadConfigcrateConditionalBlockLoadsCorrectly(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "debian-tools.vgo"), `
@@ -1195,7 +1195,7 @@ envoys:
 	}
 }
 
-func TestLoadModuleMixedPlainAndConditionalBlock(t *testing.T) {
+func TestLoadConfigcrateMixedPlainAndConditionalBlock(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "mixed.vgo"), `
@@ -1257,7 +1257,7 @@ envoys:
 	}
 }
 
-func TestLoadModuleConditionalBlockDependsOnAcrossBoundary(t *testing.T) {
+func TestLoadConfigcrateConditionalBlockDependsOnAcrossBoundary(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "cross-dep.vgo"), `
@@ -1306,7 +1306,7 @@ envoys:
 	}
 }
 
-func TestLoadModuleConditionalBlockWithResourceLevelConditionals(t *testing.T) {
+func TestLoadConfigcrateConditionalBlockWithResourceLevelConditionals(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "dual-cond.vgo"), `
@@ -1346,7 +1346,7 @@ envoys:
 	}
 }
 
-func TestLoadModuleConditionalBlockEmptyResourcesError(t *testing.T) {
+func TestLoadConfigcrateConditionalBlockEmptyResourcesError(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "bad-block.vgo"), `
@@ -1609,7 +1609,7 @@ envoys:
 	}
 }
 
-func TestConditionalRoleRefPreservesModuleWhen(t *testing.T) {
+func TestConditionalRoleRefPreservesConfigcrateWhen(t *testing.T) {
 	// When both the role ref AND the module ref have when: conditions,
 	// the module's own condition should take precedence.
 	dir := setupDir(t)
@@ -1656,7 +1656,7 @@ envoys:
 	}
 }
 
-func TestBackwardCompatPlainStringModulesStillWork(t *testing.T) {
+func TestBackwardCompatPlainStringConfigcratesStillWork(t *testing.T) {
 	// This test explicitly verifies that existing role/client YAML with plain
 	// string module references continues to load without any changes.
 	dir := setupDir(t)
@@ -1905,7 +1905,7 @@ envoys:
 	}
 }
 
-func TestDuplicateModulesKeysMerged(t *testing.T) {
+func TestDuplicateConfigcratesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
 	for _, name := range []string{"docker", "grafana", "envoy-exporter"} {
@@ -2208,7 +2208,7 @@ func TestEmptyEnvoysDir(t *testing.T) {
 	}
 }
 
-func TestNodeVarsOverrideModuleDefaults(t *testing.T) {
+func TestNodeVarsOverrideConfigcrateDefaults(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "webserver.vgo"), `
@@ -2831,7 +2831,7 @@ func setupInheritanceDir(t *testing.T) string {
 	return dir
 }
 
-func TestInheritance_BasicModules(t *testing.T) {
+func TestInheritance_BasicConfigcrates(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
@@ -2959,7 +2959,7 @@ envoys:
 	}
 }
 
-func TestInheritance_ExcludeModules(t *testing.T) {
+func TestInheritance_ExcludeConfigcrates(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "monitoring", "nginx"} {
@@ -3760,7 +3760,7 @@ envoys:
 	}
 
 	trace := store.Trace("web01")
-	filtered := trace.FilterByModule("nginx")
+	filtered := trace.FilterByConfigcrate("nginx")
 
 	// Compliance should only include nginx.
 	if len(filtered.ComplianceTags) != 1 || filtered.ComplianceTags[0].Configcrate != "nginx" {
@@ -3789,7 +3789,7 @@ envoys:
 // exists at load time, but the resolved plaintext is NOT stored in the
 // EnvoyConfig — the agent fetches the actual value via the
 // VigoAgent.ResolveSecrets RPC at apply time.
-func TestResolveModuleSecrets_EmbeddedRefs_EmitsPlaceholders(t *testing.T) {
+func TestResolveConfigcrateSecrets_EmbeddedRefs_EmitsPlaceholders(t *testing.T) {
 	dir := setupDir(t)
 
 	// container: resource with embedded secret in env; mirrors the
@@ -3842,7 +3842,7 @@ envoys:
 // `secret:` must NOT be parsed as a secret key. A real embedded reference in
 // the same content must still resolve, proving the fix doesn't disable inline
 // resolution.
-func TestResolveModuleSecrets_LiteralSecretColonInContent(t *testing.T) {
+func TestResolveConfigcrateSecrets_LiteralSecretColonInContent(t *testing.T) {
 	dir := setupDir(t)
 
 	// `content:` carries both the literal documentation text (must survive

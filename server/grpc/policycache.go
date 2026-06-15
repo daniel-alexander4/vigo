@@ -82,12 +82,12 @@ func buildBasePolicyBundle(cfg *config.EnvoyConfig, version uint64, streamEdit .
 // custom traits).
 func customizeStubs(base *pb.PolicyBundle, cachedHashes map[string]string) *pb.PolicyBundle {
 	bundle := &pb.PolicyBundle{
-		PolicyVersion:   base.PolicyVersion,
-		MatchedPattern:  base.MatchedPattern,
-		Environment:     base.Environment,
-		Roles:           base.Roles,
-		VarsJson:        base.VarsJson,
-		VarOrder:        base.VarOrder,
+		PolicyVersion:  base.PolicyVersion,
+		MatchedPattern: base.MatchedPattern,
+		Environment:    base.Environment,
+		Roles:          base.Roles,
+		VarsJson:       base.VarsJson,
+		VarOrder:       base.VarOrder,
 	}
 
 	if len(cachedHashes) == 0 {

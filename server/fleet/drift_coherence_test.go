@@ -137,8 +137,8 @@ func TestDriftCounterCoherence_RandomSequence(t *testing.T) {
 				fmt.Sprintf("run-%d", step),
 				"ok",
 				changedCount,
-				0,            // failedCount
-				5,            // moduleCount
+				0, // failedCount
+				5, // moduleCount
 				time.Now(),
 			)
 		case actionAdd:

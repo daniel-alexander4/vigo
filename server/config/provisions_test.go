@@ -79,7 +79,7 @@ func TestBuildComplianceIndex_UnknownProvisionNoop(t *testing.T) {
 // modules that both claim the same provision both appear in the
 // per-control owner list — the original "chrony vs ntp" drift cause
 // is gone by construction.
-func TestBuildComplianceIndex_TwoModulesSameProvision(t *testing.T) {
+func TestBuildComplianceIndex_TwoConfigcratesSameProvision(t *testing.T) {
 	defs := map[string]*ConfigcrateDefinition{
 		"chrony": {Name: "chrony", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},
 		"ntp":    {Name: "ntp", Compliance: ComplianceClaims{Provides: []string{"time-sync"}}},

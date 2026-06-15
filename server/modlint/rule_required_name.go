@@ -11,7 +11,7 @@ type requiredNameRule struct{}
 
 func (requiredNameRule) id() string { return "required-name" }
 
-func (requiredNameRule) apply(mod *module, opts Options) []Finding {
+func (requiredNameRule) apply(mod *configcrate, opts Options) []Finding {
 	if mod.Name != "" || opts.IsUsercrate {
 		return nil
 	}

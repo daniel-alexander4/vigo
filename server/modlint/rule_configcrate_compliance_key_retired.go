@@ -35,7 +35,7 @@ type moduleComplianceKeyRetiredRule struct{}
 
 func (moduleComplianceKeyRetiredRule) id() string { return "configcrate-compliance-key-retired" }
 
-func (moduleComplianceKeyRetiredRule) apply(mod *module, _ Options) []Finding {
+func (moduleComplianceKeyRetiredRule) apply(mod *configcrate, _ Options) []Finding {
 	if len(mod.ComplianceUnknownSubKeys) == 0 {
 		return nil
 	}

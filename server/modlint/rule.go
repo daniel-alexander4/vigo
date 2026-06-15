@@ -18,7 +18,7 @@ package modlint
 // refactor freely.
 type rule interface {
 	id() string
-	apply(mod *module, opts Options) []Finding
+	apply(mod *configcrate, opts Options) []Finding
 }
 
 // rules is the global registry, populated by per-rule init() functions.
@@ -33,7 +33,7 @@ func register(r rule) {
 
 // applyRules runs every registered rule against the parsed module and
 // aggregates findings. Order is registration order.
-func applyRules(mod *module, opts Options) []Finding {
+func applyRules(mod *configcrate, opts Options) []Finding {
 	var out []Finding
 	for _, r := range rules {
 		out = append(out, r.apply(mod, opts)...)

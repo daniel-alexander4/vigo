@@ -637,7 +637,7 @@ func (h *ConfigHandler) retractConfigcrate(ctx context.Context, mod retractConfi
 	result := retractResourceRunResult{Name: mod.Name}
 
 	// Step 1: Deterministic reversal.
-	draft, warnings, err := publish.GenerateRetractModule(mod.Name, []byte(mod.Content))
+	draft, warnings, err := publish.GenerateRetractConfigcrate(mod.Name, []byte(mod.Content))
 	if err != nil {
 		result.Warnings = append(result.Warnings, publish.RetractWarning{
 			Confidence: "low",
@@ -657,7 +657,7 @@ func (h *ConfigHandler) retractConfigcrate(ctx context.Context, mod retractConfi
 
 	// Step 3: Look up affected envoys.
 	if h.queries != nil {
-		rows, err := h.queries.EnvoysWithModule(ctx, mod.Name)
+		rows, err := h.queries.EnvoysWithConfigcrate(ctx, mod.Name)
 		if err != nil {
 			slog.Warn("retract: envoy lookup failed", "module", mod.Name, "error", err)
 		} else {

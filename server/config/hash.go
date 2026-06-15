@@ -18,7 +18,7 @@ import (
 //
 // This produces the same hash as grpc.hashPolicyConfigcrate for the same content,
 // allowing pre-computation at config load time instead of per-check-in.
-func HashModuleContent(mod Configcrate) string {
+func HashConfigcrateContent(mod Configcrate) string {
 	h := sha256.New()
 
 	// Module-level fields.

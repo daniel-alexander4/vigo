@@ -546,14 +546,14 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	}
 
 	// Serialize modules to JSON for plan storage.
-	modulesJSON, err := json.Marshal(cfg.Configcrates)
+	configcratesJSON, err := json.Marshal(cfg.Configcrates)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "marshaling configcrates: %v", err)
 	}
 
 	plan, err := s.queries.CreatePlan(ctx, db.CreatePlanParams{
 		EnvoyID:      envoyID,
-		Configcrates: string(modulesJSON),
+		Configcrates: string(configcratesJSON),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "creating plan: %v", err)

@@ -40,7 +40,7 @@ var passwordHashPrefixes = []string{
 	"$argon2",
 }
 
-func (passwordHashOrSecretRule) apply(mod *module, opts Options) []Finding {
+func (passwordHashOrSecretRule) apply(mod *configcrate, opts Options) []Finding {
 	if !opts.IsUsercrate {
 		return nil
 	}
@@ -109,7 +109,7 @@ var absentIgnoredAttrs = []string{
 	"puddle", "gitback", "curator", "poolq",
 }
 
-func (absentWithUnusedAttrsRule) apply(mod *module, opts Options) []Finding {
+func (absentWithUnusedAttrsRule) apply(mod *configcrate, opts Options) []Finding {
 	if !opts.IsUsercrate {
 		return nil
 	}
@@ -162,7 +162,7 @@ func (invalidUsernameRule) id() string { return "usercrate-invalid-username" }
 
 var validUsernamePattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]*\$?$`)
 
-func (invalidUsernameRule) apply(mod *module, opts Options) []Finding {
+func (invalidUsernameRule) apply(mod *configcrate, opts Options) []Finding {
 	if !opts.IsUsercrate {
 		return nil
 	}
@@ -234,7 +234,7 @@ var recognizedSSHKeyTypes = []string{
 	"sk-ecdsa-sha2-nistp256@openssh.com",
 }
 
-func (sshKeysMalformedRule) apply(mod *module, opts Options) []Finding {
+func (sshKeysMalformedRule) apply(mod *configcrate, opts Options) []Finding {
 	if !opts.IsUsercrate {
 		return nil
 	}

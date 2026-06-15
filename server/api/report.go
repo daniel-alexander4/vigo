@@ -447,15 +447,15 @@ func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string,
 //
 // Covered + Waived + Partial + Missing = len(findings).
 func partitionEnvoyFindings(findings []ControlFinding, coverage *config.StandardCoverage) (covered, waived, partial, missing int) {
-	coveredByModules := make(map[string]bool)
+	coveredByConfigcrates := make(map[string]bool)
 	if coverage != nil {
 		for _, cc := range coverage.CoveredControls {
-			coveredByModules[cc.ControlID] = true
+			coveredByConfigcrates[cc.ControlID] = true
 		}
 	}
 	for _, f := range findings {
 		switch {
-		case coveredByModules[f.ControlID]:
+		case coveredByConfigcrates[f.ControlID]:
 			covered++
 		case f.Status == "satisfied":
 			// Reached only via Connwaer trait-driven escalation today.
@@ -534,10 +534,10 @@ func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, s
 	if standardKey != "" {
 		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
 	}
-	coveredByModules := make(map[string][]string)
+	coveredByConfigcrates := make(map[string][]string)
 	if coverage != nil {
 		for _, cc := range coverage.CoveredControls {
-			coveredByModules[cc.ControlID] = cc.Configcrates
+			coveredByConfigcrates[cc.ControlID] = cc.Configcrates
 		}
 	}
 
@@ -550,9 +550,9 @@ func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, s
 			Evidence:  f.Evidence,
 		}
 		switch {
-		case len(coveredByModules[f.ControlID]) > 0:
+		case len(coveredByConfigcrates[f.ControlID]) > 0:
 			row.Status = "covered"
-			row.Configcrates = coveredByModules[f.ControlID]
+			row.Configcrates = coveredByConfigcrates[f.ControlID]
 		case f.Status == "satisfied":
 			// Reached only via Connwaer trait-driven escalation. Framework
 			// builders ship every catalog entry as not_satisfied; only a
@@ -569,7 +569,7 @@ func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, s
 			// apply. For enforced/attested-scope controls, point operators
 			// at the modules that would cover this control.
 			if standardKey != "" && f.Scope != ScopeDocumented {
-				row.RecommendedModules = h.configStore.RecommendModulesForControl(standardKey, f.ControlID)
+				row.RecommendedConfigcrates = h.configStore.RecommendConfigcratesForControl(standardKey, f.ControlID)
 			}
 		}
 		rows = append(rows, row)
@@ -779,11 +779,11 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		// Collect per-envoy module sets for per-control coverage calculation.
-		type envoyModules struct {
-			hostname string
-			modules  map[string]bool
+		type envoyConfigcrates struct {
+			hostname     string
+			configcrates map[string]bool
 		}
-		var activeEnvoys []envoyModules
+		var activeEnvoys []envoyConfigcrates
 
 		for i := range report.Fleet {
 			node := &report.Fleet[i]
@@ -805,7 +805,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 					}
 				}
 			}
-			activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: mods})
+			activeEnvoys = append(activeEnvoys, envoyConfigcrates{hostname: node.Hostname, configcrates: mods})
 		}
 
 		// Compute per-control fleet coverage. Match partitionEnvoyFindings:
@@ -845,14 +845,14 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 				// not_satisfied: count how many active envoys have a
 				// module tagged for this control. A control with no
 				// module tags stays at 0% — it's genuinely uncovered.
-				modulesForControl := controlIndex[cid]
-				if len(modulesForControl) == 0 {
+				configcratesForControl := controlIndex[cid]
+				if len(configcratesForControl) == 0 {
 					continue
 				}
 				covered := 0
 				for _, em := range activeEnvoys {
-					for _, mod := range modulesForControl {
-						if em.modules[mod] {
+					for _, mod := range configcratesForControl {
+						if em.configcrates[mod] {
 							covered++
 							break
 						}

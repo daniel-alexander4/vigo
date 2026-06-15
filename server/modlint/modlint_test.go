@@ -141,7 +141,7 @@ resources:
 	}
 }
 
-func TestLint_ValidModule(t *testing.T) {
+func TestLint_ValidConfigcrate(t *testing.T) {
 	input := `name: nginx
 resources:
   - name: install-nginx
@@ -749,7 +749,7 @@ resources:
 	}
 }
 
-func TestLint_ModuleComment(t *testing.T) {
+func TestLint_ConfigcrateComment(t *testing.T) {
 	input := `name: webserver
 resources:
   - name: pkg

@@ -71,7 +71,7 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 }
 
 // setupE2EConfig creates a temp config directory with the given modules and envoy entries.
-func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) string {
+func setupE2EConfig(t *testing.T, configcrates map[string]string, envoysYAML string) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "examples", "stacks")
 	for _, sub := range []string{"configcrates", "envoys", "roles"} {
@@ -79,7 +79,7 @@ func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) 
 			t.Fatal(err)
 		}
 	}
-	for name, content := range modules {
+	for name, content := range configcrates {
 		if err := os.WriteFile(filepath.Join(dir, "configcrates", name+".vgo"), []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +148,7 @@ func doCheckIn(t *testing.T, client pb.VigoAgentClient, envoyID string, priv ed2
 // a envoy registers, checks in, and receives the expected policy bundle
 // with the configured module.
 func TestE2E_RegisterCheckInFlow(t *testing.T) {
-	modules := map[string]string{
+	configcrates := map[string]string{
 		"nginx": `
 name: nginx
 resources:
@@ -163,7 +163,7 @@ envoys:
   - match: "*.test.example.com"
     configcrates: [nginx]
 `
-	configDir := setupE2EConfig(t, modules, envoys)
+	configDir := setupE2EConfig(t, configcrates, envoys)
 	addr, _, cleanup := startTestServerWithConfig(t, configDir)
 	defer cleanup()
 
@@ -254,7 +254,7 @@ envoys:
 // TestE2E_ConfigChangeVersionBump verifies that adding a module and reloading
 // config produces a bumped PolicyVersion and includes both modules.
 func TestE2E_ConfigChangeVersionBump(t *testing.T) {
-	modules := map[string]string{
+	configcrates := map[string]string{
 		"nginx": `
 name: nginx
 resources:
@@ -269,7 +269,7 @@ envoys:
   - match: "*.test.example.com"
     configcrates: [nginx]
 `
-	configDir := setupE2EConfig(t, modules, envoys)
+	configDir := setupE2EConfig(t, configcrates, envoys)
 	addr, configStore, cleanup := startTestServerWithConfig(t, configDir)
 	defer cleanup()
 
@@ -329,7 +329,7 @@ envoys:
 // prevents the no-change short-circuit, causing the server to deliver a
 // full PolicyBundle even when the agent's cached policy version matches.
 func TestE2E_ForcePushDelivery(t *testing.T) {
-	modules := map[string]string{
+	configcrates := map[string]string{
 		"nginx": `
 name: nginx
 resources:
@@ -344,7 +344,7 @@ envoys:
   - match: "*.test.example.com"
     configcrates: [nginx]
 `
-	configDir := setupE2EConfig(t, modules, envoys)
+	configDir := setupE2EConfig(t, configcrates, envoys)
 	addr, _, cleanup := startTestServerWithConfig(t, configDir)
 	defer cleanup()
 

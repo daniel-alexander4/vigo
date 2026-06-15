@@ -29,7 +29,7 @@ func sanitizeYAML(data []byte) []byte {
 // same tolerant node-based parsing as the config loader. This handles cases
 // where resources have duplicate YAML keys (e.g., "name" as both resource
 // identifier and type-specific attribute) by manually walking the YAML nodes.
-func ParseModuleFile(data []byte) (*ConfigcrateDefinition, error) {
+func ParseConfigcrateFile(data []byte) (*ConfigcrateDefinition, error) {
 	data = sanitizeYAML(data)
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {

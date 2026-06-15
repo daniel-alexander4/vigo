@@ -10,7 +10,7 @@ import (
 )
 
 // UnusedModule describes a module defined but never referenced.
-type UnusedModule struct {
+type UnusedConfigcrate struct {
 	Name       string `json:"name"`
 	SourceFile string `json:"source_file"` // stacks-relative path, e.g. "configcrates/system/cleanup.vgo"
 }
@@ -38,9 +38,9 @@ type UnusedHostcrate struct {
 
 // UnusedResult holds all unused defs and hostcrates.
 type UnusedResult struct {
-	UnusedModules    []UnusedModule    `json:"unused_modules"`
-	UnusedUsercrates []UnusedUsercrate `json:"unused_usercrates"`
-	UnusedTemplates  []UnusedTemplate  `json:"unused_templates"`
+	UnusedConfigcrates []UnusedConfigcrate `json:"unused_modules"`
+	UnusedUsercrates   []UnusedUsercrate   `json:"unused_usercrates"`
+	UnusedTemplates    []UnusedTemplate    `json:"unused_templates"`
 
 	UnusedHostcrates []UnusedHostcrate `json:"unused_hostcrates"`
 }
@@ -62,36 +62,36 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 	// Split definitions by kind. Configcrates and usercrates share cs.moduleDefs
 	// but each kind has its own ref set; reporting them separately matches
 	// the carrier-field shape (modules: vs usercrates:).
-	definedModules := make(map[string]bool)
+	definedConfigcrates := make(map[string]bool)
 	definedUsercrates := make(map[string]bool)
-	for name, def := range cs.moduleDefs {
+	for name, def := range cs.configcrateDefs {
 		if def.Kind == ConfigcrateKindUsercrate {
 			definedUsercrates[name] = true
 		} else {
-			definedModules[name] = true
+			definedConfigcrates[name] = true
 		}
 	}
 
-	refModules := make(map[string]bool)
+	refConfigcrates := make(map[string]bool)
 	refUsercrates := make(map[string]bool)
 
 	// From roles: direct, case branches, and 1-level includes.
 	for _, role := range cs.roleDefs {
 		for _, r := range role.Configcrates {
-			refModules[r.Name] = true
+			refConfigcrates[r.Name] = true
 		}
 		for _, r := range role.Usercrates {
 			refUsercrates[r.Name] = true
 		}
 		for _, c := range role.Case {
 			for _, r := range c.Configcrates {
-				refModules[r.Name] = true
+				refConfigcrates[r.Name] = true
 			}
 		}
 		for _, incName := range role.Includes {
 			if inc, ok := cs.roleDefs[incName]; ok {
 				for _, r := range inc.Configcrates {
-					refModules[r.Name] = true
+					refConfigcrates[r.Name] = true
 				}
 				for _, r := range inc.Usercrates {
 					refUsercrates[r.Name] = true
@@ -103,7 +103,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 	// From envoy entries (post-inheritance — includes common.vgo-inherited refs).
 	for _, entry := range cs.envoyEntries {
 		for _, r := range entry.Configcrates {
-			refModules[r.Name] = true
+			refConfigcrates[r.Name] = true
 		}
 		for _, r := range entry.Usercrates {
 			refUsercrates[r.Name] = true
@@ -113,7 +113,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 	// From common.vgo files.
 	for _, cc := range cs.commonConfigs {
 		for _, r := range cc.Configcrates {
-			refModules[r.Name] = true
+			refConfigcrates[r.Name] = true
 		}
 		for _, r := range cc.Usercrates {
 			refUsercrates[r.Name] = true
@@ -124,7 +124,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 	for _, envMap := range cs.perEnvOverrides {
 		for _, block := range envMap {
 			for _, r := range block.Configcrates {
-				refModules[r.Name] = true
+				refConfigcrates[r.Name] = true
 			}
 			for _, r := range block.Usercrates {
 				refUsercrates[r.Name] = true
@@ -132,23 +132,23 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 		}
 	}
 
-	for name := range definedModules {
-		if !refModules[name] {
-			result.UnusedModules = append(result.UnusedModules, UnusedModule{
+	for name := range definedConfigcrates {
+		if !refConfigcrates[name] {
+			result.UnusedConfigcrates = append(result.UnusedConfigcrates, UnusedConfigcrate{
 				Name:       name,
-				SourceFile: cs.moduleDefs[name].SourceFile,
+				SourceFile: cs.configcrateDefs[name].SourceFile,
 			})
 		}
 	}
-	sort.Slice(result.UnusedModules, func(i, j int) bool {
-		return result.UnusedModules[i].Name < result.UnusedModules[j].Name
+	sort.Slice(result.UnusedConfigcrates, func(i, j int) bool {
+		return result.UnusedConfigcrates[i].Name < result.UnusedConfigcrates[j].Name
 	})
 
 	for name := range definedUsercrates {
 		if !refUsercrates[name] {
 			result.UnusedUsercrates = append(result.UnusedUsercrates, UnusedUsercrate{
 				Name:       name,
-				SourceFile: cs.moduleDefs[name].SourceFile,
+				SourceFile: cs.configcrateDefs[name].SourceFile,
 			})
 		}
 	}
@@ -229,7 +229,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 // declared path off disk during validation).
 func (cs *ConfigStore) unusedTemplates() []UnusedTemplate {
 	referenced := make(map[string]bool)
-	for _, def := range cs.moduleDefs {
+	for _, def := range cs.configcrateDefs {
 		for _, src := range def.TemplateSources {
 			referenced[src] = true
 		}

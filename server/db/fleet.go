@@ -143,7 +143,7 @@ type ConfigcrateRunChange struct {
 // is true iff at least one resource on that module in that run reported
 // `changed: true`. Joins so we can pull started_at without an extra
 // lookup; SQLite's MAX over an INTEGER column returns 0 or 1.
-var moduleChangesQuery = fmt.Sprintf(`
+var configcrateChangesQuery = fmt.Sprintf(`
 SELECT rr.configcrate_name, rr.run_id, r.started_at, MAX(rr.changed) AS any_changed
 FROM run_results rr
 JOIN runs r ON r.id = rr.run_id
@@ -163,8 +163,8 @@ ORDER BY rr.configcrate_name, r.started_at DESC
 // run whose `startedAt` is supplied (inclusive). Rows are ordered so
 // each module's runs appear newest-first — directly feedable to
 // convergence.ComputeDrift without another sort.
-func (q *Queries) ListEnvoyModuleChangesRecent(ctx context.Context, envoyID string, startedAt time.Time) ([]ConfigcrateRunChange, error) {
-	rows, err := q.db.QueryContext(ctx, moduleChangesQuery, envoyID, startedAt)
+func (q *Queries) ListEnvoyConfigcrateChangesRecent(ctx context.Context, envoyID string, startedAt time.Time) ([]ConfigcrateRunChange, error) {
+	rows, err := q.db.QueryContext(ctx, configcrateChangesQuery, envoyID, startedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -195,12 +195,12 @@ type EnvoyPagedRow struct {
 	LastSeen     sql.NullTime
 	AgentVersion string
 	// Latest run (nullable).
-	LastRunID      sql.NullString
-	LastRunAt      sql.NullTime
-	LastRunStatus  sql.NullString
-	LastRunChanged sql.NullInt64
-	LastRunFailed  sql.NullInt64
-	LastRunModules sql.NullInt64
+	LastRunID            sql.NullString
+	LastRunAt            sql.NullTime
+	LastRunStatus        sql.NullString
+	LastRunChanged       sql.NullInt64
+	LastRunFailed        sql.NullInt64
+	LastRunResourceCount sql.NullInt64
 }
 
 const listEnvoysPagedWithRun = `
@@ -232,7 +232,7 @@ func (q *Queries) ListEnvoysPagedWithRun(ctx context.Context, afterHostname, sea
 	for rows.Next() {
 		var r EnvoyPagedRow
 		if err := rows.Scan(&r.ID, &r.Hostname, &r.IPAddress, &r.EnrolledAt, &r.LastSeen, &r.AgentVersion,
-			&r.LastRunID, &r.LastRunAt, &r.LastRunStatus, &r.LastRunChanged, &r.LastRunFailed, &r.LastRunModules); err != nil {
+			&r.LastRunID, &r.LastRunAt, &r.LastRunStatus, &r.LastRunChanged, &r.LastRunFailed, &r.LastRunResourceCount); err != nil {
 			return nil, err
 		}
 		result = append(result, r)

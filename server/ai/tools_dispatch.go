@@ -67,7 +67,7 @@ func (d *toolDeps) dispatchTool(ctx context.Context, name, argsJSON string) (str
 	case "get_configcrate_definition":
 		return d.getConfigcrateDefinition(args)
 	case "list_configcrates":
-		return d.listModules()
+		return d.listConfigcrates()
 	case "list_roles":
 		return d.listRoles()
 	case "dry_run":
@@ -463,10 +463,10 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 		return "", fmt.Errorf("invalid configcrate name %q", name)
 	}
 
-	modulesDir := filepath.Join(d.configStore.Dir(), "configcrates")
+	configcratesDir := filepath.Join(d.configStore.Dir(), "configcrates")
 	var found string
 	for _, ext := range []string{".vgo", ".yaml", ".yml"} {
-		candidate := filepath.Join(modulesDir, name+ext)
+		candidate := filepath.Join(configcratesDir, name+ext)
 		if _, err := os.Stat(candidate); err == nil {
 			found = candidate
 			break
@@ -478,7 +478,7 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 		// WalkDir errors only on an unreadable modulesDir; the callback
 		// never returns one. A bad root leaves found "" → caller reports
 		// not-found.
-		_ = filepath.WalkDir(modulesDir, func(path string, entry os.DirEntry, err error) error {
+		_ = filepath.WalkDir(configcratesDir, func(path string, entry os.DirEntry, err error) error {
 			if err != nil || entry.IsDir() {
 				return nil
 			}
@@ -502,7 +502,7 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 	return string(data), nil
 }
 
-func (d *toolDeps) listModules() (string, error) {
+func (d *toolDeps) listConfigcrates() (string, error) {
 	if d.configStore == nil {
 		return marshalResult(map[string]any{"count": 0, "configcrates": []string{}})
 	}
@@ -542,15 +542,15 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 		})
 	}
 
-	type moduleInfo struct {
+	type configcrateInfo struct {
 		Name      string   `json:"name"`
 		Resources int      `json:"resources"`
 		DependsOn []string `json:"depends_on,omitempty"`
 	}
 
-	modules := make([]moduleInfo, 0, len(cfg.Configcrates))
+	configcrates := make([]configcrateInfo, 0, len(cfg.Configcrates))
 	for _, m := range cfg.Configcrates {
-		modules = append(modules, moduleInfo{
+		configcrates = append(configcrates, configcrateInfo{
 			Name:      m.Name,
 			Resources: len(m.Resources),
 			DependsOn: m.DependsOn,
@@ -560,7 +560,7 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 	return marshalResult(map[string]any{
 		"hostname":        hostname,
 		"environment":     cfg.Environment,
-		"configcrates":    modules,
+		"configcrates":    configcrates,
 		"total_resources": countResources(cfg),
 	})
 }

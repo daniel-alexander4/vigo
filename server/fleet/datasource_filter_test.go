@@ -68,7 +68,7 @@ func TestMatchesEnvoyFilter_Arch(t *testing.T) {
 	assert.False(t, matchesEnvoyFilter(row, "", "", "", nil, nil, nil, nil, nil, splitCommaLower("amd64"), nil, nil))
 }
 
-func TestMatchesEnvoyFilter_Module(t *testing.T) {
+func TestMatchesEnvoyFilter_Configcrate(t *testing.T) {
 	row := ui.EnvoyRow{Hostname: "x", Configcrates: []string{"nginx-hardened", "rsyslog"}}
 	assert.True(t, matchesEnvoyFilter(row, "", "", "", nil, nil, nil, nil, nil, nil, splitCommaLower("nginx"), nil))
 	assert.True(t, matchesEnvoyFilter(row, "", "", "", nil, nil, nil, nil, nil, nil, splitCommaLower("apache,sys"), nil))

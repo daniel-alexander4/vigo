@@ -213,9 +213,9 @@ func TestResolveFleetLookup_Empty(t *testing.T) {
 func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
 	cs := &ConfigStore{
 		index:           buildPatternIndex(nil),
-		rawModules:      make(map[string]*ConfigcrateDefinition),
+		rawConfigcrates: make(map[string]*ConfigcrateDefinition),
 		roleDefs:        make(map[string]*RoleDefinition),
-		moduleDefs:      make(map[string]*ConfigcrateDefinition),
+		configcrateDefs: make(map[string]*ConfigcrateDefinition),
 		complianceIndex: make(map[string]map[string][]string),
 		commonConfigs:   make(map[string]*CommonConfig),
 		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),

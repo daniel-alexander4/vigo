@@ -69,7 +69,7 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if hasModule(cfg.Configcrates, "admin") {
+	if hasConfigcrate(cfg.Configcrates, "admin") {
 		t.Errorf("usercrate admin should NOT auto-apply; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
@@ -93,7 +93,7 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Configcrates, "admin") {
+	if !hasConfigcrate(cfg.Configcrates, "admin") {
 		t.Errorf("usercrate admin should be included via match-block usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
@@ -123,7 +123,7 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config for a01")
 	}
-	if !hasModule(cfg.Configcrates, "admin") {
+	if !hasConfigcrate(cfg.Configcrates, "admin") {
 		t.Errorf("usercrate admin should be inherited via common.vgo usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
@@ -152,7 +152,7 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Configcrates, "admin") {
+	if !hasConfigcrate(cfg.Configcrates, "admin") {
 		t.Errorf("usercrate admin should be added by environments.vgo usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
@@ -181,14 +181,14 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Configcrates, "admin") {
+	if !hasConfigcrate(cfg.Configcrates, "admin") {
 		t.Errorf("usercrate admin should be included via role usercrates:; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
 // --- Cross-kind rejection (2 tests) ---
 
-func TestUsercrate_RejectsModulesRefToUsercrate(t *testing.T) {
+func TestUsercrate_RejectsConfigcratesRefToUsercrate(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
 
@@ -209,7 +209,7 @@ envoys:
 	}
 }
 
-func TestUsercrate_RejectsUsercratesRefToModule(t *testing.T) {
+func TestUsercrate_RejectsUsercratesRefToConfigcrate(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeFile(t, filepath.Join(dir, "configcrates", "sshd.vgo"), `
 name: sshd
@@ -302,7 +302,7 @@ envoys:
 		t.Fatalf("usercrate with user+file+exec should load; got: %v", err)
 	}
 	cfg := cs.Get("plex")
-	if cfg == nil || !hasModule(cfg.Configcrates, "dan") {
+	if cfg == nil || !hasConfigcrate(cfg.Configcrates, "dan") {
 		t.Errorf("usercrate dan should apply; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
@@ -351,12 +351,12 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Configcrates, "alice") {
+	if !hasConfigcrate(cfg.Configcrates, "alice") {
 		t.Errorf("usercrate with defaulted name `alice` should resolve when included; modules = %v", moduleNames(cfg.Configcrates))
 	}
 }
 
-func TestUsercrate_NameCollisionWithModule(t *testing.T) {
+func TestUsercrate_NameCollisionWithConfigcrate(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	// Both a regular module and a usercrate named "dan" — must fail to
 	// load with a clear error message.
@@ -433,7 +433,7 @@ envoys:
 
 // --- helpers ---
 
-func hasModule(mods []Configcrate, name string) bool {
+func hasConfigcrate(mods []Configcrate, name string) bool {
 	for _, m := range mods {
 		if m.Name == name {
 			return true

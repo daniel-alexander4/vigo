@@ -93,9 +93,9 @@ func TestConfig_ReloadConfig_TriggersComplianceSnapshot(t *testing.T) {
 
 	handler := NewConfigHandler(queries, configStore, fleet.NewFleetIndex(), &publish.State{}, "", "")
 	var (
-		mu     sync.Mutex
-		fired  int
-		done   = make(chan struct{}, 4)
+		mu    sync.Mutex
+		fired int
+		done  = make(chan struct{}, 4)
 	)
 	handler.SetComplianceSnapshotter(func(ctx context.Context) {
 		mu.Lock()

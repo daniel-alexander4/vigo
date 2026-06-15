@@ -270,14 +270,14 @@ func checkConfigDir(dir string) preStartCheck {
 }
 
 func checkConfigValidation(dir string) preStartCheck {
-	modulesDir := filepath.Join(dir, "stacks", "configcrates")
-	if _, err := os.Stat(modulesDir); err != nil {
+	configcratesDir := filepath.Join(dir, "stacks", "configcrates")
+	if _, err := os.Stat(configcratesDir); err != nil {
 		return preStartCheck{"config_validation", "skip", "configcrates dir not found"}
 	}
 
-	var totalModules, totalErrors, totalWarnings int
+	var totalConfigcrates, totalErrors, totalWarnings int
 
-	err := filepath.WalkDir(modulesDir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(configcratesDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -294,12 +294,12 @@ func checkConfigValidation(dir string) preStartCheck {
 			return nil // skip unreadable files
 		}
 
-		def, err := config.ParseModuleFile(data)
+		def, err := config.ParseConfigcrateFile(data)
 		if err != nil {
 			totalErrors++
 			return nil
 		}
-		totalModules++
+		totalConfigcrates++
 
 		mod := validate.Configcrate{Name: def.Name}
 		for _, r := range def.Resources {
@@ -328,7 +328,7 @@ func checkConfigValidation(dir string) preStartCheck {
 		return preStartCheck{"config_validation", "fail", err.Error()}
 	}
 
-	msg := fmt.Sprintf("%d configcrates", totalModules)
+	msg := fmt.Sprintf("%d configcrates", totalConfigcrates)
 	if totalErrors > 0 {
 		msg += fmt.Sprintf(", %d errors", totalErrors)
 	}

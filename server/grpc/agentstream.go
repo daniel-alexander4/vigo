@@ -591,10 +591,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// traits). Configs with those fall through to the full bundle path
 	// where the root is recomputed.
 	agentFingerprint := req.GetStateFingerprint()
-	hasModuleWhens := config.HasModuleWhens(cfg)
+	hasConfigcrateWhens := config.HasConfigcrateWhens(cfg)
 	if agentFingerprint != "" && cfg.MerkleRoot != "" &&
 		agentFingerprint == cfg.MerkleRoot &&
-		!hasModuleWhens &&
+		!hasConfigcrateWhens &&
 		!forcePush && !hasPending {
 		s.metrics.CheckinsTotal.WithLabelValues("no_change_merkle").Inc()
 

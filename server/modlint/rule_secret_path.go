@@ -35,7 +35,7 @@ type secretPathRule struct{}
 
 func (secretPathRule) id() string { return "secret-path" }
 
-func (secretPathRule) apply(mod *module, opts Options) []Finding {
+func (secretPathRule) apply(mod *configcrate, opts Options) []Finding {
 	if opts.CommunityUpload {
 		return nil
 	}

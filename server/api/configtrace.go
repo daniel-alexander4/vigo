@@ -46,15 +46,15 @@ func (h *ConfigTraceHandler) HandleTree(w http.ResponseWriter, r *http.Request) 
 // HandleSearch finds envoy entries matching the given criteria.
 func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("match")
-	module := r.URL.Query().Get("configcrate")
+	configcrate := r.URL.Query().Get("configcrate")
 	varName := r.URL.Query().Get("var")
 
-	if query == "" && module == "" && varName == "" {
+	if query == "" && configcrate == "" && varName == "" {
 		writeError(w, http.StatusBadRequest, "at least one of ?match=, ?configcrate=, or ?var= is required")
 		return
 	}
 
-	result := h.configStore.Search(query, module, varName)
+	result := h.configStore.Search(query, configcrate, varName)
 	writeJSON(w, r, http.StatusOK, result)
 }
 
@@ -77,20 +77,20 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	hostname := q.Get("hostname")
-	module := q.Get("configcrate")
+	configcrate := q.Get("configcrate")
 	usercrate := q.Get("usercrate")
 
 	if hostname == "" {
 		// Inverse mode — module XOR usercrate.
-		if module == "" && usercrate == "" {
+		if configcrate == "" && usercrate == "" {
 			writeError(w, http.StatusBadRequest, "specify one of ?hostname=, ?configcrate=, or ?usercrate=")
 			return
 		}
-		if module != "" && usercrate != "" {
+		if configcrate != "" && usercrate != "" {
 			writeError(w, http.StatusBadRequest, "?configcrate= and ?usercrate= are mutually exclusive")
 			return
 		}
-		subject, value := "configcrate", module
+		subject, value := "configcrate", configcrate
 		if usercrate != "" {
 			subject, value = "usercrate", usercrate
 		}
@@ -113,8 +113,8 @@ func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request)
 
 	// Forward mode.
 	trace := h.configStore.Trace(hostname)
-	if module != "" {
-		trace = trace.FilterByModule(module)
+	if configcrate != "" {
+		trace = trace.FilterByConfigcrate(configcrate)
 	}
 
 	writeJSON(w, r, http.StatusOK, trace)

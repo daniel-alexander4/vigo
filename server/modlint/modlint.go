@@ -220,7 +220,7 @@ func (r *Result) warnf(line int, ruleID, format string, args ...any) {
 // (1-indexed). Both are zero before parse() runs. Used by rules that
 // emit module-level findings so the operator gets a "module foo.vgo:1:1"
 // style pointer rather than an unanchored message.
-type module struct {
+type configcrate struct {
 	Name      string
 	DependsOn []string
 	Before    []string
@@ -511,7 +511,7 @@ func fixUnquotedSpecials(text string, r *Result) string {
 
 // --- Step 2: Parse ---
 
-func parse(data []byte) (*module, error) {
+func parse(data []byte) (*configcrate, error) {
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
 		return nil, err
@@ -525,7 +525,7 @@ func parse(data []byte) (*module, error) {
 		return nil, fmt.Errorf("expected mapping at root, got %v", root.Kind)
 	}
 
-	mod := &module{
+	mod := &configcrate{
 		Vars:   make(map[string]any),
 		Line:   root.Line,
 		Column: root.Column,
@@ -717,7 +717,7 @@ func extractKeyOrder(node *yaml.Node) []string {
 // matter of dropping in a new rule_*.go that calls register() in init().
 
 // toValidateModule converts a modlint module to a validate.Configcrate.
-func toValidateModule(mod *module) vigovalidate.Configcrate {
+func toValidateConfigcrate(mod *configcrate) vigovalidate.Configcrate {
 	vm := vigovalidate.Configcrate{Name: mod.Name}
 	for _, res := range mod.Resources {
 		caseExpr, caseMatch := extractCaseMatch(res.Attrs)
@@ -760,7 +760,7 @@ func extractCaseMatch(attrs map[string]any) (string, map[string]map[string]any) 
 // --- Step 4: Render ---
 
 // render produces clean, normalized, auto-commented YAML.
-func render(mod *module, opts Options, r *Result) string {
+func render(mod *configcrate, opts Options, r *Result) string {
 	var b strings.Builder
 
 	// GPL-3.0 header for community uploads.
@@ -777,7 +777,7 @@ func render(mod *module, opts Options, r *Result) string {
 
 	// Module-level block comment (suppressed for the stripped .live form).
 	if !opts.StripComments {
-		b.WriteString(fmt.Sprintf("#~ %s\n", generateModuleComment(mod)))
+		b.WriteString(fmt.Sprintf("#~ %s\n", generateConfigcrateComment(mod)))
 	}
 	if mod.Name != "" {
 		b.WriteString(fmt.Sprintf("name: %s\n", mod.Name))
@@ -1081,7 +1081,7 @@ func writeAttrNode(b *strings.Builder, key string, node *yaml.Node, indent int) 
 // --- Comment generation ---
 
 // generateModuleComment creates a block-level #~ comment describing the module.
-func generateModuleComment(mod *module) string {
+func generateConfigcrateComment(mod *configcrate) string {
 	if len(mod.Resources) == 0 {
 		return mod.Name
 	}
