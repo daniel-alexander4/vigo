@@ -74,6 +74,7 @@ type Engine struct {
 	workflows  map[string]*WorkflowDef
 	mu         sync.RWMutex
 	abortFlags sync.Map // workflowRunID → struct{}
+	liveRuns   sync.Map // workflowRunID → struct{} — runs currently executing
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -264,6 +265,10 @@ func (e *Engine) RunWorkflow(ctx context.Context, name, operator string) (string
 		return "", fmt.Errorf("creating workflow run: %w", err)
 	}
 
+	// Mark the run live before the ID escapes to the caller, so an Abort
+	// that arrives between this return and the goroutine being scheduled is
+	// not dropped. executeWorkflow clears it on completion.
+	e.liveRuns.Store(run.ID, struct{}{})
 	e.wg.Add(1)
 	go func() {
 		defer e.wg.Done()
@@ -273,7 +278,14 @@ func (e *Engine) RunWorkflow(ctx context.Context, name, operator string) (string
 }
 
 // Abort signals a running workflow to stop before the next step.
+// Abort signals a currently-executing workflow run to stop at its next step.
+// It is a no-op for a run that is not live (already finished, or unknown) — the
+// abort flag only matters to a running executeWorkflow loop, and storing one
+// for a dead run would leak the key permanently (nothing would delete it).
 func (e *Engine) Abort(workflowRunID string) {
+	if _, live := e.liveRuns.Load(workflowRunID); !live {
+		return
+	}
 	e.abortFlags.Store(workflowRunID, struct{}{})
 }
 
@@ -291,6 +303,7 @@ func (e *Engine) isAborted(workflowRunID string) bool {
 // The top-of-loop ctx.Err() check exits before starting a new step.
 func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 	ctx := e.ctx
+	defer e.liveRuns.Delete(runID)
 	defer e.abortFlags.Delete(runID)
 
 	// currentIdx is the loop cursor, hoisted so the panic recovery below

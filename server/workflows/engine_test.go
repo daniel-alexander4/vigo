@@ -149,17 +149,25 @@ func TestEngine_AbortFlag(t *testing.T) {
 	engine := NewEngine(nil, nil, nil)
 	t.Cleanup(engine.Close)
 
-	if engine.isAborted("run-1") {
-		t.Error("should not be aborted initially")
+	// Abort on a non-live run (finished or unknown) is a no-op and must not
+	// leak an abortFlags entry — nothing would ever delete it.
+	engine.Abort("ghost")
+	if engine.isAborted("ghost") {
+		t.Error("Abort on a non-live run must not set the flag")
+	}
+	if _, leaked := engine.abortFlags.Load("ghost"); leaked {
+		t.Error("Abort on a non-live run leaked an abortFlags entry")
 	}
 
+	// A live run can be aborted.
+	engine.liveRuns.Store("run-1", struct{}{})
 	engine.Abort("run-1")
-
 	if !engine.isAborted("run-1") {
-		t.Error("should be aborted after Abort()")
+		t.Error("should be aborted after Abort() on a live run")
 	}
 
-	// Simulate cleanup.
+	// Completion clears both flags.
+	engine.liveRuns.Delete("run-1")
 	engine.abortFlags.Delete("run-1")
 	if engine.isAborted("run-1") {
 		t.Error("should not be aborted after cleanup")
