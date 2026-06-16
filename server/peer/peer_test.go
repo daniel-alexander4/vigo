@@ -13,7 +13,9 @@ import (
 	"testing"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // ---------------------------------------------------------------------------
@@ -439,17 +441,40 @@ func TestServiceStatus(t *testing.T) {
 func TestServiceDemote(t *testing.T) {
 	svc := NewService("/srv/vigo", "primary", nil, nil)
 
-	svc.Demote(context.Background(), "new-primary.example.com:1530")
+	var pushing bool
+	var hookCalled bool
+	svc.SetRoleChangeHook(func(primary bool) {
+		hookCalled = true
+		pushing = primary
+	})
+
+	// In-process operator call (no gRPC peer) is exempt from auth.
+	if _, err := svc.Demote(context.Background(), &pb.PeerDemoteRequest{}); err != nil {
+		t.Fatalf("Demote returned error: %v", err)
+	}
 
 	if role := svc.Role(); role != "peer" {
 		t.Errorf("role = %q, want %q", role, "peer")
 	}
+	if !hookCalled {
+		t.Error("role-change hook was not called")
+	}
+	if pushing {
+		t.Error("hook signalled primary=true on demote, want false (stop pushing)")
+	}
+}
 
-	svc.mu.RLock()
-	addr := svc.primaryAddr
-	svc.mu.RUnlock()
-	if addr != "new-primary.example.com:1530" {
-		t.Errorf("primaryAddr = %q, want %q", addr, "new-primary.example.com:1530")
+// TestServiceDemoteNetworkUnsignedRejected: a Demote arriving over the network
+// without a control-plane signature is rejected, exactly like Promote/Status.
+func TestServiceDemoteNetworkUnsignedRejected(t *testing.T) {
+	svc := dummySigner(t) // has a signing identity → network auth is operable
+	_, err := svc.Demote(networkCtx(t, nil, ""), &pb.PeerDemoteRequest{})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("want Unauthenticated, got %v", err)
+	}
+	if role := svc.Role(); role != "peer" {
+		// dummySigner starts as "peer"; a rejected Demote must not change role.
+		t.Errorf("role changed on rejected Demote: %q", role)
 	}
 }
 

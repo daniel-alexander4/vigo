@@ -88,24 +88,57 @@ func (s *Server) startLicenseEnforcement(ctx context.Context) {
 	daemon.SafeGo("license-enforcer", func() { s.enforcer.Run(ctx) })
 
 	// Peer replication: gRPC registration migrated into NewServer. The
-	// primary-side push goroutine lives here because it depends on the
-	// lifecycle ctx.
+	// primary-side push loop is managed by setPrimaryPushing, which captures
+	// the lifecycle ctx here so a runtime Promote/Demote can start or stop it
+	// without a restart.
 	if s.peerService != nil {
 		peerRole := s.cfg.Peers.Role
 		if peerRole == "" {
 			peerRole = "primary"
 		}
-		if peerRole == "primary" {
-			primary := peer.NewPrimary(s.serverRoot, s.cfg.Peers.Servers, s.peerTLS, s.peerSigner())
-			s.peerPrimary = primary
-			daemon.SafeGo("peer-primary", func() {
-				if err := primary.Start(ctx); err != nil && ctx.Err() == nil {
-					slog.Error("peer primary error", "error", err)
-				}
-			})
-		}
+		s.peerPushMu.Lock()
+		s.peerPushCtx = ctx
+		s.peerPushMu.Unlock()
+		s.peerService.SetRoleChangeHook(s.setPrimaryPushing)
+		s.setPrimaryPushing(peerRole == "primary")
 	}
 
+}
+
+// setPrimaryPushing starts or stops the outbound peer.Primary push loop to
+// match the node's current role: on (Promote / primary at boot) constructs and
+// starts the loop; off (Demote) stops it. Idempotent and safe under concurrent
+// transitions and shutdown. A no-op when no peers are configured or before the
+// lifecycle ctx is captured. The Stop drains via the captured ctx, so it
+// returns promptly and does not stall the Demote RPC that triggers it.
+func (s *Server) setPrimaryPushing(on bool) {
+	if s.peerService == nil {
+		return
+	}
+	s.peerPushMu.Lock()
+	defer s.peerPushMu.Unlock()
+
+	if on {
+		if s.peerPrimary != nil || s.peerPushCtx == nil {
+			return // already pushing, or lifecycle not started yet
+		}
+		ctx := s.peerPushCtx
+		primary := peer.NewPrimary(s.serverRoot, s.cfg.Peers.Servers, s.peerTLS, s.peerSigner())
+		s.peerPrimary = primary
+		daemon.SafeGo("peer-primary", func() {
+			if err := primary.Start(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("peer primary error", "error", err)
+			}
+		})
+		return
+	}
+
+	if s.peerPrimary == nil {
+		return
+	}
+	primary := s.peerPrimary
+	s.peerPrimary = nil
+	primary.Stop()
 }
 
 // startAsyncFlushers starts the staggered SQLite write batchers

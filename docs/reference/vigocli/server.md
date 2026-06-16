@@ -30,7 +30,9 @@ vigocli server server.yaml list ai
 
 ### promote
 
-Promote a peer server to primary role.
+Promote a peer server to primary role. Takes effect at runtime, no restart: the
+promoted server starts replicating to its peers immediately and, if the
+superseded primary is reachable, signals it to step down to peer role.
 
 ```bash
 # Promote the server at the configured --server address:

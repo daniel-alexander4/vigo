@@ -61,6 +61,20 @@ type Service struct {
 	// pubkeys an inbound network call is checked against.
 	signer      credentials.PerRPCCredentials
 	peerPubkeys map[string]struct{}
+
+	// onRoleChange notifies the embedding server of a runtime role transition
+	// so it can start (primary) or stop (peer) the outbound push loop. nil in
+	// tests and until SetRoleChangeHook is called.
+	onRoleChange func(primary bool)
+}
+
+// SetRoleChangeHook registers a callback invoked after a runtime role
+// transition (Promote → true, Demote → false) so the server can start or stop
+// the outbound peer.Primary push loop to match the new role.
+func (s *Service) SetRoleChangeHook(fn func(primary bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onRoleChange = fn
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
@@ -290,7 +304,7 @@ func (s *Service) Promote(ctx context.Context, _ *pb.PeerPromoteRequest) (*pb.Pe
 				"addr", addr,
 				"remote_version", remoteStatus.ConfigVersion,
 				"local_version", localVersion)
-			if err := demotePeer(ctx, addr, tlsCfg); err != nil {
+			if err := demotePeer(ctx, addr, tlsCfg, signer); err != nil {
 				slog.Error("promote: failed to demote remote peer",
 					"addr", addr, "error", err)
 				// Continue with promotion even if demote fails — the operator
@@ -303,9 +317,16 @@ func (s *Service) Promote(ctx context.Context, _ *pb.PeerPromoteRequest) (*pb.Pe
 	oldRole := s.role
 	s.role = "primary"
 	s.primaryAddr = ""
+	hook := s.onRoleChange
 	s.mu.Unlock()
 
 	slog.Info("peer promoted to primary", "old_role", oldRole)
+
+	// Start the outbound push loop so the new primary replicates to its peers
+	// immediately, without waiting for a restart.
+	if hook != nil {
+		hook(true)
+	}
 
 	// Record tamper-evident audit event.
 	if s.auditWriter != nil {
@@ -321,16 +342,37 @@ func (s *Service) Promote(ctx context.Context, _ *pb.PeerPromoteRequest) (*pb.Pe
 	}, nil
 }
 
-// Demote sets this server's role to "peer".
-// This is called remotely by a peer that wins a split-brain resolution.
-func (s *Service) Demote(_ context.Context, primaryAddr string) {
+// Demote sets this server's role to "peer" and stops the outbound push loop.
+// It is called over the wire by a peer that won split-brain resolution during
+// its own Promote, so the superseded primary steps down immediately instead of
+// discovering it on the next rejected sync.
+func (s *Service) Demote(ctx context.Context, _ *pb.PeerDemoteRequest) (*pb.PeerDemoteResponse, error) {
+	if err := s.authorizeIncoming(ctx); err != nil {
+		slog.Warn("rejected peer Demote", "error", err)
+		return nil, err
+	}
+
 	s.mu.Lock()
 	oldRole := s.role
 	s.role = "peer"
-	s.primaryAddr = primaryAddr
+	hook := s.onRoleChange
 	s.mu.Unlock()
 
-	slog.Info("peer demoted to peer role", "old_role", oldRole, "new_primary", primaryAddr)
+	slog.Info("peer demoted to peer role", "old_role", oldRole)
+
+	// Stop pushing — this node is no longer primary.
+	if hook != nil {
+		hook(false)
+	}
+
+	if s.auditWriter != nil {
+		if err := s.auditWriter.Record(ctx, "peer.demote", "system", "peer",
+			fmt.Sprintf("demoted to peer (was %s)", oldRole), ""); err != nil {
+			slog.Error("audit record failed", "type", "peer.demote", "error", err)
+		}
+	}
+
+	return &pb.PeerDemoteResponse{}, nil
 }
 
 // queryPeerStatus connects to a peer server and returns its status. signer
@@ -354,23 +396,29 @@ func queryPeerStatus(ctx context.Context, addr string, tlsCfg *tls.Config, signe
 	return client.Status(ctx, &pb.PeerStatusRequest{})
 }
 
-// demotePeer tells a remote peer to step down from primary by setting its role
-// to "peer". It does this by calling Promote on the remote — but since the
-// remote's Promote will see that this server is now primary with a higher
-// config version, it would deny its own promotion. Instead, we use a direct
-// gRPC call to set the role. For simplicity, we call the Status RPC first to
-// confirm it's still primary, then there's no dedicated Demote RPC — the remote
-// will detect the split-brain on its next check-in cycle.
-//
-// In practice, the demoted server will reconnect as a peer when it next
-// contacts the new primary.
-func demotePeer(_ context.Context, addr string, _ *tls.Config) error {
-	// There is no dedicated Demote RPC in the proto, so we only log the
-	// intent. The actual demotion happens naturally: the old primary will
-	// attempt to push to this (now-primary) server, get rejected, and fall
-	// back to peer mode. This is safe because the operator has explicitly
-	// promoted this server and its config version is higher.
-	slog.Info("demote: remote peer notified (will self-demote on next sync cycle)", "addr", addr)
+// demotePeer dials the superseded primary's VigoPeer.Demote so it steps down
+// to peer role and stops pushing immediately. signer attaches this server's
+// control-plane identity so the remote can authorize the call; nil on a
+// non-local backend (the remote rejects the unsigned call).
+func demotePeer(ctx context.Context, addr string, tlsCfg *tls.Config, signer credentials.PerRPCCredentials) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg))}
+	if signer != nil {
+		opts = append(opts, grpc.WithPerRPCCredentials(signer))
+	}
+	conn, err := grpc.NewClient(addr, opts...)
+	if err != nil {
+		return fmt.Errorf("dial %s: %w", addr, err)
+	}
+	defer conn.Close()
+
+	client := pb.NewVigoPeerClient(conn)
+	if _, err := client.Demote(ctx, &pb.PeerDemoteRequest{}); err != nil {
+		return fmt.Errorf("demote %s: %w", addr, err)
+	}
+	slog.Info("demote: superseded peer stepped down", "addr", addr)
 	return nil
 }
 

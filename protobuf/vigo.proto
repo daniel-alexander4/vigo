@@ -951,6 +951,11 @@ service VigoPeer {
 
   // Status returns the server's current peer role and sync state.
   rpc Status(PeerStatusRequest) returns (PeerStatusResponse);
+
+  // Demote tells the target server to step down to peer role. Sent by a
+  // newly-promoted primary to the superseded primary so it stops pushing
+  // immediately rather than discovering it on the next rejected sync.
+  rpc Demote(PeerDemoteRequest) returns (PeerDemoteResponse);
 }
 
 message PeerSyncMessage {
@@ -984,6 +989,10 @@ message PeerPromoteResponse {
   bool success = 1;
   string message = 2;
 }
+
+message PeerDemoteRequest {}
+
+message PeerDemoteResponse {}
 
 message PeerStatusRequest {}
 

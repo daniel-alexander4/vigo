@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -197,7 +198,12 @@ type Server struct {
 	// Close. ---
 	peerService *peer.Service
 	peerTLS     *tls.Config
+	// peerPrimary, the captured lifecycle ctx, and peerPushMu are managed by
+	// setPrimaryPushing, which starts/stops the outbound push loop to match the
+	// node's current role — at boot and on every runtime Promote/Demote.
 	peerPrimary *peer.Primary
+	peerPushCtx context.Context
+	peerPushMu  sync.Mutex
 
 	// --- Forward-declared for closure access (assigned during NewServer
 	// construction below). envoyCounter (the license enforcer's count
@@ -1701,8 +1707,12 @@ func (s *Server) Close() error {
 	if s == nil {
 		return nil
 	}
-	if s.peerPrimary != nil {
-		s.peerPrimary.Stop()
+	s.peerPushMu.Lock()
+	peerPrimary := s.peerPrimary
+	s.peerPrimary = nil
+	s.peerPushMu.Unlock()
+	if peerPrimary != nil {
+		peerPrimary.Stop()
 	}
 	if s.manifestStore != nil {
 		s.manifestStore.Stop()

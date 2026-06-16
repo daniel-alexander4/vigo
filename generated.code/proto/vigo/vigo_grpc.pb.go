@@ -1341,6 +1341,7 @@ const (
 	VigoPeer_SyncStream_FullMethodName = "/vigo.v1.VigoPeer/SyncStream"
 	VigoPeer_Promote_FullMethodName    = "/vigo.v1.VigoPeer/Promote"
 	VigoPeer_Status_FullMethodName     = "/vigo.v1.VigoPeer/Status"
+	VigoPeer_Demote_FullMethodName     = "/vigo.v1.VigoPeer/Demote"
 )
 
 // VigoPeerClient is the client API for VigoPeer service.
@@ -1354,6 +1355,10 @@ type VigoPeerClient interface {
 	Promote(ctx context.Context, in *PeerPromoteRequest, opts ...grpc.CallOption) (*PeerPromoteResponse, error)
 	// Status returns the server's current peer role and sync state.
 	Status(ctx context.Context, in *PeerStatusRequest, opts ...grpc.CallOption) (*PeerStatusResponse, error)
+	// Demote tells the target server to step down to peer role. Sent by a
+	// newly-promoted primary to the superseded primary so it stops pushing
+	// immediately rather than discovering it on the next rejected sync.
+	Demote(ctx context.Context, in *PeerDemoteRequest, opts ...grpc.CallOption) (*PeerDemoteResponse, error)
 }
 
 type vigoPeerClient struct {
@@ -1397,6 +1402,16 @@ func (c *vigoPeerClient) Status(ctx context.Context, in *PeerStatusRequest, opts
 	return out, nil
 }
 
+func (c *vigoPeerClient) Demote(ctx context.Context, in *PeerDemoteRequest, opts ...grpc.CallOption) (*PeerDemoteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PeerDemoteResponse)
+	err := c.cc.Invoke(ctx, VigoPeer_Demote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VigoPeerServer is the server API for VigoPeer service.
 // All implementations must embed UnimplementedVigoPeerServer
 // for forward compatibility.
@@ -1408,6 +1423,10 @@ type VigoPeerServer interface {
 	Promote(context.Context, *PeerPromoteRequest) (*PeerPromoteResponse, error)
 	// Status returns the server's current peer role and sync state.
 	Status(context.Context, *PeerStatusRequest) (*PeerStatusResponse, error)
+	// Demote tells the target server to step down to peer role. Sent by a
+	// newly-promoted primary to the superseded primary so it stops pushing
+	// immediately rather than discovering it on the next rejected sync.
+	Demote(context.Context, *PeerDemoteRequest) (*PeerDemoteResponse, error)
 	mustEmbedUnimplementedVigoPeerServer()
 }
 
@@ -1426,6 +1445,9 @@ func (UnimplementedVigoPeerServer) Promote(context.Context, *PeerPromoteRequest)
 }
 func (UnimplementedVigoPeerServer) Status(context.Context, *PeerStatusRequest) (*PeerStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Status not implemented")
+}
+func (UnimplementedVigoPeerServer) Demote(context.Context, *PeerDemoteRequest) (*PeerDemoteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Demote not implemented")
 }
 func (UnimplementedVigoPeerServer) mustEmbedUnimplementedVigoPeerServer() {}
 func (UnimplementedVigoPeerServer) testEmbeddedByValue()                  {}
@@ -1491,6 +1513,24 @@ func _VigoPeer_Status_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VigoPeer_Demote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeerDemoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoPeerServer).Demote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoPeer_Demote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoPeerServer).Demote(ctx, req.(*PeerDemoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VigoPeer_ServiceDesc is the grpc.ServiceDesc for VigoPeer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1505,6 +1545,10 @@ var VigoPeer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Status",
 			Handler:    _VigoPeer_Status_Handler,
+		},
+		{
+			MethodName: "Demote",
+			Handler:    _VigoPeer_Demote_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
