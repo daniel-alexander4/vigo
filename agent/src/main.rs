@@ -9,13 +9,13 @@ use vigo::executors;
 use vigo::multicall;
 use vigo::platform;
 use vigo::policy;
-use vigo::update;
 use vigo::proto;
 use vigo::runner;
 use vigo::snapshots;
 use vigo::state;
 use vigo::swarm;
 use vigo::traits;
+use vigo::update;
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
@@ -179,8 +179,12 @@ fn parse_args() -> Result<Cli> {
         key_file: None,
         log_level: "info".into(),
         api_addr: "https://localhost:8443".into(),
-        executors_dir: platform::paths::default_executors_dir().to_string_lossy().into(),
-        snapshot_dir: platform::paths::default_snapshot_dir().to_string_lossy().into(),
+        executors_dir: platform::paths::default_executors_dir()
+            .to_string_lossy()
+            .into(),
+        snapshot_dir: platform::paths::default_snapshot_dir()
+            .to_string_lossy()
+            .into(),
         snapshot_retention: 5,
         trait_refresh_cycles: 10,
         result_cache_cycles: 5,
@@ -207,19 +211,73 @@ fn parse_args() -> Result<Cli> {
                 print_usage();
                 std::process::exit(0);
             }
-            "--server" => { i += 1; cli.server = arg_val(&args, i)?; explicit.insert("server"); }
-            "--ca-file" => { i += 1; cli.ca_file = Some(arg_val(&args, i)?); explicit.insert("ca_file"); }
-            "--cert-file" => { i += 1; cli.cert_file = Some(arg_val(&args, i)?); explicit.insert("cert_file"); }
-            "--key-file" => { i += 1; cli.key_file = Some(arg_val(&args, i)?); explicit.insert("key_file"); }
-            "--log-level" => { i += 1; cli.log_level = arg_val(&args, i)?; explicit.insert("log_level"); }
-            "--api-addr" => { i += 1; cli.api_addr = arg_val(&args, i)?; explicit.insert("api_addr"); }
-            "--executors-dir" => { i += 1; cli.executors_dir = arg_val(&args, i)?; explicit.insert("executors_dir"); }
-            "--snapshot-dir" => { i += 1; cli.snapshot_dir = arg_val(&args, i)?; explicit.insert("snapshot_dir"); }
-            "--snapshot-retention" => { i += 1; cli.snapshot_retention = arg_val(&args, i)?.parse().context("--snapshot-retention must be a number")?; explicit.insert("snapshot_retention"); }
-            "--trait-refresh-cycles" => { i += 1; cli.trait_refresh_cycles = arg_val(&args, i)?.parse().context("--trait-refresh-cycles must be a number")?; explicit.insert("trait_refresh_cycles"); }
-            "--result-cache-cycles" => { i += 1; cli.result_cache_cycles = arg_val(&args, i)?.parse().context("--result-cache-cycles must be a number")?; explicit.insert("result_cache_cycles"); }
-            "--dry-run" => { cli.dry_run = true; }
-            "--once" => { cli.once = true; }
+            "--server" => {
+                i += 1;
+                cli.server = arg_val(&args, i)?;
+                explicit.insert("server");
+            }
+            "--ca-file" => {
+                i += 1;
+                cli.ca_file = Some(arg_val(&args, i)?);
+                explicit.insert("ca_file");
+            }
+            "--cert-file" => {
+                i += 1;
+                cli.cert_file = Some(arg_val(&args, i)?);
+                explicit.insert("cert_file");
+            }
+            "--key-file" => {
+                i += 1;
+                cli.key_file = Some(arg_val(&args, i)?);
+                explicit.insert("key_file");
+            }
+            "--log-level" => {
+                i += 1;
+                cli.log_level = arg_val(&args, i)?;
+                explicit.insert("log_level");
+            }
+            "--api-addr" => {
+                i += 1;
+                cli.api_addr = arg_val(&args, i)?;
+                explicit.insert("api_addr");
+            }
+            "--executors-dir" => {
+                i += 1;
+                cli.executors_dir = arg_val(&args, i)?;
+                explicit.insert("executors_dir");
+            }
+            "--snapshot-dir" => {
+                i += 1;
+                cli.snapshot_dir = arg_val(&args, i)?;
+                explicit.insert("snapshot_dir");
+            }
+            "--snapshot-retention" => {
+                i += 1;
+                cli.snapshot_retention = arg_val(&args, i)?
+                    .parse()
+                    .context("--snapshot-retention must be a number")?;
+                explicit.insert("snapshot_retention");
+            }
+            "--trait-refresh-cycles" => {
+                i += 1;
+                cli.trait_refresh_cycles = arg_val(&args, i)?
+                    .parse()
+                    .context("--trait-refresh-cycles must be a number")?;
+                explicit.insert("trait_refresh_cycles");
+            }
+            "--result-cache-cycles" => {
+                i += 1;
+                cli.result_cache_cycles = arg_val(&args, i)?
+                    .parse()
+                    .context("--result-cache-cycles must be a number")?;
+                explicit.insert("result_cache_cycles");
+            }
+            "--dry-run" => {
+                cli.dry_run = true;
+            }
+            "--once" => {
+                cli.once = true;
+            }
             other if other.starts_with('-') => bail!("unknown flag: {}", other),
             _ => {
                 positional.push(args[i].clone());
@@ -232,33 +290,49 @@ fn parse_args() -> Result<Cli> {
     // Load config file from data dir — CLI flags take precedence.
     let cfg = config::load(&cli.data_dir);
     if !explicit.contains("server") {
-        if let Some(v) = cfg.get("server") { cli.server = v.clone(); }
+        if let Some(v) = cfg.get("server") {
+            cli.server = v.clone();
+        }
     }
     if !explicit.contains("api_addr") {
-        if let Some(v) = cfg.get("api_addr") { cli.api_addr = v.clone(); }
+        if let Some(v) = cfg.get("api_addr") {
+            cli.api_addr = v.clone();
+        }
     }
     if !explicit.contains("log_level") {
-        if let Some(v) = cfg.get("log_level") { cli.log_level = v.clone(); }
+        if let Some(v) = cfg.get("log_level") {
+            cli.log_level = v.clone();
+        }
     }
     if !explicit.contains("executors_dir") {
-        if let Some(v) = cfg.get("executors_dir") { cli.executors_dir = v.clone(); }
+        if let Some(v) = cfg.get("executors_dir") {
+            cli.executors_dir = v.clone();
+        }
     }
     if !explicit.contains("snapshot_dir") {
-        if let Some(v) = cfg.get("snapshot_dir") { cli.snapshot_dir = v.clone(); }
+        if let Some(v) = cfg.get("snapshot_dir") {
+            cli.snapshot_dir = v.clone();
+        }
     }
     if !explicit.contains("snapshot_retention") {
         if let Some(v) = cfg.get("snapshot_retention") {
-            if let Ok(n) = v.parse() { cli.snapshot_retention = n; }
+            if let Ok(n) = v.parse() {
+                cli.snapshot_retention = n;
+            }
         }
     }
     if !explicit.contains("trait_refresh_cycles") {
         if let Some(v) = cfg.get("trait_refresh_cycles") {
-            if let Ok(n) = v.parse() { cli.trait_refresh_cycles = n; }
+            if let Ok(n) = v.parse() {
+                cli.trait_refresh_cycles = n;
+            }
         }
     }
     if !explicit.contains("result_cache_cycles") {
         if let Some(v) = cfg.get("result_cache_cycles") {
-            if let Ok(n) = v.parse() { cli.result_cache_cycles = n; }
+            if let Ok(n) = v.parse() {
+                cli.result_cache_cycles = n;
+            }
         }
     }
 
@@ -273,14 +347,30 @@ fn parse_args() -> Result<Cli> {
                 let mut j = 1;
                 while j < positional.len() {
                     match positional[j].as_str() {
-                        "--module" => { j += 1; module = Some(positional.get(j).cloned().context("--module requires a value")?); }
-                        "--dry-run" => { dry_run = true; }
-                        "--no-daemon" => { no_daemon = true; }
+                        "--module" => {
+                            j += 1;
+                            module = Some(
+                                positional
+                                    .get(j)
+                                    .cloned()
+                                    .context("--module requires a value")?,
+                            );
+                        }
+                        "--dry-run" => {
+                            dry_run = true;
+                        }
+                        "--no-daemon" => {
+                            no_daemon = true;
+                        }
                         _ => bail!("unknown run flag: {}", positional[j]),
                     }
                     j += 1;
                 }
-                Commands::Run { module, dry_run, no_daemon }
+                Commands::Run {
+                    module,
+                    dry_run,
+                    no_daemon,
+                }
             }
             "register" => {
                 let mut token = None;
@@ -288,13 +378,26 @@ fn parse_args() -> Result<Cli> {
                 let mut j = 1;
                 while j < positional.len() {
                     match positional[j].as_str() {
-                        "--token" => { j += 1; token = Some(positional.get(j).cloned().context("--token requires a value")?); }
-                        "--force" => { force = true; }
+                        "--token" => {
+                            j += 1;
+                            token = Some(
+                                positional
+                                    .get(j)
+                                    .cloned()
+                                    .context("--token requires a value")?,
+                            );
+                        }
+                        "--force" => {
+                            force = true;
+                        }
                         _ => bail!("unknown register flag: {}", positional[j]),
                     }
                     j += 1;
                 }
-                Commands::Register { token: token.context("register requires --token")?, force }
+                Commands::Register {
+                    token: token.context("register requires --token")?,
+                    force,
+                }
             }
             "bootstrap" => {
                 let mut server = None;
@@ -305,11 +408,37 @@ fn parse_args() -> Result<Cli> {
                 let mut j = 1;
                 while j < positional.len() {
                     match positional[j].as_str() {
-                        "--server" => { j += 1; server = Some(positional.get(j).cloned().context("--server requires a value")?); }
-                        "--token" => { j += 1; token = Some(positional.get(j).cloned().context("--token requires a value")?); }
-                        "--install-service" => { install_service = true; }
-                        "--grpc-port" => { j += 1; grpc_port = positional.get(j).cloned().context("--grpc-port requires a value")?; }
-                        "--force" => { force = true; }
+                        "--server" => {
+                            j += 1;
+                            server = Some(
+                                positional
+                                    .get(j)
+                                    .cloned()
+                                    .context("--server requires a value")?,
+                            );
+                        }
+                        "--token" => {
+                            j += 1;
+                            token = Some(
+                                positional
+                                    .get(j)
+                                    .cloned()
+                                    .context("--token requires a value")?,
+                            );
+                        }
+                        "--install-service" => {
+                            install_service = true;
+                        }
+                        "--grpc-port" => {
+                            j += 1;
+                            grpc_port = positional
+                                .get(j)
+                                .cloned()
+                                .context("--grpc-port requires a value")?;
+                        }
+                        "--force" => {
+                            force = true;
+                        }
                         _ => bail!("unknown bootstrap flag: {}", positional[j]),
                     }
                     j += 1;
@@ -322,27 +451,39 @@ fn parse_args() -> Result<Cli> {
                     force,
                 }
             }
-            "traits" => {
-                Commands::Traits { collectors: positional[1..].to_vec() }
-            }
+            "traits" => Commands::Traits {
+                collectors: positional[1..].to_vec(),
+            },
             "swarm" => match positional.get(1).map(|s| s.as_str()) {
-                Some("gitback") => Commands::Gitback { args: positional[2..].to_vec() },
-                Some("lockbox") => Commands::Lockbox { args: positional[2..].to_vec() },
-                Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
-                Some("curator") => Commands::Curator { args: positional[2..].to_vec() },
-                Some("poolq") => Commands::Poolq { args: positional[2..].to_vec() },
+                Some("gitback") => Commands::Gitback {
+                    args: positional[2..].to_vec(),
+                },
+                Some("lockbox") => Commands::Lockbox {
+                    args: positional[2..].to_vec(),
+                },
+                Some("puddle") => Commands::SelfFleet {
+                    args: positional[2..].to_vec(),
+                },
+                Some("curator") => Commands::Curator {
+                    args: positional[2..].to_vec(),
+                },
+                Some("poolq") => Commands::Poolq {
+                    args: positional[2..].to_vec(),
+                },
                 // Read-only diagnostic verbs (0.41.1+): substrate
                 // status, seed inventory, peer table, hostdox posture.
                 // Read against /var/lib/vigo/swarm/{state,manifest,
                 // peers}.json and the /etc/hosts managed block.
                 Some("status") | Some("seeds") | Some("peers") | Some("hostdox") => {
-                    Commands::SwarmDiag { args: positional[1..].to_vec() }
+                    Commands::SwarmDiag {
+                        args: positional[1..].to_vec(),
+                    }
                 }
                 // Help routes through the diag dispatcher so the
                 // user sees the full envoy-side verb tree.
-                Some("--help") | Some("-h") | Some("help") | None => {
-                    Commands::SwarmDiag { args: positional[1..].to_vec() }
-                }
+                Some("--help") | Some("-h") | Some("help") | None => Commands::SwarmDiag {
+                    args: positional[1..].to_vec(),
+                },
                 // Hidden: server-dispatched cleanup verb. Mirrors the
                 // `_apply-blacklist` pattern (gitback/lockbox), but
                 // operates on the substrate-shared blob cache rather
@@ -353,15 +494,15 @@ fn parse_args() -> Result<Cli> {
                      run `vigo swarm --help` for usage"
                 ),
             },
-            "lockbox-session-daemon" => {
-                Commands::LockboxSessionDaemon { args: positional[1..].to_vec() }
-            }
-            "puddle-session-daemon" => {
-                Commands::SelfFleetSessionDaemon { args: positional[1..].to_vec() }
-            }
-            "service-puddle-daemon" => {
-                Commands::ServicePuddleDaemon { args: positional[1..].to_vec() }
-            }
+            "lockbox-session-daemon" => Commands::LockboxSessionDaemon {
+                args: positional[1..].to_vec(),
+            },
+            "puddle-session-daemon" => Commands::SelfFleetSessionDaemon {
+                args: positional[1..].to_vec(),
+            },
+            "service-puddle-daemon" => Commands::ServicePuddleDaemon {
+                args: positional[1..].to_vec(),
+            },
             other => bail!("unknown command: {}\nRun with --help for usage", other),
         });
     }
@@ -440,13 +581,18 @@ fn stop_daemon_service() {
     #[cfg(unix)]
     {
         if std::path::Path::new("/run/systemd/system").exists() {
-            match Command::new("systemctl").args(["stop", "vigo-envoy"]).status() {
+            match Command::new("systemctl")
+                .args(["stop", "vigo-envoy"])
+                .status()
+            {
                 Ok(s) if s.success() => info!("vigo-envoy service stopped"),
                 Ok(s) => warn!("failed to stop vigo-envoy (exit {})", s),
                 Err(e) => warn!("failed to stop vigo-envoy: {}", e),
             }
         } else if std::path::Path::new("/Library/LaunchDaemons/com.vigo.envoy.plist").exists() {
-            let _ = Command::new("launchctl").args(["stop", "com.vigo.envoy"]).status();
+            let _ = Command::new("launchctl")
+                .args(["stop", "com.vigo.envoy"])
+                .status();
         }
     }
 
@@ -472,7 +618,10 @@ fn ensure_daemon_running() {
                 .unwrap_or(false);
             if !running {
                 info!("starting vigo-envoy daemon");
-                match Command::new("systemctl").args(["start", "vigo-envoy"]).status() {
+                match Command::new("systemctl")
+                    .args(["start", "vigo-envoy"])
+                    .status()
+                {
                     Ok(s) if s.success() => info!("vigo-envoy daemon started"),
                     Ok(s) => warn!("failed to start vigo-envoy (exit {})", s),
                     Err(e) => warn!("failed to start vigo-envoy: {}", e),
@@ -517,7 +666,9 @@ fn ensure_daemon_running() {
             .unwrap_or(false);
         if !running {
             info!("starting vigo-envoy service");
-            let _ = Command::new("sc.exe").args(["start", "vigo-envoy"]).status();
+            let _ = Command::new("sc.exe")
+                .args(["start", "vigo-envoy"])
+                .status();
         }
     }
 }
@@ -525,8 +676,12 @@ fn ensure_daemon_running() {
 /// Read envoy UUID from <data-dir>/envoy.uuid.
 fn load_envoy_id(data_dir: &std::path::Path) -> Result<String> {
     let path = data_dir.join("envoy.uuid");
-    let data = std::fs::read_to_string(&path)
-        .with_context(|| format!("read envoy UUID from {} (have you run 'vigo register'?)", path.display()))?;
+    let data = std::fs::read_to_string(&path).with_context(|| {
+        format!(
+            "read envoy UUID from {} (have you run 'vigo register'?)",
+            path.display()
+        )
+    })?;
     Ok(data.trim().to_string())
 }
 
@@ -641,11 +796,7 @@ fn classify_checkin_error(err: &anyhow::Error) -> (String, bool) {
 }
 
 /// Run a single convergence cycle with color-coded trace output.
-async fn run_once(
-    cli: &Cli,
-    module_filter: Option<String>,
-    dry_run: bool,
-) -> Result<()> {
+async fn run_once(cli: &Cli, module_filter: Option<String>, dry_run: bool) -> Result<()> {
     let (_, priv_key) = auth::keypair::load_or_generate(&cli.data_dir)?;
     let envoy_id = load_envoy_id(&cli.data_dir)?;
 
@@ -731,8 +882,14 @@ async fn run_once(
             match policy::eval::eval_bundle(Some(bundle), &collected_traits) {
                 Ok(mods) => (mods, Some(bundle.clone())),
                 Err(e) => {
-                    warn!("policy evaluation failed, running with compiled modules: {}", e);
-                    (server_resp.configcrates.clone(), server_resp.policy_bundle.clone())
+                    warn!(
+                        "policy evaluation failed, running with compiled modules: {}",
+                        e
+                    );
+                    (
+                        server_resp.configcrates.clone(),
+                        server_resp.policy_bundle.clone(),
+                    )
                 }
             }
         } else {
@@ -842,9 +999,15 @@ async fn run_once(
     if force_update && !dry_run && !offline {
         let tls_certs = if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
             Some(update::TlsCerts {
-                ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-                client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-                client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
+                ca_cert: auth::keypair::ca_cert_path(&cli.data_dir)
+                    .to_string_lossy()
+                    .to_string(),
+                client_cert: auth::keypair::tls_cert_path(&cli.data_dir)
+                    .to_string_lossy()
+                    .to_string(),
+                client_key: auth::keypair::tls_key_path(&cli.data_dir)
+                    .to_string_lossy()
+                    .to_string(),
             })
         } else {
             None
@@ -861,16 +1024,19 @@ async fn run_once(
     }
 
     // Build executor map with snapshot manager.
-    let os_family = collected_traits.pointer("/os/family")
+    let os_family = collected_traits
+        .pointer("/os/family")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    let os_distro = collected_traits.pointer("/os/distro")
+    let os_distro = collected_traits
+        .pointer("/os/distro")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
     let snapshot_mgr = snapshots::Manager::new(&cli.snapshot_dir, cli.snapshot_retention);
-    let mut executors = runner::build_executors_with_snapshots(&os_family, &os_distro, Some(snapshot_mgr));
+    let mut executors =
+        runner::build_executors_with_snapshots(&os_family, &os_distro, Some(snapshot_mgr));
 
     // Load custom executors.
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
@@ -909,7 +1075,14 @@ async fn run_once(
     };
 
     let mut pkg_breaker = runner::pkg_breaker::PackageBreaker::new();
-    let results = runner::converge(&modules, &executors, &mut cache, &opts, &collected_traits, &mut pkg_breaker);
+    let results = runner::converge(
+        &modules,
+        &executors,
+        &mut cache,
+        &opts,
+        &collected_traits,
+        &mut pkg_breaker,
+    );
 
     // Print color-coded trace output to stderr.
     print_trace(&bundle_for_trace, &results, dry_run);
@@ -957,7 +1130,9 @@ async fn run_once(
             match tokio::time::timeout(
                 std::time::Duration::from_secs(10),
                 client.report_result(&run_id, proto_results, total),
-            ).await {
+            )
+            .await
+            {
                 Ok(Ok(_)) => {}
                 Ok(Err(e)) => warn!(error = %e, "failed to report results to server"),
                 Err(_) => warn!("report_result timed out after 10s"),
@@ -985,11 +1160,11 @@ fn print_trace(
 
     // Catppuccin Mocha — 24-bit RGB so colors look identical on every terminal.
     const BOLD: &str = "\x1b[1m";
-    const DIM: &str = "\x1b[38;2;127;132;156m";      // Overlay1 #7f849c
-    const RED: &str = "\x1b[38;2;243;139;168m";       // Red      #f38ba8
-    const GREEN: &str = "\x1b[38;2;166;227;161m";     // Green    #a6e3a1
-    const YELLOW: &str = "\x1b[38;2;249;226;175m";    // Yellow   #f9e2af
-    const CYAN: &str = "\x1b[38;2;137;220;235m";      // Sky      #89dceb
+    const DIM: &str = "\x1b[38;2;127;132;156m"; // Overlay1 #7f849c
+    const RED: &str = "\x1b[38;2;243;139;168m"; // Red      #f38ba8
+    const GREEN: &str = "\x1b[38;2;166;227;161m"; // Green    #a6e3a1
+    const YELLOW: &str = "\x1b[38;2;249;226;175m"; // Yellow   #f9e2af
+    const CYAN: &str = "\x1b[38;2;137;220;235m"; // Sky      #89dceb
     const RESET: &str = "\x1b[0m";
 
     // Print trace header from policy bundle.
@@ -1180,7 +1355,8 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         .unwrap_or("")
         .to_string();
     let snapshot_mgr = snapshots::Manager::new(&cli.snapshot_dir, cli.snapshot_retention);
-    let mut executors = runner::build_executors_with_snapshots(&os_family, &os_distro, Some(snapshot_mgr));
+    let mut executors =
+        runner::build_executors_with_snapshots(&os_family, &os_distro, Some(snapshot_mgr));
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
 
     // (Cancellation token + signal handler were set up before the initial
@@ -1188,16 +1364,17 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
 
     // Open persistent state store for offline convergence.
     let state_dir = platform::paths::default_state_dir();
-    let state_store: Option<std::sync::Arc<state::StateStore>> = match state::StateStore::open(&state_dir) {
-        Ok(s) => {
-            info!(path = %state_dir.display(), "persistent state store ready");
-            Some(std::sync::Arc::new(s))
-        }
-        Err(e) => {
-            warn!(error = %e, "could not open state store, offline convergence disabled");
-            None
-        }
-    };
+    let state_store: Option<std::sync::Arc<state::StateStore>> =
+        match state::StateStore::open(&state_dir) {
+            Ok(s) => {
+                info!(path = %state_dir.display(), "persistent state store ready");
+                Some(std::sync::Arc::new(s))
+            }
+            Err(e) => {
+                warn!(error = %e, "could not open state store, offline convergence disabled");
+                None
+            }
+        };
 
     // Wrap reversible executors with the persistent reversal store so the
     // `revert:` lever can capture/restore prior values and run `on_revert:`
@@ -1209,7 +1386,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Create the peer map and manifest early so they can be shared between LoopConfig,
     // the swarm peer server, and multicast discovery.
     let swarm_base = platform::paths::default_swarm_base();
-    let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::load(&swarm_base.join("peers.json")));
+    let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::load(
+        &swarm_base.join("peers.json"),
+    ));
     let shared_manifest = swarm::manifest::Manifest::load(&swarm_base);
 
     // Shared announce signal between the download scheduler and the multicast
@@ -1246,7 +1425,8 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // writes to the peer table, no GITBACK / GITBACKCLAIM lines
     // emitted, no `/gitback/push` accepted). Hostname read is a
     // single cheap syscall so we do it unconditionally.
-    let gitback_peer_table = std::sync::Arc::new(vigo::swarm::gitback::peer_table::PeerTable::new());
+    let gitback_peer_table =
+        std::sync::Arc::new(vigo::swarm::gitback::peer_table::PeerTable::new());
     let gitback_pending_claims =
         std::sync::Arc::new(vigo::swarm::gitback::pending_claims::PendingClaims::new());
     // Load the envoy's Ed25519 keypair for signing gitback multicast
@@ -1278,9 +1458,15 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Build TLS certs for the swarm manager (shared with peer server).
     let swarm_tls = if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
         Some(update::TlsCerts {
-            ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-            client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-            client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
+            ca_cert: auth::keypair::ca_cert_path(&cli.data_dir)
+                .to_string_lossy()
+                .to_string(),
+            client_cert: auth::keypair::tls_cert_path(&cli.data_dir)
+                .to_string_lossy()
+                .to_string(),
+            client_key: auth::keypair::tls_key_path(&cli.data_dir)
+                .to_string_lossy()
+                .to_string(),
         })
     } else {
         None
@@ -1339,8 +1525,17 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 });
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
-                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, gitback_srv_ctx,
-                    ).await {
+                        swarm_port,
+                        blobs_dir.clone(),
+                        tls_acceptor,
+                        bw_monitor,
+                        pm,
+                        sm,
+                        swarm_cancel,
+                        gitback_srv_ctx,
+                    )
+                    .await
+                    {
                         warn!(error = %e, "swarm peer server exited with error");
                     }
                 });
@@ -1428,11 +1623,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // (`swarm.curator.enabled`) is enforced by `require_curator` at the
     // CLI front-ends (slice 4), per-user by the usercrate `curator:`
     // flag the daemon checks.
-    vigo::swarm::curator::spawn(
-        envoy_id.clone(),
-        cancel.clone(),
-        shared_manifest.clone(),
-    );
+    vigo::swarm::curator::spawn(envoy_id.clone(), cancel.clone(), shared_manifest.clone());
 
     // hostdox reactor — maintains the agent-managed `/etc/hosts`
     // block from the swarm host index when the operator has set
@@ -1470,58 +1661,45 @@ fn get_outbound_ip() -> String {
 
 /// Platform-specific service installation.
 #[cfg(target_os = "linux")]
-async fn install_platform_service(
-    bootstrap_server: &str,
-    grpc_port: &str,
-) -> Result<String> {
+async fn install_platform_service(bootstrap_server: &str, grpc_port: &str) -> Result<String> {
     bootstrap::systemd::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(target_os = "macos")]
-async fn install_platform_service(
-    bootstrap_server: &str,
-    grpc_port: &str,
-) -> Result<String> {
+async fn install_platform_service(bootstrap_server: &str, grpc_port: &str) -> Result<String> {
     bootstrap::launchd::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
-async fn install_platform_service(
-    bootstrap_server: &str,
-    grpc_port: &str,
-) -> Result<String> {
+async fn install_platform_service(bootstrap_server: &str, grpc_port: &str) -> Result<String> {
     bootstrap::rc_d::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(target_os = "openbsd")]
-async fn install_platform_service(
-    bootstrap_server: &str,
-    grpc_port: &str,
-) -> Result<String> {
+async fn install_platform_service(bootstrap_server: &str, grpc_port: &str) -> Result<String> {
     bootstrap::rcctl::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(target_os = "illumos")]
-async fn install_platform_service(
-    bootstrap_server: &str,
-    grpc_port: &str,
-) -> Result<String> {
+async fn install_platform_service(bootstrap_server: &str, grpc_port: &str) -> Result<String> {
     bootstrap::smf::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(windows)]
-async fn install_platform_service(
-    bootstrap_server: &str,
-    grpc_port: &str,
-) -> Result<String> {
+async fn install_platform_service(bootstrap_server: &str, grpc_port: &str) -> Result<String> {
     bootstrap::windows_service::install_service(bootstrap_server, grpc_port).await
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", target_os = "illumos", windows)))]
-async fn install_platform_service(
-    _bootstrap_server: &str,
-    _grpc_port: &str,
-) -> Result<String> {
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "illumos",
+    windows
+)))]
+async fn install_platform_service(_bootstrap_server: &str, _grpc_port: &str) -> Result<String> {
     bail!("service installation is not supported on this platform")
 }
 
@@ -1540,7 +1718,10 @@ fn run_status(cli: &Cli) -> Result<()> {
     };
 
     // Server address.
-    let server = cfg.get("server").cloned().unwrap_or_else(|| cli.server.clone());
+    let server = cfg
+        .get("server")
+        .cloned()
+        .unwrap_or_else(|| cli.server.clone());
 
     // Fallback servers.
     let fallbacks = config::parse_fallback_servers(&cfg);
@@ -1567,7 +1748,11 @@ fn run_status(cli: &Cli) -> Result<()> {
 
     // Server pubkey from file.
     let server_pubkey = load_server_pubkey(&cli.data_dir);
-    let pubkey_status = if server_pubkey.is_empty() { "absent" } else { "present" };
+    let pubkey_status = if server_pubkey.is_empty() {
+        "absent"
+    } else {
+        "present"
+    };
 
     // Open state store (read-only). Root-owned LMDB files enforce access control.
     let store = match state::StateStore::open(&state_dir) {
@@ -1589,7 +1774,11 @@ fn run_status(cli: &Cli) -> Result<()> {
     match store.policy.load(&rtxn) {
         Ok(Some((version, bundle))) => {
             let mod_count = bundle.configcrates.len();
-            let mod_names: Vec<&str> = bundle.configcrates.iter().map(|m| m.name.as_str()).collect();
+            let mod_names: Vec<&str> = bundle
+                .configcrates
+                .iter()
+                .map(|m| m.name.as_str())
+                .collect();
             let resource_count: usize = bundle.configcrates.iter().map(|m| m.resources.len()).sum();
 
             println!("Policy:");
@@ -1793,9 +1982,7 @@ async fn async_main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Status) => {
-            run_status(&cli)
-        }
+        Some(Commands::Status) => run_status(&cli),
 
         Some(Commands::Register { token, force }) => {
             let (pub_key, priv_key) = auth::keypair::load_or_generate(&cli.data_dir)?;
@@ -1820,7 +2007,9 @@ async fn async_main() -> Result<()> {
             )
             .await?;
 
-            let resp = client.register(&hostname, &ip_addr, &pub_pem, token, *force).await?;
+            let resp = client
+                .register(&hostname, &ip_addr, &pub_pem, token, *force)
+                .await?;
 
             if !resp.success {
                 anyhow::bail!(
@@ -2032,8 +2221,18 @@ async fn async_main() -> Result<()> {
             save_envoy_id(&cli.data_dir, &resp.envoy_id)?;
 
             // Persist server address so subsequent runs don't need --server.
-            let grpc_addr = format!("{}:{}", bootstrap_server.trim_start_matches("http://").trim_start_matches("https://").split(':').next().unwrap_or(bootstrap_server), grpc_port);
-            let mut config_pairs: Vec<(&str, &str)> = vec![("server", &grpc_addr), ("api_addr", bootstrap_server)];
+            let grpc_addr = format!(
+                "{}:{}",
+                bootstrap_server
+                    .trim_start_matches("http://")
+                    .trim_start_matches("https://")
+                    .split(':')
+                    .next()
+                    .unwrap_or(bootstrap_server),
+                grpc_port
+            );
+            let mut config_pairs: Vec<(&str, &str)> =
+                vec![("server", &grpc_addr), ("api_addr", bootstrap_server)];
             let fb_str = resp.fallback_servers.join(",");
             if !resp.fallback_servers.is_empty() {
                 config_pairs.push(("fallback_servers", &fb_str));
@@ -2068,11 +2267,7 @@ async fn async_main() -> Result<()> {
 
             // Install system service if requested.
             if *install_service {
-                let install_result = install_platform_service(
-                    bootstrap_server,
-                    grpc_port,
-                )
-                .await;
+                let install_result = install_platform_service(bootstrap_server, grpc_port).await;
 
                 match install_result {
                     Ok(grpc_addr) => {
@@ -2090,13 +2285,15 @@ async fn async_main() -> Result<()> {
                         )
                         .await
                         {
-                            Ok(mut client) => {
-                                match client.check_in("", None, 0, None).await {
-                                    Ok(_) => info!("check-in verified, service is running"),
-                                    Err(e) => warn!(error = %e, "verification check-in failed — service is installed but may not reach the server"),
+                            Ok(mut client) => match client.check_in("", None, 0, None).await {
+                                Ok(_) => info!("check-in verified, service is running"),
+                                Err(e) => {
+                                    warn!(error = %e, "verification check-in failed — service is installed but may not reach the server")
                                 }
+                            },
+                            Err(e) => {
+                                warn!(error = %e, "could not connect for verification — service is installed but may not reach the server")
                             }
-                            Err(e) => warn!(error = %e, "could not connect for verification — service is installed but may not reach the server"),
                         }
                     }
                     Err(e) => {
@@ -2112,13 +2309,12 @@ async fn async_main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Run { module, dry_run: run_dry_run, no_daemon }) => {
-            let result = run_once(
-                &cli,
-                module.clone(),
-                cli.dry_run || *run_dry_run,
-            )
-            .await;
+        Some(Commands::Run {
+            module,
+            dry_run: run_dry_run,
+            no_daemon,
+        }) => {
+            let result = run_once(&cli, module.clone(), cli.dry_run || *run_dry_run).await;
 
             if !no_daemon {
                 ensure_daemon_running();
