@@ -59,7 +59,8 @@ func TestCatalogConsistency(t *testing.T) {
 	knownFrameworks := map[string]bool{
 		"ccss": true, "cis-rhel": true,
 		"cis-ubuntu": true, "cis-windows": true, "cyber-essentials": true,
-		"fda-21cfr11": true, "finra": true, "gaming": true,
+		"fda-21cfr11": true, "finra": true,
+		"gaming-mga": true, "gaming-nevada-gcb": true, "gaming-ukgc": true,
 		"gdpr": true, "hipaa": true, "hitrust": true,
 		"iec-62443": true, "iso-27001": true, "mifid2": true,
 		"nerc-cip": true, "nist-800-53": true, "ny-dfs-cyber": true,

@@ -1,5 +1,5 @@
 name: gaming-system-integrity
-# Gaming Commission — System Integrity (Nevada NGC / Malta MGA / UK UKGC)
+# Gaming — System Integrity (Nevada NGC / Malta MGA / UK UKGC)
 # Status: ENFORCED by Vigo
 # Enforces system hardening, access controls, and change management
 # on gaming infrastructure (servers, not gaming devices/RNG directly).

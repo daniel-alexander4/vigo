@@ -507,15 +507,9 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "GAMING — Availability",
 		Description: "Framework-bundle scope-cut: gaming-availability. Implements one section of the gaming baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"gaming": {"NGC-TS-2.1", "NGC-TS-2.2", "MGA-RGR-5.1", "MGA-RGR-5.2", "UKGC-RTS-5A", "UKGC-RTS-5B"},
-		},
-	},
-	"gaming-rng-monitoring": {
-		ID:          "gaming-rng-monitoring",
-		Title:       "GAMING — Rng Monitoring",
-		Description: "Framework-bundle scope-cut: gaming-rng-monitoring. Implements one section of the gaming baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"gaming": {"NGC-TS-4.1", "NGC-TS-4.2", "MGA-RGR-6.1", "UKGC-RTS-6A"},
+			"gaming-nevada-gcb": {"NGC-TS-2.1", "NGC-TS-2.2"},
+			"gaming-mga":        {"MGA-RGR-5.1", "MGA-RGR-5.2"},
+			"gaming-ukgc":       {"UKGC-RTS-5A", "UKGC-RTS-5B"},
 		},
 	},
 	"gaming-system-integrity": {
@@ -523,7 +517,9 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "GAMING — System Integrity",
 		Description: "Framework-bundle scope-cut: gaming-system-integrity. Implements one section of the gaming baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"gaming": {"NGC-TS-1.1", "NGC-TS-1.2", "NGC-TS-3.1", "MGA-RGR-4.1", "MGA-RGR-4.2", "UKGC-RTS-4A", "UKGC-RTS-4B"},
+			"gaming-nevada-gcb": {"NGC-TS-1.1", "NGC-TS-1.2", "NGC-TS-3.1"},
+			"gaming-mga":        {"MGA-RGR-4.1", "MGA-RGR-4.2"},
+			"gaming-ukgc":       {"UKGC-RTS-4A", "UKGC-RTS-4B"},
 		},
 	},
 	"gdpr-breach-notification": {

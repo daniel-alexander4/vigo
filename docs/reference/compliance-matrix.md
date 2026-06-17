@@ -29,6 +29,9 @@ Frameworks tracked. The version label is the **currently-mapped baseline** — i
 - **FINRA** / **SEC 17a-4** — broker-dealer recordkeeping
 - **FDA 21 CFR Part 11** — electronic records and signatures
 - **SOX** — public-company financial controls
+- **UK Gambling Commission** — Remote Technical Standards
+- **Nevada Gaming Control Board** — Reg 14 Technical Standards
+- **Malta Gaming Authority** — Technical Infrastructure
 
 For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the underlying capability column — the capabilities are framework-agnostic. When a framework publishes a new revision, this list updates only after the control mappings are reviewed against the new revision; the label is the version-of-record.
 

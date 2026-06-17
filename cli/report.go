@@ -351,7 +351,9 @@ var (
 	reportMiFID2Cmd          = makeReportCmd("mifid2", "Generate a MiFID II RTS 7 compliance report", "mifid2")
 	reportCCSSCmd            = makeReportCmd("ccss", "Generate a CCSS cryptocurrency security report", "ccss")
 	reportFDA21CFR11Cmd      = makeReportCmd("fda21cfr11", "Generate a FDA 21 CFR Part 11 compliance report", "fda21cfr11")
-	reportGamingCmd          = makeReportCmd("gaming", "Generate a gaming commission compliance report", "gaming")
+	reportGamingUKGCCmd      = makeReportCmd("gamingukgc", "Generate a UK Gambling Commission compliance report", "gamingukgc")
+	reportGamingNevadaCmd    = makeReportCmd("gamingnevada", "Generate a Nevada Gaming Control Board compliance report", "gamingnevada")
+	reportGamingMGACmd       = makeReportCmd("gamingmga", "Generate a Malta Gaming Authority compliance report", "gamingmga")
 	reportCISWindowsCmd      = makeReportCmd("ciswindows", "Generate a CIS Windows Server benchmark report", "ciswindows")
 	reportNYDFSCyberCmd      = makeReportCmd("nydfscyber", "Generate a NY DFS Cybersecurity (23 NYCRR 500) report", "nydfscyber")
 )
@@ -559,7 +561,8 @@ func init() {
 	reportAuditBundleCmd.Flags().String("output", "", "Write zip to file (default: vigo-audit-bundle-<framework>.zip)")
 	reportCmd.AddCommand(reportComplianceCmd, reportHITRUSTCmd, reportSOC2Cmd, reportPCICmd, reportCISCmd,
 		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd, reportCyberEssentialsCmd,
-		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportCCSSCmd, reportFDA21CFR11Cmd, reportGamingCmd, reportCISWindowsCmd,
+		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportCCSSCmd, reportFDA21CFR11Cmd,
+		reportGamingUKGCCmd, reportGamingNevadaCmd, reportGamingMGACmd, reportCISWindowsCmd,
 		reportNYDFSCyberCmd, reportExecutiveCmd, reportAuditBundleCmd)
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")

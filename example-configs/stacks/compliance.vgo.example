@@ -1212,11 +1212,17 @@ waivers:
   #     approved_by: ""
 
   # ──────────────────────────────────────────────────────────────────
-  # Gaming Commission — Casino and Gaming Regulatory Compliance
+  # Gaming — Casino and Gaming Regulatory Compliance (per jurisdiction)
   # ──────────────────────────────────────────────────────────────────
-  # gaming:
-  #   # No specific control IDs defined in current modules.
-  #   # Add controls here as gaming compliance modules are built.
+  # gaming-ukgc:
+  #   # UK Gambling Commission (Remote Technical Standards).
+  #   # Add controls here as gaming compliance configcrates are built.
+  # gaming-nevada-gcb:
+  #   # Nevada Gaming Control Board (Reg 14 Technical Standards).
+  #   # Add controls here as gaming compliance configcrates are built.
+  # gaming-mga:
+  #   # Malta Gaming Authority (Technical Infrastructure).
+  #   # Add controls here as gaming compliance configcrates are built.
 
   # ──────────────────────────────────────────────────────────────────
   # CIS Ubuntu — Center for Internet Security Ubuntu Benchmark

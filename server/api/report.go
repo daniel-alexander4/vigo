@@ -289,7 +289,9 @@ func (h *ReportHandler) frameworkDef(_ AuditChainStatus, slug string) (framework
 		"mifid2":          {"MiFID II RTS 7 Compliance Report", "MiFID II", h.buildMiFID2Findings},
 		"ccss":            {"CCSS Cryptocurrency Security Report", "CCSS", h.buildCCSSFindings},
 		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "FDA 21 CFR Part 11", h.buildFDA21CFR11Findings},
-		"gaming":          {"Gaming Commission Compliance Report", "Gaming Commission", h.buildGamingFindings},
+		"gamingukgc":      {"UK Gambling Commission Compliance Report", "UKGC", h.buildGamingUKGCFindings},
+		"gamingnevada":    {"Nevada Gaming Control Board Compliance Report", "Nevada GCB", h.buildGamingNevadaFindings},
+		"gamingmga":       {"Malta Gaming Authority Compliance Report", "MGA", h.buildGamingMGAFindings},
 		"ciswindows":      {"CIS Windows Server Benchmark Report", "CIS Windows", h.buildCISWindowsFindings},
 		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "CIS Ubuntu", h.buildCISUbuntuFindings},
 		"cisrhel":         {"CIS RHEL Benchmark Report", "CIS RHEL", h.buildCISRHELFindings},
@@ -351,10 +353,10 @@ var connwaerCapabilityByControl = map[string]map[string]string{
 		"RTS7-Art11-2": "capacity_monitor",
 		"RTS7-Art14-1": "kill_switch",
 	},
-	"gaming": {
-		"NGC-TS-4.2":  "rng_validation",
+	"gaming-mga": {
 		"MGA-RGR-5.2": "bcp_test",
-		"MGA-RGR-6.1": "rng_validation",
+	},
+	"gaming-ukgc": {
 		"UKGC-RTS-5B": "bcp_test",
 	},
 }
@@ -2835,28 +2837,31 @@ func (h *ReportHandler) buildFDA21CFR11Findings() []ControlFinding {
 	})
 }
 
-func (h *ReportHandler) buildGamingFindings() []ControlFinding {
+func (h *ReportHandler) buildGamingUKGCFindings() []ControlFinding {
 	return catalog([][2]string{
-		// System Integrity (Nevada, MGA, UKGC)
-		{"NGC-TS-1.1", "System Hardening (Nevada)"},
-		{"NGC-TS-1.2", "File Integrity (Nevada)"},
-		{"MGA-RGR-4.1", "System Security (Malta)"},
-		{"MGA-RGR-4.2", "Data Integrity (Malta)"},
-		{"UKGC-RTS-4A", "Security Controls (UK)"},
-		{"UKGC-RTS-4B", "Change Management (UK)"},
-		// Availability
-		{"NGC-TS-2.1", "Service Monitoring (Nevada)"},
-		{"NGC-TS-2.2", "Recovery Capability (Nevada)"},
-		{"MGA-RGR-5.1", "System Availability (Malta)"},
-		{"MGA-RGR-5.2", "Disaster Recovery (Malta)"},
-		{"UKGC-RTS-5A", "Resilience (UK)"},
-		{"UKGC-RTS-5B", "Business Continuity (UK)"},
-		// RNG & Gaming Devices
-		{"NGC-TS-3.1", "Change Control for Gaming Systems (Nevada)"},
-		{"NGC-TS-4.1", "RNG Certification (Nevada)"},
-		{"NGC-TS-4.2", "RNG Monitoring (Nevada)"},
-		{"MGA-RGR-6.1", "RNG Requirements (Malta)"},
-		{"UKGC-RTS-6A", "RNG Testing (UK)"},
+		{"UKGC-RTS-4A", "Security Controls"},
+		{"UKGC-RTS-4B", "Change Management"},
+		{"UKGC-RTS-5A", "Resilience"},
+		{"UKGC-RTS-5B", "Business Continuity"},
+	})
+}
+
+func (h *ReportHandler) buildGamingNevadaFindings() []ControlFinding {
+	return catalog([][2]string{
+		{"NGC-TS-1.1", "System Hardening"},
+		{"NGC-TS-1.2", "File Integrity"},
+		{"NGC-TS-2.1", "Service Monitoring"},
+		{"NGC-TS-2.2", "Recovery Capability"},
+		{"NGC-TS-3.1", "Change Control for Gaming Systems"},
+	})
+}
+
+func (h *ReportHandler) buildGamingMGAFindings() []ControlFinding {
+	return catalog([][2]string{
+		{"MGA-RGR-4.1", "System Security"},
+		{"MGA-RGR-4.2", "Data Integrity"},
+		{"MGA-RGR-5.1", "System Availability"},
+		{"MGA-RGR-5.2", "Disaster Recovery"},
 	})
 }
 
@@ -4011,7 +4016,9 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		{"MiFID II", "mifid2"},
 		{"CCSS", "ccss"},
 		{"FDA 21 CFR Part 11", "fda21cfr11"},
-		{"Gaming Commission", "gaming"},
+		{"UKGC", "gamingukgc"},
+		{"Nevada GCB", "gamingnevada"},
+		{"MGA", "gamingmga"},
 		{"CIS Windows", "ciswindows"},
 		{"CIS Ubuntu", "cisubuntu"},
 		{"CIS RHEL", "cisrhel"},
@@ -4480,7 +4487,9 @@ func (h *ReportHandler) PersistComplianceSnapshot(ctx context.Context) {
 		{"MiFID II", "mifid2", "mifid2"},
 		{"CCSS", "ccss", "ccss"},
 		{"FDA 21 CFR Part 11", "fda21cfr11", "fda-21cfr11"},
-		{"Gaming Commission", "gaming", "gaming"},
+		{"UKGC", "gamingukgc", "gaming-ukgc"},
+		{"Nevada GCB", "gamingnevada", "gaming-nevada-gcb"},
+		{"MGA", "gamingmga", "gaming-mga"},
 		{"CIS Windows", "ciswindows", "cis-windows"},
 		{"CIS Ubuntu", "cisubuntu", "cis-ubuntu"},
 		{"CIS RHEL", "cisrhel", "cis-rhel"},
