@@ -17,8 +17,9 @@
 // publish/rollback (the local-filesystem config commands read /srv/vigo/stacks
 // directly). Those stay with the manual home-lab pass.
 //
-// Prerequisites: bin/vigosrv + bin/vigocli (run `make build`). Absent either,
-// the suite skips cleanly so a fresh `go test ./...` stays green.
+// Prerequisites: bin/vigosrv + bin/vigocli. `make test` builds them so this
+// suite always runs in the canonical gate; absent either (a bare `go test
+// ./...`), the suite skips cleanly so it stays green.
 package clismoke
 
 import (
@@ -56,7 +57,7 @@ func run(m *testing.M) (code int) {
 	cliBin = filepath.Join(root, "bin", "vigocli")
 	for _, b := range []string{vigosrv, cliBin} {
 		if _, err := os.Stat(b); err != nil {
-			fmt.Fprintf(os.Stderr, "skip: %s not found — run 'make build' first\n", b)
+			fmt.Fprintf(os.Stderr, "skip: %s not found — run 'make test' (which builds it) or 'make build'\n", b)
 			return 0
 		}
 	}

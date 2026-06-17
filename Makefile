@@ -57,6 +57,13 @@ build-agent:
 	cp agent/.build/release/vigo bin/vigo
 
 test:
+	# Build the binaries test/clismoke drives, so it actually runs here (it
+	# skips when bin/ is absent — that silent skip once let a gateway→UDS
+	# regression ship). Plain/unsigned: clismoke doesn't need the hardening
+	# signature, and these aren't dist artifacts. Agent isn't built — clismoke
+	# doesn't use it.
+	go build -o bin/vigosrv ./server
+	go build -o bin/vigocli ./cli
 	go test $(shell go list ./... | grep -v test/integration) -v -race -count=1
 	cd agent && cargo test
 
