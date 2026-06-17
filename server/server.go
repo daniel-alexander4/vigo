@@ -217,7 +217,10 @@ type Server struct {
 	// --- gRPC server + services. Constructed in chunk 4. peerService is
 	// registered on grpcSrv after construction; the actual grpcSrv.Serve
 	// goroutine still starts from run() in chunk 5. ---
-	grpcSrv     *grpc.Server
+	grpcSrv *grpc.Server
+	// operatorSrv is the plaintext gRPC server bound to the local operator UDS
+	// (the grpc-gateway dials it); the mTLS grpcSrv serves the network port.
+	operatorSrv *grpc.Server
 	certCache   *isgrpc.CertCache
 	traitsBatch *db.TraitsBatcher
 	agentSvc    *isgrpc.AgentService
@@ -960,7 +963,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// --- gRPC server + services (chunk 4). All goroutine starts
 	// (grpcSrv.Serve, traitsBatch.Start, peer primary push, etc.) stay
 	// in run() / chunk 5. ---
-	grpcSrv, certCache, traitsBatch, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, operatorSrv, certCache, traitsBatch, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:                   s.cfg.Server.TLS.CertFile,
 		KeyFile:                    s.cfg.Server.TLS.KeyFile,
 		CAFile:                     s.cfg.Server.TLS.CAFile,
@@ -1014,6 +1017,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		return nil, fmt.Errorf("creating gRPC server: %w", err)
 	}
 	s.grpcSrv = grpcSrv
+	s.operatorSrv = operatorSrv
 	s.certCache = certCache
 	s.traitsBatch = traitsBatch
 	s.agentSvc = agentSvc

@@ -29,6 +29,7 @@ import (
 	"git.alexander4.io/vigo/server/traits"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -114,10 +115,12 @@ type ServerConfig struct {
 // TLS 1.3 minimum, client certificate required and verified against CA.
 // Returns the server, a CertCache for TLS hot reload, and a
 // TraitsBatcher whose Start method should be called in a goroutine.
-func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *AgentService, *AdminService, error) {
+// Returns (networkSrv, operatorSrv, ...): networkSrv is the mTLS server for the
+// network port; operatorSrv is the plaintext server for the local operator UDS.
+func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.TraitsBatcher, *AgentService, *AdminService, error) {
 	tlsCfg, certCache, err := buildTLSConfig(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
 	if cfg.TicketsStore != nil {
 		cfg.TicketsStore.Apply(tlsCfg)
@@ -183,8 +186,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	}
 	interceptors = append(interceptors, sigInterceptor)
 
+	// Shared options for both servers below. Transport credentials are applied
+	// per-server: mTLS on the network port, plaintext on the loopback operator
+	// socket. Everything else (interceptors, keepalive, limits) is identical, so
+	// the operator path keeps the same panic-recovery + auth + metrics chain.
 	opts := []grpc.ServerOption{
-		grpc.Creds(creds),
 		grpc.ChainUnaryInterceptor(interceptors...),
 		grpc.ChainStreamInterceptor(RecoveryStreamInterceptor(cfg.Metrics)),
 		grpc.MaxConcurrentStreams(maxStreams),
@@ -213,7 +219,14 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		opts = append(opts, grpc.WriteBufferSize(cfg.GRPCWriteBuffer))
 	}
 
-	srv := grpc.NewServer(opts...)
+	// Network server: mTLS (SEC-01), reached by agents and (over the network)
+	// roster bolts. operatorSrv: the local 0600 operator UDS the grpc-gateway
+	// dials. The UDS hop is plaintext — the socket perms are the boundary and
+	// VigoAdmin's auth gate is cpauth-exempt by transport for unix peers
+	// (isLocalSocket), so the gateway dials with insecure credentials. Fresh
+	// literal bases so the two appends never alias one backing array.
+	srv := grpc.NewServer(append([]grpc.ServerOption{grpc.Creds(creds)}, opts...)...)
+	operatorSrv := grpc.NewServer(append([]grpc.ServerOption{grpc.Creds(insecure.NewCredentials())}, opts...)...)
 
 	reassignStore := NewReassignStore()
 
@@ -330,8 +343,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		integrations:     cfg.Integrations,
 	}
 	pb.RegisterVigoAdminServer(srv, adminSvc)
+	// VigoAdmin is the only service the grpc-gateway bridges, so it's all the
+	// operator UDS server needs (agents/peers use the mTLS network port).
+	pb.RegisterVigoAdminServer(operatorSrv, adminSvc)
 
-	return srv, certCache, traitsBatch, agentSvc, adminSvc, nil
+	return srv, operatorSrv, certCache, traitsBatch, agentSvc, adminSvc, nil
 }
 
 // buildTLSConfig creates a tls.Config requiring client certificates verified

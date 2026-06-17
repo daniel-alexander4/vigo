@@ -102,6 +102,66 @@ func findMigrationsDir() string {
 	}
 }
 
+// TestOperatorSocketPlaintext pins the F4 regression fix: the local operator
+// UDS is served by a PLAINTEXT gRPC server (operatorSrv), so the grpc-gateway —
+// which dials it with insecure credentials — completes the handshake instead of
+// failing with "error reading server preface: EOF" against an mTLS listener.
+// Before the fix, the UDS was served by the mTLS grpcSrv and every gateway-
+// bridged VigoAdmin call 503'd.
+func TestOperatorSocketPlaintext(t *testing.T) {
+	ctx := context.Background()
+	for _, table := range []string{"run_results", "runs", "envoy_traits", "plans", "plan_results", "file_snapshots", "approved_patterns", "envoys"} {
+		if _, err := testDB.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+			t.Fatalf("failed to delete from %s: %v", table, err)
+		}
+	}
+	queries := db.New(testDB)
+	reg := registry.NewRegistry(queries)
+	configStore, err := config.NewConfigStore(t.TempDir(), &noopProvider{}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, operatorSrv, _, _, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
+		CertFile:    filepath.Join(testCertDir, "server.crt"),
+		KeyFile:     filepath.Join(testCertDir, "server.key"),
+		CAFile:      filepath.Join(testCertDir, "ca.crt"),
+		GRPCPort:    ":0",
+		Registry:    reg,
+		ConfigStore: configStore,
+		Queries:     queries,
+		Metrics:     metrics.NewTestMetrics(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sockPath := filepath.Join(t.TempDir(), "admin.sock")
+	lis, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go operatorSrv.Serve(lis)
+	defer operatorSrv.Stop()
+
+	// Dial the UDS with INSECURE creds, exactly as the grpc-gateway does.
+	conn, err := grpc.NewClient("unix://"+sockPath, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial operator socket: %v", err)
+	}
+	defer conn.Close()
+
+	// A unix-peer VigoAdmin call is cpauth-exempt by transport, so over the
+	// empty test DB this returns cleanly. The point is the plaintext handshake
+	// succeeds — a transport failure would surface as codes.Unavailable.
+	if _, err := pb.NewVigoAdminClient(conn).ListEnvoys(ctx, &pb.ListEnvoysRequest{}); err != nil {
+		if status.Code(err) == codes.Unavailable {
+			t.Fatalf("operator UDS handshake failed (insecure client → server) — the F4 regression: %v", err)
+		}
+		t.Fatalf("ListEnvoys over operator UDS: %v", err)
+	}
+}
+
 // startTestServer creates a gRPC server with mTLS and returns its address and cleanup func.
 func startTestServer(t *testing.T) (string, func()) {
 	t.Helper()
@@ -129,7 +189,7 @@ func startTestServer(t *testing.T) (string, func()) {
 		t.Fatal(err)
 	}
 
-	srv, _, _, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	srv, _, _, _, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:    filepath.Join(testCertDir, "server.crt"),
 		KeyFile:     filepath.Join(testCertDir, "server.key"),
 		CAFile:      filepath.Join(testCertDir, "ca.crt"),

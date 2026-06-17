@@ -68,6 +68,9 @@ func (s *Server) Run(ctx context.Context) error {
 	slog.Info("shutting down...")
 
 	s.grpcSrv.GracefulStop()
+	if s.operatorSrv != nil {
+		s.operatorSrv.GracefulStop()
+	}
 	if err := s.httpSrv.Shutdown(context.Background()); err != nil {
 		slog.Error("REST gateway shutdown error", "error", err)
 	}
@@ -261,7 +264,9 @@ func (s *Server) startGRPCServer(ctx context.Context) error {
 
 	go func() {
 		slog.Info("gRPC operator socket starting", "path", sockPath)
-		if err := s.grpcSrv.Serve(udsLis); err != nil {
+		// Plaintext server (operatorSrv), not the mTLS grpcSrv — the gateway
+		// dials this socket with insecure credentials.
+		if err := s.operatorSrv.Serve(udsLis); err != nil {
 			slog.Error("gRPC operator socket error", "error", err)
 		}
 	}()
