@@ -25,7 +25,7 @@ Frameworks tracked. The version label is the **currently-mapped baseline** — i
 - **IEC 62443** — industrial control systems
 - **Cyber Essentials Plus** — UK government scheme
 - **NY DFS Cyber** — 23 NYCRR 500
-- **MiFID II** — RTS 24
+- **MiFID II** — RTS 7 (trading-venue organisational requirements) + RTS 25 (clock synchronisation)
 - **FINRA** / **SEC 17a-4** — broker-dealer recordkeeping
 - **FDA 21 CFR Part 11** — electronic records and signatures
 - **SOX** — public-company financial controls
@@ -92,7 +92,7 @@ Connwaer is a separate Alexander4 compliance-verification agent. Its docs are cu
 - `connwaer.fim` — runtime file-integrity monitoring beyond `aide`. Satisfies PCI-DSS 11.5, NIST SI-7 / SI-7(1) / SI-7(7).
 - `connwaer.hsm-lifecycle` — verifies HSM key-lifecycle handling (generation, rotation, retirement, destruction). Satisfies CCSS-9.1, PCI-DSS 3.5 / 3.6, NIST SC-12 / SC-12(2).
 - `connwaer.integrity-monitoring` — broader integrity surface than `connwaer.fim`: kernel modules, boot chain, service unit files. Satisfies NIST SI-7, ISO A.8.34.
-- `connwaer.kill-switch` — verifies sub-millisecond trading-system kill switch (financial-services). Satisfies MiFID II RTS 24, SEC Rule 15c3-5.
+- `connwaer.kill-switch` — verifies sub-millisecond trading-system kill switch (financial-services). Satisfies MiFID II RTS 7 Art 14, SEC Rule 15c3-5.
 - `connwaer.log-review` — verifies logs are reviewed on a defined cadence with documented outcomes. Satisfies PCI-DSS 10.4, NIST AU-6 / AU-6(1), ISO A.8.15 / A.8.16.
 - `connwaer.network-segmentation` — verifies segmentation between fleet partitions (CDE vs non-CDE, prod vs dev, tenant boundaries). Satisfies PCI-DSS 1.2 / 1.3, NIST SC-7, ISO A.8.22.
 - `connwaer.password-policy` — verifies password-complexity, history, and lockout policy enforcement. Satisfies NIST IA-5 / IA-5(1), CIS 5.4.x, HIPAA 164.308(a)(5)(ii)(D).

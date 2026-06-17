@@ -75,7 +75,7 @@ var frameworkLabels = map[string]string{
 	"iec62443":        "IEC 62443",
 	"sox":             "SOX",
 	"finra":           "FINRA",
-	"mifid2":          "MiFID II RTS 24",
+	"mifid2":          "MiFID II RTS 7 / RTS 25",
 	"ccss":            "CCSS",
 	"fda21cfr11":      "FDA 21 CFR Part 11",
 	"gamingukgc":      "UK Gambling Commission (Remote Technical Standards)",

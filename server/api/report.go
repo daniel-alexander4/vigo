@@ -2793,6 +2793,8 @@ func (h *ReportHandler) buildMiFID2Findings() []ControlFinding {
 		{"RTS7-Art11-1", "Capacity Monitoring"},
 		{"RTS7-Art11-2", "Capacity Planning"},
 		{"RTS7-Art14-1", "Kill Switch Mechanism"},
+		// Clock Synchronisation (RTS 25)
+		{"RTS25-ClockSync", "Business Clock Synchronisation (UTC)"},
 	})
 }
 

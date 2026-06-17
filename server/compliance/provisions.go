@@ -64,6 +64,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"cis-ubuntu":  {"2.1.1.1", "2.1.1.2"},
 			"cis-rhel":    {"2.1.1.1", "2.1.1.2"},
 			"iso-27001":   {"A.8.17"},
+			"mifid2":      {"RTS25-ClockSync"},
 			"nist-800-53": {"AU-8"},
 			"pci-dss":     {"10.6.1", "10.6.2", "10.6.3"},
 		},
