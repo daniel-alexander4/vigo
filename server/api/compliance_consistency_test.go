@@ -10,15 +10,15 @@ import (
 	"git.alexander4.io/vigo/server/config"
 )
 
-// cisStandardKeys are excluded from the builder-subset check below. The
-// CIS catalogs are pending the Level-1-Server trim (deferred until the
-// benchmark source data is on hand — see pending.md), so their bundle
-// claims are not yet guaranteed to line up with the (still full-benchmark)
-// builders. Remove an entry here once that framework's trim lands.
+// cisStandardKeys are excluded from the builder-subset check below.
+// cis-windows is already CIS Windows Server 2022 L1-Member-Server and is
+// enforced. cis-ubuntu/cis-rhel remain excluded pending their v2.0.0
+// L1-Server migration (their builders + bundle claims still use the old
+// CIS numbering — see the migration entry in pending.md). Remove an entry
+// here once that framework's migration lands.
 var cisStandardKeys = map[string]bool{
-	"cis-ubuntu":  true,
-	"cis-rhel":    true,
-	"cis-windows": true,
+	"cis-ubuntu": true,
+	"cis-rhel":   true,
 }
 
 // TestEveryStandardSlugHasABuilder guards the framework registries against

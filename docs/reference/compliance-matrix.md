@@ -17,7 +17,7 @@ Frameworks tracked. The version label is the **currently-mapped baseline** — i
 - **NIST 800-53** — Rev. 5
 - **ISO/IEC 27001** — :2022 Annex A
 - **CIS Ubuntu** — 22.04 Benchmark v1.0.0
-- **CIS Windows** — 11 Benchmark v3.x
+- **CIS Windows Server 2022** — v3.0.0 Benchmark (L1 Member Server)
 - **CIS RHEL** — 9 Benchmark v2.x
 - **HITRUST CSF** — v11.x
 - **GDPR** — technical & organizational measures

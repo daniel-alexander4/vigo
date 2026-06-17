@@ -236,7 +236,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Windows Components",
 		Description: "Framework-bundle scope-cut: cis-windows-components. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-windows": {"18.1.1", "18.3.1", "18.3.2", "18.8.1", "18.8.2", "18.8.3", "18.9.1", "18.9.2", "18.9.3", "18.9.4", "18.9.5", "18.9.6"},
+			"cis-windows": {"18.1.1.1", "18.3.1", "18.3.2"},
 		},
 	},
 	"cis-windows-firewall": {

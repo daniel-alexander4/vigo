@@ -81,7 +81,7 @@ var frameworkLabels = map[string]string{
 	"gamingukgc":      "UK Gambling Commission (Remote Technical Standards)",
 	"gamingnevada":    "Nevada Gaming Control Board (Reg 14 Technical Standards)",
 	"gamingmga":       "Malta Gaming Authority (Technical Infrastructure)",
-	"ciswindows":      "CIS Windows 11 Benchmark v3.x",
+	"ciswindows":      "CIS Windows Server 2022 Benchmark v3.0.0 (L1 Member Server)",
 	"cisubuntu":       "CIS Ubuntu 22.04 Benchmark v1.0.0",
 	"cisrhel":         "CIS RHEL 9 Benchmark v2.x",
 	"nydfscyber":      "NY DFS Cyber (23 NYCRR 500)",
