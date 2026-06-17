@@ -34,8 +34,8 @@ func TestFrameworkCatalogCounts(t *testing.T) {
 		{"SOC 2 TSC", h.buildSOC2Findings(), 30, 45},
 		{"PCI DSS v4.0", h.buildPCIDSSFindings(), 220, 300},
 		{"ISO 27001:2022 Annex A", h.buildISO27001Findings(), 88, 100},
-		{"CIS Ubuntu 22.04 L1+L2", h.buildCISUbuntuFindings(), 220, 320},
-		{"CIS RHEL 8/9 L1+L2", h.buildCISRHELFindings(), 180, 290},
+		{"CIS Ubuntu 22.04 v2.0.0 L1 Server", h.buildCISUbuntuFindings(), 205, 275},
+		{"CIS RHEL 9 v2.0.0 L1 Server", h.buildCISRHELFindings(), 200, 270},
 		{"CIS Windows Server 2022 L1+MS", h.buildCISWindowsFindings(), 320, 420},
 	}
 	for _, tc := range cases {

@@ -16,9 +16,9 @@ Frameworks tracked. The version label is the **currently-mapped baseline** — i
 - **PCI DSS** — v4.0
 - **NIST 800-53** — Rev. 5
 - **ISO/IEC 27001** — :2022 Annex A
-- **CIS Ubuntu** — 22.04 Benchmark v1.0.0
+- **CIS Ubuntu** — 22.04 Benchmark v2.0.0 (L1 Server profile)
 - **CIS Windows Server 2022** — v3.0.0 Benchmark (L1 Member Server)
-- **CIS RHEL** — 9 Benchmark v2.x
+- **CIS RHEL** — 9 Benchmark v2.0.0 (L1 Server profile)
 - **HITRUST CSF** — v11.x
 - **GDPR** — technical & organizational measures
 - **NERC CIP** — v6 (electric power utilities)

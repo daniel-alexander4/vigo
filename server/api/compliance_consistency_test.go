@@ -11,15 +11,11 @@ import (
 )
 
 // cisStandardKeys are excluded from the builder-subset check below.
-// cis-windows is already CIS Windows Server 2022 L1-Member-Server and is
-// enforced. cis-ubuntu/cis-rhel remain excluded pending their v2.0.0
-// L1-Server migration (their builders + bundle claims still use the old
-// CIS numbering — see the migration entry in pending.md). Remove an entry
-// here once that framework's migration lands.
-var cisStandardKeys = map[string]bool{
-	"cis-ubuntu": true,
-	"cis-rhel":   true,
-}
+// All CIS frameworks now migrated to their adopted profiles and are
+// enforced: cis-windows (Server 2022 L1-Member-Server), cis-ubuntu and
+// cis-rhel (ComplianceAsCode v2.0.0 L1-Server). The map is intentionally
+// empty — re-add a key only to temporarily exclude a framework mid-migration.
+var cisStandardKeys = map[string]bool{}
 
 // TestEveryStandardSlugHasABuilder guards the framework registries against
 // drift: every URL slug in config.StandardKeyForSlug must resolve to a

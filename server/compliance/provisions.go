@@ -61,8 +61,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "System time synchronization",
 		Description: "Installs and runs a time-sync daemon (chrony or ntpd) that keeps the system clock aligned with an authoritative source. Required for audit-log timestamp correlation across the fleet.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"2.1.1.1", "2.1.1.2"},
-			"cis-rhel":    {"2.1.1.1", "2.1.1.2"},
+			"cis-ubuntu":  {"2.3.2.1"},
 			"iso-27001":   {"A.8.17"},
 			"mifid2":      {"RTS25-ClockSync"},
 			"nist-800-53": {"AU-8"},
@@ -74,8 +73,8 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "System timezone configuration",
 		Description: "Sets the host's timezone to a known value (typically UTC) so audit and log timestamps are unambiguous across the fleet.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"6.1.1"},
-			"cis-rhel":    {"6.1.1"},
+			"cis-ubuntu":  {"7.1.1"},
+			"cis-rhel":    {"7.1.1"},
 			"hipaa":       {"164.312(b)"},
 			"iso-27001":   {"A.8.17"},
 			"nist-800-53": {"AU-8"},
@@ -88,8 +87,6 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "Host-level audit logging",
 		Description: "Runs the OS audit subsystem (auditd / Windows Event Log forwarding) to capture privileged actions, authentication events, and security-relevant syscalls.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4"},
-			"cis-rhel":    {"4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4"},
 			"hipaa":       {"164.312(b)"},
 			"iso-27001":   {"A.8.15"},
 			"nist-800-53": {"AU-2", "AU-3", "AU-12"},
@@ -143,8 +140,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "Log rotation + retention",
 		Description: "Rotates log files on a schedule (logrotate or equivalent) and enforces retention so the host doesn't exhaust storage and old evidence isn't truncated.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"4.2.1.3", "4.2.3"},
-			"cis-rhel":    {"4.2.1.3", "4.2.3"},
+			"cis-rhel":    {"6.2.3.3"},
 			"hipaa":       {"164.312(b)", "164.312(c)(1)"},
 			"nist-800-53": {"AU-4", "AU-9", "AU-11"},
 			"pci-dss":     {"10.5.1", "10.7.1"},
@@ -166,7 +162,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "Host-level firewall",
 		Description: "Installs and configures a host firewall (ufw, firewalld, nftables, iptables, Windows Firewall) with a default-deny stance. Covers both the firewall-installed + default-deny base case and configcrates that assert specific allow/deny rule sets — a host firewall with any rule set satisfies the same broad control set.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"3.4.1.1", "3.4.1.2"},
+			"cis-ubuntu":  {"4.1.1", "4.1.2"},
 			"iso-27001":   {"A.8.20"},
 			"nist-800-53": {"SC-7", "AC-4"},
 			"pci-dss":     {"1.2.1", "1.2.5", "1.3.1", "1.4.1"},
@@ -349,8 +345,6 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "Password policy (complexity + aging + lockout)",
 		Description: "Configures the full password-policy surface: pwquality complexity + login.defs aging + PAM faillock lockout + history.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"5.4.1.1", "5.4.1.2", "5.4.1.3", "5.4.1.4", "5.4.1.5"},
-			"cis-ubuntu":  {"5.4.1.1", "5.4.1.2", "5.4.1.3", "5.4.1.4", "5.4.1.5"},
 			"hipaa":       {"164.308(a)(5)(ii)(D)"},
 			"iso-27001":   {"A.8.5"},
 			"nist-800-53": {"IA-5"},
@@ -362,8 +356,8 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "OpenSSH server hardening",
 		Description: "Configures the OpenSSH server with CIS-aligned settings: strong crypto, root login disabled, key-only auth, protocol pinning, idle timeout, max-auth-tries.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"5.2.1", "5.2.4", "5.2.6", "5.2.7", "5.2.10", "5.2.13", "5.2.14", "5.2.15", "5.2.20"},
-			"cis-ubuntu":  {"5.2.1", "5.2.4", "5.2.6", "5.2.7", "5.2.10", "5.2.13", "5.2.14", "5.2.15", "5.2.20"},
+			"cis-rhel":    {"5.1.3", "5.1.5", "5.1.6", "5.1.9", "5.1.13", "5.1.14", "5.1.15", "5.1.20"},
+			"cis-ubuntu":  {"5.2.1", "5.2.6", "5.2.7"},
 			"hipaa":       {"164.312(a)(1)", "164.312(d)", "164.312(e)(1)"},
 			"iso-27001":   {"A.8.5", "A.5.14"},
 			"nist-800-53": {"AC-17", "IA-2"},
@@ -375,7 +369,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "SELinux in enforcing mode",
 		Description: "Sets SELinux to enforcing mode with a hardened policy (targeted or strict). RHEL-family hosts only.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"1.6.1.1", "1.6.1.2", "1.6.1.3", "1.6.1.4", "1.6.1.5"},
+			"cis-rhel":    {"1.3.1.1", "1.3.1.2", "1.3.1.3"},
 			"iso-27001":   {"A.8.3"},
 			"nist-800-53": {"AC-3"},
 		},
@@ -385,8 +379,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "Sudo least-privilege policy",
 		Description: "Configures sudo with use_pty, logfile, default require-password, and command authorization — moves OS users out of direct-root and into per-command least privilege.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"5.3.1", "5.3.2", "5.3.3", "5.3.4"},
-			"cis-ubuntu":  {"5.3.1", "5.3.2", "5.3.3", "5.3.4"},
+			"cis-rhel":    {"5.2.1", "5.2.2", "5.2.3"},
 			"hipaa":       {"164.308(a)(4)(ii)(B)", "164.312(a)(1)"},
 			"iso-27001":   {"A.8.2", "A.8.18"},
 			"nist-800-53": {"AC-6", "AU-2"},
@@ -566,7 +559,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Description: "Sets a login banner (issue / motd) with the operator's chosen warning text — CIS-aligned framing for legal notice.",
 		Frameworks: map[string][]string{
 			"cis-rhel":    {"1.7.1", "1.7.2", "1.7.3"},
-			"cis-ubuntu":  {"1.7.1", "1.7.2", "1.7.3"},
+			"cis-ubuntu":  {"1.6.1", "1.6.2", "1.6.3"},
 			"iso-27001":   {"A.8.3"},
 			"nist-800-53": {"AC-8"},
 		},
@@ -585,8 +578,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Title:       "OS user account management",
 		Description: "Creates and manages OS user accounts with declarative shell, groups, SSH keys, and home-directory permissions.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"5.4.1"},
-			"cis-ubuntu":  {"5.4.1"},
+			"cis-rhel":    {"5.3.2.1"},
 			"hipaa":       {"164.312(a)(1)", "164.312(a)(2)(i)", "164.312(d)"},
 			"iso-27001":   {"A.5.16", "A.8.5"},
 			"nist-800-53": {"AC-3", "AC-6", "AC-6(1)", "IA-2", "IA-5"},

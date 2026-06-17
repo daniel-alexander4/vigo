@@ -88,7 +88,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Rhel Access",
 		Description: "Framework-bundle scope-cut: cis-rhel-access. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"5.1.1", "5.1.2", "5.1.3", "5.1.4", "5.1.5", "5.1.6", "5.1.7", "5.1.8", "5.2.1", "5.2.2", "5.2.3", "5.2.4", "5.2.5", "5.2.6", "5.2.7", "5.2.8", "5.2.9", "5.2.10", "5.2.11", "5.2.12", "5.2.13", "5.2.14", "5.2.15", "5.2.16", "5.2.17", "5.2.18", "5.2.19", "5.2.20", "5.3.1", "5.3.2", "5.3.3", "5.3.4", "5.4.1", "5.4.2", "5.4.3", "5.4.4", "5.4.5", "5.5.1.1", "5.5.1.2", "5.5.1.3", "5.5.1.4", "5.5.1.5", "5.5.2", "5.5.3", "5.5.4", "5.5.5"},
+			"cis-rhel":    {"2.4.1.1", "2.4.1.2", "2.4.1.3", "2.4.1.4", "2.4.1.5", "2.4.1.6", "2.4.1.7", "2.4.1.8", "5.1.1", "5.1.2", "5.1.3", "5.1.4", "5.1.5", "5.1.6", "5.1.7", "5.1.8", "5.1.9", "5.1.12", "5.1.13", "5.1.14", "5.1.15", "5.1.16", "5.1.18", "5.1.17", "5.1.19", "5.1.20", "5.2.1", "5.2.2", "5.2.3", "5.3.2.1", "5.3.2.2", "5.3.2.3", "5.3.2.4", "5.3.2.5", "5.3.3.2.1", "5.3.3.2.2", "5.3.3.2.3", "5.3.3.2.4", "5.3.3.2.5"},
 			"hipaa":       {"164.312(d)", "164.312(e)(1)"},
 			"iso-27001":   {"A.5.16", "A.5.17", "A.8.3", "A.8.20"},
 			"nist-800-53": {"AC-17", "IA-2", "IA-5", "SC-8"},
@@ -100,7 +100,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Rhel Filesystem",
 		Description: "Framework-bundle scope-cut: cis-rhel-filesystem. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8", "1.1.2", "1.1.3", "1.1.4", "1.1.5", "1.4.1", "1.4.2", "1.5.1", "1.5.2", "1.5.3"},
+			"cis-rhel":    {"1.1.1.1", "1.1.1.8", "1.4.1", "1.4.2", "1.5.1", "1.5.2", "1.5.3"},
 			"nist-800-53": {"CM-6", "CM-7", "SC-7"},
 			"pci-dss":     {"2.2.1", "2.2.5"},
 		},
@@ -110,7 +110,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Rhel Logging",
 		Description: "Framework-bundle scope-cut: cis-rhel-logging. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4", "4.1.2", "4.1.3", "4.1.4", "4.1.5", "4.1.6", "4.1.7", "4.1.8", "4.1.9", "4.1.10", "4.1.11", "4.1.12", "4.1.13", "4.1.14", "4.1.15", "4.1.16", "4.1.17", "4.2.1.1", "4.2.1.2", "4.2.1.3", "4.2.3"},
+			"cis-rhel":    {"6.2.3.3"},
 			"hipaa":       {"164.312(b)"},
 			"iso-27001":   {"A.8.15"},
 			"nist-800-53": {"AU-2", "AU-3", "AU-12"},
@@ -123,7 +123,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Rhel Maintenance",
 		Description: "Framework-bundle scope-cut: cis-rhel-maintenance. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"6.1.1", "6.1.2", "6.1.3", "6.1.4", "6.1.5", "6.1.6", "6.1.7", "6.1.8", "6.1.9", "6.1.10", "6.2.1", "6.2.2", "6.2.3", "6.2.5"},
+			"cis-rhel":    {"7.1.1", "7.1.2", "7.1.3", "7.1.4", "7.1.5", "7.1.6", "7.1.7", "7.1.8", "7.1.9", "7.1.10", "7.2.1", "7.2.2", "7.2.3", "7.2.4"},
 			"nist-800-53": {"CM-6", "AC-3"},
 			"pci-dss":     {"2.2.1", "7.1.1"},
 		},
@@ -133,7 +133,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Rhel Network",
 		Description: "Framework-bundle scope-cut: cis-rhel-network. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"3.1.1", "3.1.2", "3.2.1", "3.2.2", "3.2.3", "3.2.4", "3.2.5", "3.2.6", "3.2.7", "3.2.8", "3.2.9", "3.3.1", "3.3.2", "3.3.3", "3.4.1.1", "3.4.1.2", "3.4.2.1", "3.4.2.2", "3.4.2.3", "3.4.2.4", "3.4.2.5", "3.4.2.6"},
+			"cis-rhel":    {"3.1.1", "3.1.2", "3.3.1", "3.3.2", "3.3.3", "4.1.1", "4.2.1"},
 			"iso-27001":   {"A.8.20"},
 			"nist-800-53": {"SC-7", "CM-6"},
 			"pci-dss":     {"1.3.1", "1.3.2", "2.2.1"},
@@ -144,7 +144,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Rhel Services",
 		Description: "Framework-bundle scope-cut: cis-rhel-services. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"2.1.1", "2.1.2", "2.1.3", "2.1.4", "2.1.5", "2.1.6", "2.1.7", "2.1.8", "2.1.9", "2.1.10", "2.1.11", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5"},
+			"cis-rhel":    {"2.3.1", "2.3.2", "2.1.1", "2.1.2", "2.1.3", "2.1.4"},
 			"nist-800-53": {"CM-7"},
 			"pci-dss":     {"2.2.2", "2.2.3"},
 		},
@@ -154,7 +154,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Ubuntu Access",
 		Description: "Framework-bundle scope-cut: cis-ubuntu-access. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"5.1.1", "5.1.2", "5.1.3", "5.1.4", "5.1.5", "5.1.6", "5.1.7", "5.1.8", "5.2.1", "5.2.2", "5.2.3", "5.2.4", "5.2.5", "5.2.6", "5.2.7", "5.2.8", "5.2.9", "5.2.10", "5.2.11", "5.2.12", "5.2.13", "5.2.14", "5.2.15", "5.2.16", "5.2.17", "5.2.18", "5.2.19", "5.2.20", "5.2.21", "5.2.22", "5.2.23", "5.3.1", "5.3.2", "5.3.3", "5.3.4", "5.4.1.1", "5.4.1.2", "5.4.1.3", "5.4.1.4", "5.4.1.5", "5.4.2", "5.4.3", "5.4.4", "5.4.5"},
+			"cis-ubuntu":  {"2.4.1.1", "2.4.1.2", "2.4.1.3", "2.4.1.4", "2.4.1.5", "2.4.1.6", "2.4.1.7", "2.4.1.8", "5.2.1", "5.2.2", "5.2.3", "5.2.6", "5.2.7", "5.4.2.3", "5.4.3.3", "5.4.3.2"},
 			"hipaa":       {"164.312(d)", "164.312(e)(1)"},
 			"iso-27001":   {"A.5.16", "A.5.17", "A.8.3", "A.8.20"},
 			"nist-800-53": {"AC-17", "IA-2", "IA-5", "SC-8"},
@@ -166,7 +166,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Ubuntu Filesystem",
 		Description: "Framework-bundle scope-cut: cis-ubuntu-filesystem. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8", "1.1.2", "1.1.3", "1.1.4", "1.1.5", "1.4.1", "1.4.2", "1.4.3", "1.5.1", "1.5.2", "1.5.3", "1.5.4"},
+			"cis-ubuntu":  {"1.1.1.1", "1.1.1.8", "1.4.1", "1.4.2", "1.5.1", "1.5.4", "1.5.5", "1.5.3"},
 			"nist-800-53": {"CM-6", "CM-7", "SC-7"},
 			"pci-dss":     {"2.2.1", "2.2.5"},
 		},
@@ -176,7 +176,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Ubuntu Logging",
 		Description: "Framework-bundle scope-cut: cis-ubuntu-logging. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.2", "4.1.3", "4.1.4", "4.1.5", "4.1.6", "4.1.7", "4.1.8", "4.1.9", "4.1.10", "4.1.11", "4.1.12", "4.1.13", "4.1.14", "4.1.15", "4.1.16", "4.1.17", "4.2.1.1", "4.2.1.2", "4.2.1.3", "4.2.1.4", "4.2.2.1", "4.2.3"},
+			"cis-ubuntu":  {"6.2.1.2.1", "6.2.1.2.2"},
 			"hipaa":       {"164.312(b)"},
 			"iso-27001":   {"A.8.15"},
 			"nist-800-53": {"AU-2", "AU-3", "AU-12"},
@@ -189,7 +189,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Ubuntu Maintenance",
 		Description: "Framework-bundle scope-cut: cis-ubuntu-maintenance. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"6.1.1", "6.1.2", "6.1.3", "6.1.4", "6.1.5", "6.1.6", "6.1.7", "6.1.8", "6.1.9", "6.1.10", "6.2.1", "6.2.2", "6.2.3", "6.2.4", "6.2.5", "6.2.6", "6.2.7"},
+			"cis-ubuntu":  {"7.1.1", "7.1.2", "7.1.3", "7.1.4", "7.1.5", "7.1.6", "7.1.7", "7.1.8", "7.1.9", "7.1.10", "7.2.1", "7.2.2", "7.2.3", "7.2.4", "7.2.5", "7.2.6", "7.2.7"},
 			"nist-800-53": {"CM-6", "AC-3"},
 			"pci-dss":     {"2.2.1", "7.1.1"},
 		},
@@ -199,7 +199,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Ubuntu Network",
 		Description: "Framework-bundle scope-cut: cis-ubuntu-network. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"3.1.1", "3.1.2", "3.2.1", "3.2.2", "3.2.3", "3.2.4", "3.2.5", "3.2.6", "3.2.7", "3.2.8", "3.2.9", "3.3.1", "3.3.2", "3.3.3", "3.3.4", "3.4.1", "3.4.2", "3.4.3", "3.4.4"},
+			"cis-ubuntu":  {"3.1.1", "3.1.2", "3.3.1", "3.3.2", "3.3.3", "3.3.4"},
 			"iso-27001":   {"A.8.20"},
 			"nist-800-53": {"SC-7", "CM-6"},
 			"pci-dss":     {"1.3.1", "1.3.2", "2.2.1"},
@@ -210,7 +210,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CIS — Ubuntu Services",
 		Description: "Framework-bundle scope-cut: cis-ubuntu-services. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-ubuntu":  {"2.1.1", "2.1.2", "2.1.3", "2.1.4", "2.1.5", "2.1.6", "2.1.7", "2.1.8", "2.1.9", "2.1.10", "2.1.11", "2.1.12", "2.1.13", "2.1.14", "2.1.15", "2.1.16", "2.1.17", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6"},
+			"cis-ubuntu":  {"2.1.2", "2.1.11", "2.1.3", "2.1.7", "2.1.9"},
 			"nist-800-53": {"CM-7"},
 			"pci-dss":     {"2.2.2", "2.2.3"},
 		},
@@ -351,8 +351,6 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CE — Secure Config",
 		Description: "Framework-bundle scope-cut: ce-secure-config. Implements one section of the ce baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":         {"1.1.1", "5.2.x"},
-			"cis-ubuntu":       {"1.1.1", "5.2.x"},
 			"cyber-essentials": {"CE-SC-1", "CE-SC-2", "CE-SC-3", "CE-SC-4", "CE-SC-5", "CE-SC-6"},
 			"nist-800-53":      {"CM-6", "CM-7"},
 			"pci-dss":          {"2.2.1", "2.2.4", "2.2.5"},
@@ -812,8 +810,6 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "NIST — Audit Retention",
 		Description: "Framework-bundle scope-cut: nist-audit-retention. Implements one section of the nist baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"4.1.x", "4.1.immutable", "4.2.x"},
-			"cis-ubuntu":  {"4.1.x", "4.1.immutable", "4.2.x"},
 			"hitrust":     {"09.l"},
 			"iso-27001":   {"A.8.17"},
 			"nist-800-53": {"AU-8", "AU-11"},
@@ -826,8 +822,8 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "NIST — Config Management",
 		Description: "Framework-bundle scope-cut: nist-config-management. Implements one section of the nist baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-rhel":         {"1.1.1", "1.5.1"},
-			"cis-ubuntu":       {"1.1.1", "1.5.1"},
+			"cis-rhel":         {"1.5.1"},
+			"cis-ubuntu":       {"1.5.1"},
 			"cyber-essentials": {"CE-SC-1", "CE-SC-5"},
 			"iso-27001":        {"A.8.19", "A.8.8"},
 			"nist-800-53":      {"CM-2", "CM-3", "CM-5", "CM-6", "CM-7", "CM-11"},
@@ -945,8 +941,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "PCI — Hardening (DSS with CIS/HITRUST cross-walks)",
 		Description: "Framework-bundle scope-cut: PCI-DSS hardening with broader CIS / HITRUST / SOC2 cross-walks. Sourced from compliance/pci-dss/pci-hardening.vgo.example. Note: this configcrate's YAML `name:` is `pci-hardening`, which collides with the simpler top-level compliance/pci-hardening.vgo.example — pre-existing data condition; operators load one or the other, not both.",
 		Frameworks: map[string][]string{
-			"cis-rhel":    {"2.1.1", "2.2.x", "2.3.x"},
-			"cis-ubuntu":  {"2.1.1", "2.2.x", "2.3.x"},
+			"cis-rhel":    {"2.3.1"},
 			"hitrust":     {"09.b", "09.c", "09.d"},
 			"iso-27001":   {"A.8.31", "A.8.17"},
 			"nist-800-53": {"AU-8", "CM-7", "CM-8"},
