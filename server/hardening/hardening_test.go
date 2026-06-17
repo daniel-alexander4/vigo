@@ -147,10 +147,26 @@ func TestDetectInjection(t *testing.T) {
 }
 
 func TestVerifyBinarySignatureNoSigFile(t *testing.T) {
-	// When no .sig file exists, VerifyBinarySignature returns nil (optional).
+	// Unsigned build (no baked pubkey): a missing .sig is optional → nil.
+	// serverSigningPubKey is "" in the test binary.
 	err := VerifyBinarySignature()
 	if err != nil {
-		t.Fatalf("expected nil with no sig file, got: %v", err)
+		t.Fatalf("expected nil with no sig file and no baked pubkey, got: %v", err)
+	}
+}
+
+func TestVerifyBinarySignatureMissingSigFailClosed(t *testing.T) {
+	// Signed build (baked pubkey present) with a missing .sig must fail closed:
+	// a deployed-without-signature binary is a tamper/incomplete-deploy signal.
+	// The test binary has no adjacent .sig, so setting the baked pubkey is
+	// enough to exercise the branch.
+	orig := serverSigningPubKey
+	serverSigningPubKey = "deadbeef" // any non-empty value → "signed build"
+	defer func() { serverSigningPubKey = orig }()
+
+	err := VerifyBinarySignature()
+	if err == nil {
+		t.Fatal("expected fail-closed error for missing .sig in a signed build, got nil")
 	}
 }
 

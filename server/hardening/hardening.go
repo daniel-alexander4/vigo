@@ -62,7 +62,14 @@ func VerifyBinarySignature() error {
 	sigPath := exe + ".sig"
 	sigData, err := os.ReadFile(sigPath)
 	if os.IsNotExist(err) {
-		// No signature file — verification is optional.
+		// No signature file. When a signing pubkey is baked in (a signed
+		// production/dist build), a missing .sig means the binary was deployed
+		// without its signature — a tamper / incomplete-deploy signal — so fail
+		// closed. In an unsigned dev build (no baked pubkey) a missing .sig is
+		// expected, so verification stays optional.
+		if serverSigningPubKey != "" {
+			return fmt.Errorf("hardening: signed build (baked-in pubkey present) but signature file %s is missing — refusing to start", sigPath)
+		}
 		return nil
 	}
 	if err != nil {
