@@ -150,7 +150,9 @@ func startServer(t *testing.T, configcrates map[string]string, envoysYAML string
 		t.Fatal(err)
 	}
 
-	srv, _, _, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	// NewServer returns (grpcSrv, operatorSrv, certCache, traitsBatch, agentSvc, adminSvc, err);
+	// the harness serves only the network grpcSrv and ignores the rest.
+	srv, _, _, _, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:    filepath.Join(testCertDir, "server.crt"),
 		KeyFile:     filepath.Join(testCertDir, "server.key"),
 		CAFile:      filepath.Join(testCertDir, "ca.crt"),
