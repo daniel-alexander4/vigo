@@ -20,6 +20,8 @@
 // "what does Vigo claim?" rather than "what does my fleet claim?"
 package compliance
 
+import "git.alexander4.io/vigo/server/frameworks"
+
 // AppControl is one capability the Vigo product satisfies by
 // construction (not by enforcing a module on an envoy). Each entry
 // is informational and never enters envoy compliance scoring.
@@ -54,38 +56,20 @@ type FrameworkRef struct {
 	ControlIDs []string
 }
 
-// frameworkLabels maps the framework slugs used in AppControls to
-// the human label shown on /platform/compliance. Mirrors the labels
-// in server/main.go's framework metrics table. The version string is
-// the currently-mapped baseline — i.e., the revision Vigo's control
-// IDs are aligned to. When a framework publishes a new revision, the
-// label here changes only after the control mappings are reviewed
-// against the new revision; auditors reading docs/reference/compliance-matrix.md
-// can rely on this label as the version-of-record.
-var frameworkLabels = map[string]string{
-	"compliance":      "HIPAA Security Rule (45 CFR §164.302–318)",
-	"hitrust":         "HITRUST CSF v11.x",
-	"soc2":            "SOC 2 Trust Services Criteria 2017",
-	"pci":             "PCI DSS v4.0",
-	"nist":            "NIST 800-53 Rev. 5",
-	"iso27001":        "ISO/IEC 27001:2022 Annex A",
-	"gdpr":            "GDPR (technical & organizational measures)",
-	"nerccip":         "NERC CIP v6",
-	"cyberessentials": "Cyber Essentials Plus (UK)",
-	"iec62443":        "IEC 62443",
-	"sox":             "SOX",
-	"finra":           "FINRA",
-	"mifid2":          "MiFID II RTS 7 / RTS 25",
-	"ccss":            "CCSS",
-	"fda21cfr11":      "FDA 21 CFR Part 11",
-	"gamingukgc":      "UK Gambling Commission (Remote Technical Standards)",
-	"gamingnevada":    "Nevada Gaming Control Board (Reg 14 Technical Standards)",
-	"gamingmga":       "Malta Gaming Authority (Technical Infrastructure)",
-	"ciswindows":      "CIS Windows Server 2022 Benchmark v3.0.0 (L1 Member Server)",
-	"cisubuntu":       "CIS Ubuntu Benchmark v2.0.0 (L1 Server)",
-	"cisrhel":         "CIS RHEL Benchmark v2.0.0 (L1 Server)",
-	"nydfscyber":      "NY DFS Cyber (23 NYCRR 500)",
-}
+// frameworkLabels maps the framework slug → the human version-of-record
+// label shown on /platform/compliance. Derived from the framework registry
+// (server/frameworks) — the single source of truth for the label. The
+// version string is the revision Vigo's control IDs are aligned to; auditors
+// reading docs/reference/compliance-matrix.md rely on it as the
+// version-of-record, so it changes (in frameworks.All) only after the
+// control mappings are reviewed against the new revision.
+var frameworkLabels = func() map[string]string {
+	m := make(map[string]string, len(frameworks.All))
+	for _, f := range frameworks.All {
+		m[f.Slug] = f.Label
+	}
+	return m
+}()
 
 // FrameworkLabel returns the human label for a framework slug as
 // referenced from AppControls. Falls back to the slug itself if

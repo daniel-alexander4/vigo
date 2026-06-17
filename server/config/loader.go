@@ -19,6 +19,7 @@ import (
 
 	"git.alexander4.io/vigo/server/compliance"
 	"git.alexander4.io/vigo/server/conditionals"
+	"git.alexander4.io/vigo/server/frameworks"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/secrets"
 	"git.alexander4.io/vigo/server/validate"
@@ -1651,40 +1652,12 @@ func (cs *ConfigStore) ComplianceControlIndex(standard string) map[string][]stri
 }
 
 // StandardKeyForSlug maps URL slugs to the compliance tag keys used in
-// module definitions.
-var StandardKeyForSlug = map[string]string{
-	"compliance":      "hipaa",
-	"hitrust":         "hitrust",
-	"soc2":            "soc2",
-	"pci":             "pci-dss",
-	"nist":            "nist-800-53",
-	"iso27001":        "iso-27001",
-	"gdpr":            "gdpr",
-	"nerccip":         "nerc-cip",
-	"cyberessentials": "cyber-essentials",
-	"iec62443":        "iec-62443",
-	"sox":             "sox",
-	"finra":           "finra",
-	"mifid2":          "mifid2",
-	"ccss":            "ccss",
-	"fda21cfr11":      "fda-21cfr11",
-	"gamingukgc":      "gaming-ukgc",
-	"gamingnevada":    "gaming-nevada-gcb",
-	"gamingmga":       "gaming-mga",
-	"ciswindows":      "cis-windows",
-	"cisubuntu":       "cis-ubuntu",
-	"cisrhel":         "cis-rhel",
-	"nydfscyber":      "ny-dfs-cyber",
-}
+// module definitions. Derived from the framework registry
+// (server/frameworks) — the single source of truth; do not edit here.
+var StandardKeyForSlug = frameworks.StandardKeyForSlug
 
 // SlugForStandardKey is the inverse of StandardKeyForSlug.
-var SlugForStandardKey = func() map[string]string {
-	m := make(map[string]string, len(StandardKeyForSlug))
-	for slug, key := range StandardKeyForSlug {
-		m[key] = slug
-	}
-	return m
-}()
+var SlugForStandardKey = frameworks.SlugForStandardKey
 
 // buildComplianceIndex creates a reverse index from module compliance
 // tags. Each module's controls are the UNION of three sources: the

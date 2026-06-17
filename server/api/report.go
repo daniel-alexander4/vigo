@@ -21,6 +21,7 @@ import (
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	fwreg "git.alexander4.io/vigo/server/frameworks"
 	"git.alexander4.io/vigo/ui"
 )
 
@@ -273,32 +274,41 @@ type frameworkDef struct {
 // own audit chain. The server's audit-chain integrity is surfaced
 // separately on /platform/compliance via server/compliance.AppControls.
 func (h *ReportHandler) frameworkDef(_ AuditChainStatus, slug string) (frameworkDef, bool) {
-	fws := map[string]frameworkDef{
-		"compliance":      {"HIPAA Compliance Report", "HIPAA", h.buildHIPAAFindings},
-		"hitrust":         {"HITRUST CSF Compliance Report", "HITRUST CSF", h.buildHITRUSTFindings},
-		"soc2":            {"SOC 2 Trust Services Criteria Report", "SOC 2", h.buildSOC2Findings},
-		"pci":             {"PCI DSS v4.0 Compliance Report", "PCI DSS v4.0", h.buildPCIDSSFindings},
-		"nist":            {"NIST 800-53 Compliance Report", "NIST 800-53", h.buildNIST80053Findings},
-		"iso27001":        {"ISO 27001 Compliance Report", "ISO 27001", h.buildISO27001Findings},
-		"gdpr":            {"GDPR Compliance Report", "GDPR", h.buildGDPRFindings},
-		"nerccip":         {"NERC CIP Compliance Report", "NERC CIP", h.buildNERCCIPFindings},
-		"cyberessentials": {"Cyber Essentials+ Compliance Report", "Cyber Essentials+", h.buildCyberEssentialsPlusFindings},
-		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", "IEC 62443", h.buildIEC62443Findings},
-		"sox":             {"SOX IT General Controls Report", "SOX", h.buildSOXFindings},
-		"finra":           {"FINRA Compliance Report", "FINRA", h.buildFINRAFindings},
-		"mifid2":          {"MiFID II RTS 7 Compliance Report", "MiFID II", h.buildMiFID2Findings},
-		"ccss":            {"CCSS Cryptocurrency Security Report", "CCSS", h.buildCCSSFindings},
-		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "FDA 21 CFR Part 11", h.buildFDA21CFR11Findings},
-		"gamingukgc":      {"UK Gambling Commission Compliance Report", "UKGC", h.buildGamingUKGCFindings},
-		"gamingnevada":    {"Nevada Gaming Control Board Compliance Report", "Nevada GCB", h.buildGamingNevadaFindings},
-		"gamingmga":       {"Malta Gaming Authority Compliance Report", "MGA", h.buildGamingMGAFindings},
-		"ciswindows":      {"CIS Windows Server Benchmark Report", "CIS Windows", h.buildCISWindowsFindings},
-		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "CIS Ubuntu", h.buildCISUbuntuFindings},
-		"cisrhel":         {"CIS RHEL Benchmark Report", "CIS RHEL", h.buildCISRHELFindings},
-		"nydfscyber":      {"NY DFS Cybersecurity (23 NYCRR 500) Report", "NY DFS Cyber", h.buildNYDFSCyberFindings},
+	// builders is the per-framework control-catalog dispatch — the
+	// irreducible behavior surface. The framework's display metadata
+	// (title, short name) comes from the registry (server/frameworks), the
+	// single source of truth. TestEveryStandardSlugHasABuilder guards that
+	// every registry slug has an entry here.
+	builders := map[string]func() []ControlFinding{
+		"compliance":      h.buildHIPAAFindings,
+		"hitrust":         h.buildHITRUSTFindings,
+		"soc2":            h.buildSOC2Findings,
+		"pci":             h.buildPCIDSSFindings,
+		"nist":            h.buildNIST80053Findings,
+		"iso27001":        h.buildISO27001Findings,
+		"gdpr":            h.buildGDPRFindings,
+		"nerccip":         h.buildNERCCIPFindings,
+		"cyberessentials": h.buildCyberEssentialsPlusFindings,
+		"iec62443":        h.buildIEC62443Findings,
+		"sox":             h.buildSOXFindings,
+		"finra":           h.buildFINRAFindings,
+		"mifid2":          h.buildMiFID2Findings,
+		"ccss":            h.buildCCSSFindings,
+		"fda21cfr11":      h.buildFDA21CFR11Findings,
+		"gamingukgc":      h.buildGamingUKGCFindings,
+		"gamingnevada":    h.buildGamingNevadaFindings,
+		"gamingmga":       h.buildGamingMGAFindings,
+		"ciswindows":      h.buildCISWindowsFindings,
+		"cisubuntu":       h.buildCISUbuntuFindings,
+		"cisrhel":         h.buildCISRHELFindings,
+		"nydfscyber":      h.buildNYDFSCyberFindings,
 	}
-	fw, ok := fws[slug]
-	return fw, ok
+	build, ok := builders[slug]
+	if !ok {
+		return frameworkDef{}, false
+	}
+	meta := fwreg.BySlug[slug]
+	return frameworkDef{meta.ReportTitle, meta.ShortName, build}, true
 }
 
 // connwaerCapabilityByControl maps (framework slug, control ID) →
@@ -353,10 +363,10 @@ var connwaerCapabilityByControl = map[string]map[string]string{
 		"RTS7-Art11-2": "capacity_monitor",
 		"RTS7-Art14-1": "kill_switch",
 	},
-	"gaming-mga": {
+	"gamingmga": {
 		"MGA-RGR-5.2": "bcp_test",
 	},
-	"gaming-ukgc": {
+	"gamingukgc": {
 		"UKGC-RTS-5B": "bcp_test",
 	},
 }
@@ -3934,49 +3944,20 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		return nil
 	}
 
-	// Ordered list of (name, slug) pairs so Executive report slug lookups
-	// stay stable across enablement changes.
-	type fwEntry struct {
-		name string
-		slug string
-	}
-	fwDefs := []fwEntry{
-		{"HIPAA", "compliance"},
-		{"HITRUST CSF", "hitrust"},
-		{"SOC 2", "soc2"},
-		{"PCI DSS v4.0", "pci"},
-		{"NIST 800-53", "nist"},
-		{"ISO 27001", "iso27001"},
-		{"GDPR", "gdpr"},
-		{"NERC CIP", "nerccip"},
-		{"Cyber Essentials+", "cyberessentials"},
-		{"IEC 62443", "iec62443"},
-		{"SOX", "sox"},
-		{"FINRA", "finra"},
-		{"MiFID II", "mifid2"},
-		{"CCSS", "ccss"},
-		{"FDA 21 CFR Part 11", "fda21cfr11"},
-		{"UKGC", "gamingukgc"},
-		{"Nevada GCB", "gamingnevada"},
-		{"MGA", "gamingmga"},
-		{"CIS Windows", "ciswindows"},
-		{"CIS Ubuntu", "cisubuntu"},
-		{"CIS RHEL", "cisrhel"},
-		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber"},
-	}
-
-	frameworks := make([]FrameworkSummary, 0, len(fwDefs))
-	for _, fw := range fwDefs {
-		standardKey, hasKey := config.StandardKeyForSlug[fw.slug]
-		if !hasKey || !h.configStore.IsStandardEnabled(standardKey) {
+	// Framework order + names come from the registry (server/frameworks),
+	// the single source of truth, so Executive report lookups stay stable
+	// across enablement changes.
+	frameworks := make([]FrameworkSummary, 0, len(fwreg.All))
+	for _, fw := range fwreg.All {
+		if !h.configStore.IsStandardEnabled(fw.StandardKey) {
 			continue
 		}
-		score, ok := h.ComputeFrameworkScore(r, fw.slug)
+		score, ok := h.ComputeFrameworkScore(r, fw.Slug)
 		if !ok {
 			continue
 		}
 		frameworks = append(frameworks, FrameworkSummary{
-			Name:         fw.name,
+			Name:         fw.ShortName,
 			Satisfied:    score.Fleet.Covered,
 			Waived:       score.Fleet.Waived,
 			Partial:      score.Fleet.Partial,
@@ -4406,47 +4387,22 @@ func (h *ReportHandler) PersistComplianceSnapshot(ctx context.Context) {
 	if h.configStore == nil {
 		return
 	}
-	type fwEntry struct {
-		name        string
-		slug        string
-		standardKey string
-	}
-	fwDefs := []fwEntry{
-		{"HIPAA", "compliance", "hipaa"},
-		{"HITRUST CSF", "hitrust", "hitrust"},
-		{"SOC 2", "soc2", "soc2"},
-		{"PCI DSS v4.0", "pci", "pci-dss"},
-		{"NIST 800-53", "nist", "nist-800-53"},
-		{"ISO 27001", "iso27001", "iso-27001"},
-		{"GDPR", "gdpr", "gdpr"},
-		{"NERC CIP", "nerccip", "nerc-cip"},
-		{"Cyber Essentials+", "cyberessentials", "cyber-essentials"},
-		{"IEC 62443", "iec62443", "iec-62443"},
-		{"SOX", "sox", "sox"},
-		{"FINRA", "finra", "finra"},
-		{"MiFID II", "mifid2", "mifid2"},
-		{"CCSS", "ccss", "ccss"},
-		{"FDA 21 CFR Part 11", "fda21cfr11", "fda-21cfr11"},
-		{"UKGC", "gamingukgc", "gaming-ukgc"},
-		{"Nevada GCB", "gamingnevada", "gaming-nevada-gcb"},
-		{"MGA", "gamingmga", "gaming-mga"},
-		{"CIS Windows", "ciswindows", "cis-windows"},
-		{"CIS Ubuntu", "cisubuntu", "cis-ubuntu"},
-		{"CIS RHEL", "cisrhel", "cis-rhel"},
-		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber", "ny-dfs-cyber"},
-	}
+	// Framework set + names come from the registry (server/frameworks), the
+	// single source of truth. The snapshot Framework column (fw.ShortName)
+	// is part of the (snapshot_date, framework) upsert key, so the registry
+	// ShortName must stay stable.
 	recorded := 0
-	for _, fw := range fwDefs {
-		if !h.configStore.IsStandardEnabled(fw.standardKey) {
+	for _, fw := range fwreg.All {
+		if !h.configStore.IsStandardEnabled(fw.StandardKey) {
 			continue
 		}
-		score, ok := h.ComputeFrameworkScoreCtx(ctx, fw.slug)
+		score, ok := h.ComputeFrameworkScoreCtx(ctx, fw.Slug)
 		if !ok {
-			slog.Warn("compliance snapshot: scorer returned not-ok", "framework", fw.name, "slug", fw.slug)
+			slog.Warn("compliance snapshot: scorer returned not-ok", "framework", fw.ShortName, "slug", fw.Slug)
 			continue
 		}
 		if err := h.queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
-			Framework:     fw.name,
+			Framework:     fw.ShortName,
 			ScorePercent:  score.Fleet.CoveragePercent,
 			Satisfied:     int64(score.Fleet.Covered),
 			Waived:        int64(score.Fleet.Waived),
@@ -4454,7 +4410,7 @@ func (h *ReportHandler) PersistComplianceSnapshot(ctx context.Context) {
 			NotSatisfied:  int64(score.Fleet.Missing),
 			TotalControls: int64(score.Total),
 		}); err != nil {
-			slog.Error("failed to persist compliance snapshot", "framework", fw.name, "error", err)
+			slog.Error("failed to persist compliance snapshot", "framework", fw.ShortName, "error", err)
 			continue
 		}
 		recorded++

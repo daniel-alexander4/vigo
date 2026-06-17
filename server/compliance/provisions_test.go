@@ -5,6 +5,8 @@ package compliance
 
 import (
 	"testing"
+
+	"git.alexander4.io/vigo/server/frameworks"
 )
 
 // TestResolveProvision_Known pins the contract every other layer keys
@@ -51,20 +53,12 @@ func TestKnownProvisionIDs_Sorted(t *testing.T) {
 // provision from coverage at runtime — this test catches that at
 // build/test time before the catalog ships.
 func TestCatalogConsistency(t *testing.T) {
-	// Mirror of canonicalFrameworkSlugs in
-	// server/modlint/rule_compliance_framework.go — kept inline so
-	// this test doesn't import modlint (modlint is the lint layer,
-	// compliance is the data layer, and the inverse import would
-	// muddy the layering).
-	knownFrameworks := map[string]bool{
-		"ccss": true, "cis-rhel": true,
-		"cis-ubuntu": true, "cis-windows": true, "cyber-essentials": true,
-		"fda-21cfr11": true, "finra": true,
-		"gaming-mga": true, "gaming-nevada-gcb": true, "gaming-ukgc": true,
-		"gdpr": true, "hipaa": true, "hitrust": true,
-		"iec-62443": true, "iso-27001": true, "mifid2": true,
-		"nerc-cip": true, "nist-800-53": true, "ny-dfs-cyber": true,
-		"pci-dss": true, "soc2": true, "sox": true,
+	// Derived from the framework registry (server/frameworks) — the single
+	// source of truth for the framework set — so this test can never drift
+	// from the canonical list.
+	knownFrameworks := make(map[string]bool, len(frameworks.All))
+	for _, f := range frameworks.All {
+		knownFrameworks[f.StandardKey] = true
 	}
 	for id, prov := range ConfigcrateProvisions {
 		if prov.ID != id {

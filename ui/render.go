@@ -20,6 +20,7 @@ import (
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleetpressure"
+	fwreg "git.alexander4.io/vigo/server/frameworks"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/httpsec"
 	"git.alexander4.io/vigo/server/i18n"
@@ -769,34 +770,22 @@ func funcMap() template.FuncMap {
 	}
 }
 
+// fwSlugByName maps a framework's short display name → URL slug. Derived
+// from the framework registry (server/frameworks), the single source of
+// truth, plus the "CIS Benchmarks" aggregation label used by the evidence
+// center, which has no registry entry of its own.
+var fwSlugByName = func() map[string]string {
+	m := make(map[string]string, len(fwreg.All)+1)
+	for _, f := range fwreg.All {
+		m[f.ShortName] = f.Slug
+	}
+	m["CIS Benchmarks"] = "cis"
+	return m
+}()
+
 // fwSlug maps compliance framework display names to URL slugs.
 func fwSlug(name string) string {
-	slugs := map[string]string{
-		"HIPAA":                       "compliance",
-		"HITRUST CSF":                 "hitrust",
-		"SOC 2":                       "soc2",
-		"PCI DSS v4.0":                "pci",
-		"CIS Benchmarks":              "cis",
-		"NIST 800-53":                 "nist",
-		"ISO 27001":                   "iso27001",
-		"GDPR":                        "gdpr",
-		"NERC CIP":                    "nerccip",
-		"Cyber Essentials+":           "cyberessentials",
-		"IEC 62443":                   "iec62443",
-		"SOX":                         "sox",
-		"FINRA":                       "finra",
-		"MiFID II":                    "mifid2",
-		"CCSS":                        "ccss",
-		"FDA 21 CFR Part 11":          "fda21cfr11",
-		"UKGC":                        "gamingukgc",
-		"Nevada GCB":                  "gamingnevada",
-		"MGA":                         "gamingmga",
-		"CIS Windows":                 "ciswindows",
-		"CIS Ubuntu":                  "cisubuntu",
-		"CIS RHEL":                    "cisrhel",
-		"NY DFS Cyber (23 NYCRR 500)": "nydfscyber",
-	}
-	if s, ok := slugs[name]; ok {
+	if s, ok := fwSlugByName[name]; ok {
 		return s
 	}
 	return strings.ToLower(strings.ReplaceAll(name, " ", ""))

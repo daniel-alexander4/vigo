@@ -38,6 +38,7 @@ import (
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleetpressure"
+	fwreg "git.alexander4.io/vigo/server/frameworks"
 	"git.alexander4.io/vigo/server/i18n"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/peer"
@@ -3791,32 +3792,9 @@ func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 	fw := r.PathValue("framework")
 
-	// Map URL slugs to display names and API slugs.
-	frameworks := map[string][2]string{
-		"compliance":      {"HIPAA Compliance Report", "compliance"},
-		"hitrust":         {"HITRUST CSF Compliance Report", "hitrust"},
-		"soc2":            {"SOC 2 Trust Services Criteria Report", "soc2"},
-		"pci":             {"PCI DSS v4.0 Compliance Report", "pci"},
-		"cis":             {"CIS Benchmark Compliance Report", "cis"},
-		"nist":            {"NIST 800-53 Compliance Report", "nist"},
-		"iso27001":        {"ISO 27001 Compliance Report", "iso27001"},
-		"gdpr":            {"GDPR Compliance Report", "gdpr"},
-		"nerccip":         {"NERC CIP Compliance Report", "nerccip"},
-		"cyberessentials": {"Cyber Essentials+ Compliance Report", "cyberessentials"},
-		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", "iec62443"},
-		"sox":             {"SOX IT General Controls Report", "sox"},
-		"finra":           {"FINRA Compliance Report", "finra"},
-		"mifid2":          {"MiFID II RTS 7 Compliance Report", "mifid2"},
-		"ccss":            {"CCSS Cryptocurrency Security Report", "ccss"},
-		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "fda21cfr11"},
-		"gamingukgc":      {"UK Gambling Commission Compliance Report", "gamingukgc"},
-		"gamingnevada":    {"Nevada Gaming Control Board Compliance Report", "gamingnevada"},
-		"gamingmga":       {"Malta Gaming Authority Compliance Report", "gamingmga"},
-		"ciswindows":      {"CIS Windows Server Benchmark Report", "ciswindows"},
-		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "cisubuntu"},
-		"cisrhel":         {"CIS RHEL Benchmark Report", "cisrhel"},
-		"nydfscyber":      {"NY DFS 23 NYCRR 500 Compliance Report", "nydfscyber"},
-	}
+	// Map URL slugs to display names and API slugs (registry-derived; see
+	// complianceReportTitles).
+	frameworks := complianceReportTitles()
 
 	info, ok := frameworks[fw]
 	if !ok {
@@ -3933,29 +3911,16 @@ type EvidenceControlEnvoy struct {
 }
 
 // evidenceFrameworks returns the list of framework options for the dropdown.
+// Derived from the framework registry (server/frameworks), the single source
+// of truth, plus the "CIS Benchmarks" aggregation — a roll-up across the
+// three CIS benchmarks with no registry entry of its own.
 func evidenceFrameworks() []EvidenceFrameworkOption {
-	return []EvidenceFrameworkOption{
-		{"HIPAA", "compliance"},
-		{"HITRUST CSF", "hitrust"},
-		{"SOC 2", "soc2"},
-		{"PCI DSS v4.0", "pci"},
-		{"CIS Benchmarks", "cis"},
-		{"NIST 800-53", "nist"},
-		{"ISO 27001", "iso27001"},
-		{"GDPR", "gdpr"},
-		{"NERC CIP", "nerccip"},
-		{"Cyber Essentials+", "cyberessentials"},
-		{"IEC 62443", "iec62443"},
-		{"SOX", "sox"},
-		{"FINRA", "finra"},
-		{"MiFID II", "mifid2"},
-		{"CCSS", "ccss"},
-		{"FDA 21 CFR Part 11", "fda21cfr11"},
-		{"UKGC", "gamingukgc"},
-		{"Nevada GCB", "gamingnevada"},
-		{"MGA", "gamingmga"},
-		{"CIS Windows", "ciswindows"},
+	opts := make([]EvidenceFrameworkOption, 0, len(fwreg.All)+1)
+	for _, f := range fwreg.All {
+		opts = append(opts, EvidenceFrameworkOption{f.ShortName, f.Slug})
 	}
+	opts = append(opts, EvidenceFrameworkOption{"CIS Benchmarks", "cis"})
+	return opts
 }
 
 // formatDuration renders seconds as a human-readable duration.

@@ -90,16 +90,21 @@ func countProtoRPCs(t *testing.T, root, service string) int {
 // canonicalFrameworkSlugs declaration in server/modlint/frameworks.go.
 func countFrameworkSlugs(t *testing.T, root string) int {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, "server", "modlint", "frameworks.go"))
+	// The framework registry (server/frameworks) is the single source of
+	// truth for the framework set; every other enumeration (modlint's
+	// canonical slugs, the report builders' metadata, the UI maps, …)
+	// derives from All here.
+	data, err := os.ReadFile(filepath.Join(root, "server", "frameworks", "frameworks.go"))
 	if err != nil {
 		t.Fatalf("reading frameworks.go: %v", err)
 	}
-	blockRe := regexp.MustCompile(`(?s)canonicalFrameworkSlugs\s*=\s*\[\]string\{(.*?)\}`)
+	blockRe := regexp.MustCompile(`(?s)All\s*=\s*\[\]Framework\{(.*?)\n\}`)
 	block := blockRe.FindStringSubmatch(string(data))
 	if block == nil {
-		t.Fatal("could not find canonicalFrameworkSlugs in frameworks.go")
+		t.Fatal("could not find the All registry slice in server/frameworks/frameworks.go")
 	}
-	return len(regexp.MustCompile(`"[^"]+"`).FindAllString(block[1], -1))
+	// One entry per line beginning `{"`.
+	return len(regexp.MustCompile(`(?m)^\s*\{"`).FindAllString(block[1], -1))
 }
 
 func countNetworkDeviceExecutors(t *testing.T, root string) int {

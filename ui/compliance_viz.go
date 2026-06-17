@@ -9,8 +9,23 @@ import (
 	"sort"
 
 	"git.alexander4.io/vigo/server/config"
+	fwreg "git.alexander4.io/vigo/server/frameworks"
 	"git.alexander4.io/vigo/server/uifmt"
 )
+
+// complianceReportTitles maps a compliance report URL slug → {page title,
+// slug}. Derived from the framework registry (server/frameworks), the
+// single source of truth, plus the "cis" aggregation — a UI-only roll-up
+// view across the three CIS benchmarks with no standard key or builder of
+// its own. Shared by ComplianceFrameworkViz and ComplianceFramework.
+func complianceReportTitles() map[string][2]string {
+	m := make(map[string][2]string, len(fwreg.All)+1)
+	for _, f := range fwreg.All {
+		m[f.Slug] = [2]string{f.ReportTitle, f.Slug}
+	}
+	m["cis"] = [2]string{"CIS Benchmark Compliance Report", "cis"}
+	return m
+}
 
 // ComplianceVizPageData extends the base report page with visualization data.
 type ComplianceVizPageData struct {
@@ -44,31 +59,7 @@ type ComplianceHeatmapCell struct {
 func (h *Handler) ComplianceFrameworkViz(w http.ResponseWriter, r *http.Request) {
 	fw := r.PathValue("framework")
 
-	frameworks := map[string][2]string{
-		"compliance":      {"HIPAA Compliance Report", "compliance"},
-		"hitrust":         {"HITRUST CSF Compliance Report", "hitrust"},
-		"soc2":            {"SOC 2 Trust Services Criteria Report", "soc2"},
-		"pci":             {"PCI DSS v4.0 Compliance Report", "pci"},
-		"cis":             {"CIS Benchmark Compliance Report", "cis"},
-		"nist":            {"NIST 800-53 Compliance Report", "nist"},
-		"iso27001":        {"ISO 27001 Compliance Report", "iso27001"},
-		"gdpr":            {"GDPR Compliance Report", "gdpr"},
-		"nerccip":         {"NERC CIP Compliance Report", "nerccip"},
-		"cyberessentials": {"Cyber Essentials+ Compliance Report", "cyberessentials"},
-		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", "iec62443"},
-		"sox":             {"SOX IT General Controls Report", "sox"},
-		"finra":           {"FINRA Compliance Report", "finra"},
-		"mifid2":          {"MiFID II RTS 7 Compliance Report", "mifid2"},
-		"ccss":            {"CCSS Cryptocurrency Security Report", "ccss"},
-		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "fda21cfr11"},
-		"gamingukgc":      {"UK Gambling Commission Compliance Report", "gamingukgc"},
-		"gamingnevada":    {"Nevada Gaming Control Board Compliance Report", "gamingnevada"},
-		"gamingmga":       {"Malta Gaming Authority Compliance Report", "gamingmga"},
-		"ciswindows":      {"CIS Windows Server Benchmark Report", "ciswindows"},
-		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "cisubuntu"},
-		"cisrhel":         {"CIS RHEL Benchmark Report", "cisrhel"},
-		"nydfscyber":      {"NY DFS 23 NYCRR 500 Compliance Report", "nydfscyber"},
-	}
+	frameworks := complianceReportTitles()
 
 	info, ok := frameworks[fw]
 	if !ok {
