@@ -525,7 +525,7 @@ Operator-authored data (envoy names, run results, audit entries) and all command
 i18n:
   enabled: false
   default_locale: "en"
-  supported_locales: ["en", "fr", "de"]
+  supported_locales: ["en", "fr", "de", "es", "pl", "pt", "it"]
 ```
 
 | Field | Default | Description |

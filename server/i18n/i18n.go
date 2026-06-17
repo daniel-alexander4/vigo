@@ -50,6 +50,10 @@ var localeNames = map[string]string{
 	"en": "English",
 	"fr": "Français",
 	"de": "Deutsch",
+	"es": "Español",
+	"pl": "Polski",
+	"pt": "Português",
+	"it": "Italiano",
 }
 
 func init() {
