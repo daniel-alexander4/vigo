@@ -176,6 +176,16 @@ resources:
 
   # --- 5.3: PAM / authselect ---
 
+  - name: 5.3.1.2-authselect-installed
+    type: package
+    state: present
+    package: authselect
+
+  - name: 5.3.1.3-libpwquality-installed
+    type: package
+    state: present
+    package: libpwquality
+
   - name: 5.3.1-authselect-profile
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
