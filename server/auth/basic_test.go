@@ -274,12 +274,20 @@ func postLogin(t *testing.T, provider *BasicProvider, username, password string)
 	return rec
 }
 
-// TestBasicLogin_PlaintextCompare_Succeeds is the regression case for the
-// bcrypt → constant-time-compare swap. A correct plaintext-stored password
-// authenticates the user and produces a session cookie + redirect.
-func TestBasicLogin_PlaintextCompare_Succeeds(t *testing.T) {
+// mustHashPassword bcrypt-hashes a password for the vault, as the CLI write
+// path does — the stored form basic auth now verifies against.
+func mustHashPassword(t *testing.T, pw string) string {
+	t.Helper()
+	h, err := HashPassword(pw)
+	require.NoError(t, err)
+	return h
+}
+
+// TestBasicLogin_BcryptCompare_Succeeds: a correct password verifies against
+// the stored bcrypt hash and produces a session cookie + redirect.
+func TestBasicLogin_BcryptCompare_Succeeds(t *testing.T) {
 	provider := setupBasicProviderWithSecrets(t, map[string]string{
-		"vigo/web/auth/alice": "CorrectHorseBattery$tap1e!",
+		"vigo/web/auth/alice": mustHashPassword(t, "CorrectHorseBattery$tap1e!"),
 	})
 
 	rec := postLogin(t, provider, "alice", "CorrectHorseBattery$tap1e!")
@@ -287,18 +295,34 @@ func TestBasicLogin_PlaintextCompare_Succeeds(t *testing.T) {
 	require.NotEmpty(t, rec.Header().Get("Set-Cookie"), "successful login must set a session cookie")
 }
 
-// TestBasicLogin_PlaintextCompare_WrongPasswordFails confirms a mismatched
+// TestBasicLogin_BcryptCompare_WrongPasswordFails confirms a mismatched
 // password is rejected without setting a session cookie, and the response is
 // the login page (200), not a redirect.
-func TestBasicLogin_PlaintextCompare_WrongPasswordFails(t *testing.T) {
+func TestBasicLogin_BcryptCompare_WrongPasswordFails(t *testing.T) {
 	provider := setupBasicProviderWithSecrets(t, map[string]string{
-		"vigo/web/auth/alice": "CorrectHorseBattery$tap1e!",
+		"vigo/web/auth/alice": mustHashPassword(t, "CorrectHorseBattery$tap1e!"),
 	})
 
 	rec := postLogin(t, provider, "alice", "WrongHorseBattery$tap1e!")
 	assert.Equal(t, http.StatusOK, rec.Code, "failed login must re-render the login page, not redirect")
 	for _, c := range rec.Result().Cookies() {
 		assert.NotEqual(t, "session", c.Name, "failed login must not set a session cookie")
+	}
+}
+
+// TestBasicLogin_LegacyPlaintextFails pins the forced-reset migration: a
+// pre-hash-at-rest plaintext value in the vault is NOT a bcrypt hash, so even
+// the exact stored string fails to authenticate. The account must be reset via
+// `vigocli webusers set-password`.
+func TestBasicLogin_LegacyPlaintextFails(t *testing.T) {
+	provider := setupBasicProviderWithSecrets(t, map[string]string{
+		"vigo/web/auth/alice": "CorrectHorseBattery$tap1e!", // legacy plaintext, not a hash
+	})
+
+	rec := postLogin(t, provider, "alice", "CorrectHorseBattery$tap1e!")
+	assert.Equal(t, http.StatusOK, rec.Code, "a legacy plaintext password must not authenticate")
+	for _, c := range rec.Result().Cookies() {
+		assert.NotEqual(t, "session", c.Name)
 	}
 }
 

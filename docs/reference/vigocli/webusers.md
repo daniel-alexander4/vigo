@@ -62,13 +62,18 @@ The recreate auto-reads the (new) pubkey from `/home/<username>/.ssh/id_*.pub`. 
 
 ### Setting a password
 
-Web UI passwords are managed via the secrets system, keyed per username:
+Set or change a web user's password with `set-password` (prompts, then stores a
+bcrypt hash in the secrets vault — the plaintext is never written):
 
 ```bash
-vigocli secrets set password vigo/web/auth/dan
+vigocli webusers set-password --username dan
 ```
 
-See [vigocli secrets](secrets.md) for details.
+The vault is unlock-gated, so unlock first if needed (`vigocli secrets unlock`).
+Do **not** write `vigo/web/auth/<user>` directly with `vigocli secrets set` —
+that stores the value verbatim, and basic auth verifies against a bcrypt hash,
+so a directly-written value will not authenticate. See
+[vigocli secrets](secrets.md) for the vault itself.
 
 ### set-role
 

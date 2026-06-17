@@ -5,7 +5,6 @@ package auth
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -35,11 +34,12 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source,
 }
 
 // BasicProvider implements Provider using username/password authentication.
-// User accounts live in the database; passwords are stored verbatim in the
-// secrets provider at vigo/web/auth/<username> under the master-key
-// envelope. The unlock-gated vault is the operator-side boundary; this
-// handler does a constant-time compare against the resolved value on every
-// login attempt. An account is not active until a password secret is set.
+// User accounts live in the database; passwords are stored as a bcrypt hash in
+// the secrets provider at vigo/web/auth/<username> under the master-key
+// envelope. The unlock-gated vault is the operator-side boundary; this handler
+// verifies the submitted password against the stored hash on every login
+// attempt (a vault read yields only the hash, never plaintext). An account is
+// not active until a password secret is set.
 type BasicProvider struct {
 	sessions    *SessionManager
 	userStore   *UserStore
@@ -203,8 +203,10 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Constant-time compare against the stored value.
-	if subtle.ConstantTimeCompare([]byte(stored), []byte(password)) != 1 {
+	// Verify against the stored bcrypt hash. A pre-hash-at-rest plaintext value
+	// isn't a valid bcrypt hash and fails here — that account must be reset via
+	// `vigocli webusers set-password`.
+	if !VerifyPassword(stored, password) {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "bad password", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return

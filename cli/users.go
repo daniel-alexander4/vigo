@@ -12,6 +12,7 @@ import (
 
 	"git.alexander4.io/vigo/server/secrets"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 )
 
@@ -322,16 +323,22 @@ func webuserPasswordKey(username string) string {
 	return fmt.Sprintf("vigo/web/auth/%s", username)
 }
 
-// writeWebuserPassword stores the password at the canonical key the basic
-// auth provider reads from. secretsDir is parameterized so tests can use a
-// tmpdir; production callers pass defaultSecretsDir.
+// writeWebuserPassword stores a bcrypt hash of the password at the canonical
+// key the basic auth provider reads from (server/auth.VerifyPassword is its
+// verifier; bcrypt.DefaultCost is the shared cost). The vault never holds the
+// plaintext. secretsDir is parameterized so tests can use a tmpdir; production
+// callers pass defaultSecretsDir.
 func writeWebuserPassword(username, password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
 	provider, err := secrets.NewLocalProvider("", defaultSecretsDir)
 	if err != nil {
 		return err
 	}
 	defer provider.Close()
-	return provider.Set(webuserPasswordKey(username), password)
+	return provider.Set(webuserPasswordKey(username), string(hash))
 }
 
 // defaultSecretsDir matches the persistent --secrets-dir default on the
@@ -381,7 +388,6 @@ var webusersDeleteCmd = &cobra.Command{
 		return nil
 	},
 }
-
 
 func init() {
 	webusersCreateCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")

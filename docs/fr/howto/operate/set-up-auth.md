@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0018fc18c408a1a9f17b399f7a1cdb6b7d0dde02ad7ece8466cca534ab7a2bdd -->
+<!-- vigo-i18n source_sha:0c308c6b23392f0ab1413342a45c928cfbcfff5071ff664da73e8729ba701688 -->
 
 ---
 title: Authentification
@@ -47,7 +47,7 @@ Les changements de rôle prennent effet immédiatement. Lorsqu'un administrateur
 
 ## Basic (nom d'utilisateur/mot de passe)
 
-L'authentification basic stocke les comptes utilisateur dans la base de données et le mot de passe lui-même dans le coffre à secrets soumis au verrou de déverrouillage (chiffré de façon réversible sous la clé maîtresse). Le gestionnaire de connexion résout la valeur stockée à chaque tentative et la compare en temps constant au mot de passe soumis. Cette séparation tient les identifiants hors de la base de données ; le verrou de déverrouillage du coffre tient l'accès occasionnel à l'écart de la surface opérateur.
+L'authentification basic stocke les comptes utilisateur dans la base de données et un hachage bcrypt du mot de passe dans le coffre à secrets soumis au verrou de déverrouillage (le hachage lui-même est conservé sous la clé maîtresse ; le texte en clair n'est jamais écrit). Le gestionnaire de connexion résout le hachage stocké à chaque tentative et vérifie le mot de passe soumis par rapport à celui-ci. Cette séparation tient les identifiants hors de la base de données ; le verrou de déverrouillage du coffre tient l'accès occasionnel à l'écart de la surface opérateur.
 
 ### Configuration initiale
 
@@ -62,11 +62,11 @@ curl -sSfk https://localhost:8443/bootstrap | sudo sh
 # pubkey from ~<yourname>/.ssh/id_ed25519.pub (fallback id_rsa.pub).
 sudo vigocli webusers create --username <yourname> --role admin
 
-# Set your login password:
-vigocli secrets set password vigo/web/auth/<yourname>
+# Set your login password (prompts; stores a bcrypt hash):
+vigocli webusers set-password --username <yourname>
 ```
 
-Connectez-vous sur `https://localhost:8443/login`. Les mots de passe sont stockés verbatim sous `vigo/web/auth/<username>` à l'intérieur de l'enveloppe AES-256-GCM de la clé maîtresse ; le gestionnaire de connexion effectue un `subtle.ConstantTimeCompare` contre la valeur résolue à chaque tentative.
+Connectez-vous sur `https://localhost:8443/login`. Les mots de passe sont stockés sous forme de **hachage bcrypt** sous `vigo/web/auth/<username>` à l'intérieur de l'enveloppe AES-256-GCM de la clé maîtresse — le texte en clair n'est jamais écrit — et le gestionnaire de connexion vérifie chaque tentative par rapport à ce hachage. Définissez les mots de passe uniquement avec `vigocli webusers set-password` ; écrire la clé directement avec `vigocli secrets set` stocke la valeur telle quelle et n'authentifiera pas.
 
 **Les webusers admin correspondent 1:1 aux utilisateurs du système d'exploitation.** Le nom d'utilisateur côté web doit être égal à un compte humain du système d'exploitation sur l'hôte du serveur — cela rattache l'attribution d'audit à une personne réelle et amorce la clé publique pour les sessions Scrier de navigateur. Les utilisateurs viewer et compliance ne sont pas contraints ; ce sont des cas ponctuels (auditeurs, partenaires, accès en lecture seule) sans homologues sur le système d'exploitation.
 
@@ -80,14 +80,14 @@ sudo vigocli webusers create --username alice --role admin
 sudo vigocli webusers create --username auditor --role viewer --email auditor@example.com
 sudo vigocli webusers create --username carol --role compliance --email carol@example.com
 
-# Set passwords:
-vigocli secrets set password vigo/web/auth/alice
+# Set passwords (prompts; stores a bcrypt hash):
+vigocli webusers set-password --username alice
 ```
 
 ### Réinitialiser les mots de passe
 
 ```bash
-vigocli secrets set password vigo/web/auth/<username>
+vigocli webusers set-password --username <username>
 ```
 
 ### Accès CLI (jeton local-admin)
@@ -388,7 +388,7 @@ Le jeton est stocké de manière sécurisée dans le répertoire personnel de l'
 ```bash
 vigocli webusers list
 vigocli webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
-vigocli secrets set password vigo/web/auth/alice
+vigocli webusers set-password --username alice
 vigocli webusers delete --username alice
 ```
 

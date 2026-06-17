@@ -46,7 +46,7 @@ Role changes take effect immediately. When an admin updates another user's role 
 
 ## Basic (Username/Password)
 
-Basic authentication stores user accounts in the database and the password itself in the unlock-gated secrets vault (reversibly encrypted under the master key). The login handler resolves the stored value on every attempt and constant-time-compares it against the submitted password. This separation keeps credentials out of the database; the vault's unlock gate keeps casual access off the operator surface.
+Basic authentication stores user accounts in the database and a bcrypt hash of the password in the unlock-gated secrets vault (the hash itself is held under the master key; the plaintext is never written). The login handler resolves the stored hash on every attempt and verifies the submitted password against it. This separation keeps credentials out of the database; the vault's unlock gate keeps casual access off the operator surface.
 
 ### Initial Setup
 
@@ -61,11 +61,11 @@ curl -sSfk https://localhost:8443/bootstrap | sudo sh
 # pubkey from ~<yourname>/.ssh/id_ed25519.pub (fallback id_rsa.pub).
 sudo vigocli webusers create --username <yourname> --role admin
 
-# Set your login password:
-vigocli secrets set password vigo/web/auth/<yourname>
+# Set your login password (prompts; stores a bcrypt hash):
+vigocli webusers set-password --username <yourname>
 ```
 
-Sign in at `https://localhost:8443/login`. Passwords are stored verbatim at `vigo/web/auth/<username>` inside the master-key AES-256-GCM envelope; the login handler does a `subtle.ConstantTimeCompare` against the resolved value on every attempt.
+Sign in at `https://localhost:8443/login`. Passwords are stored as a **bcrypt hash** at `vigo/web/auth/<username>` inside the master-key AES-256-GCM envelope — the plaintext is never written — and the login handler verifies each attempt against that hash. Set passwords only with `vigocli webusers set-password`; writing the key directly with `vigocli secrets set` stores the value verbatim and will not authenticate.
 
 **Admin webusers map 1:1 with OS users.** The username on the web side must equal a human OS account on the server host — this gates audit attribution to a real person and seeds the pubkey for browser scrier sessions. Viewer and compliance users are unconstrained; they're one-offs (auditors, partners, read-only access) without OS counterparts.
 
@@ -79,14 +79,14 @@ sudo vigocli webusers create --username alice --role admin
 sudo vigocli webusers create --username auditor --role viewer --email auditor@example.com
 sudo vigocli webusers create --username carol --role compliance --email carol@example.com
 
-# Set passwords:
-vigocli secrets set password vigo/web/auth/alice
+# Set passwords (prompts; stores a bcrypt hash):
+vigocli webusers set-password --username alice
 ```
 
 ### Resetting Passwords
 
 ```bash
-vigocli secrets set password vigo/web/auth/<username>
+vigocli webusers set-password --username <username>
 ```
 
 ### CLI Access (Local-Admin Token)
@@ -392,7 +392,7 @@ The token is stored securely in the user's home directory.
 ```bash
 vigocli webusers list
 vigocli webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
-vigocli secrets set password vigo/web/auth/alice
+vigocli webusers set-password --username alice
 vigocli webusers delete --username alice
 ```
 
