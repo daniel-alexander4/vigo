@@ -1,6 +1,12 @@
 name: cis-windows-security-options
 # CIS Windows Server 2022 Level 1 — Security Options & Windows Defender
-# Status: ENFORCED by Vigo
+# Status: NON-FUNCTIONAL SCAFFOLDING — does NOT enforce on a real host.
+#   These resources write attrs the agent's executors don't read:
+#   local_security_policy `policy:` (executor reads `policy_name:`), registry
+#   `key:`/`value_name:` (executor reads `path:`/`name:`), windows_defender
+#   `realtime_monitoring:` (executor reads `real_time_protection:`). All no-op.
+#   Compliance claims are withheld until the executor/configcrate attribute
+#   vocabularies are reconciled (see deferred.md: "Windows compliance executor reconciliation").
 
 compliance:
   bundle: [cis-windows-security-options]

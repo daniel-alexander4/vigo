@@ -1,6 +1,11 @@
 name: cis-windows-network
 # CIS Windows Server 2022 Level 1 — Network Security
-# Status: ENFORCED by Vigo
+# Status: NON-FUNCTIONAL SCAFFOLDING — does NOT enforce on a real host.
+#   The registry resources below write `key:`/`value_name:`/`value_type:`, but
+#   the agent's registry executor reads `path:`/`name:`/`type:`, so every
+#   resource no-ops. Do not rely on this configcrate for hardening; compliance
+#   claims are withheld until the executor/configcrate attribute vocabularies
+#   are reconciled (see deferred.md: "Windows compliance executor reconciliation").
 
 compliance:
   bundle: [cis-windows-network]

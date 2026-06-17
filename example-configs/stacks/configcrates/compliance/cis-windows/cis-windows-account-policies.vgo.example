@@ -1,6 +1,11 @@
 name: cis-windows-account-policies
 # CIS Windows Server 2022 Level 1 — Account Policies
-# Status: ENFORCED by Vigo
+# Status: NON-FUNCTIONAL SCAFFOLDING — does NOT enforce on a real host.
+#   The local_security_policy resources below write the attr `policy:`, but the
+#   agent's executor reads `policy_name:`, so every resource errors / no-ops.
+#   Do not rely on this configcrate for hardening; compliance claims are
+#   withheld until the executor/configcrate attribute vocabularies are
+#   reconciled (see deferred.md: "Windows compliance executor reconciliation").
 
 compliance:
   bundle: [cis-windows-account-policies]

@@ -1,6 +1,12 @@
 name: cis-windows-components
 # CIS Windows Server 2022 Level 1 — Windows Components
-# Status: ENFORCED by Vigo
+# Status: NON-FUNCTIONAL SCAFFOLDING — does NOT enforce on a real host.
+#   These resources write attrs the agent's executors don't read: registry
+#   `key:`/`value_name:` (executor reads `path:`/`name:`), windows_update
+#   `auto_update:`/`schedule_day:` (executor reads `auto_update_enabled:`/
+#   `scheduled_day:`), windows_defender similarly. All no-op. Compliance claims
+#   are withheld until the executor/configcrate attribute vocabularies are
+#   reconciled (see deferred.md: "Windows compliance executor reconciliation").
 
 compliance:
   bundle: [cis-windows-components]

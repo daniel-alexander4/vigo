@@ -1,6 +1,11 @@
 name: cis-windows-firewall
 # CIS Windows Server 2022 Level 1 — Windows Firewall
-# Status: ENFORCED by Vigo
+# Status: NON-FUNCTIONAL SCAFFOLDING — does NOT enforce on a real host.
+#   The firewall_windows resources below write `profile:`/`enabled:`/
+#   `default_inbound:`, but the agent's executor is rule-only
+#   (`name:`/`direction:`/`action:`) and ignores firewall profile state, so
+#   they no-op. Compliance claims are withheld until firewall_windows gains
+#   profile-state support (see deferred.md: "Windows compliance executor reconciliation").
 #
 # `type: firewall_windows` is a placeholder for a future profile-aware
 # Windows-firewall executor that takes per-profile (domain/private/public)

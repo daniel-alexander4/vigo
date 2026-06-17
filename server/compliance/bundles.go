@@ -219,65 +219,81 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		ID:          "cis-windows-account-policies",
 		Title:       "CIS — Windows Account Policies",
 		Description: "Framework-bundle scope-cut: cis-windows-account-policies. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"cis-windows": {"1.1.1", "1.1.2", "1.1.3", "1.1.4", "1.1.5", "1.2.1", "1.2.2", "1.2.3"},
-		},
+		// No claims: the configcrate's local_security_policy resources write
+		// the attr `policy:`, but the executor reads `policy_name:` — the
+		// resources enforce nothing on a real host. Claims return when the
+		// executor/configcrate attribute vocabularies are reconciled (deferred
+		// Windows item). Claiming unenforced controls would be dishonest.
+		Frameworks: map[string][]string{},
 	},
 	"cis-windows-audit-policies": {
 		ID:          "cis-windows-audit-policies",
 		Title:       "CIS — Windows Audit Policies",
 		Description: "Framework-bundle scope-cut: cis-windows-audit-policies. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-windows": {"17.1.1", "17.2.1", "17.3.1", "17.3.2", "17.5.1", "17.6.1", "17.7.1", "17.9.1"},
+			// auditpol via the powershell executor (with unless: guards) — genuinely enforces.
+			"cis-windows": {"17.1.1", "17.2.2", "17.3.2", "17.5.3", "17.5.4", "17.7.1", "17.8.1", "17.9.5"},
 		},
 	},
 	"cis-windows-components": {
 		ID:          "cis-windows-components",
 		Title:       "CIS — Windows Components",
 		Description: "Framework-bundle scope-cut: cis-windows-components. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"cis-windows": {"18.1.1.1", "18.3.1", "18.3.2"},
-		},
+		// No claims: the configcrate's registry resources write `key:`/`value_name:`/`value_type:`,
+		// but the registry executor reads `path:`/`name:`/`type:` — they enforce nothing on a real
+		// host. (The RDP/WinRM/PowerShell-logging controls are also L2, absent from the L1-MS builder.)
+		// Claims return when the executor/configcrate attribute vocabularies are reconciled (deferred).
+		Frameworks: map[string][]string{},
 	},
 	"cis-windows-firewall": {
 		ID:          "cis-windows-firewall",
 		Title:       "CIS — Windows Firewall",
 		Description: "Framework-bundle scope-cut: cis-windows-firewall. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"cis-windows": {"9.1.1", "9.1.2", "9.1.3", "9.2.1", "9.2.2", "9.3.1", "9.3.2"},
-		},
+		// No claims: the configcrate's firewall_windows resources write
+		// `profile:`/`enabled:`/`default_inbound:`, but the executor is
+		// rule-only (`name:`/`direction:`/`action:`) and ignores profile
+		// state — it enforces nothing. Claims return when firewall_windows
+		// gains profile-state support (deferred Windows item).
+		Frameworks: map[string][]string{},
 	},
 	"cis-windows-network": {
 		ID:          "cis-windows-network",
 		Title:       "CIS — Windows Network",
 		Description: "Framework-bundle scope-cut: cis-windows-network. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"cis-windows": {"18.4.1", "18.4.2", "18.4.3", "18.4.4", "18.4.5", "18.4.6", "18.4.7", "18.4.8"},
-		},
+		// No claims: the configcrate's registry resources write `key:`/`value_name:`/`value_type:`,
+		// but the registry executor reads `path:`/`name:`/`type:` — they enforce nothing on a real
+		// host. (The prior 18.4.x MSS claims were also wrong — the resources target SMBv1/NetBIOS/
+		// LDAP-signing in §18.3/§2.3, not MSS.) Claims return on attribute reconciliation (deferred).
+		Frameworks: map[string][]string{},
 	},
 	"cis-windows-security-options": {
 		ID:          "cis-windows-security-options",
 		Title:       "CIS — Windows Security Options",
 		Description: "Framework-bundle scope-cut: cis-windows-security-options. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"cis-windows": {"2.3.1.1", "2.3.7.1", "2.3.10.1", "2.3.10.2", "18.4.1", "18.9.47.1"},
-		},
+		// No claims: the configcrate's local_security_policy resources write `policy:` (executor
+		// reads `policy_name:`), its registry resources write `key:`/`value_name:` (executor reads
+		// `path:`/`name:`), and its windows_defender resources write `realtime_monitoring:` (executor
+		// reads `real_time_protection:`) — none enforce on a real host. Claims return on reconciliation (deferred).
+		Frameworks: map[string][]string{},
 	},
 	"cis-windows-system-services": {
 		ID:          "cis-windows-system-services",
 		Title:       "CIS — Windows System Services",
 		Description: "Framework-bundle scope-cut: cis-windows-system-services. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cis-windows": {"5.1", "5.2", "5.3", "5.4", "5.5", "5.6", "5.7", "5.8", "5.9", "5.10"},
+			// service: + Set-Service (powershell) — genuinely disables the named services.
+			"cis-windows": {"5.2", "5.18", "5.25", "5.31", "5.32", "5.42", "5.44"},
 		},
 	},
 	"cis-windows-user-rights": {
 		ID:          "cis-windows-user-rights",
 		Title:       "CIS — Windows User Rights",
 		Description: "Framework-bundle scope-cut: cis-windows-user-rights. Implements one section of the cis baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"cis-windows": {"2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.2.7", "2.2.8", "2.2.9", "2.2.10", "2.2.11", "2.2.12"},
-		},
+		// No claims: the configcrate's local_security_policy resources write `policy:`, but the
+		// executor reads `policy_name:` — they enforce nothing on a real host. (The prior 2.2.1–2.2.12
+		// claims were also wrong — the resources set the deny-logon/privilege rights 2.2.15–2.2.39.)
+		// Claims return when the executor/configcrate attribute vocabularies are reconciled (deferred).
+		Frameworks: map[string][]string{},
 	},
 	"ce-app-whitelisting": {
 		ID:          "ce-app-whitelisting",
