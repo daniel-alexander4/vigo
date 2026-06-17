@@ -434,6 +434,32 @@ func TestServiceStatus(t *testing.T) {
 	}
 }
 
+// TestPeerRolePersistence: a runtime Promote/Demote writes the role to the
+// non-replicated state file, and LoadPersistedRole reads it back to override
+// server.yaml at the next boot.
+func TestPeerRolePersistence(t *testing.T) {
+	root := t.TempDir()
+
+	if _, ok := LoadPersistedRole(root); ok {
+		t.Fatal("no state file should mean no persisted role")
+	}
+
+	svc := NewService(root, "peer", nil, nil)
+	if _, err := svc.Promote(context.Background(), nil); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if role, ok := LoadPersistedRole(root); !ok || role != "primary" {
+		t.Errorf("after Promote: persisted role = %q (ok=%v), want primary", role, ok)
+	}
+
+	if _, err := svc.Demote(context.Background(), &pb.PeerDemoteRequest{}); err != nil {
+		t.Fatalf("Demote: %v", err)
+	}
+	if role, ok := LoadPersistedRole(root); !ok || role != "peer" {
+		t.Errorf("after Demote: persisted role = %q (ok=%v), want peer", role, ok)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestServiceDemote
 // ---------------------------------------------------------------------------

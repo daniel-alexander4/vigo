@@ -831,6 +831,14 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		if peerRole == "" {
 			peerRole = "primary"
 		}
+		// A runtime Promote/Demote persists the new role to a non-replicated
+		// state file; it overrides server.yaml's peers.role across restarts so
+		// a runtime-promoted node stays primary. (peers.role itself can't carry
+		// this — server.yaml is replicated, so the primary's role would clobber
+		// every peer's.)
+		if persisted, ok := peer.LoadPersistedRole(s.serverRoot); ok {
+			peerRole = persisted
+		}
 
 		s.peerService = peer.NewService(s.serverRoot, peerRole, func() {
 			if err := s.configStore.Reload(); err != nil {

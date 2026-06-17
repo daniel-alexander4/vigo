@@ -27,6 +27,37 @@ import (
 // HA peer, matching the agent SEC-03 window.
 const peerSigWindow = 5 * time.Minute
 
+// roleStateFile persists a runtime role transition (Promote/Demote) so it
+// survives a restart. It lives at serverRoot/peer-role, deliberately OUTSIDE
+// the replicated set (syncDirs + server.yaml) — a replicated role would let
+// the primary's role overwrite every peer's. It overrides server.yaml's
+// peers.role at boot when present.
+const roleStateFile = "peer-role"
+
+// LoadPersistedRole returns the role recorded by a prior runtime transition,
+// or ("", false) if none/invalid. Read at startup to override peers.role.
+func LoadPersistedRole(serverRoot string) (string, bool) {
+	data, err := os.ReadFile(filepath.Join(serverRoot, roleStateFile))
+	if err != nil {
+		return "", false
+	}
+	role := strings.TrimSpace(string(data))
+	if role != "primary" && role != "peer" {
+		return "", false
+	}
+	return role, true
+}
+
+// persistRole records the current role so it survives a restart. Best-effort:
+// a write failure is logged, not fatal — the in-memory transition still holds
+// for this process lifetime.
+func (s *Service) persistRole(role string) {
+	path := filepath.Join(s.serverRoot, roleStateFile)
+	if err := os.WriteFile(path, []byte(role+"\n"), 0o600); err != nil {
+		slog.Error("peer: failed to persist role state", "path", path, "role", role, "error", err)
+	}
+}
+
 // auditRecorder is the interface for the tamper-evident audit writer.
 type auditRecorder interface {
 	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
@@ -322,6 +353,9 @@ func (s *Service) Promote(ctx context.Context, _ *pb.PeerPromoteRequest) (*pb.Pe
 
 	slog.Info("peer promoted to primary", "old_role", oldRole)
 
+	// Persist the role so it survives a restart (overrides server.yaml at boot).
+	s.persistRole("primary")
+
 	// Start the outbound push loop so the new primary replicates to its peers
 	// immediately, without waiting for a restart.
 	if hook != nil {
@@ -359,6 +393,9 @@ func (s *Service) Demote(ctx context.Context, _ *pb.PeerDemoteRequest) (*pb.Peer
 	s.mu.Unlock()
 
 	slog.Info("peer demoted to peer role", "old_role", oldRole)
+
+	// Persist the role so it survives a restart (overrides server.yaml at boot).
+	s.persistRole("peer")
 
 	// Stop pushing — this node is no longer primary.
 	if hook != nil {

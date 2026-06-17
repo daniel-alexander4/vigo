@@ -92,15 +92,15 @@ func (s *Server) startLicenseEnforcement(ctx context.Context) {
 	// the lifecycle ctx here so a runtime Promote/Demote can start or stop it
 	// without a restart.
 	if s.peerService != nil {
-		peerRole := s.cfg.Peers.Role
-		if peerRole == "" {
-			peerRole = "primary"
-		}
 		s.peerPushMu.Lock()
 		s.peerPushCtx = ctx
 		s.peerPushMu.Unlock()
 		s.peerService.SetRoleChangeHook(s.setPrimaryPushing)
-		s.setPrimaryPushing(peerRole == "primary")
+		// Use the Service's effective role (already resolved in NewServer from
+		// server.yaml plus any persisted runtime transition), not a fresh read
+		// of cfg.Peers.Role — otherwise a restart after a runtime promote would
+		// start the pusher off the stale config role.
+		s.setPrimaryPushing(s.peerService.Role() == "primary")
 	}
 
 }
