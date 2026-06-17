@@ -54,19 +54,19 @@ func (h *ExportHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // SIEMEvent is a single SIEM-consumable event derived from a run result.
 type SIEMEvent struct {
-	Timestamp    string `json:"timestamp"`
-	Hostname     string `json:"hostname"`
-	EnvoyID      string `json:"envoy_id"`
-	RunID        string `json:"run_id"`
-	ConfigcrateName   string `json:"configcrate_name"`
-	ResourceName string `json:"resource_name"`
-	ResourceType string `json:"resource_type"`
-	Action       string `json:"action"`
-	Changed      bool   `json:"changed"`
-	Error        string `json:"error,omitempty"`
-	DurationMs   int64  `json:"duration_ms"`
-	RunStatus    string `json:"run_status"`
-	Source       string `json:"source"`
+	Timestamp       string `json:"timestamp"`
+	Hostname        string `json:"hostname"`
+	EnvoyID         string `json:"envoy_id"`
+	RunID           string `json:"run_id"`
+	ConfigcrateName string `json:"configcrate_name"`
+	ResourceName    string `json:"resource_name"`
+	ResourceType    string `json:"resource_type"`
+	Action          string `json:"action"`
+	Changed         bool   `json:"changed"`
+	Error           string `json:"error,omitempty"`
+	DurationMs      int64  `json:"duration_ms"`
+	RunStatus       string `json:"run_status"`
+	Source          string `json:"source"`
 }
 
 // CMDBRecord is a CMDB-consumable configuration item for a envoy.
@@ -159,18 +159,18 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 
 func siemEventFromRow(row db.ListRunResultsSinceRow) SIEMEvent {
 	e := SIEMEvent{
-		Timestamp:    row.CreatedAt.Format(time.RFC3339),
-		Hostname:     row.Hostname,
-		EnvoyID:      row.EnvoyID,
-		RunID:        row.RunID,
-		ConfigcrateName:   row.ConfigcrateName,
-		ResourceName: row.ResourceName,
-		ResourceType: row.ResourceType,
-		Action:       row.ActionTaken,
-		Changed:      row.Changed != 0,
-		DurationMs:   row.DurationMs,
-		RunStatus:    row.RunStatus,
-		Source:       "vigo",
+		Timestamp:       row.CreatedAt.Format(time.RFC3339),
+		Hostname:        row.Hostname,
+		EnvoyID:         row.EnvoyID,
+		RunID:           row.RunID,
+		ConfigcrateName: row.ConfigcrateName,
+		ResourceName:    row.ResourceName,
+		ResourceType:    row.ResourceType,
+		Action:          row.ActionTaken,
+		Changed:         row.Changed != 0,
+		DurationMs:      row.DurationMs,
+		RunStatus:       row.RunStatus,
+		Source:          "vigo",
 	}
 	if row.ErrorMessage.Valid {
 		e.Error = row.ErrorMessage.String
@@ -180,18 +180,18 @@ func siemEventFromRow(row db.ListRunResultsSinceRow) SIEMEvent {
 
 func siemEventFromByEnvoyRow(row db.ListRunResultsSinceByEnvoyRow) SIEMEvent {
 	e := SIEMEvent{
-		Timestamp:    row.CreatedAt.Format(time.RFC3339),
-		Hostname:     row.Hostname,
-		EnvoyID:      row.EnvoyID,
-		RunID:        row.RunID,
-		ConfigcrateName:   row.ConfigcrateName,
-		ResourceName: row.ResourceName,
-		ResourceType: row.ResourceType,
-		Action:       row.ActionTaken,
-		Changed:      row.Changed != 0,
-		DurationMs:   row.DurationMs,
-		RunStatus:    row.RunStatus,
-		Source:       "vigo",
+		Timestamp:       row.CreatedAt.Format(time.RFC3339),
+		Hostname:        row.Hostname,
+		EnvoyID:         row.EnvoyID,
+		RunID:           row.RunID,
+		ConfigcrateName: row.ConfigcrateName,
+		ResourceName:    row.ResourceName,
+		ResourceType:    row.ResourceType,
+		Action:          row.ActionTaken,
+		Changed:         row.Changed != 0,
+		DurationMs:      row.DurationMs,
+		RunStatus:       row.RunStatus,
+		Source:          "vigo",
 	}
 	if row.ErrorMessage.Valid {
 		e.Error = row.ErrorMessage.String
