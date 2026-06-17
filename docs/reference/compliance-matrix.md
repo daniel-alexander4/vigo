@@ -25,7 +25,6 @@ Frameworks tracked. The version label is the **currently-mapped baseline** — i
 - **IEC 62443** — industrial control systems
 - **Cyber Essentials Plus** — UK government scheme
 - **NY DFS Cyber** — 23 NYCRR 500
-- **ABA Cybersecurity** — banking-sector self-assessment
 - **MiFID II** — RTS 24
 - **FINRA** / **SEC 17a-4** — broker-dealer recordkeeping
 - **FDA 21 CFR Part 11** — electronic records and signatures

@@ -82,7 +82,6 @@ var frameworkLabels = map[string]string{
 	"ciswindows":      "CIS Windows 11 Benchmark v3.x",
 	"cisubuntu":       "CIS Ubuntu 22.04 Benchmark v1.0.0",
 	"cisrhel":         "CIS RHEL 9 Benchmark v2.x",
-	"abacyber":        "ABA Cybersecurity (banking-sector self-assessment)",
 	"nydfscyber":      "NY DFS Cyber (23 NYCRR 500)",
 }
 

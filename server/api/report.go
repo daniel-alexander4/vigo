@@ -252,8 +252,6 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/cisubuntu.html", h.handleCISUbuntuReportHTML)
 	mux.HandleFunc("GET /api/v1/report/cisrhel", h.handleCISRHELReport)
 	mux.HandleFunc("GET /api/v1/report/cisrhel.html", h.handleCISRHELReportHTML)
-	mux.HandleFunc("GET /api/v1/report/abacyber", h.handleABACyberReport)
-	mux.HandleFunc("GET /api/v1/report/abacyber.html", h.handleABACyberReportHTML)
 	mux.HandleFunc("GET /api/v1/report/nydfscyber", h.handleNYDFSCyberReport)
 	mux.HandleFunc("GET /api/v1/report/nydfscyber.html", h.handleNYDFSCyberReportHTML)
 	h.registerAuditBundleRoute(mux)
@@ -295,7 +293,6 @@ func (h *ReportHandler) frameworkDef(_ AuditChainStatus, slug string) (framework
 		"ciswindows":      {"CIS Windows Server Benchmark Report", "CIS Windows", h.buildCISWindowsFindings},
 		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "CIS Ubuntu", h.buildCISUbuntuFindings},
 		"cisrhel":         {"CIS RHEL Benchmark Report", "CIS RHEL", h.buildCISRHELFindings},
-		"abacyber":        {"ABA Cybersecurity Compliance Report", "ABA Cybersecurity", h.buildABACyberFindings},
 		"nydfscyber":      {"NY DFS Cybersecurity (23 NYCRR 500) Report", "NY DFS Cyber", h.buildNYDFSCyberFindings},
 	}
 	fw, ok := fws[slug]
@@ -3869,16 +3866,6 @@ func (h *ReportHandler) handleCISRHELReportHTML(w http.ResponseWriter, r *http.R
 		h.buildCISRHELFindings(), true)
 }
 
-func (h *ReportHandler) handleABACyberReport(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Vigo ABA Cybersecurity Compliance Report", "vigo-aba-cyber",
-		h.buildABACyberFindings(), false)
-}
-
-func (h *ReportHandler) handleABACyberReportHTML(w http.ResponseWriter, r *http.Request) {
-	h.serveFrameworkReport(w, r, "Vigo ABA Cybersecurity Compliance Report", "vigo-aba-cyber",
-		h.buildABACyberFindings(), true)
-}
-
 func (h *ReportHandler) handleNYDFSCyberReport(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Vigo NY DFS Cybersecurity (23 NYCRR 500) Report", "vigo-ny-dfs-cyber",
 		h.buildNYDFSCyberFindings(), false)
@@ -3887,36 +3874,6 @@ func (h *ReportHandler) handleNYDFSCyberReport(w http.ResponseWriter, r *http.Re
 func (h *ReportHandler) handleNYDFSCyberReportHTML(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Vigo NY DFS Cybersecurity (23 NYCRR 500) Report", "vigo-ny-dfs-cyber",
 		h.buildNYDFSCyberFindings(), true)
-}
-
-// buildABACyberFindings returns the ABA Cybersecurity control catalog,
-// combining ABA Formal Opinion 477R, Model Rule 1.1 (technology
-// competence), and Model Rule 1.6(c) (confidentiality — reasonable
-// efforts).
-func (h *ReportHandler) buildABACyberFindings() []ControlFinding {
-	return catalog([][2]string{
-		// Model Rule 1.1 — Technology Competence
-		{"ABA-1.1", "Technology Competence (Model Rule 1.1 Comment 8)"},
-		// Model Rule 1.6(c) — Reasonable Efforts
-		{"ABA-1.6-1", "Reasonable Efforts — Encryption at Rest"},
-		{"ABA-1.6-2", "Reasonable Efforts — Encryption in Transit"},
-		{"ABA-1.6-3", "Reasonable Efforts — Access Controls"},
-		{"ABA-1.6-4", "Reasonable Efforts — Multi-Factor Authentication"},
-		{"ABA-1.6-5", "Reasonable Efforts — Secure Disposal"},
-		// Formal Opinion 477R — Specific Requirements
-		{"ABA-477R-1", "Nature of Threat Assessment"},
-		{"ABA-477R-2", "Client Matter Sensitivity Classification"},
-		{"ABA-477R-3", "Secure Communication Channels"},
-		{"ABA-477R-4", "Device Security — Endpoints"},
-		{"ABA-477R-5", "Device Security — Mobile"},
-		{"ABA-477R-6", "Patch Management"},
-		{"ABA-477R-7", "Firewall and Network Security"},
-		{"ABA-477R-8", "Anti-Malware Protection"},
-		{"ABA-477R-9", "Audit Logging"},
-		{"ABA-477R-10", "Backup and Recovery"},
-		{"ABA-477R-11", "Incident Response Plan"},
-		{"ABA-477R-12", "Vendor and Third-Party Oversight"},
-	})
 }
 
 // buildNYDFSCyberFindings returns the NY DFS 23 NYCRR 500 control
@@ -4058,7 +4015,6 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		{"CIS Windows", "ciswindows"},
 		{"CIS Ubuntu", "cisubuntu"},
 		{"CIS RHEL", "cisrhel"},
-		{"ABA Cybersecurity", "abacyber"},
 		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber"},
 	}
 
@@ -4528,7 +4484,6 @@ func (h *ReportHandler) PersistComplianceSnapshot(ctx context.Context) {
 		{"CIS Windows", "ciswindows", "cis-windows"},
 		{"CIS Ubuntu", "cisubuntu", "cis-ubuntu"},
 		{"CIS RHEL", "cisrhel", "cis-rhel"},
-		{"ABA Cybersecurity", "abacyber", "aba-cyber"},
 		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber", "ny-dfs-cyber"},
 	}
 	recorded := 0

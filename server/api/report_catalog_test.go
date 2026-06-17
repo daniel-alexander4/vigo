@@ -76,7 +76,6 @@ func TestFrameworkCatalogsAreUniqueAndStatusInitialized(t *testing.T) {
 		{"CIS Windows", h.buildCISWindowsFindings()},
 		{"CIS Ubuntu", h.buildCISUbuntuFindings()},
 		{"CIS RHEL", h.buildCISRHELFindings()},
-		{"ABA Cyber", h.buildABACyberFindings()},
 		{"NY DFS Cyber", h.buildNYDFSCyberFindings()},
 	}
 	for _, tc := range cases {

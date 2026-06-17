@@ -19,7 +19,6 @@ import "strings"
 // framework. Mirrors the canonical list in server/api/report.go +
 // server/config/loader.go.
 var canonicalFrameworkSlugs = []string{
-	"aba-cyber",
 	"ccss",
 	"cis-rhel",
 	"cis-ubuntu",

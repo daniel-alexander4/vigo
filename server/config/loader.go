@@ -1672,7 +1672,6 @@ var StandardKeyForSlug = map[string]string{
 	"ciswindows":      "cis-windows",
 	"cisubuntu":       "cis-ubuntu",
 	"cisrhel":         "cis-rhel",
-	"abacyber":        "aba-cyber",
 	"nydfscyber":      "ny-dfs-cyber",
 }
 

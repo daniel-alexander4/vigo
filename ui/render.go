@@ -792,7 +792,6 @@ func fwSlug(name string) string {
 		"CIS Windows":                 "ciswindows",
 		"CIS Ubuntu":                  "cisubuntu",
 		"CIS RHEL":                    "cisrhel",
-		"ABA Cybersecurity":           "abacyber",
 		"NY DFS Cyber (23 NYCRR 500)": "nydfscyber",
 	}
 	if s, ok := slugs[name]; ok {

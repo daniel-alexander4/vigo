@@ -10,7 +10,7 @@ import "sort"
 // configcrate *does* (functional capability that may satisfy controls across
 // many frameworks); bundles name *which framework section* a configcrate
 // satisfies (e.g. CIS-Ubuntu §5 access controls, Cyber Essentials Plus
-// firewall theme, ABA-Cyber audit-logging baseline).
+// firewall theme, HITRUST audit-logging baseline).
 //
 // The split is deliberate. A `provides: [time-sync]` claim is
 // framework-agnostic — the underlying configcrate ships a chrony daemon and
@@ -59,38 +59,6 @@ type ConfigcrateBundle struct {
 // catalog entry whose Frameworks map captures the configcrate's historical
 // claim verbatim.
 var ConfigcrateBundles = map[string]ConfigcrateBundle{
-	"aba-audit-logging": {
-		ID:          "aba-audit-logging",
-		Title:       "ABA — Audit Logging",
-		Description: "Framework-bundle scope-cut: aba-audit-logging. Implements one section of the aba baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"aba-cyber": {"ABA-477R-9"},
-		},
-	},
-	"aba-endpoint-hardening": {
-		ID:          "aba-endpoint-hardening",
-		Title:       "ABA — Endpoint Hardening",
-		Description: "Framework-bundle scope-cut: aba-endpoint-hardening. Implements one section of the aba baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"aba-cyber": {"ABA-477R-4", "ABA-1.6-1", "ABA-1.6-3", "ABA-1.6-5"},
-		},
-	},
-	"aba-malware-protection": {
-		ID:          "aba-malware-protection",
-		Title:       "ABA — Malware Protection",
-		Description: "Framework-bundle scope-cut: aba-malware-protection. Implements one section of the aba baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"aba-cyber": {"ABA-477R-8"},
-		},
-	},
-	"aba-network-security": {
-		ID:          "aba-network-security",
-		Title:       "ABA — Network Security",
-		Description: "Framework-bundle scope-cut: aba-network-security. Implements one section of the aba baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
-		Frameworks: map[string][]string{
-			"aba-cyber": {"ABA-477R-3", "ABA-477R-7", "ABA-1.6-2"},
-		},
-	},
 	"ccss-audit-integrity": {
 		ID:          "ccss-audit-integrity",
 		Title:       "CCSS — Audit Integrity",

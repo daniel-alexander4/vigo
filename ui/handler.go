@@ -3813,7 +3813,6 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		"ciswindows":      {"CIS Windows Server Benchmark Report", "ciswindows"},
 		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "cisubuntu"},
 		"cisrhel":         {"CIS RHEL Benchmark Report", "cisrhel"},
-		"abacyber":        {"ABA Cybersecurity Compliance Report", "abacyber"},
 		"nydfscyber":      {"NY DFS 23 NYCRR 500 Compliance Report", "nydfscyber"},
 	}
 

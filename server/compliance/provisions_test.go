@@ -57,7 +57,7 @@ func TestCatalogConsistency(t *testing.T) {
 	// compliance is the data layer, and the inverse import would
 	// muddy the layering).
 	knownFrameworks := map[string]bool{
-		"aba-cyber": true, "ccss": true, "cis-rhel": true,
+		"ccss": true, "cis-rhel": true,
 		"cis-ubuntu": true, "cis-windows": true, "cyber-essentials": true,
 		"fda-21cfr11": true, "finra": true, "gaming": true,
 		"gdpr": true, "hipaa": true, "hitrust": true,

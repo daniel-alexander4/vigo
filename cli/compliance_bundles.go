@@ -25,7 +25,7 @@ var complianceBundlesCmd = &cobra.Command{
 	Long: `List the Vigo-curated framework-bundle catalog used by configcrates' "bundle:" field.
 
 Each bundle is a kebab-case tag tied to a specific framework section
-(e.g. "cis-ubuntu-access-baseline", "ce-firewalls", "aba-audit-logging")
+(e.g. "cis-ubuntu-access-baseline", "ce-firewalls", "ccss-audit-integrity")
 that the loader expands into framework -> control coverage. A configcrate
 that exists to implement one framework's rule set declares
 "bundle: [cis-ubuntu-access-baseline]"; a configcrate that ships a

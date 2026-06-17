@@ -2232,7 +2232,6 @@ These endpoints are documented at summary level; `curl -v` the running server fo
 
 Same shape as the existing framework report endpoints: JSON at the bare path, HTML at `.html`.
 
-- **GET /api/v1/report/abacyber** and **GET /api/v1/report/abacyber.html** — ABA Cybersecurity compliance report.
 - **GET /api/v1/report/cisrhel** and **GET /api/v1/report/cisrhel.html** — CIS RHEL benchmark report.
 - **GET /api/v1/report/cisubuntu** and **GET /api/v1/report/cisubuntu.html** — CIS Ubuntu benchmark report.
 - **GET /api/v1/report/nydfscyber** and **GET /api/v1/report/nydfscyber.html** — NY DFS Cybersecurity (23 NYCRR 500) report.

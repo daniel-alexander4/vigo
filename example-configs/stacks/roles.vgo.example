@@ -337,13 +337,6 @@ roles:
       - gaming-system-integrity
 
   # ─── Sector-specific ───
-  - name: aba-cyber
-    configcrates:
-      - aba-endpoint-hardening
-      - aba-network-security
-      - aba-audit-logging
-      - aba-malware-protection
-
   - name: ny-dfs-cyber
     configcrates:
       - nydfs-access-control
