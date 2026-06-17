@@ -141,10 +141,10 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 	if summary.Total > 0 {
 		driftRate = float64(summary.Diverged) / float64(summary.Total) * 100
 	}
-	convPct := float64(0)
-	if summary.Total > 0 {
-		convPct = float64(summary.Converged) / float64(summary.Total) * 100
-	}
+	// Divide by the ACTIVE fleet (total − offline), same as every other
+	// convergence-% surface — via the canonical helper (CLAUDE.md single-SoT).
+	// This site previously divided by raw Total and was the lone outlier.
+	convPct := convergence.ConvergedPct(int64(summary.Converged), int64(summary.Total)-int64(summary.Offline))
 
 	// Fleet table: worst 50 envoys, triage-ordered. Also tally Observing
 	// (observe-only) here in the same walk so the dashboard filter-bar
@@ -225,11 +225,7 @@ func (ds *DataSource) ConvergenceData(baseInterval, offlineThreshold time.Durati
 
 	// Stale envoys are excluded from the convergence percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := total - int64(summary.Offline)
-	convPct := float64(0)
-	if activeTotal > 0 {
-		convPct = float64(summary.Converged) / float64(activeTotal) * 100
-	}
+	convPct := convergence.ConvergedPct(int64(summary.Converged), total-int64(summary.Offline))
 
 	// Gather non-converged envoys.
 	var notConverged []ui.ConvergenceRow
@@ -258,7 +254,7 @@ func (ds *DataSource) ConvergenceData(baseInterval, offlineThreshold time.Durati
 		for _, s := range snapshots {
 			active := s.Counters.Total - s.Counters.Offline
 			if active > 0 {
-				sparkData = append(sparkData, float64(s.Counters.Converged)/float64(active)*100)
+				sparkData = append(sparkData, convergence.ConvergedPct(int64(s.Counters.Converged), int64(active)))
 			}
 		}
 	} else {
@@ -272,7 +268,7 @@ func (ds *DataSource) ConvergenceData(baseInterval, offlineThreshold time.Durati
 			h := history[i]
 			active := h.Total - h.Offline
 			if active > 0 {
-				sparkData = append(sparkData, float64(h.Converged)/float64(active)*100)
+				sparkData = append(sparkData, convergence.ConvergedPct(h.Converged, active))
 			}
 		}
 	}

@@ -114,6 +114,30 @@ func TestFailurePct(t *testing.T) {
 	}
 }
 
+func TestConvergedPct(t *testing.T) {
+	tests := []struct {
+		converged, active int64
+		wantApprox        float64
+	}{
+		{0, 59, 0},
+		{59, 59, 100},
+		{48, 59, 81.35},
+		{0, 0, 0}, // no active fleet → 0, never a divide-by-zero
+		{5, 0, 0}, // offline-only fleet
+		{50, 80, 62.5},
+	}
+	for _, tt := range tests {
+		got := ConvergedPct(tt.converged, tt.active)
+		diff := got - tt.wantApprox
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > 0.1 {
+			t.Errorf("ConvergedPct(%d, %d) = %.2f, want ~%.2f", tt.converged, tt.active, got, tt.wantApprox)
+		}
+	}
+}
+
 func TestSummary(t *testing.T) {
 	statuses := []string{"converged", "converged", "failed", "no data", "converged", "degraded"}
 	got := Summary(statuses)

@@ -4003,11 +4003,10 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		// Fall back to live data
 		summary := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
+		// total here already excludes Offline (it sums the failure-axis
+		// statuses), so it is the active denominator. Route through the helper.
 		total := summary.Converged + summary.Degraded + summary.Failed + summary.NoData
-		pct := float64(0)
-		if total > 0 {
-			pct = float64(summary.Converged) / float64(total) * 100
-		}
+		pct := convergence.ConvergedPct(int64(summary.Converged), int64(total))
 		data := EvidenceSnapshotData{
 			SnapshotDate:   dateStr + " (live)",
 			ConvergencePct: pct,

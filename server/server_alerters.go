@@ -443,7 +443,10 @@ func (s *Server) complianceCheckTick(ctx context.Context, threshold int, wasBelo
 		if total == 0 {
 			return wasBelow
 		}
-		pct := (summary.Converged * 100) / total
+		// Active denominator (total − offline) via the canonical helper; this
+		// path previously divided by raw total. Truncated to int for the
+		// integer-percent threshold compare and event payload.
+		pct := int(convergence.ConvergedPct(int64(summary.Converged), int64(total)-int64(summary.Offline)))
 		belowNow := pct < threshold
 
 		if belowNow && !wasBelow {

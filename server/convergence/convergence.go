@@ -134,6 +134,20 @@ func FailurePct(failedCount, resourceCount int64) float64 {
 	return float64(failedCount) / float64(resourceCount) * 100
 }
 
+// ConvergedPct computes the convergence percentage over the ACTIVE fleet
+// (0-100): converged / active. Returns 0 when active is 0. The 2-arg shape
+// mirrors FailurePct; the caller supplies active (= total − offline, since
+// offline envoys are powered-off/decommissioned, not health problems) so every
+// surface divides by the same denominator. This is the single source of truth
+// for the percentage — the dashboard once divided by raw total and disagreed
+// with the convergence page, the sparkline, and the alerter.
+func ConvergedPct(converged, active int64) float64 {
+	if active <= 0 {
+		return 0
+	}
+	return float64(converged) / float64(active) * 100
+}
+
 // Summary aggregates a slice of status strings into counts by status.
 func Summary(statuses []string) map[string]int32 {
 	counts := make(map[string]int32)
