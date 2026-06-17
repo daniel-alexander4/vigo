@@ -19,11 +19,11 @@ func TestBuildComplianceIndex_ProvidesUnion(t *testing.T) {
 	}
 	idx := buildComplianceIndex(defs)
 
-	// time-sync expands into pci-dss 10.6.1/2/3 + nist AU-8 + cis 2.1.1.1/2 + iso A.12.4.4 — every owner is "chrony".
+	// time-sync expands into pci-dss 10.6.1/2/3 + nist AU-8 + cis 2.1.1.1/2 + iso A.8.17 (clock sync, :2022) — every owner is "chrony".
 	for _, want := range []struct{ framework, control string }{
 		{"pci-dss", "10.6.1"},
 		{"nist-800-53", "AU-8"},
-		{"iso-27001", "A.12.4.4"},
+		{"iso-27001", "A.8.17"},
 		{"cis-ubuntu", "2.1.1.1"},
 		{"cis-rhel", "2.1.1.2"},
 	} {
