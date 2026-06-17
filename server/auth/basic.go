@@ -11,6 +11,7 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/httpsec"
@@ -275,15 +276,19 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Try TOTP code first.
-	if ValidateTOTPCode(code, totpSecret) {
-		// Clear TOTP pending state and complete login.
-		p.sessions.Remove(r.Context(), "totp_pending_user_id")
-		p.sessions.Remove(r.Context(), "totp_pending_username")
-		p.sessions.PutUser(r.Context(), user)
-		recordAudit(r.Context(), p.auditWriter, "auth.login", username, "auth", "basic login (totp)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		http.Redirect(w, r, "/", http.StatusFound)
-		return
+	// Try TOTP code first. A code is accepted only if it both validates and
+	// advances the last-consumed step — a replayed code validates but fails to
+	// advance, so it falls through and does not authenticate.
+	if ok, step := ValidateTOTPCodeStep(code, totpSecret, time.Now()); ok {
+		if consumed, err := p.userStore.ConsumeTOTPStep(r.Context(), userID, step); err == nil && consumed {
+			// Clear TOTP pending state and complete login.
+			p.sessions.Remove(r.Context(), "totp_pending_user_id")
+			p.sessions.Remove(r.Context(), "totp_pending_username")
+			p.sessions.PutUser(r.Context(), user)
+			recordAudit(r.Context(), p.auditWriter, "auth.login", username, "auth", "basic login (totp)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
 	}
 
 	// Try recovery code.

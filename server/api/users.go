@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -460,7 +461,8 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Validate the code.
-	if !auth.ValidateTOTPCode(req.Code, secret) {
+	ok, enrollStep := auth.ValidateTOTPCodeStep(req.Code, secret, time.Now())
+	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid code — check your authenticator app")
 		return
 	}
@@ -473,8 +475,9 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Enable TOTP in DB.
-	if err := h.store.EnableTOTP(r.Context(), u.ID, hashedJSON); err != nil {
+	// Enable TOTP in DB, seeding the consumed step so the enrollment code can't
+	// be replayed at login.
+	if err := h.store.EnableTOTP(r.Context(), u.ID, hashedJSON, enrollStep); err != nil {
 		slog.Error("enabling totp", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to enable TOTP")
 		return

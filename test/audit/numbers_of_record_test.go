@@ -135,6 +135,7 @@ func TestNumbersOfRecordParity(t *testing.T) {
 		"Trait collectors":                              func() int { return len(traitCollectorNames(t, root)) },
 		"VigoAgent gRPC RPCs":                           func() int { return countProtoRPCs(t, root, "VigoAgent") },
 		"VigoAdmin gRPC RPCs":                           func() int { return countProtoRPCs(t, root, "VigoAdmin") },
+		"VigoPeer gRPC RPCs":                            func() int { return countProtoRPCs(t, root, "VigoPeer") },
 		"Compliance framework slugs":                    func() int { return countFrameworkSlugs(t, root) },
 	}
 

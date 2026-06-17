@@ -403,21 +403,22 @@ type TaskRunTarget struct {
 }
 
 type User struct {
-	ID           string        `json:"id"`
-	Username     string        `json:"username"`
-	DisplayName  string        `json:"display_name"`
-	Email        string        `json:"email"`
-	Role         string        `json:"role"`
-	Permissions  string        `json:"permissions"`
-	SshPublicKey string        `json:"ssh_public_key"`
-	OidcSubject  string        `json:"oidc_subject"`
-	TotpEnabled  int64         `json:"totp_enabled"`
-	TotpRecovery string        `json:"totp_recovery"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAtMs  int64         `json:"updated_at_ms"`
-	OriginBolt   string        `json:"origin_bolt"`
-	DeletedAt    sql.NullInt64 `json:"deleted_at"`
-	Signature    []byte        `json:"signature"`
+	ID                   string        `json:"id"`
+	Username             string        `json:"username"`
+	DisplayName          string        `json:"display_name"`
+	Email                string        `json:"email"`
+	Role                 string        `json:"role"`
+	Permissions          string        `json:"permissions"`
+	SshPublicKey         string        `json:"ssh_public_key"`
+	OidcSubject          string        `json:"oidc_subject"`
+	TotpEnabled          int64         `json:"totp_enabled"`
+	TotpRecovery         string        `json:"totp_recovery"`
+	CreatedAt            time.Time     `json:"created_at"`
+	UpdatedAtMs          int64         `json:"updated_at_ms"`
+	OriginBolt           string        `json:"origin_bolt"`
+	DeletedAt            sql.NullInt64 `json:"deleted_at"`
+	Signature            []byte        `json:"signature"`
+	TotpLastConsumedStep int64         `json:"totp_last_consumed_step"`
 }
 
 type Webhook struct {

@@ -5,10 +5,12 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
@@ -16,6 +18,9 @@ import (
 
 // TOTPIssuer is the issuer name shown in authenticator apps.
 const TOTPIssuer = "Vigo"
+
+// totpPeriod is the RFC 6238 time-step the default validator uses (30s).
+const totpPeriod = 30
 
 // recoveryCodeCount is the number of recovery codes generated.
 const recoveryCodeCount = 8
@@ -31,6 +36,24 @@ func GenerateTOTPSecret(username string) (secret, url string, err error) {
 		return "", "", fmt.Errorf("generating TOTP key: %w", err)
 	}
 	return key.Secret(), key.URL(), nil
+}
+
+// ValidateTOTPCodeStep checks a code against the secret and, if valid, returns
+// the time-step it matched (unix/period). It mirrors the default validator's
+// ±1 skew window so callers can record the consumed step and reject replays
+// within the validity window. Returns ok=false, step=0 when no step matches.
+func ValidateTOTPCodeStep(code, secret string, now time.Time) (ok bool, step int64) {
+	for skew := int64(-1); skew <= 1; skew++ {
+		t := now.Add(time.Duration(skew*totpPeriod) * time.Second)
+		expected, err := totp.GenerateCode(secret, t)
+		if err != nil {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(expected), []byte(code)) == 1 {
+			return true, t.Unix() / totpPeriod
+		}
+	}
+	return false, 0
 }
 
 // ValidateTOTPCode checks a 6-digit TOTP code against the secret.

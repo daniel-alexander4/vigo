@@ -259,16 +259,33 @@ func (s *UserStore) CountAdmins(ctx context.Context) (int64, error) {
 // codes. TOTP fields don't replicate (ADR-030 direction call A);
 // updated_at_ms is NOT bumped — a local TOTP enrollment must not
 // trigger empty CRDT churn on peers.
-func (s *UserStore) EnableTOTP(ctx context.Context, id, recoveryJSON string) error {
+// enrollStep is the TOTP step the enrollment code matched; seeding it blocks
+// replaying that same code at login.
+func (s *UserStore) EnableTOTP(ctx context.Context, id, recoveryJSON string, enrollStep int64) error {
 	return s.queries.EnableTOTP(ctx, db.EnableTOTPParams{
-		TotpRecovery: recoveryJSON,
-		ID:           id,
+		TotpRecovery:         recoveryJSON,
+		TotpLastConsumedStep: enrollStep,
+		ID:                   id,
 	})
 }
 
 // DisableTOTP removes TOTP from a user. Bolt-local; no CRDT bump.
 func (s *UserStore) DisableTOTP(ctx context.Context, id string) error {
 	return s.queries.DisableTOTP(ctx, id)
+}
+
+// ConsumeTOTPStep atomically advances the user's last-consumed TOTP step,
+// succeeding only if step is strictly newer than the stored value. Returns
+// false when the step was already consumed (replay). Bolt-local; no CRDT bump.
+func (s *UserStore) ConsumeTOTPStep(ctx context.Context, id string, step int64) (bool, error) {
+	rows, err := s.queries.ConsumeTOTPStep(ctx, db.ConsumeTOTPStepParams{
+		TotpLastConsumedStep: step,
+		ID:                   id,
+	})
+	if err != nil {
+		return false, err
+	}
+	return rows == 1, nil
 }
 
 // GetRecoveryCodes returns the raw recovery JSON for a user.

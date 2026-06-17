@@ -261,7 +261,7 @@ func TestUserStore_TOTPMutationsDoNotBumpUpdatedAtMs(t *testing.T) {
 	require.NoError(t, err)
 	preMs := pre.UpdatedAtMs
 
-	require.NoError(t, store.EnableTOTP(ctx, u.ID, `["recovery-code-1"]`))
+	require.NoError(t, store.EnableTOTP(ctx, u.ID, `["recovery-code-1"]`, 0))
 	afterEnable, err := queries.GetUserByID(ctx, u.ID)
 	require.NoError(t, err)
 	assert.Equal(t, preMs, afterEnable.UpdatedAtMs, "EnableTOTP must NOT bump updated_at_ms")

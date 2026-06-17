@@ -10,6 +10,28 @@ import (
 	"database/sql"
 )
 
+const consumeTOTPStep = `-- name: ConsumeTOTPStep :execrows
+UPDATE users SET totp_last_consumed_step = ?1
+WHERE id = ?2 AND totp_last_consumed_step < ?1 AND deleted_at IS NULL
+`
+
+type ConsumeTOTPStepParams struct {
+	TotpLastConsumedStep int64  `json:"totp_last_consumed_step"`
+	ID                   string `json:"id"`
+}
+
+// Atomic TOTP replay guard: advance the last-consumed step only if the
+// presented code's step (?1) is strictly newer than the stored one. A
+// rows-affected of 0 means the step was already consumed (replay) -> reject.
+// Bolt-local; no CRDT comparator bump (ADR-030 direction call A).
+func (q *Queries) ConsumeTOTPStep(ctx context.Context, arg ConsumeTOTPStepParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, consumeTOTPStep, arg.TotpLastConsumedStep, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const countAdminUsers = `-- name: CountAdminUsers :one
 SELECT COUNT(*) FROM users WHERE role = 'admin' AND deleted_at IS NULL
 `
@@ -48,7 +70,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const disableTOTP = `-- name: DisableTOTP :exec
-UPDATE users SET totp_enabled = 0, totp_recovery = ''
+UPDATE users SET totp_enabled = 0, totp_recovery = '', totp_last_consumed_step = 0
 WHERE id = ?
 `
 
@@ -59,26 +81,29 @@ func (q *Queries) DisableTOTP(ctx context.Context, id string) error {
 }
 
 const enableTOTP = `-- name: EnableTOTP :exec
-UPDATE users SET totp_enabled = 1, totp_recovery = ?
+UPDATE users SET totp_enabled = 1, totp_recovery = ?, totp_last_consumed_step = ?
 WHERE id = ?
 `
 
 type EnableTOTPParams struct {
-	TotpRecovery string `json:"totp_recovery"`
-	ID           string `json:"id"`
+	TotpRecovery         string `json:"totp_recovery"`
+	TotpLastConsumedStep int64  `json:"totp_last_consumed_step"`
+	ID                   string `json:"id"`
 }
 
 // ADR-030 Slice 2-iii-c: TOTP fields don't replicate (direction call
 // A -- bolt-local enrollment). DOES NOT touch updated_at_ms or
 // origin_bolt/signature -- a TOTP change must not trigger peer
 // replication of a row whose replicated content hasn't changed.
+// Seeds totp_last_consumed_step with the enrollment code's step so that same
+// code can't be replayed at login.
 func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) error {
-	_, err := q.db.ExecContext(ctx, enableTOTP, arg.TotpRecovery, arg.ID)
+	_, err := q.db.ExecContext(ctx, enableTOTP, arg.TotpRecovery, arg.TotpLastConsumedStep, arg.ID)
 	return err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature, totp_last_consumed_step
 FROM users WHERE id = ? AND deleted_at IS NULL
 `
 
@@ -101,12 +126,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.OriginBolt,
 		&i.DeletedAt,
 		&i.Signature,
+		&i.TotpLastConsumedStep,
 	)
 	return i, err
 }
 
 const getUserByOIDCSubject = `-- name: GetUserByOIDCSubject :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature, totp_last_consumed_step
 FROM users WHERE oidc_subject = ? AND deleted_at IS NULL
 `
 
@@ -129,12 +155,13 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 		&i.OriginBolt,
 		&i.DeletedAt,
 		&i.Signature,
+		&i.TotpLastConsumedStep,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature, totp_last_consumed_step
 FROM users WHERE username = ? AND deleted_at IS NULL
 `
 
@@ -157,6 +184,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.OriginBolt,
 		&i.DeletedAt,
 		&i.Signature,
+		&i.TotpLastConsumedStep,
 	)
 	return i, err
 }
@@ -175,7 +203,7 @@ func (q *Queries) GetUserSSHPublicKey(ctx context.Context, id string) (string, e
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject, updated_at_ms, origin_bolt, signature)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
+RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature, totp_last_consumed_step
 `
 
 type InsertUserParams struct {
@@ -219,12 +247,13 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.OriginBolt,
 		&i.DeletedAt,
 		&i.Signature,
+		&i.TotpLastConsumedStep,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature, totp_last_consumed_step
 FROM users WHERE deleted_at IS NULL ORDER BY username
 `
 
@@ -253,6 +282,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.OriginBolt,
 			&i.DeletedAt,
 			&i.Signature,
+			&i.TotpLastConsumedStep,
 		); err != nil {
 			return nil, err
 		}
@@ -268,7 +298,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersForReplication = `-- name: ListUsersForReplication :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at_ms, origin_bolt, deleted_at, signature, totp_last_consumed_step
 FROM users WHERE signature IS NOT NULL ORDER BY id
 `
 
@@ -302,6 +332,7 @@ func (q *Queries) ListUsersForReplication(ctx context.Context) ([]User, error) {
 			&i.OriginBolt,
 			&i.DeletedAt,
 			&i.Signature,
+			&i.TotpLastConsumedStep,
 		); err != nil {
 			return nil, err
 		}
