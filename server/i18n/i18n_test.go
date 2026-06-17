@@ -49,8 +49,12 @@ func TestCatalogT(t *testing.T) {
 		t.Errorf("CatalogT(en, chrome.sign_out) = %q, want English", got)
 	}
 	// Unknown locale falls back to English.
-	if got := CatalogT("de", "chrome.sign_out"); got != "Sign out" {
-		t.Errorf("CatalogT(de, ...) = %q, want English fallback", got)
+	if got := CatalogT("zz", "chrome.sign_out"); got != "Sign out" {
+		t.Errorf("CatalogT(zz, ...) = %q, want English fallback", got)
+	}
+	// A bundled non-English locale resolves (de added 0.76.x).
+	if got := CatalogT("de", "chrome.sign_out"); got != "Abmelden" {
+		t.Errorf("CatalogT(de, chrome.sign_out) = %q, want German", got)
 	}
 	// Nil locale (dict-rendered partial) falls back to English, no panic.
 	if got := CatalogT(nil, "chrome.sign_out"); got != "Sign out" {

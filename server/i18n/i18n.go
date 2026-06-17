@@ -49,6 +49,7 @@ var catalogs = map[string]map[string]string{}
 var localeNames = map[string]string{
 	"en": "English",
 	"fr": "Français",
+	"de": "Deutsch",
 }
 
 func init() {

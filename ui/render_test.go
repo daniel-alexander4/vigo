@@ -172,7 +172,9 @@ func TestFriendlyDurationL(t *testing.T) {
 		{"fr", 90 * time.Minute, "1 h 30 min"},
 		// A locale with no catalog falls back to English — proves a new
 		// language needs only catalog entries, no code branch here.
-		{"de", 15 * time.Minute, "15m"},
+		{"zz", 15 * time.Minute, "15m"},
+		// A bundled locale resolves from its catalog (de added 0.76.x).
+		{"de", 15 * time.Minute, "15 Min."},
 	}
 	for _, tt := range tests {
 		if got := friendlyDurationL(tt.locale, tt.d); got != tt.want {
@@ -199,7 +201,9 @@ func TestTimeAgoL(t *testing.T) {
 		{"fr hours", "fr", now.Add(-3 * time.Hour), "il y a 3 h"},
 		{"fr yesterday", "fr", now.Add(-30 * time.Hour), "hier"},
 		// Unknown locale → English fallback (data-only extensibility).
-		{"unknown locale falls back", "de", now.Add(-5 * time.Minute), "5m ago"},
+		{"unknown locale falls back", "zz", now.Add(-5 * time.Minute), "5m ago"},
+		// Bundled locale resolves from its catalog (de added 0.76.x).
+		{"de minutes", "de", now.Add(-5 * time.Minute), "vor 5 Min."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
