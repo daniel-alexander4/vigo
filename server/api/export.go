@@ -279,7 +279,7 @@ func (h *ExportHandler) handleOSCAL(w http.ResponseWriter, r *http.Request) {
 		{"164.312(e)(2)(ii)", "Encryption (Transmission)", "satisfied", "No plaintext transport"},
 		{"164.310(d)(2)(i)", "Disposal", "satisfied", "Documented decommissioning procedures"},
 		{"164.308(a)(5)(ii)(D)", "Password Management", "satisfied", "12-char minimum, complexity rules, bcrypt"},
-		{"164.308(a)(6)", "Security Incident Procedures", "satisfied", "Documented incident response plan"},
+		{"164.308(a)(6)(ii)", "Response and Reporting", "satisfied", "Documented incident response plan"},
 	}
 
 	findings := make([]oscalFinding, len(controlMappings))

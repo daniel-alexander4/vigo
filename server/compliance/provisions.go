@@ -77,8 +77,8 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"cis-rhel":    {"6.1.1"},
 			"hipaa":       {"164.312(b)"},
 			"iso-27001":   {"A.8.17"},
-			"nist-800-53": {"AU-8", "AU-8(1)"},
-			"pci-dss":     {"10.4", "10.4.1", "10.4.3"},
+			"nist-800-53": {"AU-8"},
+			"pci-dss":     {"10.6.1", "10.4.1", "10.4.3"},
 			"soc2":        {"CC7.2"},
 		},
 	},
@@ -104,7 +104,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"hipaa":       {"164.312(c)(1)"},
 			"iso-27001":   {"A.8.15", "A.8.32"},
 			"nist-800-53": {"SI-7", "CM-3"},
-			"pci-dss":     {"11.5"},
+			"pci-dss":     {"11.5.2"},
 		},
 	},
 	"brute-force-protection": {
@@ -134,7 +134,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.15"},
 			"nist-800-53": {"AU-2", "AU-3", "AU-9"},
-			"pci-dss":     {"10.5.3"},
+			"pci-dss":     {"10.3.3"},
 		},
 	},
 	"log-rotation": {
@@ -146,7 +146,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"cis-rhel":    {"4.2.1.3", "4.2.3"},
 			"hipaa":       {"164.312(b)", "164.312(c)(1)"},
 			"nist-800-53": {"AU-4", "AU-9", "AU-11"},
-			"pci-dss":     {"10.5.1", "10.7", "10.7.1"},
+			"pci-dss":     {"10.5.1", "10.7.1"},
 			"soc2":        {"CC7.2", "CC7.3"},
 		},
 	},
@@ -195,7 +195,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Description: "Adds a second authentication factor (hardware token, TOTP) at the OS / PAM layer.",
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.5"},
-			"nist-800-53": {"IA-2(1)", "IA-5(11)"},
+			"nist-800-53": {"IA-2(1)"},
 		},
 	},
 	"vpn": {
@@ -205,7 +205,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.20", "A.5.14"},
 			"nist-800-53": {"AC-17", "SC-8", "SC-13"},
-			"pci-dss":     {"4.1"},
+			"pci-dss":     {"4.2.1"},
 		},
 	},
 	"vpn-with-pki": {
@@ -248,7 +248,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"hipaa":       {"164.308(a)(7)(ii)(A)", "164.310(d)(2)(iv)"},
 			"iso-27001":   {"A.8.13", "A.8.24"},
 			"nist-800-53": {"CP-9", "CP-10", "SC-28"},
-			"pci-dss":     {"9.5.1", "3.4"},
+			"pci-dss":     {"9.5.1", "3.5.1"},
 		},
 	},
 	"vigo-stacks-backup": {
@@ -290,7 +290,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.15"},
 			"nist-800-53": {"AU-3", "AU-4", "AU-6"},
-			"pci-dss":     {"10.2", "10.3"},
+			"pci-dss":     {"10.2.1", "10.2.2"},
 		},
 	},
 	"vigo-log-forward": {
@@ -301,7 +301,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"hipaa":       {"164.312(b)", "164.308(a)(1)(ii)(D)"},
 			"iso-27001":   {"A.8.15"},
 			"nist-800-53": {"AU-3", "AU-4", "AU-6", "AU-12"},
-			"pci-dss":     {"10.2", "10.3", "10.5.4"},
+			"pci-dss":     {"10.2.1", "10.2.2", "10.3.4"},
 			"soc2":        {"CC7.2", "CC7.3"},
 		},
 	},
@@ -330,7 +330,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"hipaa":       {"164.312(b)"},
 			"iso-27001":   {"A.8.15"},
 			"nist-800-53": {"AU-2", "AU-3", "AU-12"},
-			"pci-dss":     {"10.2"},
+			"pci-dss":     {"10.2.1"},
 		},
 	},
 	"password-policy": {
@@ -376,7 +376,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"cis-rhel":    {"1.6.1.1", "1.6.1.2", "1.6.1.3", "1.6.1.4", "1.6.1.5"},
 			"iso-27001":   {"A.8.3"},
-			"nist-800-53": {"AC-3", "SC-3"},
+			"nist-800-53": {"AC-3"},
 		},
 	},
 	"sudo-policy": {
@@ -399,7 +399,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.7"},
 			"nist-800-53": {"SI-3", "SI-7"},
-			"pci-dss":     {"5.1", "5.2", "5.3"},
+			"pci-dss":     {"5.2.1", "5.3.1"},
 		},
 	},
 	"rootkit-detection": {
@@ -448,7 +448,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.24", "A.5.14"},
 			"nist-800-53": {"SC-8", "SC-13", "SC-17"},
-			"pci-dss":     {"4.1", "4.2"},
+			"pci-dss":     {"4.2.1"},
 		},
 	},
 	"internal-pki-ca": {
@@ -458,7 +458,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.24"},
 			"nist-800-53": {"SC-8", "SC-12", "SC-13", "SC-17"},
-			"pci-dss":     {"3.5", "4.1"},
+			"pci-dss":     {"3.5.1", "4.2.1"},
 		},
 	},
 	"system-ca-trust": {
@@ -477,7 +477,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.24", "A.5.14"},
 			"nist-800-53": {"SC-12", "SC-13"},
-			"pci-dss":     {"4.1"},
+			"pci-dss":     {"4.2.1"},
 		},
 	},
 	"secrets-storage-hardening": {
@@ -488,7 +488,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"hipaa":       {"164.312(a)(2)(iv)"},
 			"iso-27001":   {"A.8.3", "A.8.24"},
 			"nist-800-53": {"AC-3", "AC-6", "SC-12", "SC-28"},
-			"pci-dss":     {"3.4", "3.5.1", "7.1"},
+			"pci-dss":     {"3.5.1", "7.2.1"},
 			"soc2":        {"CC6.1"},
 		},
 	},
@@ -500,7 +500,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"hipaa":       {"164.312(e)(1)"},
 			"iso-27001":   {"A.8.24", "A.5.14"},
 			"nist-800-53": {"SC-8", "SC-13", "SC-17"},
-			"pci-dss":     {"4.1", "4.2"},
+			"pci-dss":     {"4.2.1"},
 			"soc2":        {"CC6.7"},
 		},
 	},
@@ -555,7 +555,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Description: "Runs a watchdog that monitors critical containers and restarts them on failure (Vigo's docker-keepalive pattern).",
 		Frameworks: map[string][]string{
 			"iso-27001":   {"A.8.6", "A.5.29"},
-			"nist-800-53": {"CP-2", "CP-10", "SI-13"},
+			"nist-800-53": {"CP-2", "CP-10"},
 			"soc2":        {"A1.2"},
 		},
 	},
@@ -589,7 +589,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 			"hipaa":       {"164.312(a)(1)", "164.312(a)(2)(i)", "164.312(d)"},
 			"iso-27001":   {"A.5.16", "A.8.5"},
 			"nist-800-53": {"AC-3", "AC-6", "AC-6(1)", "IA-2", "IA-5"},
-			"pci-dss":     {"8.1.1", "8.1.2", "8.1.4"},
+			"pci-dss":     {"8.1.1", "8.1.2", "8.2.6"},
 			"soc2":        {"CC6.1", "CC6.2", "CC6.3"},
 		},
 	},
@@ -712,7 +712,7 @@ var ConfigcrateProvisions = map[string]ConfigcrateProvision{
 		Frameworks: map[string][]string{
 			"hipaa":       {"164.308(a)(7)(i)"},
 			"iso-27001":   {"A.8.6", "A.5.29"},
-			"nist-800-53": {"CP-2", "SI-13", "CP-10"},
+			"nist-800-53": {"CP-2", "CP-10"},
 			"soc2":        {"A1.2"},
 		},
 	},
