@@ -28,7 +28,10 @@ func TestFrameworkCatalogCounts(t *testing.T) {
 		{"NIST 800-53 Rev 5 Moderate (incl. PM family)", h.buildNIST80053Findings(), 280, 340},
 		{"GDPR", h.buildGDPRFindings(), 35, 60},
 		// Licensed frameworks — IDs + short titles only.
-		{"SOC 2 TSC", h.buildSOC2Findings(), 50, 80},
+		// SOC 2 scoped to Security (CC1-CC9) + Availability (A1) per
+		// compliance-control-scope-policy.md; Confidentiality / Processing
+		// Integrity / Privacy are excluded as rarely-elected categories.
+		{"SOC 2 TSC", h.buildSOC2Findings(), 30, 45},
 		{"PCI DSS v4.0", h.buildPCIDSSFindings(), 220, 300},
 		{"ISO 27001:2022 Annex A", h.buildISO27001Findings(), 88, 100},
 		{"CIS Ubuntu 22.04 L1+L2", h.buildCISUbuntuFindings(), 220, 320},

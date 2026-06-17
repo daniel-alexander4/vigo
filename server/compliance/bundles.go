@@ -96,7 +96,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CCSS — Audit Integrity",
 		Description: "Framework-bundle scope-cut: ccss-audit-integrity. Implements one section of the ccss baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"ccss": {"CCSS-8.1", "CCSS-8.2", "CCSS-9.1", "CCSS-10.1"},
+			"ccss": {"CCSS-8.1", "CCSS-8.2", "CCSS-9.1"},
 		},
 	},
 	"ccss-key-storage": {
@@ -361,7 +361,6 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "CE — Monitoring",
 		Description: "Framework-bundle scope-cut: ce-monitoring. Implements one section of the ce baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cyber-essentials": {"CE-ML-3"},
 			"hitrust": {"11.a"},
 			"iso-27001": {"A.16.1.7"},
 			"nist-800-53": {"IR-4", "CA-7"},
@@ -500,7 +499,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "FDA — Audit Trail",
 		Description: "Framework-bundle scope-cut: fda-audit-trail. Implements one section of the fda baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"fda-21cfr11": {"11.10-e", "11.10-k-2", "11.10-e-1"},
+			"fda-21cfr11": {"11.10-e", "11.10-k-2"},
 		},
 	},
 	"fda-system-integrity": {
@@ -591,7 +590,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 			"hitrust": {"10.k", "10.l", "10.m"},
 			"iso-27001": {"A.12.3.1", "A.18.2.2", "A.18.2.3"},
 			"nist-800-53": {"CP-9", "CP-10"},
-			"soc2": {"A1.2", "PI1.1", "PI1.2"},
+			"soc2": {"A1.2"},
 		},
 	},
 	"hipaa-access-controls": {
@@ -722,7 +721,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Frameworks: map[string][]string{
 			"iec-62443": {"SR 3.1", "SR 3.2", "SR 3.3", "SR 3.4", "SR 3.5", "SR 3.8", "SR 3.9"},
 			"iso-27001": {"A.12.2.1", "A.12.5.1", "A.12.6.1"},
-			"nerc-cip": {"CIP-007-6-R2", "CIP-007-6-R3", "CIP-010-3-R1"},
+			"nerc-cip": {"CIP-007-6-R2", "CIP-007-6-R3", "CIP-010-4-R1"},
 			"nist-800-53": {"SI-2", "SI-3", "SI-7", "CM-3", "CM-6"},
 			"pci-dss": {"5.2.1", "6.3.3", "11.5.1"},
 		},
@@ -791,7 +790,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Frameworks: map[string][]string{
 			"hitrust": {"01.b", "01.c"},
 			"iso-27001": {"A.9.2.1", "A.9.4.1"},
-			"nerc-cip": {"CIP-003-8-R1", "CIP-004-6-R4", "CIP-004-6-R5", "CIP-007-6-R2", "CIP-007-6-R3", "CIP-007-6-R5", "CIP-011-2-R1"},
+			"nerc-cip": {"CIP-003-9-R1", "CIP-004-6-R4", "CIP-004-6-R5", "CIP-007-6-R2", "CIP-007-6-R3", "CIP-007-6-R5", "CIP-011-2-R1"},
 			"nist-800-53": {"AC-2", "AC-3", "SI-2", "SI-3"},
 			"pci-dss": {"7.2.1", "8.2.1", "5.2.1"},
 		},
@@ -803,7 +802,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Frameworks: map[string][]string{
 			"hitrust": {"07.a"},
 			"iso-27001": {"A.8.1", "A.8.2"},
-			"nerc-cip": {"CIP-002-5.1", "CIP-003-8-R2", "CIP-011-2-R2"},
+			"nerc-cip": {"CIP-002-5.1a", "CIP-003-9-R2", "CIP-011-2-R2"},
 			"nist-800-53": {"CM-8"},
 			"soc2": {"CC6.8"},
 		},
@@ -826,7 +825,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Description: "Framework-bundle scope-cut: nerc-recovery. Implements one section of the nerc baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
 			"iso-27001": {"A.12.3.1", "A.17.1.1"},
-			"nerc-cip": {"CIP-009-6-R1", "CIP-009-6-R2", "CIP-010-3-R1", "CIP-010-3-R2"},
+			"nerc-cip": {"CIP-009-6-R1", "CIP-009-6-R2", "CIP-010-4-R1", "CIP-010-4-R2"},
 			"nist-800-53": {"CP-9", "CP-10", "CM-3"},
 			"soc2": {"A1.2"},
 		},
@@ -882,7 +881,6 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 			"iso-27001": {"A.10.1.2"},
 			"nist-800-53": {"SC-12"},
 			"pci-dss": {"3.5.1", "3.5.1.1"},
-			"soc2": {"C1.1", "C1.2"},
 		},
 	},
 	"nist-login-banner": {
@@ -972,7 +970,7 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Description: "Framework-bundle scope-cut: pci-file-integrity. Implements one section of the pci baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
 			"hipaa": {"164.312(c)(1)"},
-			"nerc-cip": {"CIP-010-3-R2"},
+			"nerc-cip": {"CIP-010-4-R2"},
 			"nist-800-53": {"SI-7"},
 			"pci-dss": {"11.5.1", "11.5.1.1"},
 			"soc2": {"CC8.1"},
@@ -997,7 +995,6 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "PCI — Logging",
 		Description: "Framework-bundle scope-cut: pci-logging. Implements one section of the pci baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"cyber-essentials": {"CE-ML-1", "CE-ML-2"},
 			"hipaa": {"164.312(b)"},
 			"iso-27001": {"A.12.4.1", "A.12.4.3"},
 			"nerc-cip": {"CIP-007-6-R4"},
@@ -1072,10 +1069,10 @@ var ConfigcrateBundles = map[string]ConfigcrateBundle{
 		Title:       "SOC2 — Governance",
 		Description: "Framework-bundle scope-cut: soc2-governance. Implements one section of the soc2 baseline and its cross-walks; sourced from the configcrate of the same name under example-configs/stacks/configcrates/compliance/.",
 		Frameworks: map[string][]string{
-			"hitrust": {"06.c", "06.g", "06.h", "06.i", "11.a", "11.e", "12.c", "16.a"},
+			"hitrust": {"06.c", "06.g", "06.h", "06.i", "11.a", "11.e", "12.c"},
 			"iso-27001": {"A.5.1", "A.6.1", "A.8.1", "A.8.2", "A.14.1.2", "A.16.1.7"},
 			"nist-800-53": {"CM-8", "CA-7", "IR-4"},
-			"soc2": {"CC1.1", "CC1.2", "CC1.3", "CC2.1", "CC2.2", "CC3.1", "CC3.2", "CC3.3", "CC4.1", "CC4.2", "CC5.1", "CC5.2", "CC5.3", "CC6.6", "CC6.7", "CC6.8", "CC7.5", "CC9.1", "PI1.1", "PI1.2"},
+			"soc2": {"CC1.1", "CC1.2", "CC1.3", "CC2.1", "CC2.2", "CC3.1", "CC3.2", "CC3.3", "CC4.1", "CC4.2", "CC5.1", "CC5.2", "CC5.3", "CC6.6", "CC6.7", "CC6.8", "CC7.5", "CC9.1"},
 		},
 	},
 	"sox-access-controls": {

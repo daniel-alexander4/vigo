@@ -1534,8 +1534,8 @@ func (h *ReportHandler) buildHITRUSTFindings() []ControlFinding {
 		{"11.e", "Collection of Evidence"},
 		// Domain 12 — Business Continuity
 		{"12.c", "Developing and Implementing BCPs"},
-		// Domain 16 — Endpoint Protection
-		{"16.a", "Endpoint Protection"},
+		// (Endpoint protection lives under 09.i; HITRUST CSF has no
+		// category 16 — the old "16.a" entry was an invalid reference.)
 	})
 }
 
@@ -1681,42 +1681,11 @@ func (h *ReportHandler) buildSOC2Findings() []ControlFinding {
 			{"A1.2", "Environmental Protections, Backup, and Recovery Infrastructure"},
 			{"A1.3", "Recovery Plan Testing"},
 		}),
-		// C — Confidentiality
-		scopedCatalog(ScopeDocumented, [][2]string{
-			{"C1.1", "Identification and Maintenance of Confidential Information"},
-		}),
-		scopedCatalog(ScopeEnforced, [][2]string{
-			{"C1.2", "Disposal of Confidential Information"},
-		}),
-		// PI — Processing Integrity (application-level concerns)
-		scopedCatalog(ScopeDocumented, [][2]string{
-			{"PI1.1", "Quality of System Processing — Definitions and Specifications"},
-			{"PI1.2", "Inputs Are Complete and Accurate"},
-			{"PI1.3", "System Processing Is Complete, Valid, Accurate, Timely, and Authorized"},
-			{"PI1.4", "Outputs Are Complete and Accurate"},
-			{"PI1.5", "Stored Items Are Complete, Accurate, and Retained as Specified"},
-		}),
-		// P — Privacy (all policy/process)
-		scopedCatalog(ScopeDocumented, [][2]string{
-			{"P1.1", "Notice to Data Subjects"},
-			{"P2.1", "Choice and Consent"},
-			{"P3.1", "Collection — Personal Information Limited to Purpose"},
-			{"P3.2", "Collection — Lawfulness and Explicit Consent for Sensitive Data"},
-			{"P4.1", "Use of Personal Information"},
-			{"P4.2", "Retention of Personal Information"},
-			{"P4.3", "Disposal of Personal Information"},
-			{"P5.1", "Access to Personal Information by Data Subjects"},
-			{"P5.2", "Correction or Amendment of Personal Information"},
-			{"P6.1", "Disclosure to Third Parties — Authorized"},
-			{"P6.2", "Disclosure to Third Parties — Records of Disclosure"},
-			{"P6.3", "Notification of Unauthorized Disclosure"},
-			{"P6.4", "Disclosure to Third Parties — Privacy Practices"},
-			{"P6.5", "Third-Party Compliance Monitoring"},
-			{"P6.6", "Notification of Privacy Incidents to Data Subjects"},
-			{"P6.7", "Accountability for Disclosure of Personal Information"},
-			{"P7.1", "Quality of Personal Information"},
-			{"P8.1", "Monitoring and Enforcement of Privacy Compliance"},
-		}),
+		// Scope (compliance-control-scope-policy.md): Security (CC1-CC9) is
+		// mandatory and Availability (A1) is the common addition — both kept.
+		// Confidentiality (C1), Processing Integrity (PI1), and Privacy (P*)
+		// are the rarely-elected optional TSC categories and are excluded;
+		// re-add the relevant category here if a customer's report elects it.
 	)
 }
 
@@ -2632,10 +2601,10 @@ func (h *ReportHandler) handleGDPRReportHTML(w http.ResponseWriter, r *http.Requ
 func (h *ReportHandler) buildNERCCIPFindings() []ControlFinding {
 	return catalog([][2]string{
 		// CIP-002 — BES Cyber System Categorization
-		{"CIP-002-5.1", "BES Cyber System Identification"},
+		{"CIP-002-5.1a", "BES Cyber System Identification"},
 		// CIP-003 — Security Management Controls
-		{"CIP-003-8-R1", "Cyber Security Policies"},
-		{"CIP-003-8-R2", "Cyber Security Plans"},
+		{"CIP-003-9-R1", "Cyber Security Policies"},
+		{"CIP-003-9-R2", "Cyber Security Plans"},
 		// CIP-004 — Personnel and Training
 		{"CIP-004-6-R4", "Access Management Program"},
 		{"CIP-004-6-R5", "Access Revocation"},
@@ -2652,8 +2621,8 @@ func (h *ReportHandler) buildNERCCIPFindings() []ControlFinding {
 		{"CIP-009-6-R1", "Recovery Plan Specifications"},
 		{"CIP-009-6-R2", "Recovery Plan Implementation and Testing"},
 		// CIP-010 — Configuration Change Management
-		{"CIP-010-3-R1", "Configuration Change Management"},
-		{"CIP-010-3-R2", "Configuration Monitoring"},
+		{"CIP-010-4-R1", "Configuration Change Management"},
+		{"CIP-010-4-R2", "Configuration Monitoring"},
 		// CIP-011 — Information Protection
 		{"CIP-011-2-R1", "Information Protection"},
 		{"CIP-011-2-R2", "BES Cyber Asset Reuse and Disposal"},
@@ -2705,10 +2674,9 @@ func (h *ReportHandler) buildCyberEssentialsPlusFindings() []ControlFinding {
 		{"CE-MW-3", "Anti-Malware Updates"},
 		{"CE-MW-4", "Application Allow-Listing"},
 		{"CE-MW-5", "Sandboxing and Code Execution Prevention"},
-		// Supplementary — Monitoring and Logging (CE+ only)
-		{"CE-ML-1", "Security Event Logging"},
-		{"CE-ML-2", "Log Retention"},
-		{"CE-ML-3", "Incident Detection"},
+		// Cyber Essentials has exactly five technical control themes; the
+		// former "Monitoring and Logging" theme was not one of them — CE
+		// Plus verifies the same five themes, it does not add a sixth.
 	})
 }
 
@@ -2847,8 +2815,8 @@ func (h *ReportHandler) buildCCSSFindings() []ControlFinding {
 		{"CCSS-8.2", "Log Retention"},
 		// Data Sanitization
 		{"CCSS-9.1", "Data Sanitization"},
-		// Proof of Reserves
-		{"CCSS-10.1", "Proof of Reserves"},
+		// (Proof of Reserves is a fund-control attestation, not a host
+		// configuration control — outside what Vigo can evidence.)
 	})
 }
 
@@ -2861,7 +2829,6 @@ func (h *ReportHandler) buildFDA21CFR11Findings() []ControlFinding {
 		{"11.300-b", "Password Controls"},
 		// Audit Trail
 		{"11.10-e", "Audit Trail"},
-		{"11.10-e-1", "Audit Trail Integrity"},
 		{"11.10-k-2", "Documentation of Changes"},
 		// System Integrity
 		{"11.10-a", "System Validation"},
