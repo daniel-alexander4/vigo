@@ -127,6 +127,7 @@ var unguardedNumbers = map[string]string{
 	"Swarm content subsystems":       "fixed subsystem list (policy), not a code count",
 	"AI assistant tools (read-only)": "approximate (~14); registry SoT is itself loose",
 	"Connwaer capabilities":          "independently versioned; 'active checks' has no single SoT",
+	"Native integrations":            "placeholder (~11) cited by vigo-web; not yet pinned to a code SoT — pin + add a deriver when the real count lands",
 }
 
 func TestNumbersOfRecordParity(t *testing.T) {
