@@ -171,6 +171,19 @@ func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Querie
 	}
 	bh.RegisterRoutes(mux)
 
+	// Feed the per-(os,arch) expected-agent-version resolver into the UI
+	// data source so the Agent Version surface can flag envoys that aren't
+	// on the version the server would auto-update them to. Mirrors the
+	// auto-update path's per-arch lookup (server/grpc); "" when no binary
+	// is published for an envoy's arch.
+	customDS.SetExpectedAgentVersionFunc(func(family, arch string) string {
+		goos := bootstrap.GoosForFamily(family)
+		if goos == "" || arch == "" {
+			return ""
+		}
+		return bh.AgentVersionForArch(goos, arch)
+	})
+
 	// grpc-gateway catches /api/ paths (vigocli uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 

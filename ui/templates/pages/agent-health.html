@@ -37,6 +37,7 @@
         <thead>
             <tr>
                 <th>{{T $.Locale "th.hostname"}}</th>
+                <th>{{T $.Locale "th.agent_version"}}</th>
                 <th>{{T $.Locale "agent_health.th.open_fds"}}</th>
                 <th>{{T $.Locale "agent_health.th.host_fd_pct"}}</th>
                 <th>{{T $.Locale "agent_health.th.rootfs_pct"}}</th>
@@ -50,6 +51,7 @@
             {{range .Envoys}}
             <tr>
                 <td><a href="/envoys/{{.ID}}#footprint">{{.Hostname}}</a></td>
+                <td><span class="status-pill {{if .AgentVersionCurrent}}status-pill--converged{{else}}status-pill--degraded{{end}}" title="{{if .AgentVersionCurrent}}{{T $.Locale "agent_version.up_to_date"}}{{else if not .AgentVersion}}{{T $.Locale "agent_version.no_version"}}{{else if not .ExpectedAgentVersion}}{{T $.Locale "agent_version.no_binary"}}{{else}}{{T $.Locale "agent_version.out_of_date"}} — {{T $.Locale "agent_version.expected"}} {{.ExpectedAgentVersion}}{{end}}">{{if .AgentVersion}}{{.AgentVersion}}{{else}}—{{end}}</span></td>
                 <td><span class="{{metricPillClass .OpenFDs.Severity}} status-pill--metric">{{humanMetric .OpenFDs}}</span></td>
                 <td><span class="{{metricPillClass .FDPct.Severity}} status-pill--metric">{{humanFDPct .FDPct}}</span></td>
                 <td><span class="{{metricPillClass .RootfsPct.Severity}} status-pill--metric">{{humanFDPct .RootfsPct}}</span></td>

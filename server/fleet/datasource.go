@@ -30,6 +30,14 @@ type DataSource struct {
 	queries     *db.Queries
 	runStore    db.RunStore
 	configStore *config.ConfigStore
+
+	// expectedAgentVersion resolves the per-(os,arch) agent version the
+	// server would auto-update an envoy to, given its reported os.family
+	// and os.arch traits. Returns "" when no binary is published for that
+	// arch. Wired post-construction from the bootstrap handler (see
+	// SetExpectedAgentVersionFunc); nil until then (no expected version,
+	// so the version surface reads as "can't verify" → yellow).
+	expectedAgentVersion func(family, arch string) string
 }
 
 // NewDataSource creates a DataSource backed by the given FleetIndex.
@@ -40,6 +48,29 @@ func NewDataSource(fleet *FleetIndex, queries *db.Queries, runStore db.RunStore,
 		runStore:    runStore,
 		configStore: configStore,
 	}
+}
+
+// SetExpectedAgentVersionFunc wires the per-(os,arch) expected-agent-version
+// resolver (backed by the bootstrap dist-tree version map). Called once at
+// gateway construction, after the bootstrap handler exists.
+func (ds *DataSource) SetExpectedAgentVersionFunc(f func(family, arch string) string) {
+	ds.expectedAgentVersion = f
+}
+
+// agentVersionPair returns the envoy's reported agent version
+// (column-first, `identity.agent_version`-trait fallback — matching the
+// envoys-list precedence) and the expected per-(os,arch) version. Either
+// may be ""; the fleetpressure currency rule (EnvoyPressure.AgentVersionCurrent)
+// treats an empty value as "can't verify" → yellow.
+func (ds *DataSource) agentVersionPair(reported string, traits map[string]string) (current, expected string) {
+	current = reported
+	if current == "" {
+		current = traits["identity.agent_version"]
+	}
+	if ds.expectedAgentVersion != nil {
+		expected = ds.expectedAgentVersion(traits["os.family"], traits["os.arch"])
+	}
+	return current, expected
 }
 
 // envoyRow converts one live FleetIndex EnvoyState into a
@@ -1652,10 +1683,13 @@ func (ds *DataSource) healthSources() []fleetpressure.EnvoySource {
 		if ts.Revoked {
 			continue
 		}
+		current, expected := ds.agentVersionPair(ts.AgentVersion, ts.Traits)
 		sources = append(sources, fleetpressure.EnvoySource{
-			ID:       ts.ID,
-			Hostname: ts.Hostname,
-			Traits:   ts.Traits,
+			ID:                   ts.ID,
+			Hostname:             ts.Hostname,
+			Traits:               ts.Traits,
+			AgentVersion:         current,
+			ExpectedAgentVersion: expected,
 		})
 	}
 	return sources
@@ -1670,10 +1704,13 @@ func (ds *DataSource) EnvoyPressure(envoyID string) (fleetpressure.EnvoyPressure
 	if !ok {
 		return fleetpressure.EnvoyPressure{}, false
 	}
+	current, expected := ds.agentVersionPair(ts.AgentVersion, ts.Traits)
 	return fleetpressure.Compute(fleetpressure.EnvoySource{
-		ID:       ts.ID,
-		Hostname: ts.Hostname,
-		Traits:   ts.Traits,
+		ID:                   ts.ID,
+		Hostname:             ts.Hostname,
+		Traits:               ts.Traits,
+		AgentVersion:         current,
+		ExpectedAgentVersion: expected,
 	}), true
 }
 

@@ -344,3 +344,51 @@ func TestAggregateRollupWorstSeverityAndDegradedCount(t *testing.T) {
 		t.Errorf("DegradedCount should count bravo + charlie (= 2); got %d", sum.DegradedCount)
 	}
 }
+
+func TestAgentVersionCurrent(t *testing.T) {
+	cases := []struct {
+		name      string
+		reported  string
+		expected  string
+		wantGreen bool
+	}{
+		{"match is green", "0.76.15", "0.76.15", true},
+		{"mismatch is yellow", "0.76.10", "0.76.15", false},
+		{"no published binary for arch is yellow", "0.76.15", "", false},
+		{"unreported version is yellow", "", "0.76.15", false},
+		{"both empty is yellow", "", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := Compute(EnvoySource{
+				ID: "e1", Hostname: "h1",
+				AgentVersion:         tc.reported,
+				ExpectedAgentVersion: tc.expected,
+			})
+			if p.AgentVersion != tc.reported || p.ExpectedAgentVersion != tc.expected {
+				t.Fatalf("version fields not carried: got %q/%q", p.AgentVersion, p.ExpectedAgentVersion)
+			}
+			if got := p.AgentVersionCurrent(); got != tc.wantGreen {
+				t.Errorf("AgentVersionCurrent() = %v, want %v", got, tc.wantGreen)
+			}
+		})
+	}
+}
+
+func TestAgentVersionDoesNotAffectHealth(t *testing.T) {
+	// An out-of-date agent that is otherwise resource-healthy must keep
+	// Health == OK — version currency is a separate axis and must never
+	// fold into the composite agent-health severity.
+	p := Compute(EnvoySource{
+		ID: "e1", Hostname: "h1",
+		Traits:               map[string]string{"agent_self.open_fds": "100"}, // OK
+		AgentVersion:         "0.76.10",
+		ExpectedAgentVersion: "0.76.15", // mismatch → not current
+	})
+	if p.AgentVersionCurrent() {
+		t.Fatal("precondition: expected a version mismatch (not current)")
+	}
+	if p.Health != OK {
+		t.Errorf("version mismatch must not change Health; got %v, want OK", p.Health)
+	}
+}

@@ -19,6 +19,7 @@ import (
 	"git.alexander4.io/vigo/server/daemon"
 	"github.com/google/uuid"
 
+	"git.alexander4.io/vigo/server/bootstrap"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -1336,19 +1337,11 @@ func goosGoarchFromTraits(osRaw json.RawMessage) (goos string, goarch string) {
 	if os.Arch == "" {
 		return "", ""
 	}
-	switch strings.ToLower(os.Family) {
-	case "darwin":
-		goos = "darwin"
-	case "windows":
-		goos = "windows"
-	case "freebsd", "openbsd", "netbsd", "illumos":
-		goos = strings.ToLower(os.Family)
-	case "":
-		// Family unset — can't safely guess.
+	// Family→goos is the single SoT in server/bootstrap (shared with the
+	// agent-version currency surface). "" means family unset — can't guess.
+	goos = bootstrap.GoosForFamily(os.Family)
+	if goos == "" {
 		return "", ""
-	default:
-		// Linux distros report family="debian"/"rhel"/"suse"/etc.
-		goos = "linux"
 	}
 	return goos, os.Arch
 }

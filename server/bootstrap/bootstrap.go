@@ -98,6 +98,34 @@ func normalizeArch(arch string) string {
 	}
 }
 
+// GoosForFamily maps an agent-reported os.family trait to the Go GOOS
+// string used as the dist-tree key. Linux distros report family as the
+// vendor ("debian"/"rhel"/"suse"/…) and all map to "linux"; the BSDs,
+// illumos, macOS, and Windows report their platform name directly.
+// Returns "" when family is empty — the caller must treat that as "unknown
+// platform, no expected-version lookup."
+//
+// Single source of truth for the family→goos mapping, shared by the agent
+// auto-update path (server/grpc) and the agent-version currency surface
+// (server/fleet, via the gateway resolver). Keeping it in one place guards
+// the cross-arch update-loop class of bug that motivated per-arch
+// resolution in the first place.
+func GoosForFamily(family string) string {
+	switch strings.ToLower(family) {
+	case "":
+		return ""
+	case "darwin":
+		return "darwin"
+	case "windows":
+		return "windows"
+	case "freebsd", "openbsd", "netbsd", "illumos":
+		return strings.ToLower(family)
+	default:
+		// Linux distros report family="debian"/"rhel"/"suse"/etc.
+		return "linux"
+	}
+}
+
 // AgentVersion returns the detected agent binary version for the server's
 // own architecture, or empty string if no agent binary was found. Used for
 // dashboard display and as a backward-compatible accessor; per-arch lookups

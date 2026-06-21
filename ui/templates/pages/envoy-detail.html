@@ -463,6 +463,13 @@
         <p class="text-muted u-m-8px-0-0-fs-12px">{{T $.Locale "envoy_detail.no_telemetry"}}</p>
         {{end}}
     </a>
+    <div class="stat-card stat-card--{{if $p.AgentVersionCurrent}}success{{else}}warning{{end}}" title="{{if $p.AgentVersionCurrent}}{{T $.Locale "agent_version.up_to_date"}}{{else if not $p.AgentVersion}}{{T $.Locale "agent_version.no_version"}}{{else if not $p.ExpectedAgentVersion}}{{T $.Locale "agent_version.no_binary"}}{{else}}{{T $.Locale "agent_version.out_of_date"}} — {{T $.Locale "agent_version.expected"}} {{$p.ExpectedAgentVersion}}{{end}}">
+        <div class="stat-card__value mono">{{if $p.AgentVersion}}{{$p.AgentVersion}}{{else}}—{{end}}</div>
+        <div class="stat-card__label">{{T $.Locale "th.agent_version"}}</div>
+        {{if not $p.AgentVersionCurrent}}
+        <p class="text-muted u-m-8px-0-0-fs-12px">{{if not $p.AgentVersion}}{{T $.Locale "agent_version.no_version"}}{{else if not $p.ExpectedAgentVersion}}{{T $.Locale "agent_version.no_binary"}}{{else}}{{T $.Locale "agent_version.out_of_date"}} → {{$p.ExpectedAgentVersion}}{{end}}</p>
+        {{end}}
+    </div>
     {{if $p.HostUptimeSecs.Present}}
     <div class="stat-card">
         <div class="stat-card__value">{{humanUptime $p.HostUptimeSecs}}</div>

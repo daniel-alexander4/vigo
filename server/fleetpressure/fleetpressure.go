@@ -129,6 +129,16 @@ type EnvoyPressure struct {
 	// and errors counts surface for the per-envoy detail view.
 	RepoHealth         RepoHealthMetric
 
+	// AgentVersion is the version the envoy reported running;
+	// ExpectedAgentVersion is the version the server would auto-update
+	// this envoy's arch to (the per-(os,arch) dist binary). Both are
+	// resolved by the fleet datasource — see AgentVersionCurrent. These
+	// drive the separate green/yellow "Agent Version" surface and are
+	// deliberately NOT folded into Health: version currency is an
+	// orthogonal axis from resource pressure.
+	AgentVersion         string
+	ExpectedAgentVersion string
+
 	// Health is the worst Severity across every colored field above —
 	// FDs (open + descendant + host%), OOM-recent, rootfs%, inode%,
 	// and repo-health. Drives the dashboard card's color, the
@@ -193,6 +203,15 @@ type EnvoySource struct {
 	ID       string
 	Hostname string
 	Traits   map[string]string
+
+	// AgentVersion is the envoy's reported agent version (column-first,
+	// `identity.agent_version`-trait fallback). ExpectedAgentVersion is
+	// the per-(os,arch) dist version the server would auto-update it to,
+	// or "" when no binary is published for that arch. Both are stamped
+	// by the fleet datasource; the fleetpressure package only compares
+	// them — see AgentVersionCurrent.
+	AgentVersion         string
+	ExpectedAgentVersion string
 }
 
 // Compute projects a single EnvoySource into an EnvoyPressure.
@@ -201,8 +220,10 @@ type EnvoySource struct {
 // shouldn't poison the rollup).
 func Compute(src EnvoySource) EnvoyPressure {
 	p := EnvoyPressure{
-		ID:       src.ID,
-		Hostname: src.Hostname,
+		ID:                   src.ID,
+		Hostname:             src.Hostname,
+		AgentVersion:         src.AgentVersion,
+		ExpectedAgentVersion: src.ExpectedAgentVersion,
 	}
 	p.RSSBytes = uintMetric(src.Traits, "agent_self.rss_bytes", classifyNeutral)
 	p.OpenFDs = uintMetric(src.Traits, "agent_self.open_fds", classifyOpenFDs)
@@ -240,6 +261,22 @@ func Compute(src EnvoySource) EnvoyPressure {
 		p.RepoHealth.Severity,
 	)
 	return p
+}
+
+// AgentVersionCurrent reports whether the envoy is running the agent
+// version the server would auto-update its arch to. It is green (true)
+// only on a verified match — both the reported version and the expected
+// per-(os,arch) dist version are known and equal. Every other case is
+// "not current" (yellow): a real mismatch, no published binary for the
+// envoy's arch (ExpectedAgentVersion == ""), or an agent that reported no
+// version (AgentVersion == ""). It is never red: the version string is
+// post-authentication, self-reported metadata (mTLS + per-request ed25519
+// already gate access), so this is a currency signal, not a trust signal.
+// Intentionally independent of Health — version currency is a separate
+// axis from resource pressure.
+func (e EnvoyPressure) AgentVersionCurrent() bool {
+	return e.AgentVersion != "" && e.ExpectedAgentVersion != "" &&
+		e.AgentVersion == e.ExpectedAgentVersion
 }
 
 // Aggregate walks a slice of EnvoySources and produces the
