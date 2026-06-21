@@ -107,6 +107,31 @@ func countFrameworkSlugs(t *testing.T, root string) int {
 	return len(regexp.MustCompile(`(?m)^\s*\{"`).FindAllString(block[1], -1))
 }
 
+// TestComplianceMatrixListsAllFrameworks guards the hand-authored "Frameworks
+// tracked" list in docs/reference/compliance-matrix.md against the registry.
+// TestNumbersOfRecordParity guards the framework *count* in numbers-of-record.md,
+// but nothing else reads this prose list — and it drifted once (CCSS was added
+// to server/frameworks.All and never listed here). One bullet per framework:
+// assert the bullet count matches the registry.
+func TestComplianceMatrixListsAllFrameworks(t *testing.T) {
+	root := repoRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "docs", "reference", "compliance-matrix.md"))
+	if err != nil {
+		t.Fatalf("reading compliance-matrix.md: %v", err)
+	}
+	// The "Frameworks tracked" list runs from its intro line to the next
+	// "## " heading (the capability table).
+	sec := regexp.MustCompile(`(?s)Frameworks tracked\.(.*?)\n## `).FindStringSubmatch(string(data))
+	if sec == nil {
+		t.Fatal("could not find the `Frameworks tracked` section in compliance-matrix.md")
+	}
+	got := len(regexp.MustCompile(`(?m)^- \*\*`).FindAllString(sec[1], -1))
+	if want := countFrameworkSlugs(t, root); got != want {
+		t.Errorf("compliance-matrix.md `Frameworks tracked` lists %d frameworks, but "+
+			"server/frameworks.All has %d — add or remove a bullet to match", got, want)
+	}
+}
+
 func countNetworkDeviceExecutors(t *testing.T, root string) int {
 	t.Helper()
 	netRe := regexp.MustCompile(`^(network_|cisco_|junos_|ssh_exec)`)

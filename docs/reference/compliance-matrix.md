@@ -9,7 +9,7 @@ For *how* to tag configcrates and run reports, see [howto/compliance-reporting.m
 
 Every row is a Vigo capability — a thing one or more configcrates can do, or a thing Connwaer can verify. Columns are frameworks. A cell holds the control IDs that capability satisfies in that framework. Empty cell means the capability doesn't map to that framework (or hasn't been mapped yet — file an issue).
 
-Frameworks tracked. The version label is the **currently-mapped baseline** — i.e., the revision Vigo's control IDs are aligned to. The labels below are the authoritative source: they live in `server/compliance/appcontrols.go` and the `/platform/compliance` page renders the same string. If you're auditing against a different revision than what's listed, cross-check the control IDs in your auditor's authoritative copy.
+Frameworks tracked. The version label is the **currently-mapped baseline** — i.e., the revision Vigo's control IDs are aligned to. The labels below are the authoritative source: they live in `server/frameworks/frameworks.go` (`var All`, the single source of truth) and the `/platform/compliance` page renders the same string. If you're auditing against a different revision than what's listed, cross-check the control IDs in your auditor's authoritative copy.
 
 - **HIPAA** — Security Rule (45 CFR §164.302–318)
 - **SOC 2** — Trust Services Criteria 2017 (Security, Availability, Confidentiality)
@@ -27,6 +27,7 @@ Frameworks tracked. The version label is the **currently-mapped baseline** — i
 - **NY DFS Cyber** — 23 NYCRR 500
 - **MiFID II** — RTS 7 (trading-venue organisational requirements) + RTS 25 (clock synchronisation)
 - **FINRA** / **SEC 17a-4** — broker-dealer recordkeeping
+- **CCSS** — Cryptocurrency Security Standard
 - **FDA 21 CFR Part 11** — electronic records and signatures
 - **SOX** — public-company financial controls
 - **UK Gambling Commission** — Remote Technical Standards
