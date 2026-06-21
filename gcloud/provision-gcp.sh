@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Stand up the GCP held-stream load-test environment: two VMs (vigo-srv +
-# vigo-test-harness) on the existing vigo-vpc/vigo-subnet, plus a Cloud NAT so
-# the no-external-IP VMs can reach apt/Docker. Artifact Registry is reachable
-# via Private Google Access regardless.
+# Stand up AND provision the GCP held-stream load-test environment, end to end:
+#   - ensures firewall + Cloud NAT on vigo-vpc
+#   - creates vigo-srv (8 vCPU/32 GiB) + vigo-test-harness (8 vCPU/48 GiB),
+#     both --no-address (egress via NAT; Artifact Registry via Private Google Access)
+#   - auto-detects the server version from the repo VERSION file
+#   - builds the fakefleet + vigocli harness binaries
+#   - scp's the setup scripts, harness binaries, and a version marker to each VM
+#     over IAP, then runs the setup scripts remotely (unless --no-setup)
 #
-# Run from a host with gcloud authed (e.g. danlap). Idempotent: re-running
-# skips resources that already exist.
+# Run from the repo on a host with gcloud + go authed (danlap). Idempotent:
+# re-running skips existing infra and re-copies / re-runs setup.
 #
-#   ./provision-gcp.sh
+#   ./gcloud/provision-gcp.sh              # full: provision + remote setup
+#   ./gcloud/provision-gcp.sh --no-setup  # provision + copy only; run setup by hand
 #
-# Tear down after the test:
+# Prereq: the server image must already be in Artifact Registry at the repo's
+# VERSION — run ./push2AR.sh first. This script checks and fails early if not.
+#
+# Tear down:
 #   gcloud compute instances delete vigo-srv vigo-test-harness --zone=us-west1-a
 set -euo pipefail
 
@@ -20,8 +28,21 @@ NETWORK=vigo-vpc
 SUBNET=vigo-subnet
 IMAGE_FAMILY=ubuntu-2404-lts-amd64
 IMAGE_PROJECT=ubuntu-os-cloud
+AR_IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/vigo/vigo"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+RUN_SETUP=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-setup) RUN_SETUP=0 ;;
+    *) echo "unknown flag: $arg" >&2; exit 2 ;;
+  esac
+done
+
+command -v gcloud >/dev/null || { echo "gcloud not in PATH" >&2; exit 1; }
+command -v go     >/dev/null || { echo "go not in PATH (needed to build the harness binaries)" >&2; exit 1; }
 
 g() { gcloud --project="$PROJECT" "$@"; }
 
@@ -40,6 +61,25 @@ scp_iap() {
   done
   echo "  ok: $(basename "$src") -> ${vm}:/tmp/"
 }
+
+ssh_iap() { g compute ssh "$1" --zone="$ZONE" --tunnel-through-iap --quiet --command="$2"; }
+
+# --- Version + image preflight ------------------------------------------------
+VERSION="$(tr -d '[:space:]' < "${REPO_ROOT}/VERSION")"
+[ -n "$VERSION" ] || { echo "empty VERSION at ${REPO_ROOT}/VERSION" >&2; exit 1; }
+IMAGE="${AR_IMAGE_REPO}:${VERSION}"
+echo "== Server version ${VERSION} (image ${IMAGE}) =="
+g artifacts docker images describe "${IMAGE}" >/dev/null 2>&1 || {
+  echo "  ! ${IMAGE} is not in Artifact Registry. Build + push it first:" >&2
+  echo "      cd ${REPO_ROOT} && ./push2AR.sh" >&2
+  exit 1
+}
+
+# --- Build harness binaries (pure-Go static) ---------------------------------
+echo "== Building harness binaries =="
+( cd "$REPO_ROOT" && CGO_ENABLED=0 go build -o /tmp/vigo-fakefleet ./test/fakefleet )
+( cd "$REPO_ROOT" && CGO_ENABLED=0 go build -o /tmp/vigocli        ./cli )
+echo "$VERSION" > /tmp/vigo-version
 
 echo "== Firewall (idempotent) =="
 g compute firewall-rules describe vigo-allow-internal >/dev/null 2>&1 || \
@@ -72,27 +112,40 @@ g compute instances describe vigo-test-harness --zone="$ZONE" >/dev/null 2>&1 ||
     --image-family="$IMAGE_FAMILY" --image-project="$IMAGE_PROJECT" \
     --boot-disk-size=30GB --boot-disk-type=pd-balanced
 
+echo "== Copying scripts + binaries to the VMs (via IAP) =="
+scp_iap "${SCRIPT_DIR}/setup-server.sh"  vigo-srv
+scp_iap "/tmp/vigo-version"              vigo-srv
+scp_iap "${SCRIPT_DIR}/setup-harness.sh" vigo-test-harness
+scp_iap "/tmp/vigo-fakefleet"            vigo-test-harness
+scp_iap "/tmp/vigocli"                   vigo-test-harness
+
 SRV_IP=$(g compute instances describe vigo-srv --zone="$ZONE" \
   --format="value(networkInterfaces[0].networkIP)")
 
-echo "== Copying setup scripts to the VMs (via IAP) =="
-scp_iap "${SCRIPT_DIR}/setup-server.sh"  vigo-srv
-scp_iap "${SCRIPT_DIR}/setup-harness.sh" vigo-test-harness
+if [ "$RUN_SETUP" -eq 1 ]; then
+  echo "== Provisioning vigo-srv (Docker + pull ${VERSION} + run vigosrv) =="
+  ssh_iap vigo-srv "sudo bash /tmp/setup-server.sh"
+  echo "== Provisioning vigo-test-harness (binaries + OS tuning) =="
+  ssh_iap vigo-test-harness "sudo bash /tmp/setup-harness.sh"
+fi
 
 cat <<EOF
 
 == Done ==
+Server version:     ${VERSION}
 Server internal IP: ${SRV_IP}   (harness dials this on :1530 / :8443)
-Setup scripts are already at /tmp/ on each VM.
+$([ "$RUN_SETUP" -eq 1 ] && echo "Both VMs provisioned: vigosrv running, harness installed." \
+                          || echo "Scripts + binaries copied to /tmp/; run setup yourself (see --no-setup).")
 
-SSH (via IAP — no external IPs):
-  gcloud compute ssh vigo-srv          --zone=${ZONE} --tunnel-through-iap
+Run the test from the harness:
   gcloud compute ssh vigo-test-harness --zone=${ZONE} --tunnel-through-iap
+  ulimit -n 1048576
+  setsid vigo-fakefleet create --count 60000 --server ${SRV_IP}:1530 --skip-publish \\
+    >/tmp/create.log 2>&1 < /dev/null &   # DETACHED — wait for it to finish
+  vigo-fakefleet run --stream --server ${SRV_IP}:1530 --cadence 1s --report-cadence 1m
+  vigo-fakefleet backout --server ${SRV_IP}:1530
 
-Next:
-  1. On vigo-srv:           sudo IMAGE=...vigo:<current-tag> bash /tmp/setup-server.sh
-  2. Build + scp the harness binaries from danlap:
-       gcloud compute scp /tmp/vigo-fakefleet /tmp/vigocli \\
-         vigo-test-harness:/tmp/ --zone=${ZONE} --tunnel-through-iap
-  3. On vigo-test-harness:  sudo bash /tmp/setup-harness.sh
+Monitor on the server (never loop docker logs/stats under load):
+  gcloud compute ssh vigo-srv --zone=${ZONE} --tunnel-through-iap
+  watch -n2 'curl -sk https://127.0.0.1:8443/metrics | grep -E "vigo_streams_active|stream_connect|status=\\"shed\\""'
 EOF

@@ -2,15 +2,9 @@
 # Set up vigo-test-harness: install the fakefleet + vigocli binaries and tune
 # the OS for ~60k outbound held connections to the server.
 #
-# The binaries are pure-Go static builds produced on danlap (the source isn't
-# on a public remote). Build + ship them first, FROM danlap:
-#   cd ~/repos/vigo
-#   CGO_ENABLED=0 go build -o /tmp/vigo-fakefleet ./test/fakefleet
-#   CGO_ENABLED=0 go build -o /tmp/vigocli       ./cli
-#   gcloud compute scp /tmp/vigo-fakefleet /tmp/vigocli gcloud/setup-harness.sh \
-#     vigo-test-harness:/tmp/ --zone=us-west1-a --tunnel-through-iap
-#
-# Then ON the harness, as root:
+# Normally run by provision-gcp.sh, which builds the binaries on danlap, scp's
+# them to /tmp/ here, and invokes this over IAP. To run standalone, ensure
+# /tmp/vigo-fakefleet and /tmp/vigocli are present (scp them from danlap), then:
 #   sudo bash /tmp/setup-harness.sh
 set -euo pipefail
 

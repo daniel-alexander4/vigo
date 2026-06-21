@@ -2,22 +2,25 @@
 # Set up vigo-srv: install Docker, authenticate to Artifact Registry, seed
 # config, tune for the load test, and run the vigosrv container.
 #
-# Copy to the server and run as root:
-#   gcloud compute scp setup-server.sh vigo-srv:/tmp/ --zone=us-west1-a --tunnel-through-iap
-#   gcloud compute ssh vigo-srv --zone=us-west1-a --tunnel-through-iap
-#   sudo IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:0.76.16 bash /tmp/setup-server.sh
+# Normally run by provision-gcp.sh (which writes /tmp/vigo-version and invokes
+# this over IAP). To run standalone:
+#   sudo bash /tmp/setup-server.sh                       # version from /tmp/vigo-version
+#   sudo IMAGE=...vigo:0.76.x bash /tmp/setup-server.sh  # explicit override
 #
-# IMPORTANT: the AR `vigo` image is stale at 0.65.6. Build + push a current
-# 0.76.x from danlap first, and pass its tag via IMAGE=, or this runs a
-# months-old server missing all the held-stream work.
+# Version auto-detection: the tag comes from /tmp/vigo-version (written by
+# provision-gcp.sh from the repo VERSION). It falls back to `latest` only if
+# that marker is absent — and AR `latest` may be stale, so prefer the marker.
 set -euo pipefail
 
-IMAGE="${IMAGE:-us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest}"
 AR_HOST=us-west1-docker.pkg.dev
+AR_IMAGE_REPO="${AR_HOST}/project-69f2499e-5082-48f0-b19/vigo/vigo"
+VERSION="$(cat /tmp/vigo-version 2>/dev/null || echo latest)"
+IMAGE="${IMAGE:-${AR_IMAGE_REPO}:${VERSION}}"
 DATA=/srv/vigo
 MAX_CONCURRENT="${MAX_CONCURRENT:-2000}"   # admit rate during the connect storm
 
 [ "$(id -u)" -eq 0 ] || { echo "run as root (sudo)" >&2; exit 1; }
+echo "== Server image: ${IMAGE} =="
 
 echo "== Docker (egress via Cloud NAT) =="
 if ! command -v docker >/dev/null; then
