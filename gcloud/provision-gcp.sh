@@ -11,14 +11,21 @@
 # Run from the repo on a host with gcloud + go authed (danlap). Idempotent:
 # re-running skips existing infra and re-copies / re-runs setup.
 #
-#   ./gcloud/provision-gcp.sh              # full: provision + remote setup
-#   ./gcloud/provision-gcp.sh --no-setup  # provision + copy only; run setup by hand
+#   ./gcloud/provision-gcp.sh                       # full: provision + remote setup
+#   ./gcloud/provision-gcp.sh --no-setup            # provision + copy only
+#   ./gcloud/provision-gcp.sh --server-external-ip  # also expose the UI on a public IP
+#
+# --server-external-ip gives vigo-srv an ephemeral external IP and opens 8443
+# inbound to YOUR current public IP only (so you can reach the web UI from a
+# laptop). The harness always reaches the server over the internal subnet, so
+# this is purely for UI access. Idempotent; re-running refreshes the source IP.
 #
 # Prereq: the server image must already be in Artifact Registry at the repo's
 # VERSION — run ./push2AR.sh first. This script checks and fails early if not.
 #
 # Tear down:
 #   gcloud compute instances delete vigo-srv vigo-test-harness --zone=us-west1-a
+#   gcloud compute firewall-rules delete vigo-allow-ui   # if --server-external-ip was used
 set -euo pipefail
 
 PROJECT=project-69f2499e-5082-48f0-b19
@@ -34,9 +41,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 RUN_SETUP=1
+SERVER_EXTERNAL_IP=0
 for arg in "$@"; do
   case "$arg" in
     --no-setup) RUN_SETUP=0 ;;
+    --server-external-ip) SERVER_EXTERNAL_IP=1 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -63,6 +72,28 @@ scp_iap() {
 }
 
 ssh_iap() { g compute ssh "$1" --zone="$ZONE" --tunnel-through-iap --quiet --command="$2"; }
+
+# Give vigo-srv an ephemeral external IP and open 8443 to the caller's IP only.
+ensure_server_external_ip() {
+  if g compute instances describe vigo-srv --zone="$ZONE" \
+       --format="value(networkInterfaces[0].accessConfigs[0].natIP)" 2>/dev/null | grep -q .; then
+    echo "  vigo-srv already has an external IP"
+  else
+    g compute instances add-access-config vigo-srv --zone="$ZONE"
+  fi
+  local myip; myip="$(curl -fsS ifconfig.me 2>/dev/null || true)"
+  if [ -z "$myip" ]; then
+    echo "  ! could not detect your public IP — open 8443 manually (vigo-allow-ui)" >&2
+    return
+  fi
+  if g compute firewall-rules describe vigo-allow-ui >/dev/null 2>&1; then
+    g compute firewall-rules update vigo-allow-ui --source-ranges="${myip}/32"
+  else
+    g compute firewall-rules create vigo-allow-ui --network="$NETWORK" \
+      --direction=INGRESS --action=ALLOW --rules=tcp:8443 --source-ranges="${myip}/32"
+  fi
+  echo "  8443 open to ${myip}/32"
+}
 
 # --- Version + image preflight ------------------------------------------------
 VERSION="$(tr -d '[:space:]' < "${REPO_ROOT}/VERSION")"
@@ -112,6 +143,11 @@ g compute instances describe vigo-test-harness --zone="$ZONE" >/dev/null 2>&1 ||
     --image-family="$IMAGE_FAMILY" --image-project="$IMAGE_PROJECT" \
     --boot-disk-size=30GB --boot-disk-type=pd-balanced
 
+if [ "$SERVER_EXTERNAL_IP" -eq 1 ]; then
+  echo "== Server external IP + UI firewall =="
+  ensure_server_external_ip
+fi
+
 echo "== Copying scripts + binaries to the VMs (via IAP) =="
 scp_iap "${SCRIPT_DIR}/setup-server.sh"  vigo-srv
 scp_iap "/tmp/vigo-version"              vigo-srv
@@ -121,6 +157,8 @@ scp_iap "/tmp/vigocli"                   vigo-test-harness
 
 SRV_IP=$(g compute instances describe vigo-srv --zone="$ZONE" \
   --format="value(networkInterfaces[0].networkIP)")
+EXT_IP=$(g compute instances describe vigo-srv --zone="$ZONE" \
+  --format="value(networkInterfaces[0].accessConfigs[0].natIP)" 2>/dev/null || true)
 
 if [ "$RUN_SETUP" -eq 1 ]; then
   echo "== Provisioning vigo-srv (Docker + pull ${VERSION} + run vigosrv) =="
@@ -134,6 +172,7 @@ cat <<EOF
 == Done ==
 Server version:     ${VERSION}
 Server internal IP: ${SRV_IP}   (harness dials this on :1530 / :8443)
+$([ -n "$EXT_IP" ] && echo "Web UI:             https://${EXT_IP}:8443   (needs a webuser; create one on vigo-srv)")
 $([ "$RUN_SETUP" -eq 1 ] && echo "Both VMs provisioned: vigosrv running, harness installed." \
                           || echo "Scripts + binaries copied to /tmp/; run setup yourself (see --no-setup).")
 
