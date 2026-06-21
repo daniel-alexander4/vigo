@@ -31,7 +31,7 @@ impl ServiceMacosExecutor {
                     let stdout = String::from_utf8_lossy(&o.stdout);
                     // If PID line shows a number (not "-" or "0"), it's running
                     for line in stdout.lines() {
-                        if let Some(rest) = line.strip_prefix('"PID"') {
+                        if let Some(rest) = line.strip_prefix("\"PID\"") {
                             return !rest.contains("-");
                         }
                     }
