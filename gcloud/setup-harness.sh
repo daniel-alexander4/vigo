@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Set up vigo-test-harness: install the fakefleet + vigocli binaries and tune
+# the OS for ~60k outbound held connections to the server.
+#
+# The binaries are pure-Go static builds produced on danlap (the source isn't
+# on a public remote). Build + ship them first, FROM danlap:
+#   cd ~/repos/vigo
+#   CGO_ENABLED=0 go build -o /tmp/vigo-fakefleet ./test/fakefleet
+#   CGO_ENABLED=0 go build -o /tmp/vigocli       ./cli
+#   gcloud compute scp /tmp/vigo-fakefleet /tmp/vigocli gcloud/setup-harness.sh \
+#     vigo-test-harness:/tmp/ --zone=us-west1-a --tunnel-through-iap
+#
+# Then ON the harness, as root:
+#   sudo bash /tmp/setup-harness.sh
+set -euo pipefail
+
+SRC_DIR="${SRC_DIR:-/tmp}"   # where the scp'd binaries landed
+
+[ "$(id -u)" -eq 0 ] || { echo "run as root (sudo)" >&2; exit 1; }
+
+echo "== Install binaries =="
+for b in vigo-fakefleet vigocli; do
+  if [ ! -f "$SRC_DIR/$b" ]; then
+    echo "missing $SRC_DIR/$b — build + scp it from danlap (see header)" >&2
+    exit 1
+  fi
+  install -m755 "$SRC_DIR/$b" "/usr/local/bin/$b"
+done
+
+echo "== OS tuning for ~60k outbound connections to a single server:port =="
+# A single client to one dst ip:port is bounded by source ports. The default
+# range (~28k) caps the run well short of 60k; widen to ~64k. NOTE: this is
+# also the single-box ceiling — 120k against one port is impossible from one
+# source IP (64k-tuple limit); for the 64 GiB follow-on use a second harness.
+cat >/etc/sysctl.d/99-vigo-harness.conf <<'EOF'
+net.ipv4.ip_local_port_range = 1024 65535
+net.core.somaxconn = 65535
+net.ipv4.tcp_tw_reuse = 1
+fs.file-max = 2097152
+EOF
+sysctl --system >/dev/null
+
+cat >/etc/security/limits.d/99-vigo-harness.conf <<'EOF'
+* soft nofile 1048576
+* hard nofile 1048576
+EOF
+
+cat <<'EOF'
+
+== Done ==
+Re-ssh so the nofile limit applies, then (SRV_IP = vigo-srv internal IP):
+
+  ulimit -n 1048576
+
+  # --server is the gRPC address (host:1530). --skip-publish is REQUIRED
+  # off-box: publish writes the server's local /srv/vigo, which this box can't
+  # reach, so envoys enroll over gRPC and converge against the server's seeded
+  # .live (an empty/default bundle is fine — we're testing connection count).
+  #
+  # create DETACHED — a force-backgrounded foreground create cancels its
+  # enroll context mid-publish and wedges the SQLite writer.
+  setsid vigo-fakefleet create --count 60000 --server SRV_IP:1530 --skip-publish \
+    >/tmp/create.log 2>&1 < /dev/null &
+  tail -f /tmp/create.log        # wait for enroll to finish
+
+  # hold the streams:
+  vigo-fakefleet run --stream --server SRV_IP:1530 --cadence 1s --report-cadence 1m
+
+  # teardown (deletes lag a few minutes):
+  vigo-fakefleet backout --server SRV_IP:1530
+
+Monitor on the SERVER (never loop docker logs/stats under load):
+  watch -n2 'curl -sk https://127.0.0.1:8443/metrics | grep -E "vigo_streams_active|stream_connect|status=\"shed\""'
+EOF
