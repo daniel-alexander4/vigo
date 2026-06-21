@@ -21,7 +21,25 @@ SUBNET=vigo-subnet
 IMAGE_FAMILY=ubuntu-2404-lts-amd64
 IMAGE_PROJECT=ubuntu-os-cloud
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 g() { gcloud --project="$PROJECT" "$@"; }
+
+# scp a file to a VM over IAP, retrying while the freshly-booted VM's IAP SSH
+# comes up (sshd + IAP tunnel can take ~30-60s after instance create).
+scp_iap() {
+  local src=$1 vm=$2 tries=0
+  until g compute scp "$src" "${vm}:/tmp/" --zone="$ZONE" --tunnel-through-iap --quiet 2>/dev/null; do
+    tries=$((tries + 1))
+    if [ "$tries" -ge 12 ]; then
+      echo "  ! scp $(basename "$src") -> ${vm} failed after ${tries} tries (IAP SSH not ready?)" >&2
+      return 1
+    fi
+    echo "  ... ${vm} not ready for scp yet (try ${tries}); waiting 15s"
+    sleep 15
+  done
+  echo "  ok: $(basename "$src") -> ${vm}:/tmp/"
+}
 
 echo "== Firewall (idempotent) =="
 g compute firewall-rules describe vigo-allow-internal >/dev/null 2>&1 || \
@@ -57,16 +75,24 @@ g compute instances describe vigo-test-harness --zone="$ZONE" >/dev/null 2>&1 ||
 SRV_IP=$(g compute instances describe vigo-srv --zone="$ZONE" \
   --format="value(networkInterfaces[0].networkIP)")
 
+echo "== Copying setup scripts to the VMs (via IAP) =="
+scp_iap "${SCRIPT_DIR}/setup-server.sh"  vigo-srv
+scp_iap "${SCRIPT_DIR}/setup-harness.sh" vigo-test-harness
+
 cat <<EOF
 
 == Done ==
 Server internal IP: ${SRV_IP}   (harness dials this on :1530 / :8443)
+Setup scripts are already at /tmp/ on each VM.
 
 SSH (via IAP — no external IPs):
   gcloud compute ssh vigo-srv          --zone=${ZONE} --tunnel-through-iap
   gcloud compute ssh vigo-test-harness --zone=${ZONE} --tunnel-through-iap
 
 Next:
-  1. scp setup-server.sh to vigo-srv, run with sudo (set IMAGE=...:<current-tag>).
-  2. Build + scp the harness binaries and setup-harness.sh to vigo-test-harness.
+  1. On vigo-srv:           sudo IMAGE=...vigo:<current-tag> bash /tmp/setup-server.sh
+  2. Build + scp the harness binaries from danlap:
+       gcloud compute scp /tmp/vigo-fakefleet /tmp/vigocli \\
+         vigo-test-harness:/tmp/ --zone=${ZONE} --tunnel-through-iap
+  3. On vigo-test-harness:  sudo bash /tmp/setup-harness.sh
 EOF
