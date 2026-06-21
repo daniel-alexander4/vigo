@@ -81,16 +81,22 @@ ensure_server_external_ip() {
   else
     g compute instances add-access-config vigo-srv --zone="$ZONE"
   fi
-  local myip; myip="$(curl -fsS ifconfig.me 2>/dev/null || true)"
-  if [ -z "$myip" ]; then
-    echo "  ! could not detect your public IP — open 8443 manually (vigo-allow-ui)" >&2
-    return
-  fi
+  # Force IPv4 — the firewall rule guards the server's external IPv4, and an
+  # IPv6 source with /32 is rejected. Non-fatal throughout: a UI-firewall hiccup
+  # must never abort provisioning the actual test env (the harness uses the
+  # internal subnet, not this rule).
+  local myip; myip="$(curl -4 -fsS ifconfig.me 2>/dev/null || true)"
+  case "$myip" in
+    *.*.*.*) : ;;
+    *) echo "  ! no IPv4 detected ('${myip}') — open 8443 manually (vigo-allow-ui)" >&2; return 0 ;;
+  esac
   if g compute firewall-rules describe vigo-allow-ui >/dev/null 2>&1; then
-    g compute firewall-rules update vigo-allow-ui --source-ranges="${myip}/32"
+    g compute firewall-rules update vigo-allow-ui --source-ranges="${myip}/32" \
+      || { echo "  ! firewall update failed; open 8443 manually" >&2; return 0; }
   else
     g compute firewall-rules create vigo-allow-ui --network="$NETWORK" \
-      --direction=INGRESS --action=ALLOW --rules=tcp:8443 --source-ranges="${myip}/32"
+      --direction=INGRESS --action=ALLOW --rules=tcp:8443 --source-ranges="${myip}/32" \
+      || { echo "  ! firewall create failed; open 8443 manually" >&2; return 0; }
   fi
   echo "  8443 open to ${myip}/32"
 }
