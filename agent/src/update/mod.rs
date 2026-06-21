@@ -89,6 +89,15 @@ pub struct TlsCerts {
     pub client_key: String,  // path to client key PEM
 }
 
+/// Maximum size we'll read for a downloaded agent binary. ureq's
+/// `read_to_vec()` defaults to a silent 10 MiB cap (`MAX_BODY_SIZE`),
+/// aborting larger bodies — the agent binary crossed 10 MiB at 0.76.16,
+/// which wedged self-update in a forced-retry loop until this ceiling was
+/// raised. Kept bounded (not `u64::MAX`) so a misbehaving or hostile
+/// server can't exhaust a managed node's RAM; 256 MiB is ~25× today's
+/// binary, ample headroom without unbounded risk.
+const MAX_AGENT_BINARY_BYTES: u64 = 256 * 1024 * 1024;
+
 /// Build a ureq agent with mTLS if certs are available, otherwise plain HTTPS.
 fn build_agent(tls: Option<&TlsCerts>) -> ureq::Agent {
     if let Some(certs) = tls {
@@ -102,6 +111,27 @@ fn build_agent(tls: Option<&TlsCerts>) -> ureq::Agent {
             .timeout_global(Some(std::time::Duration::from_secs(60)))
             .build(),
     )
+}
+
+/// Fetch the agent binary from the REST `download_url` — the always-on
+/// fallback when curator can't serve the bytes P2P. Reads with an explicit
+/// body-size limit (see [`MAX_AGENT_BINARY_BYTES`]); without it ureq caps
+/// the body at 10 MiB and silently fails on larger binaries.
+fn fetch_binary_rest(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>> {
+    let resp = agent
+        .get(url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("download binary: {}", e))?;
+
+    if resp.status() != 200 {
+        bail!("download returned status {}", resp.status());
+    }
+
+    resp.into_body()
+        .with_config()
+        .limit(MAX_AGENT_BINARY_BYTES)
+        .read_to_vec()
+        .context("download binary body")
 }
 
 fn build_mtls_agent(certs: &TlsCerts) -> Result<ureq::Agent> {
@@ -315,18 +345,7 @@ pub async fn apply(
         ) {
             bytes
         } else {
-            let resp = agent
-                .get(&download_url)
-                .call()
-                .map_err(|e| anyhow::anyhow!("download binary: {}", e))?;
-
-            if resp.status() != 200 {
-                bail!("download returned status {}", resp.status());
-            }
-
-            resp.into_body()
-                .read_to_vec()
-                .context("download binary body")?
+            fetch_binary_rest(&agent, &download_url)?
         };
 
         // Compute SHA256 digest.
@@ -606,6 +625,32 @@ mod tests {
         assert_eq!(info.version, "2.0.0");
         assert_eq!(info.sha256, "abc123");
         assert!(info.download_url.ends_with("/api/v1/agent/download/linux/amd64"));
+    }
+
+    #[tokio::test]
+    async fn fetch_binary_rest_reads_bodies_over_10mib() {
+        // Regression: ureq's read_to_vec() defaults to a 10 MiB cap, which
+        // wedged self-update once the agent binary crossed 10 MiB. Serve
+        // 11 MiB and prove fetch_binary_rest reads every byte.
+        let big = vec![0u8; 11 * 1024 * 1024];
+        let mut server = mockito::Server::new_async().await;
+        let _m = server
+            .mock("GET", "/api/v1/agent/download/linux/amd64")
+            .with_body(big.clone())
+            .create_async()
+            .await;
+
+        let url = format!("{}/api/v1/agent/download/linux/amd64", server.url());
+        // ureq is blocking; run it off the runtime thread so the mock server
+        // (driven on this runtime) can respond.
+        let body = tokio::task::spawn_blocking(move || {
+            let agent = build_agent(None);
+            fetch_binary_rest(&agent, &url)
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(body.len(), 11 * 1024 * 1024);
     }
 
     #[tokio::test]
