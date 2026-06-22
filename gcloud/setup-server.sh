@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Set up vigo-srv: install Docker, authenticate to Artifact Registry, seed
-# config, tune for the load test, run the vigosrv container, and create an
-# admin web user (mapped to the invoking OS user) so the UI is usable. Prints
+# config, tune for the load test, run the vigosrv container, and create a
+# viewer web user (named after the invoking OS user) so the UI is usable. Prints
 # the login + vault passphrase at the end (also saved root-only under /srv/vigo).
 #
 # Normally run by provision-gcp.sh (which writes /tmp/vigo-version and invokes
@@ -83,12 +83,12 @@ else
   printf '%s\n' "$VAULT_PASS" | script -qec "vigocli secrets unlock" /dev/null >/dev/null
 fi
 
-echo "== OS-user ed25519 keypair (admin webuser maps to ${OSUSER}'s own pubkey) =="
-OSHOME="$(getent passwd "$OSUSER" | cut -d: -f6)"
-if [ -n "$OSHOME" ] && [ ! -f "${OSHOME}/.ssh/id_ed25519.pub" ]; then
-  sudo -u "$OSUSER" install -d -m700 "${OSHOME}/.ssh"
-  sudo -u "$OSUSER" ssh-keygen -t ed25519 -N '' -q -f "${OSHOME}/.ssh/id_ed25519"
-fi
+# Webuser role: viewer. An ADMIN webuser needs `server.hostname` configured +
+# DB wiring (server rejects admin create otherwise: "admin user validation is
+# not configured") which would mean a server.yaml change + container restart.
+# Viewer has read access to every operational dashboard — all that's needed to
+# watch a load test — and needs no OS-user keypair or hostname config.
+WEB_ROLE=viewer
 
 echo "== Run vigosrv (host net; binds 1530/8443/1531; FD limit lifted) =="
 docker rm -f vigo 2>/dev/null || true
@@ -108,11 +108,11 @@ for _ in $(seq 1 30); do
 done
 docker logs vigo 2>&1 | grep -iE "max_connections|listening|started" | tail -5 || true
 
-echo "== Admin webuser ${OSUSER} =="
+echo "== Webuser ${OSUSER} (role ${WEB_ROLE}) =="
 if vigocli webusers list 2>/dev/null | grep -qw "$OSUSER"; then
   echo "  ${OSUSER} already exists — skipping"
 else
-  printf '%s' "$WEB_PASS" | vigocli webusers create --username "$OSUSER" --role admin --password-stdin \
+  printf '%s' "$WEB_PASS" | vigocli webusers create --username "$OSUSER" --role "$WEB_ROLE" --password-stdin \
     && echo "  created"
 fi
 
