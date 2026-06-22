@@ -1,0 +1,13 @@
+{
+  "payload": {
+    "customer_name": "Community",
+    "customer_id": "community",
+    "license_id": "free-100000000",
+    "tier": "community",
+    "max_envoys": 100000000,
+    "issued_at": "2026-03-12",
+    "expires_at": "2099-12-31",
+    "version": 1
+  },
+  "signature": "jicsyB5Sraaqrw4o2+m3/8OrrjxOJ0BEvn/HQqA114E47CAQBNyClx3V1A5knsVpAZRAtywRYGM3VeRtGm05Dw=="
+}

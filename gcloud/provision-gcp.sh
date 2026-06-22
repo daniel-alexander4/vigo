@@ -164,8 +164,9 @@ if [ "$SERVER_EXTERNAL_IP" -eq 1 ]; then
 fi
 
 echo "== Copying scripts + binaries to the VMs (via IAP) =="
-scp_iap "${SCRIPT_DIR}/setup-server.sh"  vigo-srv
-scp_iap "/tmp/vigo-version"              vigo-srv
+scp_iap "${SCRIPT_DIR}/setup-server.sh"     vigo-srv
+scp_iap "/tmp/vigo-version"                 vigo-srv
+scp_iap "${SCRIPT_DIR}/loadtest-unlimited.lic" vigo-srv
 # Demo config tree (configcrates/roles/usercrates/hostcrates) for realistic
 # bundles — recursive copy to /tmp/demo-stacks on the server.
 g compute scp --recurse "${SCRIPT_DIR}/demo-stacks" vigo-srv:/tmp/ \

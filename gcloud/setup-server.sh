@@ -112,6 +112,18 @@ else
   printf '%s\n' "$VAULT_PASS" | script -qec "vigocli secrets unlock" /dev/null >/dev/null
 fi
 
+echo "== Install unlimited load-test license (community tier, 100M envoys) =="
+# Placed before the server starts so vigosrv boots above the baked 100-envoy
+# community cap (60k synthetic envoys would otherwise hit the node-count gate).
+# No fingerprint binding (community tier), so it works on any VM.
+if [ -f /tmp/loadtest-unlimited.lic ]; then
+  cp /tmp/loadtest-unlimited.lic "${DATA}/license/"
+  chmod 600 "${DATA}/license/loadtest-unlimited.lic"
+  echo "  installed"
+else
+  echo "  ! /tmp/loadtest-unlimited.lic missing — server keeps the 100-envoy cap" >&2
+fi
+
 echo "== Run vigosrv (host net; binds 1530/8443/1531; FD limit lifted) =="
 docker rm -f vigo 2>/dev/null || true
 docker run -d --name vigo --restart unless-stopped \

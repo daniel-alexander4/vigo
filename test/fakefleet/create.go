@@ -15,8 +15,12 @@ import (
 // manifest, and run a first freshness tick. After it returns the
 // operator enables the systemd timer to keep the fleet fresh.
 func runCreate(cfg config) {
-	if cfg.adminToken == "" {
-		die("admin token required (pass --admin-token or make --admin-token-file readable)")
+	// Enrollment is tokenless on a trusted CIDR — the server auto-signs from a
+	// private/loopback source. The admin token is only needed to publish the
+	// config tree, so --skip-publish (enroll against the server's existing
+	// config) needs no token.
+	if !cfg.skipPublish && cfg.adminToken == "" {
+		die("admin token required to publish the config tree (or pass --skip-publish to enroll against the server's existing config)")
 	}
 
 	plan := buildHostPlan(cfg.count, cfg.namedCount, cfg.brokenCount, cfg.changedCount)
