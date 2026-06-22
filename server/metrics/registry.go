@@ -5,6 +5,7 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
@@ -182,6 +183,14 @@ type Metrics struct {
 // given registry. Use prometheus.NewRegistry() for production; tests
 // pass their own registry to isolate state.
 func NewMetrics(reg prometheus.Registerer) *Metrics {
+	// The server serves /metrics from this private registry alone (not the
+	// default), so Go runtime + process collectors aren't auto-included.
+	// Register them explicitly: go_memstats_*, go_memstats_gc_cpu_fraction,
+	// go_goroutines, process_cpu_seconds_total etc. — needed to see GC cost
+	// and CPU draw under load, not just the app gauges.
+	reg.MustRegister(collectors.NewGoCollector())
+	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+
 	f := promauto.With(reg)
 	return &Metrics{
 		// --- Core ---

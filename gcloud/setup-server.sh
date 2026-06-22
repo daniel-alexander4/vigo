@@ -22,7 +22,11 @@ AR_IMAGE_REPO="${AR_HOST}/project-69f2499e-5082-48f0-b19/vigo/vigo"
 VERSION="$(cat /tmp/vigo-version 2>/dev/null || echo latest)"
 IMAGE="${IMAGE:-${AR_IMAGE_REPO}:${VERSION}}"
 DATA=/srv/vigo
-MAX_CONCURRENT="${MAX_CONCURRENT:-2000}"   # admit rate during the connect storm
+# 0 = the CPU-scaled default (max(128, GOMAXPROCS*16)) — the check-in admission
+# governor that protects CPU/UI by shedding excess bundle-builds. Representative
+# of how a real server runs; a high override (e.g. 2000) disables that protection
+# and lets a fast-cadence fleet CPU-saturate, which is NOT how to size.
+MAX_CONCURRENT="${MAX_CONCURRENT:-0}"
 
 [ "$(id -u)" -eq 0 ] || { echo "run as root (sudo)" >&2; exit 1; }
 
