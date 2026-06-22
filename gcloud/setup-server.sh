@@ -128,9 +128,14 @@ printf '  %sVault:%s    unlocked  %s(passphrase %s , root-only at %s)%s\n' \
 printf '%s  Create your web user (vault is already unlocked):%s\n' "$C_BOLD" "$C_RST"
 printf '    %sviewer%s (enough to watch the run):  %svigocli webusers create --username %s --role viewer%s\n' \
   "$C_GREEN" "$C_RST" "$C_YELLOW" "$OSUSER" "$C_RST"
-printf '    %sadmin%s also needs server.hostname in server.yaml %sand%s a loopback-enrolled local agent\n' \
-  "$C_GREEN" "$C_RST" "$C_BOLD" "$C_RST"
-printf '          (%scurl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh%s), then admin maps to %s\n' \
+printf '    %sadmin%s needs a loopback-enrolled local agent AND server.hostname set to that\n' \
+  "$C_GREEN" "$C_RST"
+printf '          agent'"'"'s EXACT enrolled hostname (its FQDN), then a container restart:\n'
+printf '          %scurl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh%s   # note the enrolled hostname\n' \
+  "$C_TEAL" "$C_RST"
+printf '          %ssudo yq -i '"'"'.server.hostname = "<that-fqdn>"'"'"' /srv/vigo/server.yaml%s\n' \
+  "$C_TEAL" "$C_RST"
+printf '          %ssudo docker restart vigo%s ; then vigocli webusers create --username %s --role admin\n' \
   "$C_TEAL" "$C_RST" "$OSUSER"
 printf '  %sMetrics:%s  %scurl -sk https://127.0.0.1:8443/metrics | grep vigo_streams_active%s\n' \
   "$C_MAUVE" "$C_RST" "$C_TEAL" "$C_RST"
