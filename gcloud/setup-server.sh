@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Set up vigo-srv: install Docker, authenticate to Artifact Registry, seed
-# config, tune for the load test, run the vigosrv container, and create a
-# viewer web user (named after the invoking OS user) so the UI is usable. Prints
-# the login + vault passphrase at the end (also saved root-only under /srv/vigo).
+# config, tune for the load test, and run the vigosrv container. Initializes +
+# unlocks the secrets vault (so the operator can create a web user immediately)
+# but leaves the web-user creation itself to the operator. Prints the UI URL,
+# vault passphrase, and the create-user commands at the end.
 #
 # Normally run by provision-gcp.sh (which writes /tmp/vigo-version and invokes
 # this over IAP). To run standalone:
@@ -80,8 +81,8 @@ if [ -f "$CREDS" ]; then
   . "$CREDS"; FRESH_VAULT=0
 else
   OSUSER="${SUDO_USER:-$(logname 2>/dev/null || echo admin)}"
-  VAULT_PASS="$(genpass)"; WEB_PASS="$(genpass)"
-  ( umask 077; printf 'OSUSER=%q\nVAULT_PASS=%q\nWEB_PASS=%q\n' "$OSUSER" "$VAULT_PASS" "$WEB_PASS" > "$CREDS" )
+  VAULT_PASS="$(genpass)"
+  ( umask 077; printf 'OSUSER=%q\nVAULT_PASS=%q\n' "$OSUSER" "$VAULT_PASS" > "$CREDS" )
   FRESH_VAULT=1
 fi
 
@@ -95,13 +96,6 @@ if [ "$FRESH_VAULT" -eq 1 ]; then
 else
   printf '%s\n' "$VAULT_PASS" | script -qec "vigocli secrets unlock" /dev/null >/dev/null
 fi
-
-# Webuser role: viewer. An ADMIN webuser needs `server.hostname` configured +
-# DB wiring (server rejects admin create otherwise: "admin user validation is
-# not configured") which would mean a server.yaml change + container restart.
-# Viewer has read access to every operational dashboard — all that's needed to
-# watch a load test — and needs no OS-user keypair or hostname config.
-WEB_ROLE=viewer
 
 echo "== Run vigosrv (host net; binds 1530/8443/1531; FD limit lifted) =="
 docker rm -f vigo 2>/dev/null || true
@@ -121,13 +115,7 @@ for _ in $(seq 1 30); do
 done
 docker logs vigo 2>&1 | grep -iE "max_connections|listening|started" | tail -5 || true
 
-echo "== Webuser ${OSUSER} (role ${WEB_ROLE}) =="
-if vigocli webusers list 2>/dev/null | grep -qw "$OSUSER"; then
-  echo "  ${OSUSER} already exists — skipping"
-else
-  printf '%s' "$WEB_PASS" | vigocli webusers create --username "$OSUSER" --role "$WEB_ROLE" --password-stdin \
-    && echo "  created"
-fi
+echo "== Server ready — web-user creation left to the operator =="
 
 EXT_IP="$(curl -s -H 'Metadata-Flavor: Google' \
   http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip 2>/dev/null || true)"
@@ -135,9 +123,14 @@ EXT_IP="$(curl -s -H 'Metadata-Flavor: Google' \
 echo
 printf '%s%s== Web access ==%s\n' "$C_BOLD" "$C_GREEN" "$C_RST"
 [ -n "$EXT_IP" ] && printf '  %sWeb UI:%s   %s%s%s\n' "$C_MAUVE" "$C_RST" "$C_BLUE" "https://${EXT_IP}:8443" "$C_RST"
-printf '  %sUsername:%s %s%s%s\n'  "$C_MAUVE" "$C_RST" "$C_YELLOW$C_BOLD" "$OSUSER"    "$C_RST"
-printf '  %sPassword:%s %s%s%s\n'  "$C_MAUVE" "$C_RST" "$C_YELLOW$C_BOLD" "$WEB_PASS"  "$C_RST"
-printf '  %sVault:%s    %s%s%s   %s(creds root-only at %s)%s\n' \
-  "$C_MAUVE" "$C_RST" "$C_YELLOW" "$VAULT_PASS" "$C_RST" "$C_TEAL" "$CREDS" "$C_RST"
+printf '  %sVault:%s    unlocked  %s(passphrase %s , root-only at %s)%s\n' \
+  "$C_MAUVE" "$C_RST" "$C_TEAL" "$VAULT_PASS" "$CREDS" "$C_RST"
+printf '%s  Create your web user (vault is already unlocked):%s\n' "$C_BOLD" "$C_RST"
+printf '    %sviewer%s (enough to watch the run):  %svigocli webusers create --username %s --role viewer%s\n' \
+  "$C_GREEN" "$C_RST" "$C_YELLOW" "$OSUSER" "$C_RST"
+printf '    %sadmin%s also needs server.hostname in server.yaml %sand%s a loopback-enrolled local agent\n' \
+  "$C_GREEN" "$C_RST" "$C_BOLD" "$C_RST"
+printf '          (%scurl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh%s), then admin maps to %s\n' \
+  "$C_TEAL" "$C_RST" "$OSUSER"
 printf '  %sMetrics:%s  %scurl -sk https://127.0.0.1:8443/metrics | grep vigo_streams_active%s\n' \
   "$C_MAUVE" "$C_RST" "$C_TEAL" "$C_RST"
