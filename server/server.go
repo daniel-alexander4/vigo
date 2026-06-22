@@ -398,6 +398,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	if err := s.cfg.Spanner.Validate(); err != nil {
 		return nil, err
 	}
+	if err := s.cfg.CheckIn.Validate(); err != nil {
+		return nil, err
+	}
 
 	// Phase 1 (ADR-spanner): per-bolt Ed25519 identity. Generated on
 	// first boot under <serverRoot>/bolt/, wrapped via HKDF purpose
@@ -978,6 +981,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		MaxConcurrentCheckIns:      s.cfg.CheckIn.MaxConcurrent,
 		MaxConcurrentReportResults: s.cfg.CheckIn.ReportMaxConcurrent,
 		MaxConnections:             s.cfg.CheckIn.MaxConnections,
+		RelaxStreamSignature:       s.cfg.CheckIn.StreamSignature == config.StreamSigHandshakeOnly,
 		Integrations:               s.integrations,
 		TraitsDir:                  s.traitsDir,
 		SignatureWindow:            s.sigWindow,
@@ -1708,6 +1712,16 @@ func (s *Server) emitStartupHardeningFindings(ctx context.Context) {
 		}
 		if err := s.auditWriter.Record(ctx, "security.hardening_warning", "system", "hardening", f.Summary, payload); err != nil {
 			slog.Error("recording hardening finding", "error", err, "kind", f.Kind)
+		}
+	}
+	// Record a relaxed held-stream signature posture (checkin.stream_signature:
+	// handshake-only) as a security audit event — it weakens per-message
+	// verification, so it belongs in the tamper-evident chain + SIEM fanout
+	// alongside the hardening findings. Default ("all") emits nothing.
+	if s.cfg.CheckIn.StreamSignature == config.StreamSigHandshakeOnly {
+		if err := s.auditWriter.Record(ctx, "security.stream_signature_relaxed", "system", "checkin",
+			"held-stream per-message signature verification relaxed to handshake-only", ""); err != nil {
+			slog.Error("recording stream-signature posture", "error", err)
 		}
 	}
 }

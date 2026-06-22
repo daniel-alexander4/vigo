@@ -280,6 +280,11 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 	// Set build info metric and start uptime tracker. version is set at
 	// package level via -ldflags at build time.
 	s.metrics.BuildInfo.WithLabelValues(version).Set(1)
+	sigMode := string(s.cfg.CheckIn.StreamSignature)
+	if sigMode == "" {
+		sigMode = "all"
+	}
+	s.metrics.CheckinSignatureMode.WithLabelValues(sigMode).Set(1)
 	serverStartTime := time.Now()
 	daemon.SafeGo("uptime-tracker", func() {
 		ticker := time.NewTicker(15 * time.Second)

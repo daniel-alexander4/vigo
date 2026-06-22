@@ -103,7 +103,12 @@ type ServerConfig struct {
 	ServerVersions    map[string]string
 	AgentBinAvailable func() bool      // if set, version-mismatch auto-update only fires when at least one binary exists
 	GlobalObserveOnly bool             // global observe-only mode from server.yaml checkin.observe_only
-	Metrics           *metrics.Metrics // per-instance prometheus collectors
+	// RelaxStreamSignature skips re-verifying the stream owner's own per-message
+	// signatures on a held AgentStream (checkin.stream_signature: handshake-only).
+	// The handshake is still verified and foreign-envoy (proxied) messages are
+	// still verified — see (*AgentService).needsStreamVerify. Default false.
+	RelaxStreamSignature bool
+	Metrics              *metrics.Metrics // per-instance prometheus collectors
 	// TicketsStore, if non-nil, persists TLS 1.3 session-ticket
 	// encryption keys across server restarts so envoys can resume PSK
 	// sessions instead of full-handshaking on every deploy. nil → Go's
@@ -290,7 +295,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 		serverVersions:    cfg.ServerVersions,
 		agentBinAvailable: cfg.AgentBinAvailable,
 		globalObserveOnly: cfg.GlobalObserveOnly,
+		relaxStreamSig:    cfg.RelaxStreamSignature,
 		metrics:           cfg.Metrics,
+	}
+	if cfg.RelaxStreamSignature {
+		slog.Warn("checkin: per-message stream signature verification relaxed to handshake-only — held streams rely on the verified handshake + mTLS session integrity; the stream owner's own subsequent check-ins are not re-verified (proxied results still are). Safe only with direct agent↔server mTLS (no TLS-terminating proxy). Set checkin.stream_signature: all to restore.")
 	}
 	// CheckIn is always admission-capped — the cap gates the policy-bundle build
 	// (CPU-heavy) in buildCheckInResponse, so a fleet-wide stale-checkin wave

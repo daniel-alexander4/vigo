@@ -197,10 +197,12 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
-				if _, err := verifyCheckIn(stream.Context(), s.queries, m.CheckIn, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
-					slog.Warn("stream check-in signature verification failed", "envoy_id", envoyID, "error", err)
-					errCh <- err
-					return
+				if s.needsStreamVerify(m.CheckIn.GetEnvoyId(), envoyID) {
+					if _, err := verifyCheckIn(stream.Context(), s.queries, m.CheckIn, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
+						slog.Warn("stream check-in signature verification failed", "envoy_id", envoyID, "error", err)
+						errCh <- err
+						return
+					}
 				}
 				ctx, traceID := EnsureTraceID(stream.Context(), m.CheckIn.GetTraceparent())
 				resp, err := s.buildCheckInResponse(ctx, envoyID, envoy, m.CheckIn, true)
@@ -222,11 +224,15 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				// Verify the ed25519 signature against the result's own envoy_id
 				// pubkey — for a proxied device result that's the DEVICE's key
 				// (the device signs; the gateway only relays), which the gateway
-				// config-authz check below cannot prove on its own.
-				if _, err := verifyReportResultCtx(stream.Context(), s.queries, m.ReportResult, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
-					slog.Warn("stream report-result signature verification failed", "envoy_id", envoyID, "result_envoy_id", m.ReportResult.GetEnvoyId(), "error", err)
-					errCh <- err
-					return
+				// config-authz check below cannot prove on its own. needsStreamVerify
+				// always returns true for a proxied result (foreign envoy_id), so
+				// handshake-only never skips this load-bearing check.
+				if s.needsStreamVerify(m.ReportResult.GetEnvoyId(), envoyID) {
+					if _, err := verifyReportResultCtx(stream.Context(), s.queries, m.ReportResult, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
+						slog.Warn("stream report-result signature verification failed", "envoy_id", envoyID, "result_envoy_id", m.ReportResult.GetEnvoyId(), "error", err)
+						errCh <- err
+						return
+					}
 				}
 				// Authorization check for proxied device results: if the
 				// result's envoy_id differs from the stream owner, verify
@@ -260,10 +266,12 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				}
 
 			case *pb.AgentStreamMessage_ReportTraits:
-				if err := verifyReportTraits(stream.Context(), s.queries, m.ReportTraits, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
-					slog.Warn("stream report-traits signature verification failed", "envoy_id", envoyID, "error", err)
-					errCh <- err
-					return
+				if s.needsStreamVerify(m.ReportTraits.GetEnvoyId(), envoyID) {
+					if err := verifyReportTraits(stream.Context(), s.queries, m.ReportTraits, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
+						slog.Warn("stream report-traits signature verification failed", "envoy_id", envoyID, "error", err)
+						errCh <- err
+						return
+					}
 				}
 				ctx, traceID := EnsureTraceID(stream.Context(), m.ReportTraits.GetTraceparent())
 				resp, err := s.ReportTraits(ctx, m.ReportTraits)
@@ -359,6 +367,19 @@ func compressBundle(bundle *pb.PolicyBundle) (structured *pb.PolicyBundle, gzipp
 // When streaming is true, last_seen is updated in-memory only (no DB write) since
 // the open gRPC stream already proves liveness. Unary RPCs set streaming=false to
 // ensure the timestamp is flushed to SQLite.
+// needsStreamVerify reports whether a held-stream message must have its ed25519
+// signature verified. In the default mode (checkin.stream_signature: all) every
+// message is verified. In handshake-only mode the stream owner's own messages
+// (msgEnvoyID == streamEnvoyID) are skipped — their authenticity is already
+// established by the verified handshake (agentstream.go opening) plus mTLS
+// session integrity, so per-message re-verification is redundant (the same
+// model Delta already uses). A message carrying a *different* envoy_id — a
+// proxied device result — is always verified, since its signature is the only
+// proof of that envelope and is not covered by the stream's handshake binding.
+func (s *AgentService) needsStreamVerify(msgEnvoyID, streamEnvoyID string) bool {
+	return !s.relaxStreamSig || msgEnvoyID != streamEnvoyID
+}
+
 func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string, envoy db.Envoy, req *pb.CheckInRequest, streaming bool) (*pb.CheckInResponse, error) {
 	// Load-shed before any bundle-building work. When checkin.max_concurrent
 	// is set and the cap is hit, ResourceExhausted tells the gRPC client to

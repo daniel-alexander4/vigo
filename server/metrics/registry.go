@@ -88,9 +88,10 @@ type Metrics struct {
 
 	// --- Server ---
 
-	UptimeSeconds prometheus.Gauge
-	BuildInfo     *prometheus.GaugeVec
-	StreamsActive prometheus.Gauge
+	UptimeSeconds        prometheus.Gauge
+	BuildInfo            *prometheus.GaugeVec
+	StreamsActive        prometheus.Gauge
+	CheckinSignatureMode *prometheus.GaugeVec
 
 	// --- Secrets ---
 
@@ -412,6 +413,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_streams_active",
 			Help: "Number of currently connected agent streams.",
 		}),
+		CheckinSignatureMode: f.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "vigo_checkin_signature_mode",
+			Help: "Active held-stream signature verification mode (mode label, always 1). 'all' = every message verified; 'handshake-only' = stream-owner messages trusted after the verified handshake.",
+		}, []string{"mode"}),
 
 		// --- Secrets ---
 

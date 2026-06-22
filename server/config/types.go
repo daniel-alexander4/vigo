@@ -984,18 +984,48 @@ type DatabaseSection struct {
 	Retention    string `yaml:"retention" doc:"Age-based pruning for runs, tasks, and workflows (cascades to run_results via ON DELETE CASCADE). Empty disables pruning — leaving it unset lets run history grow without bound." example:"30d, 90d, 2160h (the d-suffix shorthand and Go duration strings both parse)"`
 }
 
+// StreamSignatureMode selects how aggressively the held AgentStream verifies
+// per-message ed25519 signatures. The handshake check-in is always verified
+// (it binds the stream to the envoy's key); this knob only governs the
+// re-verification of subsequent messages on an already-bound stream.
+type StreamSignatureMode string
+
+const (
+	// StreamSigAll is the default: every per-message check-in/report on a held
+	// stream is ed25519-verified, exactly as a unary request would be.
+	StreamSigAll StreamSignatureMode = "all"
+	// StreamSigHandshakeOnly relies on the verified handshake + mTLS session
+	// integrity for the stream owner's own subsequent messages, skipping their
+	// (redundant) re-verification. Messages carrying a *different* envoy_id
+	// (proxied device results) are still fully verified. A deliberate security
+	// relaxation — only safe when agents connect directly over mTLS with no
+	// TLS-terminating intermediary.
+	StreamSigHandshakeOnly StreamSignatureMode = "handshake-only"
+)
+
 // CheckInSection holds check-in interval settings.
 type CheckInSection struct {
-	Interval            string `yaml:"interval" doc:"Nominal agent check-in interval as a Go duration string. The server pushes this to agents, so it sets the effective fleet poll cadence." default:"1s" example:"1s (default), 15s (lighter), 5m (conservative)"`
-	JitterPercent       int    `yaml:"jitter_percent" doc:"Random ± jitter applied to the check-in interval (percent)." example:"0-50; 10 (default) spreads load across a ±10% window"`
-	BundleMaxAge        string `yaml:"bundle_max_age" doc:"Signed-bundle TTL on agents (e.g. 24h). \"0\" means bundles never expire." default:"24h" example:"1h, 24h, 168h (accepts s, m, h); 0 to disable"`
-	OfflineThreshold    string `yaml:"offline_threshold" doc:"Override the staleness threshold used by the Offline pill, risk scorer, and stale-envoy notifier. Empty preserves the default 2.5× check-in interval." example:"empty (use 2.5× interval), 5m, 15m (accepts s, m, h)"`
-	FleetLookupTTL      string `yaml:"fleet_lookup_ttl" doc:"How long a resolved fleet: cross-node config lookup is reused before recomputing from the live fleet. Higher = cheaper, staler." default:"30s" example:"30s (default), 1m, 10s"`
-	ObserveOnly         bool   `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false" example:"true during Salt/Puppet migration"`
-	ComplianceThreshold int    `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables." example:"0-100; 90 for prod alerting, 95 for tight SLOs"`
-	MaxConcurrent       int    `yaml:"max_concurrent" doc:"Maximum concurrent CheckIn handlers. The cap gates the policy-bundle build (CPU-heavy) inside the handler, so a fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via ResourceExhausted → agent backoff instead of CPU-cascading. Always on — 0 (default) = a CPU-scaled built-in (max(128, GOMAXPROCS*16); GOMAXPROCS tracks the container's cgroup CPU limit), not disabled. Higher admits more before shedding (deeper concurrency, more CPU thrash); lower sheds sooner (tighter latency for admits, more backoff during waves). Watch vigo_checkins_total{status=\"shed\"}." default:"0" example:"0 (=CPU-scaled default), 256, 1024"`
-	ReportMaxConcurrent int    `yaml:"report_max_concurrent" doc:"Maximum concurrent ReportResult handlers before excess is shed with ResourceExhausted (the agent backs off). A queue-depth bound in front of the single SQLite writer: higher admits more before shedding (deeper queue, higher tail latency under sustained overload), lower sheds sooner (tighter tail, more backoff). Unlike checkin.max_concurrent this is always on — 0 (default) means the built-in 2048, not disabled." default:"0" example:"0 (=2048 default), 512, 4096"`
-	MaxConnections      int    `yaml:"max_connections" doc:"Maximum concurrently-held agent streams. Each connected envoy holds one persistent AgentStream costing ~220 KB RSS, so connection count — not request rate — is what drives the server toward OOM. Past this cap, new streams are refused with ResourceExhausted (the agent backs off and retries) so the server sheds gracefully instead of being OOM-killed. 0 (default) = auto-derive a safe ceiling from host RAM (≈ 40% of RAM ÷ 220 KB — the sizing-guide table; sheds, not OOMs, out of the box); a positive value sets an explicit cap; -1 disables the cap entirely (legacy uncapped — accepts streams until the kernel OOM-kills). Watch vigo_streams_active against the effective value." default:"0" example:"0 (auto from RAM), 60000 (explicit, ≈31 GiB host), -1 (uncapped)"`
+	Interval            string              `yaml:"interval" doc:"Nominal agent check-in interval as a Go duration string. The server pushes this to agents, so it sets the effective fleet poll cadence." default:"1s" example:"1s (default), 15s (lighter), 5m (conservative)"`
+	JitterPercent       int                 `yaml:"jitter_percent" doc:"Random ± jitter applied to the check-in interval (percent)." example:"0-50; 10 (default) spreads load across a ±10% window"`
+	BundleMaxAge        string              `yaml:"bundle_max_age" doc:"Signed-bundle TTL on agents (e.g. 24h). \"0\" means bundles never expire." default:"24h" example:"1h, 24h, 168h (accepts s, m, h); 0 to disable"`
+	OfflineThreshold    string              `yaml:"offline_threshold" doc:"Override the staleness threshold used by the Offline pill, risk scorer, and stale-envoy notifier. Empty preserves the default 2.5× check-in interval." example:"empty (use 2.5× interval), 5m, 15m (accepts s, m, h)"`
+	FleetLookupTTL      string              `yaml:"fleet_lookup_ttl" doc:"How long a resolved fleet: cross-node config lookup is reused before recomputing from the live fleet. Higher = cheaper, staler." default:"30s" example:"30s (default), 1m, 10s"`
+	ObserveOnly         bool                `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false" example:"true during Salt/Puppet migration"`
+	ComplianceThreshold int                 `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables." example:"0-100; 90 for prod alerting, 95 for tight SLOs"`
+	MaxConcurrent       int                 `yaml:"max_concurrent" doc:"Maximum concurrent CheckIn handlers. The cap gates the policy-bundle build (CPU-heavy) inside the handler, so a fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via ResourceExhausted → agent backoff instead of CPU-cascading. Always on — 0 (default) = a CPU-scaled built-in (max(128, GOMAXPROCS*16); GOMAXPROCS tracks the container's cgroup CPU limit), not disabled. Higher admits more before shedding (deeper concurrency, more CPU thrash); lower sheds sooner (tighter latency for admits, more backoff during waves). Watch vigo_checkins_total{status=\"shed\"}." default:"0" example:"0 (=CPU-scaled default), 256, 1024"`
+	ReportMaxConcurrent int                 `yaml:"report_max_concurrent" doc:"Maximum concurrent ReportResult handlers before excess is shed with ResourceExhausted (the agent backs off). A queue-depth bound in front of the single SQLite writer: higher admits more before shedding (deeper queue, higher tail latency under sustained overload), lower sheds sooner (tighter tail, more backoff). Unlike checkin.max_concurrent this is always on — 0 (default) means the built-in 2048, not disabled." default:"0" example:"0 (=2048 default), 512, 4096"`
+	MaxConnections      int                 `yaml:"max_connections" doc:"Maximum concurrently-held agent streams. Each connected envoy holds one persistent AgentStream costing ~220 KB RSS, so connection count — not request rate — is what drives the server toward OOM. Past this cap, new streams are refused with ResourceExhausted (the agent backs off and retries) so the server sheds gracefully instead of being OOM-killed. 0 (default) = auto-derive a safe ceiling from host RAM (≈ 40% of RAM ÷ 220 KB — the sizing-guide table; sheds, not OOMs, out of the box); a positive value sets an explicit cap; -1 disables the cap entirely (legacy uncapped — accepts streams until the kernel OOM-kills). Watch vigo_streams_active against the effective value." default:"0" example:"0 (auto from RAM), 60000 (explicit, ≈31 GiB host), -1 (uncapped)"`
+	StreamSignature     StreamSignatureMode `yaml:"stream_signature" doc:"Per-message ed25519 verification on held agent streams. \"all\" (default) verifies every check-in/report, exactly as a unary request. \"handshake-only\" verifies the handshake plus any proxied (foreign-envoy) message, but skips re-verifying the stream owner's own subsequent check-ins, relying on the verified handshake + mTLS session integrity. A deliberate SECURITY RELAXATION that trades a defense-in-depth layer for ~40% less CPU at very large fleets on aggressive cadence — only safe when agents connect directly over mTLS (no TLS-terminating proxy/LB in front of the gRPC port). Prefer raising checkin.interval or sharding via spanner before reaching for this." options:"all|handshake-only" default:"all" example:"all (default), handshake-only"`
+}
+
+// Validate checks the check-in config is internally consistent.
+func (c CheckInSection) Validate() error {
+	switch c.StreamSignature {
+	case "", StreamSigAll, StreamSigHandshakeOnly:
+		return nil
+	default:
+		return fmt.Errorf("checkin.stream_signature must be \"all\" or \"handshake-only\" (got %q)", c.StreamSignature)
+	}
 }
 
 // ConditionalBlock groups resources under a shared when expression.
