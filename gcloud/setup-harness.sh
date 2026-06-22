@@ -39,29 +39,36 @@ cat >/etc/security/limits.d/99-vigo-harness.conf <<'EOF'
 * hard nofile 1048576
 EOF
 
+# Persistent state dir: the per-envoy keys (the manifest) MUST survive a reboot,
+# else the server's enrolled envoys are orphaned (no keys here to re-stream them).
+# /tmp is cleared on reboot — do NOT put the manifest there. World-writable so the
+# (non-root) run user can write it.
+install -d -m1777 /var/lib/vigo-fakefleet
+
 cat <<'EOF'
 
 == Done ==
-Re-ssh so the nofile limit applies, then (SRV_IP = vigo-srv internal IP):
+Re-ssh so the nofile limit applies, then (SRV_IP = vigo-srv internal IP).
+State manifest lives at /var/lib/vigo-fakefleet/state.json (survives reboot):
 
   ulimit -n 1048576
+  STATE=/var/lib/vigo-fakefleet/state.json
 
-  # --server is the gRPC address (host:1530). --skip-publish is REQUIRED
-  # off-box: publish writes the server's local /srv/vigo, which this box can't
-  # reach, so envoys enroll over gRPC and converge against the server's seeded
-  # .live (an empty/default bundle is fine — we're testing connection count).
+  # --server is the gRPC address (host:1530). --skip-publish is REQUIRED off-box:
+  # publish writes the server's local /srv/vigo, unreachable from here — envoys
+  # enroll over gRPC and converge against the server's published .live.
   #
-  # create DETACHED — a force-backgrounded foreground create cancels its
-  # enroll context mid-publish and wedges the SQLite writer.
-  setsid vigo-fakefleet create --count 60000 --server SRV_IP:1530 --skip-publish \
-    >/tmp/create.log 2>&1 < /dev/null &
-  tail -f /tmp/create.log        # wait for enroll to finish
+  # create DETACHED — a force-backgrounded foreground create cancels its enroll
+  # context mid-publish and wedges the SQLite writer.
+  setsid vigo-fakefleet create --count 60000 --skip-publish --server SRV_IP:1530 \
+    --api https://SRV_IP:8443 --state "$STATE" >/var/lib/vigo-fakefleet/create.log 2>&1 < /dev/null &
+  tail -f /var/lib/vigo-fakefleet/create.log     # wait for enroll to finish
 
   # hold the streams:
-  vigo-fakefleet run --stream --server SRV_IP:1530 --cadence 1s --report-cadence 1m
+  vigo-fakefleet run --stream --server SRV_IP:1530 --state "$STATE" --cadence 1s --report-cadence 1m
 
-  # teardown (deletes lag a few minutes):
-  vigo-fakefleet backout --server SRV_IP:1530
+  # teardown (needs the admin token; deletes lag a few minutes):
+  vigo-fakefleet backout --server SRV_IP:1530 --api https://SRV_IP:8443 --state "$STATE" --admin-token "$(token)"
 
 Monitor on the SERVER (never loop docker logs/stats under load):
   watch -n2 'curl -sk https://127.0.0.1:8443/metrics | grep -E "vigo_streams_active|stream_connect|status=\"shed\""'
