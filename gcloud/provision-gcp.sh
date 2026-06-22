@@ -166,6 +166,12 @@ fi
 echo "== Copying scripts + binaries to the VMs (via IAP) =="
 scp_iap "${SCRIPT_DIR}/setup-server.sh"  vigo-srv
 scp_iap "/tmp/vigo-version"              vigo-srv
+# Demo config tree (configcrates/roles/usercrates/hostcrates) for realistic
+# bundles — recursive copy to /tmp/demo-stacks on the server.
+g compute scp --recurse "${SCRIPT_DIR}/demo-stacks" vigo-srv:/tmp/ \
+  --zone="$ZONE" --tunnel-through-iap --quiet \
+  && echo "  ok: demo-stacks -> vigo-srv:/tmp/demo-stacks" \
+  || echo "  ! demo-stacks copy failed — server will fall back to empty bundles" >&2
 scp_iap "${SCRIPT_DIR}/setup-harness.sh" vigo-test-harness
 scp_iap "/tmp/vigo-fakefleet"            vigo-test-harness
 scp_iap "/tmp/vigocli"                   vigo-test-harness

@@ -1,0 +1,21 @@
+#~ Cache tier — Redis.
+name: cache
+description: Redis in-memory cache servers
+
+compliance:
+  provides: [host-firewall]
+
+resources:
+  - name: redis
+    type: package
+    package: redis-server
+    state: present
+    when: "os_family('linux')"
+
+  - name: redis-service
+    type: service
+    service: redis-server
+    enabled: true
+    state: running
+    depends_on: [redis]
+    when: "os_family('linux')"

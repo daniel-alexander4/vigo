@@ -1,0 +1,53 @@
+#~ Demo hostcrates for fakefleet synthetic envoys. First match wins, top to bottom.
+#~ fakefleet hostnames are <class>-<env>-<zone>-NNN (and worker-<class>-<env>-<zone>-NNNNN);
+#~ "*<class>-*" matches both the named and worker variants (filepath.Match, * spans '-').
+#~ Every class maps to its service tier; the trailing "*" catch-all gives anything
+#~ else (incl. the server's own envoy) the baseline, so no envoy gets an empty bundle.
+envoys:
+  # ── web tier ──
+  - match: "*web-*"
+    roles: [web]
+  - match: "*app-*"
+    roles: [web]
+  - match: "*nginx-*"
+    roles: [web]
+  - match: "*apache-*"
+    roles: [web]
+  - match: "*tomcat-*"
+    roles: [web]
+  - match: "*haproxy-*"
+    roles: [web]
+
+  # ── database tier ──
+  - match: "*postgres-*"
+    roles: [database]
+  - match: "*mysql-*"
+    roles: [database]
+  - match: "*mariadb-*"
+    roles: [database]
+  - match: "*mongo-*"
+    roles: [database]
+
+  # ── cache tier ──
+  - match: "*redis-*"
+    roles: [cache]
+  - match: "*memcached-*"
+    roles: [cache]
+
+  # ── message-queue tier ──
+  - match: "*kafka-*"
+    roles: [message-queue]
+  - match: "*rabbitmq-*"
+    roles: [message-queue]
+
+  # ── monitoring tier ──
+  - match: "*prometheus-*"
+    roles: [monitoring]
+  - match: "*grafana-*"
+    roles: [monitoring]
+  - match: "*bastion-*"
+    roles: [monitoring]
+
+  # ── catch-all baseline ──
+  - match: "*"
+    roles: [base]

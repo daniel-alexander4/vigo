@@ -1,0 +1,21 @@
+#~ Message-queue tier — RabbitMQ.
+name: message-queue
+description: RabbitMQ message brokers
+
+compliance:
+  provides: [host-firewall, log-rotation]
+
+resources:
+  - name: queue-broker
+    type: package
+    package: rabbitmq-server
+    state: present
+    when: "os_family('linux')"
+
+  - name: queue-service
+    type: service
+    service: rabbitmq-server
+    enabled: true
+    state: running
+    depends_on: [queue-broker]
+    when: "os_family('linux')"

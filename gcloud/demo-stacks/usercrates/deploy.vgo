@@ -1,0 +1,9 @@
+#~ Demo deploy user — included fleet-wide via the `base` role's usercrates:.
+#~ Shape rule: exactly one `type: user` resource per usercrate file.
+name: deploy
+resources:
+  - name: deploy
+    type: user
+    state: present
+    username: deploy
+    comment: "Vigo fakefleet demo deploy user"

@@ -1,0 +1,26 @@
+#~ Demo roles for fakefleet load testing. Each tier role layers its service
+#~ configcrate on top of the shared `base` (which also carries the deploy user).
+roles:
+  - name: base
+    configcrates: [base]
+    usercrates: [deploy]
+
+  - name: web
+    includes: [base]
+    configcrates: [web]
+
+  - name: database
+    includes: [base]
+    configcrates: [database]
+
+  - name: cache
+    includes: [base]
+    configcrates: [cache]
+
+  - name: message-queue
+    includes: [base]
+    configcrates: [message-queue]
+
+  - name: monitoring
+    includes: [base]
+    configcrates: [monitoring]

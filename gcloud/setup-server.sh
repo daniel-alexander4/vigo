@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Set up vigo-srv: install Docker, authenticate to Artifact Registry, seed
-# config, tune for the load test, and run the vigosrv container. Initializes +
-# unlocks the secrets vault (so the operator can create a web user immediately)
-# but leaves the web-user creation itself to the operator. Prints the UI URL,
-# vault passphrase, and the create-user commands at the end.
+# Set up vigo-srv: install Docker, authenticate to Artifact Registry, set a
+# short hostname, seed config, tune server.yaml (max_concurrent, 1s check-in,
+# server.hostname), run vigosrv, and publish the demo fakefleet config tree
+# (/tmp/demo-stacks → configcrates/roles/usercrates/hostcrates) so synthetic
+# envoys converge against real bundles. Initializes + unlocks the secrets vault
+# so the operator can create a web user immediately, then prints the UI URL,
+# vault passphrase, and create-user commands. Web-user creation is left to you.
 #
 # Normally run by provision-gcp.sh (which writes /tmp/vigo-version and invokes
 # this over IAP). To run standalone:
@@ -55,6 +57,17 @@ echo "== Host FD ceiling (one FD per held stream) =="
 echo 'fs.file-max=2097152' >/etc/sysctl.d/99-vigo.conf
 sysctl --system >/dev/null
 
+echo "== Short hostname (so the local agent enrolls short, not GCP's FQDN) =="
+# GCP sets the kernel hostname to the FQDN via metadata + cloud-init
+# (preserve_hostname: false). Set it short and stop cloud-init/guest-agent
+# resetting it — BEFORE vigosrv starts (server.hostname must match) and before
+# any loopback agent bootstrap. `hostname -s` is the first label of the FQDN.
+SHORT_HOST="$(hostname -s)"
+hostnamectl set-hostname "$SHORT_HOST"
+mkdir -p /etc/cloud/cloud.cfg.d
+echo 'preserve_hostname: true' > /etc/cloud/cloud.cfg.d/99-vigo-preserve-hostname.cfg
+echo "  hostname set to ${SHORT_HOST}"
+
 echo "== Authenticate Docker to Artifact Registry (VM service-account token) =="
 TOKEN=$(curl -s -H "Metadata-Flavor: Google" \
   "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
@@ -72,6 +85,8 @@ echo "== Tune server.yaml =="
 # yq creates the key/parent if absent. trusted_enrollment already covers
 # RFC1918 (10.17.17.0/24) by default, so fakefleet enrolls tokenlessly.
 yq -i ".checkin.max_concurrent = ${MAX_CONCURRENT}" "$DATA/server.yaml"
+yq -i '.checkin.interval = "1s"' "$DATA/server.yaml"               # fast cadence for load testing
+yq -i ".server.hostname = \"${SHORT_HOST}\"" "$DATA/server.yaml"   # match the short OS hostname
 
 echo "== Web-user credentials (persisted root-only for idempotent re-runs) =="
 CREDS="${DATA}/.loadtest-creds"
@@ -115,6 +130,19 @@ for _ in $(seq 1 30); do
 done
 docker logs vigo 2>&1 | grep -iE "max_connections|listening|started" | tail -5 || true
 
+echo "== Publish demo fakefleet config (configcrates/roles/usercrates/hostcrates) =="
+# Replace the seeded starter stacks with the demo tree so synthetic envoys match
+# a hostcrate and converge against a real (non-empty) bundle — exercising the
+# CPU-heavy bundle-build path the load test is meant to stress. Then publish.
+if [ -d /tmp/demo-stacks ]; then
+  rm -rf "${DATA}/stacks"/*
+  cp -a /tmp/demo-stacks/. "${DATA}/stacks/"
+  vigocli config publish && echo "  demo config published" \
+    || echo "  ! demo config publish failed — see output above" >&2
+else
+  echo "  (no /tmp/demo-stacks copied — synthetic envoys will get empty bundles)"
+fi
+
 echo "== Server ready — web-user creation left to the operator =="
 
 EXT_IP="$(curl -s -H 'Metadata-Flavor: Google' \
@@ -128,14 +156,9 @@ printf '  %sVault:%s    unlocked  %s(passphrase %s , root-only at %s)%s\n' \
 printf '%s  Create your web user (vault is already unlocked):%s\n' "$C_BOLD" "$C_RST"
 printf '    %sviewer%s (enough to watch the run):  %svigocli webusers create --username %s --role viewer%s\n' \
   "$C_GREEN" "$C_RST" "$C_YELLOW" "$OSUSER" "$C_RST"
-printf '    %sadmin%s needs a loopback-enrolled local agent AND server.hostname set to that\n' \
-  "$C_GREEN" "$C_RST"
-printf '          agent'"'"'s EXACT enrolled hostname (its FQDN), then a container restart:\n'
-printf '          %scurl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh%s   # note the enrolled hostname\n' \
-  "$C_TEAL" "$C_RST"
-printf '          %ssudo yq -i '"'"'.server.hostname = "<that-fqdn>"'"'"' /srv/vigo/server.yaml%s\n' \
-  "$C_TEAL" "$C_RST"
-printf '          %ssudo docker restart vigo%s ; then vigocli webusers create --username %s --role admin\n' \
-  "$C_TEAL" "$C_RST" "$OSUSER"
+printf '    %sadmin%s: server.hostname is already set to %s%s%s — just enroll the local agent, then create:\n' \
+  "$C_GREEN" "$C_RST" "$C_YELLOW" "$SHORT_HOST" "$C_RST"
+printf '          %scurl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh%s\n' "$C_TEAL" "$C_RST"
+printf '          %svigocli webusers create --username %s --role admin%s\n' "$C_TEAL" "$OSUSER" "$C_RST"
 printf '  %sMetrics:%s  %scurl -sk https://127.0.0.1:8443/metrics | grep vigo_streams_active%s\n' \
   "$C_MAUVE" "$C_RST" "$C_TEAL" "$C_RST"

@@ -1,0 +1,34 @@
+#~ Web tier — nginx with a hardened baseline.
+name: web
+description: Web servers (nginx) with a hardened baseline
+
+compliance:
+  provides: [host-firewall, login-banner]
+
+resources:
+  - name: nginx
+    type: package
+    package: nginx
+    state: present
+    when: "os_family('linux')"
+
+  - name: web-hardening
+    type: file
+    state: present
+    target_path: "/etc/nginx/conf.d/hardening.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # managed by vigo
+      server_tokens off;
+    notify: [nginx-service]
+    when: "os_family('linux')"
+
+  - name: nginx-service
+    type: service
+    service: nginx
+    enabled: true
+    state: running
+    depends_on: [nginx]
+    when: "os_family('linux')"

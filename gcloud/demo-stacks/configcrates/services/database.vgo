@@ -1,0 +1,21 @@
+#~ Database tier — PostgreSQL.
+name: database
+description: PostgreSQL database servers
+
+compliance:
+  provides: [host-backup, file-integrity]
+
+resources:
+  - name: postgresql
+    type: package
+    package: postgresql
+    state: present
+    when: "os_family('linux')"
+
+  - name: postgresql-service
+    type: service
+    service: postgresql
+    enabled: true
+    state: running
+    depends_on: [postgresql]
+    when: "os_family('linux')"

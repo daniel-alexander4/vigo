@@ -1,0 +1,21 @@
+#~ Baseline configcrate — applied to every synthetic envoy via the `base` role.
+name: base
+description: Fleet-wide baseline (common packages + a managed MOTD)
+
+resources:
+  - name: ca-certificates
+    type: package
+    package: ca-certificates
+    state: present
+    when: "os_family('linux')"
+
+  - name: base-motd
+    type: file
+    state: present
+    target_path: "/etc/motd"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # managed by vigo — fakefleet load-test fleet
+    when: "os_family('linux')"

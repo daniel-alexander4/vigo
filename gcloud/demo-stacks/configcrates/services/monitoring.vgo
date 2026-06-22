@@ -1,0 +1,21 @@
+#~ Monitoring tier — Prometheus node exporter.
+name: monitoring
+description: Prometheus node exporter + alerting baseline
+
+compliance:
+  provides: [alerting, audit-trail]
+
+resources:
+  - name: node-exporter
+    type: package
+    package: prometheus-node-exporter
+    state: present
+    when: "os_family('linux')"
+
+  - name: node-exporter-service
+    type: service
+    service: prometheus-node-exporter
+    enabled: true
+    state: running
+    depends_on: [node-exporter]
+    when: "os_family('linux')"
