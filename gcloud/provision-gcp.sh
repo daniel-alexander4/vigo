@@ -53,6 +53,15 @@ done
 command -v gcloud >/dev/null || { echo "gcloud not in PATH" >&2; exit 1; }
 command -v go     >/dev/null || { echo "go not in PATH (needed to build the harness binaries)" >&2; exit 1; }
 
+# Catppuccin Mocha, 24-bit RGB. Set NO_COLOR=1 to disable.
+if [ -z "${NO_COLOR:-}" ]; then
+  C_GREEN=$'\033[38;2;166;227;161m' C_BLUE=$'\033[38;2;137;180;250m'
+  C_YELLOW=$'\033[38;2;249;226;175m' C_MAUVE=$'\033[38;2;203;166;247m'
+  C_TEAL=$'\033[38;2;148;226;213m' C_BOLD=$'\033[1m' C_RST=$'\033[0m'
+else
+  C_GREEN= C_BLUE= C_YELLOW= C_MAUVE= C_TEAL= C_BOLD= C_RST=
+fi
+
 g() { gcloud --project="$PROJECT" "$@"; }
 
 # scp a file to a VM over IAP, retrying while the freshly-booted VM's IAP SSH
@@ -175,14 +184,14 @@ fi
 
 cat <<EOF
 
-== Done ==
-Server version:     ${VERSION}
-Server internal IP: ${SRV_IP}   (harness dials this on :1530 / :8443)
-$([ -n "$EXT_IP" ] && echo "Web UI:             https://${EXT_IP}:8443   (needs a webuser; create one on vigo-srv)")
+${C_BOLD}${C_GREEN}== Done ==${C_RST}
+${C_MAUVE}Server version:${C_RST}     ${C_YELLOW}${VERSION}${C_RST}
+${C_MAUVE}Server internal IP:${C_RST} ${C_YELLOW}${SRV_IP}${C_RST}   (harness dials this on :1530 / :8443)
+$([ -n "$EXT_IP" ] && printf '%sWeb UI:%s             %s%s%s   (login printed by setup-server.sh above)' "$C_MAUVE" "$C_RST" "$C_BLUE" "https://${EXT_IP}:8443" "$C_RST")
 $([ "$RUN_SETUP" -eq 1 ] && echo "Both VMs provisioned: vigosrv running, harness installed." \
                           || echo "Scripts + binaries copied to /tmp/; run setup yourself (see --no-setup).")
 
-Run the test from the harness:
+${C_BOLD}Run the test from the harness:${C_RST}
   gcloud compute ssh vigo-test-harness --zone=${ZONE} --tunnel-through-iap
   ulimit -n 1048576
   setsid vigo-fakefleet create --count 60000 --server ${SRV_IP}:1530 --skip-publish \\

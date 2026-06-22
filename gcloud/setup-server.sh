@@ -22,6 +22,19 @@ DATA=/srv/vigo
 MAX_CONCURRENT="${MAX_CONCURRENT:-2000}"   # admit rate during the connect storm
 
 [ "$(id -u)" -eq 0 ] || { echo "run as root (sudo)" >&2; exit 1; }
+
+# Catppuccin Mocha, 24-bit RGB. Set NO_COLOR=1 to disable.
+if [ -z "${NO_COLOR:-}" ]; then
+  C_GREEN=$'\033[38;2;166;227;161m'   # success / headings
+  C_BLUE=$'\033[38;2;137;180;250m'    # URL
+  C_YELLOW=$'\033[38;2;249;226;175m'  # credentials
+  C_MAUVE=$'\033[38;2;203;166;247m'   # labels
+  C_TEAL=$'\033[38;2;148;226;213m'    # hints
+  C_BOLD=$'\033[1m'; C_RST=$'\033[0m'
+else
+  C_GREEN= C_BLUE= C_YELLOW= C_MAUVE= C_TEAL= C_BOLD= C_RST=
+fi
+
 echo "== Server image: ${IMAGE} =="
 
 echo "== Docker (egress via Cloud NAT) =="
@@ -120,8 +133,11 @@ EXT_IP="$(curl -s -H 'Metadata-Flavor: Google' \
   http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip 2>/dev/null || true)"
 
 echo
-echo "== Done =="
-[ -n "$EXT_IP" ] && echo "  Web UI:   https://${EXT_IP}:8443"
-echo "  Login:    ${OSUSER} / ${WEB_PASS}"
-echo "  Vault passphrase: ${VAULT_PASS}   (creds saved root-only at ${CREDS})"
-echo "  Metrics:  curl -sk https://127.0.0.1:8443/metrics | grep vigo_streams_active"
+printf '%s%s== Web access ==%s\n' "$C_BOLD" "$C_GREEN" "$C_RST"
+[ -n "$EXT_IP" ] && printf '  %sWeb UI:%s   %s%s%s\n' "$C_MAUVE" "$C_RST" "$C_BLUE" "https://${EXT_IP}:8443" "$C_RST"
+printf '  %sUsername:%s %s%s%s\n'  "$C_MAUVE" "$C_RST" "$C_YELLOW$C_BOLD" "$OSUSER"    "$C_RST"
+printf '  %sPassword:%s %s%s%s\n'  "$C_MAUVE" "$C_RST" "$C_YELLOW$C_BOLD" "$WEB_PASS"  "$C_RST"
+printf '  %sVault:%s    %s%s%s   %s(creds root-only at %s)%s\n' \
+  "$C_MAUVE" "$C_RST" "$C_YELLOW" "$VAULT_PASS" "$C_RST" "$C_TEAL" "$CREDS" "$C_RST"
+printf '  %sMetrics:%s  %scurl -sk https://127.0.0.1:8443/metrics | grep vigo_streams_active%s\n' \
+  "$C_MAUVE" "$C_RST" "$C_TEAL" "$C_RST"
