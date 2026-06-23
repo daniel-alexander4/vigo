@@ -785,29 +785,30 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// decision), so the agent treats absence as off and we must emit
 	// swarm_hostdox_enabled=true when it should be ON. Off ⇒ omit.
 	gates := map[string]any{}
-	swarmAllowed := config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Enabled)
+	sc := s.swarmConfig() // one race-free snapshot for all the gating reads below
+	swarmAllowed := config.HostMatchesPatterns(envoy.Hostname, sc.Enabled)
 	if !swarmAllowed {
 		gates["swarm_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Puddle.Enabled) {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, sc.Puddle.Enabled) {
 		gates["swarm_puddle_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Gitback.Enabled) {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, sc.Gitback.Enabled) {
 		gates["swarm_gitback_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Curator.Enabled) {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, sc.Curator.Enabled) {
 		gates["swarm_curator_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Poolq.Enabled) {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, sc.Poolq.Enabled) {
 		gates["swarm_poolq_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Longdrawer.Enabled) {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, sc.Longdrawer.Enabled) {
 		gates["swarm_longdrawer_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Filecast.Enabled) {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, sc.Filecast.Enabled) {
 		gates["swarm_filecast_enabled"] = false
 	}
-	if swarmAllowed && s.swarmCfg.Hostdox {
+	if swarmAllowed && sc.Hostdox {
 		gates["swarm_hostdox_enabled"] = true
 	}
 	if err := injectServerVars(bundle, gates); err != nil {

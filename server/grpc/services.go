@@ -80,16 +80,16 @@ type AgentService struct {
 	// when an agent reports a version that differs from the version known for
 	// THAT agent's arch. See bootstrap.detectAgentVersions for population.
 	serverVersions    map[string]string
-	agentBinAvailable func() bool              // checks whether at least one agent binary exists for distribution
-	auditWriter       auditRecorder            // tamper-evident audit writer (nil-safe)
-	workflowTrigger   workflowTriggerer        // auto-trigger workflows on trait changes (nil-safe)
-	streamEdit        config.StreamEditSection // stream_edit guardrails config
-	globalObserveOnly bool                     // global observe-only from server.yaml
-	relaxStreamSig    bool                     // checkin.stream_signature: handshake-only — skip re-verifying the stream owner's own held-stream messages
-	tunnelMgr         *tunnelManager           // Scrier tunnel manager (nil when disabled)
-	peerTracker       *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
-	manifestStore     *swarm.ManifestStore     // swarm manifest CRDT (nil when swarm disabled)
-	swarmCfg          config.SwarmSection      // swarm config section (subsystem blacklists, etc.)
+	agentBinAvailable func() bool                         // checks whether at least one agent binary exists for distribution
+	auditWriter       auditRecorder                       // tamper-evident audit writer (nil-safe)
+	workflowTrigger   workflowTriggerer                   // auto-trigger workflows on trait changes (nil-safe)
+	streamEdit        config.StreamEditSection            // stream_edit guardrails config
+	globalObserveOnly bool                                // global observe-only from server.yaml
+	relaxStreamSig    bool                                // checkin.stream_signature: handshake-only — skip re-verifying the stream owner's own held-stream messages
+	tunnelMgr         *tunnelManager                      // Scrier tunnel manager (nil when disabled)
+	peerTracker       *swarm.PeerTracker                  // swarm peer tracker (nil when swarm disabled)
+	manifestStore     *swarm.ManifestStore                // swarm manifest CRDT (nil when swarm disabled)
+	swarmCfg          atomic.Pointer[config.SwarmSection] // swarm config section; atomic so per-request gating reads don't race the config-reload writer (SetSwarmConfig)
 	// curatorCatalog holds the JSON-encoded fleet artifact catalog (ADR-024) —
 	// the same `[]curatormesh.CatalogEntry` the curator feed reactor (server/main.go)
 	// produces every cycle for the swarm.ManifestStore feed. Attached verbatim to
@@ -259,10 +259,19 @@ type manifestCacheEntry struct {
 // gates (e.g., gitback/lockbox blacklists) can be consulted at
 // check-in time. Called at construction and on every config reload.
 func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
-	s.swarmCfg = sc
+	s.swarmCfg.Store(&sc)
 	// Rebuild the fleet-global runtime-limits proto once here (not per check-in);
 	// the check-in path then returns it by pointer via buildSwarmRuntimeLimits.
 	s.swarmRuntimeLimits.Store(buildSwarmRuntimeLimitsFrom(sc))
+}
+
+// swarmConfig returns the current swarm config section (the zero value before
+// SetSwarmConfig has run / when swarm is disabled), loaded race-free.
+func (s *AgentService) swarmConfig() config.SwarmSection {
+	if sc := s.swarmCfg.Load(); sc != nil {
+		return *sc
+	}
+	return config.SwarmSection{}
 }
 
 // SetCuratorCatalog stores the JSON-encoded fleet artifact catalog the curator

@@ -4,11 +4,50 @@
 package grpc
 
 import (
+	"sync"
 	"testing"
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/swarm"
 )
+
+// TestSwarmConfig_NoRaceUnderReload exercises the swarmCfg reload race head-on:
+// a config-reload writer (SetSwarmConfig) concurrent with the per-request gating
+// readers (swarmConfig / buildSwarmRuntimeLimits). With swarmCfg as an
+// atomic.Pointer this is race-clean; run under -race to prove it.
+func TestSwarmConfig_NoRaceUnderReload(t *testing.T) {
+	s := &AgentService{}
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	wg.Add(1)
+	go func() { // reload writer
+		defer wg.Done()
+		for i := 0; i < 2000; i++ {
+			var sc config.SwarmSection
+			sc.Filecast.MaxSizeBytes = int64(i)
+			s.SetSwarmConfig(sc)
+		}
+		close(stop)
+	}()
+
+	for r := 0; r < 4; r++ { // concurrent gating readers
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					_ = s.swarmConfig()
+					_ = s.buildSwarmRuntimeLimits()
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
 
 // TestCollectManifestEntries_CachesByVersion verifies the Lever-D manifest cache:
 // the built proto slice is reused (same proto pointers) while ManifestStore
