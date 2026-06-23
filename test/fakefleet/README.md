@@ -39,8 +39,13 @@ thousands of fake envoys has no place in the production admin CLI.
   - `stacks/<fleet-dir>/<cloud>/environments.vgo` — per-environment
     overrides (prod adds fleet-wide monitoring + a stricter `log_level`;
     stage/test differ in vars), kept inside the harness-owned cloud dirs.
-- **Per-host traits** (os/distro/arch/cloud/region/az/instance) sent
-  inline on every check-in. Outcomes are spread across the fleet:
+- **Per-host traits** (os/distro/arch/cloud/region/az/instance) sent as a
+  faithful ADR-033 split agent: a ~5 KB volatile **vitals** blob every
+  check-in plus a realistic ~280 KB stable **inventory** (shared bulk merged
+  with the per-host identity, shipped only on first contact / a server resend
+  request), so the load test exercises the server's real per-tick reconstruct
+  + shallow-parse cost and per-envoy inventory-cache RAM instead of a toy
+  ~350 B payload. Outcomes are spread across the fleet:
   `--broken` (default 20) report a failing resource (→ Failed) and
   `--changed` (default 500) report drift (→ Changed/Diverged), so the
   Degraded/Failed/drift pills, risk, and alerts show realistic non-green

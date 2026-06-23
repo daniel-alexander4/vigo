@@ -36,6 +36,7 @@ func runStream(cfg config) {
 		}
 		die("load state: %v", err)
 	}
+	loadPayloads(st)
 	n := len(st.Hosts)
 	if n == 0 {
 		die("manifest has no hosts — run `create` first")
@@ -123,18 +124,22 @@ func streamEnvoy(ctx context.Context, cfg config, h *hostState, deltaMs uint32, 
 	var cancel context.CancelFunc
 	var pv0 uint64
 	var fp0 string
+	var resend0 bool
 	var bo streamBackoff
 	for {
 		var err error
 		sctx, cancel = context.WithCancel(ctx)
 		if stream, err = client.AgentStream(sctx); err == nil {
+			// The handshake CheckIn ships the full inventory so the server
+			// caches it; steady-state ticks then send vitals-only until a
+			// resend is requested.
 			if err = stream.Send(&pb.AgentStreamMessage{
-				Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: buildCheckInReq(h, deltaMs, 0, "")},
+				Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: buildCheckInReq(h, deltaMs, 0, "", true)},
 			}); err == nil || err == io.EOF {
 				var resp *pb.ServerStreamMessage
 				if resp, err = stream.Recv(); err == nil {
 					if r := resp.GetCheckInResponse(); r != nil {
-						pv0, fp0 = r.GetPolicyVersion(), r.GetResponseFingerprint()
+						pv0, fp0, resend0 = r.GetPolicyVersion(), r.GetResponseFingerprint(), r.GetResendInventory()
 					}
 				}
 			}
@@ -171,6 +176,7 @@ func streamEnvoy(ctx context.Context, cfg config, h *hostState, deltaMs uint32, 
 	// from the handshake response above.
 	var mu sync.Mutex
 	pv, fp := pv0, fp0
+	sendInv := resend0 // handshake already shipped inventory; resend only if asked
 
 	go func() {
 		for {
@@ -187,6 +193,7 @@ func streamEnvoy(ctx context.Context, cfg config, h *hostState, deltaMs uint32, 
 				if nfp := r.GetResponseFingerprint(); nfp != "" {
 					fp = nfp
 				}
+				sendInv = r.GetResendInventory()
 				mu.Unlock()
 			}
 		}
@@ -203,10 +210,10 @@ func streamEnvoy(ctx context.Context, cfg config, h *hostState, deltaMs uint32, 
 		}
 
 		mu.Lock()
-		cpv, cfp := pv, fp
+		cpv, cfp, csend := pv, fp, sendInv
 		mu.Unlock()
 		if err := stream.Send(&pb.AgentStreamMessage{
-			Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: buildCheckInReq(h, deltaMs, cpv, cfp)},
+			Msg: &pb.AgentStreamMessage_CheckIn{CheckIn: buildCheckInReq(h, deltaMs, cpv, cfp, csend)},
 		}); err != nil {
 			c.checkinFails.Add(1)
 			return

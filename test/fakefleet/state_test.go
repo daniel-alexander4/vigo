@@ -21,23 +21,24 @@ func TestStateRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	traits := json.RawMessage(`{"os":"linux","cloud_provider":"aws"}`)
+	identity := json.RawMessage(`{"os":"linux","cloud_provider":"aws"}`)
 	in := &fleetState{
 		Version:   stateVersion,
 		Count:     1,
 		StacksDir: "/srv/vigo/stacks",
 		Hosts: []hostState{{
 			hostPlan: hostPlan{
-				Hostname:    "web-prod-use1a-001",
-				Configcrate: "web",
-				TraitsJSON:  traits,
-				Outcome:     "failed",
+				Hostname:     "web-prod-use1a-001",
+				Configcrate:  "web",
+				IdentityJSON: identity,
+				Outcome:      "failed",
 			},
-			EnvoyID:    "abc-123",
-			SigningKey: []byte(priv),
-			CertPEM:    []byte("CERT"),
-			KeyPEM:     []byte("KEY"),
-			CACertPEM:  []byte("CA"),
+			EnvoyID:       "abc-123",
+			SigningKey:    []byte(priv),
+			CertPEM:       []byte("CERT"),
+			KeyPEM:        []byte("KEY"),
+			CACertPEM:     []byte("CA"),
+			InventoryHash: "deadbeef",
 		}},
 	}
 
@@ -72,8 +73,11 @@ func TestStateRoundTrip(t *testing.T) {
 	if !ed25519.PrivateKey(h.SigningKey).Equal(priv) {
 		t.Error("reconstructed ed25519 key is not equal to the original")
 	}
-	if !bytes.Equal(h.TraitsJSON, traits) {
-		t.Errorf("traits did not round-trip: %s", h.TraitsJSON)
+	if !bytes.Equal(h.IdentityJSON, identity) {
+		t.Errorf("identity did not round-trip: %s", h.IdentityJSON)
+	}
+	if h.InventoryHash != "deadbeef" {
+		t.Errorf("inventory hash did not round-trip: %s", h.InventoryHash)
 	}
 }
 

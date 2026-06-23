@@ -39,6 +39,7 @@ func runTick(cfg config) {
 		}
 		die("load state: %v", err)
 	}
+	loadPayloads(st)
 
 	var fail, gone atomic.Int64
 	var wg sync.WaitGroup
@@ -110,27 +111,38 @@ func dialAgent(cfg config, h *hostState) (*grpc.ClientConn, pb.VigoAgentClient, 
 // AgentStreamMessage), so the signing / trait / version fields stay
 // single-sourced. A fresh timestamp + signature is minted per call so each
 // check-in lands inside the server's signature-validity window.
-func buildCheckInReq(h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string) *pb.CheckInRequest {
+//
+// ADR-033 split shape: vitals + inventory_hash ride every check-in; the legacy
+// traits_json field is left empty. The full inventory ships only when
+// sendInventory is set (first contact + a server-requested resend) — the
+// steady-state vitals-only path is what exercises the server's per-tick
+// reconstruct + shallow parse.
+func buildCheckInReq(h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string, sendInventory bool) *pb.CheckInRequest {
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
-	return &pb.CheckInRequest{
+	req := &pb.CheckInRequest{
 		EnvoyId:            h.EnvoyID,
 		PolicyVersion:      policyVersion,
 		PolicyMode:         true,
 		StateFingerprint:   fingerprint,
 		Signature:          signWith(h.signingKey(), []byte(ts)),
 		Timestamp:          timestamppb.New(now),
-		TraitsJson:         h.TraitsJSON,
+		VitalsJson:         sharedVitals,
+		InventoryHash:      h.InventoryHash,
 		AgentVersion:       agentVersion,
 		IpAddress:          h.IP,
 		LastCheckinDeltaMs: deltaMs,
 	}
+	if sendInventory {
+		req.InventoryJson = fullInventory(h)
+	}
+	return req
 }
 
-func checkInOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string) (*pb.CheckInResponse, error) {
+func checkInOnce(ctx context.Context, client pb.VigoAgentClient, h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string, sendInventory bool) (*pb.CheckInResponse, error) {
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	return client.CheckIn(cctx, buildCheckInReq(h, deltaMs, policyVersion, fingerprint))
+	return client.CheckIn(cctx, buildCheckInReq(h, deltaMs, policyVersion, fingerprint, sendInventory))
 }
 
 // reportOnce fires one envoy's ReportResult — the convergence run — for
@@ -169,7 +181,9 @@ func checkInAndReport(cfg config, h *hostState, deltaMs uint32) error {
 		return err
 	}
 	defer conn.Close()
-	resp, err := checkInOnce(context.Background(), client, h, deltaMs, 0, "")
+	// One-shot: fresh connection, the server may hold no cached inventory, so
+	// always ship the full inventory to keep the cache populated.
+	resp, err := checkInOnce(context.Background(), client, h, deltaMs, 0, "", true)
 	if err != nil {
 		return err
 	}

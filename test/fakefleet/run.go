@@ -56,6 +56,7 @@ func runRun(cfg config) {
 		}
 		die("load state: %v", err)
 	}
+	loadPayloads(st)
 	n := len(st.Hosts)
 	if n == 0 {
 		die("manifest has no hosts — run `create` first")
@@ -116,14 +117,20 @@ func runRun(cfg config) {
 			var pv uint64
 			var fp string
 			var bundle []*pb.Configcrate
+			// ADR-033 inventory gate: ship the full inventory on first contact,
+			// then only when the server asks for a resend (cache miss / restart /
+			// desync). Mirrors the real agent's InventoryGate — only a successful
+			// check-in advances it, so a failed send re-ships next tick.
+			sendInv := true
 			ticker := time.NewTicker(cfg.cadence)
 			defer ticker.Stop()
 			var lastReport time.Time // zero → report on the first tick
 			for {
-				resp, err := checkInOnce(ctx, client, h, deltaMs, pv, fp)
+				resp, err := checkInOnce(ctx, client, h, deltaMs, pv, fp, sendInv)
 				switch {
 				case err == nil:
 					checkins.Add(1)
+					sendInv = resp.GetResendInventory()
 					if v := resp.GetPolicyVersion(); v != 0 {
 						pv = v
 					}

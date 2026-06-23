@@ -22,6 +22,11 @@ type hostState struct {
 	CertPEM    []byte `json:"cert_pem"`
 	KeyPEM     []byte `json:"key_pem"`
 	CACertPEM  []byte `json:"ca_cert_pem"`
+	// InventoryHash is the stable ADR-033 inventory hash this envoy sends on
+	// every check-in (sha256 of identity ∪ shared bulk). Constant across ticks
+	// so the server's vitals-only cache lookup keeps hitting. Computed at
+	// create time.
+	InventoryHash string `json:"inventory_hash"`
 }
 
 // fleetState is the on-disk manifest. It is the harness's own record of
@@ -35,8 +40,14 @@ type fleetState struct {
 	// CleanupDirs are the exact directories create wrote (the configcrates
 	// dir + each fleet-dir cloud root). backout removes precisely these, so
 	// it never touches the operator's real config in the same fleet dir.
-	CleanupDirs []string    `json:"cleanup_dirs"`
-	Hosts       []hostState `json:"hosts"`
+	CleanupDirs []string `json:"cleanup_dirs"`
+	// InventoryBulk and Vitals are the shared ADR-033 split-traits payloads —
+	// one copy each for the whole fleet. Every envoy's inventory is its
+	// per-host identity merged with this bulk; vitals ship verbatim every tick.
+	// Stored once here so the manifest stays ~25 MB at 60k hosts, not ~13 GB.
+	InventoryBulk json.RawMessage `json:"inventory_bulk"`
+	Vitals        json.RawMessage `json:"vitals"`
+	Hosts         []hostState     `json:"hosts"`
 }
 
 const stateVersion = 1

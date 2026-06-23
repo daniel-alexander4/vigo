@@ -90,12 +90,23 @@ func runCreate(cfg config) {
 	}
 
 	st := &fleetState{
-		Version:     stateVersion,
-		Count:       len(enrolled),
-		StacksDir:   cfg.stacksDir,
-		CleanupDirs: cleanupDirs,
-		Hosts:       enrolled,
+		Version:       stateVersion,
+		Count:         len(enrolled),
+		StacksDir:     cfg.stacksDir,
+		CleanupDirs:   cleanupDirs,
+		InventoryBulk: genInventoryBulk(),
+		Vitals:        genVitals(),
+		Hosts:         enrolled,
 	}
+	// Install the shared payloads, then stamp each envoy's stable inventory
+	// hash (identity ∪ bulk) so steady-state vitals-only check-ins keep hitting
+	// the server's per-envoy inventory cache.
+	loadPayloads(st)
+	for i := range st.Hosts {
+		st.Hosts[i].InventoryHash = inventoryHashFor(&st.Hosts[i])
+	}
+	fmt.Printf("split-traits payload: inventory %d KB (shared bulk %d KB + per-host identity), vitals %d KB\n",
+		(len(st.InventoryBulk)+len(st.Hosts[0].IdentityJSON))/1024, len(st.InventoryBulk)/1024, len(st.Vitals)/1024)
 	if err := saveState(cfg.statePath, st); err != nil {
 		die("save state manifest: %v", err)
 	}

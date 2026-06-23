@@ -16,15 +16,20 @@ import (
 // except the server-assigned id and the keypair, which enrollment fills
 // in. Persisted (with those added) into the state manifest.
 type hostPlan struct {
-	Hostname    string          `json:"hostname"`
-	IP          string          `json:"ip"`
-	Cloud       string          `json:"cloud"`
-	Region      string          `json:"region"`
-	AZ          string          `json:"az"`
-	Class       string          `json:"class"`
-	Env         string          `json:"env"`
-	Configcrate string          `json:"configcrate"`
-	TraitsJSON  json.RawMessage `json:"traits_json"`
+	Hostname    string `json:"hostname"`
+	IP          string `json:"ip"`
+	Cloud       string `json:"cloud"`
+	Region      string `json:"region"`
+	AZ          string `json:"az"`
+	Class       string `json:"class"`
+	Env         string `json:"env"`
+	Configcrate string `json:"configcrate"`
+	// IdentityJSON is the per-host portion of the ADR-033 inventory — the
+	// stable identity keys (os/distro/arch/hostname/cloud/role/env) that vary
+	// per envoy. It's byte-merged with the shared inventory bulk (payload.go)
+	// to form the full inventory; the demo UI's per-host os/distro/region all
+	// come from these keys.
+	IdentityJSON json.RawMessage `json:"identity_json"`
 	// Outcome drives what this host reports each tick: "ok" (settled),
 	// "changed" (a resource re-applied → drift), or "failed" (a resource
 	// errored). Spread across the plan so the fleet shows a realistic mix.
@@ -422,7 +427,7 @@ func buildHostPlan(count, named, failed, changed int) []hostPlan {
 				workerSeq++
 				host = fmt.Sprintf("worker-%s-%s-%s-%05d", cl.cls.name, cl.env, zc, workerSeq)
 			}
-			traits, _ := json.Marshal(map[string]any{
+			identity, _ := json.Marshal(map[string]any{
 				"os":             d.os,
 				"os_family":      d.family,
 				"distro":         d.distro,
@@ -440,16 +445,16 @@ func buildHostPlan(count, named, failed, changed int) []hostPlan {
 				"environment":    cl.env,
 			})
 			plan = append(plan, hostPlan{
-				Hostname:    host,
-				IP:          fmt.Sprintf("10.%d.%d.%d", gi>>16&0xff, gi>>8&0xff, gi&0xff),
-				Cloud:       cl.r.cloud,
-				Region:      cl.r.name,
-				AZ:          cl.az,
-				Class:       cl.cls.name,
-				Env:         cl.env,
-				Configcrate: cl.cls.configcrate,
-				TraitsJSON:  traits,
-				Outcome:     "ok",
+				Hostname:     host,
+				IP:           fmt.Sprintf("10.%d.%d.%d", gi>>16&0xff, gi>>8&0xff, gi&0xff),
+				Cloud:        cl.r.cloud,
+				Region:       cl.r.name,
+				AZ:           cl.az,
+				Class:        cl.cls.name,
+				Env:          cl.env,
+				Configcrate:  cl.cls.configcrate,
+				IdentityJSON: identity,
+				Outcome:      "ok",
 			})
 			gi++
 		}
