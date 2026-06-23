@@ -245,7 +245,14 @@ func TestFlattenForIndex(t *testing.T) {
 			map[string]any{"name": "openssl", "version": "3.0"},
 		},
 		"cert_lifecycle": map[string]any{
-			"certificates": []any{map[string]any{"not_after": "2027-01-01"}},
+			"certificates": []any{map[string]any{
+				"not_after": "2027-01-01",
+				"cn":        "svc.example.com",
+				"issuer":    "Example CA",
+				"path":      "/etc/ssl/svc.pem",
+				"is_ca":     false,
+				"sans":      []any{"a.example.com", "b.example.com"},
+			}},
 		},
 		"security_scan": map[string]any{
 			"cves": []any{map[string]any{"id": "CVE-2024-1", "severity": "high"}},
@@ -279,6 +286,19 @@ func TestFlattenForIndex(t *testing.T) {
 	for _, k := range want {
 		if _, ok := flat[k]; !ok {
 			t.Errorf("preserved key dropped from flattened map: %q", k)
+		}
+	}
+	// Lever 1c: cert detail beyond not_after is pruned from the in-memory map
+	// (served on demand from the DB by EnvoyCertDetails).
+	for _, k := range []string{
+		"cert_lifecycle.certificates.0.cn",
+		"cert_lifecycle.certificates.0.issuer",
+		"cert_lifecycle.certificates.0.path",
+		"cert_lifecycle.certificates.0.is_ca",
+		"cert_lifecycle.certificates.0.sans.0",
+	} {
+		if _, ok := flat[k]; ok {
+			t.Errorf("cert detail key should be pruned from flattened map: %q", k)
 		}
 	}
 }

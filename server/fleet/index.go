@@ -1774,9 +1774,47 @@ func FlattenForIndex(parsed map[string]any) map[string]string {
 	for _, k := range indexDeadInventoryKeys {
 		delete(parsed, k)
 	}
+	pruneCertDetailForIndex(parsed)
 	flat := make(map[string]string)
 	FlattenJSON("", parsed, flat)
 	return flat
+}
+
+// pruneCertDetailForIndex strips each cert_lifecycle.certificates[] object down to
+// its not_after timestamp before flattening into EnvoyState.Traits (Lever 1c). The
+// fleet-wide hot consumers (CertExpirySummary, risk classifyCertExpiry) read only
+// not_after to derive expiry buckets; the full per-cert detail (path/cn/issuer/
+// is_ca/sans — ~5/6 of the family's ~60 KB/envoy) is served on demand from the DB
+// JSON by EnvoyCertDetails alone, so it need not sit in the in-memory map. The
+// agent emits not_after plus an `expires` back-compat alias; prefer not_after,
+// fall back to expires. The DB JSON keeps the full records (this mutates only the
+// parsed copy headed for the flattened map). cert_lifecycle stays OUT of
+// indexDeadInventoryKeys — it is pruned, not dropped (not_after must survive).
+func pruneCertDetailForIndex(parsed map[string]any) {
+	cl, ok := parsed["cert_lifecycle"].(map[string]any)
+	if !ok {
+		return
+	}
+	certs, ok := cl["certificates"].([]any)
+	if !ok {
+		return
+	}
+	for _, c := range certs {
+		cm, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		na := cm["not_after"]
+		if na == nil {
+			na = cm["expires"]
+		}
+		for k := range cm {
+			delete(cm, k)
+		}
+		if na != nil {
+			cm["not_after"] = na
+		}
+	}
 }
 
 // --- Ring buffer ---

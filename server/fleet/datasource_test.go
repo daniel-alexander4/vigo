@@ -4,9 +4,59 @@
 package fleet
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
+
+// TestCertificatesFromTraits pins the nested-JSON cert extraction that
+// EnvoyCertDetails now uses (Lever 1c: per-cert detail read from the DB JSON,
+// not the pruned in-memory flattened map). Native JSON types: is_ca bool, sans
+// []string, not_after with an expires fallback.
+func TestCertificatesFromTraits(t *testing.T) {
+	raw := `{"cert_lifecycle":{"certificates":[
+		{"path":"/etc/ssl/svc.pem","cn":"svc.example.com","issuer":"Example CA",
+		 "not_after":"2027-01-01T00:00:00Z","is_ca":false,"sans":["a.example.com","b.example.com"]},
+		{"cn":"legacy","expires":"2026-06-01T00:00:00Z","is_ca":true}
+	]}}`
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	certs := certificatesFromTraits(parsed)
+	if len(certs) != 2 {
+		t.Fatalf("got %d certs, want 2", len(certs))
+	}
+	// Cert 0: full detail, native bool + []string.
+	if got := jsonString(certs[0]["cn"]); got != "svc.example.com" {
+		t.Errorf("cn = %q", got)
+	}
+	if jsonBool(certs[0]["is_ca"]) {
+		t.Errorf("cert 0 is_ca should be false")
+	}
+	if got := jsonStringSlice(certs[0]["sans"]); !reflect.DeepEqual(got, []string{"a.example.com", "b.example.com"}) {
+		t.Errorf("sans = %v", got)
+	}
+	if got := jsonString(certs[0]["not_after"]); got != "2027-01-01T00:00:00Z" {
+		t.Errorf("not_after = %q", got)
+	}
+	// Cert 1: not_after absent → expires fallback; is_ca true.
+	if jsonString(certs[1]["not_after"]) != "" {
+		t.Errorf("cert 1 should have no not_after")
+	}
+	if got := jsonString(certs[1]["expires"]); got != "2026-06-01T00:00:00Z" {
+		t.Errorf("expires fallback = %q", got)
+	}
+	if !jsonBool(certs[1]["is_ca"]) {
+		t.Errorf("cert 1 is_ca should be true")
+	}
+
+	// Absent / malformed → nil.
+	if certificatesFromTraits(map[string]any{}) != nil {
+		t.Errorf("missing cert_lifecycle should yield nil")
+	}
+}
 
 // TestEnvoyDetailData_HeaderRowCarriesConvergence pins that the envoy
 // detail page header row is built through the canonical envoyRow

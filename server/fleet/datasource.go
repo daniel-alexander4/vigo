@@ -5,6 +5,7 @@ package fleet
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -1858,74 +1859,38 @@ func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
 // Returns the envoy's hostname alongside the rows so the caller can
 // render a header without a separate lookup.
 func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail, string, bool) {
-	const prefix = "cert_lifecycle.certificates."
+	// Hostname + existence come from the FleetIndex: a miss is a genuine
+	// unknown-envoy 404 (SecurityCerts keys its 404 off the returned ok).
 	ts, ok, _ := ds.fleet.GetEnvoyLite(envoyID)
-	if !ok || ts.Traits == nil {
+	if !ok {
 		return nil, "", false
 	}
-	// Group flattened keys by index, then materialize one CertDetail per index.
-	type rowBuf struct {
-		Path     string
-		CN       string
-		SANs     []string
-		Issuer   string
-		NotAfter string
-		IsCA     bool
+	// Per-cert detail (path/cn/issuer/is_ca/sans) is no longer held in the
+	// in-memory flattened map — Lever 1c keeps only cert_lifecycle.certificates.N
+	// .not_after there for the fleet-wide expiry buckets. Read the full nested
+	// records from the DB JSON on demand; this is a cold, per-envoy, user-
+	// triggered path. An envoy known to the fleet but with no traits row yet
+	// (enrolled, never reported) yields an empty list, NOT a 404.
+	cf, err := ds.queries.GetLatestEnvoyTraits(context.Background(), envoyID)
+	if err != nil {
+		return nil, ts.Hostname, true
 	}
-	rows := map[string]*rowBuf{}
-	getRow := func(idx string) *rowBuf {
-		if r, ok := rows[idx]; ok {
-			return r
-		}
-		r := &rowBuf{}
-		rows[idx] = r
-		return r
-	}
-	for k, v := range ts.Traits {
-		if !strings.HasPrefix(k, prefix) {
-			continue
-		}
-		rest := strings.TrimPrefix(k, prefix)
-		dot := strings.Index(rest, ".")
-		if dot < 0 {
-			continue
-		}
-		idx, field := rest[:dot], rest[dot+1:]
-		if strings.Contains(idx, ".") {
-			continue
-		}
-		r := getRow(idx)
-		switch {
-		case field == "path":
-			r.Path = v
-		case field == "cn":
-			r.CN = v
-		case field == "issuer":
-			r.Issuer = v
-		case field == "not_after", field == "expires":
-			if r.NotAfter == "" {
-				r.NotAfter = v
-			}
-		case field == "is_ca":
-			r.IsCA = v == "true"
-		case strings.HasPrefix(field, "sans."):
-			// sans.0, sans.1, … — preserve index order.
-			sanIdx, err := strconv.Atoi(strings.TrimPrefix(field, "sans."))
-			if err == nil {
-				for len(r.SANs) <= sanIdx {
-					r.SANs = append(r.SANs, "")
-				}
-				r.SANs[sanIdx] = v
-			}
-		}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(cf.Traits), &parsed); err != nil {
+		return nil, ts.Hostname, true
 	}
 
 	now := time.Now()
-	out := make([]ui.CertDetail, 0, len(rows))
-	for _, r := range rows {
+	certs := certificatesFromTraits(parsed)
+	out := make([]ui.CertDetail, 0, len(certs))
+	for _, cm := range certs {
+		notAfter := jsonString(cm["not_after"])
+		if notAfter == "" {
+			notAfter = jsonString(cm["expires"])
+		}
 		// days-remaining is derived from not_after (never a stored trait —
-		// see server/certexpiry); skip rows whose not_after won't parse.
-		days, ok := certexpiry.DaysRemaining(r.NotAfter, now)
+		// see server/certexpiry); skip certs whose not_after won't parse.
+		days, ok := certexpiry.DaysRemaining(notAfter, now)
 		if !ok {
 			continue
 		}
@@ -1942,19 +1907,14 @@ func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail,
 		if bucket == "30d" && (days < certexpiry.UrgentThreshold || days >= certexpiry.SoonThreshold) {
 			continue
 		}
-		// Strip any trailing empty slots in SANs caused by sparse indexes.
-		sans := r.SANs
-		for len(sans) > 0 && sans[len(sans)-1] == "" {
-			sans = sans[:len(sans)-1]
-		}
 		out = append(out, ui.CertDetail{
-			Path:          r.Path,
-			CN:            r.CN,
-			SANs:          sans,
-			Issuer:        r.Issuer,
-			NotAfter:      r.NotAfter,
+			Path:          jsonString(cm["path"]),
+			CN:            jsonString(cm["cn"]),
+			SANs:          jsonStringSlice(cm["sans"]),
+			Issuer:        jsonString(cm["issuer"]),
+			NotAfter:      notAfter,
 			DaysRemaining: days,
-			IsCA:          r.IsCA,
+			IsCA:          jsonBool(cm["is_ca"]),
 		})
 	}
 	// Most-urgent first: expired (most-negative) before soonest-expiring.
@@ -1962,4 +1922,51 @@ func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail,
 		return out[i].DaysRemaining < out[j].DaysRemaining
 	})
 	return out, ts.Hostname, true
+}
+
+// certificatesFromTraits returns the cert_lifecycle.certificates[] objects from
+// nested traits JSON (one DB row, unmarshaled), or nil if absent/malformed.
+func certificatesFromTraits(parsed map[string]any) []map[string]any {
+	cl, ok := parsed["cert_lifecycle"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	arr, ok := cl["certificates"].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(arr))
+	for _, c := range arr {
+		if cm, ok := c.(map[string]any); ok {
+			out = append(out, cm)
+		}
+	}
+	return out
+}
+
+// jsonString / jsonBool / jsonStringSlice coerce values from an unmarshaled
+// map[string]any (nested traits JSON), where strings/bools/arrays are native
+// types — unlike the flattened map where everything is a string.
+func jsonString(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+func jsonBool(v any) bool {
+	b, _ := v.(bool)
+	return b
+}
+
+func jsonStringSlice(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(arr))
+	for _, e := range arr {
+		if s, ok := e.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
