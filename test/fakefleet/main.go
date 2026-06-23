@@ -50,6 +50,7 @@ type config struct {
 	stacksDir         string // derived: <serverRoot>/stacks (where the fleet tree is written)
 	statePath         string
 	count             int
+	inventoryKB       int
 	namedCount        int
 	brokenCount       int
 	concurrency       int
@@ -122,6 +123,7 @@ func parseFlags(cmd string, args []string) config {
 	serverRoot := fs.String("server-root", publish.DefaultServerRoot, "server root holding stacks/, .live/, config-history/; the fleet tree is written under <root>/stacks and published with `vigocli config publish --server-root <root>`")
 	statePath := fs.String("state", "/srv/vigo/fleet/state.json", "fleet identity manifest (0600); resume reads it")
 	count := fs.Int("count", 13647, "number of envoys (create only)")
+	inventoryKB := fs.Int("inventory-kb", 0, "ADR-033 split-traits full-inventory size target in KB. create: 0 = server-realistic default (150). run/tick: 0 = use the size baked into the manifest; >0 = regenerate the bulk at this size + recompute per-host hashes in memory (a sweep without re-enrolling)")
 	named := fs.Int("named", 100, "how many keep a realistic service hostname; the rest are worker-NNNNN (create only)")
 	broken := fs.Int("broken", 20, "how many envoys report a failing resource → Failed (create only)")
 	changed := fs.Int("changed", 500, "how many envoys report drift → Changed/Diverged (create only)")
@@ -157,6 +159,7 @@ func parseFlags(cmd string, args []string) config {
 		stacksDir:         stacksDir,
 		statePath:         *statePath,
 		count:             *count,
+		inventoryKB:       *inventoryKB,
 		namedCount:        *named,
 		brokenCount:       *broken,
 		changedCount:      *changed,

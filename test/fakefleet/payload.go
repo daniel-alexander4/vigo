@@ -15,27 +15,38 @@ import (
 //
 // A real agent sends three things on the steady-state check-in: a small
 // volatile "vitals" blob every tick (~5 KB), a large stable "inventory" blob
-// only when it changes (~219–332 KB across the live fleet), and the inventory
-// hash every tick so the server can detect a cache desync. The server caches
-// the inventory PER ENVOY
-// and, on every tick, byte-concatenates it with the fresh vitals and runs ONE
-// shallow json.Unmarshal of the ~218 KB result (server/grpc/agentstream.go) —
-// before the no_change short-circuit, so the parse cost lands on every tick.
+// only when it changes, and the inventory hash every tick so the server can
+// detect a cache desync. The server caches the inventory PER ENVOY and, on
+// every tick, byte-concatenates it with the fresh vitals and runs ONE shallow
+// json.Unmarshal of the merged result (server/grpc/agentstream.go) — before
+// the no_change short-circuit, so the parse cost lands on every tick.
 //
 // The old harness sent a ~350-byte toy blob in the legacy traits_json field,
 // so that parse was unrealistically cheap and the inventory cache was never
 // exercised at all. This file makes the harness a faithful split agent so the
 // load test measures the real per-tick parse CPU and the real per-envoy
-// inventory-cache RAM (~280 KB × fleet).
+// inventory-cache RAM (≈ inventory size × fleet).
 //
-// Generator economy: the big inventory BULK and the vitals blob are SHARED
-// across all envoys (one copy each in the process), and only the small
-// per-host identity portion varies — so the generator holds ~285 KB total, not
-// ~280 KB × fleet. The server still copies the reconstructed inventory per
-// envoy, so server-side RAM stays realistic. The full per-host inventory
-// (identity ∪ bulk) is rebuilt on demand only when it's actually shipped (first
-// tick + a server-requested resend), never on the vitals-only steady-state
-// path.
+// Sizing: the fleet being simulated is 60k CLOUD SERVERS, not laptops. The
+// ADR-033 measurements were home-lab laptops (219–332 KB, package-heavy with
+// GUI/dev toolchains); a typical Linux cloud server is lighter — fewer
+// packages, no gpu/display/battery — but still carries the OS CA trust store
+// (cert_lifecycle ~60 KB). So the default target is ~150 KB (defaultInventoryKB)
+// and is tunable via --inventory-kb, scaling the `packages` array while the
+// CA-bundle-sized cert_lifecycle and the fixed collectors stay constant — so a
+// sweep maps the per-envoy RAM + parse cost as a curve, not a single guess.
+//
+// Generator economy: the inventory BULK and the vitals blob are SHARED across
+// all envoys (one copy each in the process); only the small per-host identity
+// portion varies — so the generator holds ~one bulk total, not bulk × fleet.
+// The server still copies the reconstructed inventory per envoy, so server-side
+// RAM stays realistic. The full per-host inventory (identity ∪ bulk) is rebuilt
+// on demand only when it's actually shipped (first tick + a server-requested
+// resend), never on the vitals-only steady-state path.
+
+// defaultInventoryKB is the server-realistic default full-inventory target when
+// --inventory-kb isn't given. ~150 KB models a typical Linux cloud server.
+const defaultInventoryKB = 150
 
 // sharedInventoryBulk and sharedVitals are installed once by loadPayloads at
 // the start of every drive mode and are read-only thereafter, so the
@@ -45,19 +56,36 @@ var (
 	sharedVitals        json.RawMessage
 )
 
-// loadPayloads installs the shared bulk + vitals for this process from the
-// manifest, regenerating them deterministically if an older manifest predates
-// the split-traits fields.
-func loadPayloads(st *fleetState) {
-	if len(st.InventoryBulk) > 0 {
+// loadPayloads installs the shared bulk + vitals for this process.
+//
+// overrideKB == 0: use the bulk the manifest baked at create time (the common
+// run/tick path), regenerating deterministically only if an older manifest
+// predates the split-traits fields.
+//
+// overrideKB > 0: a sweep run — regenerate the bulk at the requested size and
+// recompute every host's inventory hash IN MEMORY, so the same enrolled fleet
+// can be re-measured at a different inventory size without a re-enroll. The
+// manifest on disk is untouched; only this process's view changes.
+func loadPayloads(st *fleetState, overrideKB int) {
+	switch {
+	case overrideKB > 0:
+		sharedInventoryBulk = genInventoryBulk(overrideKB)
+	case len(st.InventoryBulk) > 0:
 		sharedInventoryBulk = st.InventoryBulk
-	} else {
-		sharedInventoryBulk = genInventoryBulk()
+	default:
+		sharedInventoryBulk = genInventoryBulk(defaultInventoryKB)
 	}
 	if len(st.Vitals) > 0 {
 		sharedVitals = st.Vitals
 	} else {
 		sharedVitals = genVitals()
+	}
+	if overrideKB > 0 {
+		// The manifest's stored hashes were computed for the old bulk; recompute
+		// against the regenerated bulk so vitals-only ticks keep hitting the cache.
+		for i := range st.Hosts {
+			st.Hosts[i].InventoryHash = inventoryHashFor(&st.Hosts[i])
+		}
 	}
 }
 
@@ -98,30 +126,23 @@ func mergeJSONObjects(a, b json.RawMessage) []byte {
 	return out
 }
 
-// genInventoryBulk builds the shared ~280 KB stable-collector blob (the live
-// fleet's full inventory ranges 219–332 KB). Content is
-// synthetic but the SHAPE is what matters for the measurement: a realistic
-// top-level key count (so the server's shallow top-level parse walks a
-// real-sized map) and a realistic byte size dominated by `packages` and
-// `cert_lifecycle`, exactly as on the live fleet. None of these keys overlap
-// the per-host identity keys (gen.go) or the vitals keys (genVitals).
-func genInventoryBulk() json.RawMessage {
+// genInventoryBulk builds the shared stable-collector blob sized so the full
+// per-host inventory (identity ∪ this bulk) lands near targetKB. The SHAPE is
+// what matters for the measurement: a realistic top-level key count (so the
+// server's shallow top-level parse walks a real-sized map) and a realistic byte
+// size dominated by `packages` and `cert_lifecycle`. cert_lifecycle and the
+// fixed collectors are size-stable on real hosts (the CA trust store + one-shot
+// facts), so only `packages` scales to hit targetKB — matching how a real
+// fleet's inventory size varies (a lean VM vs a package-heavy app server). None
+// of these keys overlap the per-host identity keys (gen.go) or the vitals keys
+// (genVitals). A target below the fixed floor (~110 KB: cert_lifecycle + the
+// other size-stable collectors) yields zero packages and lands at the floor.
+func genInventoryBulk(targetKB int) json.RawMessage {
 	m := map[string]any{}
 
-	// packages: the dominant real key (~80 KB on danlap).
-	pkgs := make([]map[string]string, 1400)
-	for i := range pkgs {
-		pkgs[i] = map[string]string{
-			"name":    fmt.Sprintf("pkg-%s-%d", pkgStems[i%len(pkgStems)], i),
-			"version": fmt.Sprintf("%d.%d.%d-%dubuntu%d", i%9, i%19, i%31, i%7, i%4),
-			"arch":    "amd64",
-			"origin":  "distro",
-		}
-	}
-	m["packages"] = pkgs
-
-	// cert_lifecycle: the second dominant real key (~63 KB on danlap).
-	certs := make([]map[string]string, 450)
+	// cert_lifecycle: ~60 KB and size-stable — it's largely the OS CA trust
+	// store (ca-certificates), as big on a server as a laptop. Does NOT scale.
+	certs := make([]map[string]string, 330)
 	for i := range certs {
 		certs[i] = map[string]string{
 			"subject":   fmt.Sprintf("CN=svc-%d.internal,O=Synthetic,C=US", i),
@@ -136,10 +157,10 @@ func genInventoryBulk() json.RawMessage {
 	// A spread of the remaining stable collectors so the top-level key count
 	// matches a real ~50-key payload. Sizes are incidental; the names mirror
 	// agent/src/traits stable_collectors().
-	m["security_scan"] = genObjArray(140, "finding", []string{"id", "severity", "title", "package"})
-	m["kernel_module_attestation"] = genObjArray(220, "module", []string{"name", "signer", "sha256", "loaded"})
-	m["package_source_audit"] = genObjArray(70, "src", []string{"package", "repo", "trusted"})
-	m["listeners"] = genObjArray(48, "listener", []string{"proto", "address", "process", "pid"})
+	m["security_scan"] = genObjArray(30, "finding", []string{"id", "severity", "title", "package"})
+	m["kernel_module_attestation"] = genObjArray(110, "module", []string{"name", "signer", "sha256", "loaded"})
+	m["package_source_audit"] = genObjArray(30, "src", []string{"package", "repo", "trusted"})
+	m["listeners"] = genObjArray(24, "listener", []string{"proto", "address", "process", "pid"})
 	m["block_devices"] = genObjArray(10, "dev", []string{"name", "model", "serial", "size_gb"})
 	m["systemd"] = genObjArray(120, "unit", []string{"name", "load", "active", "sub"})
 	m["processors"] = map[string]any{"model": "Synthetic Xeon Platinum", "cores": 8, "threads": 16, "mhz": 2600, "flags": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr"}
@@ -158,6 +179,33 @@ func genInventoryBulk() json.RawMessage {
 	m["hypervisor"] = map[string]any{"host_is_libvirt": false, "virt": "kvm"}
 	m["virtual"] = map[string]any{"is_vm": true, "technology": "kvm"}
 	m["identity"] = map[string]any{"machine_id": "00000000000000000000000000000000", "boot_id": "00000000-0000-0000-0000-000000000000"}
+
+	// packages scales to hit targetKB: measure the fixed collectors, then add
+	// however many package entries fill the remaining budget. (The result is the
+	// FULL per-host inventory target, so reserve a little for the per-host
+	// identity bytes that get merged in later.)
+	mkPkg := func(i int) map[string]string {
+		return map[string]string{
+			"name":    fmt.Sprintf("pkg-%s-%d", pkgStems[i%len(pkgStems)], i),
+			"version": fmt.Sprintf("%d.%d.%d-%dubuntu%d", i%9, i%19, i%31, i%7, i%4),
+			"arch":    "amd64",
+			"origin":  "distro",
+		}
+	}
+	fixed, _ := json.Marshal(m)
+	sample, _ := json.Marshal(mkPkg(1000))
+	perPkg := len(sample) + 1 // + the joining comma
+	const identityReserve = 400
+	remain := targetKB*1024 - len(fixed) - identityReserve - len(`,"packages":[]`)
+	n := 0
+	if remain > 0 {
+		n = remain / perPkg
+	}
+	pkgs := make([]map[string]string, n)
+	for i := range pkgs {
+		pkgs[i] = mkPkg(i)
+	}
+	m["packages"] = pkgs
 
 	b, _ := json.Marshal(m)
 	return b

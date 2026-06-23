@@ -39,7 +39,7 @@ func runTick(cfg config) {
 		}
 		die("load state: %v", err)
 	}
-	loadPayloads(st)
+	loadPayloads(st, cfg.inventoryKB)
 
 	var fail, gone atomic.Int64
 	var wg sync.WaitGroup

@@ -36,7 +36,7 @@ func runStream(cfg config) {
 		}
 		die("load state: %v", err)
 	}
-	loadPayloads(st)
+	loadPayloads(st, cfg.inventoryKB)
 	n := len(st.Hosts)
 	if n == 0 {
 		die("manifest has no hosts — run `create` first")

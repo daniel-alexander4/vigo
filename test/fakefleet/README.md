@@ -41,11 +41,16 @@ thousands of fake envoys has no place in the production admin CLI.
     stage/test differ in vars), kept inside the harness-owned cloud dirs.
 - **Per-host traits** (os/distro/arch/cloud/region/az/instance) sent as a
   faithful ADR-033 split agent: a ~5 KB volatile **vitals** blob every
-  check-in plus a realistic ~280 KB stable **inventory** (shared bulk merged
+  check-in plus a server-realistic stable **inventory** (shared bulk merged
   with the per-host identity, shipped only on first contact / a server resend
   request), so the load test exercises the server's real per-tick reconstruct
   + shallow-parse cost and per-envoy inventory-cache RAM instead of a toy
-  ~350 B payload. Outcomes are spread across the fleet:
+  ~350 B payload. The inventory size defaults to **~150 KB** (a typical Linux
+  cloud server) and is tunable with **`--inventory-kb`** — on `create` it bakes
+  the size into the manifest; on `run`/`tick` a non-zero value regenerates the
+  bulk and recomputes per-host hashes **in memory**, so you can sweep inventory
+  sizes (e.g. `run --inventory-kb 200`) against the *same* enrolled fleet
+  without re-enrolling. Outcomes are spread across the fleet:
   `--broken` (default 20) report a failing resource (→ Failed) and
   `--changed` (default 500) report drift (→ Changed/Diverged), so the
   Degraded/Failed/drift pills, risk, and alerts show realistic non-green

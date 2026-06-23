@@ -89,19 +89,23 @@ func runCreate(cfg config) {
 		fmt.Fprintf(os.Stderr, "warning: %d/%d enrollments failed (first: %s)\n", failed, len(plan), firstErr.msg)
 	}
 
+	invKB := cfg.inventoryKB
+	if invKB <= 0 {
+		invKB = defaultInventoryKB
+	}
 	st := &fleetState{
 		Version:       stateVersion,
 		Count:         len(enrolled),
 		StacksDir:     cfg.stacksDir,
 		CleanupDirs:   cleanupDirs,
-		InventoryBulk: genInventoryBulk(),
+		InventoryBulk: genInventoryBulk(invKB),
 		Vitals:        genVitals(),
 		Hosts:         enrolled,
 	}
-	// Install the shared payloads, then stamp each envoy's stable inventory
-	// hash (identity ∪ bulk) so steady-state vitals-only check-ins keep hitting
-	// the server's per-envoy inventory cache.
-	loadPayloads(st)
+	// Install the shared payloads (0 = use the bulk just baked above), then stamp
+	// each envoy's stable inventory hash (identity ∪ bulk) so steady-state
+	// vitals-only check-ins keep hitting the server's per-envoy inventory cache.
+	loadPayloads(st, 0)
 	for i := range st.Hosts {
 		st.Hosts[i].InventoryHash = inventoryHashFor(&st.Hosts[i])
 	}
