@@ -10,14 +10,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/uuid"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	"github.com/google/uuid"
 )
 
 // targetInfo holds a resolved target envoy.
 type targetInfo struct {
-	EnvoyID string
+	EnvoyID  string
 	Hostname string
 }
 
@@ -160,12 +160,30 @@ func resolveByTrait(ctx context.Context, queries *db.Queries, filter string, fi 
 	// FleetIndex fast path: inverted index lookup, zero DB queries.
 	if fi != nil {
 		fleetTargets := fi.ListByTrait(traitPath, wantValue)
-		if len(fleetTargets) == 0 {
-			return nil, fmt.Errorf("no envoys match trait filter %q", filter)
+		if len(fleetTargets) > 0 {
+			targets := make([]targetInfo, len(fleetTargets))
+			for i, ft := range fleetTargets {
+				targets[i] = targetInfo{EnvoyID: ft.EnvoyID, Hostname: ft.Hostname}
+			}
+			return targets, nil
 		}
-		targets := make([]targetInfo, len(fleetTargets))
-		for i, ft := range fleetTargets {
-			targets[i] = targetInfo{EnvoyID: ft.EnvoyID, Hostname: ft.Hostname}
+
+		// Reverse-index miss. byTrait intentionally excludes array-element
+		// leaves (hasNumericSegment) — e.g. "cves.0.id" — so a selector on
+		// such a path never hits above. Fall back to an on-demand scan of the
+		// in-memory flattened traits, which still carry every leaf, so
+		// selectors like "cves.0.id=CVE-..." keep working. Off the hot path:
+		// resolveByTrait is reached only by operator live-query / task-push,
+		// never check-in or convergence. Exact-match to mirror byTrait
+		// semantics (the values it indexes are these same flattened strings).
+		var targets []targetInfo
+		for _, es := range fi.SnapshotEnvoys() {
+			if es.Traits[traitPath] == wantValue {
+				targets = append(targets, targetInfo{EnvoyID: es.ID, Hostname: es.Hostname})
+			}
+		}
+		if len(targets) == 0 {
+			return nil, fmt.Errorf("no envoys match trait filter %q", filter)
 		}
 		return targets, nil
 	}

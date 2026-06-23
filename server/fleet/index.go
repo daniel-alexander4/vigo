@@ -1559,8 +1559,44 @@ func (f *FleetIndex) removeFromStatus(id, status string) {
 	delete(f.byStatus[status], id)
 }
 
+// hasNumericSegment reports whether any dot-separated segment of key is a
+// non-empty run of ASCII digits — i.e. key is an array-element leaf produced by
+// FlattenJSON (e.g. "cves.0.id", "packages.12.version"). Such leaves are never
+// the subject of a fleet-wide reverse lookup: the only two ListByTrait readers
+// are report.go's fixed "connwaer.<cap>.status" key and the operator key=value
+// target selector (resolveByTrait), and no surface enumerates the byTrait
+// keyspace — so indexing the thousands of array leaves a realistic inventory
+// produces is pure dead weight. They are excluded from byTrait to keep the
+// reverse index bounded to the stable, queryable keyspace; resolveByTrait falls
+// back to an on-demand scan of the (intact) flattened traits map for any key not
+// found in the index, so no selector loses coverage. Allocation-free.
+func hasNumericSegment(key string) bool {
+	start := 0
+	for i := 0; i <= len(key); i++ {
+		if i == len(key) || key[i] == '.' {
+			if i > start {
+				allDigits := true
+				for j := start; j < i; j++ {
+					if key[j] < '0' || key[j] > '9' {
+						allDigits = false
+						break
+					}
+				}
+				if allDigits {
+					return true
+				}
+			}
+			start = i + 1
+		}
+	}
+	return false
+}
+
 func (f *FleetIndex) addToTraits(id string, traits map[string]string) {
 	for key, val := range traits {
+		if hasNumericSegment(key) {
+			continue // array-element leaf — not reverse-indexed (see hasNumericSegment)
+		}
 		if f.byTrait[key] == nil {
 			f.byTrait[key] = make(map[string]map[string]bool)
 		}
@@ -1573,6 +1609,9 @@ func (f *FleetIndex) addToTraits(id string, traits map[string]string) {
 
 func (f *FleetIndex) removeFromTraits(id string, traits map[string]string) {
 	for key, val := range traits {
+		if hasNumericSegment(key) {
+			continue // never inserted by addToTraits — keep the predicate symmetric
+		}
 		if f.byTrait[key] != nil && f.byTrait[key][val] != nil {
 			delete(f.byTrait[key][val], id)
 			if len(f.byTrait[key][val]) == 0 {

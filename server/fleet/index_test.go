@@ -233,6 +233,60 @@ func TestListByTrait(t *testing.T) {
 	}
 }
 
+func TestHasNumericSegment(t *testing.T) {
+	cases := []struct {
+		key  string
+		want bool
+	}{
+		{"os.distro", false},
+		{"cve_running_correlation.summary.total", false},
+		{"cves.0.id", true},
+		{"packages.1203.version", true},
+		{"security_scan.cves.847.severity", true},
+		{"mountpoints.mounts./.used_pct", false}, // literal mountpoint segment, not an index
+		{"0", true},
+		{"", false},
+		{"a.0", true},
+		{"a.0b", false}, // not all-digits
+		{"123abc.x", false},
+		{"identity.agent_version", false},
+	}
+	for _, c := range cases {
+		if got := hasNumericSegment(c.key); got != c.want {
+			t.Errorf("hasNumericSegment(%q) = %v, want %v", c.key, got, c.want)
+		}
+	}
+}
+
+// TestAddToTraitsSkipsArrayLeaves verifies the byTrait reverse index excludes
+// array-element leaves (numeric path segments) while still indexing stable
+// scalar/map-path keys — so ListByTrait resolves the latter and not the former.
+func TestAddToTraitsSkipsArrayLeaves(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{
+		ID: "t1", Hostname: "h1", ConvergenceStatus: "no data",
+		Traits: map[string]string{
+			"os.distro":                 "ubuntu",
+			"cves.0.id":                 "CVE-2024-0001", // array leaf — must NOT be indexed
+			"packages.42.version":       "1.2.3",         // array leaf — must NOT be indexed
+			"security_scan.unique_high": "5",             // stable key — must be indexed
+		},
+	}, nil)
+
+	if r := fi.ListByTrait("os.distro", "ubuntu"); len(r) != 1 || r[0].EnvoyID != "t1" {
+		t.Errorf("stable key os.distro: ListByTrait = %v, want [t1]", r)
+	}
+	if r := fi.ListByTrait("security_scan.unique_high", "5"); len(r) != 1 {
+		t.Errorf("stable key security_scan.unique_high not indexed: %v", r)
+	}
+	if r := fi.ListByTrait("cves.0.id", "CVE-2024-0001"); len(r) != 0 {
+		t.Errorf("array leaf cves.0.id should NOT be in byTrait, got %v", r)
+	}
+	if r := fi.ListByTrait("packages.42.version", "1.2.3"); len(r) != 0 {
+		t.Errorf("array leaf packages.42.version should NOT be in byTrait, got %v", r)
+	}
+}
+
 func TestConcurrentReadWrite(t *testing.T) {
 	fi := NewFleetIndex()
 	const numGoroutines = 100
