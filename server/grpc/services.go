@@ -97,6 +97,15 @@ type AgentService struct {
 	// outage. Producer: the feed reactor via SetCuratorCatalog; consumers: the
 	// check-in handler. nil until the first feed cycle (or when swarm is disabled).
 	curatorCatalog atomic.Pointer[[]byte]
+	// swarmRuntimeLimits caches the fleet-global *pb.SwarmRuntimeLimits, rebuilt
+	// only by SetSwarmConfig (construction + config reload) instead of on every
+	// check-in. nil when no/empty swarm config. Shared read-only across responses.
+	swarmRuntimeLimits atomic.Pointer[pb.SwarmRuntimeLimits]
+	// manifestCache holds the fleet-global manifest proto slice tagged with the
+	// ManifestStore.Version() it was built at; collectManifestEntries reuses it
+	// while the version is unchanged instead of rebuilding the slice + per-entry
+	// protos every check-in (the manifest is identical for every envoy).
+	manifestCache atomic.Pointer[manifestCacheEntry]
 	// checkInSem caps concurrent CheckIn handlers. The cap gates the
 	// policy-bundle build (the CPU-heavy work in buildCheckInResponse), so a
 	// fleet-wide stale-checkin wave (post-publish, mass re-enroll) sheds via
@@ -239,11 +248,21 @@ func (s *AgentService) SetSwarm(pt *swarm.PeerTracker, ms *swarm.ManifestStore) 
 	s.manifestStore = ms
 }
 
+// manifestCacheEntry is the version-tagged cached manifest proto slice (Lever D):
+// collectManifestEntries rebuilds it only when ManifestStore.Version() changes.
+type manifestCacheEntry struct {
+	version uint64
+	entries []*pb.SwarmManifestEntry
+}
+
 // SetSwarmConfig stores the swarm config section so subsystem-level
 // gates (e.g., gitback/lockbox blacklists) can be consulted at
-// check-in time.
+// check-in time. Called at construction and on every config reload.
 func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
 	s.swarmCfg = sc
+	// Rebuild the fleet-global runtime-limits proto once here (not per check-in);
+	// the check-in path then returns it by pointer via buildSwarmRuntimeLimits.
+	s.swarmRuntimeLimits.Store(buildSwarmRuntimeLimitsFrom(sc))
 }
 
 // SetCuratorCatalog stores the JSON-encoded fleet artifact catalog the curator

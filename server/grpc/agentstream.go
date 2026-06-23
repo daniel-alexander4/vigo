@@ -1008,7 +1008,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 // receives it. Returns nil when no swarm config is set (early
 // startup); the agent falls back to compile-time defaults.
 func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
-	sc := s.swarmCfg
+	return s.swarmRuntimeLimits.Load()
+}
+
+// buildSwarmRuntimeLimitsFrom builds the fleet-global runtime-limits proto from a
+// swarm config section. Called once per SetSwarmConfig (construction + reload),
+// not per check-in. Returns nil when no config is loaded.
+func buildSwarmRuntimeLimitsFrom(sc config.SwarmSection) *pb.SwarmRuntimeLimits {
 	// Heuristic for "no config loaded yet": every cap zero AND every
 	// retention string empty. Cheap; matches the SwarmSection zero
 	// value.
@@ -1068,28 +1074,38 @@ func durationSecsOrZero(s string) uint64 {
 }
 
 // collectManifestEntries returns all manifest CRDT entries as proto messages.
+// The manifest is fleet-global, so the built slice is cached and reused across
+// every check-in while ManifestStore.Version() is unchanged — rebuilding the
+// slice + per-entry protos only when the manifest actually mutates (Lever D).
+// The cached slice is shared read-only across responses; rebuilds allocate a
+// fresh slice and swap the pointer (never mutate the cached one).
 func (s *AgentService) collectManifestEntries() []*pb.SwarmManifestEntry {
 	if s.manifestStore == nil {
 		return nil
 	}
+	v := s.manifestStore.Version()
+	if c := s.manifestCache.Load(); c != nil && c.version == v {
+		return c.entries
+	}
 	entries := s.manifestStore.Entries()
-	if len(entries) == 0 {
-		return nil
+	var result []*pb.SwarmManifestEntry
+	if len(entries) > 0 {
+		result = make([]*pb.SwarmManifestEntry, 0, len(entries))
+		for _, e := range entries {
+			result = append(result, &pb.SwarmManifestEntry{
+				Sha256:    e.SHA256,
+				Label:     e.Label,
+				Target:    e.Target,
+				Retention: e.Retention,
+				SeederId:  e.SeederID,
+				Size:      e.Size,
+				Status:    e.Status,
+				UpdatedAt: e.UpdatedAt,
+				UpdatedBy: e.UpdatedBy,
+			})
+		}
 	}
-	result := make([]*pb.SwarmManifestEntry, 0, len(entries))
-	for _, e := range entries {
-		result = append(result, &pb.SwarmManifestEntry{
-			Sha256:    e.SHA256,
-			Label:     e.Label,
-			Target:    e.Target,
-			Retention: e.Retention,
-			SeederId:  e.SeederID,
-			Size:      e.Size,
-			Status:    e.Status,
-			UpdatedAt: e.UpdatedAt,
-			UpdatedBy: e.UpdatedBy,
-		})
-	}
+	s.manifestCache.Store(&manifestCacheEntry{version: v, entries: result})
 	return result
 }
 
