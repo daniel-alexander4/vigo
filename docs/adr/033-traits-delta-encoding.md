@@ -42,7 +42,10 @@ only needs the ~5 KB vitals (swarm ingest) or a stable inventory field
   `sha256` of the full ~155 KB blob every tick. (`server/db/traitsbatcher.go`.)
 
 Measured net: **4.82 → 1.72 ms/checkin (−64%), ~1,250 → ~3,500 safe envoys @1s**
-on 8 vCPU. The remaining per-tick cost is the snapshot-flush churn that changing
+on 8 vCPU (this run was `checkin.stream_signature: handshake-only`; the default
+`all`, which ed25519-verifies every check-in, is ~1.91 ms / ~3,140 @1s — the
+parse/sha fix delta is mode-independent). The remaining per-tick cost is the
+snapshot-flush churn that changing
 vitals drive (Mark fires every tick) — tracked as "option C" (snapshot on
 inventory change only, a UX-affecting follow-on) in `pending.md`; the capacity
 table lives in `docs/internal.docs/numbers-of-record.md`.
