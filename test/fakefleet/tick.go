@@ -127,7 +127,7 @@ func buildCheckInReq(h *hostState, deltaMs uint32, policyVersion uint64, fingerp
 		StateFingerprint:   fingerprint,
 		Signature:          signWith(h.signingKey(), []byte(ts)),
 		Timestamp:          timestamppb.New(now),
-		VitalsJson:         sharedVitals,
+		VitalsJson:         freshVitals(),
 		InventoryHash:      h.InventoryHash,
 		AgentVersion:       agentVersion,
 		IpAddress:          h.IP,

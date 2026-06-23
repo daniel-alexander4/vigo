@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // ADR-033 split-traits payloads for the harness.
@@ -48,13 +49,11 @@ import (
 // --inventory-kb isn't given. ~150 KB models a typical Linux cloud server.
 const defaultInventoryKB = 150
 
-// sharedInventoryBulk and sharedVitals are installed once by loadPayloads at
-// the start of every drive mode and are read-only thereafter, so the
-// per-envoy goroutines share them without locking.
-var (
-	sharedInventoryBulk json.RawMessage
-	sharedVitals        json.RawMessage
-)
+// sharedInventoryBulk is installed once by loadPayloads at the start of every
+// drive mode and is read-only thereafter, so the per-envoy goroutines share it
+// without locking. (Vitals are NOT shared — they're regenerated fresh per tick
+// by freshVitals so each check-in ships distinct bytes.)
+var sharedInventoryBulk json.RawMessage
 
 // loadPayloads installs the shared bulk + vitals for this process.
 //
@@ -74,11 +73,6 @@ func loadPayloads(st *fleetState, overrideKB int) {
 		sharedInventoryBulk = st.InventoryBulk
 	default:
 		sharedInventoryBulk = genInventoryBulk(defaultInventoryKB)
-	}
-	if len(st.Vitals) > 0 {
-		sharedVitals = st.Vitals
-	} else {
-		sharedVitals = genVitals()
 	}
 	if overrideKB > 0 {
 		// The manifest's stored hashes were computed for the old bulk; recompute
@@ -211,15 +205,21 @@ func genInventoryBulk(targetKB int) json.RawMessage {
 	return b
 }
 
-// genVitals builds the shared ~5 KB volatile-collector blob, sent every tick.
-// Keys mirror agent/src/traits volatile_collectors() and are disjoint from the
-// identity and inventory keys.
-func genVitals() json.RawMessage {
+// genVitals builds the ~5 KB volatile-collector blob. Keys mirror
+// agent/src/traits volatile_collectors() and are disjoint from the identity and
+// inventory keys. `seq` (a nanosecond counter) varies the time-derived fields so
+// successive ticks produce DIFFERENT bytes — exactly like a real agent, whose
+// uptime/loadavg/time change every collection. This is load-bearing for the
+// measurement: with byte-identical vitals the server's traitsBatch.Mark dedups
+// and never takes its pending lock, hiding the production fleet-scale lock + the
+// snapshot-flush churn that changing vitals actually drive.
+func genVitals(seq int64) json.RawMessage {
+	secs := seq / 1_000_000_000
 	m := map[string]any{
-		"time":            map[string]any{"unix": 1750000000, "rfc3339": "2026-06-22T12:00:00Z"},
-		"uptime":          map[string]any{"seconds": 864000},
-		"loadavg":         map[string]any{"1m": 0.42, "5m": 0.55, "15m": 0.48},
-		"memory":          map[string]any{"total_mb": 16384, "used_mb": 8192, "available_mb": 8192, "cached_mb": 4096},
+		"time":            map[string]any{"unix": secs, "ns": seq},
+		"uptime":          map[string]any{"seconds": 864000 + secs},
+		"loadavg":         map[string]any{"1m": float64(seq%307) / 100, "5m": float64(seq%211) / 100, "15m": float64(seq%97) / 100},
+		"memory":          map[string]any{"total_mb": 16384, "used_mb": 8000 + seq%2000, "available_mb": 8384 - seq%2000, "cached_mb": 4096},
 		"swap":            map[string]any{"total_mb": 4096, "used_mb": 128},
 		"mountpoints":     genObjArray(8, "mount", []string{"device", "mountpoint", "fstype", "options"}),
 		"filesystem":      genObjArray(8, "fs", []string{"device", "size_gb", "used_gb", "use_pct"}),
@@ -233,6 +233,11 @@ func genVitals() json.RawMessage {
 	b, _ := json.Marshal(m)
 	return b
 }
+
+// freshVitals returns a vitals blob stamped with the current time, so every
+// check-in ships distinct bytes (like a real agent). Called per-tick by
+// buildCheckInReq; cheap enough at load-test scale (one ~5 KB marshal per call).
+func freshVitals() json.RawMessage { return genVitals(time.Now().UnixNano()) }
 
 // genObjArray builds a deterministic array of n objects, each carrying the
 // given fields with index-derived string values — enough to give a collector a

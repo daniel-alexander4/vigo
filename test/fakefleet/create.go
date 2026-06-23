@@ -99,7 +99,7 @@ func runCreate(cfg config) {
 		StacksDir:     cfg.stacksDir,
 		CleanupDirs:   cleanupDirs,
 		InventoryBulk: genInventoryBulk(invKB),
-		Vitals:        genVitals(),
+		Vitals:        genVitals(0), // representative size sample for the manifest; the wire vitals are fresh per tick (freshVitals)
 		Hosts:         enrolled,
 	}
 	// Install the shared payloads (0 = use the bulk just baked above), then stamp
