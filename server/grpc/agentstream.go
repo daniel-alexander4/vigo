@@ -427,10 +427,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 	var volTop map[string]json.RawMessage
 	if len(volatile) > 0 && json.Unmarshal(volatile, &volTop) == nil {
-		// Persist the full traits (change-deduped inside Mark). Skip when there's
-		// no full blob this cycle (inventory-resend tick).
+		// Persist the full traits (change-deduped inside Mark via a cheap key —
+		// inventory_hash + a hash of the small vitals — so the full ~155 KB blob
+		// is not re-hashed every tick; it's materialized lazily only when the key
+		// changed). Skip when there's no full blob this cycle (resend tick).
 		if s.traitsBatch != nil && len(inlineTraits) > 0 {
-			s.traitsBatch.Mark(envoyID, string(inlineTraits))
+			key := traitsChangeKey(vitals, req.GetTraitsJson(), req.GetInventoryHash())
+			s.traitsBatch.Mark(envoyID, key, func() string { return string(inlineTraits) })
 		}
 		// Update swarm peer tracker when agents report cached blobs.
 		if s.peerTracker != nil {

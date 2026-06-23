@@ -12,11 +12,17 @@ import (
 	"git.alexander4.io/vigo/server/testutil"
 )
 
+// markJSON adapts the change-key + lazy-build Mark to the tests' intent — dedup
+// on the JSON itself and store it (the pre-Piece-2 2-arg behavior).
+func markJSON(b *TraitsBatcher, envoyID, traitsJSON string) {
+	b.Mark(envoyID, traitsJSON, func() string { return traitsJSON })
+}
+
 func TestTraitsBatcher_MarkDeduplicates(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("envoy-1", `{"os":"linux"}`)
-	b.Mark("envoy-1", `{"os":"linux"}`) // same hash — should not re-queue
+	markJSON(b, "envoy-1", `{"os":"linux"}`)
+	markJSON(b, "envoy-1", `{"os":"linux"}`) // same hash — should not re-queue
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -30,8 +36,8 @@ func TestTraitsBatcher_MarkDeduplicates(t *testing.T) {
 func TestTraitsBatcher_MarkDifferentTraits(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("envoy-1", `{"os":"linux"}`)
-	b.Mark("envoy-1", `{"os":"freebsd"}`) // different hash — should replace
+	markJSON(b, "envoy-1", `{"os":"linux"}`)
+	markJSON(b, "envoy-1", `{"os":"freebsd"}`) // different hash — should replace
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -49,9 +55,9 @@ func TestTraitsBatcher_MarkDifferentTraits(t *testing.T) {
 func TestTraitsBatcher_MarkMultipleEnvoys(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("envoy-1", `{"os":"linux"}`)
-	b.Mark("envoy-2", `{"os":"freebsd"}`)
-	b.Mark("envoy-1", `{"os":"linux"}`) // dedup
+	markJSON(b, "envoy-1", `{"os":"linux"}`)
+	markJSON(b, "envoy-2", `{"os":"freebsd"}`)
+	markJSON(b, "envoy-1", `{"os":"linux"}`) // dedup
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -65,7 +71,7 @@ func TestTraitsBatcher_MarkMultipleEnvoys(t *testing.T) {
 func TestTraitsBatcher_FlushClearsPending(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("envoy-1", `{"os":"linux"}`)
+	markJSON(b, "envoy-1", `{"os":"linux"}`)
 
 	// Flush with nil queries will panic if it tries to write.
 	// Since queries is nil, we just verify the pending map is swapped.
@@ -73,7 +79,7 @@ func TestTraitsBatcher_FlushClearsPending(t *testing.T) {
 	b.pending = make(map[string]string) // simulate flush
 	b.mu.Unlock()
 
-	b.Mark("envoy-1", `{"os":"linux"}`) // same hash as before — should still be deduped
+	markJSON(b, "envoy-1", `{"os":"linux"}`) // same hash as before — should still be deduped
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -87,7 +93,7 @@ func TestTraitsBatcher_FlushClearsPending(t *testing.T) {
 func TestTraitsBatcher_FlushResetsForNewTraits(t *testing.T) {
 	b := NewTraitsBatcher(nil)
 
-	b.Mark("envoy-1", `{"os":"linux"}`)
+	markJSON(b, "envoy-1", `{"os":"linux"}`)
 
 	// Simulate flush clearing pending but keeping hashes.
 	b.mu.Lock()
@@ -95,7 +101,7 @@ func TestTraitsBatcher_FlushResetsForNewTraits(t *testing.T) {
 	b.mu.Unlock()
 
 	// New traits should queue again.
-	b.Mark("envoy-1", `{"os":"freebsd"}`)
+	markJSON(b, "envoy-1", `{"os":"freebsd"}`)
 
 	b.mu.Lock()
 	count := len(b.pending)
@@ -126,7 +132,7 @@ func TestTraitsBatcher_ConcurrentMark(t *testing.T) {
 				for i := 0; i < envoys; i++ {
 					// Identical traits per envoy across every goroutine: the
 					// first Mark queues, the rest must dedup on the lock-free path.
-					b.Mark(fmt.Sprintf("envoy-%d", i), fmt.Sprintf(`{"id":%d}`, i))
+					markJSON(b, fmt.Sprintf("envoy-%d", i), fmt.Sprintf(`{"id":%d}`, i))
 				}
 			}()
 		}
@@ -173,7 +179,7 @@ func TestTraitsBatcher_FlushPrunesToRetentionCap(t *testing.T) {
 	// skip the insert. Each flush adds one row then prunes — the stored
 	// count must never exceed the cap.
 	for i := 0; i < 15; i++ {
-		b.Mark("e1", fmt.Sprintf(`{"n":%d}`, i))
+		markJSON(b, "e1", fmt.Sprintf(`{"n":%d}`, i))
 		b.Flush(ctx)
 
 		var count int

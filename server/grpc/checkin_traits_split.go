@@ -5,6 +5,8 @@ package grpc
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 )
@@ -108,6 +110,23 @@ func deriveOSArch(inventoryJSON []byte) (goos, goarch string, ok bool) {
 	}
 	goos, goarch = goosGoarchFromTraits(top["os"])
 	return goos, goarch, true
+}
+
+// traitsChangeKey is a cheap fingerprint of an envoy's full merged traits that
+// changes iff the traits change — fed to traitsBatch.Mark so the steady-state
+// check-in path never hashes the full ~155 KB merged blob (ADR-033). For a split
+// agent it is inventory_hash (identifies the stable inventory the server holds)
+// + a hash of the small vitals blob (identifies the volatile part); for a legacy
+// agent (no vitals) it falls back to hashing the full traits_json. Used on a tick
+// where the cached inventory matches the agent's inventory_hash, so the hash
+// faithfully identifies the merged inventory portion.
+func traitsChangeKey(vitalsJSON, traitsJSON []byte, inventoryHash string) string {
+	if len(vitalsJSON) > 0 {
+		h := sha256.Sum256(vitalsJSON)
+		return inventoryHash + ":" + hex.EncodeToString(h[:])
+	}
+	h := sha256.Sum256(traitsJSON)
+	return hex.EncodeToString(h[:])
 }
 
 // cachedOSArch returns the goos/goarch derived from the envoy's cached inventory,

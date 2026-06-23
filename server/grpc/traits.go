@@ -56,7 +56,8 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	// inline, so the trait values are operator-visible immediately
 	// regardless of when the history row lands.
 	if s.traitsBatch != nil {
-		s.traitsBatch.Mark(envoyID, string(traitsJSON))
+		// Standalone ReportTraits is a full (non-split) payload; key on its hash.
+		s.traitsBatch.Mark(envoyID, traitsChangeKey(nil, traitsJSON, ""), func() string { return string(traitsJSON) })
 	}
 
 	// Update in-memory FleetIndex so the UI sees current traits immediately.

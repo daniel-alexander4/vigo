@@ -5,8 +5,6 @@ package db
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -23,14 +21,14 @@ type TraitsFlushHook func(batch map[string]string)
 
 // TraitsBatcher accumulates envoy traits and flushes inserts periodically,
 // removing per-check-in DB write latency from the hot path. Traits are
-// deduplicated by SHA-256 hash — if a envoy's traits haven't changed since
-// the last insert, the write is skipped entirely. Each flush also prunes
-// old snapshots for every envoy it just inserted, enforcing the
+// deduplicated by a caller-supplied change key — if an envoy's traits haven't
+// changed since the last insert, the write is skipped entirely. Each flush also
+// prunes old snapshots for every envoy it just inserted, enforcing the
 // 10-snapshot retention cap (DB-04) coupled to the insert.
 type TraitsBatcher struct {
 	mu      sync.Mutex        // guards pending + onFlush
 	pending map[string]string // envoy_id → traits JSON (changed-since-last-flush set)
-	hashes  sync.Map          // envoy_id → last-marked SHA-256 (string); lock-free dedup on the check-in hot path
+	keys    sync.Map          // envoy_id → last-marked change key (string); lock-free dedup on the check-in hot path
 	queries *Queries
 	onFlush TraitsFlushHook // called after successful DB flush
 }
@@ -50,26 +48,28 @@ func (b *TraitsBatcher) SetFlushHook(hook TraitsFlushHook) {
 	b.mu.Unlock()
 }
 
-// Mark records traits for an envoy, deduplicated by content hash. The
-// steady-state case — every check-in re-sends byte-identical traits — hits a
-// lock-free sync.Map load and returns, so the per-check-in traits write does
-// not funnel the whole fleet through one mutex. (That mutex was the fleet-scale
-// throughput wall: at ~13K envoys @ 1s a single Mark lock serialized ~82% of
-// all check-in lock-wait, capping the server well below its CPU ceiling.) Only
-// a changed payload takes the pending lock. Writing pending before storing the
-// hash keeps the invariant "hash recorded ⇒ that payload is queued or flushed."
-func (b *TraitsBatcher) Mark(envoyID, traitsJSON string) {
-	h := sha256.Sum256([]byte(traitsJSON))
-	hash := hex.EncodeToString(h[:])
-
-	if prev, ok := b.hashes.Load(envoyID); ok && prev.(string) == hash {
+// Mark records traits for an envoy, deduplicated by changeKey — a cheap
+// fingerprint the caller computes from the parts that actually vary (e.g.
+// inventory_hash + a hash of the small vitals), NOT a hash of the full ~155 KB
+// merged blob on every tick. The steady-state unchanged case hits a lock-free
+// sync.Map load and returns, so the per-check-in traits write does not funnel
+// the whole fleet through one mutex. (That mutex was the fleet-scale throughput
+// wall: at ~13K envoys @ 1s a single Mark lock serialized ~82% of all check-in
+// lock-wait, capping the server below its CPU ceiling.) build() is invoked only
+// when the key changed — outside the lock — to materialize the full traits
+// string to persist; on a dedup hit it is never called, so the merged blob is
+// neither rebuilt nor copied. Writing pending before storing the key keeps the
+// invariant "key recorded ⇒ that payload is queued or flushed."
+func (b *TraitsBatcher) Mark(envoyID, changeKey string, build func() string) {
+	if prev, ok := b.keys.Load(envoyID); ok && prev.(string) == changeKey {
 		return
 	}
 
+	blob := build()
 	b.mu.Lock()
-	b.pending[envoyID] = traitsJSON
+	b.pending[envoyID] = blob
 	b.mu.Unlock()
-	b.hashes.Store(envoyID, hash)
+	b.keys.Store(envoyID, changeKey)
 }
 
 // Start runs the flush loop, writing accumulated traits to the DB every
