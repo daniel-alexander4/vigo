@@ -136,17 +136,22 @@ func genInventoryBulk(targetKB int) json.RawMessage {
 
 	// cert_lifecycle: ~60 KB and size-stable — it's largely the OS CA trust
 	// store (ca-certificates), as big on a server as a laptop. Does NOT scale.
+	// Shape MUST match the real agent collector (agent/src/traits/cert_lifecycle.rs):
+	// a `cert_lifecycle.certificates[]` array of per-cert objects — the server's
+	// consumers (CertExpirySummary, risk, EnvoyCertDetails) and the 1c prune key
+	// off `cert_lifecycle.certificates.N.*`. A bare top-level array would dodge
+	// both, leaving the cert paths un-exercised.
 	certs := make([]map[string]string, 330)
 	for i := range certs {
 		certs[i] = map[string]string{
-			"subject":   fmt.Sprintf("CN=svc-%d.internal,O=Synthetic,C=US", i),
+			"cn":        fmt.Sprintf("svc-%d.internal", i),
 			"issuer":    "CN=Synthetic Internal Issuing CA,O=Synthetic,C=US",
 			"serial":    fmt.Sprintf("%032x", i),
 			"not_after": fmt.Sprintf("202%d-%02d-%02dT00:00:00Z", 6+i%4, 1+i%12, 1+i%28),
 			"path":      fmt.Sprintf("/etc/ssl/certs/svc-%d.pem", i),
 		}
 	}
-	m["cert_lifecycle"] = certs
+	m["cert_lifecycle"] = map[string]any{"certificates": certs}
 
 	// A spread of the remaining stable collectors so the top-level key count
 	// matches a real ~50-key payload. Sizes are incidental; the names mirror
