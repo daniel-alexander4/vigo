@@ -56,6 +56,28 @@ func TestParseMemoryLimit(t *testing.T) {
 	}
 }
 
+func TestDeriveMemoryLimit(t *testing.T) {
+	tests := []struct {
+		budget uint64
+		want   int64
+	}{
+		{0, 0},                                   // unknown budget → leave unset
+		{16 << 30, int64((16 << 30) / 100 * 80)}, // 16 GiB → ~12.8 GiB
+		{32 << 30, int64((32 << 30) / 100 * 80)},
+		{128 << 30, int64((128 << 30) / 100 * 80)}, // overflow-safe at large RAM
+	}
+	for _, tt := range tests {
+		got := deriveMemoryLimit(tt.budget)
+		if got != tt.want {
+			t.Errorf("deriveMemoryLimit(%d) = %d, want %d", tt.budget, got, tt.want)
+		}
+		// Sanity: result is ~80% and strictly below the budget (headroom for cgo/runtime).
+		if tt.budget > 0 && (uint64(got) >= tt.budget || uint64(got) < tt.budget/100*79) {
+			t.Errorf("deriveMemoryLimit(%d) = %d not in the ~80%%-with-headroom band", tt.budget, got)
+		}
+	}
+}
+
 func TestSameStringSet(t *testing.T) {
 	cases := []struct {
 		name   string

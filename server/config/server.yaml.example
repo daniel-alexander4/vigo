@@ -551,7 +551,7 @@ watcher:
 #
 #   # Go runtime (large fleets only)
 #   # gogc: 50                                 # GC target % (default: 100)
-#   # memory_limit: "4GiB"                     # GOMEMLIMIT hard ceiling
+#   # memory_limit: "4GiB"                     # GOMEMLIMIT soft limit; empty = auto ~80% of detected RAM
 #
 #   # gRPC transport (large fleets only)
 #   # grpc_read_buffer: 16384

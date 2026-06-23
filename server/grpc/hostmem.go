@@ -39,12 +39,13 @@ func defaultMaxConnections(hostMemBytes uint64) int {
 	return int(float64(hostMemBytes) * connWorkingSetFraction / float64(connRSSBytes))
 }
 
-// hostMemoryBytes returns the memory budget the server should size the
-// connection cap against: the cgroup memory limit when one is set (the
-// container's hard ceiling), otherwise /proc/meminfo MemTotal (host RAM).
-// Returns 0 when neither is readable (non-Linux, or an unexpected layout) —
-// the caller treats 0 as "unknown" and leaves the cap off.
-func hostMemoryBytes() uint64 {
+// HostMemoryBytes returns the memory budget the server should size against: the
+// cgroup memory limit when one is set (the container's hard ceiling), otherwise
+// /proc/meminfo MemTotal (host RAM). Returns 0 when neither is readable
+// (non-Linux, or an unexpected layout) — callers treat 0 as "unknown" (leave the
+// connection cap off / skip the GOMEMLIMIT auto-derive). Shared by the
+// connection-cap auto-derive (server.go) and the GOMEMLIMIT auto-derive (main.go).
+func HostMemoryBytes() uint64 {
 	memTotal := procMemTotalBytes()
 	if lim := cgroupMemLimitBytes(); lim > 0 && (memTotal == 0 || lim < memTotal) {
 		return lim

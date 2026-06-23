@@ -260,7 +260,35 @@ func applyRuntimeTuning(t config.TuningSection) {
 			old := debug.SetMemoryLimit(limit)
 			slog.Info("Go memory limit applied", "limit", t.MemoryLimit, "bytes", limit, "previous", old)
 		}
+		return
 	}
+	// Unset: auto-derive a soft limit at ~80% of the cgroup-aware memory budget.
+	// GOMEMLIMIT governs only the Go heap, so the ~20% headroom covers the
+	// non-Go RSS GOMEMLIMIT can't cap — chiefly the cgo SQLite page cache
+	// (_cache_size=-64000 ≈ 64 MB per read/write conn) plus runtime overhead.
+	// Turns an OOM-kill under a heap spike (e.g. rehydrating a large fleet) into
+	// hard GC near the limit. Skipped when the budget is unknown (HostMemoryBytes
+	// returns 0 on non-Linux / unreadable cgroup+meminfo). Operators override by
+	// setting tuning.memory_limit explicitly.
+	if limit := deriveMemoryLimit(isgrpc.HostMemoryBytes()); limit > 0 {
+		old := debug.SetMemoryLimit(limit)
+		slog.Info("Go memory limit auto-derived", "bytes", limit, "pct", memoryLimitPct, "previous", old)
+	}
+}
+
+// memoryLimitPct is the fraction of the cgroup-aware memory budget used for the
+// auto-derived GOMEMLIMIT. The ~20% headroom covers non-Go-heap RSS that
+// GOMEMLIMIT cannot cap — chiefly the cgo SQLite page cache.
+const memoryLimitPct = 80
+
+// deriveMemoryLimit returns the auto GOMEMLIMIT for a memory budget, or 0 when
+// the budget is unknown (HostMemoryBytes returned 0) so the caller leaves the
+// limit unset. Computed as budget/100*pct to stay overflow-safe on any RAM size.
+func deriveMemoryLimit(budget uint64) int64 {
+	if budget == 0 {
+		return 0
+	}
+	return int64(budget / 100 * memoryLimitPct)
 }
 
 // parseMemoryLimit parses a human-readable memory size (e.g. "4GiB", "512MiB",

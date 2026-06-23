@@ -907,7 +907,7 @@ type TuningSection struct {
 
 	// Go runtime tuning.
 	GOGC        *int   `yaml:"gogc" doc:"Go GC target percentage (equivalent to the GOGC env var). Unset uses the Go default." example:"50 (more GC, less RAM), 100 (default), 200 (less GC, more RAM)"`
-	MemoryLimit string `yaml:"memory_limit" doc:"Go memory soft-limit (equivalent to GOMEMLIMIT; e.g. 4GiB, 512MiB). Empty = no limit." example:"512MiB, 2GiB, 8GiB  (typically 70-80% of container limit)"`
+	MemoryLimit string `yaml:"memory_limit" doc:"Go memory soft-limit (equivalent to GOMEMLIMIT; e.g. 4GiB, 512MiB). Empty = auto-derived to ~80% of the cgroup-aware memory budget (the ~20% headroom covers the cgo SQLite page cache + runtime, which GOMEMLIMIT can't cap); set explicitly to override." example:"512MiB, 2GiB, 8GiB  (typically 70-80% of container limit)"`
 
 	// gRPC transport tuning.
 	GRPCReadBuffer    int    `yaml:"grpc_read_buffer" doc:"Per-connection gRPC read buffer bytes. 0 uses the gRPC default (32 KiB)." example:"32768 (32 KiB), 65536 (64 KiB)"`

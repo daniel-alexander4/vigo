@@ -246,7 +246,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 		maxConns = 0
 		slog.Info("held-stream admission cap disabled (checkin.max_connections < 0)")
 	case maxConns == 0:
-		maxConns = defaultMaxConnections(hostMemoryBytes())
+		maxConns = defaultMaxConnections(HostMemoryBytes())
 		if maxConns == 0 {
 			slog.Warn("could not read host memory; held-stream cap left off — set checkin.max_connections to avoid OOM at the memory wall")
 		} else {
