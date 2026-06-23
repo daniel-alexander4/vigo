@@ -20,6 +20,33 @@ inventory hash daily). The FleetIndex-partition optimization is deferred
 determinism audit is tracked in pending.
 **Date:** 2026-06-04
 
+## Follow-on (0.76.20 / 0.76.21): server-side per-tick CPU
+
+The original "network-bound, not CPU-bound" reading (and the "idle CPU"
+rationale above) was measured on a **toy-blob** fleet (synthetic ~400 B traits).
+Re-measured off-box with **realistic 150 KB inventory** at 1 s cadence, the
+server *was* CPU-bound: the steady `no_change` check-in cost ~4.8 ms/tick (~90%
+of 8 cores at 1.5k envoys), dominated by the per-tick shallow `json.Unmarshal`
+of the full ~155 KB merged blob (~48%) and `traitsBatch.Mark`'s `sha256` of that
+blob (~36%) — both run *before* the no_change short-circuit to feed work that
+only needs the ~5 KB vitals (swarm ingest) or a stable inventory field
+(os/arch). Two fixes finish ADR-033's split on the server side:
+
+- **0.76.20** — drop the per-tick full parse: parse only the ~5 KB vitals;
+  derive + cache os/arch once per inventory change on `inventoryEntry`; the
+  validity gate moves into `reconstructTraits` (resend on malformed). So the
+  ~150 KB inventory is never re-scanned on a vitals-only tick.
+  (`server/grpc/checkin_traits_split.go`, `agentstream.go`.)
+- **0.76.21** — `traitsBatch.Mark` dedups on a cheap change-key
+  (`inventory_hash` + `sha256(vitals)`) + lazy blob materialization, not a
+  `sha256` of the full ~155 KB blob every tick. (`server/db/traitsbatcher.go`.)
+
+Measured net: **4.82 → 1.72 ms/checkin (−64%), ~1,250 → ~3,500 safe envoys @1s**
+on 8 vCPU. The remaining per-tick cost is the snapshot-flush churn that changing
+vitals drive (Mark fires every tick) — tracked as "option C" (snapshot on
+inventory change only, a UX-affecting follow-on) in `pending.md`; the capacity
+table lives in `docs/internal.docs/numbers-of-record.md`.
+
 ## Context
 
 The agent attaches the full `traits_json` to **every** `CheckIn` — there is no
