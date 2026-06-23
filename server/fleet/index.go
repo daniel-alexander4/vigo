@@ -1568,8 +1568,11 @@ func (f *FleetIndex) removeFromStatus(id, status string) {
 // keyspace — so indexing the thousands of array leaves a realistic inventory
 // produces is pure dead weight. They are excluded from byTrait to keep the
 // reverse index bounded to the stable, queryable keyspace; resolveByTrait falls
-// back to an on-demand scan of the (intact) flattened traits map for any key not
-// found in the index, so no selector loses coverage. Allocation-free.
+// back to an on-demand scan of the flattened traits map for any key not found in
+// the index, so array-leaf selectors (e.g. cves.0.id=...) still resolve — EXCEPT
+// for the families dropped from the flattened map by FlattenForIndex (Lever 1b:
+// packages.*), which carry no in-memory consumer and are intentionally not
+// targetable. Allocation-free.
 func hasNumericSegment(key string) bool {
 	start := 0
 	for i := 0; i <= len(key); i++ {
@@ -1741,6 +1744,39 @@ func FlattenJSON(prefix string, data map[string]any, out map[string]string) {
 			}
 		}
 	}
+}
+
+// indexDeadInventoryKeys are top-level inventory arrays dropped from the
+// in-memory EnvoyState.Traits flattened map (Lever 1b). They have NO in-memory
+// consumer: package inventory is served exclusively from the DB envoy_traits.traits
+// JSON column (server/api/inventory.go, ui/handler.go, server/ai queryInventory) —
+// nothing reads packages.* from the FleetIndex. Flattening hundreds of
+// packages.N.{name,version,...} leaves per envoy into the index is pure dead
+// weight (~half the per-trait-envoy heap on a package-heavy host). The DB JSON
+// keeps them, so the inventory UI is unaffected.
+//
+// Trade-off (intended): the three operator/config selectors that read the
+// in-memory flat map by exact key — swarm/filecast targets (swarm/target.go),
+// fleetlookup trait()/select: (config/fleetlookup.go), and the resolveByTrait
+// fallback (grpc/targeting.go) — can no longer match a packages.N.* leaf. That
+// is a meaningless selector anyway (the array index is an arbitrary per-host
+// slot) and never resolved through the DB fallback (jsonPointerLookup can't index
+// arrays), so it is withdrawn deliberately, not regressed.
+var indexDeadInventoryKeys = []string{"packages"}
+
+// FlattenForIndex flattens parsed inventory JSON into the dot-keyed map stored as
+// EnvoyState.Traits, dropping the dead top-level arrays in indexDeadInventoryKeys
+// first (see its comment). It mutates parsed (deletes those keys) — callers must
+// not reuse parsed afterward; all three call sites (the batcher flush hook,
+// rehydrate, ReportTraits) discard it after this call, and the DB-persisted JSON
+// is a separate raw string, so the dropped data survives in the DB.
+func FlattenForIndex(parsed map[string]any) map[string]string {
+	for _, k := range indexDeadInventoryKeys {
+		delete(parsed, k)
+	}
+	flat := make(map[string]string)
+	FlattenJSON("", parsed, flat)
+	return flat
 }
 
 // --- Ring buffer ---

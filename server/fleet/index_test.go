@@ -233,6 +233,69 @@ func TestListByTrait(t *testing.T) {
 	}
 }
 
+// TestFlattenForIndex verifies Lever 1b: the dead `packages` array is dropped
+// from the in-memory flattened map, while every preserved family (cert_lifecycle,
+// security_scan.cves, cve_running_correlation, ports.listening, package_source_audit)
+// and all scalar/map keys survive.
+func TestFlattenForIndex(t *testing.T) {
+	parsed := map[string]any{
+		"os": map[string]any{"distro": "ubuntu"},
+		"packages": []any{
+			map[string]any{"name": "nginx", "version": "1.0"},
+			map[string]any{"name": "openssl", "version": "3.0"},
+		},
+		"cert_lifecycle": map[string]any{
+			"certificates": []any{map[string]any{"not_after": "2027-01-01"}},
+		},
+		"security_scan": map[string]any{
+			"cves": []any{map[string]any{"id": "CVE-2024-1", "severity": "high"}},
+		},
+		"cve_running_correlation": map[string]any{
+			"running_cves": []any{map[string]any{"cve_id": "CVE-2024-1"}},
+		},
+		"ports": map[string]any{"listening": []any{map[string]any{"port": "443"}}},
+		"package_source_audit": map[string]any{
+			"sources": []any{map[string]any{"url": "https://repo", "repo": "main"}},
+		},
+	}
+	flat := FlattenForIndex(parsed)
+
+	// packages.* must be gone.
+	for k := range flat {
+		if len(k) >= 9 && k[:9] == "packages." {
+			t.Errorf("packages key leaked into flattened map: %q", k)
+		}
+	}
+	// Preserved families + scalars must survive.
+	want := []string{
+		"os.distro",
+		"cert_lifecycle.certificates.0.not_after",
+		"security_scan.cves.0.id",
+		"security_scan.cves.0.severity",
+		"cve_running_correlation.running_cves.0.cve_id",
+		"ports.listening.0.port",
+		"package_source_audit.sources.0.url",
+	}
+	for _, k := range want {
+		if _, ok := flat[k]; !ok {
+			t.Errorf("preserved key dropped from flattened map: %q", k)
+		}
+	}
+}
+
+// TestIndexDeadInventoryKeysNotPreserved guards the dead-key denylist against
+// ever including a preserved consumer family.
+func TestIndexDeadInventoryKeysNotPreserved(t *testing.T) {
+	preserved := []string{"cert_lifecycle", "security_scan", "cve_running_correlation", "ports", "package_source_audit"}
+	for _, dead := range indexDeadInventoryKeys {
+		for _, p := range preserved {
+			if dead == p {
+				t.Errorf("dead-key %q is a preserved consumer family — would starve in-memory consumers", dead)
+			}
+		}
+	}
+}
+
 func TestHasNumericSegment(t *testing.T) {
 	cases := []struct {
 		key  string

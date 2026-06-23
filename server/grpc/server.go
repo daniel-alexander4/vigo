@@ -101,8 +101,8 @@ type ServerConfig struct {
 	// arm64 agent is now compared against the arm64 binary's version, not
 	// the server-arch binary's version.
 	ServerVersions    map[string]string
-	AgentBinAvailable func() bool      // if set, version-mismatch auto-update only fires when at least one binary exists
-	GlobalObserveOnly bool             // global observe-only mode from server.yaml checkin.observe_only
+	AgentBinAvailable func() bool // if set, version-mismatch auto-update only fires when at least one binary exists
+	GlobalObserveOnly bool        // global observe-only mode from server.yaml checkin.observe_only
 	// RelaxStreamSignature skips re-verifying the stream owner's own per-message
 	// signatures on a held AgentStream (checkin.stream_signature: handshake-only).
 	// The handshake is still verified and foreign-envoy (proxied) messages are
@@ -145,9 +145,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 			for envoyID, traitsJSON := range batch {
 				var parsed map[string]any
 				if err := json.Unmarshal([]byte(traitsJSON), &parsed); err == nil {
-					flat := make(map[string]string)
-					fleet.FlattenJSON("", parsed, flat)
-					fi.UpdateTraits(envoyID, flat)
+					fi.UpdateTraits(envoyID, fleet.FlattenForIndex(parsed))
 				}
 			}
 		})

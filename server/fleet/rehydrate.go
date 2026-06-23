@@ -118,8 +118,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		if traitsJSON, ok := traitsByEnvoy[t.ID]; ok {
 			var parsed map[string]any
 			if err := json.Unmarshal([]byte(traitsJSON), &parsed); err == nil {
-				traits = make(map[string]string)
-				FlattenJSON("", parsed, traits)
+				traits = FlattenForIndex(parsed)
 				AnnotatePackageSources(traits, approvedSources)
 			}
 		}

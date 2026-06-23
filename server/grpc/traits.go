@@ -63,8 +63,7 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	// Update in-memory FleetIndex so the UI sees current traits immediately.
 	var parsedTraits map[string]any
 	if err := json.Unmarshal(traitsJSON, &parsedTraits); err == nil && s.fleetIndex != nil {
-		flat := make(map[string]string)
-		fleet.FlattenJSON("", parsedTraits, flat)
+		flat := fleet.FlattenForIndex(parsedTraits)
 		if s.configStore != nil {
 			fleet.AnnotatePackageSources(flat, s.configStore.ApprovedSources())
 		}
