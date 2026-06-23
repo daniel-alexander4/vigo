@@ -407,27 +407,35 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// to resend the full inventory. Old agents (traits_json) fall through as-is.
 	inlineTraits := req.GetTraitsJson()
 	resendInventory := false
-	if len(inlineTraits) == 0 && len(req.GetVitalsJson()) > 0 {
-		inlineTraits, resendInventory = s.reconstructTraits(envoyID, req.GetVitalsJson(), req.GetInventoryJson(), req.GetInventoryHash())
+	vitals := req.GetVitalsJson()
+	if len(inlineTraits) == 0 && len(vitals) > 0 {
+		inlineTraits, resendInventory = s.reconstructTraits(envoyID, vitals, req.GetInventoryJson(), req.GetInventoryHash())
 	}
 
-	// Parse the inline traits ONCE per check-in into top-level fields; every
-	// consumer below — and the auto-update arch lookup further down — reads its
-	// own sub-tree from this single shallow parse instead of re-scanning the raw
-	// payload (the per-parse cost measured ~15% of check-in CPU at fleet scale).
-	// A successful Unmarshal is also the validity gate: traits are always a
-	// top-level object, and each value stays a RawMessage so a malformed sub-tree
-	// only fails its own consumer, never the others.
-	var traitsTop map[string]json.RawMessage
-	if len(inlineTraits) > 0 && json.Unmarshal(inlineTraits, &traitsTop) == nil {
-		if s.traitsBatch != nil {
+	// Steady-state per-tick trait work WITHOUT re-parsing the full ~150 KB merged
+	// inventory (ADR-033). Parse only the small volatile blob — vitals for split
+	// agents, or the whole traits_json for legacy agents — which carries the swarm
+	// sub-trees and doubles as the validity gate. The inventory was already
+	// validated when it was cached (reconstructTraits), and the stable os/arch is
+	// read from that cache (cachedOSArch, further down), so the ~150 KB inventory
+	// is never re-scanned on a vitals-only tick. Because mergeTraitsObjects keeps
+	// the key sets disjoint, valid vitals ∪ valid (cached) inventory ⇒ valid
+	// merged traits, so traitsBatch.Mark still receives a well-formed blob.
+	volatile := vitals
+	if len(volatile) == 0 {
+		volatile = inlineTraits // legacy non-split agent: volatile keys live in traits_json
+	}
+	var volTop map[string]json.RawMessage
+	if len(volatile) > 0 && json.Unmarshal(volatile, &volTop) == nil {
+		// Persist the full traits (change-deduped inside Mark). Skip when there's
+		// no full blob this cycle (inventory-resend tick).
+		if s.traitsBatch != nil && len(inlineTraits) > 0 {
 			s.traitsBatch.Mark(envoyID, string(inlineTraits))
 		}
-
 		// Update swarm peer tracker when agents report cached blobs.
 		if s.peerTracker != nil {
-			s.ingestSwarmTraits(envoyID, traitsTop["swarm"])
-			s.ingestSwarmSeeds(envoyID, traitsTop["swarm_seeds"])
+			s.ingestSwarmTraits(envoyID, volTop["swarm"])
+			s.ingestSwarmSeeds(envoyID, volTop["swarm_seeds"])
 		}
 	}
 
@@ -513,7 +521,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// We resolve the agent's goos/goarch from its reported traits and look
 	// up the matching version. Unknown arch → no auto-update (safe default).
 	if !forceUpdate && agentVersion != "" && len(s.serverVersions) > 0 {
-		agentGoos, agentGoarch := goosGoarchFromTraits(traitsTop["os"])
+		// Stable os/arch from the per-inventory cache (parsed once on inventory
+		// change), not from a per-tick parse. Legacy traits_json agents have no
+		// cached inventory — fall back to the os sub-tree in the volatile blob we
+		// already parsed above.
+		agentGoos, agentGoarch := s.cachedOSArch(envoyID)
+		if agentGoos == "" && volTop != nil {
+			agentGoos, agentGoarch = goosGoarchFromTraits(volTop["os"])
+		}
 		var serverVer string
 		if agentGoos != "" && agentGoarch != "" {
 			serverVer = s.serverVersions[agentGoos+"/"+agentGoarch]

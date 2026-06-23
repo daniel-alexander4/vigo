@@ -80,6 +80,77 @@ func TestReconstructTraits(t *testing.T) {
 	}
 }
 
+// TestDeriveOSArch covers the once-per-inventory-change os/arch derivation +
+// validity gate: valid inventory with an os sub-tree yields goos/goarch; valid
+// inventory without os (or with a non-object os, like fakefleet's "os":"linux")
+// is still ok with empty platform; malformed JSON reports not-ok.
+func TestDeriveOSArch(t *testing.T) {
+	cases := []struct {
+		name               string
+		inv                string
+		wantGoos, wantArch string
+		wantOK             bool
+	}{
+		{"os_present", `{"os":{"family":"debian","arch":"amd64"},"packages":["a"]}`, "linux", "amd64", true},
+		{"os_absent", `{"packages":["a"]}`, "", "", true},
+		{"os_scalar", `{"os":"linux","packages":["a"]}`, "", "", true}, // fakefleet shape
+		{"malformed", `{"packages":[`, "", "", false},
+		{"not_object", `["a","b"]`, "", "", false}, // top-level non-object can't shallow-parse into a map
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			goos, arch, ok := deriveOSArch([]byte(c.inv))
+			if goos != c.wantGoos || arch != c.wantArch || ok != c.wantOK {
+				t.Errorf("deriveOSArch(%q) = (%q,%q,%v), want (%q,%q,%v)",
+					c.inv, goos, arch, ok, c.wantGoos, c.wantArch, c.wantOK)
+			}
+		})
+	}
+}
+
+// TestReconstructTraitsCachesOSArch verifies the steady-state optimization: the
+// agent's goos/goarch is derived ONCE when the inventory is cached and then
+// served from cachedOSArch on vitals-only ticks, so the ~150 KB inventory is
+// never re-parsed per check-in for the auto-update lookup.
+func TestReconstructTraitsCachesOSArch(t *testing.T) {
+	s := &AgentService{}
+	inv := []byte(`{"os":{"family":"debian","arch":"amd64"},"packages":["a"]}`)
+
+	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":1}`), inv, "h1"); resend {
+		t.Fatal("inventory-present check-in should not request resend")
+	}
+	if goos, arch := s.cachedOSArch("e1"); goos != "linux" || arch != "amd64" {
+		t.Fatalf("cachedOSArch after store = (%q,%q), want (linux,amd64)", goos, arch)
+	}
+	// A vitals-only tick (cache hit) must keep the derived platform available
+	// without re-parsing the inventory.
+	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":2}`), nil, "h1"); resend {
+		t.Fatal("cache hit should not request resend")
+	}
+	if goos, arch := s.cachedOSArch("e1"); goos != "linux" || arch != "amd64" {
+		t.Errorf("cachedOSArch after vitals-only tick = (%q,%q), want (linux,amd64)", goos, arch)
+	}
+	// Unknown envoy → empty platform (legacy/no-cache fallback territory).
+	if goos, arch := s.cachedOSArch("nope"); goos != "" || arch != "" {
+		t.Errorf("cachedOSArch(unknown) = (%q,%q), want empty", goos, arch)
+	}
+}
+
+// TestReconstructTraitsMalformedInventoryResends verifies that a malformed
+// inventory is not cached and triggers a resend, so the steady-state path never
+// serves or stores invalid traits (it no longer re-validates the merged blob per
+// tick — validity is gated here, once, on inventory change).
+func TestReconstructTraitsMalformedInventoryResends(t *testing.T) {
+	s := &AgentService{}
+	full, resend := s.reconstructTraits("e1", []byte(`{"loadavg":1}`), []byte(`{"packages":[`), "h1")
+	if !resend || full != nil {
+		t.Errorf("malformed inventory: got (full=%v, resend=%v), want (nil, true)", full, resend)
+	}
+	if _, ok := s.inventoryCache.Load("e1"); ok {
+		t.Error("malformed inventory must not be cached")
+	}
+}
+
 // TestInventoryEvictedOnEnvoyRemoval verifies the lifecycle wiring (ADR-033 #1):
 // the inventory cache is tied to fleet membership via FleetIndex.SetOnRemove, so
 // removing an envoy drops its cached inventory and the next vitals-only check-in

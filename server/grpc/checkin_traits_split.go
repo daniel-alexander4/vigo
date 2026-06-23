@@ -3,7 +3,11 @@
 
 package grpc
 
-import "bytes"
+import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
+)
 
 // ADR-033 conditional traits transmission (server side).
 //
@@ -17,9 +21,14 @@ import "bytes"
 // Older agents that still send the full payload in traits_json are untouched.
 
 // inventoryEntry is the per-envoy cached inventory backing reconstruction.
+// goos/goarch are derived once from the inventory's os sub-tree when it's cached
+// (on change), so the steady-state check-in path resolves the agent's platform
+// for auto-update without re-parsing the ~213 KB inventory every tick.
 type inventoryEntry struct {
-	hash string
-	json []byte
+	hash   string
+	json   []byte
+	goos   string
+	goarch string
 }
 
 // reconstructTraits rebuilds the full traits JSON for a split check-in from the
@@ -33,10 +42,20 @@ type inventoryEntry struct {
 // resend_inventory=true so the agent ships the full inventory next cycle.
 func (s *AgentService) reconstructTraits(envoyID string, vitalsJSON, inventoryJSON []byte, inventoryHash string) (full []byte, resend bool) {
 	if len(inventoryJSON) > 0 {
-		// Inventory changed — cache it (copy; the proto buffer is reused) and merge.
+		// Inventory changed — validate + derive os/arch ONCE here (not every
+		// tick), then cache (copy; the proto buffer is reused) and merge. A
+		// malformed inventory is not cached; ask the agent for a clean resend so
+		// the steady-state path never serves/stores invalid traits.
+		goos, goarch, ok := deriveOSArch(inventoryJSON)
+		if !ok {
+			slog.Warn("malformed inventory JSON on check-in; requesting resend", "envoy_id", envoyID)
+			return nil, true
+		}
 		s.inventoryCache.Store(envoyID, &inventoryEntry{
-			hash: inventoryHash,
-			json: append([]byte(nil), inventoryJSON...),
+			hash:   inventoryHash,
+			json:   append([]byte(nil), inventoryJSON...),
+			goos:   goos,
+			goarch: goarch,
 		})
 		return mergeTraitsObjects(inventoryJSON, vitalsJSON), false
 	}
@@ -75,4 +94,30 @@ func mergeTraitsObjects(inventory, vitals []byte) []byte {
 		out = append(out, vit[1:]...) // drop leading '{'
 		return out
 	}
+}
+
+// deriveOSArch shallow-parses an inventory blob — which validates it — and
+// resolves the agent's goos/goarch from its os sub-tree, the only
+// inventory-derived value the steady-state check-in path needs. Called once when
+// the inventory is cached (on change), so vitals-only ticks never re-parse it.
+// Returns ok=false when the inventory is not valid JSON.
+func deriveOSArch(inventoryJSON []byte) (goos, goarch string, ok bool) {
+	var top map[string]json.RawMessage
+	if json.Unmarshal(inventoryJSON, &top) != nil {
+		return "", "", false
+	}
+	goos, goarch = goosGoarchFromTraits(top["os"])
+	return goos, goarch, true
+}
+
+// cachedOSArch returns the goos/goarch derived from the envoy's cached inventory,
+// or empty strings when no inventory is cached (a legacy traits_json agent, or a
+// pre-resend cache miss). Lets the auto-update check skip re-parsing the
+// inventory on every check-in.
+func (s *AgentService) cachedOSArch(envoyID string) (goos, goarch string) {
+	if v, ok := s.inventoryCache.Load(envoyID); ok {
+		e := v.(*inventoryEntry)
+		return e.goos, e.goarch
+	}
+	return "", ""
 }
