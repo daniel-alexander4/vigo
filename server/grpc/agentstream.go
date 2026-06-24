@@ -27,6 +27,8 @@ import (
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/swarm"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -89,6 +91,22 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 		if err != nil {
 			return err
 		}
+	}
+
+	// Held-stream signature relaxation (handshake-only) is safe only on a DIRECT
+	// agent↔server mTLS connection — a TLS-terminating proxy re-originates TLS and
+	// breaks the handshake/stream binding the relaxation relies on. Detect that via
+	// the TLS peer cert (a direct agent presents its own enrollment cert with
+	// CN/SAN == hostname; a terminating proxy presents its own). When relaxation is
+	// configured but this connection isn't direct, fall back to full per-message
+	// verification for this stream — fail-safe, the connection stays up.
+	relaxThisStream := s.relaxStreamSig
+	if s.relaxStreamSig && !isDirectMTLS(stream.Context(), envoy.Hostname) {
+		relaxThisStream = false
+		s.metrics.ProxyDetectedTotal.Inc()
+		s.proxyWarnOnce.Do(func() {
+			slog.Warn("checkin: TLS-terminating proxy detected while stream_signature=handshake-only — per-message verification re-enabled for affected connection(s). handshake-only is safe only with direct agent↔server mTLS; remove the proxy from the gRPC path or set checkin.stream_signature: all. See vigo_checkin_proxy_detected_total.")
+		})
 	}
 
 	// Register the stream for push notifications. Refused when the held-stream
@@ -197,7 +215,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 
 			switch m := msg.GetMsg().(type) {
 			case *pb.AgentStreamMessage_CheckIn:
-				if s.needsStreamVerify(m.CheckIn.GetEnvoyId(), envoyID) {
+				if needsStreamVerify(relaxThisStream, m.CheckIn.GetEnvoyId(), envoyID) {
 					if _, err := verifyCheckIn(stream.Context(), s.queries, m.CheckIn, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
 						slog.Warn("stream check-in signature verification failed", "envoy_id", envoyID, "error", err)
 						errCh <- err
@@ -227,7 +245,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				// config-authz check below cannot prove on its own. needsStreamVerify
 				// always returns true for a proxied result (foreign envoy_id), so
 				// handshake-only never skips this load-bearing check.
-				if s.needsStreamVerify(m.ReportResult.GetEnvoyId(), envoyID) {
+				if needsStreamVerify(relaxThisStream, m.ReportResult.GetEnvoyId(), envoyID) {
 					if _, err := verifyReportResultCtx(stream.Context(), s.queries, m.ReportResult, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
 						slog.Warn("stream report-result signature verification failed", "envoy_id", envoyID, "result_envoy_id", m.ReportResult.GetEnvoyId(), "error", err)
 						errCh <- err
@@ -266,7 +284,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				}
 
 			case *pb.AgentStreamMessage_ReportTraits:
-				if s.needsStreamVerify(m.ReportTraits.GetEnvoyId(), envoyID) {
+				if needsStreamVerify(relaxThisStream, m.ReportTraits.GetEnvoyId(), envoyID) {
 					if err := verifyReportTraits(stream.Context(), s.queries, m.ReportTraits, s.signatureWindow, s.fleetIndex, s.metrics); err != nil {
 						slog.Warn("stream report-traits signature verification failed", "envoy_id", envoyID, "error", err)
 						errCh <- err
@@ -368,16 +386,48 @@ func compressBundle(bundle *pb.PolicyBundle) (structured *pb.PolicyBundle, gzipp
 // the open gRPC stream already proves liveness. Unary RPCs set streaming=false to
 // ensure the timestamp is flushed to SQLite.
 // needsStreamVerify reports whether a held-stream message must have its ed25519
-// signature verified. In the default mode (checkin.stream_signature: all) every
-// message is verified. In handshake-only mode the stream owner's own messages
-// (msgEnvoyID == streamEnvoyID) are skipped — their authenticity is already
-// established by the verified handshake (agentstream.go opening) plus mTLS
-// session integrity, so per-message re-verification is redundant (the same
-// model Delta already uses). A message carrying a *different* envoy_id — a
-// proxied device result — is always verified, since its signature is the only
-// proof of that envelope and is not covered by the stream's handshake binding.
-func (s *AgentService) needsStreamVerify(msgEnvoyID, streamEnvoyID string) bool {
-	return !s.relaxStreamSig || msgEnvoyID != streamEnvoyID
+// signature verified. With relax=false (checkin.stream_signature: all, or a
+// connection where a TLS-terminating proxy was detected — see relaxThisStream in
+// AgentStream) every message is verified. With relax=true (handshake-only on a
+// confirmed direct-mTLS connection) the stream owner's own messages (msgEnvoyID
+// == streamEnvoyID) are skipped — their authenticity is already established by
+// the verified handshake plus mTLS session integrity, so per-message
+// re-verification is redundant (the same model Delta already uses). A message
+// carrying a *different* envoy_id — a proxied device result — is always verified,
+// since its signature is the only proof of that envelope and is not covered by
+// the stream's handshake binding.
+func needsStreamVerify(relax bool, msgEnvoyID, streamEnvoyID string) bool {
+	return !relax || msgEnvoyID != streamEnvoyID
+}
+
+// isDirectMTLS reports whether the gRPC connection is a direct agent↔server mTLS
+// connection (not fronted by a TLS-terminating proxy), by checking that the TLS
+// peer certificate's subject CN or a DNS-SAN equals the envoy's hostname. The
+// enrollment cert is server-minted with CN/SAN == hostname (server/ca.SignCSR) —
+// the same string stored as envoy.Hostname, with no normalization on either path
+// — so a direct agent's own client cert matches exactly, while a terminating
+// proxy re-originates TLS and presents its own cert (CN ≠ hostname). Fail-safe:
+// any uncertainty (no peer, no TLS info, no cert) returns false so the caller
+// keeps full per-message verification.
+func isDirectMTLS(ctx context.Context, hostname string) bool {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return false
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
+		return false
+	}
+	cert := tlsInfo.State.PeerCertificates[0]
+	if cert.Subject.CommonName == hostname {
+		return true
+	}
+	for _, name := range cert.DNSNames {
+		if name == hostname {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string, envoy db.Envoy, req *pb.CheckInRequest, streaming bool) (*pb.CheckInResponse, error) {

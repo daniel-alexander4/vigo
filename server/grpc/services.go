@@ -86,6 +86,7 @@ type AgentService struct {
 	streamEdit        config.StreamEditSection            // stream_edit guardrails config
 	globalObserveOnly bool                                // global observe-only from server.yaml
 	relaxStreamSig    bool                                // checkin.stream_signature: handshake-only — skip re-verifying the stream owner's own held-stream messages
+	proxyWarnOnce     sync.Once                           // logs the handshake-only-behind-a-TLS-terminating-proxy warning once per process
 	tunnelMgr         *tunnelManager                      // Scrier tunnel manager (nil when disabled)
 	peerTracker       *swarm.PeerTracker                  // swarm peer tracker (nil when swarm disabled)
 	manifestStore     *swarm.ManifestStore                // swarm manifest CRDT (nil when swarm disabled)

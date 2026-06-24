@@ -27,10 +27,9 @@ func TestNeedsStreamVerify(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := &AgentService{relaxStreamSig: tc.relax}
-			if got := s.needsStreamVerify(tc.msgEnvoy, owner); got != tc.want {
-				t.Errorf("needsStreamVerify(%q, %q) relax=%v = %v, want %v",
-					tc.msgEnvoy, owner, tc.relax, got, tc.want)
+			if got := needsStreamVerify(tc.relax, tc.msgEnvoy, owner); got != tc.want {
+				t.Errorf("needsStreamVerify(relax=%v, %q, %q) = %v, want %v",
+					tc.relax, tc.msgEnvoy, owner, got, tc.want)
 			}
 		})
 	}
