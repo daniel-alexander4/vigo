@@ -41,14 +41,16 @@ only needs the ~5 KB vitals (swarm ingest) or a stable inventory field
   (`inventory_hash` + `sha256(vitals)`) + lazy blob materialization, not a
   `sha256` of the full ~155 KB blob every tick. (`server/db/traitsbatcher.go`.)
 
-Measured net: **4.82 → 1.72 ms/checkin (−64%), ~1,250 → ~3,500 safe envoys @1s**
-on 8 vCPU (this run was `checkin.stream_signature: handshake-only`; the default
-`all`, which ed25519-verifies every check-in, is ~1.91 ms / ~3,140 @1s — the
-parse/sha fix delta is mode-independent). The remaining per-tick cost is the
-snapshot-flush churn that changing
-vitals drive (Mark fires every tick) — tracked as "option C" (snapshot on
-inventory change only, a UX-affecting follow-on) in `pending.md`; the capacity
-table lives in `docs/internal.docs/numbers-of-record.md`.
+Measured net **at 0.76.21** (parse + change-key fixes only): **4.82 → 1.72
+ms/checkin (−64%), ~1,250 → ~3,500 safe envoys @1s** on 8 vCPU (that run was
+`checkin.stream_signature: handshake-only`; the default `all`, which
+ed25519-verifies every check-in, was ~1.91 ms / ~3,140 @1s — the parse/sha fix
+delta is mode-independent). The remaining per-tick cost was the snapshot-flush
+churn that changing vitals drive (Mark fires every tick) — addressed by **option
+C** (snapshot on inventory change only, persist-gated on a `vitals_state_hash`),
+**shipped 0.76.29**: per-checkin **0.805 ms / ~7,450 @1s** (`all`), ~0.70 ms /
+~8,500 (`handshake-only`). The live capacity table is the source of truth in
+`docs/internal.docs/numbers-of-record.md`.
 
 ## Context
 
