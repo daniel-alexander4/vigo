@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:a0671d7fc67532db7941cacb75b31e53e6b94a83d3ecb41ba410f5c0063c5f59 -->
+<!-- vigo-i18n source_sha:5c7073a7ecb30273328b36822098077de1a93ec6e6760e14aabe2c3b9652f2f9 -->
 
 # Dimensionner un hôte vigosrv
 
@@ -10,7 +10,9 @@
 
 ## L'essentiel
 
-**Le plafond mono-hôte de vigosrv est la mémoire, et il est linéaire : environ 220 Ko de RAM par envoy connecté.** Rien d'autre ne sature en premier — le CPU ne sature jamais, le modèle connexion/goroutine est plat et prévisible, et la latence se dégrade gracieusement sous surcharge plutôt que de s'effondrer. **Par défaut, le serveur dimensionne un plafond de connexions maintenues à partir de la RAM de l'hôte et, une fois ce plafond sûr atteint, écarte les nouveaux flux avec `ResourceExhausted` — l'agent se met en retrait et réessaie — de sorte qu'il reste debout sous surcharge plutôt que d'être tué par l'OOM.** Atteindre le point d'OOM du noyau exige de désactiver explicitement le plafond (`checkin.max_connections: -1`) ; les chiffres ci-dessous sont le comportement *physique* d'un serveur sans plafond, c'est-à-dire ce que le plafond est dimensionné pour vous éviter de dépasser.
+**Aux cadences de check-in typiques, le plafond mono-hôte de vigosrv est la mémoire, et il est linéaire : environ 220 Ko de RAM par envoy connecté.** Le modèle connexion/goroutine est plat et prévisible, et la latence se dégrade gracieusement sous surcharge plutôt que de s'effondrer. **Par défaut, le serveur dimensionne un plafond de connexions maintenues à partir de la RAM de l'hôte et, une fois ce plafond sûr atteint, écarte les nouveaux flux avec `ResourceExhausted` — l'agent se met en retrait et réessaie — de sorte qu'il reste debout sous surcharge plutôt que d'être tué par l'OOM.** Atteindre le point d'OOM du noyau exige de désactiver explicitement le plafond (`checkin.max_connections: -1`) ; les chiffres ci-dessous sont le comportement *physique* d'un serveur sans plafond, c'est-à-dire ce que le plafond est dimensionné pour vous éviter de dépasser.
+
+> **Deux plafonds — la mémoire, et à cadence rapide + grand inventaire, le CPU.** Le plafond mémoire de cette page est le plafond contraignant pour la plupart des flottes. Mais à une cadence de check-in agressive de **1 s** avec un **grand inventaire réaliste** (~150 Ko+ de paquets, certificats, etc.), le CPU par check-in pour reconstruire et traiter les traits sature en *premier* : mesuré hors-machine à **~7 450 envoys sur 8 vCPU** avec le mode par défaut `checkin.stream_signature: all` (chaque check-in vérifié ed25519), ou **~8 500** avec `handshake-only` (contre le plafond mémoire de ~60k). Le plafond CPU évolue ≈ linéairement avec les cœurs **et** avec la cadence — à une cadence de 30 s il est ~30× plus élevé, repassant au-dessus du plafond mémoire — donc à moins de faire des check-ins à 1 s sur une flotte volumineuse et riche en inventaire, la mémoire reste la limite. **Règle empirique :** cadence 1 s → dimensionnez pour le CPU (~7 450 envoys par 8 vCPU au mode de signature par défaut, ×N pour une cadence de N secondes ; +~14 % avec handshake-only) ; cadence plus lente → dimensionnez pour la mémoire (ci-dessous).
 
 Sur le matériel de cette page (8 CPU logiques, **31 Gio de RAM**, NVMe), mesuré en direct :
 
