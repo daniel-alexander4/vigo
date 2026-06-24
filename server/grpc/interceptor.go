@@ -6,7 +6,9 @@ package grpc
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -26,6 +28,7 @@ import (
 	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -343,7 +346,7 @@ func verifyWake(ctx context.Context, queries *db.Queries, req *pb.WakeRequest, s
 // lookupEnvoyAndPubKey retrieves a envoy and its parsed ED25519 public key.
 // When a FleetIndex is available, the parsed pubkey is served from memory (O(1),
 // no PEM parse). Falls back to direct DB query.
-func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
+func resolveEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
 	// Fast path: FleetIndex returns parsed pubkey from memory.
 	if fleetIdx != nil {
 		pubKey := fleetIdx.GetPubKey(envoyID)
@@ -391,15 +394,74 @@ func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID stri
 	return envoy, pubKey, nil
 }
 
+// lookupEnvoyAndPubKey resolves the envoy + its ed25519 pubkey and enforces the
+// mTLS client-cert pin in one place — every signature-verify path bottoms out
+// here, so binding the pin check to it covers unary CheckIn/ReportResult/
+// ReportTraits/ResolveSecrets/Wake and the held-stream handshake at once.
+func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
+	envoy, pubKey, err := resolveEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
+	if err != nil {
+		return db.Envoy{}, nil, err
+	}
+	if err := enforceCertPin(ctx, envoy, m); err != nil {
+		return db.Envoy{}, nil, err
+	}
+	return envoy, pubKey, nil
+}
+
+// certPinMismatchLog and grandfatheredPinLog throttle the two cert-pin warnings
+// to once per envoy per window (same pattern as defaultUnknownEnvoyLog).
+var (
+	certPinMismatchLog  = newUnknownEnvoyLog(10 * time.Minute)
+	grandfatheredPinLog = newUnknownEnvoyLog(10 * time.Minute)
+)
+
+// enforceCertPin rejects a connection whose TLS client-cert SubjectPublicKeyInfo
+// doesn't match the envoy's enrolled pin — a TLS-terminating proxy or MITM
+// presenting a different CA-signed cert (mTLS is CA-chain-validated, not pinned
+// to the enrolled key, so directness must be enforced here). An empty stored pin
+// is a grandfathered envoy (enrolled before pinning); enforcement resumes after
+// its next re-enrollment, which captures a fresh pin. A nil/non-TLS peer or a
+// missing client cert fails closed.
+func enforceCertPin(ctx context.Context, envoy db.Envoy, m *metrics.Metrics) error {
+	pin := envoy.CertSpkiSha256
+	if pin == "" {
+		if grandfatheredPinLog.shouldLog(envoy.ID, time.Now()) {
+			slog.Warn("cert-pin: envoy has no enrolled cert pin (grandfathered) — re-enroll to enable TLS-terminating-proxy protection",
+				"envoy_id", envoy.ID, "hostname", envoy.Hostname)
+		}
+		return nil
+	}
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "cert pin: no peer connection")
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
+		return status.Error(codes.Unauthenticated, "cert pin: no client certificate")
+	}
+	sum := sha256.Sum256(tlsInfo.State.PeerCertificates[0].RawSubjectPublicKeyInfo)
+	if hex.EncodeToString(sum[:]) != pin {
+		m.SigVerifyFailed.WithLabelValues("cert_pin_mismatch").Inc()
+		if certPinMismatchLog.shouldLog(envoy.ID, time.Now()) {
+			slog.Warn("cert-pin: client certificate does not match enrolled identity — TLS-terminating proxy/MITM on the gRPC path or wrong cert; rejecting",
+				"envoy_id", envoy.ID, "hostname", envoy.Hostname)
+		}
+		return status.Error(codes.Unauthenticated, "client certificate does not match enrolled identity")
+	}
+	return nil
+}
+
 // fleetEnvoyToDB converts a FleetIndex EnvoyState to a db.Envoy for
 // compatibility with code that expects the DB model.
 func fleetEnvoyToDB(ts *fleet.EnvoyState) db.Envoy {
 	t := db.Envoy{
-		ID:         ts.ID,
-		Hostname:   ts.Hostname,
-		IpAddress:  ts.IP,
-		PubkeyPem:  ts.PubkeyPEM,
-		EnrolledAt: ts.EnrolledAt,
+		ID:             ts.ID,
+		Hostname:       ts.Hostname,
+		IpAddress:      ts.IP,
+		PubkeyPem:      ts.PubkeyPEM,
+		CertSpkiSha256: ts.CertSPKI,
+		EnrolledAt:     ts.EnrolledAt,
 	}
 	if !ts.LastSeen.IsZero() {
 		t.LastSeen.Time = ts.LastSeen

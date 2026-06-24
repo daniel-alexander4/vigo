@@ -152,6 +152,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			Hostname:              t.Hostname,
 			IP:                    t.IpAddress,
 			PubkeyPEM:             t.PubkeyPem,
+			CertSPKI:              t.CertSpkiSha256,
 			EnrolledAt:            t.EnrolledAt,
 			LastSeen:              lastSeen,
 			Revoked:               t.Revoked != 0,

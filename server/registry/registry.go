@@ -287,6 +287,24 @@ func (r *Registry) CreateEnvoy(ctx context.Context, hostname, ip, pubkeyPEM stri
 	return r.insertEnvoyLocked(ctx, hostname, ip, pubkeyPEM)
 }
 
+// SetEnvoyCertPin records an envoy's enrolled mTLS client-cert SPKI hash (hex
+// sha256) so the check-in verify path can pin against it (cert-pinning). The
+// bootstrap handler calls this once the CSR is signed, for the just-enrolled
+// envoy. Re-enrollment mints a fresh cert and a fresh row, so this is the only
+// update path; no separate rotation hook is needed.
+func (r *Registry) SetEnvoyCertPin(ctx context.Context, envoyID, spki string) error {
+	if err := r.queries.UpdateEnvoyCertPin(ctx, db.UpdateEnvoyCertPinParams{
+		CertSpkiSha256: spki,
+		ID:             envoyID,
+	}); err != nil {
+		return fmt.Errorf("storing cert pin for %s: %w", envoyID, err)
+	}
+	if r.fleet != nil {
+		r.fleet.SetCertPin(envoyID, spki)
+	}
+	return nil
+}
+
 // insertEnvoyLocked is the single chokepoint where every enrollment path
 // lands after its own validation. Caller must hold r.enrollMu. The license
 // gate, DB insert, and FleetIndex update happen in that order under the

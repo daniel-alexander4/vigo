@@ -4,7 +4,11 @@
 package bootstrap
 
 import (
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -47,10 +51,10 @@ var validArch = map[string]bool{
 // Handler serves the bootstrap script, agent latest version info, agent
 // binary downloads, and bootstrap registration with CSR signing.
 type Handler struct {
-	serverAddr      string
-	caFile          string
-	agentDir        string
-	version         string // server version (fallback)
+	serverAddr string
+	caFile     string
+	agentDir   string
+	version    string // server version (fallback)
 	// agentVersions maps "<goos>/<goarch>" → version string for every agent
 	// binary present in agentDir. Populated at startup by scanning the dist
 	// tree. Each binary's version is read from its sidecar `<binary>.version`
@@ -654,6 +658,18 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pin the signed cert's SPKI so the check-in verify path can reject a
+	// TLS-terminating proxy/MITM presenting a different cert (cert-pinning).
+	// Best-effort: a failure here leaves the envoy grandfathered (verify path
+	// skips enforcement), not unenrolled — enrollment already succeeded.
+	if spki, perr := certPinFromPEM(signedCert); perr != nil {
+		slog.Warn("bootstrap: could not derive cert pin from signed cert; envoy grandfathered",
+			"hostname", req.Hostname, "envoy_id", envoyID, "error", perr)
+	} else if perr := h.registry.SetEnvoyCertPin(r.Context(), envoyID, spki); perr != nil {
+		slog.Warn("bootstrap: could not store cert pin; envoy grandfathered",
+			"hostname", req.Hostname, "envoy_id", envoyID, "error", perr)
+	}
+
 	h.metrics.EnrollmentsTotal.WithLabelValues("success").Inc()
 	slog.Info("envoy bootstrapped",
 		"hostname", req.Hostname,
@@ -840,4 +856,20 @@ func extractIP(remoteAddr string) string {
 		return remoteAddr
 	}
 	return host
+}
+
+// certPinFromPEM returns the hex sha256 of a PEM-encoded certificate's
+// SubjectPublicKeyInfo — the cert-pin value stored at enrollment and compared
+// against the live TLS peer cert on every check-in.
+func certPinFromPEM(certPEM []byte) (string, error) {
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return "", fmt.Errorf("no PEM block in signed certificate")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("parsing signed certificate: %w", err)
+	}
+	sum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
+	return hex.EncodeToString(sum[:]), nil
 }

@@ -1,36 +1,36 @@
 -- name: CreateEnvoy :one
 INSERT INTO envoys (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
-RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version;
+RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256;
 
 -- name: GetEnvoyByID :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE id = ?;
 
 -- name: GetEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE hostname = ?;
 
 -- name: GetActiveEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE hostname = ? AND revoked = 0;
 
 -- name: ListEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 ORDER BY enrolled_at DESC;
 
 -- name: ListActiveEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC;
 
 -- name: ListActiveEnvoysPaged :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE revoked = 0
   AND (sqlc.arg(after_hostname) = '' OR hostname > sqlc.arg(after_hostname))
@@ -41,7 +41,7 @@ LIMIT sqlc.arg(page_limit);
 -- name: ListEnvoysOffset :many
 -- Offset/limit paginated list of every envoy (active + revoked).
 -- Stable ordering: enrolled_at DESC then id ASC.
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 ORDER BY enrolled_at DESC, id
 LIMIT ? OFFSET ?;
@@ -49,7 +49,7 @@ LIMIT ? OFFSET ?;
 -- name: ListActiveEnvoysOffset :many
 -- Offset/limit paginated list of envoys with revoked = 0.
 -- Stable ordering: enrolled_at DESC then id ASC.
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC, id
@@ -104,3 +104,6 @@ WHERE id = ? AND agent_version != ?;
 UPDATE envoys
 SET ip_address = ?
 WHERE id = ? AND ip_address != ?;
+
+-- name: UpdateEnvoyCertPin :exec
+UPDATE envoys SET cert_spki_sha256 = ? WHERE id = ?;

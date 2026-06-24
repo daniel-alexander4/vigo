@@ -57,7 +57,7 @@ func (q *Queries) CountEnvoys(ctx context.Context) (int64, error) {
 const createEnvoy = `-- name: CreateEnvoy :one
 INSERT INTO envoys (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
-RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 `
 
 type CreateEnvoyParams struct {
@@ -82,6 +82,7 @@ func (q *Queries) CreateEnvoy(ctx context.Context, arg CreateEnvoyParams) (Envoy
 		&i.PendingRotatedSecrets,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
+		&i.CertSpkiSha256,
 	)
 	return i, err
 }
@@ -97,7 +98,7 @@ func (q *Queries) DeleteEnvoy(ctx context.Context, id string) error {
 }
 
 const getActiveEnvoyByHostname = `-- name: GetActiveEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE hostname = ? AND revoked = 0
 `
@@ -118,12 +119,13 @@ func (q *Queries) GetActiveEnvoyByHostname(ctx context.Context, hostname string)
 		&i.PendingRotatedSecrets,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
+		&i.CertSpkiSha256,
 	)
 	return i, err
 }
 
 const getEnvoyByHostname = `-- name: GetEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE hostname = ?
 `
@@ -144,12 +146,13 @@ func (q *Queries) GetEnvoyByHostname(ctx context.Context, hostname string) (Envo
 		&i.PendingRotatedSecrets,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
+		&i.CertSpkiSha256,
 	)
 	return i, err
 }
 
 const getEnvoyByID = `-- name: GetEnvoyByID :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE id = ?
 `
@@ -170,12 +173,13 @@ func (q *Queries) GetEnvoyByID(ctx context.Context, id string) (Envoy, error) {
 		&i.PendingRotatedSecrets,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
+		&i.CertSpkiSha256,
 	)
 	return i, err
 }
 
 const listActiveEnvoys = `-- name: ListActiveEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC
@@ -203,6 +207,7 @@ func (q *Queries) ListActiveEnvoys(ctx context.Context) ([]Envoy, error) {
 			&i.PendingRotatedSecrets,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
+			&i.CertSpkiSha256,
 		); err != nil {
 			return nil, err
 		}
@@ -218,7 +223,7 @@ func (q *Queries) ListActiveEnvoys(ctx context.Context) ([]Envoy, error) {
 }
 
 const listActiveEnvoysOffset = `-- name: ListActiveEnvoysOffset :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC, id
@@ -254,6 +259,7 @@ func (q *Queries) ListActiveEnvoysOffset(ctx context.Context, arg ListActiveEnvo
 			&i.PendingRotatedSecrets,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
+			&i.CertSpkiSha256,
 		); err != nil {
 			return nil, err
 		}
@@ -269,7 +275,7 @@ func (q *Queries) ListActiveEnvoysOffset(ctx context.Context, arg ListActiveEnvo
 }
 
 const listActiveEnvoysPaged = `-- name: ListActiveEnvoysPaged :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 WHERE revoked = 0
   AND (?1 = '' OR hostname > ?1)
@@ -306,6 +312,7 @@ func (q *Queries) ListActiveEnvoysPaged(ctx context.Context, arg ListActiveEnvoy
 			&i.PendingRotatedSecrets,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
+			&i.CertSpkiSha256,
 		); err != nil {
 			return nil, err
 		}
@@ -321,7 +328,7 @@ func (q *Queries) ListActiveEnvoysPaged(ctx context.Context, arg ListActiveEnvoy
 }
 
 const listEnvoys = `-- name: ListEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 ORDER BY enrolled_at DESC
 `
@@ -348,6 +355,7 @@ func (q *Queries) ListEnvoys(ctx context.Context) ([]Envoy, error) {
 			&i.PendingRotatedSecrets,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
+			&i.CertSpkiSha256,
 		); err != nil {
 			return nil, err
 		}
@@ -363,7 +371,7 @@ func (q *Queries) ListEnvoys(ctx context.Context) ([]Envoy, error) {
 }
 
 const listEnvoysOffset = `-- name: ListEnvoysOffset :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version, cert_spki_sha256
 FROM envoys
 ORDER BY enrolled_at DESC, id
 LIMIT ? OFFSET ?
@@ -398,6 +406,7 @@ func (q *Queries) ListEnvoysOffset(ctx context.Context, arg ListEnvoysOffsetPara
 			&i.PendingRotatedSecrets,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
+			&i.CertSpkiSha256,
 		); err != nil {
 			return nil, err
 		}
@@ -448,6 +457,20 @@ type UpdateAgentVersionParams struct {
 
 func (q *Queries) UpdateAgentVersion(ctx context.Context, arg UpdateAgentVersionParams) error {
 	_, err := q.db.ExecContext(ctx, updateAgentVersion, arg.AgentVersion, arg.ID, arg.AgentVersion_2)
+	return err
+}
+
+const updateEnvoyCertPin = `-- name: UpdateEnvoyCertPin :exec
+UPDATE envoys SET cert_spki_sha256 = ? WHERE id = ?
+`
+
+type UpdateEnvoyCertPinParams struct {
+	CertSpkiSha256 string `json:"cert_spki_sha256"`
+	ID             string `json:"id"`
+}
+
+func (q *Queries) UpdateEnvoyCertPin(ctx context.Context, arg UpdateEnvoyCertPinParams) error {
+	_, err := q.db.ExecContext(ctx, updateEnvoyCertPin, arg.CertSpkiSha256, arg.ID)
 	return err
 }
 

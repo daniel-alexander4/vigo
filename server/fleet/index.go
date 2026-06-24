@@ -45,10 +45,16 @@ const envoyStripes = 256
 // fleet-wide write lock. Readers that copy more than one field must acquire
 // the same stripe lock for snapshot consistency.
 type EnvoyState struct {
-	ID                string
-	Hostname          string
-	IP                string
-	PubkeyPEM         string
+	ID        string
+	Hostname  string
+	IP        string
+	PubkeyPEM string
+	// CertSPKI is the hex sha256 of the envoy's enrolled mTLS client-cert
+	// SubjectPublicKeyInfo (cert-pinning). The check-in verify path rejects a
+	// connection whose TLS peer cert SPKI doesn't match — a TLS-terminating
+	// proxy/MITM presents a different CA-signed cert. Empty = grandfathered
+	// (enrolled before pinning); enforced after the envoy's next (re)enrollment.
+	CertSPKI          string
 	EnrolledAt        time.Time
 	LastSeen          time.Time
 	Revoked           bool
@@ -960,6 +966,23 @@ func (f *FleetIndex) SetLiveVitals(id string, lv map[string]string) {
 	lk := f.lockFor(id)
 	lk.Lock()
 	ts.liveVitals = lv
+	lk.Unlock()
+}
+
+// SetCertPin records the envoy's enrolled mTLS client-cert SPKI hash (hex
+// sha256) so the check-in verify path can pin against it. Called once at
+// enrollment (after the CSR is signed) and again on any re-enrollment, which
+// mints a fresh cert. Per-envoy stripe lock, same discipline as SetLiveVitals.
+func (f *FleetIndex) SetCertPin(id, spki string) {
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
+		return
+	}
+	lk := f.lockFor(id)
+	lk.Lock()
+	ts.CertSPKI = spki
 	lk.Unlock()
 }
 
