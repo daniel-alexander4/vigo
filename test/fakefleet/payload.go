@@ -230,8 +230,11 @@ func genVitals(seq int64) json.RawMessage {
 		"filesystem":      genObjArray(8, "fs", []string{"device", "size_gb", "used_gb", "use_pct"}),
 		"users":           genObjArray(6, "user", []string{"name", "uid", "shell", "home"}),
 		"ports":           genObjArray(24, "port", []string{"proto", "port", "process", "state"}),
-		"agent_self":      map[string]any{"version": agentVersion, "threads": 57, "rss_mb": 38, "fds": 24},
-		"host_self":       map[string]any{"fd_pct": 3, "rootfs_pct": 41, "inode_pct": 12, "oom_recent": false, "pkg_repo_ok": true},
+		// agent_self/host_self churn every tick (FD counts / rss wiggle) but are
+		// NOT in operationalVitalsKeys, so they exercise the server's liveVitals
+		// overlay (kept fresh per tick) WITHOUT moving vitals_state_hash.
+		"agent_self":      map[string]any{"version": agentVersion, "threads": 57, "rss_mb": 38 + seq%8, "fds": 24 + seq%16},
+		"host_self":       map[string]any{"fd_pct": 3 + seq%5, "rootfs_pct": 41, "inode_pct": 12, "oom_recent": false, "pkg_repo_ok": true},
 		"host_containers": []any{},
 		"battery":         map[string]any{},
 	}
@@ -243,6 +246,42 @@ func genVitals(seq int64) json.RawMessage {
 // check-in ships distinct bytes (like a real agent). Called per-tick by
 // buildCheckInReq; cheap enough at load-test scale (one ~5 KB marshal per call).
 func freshVitals() json.RawMessage { return genVitals(time.Now().UnixNano()) }
+
+// operationalVitalsKeys mirrors the agent's OPERATIONAL_VITALS
+// (agent/src/checkin/client.rs) — the collectors whose MEANINGFUL content drives
+// vitals_state_hash (ADR-033 Option C). Of these the harness emits users + ports
+// (swarm/puddle/gitback/… are agent-runtime collectors absent from synthetic
+// vitals). Both are churn-free and byte-stable across ticks, so the hash is
+// constant while the churny vitals (time/loadavg/memory/agent_self/host_self)
+// vary every tick — exactly the steady state the gate must skip persisting.
+var operationalVitalsKeys = []string{"swarm", "swarm_seeds", "puddle", "gitback", "curator", "poolq", "lockbox", "longdrawer", "users", "ports"}
+
+// vitalsStateHash computes the per-tick vitals_state_hash the way the agent does
+// (sha256 over the operational collectors' meaningful content), so the server's
+// change-key gating behaves identically under load. The server treats it as
+// opaque — only compared against the prior value — so the harness need only
+// match the *property* (stable when meaningful content is stable), not the exact
+// bytes of the Rust serialization. The harness's operational collectors carry no
+// churny sub-keys, so no per-key stripping is needed here; encoding/json sorts
+// map keys, giving a deterministic digest. Empty when none are present.
+func vitalsStateHash(vitalsJSON []byte) string {
+	var top map[string]json.RawMessage
+	if json.Unmarshal(vitalsJSON, &top) != nil {
+		return ""
+	}
+	canon := map[string]json.RawMessage{}
+	for _, k := range operationalVitalsKeys {
+		if v, ok := top[k]; ok {
+			canon[k] = v
+		}
+	}
+	if len(canon) == 0 {
+		return ""
+	}
+	b, _ := json.Marshal(canon)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
 
 // genObjArray builds a deterministic array of n objects, each carrying the
 // given fields with index-derived string values — enough to give a collector a

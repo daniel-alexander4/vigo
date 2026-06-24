@@ -120,6 +120,7 @@ func dialAgent(cfg config, h *hostState) (*grpc.ClientConn, pb.VigoAgentClient, 
 func buildCheckInReq(h *hostState, deltaMs uint32, policyVersion uint64, fingerprint string, sendInventory bool) *pb.CheckInRequest {
 	now := time.Now()
 	ts := strconv.FormatInt(now.Unix(), 10)
+	vitals := freshVitals()
 	req := &pb.CheckInRequest{
 		EnvoyId:            h.EnvoyID,
 		PolicyVersion:      policyVersion,
@@ -127,7 +128,8 @@ func buildCheckInReq(h *hostState, deltaMs uint32, policyVersion uint64, fingerp
 		StateFingerprint:   fingerprint,
 		Signature:          signWith(h.signingKey(), []byte(ts)),
 		Timestamp:          timestamppb.New(now),
-		VitalsJson:         freshVitals(),
+		VitalsJson:         vitals,
+		VitalsStateHash:    vitalsStateHash(vitals),
 		InventoryHash:      h.InventoryHash,
 		AgentVersion:       agentVersion,
 		IpAddress:          h.IP,
