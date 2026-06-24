@@ -50,3 +50,29 @@ func TestIsDirectMTLS(t *testing.T) {
 		})
 	}
 }
+
+// TestProxyStreamDecision pins the all-modes terminating-proxy handling: a proxy
+// is detected (metered + warned) in BOTH `all` and `handshake-only`, a direct
+// connection never trips it, and handshake-only relaxation is granted only on a
+// direct connection (proxy → fall back to full per-message verification).
+func TestProxyStreamDecision(t *testing.T) {
+	tests := []struct {
+		name                    string
+		relaxConfigured, direct bool
+		wantRelax, wantDetected bool
+	}{
+		{"all mode, direct", false, true, false, false},
+		{"all mode, proxy — detected even though all never relaxes", false, false, false, true},
+		{"handshake-only, direct — relaxation granted", true, true, true, false},
+		{"handshake-only, proxy — relaxation withdrawn, detected", true, false, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			relax, detected := proxyStreamDecision(tt.relaxConfigured, tt.direct)
+			if relax != tt.wantRelax || detected != tt.wantDetected {
+				t.Errorf("proxyStreamDecision(relax=%v, direct=%v) = (relax %v, detected %v), want (relax %v, detected %v)",
+					tt.relaxConfigured, tt.direct, relax, detected, tt.wantRelax, tt.wantDetected)
+			}
+		})
+	}
+}

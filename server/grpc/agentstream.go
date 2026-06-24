@@ -93,19 +93,25 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 		}
 	}
 
-	// Held-stream signature relaxation (handshake-only) is safe only on a DIRECT
-	// agent↔server mTLS connection — a TLS-terminating proxy re-originates TLS and
-	// breaks the handshake/stream binding the relaxation relies on. Detect that via
-	// the TLS peer cert (a direct agent presents its own enrollment cert with
-	// CN/SAN == hostname; a terminating proxy presents its own). When relaxation is
-	// configured but this connection isn't direct, fall back to full per-message
-	// verification for this stream — fail-safe, the connection stays up.
-	relaxThisStream := s.relaxStreamSig
-	if s.relaxStreamSig && !isDirectMTLS(stream.Context(), envoy.Hostname) {
-		relaxThisStream = false
+	// A TLS-terminating proxy on the gRPC path re-originates TLS with its own
+	// cert, breaking the direct agent↔server mTLS that the held-stream identity
+	// model relies on: per-message CheckIn verification can be relaxed only
+	// because the handshake binds the stream (handshake-only), and Delta events
+	// carry no per-message signature in ANY mode — both trust the channel, so a
+	// terminating proxy can forge them. Detect it in every mode via the TLS peer
+	// cert (a direct agent presents its enrollment cert with CN/SAN == hostname;
+	// a terminating proxy presents its own) and surface it. Fail-safe: the
+	// connection stays up, and in handshake-only mode we re-enable full
+	// per-message verification for this stream.
+	relaxThisStream, proxyDetected := proxyStreamDecision(s.relaxStreamSig, isDirectMTLS(stream.Context(), envoy.Hostname))
+	if proxyDetected {
 		s.metrics.ProxyDetectedTotal.Inc()
 		s.proxyWarnOnce.Do(func() {
-			slog.Warn("checkin: TLS-terminating proxy detected while stream_signature=handshake-only — per-message verification re-enabled for affected connection(s). handshake-only is safe only with direct agent↔server mTLS; remove the proxy from the gRPC path or set checkin.stream_signature: all. See vigo_checkin_proxy_detected_total.")
+			if s.relaxStreamSig {
+				slog.Warn("checkin: TLS-terminating proxy detected while stream_signature=handshake-only — per-message CheckIn verification re-enabled for affected connection(s). handshake-only is safe only with direct agent↔server mTLS; remove the proxy from the gRPC path or set checkin.stream_signature: all. See vigo_checkin_proxy_detected_total.")
+			} else {
+				slog.Warn("checkin: TLS-terminating proxy detected on the gRPC path — agent→server content integrity relies on direct end-to-end mTLS, which a terminating proxy breaks. CheckIns stay per-message verified (stream_signature=all), but Delta run-result events are not individually signed and could be forged by the proxy. Remove the proxy from the gRPC path to restore the direct-mTLS integrity guarantee. See vigo_checkin_proxy_detected_total.")
+			}
 		})
 	}
 
@@ -398,6 +404,22 @@ func compressBundle(bundle *pb.PolicyBundle) (structured *pb.PolicyBundle, gzipp
 // the stream's handshake binding.
 func needsStreamVerify(relax bool, msgEnvoyID, streamEnvoyID string) bool {
 	return !relax || msgEnvoyID != streamEnvoyID
+}
+
+// proxyStreamDecision reports, for a freshly-admitted held stream, whether
+// per-message verification must remain on (relax=false) and whether a
+// TLS-terminating proxy was detected. A terminating proxy breaks the direct
+// agent↔server mTLS that the held-stream identity model relies on in EVERY
+// mode — it can forge unsigned Delta events under `all`, and forged check-ins
+// under handshake-only — so detection runs regardless of relaxConfigured.
+// handshake-only additionally falls back to full per-message verification for
+// the affected stream (fail-safe). Pulled out of HandleStream so the
+// all-modes detection invariant is unit-testable without a live stream.
+func proxyStreamDecision(relaxConfigured, direct bool) (relax, proxyDetected bool) {
+	if direct {
+		return relaxConfigured, false
+	}
+	return false, true
 }
 
 // isDirectMTLS reports whether the gRPC connection is a direct agent↔server mTLS
