@@ -129,11 +129,13 @@ func buildCheckInReq(h *hostState, deltaMs uint32, policyVersion uint64, fingerp
 		Signature:          signWith(h.signingKey(), []byte(ts)),
 		Timestamp:          timestamppb.New(now),
 		VitalsJson:         vitals,
-		VitalsStateHash:    vitalsStateHash(vitals),
 		InventoryHash:      h.InventoryHash,
 		AgentVersion:       agentVersion,
 		IpAddress:          h.IP,
 		LastCheckinDeltaMs: deltaMs,
+	}
+	if emitVitalsStateHash {
+		req.VitalsStateHash = vitalsStateHash(vitals)
 	}
 	if sendInventory {
 		req.InventoryJson = fullInventory(h)

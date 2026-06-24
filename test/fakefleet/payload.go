@@ -247,6 +247,14 @@ func genVitals(seq int64) json.RawMessage {
 // buildCheckInReq; cheap enough at load-test scale (one ~5 KB marshal per call).
 func freshVitals() json.RawMessage { return genVitals(time.Now().UnixNano()) }
 
+// emitVitalsStateHash gates whether check-ins carry vitals_state_hash (ADR-033
+// Option C). Default true = faithful split agent. The --no-vitals-hash flag sets
+// it false to simulate a pre-Phase-1 agent: the server then falls back to
+// hashing the whole vitals blob and re-persists every churny tick — the "before"
+// leg of the Option C A/B, so both legs run against ONE server image with the
+// gate as the only variable.
+var emitVitalsStateHash = true
+
 // operationalVitalsKeys mirrors the agent's OPERATIONAL_VITALS
 // (agent/src/checkin/client.rs) — the collectors whose MEANINGFUL content drives
 // vitals_state_hash (ADR-033 Option C). Of these the harness emits users + ports
