@@ -28,6 +28,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -536,10 +537,12 @@ func waitREST(base string, timeout time.Duration) bool {
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(base + "/metrics")
 		if err == nil {
-			body := make([]byte, 4096)
-			n, _ := resp.Body.Read(body)
+			// Read the whole body: vigo_build_info sits well past the first 4 KB
+			// of the (now much larger) /metrics output, so a single bounded Read
+			// would never see it.
+			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			if strings.Contains(string(body[:n]), "vigo_build_info") {
+			if strings.Contains(string(body), "vigo_build_info") {
 				return true
 			}
 		}
