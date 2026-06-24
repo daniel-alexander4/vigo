@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/certexpiry"
@@ -26,11 +27,32 @@ import (
 
 // DataSource implements ui.DataSource backed by a FleetIndex for real-time
 // queries and DB for historical data (runs, plans, convergence history).
+// envoyRowsCacheTTL bounds how stale the memoized /envoys full-fleet row
+// build may be. Kept below the 5s minimum UI poll interval so the page is
+// never less fresh than its own poll cadence, while still collapsing the
+// stats+table poll fragments (plus multi-tab and scroll load-more) within a
+// tick into a single full-fleet build — the build is O(enrolled) and churns
+// ~tens of MB of transient rows at large fleets, so doing it once per window
+// instead of per request removes avoidable GC load.
+const envoyRowsCacheTTL = 2 * time.Second
+
 type DataSource struct {
 	fleet       *FleetIndex
 	queries     *db.Queries
 	runStore    db.RunStore
 	configStore *config.ConfigStore
+
+	// envoyRowsCache memoizes the full-fleet envoy row build (SnapshotEnvoys +
+	// the per-row Match/EnvoyFrameworks pass) shared across all /envoys
+	// consumers. The cached slice is read-only: callers filter into a fresh
+	// slice (filterEnvoyRows always copies) and sort that, never the shared
+	// rows. Rebuilt under the mutex, so concurrent callers single-flight the
+	// build rather than each rebuilding the fleet.
+	envoyRowsCache struct {
+		mu      sync.Mutex
+		rows    []ui.EnvoyRow
+		builtAt time.Time
+	}
 
 	// expectedAgentVersion resolves the per-(os,arch) agent version the
 	// server would auto-update an envoy to, given its reported os.family
@@ -166,6 +188,25 @@ func (ds *DataSource) envoyRows(baseInterval, offlineThreshold time.Duration) []
 	return rows
 }
 
+// cachedEnvoyRows returns the memoized full-fleet row build, rebuilding it
+// when the cache is older than envoyRowsCacheTTL. The returned slice is
+// shared and read-only — callers must not sort or mutate it in place
+// (EnvoysData filters into a fresh slice via filterEnvoyRows, then sorts that).
+// The build runs under the mutex so simultaneous callers (the stats + table
+// poll fragments, multiple tabs, scroll load-more) collapse to one build per
+// window instead of a thundering herd of full-fleet rebuilds.
+func (ds *DataSource) cachedEnvoyRows(baseInterval, offlineThreshold time.Duration) []ui.EnvoyRow {
+	ds.envoyRowsCache.mu.Lock()
+	defer ds.envoyRowsCache.mu.Unlock()
+	if ds.envoyRowsCache.rows != nil && time.Since(ds.envoyRowsCache.builtAt) < envoyRowsCacheTTL {
+		return ds.envoyRowsCache.rows
+	}
+	rows := ds.envoyRows(baseInterval, offlineThreshold)
+	ds.envoyRowsCache.rows = rows
+	ds.envoyRowsCache.builtAt = time.Now()
+	return rows
+}
+
 func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration) ui.DashboardPageData {
 	summary := ds.fleet.ConvergenceSummary()
 
@@ -180,19 +221,22 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 
 	// Fleet table: worst 50 envoys, triage-ordered. Also tally Observing
 	// (observe-only) here in the same walk so the dashboard filter-bar
-	// has the field without a separate iteration.
-	all := ds.envoyRows(baseInterval, offlineThreshold)
+	// has the field without a separate iteration. Shares the /envoys
+	// full-fleet row memo (cachedEnvoyRows) — same build, same poll churn.
+	// The cache is shared read-only, so copy before the in-place sort.
+	all := ds.cachedEnvoyRows(baseInterval, offlineThreshold)
 	observing := 0
 	for _, e := range all {
 		if e.ObserveOnly {
 			observing++
 		}
 	}
-	sortByWorstStatus(all)
-	capped := len(all) > 50
-	worst := all
+	worstRows := append([]ui.EnvoyRow(nil), all...)
+	sortByWorstStatus(worstRows)
+	capped := len(worstRows) > 50
+	worst := worstRows
 	if capped {
-		worst = all[:50]
+		worst = worstRows[:50]
 	}
 	fleetRows := make([]ui.FleetRow, 0, len(worst))
 	for _, e := range worst {
@@ -343,7 +387,7 @@ func (ds *DataSource) DashboardStatsData(baseInterval, offlineThreshold time.Dur
 // accepts comma-separated values for OR-within-axis semantics; AND
 // across axes (the existing convFilter/driftFilter/reachFilter behavior).
 func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset, limit int) ui.EnvoysPageData {
-	all := ds.envoyRows(baseInterval, offlineThreshold)
+	all := ds.cachedEnvoyRows(baseInterval, offlineThreshold)
 
 	// Fleet-wide Module Health + observe-only count over the full set,
 	// before filtering — these are fleet totals, not page totals.
