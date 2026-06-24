@@ -60,6 +60,7 @@ type config struct {
 	reportConcurrency int
 	ramp              time.Duration
 	limit             int
+	slice             string
 	stream            bool
 	skipPublish       bool
 	vigocliBin        string
@@ -133,6 +134,7 @@ func parseFlags(cmd string, args []string) config {
 	reportConcurrency := fs.Int("report-concurrency", 256, "max in-flight ReportResult writes across the fleet (fire-and-forget; a backlog skips a report round rather than stalling check-ins)")
 	ramp := fs.Duration("ramp", time.Minute, "startup window the run daemon staggers first check-ins over (spreads the initial full-bundle builds so the server isn't stormed)")
 	limit := fs.Int("limit", 0, "if >0, the run daemon drives only the first N envoys (testing)")
+	slice := fs.String("slice", "", "drive only this VM's shard of the fleet as \"i/N\" (1-based), e.g. 2/5 = the 2nd of 5 harness VMs. The N shards tile the fleet disjointly — each VM runs the same create'd manifest with a different --slice and together they drive every envoy once. Empty = whole fleet. For multi-VM fan-out past the ~64k connections one box can hold")
 	stream := fs.Bool("stream", false, "run daemon holds a real bidi AgentStream per envoy (exercises vigo_streams_active / the per-stream connection-RSS ceiling, checkin.max_connections) instead of unary check-ins")
 	vigocliBin := fs.String("vigocli", "vigocli", "vigocli binary used to publish the fleet config (stacks → .live)")
 	skipPublish := fs.Bool("skip-publish", false, "create only: enroll + first-report without writing or publishing a config tree — envoys converge against whatever .live the target server already serves")
@@ -174,6 +176,7 @@ func parseFlags(cmd string, args []string) config {
 		reportConcurrency: *reportConcurrency,
 		ramp:              *ramp,
 		limit:             *limit,
+		slice:             *slice,
 		stream:            *stream,
 		skipPublish:       *skipPublish,
 		vigocliBin:        *vigocliBin,

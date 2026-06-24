@@ -70,6 +70,14 @@ func runRun(cfg config) {
 		ramp = cfg.cadence
 	}
 
+	// Multi-VM fan-out: each harness VM drives a disjoint [start,end) shard of
+	// the same manifest. Empty --slice → the whole fleet.
+	start, end, err := sliceBounds(n, cfg.slice)
+	if err != nil {
+		die("%v", err)
+	}
+	shardN := end - start
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -82,13 +90,13 @@ func runRun(cfg config) {
 	// next report-cadence.
 	reportSem := make(chan struct{}, cfg.reportConcurrency)
 
-	fmt.Printf("run: driving %d envoys — checkin every %s, report every %s (≤%d in flight), %s startup ramp, persistent conn per envoy; Ctrl-C to stop\n",
-		n, cfg.cadence, cfg.reportCadence, cfg.reportConcurrency, ramp)
+	fmt.Printf("run: driving %d of %d envoys%s — checkin every %s, report every %s (≤%d in flight), %s startup ramp, persistent conn per envoy; Ctrl-C to stop\n",
+		shardN, n, sliceLabel(cfg.slice), cfg.cadence, cfg.reportCadence, cfg.reportConcurrency, ramp)
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := start; i < end; i++ {
 		wg.Add(1)
-		offset := time.Duration(int64(ramp) * int64(i) / int64(n))
+		offset := time.Duration(int64(ramp) * int64(i-start) / int64(shardN))
 		go func(h *hostState, off time.Duration) {
 			defer wg.Done()
 			conn, client, err := dialAgent(cfg, h)
@@ -176,7 +184,7 @@ func runRun(cfg config) {
 		}(&st.Hosts[i], offset)
 	}
 
-	go reportRunStats(ctx, n, &runCounters{&checkins, &checkinFails, &reports, &reportFails, &reportSkips, &gone})
+	go reportRunStats(ctx, shardN, &runCounters{&checkins, &checkinFails, &reports, &reportFails, &reportSkips, &gone})
 
 	wg.Wait()
 	fmt.Printf("\nrun: stopped — %d checkins (%d failed), %d reports (%d failed, %d skipped), %d gone\n",

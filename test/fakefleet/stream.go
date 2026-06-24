@@ -50,6 +50,14 @@ func runStream(cfg config) {
 		ramp = cfg.cadence
 	}
 
+	// Multi-VM fan-out: each harness VM holds streams for a disjoint [start,end)
+	// shard of the same manifest. Empty --slice → the whole fleet.
+	start, end, err := sliceBounds(n, cfg.slice)
+	if err != nil {
+		die("%v", err)
+	}
+	shardN := end - start
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -57,20 +65,20 @@ func runStream(cfg config) {
 	var checkins, checkinFails, reports, reportFails, reportSkips, gone atomic.Int64
 	c := &runCounters{&checkins, &checkinFails, &reports, &reportFails, &reportSkips, &gone}
 
-	fmt.Printf("run --stream: holding %d bidi AgentStreams — checkin every %s, report every %s, %s startup ramp, one held stream per envoy; Ctrl-C to stop\n",
-		n, cfg.cadence, cfg.reportCadence, ramp)
+	fmt.Printf("run --stream: holding %d of %d bidi AgentStreams%s — checkin every %s, report every %s, %s startup ramp, one held stream per envoy; Ctrl-C to stop\n",
+		shardN, n, sliceLabel(cfg.slice), cfg.cadence, cfg.reportCadence, ramp)
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := start; i < end; i++ {
 		wg.Add(1)
-		offset := time.Duration(int64(ramp) * int64(i) / int64(n))
+		offset := time.Duration(int64(ramp) * int64(i-start) / int64(shardN))
 		go func(h *hostState, off time.Duration) {
 			defer wg.Done()
 			streamEnvoy(ctx, cfg, h, deltaMs, off, c)
 		}(&st.Hosts[i], offset)
 	}
 
-	go reportRunStats(ctx, n, c)
+	go reportRunStats(ctx, shardN, c)
 
 	wg.Wait()
 	fmt.Printf("\nrun --stream: stopped — %d checkins (%d failed), %d reports (%d failed), %d gone\n",

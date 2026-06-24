@@ -162,6 +162,8 @@ the manifest. Stop the daemon first so a tick doesn't race the delete
 | `--cadence` | `1s` | check-in interval, also reported as the check-in cycle (`run`/`tick`) |
 | `--report-cadence` | `1m` | how often the daemon reports a convergence run per envoy (`run`) |
 | `--stream` | `false` | `run` holds a real bidi `AgentStream` per envoy instead of unary check-ins — the only mode that drives `vigo_streams_active` and the per-stream connection-RSS ceiling (`checkin.max_connections`) |
+| `--slice` | (empty) | `run` drives only this VM's shard of the fleet as `i/N` (1-based), e.g. `2/5`. The `N` shards tile the fleet disjointly, so several harness VMs each run the **same** `create`d manifest with a different `--slice` and together drive every envoy once — the multi-box fan-out past the ~64k connections one source IP can hold against a single `:1530`. Empty = whole fleet. See [`docs/internal.docs/loadtest-per-cadence-runbook.md`](../../docs/internal.docs/loadtest-per-cadence-runbook.md) and `gcloud/provision-harness-fleet.sh` |
+| `--limit` | `0` | `run` drives only the first N envoys (single-box testing; for multi-box use `--slice`) |
 | `--concurrency` | `64` | max in-flight enroll/checkin operations |
 | `--server` | `127.0.0.1:1530` | gRPC address |
 | `--api` | `https://127.0.0.1:8443` | REST API base |
