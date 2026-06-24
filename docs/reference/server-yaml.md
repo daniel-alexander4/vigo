@@ -575,7 +575,8 @@ tuning:
   keepalive_time: "30s"              # how often the server pings each conn to check liveness
   keepalive_timeout: "30s"           # deadline for the ping ACK before the conn is closed
   gogc: 100                          # Go GC target percentage
-  memory_limit: ""                   # GOMEMLIMIT ceiling (e.g. "4GiB")
+  # GOMEMLIMIT has no key here — auto-derived to ~80% of the cgroup-aware RAM,
+  # or set the GOMEMLIMIT env var to override (GOMEMLIMIT=off for no limit).
 ```
 
 ### gRPC keepalive — `keepalive_time` + `keepalive_timeout`

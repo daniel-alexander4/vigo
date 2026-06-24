@@ -84,6 +84,10 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, err
 	}
 
+	if err := detectRetiredTuningMemoryLimit(data); err != nil {
+		return nil, err
+	}
+
 	if err := detectUnsupportedDriver(data); err != nil {
 		return nil, err
 	}
@@ -201,6 +205,26 @@ func isBoolScalar(v any) bool {
 // the `steorras:` / `steorra_id:` sub-keys to `bolts:` / `bolt_id:` in the
 // same cutover; the operator must rename the block in one pass. No
 // translation, no shim — point at the migration target and refuse to start.
+// detectRetiredTuningMemoryLimit rejects server.yaml that still sets
+// tuning.memory_limit. The Go memory soft-limit is no longer a YAML knob — it is
+// auto-derived to ~80% of the cgroup-aware budget, or set via the standard
+// GOMEMLIMIT env var (deployment/runtime tuning, alongside the container's own
+// memory limit). No translation layer — point at the env var and refuse to start.
+func detectRetiredTuningMemoryLimit(data []byte) error {
+	var raw struct {
+		Tuning struct {
+			MemoryLimit any `yaml:"memory_limit"`
+		} `yaml:"tuning"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	if raw.Tuning.MemoryLimit == nil {
+		return nil
+	}
+	return fmt.Errorf("server.yaml uses retired `tuning.memory_limit` key — the Go memory limit is now auto-derived to ~80%% of the cgroup-aware budget, or set via the standard `GOMEMLIMIT` environment variable (in docker-compose/systemd, alongside the container's memory limit). Remove the key; set `GOMEMLIMIT` to override (`GOMEMLIMIT=off` for no limit)")
+}
+
 func detectRetiredTungolKey(data []byte) error {
 	var raw struct {
 		Tungol any `yaml:"tungol"`

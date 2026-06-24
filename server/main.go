@@ -248,37 +248,51 @@ func parseDuration(s string, def time.Duration) time.Duration {
 	return d
 }
 
-// applyRuntimeTuning configures Go GC and memory limits from the tuning section.
+// applyRuntimeTuning configures Go GC and the GOMEMLIMIT soft memory limit.
+// GOGC comes from the tuning section (opt-in). The memory limit has no YAML knob —
+// it's deployment/runtime tuning, set via the standard GOMEMLIMIT env var
+// alongside the container's own memory limit, not server.yaml (a retired
+// tuning.memory_limit key hard-errors at load — see detectRetiredTuningMemoryLimit).
+// When GOMEMLIMIT is unset we auto-derive ~80% of the cgroup-aware budget;
+// when the operator set it (the Go runtime applies it before main, including
+// GOMEMLIMIT=off for "no limit") we defer to it rather than clobber it.
 func applyRuntimeTuning(t config.TuningSection) {
 	if t.GOGC != nil {
 		old := debug.SetGCPercent(*t.GOGC)
 		slog.Info("Go GC tuning applied", "gogc", *t.GOGC, "previous", old)
 	}
-	if t.MemoryLimit != "" {
-		limit := parseMemoryLimit(t.MemoryLimit)
-		if limit > 0 {
-			old := debug.SetMemoryLimit(limit)
-			slog.Info("Go memory limit applied", "limit", t.MemoryLimit, "bytes", limit, "previous", old)
-		}
+	if !shouldAutoDeriveMemLimit(os.Getenv("GOMEMLIMIT")) {
+		slog.Info("Go memory limit from GOMEMLIMIT env; skipping auto-derive", "bytes", debug.SetMemoryLimit(-1))
 		return
 	}
-	// Unset: auto-derive a soft limit at ~80% of the cgroup-aware memory budget.
-	// GOMEMLIMIT governs only the Go heap, so the ~20% headroom covers the
-	// non-Go RSS GOMEMLIMIT can't cap — chiefly the cgo SQLite page cache
-	// (_cache_size=-64000 ≈ 64 MB per read/write conn) plus runtime overhead.
-	// Turns an OOM-kill under a heap spike (e.g. rehydrating a large fleet) into
-	// hard GC near the limit. Skipped when the budget is unknown (HostMemoryBytes
-	// returns 0 on non-Linux / unreadable cgroup+meminfo). Operators override by
-	// setting tuning.memory_limit explicitly.
+	// Auto-derive a soft limit at ~80% of the cgroup-aware memory budget.
+	// GOMEMLIMIT governs only the Go heap; the ~20% headroom is a transient
+	// GC-overshoot safety margin — the heap can spike past the limit before GC
+	// catches up under a load burst (e.g. rehydrating a large fleet), and without
+	// the limit that's an OOM-kill instead of hard GC near the limit. The non-Go
+	// RSS GOMEMLIMIT can't cap is negligible — measured ~40 MB on a 2,500-envoy
+	// fleet (cgo SQLite cache + binary + thread stacks), not the per-conn cache the
+	// margin once assumed. 80% is a conservative flat guess; refining it (or going
+	// adaptive) needs near-limit overshoot data a single box can't produce — see
+	// pending.md. Skipped when the budget is unknown (HostMemoryBytes returns 0 on
+	// non-Linux / unreadable cgroup+meminfo).
 	if limit := deriveMemoryLimit(isgrpc.HostMemoryBytes()); limit > 0 {
 		old := debug.SetMemoryLimit(limit)
 		slog.Info("Go memory limit auto-derived", "bytes", limit, "pct", memoryLimitPct, "previous", old)
 	}
 }
 
+// shouldAutoDeriveMemLimit reports whether to auto-derive GOMEMLIMIT: only when
+// the operator hasn't set the standard GOMEMLIMIT env var. Any explicit value
+// (including "off" for no limit) is honored — the Go runtime already applied it
+// before main, so we must not clobber it. gomemlimitEnv is os.Getenv("GOMEMLIMIT").
+func shouldAutoDeriveMemLimit(gomemlimitEnv string) bool {
+	return gomemlimitEnv == ""
+}
+
 // memoryLimitPct is the fraction of the cgroup-aware memory budget used for the
-// auto-derived GOMEMLIMIT. The ~20% headroom covers non-Go-heap RSS that
-// GOMEMLIMIT cannot cap — chiefly the cgo SQLite page cache.
+// auto-derived GOMEMLIMIT. The ~20% headroom is a transient GC-overshoot margin
+// (non-Go-heap RSS is negligible — measured ~40 MB).
 const memoryLimitPct = 80
 
 // deriveMemoryLimit returns the auto GOMEMLIMIT for a memory budget, or 0 when
@@ -289,44 +303,6 @@ func deriveMemoryLimit(budget uint64) int64 {
 		return 0
 	}
 	return int64(budget / 100 * memoryLimitPct)
-}
-
-// parseMemoryLimit parses a human-readable memory size (e.g. "4GiB", "512MiB",
-// "1073741824") into bytes. Supports B, KiB, MiB, GiB, TiB suffixes.
-func parseMemoryLimit(s string) int64 {
-	if s == "" {
-		return 0
-	}
-
-	type suffix struct {
-		name string
-		mult int64
-	}
-	suffixes := []suffix{
-		{"TiB", 1 << 40},
-		{"GiB", 1 << 30},
-		{"MiB", 1 << 20},
-		{"KiB", 1 << 10},
-		{"B", 1},
-	}
-
-	for _, sf := range suffixes {
-		if len(s) > len(sf.name) && s[len(s)-len(sf.name):] == sf.name {
-			var n int64
-			if _, err := fmt.Sscanf(s[:len(s)-len(sf.name)], "%d", &n); err == nil && n > 0 {
-				return n * sf.mult
-			}
-		}
-	}
-
-	// Try plain integer (bytes).
-	var n int64
-	if _, err := fmt.Sscanf(s, "%d", &n); err == nil && n > 0 {
-		return n
-	}
-
-	slog.Warn("invalid memory_limit, ignoring", "value", s)
-	return 0
 }
 
 // metricsFleetAdapter wraps fleet.FleetIndex to satisfy metrics.FleetSource,

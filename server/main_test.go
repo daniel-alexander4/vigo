@@ -31,27 +31,19 @@ func TestParseRetention(t *testing.T) {
 	}
 }
 
-func TestParseMemoryLimit(t *testing.T) {
+func TestShouldAutoDeriveMemLimit(t *testing.T) {
 	tests := []struct {
-		input string
-		want  int64
+		gomemlimitEnv string
+		want          bool
 	}{
-		{"", 0},
-		{"invalid", 0},
-		{"1024", 1024},
-		{"100B", 100},
-		{"512KiB", 512 * 1024},
-		{"256MiB", 256 * 1024 * 1024},
-		{"4GiB", 4 * 1024 * 1024 * 1024},
-		{"1TiB", 1 << 40},
-		{"0", 0},
-		{"-1", 0},
+		{"", true},          // unset → auto-derive
+		{"4GiB", false},     // explicit value → defer to the env (don't clobber)
+		{"off", false},      // explicit "no limit" → defer, must NOT override with auto-derive
+		{"26843545600", false},
 	}
-
 	for _, tt := range tests {
-		got := parseMemoryLimit(tt.input)
-		if got != tt.want {
-			t.Errorf("parseMemoryLimit(%q) = %d, want %d", tt.input, got, tt.want)
+		if got := shouldAutoDeriveMemLimit(tt.gomemlimitEnv); got != tt.want {
+			t.Errorf("shouldAutoDeriveMemLimit(%q) = %v, want %v", tt.gomemlimitEnv, got, tt.want)
 		}
 	}
 }
@@ -71,7 +63,7 @@ func TestDeriveMemoryLimit(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("deriveMemoryLimit(%d) = %d, want %d", tt.budget, got, tt.want)
 		}
-		// Sanity: result is ~80% and strictly below the budget (headroom for cgo/runtime).
+		// Sanity: result is ~80% and strictly below the budget (GC-overshoot margin).
 		if tt.budget > 0 && (uint64(got) >= tt.budget || uint64(got) < tt.budget/100*79) {
 			t.Errorf("deriveMemoryLimit(%d) = %d not in the ~80%%-with-headroom band", tt.budget, got)
 		}

@@ -551,7 +551,9 @@ watcher:
 #
 #   # Go runtime (large fleets only)
 #   # gogc: 50                                 # GC target % (default: 100)
-#   # memory_limit: "4GiB"                     # GOMEMLIMIT soft limit; empty = auto ~80% of detected RAM
+#   # GOMEMLIMIT (Go memory soft-limit) has no key here — auto-derives to ~80% of
+#   # the cgroup-aware RAM, or set the GOMEMLIMIT env var to override (in
+#   # docker-compose/systemd, alongside the container's own memory limit).
 #
 #   # gRPC transport (large fleets only)
 #   # grpc_read_buffer: 16384
