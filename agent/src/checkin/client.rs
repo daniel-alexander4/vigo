@@ -30,9 +30,11 @@ const PRIMARY_PROBE_CYCLES: u32 = 20;
 /// ADR-033: partition full traits JSON into (vitals_json, inventory_json) along
 /// the agent's existing collector classification — volatile collectors
 /// (loadavg/memory/swarm/...) are the vitals shipped every check-in; everything
-/// else is inventory, shipped only when its content hash changes. Returns None
-/// when the payload isn't a JSON object (the caller then sends nothing).
-fn split_traits(traits_json: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+/// else is inventory, shipped only when its content hash changes. Also computes
+/// the `vitals_state_hash` over the operational vitals collectors' meaningful
+/// content (ADR-033 Option C Phase 1). Returns None when the payload isn't a
+/// JSON object (the caller then sends nothing).
+fn split_traits(traits_json: &[u8]) -> Option<(Vec<u8>, Vec<u8>, String)> {
     let val: serde_json::Value = serde_json::from_slice(traits_json).ok()?;
     let obj = val.as_object()?;
     let volatile: HashSet<&'static str> = crate::traits::volatile_collectors()
@@ -48,9 +50,11 @@ fn split_traits(traits_json: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
             inventory.insert(k.clone(), v.clone());
         }
     }
+    let vitals_state_hash = compute_vitals_state_hash(&vitals);
     Some((
         serde_json::to_vec(&serde_json::Value::Object(vitals)).ok()?,
         serde_json::to_vec(&serde_json::Value::Object(inventory)).ok()?,
+        vitals_state_hash,
     ))
 }
 
@@ -59,6 +63,91 @@ fn split_traits(traits_json: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
 /// any server-side computation.
 fn sha256_hex(data: &[u8]) -> String {
     hex::encode(Sha256::digest(data))
+}
+
+/// Operational vitals collectors whose MEANINGFUL content the server uses to
+/// decide whether a full re-persist/re-flatten is warranted (ADR-033 Option C
+/// Phase 1). Their churny telemetry (timestamps, in-flight download progress,
+/// login sessions) is stripped before hashing — see `CHURNY_VITALS_KEYS`.
+/// Everything else in the vitals blob (loadavg/memory/agent_self/host_self/…)
+/// is pure per-tick telemetry routed to the server's live-vitals path, not this
+/// hash, so it is deliberately excluded here. `swarm` is the `SwarmCache`
+/// collector's JSON key.
+const OPERATIONAL_VITALS: &[&str] = &[
+    "swarm",
+    "swarm_seeds",
+    "puddle",
+    "gitback",
+    "curator",
+    "poolq",
+    "lockbox",
+    "longdrawer",
+    "users",
+    "ports",
+];
+
+/// Keys dropped at any nesting depth before hashing operational vitals: fields
+/// that wiggle every check-in without reflecting a meaningful state change. The
+/// rescrut crack on "just strip `updated_at`" is honored here — `last_seen`
+/// (lockbox peers) and `active_download_ms`/`downloading` (swarm in-flight
+/// transfers) churn independently of `updated_at`, so all of them are stripped.
+const CHURNY_VITALS_KEYS: &[&str] = &[
+    "updated_at",           // per-user swarm collectors stamp this every collect
+    "mtime",                // lockbox/longdrawer per-file modification time
+    "last_seen",            // lockbox peer liveness
+    "active_download_ms",   // swarm in-flight transfer progress (per sha)
+    "downloading",          // swarm in-flight chunk counts
+    "chunk_sources",        // swarm transient per-chunk source map
+    "chunk_details",        // swarm per-chunk progress (carries ms)
+    "logged_in",            // users login/logout session churn
+    "bare_repo_size_bytes", // gitback bare-repo dir size drifts with git GC
+];
+
+/// Recursively drop churny keys and sort array elements so the resulting bytes
+/// depend only on meaningful content — independent of cosmetic reordering
+/// (`read_dir` order, push order) or telemetry wiggle. Object keys are already
+/// canonical because `serde_json::Map` is a `BTreeMap` (no `preserve_order`).
+fn canonicalize_meaningful(v: &serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match v {
+        Value::Object(map) => {
+            let mut out = serde_json::Map::new();
+            for (k, val) in map {
+                if CHURNY_VITALS_KEYS.contains(&k.as_str()) {
+                    continue;
+                }
+                out.insert(k.clone(), canonicalize_meaningful(val));
+            }
+            Value::Object(out)
+        }
+        Value::Array(arr) => {
+            let mut items: Vec<Value> = arr.iter().map(canonicalize_meaningful).collect();
+            // Sort by serialized form so set-equal arrays in any order hash equal.
+            items.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            Value::Array(items)
+        }
+        other => other.clone(),
+    }
+}
+
+/// sha256-hex over the meaningful content of the operational vitals collectors.
+/// Server-opaque, like `sha256_hex` above — only ever compared against the
+/// agent's own prior value, so the exact serialization need not match any
+/// server-side computation. Empty string when no operational vitals are present.
+fn compute_vitals_state_hash(vitals: &serde_json::Map<String, serde_json::Value>) -> String {
+    let mut canon = serde_json::Map::new();
+    for name in OPERATIONAL_VITALS {
+        if let Some(v) = vitals.get(*name) {
+            canon.insert((*name).to_string(), canonicalize_meaningful(v));
+        }
+    }
+    if canon.is_empty() {
+        return String::new();
+    }
+    match serde_json::to_vec(&serde_json::Value::Object(canon)) {
+        Ok(bytes) => sha256_hex(&bytes),
+        Err(_) => String::new(),
+    }
 }
 
 /// ADR-033 conditional-traits gate state (behind `Client.inventory_gate`).
@@ -445,18 +534,19 @@ impl Client {
     /// not a JSON object) yields all-empty — the server skips traits that cycle.
     /// Pure read of the gate; the caller records the outcome via
     /// `commit_inventory` once it holds the response.
-    fn prepare_split(&self, traits_json: Option<Vec<u8>>) -> (Vec<u8>, Vec<u8>, String) {
-        let (vitals, inventory) = match traits_json.as_deref().and_then(split_traits) {
-            Some(pair) => pair,
-            None => return (Vec::new(), Vec::new(), String::new()),
-        };
+    fn prepare_split(&self, traits_json: Option<Vec<u8>>) -> (Vec<u8>, Vec<u8>, String, String) {
+        let (vitals, inventory, vitals_state_hash) =
+            match traits_json.as_deref().and_then(split_traits) {
+                Some(t) => t,
+                None => return (Vec::new(), Vec::new(), String::new(), String::new()),
+            };
         let hash = sha256_hex(&inventory);
         let send_inventory = {
             let gate = self.inventory_gate.lock().unwrap();
             gate.force_resend || gate.last_hash.as_deref() != Some(hash.as_str())
         };
         let inv = if send_inventory { inventory } else { Vec::new() };
-        (vitals, inv, hash)
+        (vitals, inv, hash, vitals_state_hash)
     }
 
     /// ADR-033: after a check-in response, record the inventory the server now
@@ -487,7 +577,8 @@ impl Client {
 
         // ADR-033 conditional traits: vitals every check-in, inventory only when
         // changed or the server requested a resend (see prepare_split).
-        let (vitals_json, inventory_json, inventory_hash) = self.prepare_split(traits_json);
+        let (vitals_json, inventory_json, inventory_hash, vitals_state_hash) =
+            self.prepare_split(traits_json);
 
         let req = CheckInRequest {
             envoy_id: self.envoy_id.clone(),
@@ -506,6 +597,7 @@ impl Client {
             vitals_json,
             inventory_json,
             inventory_hash: inventory_hash.clone(),
+            vitals_state_hash,
         };
 
         let span = tracing::info_span!("check_in", trace_id = %trace_id);
@@ -774,7 +866,8 @@ impl Client {
         // ADR-033: split like the unary path — vitals every check-in, inventory
         // only on change/resend. The caller records the outcome via
         // `commit_inventory` once it has the response (the builder is `&self`).
-        let (vitals_json, inventory_json, inventory_hash) = self.prepare_split(traits_json);
+        let (vitals_json, inventory_json, inventory_hash, vitals_state_hash) =
+            self.prepare_split(traits_json);
 
         CheckInRequest {
             envoy_id: self.envoy_id.clone(),
@@ -793,6 +886,7 @@ impl Client {
             vitals_json,
             inventory_json,
             inventory_hash,
+            vitals_state_hash,
         }
     }
 
@@ -868,7 +962,7 @@ mod tests {
     fn test_split_traits_partitions_by_volatility() {
         // loadavg/uptime are volatile (vitals); packages is stable (inventory).
         let traits = br#"{"loadavg":{"load1":1.0},"packages":["a","b"],"uptime":{"seconds":5}}"#;
-        let (vitals, inventory) = split_traits(traits).expect("split a JSON object");
+        let (vitals, inventory, _hash) = split_traits(traits).expect("split a JSON object");
         let v: serde_json::Value = serde_json::from_slice(&vitals).unwrap();
         let i: serde_json::Value = serde_json::from_slice(&inventory).unwrap();
         assert!(v.get("loadavg").is_some() && v.get("uptime").is_some());
@@ -919,6 +1013,67 @@ mod tests {
         assert_eq!(h1.len(), 64);
         assert_eq!(h1, h1.to_lowercase());
         assert_ne!(h1, sha256_hex(b"{\"a\":2}"));
+    }
+
+    /// Helper: compute vitals_state_hash from a JSON object literal of vitals.
+    fn vsh(vitals_json: &str) -> String {
+        let v: serde_json::Value = serde_json::from_str(vitals_json).unwrap();
+        compute_vitals_state_hash(v.as_object().unwrap())
+    }
+
+    #[test]
+    fn test_vitals_state_hash_ignores_churny_telemetry() {
+        // Two ticks: identical meaningful content, only churny fields differ
+        // (updated_at, peer last_seen, swarm in-flight progress). Hash must match.
+        let tick_a = r#"{
+            "puddle":{"updated_at":100,"puddle_count":1,"puddles":[{"user":"dan","initialized":true}]},
+            "lockbox":{"updated_at":100,"users":[{"user":"dan","files_digest":"abc","peers":[{"hostname":"plex","last_seen":100}]}]},
+            "swarm":{"blob_count":2,"blobs":["sha1","sha2"],"active_download_ms":4200,"downloading":3},
+            "ports":{"listening":[22,443]}
+        }"#;
+        let tick_b = r#"{
+            "puddle":{"updated_at":999,"puddle_count":1,"puddles":[{"user":"dan","initialized":true}]},
+            "lockbox":{"updated_at":999,"users":[{"user":"dan","files_digest":"abc","peers":[{"hostname":"plex","last_seen":888}]}]},
+            "swarm":{"blob_count":2,"blobs":["sha1","sha2"],"active_download_ms":17,"downloading":0},
+            "ports":{"listening":[22,443]}
+        }"#;
+        assert_eq!(vsh(tick_a), vsh(tick_b), "churny telemetry must not perturb the hash");
+        assert!(!vsh(tick_a).is_empty());
+    }
+
+    #[test]
+    fn test_vitals_state_hash_changes_on_meaningful_change() {
+        let base = r#"{"swarm":{"blob_count":2,"blobs":["sha1","sha2"]},"ports":{"listening":[22]}}"#;
+        // A new blob (meaningful), a new listening port, and changed puddle membership
+        // each flip the hash.
+        let new_blob = r#"{"swarm":{"blob_count":3,"blobs":["sha1","sha2","sha3"]},"ports":{"listening":[22]}}"#;
+        let new_port = r#"{"swarm":{"blob_count":2,"blobs":["sha1","sha2"]},"ports":{"listening":[22,8443]}}"#;
+        assert_ne!(vsh(base), vsh(new_blob), "a new blob is meaningful");
+        assert_ne!(vsh(base), vsh(new_port), "a new listening port is meaningful");
+    }
+
+    #[test]
+    fn test_vitals_state_hash_order_independent() {
+        // Same set of blobs in a different array order hashes equal (read_dir /
+        // push order must not matter).
+        let a = r#"{"swarm":{"blob_count":2,"blobs":["sha1","sha2"]}}"#;
+        let b = r#"{"swarm":{"blob_count":2,"blobs":["sha2","sha1"]}}"#;
+        assert_eq!(vsh(a), vsh(b), "array element order must not perturb the hash");
+    }
+
+    #[test]
+    fn test_vitals_state_hash_excludes_non_operational_vitals() {
+        // loadavg/memory/agent_self are vitals but NOT operational — they belong
+        // to the live-vitals path, so they must never enter this hash.
+        let with_health = r#"{"ports":{"listening":[22]},"loadavg":{"load1":9.9},"agent_self":{"rss_bytes":12345}}"#;
+        let ports_only = r#"{"ports":{"listening":[22]}}"#;
+        assert_eq!(vsh(with_health), vsh(ports_only), "non-operational vitals excluded");
+    }
+
+    #[test]
+    fn test_vitals_state_hash_empty_when_no_operational_vitals() {
+        let none = r#"{"loadavg":{"load1":1.0},"memory":{"total":8}}"#;
+        assert!(vsh(none).is_empty(), "no operational collectors → empty hash");
     }
 
     #[tokio::test]

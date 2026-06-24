@@ -247,6 +247,7 @@ message CheckInRequest {
   bytes vitals_json = 14;                 // volatile collectors (loadavg/memory/uptime/swarm/...), sent every check-in
   bytes inventory_json = 15;              // stable+periodic collectors (packages/dmi/cert_lifecycle/...), sent only when inventory_hash changes — empty otherwise
   string inventory_hash = 16;             // sha256-hex of the inventory the agent currently holds; sent every check-in so the server detects desync
+  string vitals_state_hash = 17;          // sha256-hex over the MEANINGFUL content of the operational vitals collectors (swarm/swarm_seeds/puddle/gitback/curator/poolq/lockbox/longdrawer/users/ports), with churny telemetry (updated_at/mtime/last_seen/active_download_ms/downloading/logged_in) stripped. Sent every check-in. Combined with inventory_hash, lets the server skip heavy per-tick persist/flatten when only telemetry wiggled. Server-opaque: only compared against the prior value.
 }
 
 message CheckInResponse {

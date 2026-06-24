@@ -200,11 +200,12 @@ type CheckInRequest struct {
 	Traceparent             string                 `protobuf:"bytes,13,opt,name=traceparent,proto3" json:"traceparent,omitempty"`                                                                                                                                   // W3C traceparent (ADR-028); 55-char format "00-<trace_id>-<span_id>-<flags>"; empty/malformed → server generates
 	// ADR-033 conditional traits: split agents send vitals + inventory below and leave traits_json (field 5) empty.
 	// Older agents (rolling upgrade) keep sending the full payload in traits_json; the server accepts either shape.
-	VitalsJson    []byte `protobuf:"bytes,14,opt,name=vitals_json,json=vitalsJson,proto3" json:"vitals_json,omitempty"`          // volatile collectors (loadavg/memory/uptime/swarm/...), sent every check-in
-	InventoryJson []byte `protobuf:"bytes,15,opt,name=inventory_json,json=inventoryJson,proto3" json:"inventory_json,omitempty"` // stable+periodic collectors (packages/dmi/cert_lifecycle/...), sent only when inventory_hash changes — empty otherwise
-	InventoryHash string `protobuf:"bytes,16,opt,name=inventory_hash,json=inventoryHash,proto3" json:"inventory_hash,omitempty"` // sha256-hex of the inventory the agent currently holds; sent every check-in so the server detects desync
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	VitalsJson      []byte `protobuf:"bytes,14,opt,name=vitals_json,json=vitalsJson,proto3" json:"vitals_json,omitempty"`                  // volatile collectors (loadavg/memory/uptime/swarm/...), sent every check-in
+	InventoryJson   []byte `protobuf:"bytes,15,opt,name=inventory_json,json=inventoryJson,proto3" json:"inventory_json,omitempty"`         // stable+periodic collectors (packages/dmi/cert_lifecycle/...), sent only when inventory_hash changes — empty otherwise
+	InventoryHash   string `protobuf:"bytes,16,opt,name=inventory_hash,json=inventoryHash,proto3" json:"inventory_hash,omitempty"`         // sha256-hex of the inventory the agent currently holds; sent every check-in so the server detects desync
+	VitalsStateHash string `protobuf:"bytes,17,opt,name=vitals_state_hash,json=vitalsStateHash,proto3" json:"vitals_state_hash,omitempty"` // sha256-hex over the MEANINGFUL content of the operational vitals collectors (swarm/swarm_seeds/puddle/gitback/curator/poolq/lockbox/longdrawer/users/ports), with churny telemetry (updated_at/mtime/last_seen/active_download_ms/downloading/logged_in) stripped. Sent every check-in. Combined with inventory_hash, lets the server skip heavy per-tick persist/flatten when only telemetry wiggled. Server-opaque: only compared against the prior value.
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CheckInRequest) Reset() {
@@ -345,6 +346,13 @@ func (x *CheckInRequest) GetInventoryJson() []byte {
 func (x *CheckInRequest) GetInventoryHash() string {
 	if x != nil {
 		return x.InventoryHash
+	}
+	return ""
+}
+
+func (x *CheckInRequest) GetVitalsStateHash() string {
+	if x != nil {
+		return x.VitalsStateHash
 	}
 	return ""
 }
@@ -7354,7 +7362,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1b\n" +
 	"\tbolt_addr\x18\x04 \x01(\tR\bboltAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xa0\x06\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xcc\x06\n" +
 	"\x0eCheckInRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -7376,7 +7384,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\vvitals_json\x18\x0e \x01(\fR\n" +
 	"vitalsJson\x12%\n" +
 	"\x0einventory_json\x18\x0f \x01(\fR\rinventoryJson\x12%\n" +
-	"\x0einventory_hash\x18\x10 \x01(\tR\rinventoryHash\x1aJ\n" +
+	"\x0einventory_hash\x18\x10 \x01(\tR\rinventoryHash\x12*\n" +
+	"\x11vitals_state_hash\x18\x11 \x01(\tR\x0fvitalsStateHash\x1aJ\n" +
 	"\x1cCachedConfigcrateHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaf\b\n" +
