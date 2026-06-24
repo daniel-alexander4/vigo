@@ -1,0 +1,13 @@
+-- 000024: composite index for the enrolled_at-ordered envoy list queries (forward-only).
+--
+-- ListEnvoys / ListEnvoysOffset / ListActiveEnvoys / ListActiveEnvoysOffset and
+-- the FleetIndex rehydrate all `ORDER BY enrolled_at DESC[, id]`; with no index
+-- that's a full table scan + temp B-tree sort (a ~962 ms slow-RPC at fleet
+-- scale). enrolled_at is second-granularity (datetime('now')), so mass
+-- enrollment makes large tie-groups and the `, id` tiebreak's sort is real —
+-- only a (enrolled_at DESC, id) composite eliminates the sort for BOTH the
+-- un-paginated and the paginated shapes (verified via EXPLAIN QUERY PLAN; a
+-- plain (enrolled_at) or (enrolled_at, id) leaves a temp B-tree on the tiebreak).
+-- enrolled_at is immutable (set once at enrollment, never updated), so the
+-- index's write cost is enrollment-insert-only.
+CREATE INDEX IF NOT EXISTS idx_envoys_enrolled_at_id ON envoys (enrolled_at DESC, id);
