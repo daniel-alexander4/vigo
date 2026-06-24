@@ -572,12 +572,20 @@ tuning:
   run_store: "database"              # "database" or "memory"
   run_store_capacity: 20             # per-envoy run depth in memory mode
   max_concurrent_streams: 5000       # gRPC concurrent stream limit
+  grpc_read_buffer: 32768            # per-conn read buffer bytes; 0 = gRPC default (32 KiB)
+  grpc_write_buffer: 32768           # per-conn write buffer bytes; 0 = gRPC default (32 KiB)
   keepalive_time: "30s"              # how often the server pings each conn to check liveness
   keepalive_timeout: "30s"           # deadline for the ping ACK before the conn is closed
   gogc: 100                          # Go GC target percentage
   # GOMEMLIMIT has no key here — auto-derived to ~80% of the cgroup-aware RAM,
   # or set the GOMEMLIMIT env var to override (GOMEMLIMIT=off for no limit).
 ```
+
+### gRPC connection buffers — `grpc_read_buffer` + `grpc_write_buffer`
+
+Each held envoy connection costs ~220 KB of resident memory, of which gRPC's default per-connection read+write staging buffers are ~64 KiB (32 KiB each). On large fleets that buffer footprint is the biggest *operator-tunable* slice of per-connection RAM: halving both to `16384` cuts ~32 KiB/conn (~48 MB across 1,500 connections). Both default to `0` → gRPC's 32 KiB; the option is only applied when set `> 0`. The trade-off is memory vs. syscall efficiency — smaller buffers mean more `read`/`write` syscalls per byte moved — so lower them only when connection-count RAM is the binding constraint, and re-check that large `config publish` bundle bursts still deliver promptly (full policy bundles ride the held stream as the only high-throughput payload).
+
+There is intentionally **no** `initial_window` / HTTP/2 flow-control-window knob: gRPC floors the window at 64 KiB (a smaller value is ignored), so it cannot shrink per-connection RAM, and pinning it would only disable gRPC's BDP auto-tuning and throttle bundle delivery. The read/write buffers above are the connection-RAM dial.
 
 ### gRPC keepalive — `keepalive_time` + `keepalive_timeout`
 
