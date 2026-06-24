@@ -35,48 +35,110 @@ func TestMergeTraitsObjects(t *testing.T) {
 	}
 }
 
-// TestReconstructTraits exercises the cache-and-reconstruct path: first contact
-// (inventory present) caches and merges; a vitals-only check-in with a matching
-// hash reuses the cached inventory with fresh vitals; a hash mismatch or unknown
-// envoy returns resend with no traits.
-func TestReconstructTraits(t *testing.T) {
+// TestEnsureAndMergeTraits exercises the split cache path (ADR-033 Option C): the
+// cheap ensureInventory readiness gate (validate+cache on change, hash-compare on
+// vitals-only) and the lazy mergeCachedTraits that rebuilds inventory ∪ vitals
+// only when the persist key moved. A hash mismatch / unknown envoy is "not ready"
+// (the caller then requests a resend); merging with no cache yields nil so Mark
+// drops it.
+func TestEnsureAndMergeTraits(t *testing.T) {
 	s := &AgentService{}
 	inv := []byte(`{"packages":["a"]}`)
 	vit := []byte(`{"loadavg":1}`)
 
-	full, resend := s.reconstructTraits("e1", vit, inv, "h1")
-	if resend {
-		t.Fatal("inventory-present check-in should not request resend")
+	// Inventory present → ready + cached; merge yields valid JSON carrying both.
+	if !s.ensureInventory("e1", inv, "h1") {
+		t.Fatal("inventory-present check-in should be ready (no resend)")
 	}
-	if !json.Valid(full) {
-		t.Fatalf("reconstructed traits not valid JSON: %s", full)
+	if full := s.mergeCachedTraits("e1", vit); !json.Valid(full) {
+		t.Fatalf("merged traits not valid JSON: %s", full)
 	}
 
-	// Vitals-only, matching hash → cached inventory + fresh vitals.
-	full2, resend2 := s.reconstructTraits("e1", []byte(`{"loadavg":2}`), nil, "h1")
-	if resend2 {
-		t.Fatal("cache hit should not request resend")
+	// Vitals-only, matching hash → ready; merge uses cached inventory + fresh vitals.
+	if !s.ensureInventory("e1", nil, "h1") {
+		t.Fatal("cache hit should be ready")
 	}
 	var m map[string]any
-	if err := json.Unmarshal(full2, &m); err != nil {
-		t.Fatalf("reconstruct: %v", err)
+	if err := json.Unmarshal(s.mergeCachedTraits("e1", []byte(`{"loadavg":2}`)), &m); err != nil {
+		t.Fatalf("merge: %v", err)
 	}
 	if _, ok := m["packages"]; !ok {
-		t.Error("cached inventory missing from reconstruction")
+		t.Error("cached inventory missing from merge")
 	}
 	if v, _ := m["loadavg"].(float64); v != 2 {
-		t.Errorf("vitals not fresh in reconstruction: loadavg=%v", m["loadavg"])
+		t.Errorf("vitals not fresh in merge: loadavg=%v", m["loadavg"])
 	}
 
-	// Hash mismatch → resend, no traits.
-	full3, resend3 := s.reconstructTraits("e1", vit, nil, "h2")
-	if !resend3 || full3 != nil {
-		t.Errorf("hash mismatch: got (full=%v, resend=%v), want (nil, true)", full3, resend3)
+	// Hash mismatch → not ready (resend). Unknown envoy → not ready.
+	if s.ensureInventory("e1", nil, "h2") {
+		t.Error("hash mismatch should not be ready")
+	}
+	if s.ensureInventory("e2", nil, "h1") {
+		t.Error("cache miss should not be ready")
+	}
+	// Merge with no cached inventory → nil, so Mark drops the empty blob.
+	if s.mergeCachedTraits("e2", vit) != nil {
+		t.Error("merge with no cached inventory should be nil")
+	}
+}
+
+// TestTraitsChangeKey covers the ADR-033 Option C key: a split agent's key is
+// inventory_hash + vitals_state_hash, so churny vitals (same state hash) collapse
+// to one key while a changed state or inventory hash moves it; an empty state
+// hash (mid rolling-upgrade) falls back to hashing the whole vitals blob; a legacy
+// agent hashes traits_json.
+func TestTraitsChangeKey(t *testing.T) {
+	vitsA := []byte(`{"loadavg":1}`)
+	vitsB := []byte(`{"loadavg":99}`) // churny-different vitals, same meaningful content
+
+	k1 := traitsChangeKey("vsh1", vitsA, nil, "inv1")
+	if got := traitsChangeKey("vsh1", vitsB, nil, "inv1"); got != k1 {
+		t.Errorf("same vitals_state_hash should give same key: %q vs %q", k1, got)
+	}
+	if traitsChangeKey("vsh2", vitsA, nil, "inv1") == k1 {
+		t.Error("changed vitals_state_hash should move the key")
+	}
+	if traitsChangeKey("vsh1", vitsA, nil, "inv2") == k1 {
+		t.Error("changed inventory_hash should move the key")
 	}
 
-	// Unknown envoy, vitals-only → resend.
-	if _, resend4 := s.reconstructTraits("e2", vit, nil, "h1"); !resend4 {
-		t.Error("cache miss should request resend")
+	// Empty vitals_state_hash → fall back to hashing the vitals blob (churny
+	// vitals now DO move the key → persist every tick until the agent upgrades).
+	if traitsChangeKey("", vitsA, nil, "inv1") == traitsChangeKey("", vitsB, nil, "inv1") {
+		t.Error("empty vitals_state_hash should fall back to hashing the vitals blob")
+	}
+
+	// Legacy agent (no vitals): hashes traits_json.
+	if traitsChangeKey("", nil, []byte(`{"a":1}`), "") == traitsChangeKey("", nil, []byte(`{"a":2}`), "") {
+		t.Error("legacy key should change with traits_json")
+	}
+}
+
+// TestExtractLiveVitals confirms the per-tick liveVitals overlay flattens only
+// the operational-health collectors (agent_self/host_self/mountpoints/battery/
+// uptime) and excludes churny non-health vitals like loadavg.
+func TestExtractLiveVitals(t *testing.T) {
+	volTop := map[string]json.RawMessage{
+		"agent_self":  json.RawMessage(`{"open_fds":300,"rss_bytes":12345}`),
+		"host_self":   json.RawMessage(`{"oom_recent":1}`),
+		"mountpoints": json.RawMessage(`{"mounts":{"/":{"used_pct":81.5}}}`),
+		"loadavg":     json.RawMessage(`{"load1":9.9}`), // not a health collector
+	}
+	lv := extractLiveVitals(volTop)
+	for k, want := range map[string]string{
+		"agent_self.open_fds":           "300",
+		"host_self.oom_recent":          "1",
+		"mountpoints.mounts./.used_pct": "81.5",
+	} {
+		if lv[k] != want {
+			t.Errorf("liveVitals[%q] = %q, want %q", k, lv[k], want)
+		}
+	}
+	if _, ok := lv["loadavg.load1"]; ok {
+		t.Error("loadavg is not a health collector — must be excluded from liveVitals")
+	}
+	if extractLiveVitals(map[string]json.RawMessage{"loadavg": json.RawMessage(`{"load1":1}`)}) != nil {
+		t.Error("no health collectors present → nil (SetLiveVitals no-op)")
 	}
 }
 
@@ -108,24 +170,24 @@ func TestDeriveOSArch(t *testing.T) {
 	}
 }
 
-// TestReconstructTraitsCachesOSArch verifies the steady-state optimization: the
+// TestEnsureInventoryCachesOSArch verifies the steady-state optimization: the
 // agent's goos/goarch is derived ONCE when the inventory is cached and then
 // served from cachedOSArch on vitals-only ticks, so the ~150 KB inventory is
 // never re-parsed per check-in for the auto-update lookup.
-func TestReconstructTraitsCachesOSArch(t *testing.T) {
+func TestEnsureInventoryCachesOSArch(t *testing.T) {
 	s := &AgentService{}
 	inv := []byte(`{"os":{"family":"debian","arch":"amd64"},"packages":["a"]}`)
 
-	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":1}`), inv, "h1"); resend {
-		t.Fatal("inventory-present check-in should not request resend")
+	if !s.ensureInventory("e1", inv, "h1") {
+		t.Fatal("inventory-present check-in should be ready")
 	}
 	if goos, arch := s.cachedOSArch("e1"); goos != "linux" || arch != "amd64" {
 		t.Fatalf("cachedOSArch after store = (%q,%q), want (linux,amd64)", goos, arch)
 	}
 	// A vitals-only tick (cache hit) must keep the derived platform available
 	// without re-parsing the inventory.
-	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":2}`), nil, "h1"); resend {
-		t.Fatal("cache hit should not request resend")
+	if !s.ensureInventory("e1", nil, "h1") {
+		t.Fatal("cache hit should be ready")
 	}
 	if goos, arch := s.cachedOSArch("e1"); goos != "linux" || arch != "amd64" {
 		t.Errorf("cachedOSArch after vitals-only tick = (%q,%q), want (linux,amd64)", goos, arch)
@@ -136,15 +198,14 @@ func TestReconstructTraitsCachesOSArch(t *testing.T) {
 	}
 }
 
-// TestReconstructTraitsMalformedInventoryResends verifies that a malformed
-// inventory is not cached and triggers a resend, so the steady-state path never
-// serves or stores invalid traits (it no longer re-validates the merged blob per
-// tick — validity is gated here, once, on inventory change).
-func TestReconstructTraitsMalformedInventoryResends(t *testing.T) {
+// TestEnsureInventoryMalformedResends verifies that a malformed inventory is not
+// cached and reports not-ready (the caller then requests a resend), so the
+// steady-state path never serves or stores invalid traits — validity is gated
+// here, once, on inventory change.
+func TestEnsureInventoryMalformedResends(t *testing.T) {
 	s := &AgentService{}
-	full, resend := s.reconstructTraits("e1", []byte(`{"loadavg":1}`), []byte(`{"packages":[`), "h1")
-	if !resend || full != nil {
-		t.Errorf("malformed inventory: got (full=%v, resend=%v), want (nil, true)", full, resend)
+	if s.ensureInventory("e1", []byte(`{"packages":[`), "h1") {
+		t.Error("malformed inventory should not be ready (resend)")
 	}
 	if _, ok := s.inventoryCache.Load("e1"); ok {
 		t.Error("malformed inventory must not be cached")
@@ -154,7 +215,7 @@ func TestReconstructTraitsMalformedInventoryResends(t *testing.T) {
 // TestInventoryEvictedOnEnvoyRemoval verifies the lifecycle wiring (ADR-033 #1):
 // the inventory cache is tied to fleet membership via FleetIndex.SetOnRemove, so
 // removing an envoy drops its cached inventory and the next vitals-only check-in
-// falls back to requesting a resend.
+// is no longer ready (the caller requests a resend).
 func TestInventoryEvictedOnEnvoyRemoval(t *testing.T) {
 	s := &AgentService{}
 	fi := fleet.NewFleetIndex()
@@ -164,14 +225,14 @@ func TestInventoryEvictedOnEnvoyRemoval(t *testing.T) {
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
 
 	// First contact caches the inventory; a vitals-only check-in then hits.
-	s.reconstructTraits("e1", []byte(`{"loadavg":1}`), []byte(`{"packages":["a"]}`), "h1")
-	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":2}`), nil, "h1"); resend {
+	s.ensureInventory("e1", []byte(`{"packages":["a"]}`), "h1")
+	if !s.ensureInventory("e1", nil, "h1") {
 		t.Fatal("cache hit expected before removal")
 	}
 
 	// Removing the envoy evicts its inventory; the next vitals-only check-in misses.
 	fi.RemoveEnvoy("e1")
-	if _, resend := s.reconstructTraits("e1", []byte(`{"loadavg":3}`), nil, "h1"); !resend {
-		t.Fatal("inventory should be evicted after envoy removal → resend expected")
+	if s.ensureInventory("e1", nil, "h1") {
+		t.Fatal("inventory should be evicted after envoy removal → not ready")
 	}
 }

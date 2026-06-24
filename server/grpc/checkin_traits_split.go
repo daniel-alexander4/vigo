@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
+
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // ADR-033 conditional traits transmission (server side).
@@ -33,25 +35,29 @@ type inventoryEntry struct {
 	goarch string
 }
 
-// reconstructTraits rebuilds the full traits JSON for a split check-in from the
-// agent's fresh vitals plus the server-cached inventory. inventoryJSON is
-// non-empty only when the inventory changed (the agent then ships it); otherwise
-// the cached copy is used, gated on inventoryHash matching what was cached.
+// ensureInventory makes the server's cached inventory current for a split
+// check-in and reports whether it now holds inventory matching inventoryHash.
+// inventoryJSON is non-empty only when the inventory changed (the agent then
+// ships it): it is validated + the os/arch derived ONCE and cached. On a
+// vitals-only tick the cached copy is checked against inventoryHash.
 //
-// Returns (full, resend). resend is true when the server holds no inventory
-// matching inventoryHash (server restart, cache eviction, or desync) — full is
-// then nil, this check-in skips trait processing, and the CheckInResponse carries
-// resend_inventory=true so the agent ships the full inventory next cycle.
-func (s *AgentService) reconstructTraits(envoyID string, vitalsJSON, inventoryJSON []byte, inventoryHash string) (full []byte, resend bool) {
+// Returns ready=false when the server holds no valid inventory matching the
+// hash (server restart, cache eviction, desync, or a malformed inventory) — the
+// caller then skips the trait persist and sets resend_inventory so the agent
+// ships the full inventory next cycle. This is the cheap half of the old
+// reconstructTraits: it never performs the ~155 KB merge, so it can run every
+// tick to drive the resend decision (ADR-033 Option C). The merge itself is
+// deferred to mergeCachedTraits, called lazily only when the persist key moves.
+func (s *AgentService) ensureInventory(envoyID string, inventoryJSON []byte, inventoryHash string) (ready bool) {
 	if len(inventoryJSON) > 0 {
 		// Inventory changed — validate + derive os/arch ONCE here (not every
-		// tick), then cache (copy; the proto buffer is reused) and merge. A
-		// malformed inventory is not cached; ask the agent for a clean resend so
-		// the steady-state path never serves/stores invalid traits.
+		// tick), then cache (copy; the proto buffer is reused). A malformed
+		// inventory is not cached; ask the agent for a clean resend so the
+		// steady-state path never serves/stores invalid traits.
 		goos, goarch, ok := deriveOSArch(inventoryJSON)
 		if !ok {
 			slog.Warn("malformed inventory JSON on check-in; requesting resend", "envoy_id", envoyID)
-			return nil, true
+			return false
 		}
 		s.inventoryCache.Store(envoyID, &inventoryEntry{
 			hash:   inventoryHash,
@@ -59,16 +65,42 @@ func (s *AgentService) reconstructTraits(envoyID string, vitalsJSON, inventoryJS
 			goos:   goos,
 			goarch: goarch,
 		})
-		return mergeTraitsObjects(inventoryJSON, vitalsJSON), false
+		return true
 	}
-	// Vitals-only — use the cached inventory iff its hash matches.
+	// Vitals-only — the cached inventory is usable iff its hash matches.
 	if v, ok := s.inventoryCache.Load(envoyID); ok {
-		if e := v.(*inventoryEntry); e.hash == inventoryHash {
-			return mergeTraitsObjects(e.json, vitalsJSON), false
-		}
+		return v.(*inventoryEntry).hash == inventoryHash
 	}
-	// Cache miss or hash mismatch — ask the agent to resend; skip traits this cycle.
-	return nil, true
+	return false
+}
+
+// mergeCachedTraits rebuilds the full traits JSON = cached inventory ∪ fresh
+// vitals. Called lazily inside the traitsBatch.Mark build closure — only when
+// the persist change-key actually moved — so the ~155 KB byte-concat never runs
+// on a churny-only tick (ADR-033 Option C). Returns nil if the inventory cache
+// was lost between ensureInventory and here (Mark then drops the empty blob and
+// retries next tick); the caller must have confirmed readiness via
+// ensureInventory first.
+func (s *AgentService) mergeCachedTraits(envoyID string, vitalsJSON []byte) []byte {
+	if v, ok := s.inventoryCache.Load(envoyID); ok {
+		return mergeTraitsObjects(v.(*inventoryEntry).json, vitalsJSON)
+	}
+	return nil
+}
+
+// fullCheckinTraits returns the complete per-envoy traits for one check-in:
+// cached inventory ∪ vitals for a split agent (nil when the server doesn't hold
+// the inventory — a resend tick), or the legacy full payload as-is. Shared by
+// the trait persist (lazily, inside Mark's build closure, only when the change-
+// key moved) and the per-envoy bundle expansion (case/lookups, only when a
+// bundle is rebuilt). For a split agent each caller re-merges, but they fire
+// together only on a tick that both rebuilds the bundle AND changed the persist
+// key (rare²), so the steady-state hot path merges at most once.
+func (s *AgentService) fullCheckinTraits(envoyID string, vitals, legacyTraits []byte, splitVitals bool) []byte {
+	if splitVitals {
+		return s.mergeCachedTraits(envoyID, vitals)
+	}
+	return legacyTraits
 }
 
 // mergeTraitsObjects concatenates two compact JSON objects into one. The agent
@@ -112,21 +144,63 @@ func deriveOSArch(inventoryJSON []byte) (goos, goarch string, ok bool) {
 	return goos, goarch, true
 }
 
-// traitsChangeKey is a cheap fingerprint of an envoy's full merged traits that
-// changes iff the traits change — fed to traitsBatch.Mark so the steady-state
-// check-in path never hashes the full ~155 KB merged blob (ADR-033). For a split
-// agent it is inventory_hash (identifies the stable inventory the server holds)
-// + a hash of the small vitals blob (identifies the volatile part); for a legacy
-// agent (no vitals) it falls back to hashing the full traits_json. Used on a tick
-// where the cached inventory matches the agent's inventory_hash, so the hash
-// faithfully identifies the merged inventory portion.
-func traitsChangeKey(vitalsJSON, traitsJSON []byte, inventoryHash string) string {
+// traitsChangeKey is a cheap fingerprint of an envoy's full merged traits, fed to
+// traitsBatch.Mark so the steady-state check-in path never hashes the full
+// ~155 KB merged blob (ADR-033) and persists/re-flattens only when MEANINGFUL
+// content changes (ADR-033 Option C). For a split agent it is inventory_hash
+// (identifies the stable inventory the server holds) + the agent's
+// vitals_state_hash — a hash over only the operational vitals' meaningful
+// content, so churny telemetry (loadavg, rss, download progress, updated_at)
+// no longer flips the key and the merge/persist/re-flatten is skipped on those
+// ticks. A split agent that predates vitals_state_hash (mid rolling-upgrade)
+// sends it empty: fall back to hashing the whole vitals blob — correct, just
+// persists every tick (no savings) until it upgrades. A legacy agent (no
+// vitals) hashes the full traits_json. Used on a tick where the cached inventory
+// matches the agent's inventory_hash, so the key faithfully identifies the
+// merged inventory portion.
+func traitsChangeKey(vitalsStateHash string, vitalsJSON, traitsJSON []byte, inventoryHash string) string {
 	if len(vitalsJSON) > 0 {
+		if vitalsStateHash != "" {
+			return inventoryHash + ":" + vitalsStateHash
+		}
 		h := sha256.Sum256(vitalsJSON)
 		return inventoryHash + ":" + hex.EncodeToString(h[:])
 	}
 	h := sha256.Sum256(traitsJSON)
 	return hex.EncodeToString(h[:])
+}
+
+// liveVitalsCollectors are the volatile collectors whose flattened fields the
+// fleetpressure agent-health surface reads — agent_self/host_self (FD counts,
+// OOM-recent), mountpoints (rootfs/inode %), battery (wear health), and uptime.
+// Under ADR-033 Option C the full traits map is re-persisted only on meaningful
+// change, so these churny health fields are extracted from every check-in's
+// vitals into the FleetIndex liveVitals overlay (see fleet.EnvoyState.liveVitals)
+// to keep the health card current without a full re-flatten.
+var liveVitalsCollectors = []string{"agent_self", "host_self", "mountpoints", "battery", "uptime"}
+
+// extractLiveVitals flattens the operational-health sub-trees out of the parsed
+// volatile blob into the flat key→value shape fleetpressure consumes. Returns
+// nil when none are present (legacy/minimal agents), which SetLiveVitals treats
+// as a no-op.
+func extractLiveVitals(volTop map[string]json.RawMessage) map[string]string {
+	sub := make(map[string]any, len(liveVitalsCollectors))
+	for _, k := range liveVitalsCollectors {
+		raw, ok := volTop[k]
+		if !ok {
+			continue
+		}
+		var v any
+		if json.Unmarshal(raw, &v) == nil {
+			sub[k] = v
+		}
+	}
+	if len(sub) == 0 {
+		return nil
+	}
+	flat := make(map[string]string)
+	fleet.FlattenJSON("", sub, flat)
+	return flat
 }
 
 // cachedOSArch returns the goos/goarch derived from the envoy's cached inventory,

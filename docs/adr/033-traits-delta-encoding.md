@@ -236,6 +236,52 @@ fall back to delta for that robustness.
   measurement on the live home-lab agents (the synthetic harness can't show it —
   fakefleet traits are ~400 B).
 
+## Option C — decouple persist from churny vitals (CPU follow-on)
+
+Slices 1–4 stopped re-*shipping* the 213 KB inventory every cycle. They did not
+stop the server re-*persisting* it: the change-key fed to `traitsBatch.Mark` was
+`inventory_hash + sha256(vitals_json)`, and the full ~5 KB vitals blob churns
+every tick (loadavg, rss, swarm download progress, per-collector `updated_at`),
+so every check-in still materialized the ~155 KB inventory∪vitals merge, wrote a
+DB row, and re-flattened the FleetIndex map. At fleet scale that per-tick
+merge+persist+re-flatten — not the wire — is what binds CPU and sets the 1 s
+ceiling. Option C makes the persist fire only on **meaningful** change.
+
+- **Phase 0 — GOMEMLIMIT auto-derive** (0.76.27). Unrelated RAM safety valve
+  shipped first so the box survives the bigger fleets the CPU work enables.
+- **Phase 1 — agent `vitals_state_hash`** (0.76.28, proto field 17). The agent
+  hashes only the *meaningful* content of the operational vitals collectors
+  (swarm/swarm_seeds/puddle/gitback/curator/poolq/lockbox/longdrawer/users/ports),
+  stripping churny telemetry (`updated_at`, `last_seen`, `active_download_ms`,
+  `downloading`, `mtime`, login sessions) at any depth and sorting arrays for
+  order-independence. Server-opaque, compared only against the prior value.
+- **Phase 2 — server change-key + liveVitals companion** (0.76.29). The
+  change-key becomes `inventory_hash + vitals_state_hash` (`traitsChangeKey`),
+  and the ~155 KB merge moves into `Mark`'s build closure so it runs **only when
+  that key moves** (`mergeCachedTraits`; `ensureInventory` does the cheap
+  resend/desync check every tick without merging; `Mark` drops an empty blob if
+  the inventory cache was lost between the two). Mid-rolling-upgrade agents that
+  send an empty hash fall back to `sha256(vitals_json)` — they persist every tick,
+  as before, until upgraded. **Mandatory companion:** fleetpressure's health
+  fields (`agent_self`/`host_self` FDs + OOM, `mountpoints` rootfs/inode %,
+  `battery`, `uptime`) are churny vitals in neither hash, so gating persist on the
+  new key would freeze them. Every check-in therefore extracts those five
+  sub-trees into a small per-envoy `liveVitals` overlay on the FleetIndex
+  (whole-map swap under the stripe lock, same discipline as `Traits`);
+  `EnvoyState.healthTraits()` overlays it on the rarely-re-persisted map, and the
+  fleet datasource feeds that overlay to the (unchanged) `fleetpressure` projector.
+- **Phase 3 — fakefleet parity + box A/B** (gating measurement). Confirms the
+  reasoned ~2–3× per-tick CPU win before the lever is banked.
+
+**Accepted trade-off.** Generic whole-blob readers (AI `query_fleet`, the
+`/inventory` + `/traits` REST surfaces, CMDB export, the Prometheus
+security/risk gauges) now reflect churny vitals at persist cadence rather than
+per-tick. `traits livequery` (live over the AgentStream) is the live-read escape.
+Inventory-backed fields (`security_scan.*`, `package_updates.*`, identity
+sub-trees) are unaffected — they ride the `inventory_hash` half of the key, and
+the swarm meshes read them from the DB JSON regardless. Freshness/risk-offline
+are timestamp-driven (`MarkSeen`), independent of persist cadence.
+
 Cross-references: the gRPC-response-compression and swarm-freshness-decouple
 follow-ons (`pending.md`); ADR-028 set the precedent of evolving the
 `CheckInRequest` body for cross-cutting agent↔server concerns.

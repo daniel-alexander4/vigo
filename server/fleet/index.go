@@ -97,6 +97,15 @@ type EnvoyState struct {
 	// magnitude. Zero entries are skipped by the EnvoyCycle resolver.
 	recentCheckinDeltasMs  [3]uint32
 	recentCheckinDeltasIdx int8 // next slot to write
+	// liveVitals is a small overlay of churny operational health fields
+	// (agent_self/host_self/mountpoints/battery/uptime, flattened) refreshed on
+	// every check-in. Under ADR-033 Option C the full Traits map is re-persisted
+	// only when meaningful content changes, so these fleetpressure inputs would
+	// otherwise freeze between meaningful changes; liveVitals keeps them current.
+	// In-memory only, never flushed. Written via SetLiveVitals (whole-map swap
+	// under the stripe lock, same discipline as Traits) and read via
+	// healthTraits().
+	liveVitals map[string]string
 }
 
 // ConvergenceCounters holds pre-computed totals across three axes.
@@ -928,6 +937,53 @@ func (es *EnvoyState) ObservedCycle() time.Duration {
 		}
 	}
 	return time.Duration(maxMs) * time.Millisecond
+}
+
+// SetLiveVitals replaces the per-envoy live operational-vitals overlay — the
+// small set of churny health fields (agent_self/host_self/mountpoints/battery/
+// uptime) that fleetpressure reads but that, under ADR-033 Option C, no longer
+// force a full traits re-persist on every tick. Whole-map pointer swap under the
+// per-envoy stripe lock (same discipline as UpdateTraits and the Traits field),
+// so AllEnvoys / Snapshot readers can share the map without a deep copy. A nil/
+// empty overlay is a no-op (keeps the last known values rather than blanking the
+// health card). In-memory only; never flushed.
+func (f *FleetIndex) SetLiveVitals(id string, lv map[string]string) {
+	if len(lv) == 0 {
+		return
+	}
+	f.mu.RLock()
+	ts := f.envoys[id]
+	f.mu.RUnlock()
+	if ts == nil {
+		return
+	}
+	lk := f.lockFor(id)
+	lk.Lock()
+	ts.liveVitals = lv
+	lk.Unlock()
+}
+
+// healthTraits returns the flattened traits with the per-tick live vitals
+// overlaid on top of the rarely-re-persisted Traits map. fleetpressure reads
+// churny health fields (FD counts, OOM-recent, rootfs/inode %, battery) that
+// under ADR-033 Option C no longer trigger a persist every tick; the overlay
+// keeps them current. Returns Traits unchanged when no live vitals have been
+// recorded (legacy agents persist every tick, so Traits is already fresh) —
+// avoiding a per-envoy map allocation on that path. Called on snapshot copies
+// (AllEnvoys / GetEnvoyLite), whose maps are safe to read under the pointer-swap
+// invariant.
+func (es *EnvoyState) healthTraits() map[string]string {
+	if len(es.liveVitals) == 0 {
+		return es.Traits
+	}
+	merged := make(map[string]string, len(es.Traits)+len(es.liveVitals))
+	for k, v := range es.Traits {
+		merged[k] = v
+	}
+	for k, v := range es.liveVitals {
+		merged[k] = v
+	}
+	return merged
 }
 
 // MarkSeenInMemory updates the LastSeen timestamp in-memory without marking

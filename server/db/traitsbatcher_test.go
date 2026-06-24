@@ -162,6 +162,35 @@ func TestTraitsBatcher_ConcurrentMark(t *testing.T) {
 	}
 }
 
+// TestTraitsBatcher_MarkSkipsEmptyBlob verifies the ADR-033 Option C guard: when
+// build() returns "" (the inventory cache was lost between the change-key check
+// and the merge), Mark neither queues an empty snapshot nor advances the key — so
+// the next tick with a real blob retries instead of silently persisting nothing.
+func TestTraitsBatcher_MarkSkipsEmptyBlob(t *testing.T) {
+	b := NewTraitsBatcher(nil)
+
+	b.Mark("envoy-1", "k1", func() string { return "" }) // cache-lost: empty blob
+
+	b.mu.Lock()
+	count := len(b.pending)
+	b.mu.Unlock()
+	if count != 0 {
+		t.Fatalf("empty blob must not be queued, got %d pending", count)
+	}
+	if _, ok := b.keys.Load("envoy-1"); ok {
+		t.Error("key must not advance on an empty blob, so the next real tick retries")
+	}
+
+	// The retry with the same key now succeeds (proves the key wasn't advanced).
+	b.Mark("envoy-1", "k1", func() string { return `{"os":"linux"}` })
+	b.mu.Lock()
+	got := b.pending["envoy-1"]
+	b.mu.Unlock()
+	if got != `{"os":"linux"}` {
+		t.Fatalf("retry after empty blob should queue the real blob, got %q", got)
+	}
+}
+
 // TestTraitsBatcher_FlushPrunesToRetentionCap verifies that each flush
 // inserts the pending snapshot and prunes the envoy back to the
 // 10-snapshot retention cap (DB-04) — the count never sawtooths above

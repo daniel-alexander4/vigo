@@ -983,7 +983,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 	return ui.EnvoyDetailPageData{
 		PageData:   ui.PageData{Title: "Envoy: " + ts.Hostname, ActiveNav: "envoys"},
 		Envoy:      ds.envoyRow(ts, baseInterval, offlineThreshold),
-		UptimeSecs: fleetpressure.UptimeMetric(ts.Traits),
+		UptimeSecs: fleetpressure.UptimeMetric(ts.healthTraits()),
 	}, nil
 }
 
@@ -1688,7 +1688,7 @@ func (ds *DataSource) healthSources() []fleetpressure.EnvoySource {
 		sources = append(sources, fleetpressure.EnvoySource{
 			ID:                   ts.ID,
 			Hostname:             ts.Hostname,
-			Traits:               ts.Traits,
+			Traits:               ts.healthTraits(),
 			AgentVersion:         current,
 			ExpectedAgentVersion: expected,
 		})

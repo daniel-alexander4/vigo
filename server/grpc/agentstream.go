@@ -401,39 +401,55 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		s.fleetIndex.MarkCycleDuration(envoyID, clampReportedCycle(req.GetLastCheckinDeltaMs()))
 	}
 	// ADR-033 conditional traits: a split agent leaves traits_json empty and sends
-	// vitals every check-in + inventory only on change. Reconstruct the full traits
-	// from the per-envoy inventory cache so everything below is unchanged; a cache
-	// miss leaves inlineTraits empty (traits skipped this cycle) and asks the agent
-	// to resend the full inventory. Old agents (traits_json) fall through as-is.
-	inlineTraits := req.GetTraitsJson()
-	resendInventory := false
+	// vitals every check-in + inventory only on change. We persist the full traits
+	// = cached inventory ∪ vitals, but only when the change-key (inventory_hash +
+	// vitals_state_hash) actually moves — the ~155 KB merge is materialized lazily
+	// inside Mark's build closure (ADR-033 Option C), so a churny-only tick does no
+	// merge, no DB write, no FleetIndex re-flatten. Old agents (traits_json) fall
+	// through as a full payload, persisted on change as before.
+	legacyTraits := req.GetTraitsJson()
 	vitals := req.GetVitalsJson()
-	if len(inlineTraits) == 0 && len(vitals) > 0 {
-		inlineTraits, resendInventory = s.reconstructTraits(envoyID, vitals, req.GetInventoryJson(), req.GetInventoryHash())
+	inventoryJSON := req.GetInventoryJson()
+	inventoryHash := req.GetInventoryHash()
+	resendInventory := false
+
+	// For a split agent, decide cheaply — WITHOUT the 155 KB merge — whether the
+	// server holds the inventory matching the agent's hash (caching it now if the
+	// agent just shipped a changed inventory). If not (restart / eviction /
+	// desync / malformed), ask for a resend and skip the persist this cycle.
+	splitVitals := len(legacyTraits) == 0 && len(vitals) > 0
+	if splitVitals {
+		resendInventory = !s.ensureInventory(envoyID, inventoryJSON, inventoryHash)
 	}
 
 	// Steady-state per-tick trait work WITHOUT re-parsing the full ~150 KB merged
 	// inventory (ADR-033). Parse only the small volatile blob — vitals for split
 	// agents, or the whole traits_json for legacy agents — which carries the swarm
-	// sub-trees and doubles as the validity gate. The inventory was already
-	// validated when it was cached (reconstructTraits), and the stable os/arch is
-	// read from that cache (cachedOSArch, further down), so the ~150 KB inventory
-	// is never re-scanned on a vitals-only tick. Because mergeTraitsObjects keeps
-	// the key sets disjoint, valid vitals ∪ valid (cached) inventory ⇒ valid
-	// merged traits, so traitsBatch.Mark still receives a well-formed blob.
+	// sub-trees + the liveVitals fields + the os/arch fallback, and doubles as the
+	// validity gate. The stable os/arch is read from the inventory cache
+	// (cachedOSArch, further down), so the ~150 KB inventory is never re-scanned on
+	// a vitals-only tick.
 	volatile := vitals
 	if len(volatile) == 0 {
-		volatile = inlineTraits // legacy non-split agent: volatile keys live in traits_json
+		volatile = legacyTraits // legacy non-split agent: volatile keys live in traits_json
 	}
 	var volTop map[string]json.RawMessage
 	if len(volatile) > 0 && json.Unmarshal(volatile, &volTop) == nil {
-		// Persist the full traits (change-deduped inside Mark via a cheap key —
-		// inventory_hash + a hash of the small vitals — so the full ~155 KB blob
-		// is not re-hashed every tick; it's materialized lazily only when the key
-		// changed). Skip when there's no full blob this cycle (resend tick).
-		if s.traitsBatch != nil && len(inlineTraits) > 0 {
-			key := traitsChangeKey(vitals, req.GetTraitsJson(), req.GetInventoryHash())
-			s.traitsBatch.Mark(envoyID, key, func() string { return string(inlineTraits) })
+		// Persist the full traits, change-deduped by the cheap key. build() runs
+		// only when the key changed (Mark dedup), materializing the merge lazily;
+		// skipped on a resend tick (no valid full blob this cycle). On the rare
+		// key change, build merges cached inventory ∪ vitals for a split agent, or
+		// returns the legacy full payload as-is.
+		if s.traitsBatch != nil && !resendInventory {
+			key := traitsChangeKey(req.GetVitalsStateHash(), vitals, legacyTraits, inventoryHash)
+			s.traitsBatch.Mark(envoyID, key, func() string {
+				return string(s.fullCheckinTraits(envoyID, vitals, legacyTraits, splitVitals))
+			})
+		}
+		// Keep fleetpressure's churny health fields current every tick, decoupled
+		// from the now-rare persist (ADR-033 Option C companion).
+		if s.fleetIndex != nil {
+			s.fleetIndex.SetLiveVitals(envoyID, extractLiveVitals(volTop))
 		}
 		// Update swarm peer tracker when agents report cached blobs.
 		if s.peerTracker != nil {
@@ -663,12 +679,15 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		return resp, nil
 	}
 
-	// Parse inline traits once into a deep map, shared by case/lookup expansion
-	// below and match-var resolution / bundle filtering further down — these
-	// were two redundant Unmarshals of the same payload before.
+	// Parse the full per-envoy traits once into a deep map, shared by case/lookup
+	// expansion below and match-var resolution / bundle filtering further down.
+	// This path runs only when a bundle is (re)built — the steady-state no-change
+	// tick short-circuits above — so the inventory ∪ vitals merge here is off the
+	// hot path (ADR-033 Option C). Empty on a split resend tick (inventory not yet
+	// held), exactly as before.
 	var traitsMap map[string]any
-	if len(inlineTraits) > 0 {
-		if err := json.Unmarshal(inlineTraits, &traitsMap); err != nil {
+	if full := s.fullCheckinTraits(envoyID, vitals, legacyTraits, splitVitals); len(full) > 0 {
+		if err := json.Unmarshal(full, &traitsMap); err != nil {
 			slog.Warn("malformed inline traits JSON", "envoy", envoy.Hostname, "error", err)
 		}
 	}

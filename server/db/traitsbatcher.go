@@ -66,6 +66,14 @@ func (b *TraitsBatcher) Mark(envoyID, changeKey string, build func() string) {
 	}
 
 	blob := build()
+	if blob == "" {
+		// build() couldn't materialize the blob — e.g. the inventory cache was
+		// lost (server restart/eviction) between the change-key check and here.
+		// Don't persist an empty snapshot or advance the key, so the next tick
+		// with a real blob retries. (A genuinely empty traits object serializes
+		// as "{}", not "", so this only catches the cache-lost path.)
+		return
+	}
 	b.mu.Lock()
 	b.pending[envoyID] = blob
 	b.mu.Unlock()
