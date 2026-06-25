@@ -23,7 +23,7 @@ func runCreate(cfg config) {
 		die("admin token required to publish the config tree (or pass --skip-publish to enroll against the server's existing config)")
 	}
 
-	plan := buildHostPlan(cfg.count, cfg.namedCount, cfg.brokenCount, cfg.changedCount)
+	plan := buildHostPlan(cfg.count, cfg.namedCount, cfg.brokenCount, cfg.changedCount, cfg.hostnameSuffix)
 	named := 0
 	for _, h := range plan {
 		if !strings.HasPrefix(h.Hostname, "worker-") {

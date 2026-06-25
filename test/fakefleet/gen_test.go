@@ -29,7 +29,7 @@ func TestWriteConfigTreeNestsUnderFleetDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cleanup, err := writeConfigTree(stacks, "alexander4", buildHostPlan(400, 5, 3, 20))
+	cleanup, err := writeConfigTree(stacks, "alexander4", buildHostPlan(400, 5, 3, 20, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestEnvironmentsFileLintClean(t *testing.T) {
 func TestEnvAxisCovered(t *testing.T) {
 	valid := map[string]bool{"prod": true, "stage": true, "test": true}
 	counts := map[string]int{}
-	for _, h := range buildHostPlan(13647, 100, 20, 500) {
+	for _, h := range buildHostPlan(13647, 100, 20, 500, "") {
 		if !valid[h.Env] {
 			t.Fatalf("host %q has invalid env %q", h.Hostname, h.Env)
 		}
@@ -128,7 +128,7 @@ func TestHostPlanOutcomes(t *testing.T) {
 		{1000, 50, 5, 30},
 		{100, 0, 0, 0},
 	} {
-		plan := buildHostPlan(tc.count, tc.named, tc.failed, tc.changed)
+		plan := buildHostPlan(tc.count, tc.named, tc.failed, tc.changed, "")
 		if len(plan) != tc.count {
 			t.Errorf("count=%d: got %d hosts", tc.count, len(plan))
 		}
@@ -152,7 +152,7 @@ func TestHostPlanOutcomes(t *testing.T) {
 // count of realistic service hostnames.
 func TestEveryHostnameLooksSynthetic(t *testing.T) {
 	const named = 100
-	plan := buildHostPlan(13647, named, 20, 500)
+	plan := buildHostPlan(13647, named, 20, 500, "")
 	seen := make(map[string]bool, len(plan))
 	gotNamed := 0
 	for _, h := range plan {

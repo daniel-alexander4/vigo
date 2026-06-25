@@ -365,7 +365,7 @@ func looksSynthetic(hostname string) bool {
 // assigns outcomes: `failed` report a resource error, `changed` report
 // drift, the rest are settled. Deterministic (fixed seed) so a regenerate
 // is identical.
-func buildHostPlan(count, named, failed, changed int) []hostPlan {
+func buildHostPlan(count, named, failed, changed int, suffix string) []hostPlan {
 	type cell struct {
 		r   region
 		az  string
@@ -426,6 +426,9 @@ func buildHostPlan(count, named, failed, changed int) []hostPlan {
 			} else {
 				workerSeq++
 				host = fmt.Sprintf("worker-%s-%s-%s-%05d", cl.cls.name, cl.env, zc, workerSeq)
+			}
+			if suffix != "" {
+				host += suffix
 			}
 			identity, _ := json.Marshal(map[string]any{
 				"os":             d.os,

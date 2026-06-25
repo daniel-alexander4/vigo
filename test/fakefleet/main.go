@@ -65,6 +65,7 @@ type config struct {
 	skipPublish       bool
 	vigocliBin        string
 	fleetDir          string
+	hostnameSuffix    string
 	httpClient        *http.Client
 }
 
@@ -139,6 +140,7 @@ func parseFlags(cmd string, args []string) config {
 	vigocliBin := fs.String("vigocli", "vigocli", "vigocli binary used to publish the fleet config (stacks → .live)")
 	skipPublish := fs.Bool("skip-publish", false, "create only: enroll + first-report without writing or publishing a config tree — envoys converge against whatever .live the target server already serves")
 	fleetDir := fs.String("fleet-dir", "alexander4", "stacks subdir the demo clouds nest under (e.g. alexander4); the harness owns <fleet-dir>/{aws,gcp} and removes only those on backout")
+	hostnameSuffix := fs.String("hostname-suffix", "", "append this suffix to every generated hostname (create only) — e.g. .a.test, so envoys match a spanner bolt's hostname pattern")
 	noVitalsHash := fs.Bool("no-vitals-hash", false, "omit vitals_state_hash (ADR-033 Option C) from check-ins, so the server re-persists every churny tick — the 'before' leg of the Option C CPU A/B against one server image")
 	_ = fs.Parse(args)
 
@@ -168,6 +170,7 @@ func parseFlags(cmd string, args []string) config {
 		count:             *count,
 		inventoryKB:       *inventoryKB,
 		namedCount:        *named,
+		hostnameSuffix:    *hostnameSuffix,
 		brokenCount:       *broken,
 		changedCount:      *changed,
 		concurrency:       *concurrency,
