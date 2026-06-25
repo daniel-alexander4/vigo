@@ -37,6 +37,11 @@ IMAGE_FAMILY=ubuntu-2404-lts-amd64
 IMAGE_PROJECT=ubuntu-os-cloud
 AR_IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/vigo/vigo"
 
+# Server machine type. Default is the 8 vCPU / 32 GiB anchor box; override to
+# validate the linear capacity model on other sizes, e.g.
+#   SRV_MACHINE_TYPE=e2-standard-4 ./gcloud/provision-gcp.sh   # 4 vCPU / 16 GiB
+SRV_MACHINE_TYPE="${SRV_MACHINE_TYPE:-e2-custom-8-32768}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
@@ -142,10 +147,10 @@ g compute routers nats describe vigo-nat --router=vigo-router --region="$REGION"
   g compute routers nats create vigo-nat --router=vigo-router --region="$REGION" \
     --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges
 
-echo "== Server VM: 8 vCPU / 32 GiB, SSD boot (SQLite WAL throughput) =="
+echo "== Server VM: ${SRV_MACHINE_TYPE}, SSD boot (SQLite WAL throughput) =="
 g compute instances describe vigo-srv --zone="$ZONE" >/dev/null 2>&1 || \
   g compute instances create vigo-srv --zone="$ZONE" \
-    --machine-type=e2-custom-8-32768 \
+    --machine-type="$SRV_MACHINE_TYPE" \
     --network="$NETWORK" --subnet="$SUBNET" --no-address \
     --image-family="$IMAGE_FAMILY" --image-project="$IMAGE_PROJECT" \
     --boot-disk-size=50GB --boot-disk-type=pd-ssd
