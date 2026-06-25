@@ -3,15 +3,15 @@
 # Générateur de bruit brun
 
 Cet exemple exécute du bruit brun en tant que **service systemd à l'échelle du système** qui joue
-directement vers le périphérique **ALSA** local de l'hôte — sans Docker, sans PulseAudio, sans
+directement sur le périphérique **ALSA** local de l'hôte — sans Docker, sans PulseAudio, sans
 session utilisateur connectée. `sox` génère le bruit, un fichier d'unité le supervise,
 et une étape `amixer` idempotente règle le niveau de lecture. Il illustre une
 chaîne `package` → `file` (script + unité) → `service` câblée avec
-`notify`/`subscribes` afin qu'une modification du script ou de l'unité redémarre le service, plus une
-ressource `exec` dotée d'une garde `unless:` tolérante qui converge une seule fois au lieu de
+`notify`/`subscribes` afin qu'un changement de script ou d'unité redémarre le service, plus une
+ressource `exec` avec une garde `unless:` tolérante qui converge une fois au lieu de
 s'agiter à chaque cycle.
 
-## Définition du configcrate
+## Définition de configcrate
 
 `stacks/configcrates/brownnoise.vgo` :
 
@@ -135,11 +135,11 @@ envoys:
       brownnoise_freq_center: "1200"
 ```
 
-## Template
+## Modèle
 
-Placez votre script `brownnoise.sh` dans
+Placez votre script `brownnoise.sh` à
 `stacks/configcrates/templates/brownnoise.sh.tmpl`. Les vars ne sont utilisées que si
-vous ajoutez des marqueurs de template — sinon, déposez le script tel quel :
+vous ajoutez des marqueurs de modèle — sinon, déposez le script tel quel :
 
 ```bash
 minutes=${1:-'{{ .Vars.brownnoise_minutes }}'}
@@ -148,45 +148,45 @@ wave=${3:-'{{ .Vars.brownnoise_wave }}'}
 ```
 
 Le script utilise le `play` de `sox` pour synthétiser du bruit brownien, le filtrer en passe-bande autour de
-`center`, ajouter un trémolo lent (`wave`) et de la réverbération, et répéter un segment d'une minute
-pré-rendu pour maintenir une faible consommation CPU. `AUDIODRIVER=alsa` + `AUDIODEV` (définis
+`center`, ajouter un trémolo lent (`wave`) plus de la réverbération, et répéter un segment d'une minute
+pré-rendu afin de limiter l'utilisation du CPU. `AUDIODRIVER=alsa` + `AUDIODEV` (définis
 dans l'unité) dirigent `play` vers le périphérique ALSA plutôt que vers un serveur PulseAudio
 utilisateur.
 
 ## Fonctionnement
 
 1. `brownnoise-sox`, `brownnoise-sox-formats` et `brownnoise-alsa-utils`
-   installent `sox` (le synthétiseur/lecteur), ses codecs de format, ainsi que `amixer`/
+   installent `sox` (le synthétiseur/lecteur), ses codecs de format, et `amixer`/
    `alsactl`.
-2. `brownnoise-volume` règle le contrôle du mixeur ALSA sur
-   `brownnoise_alsa_level` (60 % par défaut) et le réactive (unmute). La garde `unless:`
-   relit le niveau actuel, accepte toute valeur dans une plage de ±3 % de la cible tant qu'il
-   est activé, et ne saute qu'à ce moment-là — elle s'auto-répare donc d'un niveau muet/incorrect sans
-   se réexécuter à chaque cycle de convergence. (Les gardes `exec` sont `unless:`,
-   saute-si-la-garde-réussit, et `onlyif:`, saute-si-elle-échoue.)
-3. `brownnoise-script` et `brownnoise-unit` écrivent le script du lecteur et l'unité
-   systemd. Tous deux utilisent `notify: [brownnoise-restart]`, donc modifier l'un ou l'autre
+2. `brownnoise-volume` règle le contrôle du mélangeur ALSA à
+   `brownnoise_alsa_level` (60 % par défaut) et le rétablit (unmute). La garde `unless:`
+   relit le niveau actuel, accepte toute valeur à ±3 % de la cible tant qu'il n'est pas en sourdine,
+   et seulement alors saute — il s'auto-répare donc d'un niveau en sourdine/erroné sans
+   se ré-exécuter à chaque cycle de convergence. (Les gardes `exec` sont `unless:`,
+   sauter-si-la-garde-réussit, et `onlyif:`, sauter-si-elle-échoue.)
+3. `brownnoise-script` et `brownnoise-unit` écrivent le script du lecteur et
+   l'unité systemd. Tous deux `notify: [brownnoise-restart]`, donc modifier l'un ou l'autre
    relance le service.
-4. `brownnoise-daemon-reload` exécute `systemctl daemon-reload`, mais uniquement lorsque le
+4. `brownnoise-daemon-reload` exécute `systemctl daemon-reload`, mais uniquement quand le
    fichier d'unité change (`subscribes: [brownnoise-unit]`).
 5. `brownnoise-service` réconcilie l'unité vers `running` + `enabled` (démarre au
-   boot). Il dépend (`depends_on:`) des paquets, du script, de l'unité, du daemon-reload, et de
+   boot). Il fait `depends_on:` des paquets, du script, de l'unité, du daemon-reload, et de
    l'étape de volume afin que le service ne démarre qu'une fois tout ce dont il a besoin en
    place.
-6. `brownnoise-restart` est une ressource service `when: changed` qui redémarre
-   brownnoise lorsque son script ou son unité a changé lors de ce passage.
+6. `brownnoise-restart` est une ressource de service `when: changed` qui redémarre
+   brownnoise lorsque son script ou son unité a changé lors de cette exécution.
 
 **Changer le son :** modifiez `brownnoise.sh` (ou l'unité) — le câblage `notify`
-redémarre le service à la prochaine convergence. Ajustez le centre du passe-bande,
+redémarre le service à la prochaine convergence. Ajustez le centre de la passe-bande,
 la profondeur du trémolo ou le volume en surchargeant les vars au niveau du nœud.
 
 ## Prérequis
 
 Une carte son fonctionnelle avec un périphérique ALSA sur le nœud. Trouvez l'index de la carte et
-le contrôle du mixeur avec `aplay -l` et `amixer -c <n> scontrols` ; réglez
+le contrôle du mélangeur avec `aplay -l` et `amixer -c <n> scontrols` ; réglez
 `brownnoise_alsa_card`, `brownnoise_audio_dev` et `brownnoise_alsa_control`
 en conséquence (les contrôles courants sont `PCM`, `Master`, `Speaker`). Aucun serveur
-d'affichage, session de connexion ou PulseAudio n'est requis — le service joue directement vers le
+d'affichage, session de connexion ou PulseAudio n'est requis — le service joue directement sur le
 matériel en tant que root.
 
 ## Personnalisation
@@ -196,12 +196,12 @@ Surchargez les vars au niveau du nœud pour ajuster le son et cibler le bon pér
 | Variable | Défaut | Description |
 |---|---|---|
 | `brownnoise_freq_center` | `1786` | Fréquence centrale du filtre passe-bande en Hz |
-| `brownnoise_wave` | `0.08` | Profondeur du trémolo (oscillation du volume) ; garder ≤ 0.20 |
+| `brownnoise_wave` | `0.08` | Profondeur du trémolo (oscillation du volume) ; garder ≤ 0,20 |
 | `brownnoise_minutes` | `900` | Durée en minutes (un segment d'une minute est répété) |
-| `brownnoise_dir` | `/opt/brownnoise` | Répertoire de travail du script sur le nœud |
-| `brownnoise_audio_dev` | `plughw:0` | Périphérique ALSA vers lequel `play` écrit (`AUDIODEV`) |
+| `brownnoise_dir` | `/opt/brownnoise` | Répertoire de travail pour le script sur le nœud |
+| `brownnoise_audio_dev` | `plughw:0` | Périphérique ALSA sur lequel `play` écrit (`AUDIODEV`) |
 | `brownnoise_alsa_card` | `0` | Index de carte pour `amixer -c` |
-| `brownnoise_alsa_control` | `PCM` | Contrôle du mixeur à régler (p. ex. `PCM`, `Master`) |
+| `brownnoise_alsa_control` | `PCM` | Contrôle du mélangeur à régler (p. ex. `PCM`, `Master`) |
 | `brownnoise_alsa_level` | `60` | Pourcentage du niveau de lecture à régler et maintenir |
 ---
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir la [licence](../legal/license.md).*
+*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir [licence](../legal/license.md).*

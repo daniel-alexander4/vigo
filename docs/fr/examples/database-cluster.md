@@ -112,7 +112,7 @@ resources:
 
 ## Variables partagées via common.vgo
 
-Les fichiers `common.vgo` au niveau du répertoire définissent des vars partagées pour chaque envoy du sous-arbre. Un `common.vgo` placé auprès des envoys de base de données fournit les valeurs par défaut applicables à toute la base de données :
+Les fichiers `common.vgo` au niveau du répertoire définissent des vars partagées pour chaque envoy du sous-arbre. Un `common.vgo` placé à côté des envoys de base de données fournit les valeurs par défaut communes à toute la base de données :
 
 `stacks/db/common.vgo` :
 
@@ -155,7 +155,7 @@ envoys:
       pg_listen_addresses: "*"
 ```
 
-Les blocs match restent réduits — seules les vars qui ne sont pas spécifiques à un environnement y figurent.
+Les blocs match restent petits — seules les vars qui ne sont pas spécifiques à l'environnement y figurent.
 
 ## Réglage par environnement
 
@@ -178,7 +178,7 @@ env:
       pg_work_mem: 4MB
 ```
 
-Le réglage spécifique à un environnement tient dans un seul fichier, indexé par palier. Ajouter un nouveau palier revient à ajouter un bloc ici — sans toucher aux blocs match.
+Le réglage spécifique à chaque environnement réside dans un seul fichier, indexé par palier. Ajouter un nouveau palier revient à ajouter un bloc ici — sans toucher aux blocs match.
 
 ## Références de secrets
 
@@ -206,4 +206,4 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 
 Voir [Configuration multi-axes](../reference/configcrate-language.md) pour le modèle canonique complet.
 ---
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir [licence](../legal/license.md).*
+*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir la [licence](../legal/license.md).*

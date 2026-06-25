@@ -2,7 +2,7 @@
 
 # Swarm
 
-Mettez en place le substrat pair à pair et ses sous-systèmes de contenu.
+Mettez en place le substrat pair-à-pair et ses sous-systèmes de contenu.
 
 - [Mettre en place le Swarm](set-up-swarm.md) — le substrat
 - [Mettre en place Puddle](set-up-puddle.md) — l'identité par utilisateur sur laquelle tout repose

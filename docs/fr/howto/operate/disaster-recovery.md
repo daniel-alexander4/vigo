@@ -2,24 +2,24 @@
 
 # Reprise après sinistre
 
-À la fin de cette page, vous disposerez d'un plan de reprise écrit et testé pour « le serveur Vigo a disparu — panne de disque, hôte perdu, région hors service, un `rm -rf` tombé au mauvais endroit » — ainsi que d'une estimation calibrée du temps de reprise. Le plan suit la forme `provisionner → restaurer → publier → démarrer` ; le temps de reprise est dominé par le provisionnement, pas par Vigo. Cinq scénarios concrets sont couverts ci-dessous, par ordre croissant de difficulté.
+Vous terminerez cette page avec un manuel de reprise écrit et testé pour « le serveur Vigo a disparu — panne de disque, hôte perdu, région hors service, un `rm -rf` tombé au mauvais endroit » — et une estimation calibrée du temps de reprise. La forme du manuel est `provision → restauration → publication → démarrage` ; le temps de reprise est dominé par le provisionnement, pas par Vigo. Cinq scénarios concrets sont couverts ci-dessous, par ordre croissant de difficulté.
 
-**Quand l'utiliser :** avant d'en avoir besoin. Parcourez le scénario 1 contre une vraie archive de sauvegarde sur un hôte de préproduction une fois par trimestre. Ne découvrez pas pendant la vraie panne que votre clé maîtresse n'était en fait pas dans l'archive.
+**Quand l'utiliser :** avant d'en avoir besoin. Déroulez le scénario 1 contre une vraie archive de sauvegarde sur un hôte de préproduction une fois par trimestre. Ne découvrez pas pendant la vraie panne que votre clé maîtresse n'était pas réellement dans l'archive.
 
-**Quand la sauter :** jamais — même les flottes à serveur unique qui subissent une panne s'en sortent mieux avec cette lecture faite à l'avance.
+**Quand vous en passer :** jamais — même les flottes mono-serveur qui subissent une panne s'en sortent mieux avec cette lecture faite à l'avance.
 
-Pour la configuration et la création des sauvegardes, voir [Sauvegarde et reprise](backup-and-recovery.md). Un fait important ci-dessous : **les agents survivent indéfiniment aux pannes serveur** grâce à la politique mise en cache dans LMDB et aux résultats mis en file d'attente, de sorte qu'une panne serveur de plusieurs heures n'est pas une panne de flotte.
+Pour la configuration et la création des sauvegardes, voir [Sauvegarde & reprise](backup-and-recovery.md). Un fait important ci-dessous : **les agents survivent indéfiniment aux pannes du serveur** grâce à la politique mise en cache dans LMDB et aux résultats en file d'attente, donc une panne serveur de plusieurs heures n'est pas une panne de flotte.
 
-## Ce que vous devez restaurer
+## Ce dont vous avez besoin pour la reprise
 
-Un serveur Vigo complet se compose de cinq composants, tous stockés sous `/srv/vigo/` :
+Un serveur Vigo complet se compose de cinq éléments, tous stockés sous `/srv/vigo/` :
 
 | Composant | Chemin | Rôle | Méthode de sauvegarde |
 |-----------|------|---------|---------------|
 | Base de données | `db/vigo.db` | Envoys enrôlés, historique des exécutions, traits, utilisateurs, jetons | `vigocli backup` ou Litestream |
 | Fichiers de config | `stacks/` | Configcrates, rôles, mappages d'envoys, vars | `vigocli backup` (aussi : git) |
 | Secrets | `secrets/` | Fichiers chiffrés AES-256-GCM + `.master.key` | `vigocli backup` |
-| Certificats TLS | `tls/` | CA + certificat/clé serveur (PEM brut) | `vigocli backup` |
+| Certificats TLS | `tls/` | CA + cert/clé serveur (PEM en clair) | `vigocli backup` |
 | Config serveur | `server.yaml` | Ports, intervalles, backends, SMTP, export | `vigocli backup` |
 
 Rien d'autre n'a besoin d'être sauvegardé. Le FleetIndex, les compteurs de conformité et le cache de politique sont tous reconstruits à partir de la base de données au démarrage.
@@ -28,48 +28,48 @@ Rien d'autre n'a besoin d'être sauvegardé. Le FleetIndex, les compteurs de con
 
 Les agents sont conçus pour survivre indéfiniment à l'indisponibilité du serveur :
 
-- **Backoff exponentiel** : le check-in réessaie à 5 s, 10 s, 20 s ... jusqu'à des intervalles de 5 minutes. Pas de plantage, pas de perte de données.
-- **Convergence hors ligne** : si l'agent dispose d'un bundle de politique en cache (stocké dans LMDB sous `/var/lib/vigo/state/`), il continue d'appliquer les ressources localement à son intervalle normal.
-- **File d'attente des résultats en attente** : les résultats d'exécution et les mises à jour de traits sont mis en file d'attente localement et livrés automatiquement au retour du serveur.
-- **Pas de réenrôlement** : les agents se reconnectent à l'aide de leur UUID et de leur paire de clés ED25519 existants. Le serveur vérifie leur signature contre la clé publique stockée dans la base de données restaurée. Aucun jeton ni intervention manuelle nécessaire.
+- **Backoff exponentiel** : les tentatives de check-in se font à 5 s, 10 s, 20 s ... jusqu'à des intervalles de 5 minutes. Pas de crash, pas de perte de données.
+- **Convergence hors ligne** : si l'agent dispose d'un bundle de politique mis en cache (stocké dans LMDB à `/var/lib/vigo/state/`), il continue d'appliquer les ressources localement selon son intervalle normal.
+- **File d'attente des résultats en attente** : les résultats d'exécution et les mises à jour de traits sont mis en file d'attente localement et délivrés automatiquement au retour du serveur.
+- **Aucun ré-enrôlement** : les agents se reconnectent en utilisant leur UUID et leur paire de clés ED25519 existants. Le serveur vérifie leur signature contre la clé publique stockée dans la base de données restaurée. Aucun jeton ni intervention manuelle nécessaires.
 
-**Le seul scénario nécessitant un réenrôlement** est la perte de la base de données sans sauvegarde (enregistrements d'envoys disparus) ou la suppression des fichiers d'état de l'agent sous `/var/lib/vigo/state/`.
+**Le seul scénario nécessitant un ré-enrôlement** est la perte de la base de données sans sauvegarde (les enregistrements d'envoys ont disparu) ou la suppression des fichiers d'état de l'agent à `/var/lib/vigo/state/`.
 
-## Parcours d'une panne de disque
+## Procédure de panne de disque
 
-Cette section parcourt le scénario de sinistre le plus courant : le disque de votre serveur tombe en panne.
+Cette section déroule le scénario de sinistre le plus courant : le disque de votre serveur tombe en panne.
 
-**Instant de la défaillance.** Le disque meurt. Le conteneur vigosrv s'arrête. Les endpoints gRPC et REST s'éteignent.
+**Moment de la panne.** Le disque tombe. Le conteneur vigosrv s'arrête. Les points d'accès gRPC et REST deviennent inaccessibles.
 
-**Ce qui arrive aux envoys.** Rien de grave. Chaque agent dispose d'un bundle de politique signé en cache dans LMDB (`/var/lib/vigo/state/`). Ils continuent de converger à leur intervalle de check-in normal. Le check-in échoue, l'agent journalise un avertissement, applique un backoff exponentiel sur les réessais et continue d'appliquer la politique en cache. Les résultats d'exécution et les mises à jour de traits sont mis en file d'attente localement dans la file d'attente LMDB. Aucun envoy ne cesse d'appliquer l'état.
+**Ce qui arrive aux envoys.** Rien de grave. Chaque agent dispose d'un bundle de politique signé mis en cache dans LMDB (`/var/lib/vigo/state/`). Ils continuent de converger selon leur intervalle de check-in normal. Le check-in échoue, l'agent journalise un avertissement, applique un backoff exponentiel aux tentatives, et continue d'appliquer la politique mise en cache. Les résultats d'exécution et les mises à jour de traits sont mis en file d'attente localement dans la file d'attente LMDB. Aucun envoy ne cesse d'appliquer l'état.
 
-**Ce que vous avez perdu.** La visibilité du tableau de bord, la capacité de publier des changements de config, l'enrôlement de nouveaux envoys, la dispatch de tâches et le rapport de traits. Aucun envoy ne perd la conformité.
+**Ce que vous avez perdu.** La visibilité du tableau de bord, la possibilité de publier des changements de config, l'enrôlement de nouveaux envoys, la répartition des tâches et le reporting des traits. Aucun envoy ne perd sa conformité.
 
 **Reprise.**
 
-1. **Provisionner un nouveau serveur.** Démarrez une nouvelle VM ou un nouvel hôte de conteneur. Quelques secondes dans le cloud, quelques minutes sur bare metal.
+1. **Provisionner un nouveau serveur.** Lancez une nouvelle VM ou un nouvel hôte de conteneurs. Quelques secondes dans le cloud, quelques minutes sur du bare metal.
 
 2. **Restaurer `/srv/vigo`.** C'est là que votre stratégie de sauvegarde détermine le temps de reprise :
 
    | Méthode de sauvegarde | Temps de reprise | Fenêtre de perte de données |
    |---|---|---|
-   | Instantané de volume cloud (horaire) | ~1-2 min (rattacher l'instantané) | Jusqu'à 1 heure de changements de config |
-   | Litestream + sauvegarde de système de fichiers | ~1-2 min | Quelques secondes pour la BD, selon la fréquence de sauvegarde de la config |
-   | rsync/Borg/restic vers distant (horaire) | ~2-5 min | Jusqu'à 1 heure |
-   | Instantané VM complet | ~1-2 min (démarrage depuis l'instantané) | Depuis le dernier instantané |
+   | Snapshot de volume cloud (horaire) | ~1-2 min (attacher le snapshot) | Jusqu'à 1 heure de changements de config |
+   | Litestream + sauvegarde du système de fichiers | ~1-2 min | Quelques secondes pour la BD, selon la fréquence de sauvegarde de la config |
+   | rsync/Borg/restic vers un site distant (horaire) | ~2-5 min | Jusqu'à 1 heure |
+   | Snapshot complet de VM | ~1-2 min (démarrage depuis le snapshot) | Depuis le dernier snapshot |
 
-3. **Démarrer le conteneur.** `docker run` avec le montage de volume `/srv/vigo` restauré. vigosrv démarre, charge la config, réhydrate le FleetIndex depuis SQLite. Quelques secondes, même à 10 000 envoys.
+3. **Démarrer le conteneur.** `docker run` avec le volume `/srv/vigo` restauré monté. vigosrv démarre, charge la config, réhydrate le FleetIndex depuis SQLite. Quelques secondes, même à 10 000 envoys.
 
-4. **Reconnexion des envoys.** Les agents en backoff exponentiel réessaient en quelques secondes à quelques minutes. Au check-in réussi, les résultats en attente se vident de la file d'attente LMDB. Le FleetIndex se peuple d'horodatages frais. Le tableau de bord reprend vie.
+4. **Les envoys se reconnectent.** Les agents en backoff exponentiel réessaient en quelques secondes à quelques minutes. Lors d'un check-in réussi, les résultats en attente se vident de la file d'attente LMDB. Le FleetIndex se peuple avec des horodatages frais. Le tableau de bord reprend vie.
 
-**Temps de reprise total : 5 à 15 minutes.** L'essentiel correspond au provisionnement du nouveau serveur et à la restauration du volume. Le démarrage de vigosrv lui-même prend quelques secondes.
+**Temps de reprise total : 5-15 minutes.** L'essentiel est le provisionnement du nouveau serveur et la restauration du volume. Le démarrage de vigosrv lui-même prend quelques secondes.
 
 
-**Le point à surveiller.** Litestream ne couvre que la base de données SQLite. Les fichiers de config (`stacks/`), les secrets, les certificats TLS et `server.yaml` nécessitent une sauvegarde de système de fichiers distincte. Si votre dernière sauvegarde de système de fichiers date d'une heure et que vous avez publié des changements de config 10 minutes avant la panne de disque, ces changements sont perdus. Conservez `stacks/` dans git pour éliminer ce risque.
+**Le point à surveiller.** Litestream ne couvre que la base de données SQLite. Les fichiers de config (`stacks/`), les secrets, les certificats TLS et `server.yaml` ont besoin d'une sauvegarde du système de fichiers distincte. Si votre dernière sauvegarde du système de fichiers date d'une heure et que vous avez publié des changements de config 10 minutes avant la panne du disque, ces changements sont perdus. Conservez `stacks/` dans git pour éliminer ce risque.
 
 ## Procédures de reprise
 
-### Scénario 1 : Restauration complète du serveur depuis une sauvegarde manuelle
+### Scénario 1 : restauration complète du serveur depuis une sauvegarde manuelle
 
 Vous disposez d'une archive de sauvegarde créée par `vigocli backup create`.
 
@@ -89,16 +89,16 @@ systemctl start vigosrv
 ```
 
 Le serveur va :
-1. Charger les secrets à l'aide de la `.master.key` restaurée
+1. Charger les secrets en utilisant la `.master.key` restaurée
 2. Ouvrir la base de données restaurée, exécuter les migrations en attente
 3. Reconstruire le FleetIndex à partir de la base de données (tous les envoys, traits, statut de conformité)
 4. Commencer à accepter les check-ins d'agents sur les ports 1530 (gRPC) et 8443 (REST)
 
 Les agents se reconnecteront automatiquement dans leur fenêtre de backoff (au plus 5 minutes après que le serveur devient joignable).
 
-### Scénario 2 : Restauration depuis une réplique Litestream
+### Scénario 2 : restauration depuis une réplique Litestream
 
-Vous avez configuré une réplication continue et la base de données est perdue, mais `/srv/vigo/` (configs, secrets, TLS) est intact.
+Vous avez une réplication continue configurée et la base de données est perdue, mais `/srv/vigo/` (configs, secrets, TLS) est intact.
 
 ```bash
 # 1. Stop the server
@@ -117,7 +117,7 @@ litestream restore -o /srv/vigo/db/vigo.db \
 systemctl start vigosrv
 ```
 
-### Scénario 3 : Restauration de la base de données uniquement
+### Scénario 3 : restauration de la base de données uniquement
 
 La config et les secrets sont intacts, mais la base de données est perdue ou corrompue.
 
@@ -128,7 +128,7 @@ vigocli backup restore /path/to/backup.tar.gz --db-only
 systemctl start vigosrv
 ```
 
-### Scénario 4 : Clé maîtresse perdue (secrets irrécupérables)
+### Scénario 4 : clé maîtresse perdue (secrets irrécupérables)
 
 Si la clé maîtresse (`.master.key`) est perdue et que vous n'avez aucune sauvegarde l'incluant, les secrets chiffrés ne peuvent pas être déchiffrés. Vous devez les recréer :
 
@@ -147,15 +147,15 @@ vigocli config publish
 systemctl start vigosrv
 ```
 
-### Scénario 5 : Perte complète (aucune sauvegarde)
+### Scénario 5 : perte complète (aucune sauvegarde)
 
 Si le serveur et toutes les sauvegardes sont perdus :
 
 1. Installez Vigo à neuf, configurez `server.yaml` et les certificats TLS
-2. Recréez les fichiers de config (`stacks/`) à partir de git ou de la documentation
+2. Recréez les fichiers de config (`stacks/`) depuis git ou la documentation
 3. Recréez les secrets
 4. Démarrez le serveur — il initialisera une base de données vide
-5. **Les agents doivent se réenrôler** : configurez les motifs d'enrôlement de confiance, puis soit :
+5. **Les agents doivent se ré-enrôler** : configurez les motifs d'enrôlement de confiance, puis soit :
    - Attendez que les agents réessaient (ils finiront par atteindre le serveur, échoueront à l'authentification, et auront besoin d'un bootstrap)
    - Exécutez `vigocli envoys rebootstrap --all` pour signaler à tous les agents de se mettre à jour
    - Ou bootstrappez manuellement chaque nœud : `curl -sSfk https://<server>:8443/bootstrap | sudo sh`
@@ -182,22 +182,22 @@ vigocli envoys push web-01.example.com
 open https://<server-ip>:8443/
 ```
 
-Si des envoys apparaissent « hors ligne » après la restauration, c'est attendu — ils repasseront à converged/relapsed après leur prochain check-in.
+Si des envoys apparaissent « hors ligne » après la restauration, c'est attendu -- ils repasseront à convergé/relapsé après leur prochain check-in.
 
 
 ## Reprise Spanner
 
 Dans une topologie spanner hub + bolts :
 
-- **Défaillance d'un Bolt** : restaurez le Bolt indépendamment. Les envoys enrôlés sur ce Bolt se reconnectent automatiquement. Le hub reprendra la réception des données agrégées au prochain heartbeat du Bolt.
-- **Défaillance du hub** : restaurez le hub. Les Bolts se reconnecteront et reprendront les heartbeats spanner. Les réaffectations d'envoys et les opérations de drain doivent être revérifiées après la restauration du hub.
+- **Panne d'un Bolt** : restaurez le Bolt indépendamment. Les envoys enrôlés sur ce Bolt se reconnectent automatiquement. Le hub reprendra la réception des données agrégées au prochain heartbeat du Bolt.
+- **Panne du hub** : restaurez le hub. Les Bolts se reconnecteront et reprendront les heartbeats spanner. Les réaffectations d'envoys et les opérations de drain devraient être re-vérifiées après la restauration du hub.
 - **Le hub et le Bolt ont des bases de données indépendantes** — restaurer l'un n'affecte pas l'autre.
 
 ## Bonnes pratiques
 
 ### Sauvegarder les fichiers de config dans Git
 
-La source de vérité de la config (`stacks/`) est du YAML brut sur le système de fichiers. Suivez-la dans git pour un historique versionné, la visibilité des diffs et une restauration facile :
+La source de vérité de la config (`stacks/`) est du YAML en clair sur le système de fichiers. Suivez-la dans git pour un historique versionné, une visibilité des diffs et une restauration facile :
 
 ```bash
 cd /srv/vigo/stacks
@@ -207,7 +207,7 @@ git init && git add -A && git commit -m "initial config"
 git add -A && git commit -m "add redis configcrate for cache nodes"
 ```
 
-Cela vous donne `git log`, `git diff` et `git revert` pour les changements de config, indépendamment des sauvegardes de base de données.
+Cela vous donne `git log`, `git diff` et `git revert` pour les changements de config, indépendamment des sauvegardes de la base de données.
 
 ### Protéger la clé maîtresse
 
@@ -226,7 +226,7 @@ La clé maîtresse des secrets (`secrets/.master.key`) est le fichier le plus cr
   && find /backup -name 'vigo-*.tar.gz' -mtime +7 -delete
 ```
 
-Pour une protection continue, configurez Litestream en plus des instantanés quotidiens. Litestream offre un RPO quasi nul (< 1 seconde), tandis que les instantanés fournissent des points de reprise portables et autonomes.
+Pour une protection continue, configurez Litestream en plus des snapshots quotidiens. Litestream offre un RPO quasi nul (< 1 seconde), tandis que les snapshots fournissent des points de reprise portables et autonomes.
 
 ### Tester vos restaurations
 
@@ -245,24 +245,24 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 
 | Scénario | Temps de reprise typique |
 |----------|----------------------|
-| Restauration de la base de données depuis Litestream | Quelques minutes (téléchargement + démarrage serveur) |
-| Restauration complète depuis une archive de sauvegarde | Quelques minutes (extraction + publication + démarrage) |
+| Restauration de la base de données depuis Litestream | Minutes (téléchargement + démarrage serveur) |
+| Restauration complète depuis une archive de sauvegarde | Minutes (extraction + publication + démarrage) |
 | Reconnexion des agents après le retour du serveur | 0–5 minutes (fenêtre de backoff) |
-| Vidage des résultats en attente | Quelques secondes (résultats en file d'attente livrés au premier check-in) |
-| Réhydratation du FleetIndex | Quelques secondes (même à 10 000+ envoys) |
-| Perte complète, aucune sauvegarde | Quelques heures (réinstallation, reconfiguration, réenrôlement de tous les agents) |
+| Vidage des résultats en attente | Secondes (résultats en file d'attente délivrés au premier check-in) |
+| Réhydratation du FleetIndex | Secondes (même à plus de 10 000 envoys) |
+| Perte complète, aucune sauvegarde | Heures (réinstaller, reconfigurer, ré-enrôler tous les agents) |
 
-## Voir aussi
+## Liens connexes
 
-- [Sauvegarde et reprise](backup-and-recovery.md) — Configuration Litestream et commandes d'instantanés manuels
+- [Sauvegarde & reprise](backup-and-recovery.md) — Configuration Litestream et commandes de snapshot manuel
 - [Base de données](../../reference/server-yaml.md) — Configuration SQLite et Postgres
 - [FleetIndex](troubleshoot.md) — Index en mémoire reconstruit au démarrage
 - [Dépannage](troubleshoot.md) — Problèmes courants et diagnostics
 
 ## Et ensuite
 
-- **Planifiez un exercice de DR trimestriel** → restaurez une archive de sauvegarde sur un hôte jetable. Vérifiez `/api/v1/health`, puis faites passer un envoy par un check-in contre le serveur restauré. Considérez les sauvegardes non testées comme inopérantes.
-- **Vous opérez un spanner hub-spoke** → restaurez chaque rôle indépendamment (le hub et le Bolt ont des bases de données séparées). Revérifiez les réaffectations et les drains après la restauration du hub.
+- **Planifiez un exercice de reprise après sinistre trimestriel** → restaurez une archive de sauvegarde sur un hôte jetable. Vérifiez `/api/v1/health`, puis faites passer un envoy par un check-in contre le serveur restauré. Considérez les sauvegardes non testées comme inopérantes.
+- **Vous opérez un spanner hub-spoke** → restaurez chaque rôle indépendamment (le hub et le Bolt ont des bases de données séparées). Re-vérifiez les réaffectations et les drains après la restauration du hub.
 - **Une étape de restauration a échoué** → [Dépanner les problèmes courants](troubleshoot.md).
 
 ---

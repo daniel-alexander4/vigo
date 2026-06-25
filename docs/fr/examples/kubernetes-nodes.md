@@ -2,9 +2,9 @@
 
 # Gestion des nœuds Kubernetes
 
-Cet exemple gère la configuration au niveau du système d'exploitation des machines exécutant Kubernetes — runtime de conteneurs, kubelet, réglage du noyau, CNI et règles de pare-feu. Un workflow roulant de drain-et-redémarrage assure l'application des correctifs du système d'exploitation sans perturber le cluster.
+Cet exemple gère la configuration au niveau du système d'exploitation des machines exécutant Kubernetes — runtime de conteneurs, kubelet, réglages du noyau, CNI et règles de pare-feu. Un workflow de drainage-et-redémarrage progressif assure les correctifs de l'OS sans perturber le cluster.
 
-Vigo gère la couche système sous Kubernetes. Il ne gère pas les ressources Kubernetes (deployments, configmaps, services) — c'est le domaine de kubectl apply et des outils GitOps comme ArgoCD ou Flux.
+Vigo gère la couche OS sous Kubernetes. Il ne gère pas les ressources Kubernetes (déploiements, configmaps, services) — c'est le domaine de kubectl apply et des outils GitOps comme ArgoCD ou Flux.
 
 ## Configcrate Containerd
 
@@ -138,7 +138,7 @@ resources:
 
 ## Configcrate de réglage du noyau
 
-Paramètres et modules de noyau requis pour le réseau et les performances de Kubernetes.
+Paramètres et modules du noyau requis pour la mise en réseau et les performances de Kubernetes.
 
 `stacks/configcrates/k8s/kernel-tuning.vgo` :
 
@@ -199,7 +199,7 @@ resources:
 
 ## Configcrate CNI
 
-Dépose les fichiers de configuration CNI. Le plugin CNI proprement dit (Calico, Cilium, Flannel) est généralement déployé via un DaemonSet, mais le répertoire de configuration au niveau de l'hôte et toute configuration de bridge doivent exister.
+Dépose les fichiers de configuration CNI. Le plugin CNI proprement dit (Calico, Cilium, Flannel) est généralement déployé via un DaemonSet, mais le répertoire de configuration au niveau de l'hôte et toute configuration de pont doivent exister.
 
 `stacks/configcrates/k8s/cni.vgo` :
 
@@ -318,9 +318,9 @@ envoys:
       kubelet_max_pods: "250"
 ```
 
-## Workflow roulant de drain-et-redémarrage
+## Workflow de drainage-et-redémarrage progressif
 
-Pour l'application des correctifs du système d'exploitation, les nœuds doivent être drainés avant le redémarrage afin d'éviter de perturber les pods. Ce workflow draine chaque nœud, le redémarre, attend qu'il rejoigne le cluster, puis le décordonne (uncordon) — en roulant à travers le parc par lots, avec des contrôles de santé.
+Pour les correctifs de l'OS, les nœuds doivent être drainés avant le redémarrage afin d'éviter toute perturbation des pods. Ce workflow draine chaque nœud, le redémarre, attend qu'il rejoigne le cluster et le décordonne — en progressant par lots à travers la flotte avec des contrôles de santé.
 
 ### Définitions des tâches
 
@@ -403,7 +403,7 @@ steps:
     batch_size: "1"
 ```
 
-Exécutez avec :
+Lancez avec :
 
 ```bash
 vigocli workflow run k8s-rolling-reboot
@@ -419,7 +419,7 @@ vigocli workflow run k8s-rolling-reboot --target "k8s-worker-0[1-3].example.com"
 
 Le DAG des configcrates garantit un ordonnancement correct :
 
-1. **k8s-kernel-tuning** — modules de noyau et paramètres sysctl (aucune dépendance)
+1. **k8s-kernel-tuning** — modules du noyau et paramètres sysctl (aucune dépendance)
 2. **k8s-containerd** — runtime de conteneurs (aucune dépendance)
 3. **k8s-cni** — répertoires de configuration CNI (dépend de kernel-tuning)
 4. **k8s-kubelet** — configuration et service kubelet (dépend de containerd)
@@ -432,9 +432,9 @@ Le DAG des configcrates garantit un ordonnancement correct :
 | Installation + configuration de containerd | Déploiements de pods, DaemonSets |
 | Configuration + service kubelet | ConfigMaps, Secrets (objets de l'API k8s) |
 | Paramètres du noyau (sysctl, modules) | Charts Helm, overlays Kustomize |
-| Répertoires hôtes CNI | DaemonSet du plugin CNI (Calico, Cilium) |
+| Répertoires hôte CNI | DaemonSet du plugin CNI (Calico, Cilium) |
 | Règles de pare-feu pour les ports k8s | Politiques réseau |
-| Application de correctifs OS + coordination des redémarrages | Mises à niveau du cluster (kubeadm upgrade) |
+| Correctifs OS + coordination des redémarrages | Mises à niveau du cluster (kubeadm upgrade) |
 | Certificats des nœuds (PKI au niveau de l'hôte) | Jetons ServiceAccount, RBAC |
 ---
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir [licence](../legal/license.md).*
+*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir la [licence](../legal/license.md).*
