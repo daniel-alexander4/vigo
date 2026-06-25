@@ -4,12 +4,14 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // configTreeNode is one entry (file or directory) under .live/.
@@ -17,6 +19,7 @@ type configTreeNode struct {
 	Name     string
 	IsDir    bool
 	Kind     string // file-type classification; empty for directories
+	Path     string // slash-joined rel path from .live root; files only (drives the viewer hx-get)
 	Children []*configTreeNode
 }
 
@@ -107,6 +110,11 @@ func walkConfigTree(dir string, node *configTreeNode, relPath string) error {
 			}
 		} else {
 			child.Kind = classifyConfigFile(name, relPath)
+			if relPath != "" {
+				child.Path = relPath + "/" + name
+			} else {
+				child.Path = name
+			}
 		}
 		node.Children = append(node.Children, child)
 	}
@@ -140,4 +148,109 @@ func classifyConfigFile(name, relPath string) string {
 		return "vgo"
 	}
 	return "other"
+}
+
+// maxConfigFileView caps how much of a file the viewer will render into
+// a <pre>. Published config files are small; the cap guards against an
+// unexpectedly large file under .live/ blowing up the response.
+const maxConfigFileView = 2 << 20 // 2 MB
+
+// resolveLiveFile validates a request-supplied relative path against the
+// published-config root and returns the absolute path of the regular file
+// to read. It mirrors the secrets-provider guard (server/secrets/local.go):
+// Clean+HasPrefix to reject `..`/absolute escapes, then an EvalSymlinks
+// re-check so a symlink inside .live/ can't redirect the read outside it.
+// Symlinks are rejected outright, matching walkConfigTree which skips them.
+func resolveLiveFile(liveDir, rel string) (string, error) {
+	if rel == "" {
+		return "", fmt.Errorf("path required")
+	}
+	full := filepath.Clean(filepath.Join(liveDir, filepath.FromSlash(rel)))
+	base := filepath.Clean(liveDir)
+	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes config root")
+	}
+	// Reject symlinks (the tree never lists them) before resolving.
+	if fi, err := os.Lstat(full); err != nil {
+		return "", err
+	} else if fi.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("symlink not permitted")
+	} else if !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("not a regular file")
+	}
+	resolved, err := filepath.EvalSymlinks(full)
+	if err != nil {
+		return "", err
+	}
+	resolvedBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return "", err
+	}
+	if resolved != resolvedBase && !strings.HasPrefix(resolved, resolvedBase+string(filepath.Separator)) {
+		return "", fmt.Errorf("path resolves outside config root")
+	}
+	return resolved, nil
+}
+
+// ConfigTreeFileFragmentData drives the "config-tree-file-fragment" define.
+type ConfigTreeFileFragmentData struct {
+	Path     string
+	Content  string
+	NotFound bool
+	TooLarge bool
+	Binary   bool
+	Size     int64
+	Locale   string
+}
+
+// ConfigTreeFileFragment serves the raw contents of one published config
+// file under .live/ for the side-panel viewer on /fleet/config-tree. The
+// published .vgo source carries `secret:` path references, not resolved
+// values, so no secret material is exposed. Auth matches the page: the
+// global middleware authenticates; there is no finer per-file gate.
+func (h *Handler) ConfigTreeFileFragment(w http.ResponseWriter, r *http.Request) {
+	data := ConfigTreeFileFragmentData{
+		Path:   r.URL.Query().Get("path"),
+		Locale: h.localeFromRequest(r),
+	}
+
+	if h.configStore == nil {
+		data.NotFound = true
+		h.renderer.RenderFragment(w, "config-tree", "config-tree-file-fragment", data)
+		return
+	}
+
+	full, err := resolveLiveFile(h.configStore.Dir(), data.Path)
+	if err != nil {
+		data.NotFound = true
+		h.renderer.RenderFragment(w, "config-tree", "config-tree-file-fragment", data)
+		return
+	}
+
+	fi, err := os.Stat(full)
+	if err != nil {
+		data.NotFound = true
+		h.renderer.RenderFragment(w, "config-tree", "config-tree-file-fragment", data)
+		return
+	}
+	data.Size = fi.Size()
+	if fi.Size() > maxConfigFileView {
+		data.TooLarge = true
+		h.renderer.RenderFragment(w, "config-tree", "config-tree-file-fragment", data)
+		return
+	}
+
+	raw, err := os.ReadFile(full)
+	if err != nil {
+		data.NotFound = true
+		h.renderer.RenderFragment(w, "config-tree", "config-tree-file-fragment", data)
+		return
+	}
+	if !utf8.Valid(raw) {
+		data.Binary = true
+		h.renderer.RenderFragment(w, "config-tree", "config-tree-file-fragment", data)
+		return
+	}
+	data.Content = string(raw)
+	h.renderer.RenderFragment(w, "config-tree", "config-tree-file-fragment", data)
 }

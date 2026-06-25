@@ -658,6 +658,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
 	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)
 	mux.HandleFunc("GET /fleet/config-tree", h.ConfigTree)
+	mux.HandleFunc("GET /ui/fragments/config-tree/file", h.ConfigTreeFileFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-swarm-load/{id}", h.EnvoySwarmLoadFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-footprint/{id}", h.EnvoyFootprintFragment)
 	mux.HandleFunc("GET /ui/fragments/dashboard-pressure", h.DashboardPressureFragment)
@@ -941,6 +942,11 @@ type DashboardPageData struct {
 	ActiveEnvoys     int
 	RecentFailures   int
 	DriftRate        float64
+	// FleetWideEnvoys is the federation-wide envoy total (this bolt's
+	// partition + every cached peer) in spanner mode, 0 otherwise. The
+	// dashboard counts above are this bolt's partition only; this drives
+	// the header scope chip so the operator can tell the two apart.
+	FleetWideEnvoys int
 	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
@@ -1377,8 +1383,12 @@ type EnvoysPageData struct {
 	SortDir           string // "asc" or "desc"
 	EnvoyCount        int    // rows on this page after filter+offset
 	MatchingTotal     int    // total entries matching filter (across all pages)
-	TotalEnvoys       int    // fleet-wide total, regardless of filter
-	HasMore           bool
+	TotalEnvoys       int    // this bolt's partition total (local), regardless of filter
+	// FleetWideEnvoys is the federation-wide total (this bolt's partition +
+	// every cached peer) in spanner mode, 0 otherwise. TotalEnvoys above is
+	// local-only; this drives the header scope chip distinguishing the two.
+	FleetWideEnvoys int
+	HasMore         bool
 	Offset            int
 	Limit             int
 	NextOffset        int
@@ -2453,6 +2463,20 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // fleet.read (i.e., the compliance role) get redirected to
 // /compliance instead — the dashboard is a fleet-state surface and
 // has no compliance-shaped fallback worth rendering.
+// fleetWideEnvoyCount returns the federation-wide envoy total (this
+// bolt's partition + every cached peer) in spanner mode, or 0 when not
+// federated. The dashboard + envoys page surface it next to their local
+// partition counts so the operator can tell "this bolt" from "the
+// fleet"; /spanner has the per-bolt breakdown. Cheap — it's the same
+// gossip-cache aggregate /spanner reads.
+func (h *Handler) fleetWideEnvoyCount() int {
+	if h.spannerAdmin == nil {
+		return 0
+	}
+	envoys, _ := h.spannerAdmin.AggregateEnvoysLocal()
+	return len(envoys)
+}
+
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	// In the first-run (zero-envoy) state the dashboard is universal
 	// onboarding — show the enrollment panel to every operator, including
@@ -2566,6 +2590,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	msRunningCVEs := doneRunningCVEs()
 
 	doneRender := step()
+	data.FleetWideEnvoys = h.fleetWideEnvoyCount()
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 	msRender := doneRender()
@@ -4470,6 +4495,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset)
 	h.enrichEnvoyRows(data.Envoys)
 
+	data.FleetWideEnvoys = h.fleetWideEnvoyCount()
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
 }

@@ -11,22 +11,28 @@
     </div>
 </div>
 {{else if .Root}}
-<div class="config-tree">
-    <div class="config-tree__root">
-        <span class="config-tree__dir-name">{{.Root.Name}}/</span>
-        {{if .Root.Children}}{{template "config-tree-children" .Root.Children}}{{end}}
+<div class="config-tree-browser">
+    <div class="config-tree">
+        <div class="config-tree__root">
+            <span class="config-tree__dir-name">{{.Root.Name}}/</span>
+            {{if .Root.Children}}{{template "config-tree-children" .Root.Children}}{{end}}
+        </div>
+
+        <div class="config-tree__legend">
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--common"></span>common.vgo</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--environments"></span>environments.vgo</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--roles"></span>roles.vgo</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--waivers"></span>waivers.vgo</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--hostcrate"></span>envoys.vgo (hostcrate)</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--configcrate"></span>configcrate</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--usercrate"></span>usercrate</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--vgo"></span>{{T $.Locale "config_tree.legend_other_vgo"}}</span>
+            <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--other"></span>{{T $.Locale "config_tree.legend_other"}}</span>
+        </div>
     </div>
 
-    <div class="config-tree__legend">
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--common"></span>common.vgo</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--environments"></span>environments.vgo</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--roles"></span>roles.vgo</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--waivers"></span>waivers.vgo</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--hostcrate"></span>envoys.vgo (hostcrate)</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--configcrate"></span>configcrate</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--usercrate"></span>usercrate</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--vgo"></span>{{T $.Locale "config_tree.legend_other_vgo"}}</span>
-        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--other"></span>{{T $.Locale "config_tree.legend_other"}}</span>
+    <div id="config-tree-view" class="config-tree-view">
+        <p class="config-tree-view__placeholder text-muted">{{T $.Locale "config_tree.select_file"}}</p>
     </div>
 </div>
 {{end}}
@@ -42,9 +48,26 @@
             {{if .Children}}{{template "config-tree-children" .Children}}{{end}}
         </details>
         {{else}}
-        <span class="config-tree__file config-tree__file--{{.Kind}}">{{.Name}}</span>
+        <span class="config-tree__file config-tree__file--{{.Kind}} config-tree__file--clickable"
+              hx-get="/ui/fragments/config-tree/file?path={{.Path | urlquery}}"
+              hx-target="#config-tree-view" hx-swap="innerHTML">{{.Name}}</span>
         {{end}}
     </li>
     {{end}}
 </ul>
+{{end}}
+
+{{define "config-tree-file-fragment"}}
+<div class="config-tree-view__header">
+    <code class="config-tree-view__path">{{.Path}}</code>
+</div>
+{{if .NotFound}}
+<p class="text-muted">{{T $.Locale "config_tree.file_not_found"}}</p>
+{{else if .TooLarge}}
+<p class="text-muted">{{T $.Locale "config_tree.file_too_large"}}</p>
+{{else if .Binary}}
+<p class="text-muted">{{T $.Locale "config_tree.file_binary"}}</p>
+{{else}}
+<pre class="config-tree-view__content">{{.Content}}</pre>
+{{end}}
 {{end}}

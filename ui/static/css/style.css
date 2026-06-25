@@ -4989,6 +4989,59 @@ a.server-config-card:hover {
     background-color: currentColor;
 }
 
+/* === Config-tree browser: tree on the left, file viewer on the right. ===
+   Two columns at desktop; stacks to one column on narrow viewports. The
+   tree keeps its intrinsic width; the viewer takes the remaining space. */
+.config-tree-browser {
+    display: grid;
+    grid-template-columns: minmax(260px, 22rem) 1fr;
+    gap: 16px;
+    align-items: start;
+}
+@media (max-width: 800px) {
+    .config-tree-browser { grid-template-columns: 1fr; }
+}
+.config-tree__file--clickable {
+    cursor: pointer;
+    border-radius: 3px;
+}
+.config-tree__file--clickable:hover {
+    background: var(--color-primary-tint-faint);
+}
+.config-tree-view {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    min-height: 200px;
+    position: sticky;
+    top: 16px;
+    overflow: hidden;
+}
+.config-tree-view__placeholder {
+    margin: 0;
+    font-size: 13px;
+}
+.config-tree-view__header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border);
+}
+.config-tree-view__path {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    word-break: break-all;
+}
+.config-tree-view__content {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 70vh;
+}
+
 /* === Per-envoy Agent Health groups ===
    Three labeled subject groups (Agent Process / Host Pressure / Disk &
    Repos) laid out side by side at desktop with a vertical separator

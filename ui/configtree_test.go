@@ -109,6 +109,82 @@ func TestBuildConfigTree_MissingDir(t *testing.T) {
 	}
 }
 
+func TestBuildConfigTree_FilePath(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "stacks/configcrates/system"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"common.vgo", "stacks/configcrates/system/docker.vgo"} {
+		if err := os.WriteFile(filepath.Join(root, f), []byte("# fixture\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tree, err := buildConfigTree(root)
+	if err != nil {
+		t.Fatalf("buildConfigTree: %v", err)
+	}
+	// Top-level file: Path is the bare name.
+	if p := find(tree, "common.vgo").Path; p != "common.vgo" {
+		t.Errorf("common.vgo Path = %q, want %q", p, "common.vgo")
+	}
+	// Nested file: Path is the slash-joined rel path from .live.
+	docker := findPath(tree, "stacks", "configcrates", "system", "docker.vgo")
+	if docker == nil || docker.Path != "stacks/configcrates/system/docker.vgo" {
+		t.Errorf("docker.vgo Path = %q, want %q", docker.Path, "stacks/configcrates/system/docker.vgo")
+	}
+	// Directories carry no Path.
+	if d := find(tree, "stacks"); d == nil || d.Path != "" {
+		t.Errorf("directory Path = %q, want empty", d.Path)
+	}
+}
+
+func TestResolveLiveFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sub", "ok.vgo"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A symlink inside the root pointing outside it.
+	secret := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(secret, []byte("s"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "escape.vgo")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		rel     string
+		wantErr bool
+	}{
+		{"valid nested file", "sub/ok.vgo", false},
+		{"empty path", "", true},
+		{"parent escape", "../escape", true},
+		{"absolute path", "/etc/passwd", true},
+		{"nonexistent", "sub/missing.vgo", true},
+		{"directory not a file", "sub", true},
+		{"symlink rejected", "escape.vgo", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveLiveFile(root, tc.rel)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("resolveLiveFile(%q) = %q, want error", tc.rel, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("resolveLiveFile(%q): unexpected error %v", tc.rel, err)
+			}
+		})
+	}
+}
+
 func childNames(n *configTreeNode) []string {
 	out := make([]string, 0, len(n.Children))
 	for _, c := range n.Children {

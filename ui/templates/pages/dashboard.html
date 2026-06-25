@@ -23,6 +23,12 @@
             <span class="meta-chip__value mono">{{range $i, $p := .AgentPlatforms}}{{if $i}}, {{end}}{{osLabel $p.OS}}/{{$p.Arch}}{{end}}</span>
         </span>
         {{end}}
+        {{if $.SpannerEnabled}}
+        <span class="meta-chip">
+            <span class="meta-chip__label">{{T $.Locale "spanner.scope_label"}}</span>
+            <span class="meta-chip__value">{{T $.Locale "spanner.scope_partition"}} &middot; <a href="/spanner">{{printf (T $.Locale "spanner.scope_fleet_count") .FleetWideEnvoys}}</a></span>
+        </span>
+        {{end}}
     </div>
 </div>
 
