@@ -40,6 +40,10 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "https://localhost:8443",
 		"Base URL for the Vigo REST API")
+	// Global skip-confirmation flag for destructive commands. confirmAction
+	// reads it (via inherited-flag Lookup); without it, a non-TTY invocation
+	// of a destructive command errors loudly instead of silently no-opping.
+	rootCmd.PersistentFlags().Bool("yes", false, "Skip confirmation prompts for destructive actions")
 
 	rootCmd.AddCommand(
 		approvedCmd,

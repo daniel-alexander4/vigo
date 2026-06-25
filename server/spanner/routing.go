@@ -196,6 +196,43 @@ func (a *SpannerAdmin) ForcePushToBolt(ctx context.Context, boltHostname, envoyI
 	return resp.EnvoysNotified, nil
 }
 
+// DeleteEnvoyToBolt deletes an envoy on its owning bolt via a direct
+// admin gRPC call over the PeerDialer — the owning-bolt routing path for
+// a delete targeted at an envoy a remote peer serves. Mirrors
+// ForcePushToBolt. Without this, a delete on the wrong bolt is a silent
+// 0-row no-op (the envoys list is fleet-wide but the row lives on one bolt).
+func (a *SpannerAdmin) DeleteEnvoyToBolt(ctx context.Context, boltHostname, envoyID string, skipSwarmCleanup bool) error {
+	pc, err := a.dialBolt(boltHostname)
+	if err != nil {
+		return fmt.Errorf("dialing owning bolt %s: %w", boltHostname, err)
+	}
+	defer pc.Close()
+
+	callCtx, cancel := context.WithTimeout(ctx, fanOutTimeout)
+	defer cancel()
+	if _, err := pc.Admin.DeleteEnvoy(callCtx, &pb.DeleteEnvoyRequest{Id: envoyID, SkipSwarmCleanup: skipSwarmCleanup}); err != nil {
+		return fmt.Errorf("DeleteEnvoy on owning bolt %s: %w", boltHostname, err)
+	}
+	return nil
+}
+
+// RevokeEnvoyToBolt revokes an envoy on its owning bolt via a direct
+// admin gRPC call over the PeerDialer. Mirrors DeleteEnvoyToBolt.
+func (a *SpannerAdmin) RevokeEnvoyToBolt(ctx context.Context, boltHostname, envoyID string, skipSwarmCleanup bool) error {
+	pc, err := a.dialBolt(boltHostname)
+	if err != nil {
+		return fmt.Errorf("dialing owning bolt %s: %w", boltHostname, err)
+	}
+	defer pc.Close()
+
+	callCtx, cancel := context.WithTimeout(ctx, fanOutTimeout)
+	defer cancel()
+	if _, err := pc.Admin.RevokeEnvoy(callCtx, &pb.RevokeEnvoyRequest{Id: envoyID, SkipSwarmCleanup: skipSwarmCleanup}); err != nil {
+		return fmt.Errorf("RevokeEnvoy on owning bolt %s: %w", boltHostname, err)
+	}
+	return nil
+}
+
 // PeerReassignResult is the outcome of a peer-equal envoy reassignment.
 type PeerReassignResult struct {
 	NewEnvoyID string `json:"new_envoy_id"`

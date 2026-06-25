@@ -230,7 +230,11 @@ Examples:
 			return nil
 		}
 
-		if !confirmAction("Restore from this backup? Current data will be overwritten.") {
+		ok, err := confirmAction(cmd, "Restore from this backup? Current data will be overwritten.")
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}

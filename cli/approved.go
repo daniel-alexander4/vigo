@@ -79,7 +79,11 @@ var approvedRevokeCmd = &cobra.Command{
 	Short: "Delete an enrollment pattern so no new machines can match it",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !confirmAction("Revoke this enrollment pattern? New machines matching it cannot enroll.") {
+		ok, err := confirmAction(cmd, "Revoke this enrollment pattern? New machines matching it cannot enroll.")
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}

@@ -139,7 +139,11 @@ var workflowAbortCmd = &cobra.Command{
 	Short: "Cancel a running workflow and stop further step execution",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !confirmAction("Abort this running workflow?") {
+		ok, err := confirmAction(cmd, "Abort this running workflow?")
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}
@@ -148,7 +152,7 @@ var workflowAbortCmd = &cobra.Command{
 		var resp struct {
 			Status string `json:"status"`
 		}
-		err := client.post("/api/v1/workflows/"+args[0]+"/abort", nil, &resp)
+		err = client.post("/api/v1/workflows/"+args[0]+"/abort", nil, &resp)
 		if err != nil {
 			return err
 		}

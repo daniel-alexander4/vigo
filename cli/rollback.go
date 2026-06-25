@@ -25,7 +25,11 @@ var envoysRevertCmd = &cobra.Command{
 			return fmt.Errorf("specify only one of --run or --file, not both")
 		}
 
-		if !confirmAction("Roll back this envoy's file resources to the previous state?") {
+		ok, err := confirmAction(cmd, "Roll back this envoy's file resources to the previous state?")
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}
@@ -45,7 +49,7 @@ var envoysRevertCmd = &cobra.Command{
 			Success bool   `json:"success"`
 			Message string `json:"message"`
 		}
-		err := client.post("/api/v1/envoys/"+args[0]+"/rollback", body, &resp)
+		err = client.post("/api/v1/envoys/"+args[0]+"/rollback", body, &resp)
 		if err != nil {
 			return err
 		}

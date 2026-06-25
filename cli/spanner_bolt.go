@@ -388,7 +388,11 @@ func runSpannerBoltPush(cmd *cobra.Command, args []string) error {
 }
 
 func runSpannerBoltReassign(cmd *cobra.Command, args []string) error {
-	if !confirmAction("Reassign this envoy to a different bolt?") {
+	ok, err := confirmAction(cmd, "Reassign this envoy to a different bolt?")
+	if err != nil {
+		return err
+	}
+	if !ok {
 		fmt.Println("Cancelled.")
 		return nil
 	}
@@ -422,7 +426,11 @@ func runSpannerBoltReassign(cmd *cobra.Command, args []string) error {
 }
 
 func runSpannerBoltDrain(cmd *cobra.Command, args []string) error {
-	if !confirmAction("Drain all envoys from this bolt? They will be migrated to other bolts.") {
+	ok, err := confirmAction(cmd, "Drain all envoys from this bolt? They will be migrated to other bolts.")
+	if err != nil {
+		return err
+	}
+	if !ok {
 		fmt.Println("Cancelled.")
 		return nil
 	}

@@ -152,6 +152,8 @@ type recordingAdminClient struct {
 	enrollR []*pb.EnrollEnvoyRequest
 	reassR  []*pb.SetReassignmentRequest
 	fpR     []*pb.ForcePushRequest
+	delR    []*pb.DeleteEnvoyRequest
+	revR    []*pb.RevokeEnvoyRequest
 }
 
 func (c *recordingAdminClient) record(name string) {
@@ -194,6 +196,22 @@ func (c *recordingAdminClient) ListEnvoys(_ context.Context, _ *pb.ListEnvoysReq
 	return &pb.ListEnvoysResponse{Envoys: c.envoys}, nil
 }
 
+func (c *recordingAdminClient) DeleteEnvoy(_ context.Context, req *pb.DeleteEnvoyRequest, _ ...grpc.CallOption) (*pb.DeleteEnvoyResponse, error) {
+	c.record("DeleteEnvoy")
+	c.mu.Lock()
+	c.delR = append(c.delR, req)
+	c.mu.Unlock()
+	return &pb.DeleteEnvoyResponse{}, nil
+}
+
+func (c *recordingAdminClient) RevokeEnvoy(_ context.Context, req *pb.RevokeEnvoyRequest, _ ...grpc.CallOption) (*pb.RevokeEnvoyResponse, error) {
+	c.record("RevokeEnvoy")
+	c.mu.Lock()
+	c.revR = append(c.revR, req)
+	c.mu.Unlock()
+	return &pb.RevokeEnvoyResponse{}, nil
+}
+
 // --- Step 3: force-push routing ---
 
 // TestForcePushToBolt routes a ForcePush to the named bolt via the
@@ -217,6 +235,45 @@ func TestForcePushToBolt(t *testing.T) {
 	}
 	if len(rec.fpR) != 1 || rec.fpR[0].EnvoyId != "envoy-1" {
 		t.Errorf("ForcePush request = %+v, want EnvoyId envoy-1", rec.fpR)
+	}
+}
+
+// TestDeleteEnvoyToBolt routes a DeleteEnvoy to the owning bolt via the
+// injected single-bolt dialer, carrying the skip-swarm-cleanup flag.
+func TestDeleteEnvoyToBolt(t *testing.T) {
+	a := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "self", FallbackAdminLocal, "1530")
+	rec := &recordingAdminClient{}
+	a.dialBoltFn = func(host string) (*PeerConn, error) {
+		if host != "owner.example.com" {
+			t.Errorf("delete dialed %q, want owner.example.com", host)
+		}
+		return &PeerConn{ID: host, Admin: rec}, nil
+	}
+
+	if err := a.DeleteEnvoyToBolt(context.Background(), "owner.example.com", "envoy-1", true); err != nil {
+		t.Fatalf("DeleteEnvoyToBolt: %v", err)
+	}
+	if len(rec.delR) != 1 || rec.delR[0].Id != "envoy-1" || !rec.delR[0].SkipSwarmCleanup {
+		t.Errorf("DeleteEnvoy request = %+v, want Id=envoy-1 skip=true", rec.delR)
+	}
+}
+
+// TestRevokeEnvoyToBolt routes a RevokeEnvoy to the owning bolt.
+func TestRevokeEnvoyToBolt(t *testing.T) {
+	a := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "self", FallbackAdminLocal, "1530")
+	rec := &recordingAdminClient{}
+	a.dialBoltFn = func(host string) (*PeerConn, error) {
+		if host != "owner.example.com" {
+			t.Errorf("revoke dialed %q, want owner.example.com", host)
+		}
+		return &PeerConn{ID: host, Admin: rec}, nil
+	}
+
+	if err := a.RevokeEnvoyToBolt(context.Background(), "owner.example.com", "envoy-1", false); err != nil {
+		t.Fatalf("RevokeEnvoyToBolt: %v", err)
+	}
+	if len(rec.revR) != 1 || rec.revR[0].Id != "envoy-1" || rec.revR[0].SkipSwarmCleanup {
+		t.Errorf("RevokeEnvoy request = %+v, want Id=envoy-1 skip=false", rec.revR)
 	}
 }
 

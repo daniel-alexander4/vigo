@@ -310,7 +310,6 @@ normal task-dispatch retry.`,
 		host, _ := cmd.Flags().GetString("host")
 		user, _ := cmd.Flags().GetString("user")
 		allUsers, _ := cmd.Flags().GetBool("all-users")
-		yes, _ := cmd.Flags().GetBool("yes")
 		if host == "" {
 			return fmt.Errorf("--host is required")
 		}
@@ -320,11 +319,11 @@ normal task-dispatch retry.`,
 		if user != "" && allUsers {
 			return fmt.Errorf("--user and --all-users are mutually exclusive")
 		}
-		return runLockboxEvict(host, user, allUsers, yes)
+		return runLockboxEvict(cmd, host, user, allUsers)
 	},
 }
 
-func runLockboxEvict(host, user string, allUsers, yes bool) error {
+func runLockboxEvict(cmd *cobra.Command, host, user string, allUsers bool) error {
 	client := newAPIClient()
 	var fleet lockboxFleet
 	if err := client.get("/api/v1/swarm/lockbox/fleet", &fleet); err != nil {
@@ -356,18 +355,17 @@ func runLockboxEvict(host, user string, allUsers, yes bool) error {
 		return fmt.Errorf("host %q is not enrolled in any matching lockbox circle", host)
 	}
 
-	if !yes {
-		fmt.Printf("Will evict %s from %d user circle(s):\n", host, len(targets))
-		for _, t := range targets {
-			fmt.Printf("  user=%s\n", t.user)
-		}
-		fmt.Print("Proceed? [y/N] ")
-		var resp string
-		_, _ = fmt.Scanln(&resp) // a read error leaves resp empty → treated as "no"
-		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
-			fmt.Println("aborted.")
-			return nil
-		}
+	fmt.Printf("Will evict %s from %d user circle(s):\n", host, len(targets))
+	for _, t := range targets {
+		fmt.Printf("  user=%s\n", t.user)
+	}
+	ok, err := confirmAction(cmd, "Proceed with eviction?")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		fmt.Println("aborted.")
+		return nil
 	}
 
 	// For each target user, look up the host's age pubkey and dispatch.
@@ -413,7 +411,6 @@ func init() {
 	lockboxEvictCmd.Flags().String("host", "", "Hostname to evict from the circle")
 	lockboxEvictCmd.Flags().String("user", "", "User whose circle to evict from")
 	lockboxEvictCmd.Flags().Bool("all-users", false, "Evict the host from every user's lockbox circle it belongs to")
-	lockboxEvictCmd.Flags().Bool("yes", false, "Skip the confirmation prompt")
 
 	lockboxCmd.AddCommand(lockboxStatusCmd, lockboxListCmd, lockboxShowCmd, lockboxMembersCmd, lockboxEvictCmd)
 	// Hidden redirects for the per-user agent-side verbs. Lockbox bootstraps

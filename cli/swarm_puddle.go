@@ -289,14 +289,13 @@ accepted during the 0.40.0 transition.`,
 		host := args[0]
 		user, _ := cmd.Flags().GetString("user")
 		allUsers, _ := cmd.Flags().GetBool("all-users")
-		yes, _ := cmd.Flags().GetBool("yes")
 		if user == "" && !allUsers {
 			return fmt.Errorf("either --user <u> or --all-users is required")
 		}
 		if user != "" && allUsers {
 			return fmt.Errorf("--user and --all-users are mutually exclusive")
 		}
-		return runLockboxEvict(host, user, allUsers, yes)
+		return runLockboxEvict(cmd, host, user, allUsers)
 	},
 }
 
@@ -306,7 +305,6 @@ func init() {
 
 	puddleEvictCmd.Flags().String("user", "", "User whose puddle to evict from")
 	puddleEvictCmd.Flags().Bool("all-users", false, "Evict the host from every user's puddle it belongs to")
-	puddleEvictCmd.Flags().Bool("yes", false, "Skip the confirmation prompt")
 
 	puddleCmd.AddCommand(puddleListCmd)
 	puddleCmd.AddCommand(puddleShowCmd)

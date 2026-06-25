@@ -258,13 +258,29 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
 
+	// Spanner: route to the owning bolt when a remote peer serves this
+	// envoy. Without this, a revoke on the wrong bolt is a silent 0-row
+	// no-op (the envoys list is fleet-wide but the row lives on one bolt).
+	if s.spannerAdmin != nil {
+		if _, ownerHost, remote := s.spannerAdmin.OwningBoltHostname(ctx, req.Id); remote && ownerHost != "" {
+			if err := s.spannerAdmin.RevokeEnvoyToBolt(ctx, ownerHost, req.Id, req.GetSkipSwarmCleanup()); err != nil {
+				return nil, status.Errorf(codes.Internal, "revoke on owning bolt: %v", err)
+			}
+			return &pb.RevokeEnvoyResponse{}, nil
+		}
+	}
+
 	// Look up hostname before flipping revoked-bit so the swarm cleanup
-	// hook + integrations event can use the friendly name.
+	// hook + integrations event can use the friendly name. A miss here
+	// (with the index present) means no bolt — local or peer — serves this
+	// envoy: fail loudly rather than silently revoke 0 rows.
 	hostname := req.Id
 	if s.fleetIndex != nil {
-		if ts, ok, _ := s.fleetIndex.GetEnvoyLite(req.Id); ok {
-			hostname = ts.Hostname
+		ts, ok, _ := s.fleetIndex.GetEnvoyLite(req.Id)
+		if !ok {
+			return nil, status.Errorf(codes.NotFound, "envoy %s not found on this bolt", req.Id)
 		}
+		hostname = ts.Hostname
 	}
 
 	if err := s.queries.RevokeEnvoy(ctx, req.Id); err != nil {
@@ -316,12 +332,28 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
 
-	// Look up hostname before deleting for the audit trail.
+	// Spanner: route to the owning bolt when a remote peer serves this
+	// envoy. Without this, a delete on the wrong bolt is a silent 0-row
+	// no-op (the envoys list is fleet-wide but the row lives on one bolt).
+	if s.spannerAdmin != nil {
+		if _, ownerHost, remote := s.spannerAdmin.OwningBoltHostname(ctx, req.Id); remote && ownerHost != "" {
+			if err := s.spannerAdmin.DeleteEnvoyToBolt(ctx, ownerHost, req.Id, req.GetSkipSwarmCleanup()); err != nil {
+				return nil, status.Errorf(codes.Internal, "delete on owning bolt: %v", err)
+			}
+			return &pb.DeleteEnvoyResponse{}, nil
+		}
+	}
+
+	// Look up hostname before deleting for the audit trail. A miss here
+	// (with the index present) means no bolt — local or peer — serves this
+	// envoy: fail loudly rather than silently delete 0 rows.
 	hostname := req.Id
 	if s.fleetIndex != nil {
-		if t := s.fleetIndex.GetEnvoy(req.Id); t != nil {
-			hostname = t.Hostname
+		t := s.fleetIndex.GetEnvoy(req.Id)
+		if t == nil {
+			return nil, status.Errorf(codes.NotFound, "envoy %s not found on this bolt", req.Id)
 		}
+		hostname = t.Hostname
 	}
 
 	if err := s.queries.DeleteEnvoy(ctx, req.Id); err != nil {

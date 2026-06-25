@@ -22,7 +22,11 @@ var envoysPushCmd = &cobra.Command{
 		client := newAPIClient()
 
 		if all {
-			if !confirmAction("Force check-in for ALL envoys?") {
+			ok, err := confirmAction(cmd, "Force check-in for ALL envoys?")
+			if err != nil {
+				return err
+			}
+			if !ok {
 				fmt.Println("Cancelled.")
 				return nil
 			}

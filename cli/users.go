@@ -375,7 +375,11 @@ var webusersDeleteCmd = &cobra.Command{
 			return fmt.Errorf("user %q not found", userUsername)
 		}
 
-		if !confirmAction(fmt.Sprintf("Delete user %q? This cannot be undone.", userUsername)) {
+		ok, err := confirmAction(cmd, fmt.Sprintf("Delete user %q? This cannot be undone.", userUsername))
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}

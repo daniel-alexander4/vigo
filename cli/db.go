@@ -112,18 +112,19 @@ var dbVacuumCmd = &cobra.Command{
 This operation rewrites the entire database file and may take a few seconds
 on large databases. The server remains available during VACUUM.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		force, _ := cmd.Flags().GetBool("force")
-		if !force {
-			if !confirmAction("This will rewrite the entire database file. Continue?") {
-				fmt.Println("Cancelled.")
-				return nil
-			}
+		ok, err := confirmAction(cmd, "This will rewrite the entire database file. Continue?")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Cancelled.")
+			return nil
 		}
 
 		client := newAPIClient()
 		fmt.Println("Running VACUUM. This rewrites the database file; expect many minutes on a multi-GB DB.")
 		var finalErr error
-		err := client.postStream("/api/v1/db/vacuum", nil, func(msg map[string]any) error {
+		err = client.postStream("/api/v1/db/vacuum", nil, func(msg map[string]any) error {
 			switch msg["status"] {
 			case "running":
 				elapsed := toInt64(msg["elapsed_ms"])
@@ -183,12 +184,13 @@ Examples:
 		if olderThan == "" {
 			return fmt.Errorf("--older-than is required (e.g. 30d, 720h)")
 		}
-		force, _ := cmd.Flags().GetBool("force")
-		if !force {
-			if !confirmAction(fmt.Sprintf("Delete history rows older than %s. Continue?", olderThan)) {
-				fmt.Println("Cancelled.")
-				return nil
-			}
+		ok, err := confirmAction(cmd, fmt.Sprintf("Delete history rows older than %s. Continue?", olderThan))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Cancelled.")
+			return nil
 		}
 
 		client := newAPIClient()
@@ -342,9 +344,7 @@ database from migrations on the next startup.`,
 }
 
 func init() {
-	dbVacuumCmd.Flags().Bool("force", false, "skip confirmation prompt")
 	dbPruneCmd.Flags().String("older-than", "", "age cutoff (e.g. 30d, 720h); rows older than this are deleted")
-	dbPruneCmd.Flags().Bool("force", false, "skip confirmation prompt")
 
 	dbCmd.AddCommand(
 		dbStatsCmd,

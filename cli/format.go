@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/uifmt"
@@ -248,11 +249,24 @@ func requireArgs(min int, noun string) cobra.PositionalArgs {
 	}
 }
 
-// confirmAction prompts the user for confirmation before a destructive operation.
-// Returns true if the user types "y" or "yes". Skips the prompt if --force is set.
-func confirmAction(msg string) bool {
+// confirmAction asks the operator to confirm a destructive operation.
+// It returns (true, nil) to proceed, (false, nil) when the operator
+// declines interactively, and (false, err) when confirmation is
+// impossible — a non-TTY stdin with no --yes — so scripts fail loudly
+// instead of silently treating the unanswered prompt as "no" (which read
+// as a successful no-op). Pass --yes (registered via addConfirmFlag) to
+// proceed non-interactively.
+func confirmAction(cmd *cobra.Command, msg string) (bool, error) {
+	if cmd != nil {
+		if f := cmd.Flags().Lookup("yes"); f != nil && f.Value.String() == "true" {
+			return true, nil
+		}
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return false, fmt.Errorf("refusing to prompt for confirmation: stdin is not a terminal — re-run with --yes to proceed non-interactively")
+	}
 	fmt.Printf("%s [y/N] ", msg)
-	reader := bufio.NewReader(os.Stdin)
-	answer, _ := reader.ReadString('\n')
-	return strings.TrimSpace(strings.ToLower(answer)) == "y" || strings.TrimSpace(strings.ToLower(answer)) == "yes"
+	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	a := strings.TrimSpace(strings.ToLower(answer))
+	return a == "y" || a == "yes", nil
 }

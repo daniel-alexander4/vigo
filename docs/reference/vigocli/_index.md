@@ -17,6 +17,7 @@ Vigo has two CLI binaries:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--server` | `https://localhost:8443` | Base URL for the Vigo REST API |
+| `--yes` | `false` | Skip the confirmation prompt on destructive commands (revoke, delete, purge, rollback, restore, drain, …). **Required for non-interactive use** — without a TTY and without `--yes`, a destructive command errors loudly instead of silently doing nothing. |
 
 ## Commands
 

@@ -29,7 +29,11 @@ var configFreezeCmd = &cobra.Command{
 			return fmt.Errorf("invalid --until value: must be RFC3339 timestamp or duration (e.g., 24h)")
 		}
 
-		if !confirmAction(fmt.Sprintf("Freeze config publishes until %s?", freezeUntil.Format(time.RFC3339))) {
+		ok, err := confirmAction(cmd, fmt.Sprintf("Freeze config publishes until %s?", freezeUntil.Format(time.RFC3339)))
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}

@@ -326,7 +326,11 @@ func runSecretsGet(cmd *cobra.Command, args []string) error {
 }
 
 func runSecretsDelete(cmd *cobra.Command, args []string) error {
-	if !confirmAction(fmt.Sprintf("Delete secret %q? This cannot be undone.", args[0])) {
+	ok, err := confirmAction(cmd, fmt.Sprintf("Delete secret %q? This cannot be undone.", args[0]))
+	if err != nil {
+		return err
+	}
+	if !ok {
 		fmt.Println("Cancelled.")
 		return nil
 	}

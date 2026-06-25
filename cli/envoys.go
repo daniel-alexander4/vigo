@@ -127,7 +127,11 @@ recipient state preserved.`,
 	Args:              requireArgs(1, "a envoy ID"),
 	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !confirmAction("Revoke this envoy? It will be blocked from checking in.") {
+		ok, err := confirmAction(cmd, "Revoke this envoy? It will be blocked from checking in.")
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}
@@ -156,7 +160,11 @@ hostname shortly under a different UUID).`,
 	Args:              requireArgs(1, "a envoy ID"),
 	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !confirmAction("Delete this envoy and all its history? This cannot be undone.") {
+		ok, err := confirmAction(cmd, "Delete this envoy and all its history? This cannot be undone.")
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}
@@ -355,7 +363,11 @@ Use --dry-run to preview what would be deleted without making changes.`,
 			return nil
 		}
 
-		if !confirmAction("Purge these envoys?") {
+		ok, err := confirmAction(cmd, "Purge these envoys?")
+		if err != nil {
+			return err
+		}
+		if !ok {
 			fmt.Println("Cancelled.")
 			return nil
 		}

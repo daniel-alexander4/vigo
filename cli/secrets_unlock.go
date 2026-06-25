@@ -417,6 +417,9 @@ secrets anyway). Typed confirmation required to avoid accidents.`,
 			return fmt.Errorf("cannot prove master-key access (read %s): %w", keyFile, err)
 		}
 
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
+			return fmt.Errorf("reset-passphrase requires an interactive terminal to type the RESET confirmation")
+		}
 		fmt.Println("  This will replace the unlock passphrase without verifying the old one.")
 		fmt.Print("  Type RESET to proceed: ")
 		reader := bufio.NewReader(os.Stdin)
