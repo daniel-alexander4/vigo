@@ -6379,6 +6379,11 @@ type SpannerBoltRow struct {
 	Offline            int
 	ConvergencePct     float64
 	SnapshotAgeSeconds int64
+	// IsLocal marks the bolt rendering this page — its own data comes
+	// live from the local fleet index, not the gossip cache (which holds
+	// peers only), so the page lists every bolt equally regardless of
+	// which one you're viewing.
+	IsLocal bool
 }
 
 // SpannerPageData holds data for the spanner page.
@@ -6407,6 +6412,33 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 	var bolts []SpannerBoltRow
 	var totalEnvoys, totalConverged, totalDegraded, totalFailed, totalOffline int
 	now := time.Now()
+
+	// The local bolt — gossip excludes self, so fold in its own live row
+	// so every bolt is listed equally regardless of which one serves the
+	// page. SnapshotAge stays 0 (the data is live, not a cached snapshot).
+	if lp := h.spannerAdmin.LocalPubkey(); lp != "" {
+		conv := h.spannerAdmin.LocalConvergence()
+		local := SpannerBoltRow{
+			BoltPubkey: lp,
+			EnvoyCount: len(h.spannerAdmin.LocalEnvoys()),
+			Converged:  conv.Converged,
+			Degraded:   conv.Degraded,
+			Failed:     conv.Failed,
+			NoData:     conv.NoData,
+			Offline:    conv.Offline,
+			IsLocal:    true,
+		}
+		if active := local.EnvoyCount - local.Offline; active > 0 {
+			local.ConvergencePct = float64(local.Converged) / float64(active) * 100
+		}
+		bolts = append(bolts, local)
+		totalEnvoys += local.EnvoyCount
+		totalConverged += local.Converged
+		totalDegraded += local.Degraded
+		totalFailed += local.Failed
+		totalOffline += local.Offline
+	}
+
 	for pubkey, p := range h.spannerAdmin.AllPeerObservability() {
 		row := SpannerBoltRow{
 			BoltPubkey: pubkey,
@@ -6484,6 +6516,7 @@ type BoltDetailPageData struct {
 	ConvergencePct     float64
 	SnapshotAgeSeconds int64
 	Envoys             []BoltDetailEnvoyRow
+	IsLocal            bool
 }
 
 // BoltDetailEnvoyRow is an envoy on a bolt.
@@ -6501,14 +6534,31 @@ type BoltDetailEnvoyRow struct {
 // `vigocli spanner bolt runs` or the per-envoy detail page.
 func (h *Handler) BoltDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	p := h.spannerAdmin.PeerObservability(id)
-	if p == nil {
+
+	// Resolve the bolt's envoy roster + convergence. The gossip cache holds
+	// peers only, so the local bolt's own detail comes live from the local
+	// fleet index — without this, clicking your own row would 404.
+	var (
+		envoys  []spanner.EnvoyLite
+		conv    spanner.ConvergenceCounters
+		isLocal bool
+		updated time.Time
+	)
+	if id == h.spannerAdmin.LocalPubkey() {
+		envoys = h.spannerAdmin.LocalEnvoys()
+		conv = h.spannerAdmin.LocalConvergence()
+		isLocal = true
+	} else if p := h.spannerAdmin.PeerObservability(id); p != nil {
+		envoys = p.Envoys
+		conv = p.Convergence
+		updated = p.UpdatedAt()
+	} else {
 		http.Error(w, "bolt not found", http.StatusNotFound)
 		return
 	}
 
 	var envoyRows []BoltDetailEnvoyRow
-	for _, e := range p.Envoys {
+	for _, e := range envoys {
 		row := BoltDetailEnvoyRow{
 			ID:        e.ID,
 			Hostname:  e.Hostname,
@@ -6524,19 +6574,20 @@ func (h *Handler) BoltDetail(w http.ResponseWriter, r *http.Request) {
 	data := BoltDetailPageData{
 		PageData:   PageData{Title: "Bolt: " + id, ActiveNav: "spanner"},
 		BoltPubkey: id,
-		EnvoyCount: len(p.Envoys),
-		Converged:  p.Convergence.Converged,
-		Degraded:   p.Convergence.Degraded,
-		Failed:     p.Convergence.Failed,
-		NoData:     p.Convergence.NoData,
-		Offline:    p.Convergence.Offline,
+		EnvoyCount: len(envoys),
+		Converged:  conv.Converged,
+		Degraded:   conv.Degraded,
+		Failed:     conv.Failed,
+		NoData:     conv.NoData,
+		Offline:    conv.Offline,
 		Envoys:     envoyRows,
+		IsLocal:    isLocal,
 	}
 	if active := data.EnvoyCount - data.Offline; active > 0 {
 		data.ConvergencePct = float64(data.Converged) / float64(active) * 100
 	}
-	if u := p.UpdatedAt(); !u.IsZero() {
-		data.SnapshotAgeSeconds = int64(time.Since(u).Seconds())
+	if !updated.IsZero() {
+		data.SnapshotAgeSeconds = int64(time.Since(updated).Seconds())
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "bolt-detail", data)

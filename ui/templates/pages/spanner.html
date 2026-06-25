@@ -7,7 +7,7 @@
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__value">{{.BoltCount}}</div>
-        <div class="stat-card__label">{{T $.Locale "spanner.peer_bolts"}}</div>
+        <div class="stat-card__label">{{T $.Locale "spanner.bolts"}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">{{.TotalEnvoys}}</div>
@@ -49,14 +49,14 @@
         <tbody>
             {{range .Bolts}}
             <tr>
-                <td><a href="/spanner/bolts/{{.BoltPubkey}}"><strong class="mono">{{slice .BoltPubkey 0 16}}</strong></a></td>
+                <td><a href="/spanner/bolts/{{.BoltPubkey}}"><strong class="mono">{{slice .BoltPubkey 0 16}}</strong></a>{{if .IsLocal}} <span class="badge badge--info">{{T $.Locale "spanner.this_bolt"}}</span>{{end}}</td>
                 <td>{{.EnvoyCount}}</td>
                 <td class="text-success">{{.Converged}}</td>
                 <td class="text-warning">{{.Degraded}}</td>
                 <td class="text-danger">{{.Failed}}</td>
                 <td class="text-muted">{{.Offline}}</td>
                 <td>{{printf "%.1f" .ConvergencePct}}%</td>
-                <td class="text-muted">{{.SnapshotAgeSeconds}}{{T $.Locale "spanner.seconds_ago"}}</td>
+                <td class="text-muted">{{if .IsLocal}}{{T $.Locale "spanner.live"}}{{else}}{{.SnapshotAgeSeconds}}{{T $.Locale "spanner.seconds_ago"}}{{end}}</td>
             </tr>
             {{end}}
         </tbody>

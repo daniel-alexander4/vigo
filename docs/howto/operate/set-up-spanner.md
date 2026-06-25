@@ -111,7 +111,7 @@ With `license.mode: aggregate`, every bolt independently sums the fleet-wide nod
 
 ## Web UI
 
-The `/spanner` page shows one row per peer bolt from the gossip-backed observability cache; `/spanner/bolts/{pubkey}` drills into a bolt's convergence breakdown and envoy roster.
+The `/spanner` page lists every bolt in the spanner — one row each, with the bolt serving the page tagged **this bolt**. Peer rows come from the gossip-backed observability cache (with a snapshot age); the local row is live from this bolt's own fleet index, so the view is identical no matter which bolt's UI you open. `/spanner/bolts/{pubkey}` drills into a bolt's convergence breakdown and envoy roster.
 
 ## Related
 

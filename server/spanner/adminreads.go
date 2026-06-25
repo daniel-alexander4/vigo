@@ -170,6 +170,37 @@ func (a *SpannerAdmin) AggregateConvergenceLocal() (counters ConvergenceCounters
 	return counters, a.observ.OldestUpdate()
 }
 
+// LocalPubkey returns this bolt's own pubkey-hex. The gossip cache
+// deliberately excludes self, so observability surfaces that want to
+// present every bolt equally (the /spanner page) fold in a local row
+// keyed by this value.
+func (a *SpannerAdmin) LocalPubkey() string {
+	if a == nil {
+		return ""
+	}
+	return a.ownPubkey
+}
+
+// LocalEnvoys returns this bolt's OWN envoy roster from the live local
+// fleet index (nil if no source is wired). Unlike AggregateEnvoysLocal
+// it does not fold in peers — it is the local bolt's row alone.
+func (a *SpannerAdmin) LocalEnvoys() []EnvoyLite {
+	if a == nil || a.localEnvoys == nil {
+		return nil
+	}
+	return a.localEnvoys()
+}
+
+// LocalConvergence returns this bolt's OWN convergence counters from the
+// live local fleet index (zero value if no source is wired). Local-only,
+// not aggregated with peers.
+func (a *SpannerAdmin) LocalConvergence() ConvergenceCounters {
+	if a == nil || a.localConv == nil {
+		return ConvergenceCounters{}
+	}
+	return a.localConv()
+}
+
 // OwningBoltHostname resolves which bolt serves a given envoy via the
 // observability cache's non-copying OwnerOf lookup. Returns the peer
 // bolt's pubkey-hex + hostname and true if a remote peer serves the
