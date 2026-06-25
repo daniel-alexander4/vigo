@@ -217,6 +217,66 @@ func writeServerCert(tlsDir string, caCert *x509.Certificate, caKey *ecdsa.Priva
 	return nil
 }
 
+// ExportCA reads this host's fleet CA certificate + private key PEM so an
+// operator can establish a SHARED CA across spanner bolts (ADR-026 config-driven
+// peering, option 3 — the CA is distributed out-of-band, never over the wire).
+// The CA key is the fleet's crown jewel; callers must protect the output (the
+// vigocli `spanner ca export` surface writes it 0600, root-only).
+func ExportCA(tlsDir string) (caPEM, caKeyPEM []byte, err error) {
+	caPath, caKeyPath, _, _ := TLSCertPaths(tlsDir)
+	caPEM, err = os.ReadFile(caPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading CA cert: %w", err)
+	}
+	caKeyPEM, err = os.ReadFile(caKeyPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading CA key: %w", err)
+	}
+	return caPEM, caKeyPEM, nil
+}
+
+// AdoptCA installs a CA (cert + key) exported from another bolt as THIS host's
+// fleet CA, then re-signs this host's server cert from it so the cert chains to
+// the shared CA with this host's own SANs (hostname + interface IPs + localhost
+// + extraSANs). This is how a joining bolt adopts the founder's CA in the
+// option-3 (CA-off-the-wire) flow: the operator runs `vigocli spanner ca import`
+// with the exported bundle before the bolt joins. Idempotent. The server reads
+// the new files on its next start (or restart after import).
+func AdoptCA(tlsDir string, caPEM, caKeyPEM []byte, extraSANs ...string) error {
+	if _, err := x509.ParseCertificate(mustDERFromPEM(caPEM)); err != nil {
+		return fmt.Errorf("CA cert is not a valid certificate: %w", err)
+	}
+	caPath, caKeyPath, _, _ := TLSCertPaths(tlsDir)
+	if err := os.MkdirAll(tlsDir, 0700); err != nil {
+		return fmt.Errorf("creating tls dir: %w", err)
+	}
+	if err := os.WriteFile(caPath, caPEM, 0644); err != nil {
+		return fmt.Errorf("writing CA cert: %w", err)
+	}
+	if err := os.WriteFile(caKeyPath, caKeyPEM, 0600); err != nil {
+		return fmt.Errorf("writing CA key: %w", err)
+	}
+	caCert, caKey, err := loadCA(caPath, caKeyPath)
+	if err != nil {
+		return fmt.Errorf("loading adopted CA: %w", err)
+	}
+	dnsNames, ips := buildExpectedSANs(extraSANs)
+	if err := writeServerCert(tlsDir, caCert, caKey, dnsNames, ips); err != nil {
+		return fmt.Errorf("re-signing server cert from adopted CA: %w", err)
+	}
+	return nil
+}
+
+// mustDERFromPEM returns the DER bytes of the first PEM block, or nil if the
+// input isn't PEM — the caller's x509.ParseCertificate then reports the error.
+func mustDERFromPEM(p []byte) []byte {
+	block, _ := pem.Decode(p)
+	if block == nil {
+		return nil
+	}
+	return block.Bytes
+}
+
 // loadCA parses the on-disk CA certificate and private key.
 func loadCA(caPath, caKeyPath string) (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	certPEM, err := os.ReadFile(caPath)
