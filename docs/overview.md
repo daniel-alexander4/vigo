@@ -1,6 +1,6 @@
 # Vigo
 
-**60,000 envoys. A 1-second check-in cadence. One server.**
+**Tens of thousands of envoys at a 1-second cadence. Hundreds of thousands at a relaxed one. One server.**
 
 Vigo is a distributed state enforcement engine: agents on your managed nodes (envoys) pull desired state from a central server over gRPC/mTLS, apply idempotent resource changes, and report results back — at a tight cadence, at fleet scale, on commodity hardware. When one server isn't enough, **spanner** federates write-equal peers and the ceiling goes away.
 
