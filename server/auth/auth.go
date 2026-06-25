@@ -126,6 +126,15 @@ var publicPaths = map[string]bool{
 	// `blob/` prefix above). Registered bare (no per-route wrapper), so
 	// the no-user request just runs the handler.
 	"/api/v1/swarm/curator/resolve": true,
+	// Spanner bolt admission (ADR-026) — a joining bolt POSTs its invite
+	// bundle here during `vigocli spanner bolt join`. It's authenticated by
+	// the founder-signed, single-use bundle itself (validated in handleAdmit),
+	// NOT by an operator session — the joiner has no credentials on this bolt
+	// yet (that's the point of the invite). Registered bare (no per-route
+	// wrapper), same as fleet/pubkeys above, so the no-user request just runs
+	// the handler. Without this, the default `basic` auth 401s the cross-bolt
+	// /admit call and `spanner bolt join` can never complete.
+	"/api/v1/spanner/bolt/admit": true,
 	// /api/v1/config/reload is INTENTIONALLY NOT public. The route's own
 	// RequirePermission(PermConfigPublish) wrapper handles auth — adding
 	// it here bypassed the auth middleware entirely (no user injected

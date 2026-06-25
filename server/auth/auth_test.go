@@ -32,6 +32,10 @@ func TestIsPublicPath(t *testing.T) {
 		// Agents fetch these with only an mTLS client cert, no token.
 		{"/api/v1/fleet/pubkeys", true},
 		{"/api/v1/swarm/puddle/names", true},
+		// Spanner bolt admission — authenticated by the invite bundle itself
+		// (handleAdmit), not an operator session; a joining bolt has no creds
+		// on this bolt yet. Must be public or `spanner bolt join` 401s.
+		{"/api/v1/spanner/bolt/admit", true},
 		// ...but the exact-match granularity holds: the authed gitback
 		// fleet view stays gated.
 		{"/api/v1/swarm/gitback/fleet", false},
