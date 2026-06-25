@@ -100,9 +100,13 @@ func NewSpannerAdmissionHandler(sqlDB *sql.DB, queries *db.Queries, boltID *bolt
 // RegisterRoutes mounts the ceremony endpoints. init/invite/join are
 // admin-gated (operator-driven). admit is bundle-authenticated, not
 // Bearer-gated — a joining vigosrv is a peer, not an enrolled envoy.
-// roster + snapshot are read-gated. snapshot is the Slice 2-i-a
-// roster-replication pull endpoint — a peer's gossiper GETs it and
-// CRDT-merges the result.
+// roster is an OPERATOR read (read-gated). snapshot + fleet-snapshot are
+// the inter-bolt Tier-2 gossip pulls: a PEER bolt's gossiper GETs them
+// with NO operator session and verifies the founder/bolt SIGNATURE on
+// the payload (MergeSnapshot), not the caller — so they're registered
+// BARE and listed in auth.publicPaths, exactly like /admit. (A read()
+// wrapper here 401s the session-less gossiper and observability never
+// converges — found standing up a real 2-bolt spanner.)
 func (h *SpannerAdmissionHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
 	admin := auth.RequireAdmin("")
@@ -111,13 +115,11 @@ func (h *SpannerAdmissionHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/spanner/bolt/admit", http.HandlerFunc(h.handleAdmit))
 	mux.Handle("POST /api/v1/spanner/bolt/join", admin(http.HandlerFunc(h.handleJoin)))
 	mux.Handle("GET /api/v1/spanner/roster", read(http.HandlerFunc(h.handleRoster)))
-	mux.Handle("GET /api/v1/spanner/snapshot", read(http.HandlerFunc(h.handleSnapshot)))
-	// Slice 2-ii-a: the signed fleet-observability snapshot. Kept
-	// SEPARATE from /snapshot (admissions) — different consistency
-	// model + size profile. A peer's gossiper GETs it on the Tier-2
-	// cadence and stores the verified result in its observability
-	// cache for cache-aggregated admin reads.
-	mux.Handle("GET /api/v1/spanner/fleet-snapshot", read(http.HandlerFunc(h.handleFleetSnapshot)))
+	// Inter-bolt gossip pulls — signature-authenticated, registered bare
+	// (see the publicPaths entries). NOT read()-wrapped: the peer gossiper
+	// carries no operator session.
+	mux.Handle("GET /api/v1/spanner/snapshot", http.HandlerFunc(h.handleSnapshot))
+	mux.Handle("GET /api/v1/spanner/fleet-snapshot", http.HandlerFunc(h.handleFleetSnapshot))
 }
 
 // localPubkeyHex returns the local bolt pubkey as a lowercase hex

@@ -36,6 +36,12 @@ func TestIsPublicPath(t *testing.T) {
 		// (handleAdmit), not an operator session; a joining bolt has no creds
 		// on this bolt yet. Must be public or `spanner bolt join` 401s.
 		{"/api/v1/spanner/bolt/admit", true},
+		// Spanner Tier-2 gossip pulls — signature-authenticated payloads the
+		// peer gossiper verifies; no operator session. Public, or observability
+		// never converges. But /roster is an operator read and stays gated.
+		{"/api/v1/spanner/snapshot", true},
+		{"/api/v1/spanner/fleet-snapshot", true},
+		{"/api/v1/spanner/roster", false},
 		// ...but the exact-match granularity holds: the authed gitback
 		// fleet view stays gated.
 		{"/api/v1/swarm/gitback/fleet", false},

@@ -135,6 +135,15 @@ var publicPaths = map[string]bool{
 	// the handler. Without this, the default `basic` auth 401s the cross-bolt
 	// /admit call and `spanner bolt join` can never complete.
 	"/api/v1/spanner/bolt/admit": true,
+	// Spanner Tier-2 gossip pulls (ADR-026) — a PEER bolt's gossiper GETs
+	// these on the Tier-2 cadence with no operator session and verifies the
+	// founder/bolt SIGNATURE on the payload (server/spanner MergeSnapshot),
+	// not the caller. Registered bare in spanner_admission.go, same as
+	// /admit above. Without these, every inter-bolt pull 401s and per-bolt
+	// observability never converges. (/api/v1/spanner/roster, by contrast,
+	// is an operator read and stays PermFleetRead-gated.)
+	"/api/v1/spanner/snapshot":       true,
+	"/api/v1/spanner/fleet-snapshot": true,
 	// /api/v1/config/reload is INTENTIONALLY NOT public. The route's own
 	// RequirePermission(PermConfigPublish) wrapper handles auth — adding
 	// it here bypassed the auth middleware entirely (no user injected
