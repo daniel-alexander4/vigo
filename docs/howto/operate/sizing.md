@@ -23,7 +23,7 @@ Max envoys per box. Built **conservatively** — the CPU column uses the heavier
 
 | Server (vCPU / RAM) | Aggressive **≤ 5 s** (CPU-bound, @1 s) | Normal **30 s – 5 m** (RAM-bound) | Basis |
 |---|---|---|---|
-| 4 vCPU / 16 GB | ~3,700 | **~12,000** ⚠️ | measured (brownout) |
+| 4 vCPU / 16 GB | ~3,700 | **~15,000** ⚠️ stay well under | measured (brownout) |
 | **8 vCPU / 32 GB** | **~7,500** | **~30,000** | **measured anchor** |
 | 16 vCPU / 64 GB | ~15,000 | ~60,000 | calculated |
 | 32 vCPU / 128 GB | ~30,000 | ~123,000 | calculated |
