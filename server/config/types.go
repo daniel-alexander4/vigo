@@ -44,6 +44,7 @@ type SpannerSection struct {
 	Mode          SpannerMode     `yaml:"mode" doc:"Server mode in a spanner deployment (peer-equal model, ADR-026)." options:"standalone|spanner" default:"standalone" example:"spanner"`
 	SpannerID     string          `yaml:"spanner_id" doc:"Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + - _ ., no leading dot)." example:"alexander4-prod, acme-staging"`
 	Patterns      []string        `yaml:"patterns" doc:"Hostname glob patterns this bolt owns. First-match-wins across the spanner; loader refuses overlap with another bolt's patterns at publish time + boot time." example:"[*.us-west.*, *.dc1.*]"`
+	Peers         []string        `yaml:"peers" doc:"Addresses (host or host:port, REST/HTTPS) of the other bolts in this spanner. When set, this bolt auto-admits with each on boot — no manual invite/join token ceremony — adopting the shared fleet CA over the signed admission channel (ADR-026 config-driven peering). Empty = gossip/ceremony discovery only." example:"[10.0.0.2, bolt-3.dc1:8443]"`
 	Snapshot      SnapshotConfig  `yaml:"snapshot" doc:"Two-tier snapshot cadence — Tier-1 counters via multicast, Tier-2 roster bytes via REST."`
 	Transport     TransportConfig `yaml:"transport" doc:"Multicast gossip group for Tier-1 counter gossip."`
 	Freshness     FreshnessConfig `yaml:"freshness" doc:"Liveness thresholds for declaring a bolt silent (consumes server/freshness/ defaults)."`
