@@ -2220,6 +2220,15 @@ async fn async_main() -> Result<()> {
             auth::keypair::save_ca_cert(&cli.data_dir, &resp.ca_cert_pem)?;
             save_envoy_id(&cli.data_dir, &resp.envoy_id)?;
 
+            // Spanner: if the contacted bolt routed us to the bolt that owns our
+            // hostname, persist that address — load_bolt_addr overrides the
+            // server addr on every subsequent run, so check-ins land on the
+            // owning bolt. Mirrors the gRPC enroll path above.
+            if !resp.bolt_addr.is_empty() {
+                save_bolt_addr(&cli.data_dir, &resp.bolt_addr)?;
+                info!(bolt_addr = %resp.bolt_addr, "spanner routed to bolt");
+            }
+
             // Persist server address so subsequent runs don't need --server.
             let grpc_addr = format!(
                 "{}:{}",

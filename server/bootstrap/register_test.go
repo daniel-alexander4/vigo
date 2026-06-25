@@ -214,3 +214,97 @@ func mustJSON(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+// stubSpannerRouter is a test double for the spanner enrollment router so the
+// REST routing path can be exercised without standing up a second bolt.
+type stubSpannerRouter struct {
+	ownerHostname string
+	ownsLocally   bool
+	boltEnvoyID   string
+	enrollErr     error
+	enrolledCount int
+}
+
+func (s *stubSpannerRouter) OwningBolt(context.Context, string) (string, string, bool) {
+	return "ownerpub", s.ownerHostname, s.ownerHostname != ""
+}
+func (s *stubSpannerRouter) OwnsLocally(string) bool { return s.ownsLocally }
+func (s *stubSpannerRouter) EnrollOnPeerBolt(context.Context, string, string, string, string, bool) (string, error) {
+	s.enrolledCount++
+	return s.boltEnvoyID, s.enrollErr
+}
+func (s *stubSpannerRouter) GRPCPort() string { return "1530" }
+
+// TestBootstrapRegister_SpannerRouting verifies the REST bootstrap path routes
+// an envoy to the bolt whose patterns own its hostname (the gap that left
+// spanner partitioning non-functional for install-script enrollments), and
+// fails open to local registration when the peer enroll errors.
+func TestBootstrapRegister_SpannerRouting(t *testing.T) {
+	cases := []struct {
+		name         string
+		router       *stubSpannerRouter
+		wantBoltAddr string
+		wantBoltID   bool // EnvoyID should be the bolt-assigned id
+		wantEnrolled int
+	}{
+		{"routes to owning bolt", &stubSpannerRouter{ownerHostname: "bolt-2", boltEnvoyID: "bolt2-id"}, "bolt-2:1530", true, 1},
+		{"fallback on enroll error", &stubSpannerRouter{ownerHostname: "bolt-2", boltEnvoyID: "bolt2-id", enrollErr: fmt.Errorf("peer down")}, "", false, 1},
+		{"this bolt owns it", &stubSpannerRouter{ownerHostname: "bolt-1", ownsLocally: true}, "", false, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanDB(t)
+			ctx := context.Background()
+			dir := t.TempDir()
+			queries := db.New(testDB)
+			reg := registry.NewRegistry(queries)
+			if _, err := reg.AddApprovedPattern(ctx, "*.example.com", "test-token"); err != nil {
+				t.Fatalf("AddApprovedPattern: %v", err)
+			}
+			fi := fleet.NewFleetIndex()
+			reg.SetFleetIndex(fi)
+			h := newTestHandlerWithCA(t, dir)
+			h.SetRegistry(reg)
+			h.SetFleetIndex(fi)
+			h.SetSpannerRouter(tc.router)
+
+			csr := generateTestCSR(t, "web-01.example.com")
+			mux := http.NewServeMux()
+			h.RegisterRoutes(mux)
+			body := fmt.Sprintf(`{"hostname":"web-01.example.com","ip_address":"10.0.1.5","pubkey_pem":"fakepk","csr_pem":%s,"token":"test-token"}`, mustJSON(string(csr)))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/bootstrap/register", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+			}
+			var resp bootstrapRegisterResponse
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if resp.BoltAddr != tc.wantBoltAddr {
+				t.Errorf("BoltAddr = %q, want %q", resp.BoltAddr, tc.wantBoltAddr)
+			}
+			if tc.router.enrolledCount != tc.wantEnrolled {
+				t.Errorf("EnrollOnPeerBolt calls = %d, want %d", tc.router.enrolledCount, tc.wantEnrolled)
+			}
+			if tc.wantBoltID {
+				if resp.EnvoyID != "bolt2-id" {
+					t.Errorf("EnvoyID = %q, want bolt-assigned bolt2-id", resp.EnvoyID)
+				}
+				// Routed away: the local FleetIndex entry must be dropped.
+				if fi.GetEnvoy(resp.EnvoyID) != nil {
+					t.Error("routed envoy should not be in the local FleetIndex")
+				}
+			} else {
+				if resp.EnvoyID == "bolt2-id" {
+					t.Error("EnvoyID should be the local id, not the bolt's")
+				}
+				// Local registration stands.
+				if fi.GetEnvoy(resp.EnvoyID) == nil {
+					t.Error("local envoy should be in the FleetIndex")
+				}
+			}
+		})
+	}
+}

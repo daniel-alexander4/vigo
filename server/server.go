@@ -1384,6 +1384,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 				bh.SetIntegrations(s.integrations)
 				bh.SetFleetIndex(s.fleetIndex)
 				bh.SetLicenseEnforcer(s.enforcer)
+				// Spanner: route REST bootstrap enrollments to the owning bolt,
+				// matching the gRPC Register path. Guard the nil so a typed-nil
+				// *SpannerAdmin isn't stored as a non-nil interface (standalone).
+				if s.spannerAdmin != nil {
+					bh.SetSpannerRouter(s.spannerAdmin)
+				}
 			})
 
 			if len(s.cfg.Bootstrap.TrustedPatterns) > 0 {

@@ -4,6 +4,7 @@
 package bootstrap
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -72,6 +73,19 @@ type Handler struct {
 	integrations    *integrations.Dispatcher
 	fleetIndex      *fleet.FleetIndex
 	licenseEnforcer *license.Enforcer // for post-enrollment capacity reporting
+	spannerRouter   spannerRouter     // nil in standalone mode
+}
+
+// spannerRouter is the subset of *spanner.SpannerAdmin the REST bootstrap
+// enrollment path needs to route an envoy to the bolt whose patterns own its
+// hostname — the same redirect the gRPC VigoAgent.Register handler performs
+// (server/grpc/register.go). Defined as an interface so server/bootstrap stays
+// decoupled from server/spanner (no import). nil ⇒ standalone, no routing.
+type spannerRouter interface {
+	OwningBolt(ctx context.Context, hostname string) (boltPubkeyHex, boltHostname string, found bool)
+	OwnsLocally(boltPubkeyHex string) bool
+	EnrollOnPeerBolt(ctx context.Context, boltHostname, hostname, ipAddress, pubkeyPEM string, force bool) (string, error)
+	GRPCPort() string
 }
 
 // NewHandler creates a Handler for serving bootstrap and agent distribution endpoints.
@@ -249,6 +263,13 @@ func (h *Handler) SetIntegrations(d *integrations.Dispatcher) { h.integrations =
 
 // SetFleetIndex configures the in-memory fleet index for immediate envoy availability after bootstrap.
 func (h *Handler) SetFleetIndex(fi *fleet.FleetIndex) { h.fleetIndex = fi }
+
+// SetSpannerRouter wires the spanner enrollment router so REST bootstrap
+// enrollments are routed to the owning bolt, matching the gRPC Register path.
+// Pass nil (or don't call) in standalone mode. Accepts the interface so a typed
+// nil *spanner.SpannerAdmin isn't stored as a non-nil interface — callers must
+// pass nil explicitly when there's no spanner.
+func (h *Handler) SetSpannerRouter(r spannerRouter) { h.spannerRouter = r }
 
 // SetLicenseEnforcer wires the license enforcer so bootstrap responses can
 // report post-enrollment capacity (envoys_active, envoys_remaining, warning
@@ -576,6 +597,11 @@ type bootstrapRegisterResponse struct {
 	EnvoyID         string `json:"envoy_id"`
 	SignedCertPEM   string `json:"signed_cert_pem"`
 	CACertPEM       string `json:"ca_cert_pem"`
+	// BoltAddr, when non-empty, is the gRPC address of the spanner bolt whose
+	// patterns own this hostname; the contacted bolt enrolled the envoy there
+	// and the agent must check in at this address (it carries the bolt-assigned
+	// EnvoyID above). Empty ⇒ this bolt owns it / standalone.
+	BoltAddr        string `json:"bolt_addr,omitempty"`
 	EnvoysActive    int    `json:"envoys_active,omitempty"`
 	EnvoysRemaining int    `json:"envoys_remaining,omitempty"`
 	LicenseMax      int    `json:"license_max,omitempty"`
@@ -670,6 +696,37 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 			"hostname", req.Hostname, "envoy_id", envoyID, "error", perr)
 	}
 
+	// Peer-equal enrollment routing — the REST-path counterpart of the gRPC
+	// VigoAgent.Register routing (server/grpc/register.go). Resolve which roster
+	// bolt owns this hostname; when a DIFFERENT bolt owns it, create the envoy
+	// record on that bolt and redirect the agent there with the bolt-assigned
+	// envoy ID + its gRPC address (returned as BoltAddr below). On any error we
+	// fall back to the local registration already done — fail-open, never block
+	// enrollment on a routing hiccup. Standalone (nil router) skips this.
+	localEnvoyID := envoyID
+	var boltAddr string
+	if h.spannerRouter != nil {
+		ownerPubkey, ownerHostname, owned := h.spannerRouter.OwningBolt(r.Context(), req.Hostname)
+		if owned && !h.spannerRouter.OwnsLocally(ownerPubkey) && ownerHostname != "" {
+			boltEnvoyID, enrollErr := h.spannerRouter.EnrollOnPeerBolt(r.Context(), ownerHostname, req.Hostname, req.IPAddress, req.PubkeyPEM, req.Force)
+			if enrollErr != nil {
+				slog.Error("spanner bolt enrollment failed, envoy registered locally only",
+					"hostname", req.Hostname, "owning_bolt", ownerHostname, "error", enrollErr)
+			} else {
+				envoyID = boltEnvoyID
+				boltAddr = ownerHostname + ":" + h.spannerRouter.GRPCPort()
+				slog.Info("envoy routed to owning bolt (peer-equal)",
+					"hostname", req.Hostname, "owning_bolt", ownerHostname,
+					"bolt_addr", boltAddr, "envoy_id", envoyID)
+			}
+		}
+	}
+	// When routed away, this bolt's local FleetIndex entry is redundant — the
+	// owning bolt holds the envoy now — so drop it to keep the local count right.
+	if h.fleetIndex != nil && boltAddr != "" {
+		h.fleetIndex.RemoveEnvoy(localEnvoyID)
+	}
+
 	h.metrics.EnrollmentsTotal.WithLabelValues("success").Inc()
 	slog.Info("envoy bootstrapped",
 		"hostname", req.Hostname,
@@ -696,6 +753,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		EnvoyID:       envoyID,
 		SignedCertPEM: string(signedCert),
 		CACertPEM:     string(h.ca.CACertPEM()),
+		BoltAddr:      boltAddr, // non-empty ⇒ agent redirects check-ins here
 	}
 
 	// Populate post-enrollment capacity information so the agent-side

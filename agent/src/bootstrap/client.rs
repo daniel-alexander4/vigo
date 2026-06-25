@@ -23,6 +23,12 @@ pub struct RegisterResponse {
     pub envoy_id: String,
     pub signed_cert_pem: String,
     pub ca_cert_pem: String,
+    // Spanner enrollment routing: when non-empty, the contacted bolt enrolled
+    // this envoy on the bolt whose patterns own its hostname; this is that
+    // bolt's gRPC address and the agent must check in there (load_bolt_addr
+    // overrides the server addr at runtime). Empty ⇒ the contacted bolt owns it.
+    #[serde(default)]
+    pub bolt_addr: String,
     #[serde(default)]
     pub fallback_servers: Vec<String>,
     // License capacity hints populated by the server on successful
