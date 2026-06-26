@@ -3,7 +3,8 @@
 #   - vigo-bolt-1   (e2-medium 2/4)  patterns *.a.test
 #   - vigo-bolt-2   (e2-medium 2/4)  patterns *.b.test
 #   - vigo-harness-1, vigo-harness-2 (e2-small 2/2)  fakefleet drivers
-# All --no-address (egress via Cloud NAT). Servers run vigosrv in spanner mode;
+# bolt-1 pins the reserved static external IP vigo-srv-external; the rest are
+# --no-address (egress via Cloud NAT). Servers run vigosrv in spanner mode;
 # the federation ceremony (init/invite/join) + harness enroll are printed as
 # next-steps (token passing needs to be driven). Reuses the surviving vigo-vpc.
 #
@@ -41,21 +42,28 @@ g compute firewall-rules describe vigo-allow-internal >/dev/null 2>&1 || \
   g compute firewall-rules create vigo-allow-internal --network="$NETWORK" --direction=INGRESS --action=ALLOW --rules=tcp,udp,icmp --source-ranges=10.17.17.0/24
 g compute firewall-rules describe vigo-allow-iap >/dev/null 2>&1 || \
   g compute firewall-rules create vigo-allow-iap --network="$NETWORK" --direction=INGRESS --action=ALLOW --rules=tcp:22 --source-ranges=35.235.240.0/20
+# Public 8443 (UI/REST/gRPC-gateway) so bolt-1's external IP is reachable off-VPC.
+g compute firewall-rules describe vigo-allow-ui >/dev/null 2>&1 || \
+  g compute firewall-rules create vigo-allow-ui --network="$NETWORK" --direction=INGRESS --action=ALLOW --rules=tcp:8443 --source-ranges=0.0.0.0/0
 g compute routers describe vigo-router --region="$REGION" >/dev/null 2>&1 || \
   g compute routers create vigo-router --network="$NETWORK" --region="$REGION"
 g compute routers nats describe vigo-nat --router=vigo-router --region="$REGION" >/dev/null 2>&1 || \
   g compute routers nats create vigo-nat --router=vigo-router --region="$REGION" --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges
 
-mk() { # name machine-type disk
+mk() { # name machine-type disk [reserved-external-address-name]
   g compute instances describe "$1" --zone="$ZONE" >/dev/null 2>&1 && { echo "  $1 exists — skip"; return; }
-  echo "  creating $1 ($2)"
+  # bolt-1 pins the reserved static external IP (vigo-srv-external); everything
+  # else stays --no-address and egresses via Cloud NAT.
+  local addr_flag="--no-address"
+  [ -n "${4:-}" ] && addr_flag="--address=$4"
+  echo "  creating $1 ($2)${4:+ [ext-ip $4]}"
   g compute instances create "$1" --zone="$ZONE" --machine-type="$2" \
-    --network="$NETWORK" --subnet="$SUBNET" --no-address \
+    --network="$NETWORK" --subnet="$SUBNET" "$addr_flag" \
     --image-family="$IMAGE_FAMILY" --image-project="$IMAGE_PROJECT" \
     --boot-disk-size="$3" --boot-disk-type=pd-balanced --quiet >/dev/null &
 }
 echo "== Create VMs (2 bolts e2-medium, 2 harnesses e2-small) =="
-mk vigo-bolt-1 e2-medium 20GB
+mk vigo-bolt-1 e2-medium 20GB vigo-srv-external
 mk vigo-bolt-2 e2-medium 20GB
 mk vigo-harness-1 e2-small 15GB
 mk vigo-harness-2 e2-small 15GB
@@ -88,10 +96,11 @@ fi
 
 B1=$(g compute instances describe vigo-bolt-1 --zone="$ZONE" --format='get(networkInterfaces[0].networkIP)')
 B2=$(g compute instances describe vigo-bolt-2 --zone="$ZONE" --format='get(networkInterfaces[0].networkIP)')
+B1_EXT=$(g compute instances describe vigo-bolt-1 --zone="$ZONE" --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 cat <<EOF
 
 == Done — bolts up in spanner mode (spanner_id=${SPANNER_ID}) ==
-  vigo-bolt-1  ${B1}  patterns *.a.test
+  vigo-bolt-1  ${B1}  ext ${B1_EXT}  patterns *.a.test
   vigo-bolt-2  ${B2}  patterns *.b.test
   vigo-harness-1 / vigo-harness-2  (fakefleet installed)
 
