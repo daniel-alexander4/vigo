@@ -287,16 +287,32 @@ func TestMergeSecuritySummaries(t *testing.T) {
 	// Two bolts share CVE-2024-1 (low on bolt A, critical on bolt B → the
 	// union must keep critical); CVE-2024-2 is unique to A, CVE-2024-3 to B.
 	// Summing per-bolt unique counts (2+2=4) would over-count; the union is 3.
+	// Lynis is an average: bolt A scored 1000 hosts summing 70000 (avg 70),
+	// bolt B scored 10 hosts summing 900 (avg 90). The fleet avg must be
+	// weighted by scored-host count — 70900/1010 ≈ 70 — not the 80 you'd get
+	// averaging the two averages.
 	boltA := SecuritySummary{
 		UniqueCVEs:        []CVEIdent{{ID: "CVE-2024-1", Severity: "low"}, {ID: "CVE-2024-2", Severity: "high"}},
 		CertsExpiringSoon: 3, CertsExpired: 1, RootkitWarnings: 2, RunningCVEsTotal: 10, RunningCVEsCritical: 1,
+		LynisScoreSum: 70000, LynisScoredCount: 1000, ScannedHosts: 1000, TotalHosts: 1000, ClamavInfected: 4,
 	}
 	boltB := SecuritySummary{
 		UniqueCVEs:        []CVEIdent{{ID: "CVE-2024-1", Severity: "critical"}, {ID: "CVE-2024-3", Severity: "medium"}},
 		CertsExpiringSoon: 4, CertsExpired: 0, RootkitWarnings: 1, RunningCVEsTotal: 5, RunningCVEsCritical: 2,
+		LynisScoreSum: 900, LynisScoredCount: 10, ScannedHosts: 10, TotalHosts: 12, ClamavInfected: 1,
 	}
 
 	got := MergeSecuritySummaries([]SecuritySummary{boltA, boltB})
+
+	if got.LynisScoredCount != 1010 || got.LynisScoreSum != 70900 {
+		t.Fatalf("lynis sum/count: got %d/%d, want 70900/1010", got.LynisScoreSum, got.LynisScoredCount)
+	}
+	if avg := got.LynisAvg(); avg != 70 {
+		t.Errorf("fleet-weighted Lynis avg: got %d, want 70 (not the 80 of avg-of-avgs)", avg)
+	}
+	if got.ScannedHosts != 1010 || got.TotalHosts != 1012 || got.ClamavInfected != 5 {
+		t.Errorf("scanner additive sums wrong: %+v", got)
+	}
 
 	if got.UniqueCVECount() != 3 {
 		t.Errorf("unique CVE union: got %d, want 3 (CVE-2024-1 shared, must dedup)", got.UniqueCVECount())
@@ -323,6 +339,8 @@ func TestSecuritySummaryProtoRoundTrip(t *testing.T) {
 		UniqueCVEs:        []CVEIdent{{ID: "CVE-2024-9", Severity: "high"}},
 		CertsExpiringSoon: 2, CertsExpired: 1, CertsExpiringIn7: 1, CertsExpiringIn30: 2, CertHostsAffected: 3,
 		RootkitWarnings: 4, RunningCVEsTotal: 6, RunningCVEsCritical: 1, RunningCVEsHigh: 2, RunningCVEsMedium: 2, RunningCVEsLow: 1, RunningCVEHostsAffected: 5,
+		LynisScoreSum: 1234, LynisScoredCount: 17, LynisWarnings: 8, RootkitClean: 90, ClamavClean: 88, ClamavInfected: 2,
+		AideClean: 80, AideChanged: 3, ScapScanned: 50, ScapClean: 47, ScapHighFail: 3, ScannedHosts: 95, TotalHosts: 100,
 	}
 	out := SecuritySummaryFromProto(SecuritySummaryToProto(in))
 	if out.UniqueCVECount() != 1 || out.UniqueCVEs[0].ID != "CVE-2024-9" || out.UniqueCVEs[0].Severity != "high" {
@@ -331,6 +349,12 @@ func TestSecuritySummaryProtoRoundTrip(t *testing.T) {
 	if out.CertsExpiringSoon != 2 || out.CertHostsAffected != 3 || out.RootkitWarnings != 4 ||
 		out.RunningCVEsTotal != 6 || out.RunningCVEHostsAffected != 5 {
 		t.Errorf("scalar round-trip mismatch: %+v", out)
+	}
+	if out.LynisScoreSum != 1234 || out.LynisScoredCount != 17 || out.LynisWarnings != 8 ||
+		out.RootkitClean != 90 || out.ClamavClean != 88 || out.ClamavInfected != 2 ||
+		out.AideClean != 80 || out.AideChanged != 3 || out.ScapScanned != 50 ||
+		out.ScapClean != 47 || out.ScapHighFail != 3 || out.ScannedHosts != 95 || out.TotalHosts != 100 {
+		t.Errorf("scanner-rollup round-trip mismatch: %+v", out)
 	}
 }
 

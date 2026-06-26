@@ -1530,5 +1530,6 @@
   "workflows.steps": "Passos",
   "workflows.with_status": "com estado",
   "workflows.workflow": "Workflow",
-  "workflows.workflow_runs": "execuções de workflow"
+  "workflows.workflow_runs": "execuções de workflow",
+  "security.fleet_aggregate_note": "A mostrar o agregado de toda a frota em todos os bolts. O detalhe por host, as análises de certificados, a pesquisa de CVE e as tendências são por bolt — selecione um separador de bolt acima para os ver."
 }

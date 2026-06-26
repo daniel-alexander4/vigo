@@ -1168,6 +1168,59 @@
         "runningCveHostsAffected": {
           "type": "integer",
           "format": "int32"
+        },
+        "lynisScoreSum": {
+          "type": "string",
+          "format": "int64",
+          "description": "Summable scanner rollups for the federated /security PAGE Fleet view\n(ADR-037 slice 5). All additive across bolts except the Lynis average,\nwhich ships as score_sum + scored_count so the viewer re-means\ncorrectly (not an average-of-averages)."
+        },
+        "lynisScoredCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "lynisWarnings": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "rootkitClean": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "clamavClean": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "clamavInfected": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "aideClean": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "aideChanged": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "scapScanned": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "scapClean": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "scapHighFail": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "scannedHosts": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalHosts": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

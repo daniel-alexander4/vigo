@@ -1530,5 +1530,6 @@
   "workflows.steps": "Schritte",
   "workflows.with_status": "mit Status",
   "workflows.workflow": "Workflow",
-  "workflows.workflow_runs": "Workflow-Läufe"
+  "workflows.workflow_runs": "Workflow-Läufe",
+  "security.fleet_aggregate_note": "Flottenweite Aggregation über alle Bolts wird angezeigt. Per-Host-Details, Zertifikat-Drilldowns, CVE-Suche und Trends sind pro Bolt — wählen Sie oben einen Bolt-Tab dafür."
 }

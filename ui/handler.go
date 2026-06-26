@@ -168,6 +168,22 @@ type SecuritySummary struct {
 	RunningCVEsMedium       int
 	RunningCVEsLow          int
 	RunningCVEHostsAffected int
+	// Scanner rollups for the federated /security PAGE Fleet view (ADR-037
+	// slice 5). Additive across bolts except the Lynis average, carried as
+	// LynisScoreSum + LynisScoredCount so the viewer re-means correctly.
+	LynisScoreSum    int64
+	LynisScoredCount int
+	LynisWarnings    int
+	RootkitClean     int
+	ClamavClean      int
+	ClamavInfected   int
+	AideClean        int
+	AideChanged      int
+	ScapScanned      int
+	ScapClean        int
+	ScapHighFail     int
+	ScannedHosts     int
+	TotalHosts       int
 }
 
 // ToSpanner converts to the spanner federation type for fan-out merging.
@@ -185,6 +201,19 @@ func (s SecuritySummary) ToSpanner() spanner.SecuritySummary {
 		RunningCVEsMedium:       s.RunningCVEsMedium,
 		RunningCVEsLow:          s.RunningCVEsLow,
 		RunningCVEHostsAffected: s.RunningCVEHostsAffected,
+		LynisScoreSum:           s.LynisScoreSum,
+		LynisScoredCount:        s.LynisScoredCount,
+		LynisWarnings:           s.LynisWarnings,
+		RootkitClean:            s.RootkitClean,
+		ClamavClean:             s.ClamavClean,
+		ClamavInfected:          s.ClamavInfected,
+		AideClean:               s.AideClean,
+		AideChanged:             s.AideChanged,
+		ScapScanned:             s.ScapScanned,
+		ScapClean:               s.ScapClean,
+		ScapHighFail:            s.ScapHighFail,
+		ScannedHosts:            s.ScannedHosts,
+		TotalHosts:              s.TotalHosts,
 	}
 	for _, c := range s.UniqueCVEs {
 		out.UniqueCVEs = append(out.UniqueCVEs, spanner.CVEIdent{ID: c.ID, Severity: c.Severity})
@@ -7195,6 +7224,11 @@ type SecurityPageData struct {
 	QueryTimeoutSec int
 	CVETrend        []float64
 	HardeningTrend  []float64
+	// FleetAggregate marks the multi-bolt Fleet view: the scalar rollups are
+	// merged across bolts but the per-host tables and sparklines are omitted
+	// (they don't aggregate at scale) — the template hides them and shows a
+	// "select a bolt for per-host detail" note (ADR-037 slice 5).
+	FleetAggregate bool
 }
 
 // securityQueryTimeoutSec is the live-drill-down dispatch budget, derived
@@ -7208,14 +7242,97 @@ func (h *Handler) securityQueryTimeoutSec() int {
 	return s
 }
 
-func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	scope := h.resolveScope(r)
-
-	var data SecurityPageData
-	if !h.routeScopedPage(ctx, scope, pageSecurity, &data) {
-		data = h.dataSource.SecurityPageData(ctx, h.baseInterval, h.offlineThreshold)
+// securityFleetPageData builds the multi-bolt Fleet view of /security from
+// the merged security summary + scoped convergence (ADR-037 slice 5): the
+// fleet-wide scalar scanner rollups and the deduped CVE list. Per-host
+// tables, cert drill-downs, and trends are omitted (FleetAggregate) — they
+// don't aggregate at scale; drill into a bolt tab for those. ok=false on
+// fan-out failure → the caller renders locally.
+func (h *Handler) securityFleetPageData(ctx context.Context) (SecurityPageData, bool) {
+	sec, ok := h.scopedSecurity(ctx, scopeFleet)
+	if !ok {
+		return SecurityPageData{}, false
 	}
+	conv := h.scopedConvergence(scopeFleet)
+
+	var crit, high, med, low int
+	cveEntries := make([]CVEEntry, 0, len(sec.UniqueCVEs))
+	for _, c := range sec.UniqueCVEs {
+		switch c.Severity {
+		case "critical":
+			crit++
+		case "high":
+			high++
+		case "medium":
+			med++
+		case "low":
+			low++
+		}
+		cveEntries = append(cveEntries, CVEEntry{CVEID: c.ID, Severity: c.Severity})
+	}
+
+	return SecurityPageData{
+		ConvergencePct: convergence.ConvergedPct(int64(conv.Converged), int64(conv.Total-conv.Offline)),
+		Total:          int64(conv.Total),
+		Converged:      int64(conv.Converged),
+		Degraded:       int64(conv.Degraded),
+		Failed:         int64(conv.Failed),
+		NoData:         int64(conv.NoData),
+		Changed:        int64(conv.Changed),
+		Diverged:       int64(conv.Diverged),
+		Offline:        int64(conv.Offline),
+		Security: SecurityScanPageData{
+			UniqueCVEs:     int64(len(sec.UniqueCVEs)),
+			UniqueCritical: int64(crit),
+			UniqueHigh:     int64(high),
+			UniqueMedium:   int64(med),
+			UniqueLow:      int64(low),
+			LynisAvgScore:  int64(sec.LynisAvg()),
+			LynisWarnings:  int64(sec.LynisWarnings),
+			RootkitClean:   int64(sec.RootkitClean),
+			RootkitWarning: int64(sec.RootkitWarnings),
+			ClamavClean:    int64(sec.ClamavClean),
+			ClamavInfected: int64(sec.ClamavInfected),
+			AideClean:      int64(sec.AideClean),
+			AideChanged:    int64(sec.AideChanged),
+			ScapScanned:    int64(sec.ScapScanned),
+			ScapClean:      int64(sec.ScapClean),
+			ScapHighFail:   int64(sec.ScapHighFail),
+			ScannedHosts:   int64(sec.ScannedHosts),
+			TotalHosts:     int64(sec.TotalHosts),
+			CVEs:           cveEntries,
+		},
+		Certs: CertExpirySummary{
+			ExpiringSoon:  sec.CertsExpiringSoon,
+			Expired:       sec.CertsExpired,
+			ExpiringIn7:   sec.CertsExpiringIn7,
+			ExpiringIn30:  sec.CertsExpiringIn30,
+			HostsAffected: sec.CertHostsAffected,
+		},
+		FleetAggregate: true,
+	}, true
+}
+
+// securityScopedData resolves the /security page data for the active scope
+// (ADR-037 slice 5): a peer bolt routes to its owner (full detail), the
+// multi-bolt Fleet scope renders the merged aggregate, and everything else
+// (this bolt / standalone / single-bolt) renders the full local page.
+func (h *Handler) securityScopedData(ctx context.Context, r *http.Request) SecurityPageData {
+	scope := h.resolveScope(r)
+	var data SecurityPageData
+	switch {
+	case h.routeScopedPage(ctx, scope, pageSecurity, &data):
+		return data
+	case scope == scopeFleet && h.scopedAway(ctx, scope):
+		if fd, ok := h.securityFleetPageData(ctx); ok {
+			return fd
+		}
+	}
+	return h.dataSource.SecurityPageData(ctx, h.baseInterval, h.offlineThreshold)
+}
+
+func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
+	data := h.securityScopedData(r.Context(), r)
 	data.PageData = PageData{Title: "Security", ActiveNav: "security"}
 	data.QueryTimeoutSec = h.securityQueryTimeoutSec()
 	data.ScopeAware = true
@@ -7225,15 +7342,9 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 
 // SecurityStatus renders the convergence+security left-panel fragment for HTMX polling.
 func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	scope := h.resolveScope(r)
-
-	// Same data + scope routing as SecurityPage, so the HTMX poll keeps
-	// showing the selected bolt's status (ADR-037 slice 5).
-	var data SecurityPageData
-	if !h.routeScopedPage(ctx, scope, pageSecurity, &data) {
-		data = h.dataSource.SecurityPageData(ctx, h.baseInterval, h.offlineThreshold)
-	}
+	// Same scope routing as SecurityPage, so the HTMX poll keeps showing the
+	// selected bolt's (or the Fleet aggregate's) status (ADR-037 slice 5).
+	data := h.securityScopedData(r.Context(), r)
 	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "security", "security-status", data)
 }

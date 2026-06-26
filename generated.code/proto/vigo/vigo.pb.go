@@ -5364,8 +5364,25 @@ type GetSecuritySummaryResponse struct {
 	RunningCvesMedium       int32 `protobuf:"varint,11,opt,name=running_cves_medium,json=runningCvesMedium,proto3" json:"running_cves_medium,omitempty"`
 	RunningCvesLow          int32 `protobuf:"varint,12,opt,name=running_cves_low,json=runningCvesLow,proto3" json:"running_cves_low,omitempty"`
 	RunningCveHostsAffected int32 `protobuf:"varint,13,opt,name=running_cve_hosts_affected,json=runningCveHostsAffected,proto3" json:"running_cve_hosts_affected,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// Summable scanner rollups for the federated /security PAGE Fleet view
+	// (ADR-037 slice 5). All additive across bolts except the Lynis average,
+	// which ships as score_sum + scored_count so the viewer re-means
+	// correctly (not an average-of-averages).
+	LynisScoreSum    int64 `protobuf:"varint,14,opt,name=lynis_score_sum,json=lynisScoreSum,proto3" json:"lynis_score_sum,omitempty"`
+	LynisScoredCount int32 `protobuf:"varint,15,opt,name=lynis_scored_count,json=lynisScoredCount,proto3" json:"lynis_scored_count,omitempty"`
+	LynisWarnings    int32 `protobuf:"varint,16,opt,name=lynis_warnings,json=lynisWarnings,proto3" json:"lynis_warnings,omitempty"`
+	RootkitClean     int32 `protobuf:"varint,17,opt,name=rootkit_clean,json=rootkitClean,proto3" json:"rootkit_clean,omitempty"`
+	ClamavClean      int32 `protobuf:"varint,18,opt,name=clamav_clean,json=clamavClean,proto3" json:"clamav_clean,omitempty"`
+	ClamavInfected   int32 `protobuf:"varint,19,opt,name=clamav_infected,json=clamavInfected,proto3" json:"clamav_infected,omitempty"`
+	AideClean        int32 `protobuf:"varint,20,opt,name=aide_clean,json=aideClean,proto3" json:"aide_clean,omitempty"`
+	AideChanged      int32 `protobuf:"varint,21,opt,name=aide_changed,json=aideChanged,proto3" json:"aide_changed,omitempty"`
+	ScapScanned      int32 `protobuf:"varint,22,opt,name=scap_scanned,json=scapScanned,proto3" json:"scap_scanned,omitempty"`
+	ScapClean        int32 `protobuf:"varint,23,opt,name=scap_clean,json=scapClean,proto3" json:"scap_clean,omitempty"`
+	ScapHighFail     int32 `protobuf:"varint,24,opt,name=scap_high_fail,json=scapHighFail,proto3" json:"scap_high_fail,omitempty"`
+	ScannedHosts     int32 `protobuf:"varint,25,opt,name=scanned_hosts,json=scannedHosts,proto3" json:"scanned_hosts,omitempty"`
+	TotalHosts       int32 `protobuf:"varint,26,opt,name=total_hosts,json=totalHosts,proto3" json:"total_hosts,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetSecuritySummaryResponse) Reset() {
@@ -5485,6 +5502,97 @@ func (x *GetSecuritySummaryResponse) GetRunningCvesLow() int32 {
 func (x *GetSecuritySummaryResponse) GetRunningCveHostsAffected() int32 {
 	if x != nil {
 		return x.RunningCveHostsAffected
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetLynisScoreSum() int64 {
+	if x != nil {
+		return x.LynisScoreSum
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetLynisScoredCount() int32 {
+	if x != nil {
+		return x.LynisScoredCount
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetLynisWarnings() int32 {
+	if x != nil {
+		return x.LynisWarnings
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetRootkitClean() int32 {
+	if x != nil {
+		return x.RootkitClean
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetClamavClean() int32 {
+	if x != nil {
+		return x.ClamavClean
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetClamavInfected() int32 {
+	if x != nil {
+		return x.ClamavInfected
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetAideClean() int32 {
+	if x != nil {
+		return x.AideClean
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetAideChanged() int32 {
+	if x != nil {
+		return x.AideChanged
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetScapScanned() int32 {
+	if x != nil {
+		return x.ScapScanned
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetScapClean() int32 {
+	if x != nil {
+		return x.ScapClean
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetScapHighFail() int32 {
+	if x != nil {
+		return x.ScapHighFail
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetScannedHosts() int32 {
+	if x != nil {
+		return x.ScannedHosts
+	}
+	return 0
+}
+
+func (x *GetSecuritySummaryResponse) GetTotalHosts() int32 {
+	if x != nil {
+		return x.TotalHosts
 	}
 	return 0
 }
@@ -8358,7 +8466,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x19GetSecuritySummaryRequest\"9\n" +
 	"\vCveSeverity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
-	"\bseverity\x18\x02 \x01(\tR\bseverity\"\x86\x05\n" +
+	"\bseverity\x18\x02 \x01(\tR\bseverity\"\xe4\b\n" +
 	"\x1aGetSecuritySummaryResponse\x125\n" +
 	"\vunique_cves\x18\x01 \x03(\v2\x14.vigo.v1.CveSeverityR\n" +
 	"uniqueCves\x12.\n" +
@@ -8374,7 +8482,23 @@ const file_vigo_proto_rawDesc = "" +
 	" \x01(\x05R\x0frunningCvesHigh\x12.\n" +
 	"\x13running_cves_medium\x18\v \x01(\x05R\x11runningCvesMedium\x12(\n" +
 	"\x10running_cves_low\x18\f \x01(\x05R\x0erunningCvesLow\x12;\n" +
-	"\x1arunning_cve_hosts_affected\x18\r \x01(\x05R\x17runningCveHostsAffected\"\x17\n" +
+	"\x1arunning_cve_hosts_affected\x18\r \x01(\x05R\x17runningCveHostsAffected\x12&\n" +
+	"\x0flynis_score_sum\x18\x0e \x01(\x03R\rlynisScoreSum\x12,\n" +
+	"\x12lynis_scored_count\x18\x0f \x01(\x05R\x10lynisScoredCount\x12%\n" +
+	"\x0elynis_warnings\x18\x10 \x01(\x05R\rlynisWarnings\x12#\n" +
+	"\rrootkit_clean\x18\x11 \x01(\x05R\frootkitClean\x12!\n" +
+	"\fclamav_clean\x18\x12 \x01(\x05R\vclamavClean\x12'\n" +
+	"\x0fclamav_infected\x18\x13 \x01(\x05R\x0eclamavInfected\x12\x1d\n" +
+	"\n" +
+	"aide_clean\x18\x14 \x01(\x05R\taideClean\x12!\n" +
+	"\faide_changed\x18\x15 \x01(\x05R\vaideChanged\x12!\n" +
+	"\fscap_scanned\x18\x16 \x01(\x05R\vscapScanned\x12\x1d\n" +
+	"\n" +
+	"scap_clean\x18\x17 \x01(\x05R\tscapClean\x12$\n" +
+	"\x0escap_high_fail\x18\x18 \x01(\x05R\fscapHighFail\x12#\n" +
+	"\rscanned_hosts\x18\x19 \x01(\x05R\fscannedHosts\x12\x1f\n" +
+	"\vtotal_hosts\x18\x1a \x01(\x05R\n" +
+	"totalHosts\"\x17\n" +
 	"\x15GetRiskSummaryRequest\"\xb2\x01\n" +
 	"\x16GetRiskSummaryResponse\x12\x1b\n" +
 	"\tscore_sum\x18\x01 \x01(\x03R\bscoreSum\x12!\n" +

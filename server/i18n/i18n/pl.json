@@ -1530,5 +1530,6 @@
   "workflows.steps": "Kroki",
   "workflows.with_status": "ze statusem",
   "workflows.workflow": "Przepływ pracy",
-  "workflows.workflow_runs": "przebiegi przepływów pracy"
+  "workflows.workflow_runs": "przebiegi przepływów pracy",
+  "security.fleet_aggregate_note": "Wyświetlanie zagregowanych danych dla całej floty ze wszystkich boltów. Szczegóły poszczególnych hostów, analiza certyfikatów, wyszukiwanie CVE i trendy są per bolt — wybierz powyżej kartę bolta, aby je zobaczyć."
 }

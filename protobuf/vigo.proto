@@ -925,6 +925,23 @@ message GetSecuritySummaryResponse {
   int32 running_cves_medium = 11;
   int32 running_cves_low = 12;
   int32 running_cve_hosts_affected = 13;
+  // Summable scanner rollups for the federated /security PAGE Fleet view
+  // (ADR-037 slice 5). All additive across bolts except the Lynis average,
+  // which ships as score_sum + scored_count so the viewer re-means
+  // correctly (not an average-of-averages).
+  int64 lynis_score_sum = 14;
+  int32 lynis_scored_count = 15;
+  int32 lynis_warnings = 16;
+  int32 rootkit_clean = 17;
+  int32 clamav_clean = 18;
+  int32 clamav_infected = 19;
+  int32 aide_clean = 20;
+  int32 aide_changed = 21;
+  int32 scap_scanned = 22;
+  int32 scap_clean = 23;
+  int32 scap_high_fail = 24;
+  int32 scanned_hosts = 25;
+  int32 total_hosts = 26;
 }
 
 message GetRiskSummaryRequest {}

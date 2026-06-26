@@ -1505,6 +1505,17 @@ func (ds *DataSource) SecuritySummary() ui.SecuritySummary {
 	for _, c := range sec.CVEs {
 		cves = append(cves, ui.CVEIdent{ID: c.CVEID, Severity: c.Severity})
 	}
+	// Lynis is an average, so carry the un-divided sum + scored-host count
+	// for a correct fleet re-mean (ADR-037 slice 5). Derived from the
+	// per-host scores so a single bolt reproduces its own LynisAvgScore.
+	var lynisSum int64
+	var lynisCount int
+	for _, h := range sec.PerHost {
+		if h.LynisScore > 0 {
+			lynisSum += h.LynisScore
+			lynisCount++
+		}
+	}
 	return ui.SecuritySummary{
 		UniqueCVEs:              cves,
 		CertsExpiringSoon:       cert.ExpiringSoon,
@@ -1519,6 +1530,19 @@ func (ds *DataSource) SecuritySummary() ui.SecuritySummary {
 		RunningCVEsMedium:       run.Medium,
 		RunningCVEsLow:          run.Low,
 		RunningCVEHostsAffected: run.HostsAffected,
+		LynisScoreSum:           lynisSum,
+		LynisScoredCount:        lynisCount,
+		LynisWarnings:           int(sec.LynisWarnings),
+		RootkitClean:            int(sec.RootkitClean),
+		ClamavClean:             int(sec.ClamavClean),
+		ClamavInfected:          int(sec.ClamavInfected),
+		AideClean:               int(sec.AideClean),
+		AideChanged:             int(sec.AideChanged),
+		ScapScanned:             int(sec.ScapScanned),
+		ScapClean:               int(sec.ScapClean),
+		ScapHighFail:            int(sec.ScapHighFail),
+		ScannedHosts:            int(sec.ScannedHosts),
+		TotalHosts:              int(sec.TotalHosts),
 	}
 }
 

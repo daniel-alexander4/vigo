@@ -470,6 +470,31 @@ type SecuritySummary struct {
 	RunningCVEsMedium       int
 	RunningCVEsLow          int
 	RunningCVEHostsAffected int
+	// Scanner rollups for the federated /security PAGE Fleet view (ADR-037
+	// slice 5). Additive across bolts except the Lynis average (carried as
+	// LynisScoreSum + LynisScoredCount for a correct re-mean).
+	LynisScoreSum    int64
+	LynisScoredCount int
+	LynisWarnings    int
+	RootkitClean     int
+	ClamavClean      int
+	ClamavInfected   int
+	AideClean        int
+	AideChanged      int
+	ScapScanned      int
+	ScapClean        int
+	ScapHighFail     int
+	ScannedHosts     int
+	TotalHosts       int
+}
+
+// LynisAvg is the fleet (or per-bolt) mean Lynis hardening score, re-meaned
+// from the un-divided sum/count so an average-of-averages can't skew it.
+func (s SecuritySummary) LynisAvg() int {
+	if s.LynisScoredCount == 0 {
+		return 0
+	}
+	return int(s.LynisScoreSum / int64(s.LynisScoredCount))
 }
 
 // UniqueCVECount is the deduped unique-CVE total (len of the set after any
@@ -501,6 +526,19 @@ func MergeSecuritySummaries(parts []SecuritySummary) SecuritySummary {
 		out.RunningCVEsMedium += p.RunningCVEsMedium
 		out.RunningCVEsLow += p.RunningCVEsLow
 		out.RunningCVEHostsAffected += p.RunningCVEHostsAffected
+		out.LynisScoreSum += p.LynisScoreSum
+		out.LynisScoredCount += p.LynisScoredCount
+		out.LynisWarnings += p.LynisWarnings
+		out.RootkitClean += p.RootkitClean
+		out.ClamavClean += p.ClamavClean
+		out.ClamavInfected += p.ClamavInfected
+		out.AideClean += p.AideClean
+		out.AideChanged += p.AideChanged
+		out.ScapScanned += p.ScapScanned
+		out.ScapClean += p.ScapClean
+		out.ScapHighFail += p.ScapHighFail
+		out.ScannedHosts += p.ScannedHosts
+		out.TotalHosts += p.TotalHosts
 	}
 	for id, sev := range cveMax {
 		out.UniqueCVEs = append(out.UniqueCVEs, CVEIdent{ID: id, Severity: sev})
@@ -523,6 +561,19 @@ func SecuritySummaryToProto(s SecuritySummary) *pb.GetSecuritySummaryResponse {
 		RunningCvesMedium:       int32(s.RunningCVEsMedium),
 		RunningCvesLow:          int32(s.RunningCVEsLow),
 		RunningCveHostsAffected: int32(s.RunningCVEHostsAffected),
+		LynisScoreSum:           s.LynisScoreSum,
+		LynisScoredCount:        int32(s.LynisScoredCount),
+		LynisWarnings:           int32(s.LynisWarnings),
+		RootkitClean:            int32(s.RootkitClean),
+		ClamavClean:             int32(s.ClamavClean),
+		ClamavInfected:          int32(s.ClamavInfected),
+		AideClean:               int32(s.AideClean),
+		AideChanged:             int32(s.AideChanged),
+		ScapScanned:             int32(s.ScapScanned),
+		ScapClean:               int32(s.ScapClean),
+		ScapHighFail:            int32(s.ScapHighFail),
+		ScannedHosts:            int32(s.ScannedHosts),
+		TotalHosts:              int32(s.TotalHosts),
 	}
 	resp.UniqueCves = make([]*pb.CveSeverity, 0, len(s.UniqueCVEs))
 	for _, c := range s.UniqueCVEs {
@@ -545,6 +596,19 @@ func SecuritySummaryFromProto(resp *pb.GetSecuritySummaryResponse) SecuritySumma
 		RunningCVEsMedium:       int(resp.RunningCvesMedium),
 		RunningCVEsLow:          int(resp.RunningCvesLow),
 		RunningCVEHostsAffected: int(resp.RunningCveHostsAffected),
+		LynisScoreSum:           resp.LynisScoreSum,
+		LynisScoredCount:        int(resp.LynisScoredCount),
+		LynisWarnings:           int(resp.LynisWarnings),
+		RootkitClean:            int(resp.RootkitClean),
+		ClamavClean:             int(resp.ClamavClean),
+		ClamavInfected:          int(resp.ClamavInfected),
+		AideClean:               int(resp.AideClean),
+		AideChanged:             int(resp.AideChanged),
+		ScapScanned:             int(resp.ScapScanned),
+		ScapClean:               int(resp.ScapClean),
+		ScapHighFail:            int(resp.ScapHighFail),
+		ScannedHosts:            int(resp.ScannedHosts),
+		TotalHosts:              int(resp.TotalHosts),
 	}
 	for _, c := range resp.UniqueCves {
 		s.UniqueCVEs = append(s.UniqueCVEs, CVEIdent{ID: c.Id, Severity: c.Severity})

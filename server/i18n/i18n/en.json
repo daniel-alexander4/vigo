@@ -1530,5 +1530,6 @@
   "workflows.steps": "Steps",
   "workflows.with_status": "with status",
   "workflows.workflow": "Workflow",
-  "workflows.workflow_runs": "workflow runs"
+  "workflows.workflow_runs": "workflow runs",
+  "security.fleet_aggregate_note": "Showing fleet-wide aggregate across all bolts. Per-host detail, certificate drill-downs, CVE search, and trends are per-bolt — select a bolt tab above for those."
 }
