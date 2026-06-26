@@ -736,6 +736,8 @@ func (s *AdminService) GetScopedPageData(ctx context.Context, req *pb.GetScopedP
 		v = ds.RiskPostureData(s.baseInterval, s.offlineThreshold)
 	case "agent-health":
 		v = ds.AgentHealthData()
+	case "compliance":
+		v = ds.ComplianceLandingData(ctx)
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown scoped page %q", req.PageId)
 	}

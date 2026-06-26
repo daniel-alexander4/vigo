@@ -1794,6 +1794,38 @@ func (ds *DataSource) ComplianceSummary(ctx context.Context) ui.ComplianceSummar
 	return aggregateComplianceSnapshot(rows)
 }
 
+// ComplianceLandingData builds the /compliance landing model: the headline
+// control coverage (from the ComplianceSummary SoT) plus waiver alerts from
+// the config-file waivers. SoT shared by the local render and the
+// route-to-owner RPC (ADR-037 slice 5). Excludes PageData chrome.
+func (ds *DataSource) ComplianceLandingData(ctx context.Context) ui.StandardsPageData {
+	cs := ds.ComplianceSummary(ctx)
+	var data ui.StandardsPageData
+	if cs.Total > 0 {
+		data.HasStandards = true
+		data.StandardsPct = cs.Pct()
+		data.SatisfiedControls = cs.Satisfied
+		data.WaivedControls = cs.Waived
+		data.PartialControls = cs.Partial
+		data.NotSatisfiedControls = cs.NotSatisfied
+		data.TotalControls = cs.Total
+	}
+	if ds.configStore != nil {
+		soon := time.Now().AddDate(0, 0, 30)
+		for _, controls := range ds.configStore.AllWaivers() {
+			for _, w := range controls {
+				data.TotalActiveWaivers++
+				if w.Expires != "" {
+					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soon) {
+						data.ExpiringWaivers++
+					}
+				}
+			}
+		}
+	}
+	return data
+}
+
 // aggregateComplianceSnapshot folds the per-framework rows of a single
 // compliance_history snapshot date into a ui.ComplianceSummary. Pure
 // function — extracted so the unweighted-mean and no-waiver-double-count

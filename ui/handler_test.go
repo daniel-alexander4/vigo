@@ -464,6 +464,9 @@ func (m *footprintMock) ComplianceSummary(ctx context.Context) ComplianceSummary
 func (m *footprintMock) SecurityPageData(ctx context.Context, b, o time.Duration) SecurityPageData {
 	return m.base.SecurityPageData(ctx, b, o)
 }
+func (m *footprintMock) ComplianceLandingData(ctx context.Context) StandardsPageData {
+	return m.base.ComplianceLandingData(ctx)
+}
 func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 	return fleetpressure.FleetSummary{
 		MaxOpenFDs:         640,
@@ -1348,6 +1351,10 @@ func (m *mockDataSource) ComplianceSummary(_ context.Context) ComplianceSummary 
 
 func (m *mockDataSource) SecurityPageData(_ context.Context, _, _ time.Duration) SecurityPageData {
 	return SecurityPageData{}
+}
+
+func (m *mockDataSource) ComplianceLandingData(_ context.Context) StandardsPageData {
+	return StandardsPageData{}
 }
 
 func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {

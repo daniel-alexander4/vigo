@@ -112,6 +112,10 @@ type DataSource interface {
 	// bolt's /security page renders identically in the viewer (ADR-037
 	// slice 5). Excludes the PageData chrome + QueryTimeoutSec (viewer-set).
 	SecurityPageData(ctx context.Context, baseInterval, offlineThreshold time.Duration) SecurityPageData
+	// ComplianceLandingData builds the /compliance landing model (control
+	// coverage + waiver alerts). SoT shared by the local render and the
+	// route-to-owner RPC (ADR-037 slice 5).
+	ComplianceLandingData(ctx context.Context) StandardsPageData
 	// FleetPressure rolls up per-envoy resource + repo-health telemetry
 	// into the dashboard "Agent Health" card via the fleetpressure SoT
 	// package.
@@ -1075,6 +1079,7 @@ const (
 	pageSecurity    = "security"
 	pageRisk        = "risk"
 	pageAgentHealth = "agent-health"
+	pageCompliance  = "compliance"
 )
 
 // LicensePageData holds data for the license status page.
@@ -1448,6 +1453,11 @@ type StandardsPageData struct {
 	// Waiver alerts.
 	TotalActiveWaivers int
 	ExpiringWaivers    int // waivers expiring within 30 days
+	// FleetAggregate marks the multi-bolt Fleet view: the control coverage
+	// is merged across bolts, but waiver alerts + the framework reports stay
+	// per-bolt (config + audit-chain are per-bolt) — the template shows a
+	// drill-to-bolt note (ADR-037 slice 5).
+	FleetAggregate bool
 }
 
 // ComplianceReportPageData holds data for a per-framework compliance report page.
@@ -3992,8 +4002,42 @@ var integrationExamples = map[string]IntegrationExample{
 }
 
 // Compliance renders the standards compliance overview page.
+// complianceScopedData resolves the /compliance landing model for the active
+// scope (ADR-037 slice 5): a peer bolt routes to its owner, the multi-bolt
+// Fleet scope merges the control coverage across bolts (waivers stay this
+// bolt's — config is per-bolt), and everything else renders the full local
+// page.
+func (h *Handler) complianceScopedData(ctx context.Context, r *http.Request) StandardsPageData {
+	scope := h.resolveScope(r)
+	var data StandardsPageData
+	switch {
+	case h.routeScopedPage(ctx, scope, pageCompliance, &data):
+		return data
+	case scope == scopeFleet && h.scopedAway(ctx, scope):
+		if cmp, ok := h.scopedCompliance(ctx, scope); ok {
+			// Federated control coverage; waivers remain this bolt's (config
+			// is per-bolt), surfaced behind the FleetAggregate note.
+			d := h.dataSource.ComplianceLandingData(ctx)
+			if cmp.Total > 0 {
+				d.HasStandards = true
+				d.StandardsPct = cmp.Pct()
+				d.SatisfiedControls = cmp.Satisfied
+				d.WaivedControls = cmp.Waived
+				d.PartialControls = cmp.Partial
+				d.NotSatisfiedControls = cmp.NotSatisfied
+				d.TotalControls = cmp.Total
+			}
+			d.FleetAggregate = true
+			return d
+		}
+	}
+	return h.dataSource.ComplianceLandingData(ctx)
+}
+
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
-	data := h.standardsData()
+	data := h.complianceScopedData(r.Context(), r)
+	data.PageData = PageData{Title: "Compliance", ActiveNav: "compliance"}
+	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
 }
@@ -4096,48 +4140,16 @@ func (h *Handler) PlatformCompliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "platform-compliance", data)
 }
 
-// ComplianceStatus renders the standards compliance gauge/breakdown fragment for HTMX polling.
+// ComplianceStatus renders the standards compliance gauge/breakdown fragment
+// for HTMX polling — same scope routing as the page so the poll keeps showing
+// the selected bolt's (or the Fleet aggregate's) coverage (ADR-037 slice 5).
 func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
-	data := h.standardsData()
+	data := h.complianceScopedData(r.Context(), r)
 	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
 }
 
 // standardsData builds a StandardsPageData from the executive report.
-func (h *Handler) standardsData() StandardsPageData {
-	data := StandardsPageData{
-		PageData: PageData{Title: "Compliance", ActiveNav: "compliance"},
-	}
-	s := h.computeStandardsSummary()
-	if s.Total > 0 {
-		data.HasStandards = true
-		data.StandardsPct = s.Pct
-		data.SatisfiedControls = s.Satisfied
-		data.WaivedControls = s.Waived
-		data.PartialControls = s.Partial
-		data.NotSatisfiedControls = s.NotSatisfied
-		data.TotalControls = s.Total
-	}
-
-	// Compute waiver alerts from the config-file waivers (waivers.vgo) —
-	// the single source the unified scorer uses, so the badge count
-	// matches the rows shown on /compliance/waivers.
-	soonThreshold := time.Now().AddDate(0, 0, 30)
-	if h.configStore != nil {
-		for _, controls := range h.configStore.AllWaivers() {
-			for _, w := range controls {
-				data.TotalActiveWaivers++
-				if w.Expires != "" {
-					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soonThreshold) {
-						data.ExpiringWaivers++
-					}
-				}
-			}
-		}
-	}
-
-	return data
-}
 
 // standardsSummary computes fleet-wide standards compliance stats.
 // Reused by the compliance page and dashboard.
