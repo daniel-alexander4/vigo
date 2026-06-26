@@ -706,6 +706,32 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	return spanner.ComplianceSummaryToProto(ds.ComplianceSummary(ctx).ToSpanner()), nil
 }
 
+// GetScopedPageData returns THIS bolt's data for one rich UI page,
+// JSON-encoded (ADR-037 slice 5). A leaf read — never fans out — so the
+// federated viewer can route a per-bolt page tab to the owning bolt and
+// render the result in its own chrome. The page struct is built via the
+// same fleet.DataSource the local UI uses, so a routed render is identical
+// to a local one. Generic: one switch keyed by page_id, not a typed RPC
+// per page.
+func (s *AdminService) GetScopedPageData(ctx context.Context, req *pb.GetScopedPageDataRequest) (*pb.GetScopedPageDataResponse, error) {
+	if s.fleetIndex == nil {
+		return &pb.GetScopedPageDataResponse{}, nil
+	}
+	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
+	var v any
+	switch req.PageId {
+	case "security":
+		v = ds.SecurityPageData(ctx, s.baseInterval, s.offlineThreshold)
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unknown scoped page %q", req.PageId)
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "marshal scoped page %q: %v", req.PageId, err)
+	}
+	return &pb.GetScopedPageDataResponse{Json: b}, nil
+}
+
 func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoyConvergenceRequest) (*pb.GetEnvoyConvergenceResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)

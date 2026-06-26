@@ -461,6 +461,9 @@ func (m *footprintMock) RiskSummary(b, o time.Duration) RiskSummary {
 func (m *footprintMock) ComplianceSummary(ctx context.Context) ComplianceSummary {
 	return m.base.ComplianceSummary(ctx)
 }
+func (m *footprintMock) SecurityPageData(ctx context.Context, b, o time.Duration) SecurityPageData {
+	return m.base.SecurityPageData(ctx, b, o)
+}
 func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 	return fleetpressure.FleetSummary{
 		MaxOpenFDs:         640,
@@ -1338,6 +1341,10 @@ func (m *mockDataSource) RiskSummary(_, _ time.Duration) RiskSummary {
 
 func (m *mockDataSource) ComplianceSummary(_ context.Context) ComplianceSummary {
 	return ComplianceSummary{}
+}
+
+func (m *mockDataSource) SecurityPageData(_ context.Context, _, _ time.Duration) SecurityPageData {
+	return SecurityPageData{}
 }
 
 func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {

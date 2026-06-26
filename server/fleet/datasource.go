@@ -1522,6 +1522,47 @@ func (ds *DataSource) SecuritySummary() ui.SecuritySummary {
 	}
 }
 
+// SecurityPageData builds the full /security page model (ADR-037 slice 5):
+// shared convergence status + the security-scan rollup (incl. per-host
+// tables) + cert-expiry + the 30-day CVE/hardening trends. It is the SoT
+// for both the local render and the route-to-owner GetScopedPageData RPC,
+// so a peer bolt's /security page renders identically in the viewer. The
+// PageData chrome and QueryTimeoutSec are viewer-set and intentionally left
+// zero here.
+func (ds *DataSource) SecurityPageData(ctx context.Context, baseInterval, offlineThreshold time.Duration) ui.SecurityPageData {
+	conv := ds.ConvergenceData(baseInterval, offlineThreshold)
+
+	var cveTrend, hardeningTrend []float64
+	if ds.queries != nil {
+		history, err := ds.queries.ListSecurityPostureHistory(ctx, 30)
+		if err == nil {
+			// Reverse for chronological order (query returns DESC).
+			for i := len(history) - 1; i >= 0; i-- {
+				cveTrend = append(cveTrend, float64(history[i].CveCritical+history[i].CveHigh))
+				hardeningTrend = append(hardeningTrend, float64(history[i].AvgHardening))
+			}
+		} else {
+			slog.Warn("security page: posture history query failed", "error", err)
+		}
+	}
+
+	return ui.SecurityPageData{
+		ConvergencePct: conv.ConvergencePct,
+		Total:          conv.Total,
+		Converged:      conv.Converged,
+		Degraded:       conv.Degraded,
+		Failed:         conv.Failed,
+		NoData:         conv.NoData,
+		Changed:        conv.Changed,
+		Diverged:       conv.Diverged,
+		Offline:        conv.Offline,
+		Security:       ds.SecurityScanData(),
+		Certs:          ds.CertExpirySummary(),
+		CVETrend:       cveTrend,
+		HardeningTrend: hardeningTrend,
+	}
+}
+
 // collectCVEEntries extracts structured CVE entries from the unified
 // security_scan.cves.N.{id,severity,packages} flattened traits.
 func collectCVEEntries(traitMap map[string]string) []ui.CVEEntry {

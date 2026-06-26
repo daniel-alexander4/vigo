@@ -749,6 +749,32 @@ func (a *SpannerAdmin) AggregateComplianceFanout(ctx context.Context) (Complianc
 	return MergeComplianceSummaries(parts), nil
 }
 
+// ScopedPageDataFromBolt fetches one peer bolt's JSON-encoded page data via
+// a single admin gRPC call — the route-to-owner path for a per-bolt page
+// tab (ADR-037 slice 5). boltPubkey comes straight from the active scope
+// tab's Key; the hostname is resolved from the authenticated roster. Leaf
+// call — the peer's GetScopedPageData never fans out, so there's no
+// recursion. Pull-on-view only.
+func (a *SpannerAdmin) ScopedPageDataFromBolt(ctx context.Context, boltPubkey, pageID string) ([]byte, error) {
+	host := hostnameOfPeer(ctx, a, boltPubkey)
+	if host == "" {
+		return nil, fmt.Errorf("no roster hostname for bolt %s", boltPubkey)
+	}
+	pc, err := a.dialBolt(host)
+	if err != nil {
+		return nil, fmt.Errorf("dialing bolt %s: %w", host, err)
+	}
+	defer pc.Close()
+
+	callCtx, cancel := context.WithTimeout(ctx, fanOutTimeout)
+	defer cancel()
+	resp, err := pc.Admin.GetScopedPageData(callCtx, &pb.GetScopedPageDataRequest{PageId: pageID})
+	if err != nil {
+		return nil, fmt.Errorf("GetScopedPageData(%s) on bolt %s: %w", pageID, host, err)
+	}
+	return resp.Json, nil
+}
+
 // RunsFromBolt pulls one bolt's runs for a specific envoy via a single
 // admin gRPC call — the owning-bolt routing path for ListRuns(envoy_id)
 // when the cached roster shows the envoy lives on a remote peer.

@@ -9,7 +9,7 @@
     {{/* ── Left panel: convergence + reports + security ── */}}
     <div class="security-panel"
          id="security-status"
-         hx-get="/ui/fragments/security-status"
+         hx-get="/ui/fragments/security-status{{if .Scope}}?scope={{.Scope}}{{end}}"
          hx-trigger="every {{.PollInterval}}"
          hx-swap="morph:innerHTML"
          hx-disinherit="*"

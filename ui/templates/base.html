@@ -61,6 +61,7 @@
                 <a href="/license" class="license-banner__link">{{T $.Locale "chrome.view_license"}}</a>
             </div>
             {{end}}
+            {{if .ScopeAware}}{{template "scope-tabs" .}}{{end}}
             {{block "page-content" .}}{{end}}
         </main>
     </div>

@@ -485,6 +485,7 @@ const (
 	VigoAdmin_GetSecuritySummary_FullMethodName    = "/vigo.v1.VigoAdmin/GetSecuritySummary"
 	VigoAdmin_GetRiskSummary_FullMethodName        = "/vigo.v1.VigoAdmin/GetRiskSummary"
 	VigoAdmin_GetComplianceSummary_FullMethodName  = "/vigo.v1.VigoAdmin/GetComplianceSummary"
+	VigoAdmin_GetScopedPageData_FullMethodName     = "/vigo.v1.VigoAdmin/GetScopedPageData"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
@@ -554,6 +555,14 @@ type VigoAdminClient interface {
 	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
 	// org-wide compliance report/PDF) is a separate, larger slice.
 	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
+	// GetScopedPageData returns THIS bolt's data for one rich UI page,
+	// JSON-encoded (the ui.<Page>Data struct, data fields only). It is a leaf
+	// read — never fans out — so the federated-UI viewer can route a per-bolt
+	// page tab to the owning bolt (ADR-037 slice 5, "detail pages route to
+	// owner") and render the returned data in its own chrome/locale. Generic
+	// by design: ONE RPC serves every scope-aware page, keyed by page_id,
+	// rather than a typed RPC per page. Pull-on-view only — never gossiped.
+	GetScopedPageData(ctx context.Context, in *GetScopedPageDataRequest, opts ...grpc.CallOption) (*GetScopedPageDataResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -766,6 +775,16 @@ func (c *vigoAdminClient) GetComplianceSummary(ctx context.Context, in *GetCompl
 	return out, nil
 }
 
+func (c *vigoAdminClient) GetScopedPageData(ctx context.Context, in *GetScopedPageDataRequest, opts ...grpc.CallOption) (*GetScopedPageDataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetScopedPageDataResponse)
+	err := c.cc.Invoke(ctx, VigoAdmin_GetScopedPageData_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vigoAdminClient) GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEnvoyConvergenceResponse)
@@ -869,6 +888,14 @@ type VigoAdminServer interface {
 	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
 	// org-wide compliance report/PDF) is a separate, larger slice.
 	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
+	// GetScopedPageData returns THIS bolt's data for one rich UI page,
+	// JSON-encoded (the ui.<Page>Data struct, data fields only). It is a leaf
+	// read — never fans out — so the federated-UI viewer can route a per-bolt
+	// page tab to the owning bolt (ADR-037 slice 5, "detail pages route to
+	// owner") and render the returned data in its own chrome/locale. Generic
+	// by design: ONE RPC serves every scope-aware page, keyed by page_id,
+	// rather than a typed RPC per page. Pull-on-view only — never gossiped.
+	GetScopedPageData(context.Context, *GetScopedPageDataRequest) (*GetScopedPageDataResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -947,6 +974,9 @@ func (UnimplementedVigoAdminServer) GetRiskSummary(context.Context, *GetRiskSumm
 }
 func (UnimplementedVigoAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
+}
+func (UnimplementedVigoAdminServer) GetScopedPageData(context.Context, *GetScopedPageDataRequest) (*GetScopedPageDataResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetScopedPageData not implemented")
 }
 func (UnimplementedVigoAdminServer) GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEnvoyConvergence not implemented")
@@ -1323,6 +1353,24 @@ func _VigoAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VigoAdmin_GetScopedPageData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetScopedPageDataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoAdminServer).GetScopedPageData(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoAdmin_GetScopedPageData_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoAdminServer).GetScopedPageData(ctx, req.(*GetScopedPageDataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VigoAdmin_GetEnvoyConvergence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEnvoyConvergenceRequest)
 	if err := dec(in); err != nil {
@@ -1477,6 +1525,10 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetComplianceSummary",
 			Handler:    _VigoAdmin_GetComplianceSummary_Handler,
+		},
+		{
+			MethodName: "GetScopedPageData",
+			Handler:    _VigoAdmin_GetScopedPageData_Handler,
 		},
 		{
 			MethodName: "GetEnvoyConvergence",

@@ -106,6 +106,12 @@ type DataSource interface {
 	// the latest compliance_history snapshot. SoT for both the local
 	// dashboard headline and the fan-out merged Fleet view (ADR-037 slice 4).
 	ComplianceSummary(ctx context.Context) ComplianceSummary
+	// SecurityPageData builds the full /security page model (convergence +
+	// security-scan rollup + cert-expiry + 30-day trends). SoT shared by the
+	// local render and the route-to-owner GetScopedPageData RPC, so a peer
+	// bolt's /security page renders identically in the viewer (ADR-037
+	// slice 5). Excludes the PageData chrome + QueryTimeoutSec (viewer-set).
+	SecurityPageData(ctx context.Context, baseInterval, offlineThreshold time.Duration) SecurityPageData
 	// FleetPressure rolls up per-envoy resource + repo-health telemetry
 	// into the dashboard "Agent Health" card via the fleetpressure SoT
 	// package.
@@ -981,6 +987,11 @@ type PageData struct {
 	Scope      string
 	ScopedAway bool
 	ScopeTabs  []ScopeTab
+	// ScopeAware gates the global tab strip (base.html): a page sets it true
+	// once it actually honors ?scope= (renders the selected bolt). Pages
+	// that don't yet scope leave it false so the strip stays hidden there —
+	// no inert tabs during the ADR-037 slice-5 rollout.
+	ScopeAware bool
 }
 
 // ScopeTab is one entry in the ADR-037 "Fleet | bolt-1 … bolt-N" tab
@@ -1005,6 +1016,15 @@ const scopeFleet = "fleet"
 // chrome over the same view, so adding a second bolt doesn't restructure
 // the page (ADR-037).
 const scopeLocal = "local"
+
+// Page IDs for the generic route-to-owner scoped-page mechanism (ADR-037
+// slice 5). When a page tab names a peer bolt, the viewer asks that bolt
+// for its own ui.<Page>Data via GetScopedPageData(pageID) and renders it in
+// the viewer's chrome. One generic RPC keyed by these, not a typed RPC per
+// page.
+const (
+	pageSecurity = "security"
+)
 
 // LicensePageData holds data for the license status page.
 type LicensePageData struct {
@@ -2683,6 +2703,30 @@ func (h *Handler) scopedAway(ctx context.Context, scope string) bool {
 	return len(roster) > 1
 }
 
+// routeScopedPage fetches the owning bolt's data for one page when scope
+// names a PEER bolt (ADR-037 slice 5, "detail pages route to owner"),
+// JSON-decoding it into out. Returns true iff it routed (out is filled).
+// It returns false — caller renders locally — for standalone, this bolt's
+// own tab, the standalone local tab, and the fleet scope (which renders its
+// own aggregate). Falls back to local (false) on any fetch/decode error so
+// a degraded or unreachable peer never blanks the page.
+func (h *Handler) routeScopedPage(ctx context.Context, scope, pageID string, out any) bool {
+	if h.spannerAdmin == nil || scope == "" || scope == scopeFleet ||
+		scope == scopeLocal || scope == h.spannerAdmin.LocalPubkey() {
+		return false
+	}
+	raw, err := h.spannerAdmin.ScopedPageDataFromBolt(ctx, scope, pageID)
+	if err != nil {
+		slog.Warn("scoped page fetch failed; rendering local", "page", pageID, "scope", scope, "error", err)
+		return false
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		slog.Warn("scoped page decode failed; rendering local", "page", pageID, "error", err)
+		return false
+	}
+	return true
+}
+
 // scopedConvergence returns the convergence counters for a scoped-away
 // view: the fleet-wide aggregate for scopeFleet, or one peer bolt's
 // gossiped counters. The local bolt is never routed here (scopedAway is
@@ -2943,6 +2987,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	msRunningCVEs := doneRunningCVEs()
 
 	doneRender := step()
+	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 	msRender := doneRender()
@@ -3024,6 +3069,7 @@ func (h *Handler) dashboardScoped(w http.ResponseWriter, r *http.Request, scope 
 		data.TotalControls = cmp.Total
 	}
 
+	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 }
@@ -7125,120 +7171,70 @@ type SecurityHostRow struct {
 
 // SecurityPage renders the fleet security dashboard — convergence,
 // CVE counts, hardening scores, and the AI chat drawer overlay.
+// SecurityPageData is the full /security page model: shared convergence
+// status, the security-scan rollup (incl. per-host tables), cert-expiry,
+// and the 30-day trends. The data fields are produced by
+// DataSource.SecurityPageData so a peer bolt can build its own and the
+// federated viewer can render it for a per-bolt scope (ADR-037 slice 5,
+// "detail pages route to owner"); the viewer supplies the PageData chrome
+// and QueryTimeoutSec locally after the fetch. Plain exported fields →
+// JSON-round-trippable across the wire.
+type SecurityPageData struct {
+	PageData
+	ConvergencePct  float64
+	Total           int64
+	Converged       int64
+	Degraded        int64
+	Failed          int64
+	NoData          int64
+	Changed         int64
+	Diverged        int64
+	Offline         int64
+	Security        SecurityScanPageData
+	Certs           CertExpirySummary
+	QueryTimeoutSec int
+	CVETrend        []float64
+	HardeningTrend  []float64
+}
+
+// securityQueryTimeoutSec is the live-drill-down dispatch budget, derived
+// from this (viewing) bolt's check-in interval — applied locally on both
+// the local and route-to-owner paths.
+func (h *Handler) securityQueryTimeoutSec() int {
+	s := int(h.baseInterval.Seconds()*2.5 + 10)
+	if s < 30 {
+		s = 30
+	}
+	return s
+}
+
 func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	scope := h.resolveScope(r)
 
-	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
-
-	secData := h.dataSource.SecurityScanData()
-	certData := h.dataSource.CertExpirySummary()
-
-	// Query timeout = 2.5× check-in interval (agent needs to poll, promote, respond).
-	queryTimeoutSec := int(h.baseInterval.Seconds()*2.5 + 10)
-	if queryTimeoutSec < 30 {
-		queryTimeoutSec = 30
+	var data SecurityPageData
+	if !h.routeScopedPage(ctx, scope, pageSecurity, &data) {
+		data = h.dataSource.SecurityPageData(ctx, h.baseInterval, h.offlineThreshold)
 	}
-
-	// Load 30-day security posture trend.
-	var cveTrend, hardeningTrend []float64
-	if h.queries != nil {
-		history, err := h.queries.ListSecurityPostureHistory(ctx, 30)
-		if err == nil {
-			// Reverse for chronological order (query returns DESC).
-			for i := len(history) - 1; i >= 0; i-- {
-				cveTrend = append(cveTrend, float64(history[i].CveCritical+history[i].CveHigh))
-				hardeningTrend = append(hardeningTrend, float64(history[i].AvgHardening))
-			}
-		}
-	}
-
-	data := struct {
-		PageData
-		ConvergencePct  float64
-		Total           int64
-		Converged       int64
-		Degraded        int64
-		Failed          int64
-		NoData          int64
-		Changed         int64
-		Diverged        int64
-		Offline         int64
-		Security        SecurityScanPageData
-		Certs           CertExpirySummary
-		QueryTimeoutSec int
-		CVETrend        []float64
-		HardeningTrend  []float64
-	}{
-		PageData:        PageData{Title: "Security", ActiveNav: "security"},
-		ConvergencePct:  convData.ConvergencePct,
-		Total:           convData.Total,
-		Converged:       convData.Converged,
-		Degraded:        convData.Degraded,
-		Failed:          convData.Failed,
-		NoData:          convData.NoData,
-		Changed:         convData.Changed,
-		Diverged:        convData.Diverged,
-		Offline:         convData.Offline,
-		Security:        secData,
-		Certs:           certData,
-		QueryTimeoutSec: queryTimeoutSec,
-		CVETrend:        cveTrend,
-		HardeningTrend:  hardeningTrend,
-	}
+	data.PageData = PageData{Title: "Security", ActiveNav: "security"}
+	data.QueryTimeoutSec = h.securityQueryTimeoutSec()
+	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "security", data)
 }
 
 // SecurityStatus renders the convergence+security left-panel fragment for HTMX polling.
 func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
-	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
+	ctx := r.Context()
+	scope := h.resolveScope(r)
 
-	secData := h.dataSource.SecurityScanData()
-	certData := h.dataSource.CertExpirySummary()
-
-	// Load 30-day security posture trend (same as SecurityPage).
-	var cveTrend, hardeningTrend []float64
-	if h.queries != nil {
-		history, err := h.queries.ListSecurityPostureHistory(r.Context(), 30)
-		if err == nil {
-			for i := len(history) - 1; i >= 0; i-- {
-				cveTrend = append(cveTrend, float64(history[i].CveCritical+history[i].CveHigh))
-				hardeningTrend = append(hardeningTrend, float64(history[i].AvgHardening))
-			}
-		}
+	// Same data + scope routing as SecurityPage, so the HTMX poll keeps
+	// showing the selected bolt's status (ADR-037 slice 5).
+	var data SecurityPageData
+	if !h.routeScopedPage(ctx, scope, pageSecurity, &data) {
+		data = h.dataSource.SecurityPageData(ctx, h.baseInterval, h.offlineThreshold)
 	}
-
-	data := struct {
-		Locale         string
-		ConvergencePct float64
-		Total          int64
-		Converged      int64
-		Degraded       int64
-		Failed         int64
-		NoData         int64
-		Changed        int64
-		Diverged       int64
-		Offline        int64
-		Security       SecurityScanPageData
-		Certs          CertExpirySummary
-		CVETrend       []float64
-		HardeningTrend []float64
-	}{
-		Locale:         h.localeFromRequest(r),
-		ConvergencePct: convData.ConvergencePct,
-		Total:          convData.Total,
-		Converged:      convData.Converged,
-		Degraded:       convData.Degraded,
-		Failed:         convData.Failed,
-		NoData:         convData.NoData,
-		Changed:        convData.Changed,
-		Diverged:       convData.Diverged,
-		Offline:        convData.Offline,
-		Security:       secData,
-		Certs:          certData,
-		CVETrend:       cveTrend,
-		HardeningTrend: hardeningTrend,
-	}
+	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "security", "security-status", data)
 }
 
