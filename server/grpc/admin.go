@@ -706,6 +706,16 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	return spanner.ComplianceSummaryToProto(ds.ComplianceSummary(ctx).ToSpanner()), nil
 }
 
+// GetHealthSummary returns THIS bolt's agent-health (fleetpressure) rollup
+// (ADR-037 slice 5) — a leaf read that never fans out.
+func (s *AdminService) GetHealthSummary(_ context.Context, _ *pb.GetHealthSummaryRequest) (*pb.GetHealthSummaryResponse, error) {
+	if s.fleetIndex == nil {
+		return &pb.GetHealthSummaryResponse{}, nil
+	}
+	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
+	return spanner.HealthSummaryToProto(ds.FleetPressure()), nil
+}
+
 // GetScopedPageData returns THIS bolt's data for one rich UI page,
 // JSON-encoded (ADR-037 slice 5). A leaf read — never fans out — so the
 // federated viewer can route a per-bolt page tab to the owning bolt and
@@ -724,6 +734,8 @@ func (s *AdminService) GetScopedPageData(ctx context.Context, req *pb.GetScopedP
 		v = ds.SecurityPageData(ctx, s.baseInterval, s.offlineThreshold)
 	case "risk":
 		v = ds.RiskPostureData(s.baseInterval, s.offlineThreshold)
+	case "agent-health":
+		v = ds.AgentHealthData()
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown scoped page %q", req.PageId)
 	}

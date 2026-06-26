@@ -16,6 +16,7 @@ import (
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleetpressure"
 )
 
 // Spanner Slice 2-ii-a — peer-equal fleet-observability admin reads
@@ -910,6 +911,89 @@ func (a *SpannerAdmin) ScopedPageDataFromBolt(ctx context.Context, boltPubkey, p
 		return nil, fmt.Errorf("GetScopedPageData(%s) on bolt %s: %w", pageID, host, err)
 	}
 	return resp.Json, nil
+}
+
+// --- agent-health summary (ADR-037 slice 5, fan-out-only) ---
+
+// MergeHealthSummaries folds per-bolt fleetpressure rollups into one fleet
+// rollup: counts sum, the worst severity and the highest open-FD host win
+// (reductions), and example hostnames take the first non-empty.
+func MergeHealthSummaries(parts []fleetpressure.FleetSummary) fleetpressure.FleetSummary {
+	var out fleetpressure.FleetSummary
+	for _, p := range parts {
+		if p.WorstSeverity > out.WorstSeverity {
+			out.WorstSeverity = p.WorstSeverity
+		}
+		out.DegradedCount += p.DegradedCount
+		if p.MaxOpenFDs > out.MaxOpenFDs {
+			out.MaxOpenFDs = p.MaxOpenFDs
+			out.MaxOpenFDsHost = p.MaxOpenFDsHost
+			out.MaxOpenFDsID = p.MaxOpenFDsID
+			out.MaxOpenFDsSeverity = p.MaxOpenFDsSeverity
+		}
+		out.HighFDPctCount += p.HighFDPctCount
+		if out.HighFDPctExample == "" {
+			out.HighFDPctExample = p.HighFDPctExample
+		}
+		out.RecentOomCount += p.RecentOomCount
+		if out.RecentOomExample == "" {
+			out.RecentOomExample = p.RecentOomExample
+		}
+		out.TotalReporting += p.TotalReporting
+	}
+	return out
+}
+
+func HealthSummaryToProto(s fleetpressure.FleetSummary) *pb.GetHealthSummaryResponse {
+	return &pb.GetHealthSummaryResponse{
+		WorstSeverity:      int32(s.WorstSeverity),
+		DegradedCount:      int32(s.DegradedCount),
+		MaxOpenFds:         s.MaxOpenFDs,
+		MaxOpenFdsHost:     s.MaxOpenFDsHost,
+		MaxOpenFdsId:       s.MaxOpenFDsID,
+		MaxOpenFdsSeverity: int32(s.MaxOpenFDsSeverity),
+		HighFdPctCount:     int32(s.HighFDPctCount),
+		HighFdPctExample:   s.HighFDPctExample,
+		RecentOomCount:     int32(s.RecentOomCount),
+		RecentOomExample:   s.RecentOomExample,
+		TotalReporting:     int32(s.TotalReporting),
+	}
+}
+
+func HealthSummaryFromProto(resp *pb.GetHealthSummaryResponse) fleetpressure.FleetSummary {
+	return fleetpressure.FleetSummary{
+		WorstSeverity:      fleetpressure.Severity(resp.WorstSeverity),
+		DegradedCount:      int(resp.DegradedCount),
+		MaxOpenFDs:         resp.MaxOpenFds,
+		MaxOpenFDsHost:     resp.MaxOpenFdsHost,
+		MaxOpenFDsID:       resp.MaxOpenFdsId,
+		MaxOpenFDsSeverity: fleetpressure.Severity(resp.MaxOpenFdsSeverity),
+		HighFDPctCount:     int(resp.HighFdPctCount),
+		HighFDPctExample:   resp.HighFdPctExample,
+		RecentOomCount:     int(resp.RecentOomCount),
+		RecentOomExample:   resp.RecentOomExample,
+		TotalReporting:     int(resp.TotalReporting),
+	}
+}
+
+// AggregateHealthFanout fans out GetHealthSummary to every roster bolt and
+// merges. Returns the merged PEER rollup; the caller folds in local.
+func (a *SpannerAdmin) AggregateHealthFanout(ctx context.Context) (fleetpressure.FleetSummary, error) {
+	results, err := a.fanOut(ctx, func(ctx context.Context, pc *PeerConn) (any, error) {
+		return pc.Admin.GetHealthSummary(ctx, &pb.GetHealthSummaryRequest{})
+	})
+	if err != nil {
+		return fleetpressure.FleetSummary{}, err
+	}
+	parts := make([]fleetpressure.FleetSummary, 0, len(results))
+	for _, r := range results {
+		if r.err != nil {
+			slog.Warn("spanner fanout: peer GetHealthSummary failed", "peer", r.pubkey, "error", r.err)
+			continue
+		}
+		parts = append(parts, HealthSummaryFromProto(r.value.(*pb.GetHealthSummaryResponse)))
+	}
+	return MergeHealthSummaries(parts), nil
 }
 
 // RunsFromBolt pulls one bolt's runs for a specific envoy via a single

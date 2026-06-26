@@ -479,6 +479,9 @@ func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 func (m *footprintMock) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
 	return m.FleetPressure(), nil
 }
+func (m *footprintMock) AgentHealthData() AgentHealthPageData {
+	return AgentHealthPageData{Summary: m.FleetPressure()}
+}
 func (m *footprintMock) EnvoyFreshness(id string) (time.Time, time.Duration, bool) {
 	return m.base.EnvoyFreshness(id)
 }
@@ -1353,6 +1356,10 @@ func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {
 
 func (m *mockDataSource) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
 	return fleetpressure.FleetSummary{}, nil
+}
+
+func (m *mockDataSource) AgentHealthData() AgentHealthPageData {
+	return AgentHealthPageData{}
 }
 
 func (m *mockDataSource) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {

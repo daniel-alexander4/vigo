@@ -119,6 +119,9 @@ type DataSource interface {
 	// FleetPressureDetail returns the same rollup plus every per-envoy
 	// projection in one walk — feeds the `/agent-health` fleet table.
 	FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure)
+	// AgentHealthData is the full /agent-health page model (rollup + rows),
+	// shared by the local render and the route-to-owner RPC (ADR-037 slice 5).
+	AgentHealthData() AgentHealthPageData
 	// EnvoyPressure returns the per-envoy projection used by the
 	// envoy-detail "Agent Health" tab. Bool is false when the envoy
 	// is unknown to the fleet index.
@@ -1069,8 +1072,9 @@ const scopeLocal = "local"
 // the viewer's chrome. One generic RPC keyed by these, not a typed RPC per
 // page.
 const (
-	pageSecurity = "security"
-	pageRisk     = "risk"
+	pageSecurity    = "security"
+	pageRisk        = "risk"
+	pageAgentHealth = "agent-health"
 )
 
 // LicensePageData holds data for the license status page.

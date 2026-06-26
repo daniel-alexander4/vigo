@@ -11,6 +11,7 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/testutil"
 	"google.golang.org/grpc"
 )
@@ -355,6 +356,42 @@ func TestSecuritySummaryProtoRoundTrip(t *testing.T) {
 		out.AideClean != 80 || out.AideChanged != 3 || out.ScapScanned != 50 ||
 		out.ScapClean != 47 || out.ScapHighFail != 3 || out.ScannedHosts != 95 || out.TotalHosts != 100 {
 		t.Errorf("scanner-rollup round-trip mismatch: %+v", out)
+	}
+}
+
+func TestMergeHealthSummaries(t *testing.T) {
+	a := fleetpressure.FleetSummary{
+		WorstSeverity: fleetpressure.Warn, DegradedCount: 3, MaxOpenFDs: 500, MaxOpenFDsHost: "a-host",
+		HighFDPctCount: 1, HighFDPctExample: "a-fd", RecentOomCount: 0, TotalReporting: 100,
+	}
+	b := fleetpressure.FleetSummary{
+		WorstSeverity: fleetpressure.Fail, DegradedCount: 2, MaxOpenFDs: 900, MaxOpenFDsHost: "b-host",
+		HighFDPctCount: 2, RecentOomCount: 1, RecentOomExample: "b-oom", TotalReporting: 10,
+	}
+	got := MergeHealthSummaries([]fleetpressure.FleetSummary{a, b})
+	if got.WorstSeverity != fleetpressure.Fail {
+		t.Errorf("worst severity should win: got %v, want Fail", got.WorstSeverity)
+	}
+	if got.MaxOpenFDs != 900 || got.MaxOpenFDsHost != "b-host" {
+		t.Errorf("max open-FDs host should win: got %d/%q, want 900/b-host", got.MaxOpenFDs, got.MaxOpenFDsHost)
+	}
+	if got.DegradedCount != 5 || got.HighFDPctCount != 3 || got.RecentOomCount != 1 || got.TotalReporting != 110 {
+		t.Errorf("additive counts wrong: %+v", got)
+	}
+	if got.HighFDPctExample != "a-fd" || got.RecentOomExample != "b-oom" {
+		t.Errorf("examples should take first non-empty: %+v", got)
+	}
+}
+
+func TestHealthSummaryProtoRoundTrip(t *testing.T) {
+	in := fleetpressure.FleetSummary{
+		WorstSeverity: fleetpressure.Fail, DegradedCount: 7, MaxOpenFDs: 1234, MaxOpenFDsHost: "h", MaxOpenFDsID: "id",
+		MaxOpenFDsSeverity: fleetpressure.Warn, HighFDPctCount: 4, HighFDPctExample: "x", RecentOomCount: 2,
+		RecentOomExample: "o", TotalReporting: 50,
+	}
+	out := HealthSummaryFromProto(HealthSummaryToProto(in))
+	if out != in {
+		t.Errorf("round-trip mismatch: got %+v, want %+v", out, in)
 	}
 }
 

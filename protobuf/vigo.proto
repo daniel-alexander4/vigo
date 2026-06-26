@@ -223,6 +223,12 @@ service VigoAdmin {
     };
   }
 
+  // GetHealthSummary returns this bolt's agent-health (fleetpressure)
+  // rollup for the federated /agent-health Fleet view (ADR-037 slice 5).
+  // Leaf read — never fans out. Counts are additive across bolts; the worst
+  // severity and the max-open-FDs host are reductions (worst/max wins).
+  rpc GetHealthSummary(GetHealthSummaryRequest) returns (GetHealthSummaryResponse);
+
   // GetScopedPageData returns THIS bolt's data for one rich UI page,
   // JSON-encoded (the ui.<Page>Data struct, data fields only). It is a leaf
   // read — never fans out — so the federated-UI viewer can route a per-bolt
@@ -994,6 +1000,22 @@ message GetComplianceSummaryResponse {
   // Pct = pct_sum / pct_count.
   double pct_sum = 6;
   int32 pct_count = 7;
+}
+
+message GetHealthSummaryRequest {}
+
+message GetHealthSummaryResponse {
+  int32 worst_severity = 1; // fleetpressure.Severity (0=Unknown 1=OK 2=Warn 3=Fail)
+  int32 degraded_count = 2;
+  uint64 max_open_fds = 3;
+  string max_open_fds_host = 4;
+  string max_open_fds_id = 5;
+  int32 max_open_fds_severity = 6;
+  int32 high_fd_pct_count = 7;
+  string high_fd_pct_example = 8;
+  int32 recent_oom_count = 9;
+  string recent_oom_example = 10;
+  int32 total_reporting = 11;
 }
 
 message GetScopedPageDataRequest {

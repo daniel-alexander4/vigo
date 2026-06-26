@@ -1532,5 +1532,6 @@
   "workflows.workflow": "Workflow",
   "workflows.workflow_runs": "execuções de workflow",
   "security.fleet_aggregate_note": "A mostrar o agregado de toda a frota em todos os bolts. O detalhe por host, as análises de certificados, a pesquisa de CVE e as tendências são por bolt — selecione um separador de bolt acima para os ver.",
-  "risk.fleet_aggregate_note": "A mostrar os envoys de maior risco de toda a frota, combinados de todos os bolts. Selecione um separador de bolt acima para ver a classificação completa por envoy e a tendência de 30 dias desse bolt."
+  "risk.fleet_aggregate_note": "A mostrar os envoys de maior risco de toda a frota, combinados de todos os bolts. Selecione um separador de bolt acima para ver a classificação completa por envoy e a tendência de 30 dias desse bolt.",
+  "agent_health.fleet_aggregate_note": "A mostrar o resumo de estado de toda a frota, combinado de todos os bolts. A tabela por envoy é por bolt — selecione um separador de bolt acima para ver o detalhe de estado dos seus envoys."
 }

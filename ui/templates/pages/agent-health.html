@@ -31,6 +31,10 @@
     {{end}}
 </div>
 
+{{if .FleetAggregate}}
+<p class="scope-notice">{{T $.Locale "agent_health.fleet_aggregate_note"}}</p>
+{{end}}
+
 {{if .Envoys}}
 <div class="table-container">
     <table class="table">

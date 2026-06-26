@@ -485,6 +485,7 @@ const (
 	VigoAdmin_GetSecuritySummary_FullMethodName    = "/vigo.v1.VigoAdmin/GetSecuritySummary"
 	VigoAdmin_GetRiskSummary_FullMethodName        = "/vigo.v1.VigoAdmin/GetRiskSummary"
 	VigoAdmin_GetComplianceSummary_FullMethodName  = "/vigo.v1.VigoAdmin/GetComplianceSummary"
+	VigoAdmin_GetHealthSummary_FullMethodName      = "/vigo.v1.VigoAdmin/GetHealthSummary"
 	VigoAdmin_GetScopedPageData_FullMethodName     = "/vigo.v1.VigoAdmin/GetScopedPageData"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
@@ -555,6 +556,11 @@ type VigoAdminClient interface {
 	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
 	// org-wide compliance report/PDF) is a separate, larger slice.
 	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
+	// GetHealthSummary returns this bolt's agent-health (fleetpressure)
+	// rollup for the federated /agent-health Fleet view (ADR-037 slice 5).
+	// Leaf read — never fans out. Counts are additive across bolts; the worst
+	// severity and the max-open-FDs host are reductions (worst/max wins).
+	GetHealthSummary(ctx context.Context, in *GetHealthSummaryRequest, opts ...grpc.CallOption) (*GetHealthSummaryResponse, error)
 	// GetScopedPageData returns THIS bolt's data for one rich UI page,
 	// JSON-encoded (the ui.<Page>Data struct, data fields only). It is a leaf
 	// read — never fans out — so the federated-UI viewer can route a per-bolt
@@ -775,6 +781,16 @@ func (c *vigoAdminClient) GetComplianceSummary(ctx context.Context, in *GetCompl
 	return out, nil
 }
 
+func (c *vigoAdminClient) GetHealthSummary(ctx context.Context, in *GetHealthSummaryRequest, opts ...grpc.CallOption) (*GetHealthSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHealthSummaryResponse)
+	err := c.cc.Invoke(ctx, VigoAdmin_GetHealthSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vigoAdminClient) GetScopedPageData(ctx context.Context, in *GetScopedPageDataRequest, opts ...grpc.CallOption) (*GetScopedPageDataResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetScopedPageDataResponse)
@@ -888,6 +904,11 @@ type VigoAdminServer interface {
 	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
 	// org-wide compliance report/PDF) is a separate, larger slice.
 	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
+	// GetHealthSummary returns this bolt's agent-health (fleetpressure)
+	// rollup for the federated /agent-health Fleet view (ADR-037 slice 5).
+	// Leaf read — never fans out. Counts are additive across bolts; the worst
+	// severity and the max-open-FDs host are reductions (worst/max wins).
+	GetHealthSummary(context.Context, *GetHealthSummaryRequest) (*GetHealthSummaryResponse, error)
 	// GetScopedPageData returns THIS bolt's data for one rich UI page,
 	// JSON-encoded (the ui.<Page>Data struct, data fields only). It is a leaf
 	// read — never fans out — so the federated-UI viewer can route a per-bolt
@@ -974,6 +995,9 @@ func (UnimplementedVigoAdminServer) GetRiskSummary(context.Context, *GetRiskSumm
 }
 func (UnimplementedVigoAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
+}
+func (UnimplementedVigoAdminServer) GetHealthSummary(context.Context, *GetHealthSummaryRequest) (*GetHealthSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetHealthSummary not implemented")
 }
 func (UnimplementedVigoAdminServer) GetScopedPageData(context.Context, *GetScopedPageDataRequest) (*GetScopedPageDataResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetScopedPageData not implemented")
@@ -1353,6 +1377,24 @@ func _VigoAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VigoAdmin_GetHealthSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHealthSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoAdminServer).GetHealthSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoAdmin_GetHealthSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoAdminServer).GetHealthSummary(ctx, req.(*GetHealthSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VigoAdmin_GetScopedPageData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetScopedPageDataRequest)
 	if err := dec(in); err != nil {
@@ -1525,6 +1567,10 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetComplianceSummary",
 			Handler:    _VigoAdmin_GetComplianceSummary_Handler,
+		},
+		{
+			MethodName: "GetHealthSummary",
+			Handler:    _VigoAdmin_GetHealthSummary_Handler,
 		},
 		{
 			MethodName: "GetScopedPageData",

@@ -1949,6 +1949,15 @@ func (ds *DataSource) FleetPressureDetail() (fleetpressure.FleetSummary, []fleet
 	return fleetpressure.Aggregate(ds.healthSources())
 }
 
+// AgentHealthData is the full /agent-health page model (rollup + per-envoy
+// rows, unsorted — the handler sorts worst-first). SoT shared by the local
+// render and the route-to-owner GetScopedPageData RPC, so a peer bolt's
+// agent-health page renders identically in the viewer (ADR-037 slice 5).
+func (ds *DataSource) AgentHealthData() ui.AgentHealthPageData {
+	summary, envoys := ds.FleetPressureDetail()
+	return ui.AgentHealthPageData{Summary: summary, Envoys: envoys}
+}
+
 // healthSources collects every non-revoked envoy as an EnvoySource for
 // the fleetpressure package to digest. Single iteration helper so the
 // rollup and the per-envoy detail can share the walk.
