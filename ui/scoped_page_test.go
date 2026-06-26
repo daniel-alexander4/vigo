@@ -78,7 +78,7 @@ func TestRouteScopedPageStandaloneNeverRoutes(t *testing.T) {
 	h := &Handler{} // spannerAdmin nil → standalone
 	for _, scope := range []string{"", scopeFleet, scopeLocal, "somepeerpubkey"} {
 		var data SecurityPageData
-		if h.routeScopedPage(context.Background(), scope, pageSecurity, &data) {
+		if h.routeScopedPage(context.Background(), scope, pageSecurity, "", &data) {
 			t.Errorf("standalone routeScopedPage(%q) routed; want local render (false)", scope)
 		}
 	}

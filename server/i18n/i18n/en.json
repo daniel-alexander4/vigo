@@ -1534,5 +1534,6 @@
   "security.fleet_aggregate_note": "Showing fleet-wide aggregate across all bolts. Per-host detail, certificate drill-downs, CVE search, and trends are per-bolt — select a bolt tab above for those.",
   "risk.fleet_aggregate_note": "Showing the fleet-wide top riskiest envoys merged across all bolts. Select a bolt tab above for that bolt's full per-envoy ranking and 30-day trend.",
   "agent_health.fleet_aggregate_note": "Showing the fleet-wide health rollup merged across all bolts. The per-envoy table is per-bolt — select a bolt tab above to see its envoys' health detail.",
-  "compliance.fleet_aggregate_note": "Showing fleet-wide control coverage merged across all bolts. Waiver alerts and the detailed framework reports are per-bolt — select a bolt tab above for those."
+  "compliance.fleet_aggregate_note": "Showing fleet-wide control coverage merged across all bolts. Waiver alerts and the detailed framework reports are per-bolt — select a bolt tab above for those.",
+  "runs.fleet_aggregate_note": "Run history is per-bolt. Select a bolt tab above to view its runs."
 }

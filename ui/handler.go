@@ -1080,6 +1080,7 @@ const (
 	pageRisk        = "risk"
 	pageAgentHealth = "agent-health"
 	pageCompliance  = "compliance"
+	pageRuns        = "runs"
 )
 
 // LicensePageData holds data for the license status page.
@@ -1828,6 +1829,10 @@ type RunsPageData struct {
 	SortColumn   string
 	SortDir      string
 	RunCount     int
+	// FleetAggregate marks the multi-bolt Fleet view: runs are per-bolt, so
+	// the Fleet tab shows a drill-to-bolt note instead of concatenating
+	// every bolt's run log (ADR-037 slice 5, approach A).
+	FleetAggregate bool
 }
 
 // RunDetailPageData holds data for the run detail page.
@@ -2775,12 +2780,12 @@ func (h *Handler) scopedAway(ctx context.Context, scope string) bool {
 // own tab, the standalone local tab, and the fleet scope (which renders its
 // own aggregate). Falls back to local (false) on any fetch/decode error so
 // a degraded or unreachable peer never blanks the page.
-func (h *Handler) routeScopedPage(ctx context.Context, scope, pageID string, out any) bool {
+func (h *Handler) routeScopedPage(ctx context.Context, scope, pageID, query string, out any) bool {
 	if h.spannerAdmin == nil || scope == "" || scope == scopeFleet ||
 		scope == scopeLocal || scope == h.spannerAdmin.LocalPubkey() {
 		return false
 	}
-	raw, err := h.spannerAdmin.ScopedPageDataFromBolt(ctx, scope, pageID)
+	raw, err := h.spannerAdmin.ScopedPageDataFromBolt(ctx, scope, pageID, query)
 	if err != nil {
 		slog.Warn("scoped page fetch failed; rendering local", "page", pageID, "scope", scope, "error", err)
 		return false
@@ -4011,7 +4016,7 @@ func (h *Handler) complianceScopedData(ctx context.Context, r *http.Request) Sta
 	scope := h.resolveScope(r)
 	var data StandardsPageData
 	switch {
-	case h.routeScopedPage(ctx, scope, pageCompliance, &data):
+	case h.routeScopedPage(ctx, scope, pageCompliance, "", &data):
 		return data
 	case scope == scopeFleet && h.scopedAway(ctx, scope):
 		if cmp, ok := h.scopedCompliance(ctx, scope); ok {
@@ -4380,7 +4385,7 @@ func (h *Handler) riskScopedData(ctx context.Context, r *http.Request) RiskPostu
 	scope := h.resolveScope(r)
 	var data RiskPosturePageData
 	switch {
-	case h.routeScopedPage(ctx, scope, pageRisk, &data):
+	case h.routeScopedPage(ctx, scope, pageRisk, "", &data):
 		return data
 	case scope == scopeFleet && h.scopedAway(ctx, scope):
 		if fd, ok := h.riskFleetPageData(ctx); ok {
@@ -5901,6 +5906,23 @@ func standardDisplayNameFromSlug(slug string) string {
 }
 
 // Runs renders the runs list page with optional status filter.
+// runsScopedData resolves the /runs page data for the active scope (ADR-037
+// slice 5, approach A): a peer bolt routes to its owner (that bolt's runs,
+// status-filtered on the owner), the multi-bolt Fleet scope shows a
+// drill-to-bolt note (runs are per-bolt — no cross-bolt concat), everything
+// else renders the full local list.
+func (h *Handler) runsScopedData(ctx context.Context, r *http.Request) RunsPageData {
+	scope := h.resolveScope(r)
+	var data RunsPageData
+	switch {
+	case h.routeScopedPage(ctx, scope, pageRuns, r.URL.RawQuery, &data):
+		return data
+	case scope == scopeFleet && h.scopedAway(ctx, scope):
+		return RunsPageData{FleetAggregate: true}
+	}
+	return h.dataSource.RunsData(r.URL.Query().Get("status"))
+}
+
 func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	sortCol := r.URL.Query().Get("sort")
@@ -5909,10 +5931,13 @@ func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 		sortDir = "desc" // runs default newest-first
 	}
 
-	data := h.dataSource.RunsData(statusFilter)
+	data := h.runsScopedData(r.Context(), r)
 	sortRunRows(data.Runs, sortCol, sortDir)
+	data.StatusFilter = statusFilter
 	data.SortColumn = sortCol
 	data.SortDir = sortDir
+	data.PageData = PageData{Title: "Runs", ActiveNav: "runs"}
+	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "runs", data)
 }
@@ -7411,7 +7436,7 @@ func (h *Handler) securityScopedData(ctx context.Context, r *http.Request) Secur
 	scope := h.resolveScope(r)
 	var data SecurityPageData
 	switch {
-	case h.routeScopedPage(ctx, scope, pageSecurity, &data):
+	case h.routeScopedPage(ctx, scope, pageSecurity, "", &data):
 		return data
 	case scope == scopeFleet && h.scopedAway(ctx, scope):
 		if fd, ok := h.securityFleetPageData(ctx); ok {

@@ -1020,6 +1020,10 @@ message GetHealthSummaryResponse {
 
 message GetScopedPageDataRequest {
   string page_id = 1; // "security", "risk", "agent-health", "compliance", "envoys", "runs"
+  // query is the page's raw URL query (filters/sort/offset) for list pages
+  // that apply it on the owning bolt (envoys/runs); empty for pages that
+  // ignore it (ADR-037 slice 5).
+  string query = 2;
 }
 
 message GetScopedPageDataResponse {

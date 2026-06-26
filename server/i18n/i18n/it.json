@@ -1534,5 +1534,6 @@
   "security.fleet_aggregate_note": "Visualizzazione dell'aggregato dell'intera flotta su tutti i bolt. Il dettaglio per host, gli approfondimenti sui certificati, la ricerca CVE e gli andamenti sono per bolt — seleziona una scheda bolt sopra per visualizzarli.",
   "risk.fleet_aggregate_note": "Visualizzazione degli envoy più a rischio dell'intera flotta, uniti da tutti i bolt. Seleziona una scheda bolt sopra per la classifica completa per envoy e l'andamento a 30 giorni di quel bolt.",
   "agent_health.fleet_aggregate_note": "Visualizzazione del riepilogo dello stato dell'intera flotta, unito da tutti i bolt. La tabella per envoy è per bolt — seleziona una scheda bolt sopra per vedere il dettaglio dello stato dei suoi envoy.",
-  "compliance.fleet_aggregate_note": "Visualizzazione della copertura dei controlli dell'intera flotta, unita da tutti i bolt. Gli avvisi di deroga e i report dettagliati dei framework sono per bolt — seleziona una scheda bolt sopra per visualizzarli."
+  "compliance.fleet_aggregate_note": "Visualizzazione della copertura dei controlli dell'intera flotta, unita da tutti i bolt. Gli avvisi di deroga e i report dettagliati dei framework sono per bolt — seleziona una scheda bolt sopra per visualizzarli.",
+  "runs.fleet_aggregate_note": "La cronologia delle esecuzioni è per bolt. Seleziona una scheda bolt sopra per visualizzare le sue esecuzioni."
 }

@@ -50,7 +50,7 @@ func (h *Handler) agentHealthScopedData(ctx context.Context, r *http.Request) Ag
 	scope := h.resolveScope(r)
 	var data AgentHealthPageData
 	switch {
-	case h.routeScopedPage(ctx, scope, pageAgentHealth, &data):
+	case h.routeScopedPage(ctx, scope, pageAgentHealth, "", &data):
 		return data
 	case scope == scopeFleet && h.scopedAway(ctx, scope):
 		if s, ok := h.scopedHealth(ctx, scope); ok {

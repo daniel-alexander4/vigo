@@ -893,7 +893,7 @@ func (a *SpannerAdmin) AggregateComplianceFanout(ctx context.Context) (Complianc
 // tab's Key; the hostname is resolved from the authenticated roster. Leaf
 // call — the peer's GetScopedPageData never fans out, so there's no
 // recursion. Pull-on-view only.
-func (a *SpannerAdmin) ScopedPageDataFromBolt(ctx context.Context, boltPubkey, pageID string) ([]byte, error) {
+func (a *SpannerAdmin) ScopedPageDataFromBolt(ctx context.Context, boltPubkey, pageID, query string) ([]byte, error) {
 	host := hostnameOfPeer(ctx, a, boltPubkey)
 	if host == "" {
 		return nil, fmt.Errorf("no roster hostname for bolt %s", boltPubkey)
@@ -906,7 +906,7 @@ func (a *SpannerAdmin) ScopedPageDataFromBolt(ctx context.Context, boltPubkey, p
 
 	callCtx, cancel := context.WithTimeout(ctx, fanOutTimeout)
 	defer cancel()
-	resp, err := pc.Admin.GetScopedPageData(callCtx, &pb.GetScopedPageDataRequest{PageId: pageID})
+	resp, err := pc.Admin.GetScopedPageData(callCtx, &pb.GetScopedPageDataRequest{PageId: pageID, Query: query})
 	if err != nil {
 		return nil, fmt.Errorf("GetScopedPageData(%s) on bolt %s: %w", pageID, host, err)
 	}

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -738,6 +739,9 @@ func (s *AdminService) GetScopedPageData(ctx context.Context, req *pb.GetScopedP
 		v = ds.AgentHealthData()
 	case "compliance":
 		v = ds.ComplianceLandingData(ctx)
+	case "runs":
+		q, _ := url.ParseQuery(req.Query)
+		v = ds.RunsData(q.Get("status"))
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown scoped page %q", req.PageId)
 	}

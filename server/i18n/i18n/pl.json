@@ -1534,5 +1534,6 @@
   "security.fleet_aggregate_note": "Wyświetlanie zagregowanych danych dla całej floty ze wszystkich boltów. Szczegóły poszczególnych hostów, analiza certyfikatów, wyszukiwanie CVE i trendy są per bolt — wybierz powyżej kartę bolta, aby je zobaczyć.",
   "risk.fleet_aggregate_note": "Wyświetlanie najbardziej ryzykownych envoyów w całej flocie, połączonych ze wszystkich boltów. Wybierz powyżej kartę bolta, aby zobaczyć pełny ranking poszczególnych envoyów i 30-dniowy trend tego bolta.",
   "agent_health.fleet_aggregate_note": "Wyświetlanie zbiorczego stanu całej floty, połączonego ze wszystkich boltów. Tabela poszczególnych envoyów jest per bolt — wybierz powyżej kartę bolta, aby zobaczyć szczegóły stanu jego envoyów.",
-  "compliance.fleet_aggregate_note": "Wyświetlanie pokrycia kontroli w całej flocie, połączonego ze wszystkich boltów. Alerty o odstępstwach i szczegółowe raporty ram są per bolt — wybierz powyżej kartę bolta, aby je zobaczyć."
+  "compliance.fleet_aggregate_note": "Wyświetlanie pokrycia kontroli w całej flocie, połączonego ze wszystkich boltów. Alerty o odstępstwach i szczegółowe raporty ram są per bolt — wybierz powyżej kartę bolta, aby je zobaczyć.",
+  "runs.fleet_aggregate_note": "Historia uruchomień jest per bolt. Wybierz powyżej kartę bolta, aby zobaczyć jego uruchomienia."
 }

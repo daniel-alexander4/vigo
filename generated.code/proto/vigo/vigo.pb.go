@@ -6178,8 +6178,12 @@ func (x *GetHealthSummaryResponse) GetTotalReporting() int32 {
 }
 
 type GetScopedPageDataRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PageId        string                 `protobuf:"bytes,1,opt,name=page_id,json=pageId,proto3" json:"page_id,omitempty"` // "security", "risk", "agent-health", "compliance", "envoys", "runs"
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	PageId string                 `protobuf:"bytes,1,opt,name=page_id,json=pageId,proto3" json:"page_id,omitempty"` // "security", "risk", "agent-health", "compliance", "envoys", "runs"
+	// query is the page's raw URL query (filters/sort/offset) for list pages
+	// that apply it on the owning bolt (envoys/runs); empty for pages that
+	// ignore it (ADR-037 slice 5).
+	Query         string `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6217,6 +6221,13 @@ func (*GetScopedPageDataRequest) Descriptor() ([]byte, []int) {
 func (x *GetScopedPageDataRequest) GetPageId() string {
 	if x != nil {
 		return x.PageId
+	}
+	return ""
+}
+
+func (x *GetScopedPageDataRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
 	}
 	return ""
 }
@@ -8870,9 +8881,10 @@ const file_vigo_proto_rawDesc = "" +
 	"\x10recent_oom_count\x18\t \x01(\x05R\x0erecentOomCount\x12,\n" +
 	"\x12recent_oom_example\x18\n" +
 	" \x01(\tR\x10recentOomExample\x12'\n" +
-	"\x0ftotal_reporting\x18\v \x01(\x05R\x0etotalReporting\"3\n" +
+	"\x0ftotal_reporting\x18\v \x01(\x05R\x0etotalReporting\"I\n" +
 	"\x18GetScopedPageDataRequest\x12\x17\n" +
-	"\apage_id\x18\x01 \x01(\tR\x06pageId\"/\n" +
+	"\apage_id\x18\x01 \x01(\tR\x06pageId\x12\x14\n" +
+	"\x05query\x18\x02 \x01(\tR\x05query\"/\n" +
 	"\x19GetScopedPageDataResponse\x12\x12\n" +
 	"\x04json\x18\x01 \x01(\fR\x04json\",\n" +
 	"\x1aGetEnvoyConvergenceRequest\x12\x0e\n" +

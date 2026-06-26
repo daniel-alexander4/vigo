@@ -1534,5 +1534,6 @@
   "security.fleet_aggregate_note": "Affichage de l'agrégat à l'échelle de la flotte sur tous les bolts. Le détail par hôte, les explorations de certificats, la recherche CVE et les tendances sont par bolt — sélectionnez un onglet de bolt ci-dessus pour y accéder.",
   "risk.fleet_aggregate_note": "Affichage des envoys les plus à risque à l'échelle de la flotte, fusionnés sur tous les bolts. Sélectionnez un onglet de bolt ci-dessus pour le classement complet par envoy et la tendance sur 30 jours de ce bolt.",
   "agent_health.fleet_aggregate_note": "Affichage du récapitulatif de santé à l'échelle de la flotte, fusionné sur tous les bolts. Le tableau par envoy est par bolt — sélectionnez un onglet de bolt ci-dessus pour voir le détail de santé de ses envoys.",
-  "compliance.fleet_aggregate_note": "Affichage de la couverture des contrôles à l'échelle de la flotte, fusionnée sur tous les bolts. Les alertes de dérogation et les rapports de référentiel détaillés sont par bolt — sélectionnez un onglet de bolt ci-dessus pour y accéder."
+  "compliance.fleet_aggregate_note": "Affichage de la couverture des contrôles à l'échelle de la flotte, fusionnée sur tous les bolts. Les alertes de dérogation et les rapports de référentiel détaillés sont par bolt — sélectionnez un onglet de bolt ci-dessus pour y accéder.",
+  "runs.fleet_aggregate_note": "L'historique des exécutions est par bolt. Sélectionnez un onglet de bolt ci-dessus pour voir ses exécutions."
 }
