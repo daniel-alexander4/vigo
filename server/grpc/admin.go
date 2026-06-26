@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -742,6 +743,17 @@ func (s *AdminService) GetScopedPageData(ctx context.Context, req *pb.GetScopedP
 	case "runs":
 		q, _ := url.ParseQuery(req.Query)
 		v = ds.RunsData(q.Get("status"))
+	case "envoys":
+		q, _ := url.ParseQuery(req.Query)
+		offset, _ := strconv.Atoi(q.Get("offset"))
+		if offset < 0 {
+			offset = 0
+		}
+		v = ds.EnvoysPageData(s.baseInterval, s.offlineThreshold,
+			q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
+			q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
+			q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
+			q.Get("sort"), q.Get("dir"), offset)
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown scoped page %q", req.PageId)
 	}

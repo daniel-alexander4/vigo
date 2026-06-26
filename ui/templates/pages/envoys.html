@@ -20,8 +20,11 @@
 
 {{$qs := ""}}{{if .ConvFilter}}{{$qs = printf "%s&conv=%s" $qs .ConvFilter}}{{end}}{{if .DriftFilter}}{{$qs = printf "%s&drift=%s" $qs .DriftFilter}}{{end}}{{if .ReachFilter}}{{$qs = printf "%s&reach=%s" $qs .ReachFilter}}{{end}}{{if .EnvFilter}}{{$qs = printf "%s&env=%s" $qs .EnvFilter}}{{end}}{{if .TagFilter}}{{$qs = printf "%s&tag=%s" $qs .TagFilter}}{{end}}{{if .RoleFilter}}{{$qs = printf "%s&role=%s" $qs .RoleFilter}}{{end}}{{if .OSFilter}}{{$qs = printf "%s&os=%s" $qs .OSFilter}}{{end}}{{if .ArchFilter}}{{$qs = printf "%s&arch=%s" $qs .ArchFilter}}{{end}}{{if .ConfigcrateFilter}}{{$qs = printf "%s&configcrate=%s" $qs .ConfigcrateFilter}}{{end}}{{if .ComplianceFilter}}{{$qs = printf "%s&compliance=%s" $qs .ComplianceFilter}}{{end}}
 
+{{if .FleetAggregate}}
+<p class="scope-notice">{{T $.Locale "envoys.fleet_aggregate_note"}}</p>
+{{else}}
 <div id="envoys-stats-container"
-     hx-get="/ui/fragments/envoys-stats?{{$qs}}"
+     hx-get="/ui/fragments/envoys-stats?{{$qs}}{{if .Scope}}&scope={{.Scope}}{{end}}"
      hx-trigger="every {{.PollInterval}}"
      hx-swap="morph:innerHTML"
      hx-disinherit="*"
@@ -67,7 +70,7 @@
 
 <div class="table-container envoys-table-container"
      id="envoys-table-container"
-     hx-get="/ui/fragments/envoys-table?{{$qs}}{{if .Search}}&search={{.Search}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
+     hx-get="/ui/fragments/envoys-table?{{$qs}}{{if .Search}}&search={{.Search}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}{{if .Scope}}&scope={{.Scope}}{{end}}"
      hx-trigger="every {{.PollInterval}}"
      hx-swap="morph:innerHTML"
      hx-disinherit="*">
@@ -75,6 +78,7 @@
 </div>
 
 {{template "envoy-filter-drawer" .}}
+{{end}}
 
 {{end}}
 
@@ -152,7 +156,7 @@
         </tr>
         {{else if .HasMore}}
         <tr class="envoys-table__loadmore-trigger"
-            hx-get="/ui/fragments/envoys-table?offset={{.NextOffset}}{{if .ConvFilter}}&conv={{.ConvFilter}}{{end}}{{if .DriftFilter}}&drift={{.DriftFilter}}{{end}}{{if .ReachFilter}}&reach={{.ReachFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}{{if .EnvFilter}}&env={{.EnvFilter}}{{end}}{{if .TagFilter}}&tag={{.TagFilter}}{{end}}{{if .RoleFilter}}&role={{.RoleFilter}}{{end}}{{if .OSFilter}}&os={{.OSFilter}}{{end}}{{if .ArchFilter}}&arch={{.ArchFilter}}{{end}}{{if .ConfigcrateFilter}}&configcrate={{.ConfigcrateFilter}}{{end}}{{if .ComplianceFilter}}&compliance={{.ComplianceFilter}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
+            hx-get="/ui/fragments/envoys-table?offset={{.NextOffset}}{{if .ConvFilter}}&conv={{.ConvFilter}}{{end}}{{if .DriftFilter}}&drift={{.DriftFilter}}{{end}}{{if .ReachFilter}}&reach={{.ReachFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}{{if .EnvFilter}}&env={{.EnvFilter}}{{end}}{{if .TagFilter}}&tag={{.TagFilter}}{{end}}{{if .RoleFilter}}&role={{.RoleFilter}}{{end}}{{if .OSFilter}}&os={{.OSFilter}}{{end}}{{if .ArchFilter}}&arch={{.ArchFilter}}{{end}}{{if .ConfigcrateFilter}}&configcrate={{.ConfigcrateFilter}}{{end}}{{if .ComplianceFilter}}&compliance={{.ComplianceFilter}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}{{if .Scope}}&scope={{.Scope}}{{end}}"
             hx-trigger="revealed"
             hx-swap="outerHTML"
             hx-select="tbody > tr">

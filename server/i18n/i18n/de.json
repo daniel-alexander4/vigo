@@ -1535,5 +1535,6 @@
   "risk.fleet_aggregate_note": "Anzeige der fleetweit riskantesten Envoys, zusammengeführt über alle Bolts. Wählen Sie oben einen Bolt-Tab für die vollständige Per-Envoy-Rangliste und den 30-Tage-Trend dieses Bolts.",
   "agent_health.fleet_aggregate_note": "Anzeige der flottenweiten Zustandsübersicht, zusammengeführt über alle Bolts. Die Per-Envoy-Tabelle ist pro Bolt — wählen Sie oben einen Bolt-Tab, um die Zustandsdetails seiner Envoys zu sehen.",
   "compliance.fleet_aggregate_note": "Anzeige der flottenweiten Kontrollabdeckung, zusammengeführt über alle Bolts. Ausnahme-Warnungen und die detaillierten Framework-Berichte sind pro Bolt — wählen Sie oben einen Bolt-Tab dafür.",
-  "runs.fleet_aggregate_note": "Der Ausführungsverlauf ist pro Bolt. Wählen Sie oben einen Bolt-Tab, um dessen Ausführungen anzuzeigen."
+  "runs.fleet_aggregate_note": "Der Ausführungsverlauf ist pro Bolt. Wählen Sie oben einen Bolt-Tab, um dessen Ausführungen anzuzeigen.",
+  "envoys.fleet_aggregate_note": "Die Envoy-Liste ist pro Bolt. Wählen Sie oben einen Bolt-Tab, um die Envoys dieses Bolts zu durchsuchen und zu filtern; die flottenweite Anzahl steht in der Kopfzeile."
 }

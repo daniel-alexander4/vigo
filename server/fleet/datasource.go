@@ -472,6 +472,79 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, c
 	return data
 }
 
+// EnvoysPageLimit is the page size for the /envoys "load more" trigger;
+// EnvoysRenderedCap is the hard cap on visible rows (past it, the footer
+// shows a "refine your filter" sentinel instead of another load-more so the
+// DOM can't grow unbounded). Defined here (not in ui) so both the local
+// render and the route-to-owner GetScopedPageData RPC share one SoT.
+const (
+	EnvoysPageLimit   = 100
+	EnvoysRenderedCap = 1000
+)
+
+// normalizeEnvoySort validates the sort column/direction (route-to-owner
+// gets the raw URL value, so the owning bolt normalizes). Mirrors the ui
+// helper; kept here too because ui can't import fleet (cycle).
+func normalizeEnvoySort(col, dir string) (string, string) {
+	switch col {
+	case "status", "hostname", "ip", "last_seen", "last_run":
+	default:
+		col = "status"
+	}
+	if dir != "asc" && dir != "desc" {
+		switch col {
+		case "last_run", "last_seen":
+			dir = "desc"
+		default:
+			dir = "asc"
+		}
+	}
+	return col, dir
+}
+
+// EnvoysPageData is the complete /envoys list build — render-cap clamp +
+// EnvoysData (rows/counts/filter-axes) + per-row Agent-Health enrichment +
+// the render-cap sentinel. SoT shared by the local render and the
+// route-to-owner RPC (ADR-037 slice 5b), so a peer bolt's /envoys page (and
+// its polling fragments) render identically in the viewer. The agent-version
+// trait fallback stays handler-side (it needs the trait cache), so a routed
+// view uses the DB agent_version.
+func (ds *DataSource) EnvoysPageData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset int) ui.EnvoysPageData {
+	sortCol, sortDir = normalizeEnvoySort(sortCol, sortDir)
+	// Cap the request at the hard render limit.
+	limit := EnvoysPageLimit
+	if offset+limit > EnvoysRenderedCap {
+		limit = EnvoysRenderedCap - offset
+		if limit < 0 {
+			limit = 0
+		}
+	}
+
+	data := ds.EnvoysData(baseInterval, offlineThreshold, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset, limit)
+
+	// Per-row Agent-Health enrichment (the canonical fleetpressure
+	// projection) — done here so a route-to-owner render carries it.
+	for i := range data.Envoys {
+		if p, ok := ds.EnvoyPressure(data.Envoys[i].ID); ok {
+			data.Envoys[i].HealthSeverity = p.Health
+			if p.Health != fleetpressure.Unknown {
+				data.Envoys[i].HealthSummary = ui.HealthSummary(p)
+				pCopy := p
+				data.Envoys[i].Pressure = &pCopy
+			}
+		}
+	}
+
+	// Render-cap sentinel: stop emitting load-more past the hard DOM cap.
+	nextOffset := offset + len(data.Envoys)
+	renderedCap := nextOffset >= EnvoysRenderedCap && nextOffset < data.MatchingTotal
+	data.HasMore = data.HasMore && !renderedCap
+	data.Limit = EnvoysPageLimit
+	data.RenderedCap = renderedCap
+	data.RenderedCapMax = EnvoysRenderedCap
+	return data
+}
+
 // filterEnvoyRows returns the subset of rows matching the given axis
 // filters. Filter semantics (AND across axes; empty axis = match all):
 //   - convFilter: "" / "converged" / "degraded" / "failed" / "no data" (enum, single value)

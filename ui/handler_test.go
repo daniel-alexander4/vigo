@@ -420,6 +420,9 @@ func (m *footprintMock) DashboardStatsData(d, o time.Duration) DashboardStatsFra
 func (m *footprintMock) EnvoysData(d, o time.Duration, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir string, offset, limit int) EnvoysPageData {
 	return m.base.EnvoysData(d, o, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir, offset, limit)
 }
+func (m *footprintMock) EnvoysPageData(d, o time.Duration, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir string, offset int) EnvoysPageData {
+	return m.base.EnvoysPageData(d, o, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir, offset)
+}
 func (m *footprintMock) EnvoyDetailData(id string, d, o time.Duration) (EnvoyDetailPageData, error) {
 	return m.base.EnvoyDetailData(id, d, o)
 }
@@ -1086,6 +1089,10 @@ func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration
 			}},
 		},
 	}
+}
+
+func (m *mockDataSource) EnvoysPageData(d, o time.Duration, conv, drift, reach, search, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir string, offset int) EnvoysPageData {
+	return m.EnvoysData(d, o, conv, drift, reach, search, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir, offset, 100)
 }
 
 func (m *mockDataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error) {

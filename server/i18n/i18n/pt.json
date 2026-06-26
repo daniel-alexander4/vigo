@@ -1535,5 +1535,6 @@
   "risk.fleet_aggregate_note": "A mostrar os envoys de maior risco de toda a frota, combinados de todos os bolts. Selecione um separador de bolt acima para ver a classificação completa por envoy e a tendência de 30 dias desse bolt.",
   "agent_health.fleet_aggregate_note": "A mostrar o resumo de estado de toda a frota, combinado de todos os bolts. A tabela por envoy é por bolt — selecione um separador de bolt acima para ver o detalhe de estado dos seus envoys.",
   "compliance.fleet_aggregate_note": "A mostrar a cobertura de controlos de toda a frota, combinada de todos os bolts. Os alertas de dispensa e os relatórios detalhados de frameworks são por bolt — selecione um separador de bolt acima para os ver.",
-  "runs.fleet_aggregate_note": "O histórico de execuções é por bolt. Selecione um separador de bolt acima para ver as suas execuções."
+  "runs.fleet_aggregate_note": "O histórico de execuções é por bolt. Selecione um separador de bolt acima para ver as suas execuções.",
+  "envoys.fleet_aggregate_note": "A lista de envoys é por bolt. Selecione um separador de bolt acima para navegar e filtrar os envoys desse bolt; o total de toda a frota está no cabeçalho."
 }

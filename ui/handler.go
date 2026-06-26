@@ -116,6 +116,11 @@ type DataSource interface {
 	// coverage + waiver alerts). SoT shared by the local render and the
 	// route-to-owner RPC (ADR-037 slice 5).
 	ComplianceLandingData(ctx context.Context) StandardsPageData
+	// EnvoysPageData builds the full /envoys list (render-cap + rows +
+	// filter axes + health enrichment). SoT shared by the local render, the
+	// stats/table polling fragments, and the route-to-owner RPC (ADR-037
+	// slice 5b). The agent-version trait fallback is layered on handler-side.
+	EnvoysPageData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset int) EnvoysPageData
 	// FleetPressure rolls up per-envoy resource + repo-health telemetry
 	// into the dashboard "Agent Health" card via the fleetpressure SoT
 	// package.
@@ -1081,6 +1086,7 @@ const (
 	pageAgentHealth = "agent-health"
 	pageCompliance  = "compliance"
 	pageRuns        = "runs"
+	pageEnvoys      = "envoys"
 )
 
 // LicensePageData holds data for the license status page.
@@ -1699,6 +1705,10 @@ type EnvoysPageData struct {
 	FilterAxes        []FilterAxis
 	ActiveFilterCount int    // number of axes with at least one selection (drives the "Filter (N active)" button label)
 	BasePath          string // page path the drawer pills should anchor against ("/envoys"); tree page overrides to "/envoys/tree"
+	// FleetAggregate marks the multi-bolt Fleet view: the browsable list is
+	// per-bolt (cross-bolt concat is a deferred slice), so the Fleet tab
+	// shows a drill-to-bolt note instead (ADR-037 slice 5b, approach A).
+	FleetAggregate bool
 }
 
 // EnvoyDetailRunRow is a run with its per-module results for the envoy detail page.
@@ -5063,42 +5073,54 @@ func (h *Handler) ComplianceExecutiveFragment(w http.ResponseWriter, r *http.Req
 	h.renderer.RenderFragment(w, "compliance-executive", "compliance-executive-content", data)
 }
 
-// envoysPageLimit is the page size for the envoys list "load more"
-// trigger. envoysRenderedCap is the hard cap on visible rows — past
-// this, growth is taxed without value, and the operator should refine
-// the filter instead. See SME-#1 scale-resilience checklist.
-const (
-	envoysPageLimit   = 100
-	envoysRenderedCap = 1000
-)
+// The render-cap constants (page size + hard DOM cap) now live in
+// server/fleet (EnvoysPageLimit / EnvoysRenderedCap) so the local render and
+// the route-to-owner RPC share one SoT — ui can't import fleet (cycle).
 
 // Envoys renders the envoys list page with optional axis filters
 // (?conv=, ?drift=, ?reach=) and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	convFilter := q.Get("conv")
-	driftFilter := q.Get("drift")
-	reachFilter := q.Get("reach")
-	search := q.Get("search")
-	envFilter := q.Get("env")
-	tagFilter := q.Get("tag")
-	roleFilter := q.Get("role")
-	osFilter := q.Get("os")
-	archFilter := q.Get("arch")
-	configcrateFilter := q.Get("configcrate")
-	complianceFilter := q.Get("compliance")
-	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
-	offset, _ := strconv.Atoi(q.Get("offset"))
-	if offset < 0 {
-		offset = 0
-	}
-
-	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset)
-	h.enrichEnvoyRows(data.Envoys)
-
-	data.FleetWideEnvoys = h.fleetWideEnvoyCount()
+	data := h.resolveEnvoysData(r.Context(), r)
+	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
+}
+
+// resolveEnvoysData builds the /envoys page data for the active scope
+// (ADR-037 slice 5b): a peer bolt routes to its owner (the full filtered/
+// sorted/paginated list, health enriched by the owner), the multi-bolt
+// Fleet scope shows a drill-to-bolt note (cross-bolt browse is a deferred
+// slice — approach A), everything else renders the full local list. Shared
+// by the page handler AND the stats/table polling fragments so a peer-bolt
+// view doesn't revert to local data on the next poll tick.
+func (h *Handler) resolveEnvoysData(ctx context.Context, r *http.Request) EnvoysPageData {
+	scope := h.resolveScope(r)
+	var data EnvoysPageData
+	switch {
+	case h.routeScopedPage(ctx, scope, pageEnvoys, r.URL.RawQuery, &data):
+		// Peer: rows + health enriched on the owner. The agent-version
+		// trait fallback is skipped — the peer's envoys aren't in this
+		// bolt's trait cache (the DB agent_version is already populated).
+	case scope == scopeFleet && h.scopedAway(ctx, scope):
+		data = EnvoysPageData{
+			PageData:       PageData{Title: "Envoys", ActiveNav: "envoys"},
+			FleetAggregate: true,
+		}
+	default:
+		q := r.URL.Query()
+		offset, _ := strconv.Atoi(q.Get("offset"))
+		if offset < 0 {
+			offset = 0
+		}
+		data = h.dataSource.EnvoysPageData(h.baseInterval, h.offlineThreshold,
+			q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
+			q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
+			q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
+			q.Get("sort"), q.Get("dir"), offset)
+		h.enrichEnvoyAgentVersions(data.Envoys)
+	}
+	data.FleetWideEnvoys = h.fleetWideEnvoyCount()
+	return data
 }
 
 // normalizeEnvoySort canonicalizes the sort URL params. Empty / unknown
@@ -5128,30 +5150,6 @@ func normalizeEnvoySort(col, dir string) (string, string) {
 // in the pills above it. The hard render cap (envoysRenderedCap) is
 // applied here, handler-side: the request limit is clamped before the
 // data-source call and the load-more sentinel is set after.
-func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset int) EnvoysPageData {
-	// Cap the request at the hard render limit. Past envoysRenderedCap
-	// rows we stop emitting load-more triggers and surface a sentinel.
-	limit := envoysPageLimit
-	if offset+limit > envoysRenderedCap {
-		limit = envoysRenderedCap - offset
-		if limit < 0 {
-			limit = 0
-		}
-	}
-
-	data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset, limit)
-
-	// Render-cap sentinel: when paging reaches the hard DOM cap, the
-	// footer renders a "refine your filter" notice instead of another
-	// load-more trigger so the DOM cannot grow unbounded.
-	nextOffset := offset + len(data.Envoys)
-	renderedCap := nextOffset >= envoysRenderedCap && nextOffset < data.MatchingTotal
-	data.HasMore = data.HasMore && !renderedCap
-	data.Limit = envoysPageLimit
-	data.RenderedCap = renderedCap
-	data.RenderedCapMax = envoysRenderedCap
-	return data
-}
 
 // EnvoyDetail renders the envoy detail page shell. Runs and traits are loaded
 // asynchronously via HTMX fragment endpoints for instant page rendering.
@@ -6229,20 +6227,12 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 // longer auto-polled, since polling at the table boundary wipes any
 // rows the user has already scrolled into.
 func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
-	offset, _ := strconv.Atoi(q.Get("offset"))
-	if offset < 0 {
-		offset = 0
-	}
-	data := h.envoysPageData(
-		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
-		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
-		q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
-		sortCol, sortDir, offset,
-	)
-	h.enrichEnvoyRows(data.Envoys)
+	// Shares the page resolver so a peer-bolt scope keeps showing that
+	// bolt's table across poll ticks (ADR-037 slice 5b). Scope is set so the
+	// load-more trigger carries it (this fragment skips setCommonWithRequest).
+	data := h.resolveEnvoysData(r.Context(), r)
 	data.Locale = h.localeFromRequest(r)
+	data.Scope = h.resolveScope(r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
 
@@ -6252,14 +6242,7 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 // table itself are outside this region so the operator's typed query
 // and scrolled position survive every refresh tick.
 func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
-	data := h.envoysPageData(
-		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
-		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
-		q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
-		sortCol, sortDir, 0,
-	)
+	data := h.resolveEnvoysData(r.Context(), r)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-stats", data)
 }
@@ -8570,28 +8553,20 @@ func (h *Handler) SetTraitLookup(tl TraitLookup) {
 // from raw traits here — so the /envoys "Agent Health" column, the
 // dashboard "Agent Health" card, and the /agent-health table all agree
 // on the same severity classification per envoy.
-func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
+// enrichEnvoyAgentVersions layers the agent-version trait fallback onto
+// locally-built rows — the DB column can be empty even when the trait has
+// it. The Agent-Health composite is enriched upstream in
+// DataSource.EnvoysPageData (so it survives a route-to-owner render); this
+// fallback needs the local trait cache, so it's applied only on the local
+// path (ADR-037 slice 5b).
+func (h *Handler) enrichEnvoyAgentVersions(rows []EnvoyRow) {
+	if h.traitLookup == nil {
+		return
+	}
 	for i := range rows {
-		// Agent version from traits (always available, even if DB column is empty).
-		if rows[i].AgentVersion == "" && h.traitLookup != nil {
+		if rows[i].AgentVersion == "" {
 			if v := h.traitLookup.EnvoyTrait(rows[i].ID, "identity.agent_version"); v != "" {
 				rows[i].AgentVersion = v
-			}
-		}
-		// Agent Health composite. Routed through fleetpressure — the
-		// canonical per-envoy projection that already covers FDs, host
-		// FD%, OOM-recent, rootfs %, inode %, and repo-health on one
-		// severity axis. The pill color follows Health; the hover
-		// title lists the contributing per-axis values so operators
-		// see the breakdown without leaving the page.
-		if h.dataSource != nil {
-			if p, ok := h.dataSource.EnvoyPressure(rows[i].ID); ok {
-				rows[i].HealthSeverity = p.Health
-				if p.Health != fleetpressure.Unknown {
-					rows[i].HealthSummary = HealthSummary(p)
-					pCopy := p
-					rows[i].Pressure = &pCopy
-				}
 			}
 		}
 	}
