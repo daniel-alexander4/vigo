@@ -30,5 +30,18 @@ func (h *LicenseHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *LicenseHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	status := h.enforcer.GetStatus()
+	// Customer identity and the machine fingerprint are admin-only. Viewers
+	// (and compliance) get the operational fields — tier, count, expiry —
+	// but not who the license is issued to or its machine binding. Copy
+	// before redacting: GetStatus hands back a pointer to the enforcer's
+	// live payload, which must not be mutated.
+	if status.License != nil && !auth.UserFromContext(r.Context()).IsAdmin() {
+		redacted := *status.License
+		redacted.CustomerName = ""
+		redacted.CustomerID = ""
+		redacted.LicenseID = ""
+		redacted.Fingerprint = ""
+		status.License = &redacted
+	}
 	writeJSON(w, r, http.StatusOK, status)
 }

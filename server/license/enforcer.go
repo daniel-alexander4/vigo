@@ -321,7 +321,9 @@ func (e *Enforcer) loadAndCheckLocked() error {
 		if e.graceStart == nil {
 			now := time.Now()
 			e.graceStart = &now
-			writeGraceStart(e.graceDir, now)
+			if err := writeGraceStart(e.graceDir, now); err != nil {
+				slog.Warn("license grace start not persisted — grace clock resets on restart", "error", err)
+			}
 		}
 		return nil
 	}
@@ -406,7 +408,9 @@ func (e *Enforcer) evaluateLocked() error {
 		} else {
 			t := now
 			e.graceStart = &t
-			writeGraceStart(e.graceDir, t)
+			if err := writeGraceStart(e.graceDir, t); err != nil {
+				slog.Warn("license grace start not persisted — grace clock resets on restart", "error", err)
+			}
 		}
 	}
 
@@ -461,14 +465,18 @@ func (e *Enforcer) RefreshMetrics() {
 	e.updateMetrics()
 }
 
-// FreeLicenseID is the license_id of the built-in community license.
-const FreeLicenseID = "free-100"
-
-// IsFreeLicense returns true if the loaded license is the built-in free tier.
-func (e *Enforcer) IsFreeLicense() bool {
+// IsCommercialLicense reports whether the loaded license is a paid,
+// commercial tier. Spanner federation requires one (server.go gates on
+// it). The classification is tessera's: a tier is commercial iff it
+// requires machine binding — i.e. it maps to a paid bracket
+// (PricePerNode > 0). Community (free), the legacy aliases, and any
+// unknown or empty tier are non-commercial. RequiresBinding is the
+// single source of truth, so "commercial" can never drift from the
+// tier/price table that defines it.
+func (e *Enforcer) IsCommercialLicense() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.license != nil && e.license.LicenseID == FreeLicenseID
+	return e.license != nil && vigolic.RequiresBinding(e.license.Tier)
 }
 
 // CheckInWarning returns a non-empty warning message if the license is in

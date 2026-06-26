@@ -595,9 +595,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		return nil, fmt.Errorf("license: %w", err)
 	}
 
-	// Spanner requires a paid license — reject spanner mode on free tier.
-	if s.mode != config.ModeStandalone && s.enforcer.IsFreeLicense() {
-		return nil, fmt.Errorf("spanner mode requires a paid license — the built-in free license does not support spanner")
+	// Spanner requires a commercial license — reject spanner mode on any
+	// non-commercial tier (community/free, legacy aliases, unknown). The
+	// predicate is tier-based (tessera's RequiresBinding), not a single
+	// license_id, so a hand-signed community license cannot unlock it.
+	if s.mode != config.ModeStandalone && !s.enforcer.IsCommercialLicense() {
+		return nil, fmt.Errorf("spanner mode requires a commercial license — the community/free tier does not support spanner")
 	}
 
 	// --- Auth ---

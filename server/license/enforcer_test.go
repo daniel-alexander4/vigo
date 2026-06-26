@@ -484,46 +484,63 @@ func TestCheckInWarning(t *testing.T) {
 	}
 }
 
-func TestIsFreeLicense(t *testing.T) {
-	// With the built-in free license (no .lic on disk). Defend against
-	// prior-test pollution by explicitly restoring the real production
-	// pubkey (captured at package init) — the embedded free license
-	// was signed with this key at compile time.
-	dir := t.TempDir()
+func TestIsCommercialLicense(t *testing.T) {
+	counter := func(ctx context.Context) (int, error) { return 5, nil }
+
+	// Built-in free license (no .lic on disk) is community tier — not
+	// commercial. Restore the real production pubkey (captured at package
+	// init): the embedded free license was signed with it at compile time.
 	licfmt.SetPublicKeyForTest(realPublicKey)
 	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
-
-	counter := func(ctx context.Context) (int, error) { return 5, nil }
-	e, err := NewEnforcer(dir, dir, "", counter, func() {}, metrics.NewTestMetrics())
+	builtin, err := NewEnforcer(t.TempDir(), t.TempDir(), "", counter, func() {}, metrics.NewTestMetrics())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !e.IsFreeLicense() {
-		t.Error("expected IsFreeLicense() = true for built-in free license")
+	if builtin.IsCommercialLicense() {
+		t.Error("built-in free license must not be commercial")
 	}
 
-	// With a paid license.
+	// Signed licenses below are verified against a per-test key.
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
 
-	dir2 := t.TempDir()
-	writeLic(t, dir2, licfmt.Payload{
-		CustomerName: "Paid Customer",
-		CustomerID:   "paid-001",
-		LicenseID:    "lic-paid-100",
-		Tier:         "standard",
-		MaxEnvoys:   100,
-		IssuedAt:     "2025-01-01",
-		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
-		Version:      1,
-	}, priv)
-
-	e2, err := NewEnforcer(dir2, dir2, "", counter, func() {}, metrics.NewTestMetrics())
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name       string
+		tier       string
+		licenseID  string
+		maxEnvoys  int
+		commercial bool
+	}{
+		// A hand-signed community license with a huge node count and a
+		// non-"free-100" id (the gcloud/loadtest-unlimited.lic shape) is
+		// still non-commercial — the gap the old license_id check missed.
+		{"community-unlimited", "community", "free-100000000", 100_000_000, false},
+		// The legacy display alias is not a paid bracket.
+		{"legacy-standard", "standard", "lic-legacy", 100, false},
+		{"paid-starter", "starter", "lic-starter", 200, true},
+		{"paid-scale", "scale", "lic-scale", 50_000, true},
 	}
-	if e2.IsFreeLicense() {
-		t.Error("expected IsFreeLicense() = false for paid license")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeLic(t, dir, licfmt.Payload{
+				CustomerName: "Test",
+				CustomerID:   "test",
+				LicenseID:    tc.licenseID,
+				Tier:         tc.tier,
+				MaxEnvoys:    tc.maxEnvoys,
+				IssuedAt:     "2025-01-01",
+				ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+				Version:      1,
+			}, priv)
+			e, err := NewEnforcer(dir, dir, "", counter, func() {}, metrics.NewTestMetrics())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := e.IsCommercialLicense(); got != tc.commercial {
+				t.Errorf("IsCommercialLicense() = %v, want %v for tier %q", got, tc.commercial, tc.tier)
+			}
+		})
 	}
 }
 
