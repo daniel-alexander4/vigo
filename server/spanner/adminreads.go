@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -243,6 +244,49 @@ func (a *SpannerAdmin) PeerObservability(boltPubkeyHex string) *PeerObservabilit
 // entry, keyed by bolt pubkey-hex.
 func (a *SpannerAdmin) AllPeerObservability() map[string]*PeerObservability {
 	return a.observ.All()
+}
+
+// BoltIdentity is one admitted bolt's stable identity for UI labelling —
+// the authenticated roster row (pubkey + hostname), with IsLocal marking
+// this bolt. The UI scope tabs (ADR-037 "Fleet | bolt-N") build their
+// per-bolt tabs from this; hostnames come from the roster, never from
+// gossiped observability data.
+type BoltIdentity struct {
+	Pubkey   string
+	Hostname string
+	IsLocal  bool
+}
+
+// BoltRoster returns every non-revoked bolt in the local spanner_bolts
+// roster (including this bolt, flagged IsLocal), ordered local-first then
+// by hostname. Drives the ADR-037 federated-UI scope tabs. Returns nil on
+// a standalone (nil receiver) or a roster read error.
+func (a *SpannerAdmin) BoltRoster(ctx context.Context) ([]BoltIdentity, error) {
+	if a == nil {
+		return nil, nil
+	}
+	roster, err := a.queries.ListBolts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing spanner roster: %w", err)
+	}
+	out := make([]BoltIdentity, 0, len(roster))
+	for _, b := range roster {
+		if b.RevokedAt.Valid {
+			continue
+		}
+		out = append(out, BoltIdentity{
+			Pubkey:   b.Pubkey,
+			Hostname: b.Hostname,
+			IsLocal:  b.Pubkey == a.ownPubkey,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].IsLocal != out[j].IsLocal {
+			return out[i].IsLocal // local bolt first
+		}
+		return out[i].Hostname < out[j].Hostname
+	})
+	return out, nil
 }
 
 // --- fanout path ---

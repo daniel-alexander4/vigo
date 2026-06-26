@@ -11,6 +11,7 @@
             </div>
         </div>
     </a>
+    {{if not $.ScopedAway}}
     <a class="dash-column dash-column--link" href="/security" aria-label="{{T $.Locale "dashboard_stats.security_posture_aria"}}">
         <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.security_posture"}}</h3>
         <div class="stat-cards">
@@ -52,5 +53,9 @@
             {{template "stat-card" dict "Locale" $.Locale "Value" .RiskMedium "Label" (T $.Locale "sev.medium") "Color" "brand"}}
         </div>
     </a>
+    {{end}}
 </div>
+{{if $.ScopedAway}}
+<p class="scope-notice">{{T $.Locale "spanner.scope_detail_notice"}}</p>
+{{end}}
 {{end}}

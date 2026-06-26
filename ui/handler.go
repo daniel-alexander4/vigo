@@ -845,7 +845,33 @@ type PageData struct {
 	// picker.
 	Locale  string
 	Locales []LocaleChoice
+	// Scope is the selected spanner scope (ADR-037 federated UI):
+	// scopeFleet ("fleet") for the fleet-wide aggregate, or a bolt
+	// pubkey-hex to focus one bolt. Empty when not in spanner mode.
+	// ScopedAway is true when the scope hides this bolt's local-only
+	// detail cards — i.e. fleet or a peer bolt (everything except this
+	// bolt's own tab). ScopeTabs drives the "Fleet | bolt-N" tab strip,
+	// rendered only in spanner mode.
+	Scope      string
+	ScopedAway bool
+	ScopeTabs  []ScopeTab
 }
+
+// ScopeTab is one entry in the ADR-037 "Fleet | bolt-1 … bolt-N" tab
+// strip. Key is scopeFleet or a bolt pubkey-hex; Href is the same page
+// with ?scope=Key so a boosted nav click re-renders in scope.
+type ScopeTab struct {
+	Key     string
+	Label   string // bolt hostname; empty for the fleet tab (template renders T "spanner.tab_fleet")
+	Href    string
+	Active  bool
+	IsFleet bool
+	IsLocal bool // this bolt — template appends the "(this bolt)" suffix
+}
+
+// scopeFleet is the default spanner scope — the fleet-wide aggregate
+// across every bolt. Any other scope value is a bolt pubkey-hex.
+const scopeFleet = "fleet"
 
 // LicensePageData holds data for the license status page.
 type LicensePageData struct {
@@ -1218,7 +1244,13 @@ type ComplianceReportPageData struct {
 
 // DashboardStatsFragmentData holds data for the stats fragment (HTMX auto-refresh).
 type DashboardStatsFragmentData struct {
-	Locale          string // per-request locale for {{T}}/{{tEnum}} in the polled fragment
+	Locale string // per-request locale for {{T}}/{{tEnum}} in the polled fragment
+	// Scope / ScopedAway mirror PageData for the polled fragment (which
+	// never runs setCommonWithRequest): in a scoped-away view the fragment
+	// renders only the fleet-health column from scoped convergence counters
+	// plus the "detail not yet federated" notice (ADR-037).
+	Scope           string
+	ScopedAway      bool
 	TotalEnvoys     int
 	ActiveEnvoys    int
 	RecentFailures  int
@@ -1389,9 +1421,9 @@ type EnvoysPageData struct {
 	// local-only; this drives the header scope chip distinguishing the two.
 	FleetWideEnvoys int
 	HasMore         bool
-	Offset            int
-	Limit             int
-	NextOffset        int
+	Offset          int
+	Limit           int
+	NextOffset      int
 	// RenderedCap is true when the operator has paged to the hard DOM cap;
 	// the table footer renders a "refine your filter" sentinel instead of
 	// another load-more trigger so the DOM cannot grow unbounded.
@@ -2444,6 +2476,13 @@ func (h *Handler) agentPlatforms() []AgentPlatform {
 func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 	h.setCommon(pd)
 	pd.Locale = h.localeFromRequest(r)
+	// Spanner scope (ADR-037 federated UI). No-op outside spanner mode —
+	// Scope stays "", ScopeTabs nil, ScopedAway false, so non-federated
+	// deployments render exactly as before.
+	scope := h.resolveScope(r)
+	pd.Scope = scope
+	pd.ScopedAway = h.scopedAway(scope)
+	pd.ScopeTabs = h.buildScopeTabs(r, scope)
 	if h.authEnabled {
 		if u := auth.UserFromContext(r.Context()); u != nil {
 			pd.CurrentUser = &AuthUser{
@@ -2463,6 +2502,79 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // fleet.read (i.e., the compliance role) get redirected to
 // /compliance instead — the dashboard is a fleet-state surface and
 // has no compliance-shaped fallback worth rendering.
+// resolveScope returns the active spanner scope from ?scope=, defaulting
+// to scopeFleet in spanner mode. Empty when not federated — the page then
+// renders its local DataSource exactly as before (no tabs, no scoping).
+func (h *Handler) resolveScope(r *http.Request) string {
+	if h.spannerAdmin == nil {
+		return ""
+	}
+	if s := r.URL.Query().Get("scope"); s != "" {
+		return s
+	}
+	return scopeFleet
+}
+
+// scopedAway reports whether a scope hides this bolt's local-only detail
+// cards: true for fleet and for any peer bolt, false for this bolt's own
+// tab (full local detail) and for standalone mode. The local-only cards
+// (CVE/risk/compliance/cert detail) are not yet federated (ADR-037 slices
+// 2–4), so outside this bolt's tab the page shows the scoped convergence
+// summary plus an honest "detail not yet federated" notice.
+func (h *Handler) scopedAway(scope string) bool {
+	return h.spannerAdmin != nil && scope != "" && scope != h.spannerAdmin.LocalPubkey()
+}
+
+// scopedConvergence returns the convergence counters for a scoped-away
+// view: the fleet-wide aggregate for scopeFleet, or one peer bolt's
+// gossiped counters. The local bolt is never routed here (scopedAway is
+// false for it — the caller uses the live local DataSource).
+func (h *Handler) scopedConvergence(scope string) spanner.ConvergenceCounters {
+	if h.spannerAdmin == nil {
+		return spanner.ConvergenceCounters{}
+	}
+	if scope == scopeFleet {
+		c, _ := h.spannerAdmin.AggregateConvergenceLocal()
+		return c
+	}
+	if p := h.spannerAdmin.PeerObservability(scope); p != nil {
+		return p.Convergence
+	}
+	return spanner.ConvergenceCounters{} // unknown / never-reported peer
+}
+
+// buildScopeTabs builds the ADR-037 "Fleet | bolt-N" tab strip for the
+// current page path, marking the active tab. The fleet tab's label is
+// rendered in-template via {{T}}; bolt tabs are labelled by hostname
+// (data, not translatable). Returns nil outside spanner mode.
+func (h *Handler) buildScopeTabs(r *http.Request, current string) []ScopeTab {
+	if h.spannerAdmin == nil {
+		return nil
+	}
+	roster, err := h.spannerAdmin.BoltRoster(r.Context())
+	if err != nil {
+		slog.Warn("scope tabs: bolt roster read failed", "error", err)
+		return nil
+	}
+	path := r.URL.Path
+	tabs := []ScopeTab{{
+		Key:     scopeFleet,
+		Href:    path + "?scope=" + scopeFleet,
+		Active:  current == scopeFleet,
+		IsFleet: true,
+	}}
+	for _, b := range roster {
+		tabs = append(tabs, ScopeTab{
+			Key:     b.Pubkey,
+			Label:   b.Hostname,
+			Href:    path + "?scope=" + b.Pubkey,
+			Active:  current == b.Pubkey,
+			IsLocal: b.IsLocal,
+		})
+	}
+	return tabs
+}
+
 // fleetWideEnvoyCount returns the federation-wide envoy total (this
 // bolt's partition + every cached peer) in spanner mode, or 0 when not
 // federated. The dashboard + envoys page surface it next to their local
@@ -2486,6 +2598,16 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/compliance", http.StatusFound)
 			return
 		}
+	}
+
+	// Spanner scoped views (ADR-037): the fleet aggregate or a peer bolt
+	// renders the convergence summary from the gossip cache plus an honest
+	// "detail not yet federated" notice — skipping the local-only CVE/risk/
+	// compliance/cert enrichment entirely. This bolt's own tab (and
+	// standalone mode) falls through to the full local dashboard below.
+	if scope := h.resolveScope(r); h.scopedAway(scope) {
+		h.dashboardScoped(w, r, scope)
+		return
 	}
 
 	// Per-step timing for slow-dashboard diagnosis. One slog.Info line per
@@ -2590,7 +2712,6 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	msRunningCVEs := doneRunningCVEs()
 
 	doneRender := step()
-	data.FleetWideEnvoys = h.fleetWideEnvoyCount()
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 	msRender := doneRender()
@@ -2608,6 +2729,40 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		"running_cves_ms", msRunningCVEs,
 		"render_ms", msRender,
 	)
+}
+
+// dashboardScoped renders the dashboard for a fleet or peer-bolt scope
+// (ADR-037). Only convergence is federated today, so it shows the scoped
+// fleet-health column from the gossip cache plus the version/platforms
+// header and license banner; the template suppresses the local-only
+// detail cards behind an honest notice. No local DataSource build — the
+// scoped numbers come straight from the observability cache.
+func (h *Handler) dashboardScoped(w http.ResponseWriter, r *http.Request, scope string) {
+	data := DashboardPageData{
+		PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"},
+	}
+	data.AgentVersion = h.agentVersion
+	if data.AgentVersion == "" {
+		data.AgentVersion = h.version
+	}
+	data.AgentPlatforms = h.agentPlatforms()
+	h.applyLicenseCapacity(&data)
+
+	c := h.scopedConvergence(scope)
+	data.TotalEnvoys = c.Total
+	data.ActiveEnvoys = c.Total - c.Offline
+	data.RecentFailures = c.Failed
+	data.Converged = c.Converged
+	data.Degraded = c.Degraded
+	data.Diverged = c.Diverged
+	data.Offline = c.Offline
+	if c.Total > 0 {
+		data.DriftRate = float64(c.Diverged) / float64(c.Total) * 100
+	}
+	data.ConvergencePct = convergence.ConvergedPct(int64(c.Converged), int64(c.Total-c.Offline))
+
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "dashboard", data)
 }
 
 // convergenceSparkline returns the last 30 days of fleet convergence %
@@ -2698,6 +2853,30 @@ func sparklineBounds(data []float64) (min, max int) {
 // dashboardData builds dashboard page data from the live FleetIndex
 // via the data source (single in-memory snapshot, no N+1 queries),
 // then layers on the license banner and recent-runs DB query.
+// applyLicenseCapacity fills the dashboard capacity banner fields from the
+// enforcer's mode-aware count. Shared by the full local dashboard and the
+// scoped (fleet/peer) dashboard so the banner is identical on both.
+func (h *Handler) applyLicenseCapacity(data *DashboardPageData) {
+	if h.enforcer == nil {
+		return
+	}
+	st := h.enforcer.GetStatus()
+	if st.MaxEnvoys <= 0 {
+		return
+	}
+	active := st.ActiveEnvoys
+	max := st.MaxEnvoys
+	data.LicenseCapacityActive = active
+	data.LicenseCapacityMax = max
+	switch {
+	case active >= max:
+		data.LicenseCapacityLevel = "critical"
+	case active*10 >= max*9: // ≥90%
+		data.LicenseCapacityLevel = "warning"
+		data.LicenseCapacitySlotsRemaining = max - active
+	}
+}
+
 func (h *Handler) dashboardData() DashboardPageData {
 	data := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
 
@@ -2708,21 +2887,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 	// ActiveEnvoys is the enforcer's mode-aware count (the licensed-count SoT:
 	// local FleetIndex locally, spanner-wide in aggregate mode) so the banner
 	// agrees with the /license page and header warning frame-for-frame.
-	if h.enforcer != nil {
-		if st := h.enforcer.GetStatus(); st.MaxEnvoys > 0 {
-			active := st.ActiveEnvoys
-			max := st.MaxEnvoys
-			data.LicenseCapacityActive = active
-			data.LicenseCapacityMax = max
-			switch {
-			case active >= max:
-				data.LicenseCapacityLevel = "critical"
-			case active*10 >= max*9: // ≥90%
-				data.LicenseCapacityLevel = "warning"
-				data.LicenseCapacitySlotsRemaining = max - active
-			}
-		}
-	}
+	h.applyLicenseCapacity(&data)
 
 	// Recent runs (always from DB, lightweight query). h.queries is nil
 	// only in the early-boot window and unit tests — skip the query
@@ -2806,6 +2971,31 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
+	// Scoped (fleet / peer-bolt) view: only the fleet-health column from
+	// scoped convergence counters; the local-only columns are suppressed
+	// in the template (ADR-037). No local DataSource build.
+	if scope := h.resolveScope(r); h.scopedAway(scope) {
+		c := h.scopedConvergence(scope)
+		data := DashboardStatsFragmentData{
+			Locale:         h.localeFromRequest(r),
+			Scope:          scope,
+			ScopedAway:     true,
+			TotalEnvoys:    c.Total,
+			ActiveEnvoys:   c.Total - c.Offline,
+			RecentFailures: c.Failed,
+			Converged:      c.Converged,
+			Degraded:       c.Degraded,
+			Diverged:       c.Diverged,
+			Offline:        c.Offline,
+		}
+		if c.Total > 0 {
+			data.DriftRate = float64(c.Diverged) / float64(c.Total) * 100
+		}
+		data.ConvergencePct = convergence.ConvergedPct(int64(c.Converged), int64(c.Total-c.Offline))
+		h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
+		return
+	}
+
 	data := h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold)
 	data.Locale = h.localeFromRequest(r)
 

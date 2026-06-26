@@ -23,14 +23,9 @@
             <span class="meta-chip__value mono">{{range $i, $p := .AgentPlatforms}}{{if $i}}, {{end}}{{osLabel $p.OS}}/{{$p.Arch}}{{end}}</span>
         </span>
         {{end}}
-        {{if $.SpannerEnabled}}
-        <span class="meta-chip">
-            <span class="meta-chip__label">{{T $.Locale "spanner.scope_label"}}</span>
-            <span class="meta-chip__value">{{T $.Locale "spanner.scope_partition"}} &middot; <a href="/spanner">{{printf (T $.Locale "spanner.scope_fleet_count") .FleetWideEnvoys}}</a></span>
-        </span>
-        {{end}}
     </div>
 </div>
+{{template "scope-tabs" .}}
 
 {{if .LicenseCapacityLevel}}
 <div class="license-banner license-banner--{{.LicenseCapacityLevel}}" role="status" aria-live="polite">
@@ -51,7 +46,7 @@
 </div>
 {{end}}
 
-{{if .NoEnvoys}}
+{{if and (not $.ScopedAway) .NoEnvoys}}
 <div class="welcome-card">
     <h2>{{T $.Locale "dashboard.welcome.heading"}}</h2>
     <p>{{T $.Locale "dashboard.welcome.intro_pre"}}<em>envoys</em>{{T $.Locale "dashboard.welcome.intro_post"}} <strong>{{T $.Locale "dashboard.welcome.on_server_host"}}</strong>{{T $.Locale "dashboard.welcome.intro_tail"}}</p>
@@ -66,7 +61,7 @@
 </div>
 {{else}}
 <div id="stats"
-     hx-get="/ui/fragments/dashboard-stats"
+     hx-get="/ui/fragments/dashboard-stats{{if .Scope}}?scope={{.Scope}}{{end}}"
      hx-trigger="every {{.PollInterval}}"
      hx-swap="morph:innerHTML"
      hx-disinherit="*"
@@ -74,6 +69,7 @@
     {{template "dashboard-stats" .}}
 </div>
 
+{{if not $.ScopedAway}}
 <div id="pressure"
      hx-get="/ui/fragments/dashboard-pressure"
      hx-trigger="load, every {{.PollInterval}}"
@@ -101,6 +97,7 @@
     "Search"                ""
     "ReadOnly"              false}}
 {{template "dashboard-activity" .}}
+{{end}}
 {{end}}
 
 {{end}}

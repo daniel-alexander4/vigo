@@ -4,8 +4,8 @@ title: "ADR-037: Federated fleet-wide UI for spanner (any-bolt-federates read mo
 
 # ADR-037: Federated fleet-wide UI for spanner (any-bolt-federates read model)
 
-**Status:** Approved — not yet implemented. Interim labeling shipped in `00a040f5` (the dashboard + envoys page now mark "this bolt's partition · fleet-wide: N" in spanner mode). This ADR covers the full federated-read arc that the labeling is a stopgap for.
-**Date:** 2026-06-24.
+**Status:** Approved — implementation in progress (grilled 2026-06-25; the grill corrected the per-slice merge math below and inverted the build order to **tabs-first**). Interim labeling shipped in `00a040f5` (the dashboard + envoys page now mark "this bolt's partition · fleet-wide: N" in spanner mode). This ADR covers the full federated-read arc that the labeling is a stopgap for.
+**Date:** 2026-06-24 (merge-math + sequencing corrections 2026-06-25).
 
 ## Context
 
@@ -28,7 +28,7 @@ This is **not** a generic query envelope. The cross-bolt channel is hard-typed g
 - **Aggregate/reporting pages** (dashboard top-line, CVE, risk, compliance, cert-expiry, convergence): fan-out summaries + merge.
 - **List pages** (envoys): fan-out + concatenate, with an **owning-bolt column**. Cheap columns can ride the already-gossiped `EnvoyLite`.
 - **Detail pages** (one envoy / one run): **route to the owning bolt**, no merge — the roster resolves the owner (`OwningBoltHostname`).
-- **Write actions** (push / revoke / delete / reassign): route to the owning bolt, reusing the existing spanner admin routing (`ForcePushToBolt`, `ReassignEnvoy`). **Note:** `DeleteEnvoy` currently has *no* such routing (silent no-op on the wrong bolt) — that gap must be closed as part of this work (tracked in `pending.md`).
+- **Write actions** (push / revoke / delete / reassign): route to the owning bolt, reusing the existing spanner admin routing (`ForcePushToBolt`, `ReassignEnvoy`, `DeleteEnvoyToBolt`, `RevokeEnvoyToBolt`). All four exist and are tested — including delete/revoke owning-bolt routing + the FleetIndex-miss `NotFound` backstop, closed in `4f23a18b` (the ADR's original "`DeleteEnvoy` has no routing" note is now stale).
 - **Stateful/interactive pages** (scrier sessions, AI chat streaming): route to the owning bolt — they are inherently single-target and never merge.
 
 ### UX — Fleet + per-bolt tabs, federated-rendered
@@ -40,18 +40,20 @@ Graceful partial results: the `fanOut` driver already gives this — a 5s per-pe
 ## What is already solid (verified) vs. what must be built
 
 **Solid — reuse as-is:**
-- Transport: long-lived mTLS gRPC `VigoAdmin` via `PeerDialer`.
+- Transport: long-lived mTLS gRPC `VigoAdmin` via `PeerDialer`. **Prerequisite (not a code gap, but unflagged in the original draft):** `PeerDialer` mTLS requires every bolt to share one **fleet CA** (`buildClientTLS` trusts a single `RootCAs` anchor — no skip-verify); cross-bolt fan-out fails `x509: unknown authority` without it. Establishing the shared CA is currently a **manual** operator step (`vigocli spanner ca export|import`, or `setup-bolt.sh` seeding); the hands-off `spanner.peers` boot-time auto-admission is **not yet shipped** (the field is defined but unconsumed — tracked in `pending.md`). ADR-037 is not gated on auto-admission — it works on any spanner whose bolts already share a CA (proven live on the GCP 2-bolt spanner, 2026-06-24) — but a fresh multi-bolt fleet needs the CA established first.
 - The `fanOut` scatter driver + per-field merge + local fold-in is the canonical pattern (proven by `ListEnvoys` / `GetConvergenceSummary` / `ListRuns`). Do not invent a new aggregator.
 - Auth: any new `VigoAdmin` read RPC is auto-gated by cpauth + mTLS + roster-pin.
 - Convergence is already federated end-to-end.
 - The scoring kernels (`server/cve`, `server/risk`, `server/certexpiry`, `server/convergence`) are pure and reusable; precedent for trusting cross-bolt aggregation already exists (license `aggregate` mode).
 
-**Must be built — per-page extraction (the real work), sized by difficulty:**
+**Must be built — sized by difficulty. Build order is tabs-first (see below), not this numbering:**
 1. **Convergence** — done (already fanned-out + merged).
-2. **CVE summary, cert-expiry summary** — *small.* The summary fns exist inline in `server/fleet/datasource.go` (`RunningCVESummary`, `CertExpirySummary`); extract a callable + a proto message. Merge is trivial summation.
-3. **Risk summary** — *medium.* `risk.ScoreFleet`/`ScoreEnvoy` are pure, but the per-bolt summary is embedded in `DataSource.RiskData`. The merge is non-trivial: averages and top-N can't be summed — each bolt must ship per-bolt **count + sum** (and its top-N candidates) and the viewer re-ranks. Extract accordingly.
-4. **Compliance coverage** — *largest.* The aggregate exists (`aggregateFleetPartitions`/`BuildFrameworkReport`/`buildFrameworkCoverage`) but is tied to `ReportHandler`'s local `fleetIndex` + `configStore` + audit chain inside the ~4400-line `server/api/report.go`. A per-bolt summary struct (covered/waived/partial/missing per control are additive) must be extracted; **per-bolt audit-chain status does not aggregate cleanly** — see Open Questions.
-5. **Fleet + per-bolt tabs UX** + the `DeleteEnvoy` owning-bolt routing fix.
+2. **Cert-expiry + running-CVE summaries** — *small.* The fns already exist as standalone `*DataSource` methods (`RunningCVESummary`, `CertExpirySummary` in `server/fleet/datasource.go`) — no extraction from a tangled method needed, just a proto shape and an `Aggregate*Fanout` wrapper that calls the existing method locally. Both are additive (cert buckets/`PerHost` are disjoint per envoy; `RunningCVESummary` is host-scoped running-process counts). **Caveat — two different CVE metrics:** the dashboard's headline *CVE exposure* is **unique CVE IDs**, served by a *third* method `CVEData` that deduplicates by CVE-ID across hosts (max-severity reconciliation) — that one is **not** summable, so its fan-out must ship each bolt's `{CVE-ID → max-severity}` set and dedup at the viewer. Only `RunningCVESummary` is the trivial-summation case.
+3. **Risk summary** — *medium.* `risk.ScoreFleet`/`ScoreEnvoy` are pure, but the per-bolt summary is embedded in `DataSource.RiskData`. The merge is non-trivial: `AvgScore` is a mean (not summable) — each bolt ships **count + score-sum**, the viewer re-means; top-N ships per-bolt candidates and the viewer re-ranks; the sparkline is per-bolt DB history (`ListRiskPostureHistory`) that must also be merged.
+4. **Compliance coverage** — *largest.* The aggregate exists (`aggregateFleetPartitions`/`BuildFrameworkReport`/`buildFrameworkCoverage`) but is tied to `ReportHandler`'s local `fleetIndex` + `configStore` + audit chain inside the ~4400-line `server/api/report.go`. **Merge math (corrected — the original "covered/waived/partial/missing are additive" was wrong):** the headline buckets are **macro-averages** (unweighted mean of per-envoy values), so a mean-of-per-bolt-means mis-weights a 3-envoy bolt equal to a 1000-envoy one. Each bolt must ship per-bucket **sum + active-envoy count** and the viewer re-means over the union — the same count+sum pattern as risk. Only the per-control `{FleetCovered, FleetTotal}` counts are truly additive (merged % = ΣFleetCovered / ΣFleetTotal). **Wire discipline (load-bearing):** the owning bolt must fold to per-control counts *before* the wire; shipping per-envoy configcrate-assignment sets re-replicates inventory-scale data and defeats federation. **Per-bolt audit-chain status does not aggregate** — see Open Questions.
+5. **Fleet + per-bolt tabs UX.** (The `DeleteEnvoy` owning-bolt routing the original draft folded in here was already shipped in `4f23a18b` — see Per-page class rules.)
+
+**Build order — tabs-first.** The cheapest end-to-end slice that proves the whole mechanism (the `?scope=` threading, the boosted-nav tabs, fan-out-to-one-peer) is the tab shell wired to the data that is *already* federated — convergence + envoy counts/list. Build that first so the operator gets working `Fleet | bolt-N` tabs early; not-yet-federated cards carry an honest per-card scope label until their slice (2 → 3 → 4) lands and lights them up. This inverts the original tabs-last numbering.
 
 Optionally, a `local`/no-RPC path for these pages (like convergence's gossip-cache aggregate) would require extending the gossiped `FleetSnapshot` beyond `Envoys`+`Convergence`. Not needed for v1 — fan-out-only is correct for on-demand viewing and avoids the continuous bandwidth/memory cost.
 
@@ -66,6 +68,8 @@ Optionally, a `local`/no-RPC path for these pages (like convergence's gossip-cac
 ## Open questions / residual
 
 - **Fleet-wide compliance is the hard slice.** Each bolt has its own tamper-evident audit hash chain; there is no single fleet audit chain, so a merged compliance view cannot present one aggregate "audit status." Resolution (deferred to the compliance slice): present coverage % merged across bolts but surface audit-chain status **per bolt** (not aggregated), with the merged report stating that the audit chain is per-bolt by construction. This is a fact about the design, not a defect — but it shapes how the compliance slice renders.
+- **Per-control `Status` divergence across bolts (compliance slice).** A control's `Status` (satisfied / waived / partial / not-satisfied) is partly a *bolt-local* product-findings verdict (`buildFrameworkFindings`), so two bolts can legitimately report different statuses for the same control. The correct cross-bolt reconciliation rule (worst-wins? coverage-weighted? per-bolt breakdown on hover?) is unspecified and must be settled when slice 4 is built. The additive `{FleetCovered, FleetTotal}` counts are unaffected — this is only about the qualitative per-control verdict.
+- **Shared-CA prerequisite (transport).** Fan-out presupposes the bolts share a fleet CA; hands-off establishment (`spanner.peers` boot-time auto-admission) is tracked separately in `pending.md` and is not part of this arc. Manual CA setup is the interim path.
 
 ## Consequences
 
