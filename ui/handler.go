@@ -999,6 +999,13 @@ type ScopeTab struct {
 // across every bolt. Any other scope value is a bolt pubkey-hex.
 const scopeFleet = "fleet"
 
+// scopeLocal is the bolt-tab scope key for a standalone server (no spanner
+// identity, so no pubkey). It resolves to the full local dashboard exactly
+// like scopeFleet does in standalone — the two standalone tabs are stable
+// chrome over the same view, so adding a second bolt doesn't restructure
+// the page (ADR-037).
+const scopeLocal = "local"
+
 // LicensePageData holds data for the license status page.
 type LicensePageData struct {
 	PageData
@@ -2619,7 +2626,7 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 	// deployments render exactly as before.
 	scope := h.resolveScope(r)
 	pd.Scope = scope
-	pd.ScopedAway = h.scopedAway(scope)
+	pd.ScopedAway = h.scopedAway(r.Context(), scope)
 	pd.ScopeTabs = h.buildScopeTabs(r, scope)
 	if h.authEnabled {
 		if u := auth.UserFromContext(r.Context()); u != nil {
@@ -2640,27 +2647,40 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // fleet.read (i.e., the compliance role) get redirected to
 // /compliance instead — the dashboard is a fleet-state surface and
 // has no compliance-shaped fallback worth rendering.
-// resolveScope returns the active spanner scope from ?scope=, defaulting
-// to scopeFleet in spanner mode. Empty when not federated — the page then
-// renders its local DataSource exactly as before (no tabs, no scoping).
+// resolveScope returns the active scope from ?scope=, defaulting to
+// scopeFleet. The dashboard always shows the Fleet | <bolt> tab strip — in
+// standalone too (ADR-037) — so the default is scopeFleet in both modes.
+// In standalone the scope is cosmetic: scopedAway is false for every value,
+// so any tab renders the full local dashboard.
 func (h *Handler) resolveScope(r *http.Request) string {
-	if h.spannerAdmin == nil {
-		return ""
-	}
 	if s := r.URL.Query().Get("scope"); s != "" {
 		return s
 	}
 	return scopeFleet
 }
 
-// scopedAway reports whether a scope hides this bolt's local-only detail
-// cards: true for fleet and for any peer bolt, false for this bolt's own
-// tab (full local detail) and for standalone mode. The local-only cards
-// (CVE/risk/compliance/cert detail) are not yet federated (ADR-037 slices
-// 2–4), so outside this bolt's tab the page shows the scoped convergence
-// summary plus an honest "detail not yet federated" notice.
-func (h *Handler) scopedAway(scope string) bool {
-	return h.spannerAdmin != nil && scope != "" && scope != h.spannerAdmin.LocalPubkey()
+// scopedAway reports whether a scope routes to the reduced federated/scoped
+// render (dashboardScoped) instead of the full local dashboard. It is true
+// only for a genuinely multi-bolt fleet viewed at fleet scope or a peer
+// bolt's tab. It is false for: standalone mode, this bolt's own tab, and —
+// critically — any scope on a single-bolt spanner. A lone bolt has no peers
+// to federate from, so its Fleet view IS the full local dashboard; routing
+// it to the reduced view would needlessly hide ~80% of the cards. This is
+// what lets the Fleet | <bolt> tab strip render identically from one bolt
+// up, with the chrome stable as bolts are added (ADR-037).
+func (h *Handler) scopedAway(ctx context.Context, scope string) bool {
+	if h.spannerAdmin == nil {
+		return false // standalone: tabs are cosmetic, always the full local render
+	}
+	if scope == "" || scope == h.spannerAdmin.LocalPubkey() {
+		return false // this bolt's own tab → full local detail
+	}
+	roster, err := h.spannerAdmin.BoltRoster(ctx)
+	if err != nil {
+		slog.Warn("scopedAway: bolt roster read failed", "error", err)
+		return false
+	}
+	return len(roster) > 1
 }
 
 // scopedConvergence returns the convergence counters for a scoped-away
@@ -2743,21 +2763,36 @@ func (h *Handler) scopedCompliance(ctx context.Context, scope string) (spanner.C
 // rendered in-template via {{T}}; bolt tabs are labelled by hostname
 // (data, not translatable). Returns nil outside spanner mode.
 func (h *Handler) buildScopeTabs(r *http.Request, current string) []ScopeTab {
+	path := r.URL.Path
+	fleetTab := ScopeTab{
+		Key:     scopeFleet,
+		Href:    path + "?scope=" + scopeFleet,
+		Active:  current == scopeFleet,
+		IsFleet: true,
+	}
+	// Standalone: no spanner identity, so synthesize a single local bolt
+	// from the server hostname. Both tabs render the full local dashboard
+	// (scopedAway is false in standalone), so the chrome is stable from one
+	// bolt up — adding a second server doesn't restructure the page.
 	if h.spannerAdmin == nil {
-		return nil
+		host := h.serverHostname
+		if host == "" {
+			host = "localhost"
+		}
+		return []ScopeTab{fleetTab, {
+			Key:     scopeLocal,
+			Label:   host,
+			Href:    path + "?scope=" + scopeLocal,
+			Active:  current == scopeLocal,
+			IsLocal: true,
+		}}
 	}
 	roster, err := h.spannerAdmin.BoltRoster(r.Context())
 	if err != nil {
 		slog.Warn("scope tabs: bolt roster read failed", "error", err)
 		return nil
 	}
-	path := r.URL.Path
-	tabs := []ScopeTab{{
-		Key:     scopeFleet,
-		Href:    path + "?scope=" + scopeFleet,
-		Active:  current == scopeFleet,
-		IsFleet: true,
-	}}
+	tabs := []ScopeTab{fleetTab}
 	for _, b := range roster {
 		tabs = append(tabs, ScopeTab{
 			Key:     b.Pubkey,
@@ -2795,12 +2830,13 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Spanner scoped views (ADR-037): the fleet aggregate or a peer bolt
-	// renders the convergence summary from the gossip cache plus an honest
-	// "detail not yet federated" notice — skipping the local-only CVE/risk/
-	// compliance/cert enrichment entirely. This bolt's own tab (and
-	// standalone mode) falls through to the full local dashboard below.
-	if scope := h.resolveScope(r); h.scopedAway(scope) {
+	// Spanner scoped views (ADR-037): on a multi-bolt fleet, the fleet
+	// aggregate or a peer bolt renders the convergence summary from the
+	// gossip cache plus the federated columns and an honest notice for the
+	// rest — skipping the local-only enrichment. This bolt's own tab,
+	// standalone mode, AND a single-bolt spanner (no peers to federate from)
+	// all fall through to the full local dashboard below.
+	if scope := h.resolveScope(r); h.scopedAway(r.Context(), scope) {
 		h.dashboardScoped(w, r, scope)
 		return
 	}
@@ -3201,7 +3237,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	// Scoped (fleet / peer-bolt) view: only the fleet-health column from
 	// scoped convergence counters; the local-only columns are suppressed
 	// in the template (ADR-037). No local DataSource build.
-	if scope := h.resolveScope(r); h.scopedAway(scope) {
+	if scope := h.resolveScope(r); h.scopedAway(r.Context(), scope) {
 		c := h.scopedConvergence(scope)
 		data := DashboardStatsFragmentData{
 			Locale:         h.localeFromRequest(r),

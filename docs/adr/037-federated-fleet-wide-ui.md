@@ -37,6 +37,8 @@ Top tabs `Fleet | bolt-1 | … | bolt-N`, all rendered **in the viewing bolt's o
 
 Graceful partial results: the `fanOut` driver already gives this — a 5s per-peer timeout + panic isolation, returning partial results. Reachable bolts render; unreachable bolts are flagged ("N bolts unreachable") so a merged number is never *silently* undercounted.
 
+**Stable chrome from one bolt up (0.76.41).** The `Fleet | <bolt>` strip renders in **standalone mode too**, not just spanner — a standalone server shows `Fleet | <hostname> (this bolt)` synthesized from `server.hostname` (falling back to `localhost`). This keeps the dashboard layout identical whether you run one server or many, so enabling spanner and adding a second bolt grows the strip by a tab rather than restructuring the page. The standalone tabs are **cosmetic**: both render the full local dashboard (the scope is never "scoped away"). Crucially, the same is true for a **single-bolt spanner** — with no peers to federate from, its Fleet view IS the full local dashboard, not the reduced federated render; routing a lone bolt to the reduced view would needlessly hide ~80% of the cards. The reduced federated Fleet view engages only once a second bolt joins (`scopedAway` gates on `len(roster) > 1`). Note the tab strip is rendered only on the dashboard today (`dashboard.html`); other pages populate `ScopeTabs` but don't yet emit it.
+
 ## What is already solid (verified) vs. what must be built
 
 **Solid — reuse as-is:**
