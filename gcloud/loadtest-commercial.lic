@@ -1,0 +1,14 @@
+{
+  "payload": {
+    "customer_name": "Alexander4 Loadtest (shared, container)",
+    "customer_id": "alexander4-loadtest",
+    "license_id": "lic-20260625-alexander4-loadtest",
+    "tier": "scale",
+    "max_envoys": 100000,
+    "fingerprint": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    "issued_at": "2026-06-25",
+    "expires_at": "2030-01-01",
+    "version": 1
+  },
+  "signature": "ydSjb2gMT6Gx+Bwfoe6TvMRab1RvqeRC+d2uah9il4csjQ8t9uL6MwZSUl6gV0PV7llVA3T9B703EhP8lSNjBA=="
+}

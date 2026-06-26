@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 # Set up a spanner BOLT: Docker + AR auth + seed config, write the spanner block
 # (mode=spanner, shared spanner_id, this bolt's hostname-pattern partition) into
-# server.yaml, init+unlock the vault, install the unlimited load-test license
-# (spanner refuses the built-in free-100 license; the community "free-100000000"
-# license is NOT the free one, so it's accepted), run vigosrv, install vigocli.
+# server.yaml, init+unlock the vault, install the commercial load-test license,
+# run vigosrv, install vigocli.
+#
+# License note: spanner mode requires a COMMERCIAL-tier license (0.76.41+ gates on
+# vigolic.RequiresBinding(tier); community/free tiers are refused). We seed a
+# shared Scale-tier license (loadtest-commercial.lic). It carries a *placeholder*
+# fingerprint — a commercial license without one is rejected as unbound, but the
+# containerized vigosrv can't read /var/lib/dbus/machine-id, so the binding check
+# degrades to a warning and the license validates on tier+signature+expiry. That's
+# why one license is shared across all load-test bolts. NOT a production pattern —
+# real deployments bind each server to its own fingerprint.
 #
 # The spanner ceremony (init / invite / join) is driven AFTER this by the operator
 # — see provision-spanner.sh next-steps.
@@ -77,12 +85,12 @@ printf '%s\n%s\n' "$VAULT_PASS" "$VAULT_PASS" \
   | script -qec "vigocli secrets init --key-file ${DATA}/secrets/.master.key" /dev/null >/dev/null 2>&1 \
   || printf '%s\n' "$VAULT_PASS" | script -qec "vigocli secrets unlock" /dev/null >/dev/null 2>&1 || true
 
-echo "== Install unlimited load-test license (spanner needs a non-free license) =="
-if [ -f /tmp/loadtest-unlimited.lic ]; then
-  cp /tmp/loadtest-unlimited.lic "${DATA}/license/"; chmod 600 "${DATA}/license/loadtest-unlimited.lic"
+echo "== Install commercial load-test license (spanner requires a commercial tier) =="
+if [ -f /tmp/loadtest-commercial.lic ]; then
+  cp /tmp/loadtest-commercial.lic "${DATA}/license/"; chmod 600 "${DATA}/license/loadtest-commercial.lic"
   echo "  installed"
 else
-  echo "  ! /tmp/loadtest-unlimited.lic missing — spanner will refuse to start on the free license" >&2
+  echo "  ! /tmp/loadtest-commercial.lic missing — spanner will refuse to start without a commercial license" >&2
 fi
 
 echo "== Run vigosrv (host net; spanner mode) =="

@@ -74,7 +74,7 @@ echo "== Copy to bolts =="
 for b in vigo-bolt-1 vigo-bolt-2; do
   scp_iap "${SCRIPT_DIR}/setup-bolt.sh" "$b"
   scp_iap "/tmp/vigo-version" "$b"
-  scp_iap "${SCRIPT_DIR}/loadtest-unlimited.lic" "$b"
+  scp_iap "${SCRIPT_DIR}/loadtest-commercial.lic" "$b"
   scp_iap "/tmp/vigocli" "$b"
 done
 echo "== Copy to harnesses =="
