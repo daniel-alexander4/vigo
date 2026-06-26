@@ -454,6 +454,9 @@ func (m *footprintMock) EnvoyCertDetails(id, b string) ([]CertDetail, string, bo
 }
 func (m *footprintMock) RunningCVESummary() RunningCVESummary { return m.base.RunningCVESummary() }
 func (m *footprintMock) SecuritySummary() SecuritySummary     { return m.base.SecuritySummary() }
+func (m *footprintMock) RiskSummary(b, o time.Duration) RiskSummary {
+	return m.base.RiskSummary(b, o)
+}
 func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 	return fleetpressure.FleetSummary{
 		MaxOpenFDs:         640,
@@ -1323,6 +1326,10 @@ func (m *mockDataSource) RunningCVESummary() RunningCVESummary {
 
 func (m *mockDataSource) SecuritySummary() SecuritySummary {
 	return SecuritySummary{}
+}
+
+func (m *mockDataSource) RiskSummary(_, _ time.Duration) RiskSummary {
+	return RiskSummary{}
 }
 
 func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {

@@ -1341,7 +1341,7 @@
   "spanner.scope_partition": "partizione di questo bolt",
   "spanner.scope_aria": "Ambito della flotta",
   "spanner.scope_detail_notice": "Visualizzazione della convergenza dell'intera flotta. Il dettaglio di sicurezza, rischio, conformità e certificati per bolt si trova nella scheda di ciascun bolt; le viste dettagliate dell'intera flotta sono in fase di rilascio (ADR-037).",
-  "spanner.scope_detail_notice_partial": "Visualizzazione della convergenza e della sicurezza dell'intera flotta. Il dettaglio di conformità e rischio per bolt si trova nella scheda di ciascun bolt; queste viste dell'intera flotta sono in fase di rilascio (ADR-037).",
+  "spanner.scope_detail_notice_partial": "Visualizzazione della convergenza dell'intera flotta e delle schede federate sopra. Il dettaglio per bolt delle schede rimanenti si trova nella scheda di ciascun bolt; queste viste dell'intera flotta sono in fase di rilascio (ADR-037).",
   "spanner.tab_fleet": "Flotta",
   "spanner.tab_this_bolt_suffix": "(questo bolt)",
   "spanner.seconds_ago": "s fa",

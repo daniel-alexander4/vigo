@@ -1627,6 +1627,36 @@ func (ds *DataSource) RiskData(baseInterval, offlineThreshold time.Duration) ui.
 	}
 }
 
+// RiskSummary composes this bolt's Risk column data into a federatable
+// rollup (ADR-037 slice 3): the score sum + scored count (so the viewer
+// re-means across bolts) plus the severity distribution. Skips the
+// per-envoy top-N and the DB sparkline that RiskData builds — those are
+// the /risk page's, not the dashboard column's, and not federated here.
+func (ds *DataSource) RiskSummary(baseInterval, offlineThreshold time.Duration) ui.RiskSummary {
+	allEnvoys := ds.fleet.AllEnvoys()
+	inputs := make([]risk.EnvoyInput, len(allEnvoys))
+	for i, es := range allEnvoys {
+		inputs[i] = risk.EnvoyInput{
+			ID:                es.ID,
+			Hostname:          es.Hostname,
+			Revoked:           es.Revoked,
+			LastSeen:          es.LastSeen,
+			ConvergenceStatus: es.ConvergenceStatus,
+			Traits:            es.Traits,
+			ObservedCycle:     ds.fleet.EnvoyCycle(es.ID),
+		}
+	}
+	fr := risk.ScoreFleet(inputs, baseInterval, offlineThreshold, 0)
+	return ui.RiskSummary{
+		ScoreSum:    fr.ScoreSum,
+		ScoredCount: fr.ScoredEnvoys,
+		Critical:    fr.Distribution[risk.LevelCritical],
+		High:        fr.Distribution[risk.LevelHigh],
+		Medium:      fr.Distribution[risk.LevelMedium],
+		Low:         fr.Distribution[risk.LevelLow],
+	}
+}
+
 func (ds *DataSource) RiskPostureData(baseInterval, offlineThreshold time.Duration) ui.RiskPosturePageData {
 	allEnvoys := ds.fleet.AllEnvoys()
 	inputs := make([]risk.EnvoyInput, len(allEnvoys))

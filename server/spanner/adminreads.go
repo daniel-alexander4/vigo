@@ -575,6 +575,89 @@ func (a *SpannerAdmin) AggregateSecurityFanout(ctx context.Context) (SecuritySum
 	return MergeSecuritySummaries(parts), nil
 }
 
+// --- risk summary (ADR-037 slice 3, fan-out-only — never gossiped) ---
+
+// RiskSummary is a bolt's risk-posture rollup for the federated dashboard
+// Risk column. ScoreSum + ScoredCount carry the un-divided average so the
+// viewer re-means across bolts (averaging per-bolt averages mis-weights a
+// small bolt equal to a large one); the severity buckets are additive.
+type RiskSummary struct {
+	ScoreSum    int64
+	ScoredCount int
+	Critical    int
+	High        int
+	Medium      int
+	Low         int
+}
+
+// AvgScore is the fleet (or per-bolt) mean risk score, truncated to int to
+// match the local dashboard's int(float64(sum)/count) rendering.
+func (s RiskSummary) AvgScore() int {
+	if s.ScoredCount == 0 {
+		return 0
+	}
+	return int(s.ScoreSum / int64(s.ScoredCount))
+}
+
+// MergeRiskSummaries sums score totals, scored counts, and severity buckets
+// across bolts. The merged AvgScore is then ScoreSum/ScoredCount over the
+// union — a correctly fleet-weighted mean.
+func MergeRiskSummaries(parts []RiskSummary) RiskSummary {
+	var out RiskSummary
+	for _, p := range parts {
+		out.ScoreSum += p.ScoreSum
+		out.ScoredCount += p.ScoredCount
+		out.Critical += p.Critical
+		out.High += p.High
+		out.Medium += p.Medium
+		out.Low += p.Low
+	}
+	return out
+}
+
+func RiskSummaryToProto(s RiskSummary) *pb.GetRiskSummaryResponse {
+	return &pb.GetRiskSummaryResponse{
+		ScoreSum:    s.ScoreSum,
+		ScoredCount: int32(s.ScoredCount),
+		Critical:    int32(s.Critical),
+		High:        int32(s.High),
+		Medium:      int32(s.Medium),
+		Low:         int32(s.Low),
+	}
+}
+
+func RiskSummaryFromProto(resp *pb.GetRiskSummaryResponse) RiskSummary {
+	return RiskSummary{
+		ScoreSum:    resp.ScoreSum,
+		ScoredCount: int(resp.ScoredCount),
+		Critical:    int(resp.Critical),
+		High:        int(resp.High),
+		Medium:      int(resp.Medium),
+		Low:         int(resp.Low),
+	}
+}
+
+// AggregateRiskFanout fans out GetRiskSummary to every roster bolt and
+// merges the results. Returns the merged PEER summaries; the caller folds
+// in the local bolt's own summary. Fan-out-only (risk is never gossiped).
+func (a *SpannerAdmin) AggregateRiskFanout(ctx context.Context) (RiskSummary, error) {
+	results, err := a.fanOut(ctx, func(ctx context.Context, pc *PeerConn) (any, error) {
+		return pc.Admin.GetRiskSummary(ctx, &pb.GetRiskSummaryRequest{})
+	})
+	if err != nil {
+		return RiskSummary{}, err
+	}
+	parts := make([]RiskSummary, 0, len(results))
+	for _, r := range results {
+		if r.err != nil {
+			slog.Warn("spanner fanout: peer GetRiskSummary failed", "peer", r.pubkey, "error", r.err)
+			continue
+		}
+		parts = append(parts, RiskSummaryFromProto(r.value.(*pb.GetRiskSummaryResponse)))
+	}
+	return MergeRiskSummaries(parts), nil
+}
+
 // RunsFromBolt pulls one bolt's runs for a specific envoy via a single
 // admin gRPC call — the owning-bolt routing path for ListRuns(envoy_id)
 // when the cached roster shows the envoy lives on a remote peer.

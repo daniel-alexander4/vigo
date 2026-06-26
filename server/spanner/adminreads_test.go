@@ -333,3 +333,31 @@ func TestSecuritySummaryProtoRoundTrip(t *testing.T) {
 		t.Errorf("scalar round-trip mismatch: %+v", out)
 	}
 }
+
+func TestMergeRiskSummaries(t *testing.T) {
+	// Bolt A: 1000 envoys, score sum 30000 (avg 30). Bolt B: 10 envoys,
+	// score sum 900 (avg 90). The fleet mean must be weighted by envoy
+	// count — 30900/1010 ≈ 30 — not the average of averages (60).
+	a := RiskSummary{ScoreSum: 30000, ScoredCount: 1000, Critical: 1, High: 5, Medium: 10, Low: 984}
+	b := RiskSummary{ScoreSum: 900, ScoredCount: 10, Critical: 4, High: 3, Medium: 2, Low: 1}
+
+	got := MergeRiskSummaries([]RiskSummary{a, b})
+
+	if got.ScoredCount != 1010 || got.ScoreSum != 30900 {
+		t.Fatalf("merge sums: count=%d sum=%d, want 1010/30900", got.ScoredCount, got.ScoreSum)
+	}
+	if avg := got.AvgScore(); avg != 30 {
+		t.Errorf("fleet-weighted avg: got %d, want 30 (not the 60 you'd get averaging averages)", avg)
+	}
+	if got.Critical != 5 || got.High != 8 || got.Medium != 12 || got.Low != 985 {
+		t.Errorf("severity buckets not summed: %+v", got)
+	}
+}
+
+func TestRiskSummaryProtoRoundTrip(t *testing.T) {
+	in := RiskSummary{ScoreSum: 1234, ScoredCount: 56, Critical: 1, High: 2, Medium: 3, Low: 4}
+	out := RiskSummaryFromProto(RiskSummaryToProto(in))
+	if out != in {
+		t.Errorf("round-trip mismatch: got %+v, want %+v", out, in)
+	}
+}

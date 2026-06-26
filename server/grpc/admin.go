@@ -683,6 +683,17 @@ func (s *AdminService) GetSecuritySummary(_ context.Context, _ *pb.GetSecuritySu
 	return spanner.SecuritySummaryToProto(ds.SecuritySummary().ToSpanner()), nil
 }
 
+// GetRiskSummary returns THIS bolt's risk-posture rollup (ADR-037 slice
+// 3) — a leaf read that never fans out, so the federated viewer can fan
+// it to every roster bolt without recursion.
+func (s *AdminService) GetRiskSummary(_ context.Context, _ *pb.GetRiskSummaryRequest) (*pb.GetRiskSummaryResponse, error) {
+	if s.fleetIndex == nil {
+		return &pb.GetRiskSummaryResponse{}, nil
+	}
+	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
+	return spanner.RiskSummaryToProto(ds.RiskSummary(s.baseInterval, s.offlineThreshold).ToSpanner()), nil
+}
+
 func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoyConvergenceRequest) (*pb.GetEnvoyConvergenceResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)

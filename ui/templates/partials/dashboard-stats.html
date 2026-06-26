@@ -43,6 +43,8 @@
             {{template "stat-card" dict "Locale" $.Locale "Value" (printf "%.0f%%" .StandardsPct) "Label" (printf (T $.Locale "dashboard_stats.n_of_n_covered") (add .SatisfiedControls .WaivedControls) .TotalControls) "Color" "success"}}
         </div>
     </a>
+    {{end}}
+    {{if or (not $.ScopedAway) $.RiskFederated}}
     <a class="dash-column dash-column--link" href="/risk" aria-label="{{T $.Locale "dashboard_stats.risk_posture_aria"}}">
         <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.risk_posture"}}</h3>
         <div class="stat-cards">

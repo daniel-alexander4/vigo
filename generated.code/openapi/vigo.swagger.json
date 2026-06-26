@@ -426,6 +426,29 @@
         ]
       }
     },
+    "/api/v1/risk-summary": {
+      "get": {
+        "summary": "GetRiskSummary returns this bolt's risk-posture rollup for the\ndashboard Risk column (ADR-037). Leaf read — never fans out. Ships\nscore_sum + scored_count (not a pre-divided average) so the federated\nviewer re-means across bolts correctly; the severity buckets are\nadditive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,\nwhich the hand-written /api/v1/risk/{envoyID} route would shadow).",
+        "operationId": "VigoAdmin_GetRiskSummary",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRiskSummaryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
     "/api/v1/runs": {
       "get": {
         "summary": "ListRuns lists recent runs, optionally filtered by envoy.",
@@ -980,6 +1003,36 @@
       "properties": {
         "envoy": {
           "$ref": "#/definitions/v1Envoy"
+        }
+      }
+    },
+    "v1GetRiskSummaryResponse": {
+      "type": "object",
+      "properties": {
+        "scoreSum": {
+          "type": "string",
+          "format": "int64",
+          "description": "score_sum / scored_count let the viewer re-mean across bolts\n(avg = score_sum / scored_count); the buckets are additive counts."
+        },
+        "scoredCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "critical": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "high": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "medium": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "low": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

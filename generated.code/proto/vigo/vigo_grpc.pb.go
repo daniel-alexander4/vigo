@@ -483,6 +483,7 @@ const (
 	VigoAdmin_DeleteWebhook_FullMethodName         = "/vigo.v1.VigoAdmin/DeleteWebhook"
 	VigoAdmin_GetConvergenceSummary_FullMethodName = "/vigo.v1.VigoAdmin/GetConvergenceSummary"
 	VigoAdmin_GetSecuritySummary_FullMethodName    = "/vigo.v1.VigoAdmin/GetSecuritySummary"
+	VigoAdmin_GetRiskSummary_FullMethodName        = "/vigo.v1.VigoAdmin/GetRiskSummary"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
@@ -534,6 +535,13 @@ type VigoAdminClient interface {
 	// viewer unions them across bolts (summing counts double-counts shared
 	// CVEs); every other field is an additive per-host count.
 	GetSecuritySummary(ctx context.Context, in *GetSecuritySummaryRequest, opts ...grpc.CallOption) (*GetSecuritySummaryResponse, error)
+	// GetRiskSummary returns this bolt's risk-posture rollup for the
+	// dashboard Risk column (ADR-037). Leaf read — never fans out. Ships
+	// score_sum + scored_count (not a pre-divided average) so the federated
+	// viewer re-means across bolts correctly; the severity buckets are
+	// additive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,
+	// which the hand-written /api/v1/risk/{envoyID} route would shadow).
+	GetRiskSummary(ctx context.Context, in *GetRiskSummaryRequest, opts ...grpc.CallOption) (*GetRiskSummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -726,6 +734,16 @@ func (c *vigoAdminClient) GetSecuritySummary(ctx context.Context, in *GetSecurit
 	return out, nil
 }
 
+func (c *vigoAdminClient) GetRiskSummary(ctx context.Context, in *GetRiskSummaryRequest, opts ...grpc.CallOption) (*GetRiskSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRiskSummaryResponse)
+	err := c.cc.Invoke(ctx, VigoAdmin_GetRiskSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vigoAdminClient) GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEnvoyConvergenceResponse)
@@ -811,6 +829,13 @@ type VigoAdminServer interface {
 	// viewer unions them across bolts (summing counts double-counts shared
 	// CVEs); every other field is an additive per-host count.
 	GetSecuritySummary(context.Context, *GetSecuritySummaryRequest) (*GetSecuritySummaryResponse, error)
+	// GetRiskSummary returns this bolt's risk-posture rollup for the
+	// dashboard Risk column (ADR-037). Leaf read — never fans out. Ships
+	// score_sum + scored_count (not a pre-divided average) so the federated
+	// viewer re-means across bolts correctly; the severity buckets are
+	// additive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,
+	// which the hand-written /api/v1/risk/{envoyID} route would shadow).
+	GetRiskSummary(context.Context, *GetRiskSummaryRequest) (*GetRiskSummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -883,6 +908,9 @@ func (UnimplementedVigoAdminServer) GetConvergenceSummary(context.Context, *GetC
 }
 func (UnimplementedVigoAdminServer) GetSecuritySummary(context.Context, *GetSecuritySummaryRequest) (*GetSecuritySummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSecuritySummary not implemented")
+}
+func (UnimplementedVigoAdminServer) GetRiskSummary(context.Context, *GetRiskSummaryRequest) (*GetRiskSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRiskSummary not implemented")
 }
 func (UnimplementedVigoAdminServer) GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEnvoyConvergence not implemented")
@@ -1223,6 +1251,24 @@ func _VigoAdmin_GetSecuritySummary_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VigoAdmin_GetRiskSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRiskSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoAdminServer).GetRiskSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoAdmin_GetRiskSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoAdminServer).GetRiskSummary(ctx, req.(*GetRiskSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VigoAdmin_GetEnvoyConvergence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEnvoyConvergenceRequest)
 	if err := dec(in); err != nil {
@@ -1369,6 +1415,10 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSecuritySummary",
 			Handler:    _VigoAdmin_GetSecuritySummary_Handler,
+		},
+		{
+			MethodName: "GetRiskSummary",
+			Handler:    _VigoAdmin_GetRiskSummary_Handler,
 		},
 		{
 			MethodName: "GetEnvoyConvergence",

@@ -99,6 +99,10 @@ type DataSource interface {
 	// federatable rollup (deduped CVEs + cert/running-CVE/rootkit counts),
 	// fanned out across bolts in spanner mode (ADR-037 slice 2).
 	SecuritySummary() SecuritySummary
+	// RiskSummary is the dashboard Risk column's data as a federatable
+	// rollup (score sum + count + severity buckets), fanned out across
+	// bolts in spanner mode (ADR-037 slice 3).
+	RiskSummary(baseInterval, offlineThreshold time.Duration) RiskSummary
 	// FleetPressure rolls up per-envoy resource + repo-health telemetry
 	// into the dashboard "Agent Health" card via the fleetpressure SoT
 	// package.
@@ -177,6 +181,30 @@ func (s SecuritySummary) ToSpanner() spanner.SecuritySummary {
 		out.UniqueCVEs = append(out.UniqueCVEs, spanner.CVEIdent{ID: c.ID, Severity: c.Severity})
 	}
 	return out
+}
+
+// RiskSummary is the dashboard Risk column's data as a federatable rollup
+// (ADR-037 slice 3): score sum + scored count (so the viewer re-means the
+// average across bolts) plus additive severity-bucket counts.
+type RiskSummary struct {
+	ScoreSum    int64
+	ScoredCount int
+	Critical    int
+	High        int
+	Medium      int
+	Low         int
+}
+
+// ToSpanner converts to the spanner federation type for fan-out merging.
+func (s RiskSummary) ToSpanner() spanner.RiskSummary {
+	return spanner.RiskSummary{
+		ScoreSum:    s.ScoreSum,
+		ScoredCount: s.ScoredCount,
+		Critical:    s.Critical,
+		High:        s.High,
+		Medium:      s.Medium,
+		Low:         s.Low,
+	}
 }
 
 // CertExpirySummary aggregates `cert_lifecycle` trait rows fleet-wide
@@ -1026,10 +1054,11 @@ type DashboardPageData struct {
 	// dashboard counts above are this bolt's partition only; this drives
 	// the header scope chip so the operator can tell the two apart.
 	FleetWideEnvoys int
-	// SecurityFederated is set when the Security Posture column has been
-	// fanned out + merged across bolts (ADR-037 slice 2), so the template
-	// renders it even in a scoped-away (fleet) view.
+	// SecurityFederated / RiskFederated are set when the Security Posture /
+	// Risk column has been fanned out + merged across bolts (ADR-037 slices
+	// 2 & 3), so the template renders them even in a scoped-away view.
 	SecurityFederated bool
+	RiskFederated     bool
 	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
@@ -1311,6 +1340,7 @@ type DashboardStatsFragmentData struct {
 	Scope             string
 	ScopedAway        bool
 	SecurityFederated bool
+	RiskFederated     bool
 	TotalEnvoys       int
 	ActiveEnvoys      int
 	RecentFailures    int
@@ -2622,6 +2652,23 @@ func (h *Handler) scopedSecurity(ctx context.Context, scope string) (spanner.Sec
 	return spanner.MergeSecuritySummaries([]spanner.SecuritySummary{peers, local}), true
 }
 
+// scopedRisk returns the fleet-merged Risk summary for the fleet scope:
+// fan out GetRiskSummary to peers, fold in this bolt's own summary, and
+// re-mean across the union. Only fleet scope is federated for risk in
+// slice 3. ok=false otherwise or on fan-out failure.
+func (h *Handler) scopedRisk(ctx context.Context, scope string) (spanner.RiskSummary, bool) {
+	if h.spannerAdmin == nil || scope != scopeFleet {
+		return spanner.RiskSummary{}, false
+	}
+	peers, err := h.spannerAdmin.AggregateRiskFanout(ctx)
+	if err != nil {
+		slog.Warn("scoped risk fan-out failed", "error", err)
+		return spanner.RiskSummary{}, false
+	}
+	local := h.dataSource.RiskSummary(h.baseInterval, h.offlineThreshold).ToSpanner()
+	return spanner.MergeRiskSummaries([]spanner.RiskSummary{peers, local}), true
+}
+
 // buildScopeTabs builds the ADR-037 "Fleet | bolt-N" tab strip for the
 // current page path, marking the active tab. The fleet tab's label is
 // rendered in-template via {{T}}; bolt tabs are labelled by hostname
@@ -2851,6 +2898,14 @@ func (h *Handler) dashboardScoped(w http.ResponseWriter, r *http.Request, scope 
 		data.RunningCVEsTotal = sec.RunningCVEsTotal
 		data.RunningCVEsCritical = sec.RunningCVEsCritical
 		data.RunningCVEsHigh = sec.RunningCVEsHigh
+	}
+	// Federated Risk column (slice 3): fleet scope re-means across bolts.
+	if rsk, ok := h.scopedRisk(r.Context(), scope); ok {
+		data.RiskFederated = true
+		data.RiskAvgScore = rsk.AvgScore()
+		data.RiskCritical = rsk.Critical
+		data.RiskHigh = rsk.High
+		data.RiskMedium = rsk.Medium
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)
@@ -3093,6 +3148,13 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 			data.RunningCVEsTotal = sec.RunningCVEsTotal
 			data.RunningCVEsCritical = sec.RunningCVEsCritical
 			data.RunningCVEsHigh = sec.RunningCVEsHigh
+		}
+		if rsk, ok := h.scopedRisk(r.Context(), scope); ok {
+			data.RiskFederated = true
+			data.RiskAvgScore = rsk.AvgScore()
+			data.RiskCritical = rsk.Critical
+			data.RiskHigh = rsk.High
+			data.RiskMedium = rsk.Medium
 		}
 		h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 		return
@@ -7302,7 +7364,7 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 		data.ExpiresAt = s.ExpiresAt
 		data.DaysRemaining = s.DaysRemaining
 		data.Violation = s.Violation
-		data.IsFreeTier = h.enforcer.IsFreeLicense()
+		data.IsFreeTier = !h.enforcer.IsCommercialLicense()
 		if s.MaxEnvoys > 0 {
 			data.UsagePct = float64(data.ActiveEnvoys) / float64(s.MaxEnvoys) * 100
 		}
@@ -7335,7 +7397,7 @@ func (h *Handler) Support(w http.ResponseWriter, r *http.Request) {
 	if h.enforcer != nil {
 		s := h.enforcer.GetStatus()
 		data.MaxEnvoys = s.MaxEnvoys
-		data.IsFreeTier = h.enforcer.IsFreeLicense()
+		data.IsFreeTier = !h.enforcer.IsCommercialLicense()
 		if s.License != nil {
 			data.CustomerName = s.License.CustomerName
 			data.LicenseID = s.License.LicenseID
