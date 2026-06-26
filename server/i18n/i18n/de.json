@@ -1531,5 +1531,6 @@
   "workflows.with_status": "mit Status",
   "workflows.workflow": "Workflow",
   "workflows.workflow_runs": "Workflow-Läufe",
-  "security.fleet_aggregate_note": "Flottenweite Aggregation über alle Bolts wird angezeigt. Per-Host-Details, Zertifikat-Drilldowns, CVE-Suche und Trends sind pro Bolt — wählen Sie oben einen Bolt-Tab dafür."
+  "security.fleet_aggregate_note": "Flottenweite Aggregation über alle Bolts wird angezeigt. Per-Host-Details, Zertifikat-Drilldowns, CVE-Suche und Trends sind pro Bolt — wählen Sie oben einen Bolt-Tab dafür.",
+  "risk.fleet_aggregate_note": "Anzeige der fleetweit riskantesten Envoys, zusammengeführt über alle Bolts. Wählen Sie oben einen Bolt-Tab für die vollständige Per-Envoy-Rangliste und den 30-Tage-Trend dieses Bolts."
 }

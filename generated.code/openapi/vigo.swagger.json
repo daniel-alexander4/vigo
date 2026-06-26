@@ -1091,6 +1091,25 @@
         "low": {
           "type": "integer",
           "format": "int32"
+        },
+        "maxScore": {
+          "type": "integer",
+          "format": "int32",
+          "description": "For the federated /risk PAGE Fleet view (ADR-037 slice 5): the bolt's\ntop-N riskiest envoys (re-ranked to a global top-N at the viewer) and\nits factor rollup (summed by name across bolts). max_score is maxed."
+        },
+        "topEnvoys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RiskTopEnvoy"
+          }
+        },
+        "topFactors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RiskFactorRollup"
+          }
         }
       }
     },
@@ -1360,6 +1379,43 @@
     },
     "v1RevokeEnvoyResponse": {
       "type": "object"
+    },
+    "v1RiskFactorRollup": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "totalPoints": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "envoyCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1RiskTopEnvoy": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "score": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "level": {
+          "type": "string"
+        },
+        "topFactor": {
+          "type": "string"
+        }
+      }
     },
     "v1RollbackResponse": {
       "type": "object",

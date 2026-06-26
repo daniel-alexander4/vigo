@@ -1531,5 +1531,6 @@
   "workflows.with_status": "with status",
   "workflows.workflow": "Workflow",
   "workflows.workflow_runs": "workflow runs",
-  "security.fleet_aggregate_note": "Showing fleet-wide aggregate across all bolts. Per-host detail, certificate drill-downs, CVE search, and trends are per-bolt — select a bolt tab above for those."
+  "security.fleet_aggregate_note": "Showing fleet-wide aggregate across all bolts. Per-host detail, certificate drill-downs, CVE search, and trends are per-bolt — select a bolt tab above for those.",
+  "risk.fleet_aggregate_note": "Showing the fleet-wide top riskiest envoys merged across all bolts. Select a bolt tab above for that bolt's full per-envoy ranking and 30-day trend."
 }

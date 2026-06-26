@@ -1713,7 +1713,42 @@ func (ds *DataSource) RiskSummary(baseInterval, offlineThreshold time.Duration) 
 			ObservedCycle:     ds.fleet.EnvoyCycle(es.ID),
 		}
 	}
-	fr := risk.ScoreFleet(inputs, baseInterval, offlineThreshold, 0)
+	// riskFleetTopN bounds the per-bolt top-risk candidate list. Must be ≥
+	// the viewer's merged cap (spanner riskTopN, 20) so the global top-N is
+	// recoverable; the merge re-ranks + re-caps.
+	const riskFleetTopN = 20
+	fr := risk.ScoreFleet(inputs, baseInterval, offlineThreshold, riskFleetTopN)
+
+	// Top-N riskiest envoys (re-ranked across bolts at the federated viewer)
+	// and the fleet factor rollup — both for the /risk PAGE Fleet view.
+	topEnvoys := make([]ui.RiskEnvoyDetail, 0, len(fr.TopRisks))
+	for _, er := range fr.TopRisks {
+		top := ""
+		if len(er.Factors) > 0 {
+			top = er.Factors[0].Name
+		}
+		topEnvoys = append(topEnvoys, ui.RiskEnvoyDetail{
+			EnvoyID:   er.EnvoyID,
+			Hostname:  er.Hostname,
+			Score:     er.Score,
+			Level:     string(er.Level),
+			TopFactor: top,
+		})
+	}
+	factorPoints := make(map[string]int)
+	factorCount := make(map[string]int)
+	for _, er := range fr.Envoys {
+		for _, f := range er.Factors {
+			factorPoints[f.Name] += f.Points
+			factorCount[f.Name]++
+		}
+	}
+	topFactors := make([]ui.RiskFactorSummary, 0, len(factorPoints))
+	for name, pts := range factorPoints {
+		topFactors = append(topFactors, ui.RiskFactorSummary{Name: name, TotalPoints: pts, EnvoyCount: factorCount[name]})
+	}
+	sort.Slice(topFactors, func(i, j int) bool { return topFactors[i].TotalPoints > topFactors[j].TotalPoints })
+
 	return ui.RiskSummary{
 		ScoreSum:    fr.ScoreSum,
 		ScoredCount: fr.ScoredEnvoys,
@@ -1721,6 +1756,9 @@ func (ds *DataSource) RiskSummary(baseInterval, offlineThreshold time.Duration) 
 		High:        fr.Distribution[risk.LevelHigh],
 		Medium:      fr.Distribution[risk.LevelMedium],
 		Low:         fr.Distribution[risk.LevelLow],
+		MaxScore:    fr.MaxScore,
+		TopEnvoys:   topEnvoys,
+		TopFactors:  topFactors,
 	}
 }
 

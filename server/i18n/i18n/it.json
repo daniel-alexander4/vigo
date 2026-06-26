@@ -1531,5 +1531,6 @@
   "workflows.with_status": "con stato",
   "workflows.workflow": "Workflow",
   "workflows.workflow_runs": "esecuzioni di workflow",
-  "security.fleet_aggregate_note": "Visualizzazione dell'aggregato dell'intera flotta su tutti i bolt. Il dettaglio per host, gli approfondimenti sui certificati, la ricerca CVE e gli andamenti sono per bolt — seleziona una scheda bolt sopra per visualizzarli."
+  "security.fleet_aggregate_note": "Visualizzazione dell'aggregato dell'intera flotta su tutti i bolt. Il dettaglio per host, gli approfondimenti sui certificati, la ricerca CVE e gli andamenti sono per bolt — seleziona una scheda bolt sopra per visualizzarli.",
+  "risk.fleet_aggregate_note": "Visualizzazione degli envoy più a rischio dell'intera flotta, uniti da tutti i bolt. Seleziona una scheda bolt sopra per la classifica completa per envoy e l'andamento a 30 giorni di quel bolt."
 }

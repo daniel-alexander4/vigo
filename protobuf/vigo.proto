@@ -946,6 +946,20 @@ message GetSecuritySummaryResponse {
 
 message GetRiskSummaryRequest {}
 
+message RiskTopEnvoy {
+  string id = 1;
+  string hostname = 2;
+  int32 score = 3;
+  string level = 4;
+  string top_factor = 5;
+}
+
+message RiskFactorRollup {
+  string name = 1;
+  int32 total_points = 2;
+  int32 envoy_count = 3;
+}
+
 message GetRiskSummaryResponse {
   // score_sum / scored_count let the viewer re-mean across bolts
   // (avg = score_sum / scored_count); the buckets are additive counts.
@@ -955,6 +969,12 @@ message GetRiskSummaryResponse {
   int32 high = 4;
   int32 medium = 5;
   int32 low = 6;
+  // For the federated /risk PAGE Fleet view (ADR-037 slice 5): the bolt's
+  // top-N riskiest envoys (re-ranked to a global top-N at the viewer) and
+  // its factor rollup (summed by name across bolts). max_score is maxed.
+  int32 max_score = 7;
+  repeated RiskTopEnvoy top_envoys = 8;
+  repeated RiskFactorRollup top_factors = 9;
 }
 
 message GetComplianceSummaryRequest {}

@@ -362,8 +362,16 @@ func TestMergeRiskSummaries(t *testing.T) {
 	// Bolt A: 1000 envoys, score sum 30000 (avg 30). Bolt B: 10 envoys,
 	// score sum 900 (avg 90). The fleet mean must be weighted by envoy
 	// count — 30900/1010 ≈ 30 — not the average of averages (60).
-	a := RiskSummary{ScoreSum: 30000, ScoredCount: 1000, Critical: 1, High: 5, Medium: 10, Low: 984}
-	b := RiskSummary{ScoreSum: 900, ScoredCount: 10, Critical: 4, High: 3, Medium: 2, Low: 1}
+	a := RiskSummary{
+		ScoreSum: 30000, ScoredCount: 1000, Critical: 1, High: 5, Medium: 10, Low: 984, MaxScore: 88,
+		TopEnvoys:  []RiskTopEnvoy{{ID: "a1", Score: 88}, {ID: "a2", Score: 40}},
+		TopFactors: []RiskFactorRollup{{Name: "cve", TotalPoints: 50, EnvoyCount: 5}, {Name: "drift", TotalPoints: 20, EnvoyCount: 2}},
+	}
+	b := RiskSummary{
+		ScoreSum: 900, ScoredCount: 10, Critical: 4, High: 3, Medium: 2, Low: 1, MaxScore: 95,
+		TopEnvoys:  []RiskTopEnvoy{{ID: "b1", Score: 95}, {ID: "b2", Score: 60}},
+		TopFactors: []RiskFactorRollup{{Name: "cve", TotalPoints: 30, EnvoyCount: 3}, {Name: "certs", TotalPoints: 15, EnvoyCount: 1}},
+	}
 
 	got := MergeRiskSummaries([]RiskSummary{a, b})
 
@@ -376,13 +384,42 @@ func TestMergeRiskSummaries(t *testing.T) {
 	if got.Critical != 5 || got.High != 8 || got.Medium != 12 || got.Low != 985 {
 		t.Errorf("severity buckets not summed: %+v", got)
 	}
+	if got.MaxScore != 95 {
+		t.Errorf("MaxScore should be the cross-bolt max: got %d, want 95", got.MaxScore)
+	}
+	// Top-N re-ranked globally by score desc: b1(95) > a1(88) > b2(60) > a2(40).
+	if len(got.TopEnvoys) != 4 || got.TopEnvoys[0].ID != "b1" || got.TopEnvoys[1].ID != "a1" ||
+		got.TopEnvoys[2].ID != "b2" || got.TopEnvoys[3].ID != "a2" {
+		t.Errorf("top-N not re-ranked across bolts: %+v", got.TopEnvoys)
+	}
+	// Factors summed by name (cve appears on both bolts → 80 points / 8 envoys).
+	var cvePts, cveCount int
+	for _, f := range got.TopFactors {
+		if f.Name == "cve" {
+			cvePts, cveCount = f.TotalPoints, f.EnvoyCount
+		}
+	}
+	if cvePts != 80 || cveCount != 8 {
+		t.Errorf("shared factor not summed: cve got %d pts / %d envoys, want 80/8", cvePts, cveCount)
+	}
+	if got.TopFactors[0].Name != "cve" {
+		t.Errorf("factors should sort by points desc, top is %q want cve", got.TopFactors[0].Name)
+	}
 }
 
 func TestRiskSummaryProtoRoundTrip(t *testing.T) {
-	in := RiskSummary{ScoreSum: 1234, ScoredCount: 56, Critical: 1, High: 2, Medium: 3, Low: 4}
+	in := RiskSummary{
+		ScoreSum: 1234, ScoredCount: 56, Critical: 1, High: 2, Medium: 3, Low: 4, MaxScore: 91,
+		TopEnvoys:  []RiskTopEnvoy{{ID: "e1", Hostname: "h1", Score: 91, Level: "critical", TopFactor: "cve"}},
+		TopFactors: []RiskFactorRollup{{Name: "cve", TotalPoints: 50, EnvoyCount: 5}},
+	}
 	out := RiskSummaryFromProto(RiskSummaryToProto(in))
-	if out != in {
+	if out.MaxScore != 91 || len(out.TopEnvoys) != 1 || out.TopEnvoys[0] != in.TopEnvoys[0] ||
+		len(out.TopFactors) != 1 || out.TopFactors[0] != in.TopFactors[0] {
 		t.Errorf("round-trip mismatch: got %+v, want %+v", out, in)
+	}
+	if out.ScoreSum != in.ScoreSum || out.ScoredCount != in.ScoredCount || out.Critical != in.Critical {
+		t.Errorf("scalar round-trip mismatch: got %+v", out)
 	}
 }
 

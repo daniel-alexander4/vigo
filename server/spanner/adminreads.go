@@ -646,6 +646,29 @@ func (a *SpannerAdmin) AggregateSecurityFanout(ctx context.Context) (SecuritySum
 // Risk column. ScoreSum + ScoredCount carry the un-divided average so the
 // viewer re-means across bolts (averaging per-bolt averages mis-weights a
 // small bolt equal to a large one); the severity buckets are additive.
+// RiskTopEnvoy is one candidate in a bolt's top-N riskiest envoys, shipped
+// for re-ranking into a global top-N at the federated viewer (ADR-037
+// slice 5). RiskFactorRollup is a per-factor points/count rollup, summed by
+// name across bolts.
+type RiskTopEnvoy struct {
+	ID        string
+	Hostname  string
+	Score     int
+	Level     string
+	TopFactor string
+}
+
+type RiskFactorRollup struct {
+	Name        string
+	TotalPoints int
+	EnvoyCount  int
+}
+
+// riskTopN bounds the per-bolt candidate list and the merged Fleet list.
+// Shipping N per bolt guarantees the global top-N is recoverable (worst
+// case: all N live on one bolt, whose own top-N already holds them).
+const riskTopN = 20
+
 type RiskSummary struct {
 	ScoreSum    int64
 	ScoredCount int
@@ -653,6 +676,12 @@ type RiskSummary struct {
 	High        int
 	Medium      int
 	Low         int
+	// /risk PAGE Fleet view (ADR-037 slice 5): max-score, the bolt's top-N
+	// riskiest envoys (re-ranked at the viewer), and its factor rollup
+	// (summed by name).
+	MaxScore   int
+	TopEnvoys  []RiskTopEnvoy
+	TopFactors []RiskFactorRollup
 }
 
 // AvgScore is the fleet (or per-bolt) mean risk score, truncated to int to
@@ -669,6 +698,7 @@ func (s RiskSummary) AvgScore() int {
 // union — a correctly fleet-weighted mean.
 func MergeRiskSummaries(parts []RiskSummary) RiskSummary {
 	var out RiskSummary
+	factorIdx := make(map[string]int) // factor name → index in out.TopFactors
 	for _, p := range parts {
 		out.ScoreSum += p.ScoreSum
 		out.ScoredCount += p.ScoredCount
@@ -676,30 +706,73 @@ func MergeRiskSummaries(parts []RiskSummary) RiskSummary {
 		out.High += p.High
 		out.Medium += p.Medium
 		out.Low += p.Low
+		if p.MaxScore > out.MaxScore {
+			out.MaxScore = p.MaxScore
+		}
+		out.TopEnvoys = append(out.TopEnvoys, p.TopEnvoys...)
+		for _, f := range p.TopFactors {
+			if i, ok := factorIdx[f.Name]; ok {
+				out.TopFactors[i].TotalPoints += f.TotalPoints
+				out.TopFactors[i].EnvoyCount += f.EnvoyCount
+			} else {
+				factorIdx[f.Name] = len(out.TopFactors)
+				out.TopFactors = append(out.TopFactors, f)
+			}
+		}
 	}
+	// Re-rank the unioned candidates to a global top-N (by score desc).
+	sort.Slice(out.TopEnvoys, func(i, j int) bool { return out.TopEnvoys[i].Score > out.TopEnvoys[j].Score })
+	if len(out.TopEnvoys) > riskTopN {
+		out.TopEnvoys = out.TopEnvoys[:riskTopN]
+	}
+	sort.Slice(out.TopFactors, func(i, j int) bool { return out.TopFactors[i].TotalPoints > out.TopFactors[j].TotalPoints })
 	return out
 }
 
 func RiskSummaryToProto(s RiskSummary) *pb.GetRiskSummaryResponse {
-	return &pb.GetRiskSummaryResponse{
+	resp := &pb.GetRiskSummaryResponse{
 		ScoreSum:    s.ScoreSum,
 		ScoredCount: int32(s.ScoredCount),
 		Critical:    int32(s.Critical),
 		High:        int32(s.High),
 		Medium:      int32(s.Medium),
 		Low:         int32(s.Low),
+		MaxScore:    int32(s.MaxScore),
 	}
+	for _, e := range s.TopEnvoys {
+		resp.TopEnvoys = append(resp.TopEnvoys, &pb.RiskTopEnvoy{
+			Id: e.ID, Hostname: e.Hostname, Score: int32(e.Score), Level: e.Level, TopFactor: e.TopFactor,
+		})
+	}
+	for _, f := range s.TopFactors {
+		resp.TopFactors = append(resp.TopFactors, &pb.RiskFactorRollup{
+			Name: f.Name, TotalPoints: int32(f.TotalPoints), EnvoyCount: int32(f.EnvoyCount),
+		})
+	}
+	return resp
 }
 
 func RiskSummaryFromProto(resp *pb.GetRiskSummaryResponse) RiskSummary {
-	return RiskSummary{
+	s := RiskSummary{
 		ScoreSum:    resp.ScoreSum,
 		ScoredCount: int(resp.ScoredCount),
 		Critical:    int(resp.Critical),
 		High:        int(resp.High),
 		Medium:      int(resp.Medium),
 		Low:         int(resp.Low),
+		MaxScore:    int(resp.MaxScore),
 	}
+	for _, e := range resp.TopEnvoys {
+		s.TopEnvoys = append(s.TopEnvoys, RiskTopEnvoy{
+			ID: e.Id, Hostname: e.Hostname, Score: int(e.Score), Level: e.Level, TopFactor: e.TopFactor,
+		})
+	}
+	for _, f := range resp.TopFactors {
+		s.TopFactors = append(s.TopFactors, RiskFactorRollup{
+			Name: f.Name, TotalPoints: int(f.TotalPoints), EnvoyCount: int(f.EnvoyCount),
+		})
+	}
+	return s
 }
 
 // AggregateRiskFanout fans out GetRiskSummary to every roster bolt and

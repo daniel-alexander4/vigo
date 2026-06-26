@@ -231,18 +231,35 @@ type RiskSummary struct {
 	High        int
 	Medium      int
 	Low         int
+	// /risk PAGE Fleet view (ADR-037 slice 5): max score, the bolt's top-N
+	// riskiest envoys (re-ranked at the viewer), and its factor rollup.
+	MaxScore   int
+	TopEnvoys  []RiskEnvoyDetail
+	TopFactors []RiskFactorSummary
 }
 
 // ToSpanner converts to the spanner federation type for fan-out merging.
 func (s RiskSummary) ToSpanner() spanner.RiskSummary {
-	return spanner.RiskSummary{
+	out := spanner.RiskSummary{
 		ScoreSum:    s.ScoreSum,
 		ScoredCount: s.ScoredCount,
 		Critical:    s.Critical,
 		High:        s.High,
 		Medium:      s.Medium,
 		Low:         s.Low,
+		MaxScore:    s.MaxScore,
 	}
+	for _, e := range s.TopEnvoys {
+		out.TopEnvoys = append(out.TopEnvoys, spanner.RiskTopEnvoy{
+			ID: e.EnvoyID, Hostname: e.Hostname, Score: e.Score, Level: e.Level, TopFactor: e.TopFactor,
+		})
+	}
+	for _, f := range s.TopFactors {
+		out.TopFactors = append(out.TopFactors, spanner.RiskFactorRollup{
+			Name: f.Name, TotalPoints: f.TotalPoints, EnvoyCount: f.EnvoyCount,
+		})
+	}
+	return out
 }
 
 // ComplianceSummary is the dashboard Standards Compliance column's data as
@@ -1053,6 +1070,7 @@ const scopeLocal = "local"
 // page.
 const (
 	pageSecurity = "security"
+	pageRisk     = "risk"
 )
 
 // LicensePageData holds data for the license status page.
@@ -1292,6 +1310,10 @@ type RiskPosturePageData struct {
 	SparklineDays  int
 	Envoys         []RiskEnvoyDetail
 	TopFactors     []RiskFactorSummary
+	// FleetAggregate marks the multi-bolt Fleet view: distribution + avg +
+	// the re-ranked fleet top-N + summed factors; the per-bolt sparkline is
+	// omitted and Envoys holds the top-N only (ADR-037 slice 5).
+	FleetAggregate bool
 }
 
 // RiskEnvoyDetail is a single envoy with risk score and top factor.
@@ -4301,8 +4323,59 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 }
 
 // RiskPosture renders the dedicated risk posture page.
+// riskFleetPageData builds the multi-bolt Fleet view of /risk from the
+// merged risk summary + scoped convergence (ADR-037 slice 5): the merged
+// distribution, the re-meaned average, the fleet-wide top-N riskiest
+// envoys (re-ranked at the viewer), and the summed factor rollup. The
+// per-bolt sparkline is omitted; Envoys holds the top-N only. ok=false on
+// fan-out failure → caller renders locally.
+func (h *Handler) riskFleetPageData(ctx context.Context) (RiskPosturePageData, bool) {
+	rsk, ok := h.scopedRisk(ctx, scopeFleet)
+	if !ok {
+		return RiskPosturePageData{}, false
+	}
+	envoys := make([]RiskEnvoyDetail, 0, len(rsk.TopEnvoys))
+	for _, e := range rsk.TopEnvoys {
+		envoys = append(envoys, RiskEnvoyDetail{
+			EnvoyID: e.ID, Hostname: e.Hostname, Score: e.Score, Level: e.Level, TopFactor: e.TopFactor,
+		})
+	}
+	factors := make([]RiskFactorSummary, 0, len(rsk.TopFactors))
+	for _, f := range rsk.TopFactors {
+		factors = append(factors, RiskFactorSummary{Name: f.Name, TotalPoints: f.TotalPoints, EnvoyCount: f.EnvoyCount})
+	}
+	return RiskPosturePageData{
+		AvgScore:       rsk.AvgScore(),
+		MaxScore:       rsk.MaxScore,
+		Critical:       rsk.Critical,
+		High:           rsk.High,
+		Medium:         rsk.Medium,
+		Low:            rsk.Low,
+		Envoys:         envoys,
+		TopFactors:     factors,
+		FleetAggregate: true,
+	}, true
+}
+
+// riskScopedData resolves the /risk page data for the active scope: a peer
+// bolt routes to its owner (full detail), the multi-bolt Fleet scope renders
+// the merged aggregate, everything else renders the full local page.
+func (h *Handler) riskScopedData(ctx context.Context, r *http.Request) RiskPosturePageData {
+	scope := h.resolveScope(r)
+	var data RiskPosturePageData
+	switch {
+	case h.routeScopedPage(ctx, scope, pageRisk, &data):
+		return data
+	case scope == scopeFleet && h.scopedAway(ctx, scope):
+		if fd, ok := h.riskFleetPageData(ctx); ok {
+			return fd
+		}
+	}
+	return h.dataSource.RiskPostureData(h.baseInterval, h.offlineThreshold)
+}
+
 func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.RiskPostureData(h.baseInterval, h.offlineThreshold)
+	data := h.riskScopedData(r.Context(), r)
 	data.PageData = PageData{Title: "Risk Posture", ActiveNav: "risk"}
 	levelFilter := r.URL.Query().Get("level")
 	data.LevelFilter = levelFilter
@@ -4315,6 +4388,7 @@ func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
 		}
 		data.Envoys = filtered
 	}
+	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "risk", data)
 }

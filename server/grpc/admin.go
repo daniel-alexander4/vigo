@@ -722,6 +722,8 @@ func (s *AdminService) GetScopedPageData(ctx context.Context, req *pb.GetScopedP
 	switch req.PageId {
 	case "security":
 		v = ds.SecurityPageData(ctx, s.baseInterval, s.offlineThreshold)
+	case "risk":
+		v = ds.RiskPostureData(s.baseInterval, s.offlineThreshold)
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown scoped page %q", req.PageId)
 	}
