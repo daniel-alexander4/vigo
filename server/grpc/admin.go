@@ -694,6 +694,18 @@ func (s *AdminService) GetRiskSummary(_ context.Context, _ *pb.GetRiskSummaryReq
 	return spanner.RiskSummaryToProto(ds.RiskSummary(s.baseInterval, s.offlineThreshold).ToSpanner()), nil
 }
 
+// GetComplianceSummary returns THIS bolt's standards-compliance rollup
+// (ADR-037 slice 4) — a leaf read that never fans out, so the federated
+// viewer can fan it to every roster bolt without recursion. Reads this
+// bolt's latest compliance_history snapshot via the DataSource SoT.
+func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
+	if s.fleetIndex == nil {
+		return &pb.GetComplianceSummaryResponse{}, nil
+	}
+	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
+	return spanner.ComplianceSummaryToProto(ds.ComplianceSummary(ctx).ToSpanner()), nil
+}
+
 func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoyConvergenceRequest) (*pb.GetEnvoyConvergenceResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)

@@ -34,7 +34,7 @@
         </div>
     </a>
     {{end}}
-    {{if not $.ScopedAway}}
+    {{if or (not $.ScopedAway) $.ComplianceFederated}}
     <a class="dash-column dash-column--link" href="/compliance" aria-label="{{T $.Locale "dashboard_stats.standards_compliance_aria"}}">
         <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.standards_compliance"}}</h3>
         <div class="stat-cards">

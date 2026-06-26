@@ -361,3 +361,32 @@ func TestRiskSummaryProtoRoundTrip(t *testing.T) {
 		t.Errorf("round-trip mismatch: got %+v, want %+v", out, in)
 	}
 }
+
+func TestMergeComplianceSummaries(t *testing.T) {
+	// Bolt A: many frameworks averaging 30% (PctSum 90 over 3). Bolt B: one
+	// framework at 90% (PctSum 90 over 1). The fleet percent must re-mean
+	// over the union of per-framework rows — (90+90)/(3+1) = 45 — NOT the
+	// average of per-bolt averages ((30+90)/2 = 60). Buckets sum additively.
+	a := ComplianceSummary{Satisfied: 30, Waived: 3, Partial: 4, NotSatisfied: 63, Total: 100, PctSum: 90, PctCount: 3}
+	b := ComplianceSummary{Satisfied: 9, Waived: 0, Partial: 0, NotSatisfied: 1, Total: 10, PctSum: 90, PctCount: 1}
+
+	got := MergeComplianceSummaries([]ComplianceSummary{a, b})
+
+	if got.PctCount != 4 || got.PctSum != 180 {
+		t.Fatalf("merge sums: pctCount=%d pctSum=%v, want 4/180", got.PctCount, got.PctSum)
+	}
+	if pct := got.Pct(); pct != 45 {
+		t.Errorf("fleet re-meaned pct: got %v, want 45 (not the 60 you'd get averaging per-bolt averages)", pct)
+	}
+	if got.Satisfied != 39 || got.Waived != 3 || got.Partial != 4 || got.NotSatisfied != 64 || got.Total != 110 {
+		t.Errorf("control buckets not summed: %+v", got)
+	}
+}
+
+func TestComplianceSummaryProtoRoundTrip(t *testing.T) {
+	in := ComplianceSummary{Satisfied: 12, Waived: 3, Partial: 4, NotSatisfied: 5, Total: 24, PctSum: 67.5, PctCount: 2}
+	out := ComplianceSummaryFromProto(ComplianceSummaryToProto(in))
+	if out != in {
+		t.Errorf("round-trip mismatch: got %+v, want %+v", out, in)
+	}
+}

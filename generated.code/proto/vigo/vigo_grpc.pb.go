@@ -484,6 +484,7 @@ const (
 	VigoAdmin_GetConvergenceSummary_FullMethodName = "/vigo.v1.VigoAdmin/GetConvergenceSummary"
 	VigoAdmin_GetSecuritySummary_FullMethodName    = "/vigo.v1.VigoAdmin/GetSecuritySummary"
 	VigoAdmin_GetRiskSummary_FullMethodName        = "/vigo.v1.VigoAdmin/GetRiskSummary"
+	VigoAdmin_GetComplianceSummary_FullMethodName  = "/vigo.v1.VigoAdmin/GetComplianceSummary"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
@@ -542,6 +543,17 @@ type VigoAdminClient interface {
 	// additive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,
 	// which the hand-written /api/v1/risk/{envoyID} route would shadow).
 	GetRiskSummary(ctx context.Context, in *GetRiskSummaryRequest, opts ...grpc.CallOption) (*GetRiskSummaryResponse, error)
+	// GetComplianceSummary returns this bolt's standards-compliance rollup
+	// for the dashboard Standards Compliance column (ADR-037 slice 4, the
+	// dashboard-card path). Leaf read — never fans out. Reads this bolt's
+	// latest compliance_history snapshot and ships the additive control
+	// buckets plus pct_sum + pct_count (NOT a pre-divided percent), so the
+	// federated viewer re-means across bolts exactly as the local aggregator
+	// does (unweighted mean over per-framework percents). Buckets sum
+	// additively across partitions. NOTE: this is the partition-summed
+	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
+	// org-wide compliance report/PDF) is a separate, larger slice.
+	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -744,6 +756,16 @@ func (c *vigoAdminClient) GetRiskSummary(ctx context.Context, in *GetRiskSummary
 	return out, nil
 }
 
+func (c *vigoAdminClient) GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetComplianceSummaryResponse)
+	err := c.cc.Invoke(ctx, VigoAdmin_GetComplianceSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vigoAdminClient) GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEnvoyConvergenceResponse)
@@ -836,6 +858,17 @@ type VigoAdminServer interface {
 	// additive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,
 	// which the hand-written /api/v1/risk/{envoyID} route would shadow).
 	GetRiskSummary(context.Context, *GetRiskSummaryRequest) (*GetRiskSummaryResponse, error)
+	// GetComplianceSummary returns this bolt's standards-compliance rollup
+	// for the dashboard Standards Compliance column (ADR-037 slice 4, the
+	// dashboard-card path). Leaf read — never fans out. Reads this bolt's
+	// latest compliance_history snapshot and ships the additive control
+	// buckets plus pct_sum + pct_count (NOT a pre-divided percent), so the
+	// federated viewer re-means across bolts exactly as the local aggregator
+	// does (unweighted mean over per-framework percents). Buckets sum
+	// additively across partitions. NOTE: this is the partition-summed
+	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
+	// org-wide compliance report/PDF) is a separate, larger slice.
+	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -911,6 +944,9 @@ func (UnimplementedVigoAdminServer) GetSecuritySummary(context.Context, *GetSecu
 }
 func (UnimplementedVigoAdminServer) GetRiskSummary(context.Context, *GetRiskSummaryRequest) (*GetRiskSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRiskSummary not implemented")
+}
+func (UnimplementedVigoAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
 }
 func (UnimplementedVigoAdminServer) GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEnvoyConvergence not implemented")
@@ -1269,6 +1305,24 @@ func _VigoAdmin_GetRiskSummary_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VigoAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetComplianceSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoAdminServer).GetComplianceSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoAdmin_GetComplianceSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoAdminServer).GetComplianceSummary(ctx, req.(*GetComplianceSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VigoAdmin_GetEnvoyConvergence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEnvoyConvergenceRequest)
 	if err := dec(in); err != nil {
@@ -1419,6 +1473,10 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRiskSummary",
 			Handler:    _VigoAdmin_GetRiskSummary_Handler,
+		},
+		{
+			MethodName: "GetComplianceSummary",
+			Handler:    _VigoAdmin_GetComplianceSummary_Handler,
 		},
 		{
 			MethodName: "GetEnvoyConvergence",

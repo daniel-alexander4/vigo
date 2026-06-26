@@ -7,9 +7,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -103,6 +101,11 @@ type DataSource interface {
 	// rollup (score sum + count + severity buckets), fanned out across
 	// bolts in spanner mode (ADR-037 slice 3).
 	RiskSummary(baseInterval, offlineThreshold time.Duration) RiskSummary
+	// ComplianceSummary is the dashboard Standards Compliance column's data
+	// as a federatable rollup (control buckets + PctSum/PctCount), read from
+	// the latest compliance_history snapshot. SoT for both the local
+	// dashboard headline and the fan-out merged Fleet view (ADR-037 slice 4).
+	ComplianceSummary(ctx context.Context) ComplianceSummary
 	// FleetPressure rolls up per-envoy resource + repo-health telemetry
 	// into the dashboard "Agent Health" card via the fleetpressure SoT
 	// package.
@@ -204,6 +207,48 @@ func (s RiskSummary) ToSpanner() spanner.RiskSummary {
 		High:        s.High,
 		Medium:      s.Medium,
 		Low:         s.Low,
+	}
+}
+
+// ComplianceSummary is the dashboard Standards Compliance column's data as
+// a federatable rollup (ADR-037 slice 4): the additive control buckets plus
+// PctSum + PctCount, the un-divided numerator/denominator of the unweighted
+// per-framework-percent mean. Shipping count+sum (not a pre-divided Pct)
+// lets the federated viewer re-mean across bolts the same way the local
+// aggregator does — averaging per-bolt averages would mis-weight a small
+// bolt equal to a large one.
+type ComplianceSummary struct {
+	Satisfied    int
+	Waived       int
+	Partial      int
+	NotSatisfied int
+	Total        int
+	// PctSum is Σ of each framework's ScorePercent; PctCount is the number
+	// of frameworks with controls. Pct() = PctSum/PctCount.
+	PctSum   float64
+	PctCount int
+}
+
+// Pct is the unweighted mean of per-framework percents, rounded to one
+// decimal to match the dashboard's prior rendering. Zero when no framework
+// has controls (fresh server before the first snapshot).
+func (s ComplianceSummary) Pct() float64 {
+	if s.PctCount == 0 {
+		return 0
+	}
+	return math.Round(s.PctSum/float64(s.PctCount)*10) / 10
+}
+
+// ToSpanner converts to the spanner federation type for fan-out merging.
+func (s ComplianceSummary) ToSpanner() spanner.ComplianceSummary {
+	return spanner.ComplianceSummary{
+		Satisfied:    s.Satisfied,
+		Waived:       s.Waived,
+		Partial:      s.Partial,
+		NotSatisfied: s.NotSatisfied,
+		Total:        s.Total,
+		PctSum:       s.PctSum,
+		PctCount:     s.PctCount,
 	}
 }
 
@@ -1054,11 +1099,13 @@ type DashboardPageData struct {
 	// dashboard counts above are this bolt's partition only; this drives
 	// the header scope chip so the operator can tell the two apart.
 	FleetWideEnvoys int
-	// SecurityFederated / RiskFederated are set when the Security Posture /
-	// Risk column has been fanned out + merged across bolts (ADR-037 slices
-	// 2 & 3), so the template renders them even in a scoped-away view.
-	SecurityFederated bool
-	RiskFederated     bool
+	// SecurityFederated / RiskFederated / ComplianceFederated are set when
+	// the Security Posture / Risk / Standards Compliance column has been
+	// fanned out + merged across bolts (ADR-037 slices 2, 3 & 4), so the
+	// template renders them even in a scoped-away (fleet) view.
+	SecurityFederated   bool
+	RiskFederated       bool
+	ComplianceFederated bool
 	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
@@ -1337,13 +1384,14 @@ type DashboardStatsFragmentData struct {
 	// plus the "detail not yet federated" notice (ADR-037). SecurityFederated
 	// is set when the Security Posture column has been fanned out + merged
 	// (slice 2), so the template shows it even in a scoped-away view.
-	Scope             string
-	ScopedAway        bool
-	SecurityFederated bool
-	RiskFederated     bool
-	TotalEnvoys       int
-	ActiveEnvoys      int
-	RecentFailures    int
+	Scope               string
+	ScopedAway          bool
+	SecurityFederated   bool
+	RiskFederated       bool
+	ComplianceFederated bool
+	TotalEnvoys         int
+	ActiveEnvoys        int
+	RecentFailures      int
 	DriftRate         float64
 	CVECritical       int64
 	CVEHigh           int64
@@ -2669,6 +2717,27 @@ func (h *Handler) scopedRisk(ctx context.Context, scope string) (spanner.RiskSum
 	return spanner.MergeRiskSummaries([]spanner.RiskSummary{peers, local}), true
 }
 
+// scopedCompliance returns the fleet-merged Standards Compliance summary:
+// fan out GetComplianceSummary to peers, fold in this bolt's own summary,
+// and re-mean across the union (ADR-037 slice 4). Only fleet scope is
+// federated for compliance; ok=false otherwise or on fan-out failure. The
+// merged buckets are partition-summed (a framework on N bolts contributes
+// N instances) — the headline percent is the unweighted mean re-meaned
+// across the union; auditor-grade per-control reconciliation is a separate
+// (report/PDF) slice.
+func (h *Handler) scopedCompliance(ctx context.Context, scope string) (spanner.ComplianceSummary, bool) {
+	if h.spannerAdmin == nil || scope != scopeFleet {
+		return spanner.ComplianceSummary{}, false
+	}
+	peers, err := h.spannerAdmin.AggregateComplianceFanout(ctx)
+	if err != nil {
+		slog.Warn("scoped compliance fan-out failed", "error", err)
+		return spanner.ComplianceSummary{}, false
+	}
+	local := h.dataSource.ComplianceSummary(ctx).ToSpanner()
+	return spanner.MergeComplianceSummaries([]spanner.ComplianceSummary{peers, local}), true
+}
+
 // buildScopeTabs builds the ADR-037 "Fleet | bolt-N" tab strip for the
 // current page path, marking the active tab. The fleet tab's label is
 // rendered in-template via {{T}}; bolt tabs are labelled by hostname
@@ -2906,6 +2975,17 @@ func (h *Handler) dashboardScoped(w http.ResponseWriter, r *http.Request, scope 
 		data.RiskCritical = rsk.Critical
 		data.RiskHigh = rsk.High
 		data.RiskMedium = rsk.Medium
+	}
+	// Federated Standards Compliance column (slice 4): fleet scope merges
+	// per-bolt snapshots and re-means the percent across the union.
+	if cmp, ok := h.scopedCompliance(r.Context(), scope); ok {
+		data.ComplianceFederated = true
+		data.StandardsPct = cmp.Pct()
+		data.SatisfiedControls = cmp.Satisfied
+		data.WaivedControls = cmp.Waived
+		data.PartialControls = cmp.Partial
+		data.NotSatisfiedControls = cmp.NotSatisfied
+		data.TotalControls = cmp.Total
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)
@@ -3155,6 +3235,15 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 			data.RiskCritical = rsk.Critical
 			data.RiskHigh = rsk.High
 			data.RiskMedium = rsk.Medium
+		}
+		if cmp, ok := h.scopedCompliance(r.Context(), scope); ok {
+			data.ComplianceFederated = true
+			data.StandardsPct = cmp.Pct()
+			data.SatisfiedControls = cmp.Satisfied
+			data.WaivedControls = cmp.Waived
+			data.PartialControls = cmp.Partial
+			data.NotSatisfiedControls = cmp.NotSatisfied
+			data.TotalControls = cmp.Total
 		}
 		h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 		return
@@ -3924,69 +4013,21 @@ type standardsSummary struct {
 	Total        int
 }
 
-// computeStandardsSummary reads the most-recent per-framework compliance
-// snapshot from `compliance_history` and aggregates it into the six
-// dashboard/`/compliance` headline numbers. The snapshot is written by
-// ReportHandler.PersistComplianceSnapshot — daily plus on every successful
-// config publish — through the same unified scorer the audit report
-// uses, so dashboard numbers stay consistent with /compliance/executive.
-// Off the request hot path: a SQL read + tiny aggregation, no live walk
-// of frameworks × envoys × controls.
+// computeStandardsSummary returns the six dashboard / `/compliance`
+// headline numbers by delegating to the DataSource ComplianceSummary SoT
+// (ADR-037 slice 4) — the same function the federated Fleet view merges
+// across bolts, so the local and fleet headlines can never drift. Off the
+// request hot path: a SQL read + tiny aggregation, no live walk of
+// frameworks × envoys × controls.
 func (h *Handler) computeStandardsSummary() standardsSummary {
-	if h.queries == nil {
-		return standardsSummary{}
-	}
-	ctx := context.Background()
-	snapshotDate, err := h.queries.GetLatestComplianceSnapshotDate(ctx)
-	if err != nil {
-		// sql.ErrNoRows on a fresh server before the first snapshot lands;
-		// callers render an empty-state. Any other error is logged and
-		// also returns empty so the page still renders.
-		if !errors.Is(err, sql.ErrNoRows) {
-			slog.Warn("standards summary: latest snapshot date query failed", "error", err)
-		}
-		return standardsSummary{}
-	}
-	rows, err := h.queries.ListComplianceSnapshotByDate(ctx, snapshotDate)
-	if err != nil {
-		slog.Warn("standards summary: snapshot rows query failed", "error", err, "date", snapshotDate)
-		return standardsSummary{}
-	}
-	return aggregateStandardsSnapshot(rows)
-}
-
-// aggregateStandardsSnapshot folds the per-framework rows of a single
-// compliance_history snapshot date into the six headline counts shown
-// on the dashboard / `/compliance`. Pure function — extracted so the
-// unweighted-mean and no-waiver-double-count invariants can be pinned
-// without standing up a real database.
-//
-// Invariants enforced (and tested):
-//   - overall percent is the unweighted mean of per-framework percents,
-//     not a control-count-weighted average
-//   - per-framework buckets are disjoint, so waivers never inflate Total
-//     beyond the framework's real control count
-//   - frameworks with zero controls (disabled / no data) are skipped
-//     entirely — they don't drag the mean toward zero
-func aggregateStandardsSnapshot(rows []db.ListComplianceSnapshotByDateRow) standardsSummary {
-	var s standardsSummary
-	var pctSum float64
-	pctCount := 0
-	for _, fw := range rows {
-		fwTotal := int(fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied)
-		if fwTotal == 0 {
-			continue
-		}
-		s.Satisfied += int(fw.Satisfied)
-		s.Waived += int(fw.Waived)
-		s.Partial += int(fw.Partial)
-		s.NotSatisfied += int(fw.NotSatisfied)
-		s.Total += fwTotal
-		pctSum += fw.ScorePercent
-		pctCount++
-	}
-	if pctCount > 0 {
-		s.Pct = math.Round(pctSum/float64(pctCount)*10) / 10
+	cs := h.dataSource.ComplianceSummary(context.Background())
+	s := standardsSummary{
+		Pct:          cs.Pct(),
+		Satisfied:    cs.Satisfied,
+		Waived:       cs.Waived,
+		Partial:      cs.Partial,
+		NotSatisfied: cs.NotSatisfied,
+		Total:        cs.Total,
 	}
 	if s.Pct < 0 || s.Pct > 100 {
 		slog.Warn("standards summary percent outside [0,100] — aggregator invariant broken",

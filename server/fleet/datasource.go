@@ -5,7 +5,9 @@ package fleet
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -1655,6 +1657,69 @@ func (ds *DataSource) RiskSummary(baseInterval, offlineThreshold time.Duration) 
 		Medium:      fr.Distribution[risk.LevelMedium],
 		Low:         fr.Distribution[risk.LevelLow],
 	}
+}
+
+// ComplianceSummary is the single source of truth for the dashboard /
+// `/compliance` standards-headline numbers (ADR-037 slice 4). It reads the
+// most-recent per-framework snapshot from `compliance_history` — written by
+// ReportHandler.PersistComplianceSnapshot (daily + on every successful
+// config publish, through the unified scorer the audit report uses) — and
+// folds it. Off the request hot path: a SQL read + a tiny aggregation, no
+// live walk of frameworks × envoys × controls. The federated viewer fans
+// this out per bolt and merges (sums the buckets + PctSum/PctCount, then
+// re-means), so both the local dashboard and the spanner Fleet view derive
+// from this one function.
+func (ds *DataSource) ComplianceSummary(ctx context.Context) ui.ComplianceSummary {
+	if ds.queries == nil {
+		return ui.ComplianceSummary{}
+	}
+	snapshotDate, err := ds.queries.GetLatestComplianceSnapshotDate(ctx)
+	if err != nil {
+		// sql.ErrNoRows on a fresh server before the first snapshot lands;
+		// callers render an empty state. Any other error is logged and also
+		// returns empty so the page still renders.
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Warn("compliance summary: latest snapshot date query failed", "error", err)
+		}
+		return ui.ComplianceSummary{}
+	}
+	rows, err := ds.queries.ListComplianceSnapshotByDate(ctx, snapshotDate)
+	if err != nil {
+		slog.Warn("compliance summary: snapshot rows query failed", "error", err, "date", snapshotDate)
+		return ui.ComplianceSummary{}
+	}
+	return aggregateComplianceSnapshot(rows)
+}
+
+// aggregateComplianceSnapshot folds the per-framework rows of a single
+// compliance_history snapshot date into a ui.ComplianceSummary. Pure
+// function — extracted so the unweighted-mean and no-waiver-double-count
+// invariants can be pinned without a real database.
+//
+// Invariants (tested):
+//   - PctSum/PctCount carry the UN-divided unweighted mean (one count per
+//     framework with controls), so a federated viewer re-means correctly
+//     across bolts from per-bolt count+sum — see ComplianceSummary.Pct().
+//   - per-framework buckets are disjoint, so waivers never inflate Total
+//     beyond the framework's real control count.
+//   - frameworks with zero controls (disabled / no data) are skipped so
+//     they don't drag the mean toward zero.
+func aggregateComplianceSnapshot(rows []db.ListComplianceSnapshotByDateRow) ui.ComplianceSummary {
+	var s ui.ComplianceSummary
+	for _, fw := range rows {
+		fwTotal := int(fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied)
+		if fwTotal == 0 {
+			continue
+		}
+		s.Satisfied += int(fw.Satisfied)
+		s.Waived += int(fw.Waived)
+		s.Partial += int(fw.Partial)
+		s.NotSatisfied += int(fw.NotSatisfied)
+		s.Total += fwTotal
+		s.PctSum += fw.ScorePercent
+		s.PctCount++
+	}
+	return s
 }
 
 func (ds *DataSource) RiskPostureData(baseInterval, offlineThreshold time.Duration) ui.RiskPosturePageData {

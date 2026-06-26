@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -456,6 +457,9 @@ func (m *footprintMock) RunningCVESummary() RunningCVESummary { return m.base.Ru
 func (m *footprintMock) SecuritySummary() SecuritySummary     { return m.base.SecuritySummary() }
 func (m *footprintMock) RiskSummary(b, o time.Duration) RiskSummary {
 	return m.base.RiskSummary(b, o)
+}
+func (m *footprintMock) ComplianceSummary(ctx context.Context) ComplianceSummary {
+	return m.base.ComplianceSummary(ctx)
 }
 func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 	return fleetpressure.FleetSummary{
@@ -1330,6 +1334,10 @@ func (m *mockDataSource) SecuritySummary() SecuritySummary {
 
 func (m *mockDataSource) RiskSummary(_, _ time.Duration) RiskSummary {
 	return RiskSummary{}
+}
+
+func (m *mockDataSource) ComplianceSummary(_ context.Context) ComplianceSummary {
+	return ComplianceSummary{}
 }
 
 func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {

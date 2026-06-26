@@ -107,6 +107,29 @@
         ]
       }
     },
+    "/api/v1/compliance/summary": {
+      "get": {
+        "summary": "GetComplianceSummary returns this bolt's standards-compliance rollup\nfor the dashboard Standards Compliance column (ADR-037 slice 4, the\ndashboard-card path). Leaf read — never fans out. Reads this bolt's\nlatest compliance_history snapshot and ships the additive control\nbuckets plus pct_sum + pct_count (NOT a pre-divided percent), so the\nfederated viewer re-means across bolts exactly as the local aggregator\ndoes (unweighted mean over per-framework percents). Buckets sum\nadditively across partitions. NOTE: this is the partition-summed\ndashboard rollup — auditor-grade per-control fleet reconciliation (the\norg-wide compliance report/PDF) is a separate, larger slice.",
+        "operationId": "VigoAdmin_GetComplianceSummary",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetComplianceSummaryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
     "/api/v1/convergence": {
       "get": {
         "summary": "GetConvergenceSummary returns aggregate convergence status across all envoys.",
@@ -928,6 +951,41 @@
       "properties": {
         "token": {
           "type": "string"
+        }
+      }
+    },
+    "v1GetComplianceSummaryResponse": {
+      "type": "object",
+      "properties": {
+        "satisfied": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Additive control-bucket counts summed over this bolt's enabled\nframeworks (per-framework buckets are disjoint, so they never\ndouble-count; across bolts they sum as partition-scoped instances)."
+        },
+        "waived": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "partial": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "notSatisfied": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pctSum": {
+          "type": "number",
+          "format": "double",
+          "description": "pct_sum / pct_count carry the un-divided numerator and denominator of\nthe unweighted per-framework-percent mean (one count per framework\nthat has controls), so the viewer re-means over the bolt union:\nPct = pct_sum / pct_count."
+        },
+        "pctCount": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

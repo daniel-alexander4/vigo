@@ -207,6 +207,22 @@ service VigoAdmin {
     };
   }
 
+  // GetComplianceSummary returns this bolt's standards-compliance rollup
+  // for the dashboard Standards Compliance column (ADR-037 slice 4, the
+  // dashboard-card path). Leaf read — never fans out. Reads this bolt's
+  // latest compliance_history snapshot and ships the additive control
+  // buckets plus pct_sum + pct_count (NOT a pre-divided percent), so the
+  // federated viewer re-means across bolts exactly as the local aggregator
+  // does (unweighted mean over per-framework percents). Buckets sum
+  // additively across partitions. NOTE: this is the partition-summed
+  // dashboard rollup — auditor-grade per-control fleet reconciliation (the
+  // org-wide compliance report/PDF) is a separate, larger slice.
+  rpc GetComplianceSummary(GetComplianceSummaryRequest) returns (GetComplianceSummaryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/compliance/summary"
+    };
+  }
+
   // GetEnvoyConvergence returns convergence details for a single envoy.
   rpc GetEnvoyConvergence(GetEnvoyConvergenceRequest) returns (GetEnvoyConvergenceResponse) {
     option (google.api.http) = {
@@ -913,6 +929,25 @@ message GetRiskSummaryResponse {
   int32 high = 4;
   int32 medium = 5;
   int32 low = 6;
+}
+
+message GetComplianceSummaryRequest {}
+
+message GetComplianceSummaryResponse {
+  // Additive control-bucket counts summed over this bolt's enabled
+  // frameworks (per-framework buckets are disjoint, so they never
+  // double-count; across bolts they sum as partition-scoped instances).
+  int32 satisfied = 1;
+  int32 waived = 2;
+  int32 partial = 3;
+  int32 not_satisfied = 4;
+  int32 total = 5;
+  // pct_sum / pct_count carry the un-divided numerator and denominator of
+  // the unweighted per-framework-percent mean (one count per framework
+  // that has controls), so the viewer re-means over the bolt union:
+  // Pct = pct_sum / pct_count.
+  double pct_sum = 6;
+  int32 pct_count = 7;
 }
 
 message GetEnvoyConvergenceRequest {

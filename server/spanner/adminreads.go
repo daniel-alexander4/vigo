@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -656,6 +657,96 @@ func (a *SpannerAdmin) AggregateRiskFanout(ctx context.Context) (RiskSummary, er
 		parts = append(parts, RiskSummaryFromProto(r.value.(*pb.GetRiskSummaryResponse)))
 	}
 	return MergeRiskSummaries(parts), nil
+}
+
+// --- compliance summary (ADR-037 slice 4, fan-out-only — never gossiped) ---
+
+// ComplianceSummary is a bolt's standards-compliance rollup for the
+// federated dashboard Standards Compliance column. The control buckets are
+// additive across bolts (per-framework buckets are disjoint, so on each
+// bolt they sum to that framework's catalog; across bolts they accumulate
+// as partition-scoped instances). PctSum + PctCount carry the un-divided
+// unweighted-mean numerator/denominator so the viewer re-means over the
+// bolt union rather than averaging per-bolt averages.
+type ComplianceSummary struct {
+	Satisfied    int
+	Waived       int
+	Partial      int
+	NotSatisfied int
+	Total        int
+	PctSum       float64
+	PctCount     int
+}
+
+// Pct is the unweighted mean of per-framework percents over the union,
+// rounded to one decimal to match the local dashboard's rendering.
+func (s ComplianceSummary) Pct() float64 {
+	if s.PctCount == 0 {
+		return 0
+	}
+	return math.Round(s.PctSum/float64(s.PctCount)*10) / 10
+}
+
+// MergeComplianceSummaries sums every field across bolts; the merged Pct is
+// then ΣPctSum/ΣPctCount over the union — a correctly re-meaned percent.
+func MergeComplianceSummaries(parts []ComplianceSummary) ComplianceSummary {
+	var out ComplianceSummary
+	for _, p := range parts {
+		out.Satisfied += p.Satisfied
+		out.Waived += p.Waived
+		out.Partial += p.Partial
+		out.NotSatisfied += p.NotSatisfied
+		out.Total += p.Total
+		out.PctSum += p.PctSum
+		out.PctCount += p.PctCount
+	}
+	return out
+}
+
+func ComplianceSummaryToProto(s ComplianceSummary) *pb.GetComplianceSummaryResponse {
+	return &pb.GetComplianceSummaryResponse{
+		Satisfied:    int32(s.Satisfied),
+		Waived:       int32(s.Waived),
+		Partial:      int32(s.Partial),
+		NotSatisfied: int32(s.NotSatisfied),
+		Total:        int32(s.Total),
+		PctSum:       s.PctSum,
+		PctCount:     int32(s.PctCount),
+	}
+}
+
+func ComplianceSummaryFromProto(resp *pb.GetComplianceSummaryResponse) ComplianceSummary {
+	return ComplianceSummary{
+		Satisfied:    int(resp.Satisfied),
+		Waived:       int(resp.Waived),
+		Partial:      int(resp.Partial),
+		NotSatisfied: int(resp.NotSatisfied),
+		Total:        int(resp.Total),
+		PctSum:       resp.PctSum,
+		PctCount:     int(resp.PctCount),
+	}
+}
+
+// AggregateComplianceFanout fans out GetComplianceSummary to every roster
+// bolt and merges the results. Returns the merged PEER summaries; the
+// caller folds in the local bolt's own summary. Fan-out-only (compliance
+// is never gossiped).
+func (a *SpannerAdmin) AggregateComplianceFanout(ctx context.Context) (ComplianceSummary, error) {
+	results, err := a.fanOut(ctx, func(ctx context.Context, pc *PeerConn) (any, error) {
+		return pc.Admin.GetComplianceSummary(ctx, &pb.GetComplianceSummaryRequest{})
+	})
+	if err != nil {
+		return ComplianceSummary{}, err
+	}
+	parts := make([]ComplianceSummary, 0, len(results))
+	for _, r := range results {
+		if r.err != nil {
+			slog.Warn("spanner fanout: peer GetComplianceSummary failed", "peer", r.pubkey, "error", r.err)
+			continue
+		}
+		parts = append(parts, ComplianceSummaryFromProto(r.value.(*pb.GetComplianceSummaryResponse)))
+	}
+	return MergeComplianceSummaries(parts), nil
 }
 
 // RunsFromBolt pulls one bolt's runs for a specific envoy via a single
