@@ -1487,6 +1487,39 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 	return data
 }
 
+// SecuritySummary composes this bolt's Security Posture column data into a
+// federatable rollup (ADR-037 slice 2): the deduped unique-CVE set (from
+// SecurityScanData's fleet-wide dedup) plus the additive cert-expiry,
+// running-CVE, and rootkit counts. In spanner mode the viewer fans this
+// out to peer bolts and unions the CVE sets; standalone it is just this
+// fleet's posture. Three fleet walks (security/cert/running-CVE) — same
+// work the local dashboard already does, bundled; off the hot path.
+func (ds *DataSource) SecuritySummary() ui.SecuritySummary {
+	sec := ds.SecurityScanData()
+	cert := ds.CertExpirySummary()
+	run := ds.RunningCVESummary()
+
+	cves := make([]ui.CVEIdent, 0, len(sec.CVEs))
+	for _, c := range sec.CVEs {
+		cves = append(cves, ui.CVEIdent{ID: c.CVEID, Severity: c.Severity})
+	}
+	return ui.SecuritySummary{
+		UniqueCVEs:              cves,
+		CertsExpiringSoon:       cert.ExpiringSoon,
+		CertsExpired:            cert.Expired,
+		CertsExpiringIn7:        cert.ExpiringIn7,
+		CertsExpiringIn30:       cert.ExpiringIn30,
+		CertHostsAffected:       cert.HostsAffected,
+		RootkitWarnings:         int(sec.RootkitWarning),
+		RunningCVEsTotal:        run.Total,
+		RunningCVEsCritical:     run.Critical,
+		RunningCVEsHigh:         run.High,
+		RunningCVEsMedium:       run.Medium,
+		RunningCVEsLow:          run.Low,
+		RunningCVEHostsAffected: run.HostsAffected,
+	}
+}
+
 // collectCVEEntries extracts structured CVE entries from the unified
 // security_scan.cves.N.{id,severity,packages} flattened traits.
 func collectCVEEntries(traitMap map[string]string) []ui.CVEEntry {

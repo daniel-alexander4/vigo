@@ -482,6 +482,7 @@ const (
 	VigoAdmin_ListWebhooks_FullMethodName          = "/vigo.v1.VigoAdmin/ListWebhooks"
 	VigoAdmin_DeleteWebhook_FullMethodName         = "/vigo.v1.VigoAdmin/DeleteWebhook"
 	VigoAdmin_GetConvergenceSummary_FullMethodName = "/vigo.v1.VigoAdmin/GetConvergenceSummary"
+	VigoAdmin_GetSecuritySummary_FullMethodName    = "/vigo.v1.VigoAdmin/GetSecuritySummary"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
@@ -524,6 +525,15 @@ type VigoAdminClient interface {
 	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error)
 	// GetConvergenceSummary returns aggregate convergence status across all envoys.
 	GetConvergenceSummary(ctx context.Context, in *GetConvergenceSummaryRequest, opts ...grpc.CallOption) (*GetConvergenceSummaryResponse, error)
+	// GetSecuritySummary returns this bolt's local security posture rollup —
+	// the dashboard Security Posture column's data (deduped unique CVEs,
+	// cert-expiry buckets, running-CVE counts, rootkit warnings). It is a
+	// leaf read: it returns THIS bolt's partition only and never fans out,
+	// so the federated-UI viewer (ADR-037) can fan it out to peers without
+	// recursion. Unique CVEs ride as the per-bolt deduped CVE-ID set so the
+	// viewer unions them across bolts (summing counts double-counts shared
+	// CVEs); every other field is an additive per-host count.
+	GetSecuritySummary(ctx context.Context, in *GetSecuritySummaryRequest, opts ...grpc.CallOption) (*GetSecuritySummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -706,6 +716,16 @@ func (c *vigoAdminClient) GetConvergenceSummary(ctx context.Context, in *GetConv
 	return out, nil
 }
 
+func (c *vigoAdminClient) GetSecuritySummary(ctx context.Context, in *GetSecuritySummaryRequest, opts ...grpc.CallOption) (*GetSecuritySummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSecuritySummaryResponse)
+	err := c.cc.Invoke(ctx, VigoAdmin_GetSecuritySummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vigoAdminClient) GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEnvoyConvergenceResponse)
@@ -782,6 +802,15 @@ type VigoAdminServer interface {
 	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
 	// GetConvergenceSummary returns aggregate convergence status across all envoys.
 	GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error)
+	// GetSecuritySummary returns this bolt's local security posture rollup —
+	// the dashboard Security Posture column's data (deduped unique CVEs,
+	// cert-expiry buckets, running-CVE counts, rootkit warnings). It is a
+	// leaf read: it returns THIS bolt's partition only and never fans out,
+	// so the federated-UI viewer (ADR-037) can fan it out to peers without
+	// recursion. Unique CVEs ride as the per-bolt deduped CVE-ID set so the
+	// viewer unions them across bolts (summing counts double-counts shared
+	// CVEs); every other field is an additive per-host count.
+	GetSecuritySummary(context.Context, *GetSecuritySummaryRequest) (*GetSecuritySummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -851,6 +880,9 @@ func (UnimplementedVigoAdminServer) DeleteWebhook(context.Context, *DeleteWebhoo
 }
 func (UnimplementedVigoAdminServer) GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetConvergenceSummary not implemented")
+}
+func (UnimplementedVigoAdminServer) GetSecuritySummary(context.Context, *GetSecuritySummaryRequest) (*GetSecuritySummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSecuritySummary not implemented")
 }
 func (UnimplementedVigoAdminServer) GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEnvoyConvergence not implemented")
@@ -1173,6 +1205,24 @@ func _VigoAdmin_GetConvergenceSummary_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VigoAdmin_GetSecuritySummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSecuritySummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoAdminServer).GetSecuritySummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoAdmin_GetSecuritySummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoAdminServer).GetSecuritySummary(ctx, req.(*GetSecuritySummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VigoAdmin_GetEnvoyConvergence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEnvoyConvergenceRequest)
 	if err := dec(in); err != nil {
@@ -1315,6 +1365,10 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetConvergenceSummary",
 			Handler:    _VigoAdmin_GetConvergenceSummary_Handler,
+		},
+		{
+			MethodName: "GetSecuritySummary",
+			Handler:    _VigoAdmin_GetSecuritySummary_Handler,
 		},
 		{
 			MethodName: "GetEnvoyConvergence",

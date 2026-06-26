@@ -21,6 +21,7 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/spanner"
 )
@@ -666,6 +667,20 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 	resp := convergenceCountersToProto(s.localConvergenceCounters())
 	finalizeConvergencePct(resp)
 	return resp, nil
+}
+
+// GetSecuritySummary returns THIS bolt's security-posture rollup (ADR-037
+// slice 2). It is a leaf read — it never fans out, so the federated-UI
+// viewer can fan it out to every roster bolt without recursion. The
+// security computation lives on fleet.DataSource; build one over this
+// bolt's own index/stores (NewDataSource is cheap — lazy caches) and
+// convert to the wire form via the spanner federation type.
+func (s *AdminService) GetSecuritySummary(_ context.Context, _ *pb.GetSecuritySummaryRequest) (*pb.GetSecuritySummaryResponse, error) {
+	if s.fleetIndex == nil {
+		return &pb.GetSecuritySummaryResponse{}, nil
+	}
+	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
+	return spanner.SecuritySummaryToProto(ds.SecuritySummary().ToSpanner()), nil
 }
 
 func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoyConvergenceRequest) (*pb.GetEnvoyConvergenceResponse, error) {

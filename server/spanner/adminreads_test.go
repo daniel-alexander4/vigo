@@ -9,6 +9,7 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/testutil"
 	"google.golang.org/grpc"
@@ -279,5 +280,56 @@ func TestFanoutFlag(t *testing.T) {
 	def := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "x", "", "")
 	if def.Fanout() {
 		t.Error("empty fallback_admin should default to local")
+	}
+}
+
+func TestMergeSecuritySummaries(t *testing.T) {
+	// Two bolts share CVE-2024-1 (low on bolt A, critical on bolt B → the
+	// union must keep critical); CVE-2024-2 is unique to A, CVE-2024-3 to B.
+	// Summing per-bolt unique counts (2+2=4) would over-count; the union is 3.
+	boltA := SecuritySummary{
+		UniqueCVEs:        []CVEIdent{{ID: "CVE-2024-1", Severity: "low"}, {ID: "CVE-2024-2", Severity: "high"}},
+		CertsExpiringSoon: 3, CertsExpired: 1, RootkitWarnings: 2, RunningCVEsTotal: 10, RunningCVEsCritical: 1,
+	}
+	boltB := SecuritySummary{
+		UniqueCVEs:        []CVEIdent{{ID: "CVE-2024-1", Severity: "critical"}, {ID: "CVE-2024-3", Severity: "medium"}},
+		CertsExpiringSoon: 4, CertsExpired: 0, RootkitWarnings: 1, RunningCVEsTotal: 5, RunningCVEsCritical: 2,
+	}
+
+	got := MergeSecuritySummaries([]SecuritySummary{boltA, boltB})
+
+	if got.UniqueCVECount() != 3 {
+		t.Errorf("unique CVE union: got %d, want 3 (CVE-2024-1 shared, must dedup)", got.UniqueCVECount())
+	}
+	// CVE-2024-1 must carry the max severity (critical), not low.
+	var sev string
+	for _, c := range got.UniqueCVEs {
+		if c.ID == "CVE-2024-1" {
+			sev = c.Severity
+		}
+	}
+	if cve.Classify(sev) != cve.SevCritical {
+		t.Errorf("shared CVE severity: got %q, want critical (max across bolts)", sev)
+	}
+	// Additive counts sum.
+	if got.CertsExpiringSoon != 7 || got.CertsExpired != 1 || got.RootkitWarnings != 3 ||
+		got.RunningCVEsTotal != 15 || got.RunningCVEsCritical != 3 {
+		t.Errorf("additive sums wrong: %+v", got)
+	}
+}
+
+func TestSecuritySummaryProtoRoundTrip(t *testing.T) {
+	in := SecuritySummary{
+		UniqueCVEs:        []CVEIdent{{ID: "CVE-2024-9", Severity: "high"}},
+		CertsExpiringSoon: 2, CertsExpired: 1, CertsExpiringIn7: 1, CertsExpiringIn30: 2, CertHostsAffected: 3,
+		RootkitWarnings: 4, RunningCVEsTotal: 6, RunningCVEsCritical: 1, RunningCVEsHigh: 2, RunningCVEsMedium: 2, RunningCVEsLow: 1, RunningCVEHostsAffected: 5,
+	}
+	out := SecuritySummaryFromProto(SecuritySummaryToProto(in))
+	if out.UniqueCVECount() != 1 || out.UniqueCVEs[0].ID != "CVE-2024-9" || out.UniqueCVEs[0].Severity != "high" {
+		t.Errorf("CVE round-trip lost data: %+v", out.UniqueCVEs)
+	}
+	if out.CertsExpiringSoon != 2 || out.CertHostsAffected != 3 || out.RootkitWarnings != 4 ||
+		out.RunningCVEsTotal != 6 || out.RunningCVEHostsAffected != 5 {
+		t.Errorf("scalar round-trip mismatch: %+v", out)
 	}
 }

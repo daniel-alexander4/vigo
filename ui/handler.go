@@ -95,6 +95,10 @@ type DataSource interface {
 	// no cert_lifecycle trait rows matching the filter.
 	EnvoyCertDetails(envoyID, bucket string) ([]CertDetail, string, bool)
 	RunningCVESummary() RunningCVESummary
+	// SecuritySummary is the dashboard Security Posture column's data as a
+	// federatable rollup (deduped CVEs + cert/running-CVE/rootkit counts),
+	// fanned out across bolts in spanner mode (ADR-037 slice 2).
+	SecuritySummary() SecuritySummary
 	// FleetPressure rolls up per-envoy resource + repo-health telemetry
 	// into the dashboard "Agent Health" card via the fleetpressure SoT
 	// package.
@@ -124,6 +128,55 @@ type RunningCVESummary struct {
 	Medium        int
 	Low           int
 	HostsAffected int
+}
+
+// CVEIdent is a deduped CVE (ID + max severity) for the federated security
+// rollup (ADR-037 slice 2).
+type CVEIdent struct {
+	ID       string
+	Severity string
+}
+
+// SecuritySummary is the dashboard Security Posture column's data as a
+// federatable rollup: the per-bolt deduped CVE set plus additive per-host
+// counts. DataSource produces it locally; in spanner mode the viewer fans
+// it out and unions it across bolts (security posture is never gossiped).
+type SecuritySummary struct {
+	UniqueCVEs              []CVEIdent
+	CertsExpiringSoon       int
+	CertsExpired            int
+	CertsExpiringIn7        int
+	CertsExpiringIn30       int
+	CertHostsAffected       int
+	RootkitWarnings         int
+	RunningCVEsTotal        int
+	RunningCVEsCritical     int
+	RunningCVEsHigh         int
+	RunningCVEsMedium       int
+	RunningCVEsLow          int
+	RunningCVEHostsAffected int
+}
+
+// ToSpanner converts to the spanner federation type for fan-out merging.
+func (s SecuritySummary) ToSpanner() spanner.SecuritySummary {
+	out := spanner.SecuritySummary{
+		CertsExpiringSoon:       s.CertsExpiringSoon,
+		CertsExpired:            s.CertsExpired,
+		CertsExpiringIn7:        s.CertsExpiringIn7,
+		CertsExpiringIn30:       s.CertsExpiringIn30,
+		CertHostsAffected:       s.CertHostsAffected,
+		RootkitWarnings:         s.RootkitWarnings,
+		RunningCVEsTotal:        s.RunningCVEsTotal,
+		RunningCVEsCritical:     s.RunningCVEsCritical,
+		RunningCVEsHigh:         s.RunningCVEsHigh,
+		RunningCVEsMedium:       s.RunningCVEsMedium,
+		RunningCVEsLow:          s.RunningCVEsLow,
+		RunningCVEHostsAffected: s.RunningCVEHostsAffected,
+	}
+	for _, c := range s.UniqueCVEs {
+		out.UniqueCVEs = append(out.UniqueCVEs, spanner.CVEIdent{ID: c.ID, Severity: c.Severity})
+	}
+	return out
 }
 
 // CertExpirySummary aggregates `cert_lifecycle` trait rows fleet-wide
@@ -973,6 +1026,10 @@ type DashboardPageData struct {
 	// dashboard counts above are this bolt's partition only; this drives
 	// the header scope chip so the operator can tell the two apart.
 	FleetWideEnvoys int
+	// SecurityFederated is set when the Security Posture column has been
+	// fanned out + merged across bolts (ADR-037 slice 2), so the template
+	// renders it even in a scoped-away (fleet) view.
+	SecurityFederated bool
 	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
@@ -1248,24 +1305,27 @@ type DashboardStatsFragmentData struct {
 	// Scope / ScopedAway mirror PageData for the polled fragment (which
 	// never runs setCommonWithRequest): in a scoped-away view the fragment
 	// renders only the fleet-health column from scoped convergence counters
-	// plus the "detail not yet federated" notice (ADR-037).
-	Scope           string
-	ScopedAway      bool
-	TotalEnvoys     int
-	ActiveEnvoys    int
-	RecentFailures  int
-	DriftRate       float64
-	CVECritical     int64
-	CVEHigh         int64
-	UniqueCVEs      int64
-	HardeningScore  int64
-	RootkitWarnings int64
-	ConvergencePct  float64
-	Converged       int
-	Degraded        int
-	Diverged        int // drift-axis bucket
-	CompFailed      int
-	Offline         int
+	// plus the "detail not yet federated" notice (ADR-037). SecurityFederated
+	// is set when the Security Posture column has been fanned out + merged
+	// (slice 2), so the template shows it even in a scoped-away view.
+	Scope             string
+	ScopedAway        bool
+	SecurityFederated bool
+	TotalEnvoys       int
+	ActiveEnvoys      int
+	RecentFailures    int
+	DriftRate         float64
+	CVECritical       int64
+	CVEHigh           int64
+	UniqueCVEs        int64
+	HardeningScore    int64
+	RootkitWarnings   int64
+	ConvergencePct    float64
+	Converged         int
+	Degraded          int
+	Diverged          int // drift-axis bucket
+	CompFailed        int
+	Offline           int
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
@@ -2543,6 +2603,25 @@ func (h *Handler) scopedConvergence(scope string) spanner.ConvergenceCounters {
 	return spanner.ConvergenceCounters{} // unknown / never-reported peer
 }
 
+// scopedSecurity returns the fleet-merged Security Posture summary for the
+// fleet scope: fan out GetSecuritySummary to every peer bolt, then fold in
+// this bolt's own summary (the local bolt is not a peer of itself). Only
+// fleet scope is federated for security in slice 2 — per-peer scope still
+// shows the "detail not yet federated" notice. ok=false when not federated
+// or the fan-out failed (the caller leaves the column hidden).
+func (h *Handler) scopedSecurity(ctx context.Context, scope string) (spanner.SecuritySummary, bool) {
+	if h.spannerAdmin == nil || scope != scopeFleet {
+		return spanner.SecuritySummary{}, false
+	}
+	peers, err := h.spannerAdmin.AggregateSecurityFanout(ctx)
+	if err != nil {
+		slog.Warn("scoped security fan-out failed", "error", err)
+		return spanner.SecuritySummary{}, false
+	}
+	local := h.dataSource.SecuritySummary().ToSpanner()
+	return spanner.MergeSecuritySummaries([]spanner.SecuritySummary{peers, local}), true
+}
+
 // buildScopeTabs builds the ADR-037 "Fleet | bolt-N" tab strip for the
 // current page path, marking the active tab. The fleet tab's label is
 // rendered in-template via {{T}}; bolt tabs are labelled by hostname
@@ -2760,6 +2839,19 @@ func (h *Handler) dashboardScoped(w http.ResponseWriter, r *http.Request, scope 
 		data.DriftRate = float64(c.Diverged) / float64(c.Total) * 100
 	}
 	data.ConvergencePct = convergence.ConvergedPct(int64(c.Converged), int64(c.Total-c.Offline))
+
+	// Federated Security Posture column (slice 2): fleet scope fans out +
+	// merges; per-peer scope leaves it behind the notice.
+	if sec, ok := h.scopedSecurity(r.Context(), scope); ok {
+		data.SecurityFederated = true
+		data.UniqueCVEs = int64(sec.UniqueCVECount())
+		data.CertsExpiringSoon = sec.CertsExpiringSoon
+		data.CertsExpired = sec.CertsExpired
+		data.RootkitWarnings = int64(sec.RootkitWarnings)
+		data.RunningCVEsTotal = sec.RunningCVEsTotal
+		data.RunningCVEsCritical = sec.RunningCVEsCritical
+		data.RunningCVEsHigh = sec.RunningCVEsHigh
+	}
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
@@ -2992,6 +3084,16 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 			data.DriftRate = float64(c.Diverged) / float64(c.Total) * 100
 		}
 		data.ConvergencePct = convergence.ConvergedPct(int64(c.Converged), int64(c.Total-c.Offline))
+		if sec, ok := h.scopedSecurity(r.Context(), scope); ok {
+			data.SecurityFederated = true
+			data.UniqueCVEs = int64(sec.UniqueCVECount())
+			data.CertsExpiringSoon = sec.CertsExpiringSoon
+			data.CertsExpired = sec.CertsExpired
+			data.RootkitWarnings = int64(sec.RootkitWarnings)
+			data.RunningCVEsTotal = sec.RunningCVEsTotal
+			data.RunningCVEsCritical = sec.RunningCVEsCritical
+			data.RunningCVEsHigh = sec.RunningCVEsHigh
+		}
 		h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 		return
 	}

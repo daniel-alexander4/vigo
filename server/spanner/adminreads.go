@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 )
@@ -437,6 +438,141 @@ func (a *SpannerAdmin) AggregateRunsFanout(ctx context.Context, envoyID string, 
 		out = append(out, r.value.([]*pb.Run)...)
 	}
 	return out, nil
+}
+
+// --- security summary (ADR-037 slice 2, fan-out-only — never gossiped) ---
+
+// CVEIdent is one deduped CVE on a bolt: the CVE ID and the highest
+// severity any host on that bolt reported it at. The federated rollup
+// unions these by ID across bolts (max severity wins) so the fleet
+// unique-CVE count is correct rather than a double-counting sum.
+type CVEIdent struct {
+	ID       string
+	Severity string
+}
+
+// SecuritySummary is a bolt's security-posture rollup for the federated
+// dashboard Security Posture column. UniqueCVEs is the per-bolt deduped
+// CVE set (unioned across bolts at merge time); every other field is an
+// additive per-host count (a host belongs to one bolt → summable).
+type SecuritySummary struct {
+	UniqueCVEs              []CVEIdent
+	CertsExpiringSoon       int
+	CertsExpired            int
+	CertsExpiringIn7        int
+	CertsExpiringIn30       int
+	CertHostsAffected       int
+	RootkitWarnings         int
+	RunningCVEsTotal        int
+	RunningCVEsCritical     int
+	RunningCVEsHigh         int
+	RunningCVEsMedium       int
+	RunningCVEsLow          int
+	RunningCVEHostsAffected int
+}
+
+// UniqueCVECount is the deduped unique-CVE total (len of the set after any
+// merge). Surfaced as the dashboard's headline unique-CVE number.
+func (s SecuritySummary) UniqueCVECount() int { return len(s.UniqueCVEs) }
+
+// MergeSecuritySummaries unions the per-bolt deduped CVE sets (max severity
+// per CVE ID) and sums the additive counts. The result's UniqueCVEs is the
+// fleet-deduped set — summing per-bolt unique counts would double-count a
+// CVE present on hosts across two bolts.
+func MergeSecuritySummaries(parts []SecuritySummary) SecuritySummary {
+	cveMax := make(map[string]string)
+	var out SecuritySummary
+	for _, p := range parts {
+		for _, c := range p.UniqueCVEs {
+			if cur, ok := cveMax[c.ID]; !ok || cve.Classify(c.Severity) > cve.Classify(cur) {
+				cveMax[c.ID] = c.Severity
+			}
+		}
+		out.CertsExpiringSoon += p.CertsExpiringSoon
+		out.CertsExpired += p.CertsExpired
+		out.CertsExpiringIn7 += p.CertsExpiringIn7
+		out.CertsExpiringIn30 += p.CertsExpiringIn30
+		out.CertHostsAffected += p.CertHostsAffected
+		out.RootkitWarnings += p.RootkitWarnings
+		out.RunningCVEsTotal += p.RunningCVEsTotal
+		out.RunningCVEsCritical += p.RunningCVEsCritical
+		out.RunningCVEsHigh += p.RunningCVEsHigh
+		out.RunningCVEsMedium += p.RunningCVEsMedium
+		out.RunningCVEsLow += p.RunningCVEsLow
+		out.RunningCVEHostsAffected += p.RunningCVEHostsAffected
+	}
+	for id, sev := range cveMax {
+		out.UniqueCVEs = append(out.UniqueCVEs, CVEIdent{ID: id, Severity: sev})
+	}
+	return out
+}
+
+// SecuritySummaryToProto / SecuritySummaryFromProto bridge the wire form.
+func SecuritySummaryToProto(s SecuritySummary) *pb.GetSecuritySummaryResponse {
+	resp := &pb.GetSecuritySummaryResponse{
+		CertsExpiringSoon:       int32(s.CertsExpiringSoon),
+		CertsExpired:            int32(s.CertsExpired),
+		CertsExpiringIn7:        int32(s.CertsExpiringIn7),
+		CertsExpiringIn30:       int32(s.CertsExpiringIn30),
+		CertHostsAffected:       int32(s.CertHostsAffected),
+		RootkitWarnings:         int32(s.RootkitWarnings),
+		RunningCvesTotal:        int32(s.RunningCVEsTotal),
+		RunningCvesCritical:     int32(s.RunningCVEsCritical),
+		RunningCvesHigh:         int32(s.RunningCVEsHigh),
+		RunningCvesMedium:       int32(s.RunningCVEsMedium),
+		RunningCvesLow:          int32(s.RunningCVEsLow),
+		RunningCveHostsAffected: int32(s.RunningCVEHostsAffected),
+	}
+	resp.UniqueCves = make([]*pb.CveSeverity, 0, len(s.UniqueCVEs))
+	for _, c := range s.UniqueCVEs {
+		resp.UniqueCves = append(resp.UniqueCves, &pb.CveSeverity{Id: c.ID, Severity: c.Severity})
+	}
+	return resp
+}
+
+func SecuritySummaryFromProto(resp *pb.GetSecuritySummaryResponse) SecuritySummary {
+	s := SecuritySummary{
+		CertsExpiringSoon:       int(resp.CertsExpiringSoon),
+		CertsExpired:            int(resp.CertsExpired),
+		CertsExpiringIn7:        int(resp.CertsExpiringIn7),
+		CertsExpiringIn30:       int(resp.CertsExpiringIn30),
+		CertHostsAffected:       int(resp.CertHostsAffected),
+		RootkitWarnings:         int(resp.RootkitWarnings),
+		RunningCVEsTotal:        int(resp.RunningCvesTotal),
+		RunningCVEsCritical:     int(resp.RunningCvesCritical),
+		RunningCVEsHigh:         int(resp.RunningCvesHigh),
+		RunningCVEsMedium:       int(resp.RunningCvesMedium),
+		RunningCVEsLow:          int(resp.RunningCvesLow),
+		RunningCVEHostsAffected: int(resp.RunningCveHostsAffected),
+	}
+	for _, c := range resp.UniqueCves {
+		s.UniqueCVEs = append(s.UniqueCVEs, CVEIdent{ID: c.Id, Severity: c.Severity})
+	}
+	return s
+}
+
+// AggregateSecurityFanout fans out GetSecuritySummary to every roster bolt
+// and merges the results (union deduped CVEs, sum additive counts). It
+// returns the merged PEER summaries; the caller folds in the local bolt's
+// own summary (the local bolt is not a peer of itself). Fan-out-only:
+// security posture is never gossiped, so unlike convergence there is no
+// cache-aggregate path.
+func (a *SpannerAdmin) AggregateSecurityFanout(ctx context.Context) (SecuritySummary, error) {
+	results, err := a.fanOut(ctx, func(ctx context.Context, pc *PeerConn) (any, error) {
+		return pc.Admin.GetSecuritySummary(ctx, &pb.GetSecuritySummaryRequest{})
+	})
+	if err != nil {
+		return SecuritySummary{}, err
+	}
+	parts := make([]SecuritySummary, 0, len(results))
+	for _, r := range results {
+		if r.err != nil {
+			slog.Warn("spanner fanout: peer GetSecuritySummary failed", "peer", r.pubkey, "error", r.err)
+			continue
+		}
+		parts = append(parts, SecuritySummaryFromProto(r.value.(*pb.GetSecuritySummaryResponse)))
+	}
+	return MergeSecuritySummaries(parts), nil
 }
 
 // RunsFromBolt pulls one bolt's runs for a specific envoy via a single

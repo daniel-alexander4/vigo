@@ -11,7 +11,7 @@
             </div>
         </div>
     </a>
-    {{if not $.ScopedAway}}
+    {{if or (not $.ScopedAway) $.SecurityFederated}}
     <a class="dash-column dash-column--link" href="/security" aria-label="{{T $.Locale "dashboard_stats.security_posture_aria"}}">
         <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.security_posture"}}</h3>
         <div class="stat-cards">
@@ -33,6 +33,8 @@
             {{end}}
         </div>
     </a>
+    {{end}}
+    {{if not $.ScopedAway}}
     <a class="dash-column dash-column--link" href="/compliance" aria-label="{{T $.Locale "dashboard_stats.standards_compliance_aria"}}">
         <h3 class="dash-column__title">{{T $.Locale "dashboard_stats.standards_compliance"}}</h3>
         <div class="stat-cards">
@@ -56,6 +58,6 @@
     {{end}}
 </div>
 {{if $.ScopedAway}}
-<p class="scope-notice">{{T $.Locale "spanner.scope_detail_notice"}}</p>
+<p class="scope-notice">{{if $.SecurityFederated}}{{T $.Locale "spanner.scope_detail_notice_partial"}}{{else}}{{T $.Locale "spanner.scope_detail_notice"}}{{end}}</p>
 {{end}}
 {{end}}

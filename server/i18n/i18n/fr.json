@@ -1341,6 +1341,7 @@
   "spanner.scope_partition": "partition de ce bolt",
   "spanner.scope_aria": "Portée de la flotte",
   "spanner.scope_detail_notice": "Affichage de la convergence à l'échelle de la flotte. Le détail sécurité, risque, conformité et certificats par bolt se trouve dans l'onglet de chaque bolt ; les vues détaillées à l'échelle de la flotte arrivent progressivement (ADR-037).",
+  "spanner.scope_detail_notice_partial": "Affichage de la convergence et de la sécurité à l'échelle de la flotte. Le détail conformité et risque par bolt se trouve dans l'onglet de chaque bolt ; ces vues à l'échelle de la flotte arrivent progressivement (ADR-037).",
   "spanner.tab_fleet": "Flotte",
   "spanner.tab_this_bolt_suffix": "(ce bolt)",
   "spanner.seconds_ago": " s",

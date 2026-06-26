@@ -181,6 +181,20 @@ service VigoAdmin {
     };
   }
 
+  // GetSecuritySummary returns this bolt's local security posture rollup —
+  // the dashboard Security Posture column's data (deduped unique CVEs,
+  // cert-expiry buckets, running-CVE counts, rootkit warnings). It is a
+  // leaf read: it returns THIS bolt's partition only and never fans out,
+  // so the federated-UI viewer (ADR-037) can fan it out to peers without
+  // recursion. Unique CVEs ride as the per-bolt deduped CVE-ID set so the
+  // viewer unions them across bolts (summing counts double-counts shared
+  // CVEs); every other field is an additive per-host count.
+  rpc GetSecuritySummary(GetSecuritySummaryRequest) returns (GetSecuritySummaryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/security/summary"
+    };
+  }
+
   // GetEnvoyConvergence returns convergence details for a single envoy.
   rpc GetEnvoyConvergence(GetEnvoyConvergenceRequest) returns (GetEnvoyConvergenceResponse) {
     option (google.api.http) = {
@@ -845,6 +859,35 @@ message GetConvergenceSummaryResponse {
   // hub-fan-out / fanout paths which query peers live). Operators read
   // it to gauge how stale a gossip-aggregated answer is.
   int64 snapshot_age_seconds = 9;
+}
+
+message GetSecuritySummaryRequest {}
+
+// CveSeverity is one deduped CVE on a bolt — the CVE ID plus the highest
+// severity any host on that bolt reported it at. The federated viewer
+// unions these by ID across bolts (taking the max severity) so the
+// fleet unique-CVE count is correct and not double-counted.
+message CveSeverity {
+  string id = 1;
+  string severity = 2; // critical | high | medium | low | info
+}
+
+message GetSecuritySummaryResponse {
+  // Deduped unique CVEs on this bolt (union across bolts at the viewer).
+  repeated CveSeverity unique_cves = 1;
+  // Additive per-host counts (a host belongs to one bolt → summable).
+  int32 certs_expiring_soon = 2;
+  int32 certs_expired = 3;
+  int32 certs_expiring_in7 = 4;
+  int32 certs_expiring_in30 = 5;
+  int32 cert_hosts_affected = 6;
+  int32 rootkit_warnings = 7;
+  int32 running_cves_total = 8;
+  int32 running_cves_critical = 9;
+  int32 running_cves_high = 10;
+  int32 running_cves_medium = 11;
+  int32 running_cves_low = 12;
+  int32 running_cve_hosts_affected = 13;
 }
 
 message GetEnvoyConvergenceRequest {

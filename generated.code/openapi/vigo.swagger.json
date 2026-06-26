@@ -497,6 +497,29 @@
         ]
       }
     },
+    "/api/v1/security/summary": {
+      "get": {
+        "summary": "GetSecuritySummary returns this bolt's local security posture rollup —\nthe dashboard Security Posture column's data (deduped unique CVEs,\ncert-expiry buckets, running-CVE counts, rootkit warnings). It is a\nleaf read: it returns THIS bolt's partition only and never fans out,\nso the federated-UI viewer (ADR-037) can fan it out to peers without\nrecursion. Unique CVEs ride as the per-bolt deduped CVE-ID set so the\nviewer unions them across bolts (summing counts double-counts shared\nCVEs); every other field is an additive per-host count.",
+        "operationId": "VigoAdmin_GetSecuritySummary",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSecuritySummaryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googleRpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VigoAdmin"
+        ]
+      }
+    },
     "/api/v1/tokens": {
       "post": {
         "summary": "GenerateToken generates a cryptographically random one-time enrollment token.",
@@ -787,6 +810,19 @@
         }
       }
     },
+    "v1CveSeverity": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string",
+          "title": "critical | high | medium | low | info"
+        }
+      },
+      "description": "CveSeverity is one deduped CVE on a bolt — the CVE ID plus the highest\nseverity any host on that bolt reported it at. The federated viewer\nunions these by ID across bolts (taking the max severity) so the\nfleet unique-CVE count is correct and not double-counted."
+    },
     "v1DeleteEnvoyResponse": {
       "type": "object"
     },
@@ -959,6 +995,68 @@
             "type": "object",
             "$ref": "#/definitions/v1ResourceRunResult"
           }
+        }
+      }
+    },
+    "v1GetSecuritySummaryResponse": {
+      "type": "object",
+      "properties": {
+        "uniqueCves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CveSeverity"
+          },
+          "description": "Deduped unique CVEs on this bolt (union across bolts at the viewer)."
+        },
+        "certsExpiringSoon": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Additive per-host counts (a host belongs to one bolt → summable)."
+        },
+        "certsExpired": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "certsExpiringIn7": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "certsExpiringIn30": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "certHostsAffected": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "rootkitWarnings": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "runningCvesTotal": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "runningCvesCritical": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "runningCvesHigh": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "runningCvesMedium": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "runningCvesLow": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "runningCveHostsAffected": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

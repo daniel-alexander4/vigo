@@ -1341,6 +1341,7 @@
   "spanner.scope_partition": "partycja tego bolta",
   "spanner.scope_aria": "Zakres floty",
   "spanner.scope_detail_notice": "Wyświetlanie zbieżności w całej flocie. Szczegóły bezpieczeństwa, ryzyka, zgodności i certyfikatów dla poszczególnych boltów znajdują się na karcie każdego bolta; widoki szczegółowe dla całej floty są stopniowo wdrażane (ADR-037).",
+  "spanner.scope_detail_notice_partial": "Wyświetlanie zbieżności i bezpieczeństwa w całej flocie. Szczegóły zgodności i ryzyka dla poszczególnych boltów znajdują się na karcie każdego bolta; te widoki dla całej floty są stopniowo wdrażane (ADR-037).",
   "spanner.tab_fleet": "Flota",
   "spanner.tab_this_bolt_suffix": "(ten bolt)",
   "spanner.seconds_ago": "s temu",

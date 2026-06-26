@@ -1341,6 +1341,7 @@
   "spanner.scope_partition": "partición de este bolt",
   "spanner.scope_aria": "Ámbito de la flota",
   "spanner.scope_detail_notice": "Mostrando la convergencia de toda la flota. El detalle de seguridad, riesgo, cumplimiento y certificados por bolt está en la pestaña de cada bolt; las vistas detalladas de toda la flota se están implementando (ADR-037).",
+  "spanner.scope_detail_notice_partial": "Mostrando la convergencia y la seguridad de toda la flota. El detalle de cumplimiento y riesgo por bolt está en la pestaña de cada bolt; esas vistas de toda la flota se están implementando (ADR-037).",
   "spanner.tab_fleet": "Flota",
   "spanner.tab_this_bolt_suffix": "(este bolt)",
   "spanner.seconds_ago": "s atrás",
