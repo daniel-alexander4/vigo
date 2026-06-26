@@ -100,11 +100,11 @@ The originating instance of a swarm blob on an envoy — the source of truth for
 
 ## spanner
 
-The whole federated control plane — a constellation of [bolt](#bolt) servers cooperating to operate one fleet. CLI (`vigocli spanner`), UI route (`/spanner`), REST namespace (`/api/v1/spanner/*`), YAML key (`spanner:`), and metric prefix (`vigo_spanner_*`) all speak the spanner vocabulary. The current wire implementation is hub + bolts; Phase 1+ will replace it with peer-equal gossip. The loader rejects the retired `tungol:` YAML key at startup. See [Set up Spanner](howto/operate/set-up-spanner.md).
+The whole federated control plane — a constellation of [bolt](#bolt) servers cooperating as write-equal peers to operate one fleet. CLI (`vigocli spanner`), UI route (`/spanner`), REST namespace (`/api/v1/spanner/*`), YAML key (`spanner:`), and metric prefix (`vigo_spanner_*`) all speak the spanner vocabulary. There is no hub and no primary: every bolt runs identical code, holds the full admissions roster (CRDT-replicated over multicast counter gossip + a REST snapshot pull), and answers fleet-wide admin queries by aggregating from that roster (ADR-026). Membership is established with `vigocli spanner init` / `bolt invite` / `bolt join`; the loader hard-errors on the retired hub-spoke keys (`role`, `bolt_id`, `hub_addr`, …) with migration pointers. See [Set up Spanner](howto/operate/set-up-spanner.md).
 
 ## bolt
 
-One `vigosrv` participating in a [spanner](#spanner) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; participates as a peer in the gossiped admissions CRDT (ADR-026). The YAML config uses `spanner.mode: founder` (the bootstrap-discovery rendezvous in Phase 2 — Phase 3 retires the founder/joiner distinction entirely) or `spanner.mode: joiner` (a bolt that joined an existing spanner). Per-bolt identity is the Ed25519 pubkey from `server/bolt/`, not a YAML-configured ID.
+One `vigosrv` participating in a [spanner](#spanner) federation as a write-equal peer. Owns a hostname-pattern partition of the fleet (`spanner.patterns`, first-match-wins, overlap refused at publish + boot); handles agent check-ins for its envoys; holds the full admissions roster and aggregates fleet-wide reads from it (no hub). Configured with `spanner.mode: spanner` plus a `spanner_id` and `patterns` — the retired `founder`/`joiner` mode values hard-error (every bolt is a peer-equal `spanner`). Per-bolt identity is the Ed25519 pubkey generated at `server/bolt/`, not a YAML-configured ID.
 
 ## stacks
 
