@@ -1,8 +1,8 @@
-<!-- vigo-i18n source_sha:31c64a3fe3ac64a0b07a6a39c54ec3a305d48080a56fe59d1f474e7647606a9f -->
+<!-- vigo-i18n source_sha:6c80a79b4803ea54ac102605e222253aafd4e52ea11cd63f3ad9c843b7987bce -->
 
 # Vigo
 
-**Des dizaines de milliers d'Envoys à une cadence d'une seconde. Des centaines de milliers à une cadence détendue. Un seul serveur.**
+**Des dizaines de milliers d'Envoys sur un seul serveur — vous fixez la cadence de check-in, jusqu'à la seconde.**
 
 Vigo est un moteur distribué d'application d'état : des agents installés sur vos nœuds gérés (Envoys) tirent l'état souhaité depuis un serveur central via gRPC/mTLS, appliquent des modifications de ressources idempotentes et renvoient les résultats — à une cadence serrée, à l'échelle d'une flotte, sur du matériel grand public. Quand un seul serveur ne suffit pas, **Spanner** fédère des pairs égaux en écriture et le plafond disparaît.
 

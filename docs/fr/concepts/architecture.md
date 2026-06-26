@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:aa50e42f5d9cb230460256ef1f052aaccd19caf34a882e6d825314867e6cb11f -->
+<!-- vigo-i18n source_sha:70c74bfef766a4bc0728c1d140ed0e7f768a0dc7451f7de69cc5d4bd73fc8d78 -->
 
 # Architecture
 
@@ -22,7 +22,7 @@ Le modèle est **pull** : il n'y a pas de canal push du serveur vers le nœud po
 
 - **L'agent survit à l'absence du serveur.** Il met en cache le dernier bundle, ses traits et une file de résultats dans un magasin LMDB embarqué, de sorte qu'il continue de converger hors ligne et vide ses résultats à la reconnexion. Voir [convergence vs conformité](convergence-vs-compliance.md).
 - **Les fichiers sont la seule source de vérité.** Les opérateurs éditent du YAML (`.vgo`) sous les stacks ; `vigocli config publish` valide et recharge. Il n'existe aucun chemin API/UI/DB qui écrive la configuration.
-- **Un seul serveur passe à l'échelle de dizaines de milliers d'Envoys à une cadence serrée**, et au-delà, [spanner](spanner-federation.md) fédère des pairs égaux en écriture.
+- **Un seul serveur passe à l'échelle de dizaines de milliers d'Envoys à une cadence normale** (moins à une cadence d'une seconde, où le CPU par check-in sature en premier — la cadence fixe le plafond), et au-delà, [spanner](spanner-federation.md) fédère des pairs égaux en écriture.
 
 ## Où cela se retrouve
 
