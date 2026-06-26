@@ -370,6 +370,8 @@ Check statuses: `pass`, `warn`, `fail`, `skip`. Check scope: `server` (Vigo itse
 
 Returns current license status including stage, tier, envoy counts, and expiration.
 
+Customer identity (`customer_name`, `customer_id`, `license_id`) and the machine `fingerprint` are **admin-only** — for `viewer` and `compliance` callers these fields are blanked, leaving the operational fields (tier, counts, expiry) intact.
+
 **Response:**
 
 ```json

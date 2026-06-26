@@ -7,7 +7,7 @@ A spanner is a set of vigosrv servers — **bolts** — that share one fleet as 
 
 **When you'd skip this:** smaller fleets (a single-server `standalone` deployment is the default and the right answer for almost every operator); fleets that need HA but not horizontal sharding (use `server/peer/` primary/secondary replication instead — see the `peers:` section in `server.yaml`).
 
-> **License requirement:** Spanner needs a paid license. The built-in free license (100 envoys) does not support `spanner` mode; the server refuses to start with `spanner.mode: spanner` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — moving a bolt to a new machine requires a new license.
+> **License requirement:** Spanner needs a **commercial** license. Any non-commercial tier — the built-in free license (100 envoys), a hand-issued community/unlimited license, or any tier that does not require machine binding — does not support `spanner` mode; the server refuses to start with `spanner.mode: spanner` on such a license. Commercial licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — moving a bolt to a new machine requires a new license.
 
 ## Modes
 
@@ -122,7 +122,7 @@ The `/spanner` page lists every bolt in the spanner — one row each, with the b
 
 - **HA for an individual bolt** → `server/peer/` primary/secondary replication, configured per bolt independently of the spanner.
 - **A bolt is wedged** → `vigocli spanner status` shows a stale snapshot age; drain it with `vigocli spanner bolt drain <pubkey>`.
-- **License is too small** → spanner needs a paid license; see [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
+- **License is too small / wrong tier** → spanner needs a commercial license; a free or community-tier license is refused regardless of node count. See [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
 - **Cross-bolt convergence lags** → the Tier-1 counter-gossip cadence is `30s` by default; reduce `spanner.snapshot.tier1_interval` for tighter cross-bolt convergence.
 
 ---
