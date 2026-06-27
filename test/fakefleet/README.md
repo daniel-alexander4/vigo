@@ -159,6 +159,9 @@ the manifest. Stop the daemon first so a tick doesn't race the delete
 | `--named` | `100` | how many keep a realistic service hostname; the rest are `worker-NNNNN` (`create`) |
 | `--broken` | `20` | how many report a failing resource → Failed (`create`) |
 | `--changed` | `500` | how many report drift → Changed/Diverged (`create`) |
+| `--hostname-suffix` | (empty) | append a domain to every hostname (`create`) — e.g. `.a.test`, so envoys match a spanner bolt's hostname pattern |
+| `--name-prefix` | (empty) | prepend `<tag>-` to every hostname (`create`) — e.g. `bolt1`, so a spanner bolt's envoys are recognizable by name. Rides inside the `--hostname-suffix` pattern, so routing is unchanged |
+| `--ip-prefix` | (empty) | first two octets of synthetic IPs as `A.B` (`create`) — e.g. `10.100` → `10.100.x.x`, so a bolt's fleet shares a recognizable /16. Empty = the default `10.x.x.x` spread |
 | `--cadence` | `1s` | check-in interval, also reported as the check-in cycle (`run`/`tick`) |
 | `--report-cadence` | `1m` | how often the daemon reports a convergence run per envoy (`run`) |
 | `--stream` | `false` | `run` holds a real bidi `AgentStream` per envoy instead of unary check-ins — the only mode that drives `vigo_streams_active` and the per-stream connection-RSS ceiling (`checkin.max_connections`) |

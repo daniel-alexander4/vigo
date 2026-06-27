@@ -326,31 +326,48 @@ func baseLabel(hostname string) string {
 	return strings.ToLower(hostname)
 }
 
-// looksSynthetic reports whether a hostname has the exact shape this
-// harness generates — "<class>-<env>-<zone>-NNN" or the worker form
-// "worker-<class>-<env>-<zone>-NNNNN", with class/env/zone drawn from the
-// known topology and a numeric tail. It's the positive identifier
-// backout's fallback uses when the manifest is lost: no reserved suffix
-// needed, and it can never match a real host (guarded by realHosts) or
-// the vigosrv-self envoy (whose name has no such shape).
+// synthIP assigns a deterministic per-host IP from the generation counter.
+// With ipPrefix set ("10.100") it fills the low two octets from the counter
+// (10.100.<hi>.<lo>), so a spanner bolt's fleet shares a recognizable /16 — up
+// to 65 536 hosts. Empty ipPrefix keeps the default 10/8 spread across three
+// counter octets (up to ~16M unique addresses, for the single-server tests).
+func synthIP(ipPrefix string, i int) string {
+	if ipPrefix != "" {
+		return fmt.Sprintf("%s.%d.%d", ipPrefix, i>>8&0xff, i&0xff)
+	}
+	return fmt.Sprintf("10.%d.%d.%d", i>>16&0xff, i>>8&0xff, i&0xff)
+}
+
+// isWorkerHost reports whether a generated hostname is from the worker pool,
+// independent of any --name-prefix tag ("worker-..." or "<tag>-worker-...").
+func isWorkerHost(hostname string) bool {
+	return strings.HasPrefix(hostname, "worker-") || strings.Contains(hostname, "-worker-")
+}
+
+// looksSynthetic reports whether a hostname carries the shape this harness
+// generates: a trailing "<class>-<env>-<zone>-NNN" with class/env/zone drawn
+// from the known topology and a numeric tail. Any leading segments are
+// harness-added decoration — the "worker" pool marker and/or a --name-prefix
+// tag (worker-, bolt1-, bolt1-worker-, …) — so the match is on the tail. It's
+// the positive identifier backout's fallback uses when the manifest is lost:
+// it can never match a real host (guarded by realHosts) or the vigosrv-self
+// envoy (whose name has no such shape).
 func looksSynthetic(hostname string) bool {
 	if realHosts[baseLabel(hostname)] {
 		return false
 	}
 	parts := strings.Split(hostname, "-")
-	if len(parts) == 5 && parts[0] == "worker" {
-		parts = parts[1:]
-	}
-	if len(parts) != 4 {
+	if len(parts) < 4 {
 		return false
 	}
-	if !synthClassSet[parts[0]] || !synthEnvSet[parts[1]] || !synthZoneSet[parts[2]] {
+	tail := parts[len(parts)-4:]
+	if !synthClassSet[tail[0]] || !synthEnvSet[tail[1]] || !synthZoneSet[tail[2]] {
 		return false
 	}
-	if parts[3] == "" {
+	if tail[3] == "" {
 		return false
 	}
-	for _, ch := range parts[3] {
+	for _, ch := range tail[3] {
 		if ch < '0' || ch > '9' {
 			return false
 		}
@@ -358,14 +375,27 @@ func looksSynthetic(hostname string) bool {
 	return true
 }
 
+// planOpts are the create-time knobs that shape the synthetic host plan.
+// namePrefix prepends a "<tag>-" segment to every hostname (e.g. bolt1, so a
+// spanner partition's envoys read as belonging to that bolt); suffix appends a
+// domain (e.g. .a.test, so they match a bolt's hostname pattern); ipPrefix sets
+// the first two octets of the synthetic IPs (e.g. 10.100 → 10.100.x.x). All
+// three are empty by default, giving bare names and the 10/8 IP spread.
+type planOpts struct {
+	count, named, failed, changed int
+	namePrefix, suffix, ipPrefix  string
+}
+
 // buildHostPlan deterministically spreads `count` hosts across the
 // region/AZ/class/env topology. About `named` of them (evenly spread)
 // keep a realistic service hostname (<class>-<env>-<zone>-NNN); the rest
-// join the worker pool (worker-<class>-<env>-<zone>-NNNNN). It then
-// assigns outcomes: `failed` report a resource error, `changed` report
-// drift, the rest are settled. Deterministic (fixed seed) so a regenerate
-// is identical.
-func buildHostPlan(count, named, failed, changed int, suffix string) []hostPlan {
+// join the worker pool (worker-<class>-<env>-<zone>-NNNNN). An optional
+// namePrefix tags every host (bolt1-web-prod-use1a-007); an optional suffix
+// appends a domain. It then assigns outcomes: `failed` report a resource
+// error, `changed` report drift, the rest are settled. Deterministic (fixed
+// seed) so a regenerate is identical.
+func buildHostPlan(o planOpts) []hostPlan {
+	count, named, failed, changed := o.count, o.named, o.failed, o.changed
 	type cell struct {
 		r   region
 		az  string
@@ -427,8 +457,11 @@ func buildHostPlan(count, named, failed, changed int, suffix string) []hostPlan 
 				workerSeq++
 				host = fmt.Sprintf("worker-%s-%s-%s-%05d", cl.cls.name, cl.env, zc, workerSeq)
 			}
-			if suffix != "" {
-				host += suffix
+			if o.namePrefix != "" {
+				host = o.namePrefix + "-" + host
+			}
+			if o.suffix != "" {
+				host += o.suffix
 			}
 			identity, _ := json.Marshal(map[string]any{
 				"os":             d.os,
@@ -449,7 +482,7 @@ func buildHostPlan(count, named, failed, changed int, suffix string) []hostPlan 
 			})
 			plan = append(plan, hostPlan{
 				Hostname:     host,
-				IP:           fmt.Sprintf("10.%d.%d.%d", gi>>16&0xff, gi>>8&0xff, gi&0xff),
+				IP:           synthIP(o.ipPrefix, gi),
 				Cloud:        cl.r.cloud,
 				Region:       cl.r.name,
 				AZ:           cl.az,

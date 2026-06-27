@@ -113,9 +113,12 @@ Next — found + join the spanner (token passing, driven):
   # verify roster on either bolt
   gcloud compute ssh vigo-bolt-1 --zone=${ZONE} --tunnel-through-iap --command='sudo vigocli spanner status; sudo vigocli spanner bolt list'
 
-Then enroll partitioned envoys (routing test):
-  gcloud compute ssh vigo-harness-1 --zone=${ZONE} --tunnel-through-iap --command='ulimit -n 1048576; vigo-fakefleet create --count 40 --named 40 --skip-publish --hostname-suffix .a.test --server ${B1}:1530 --api https://${B1}:8443 --state /var/lib/vigo-fakefleet/a.json'
-  gcloud compute ssh vigo-harness-2 --zone=${ZONE} --tunnel-through-iap --command='ulimit -n 1048576; vigo-fakefleet create --count 40 --named 40 --skip-publish --hostname-suffix .b.test --server ${B1}:1530 --api https://${B1}:8443 --state /var/lib/vigo-fakefleet/b.json'
+Then enroll partitioned envoys (routing test). Each harness tags its fleet so the
+owning bolt is obvious: bolt-1's are bolt1-*.a.test on 10.100.x.x, bolt-2's are
+bolt2-*.b.test on 10.200.x.x (the tag rides inside *.a.test / *.b.test, so routing
+by hostname pattern is unchanged):
+  gcloud compute ssh vigo-harness-1 --zone=${ZONE} --tunnel-through-iap --command='ulimit -n 1048576; vigo-fakefleet create --count 40 --named 40 --skip-publish --hostname-suffix .a.test --name-prefix bolt1 --ip-prefix 10.100 --server ${B1}:1530 --api https://${B1}:8443 --state /var/lib/vigo-fakefleet/a.json'
+  gcloud compute ssh vigo-harness-2 --zone=${ZONE} --tunnel-through-iap --command='ulimit -n 1048576; vigo-fakefleet create --count 40 --named 40 --skip-publish --hostname-suffix .b.test --name-prefix bolt2 --ip-prefix 10.200 --server ${B1}:1530 --api https://${B1}:8443 --state /var/lib/vigo-fakefleet/b.json'
   # both enroll against bolt-1; *.b.test envoys should route to bolt-2. Verify split:
   gcloud compute ssh vigo-bolt-1 --zone=${ZONE} --tunnel-through-iap --command='sudo vigocli spanner bolt list'   # then 'spanner bolt envoys <pubkey>' per bolt
 

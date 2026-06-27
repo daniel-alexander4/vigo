@@ -29,7 +29,7 @@ func TestWriteConfigTreeNestsUnderFleetDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cleanup, err := writeConfigTree(stacks, "alexander4", buildHostPlan(400, 5, 3, 20, ""))
+	cleanup, err := writeConfigTree(stacks, "alexander4", buildHostPlan(planOpts{count: 400, named: 5, failed: 3, changed: 20}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestEnvironmentsFileLintClean(t *testing.T) {
 func TestEnvAxisCovered(t *testing.T) {
 	valid := map[string]bool{"prod": true, "stage": true, "test": true}
 	counts := map[string]int{}
-	for _, h := range buildHostPlan(13647, 100, 20, 500, "") {
+	for _, h := range buildHostPlan(planOpts{count: 13647, named: 100, failed: 20, changed: 500}) {
 		if !valid[h.Env] {
 			t.Fatalf("host %q has invalid env %q", h.Hostname, h.Env)
 		}
@@ -128,7 +128,7 @@ func TestHostPlanOutcomes(t *testing.T) {
 		{1000, 50, 5, 30},
 		{100, 0, 0, 0},
 	} {
-		plan := buildHostPlan(tc.count, tc.named, tc.failed, tc.changed, "")
+		plan := buildHostPlan(planOpts{count: tc.count, named: tc.named, failed: tc.failed, changed: tc.changed})
 		if len(plan) != tc.count {
 			t.Errorf("count=%d: got %d hosts", tc.count, len(plan))
 		}
@@ -152,7 +152,7 @@ func TestHostPlanOutcomes(t *testing.T) {
 // count of realistic service hostnames.
 func TestEveryHostnameLooksSynthetic(t *testing.T) {
 	const named = 100
-	plan := buildHostPlan(13647, named, 20, 500, "")
+	plan := buildHostPlan(planOpts{count: 13647, named: named, failed: 20, changed: 500})
 	seen := make(map[string]bool, len(plan))
 	gotNamed := 0
 	for _, h := range plan {
@@ -178,6 +178,28 @@ func TestEveryHostnameLooksSynthetic(t *testing.T) {
 	}
 	if gotNamed != named {
 		t.Errorf("got %d named (non-worker) hosts, want %d", gotNamed, named)
+	}
+}
+
+// TestNamePrefixAndIPPrefix locks the spanner-harness knobs: --name-prefix
+// tags every hostname (so a bolt's envoys are recognizable by name and still
+// pass looksSynthetic), and --ip-prefix pins the first two octets (so a bolt's
+// fleet shares a /16). Exercised with a mix of named + worker hosts.
+func TestNamePrefixAndIPPrefix(t *testing.T) {
+	plan := buildHostPlan(planOpts{count: 60, named: 5, failed: 0, changed: 0, namePrefix: "bolt1", ipPrefix: "10.100"})
+	if len(plan) != 60 {
+		t.Fatalf("got %d hosts, want 60", len(plan))
+	}
+	for _, h := range plan {
+		if !strings.HasPrefix(h.Hostname, "bolt1-") {
+			t.Errorf("hostname %q lacks the bolt1- prefix", h.Hostname)
+		}
+		if !looksSynthetic(h.Hostname) {
+			t.Errorf("prefixed hostname %q not identified by looksSynthetic", h.Hostname)
+		}
+		if !strings.HasPrefix(h.IP, "10.100.") {
+			t.Errorf("IP %q lacks the 10.100. prefix", h.IP)
+		}
 	}
 }
 
@@ -218,6 +240,8 @@ func TestLooksSynthetic(t *testing.T) {
 		"postgres-stage-usw2b-003",
 		"worker-redis-stage-usw2b-01337",
 		"worker-nginx-test-euw4a-00001",
+		"bolt1-web-prod-use1a-007",             // --name-prefix tag
+		"bolt2-worker-redis-stage-usw2b-01337", // --name-prefix tag on a worker
 	}
 	for _, h := range synthetic {
 		if !looksSynthetic(h) {
