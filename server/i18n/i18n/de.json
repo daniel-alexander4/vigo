@@ -1335,6 +1335,8 @@
   "spanner.ha_replication": "HA-Replikation",
   "spanner.last_sync": "Letzte Synchronisierung",
   "spanner.live": "live",
+  "spanner.not_bolt_specific": "nicht boltspezifisch",
+  "spanner.not_bolt_specific_title": "Diese Seite zeigt für jeden Bolt dieselben Daten — Ihre Bereichsauswahl gilt auf den Flottendatenseiten.",
   "spanner.primary_address": "Primary-Adresse",
   "spanner.scope_fleet_count": "flottenweit: %d",
   "spanner.scope_label": "Bereich",

@@ -5,54 +5,22 @@ package ui
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-// The dashboard scope tab strip (ADR-037) renders in standalone mode too,
-// so the Fleet | <bolt> chrome is stable from one server up and adding a
-// second bolt doesn't restructure the page. In standalone the spannerAdmin
-// is nil, so these paths are exercised without a real spanner.
+// The header scope selector (ADR-037) renders only for a genuine multi-bolt
+// federation. In standalone mode the spannerAdmin is nil and there are no
+// bolts to choose between, so no selector is shown — buildScopeTabs returns
+// no tabs. These paths are exercised without a real spanner.
 
-func TestStandaloneScopeTabs(t *testing.T) {
+func TestStandaloneScopeTabsHidden(t *testing.T) {
 	h := &Handler{serverHostname: "srv1.example.com"} // spannerAdmin nil → standalone
 	r := httptest.NewRequest("GET", "/", nil)
 
-	tabs := h.buildScopeTabs(r, h.resolveScope(r))
-	if len(tabs) != 2 {
-		t.Fatalf("standalone tabs = %d, want 2 (Fleet + local bolt)", len(tabs))
-	}
-	if !tabs[0].IsFleet || !tabs[0].Active {
-		t.Errorf("tab[0] should be the active Fleet tab, got %+v", tabs[0])
-	}
-	if tabs[1].IsFleet || !tabs[1].IsLocal || tabs[1].Label != "srv1.example.com" {
-		t.Errorf("tab[1] should be the local bolt labeled by hostname, got %+v", tabs[1])
-	}
-	if tabs[1].Active {
-		t.Errorf("local tab should not be active under the default Fleet scope")
-	}
-}
-
-func TestStandaloneScopeTabsHostnameFallback(t *testing.T) {
-	h := &Handler{} // no serverHostname configured
-	r := httptest.NewRequest("GET", "/", nil)
-
-	tabs := h.buildScopeTabs(r, scopeFleet)
-	if len(tabs) != 2 || tabs[1].Label != "localhost" {
-		t.Errorf("local tab label = %q, want \"localhost\" fallback", tabs[1].Label)
-	}
-}
-
-func TestStandaloneScopeTabsActiveToggle(t *testing.T) {
-	h := &Handler{serverHostname: "srv1"}
-	r := httptest.NewRequest("GET", "/?scope="+scopeLocal, nil)
-
-	tabs := h.buildScopeTabs(r, h.resolveScope(r))
-	if tabs[0].Active {
-		t.Errorf("Fleet tab should not be active when scope=%s", scopeLocal)
-	}
-	if !tabs[1].Active {
-		t.Errorf("local tab should be active when scope=%s", scopeLocal)
+	if tabs := h.buildScopeTabs(r, h.resolveScope(r)); len(tabs) != 0 {
+		t.Fatalf("standalone scope tabs = %d, want 0 (selector hidden in standalone)", len(tabs))
 	}
 }
 
@@ -64,6 +32,25 @@ func TestStandaloneResolveScopeDefaultsToFleet(t *testing.T) {
 	r := httptest.NewRequest("GET", "/?scope="+scopeLocal, nil)
 	if got := h.resolveScope(r); got != scopeLocal {
 		t.Errorf("explicit scope = %q, want %q", got, scopeLocal)
+	}
+}
+
+// resolveScope persists the operator's choice via the vigo_scope cookie
+// (ADR-037 header selector), with an explicit ?scope= query overriding it so
+// deep links still work.
+func TestResolveScopeCookiePrecedence(t *testing.T) {
+	h := &Handler{}
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.AddCookie(&http.Cookie{Name: scopeCookieName, Value: "deadbeefpubkey"})
+	if got := h.resolveScope(r); got != "deadbeefpubkey" {
+		t.Errorf("cookie scope = %q, want deadbeefpubkey", got)
+	}
+
+	r2 := httptest.NewRequest("GET", "/?scope="+scopeFleet, nil)
+	r2.AddCookie(&http.Cookie{Name: scopeCookieName, Value: "deadbeefpubkey"})
+	if got := h.resolveScope(r2); got != scopeFleet {
+		t.Errorf("explicit ?scope= should override the cookie, got %q", got)
 	}
 }
 

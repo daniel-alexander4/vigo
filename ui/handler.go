@@ -1058,11 +1058,16 @@ type PageData struct {
 type ScopeTab struct {
 	Key     string
 	Label   string // bolt hostname; empty for the fleet tab (template renders T "spanner.tab_fleet")
-	Href    string
 	Active  bool
 	IsFleet bool
 	IsLocal bool // this bolt — template appends the "(this bolt)" suffix
 }
+
+// scopeCookieName persists the operator's selected spanner scope across
+// pages (ADR-037). Mirrors vigo_lang: the header scope selector writes it
+// client-side (ui-actions.js) and resolveScope reads it; an explicit
+// ?scope= query overrides it so deep links still work.
+const scopeCookieName = "vigo_scope"
 
 // scopeFleet is the default spanner scope — the fleet-wide aggregate
 // across every bolt. Any other scope value is a bolt pubkey-hex.
@@ -1491,18 +1496,18 @@ type DashboardStatsFragmentData struct {
 	TotalEnvoys         int
 	ActiveEnvoys        int
 	RecentFailures      int
-	DriftRate         float64
-	CVECritical       int64
-	CVEHigh           int64
-	UniqueCVEs        int64
-	HardeningScore    int64
-	RootkitWarnings   int64
-	ConvergencePct    float64
-	Converged         int
-	Degraded          int
-	Diverged          int // drift-axis bucket
-	CompFailed        int
-	Offline           int
+	DriftRate           float64
+	CVECritical         int64
+	CVEHigh             int64
+	UniqueCVEs          int64
+	HardeningScore      int64
+	RootkitWarnings     int64
+	ConvergencePct      float64
+	Converged           int
+	Degraded            int
+	Diverged            int // drift-axis bucket
+	CompFailed          int
+	Offline             int
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
@@ -2756,6 +2761,11 @@ func (h *Handler) resolveScope(r *http.Request) string {
 	if s := r.URL.Query().Get("scope"); s != "" {
 		return s
 	}
+	// Persisted selection from the header scope selector — applies to every
+	// page until changed (ADR-037). Set client-side, like vigo_lang.
+	if c, err := r.Cookie(scopeCookieName); err == nil && c.Value != "" {
+		return c.Value
+	}
 	return scopeFleet
 }
 
@@ -2887,41 +2897,30 @@ func (h *Handler) scopedCompliance(ctx context.Context, scope string) (spanner.C
 // rendered in-template via {{T}}; bolt tabs are labelled by hostname
 // (data, not translatable). Returns nil outside spanner mode.
 func (h *Handler) buildScopeTabs(r *http.Request, current string) []ScopeTab {
-	path := r.URL.Path
-	fleetTab := ScopeTab{
-		Key:     scopeFleet,
-		Href:    path + "?scope=" + scopeFleet,
-		Active:  current == scopeFleet,
-		IsFleet: true,
-	}
-	// Standalone: no spanner identity, so synthesize a single local bolt
-	// from the server hostname. Both tabs render the full local dashboard
-	// (scopedAway is false in standalone), so the chrome is stable from one
-	// bolt up — adding a second server doesn't restructure the page.
+	// The header scope selector is meaningful only in a genuine multi-bolt
+	// federation. Standalone and single-bolt spanners have no real choice
+	// (Fleet == the only bolt), so no selector renders there — nil tabs hide
+	// it entirely (ADR-037: the selector lives in the topbar now).
 	if h.spannerAdmin == nil {
-		host := h.serverHostname
-		if host == "" {
-			host = "localhost"
-		}
-		return []ScopeTab{fleetTab, {
-			Key:     scopeLocal,
-			Label:   host,
-			Href:    path + "?scope=" + scopeLocal,
-			Active:  current == scopeLocal,
-			IsLocal: true,
-		}}
+		return nil
 	}
 	roster, err := h.spannerAdmin.BoltRoster(r.Context())
 	if err != nil {
 		slog.Warn("scope tabs: bolt roster read failed", "error", err)
 		return nil
 	}
-	tabs := []ScopeTab{fleetTab}
+	if len(roster) < 2 {
+		return nil
+	}
+	tabs := []ScopeTab{{
+		Key:     scopeFleet,
+		Active:  current == scopeFleet,
+		IsFleet: true,
+	}}
 	for _, b := range roster {
 		tabs = append(tabs, ScopeTab{
 			Key:     b.Pubkey,
 			Label:   b.Hostname,
-			Href:    path + "?scope=" + b.Pubkey,
 			Active:  current == b.Pubkey,
 			IsLocal: b.IsLocal,
 		})

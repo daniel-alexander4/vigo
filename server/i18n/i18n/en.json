@@ -1335,6 +1335,8 @@
   "spanner.ha_replication": "HA Replication",
   "spanner.last_sync": "Last Sync",
   "spanner.live": "live",
+  "spanner.not_bolt_specific": "not bolt-specific",
+  "spanner.not_bolt_specific_title": "This page shows the same data for every bolt — your scope selection applies on the fleet-data pages.",
   "spanner.primary_address": "Primary Address",
   "spanner.scope_fleet_count": "fleet-wide: %d",
   "spanner.scope_label": "Scope",

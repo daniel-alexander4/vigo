@@ -33,6 +33,7 @@
         <main class="content">
             {{if .AuthEnabled}}{{if .CurrentUser}}
             <header class="topbar">
+                {{template "scope-tabs" .}}
                 <div class="topbar__right">
                     {{if gt (len .Locales) 1}}
                     <select id="locale-picker" data-change="set-locale" class="input input--sm topbar__locale" aria-label="{{T $.Locale "chrome.language"}}">
@@ -61,7 +62,6 @@
                 <a href="/license" class="license-banner__link">{{T $.Locale "chrome.view_license"}}</a>
             </div>
             {{end}}
-            {{if .ScopeAware}}{{template "scope-tabs" .}}{{end}}
             {{block "page-content" .}}{{end}}
         </main>
     </div>

@@ -1335,6 +1335,8 @@
   "spanner.ha_replication": "Réplication HA",
   "spanner.last_sync": "Dernière synchro",
   "spanner.live": "en direct",
+  "spanner.not_bolt_specific": "non spécifique à un bolt",
+  "spanner.not_bolt_specific_title": "Cette page affiche les mêmes données pour chaque bolt — votre sélection de portée s'applique aux pages de données de flotte.",
   "spanner.primary_address": "Adresse primaire",
   "spanner.scope_fleet_count": "ensemble du parc : %d",
   "spanner.scope_label": "Portée",

@@ -1882,6 +1882,31 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     opacity: 0.75;
     font-size: 0.8125rem;
 }
+/* Scope selector in the topbar (ADR-037): tabs are <button>s now, and the
+   strip sits inline in the header rather than above page content. */
+.topbar__scope {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: auto; /* selector left; account controls stay flush right */
+}
+.topbar__scope .scope-tabs {
+    margin-bottom: 0;
+    flex-wrap: nowrap;
+}
+button.scope-tab {
+    font-family: inherit;
+    line-height: 1.3;
+    cursor: pointer;
+}
+.scope-select {
+    width: auto;
+}
+.scope-caption {
+    color: var(--subtext0);
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
 .scope-notice {
     margin: 8px 0 16px;
     padding: 10px 14px;

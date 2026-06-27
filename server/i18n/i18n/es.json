@@ -1335,6 +1335,8 @@
   "spanner.ha_replication": "Replicación HA",
   "spanner.last_sync": "Última sincronización",
   "spanner.live": "en vivo",
+  "spanner.not_bolt_specific": "no específico de un bolt",
+  "spanner.not_bolt_specific_title": "Esta página muestra los mismos datos para cada bolt: tu selección de ámbito se aplica en las páginas de datos de la flota.",
   "spanner.primary_address": "Dirección principal",
   "spanner.scope_fleet_count": "toda la flota: %d",
   "spanner.scope_label": "Alcance",
