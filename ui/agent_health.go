@@ -74,7 +74,6 @@ func (h *Handler) AgentHealth(w http.ResponseWriter, r *http.Request) {
 		return data.Envoys[i].Hostname < data.Envoys[j].Hostname
 	})
 	data.PageData = PageData{Title: "Agent Health", ActiveNav: "agent-health"}
-	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "agent-health", data)
 }

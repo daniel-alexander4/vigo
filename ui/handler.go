@@ -1046,21 +1046,17 @@ type PageData struct {
 	// picker.
 	Locale  string
 	Locales []LocaleChoice
-	// Scope is the selected spanner scope (ADR-037 federated UI):
-	// scopeFleet ("fleet") for the fleet-wide aggregate, or a bolt
-	// pubkey-hex to focus one bolt. Empty when not in spanner mode.
-	// ScopedAway is true when the scope hides this bolt's local-only
-	// detail cards — i.e. fleet or a peer bolt (everything except this
-	// bolt's own tab). ScopeTabs drives the "Fleet | bolt-N" tab strip,
-	// rendered only in spanner mode.
-	Scope      string
-	ScopedAway bool
-	ScopeTabs  []ScopeTab
-	// ScopeAware gates the global tab strip (base.html): a page sets it true
-	// once it actually honors ?scope= (renders the selected bolt). Pages
-	// that don't yet scope leave it false so the strip stays hidden there —
-	// no inert tabs during the ADR-037 slice-5 rollout.
-	ScopeAware bool
+	// Scope is the selected spanner scope (ADR-037 "D" federated UI):
+	// scopeFleet ("fleet") for the fleet-wide aggregate, or a bolt pubkey-hex
+	// to focus one bolt. Set only on the /fleet/* section (fleetCommon);
+	// local pages render this bolt and leave it scopeLocal/"". ScopedAway is
+	// true when the scope hides this bolt's local-only detail. ScopeTabs +
+	// FleetSection drive the "Fleet | bolt-N" drill strip — rendered only on
+	// the /fleet section (base.html gates on FleetSection).
+	Scope        string
+	ScopedAway   bool
+	ScopeTabs    []ScopeTab
+	FleetSection bool
 }
 
 // ScopeTab is one entry in the ADR-037 "Fleet | bolt-1 … bolt-N" tab
@@ -1074,21 +1070,13 @@ type ScopeTab struct {
 	IsLocal bool // this bolt — template appends the "(this bolt)" suffix
 }
 
-// scopeCookieName persists the operator's selected spanner scope across
-// pages (ADR-037). Mirrors vigo_lang: the header scope selector writes it
-// client-side (ui-actions.js) and resolveScope reads it; an explicit
-// ?scope= query overrides it so deep links still work.
-const scopeCookieName = "vigo_scope"
-
-// scopeFleet is the default spanner scope — the fleet-wide aggregate
-// across every bolt. Any other scope value is a bolt pubkey-hex.
+// scopeFleet is the fleet-wide aggregate scope — across every bolt. Any
+// scope value that is neither scopeFleet nor scopeLocal is a bolt pubkey-hex
+// (a per-bolt drill on the /fleet section). It is the default for fleetScope.
 const scopeFleet = "fleet"
 
-// scopeLocal is the bolt-tab scope key for a standalone server (no spanner
-// identity, so no pubkey). It resolves to the full local dashboard exactly
-// like scopeFleet does in standalone — the two standalone tabs are stable
-// chrome over the same view, so adding a second bolt doesn't restructure
-// the page (ADR-037).
+// scopeLocal means "this bolt" — the default for resolveScope, so the
+// per-bolt local pages (and standalone) always render their own partition.
 const scopeLocal = "local"
 
 // Page IDs for the generic route-to-owner scoped-page mechanism (ADR-037
@@ -2763,22 +2751,19 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // fleet.read (i.e., the compliance role) get redirected to
 // /compliance instead — the dashboard is a fleet-state surface and
 // has no compliance-shaped fallback worth rendering.
-// resolveScope returns the active scope: an explicit ?scope= wins (deep
-// links), then the persisted vigo_scope cookie (the header selector), else
-// scopeFleet. The header scope selector renders only for a genuine multi-bolt
-// federation; standalone and single-bolt deployments hide it (buildScopeTabs
-// returns nil) and scopedAway is false for every value there, so the full
-// local dashboard always renders regardless of the resolved scope.
+// resolveScope returns the active scope for the per-bolt local pages and the
+// shared HTMX poll fragments (ADR-037 "D"): an explicit ?scope= wins (the
+// /fleet section's drill links carry it), otherwise scopeLocal — THIS bolt.
+// There is no longer a scope cookie: the per-bolt pages are purely local and
+// the federated view lives in its own /fleet/* section (fleetScope). Defaulting
+// to scopeLocal means a local page renders its own partition even if a stale
+// pre-D vigo_scope cookie is still in the browser. scopedAway(scopeLocal) is
+// false, so a bare local page always renders the full local view.
 func (h *Handler) resolveScope(r *http.Request) string {
 	if s := r.URL.Query().Get("scope"); s != "" {
 		return s
 	}
-	// Persisted selection from the header scope selector — applies to every
-	// page until changed (ADR-037). Set client-side, like vigo_lang.
-	if c, err := r.Cookie(scopeCookieName); err == nil && c.Value != "" {
-		return c.Value
-	}
-	return scopeFleet
+	return scopeLocal
 }
 
 // fleetScope is the scope resolver for the dedicated /fleet/* section
@@ -2795,15 +2780,14 @@ func (h *Handler) fleetScope(r *http.Request) string {
 	return scopeFleet
 }
 
-// scopedAway reports whether a scope routes to the reduced federated/scoped
-// render (dashboardScoped) instead of the full local dashboard. It is true
-// only for a genuinely multi-bolt fleet viewed at fleet scope or a peer
-// bolt's tab. It is false for: standalone mode, this bolt's own tab, and —
-// critically — any scope on a single-bolt spanner. A lone bolt has no peers
-// to federate from, so its Fleet view IS the full local dashboard; routing
-// it to the reduced view would needlessly hide ~80% of the cards. This is
-// what lets the Fleet | <bolt> tab strip render identically from one bolt
-// up, with the chrome stable as bolts are added (ADR-037).
+// scopedAway reports whether a scope routes a /fleet/* page to the reduced
+// federated aggregate render instead of a single bolt's full page. It is true
+// only for a genuinely multi-bolt fleet viewed at fleet scope. It is false
+// for: standalone mode, scopeLocal / this bolt's own pubkey (the per-bolt
+// drill renders that bolt's full local page), and — critically — any scope on
+// a single-bolt spanner. A lone bolt has no peers to federate from, so its
+// Fleet view IS its full local page; routing it to the reduced view would
+// needlessly hide ~80% of the cards (ADR-037 "D").
 func (h *Handler) scopedAway(ctx context.Context, scope string) bool {
 	if h.spannerAdmin == nil {
 		return false // standalone: tabs are cosmetic, always the full local render
@@ -3006,17 +2990,6 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Spanner scoped views (ADR-037): on a multi-bolt fleet, the fleet
-	// aggregate or a peer bolt renders the convergence summary from the
-	// gossip cache plus the federated columns and an honest notice for the
-	// rest — skipping the local-only enrichment. This bolt's own tab,
-	// standalone mode, AND a single-bolt spanner (no peers to federate from)
-	// all fall through to the full local dashboard below.
-	if scope := h.resolveScope(r); h.scopedAway(r.Context(), scope) {
-		h.dashboardScoped(w, r, scope)
-		return
-	}
-
 	// Per-step timing for slow-dashboard diagnosis. One slog.Info line per
 	// render; each step's elapsed ms is its own attribute so log parsers
 	// can pivot on the slowest sub-step without parsing free-form text.
@@ -3119,7 +3092,6 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	msRunningCVEs := doneRunningCVEs()
 
 	doneRender := step()
-	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 	msRender := doneRender()
@@ -3137,73 +3109,6 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		"running_cves_ms", msRunningCVEs,
 		"render_ms", msRender,
 	)
-}
-
-// dashboardScoped renders the dashboard for a fleet or peer-bolt scope
-// (ADR-037). Only convergence is federated today, so it shows the scoped
-// fleet-health column from the gossip cache plus the version/platforms
-// header and license banner; the template suppresses the local-only
-// detail cards behind an honest notice. No local DataSource build — the
-// scoped numbers come straight from the observability cache.
-func (h *Handler) dashboardScoped(w http.ResponseWriter, r *http.Request, scope string) {
-	data := DashboardPageData{
-		PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-	}
-	data.AgentVersion = h.agentVersion
-	if data.AgentVersion == "" {
-		data.AgentVersion = h.version
-	}
-	data.AgentPlatforms = h.agentPlatforms()
-	h.applyLicenseCapacity(&data)
-
-	c := h.scopedConvergence(scope)
-	data.TotalEnvoys = c.Total
-	data.ActiveEnvoys = c.Total - c.Offline
-	data.RecentFailures = c.Failed
-	data.Converged = c.Converged
-	data.Degraded = c.Degraded
-	data.Diverged = c.Diverged
-	data.Offline = c.Offline
-	if c.Total > 0 {
-		data.DriftRate = float64(c.Diverged) / float64(c.Total) * 100
-	}
-	data.ConvergencePct = convergence.ConvergedPct(int64(c.Converged), int64(c.Total-c.Offline))
-
-	// Federated Security Posture column (slice 2): fleet scope fans out +
-	// merges; per-peer scope leaves it behind the notice.
-	if sec, ok := h.scopedSecurity(r.Context(), scope); ok {
-		data.SecurityFederated = true
-		data.UniqueCVEs = int64(sec.UniqueCVECount())
-		data.CertsExpiringSoon = sec.CertsExpiringSoon
-		data.CertsExpired = sec.CertsExpired
-		data.RootkitWarnings = int64(sec.RootkitWarnings)
-		data.RunningCVEsTotal = sec.RunningCVEsTotal
-		data.RunningCVEsCritical = sec.RunningCVEsCritical
-		data.RunningCVEsHigh = sec.RunningCVEsHigh
-	}
-	// Federated Risk column (slice 3): fleet scope re-means across bolts.
-	if rsk, ok := h.scopedRisk(r.Context(), scope); ok {
-		data.RiskFederated = true
-		data.RiskAvgScore = rsk.AvgScore()
-		data.RiskCritical = rsk.Critical
-		data.RiskHigh = rsk.High
-		data.RiskMedium = rsk.Medium
-	}
-	// Federated Standards Compliance column (slice 4): fleet scope merges
-	// per-bolt snapshots and re-means the percent across the union.
-	if cmp, ok := h.scopedCompliance(r.Context(), scope); ok {
-		data.ComplianceFederated = true
-		data.StandardsPct = cmp.Pct()
-		data.SatisfiedControls = cmp.Satisfied
-		data.WaivedControls = cmp.Waived
-		data.PartialControls = cmp.Partial
-		data.NotSatisfiedControls = cmp.NotSatisfied
-		data.TotalControls = cmp.Total
-	}
-
-	data.ScopeAware = true
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "dashboard", data)
 }
 
 // convergenceSparkline returns the last 30 days of fleet convergence %
@@ -3412,56 +3317,6 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
-	// Scoped (fleet / peer-bolt) view: only the fleet-health column from
-	// scoped convergence counters; the local-only columns are suppressed
-	// in the template (ADR-037). No local DataSource build.
-	if scope := h.resolveScope(r); h.scopedAway(r.Context(), scope) {
-		c := h.scopedConvergence(scope)
-		data := DashboardStatsFragmentData{
-			Locale:         h.localeFromRequest(r),
-			Scope:          scope,
-			ScopedAway:     true,
-			TotalEnvoys:    c.Total,
-			ActiveEnvoys:   c.Total - c.Offline,
-			RecentFailures: c.Failed,
-			Converged:      c.Converged,
-			Degraded:       c.Degraded,
-			Diverged:       c.Diverged,
-			Offline:        c.Offline,
-		}
-		if c.Total > 0 {
-			data.DriftRate = float64(c.Diverged) / float64(c.Total) * 100
-		}
-		data.ConvergencePct = convergence.ConvergedPct(int64(c.Converged), int64(c.Total-c.Offline))
-		if sec, ok := h.scopedSecurity(r.Context(), scope); ok {
-			data.SecurityFederated = true
-			data.UniqueCVEs = int64(sec.UniqueCVECount())
-			data.CertsExpiringSoon = sec.CertsExpiringSoon
-			data.CertsExpired = sec.CertsExpired
-			data.RootkitWarnings = int64(sec.RootkitWarnings)
-			data.RunningCVEsTotal = sec.RunningCVEsTotal
-			data.RunningCVEsCritical = sec.RunningCVEsCritical
-			data.RunningCVEsHigh = sec.RunningCVEsHigh
-		}
-		if rsk, ok := h.scopedRisk(r.Context(), scope); ok {
-			data.RiskFederated = true
-			data.RiskAvgScore = rsk.AvgScore()
-			data.RiskCritical = rsk.Critical
-			data.RiskHigh = rsk.High
-			data.RiskMedium = rsk.Medium
-		}
-		if cmp, ok := h.scopedCompliance(r.Context(), scope); ok {
-			data.ComplianceFederated = true
-			data.StandardsPct = cmp.Pct()
-			data.SatisfiedControls = cmp.Satisfied
-			data.WaivedControls = cmp.Waived
-			data.PartialControls = cmp.Partial
-			data.NotSatisfiedControls = cmp.NotSatisfied
-			data.TotalControls = cmp.Total
-		}
-		h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
-		return
-	}
 
 	data := h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold)
 	data.Locale = h.localeFromRequest(r)
@@ -4103,7 +3958,6 @@ func (h *Handler) complianceScopedData(ctx context.Context, r *http.Request, sco
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.complianceScopedData(r.Context(), r, h.resolveScope(r))
 	data.PageData = PageData{Title: "Compliance", ActiveNav: "compliance"}
-	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
 }
@@ -4469,7 +4323,6 @@ func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
 		}
 		data.Envoys = filtered
 	}
-	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "risk", data)
 }
@@ -5131,7 +4984,6 @@ func (h *Handler) ComplianceExecutiveFragment(w http.ResponseWriter, r *http.Req
 // (?conv=, ?drift=, ?reach=) and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	data := h.resolveEnvoysData(r.Context(), r, h.resolveScope(r))
-	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
 }
@@ -5983,7 +5835,6 @@ func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 	data.SortColumn = sortCol
 	data.SortDir = sortDir
 	data.PageData = PageData{Title: "Runs", ActiveNav: "runs"}
-	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "runs", data)
 }
@@ -7480,7 +7331,6 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	data := h.securityScopedData(r.Context(), r, h.resolveScope(r))
 	data.PageData = PageData{Title: "Security", ActiveNav: "security"}
 	data.QueryTimeoutSec = h.securityQueryTimeoutSec()
-	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "security", data)
 }

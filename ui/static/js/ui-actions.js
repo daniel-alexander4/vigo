@@ -140,49 +140,10 @@
                 "; path=/; max-age=31536000; samesite=lax";
             window.location.reload();
         }
-        // Spanner scope selector (ADR-037), header dropdown form (≥5 bolts).
-        else if (el.dataset.change === "set-scope") {
-            applyScope(el.value);
-        }
     });
-
-    // Spanner scope selector (ADR-037), header tab form (≤4 bolts). Tabs are
-    // buttons (not boosted links) so the cookie write + full reload mirror the
-    // locale picker exactly — the selection then applies to every page.
-    document.addEventListener("click", function (e) {
-        var el = e.target.closest("[data-set-scope]");
-        if (!el) return;
-        e.preventDefault();
-        applyScope(el.dataset.setScope);
-    });
-
-    // applyScope persists the chosen scope in a server-readable cookie and
-    // reloads onto the current page WITHOUT ?scope= so the cookie drives the
-    // render (an explicit ?scope= would otherwise win over the new cookie).
-    function applyScope(v) {
-        document.cookie = "vigo_scope=" + encodeURIComponent(v) +
-            "; path=/; max-age=31536000; samesite=lax";
-        var u = new URL(window.location.href);
-        u.searchParams.delete("scope");
-        var target = u.pathname + u.search + u.hash;
-        if (target === window.location.pathname + window.location.search + window.location.hash) {
-            window.location.reload();
-        } else {
-            window.location.href = target;
-        }
-    }
-
-    // Deep-link sync: a ?scope= URL renders that scope (resolveScope reads the
-    // query first); persist it to the cookie so the choice sticks on the next
-    // navigation. Runs once per full load — which is exactly when a ?scope=
-    // deep link is opened.
-    (function syncScopeFromQuery() {
-        var s = new URLSearchParams(window.location.search).get("scope");
-        if (s) {
-            document.cookie = "vigo_scope=" + encodeURIComponent(s) +
-                "; path=/; max-age=31536000; samesite=lax";
-        }
-    })();
+    // The /fleet section's per-bolt drill strip is plain boosted <a> ?scope=
+    // links (ADR-037 "D") — no cookie, no JS. The old vigo_scope scope-tab
+    // handlers were removed with the per-page scope tabs.
 
     // --- submit (data-submit) ------------------------------------------------
     document.addEventListener("submit", function (e) {

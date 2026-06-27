@@ -1896,24 +1896,27 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     opacity: 0.75;
     font-size: 11px;
 }
-/* Scope selector in the topbar (ADR-037): tabs are <button>s now, and the
-   strip sits inline in the header rather than above page content. */
+/* /fleet drill strip in the topbar (ADR-037 "D"): tabs are boosted <a>
+   ?scope= links now, and the strip sits inline in the header. The a.* link
+   states pin the muted/active colors so the UA visited/link rules (higher
+   specificity than .scope-tab alone) can't bleed through in either theme. */
 .topbar__scope {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-right: auto; /* selector left; account controls stay flush right */
+    margin-right: auto; /* strip left; account controls stay flush right */
 }
 .topbar__scope .scope-tabs {
     margin-bottom: 0;
     flex-wrap: nowrap;
 }
-button.scope-tab {
-    font-family: inherit;
-    cursor: pointer;
+a.scope-tab:link,
+a.scope-tab:visited {
+    color: var(--color-text-muted);
 }
-.scope-select {
-    width: auto;
+a.scope-tab--active:link,
+a.scope-tab--active:visited {
+    color: #fff;
 }
 .scope-caption {
     color: var(--subtext0);

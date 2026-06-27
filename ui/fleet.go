@@ -67,18 +67,20 @@ func (h *Handler) FleetOverview(w http.ResponseWriter, r *http.Request) {
 // a hand-entered ?scope=<bolt> already route-to-owners one bolt.
 
 // fleetCommon applies the shared /fleet-section chrome to a built page: the
-// Fleet nav highlight, and the fleet scope pinned onto PageData so the page's
-// HTMX poll fragments (which carry ?scope={{.Scope}}) stay in the federated
-// view rather than reverting to the cookie's bolt. The cookie-driven scope-tab
-// strip is suppressed — the /fleet section's query-based drill lands in
-// slice 3.
+// Fleet nav highlight, the fleet scope pinned onto PageData (so the page's
+// HTMX poll fragments, which carry ?scope={{.Scope}}, stay federated), and the
+// FleetSection flag + the "Fleet | bolt-N" drill strip. The strip is built at
+// the fleet scope so the active marker tracks the current drill; FleetSection
+// is what gates the strip's render in base.html, so it appears ONLY here — the
+// per-bolt local pages carry no scope chrome (ADR-037 "D").
 func (h *Handler) fleetCommon(pd *PageData, title string, r *http.Request) {
 	scope := h.fleetScope(r)
 	*pd = PageData{Title: title, ActiveNav: "fleet"}
 	h.setCommonWithRequest(pd, r)
 	pd.Scope = scope
 	pd.ScopedAway = h.scopedAway(r.Context(), scope)
-	pd.ScopeTabs = nil
+	pd.ScopeTabs = h.buildScopeTabs(r, scope)
+	pd.FleetSection = true
 }
 
 func (h *Handler) FleetSecurity(w http.ResponseWriter, r *http.Request) {

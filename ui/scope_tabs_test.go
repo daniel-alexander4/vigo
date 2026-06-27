@@ -10,59 +10,58 @@ import (
 	"testing"
 )
 
-// The header scope selector (ADR-037) renders only for a genuine multi-bolt
-// federation. In standalone mode the spannerAdmin is nil and there are no
-// bolts to choose between, so no selector is shown — buildScopeTabs returns
-// no tabs. These paths are exercised without a real spanner.
+// The /fleet per-bolt drill strip (ADR-037 "D") renders only for a genuine
+// multi-bolt federation. In standalone mode the spannerAdmin is nil and there
+// are no bolts to choose between, so buildScopeTabs returns no tabs. These
+// paths are exercised without a real spanner.
 
 func TestStandaloneScopeTabsHidden(t *testing.T) {
 	h := &Handler{serverHostname: "srv1.example.com"} // spannerAdmin nil → standalone
 	r := httptest.NewRequest("GET", "/", nil)
 
 	if tabs := h.buildScopeTabs(r, h.resolveScope(r)); len(tabs) != 0 {
-		t.Fatalf("standalone scope tabs = %d, want 0 (selector hidden in standalone)", len(tabs))
+		t.Fatalf("standalone scope tabs = %d, want 0 (strip hidden in standalone)", len(tabs))
 	}
 }
 
-func TestStandaloneResolveScopeDefaultsToFleet(t *testing.T) {
+// resolveScope drives the per-bolt local pages + shared poll fragments
+// (ADR-037 "D"): an explicit ?scope= wins (the /fleet drill links carry it),
+// otherwise scopeLocal — THIS bolt. There is no scope cookie anymore.
+func TestResolveScopeDefaultsToLocal(t *testing.T) {
 	h := &Handler{}
-	if got := h.resolveScope(httptest.NewRequest("GET", "/", nil)); got != scopeFleet {
-		t.Errorf("standalone default scope = %q, want %q", got, scopeFleet)
+	if got := h.resolveScope(httptest.NewRequest("GET", "/", nil)); got != scopeLocal {
+		t.Errorf("default scope = %q, want %q (this bolt)", got, scopeLocal)
 	}
-	r := httptest.NewRequest("GET", "/?scope="+scopeLocal, nil)
+	r := httptest.NewRequest("GET", "/?scope="+scopeFleet, nil)
+	if got := h.resolveScope(r); got != scopeFleet {
+		t.Errorf("explicit ?scope= = %q, want %q", got, scopeFleet)
+	}
+}
+
+// Post-D the local pages are purely local: resolveScope no longer reads a
+// scope cookie, so a stale pre-D vigo_scope cookie can't silently scope a
+// local page to a bolt. The /fleet drill's ?scope= still wins.
+func TestResolveScopeIgnoresStaleCookie(t *testing.T) {
+	h := &Handler{}
+	r := httptest.NewRequest("GET", "/security", nil)
+	r.AddCookie(&http.Cookie{Name: "vigo_scope", Value: "deadbeefpubkey"})
 	if got := h.resolveScope(r); got != scopeLocal {
-		t.Errorf("explicit scope = %q, want %q", got, scopeLocal)
+		t.Errorf("stale scope cookie must be ignored, got %q want %q", got, scopeLocal)
 	}
-}
-
-// resolveScope persists the operator's choice via the vigo_scope cookie
-// (ADR-037 header selector), with an explicit ?scope= query overriding it so
-// deep links still work.
-func TestResolveScopeCookiePrecedence(t *testing.T) {
-	h := &Handler{}
-
-	r := httptest.NewRequest("GET", "/", nil)
-	r.AddCookie(&http.Cookie{Name: scopeCookieName, Value: "deadbeefpubkey"})
-	if got := h.resolveScope(r); got != "deadbeefpubkey" {
-		t.Errorf("cookie scope = %q, want deadbeefpubkey", got)
-	}
-
-	r2 := httptest.NewRequest("GET", "/?scope="+scopeFleet, nil)
-	r2.AddCookie(&http.Cookie{Name: scopeCookieName, Value: "deadbeefpubkey"})
+	r2 := httptest.NewRequest("GET", "/security?scope="+scopeFleet, nil)
 	if got := h.resolveScope(r2); got != scopeFleet {
-		t.Errorf("explicit ?scope= should override the cookie, got %q", got)
+		t.Errorf("explicit ?scope= should win, got %q", got)
 	}
 }
 
-// fleetScope drives the dedicated /fleet/* section (ADR-037 "D"): it is the
-// federated view by definition, so it NEVER reads the vigo_scope cookie (which
-// belongs to the per-bolt local pages) — only an explicit ?scope=<bolt> drills
-// to one bolt, otherwise Fleet.
+// fleetScope drives the dedicated /fleet/* section (ADR-037 "D"): the
+// federated view by definition. It never reads a cookie — only an explicit
+// ?scope=<bolt> drills to one bolt, otherwise Fleet.
 func TestFleetScopeIgnoresCookie(t *testing.T) {
 	h := &Handler{}
 
 	r := httptest.NewRequest("GET", "/fleet/security", nil)
-	r.AddCookie(&http.Cookie{Name: scopeCookieName, Value: "deadbeefpubkey"})
+	r.AddCookie(&http.Cookie{Name: "vigo_scope", Value: "deadbeefpubkey"})
 	if got := h.fleetScope(r); got != scopeFleet {
 		t.Errorf("fleetScope must ignore the cookie, got %q want %q", got, scopeFleet)
 	}
@@ -74,8 +73,8 @@ func TestFleetScopeIgnoresCookie(t *testing.T) {
 }
 
 // Standalone scope is cosmetic: every scope value renders the full local
-// dashboard (Path A), never the reduced federated view — so no card is ever
-// hidden on a single server.
+// page, never the reduced federated view — so no card is ever hidden on a
+// single server.
 func TestStandaloneScopedAwayAlwaysFalse(t *testing.T) {
 	h := &Handler{}
 	for _, scope := range []string{"", scopeFleet, scopeLocal, "deadbeefpubkeyhex"} {
