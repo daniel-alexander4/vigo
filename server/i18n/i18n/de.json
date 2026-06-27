@@ -1539,5 +1539,18 @@
   "agent_health.fleet_aggregate_note": "Anzeige der flottenweiten Zustandsübersicht, zusammengeführt über alle Bolts. Die Per-Envoy-Tabelle ist pro Bolt — wählen Sie oben einen Bolt-Tab, um die Zustandsdetails seiner Envoys zu sehen.",
   "compliance.fleet_aggregate_note": "Anzeige der flottenweiten Kontrollabdeckung, zusammengeführt über alle Bolts. Ausnahme-Warnungen und die detaillierten Framework-Berichte sind pro Bolt — wählen Sie oben einen Bolt-Tab dafür.",
   "runs.fleet_aggregate_note": "Der Ausführungsverlauf ist pro Bolt. Wählen Sie oben einen Bolt-Tab, um dessen Ausführungen anzuzeigen.",
-  "envoys.fleet_aggregate_note": "Die Envoy-Liste ist pro Bolt. Wählen Sie oben einen Bolt-Tab, um die Envoys dieses Bolts zu durchsuchen und zu filtern; die flottenweite Anzahl steht in der Kopfzeile."
+  "envoys.fleet_aggregate_note": "Die Envoy-Liste ist pro Bolt. Wählen Sie oben einen Bolt-Tab, um die Envoys dieses Bolts zu durchsuchen und zu filtern; die flottenweite Anzahl steht in der Kopfzeile.",
+  "nav.fleet_overview": "Flottenübersicht",
+  "nav.tip.fleet_overview": "Aggregierte flottenweite Lage über alle Bolts",
+  "fleet.subtitle": "Aggregierte Sicherheit, Risiko, Compliance und Zustand über alle Bolts im Spanner.",
+  "fleet.stat_bolts": "Bolts",
+  "fleet.stat_envoys": "Envoys",
+  "fleet.stat_converged": "Konvergiert",
+  "fleet.unique_cves": "Eindeutige CVEs",
+  "fleet.certs_expiring": "Bald ablaufende Zertifikate",
+  "fleet.avg_risk": "Durchschn. Risikowert",
+  "fleet.critical_high": "Kritisch / Hoch",
+  "fleet.coverage": "Abdeckung",
+  "fleet.degraded_agents": "Beeinträchtigte Agenten",
+  "fleet.view_full": "Vollansicht öffnen"
 }

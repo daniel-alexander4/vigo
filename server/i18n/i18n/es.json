@@ -1539,5 +1539,18 @@
   "agent_health.fleet_aggregate_note": "Mostrando el resumen de estado de toda la flota combinado de todos los bolts. La tabla por envoy es por bolt — seleccione una pestaña de bolt arriba para ver el detalle de estado de sus envoys.",
   "compliance.fleet_aggregate_note": "Mostrando la cobertura de controles de toda la flota combinada de todos los bolts. Las alertas de exención y los informes detallados de marcos son por bolt — seleccione una pestaña de bolt arriba para verlos.",
   "runs.fleet_aggregate_note": "El historial de ejecuciones es por bolt. Seleccione una pestaña de bolt arriba para ver sus ejecuciones.",
-  "envoys.fleet_aggregate_note": "La lista de envoys es por bolt. Seleccione una pestaña de bolt arriba para explorar y filtrar los envoys de ese bolt; el total de toda la flota está en el encabezado."
+  "envoys.fleet_aggregate_note": "La lista de envoys es por bolt. Seleccione una pestaña de bolt arriba para explorar y filtrar los envoys de ese bolt; el total de toda la flota está en el encabezado.",
+  "nav.fleet_overview": "Vista de la flota",
+  "nav.tip.fleet_overview": "Postura agregada de toda la flota, en cada bolt",
+  "fleet.subtitle": "Seguridad, riesgo, cumplimiento y estado agregados de cada bolt del spanner.",
+  "fleet.stat_bolts": "Bolts",
+  "fleet.stat_envoys": "Envoys",
+  "fleet.stat_converged": "Convergidos",
+  "fleet.unique_cves": "CVE únicos",
+  "fleet.certs_expiring": "Certificados por vencer",
+  "fleet.avg_risk": "Puntuación media de riesgo",
+  "fleet.critical_high": "Crítico / Alto",
+  "fleet.coverage": "Cobertura",
+  "fleet.degraded_agents": "Agentes degradados",
+  "fleet.view_full": "Abrir vista completa"
 }

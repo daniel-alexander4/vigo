@@ -1539,5 +1539,18 @@
   "agent_health.fleet_aggregate_note": "Showing the fleet-wide health rollup merged across all bolts. The per-envoy table is per-bolt — select a bolt tab above to see its envoys' health detail.",
   "compliance.fleet_aggregate_note": "Showing fleet-wide control coverage merged across all bolts. Waiver alerts and the detailed framework reports are per-bolt — select a bolt tab above for those.",
   "runs.fleet_aggregate_note": "Run history is per-bolt. Select a bolt tab above to view its runs.",
-  "envoys.fleet_aggregate_note": "The envoy list is per-bolt. Select a bolt tab above to browse and filter that bolt's envoys; the fleet-wide count is in the header."
+  "envoys.fleet_aggregate_note": "The envoy list is per-bolt. Select a bolt tab above to browse and filter that bolt's envoys; the fleet-wide count is in the header.",
+  "nav.fleet_overview": "Fleet Overview",
+  "nav.tip.fleet_overview": "Aggregated fleet-wide posture across every bolt",
+  "fleet.subtitle": "Aggregated security, risk, compliance, and health across every bolt in the spanner.",
+  "fleet.stat_bolts": "Bolts",
+  "fleet.stat_envoys": "Envoys",
+  "fleet.stat_converged": "Converged",
+  "fleet.unique_cves": "Unique CVEs",
+  "fleet.certs_expiring": "Certs Expiring Soon",
+  "fleet.avg_risk": "Avg Risk Score",
+  "fleet.critical_high": "Critical / High",
+  "fleet.coverage": "Coverage",
+  "fleet.degraded_agents": "Degraded Agents",
+  "fleet.view_full": "Open full view"
 }

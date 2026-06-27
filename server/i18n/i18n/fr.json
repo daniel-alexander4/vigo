@@ -1539,5 +1539,18 @@
   "agent_health.fleet_aggregate_note": "Affichage du récapitulatif de santé à l'échelle de la flotte, fusionné sur tous les bolts. Le tableau par envoy est par bolt — sélectionnez un onglet de bolt ci-dessus pour voir le détail de santé de ses envoys.",
   "compliance.fleet_aggregate_note": "Affichage de la couverture des contrôles à l'échelle de la flotte, fusionnée sur tous les bolts. Les alertes de dérogation et les rapports de référentiel détaillés sont par bolt — sélectionnez un onglet de bolt ci-dessus pour y accéder.",
   "runs.fleet_aggregate_note": "L'historique des exécutions est par bolt. Sélectionnez un onglet de bolt ci-dessus pour voir ses exécutions.",
-  "envoys.fleet_aggregate_note": "La liste des envoys est par bolt. Sélectionnez un onglet de bolt ci-dessus pour parcourir et filtrer les envoys de ce bolt ; le total à l'échelle de la flotte figure dans l'en-tête."
+  "envoys.fleet_aggregate_note": "La liste des envoys est par bolt. Sélectionnez un onglet de bolt ci-dessus pour parcourir et filtrer les envoys de ce bolt ; le total à l'échelle de la flotte figure dans l'en-tête.",
+  "nav.fleet_overview": "Vue de la flotte",
+  "nav.tip.fleet_overview": "Posture agrégée de toute la flotte, sur chaque bolt",
+  "fleet.subtitle": "Sécurité, risque, conformité et santé agrégés sur chaque bolt du spanner.",
+  "fleet.stat_bolts": "Bolts",
+  "fleet.stat_envoys": "Envoys",
+  "fleet.stat_converged": "Convergés",
+  "fleet.unique_cves": "CVE uniques",
+  "fleet.certs_expiring": "Certificats expirant bientôt",
+  "fleet.avg_risk": "Score de risque moyen",
+  "fleet.critical_high": "Critique / Élevé",
+  "fleet.coverage": "Couverture",
+  "fleet.degraded_agents": "Agents dégradés",
+  "fleet.view_full": "Ouvrir la vue complète"
 }

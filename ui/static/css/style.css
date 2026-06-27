@@ -671,6 +671,15 @@ a.dash-column--link:hover {
    rule is hard to spot on a card-sized target, so override with a thicker
    brand-colored ring + the same lift hover applies — symmetric feedback
    between mouse hover and keyboard focus. */
+/* Footer "open full view" link on the /fleet overview summary cards. */
+.card__link {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 0.9em;
+    color: var(--color-brand);
+    text-decoration: none;
+}
+.card__link:hover { text-decoration: underline; }
 a.dash-column--link:focus-visible {
     outline: 3px solid var(--color-brand);
     outline-offset: 3px;

@@ -959,6 +959,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	if h.spannerAdmin != nil {
 		mux.HandleFunc("GET /spanner", h.Spanner)
 		mux.HandleFunc("GET /spanner/bolts/{id}", h.BoltDetail)
+		// Fleet-wide aggregate surface (ADR-037): the one page that fans out
+		// across the spanner and merges. Spanner-only — standalone has no
+		// federation to aggregate.
+		mux.HandleFunc("GET /fleet", h.FleetOverview)
 	}
 
 	// Docs pages (only registered when docsDir is configured and exists)
