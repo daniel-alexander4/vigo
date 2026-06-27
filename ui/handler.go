@@ -7049,42 +7049,23 @@ type inventoryGroupRow struct {
 	Hosts []string // first N hostnames
 }
 
-// inventoryChangeRow is a single trait change detected between snapshots.
-type inventoryChangeRow struct {
-	Hostname string
-	Key      string
-	OldValue string
-	NewValue string
-	When     string
-}
-
 // Inventory renders the fleet inventory dashboard with summary cards,
 // grouped views, change log, and a power-user filter bar.
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	where := r.URL.Query().Get("where")
-	show := r.URL.Query().Get("show")
-	groupBy := r.URL.Query().Get("group")
-	if groupBy == "" {
-		groupBy = "os"
-	}
 
 	all, _ := h.queries.GetAllLatestTraits(ctx)
 
 	// --- Summary cards ---
 	totalEnvoys := len(all)
 	osCounts := map[string]int{}
-	archCounts := map[string]int{}
 	staleCount := 0
 	staleCutoff := time.Now().Add(-7 * 24 * time.Hour)
 
 	type parsedEnvoy struct {
-		ID        string
-		Hostname  string
-		IP        string
-		Traits    map[string]any
-		Flat      map[string]string
-		Collected time.Time
+		Hostname string
+		Traits   map[string]any
+		Flat     map[string]string
 	}
 	var parsed []parsedEnvoy
 
@@ -7100,8 +7081,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 			flat[k] = fmt.Sprint(v)
 		}
 		parsed = append(parsed, parsedEnvoy{
-			ID: t.ID, Hostname: t.Hostname, IP: t.IPAddress,
-			Traits: traits, Flat: flat, Collected: t.CollectedAt,
+			Hostname: t.Hostname, Traits: traits, Flat: flat,
 		})
 
 		distro := inventoryTraverse(traits, "os.distro")
@@ -7112,11 +7092,6 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		}
 		if osLabel != "" && osLabel != "-" {
 			osCounts[osLabel]++
-		}
-
-		arch := inventoryTraverse(traits, "os.arch")
-		if arch != "-" && arch != "" {
-			archCounts[arch]++
 		}
 
 		if t.CollectedAt.Before(staleCutoff) {
@@ -7171,189 +7146,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		alerts = append(alerts, healthAlert{Level: "warning", Title: i18n.CatalogT(locale, "health_alert.disk_high"), Count: len(diskFullHosts), Hosts: diskFullHosts})
 	}
 
-	// Fleet diversity score.
 	uniqueOS := len(osCounts)
-	uniqueArch := len(archCounts)
-
-	// --- Grouped view ---
-	groupField := "os.distro"
-	groupLabel := "OS Distribution"
-	switch groupBy {
-	case "os":
-		groupField = "os.distro"
-		groupLabel = "OS Distribution"
-	case "version":
-		groupField = "" // special: distro + version
-		groupLabel = "OS Version"
-	case "arch":
-		groupField = "os.arch"
-		groupLabel = "Architecture"
-	case "kernel":
-		groupField = "kernel.version"
-		groupLabel = "Kernel Version"
-	case "virtual":
-		groupField = "virtual.system"
-		groupLabel = "Virtualization"
-	case "product":
-		groupField = "dmi.product_name"
-		groupLabel = "Model"
-	case "board":
-		groupField = "dmi.board_name"
-		groupLabel = "Motherboard"
-	case "bios":
-		groupField = "dmi.bios_version"
-		groupLabel = "BIOS / Firmware"
-	case "tpm":
-		groupField = "tpm.version"
-		groupLabel = "TPM Version"
-	case "secureboot":
-		groupField = "secureboot.enabled"
-		groupLabel = "Secure Boot"
-	case "cpu":
-		groupField = "processors.model"
-		groupLabel = "CPU Model"
-	case "gpu":
-		groupField = "" // special: nested array
-		groupLabel = "GPU"
-	case "disk":
-		groupField = "" // special: nested object
-		groupLabel = "Disk Model"
-	case "location":
-		groupField = "" // special: config directory path
-		groupLabel = "Location / Org"
-	}
-
-	// Build hostname→dirPath map for location grouping.
-	var dirPaths map[string]string
-	if groupBy == "location" && h.configStore != nil {
-		matchPaths := h.configStore.MatchDirPaths()
-		dirPaths = make(map[string]string, len(parsed))
-		for _, p := range parsed {
-			// Try exact match first, then check glob patterns.
-			if path, ok := matchPaths[p.Hostname]; ok {
-				dirPaths[p.Hostname] = path
-			} else {
-				dirPaths[p.Hostname] = "(unmatched)"
-			}
-		}
-	}
-
-	groupCounts := map[string][]string{} // label → hostnames
-	for _, p := range parsed {
-		// Multi-value groups: one envoy can contribute to multiple groups.
-		switch groupBy {
-		case "gpu":
-			labels := inventoryAllGPUs(p.Traits)
-			if len(labels) == 0 {
-				groupCounts["(not reported)"] = append(groupCounts["(not reported)"], p.Hostname)
-			} else {
-				for _, label := range labels {
-					groupCounts[label] = append(groupCounts[label], p.Hostname)
-				}
-			}
-		case "disk":
-			labels := inventoryAllBlockDevices(p.Traits, "blockdevices")
-			if len(labels) == 0 {
-				groupCounts["(not reported)"] = append(groupCounts["(not reported)"], p.Hostname)
-			} else {
-				for _, label := range labels {
-					groupCounts[label] = append(groupCounts[label], p.Hostname)
-				}
-			}
-		default:
-			var label string
-			switch groupBy {
-			case "version":
-				d := inventoryTraverse(p.Traits, "os.distro")
-				v := inventoryTraverse(p.Traits, "os.version")
-				label = strings.TrimSpace(d)
-				if v != "-" && v != "" {
-					label = strings.TrimSpace(label + " " + v)
-				}
-			case "location":
-				if path, ok := dirPaths[p.Hostname]; ok {
-					label = path
-				}
-			default:
-				label = inventoryTraverse(p.Traits, groupField)
-			}
-			if label == "-" || label == "" {
-				label = "(not reported)"
-			}
-			groupCounts[label] = append(groupCounts[label], p.Hostname)
-		}
-	}
-	var groups []inventoryGroupRow
-	for label, hosts := range groupCounts {
-		sort.Strings(hosts)
-		preview := hosts
-		if len(preview) > 5 {
-			preview = preview[:5]
-		}
-		groups = append(groups, inventoryGroupRow{Label: label, Count: len(hosts), Hosts: preview})
-	}
-	// Sort: known groups by count descending, "(not reported)" always last.
-	sort.Slice(groups, func(i, j int) bool {
-		iUnknown := groups[i].Label == "(not reported)"
-		jUnknown := groups[j].Label == "(not reported)"
-		if iUnknown != jUnknown {
-			return jUnknown // unknown goes last
-		}
-		return groups[i].Count > groups[j].Count
-	})
-
-	// --- Change log ---
-	var changes []inventoryChangeRow
-	pairs, _ := h.queries.GetTraitPairs(ctx)
-	for _, p := range pairs {
-		if p.PreviousTraits == "" {
-			continue
-		}
-		var curr, prev map[string]any
-		if json.Unmarshal([]byte(p.CurrentTraits), &curr) != nil {
-			continue
-		}
-		if json.Unmarshal([]byte(p.PreviousTraits), &prev) != nil {
-			continue
-		}
-		currFlat := make(map[string]any)
-		prevFlat := make(map[string]any)
-		flattenTraits("", curr, currFlat)
-		flattenTraits("", prev, prevFlat)
-		for k, cv := range currFlat {
-			cs := fmt.Sprint(cv)
-			ps := "-"
-			if pv, ok := prevFlat[k]; ok {
-				ps = fmt.Sprint(pv)
-			}
-			if cs != ps {
-				changes = append(changes, inventoryChangeRow{
-					Hostname: p.Hostname,
-					Key:      k,
-					OldValue: ps,
-					NewValue: cs,
-					When:     p.CurrentCollected.Local().Format("2006-01-02 15:04"),
-				})
-			}
-		}
-		// Detect removed traits.
-		for k, pv := range prevFlat {
-			if _, ok := currFlat[k]; !ok {
-				changes = append(changes, inventoryChangeRow{
-					Hostname: p.Hostname,
-					Key:      k,
-					OldValue: fmt.Sprint(pv),
-					NewValue: "(removed)",
-					When:     p.CurrentCollected.Local().Format("2006-01-02 15:04"),
-				})
-			}
-		}
-	}
-	// Sort by time descending, limit to 50.
-	sort.Slice(changes, func(i, j int) bool { return changes[i].When > changes[j].When })
-	if len(changes) > 50 {
-		changes = changes[:50]
-	}
 
 	// --- OS summary for cards ---
 	var osSummary []inventoryGroupRow
@@ -7367,36 +7160,18 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageData
-		Where       string
-		Show        string
-		GroupBy     string
-		GroupLabel  string
-		Total       int
-		StaleCount  int
-		OSSummary   []inventoryGroupRow
-		ArchCounts  map[string]int
-		Groups      []inventoryGroupRow
-		Changes     []inventoryChangeRow
-		ChangeCount int
-		Alerts      []healthAlert
-		UniqueOS    int
-		UniqueArch  int
+		Total      int
+		StaleCount int
+		OSSummary  []inventoryGroupRow
+		Alerts     []healthAlert
+		UniqueOS   int
 	}{
-		PageData:    PageData{Title: "Inventory", ActiveNav: "inventory"},
-		Where:       where,
-		Show:        show,
-		GroupBy:     groupBy,
-		GroupLabel:  groupLabel,
-		Total:       totalEnvoys,
-		StaleCount:  staleCount,
-		OSSummary:   osSummary,
-		ArchCounts:  archCounts,
-		Groups:      groups,
-		Changes:     changes,
-		ChangeCount: len(changes),
-		Alerts:      alerts,
-		UniqueOS:    uniqueOS,
-		UniqueArch:  uniqueArch,
+		PageData:   PageData{Title: "Inventory", ActiveNav: "inventory"},
+		Total:      totalEnvoys,
+		StaleCount: staleCount,
+		OSSummary:  osSummary,
+		Alerts:     alerts,
+		UniqueOS:   uniqueOS,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "inventory", data)
@@ -7973,7 +7748,11 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 
 	// Cursor-based pagination: fetch 200 envoys at a time instead of the full fleet.
 	const pageSize = 200
+	// inventoryRenderedCap bounds infinite scroll so a very large fleet can't
+	// load unboundedly into the DOM (mirrors envoysRenderedCap on /envoys).
+	const inventoryRenderedCap = 1000
 	cursor := r.URL.Query().Get("after")
+	loaded, _ := strconv.Atoi(r.URL.Query().Get("loaded"))
 
 	all, err := h.queries.GetAllLatestTraitsPaged(r.Context(), cursor, int64(pageSize+1))
 	if err != nil {
@@ -8098,19 +7877,27 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `</tbody></table>`)
 	}
 
-	// Infinite scroll trigger for next page.
+	// Infinite scroll trigger for next page, bounded by inventoryRenderedCap so a
+	// very large fleet can't load unboundedly into the DOM.
+	loaded += len(all)
 	if hasMore && len(all) > 0 {
-		nextCursor := all[len(all)-1].Hostname
-		params := fmt.Sprintf("after=%s", url.QueryEscape(nextCursor))
-		if whereParam != "" {
-			params += "&where=" + url.QueryEscape(whereParam)
+		if loaded >= inventoryRenderedCap {
+			fmt.Fprintf(w,
+				`<tr><td colspan="%d" class="text-muted u-p-12px">Showing the first %d envoys — add a <code>where</code> filter to narrow the list.</td></tr>`,
+				len(showFields)+3, loaded)
+		} else {
+			nextCursor := all[len(all)-1].Hostname
+			params := fmt.Sprintf("after=%s&loaded=%d", url.QueryEscape(nextCursor), loaded)
+			if whereParam != "" {
+				params += "&where=" + url.QueryEscape(whereParam)
+			}
+			if showParam != "" {
+				params += "&show=" + url.QueryEscape(showParam)
+			}
+			fmt.Fprintf(w,
+				`<tr class="u-h-1px" hx-get="/ui/fragments/inventory?%s" hx-trigger="revealed" hx-swap="afterend" hx-target="#inventory-tbody" hx-select="tr"><td colspan="%d"></td></tr>`,
+				params, len(showFields)+3)
 		}
-		if showParam != "" {
-			params += "&show=" + url.QueryEscape(showParam)
-		}
-		fmt.Fprintf(w,
-			`<tr class="u-h-1px" hx-get="/ui/fragments/inventory?%s" hx-trigger="revealed" hx-swap="afterend" hx-target="#inventory-tbody" hx-select="tr"><td colspan="%d"></td></tr>`,
-			params, len(showFields)+3)
 	}
 }
 
@@ -8918,7 +8705,7 @@ func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request)
 					if model == "<nil>" {
 						model = ""
 					}
-					// Build the same label as inventoryAllBlockDevices.
+					// Build the block-device label (model + size + device name).
 					devLabel := model
 					if sizeBytes, ok := dev["size_bytes"].(float64); ok && sizeBytes > 0 && model != "" {
 						gb := sizeBytes / (1024 * 1024 * 1024)
@@ -8956,7 +8743,7 @@ func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request)
 						if !ok {
 							continue
 						}
-						// Build GPU label the same way as inventoryAllGPUs.
+						// Build the GPU label (name, vendor+driver, or device).
 						name, _ := m["name"].(string)
 						vendor, _ := m["vendor"].(string)
 						driver, _ := m["driver"].(string)
@@ -9091,88 +8878,6 @@ func inventoryTraverse(data map[string]any, path string) string {
 		}
 	}
 	return fmt.Sprint(current)
-}
-
-// inventoryAllArrayFields extracts a field from every element of a nested
-// array: data[namespace][arrayKey][*][field]. Returns all non-empty values.
-// inventoryAllGPUs builds a label for each GPU device from the best available
-// fields: name (from lspci), vendor+driver, or device (card0) as last resort.
-func inventoryAllGPUs(data map[string]any) []string {
-	ns, ok := data["gpu"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	arr, ok := ns["devices"].([]any)
-	if !ok || len(arr) == 0 {
-		return nil
-	}
-	var result []string
-	for _, elem := range arr {
-		m, ok := elem.(map[string]any)
-		if !ok {
-			continue
-		}
-		name, _ := m["name"].(string)
-		vendor, _ := m["vendor"].(string)
-		driver, _ := m["driver"].(string)
-		device, _ := m["device"].(string)
-
-		var label string
-		switch {
-		case name != "":
-			label = name
-			if vendor != "" && !strings.Contains(strings.ToLower(name), strings.ToLower(vendor)) {
-				label = vendor + " " + name
-			}
-		case driver != "":
-			label = driver
-			if device != "" {
-				label = driver + " (" + device + ")"
-			}
-		case device != "":
-			label = device
-		default:
-			continue
-		}
-		result = append(result, label)
-	}
-	return result
-}
-
-// inventoryAllBlockDevices returns the model (with size) for every block device
-// that has a model field. Block devices are keyed by device name (sda, nvme0n1).
-func inventoryAllBlockDevices(data map[string]any, namespace string) []string {
-	ns, ok := data[namespace].(map[string]any)
-	if !ok {
-		return nil
-	}
-	var result []string
-	for devName, v := range ns {
-		dev, ok := v.(map[string]any)
-		if !ok {
-			continue
-		}
-		model, ok := dev["model"]
-		if !ok {
-			continue
-		}
-		s := strings.TrimSpace(fmt.Sprint(model))
-		if s == "" {
-			continue
-		}
-		// Append size if available for richer grouping.
-		if sizeBytes, ok := dev["size_bytes"].(float64); ok && sizeBytes > 0 {
-			gb := sizeBytes / (1024 * 1024 * 1024)
-			if gb >= 1024 {
-				s = fmt.Sprintf("%s (%.1f TB, %s)", s, gb/1024, devName)
-			} else {
-				s = fmt.Sprintf("%s (%.0f GB, %s)", s, gb, devName)
-			}
-		}
-		result = append(result, s)
-	}
-	sort.Strings(result)
-	return result
 }
 
 // HealthFragment returns the Vigo Health diagnostics via HTMX.
