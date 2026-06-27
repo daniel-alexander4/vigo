@@ -33,7 +33,6 @@
         <main class="content">
             {{if .AuthEnabled}}{{if .CurrentUser}}
             <header class="topbar">
-                {{if .FleetSection}}{{template "fleet-scope-strip" .}}{{end}}
                 <div class="topbar__right">
                     {{if gt (len .Locales) 1}}
                     <select id="locale-picker" data-change="set-locale" class="input input--sm topbar__locale" aria-label="{{T $.Locale "chrome.language"}}">

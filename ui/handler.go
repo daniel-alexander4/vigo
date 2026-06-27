@@ -7,7 +7,9 @@ import (
 	"archive/zip"
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -93,34 +95,6 @@ type DataSource interface {
 	// no cert_lifecycle trait rows matching the filter.
 	EnvoyCertDetails(envoyID, bucket string) ([]CertDetail, string, bool)
 	RunningCVESummary() RunningCVESummary
-	// SecuritySummary is the dashboard Security Posture column's data as a
-	// federatable rollup (deduped CVEs + cert/running-CVE/rootkit counts),
-	// fanned out across bolts in spanner mode (ADR-037 slice 2).
-	SecuritySummary() SecuritySummary
-	// RiskSummary is the dashboard Risk column's data as a federatable
-	// rollup (score sum + count + severity buckets), fanned out across
-	// bolts in spanner mode (ADR-037 slice 3).
-	RiskSummary(baseInterval, offlineThreshold time.Duration) RiskSummary
-	// ComplianceSummary is the dashboard Standards Compliance column's data
-	// as a federatable rollup (control buckets + PctSum/PctCount), read from
-	// the latest compliance_history snapshot. SoT for both the local
-	// dashboard headline and the fan-out merged Fleet view (ADR-037 slice 4).
-	ComplianceSummary(ctx context.Context) ComplianceSummary
-	// SecurityPageData builds the full /security page model (convergence +
-	// security-scan rollup + cert-expiry + 30-day trends). SoT shared by the
-	// local render and the route-to-owner GetScopedPageData RPC, so a peer
-	// bolt's /security page renders identically in the viewer (ADR-037
-	// slice 5). Excludes the PageData chrome + QueryTimeoutSec (viewer-set).
-	SecurityPageData(ctx context.Context, baseInterval, offlineThreshold time.Duration) SecurityPageData
-	// ComplianceLandingData builds the /compliance landing model (control
-	// coverage + waiver alerts). SoT shared by the local render and the
-	// route-to-owner RPC (ADR-037 slice 5).
-	ComplianceLandingData(ctx context.Context) StandardsPageData
-	// EnvoysPageData builds the full /envoys list (render-cap + rows +
-	// filter axes + health enrichment). SoT shared by the local render, the
-	// stats/table polling fragments, and the route-to-owner RPC (ADR-037
-	// slice 5b). The agent-version trait fallback is layered on handler-side.
-	EnvoysPageData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset int) EnvoysPageData
 	// FleetPressure rolls up per-envoy resource + repo-health telemetry
 	// into the dashboard "Agent Health" card via the fleetpressure SoT
 	// package.
@@ -128,9 +102,6 @@ type DataSource interface {
 	// FleetPressureDetail returns the same rollup plus every per-envoy
 	// projection in one walk — feeds the `/agent-health` fleet table.
 	FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure)
-	// AgentHealthData is the full /agent-health page model (rollup + rows),
-	// shared by the local render and the route-to-owner RPC (ADR-037 slice 5).
-	AgentHealthData() AgentHealthPageData
 	// EnvoyPressure returns the per-envoy projection used by the
 	// envoy-detail "Agent Health" tab. Bool is false when the envoy
 	// is unknown to the fleet index.
@@ -153,167 +124,6 @@ type RunningCVESummary struct {
 	Medium        int
 	Low           int
 	HostsAffected int
-}
-
-// CVEIdent is a deduped CVE (ID + max severity) for the federated security
-// rollup (ADR-037 slice 2).
-type CVEIdent struct {
-	ID       string
-	Severity string
-}
-
-// SecuritySummary is the dashboard Security Posture column's data as a
-// federatable rollup: the per-bolt deduped CVE set plus additive per-host
-// counts. DataSource produces it locally; in spanner mode the viewer fans
-// it out and unions it across bolts (security posture is never gossiped).
-type SecuritySummary struct {
-	UniqueCVEs              []CVEIdent
-	CertsExpiringSoon       int
-	CertsExpired            int
-	CertsExpiringIn7        int
-	CertsExpiringIn30       int
-	CertHostsAffected       int
-	RootkitWarnings         int
-	RunningCVEsTotal        int
-	RunningCVEsCritical     int
-	RunningCVEsHigh         int
-	RunningCVEsMedium       int
-	RunningCVEsLow          int
-	RunningCVEHostsAffected int
-	// Scanner rollups for the federated /security PAGE Fleet view (ADR-037
-	// slice 5). Additive across bolts except the Lynis average, carried as
-	// LynisScoreSum + LynisScoredCount so the viewer re-means correctly.
-	LynisScoreSum    int64
-	LynisScoredCount int
-	LynisWarnings    int
-	RootkitClean     int
-	ClamavClean      int
-	ClamavInfected   int
-	AideClean        int
-	AideChanged      int
-	ScapScanned      int
-	ScapClean        int
-	ScapHighFail     int
-	ScannedHosts     int
-	TotalHosts       int
-}
-
-// ToSpanner converts to the spanner federation type for fan-out merging.
-func (s SecuritySummary) ToSpanner() spanner.SecuritySummary {
-	out := spanner.SecuritySummary{
-		CertsExpiringSoon:       s.CertsExpiringSoon,
-		CertsExpired:            s.CertsExpired,
-		CertsExpiringIn7:        s.CertsExpiringIn7,
-		CertsExpiringIn30:       s.CertsExpiringIn30,
-		CertHostsAffected:       s.CertHostsAffected,
-		RootkitWarnings:         s.RootkitWarnings,
-		RunningCVEsTotal:        s.RunningCVEsTotal,
-		RunningCVEsCritical:     s.RunningCVEsCritical,
-		RunningCVEsHigh:         s.RunningCVEsHigh,
-		RunningCVEsMedium:       s.RunningCVEsMedium,
-		RunningCVEsLow:          s.RunningCVEsLow,
-		RunningCVEHostsAffected: s.RunningCVEHostsAffected,
-		LynisScoreSum:           s.LynisScoreSum,
-		LynisScoredCount:        s.LynisScoredCount,
-		LynisWarnings:           s.LynisWarnings,
-		RootkitClean:            s.RootkitClean,
-		ClamavClean:             s.ClamavClean,
-		ClamavInfected:          s.ClamavInfected,
-		AideClean:               s.AideClean,
-		AideChanged:             s.AideChanged,
-		ScapScanned:             s.ScapScanned,
-		ScapClean:               s.ScapClean,
-		ScapHighFail:            s.ScapHighFail,
-		ScannedHosts:            s.ScannedHosts,
-		TotalHosts:              s.TotalHosts,
-	}
-	for _, c := range s.UniqueCVEs {
-		out.UniqueCVEs = append(out.UniqueCVEs, spanner.CVEIdent{ID: c.ID, Severity: c.Severity})
-	}
-	return out
-}
-
-// RiskSummary is the dashboard Risk column's data as a federatable rollup
-// (ADR-037 slice 3): score sum + scored count (so the viewer re-means the
-// average across bolts) plus additive severity-bucket counts.
-type RiskSummary struct {
-	ScoreSum    int64
-	ScoredCount int
-	Critical    int
-	High        int
-	Medium      int
-	Low         int
-	// /risk PAGE Fleet view (ADR-037 slice 5): max score, the bolt's top-N
-	// riskiest envoys (re-ranked at the viewer), and its factor rollup.
-	MaxScore   int
-	TopEnvoys  []RiskEnvoyDetail
-	TopFactors []RiskFactorSummary
-}
-
-// ToSpanner converts to the spanner federation type for fan-out merging.
-func (s RiskSummary) ToSpanner() spanner.RiskSummary {
-	out := spanner.RiskSummary{
-		ScoreSum:    s.ScoreSum,
-		ScoredCount: s.ScoredCount,
-		Critical:    s.Critical,
-		High:        s.High,
-		Medium:      s.Medium,
-		Low:         s.Low,
-		MaxScore:    s.MaxScore,
-	}
-	for _, e := range s.TopEnvoys {
-		out.TopEnvoys = append(out.TopEnvoys, spanner.RiskTopEnvoy{
-			ID: e.EnvoyID, Hostname: e.Hostname, Score: e.Score, Level: e.Level, TopFactor: e.TopFactor,
-		})
-	}
-	for _, f := range s.TopFactors {
-		out.TopFactors = append(out.TopFactors, spanner.RiskFactorRollup{
-			Name: f.Name, TotalPoints: f.TotalPoints, EnvoyCount: f.EnvoyCount,
-		})
-	}
-	return out
-}
-
-// ComplianceSummary is the dashboard Standards Compliance column's data as
-// a federatable rollup (ADR-037 slice 4): the additive control buckets plus
-// PctSum + PctCount, the un-divided numerator/denominator of the unweighted
-// per-framework-percent mean. Shipping count+sum (not a pre-divided Pct)
-// lets the federated viewer re-mean across bolts the same way the local
-// aggregator does — averaging per-bolt averages would mis-weight a small
-// bolt equal to a large one.
-type ComplianceSummary struct {
-	Satisfied    int
-	Waived       int
-	Partial      int
-	NotSatisfied int
-	Total        int
-	// PctSum is Σ of each framework's ScorePercent; PctCount is the number
-	// of frameworks with controls. Pct() = PctSum/PctCount.
-	PctSum   float64
-	PctCount int
-}
-
-// Pct is the unweighted mean of per-framework percents, rounded to one
-// decimal to match the dashboard's prior rendering. Zero when no framework
-// has controls (fresh server before the first snapshot).
-func (s ComplianceSummary) Pct() float64 {
-	if s.PctCount == 0 {
-		return 0
-	}
-	return math.Round(s.PctSum/float64(s.PctCount)*10) / 10
-}
-
-// ToSpanner converts to the spanner federation type for fan-out merging.
-func (s ComplianceSummary) ToSpanner() spanner.ComplianceSummary {
-	return spanner.ComplianceSummary{
-		Satisfied:    s.Satisfied,
-		Waived:       s.Waived,
-		Partial:      s.Partial,
-		NotSatisfied: s.NotSatisfied,
-		Total:        s.Total,
-		PctSum:       s.PctSum,
-		PctCount:     s.PctCount,
-	}
 }
 
 // CertExpirySummary aggregates `cert_lifecycle` trait rows fleet-wide
@@ -959,17 +769,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	if h.spannerAdmin != nil {
 		mux.HandleFunc("GET /spanner", h.Spanner)
 		mux.HandleFunc("GET /spanner/bolts/{id}", h.BoltDetail)
-		// Fleet-wide aggregate surface (ADR-037 "D"): the dedicated section
-		// that fans out across the spanner and merges. Spanner-only —
-		// standalone has no federation to aggregate. Each page reuses its
-		// per-bolt builder + template at federated scope.
-		mux.HandleFunc("GET /fleet", h.FleetOverview)
-		mux.HandleFunc("GET /fleet/security", h.FleetSecurity)
-		mux.HandleFunc("GET /fleet/risk", h.FleetRisk)
-		mux.HandleFunc("GET /fleet/compliance", h.FleetCompliance)
-		mux.HandleFunc("GET /fleet/runs", h.FleetRuns)
-		mux.HandleFunc("GET /fleet/agent-health", h.FleetAgentHealth)
-		mux.HandleFunc("GET /fleet/envoys", h.FleetEnvoys)
 	}
 
 	// Docs pages (only registered when docsDir is configured and exists)
@@ -1046,52 +845,7 @@ type PageData struct {
 	// picker.
 	Locale  string
 	Locales []LocaleChoice
-	// Scope is the selected spanner scope (ADR-037 "D" federated UI):
-	// scopeFleet ("fleet") for the fleet-wide aggregate, or a bolt pubkey-hex
-	// to focus one bolt. Set only on the /fleet/* section (fleetCommon);
-	// local pages render this bolt and leave it scopeLocal/"". ScopedAway is
-	// true when the scope hides this bolt's local-only detail. ScopeTabs +
-	// FleetSection drive the "Fleet | bolt-N" drill strip — rendered only on
-	// the /fleet section (base.html gates on FleetSection).
-	Scope        string
-	ScopedAway   bool
-	ScopeTabs    []ScopeTab
-	FleetSection bool
 }
-
-// ScopeTab is one entry in the ADR-037 "Fleet | bolt-1 … bolt-N" tab
-// strip. Key is scopeFleet or a bolt pubkey-hex; Href is the same page
-// with ?scope=Key so a boosted nav click re-renders in scope.
-type ScopeTab struct {
-	Key     string
-	Label   string // bolt hostname; empty for the fleet tab (template renders T "spanner.tab_fleet")
-	Active  bool
-	IsFleet bool
-	IsLocal bool // this bolt — template appends the "(this bolt)" suffix
-}
-
-// scopeFleet is the fleet-wide aggregate scope — across every bolt. Any
-// scope value that is neither scopeFleet nor scopeLocal is a bolt pubkey-hex
-// (a per-bolt drill on the /fleet section). It is the default for fleetScope.
-const scopeFleet = "fleet"
-
-// scopeLocal means "this bolt" — the default for resolveScope, so the
-// per-bolt local pages (and standalone) always render their own partition.
-const scopeLocal = "local"
-
-// Page IDs for the generic route-to-owner scoped-page mechanism (ADR-037
-// slice 5). When a page tab names a peer bolt, the viewer asks that bolt
-// for its own ui.<Page>Data via GetScopedPageData(pageID) and renders it in
-// the viewer's chrome. One generic RPC keyed by these, not a typed RPC per
-// page.
-const (
-	pageSecurity    = "security"
-	pageRisk        = "risk"
-	pageAgentHealth = "agent-health"
-	pageCompliance  = "compliance"
-	pageRuns        = "runs"
-	pageEnvoys      = "envoys"
-)
 
 // LicensePageData holds data for the license status page.
 type LicensePageData struct {
@@ -1188,18 +942,6 @@ type DashboardPageData struct {
 	ActiveEnvoys     int
 	RecentFailures   int
 	DriftRate        float64
-	// FleetWideEnvoys is the federation-wide envoy total (this bolt's
-	// partition + every cached peer) in spanner mode, 0 otherwise. The
-	// dashboard counts above are this bolt's partition only; this drives
-	// the header scope chip so the operator can tell the two apart.
-	FleetWideEnvoys int
-	// SecurityFederated / RiskFederated / ComplianceFederated are set when
-	// the Security Posture / Risk / Standards Compliance column has been
-	// fanned out + merged across bolts (ADR-037 slices 2, 3 & 4), so the
-	// template renders them even in a scoped-away (fleet) view.
-	SecurityFederated   bool
-	RiskFederated       bool
-	ComplianceFederated bool
 	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
@@ -1330,10 +1072,6 @@ type RiskPosturePageData struct {
 	SparklineDays  int
 	Envoys         []RiskEnvoyDetail
 	TopFactors     []RiskFactorSummary
-	// FleetAggregate marks the multi-bolt Fleet view: distribution + avg +
-	// the re-ranked fleet top-N + summed factors; the per-bolt sparkline is
-	// omitted and Envoys holds the top-N only (ADR-037 slice 5).
-	FleetAggregate bool
 }
 
 // RiskEnvoyDetail is a single envoy with risk score and top factor.
@@ -1464,11 +1202,6 @@ type StandardsPageData struct {
 	// Waiver alerts.
 	TotalActiveWaivers int
 	ExpiringWaivers    int // waivers expiring within 30 days
-	// FleetAggregate marks the multi-bolt Fleet view: the control coverage
-	// is merged across bolts, but waiver alerts + the framework reports stay
-	// per-bolt (config + audit-chain are per-bolt) — the template shows a
-	// drill-to-bolt note (ADR-037 slice 5).
-	FleetAggregate bool
 }
 
 // ComplianceReportPageData holds data for a per-framework compliance report page.
@@ -1480,33 +1213,22 @@ type ComplianceReportPageData struct {
 
 // DashboardStatsFragmentData holds data for the stats fragment (HTMX auto-refresh).
 type DashboardStatsFragmentData struct {
-	Locale string // per-request locale for {{T}}/{{tEnum}} in the polled fragment
-	// Scope / ScopedAway mirror PageData for the polled fragment (which
-	// never runs setCommonWithRequest): in a scoped-away view the fragment
-	// renders only the fleet-health column from scoped convergence counters
-	// plus the "detail not yet federated" notice (ADR-037). SecurityFederated
-	// is set when the Security Posture column has been fanned out + merged
-	// (slice 2), so the template shows it even in a scoped-away view.
-	Scope               string
-	ScopedAway          bool
-	SecurityFederated   bool
-	RiskFederated       bool
-	ComplianceFederated bool
-	TotalEnvoys         int
-	ActiveEnvoys        int
-	RecentFailures      int
-	DriftRate           float64
-	CVECritical         int64
-	CVEHigh             int64
-	UniqueCVEs          int64
-	HardeningScore      int64
-	RootkitWarnings     int64
-	ConvergencePct      float64
-	Converged           int
-	Degraded            int
-	Diverged            int // drift-axis bucket
-	CompFailed          int
-	Offline             int
+	Locale          string // per-request locale for {{T}}/{{tEnum}} in the polled fragment
+	TotalEnvoys     int
+	ActiveEnvoys    int
+	RecentFailures  int
+	DriftRate       float64
+	CVECritical     int64
+	CVEHigh         int64
+	UniqueCVEs      int64
+	HardeningScore  int64
+	RootkitWarnings int64
+	ConvergencePct  float64
+	Converged       int
+	Degraded        int
+	Diverged        int // drift-axis bucket
+	CompFailed      int
+	Offline         int
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
@@ -1656,15 +1378,11 @@ type EnvoysPageData struct {
 	SortDir           string // "asc" or "desc"
 	EnvoyCount        int    // rows on this page after filter+offset
 	MatchingTotal     int    // total entries matching filter (across all pages)
-	TotalEnvoys       int    // this bolt's partition total (local), regardless of filter
-	// FleetWideEnvoys is the federation-wide total (this bolt's partition +
-	// every cached peer) in spanner mode, 0 otherwise. TotalEnvoys above is
-	// local-only; this drives the header scope chip distinguishing the two.
-	FleetWideEnvoys int
-	HasMore         bool
-	Offset          int
-	Limit           int
-	NextOffset      int
+	TotalEnvoys       int    // fleet-wide total, regardless of filter
+	HasMore           bool
+	Offset            int
+	Limit             int
+	NextOffset        int
 	// RenderedCap is true when the operator has paged to the hard DOM cap;
 	// the table footer renders a "refine your filter" sentinel instead of
 	// another load-more trigger so the DOM cannot grow unbounded.
@@ -1709,10 +1427,6 @@ type EnvoysPageData struct {
 	FilterAxes        []FilterAxis
 	ActiveFilterCount int    // number of axes with at least one selection (drives the "Filter (N active)" button label)
 	BasePath          string // page path the drawer pills should anchor against ("/envoys"); tree page overrides to "/envoys/tree"
-	// FleetAggregate marks the multi-bolt Fleet view: the browsable list is
-	// per-bolt (cross-bolt concat is a deferred slice), so the Fleet tab
-	// shows a drill-to-bolt note instead (ADR-037 slice 5b, approach A).
-	FleetAggregate bool
 }
 
 // EnvoyDetailRunRow is a run with its per-module results for the envoy detail page.
@@ -1843,10 +1557,6 @@ type RunsPageData struct {
 	SortColumn   string
 	SortDir      string
 	RunCount     int
-	// FleetAggregate marks the multi-bolt Fleet view: runs are per-bolt, so
-	// the Fleet tab shows a drill-to-bolt note instead of concatenating
-	// every bolt's run log (ADR-037 slice 5, approach A).
-	FleetAggregate bool
 }
 
 // RunDetailPageData holds data for the run detail page.
@@ -2725,13 +2435,6 @@ func (h *Handler) agentPlatforms() []AgentPlatform {
 func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 	h.setCommon(pd)
 	pd.Locale = h.localeFromRequest(r)
-	// Spanner scope (ADR-037 federated UI). No-op outside spanner mode —
-	// Scope stays "", ScopeTabs nil, ScopedAway false, so non-federated
-	// deployments render exactly as before.
-	scope := h.resolveScope(r)
-	pd.Scope = scope
-	pd.ScopedAway = h.scopedAway(r.Context(), scope)
-	pd.ScopeTabs = h.buildScopeTabs(r, scope)
 	if h.authEnabled {
 		if u := auth.UserFromContext(r.Context()); u != nil {
 			pd.CurrentUser = &AuthUser{
@@ -2751,234 +2454,6 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // fleet.read (i.e., the compliance role) get redirected to
 // /compliance instead — the dashboard is a fleet-state surface and
 // has no compliance-shaped fallback worth rendering.
-// resolveScope returns the active scope for the per-bolt local pages and the
-// shared HTMX poll fragments (ADR-037 "D"): an explicit ?scope= wins (the
-// /fleet section's drill links carry it), otherwise scopeLocal — THIS bolt.
-// There is no longer a scope cookie: the per-bolt pages are purely local and
-// the federated view lives in its own /fleet/* section (fleetScope). Defaulting
-// to scopeLocal means a local page renders its own partition even if a stale
-// pre-D vigo_scope cookie is still in the browser. scopedAway(scopeLocal) is
-// false, so a bare local page always renders the full local view.
-func (h *Handler) resolveScope(r *http.Request) string {
-	if s := r.URL.Query().Get("scope"); s != "" {
-		return s
-	}
-	return scopeLocal
-}
-
-// fleetScope is the scope resolver for the dedicated /fleet/* section
-// (ADR-037 "D"). Unlike resolveScope it NEVER reads the vigo_scope cookie —
-// the cookie belongs to the per-bolt local pages. The /fleet section is the
-// federated view by definition: it shows the fleet aggregate unless an
-// explicit ?scope=<bolt-pubkey> drills to one bolt (route-to-owner). This
-// keeps the two surfaces independent — a bolt-focused cookie on a local page
-// never bleeds into the fleet aggregate, and vice versa.
-func (h *Handler) fleetScope(r *http.Request) string {
-	if s := r.URL.Query().Get("scope"); s != "" {
-		return s
-	}
-	return scopeFleet
-}
-
-// scopedAway reports whether a scope routes a /fleet/* page to the reduced
-// federated aggregate render instead of a single bolt's full page. It is true
-// only for a genuinely multi-bolt fleet viewed at fleet scope. It is false
-// for: standalone mode, scopeLocal / this bolt's own pubkey (the per-bolt
-// drill renders that bolt's full local page), and — critically — any scope on
-// a single-bolt spanner. A lone bolt has no peers to federate from, so its
-// Fleet view IS its full local page; routing it to the reduced view would
-// needlessly hide ~80% of the cards (ADR-037 "D").
-func (h *Handler) scopedAway(ctx context.Context, scope string) bool {
-	if h.spannerAdmin == nil {
-		return false // standalone: tabs are cosmetic, always the full local render
-	}
-	if scope == "" || scope == scopeLocal || scope == h.spannerAdmin.LocalPubkey() {
-		return false // this bolt's own tab (or a stale standalone "local" cookie) → full local detail
-	}
-	roster, err := h.spannerAdmin.BoltRoster(ctx)
-	if err != nil {
-		slog.Warn("scopedAway: bolt roster read failed", "error", err)
-		return false
-	}
-	return len(roster) > 1
-}
-
-// routeScopedPage fetches the owning bolt's data for one page when scope
-// names a PEER bolt (ADR-037 slice 5, "detail pages route to owner"),
-// JSON-decoding it into out. Returns true iff it routed (out is filled).
-// It returns false — caller renders locally — for standalone, this bolt's
-// own tab, the standalone local tab, and the fleet scope (which renders its
-// own aggregate). Falls back to local (false) on any fetch/decode error so
-// a degraded or unreachable peer never blanks the page.
-func (h *Handler) routeScopedPage(ctx context.Context, scope, pageID, query string, out any) bool {
-	if h.spannerAdmin == nil || scope == "" || scope == scopeFleet ||
-		scope == scopeLocal || scope == h.spannerAdmin.LocalPubkey() {
-		return false
-	}
-	raw, err := h.spannerAdmin.ScopedPageDataFromBolt(ctx, scope, pageID, query)
-	if err != nil {
-		slog.Warn("scoped page fetch failed; rendering local", "page", pageID, "scope", scope, "error", err)
-		return false
-	}
-	if err := json.Unmarshal(raw, out); err != nil {
-		slog.Warn("scoped page decode failed; rendering local", "page", pageID, "error", err)
-		return false
-	}
-	return true
-}
-
-// scopedConvergence returns the convergence counters for a scoped-away
-// view: the fleet-wide aggregate for scopeFleet, or one peer bolt's
-// gossiped counters. The local bolt is never routed here (scopedAway is
-// false for it — the caller uses the live local DataSource).
-func (h *Handler) scopedConvergence(scope string) spanner.ConvergenceCounters {
-	if h.spannerAdmin == nil {
-		return spanner.ConvergenceCounters{}
-	}
-	if scope == scopeFleet {
-		c, _ := h.spannerAdmin.AggregateConvergenceLocal()
-		return c
-	}
-	if p := h.spannerAdmin.PeerObservability(scope); p != nil {
-		return p.Convergence
-	}
-	return spanner.ConvergenceCounters{} // unknown / never-reported peer
-}
-
-// scopedSecurity returns the fleet-merged Security Posture summary for the
-// fleet scope: fan out GetSecuritySummary to every peer bolt, then fold in
-// this bolt's own summary (the local bolt is not a peer of itself). Only
-// fleet scope is federated for security in slice 2 — per-peer scope still
-// shows the "detail not yet federated" notice. ok=false when not federated
-// or the fan-out failed (the caller leaves the column hidden).
-func (h *Handler) scopedSecurity(ctx context.Context, scope string) (spanner.SecuritySummary, bool) {
-	if h.spannerAdmin == nil {
-		return spanner.SecuritySummary{}, false
-	}
-	if scope != scopeFleet {
-		// Per-bolt tab (ADR-037 B1): that one peer's own summary.
-		s, err := h.spannerAdmin.PeerSecuritySummary(ctx, scope)
-		if err != nil {
-			slog.Warn("scoped security peer fetch failed", "scope", scope, "error", err)
-			return spanner.SecuritySummary{}, false
-		}
-		return s, true
-	}
-	peers, err := h.spannerAdmin.AggregateSecurityFanout(ctx)
-	if err != nil {
-		slog.Warn("scoped security fan-out failed", "error", err)
-		return spanner.SecuritySummary{}, false
-	}
-	local := h.dataSource.SecuritySummary().ToSpanner()
-	return spanner.MergeSecuritySummaries([]spanner.SecuritySummary{peers, local}), true
-}
-
-// scopedRisk returns the fleet-merged Risk summary for the fleet scope:
-// fan out GetRiskSummary to peers, fold in this bolt's own summary, and
-// re-mean across the union. Only fleet scope is federated for risk in
-// slice 3. ok=false otherwise or on fan-out failure.
-func (h *Handler) scopedRisk(ctx context.Context, scope string) (spanner.RiskSummary, bool) {
-	if h.spannerAdmin == nil {
-		return spanner.RiskSummary{}, false
-	}
-	if scope != scopeFleet {
-		// Per-bolt tab (ADR-037 B1): that one peer's own summary.
-		r, err := h.spannerAdmin.PeerRiskSummary(ctx, scope)
-		if err != nil {
-			slog.Warn("scoped risk peer fetch failed", "scope", scope, "error", err)
-			return spanner.RiskSummary{}, false
-		}
-		return r, true
-	}
-	peers, err := h.spannerAdmin.AggregateRiskFanout(ctx)
-	if err != nil {
-		slog.Warn("scoped risk fan-out failed", "error", err)
-		return spanner.RiskSummary{}, false
-	}
-	local := h.dataSource.RiskSummary(h.baseInterval, h.offlineThreshold).ToSpanner()
-	return spanner.MergeRiskSummaries([]spanner.RiskSummary{peers, local}), true
-}
-
-// scopedCompliance returns the fleet-merged Standards Compliance summary:
-// fan out GetComplianceSummary to peers, fold in this bolt's own summary,
-// and re-mean across the union (ADR-037 slice 4). Only fleet scope is
-// federated for compliance; ok=false otherwise or on fan-out failure. The
-// merged buckets are partition-summed (a framework on N bolts contributes
-// N instances) — the headline percent is the unweighted mean re-meaned
-// across the union; auditor-grade per-control reconciliation is a separate
-// (report/PDF) slice.
-func (h *Handler) scopedCompliance(ctx context.Context, scope string) (spanner.ComplianceSummary, bool) {
-	if h.spannerAdmin == nil {
-		return spanner.ComplianceSummary{}, false
-	}
-	if scope != scopeFleet {
-		// Per-bolt tab (ADR-037 B1): that one peer's own summary.
-		c, err := h.spannerAdmin.PeerComplianceSummary(ctx, scope)
-		if err != nil {
-			slog.Warn("scoped compliance peer fetch failed", "scope", scope, "error", err)
-			return spanner.ComplianceSummary{}, false
-		}
-		return c, true
-	}
-	peers, err := h.spannerAdmin.AggregateComplianceFanout(ctx)
-	if err != nil {
-		slog.Warn("scoped compliance fan-out failed", "error", err)
-		return spanner.ComplianceSummary{}, false
-	}
-	local := h.dataSource.ComplianceSummary(ctx).ToSpanner()
-	return spanner.MergeComplianceSummaries([]spanner.ComplianceSummary{peers, local}), true
-}
-
-// buildScopeTabs builds the ADR-037 "Fleet | bolt-N" tab strip for the
-// current page path, marking the active tab. The fleet tab's label is
-// rendered in-template via {{T}}; bolt tabs are labelled by hostname
-// (data, not translatable). Returns nil outside spanner mode.
-func (h *Handler) buildScopeTabs(r *http.Request, current string) []ScopeTab {
-	// The header scope selector is meaningful only in a genuine multi-bolt
-	// federation. Standalone and single-bolt spanners have no real choice
-	// (Fleet == the only bolt), so no selector renders there — nil tabs hide
-	// it entirely (ADR-037: the selector lives in the topbar now).
-	if h.spannerAdmin == nil {
-		return nil
-	}
-	roster, err := h.spannerAdmin.BoltRoster(r.Context())
-	if err != nil {
-		slog.Warn("scope tabs: bolt roster read failed", "error", err)
-		return nil
-	}
-	if len(roster) < 2 {
-		return nil
-	}
-	tabs := []ScopeTab{{
-		Key:     scopeFleet,
-		Active:  current == scopeFleet,
-		IsFleet: true,
-	}}
-	for _, b := range roster {
-		tabs = append(tabs, ScopeTab{
-			Key:     b.Pubkey,
-			Label:   b.Hostname,
-			Active:  current == b.Pubkey,
-			IsLocal: b.IsLocal,
-		})
-	}
-	return tabs
-}
-
-// fleetWideEnvoyCount returns the federation-wide envoy total (this
-// bolt's partition + every cached peer) in spanner mode, or 0 when not
-// federated. The dashboard + envoys page surface it next to their local
-// partition counts so the operator can tell "this bolt" from "the
-// fleet"; /spanner has the per-bolt breakdown. Cheap — it's the same
-// gossip-cache aggregate /spanner reads.
-func (h *Handler) fleetWideEnvoyCount() int {
-	if h.spannerAdmin == nil {
-		return 0
-	}
-	envoys, _ := h.spannerAdmin.AggregateEnvoysLocal()
-	return len(envoys)
-}
-
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	// In the first-run (zero-envoy) state the dashboard is universal
 	// onboarding — show the enrollment panel to every operator, including
@@ -3199,30 +2674,6 @@ func sparklineBounds(data []float64) (min, max int) {
 // dashboardData builds dashboard page data from the live FleetIndex
 // via the data source (single in-memory snapshot, no N+1 queries),
 // then layers on the license banner and recent-runs DB query.
-// applyLicenseCapacity fills the dashboard capacity banner fields from the
-// enforcer's mode-aware count. Shared by the full local dashboard and the
-// scoped (fleet/peer) dashboard so the banner is identical on both.
-func (h *Handler) applyLicenseCapacity(data *DashboardPageData) {
-	if h.enforcer == nil {
-		return
-	}
-	st := h.enforcer.GetStatus()
-	if st.MaxEnvoys <= 0 {
-		return
-	}
-	active := st.ActiveEnvoys
-	max := st.MaxEnvoys
-	data.LicenseCapacityActive = active
-	data.LicenseCapacityMax = max
-	switch {
-	case active >= max:
-		data.LicenseCapacityLevel = "critical"
-	case active*10 >= max*9: // ≥90%
-		data.LicenseCapacityLevel = "warning"
-		data.LicenseCapacitySlotsRemaining = max - active
-	}
-}
-
 func (h *Handler) dashboardData() DashboardPageData {
 	data := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
 
@@ -3233,7 +2684,21 @@ func (h *Handler) dashboardData() DashboardPageData {
 	// ActiveEnvoys is the enforcer's mode-aware count (the licensed-count SoT:
 	// local FleetIndex locally, spanner-wide in aggregate mode) so the banner
 	// agrees with the /license page and header warning frame-for-frame.
-	h.applyLicenseCapacity(&data)
+	if h.enforcer != nil {
+		if st := h.enforcer.GetStatus(); st.MaxEnvoys > 0 {
+			active := st.ActiveEnvoys
+			max := st.MaxEnvoys
+			data.LicenseCapacityActive = active
+			data.LicenseCapacityMax = max
+			switch {
+			case active >= max:
+				data.LicenseCapacityLevel = "critical"
+			case active*10 >= max*9: // ≥90%
+				data.LicenseCapacityLevel = "warning"
+				data.LicenseCapacitySlotsRemaining = max - active
+			}
+		}
+	}
 
 	// Recent runs (always from DB, lightweight query). h.queries is nil
 	// only in the early-boot window and unit tests — skip the query
@@ -3317,7 +2782,6 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
-
 	data := h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold)
 	data.Locale = h.localeFromRequest(r)
 
@@ -3924,40 +3388,8 @@ var integrationExamples = map[string]IntegrationExample{
 }
 
 // Compliance renders the standards compliance overview page.
-// complianceScopedData resolves the /compliance landing model for the active
-// scope (ADR-037 slice 5): a peer bolt routes to its owner, the multi-bolt
-// Fleet scope merges the control coverage across bolts (waivers stay this
-// bolt's — config is per-bolt), and everything else renders the full local
-// page.
-func (h *Handler) complianceScopedData(ctx context.Context, r *http.Request, scope string) StandardsPageData {
-	var data StandardsPageData
-	switch {
-	case h.routeScopedPage(ctx, scope, pageCompliance, "", &data):
-		return data
-	case scope == scopeFleet && h.scopedAway(ctx, scope):
-		if cmp, ok := h.scopedCompliance(ctx, scope); ok {
-			// Federated control coverage; waivers remain this bolt's (config
-			// is per-bolt), surfaced behind the FleetAggregate note.
-			d := h.dataSource.ComplianceLandingData(ctx)
-			if cmp.Total > 0 {
-				d.HasStandards = true
-				d.StandardsPct = cmp.Pct()
-				d.SatisfiedControls = cmp.Satisfied
-				d.WaivedControls = cmp.Waived
-				d.PartialControls = cmp.Partial
-				d.NotSatisfiedControls = cmp.NotSatisfied
-				d.TotalControls = cmp.Total
-			}
-			d.FleetAggregate = true
-			return d
-		}
-	}
-	return h.dataSource.ComplianceLandingData(ctx)
-}
-
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
-	data := h.complianceScopedData(r.Context(), r, h.resolveScope(r))
-	data.PageData = PageData{Title: "Compliance", ActiveNav: "compliance"}
+	data := h.standardsData()
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
 }
@@ -4060,16 +3492,48 @@ func (h *Handler) PlatformCompliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "platform-compliance", data)
 }
 
-// ComplianceStatus renders the standards compliance gauge/breakdown fragment
-// for HTMX polling — same scope routing as the page so the poll keeps showing
-// the selected bolt's (or the Fleet aggregate's) coverage (ADR-037 slice 5).
+// ComplianceStatus renders the standards compliance gauge/breakdown fragment for HTMX polling.
 func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
-	data := h.complianceScopedData(r.Context(), r, h.resolveScope(r))
+	data := h.standardsData()
 	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
 }
 
 // standardsData builds a StandardsPageData from the executive report.
+func (h *Handler) standardsData() StandardsPageData {
+	data := StandardsPageData{
+		PageData: PageData{Title: "Compliance", ActiveNav: "compliance"},
+	}
+	s := h.computeStandardsSummary()
+	if s.Total > 0 {
+		data.HasStandards = true
+		data.StandardsPct = s.Pct
+		data.SatisfiedControls = s.Satisfied
+		data.WaivedControls = s.Waived
+		data.PartialControls = s.Partial
+		data.NotSatisfiedControls = s.NotSatisfied
+		data.TotalControls = s.Total
+	}
+
+	// Compute waiver alerts from the config-file waivers (waivers.vgo) —
+	// the single source the unified scorer uses, so the badge count
+	// matches the rows shown on /compliance/waivers.
+	soonThreshold := time.Now().AddDate(0, 0, 30)
+	if h.configStore != nil {
+		for _, controls := range h.configStore.AllWaivers() {
+			for _, w := range controls {
+				data.TotalActiveWaivers++
+				if w.Expires != "" {
+					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soonThreshold) {
+						data.ExpiringWaivers++
+					}
+				}
+			}
+		}
+	}
+
+	return data
+}
 
 // standardsSummary computes fleet-wide standards compliance stats.
 // Reused by the compliance page and dashboard.
@@ -4082,21 +3546,69 @@ type standardsSummary struct {
 	Total        int
 }
 
-// computeStandardsSummary returns the six dashboard / `/compliance`
-// headline numbers by delegating to the DataSource ComplianceSummary SoT
-// (ADR-037 slice 4) — the same function the federated Fleet view merges
-// across bolts, so the local and fleet headlines can never drift. Off the
-// request hot path: a SQL read + tiny aggregation, no live walk of
-// frameworks × envoys × controls.
+// computeStandardsSummary reads the most-recent per-framework compliance
+// snapshot from `compliance_history` and aggregates it into the six
+// dashboard/`/compliance` headline numbers. The snapshot is written by
+// ReportHandler.PersistComplianceSnapshot — daily plus on every successful
+// config publish — through the same unified scorer the audit report
+// uses, so dashboard numbers stay consistent with /compliance/executive.
+// Off the request hot path: a SQL read + tiny aggregation, no live walk
+// of frameworks × envoys × controls.
 func (h *Handler) computeStandardsSummary() standardsSummary {
-	cs := h.dataSource.ComplianceSummary(context.Background())
-	s := standardsSummary{
-		Pct:          cs.Pct(),
-		Satisfied:    cs.Satisfied,
-		Waived:       cs.Waived,
-		Partial:      cs.Partial,
-		NotSatisfied: cs.NotSatisfied,
-		Total:        cs.Total,
+	if h.queries == nil {
+		return standardsSummary{}
+	}
+	ctx := context.Background()
+	snapshotDate, err := h.queries.GetLatestComplianceSnapshotDate(ctx)
+	if err != nil {
+		// sql.ErrNoRows on a fresh server before the first snapshot lands;
+		// callers render an empty-state. Any other error is logged and
+		// also returns empty so the page still renders.
+		if !errors.Is(err, sql.ErrNoRows) {
+			slog.Warn("standards summary: latest snapshot date query failed", "error", err)
+		}
+		return standardsSummary{}
+	}
+	rows, err := h.queries.ListComplianceSnapshotByDate(ctx, snapshotDate)
+	if err != nil {
+		slog.Warn("standards summary: snapshot rows query failed", "error", err, "date", snapshotDate)
+		return standardsSummary{}
+	}
+	return aggregateStandardsSnapshot(rows)
+}
+
+// aggregateStandardsSnapshot folds the per-framework rows of a single
+// compliance_history snapshot date into the six headline counts shown
+// on the dashboard / `/compliance`. Pure function — extracted so the
+// unweighted-mean and no-waiver-double-count invariants can be pinned
+// without standing up a real database.
+//
+// Invariants enforced (and tested):
+//   - overall percent is the unweighted mean of per-framework percents,
+//     not a control-count-weighted average
+//   - per-framework buckets are disjoint, so waivers never inflate Total
+//     beyond the framework's real control count
+//   - frameworks with zero controls (disabled / no data) are skipped
+//     entirely — they don't drag the mean toward zero
+func aggregateStandardsSnapshot(rows []db.ListComplianceSnapshotByDateRow) standardsSummary {
+	var s standardsSummary
+	var pctSum float64
+	pctCount := 0
+	for _, fw := range rows {
+		fwTotal := int(fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied)
+		if fwTotal == 0 {
+			continue
+		}
+		s.Satisfied += int(fw.Satisfied)
+		s.Waived += int(fw.Waived)
+		s.Partial += int(fw.Partial)
+		s.NotSatisfied += int(fw.NotSatisfied)
+		s.Total += fwTotal
+		pctSum += fw.ScorePercent
+		pctCount++
+	}
+	if pctCount > 0 {
+		s.Pct = math.Round(pctSum/float64(pctCount)*10) / 10
 	}
 	if s.Pct < 0 || s.Pct > 100 {
 		slog.Warn("standards summary percent outside [0,100] — aggregator invariant broken",
@@ -4259,58 +3771,8 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 }
 
 // RiskPosture renders the dedicated risk posture page.
-// riskFleetPageData builds the multi-bolt Fleet view of /risk from the
-// merged risk summary + scoped convergence (ADR-037 slice 5): the merged
-// distribution, the re-meaned average, the fleet-wide top-N riskiest
-// envoys (re-ranked at the viewer), and the summed factor rollup. The
-// per-bolt sparkline is omitted; Envoys holds the top-N only. ok=false on
-// fan-out failure → caller renders locally.
-func (h *Handler) riskFleetPageData(ctx context.Context) (RiskPosturePageData, bool) {
-	rsk, ok := h.scopedRisk(ctx, scopeFleet)
-	if !ok {
-		return RiskPosturePageData{}, false
-	}
-	envoys := make([]RiskEnvoyDetail, 0, len(rsk.TopEnvoys))
-	for _, e := range rsk.TopEnvoys {
-		envoys = append(envoys, RiskEnvoyDetail{
-			EnvoyID: e.ID, Hostname: e.Hostname, Score: e.Score, Level: e.Level, TopFactor: e.TopFactor,
-		})
-	}
-	factors := make([]RiskFactorSummary, 0, len(rsk.TopFactors))
-	for _, f := range rsk.TopFactors {
-		factors = append(factors, RiskFactorSummary{Name: f.Name, TotalPoints: f.TotalPoints, EnvoyCount: f.EnvoyCount})
-	}
-	return RiskPosturePageData{
-		AvgScore:       rsk.AvgScore(),
-		MaxScore:       rsk.MaxScore,
-		Critical:       rsk.Critical,
-		High:           rsk.High,
-		Medium:         rsk.Medium,
-		Low:            rsk.Low,
-		Envoys:         envoys,
-		TopFactors:     factors,
-		FleetAggregate: true,
-	}, true
-}
-
-// riskScopedData resolves the /risk page data for the active scope: a peer
-// bolt routes to its owner (full detail), the multi-bolt Fleet scope renders
-// the merged aggregate, everything else renders the full local page.
-func (h *Handler) riskScopedData(ctx context.Context, r *http.Request, scope string) RiskPosturePageData {
-	var data RiskPosturePageData
-	switch {
-	case h.routeScopedPage(ctx, scope, pageRisk, "", &data):
-		return data
-	case scope == scopeFleet && h.scopedAway(ctx, scope):
-		if fd, ok := h.riskFleetPageData(ctx); ok {
-			return fd
-		}
-	}
-	return h.dataSource.RiskPostureData(h.baseInterval, h.offlineThreshold)
-}
-
 func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
-	data := h.riskScopedData(r.Context(), r, h.resolveScope(r))
+	data := h.dataSource.RiskPostureData(h.baseInterval, h.offlineThreshold)
 	data.PageData = PageData{Title: "Risk Posture", ActiveNav: "risk"}
 	levelFilter := r.URL.Query().Get("level")
 	data.LevelFilter = levelFilter
@@ -4976,52 +4438,41 @@ func (h *Handler) ComplianceExecutiveFragment(w http.ResponseWriter, r *http.Req
 	h.renderer.RenderFragment(w, "compliance-executive", "compliance-executive-content", data)
 }
 
-// The render-cap constants (page size + hard DOM cap) now live in
-// server/fleet (EnvoysPageLimit / EnvoysRenderedCap) so the local render and
-// the route-to-owner RPC share one SoT — ui can't import fleet (cycle).
+// envoysPageLimit is the page size for the envoys list "load more"
+// trigger. envoysRenderedCap is the hard cap on visible rows — past
+// this, growth is taxed without value, and the operator should refine
+// the filter instead. See SME-#1 scale-resilience checklist.
+const (
+	envoysPageLimit   = 100
+	envoysRenderedCap = 1000
+)
 
 // Envoys renders the envoys list page with optional axis filters
 // (?conv=, ?drift=, ?reach=) and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
-	data := h.resolveEnvoysData(r.Context(), r, h.resolveScope(r))
+	q := r.URL.Query()
+	convFilter := q.Get("conv")
+	driftFilter := q.Get("drift")
+	reachFilter := q.Get("reach")
+	search := q.Get("search")
+	envFilter := q.Get("env")
+	tagFilter := q.Get("tag")
+	roleFilter := q.Get("role")
+	osFilter := q.Get("os")
+	archFilter := q.Get("arch")
+	configcrateFilter := q.Get("configcrate")
+	complianceFilter := q.Get("compliance")
+	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+
+	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset)
+	h.enrichEnvoyRows(data.Envoys)
+
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
-}
-
-// resolveEnvoysData builds the /envoys page data for the active scope
-// (ADR-037 slice 5b): a peer bolt routes to its owner (the full filtered/
-// sorted/paginated list, health enriched by the owner), the multi-bolt
-// Fleet scope shows a drill-to-bolt note (cross-bolt browse is a deferred
-// slice — approach A), everything else renders the full local list. Shared
-// by the page handler AND the stats/table polling fragments so a peer-bolt
-// view doesn't revert to local data on the next poll tick.
-func (h *Handler) resolveEnvoysData(ctx context.Context, r *http.Request, scope string) EnvoysPageData {
-	var data EnvoysPageData
-	switch {
-	case h.routeScopedPage(ctx, scope, pageEnvoys, r.URL.RawQuery, &data):
-		// Peer: rows + health enriched on the owner. The agent-version
-		// trait fallback is skipped — the peer's envoys aren't in this
-		// bolt's trait cache (the DB agent_version is already populated).
-	case scope == scopeFleet && h.scopedAway(ctx, scope):
-		data = EnvoysPageData{
-			PageData:       PageData{Title: "Envoys", ActiveNav: "envoys"},
-			FleetAggregate: true,
-		}
-	default:
-		q := r.URL.Query()
-		offset, _ := strconv.Atoi(q.Get("offset"))
-		if offset < 0 {
-			offset = 0
-		}
-		data = h.dataSource.EnvoysPageData(h.baseInterval, h.offlineThreshold,
-			q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
-			q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
-			q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
-			q.Get("sort"), q.Get("dir"), offset)
-		h.enrichEnvoyAgentVersions(data.Envoys)
-	}
-	data.FleetWideEnvoys = h.fleetWideEnvoyCount()
-	return data
 }
 
 // normalizeEnvoySort canonicalizes the sort URL params. Empty / unknown
@@ -5051,6 +4502,30 @@ func normalizeEnvoySort(col, dir string) (string, string) {
 // in the pills above it. The hard render cap (envoysRenderedCap) is
 // applied here, handler-side: the request limit is clamped before the
 // data-source call and the load-more sentinel is set after.
+func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir string, offset int) EnvoysPageData {
+	// Cap the request at the hard render limit. Past envoysRenderedCap
+	// rows we stop emitting load-more triggers and surface a sentinel.
+	limit := envoysPageLimit
+	if offset+limit > envoysRenderedCap {
+		limit = envoysRenderedCap - offset
+		if limit < 0 {
+			limit = 0
+		}
+	}
+
+	data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, driftFilter, reachFilter, search, envFilter, tagFilter, roleFilter, osFilter, archFilter, configcrateFilter, complianceFilter, sortCol, sortDir, offset, limit)
+
+	// Render-cap sentinel: when paging reaches the hard DOM cap, the
+	// footer renders a "refine your filter" notice instead of another
+	// load-more trigger so the DOM cannot grow unbounded.
+	nextOffset := offset + len(data.Envoys)
+	renderedCap := nextOffset >= envoysRenderedCap && nextOffset < data.MatchingTotal
+	data.HasMore = data.HasMore && !renderedCap
+	data.Limit = envoysPageLimit
+	data.RenderedCap = renderedCap
+	data.RenderedCapMax = envoysRenderedCap
+	return data
+}
 
 // EnvoyDetail renders the envoy detail page shell. Runs and traits are loaded
 // asynchronously via HTMX fragment endpoints for instant page rendering.
@@ -5805,22 +5280,6 @@ func standardDisplayNameFromSlug(slug string) string {
 }
 
 // Runs renders the runs list page with optional status filter.
-// runsScopedData resolves the /runs page data for the active scope (ADR-037
-// slice 5, approach A): a peer bolt routes to its owner (that bolt's runs,
-// status-filtered on the owner), the multi-bolt Fleet scope shows a
-// drill-to-bolt note (runs are per-bolt — no cross-bolt concat), everything
-// else renders the full local list.
-func (h *Handler) runsScopedData(ctx context.Context, r *http.Request, scope string) RunsPageData {
-	var data RunsPageData
-	switch {
-	case h.routeScopedPage(ctx, scope, pageRuns, r.URL.RawQuery, &data):
-		return data
-	case scope == scopeFleet && h.scopedAway(ctx, scope):
-		return RunsPageData{FleetAggregate: true}
-	}
-	return h.dataSource.RunsData(r.URL.Query().Get("status"))
-}
-
 func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	sortCol := r.URL.Query().Get("sort")
@@ -5829,12 +5288,10 @@ func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 		sortDir = "desc" // runs default newest-first
 	}
 
-	data := h.runsScopedData(r.Context(), r, h.resolveScope(r))
+	data := h.dataSource.RunsData(statusFilter)
 	sortRunRows(data.Runs, sortCol, sortDir)
-	data.StatusFilter = statusFilter
 	data.SortColumn = sortCol
 	data.SortDir = sortDir
-	data.PageData = PageData{Title: "Runs", ActiveNav: "runs"}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "runs", data)
 }
@@ -6126,12 +5583,20 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 // longer auto-polled, since polling at the table boundary wipes any
 // rows the user has already scrolled into.
 func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
-	// Shares the page resolver so a peer-bolt scope keeps showing that
-	// bolt's table across poll ticks (ADR-037 slice 5b). Scope is set so the
-	// load-more trigger carries it (this fragment skips setCommonWithRequest).
-	data := h.resolveEnvoysData(r.Context(), r, h.resolveScope(r))
+	q := r.URL.Query()
+	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	data := h.envoysPageData(
+		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
+		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
+		q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
+		sortCol, sortDir, offset,
+	)
+	h.enrichEnvoyRows(data.Envoys)
 	data.Locale = h.localeFromRequest(r)
-	data.Scope = h.resolveScope(r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
 
@@ -6141,7 +5606,14 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 // table itself are outside this region so the operator's typed query
 // and scrolled position survive every refresh tick.
 func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
-	data := h.resolveEnvoysData(r.Context(), r, h.resolveScope(r))
+	q := r.URL.Query()
+	sortCol, sortDir := normalizeEnvoySort(q.Get("sort"), q.Get("dir"))
+	data := h.envoysPageData(
+		q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
+		q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
+		q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
+		sortCol, sortDir, 0,
+	)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-stats", data)
 }
@@ -7197,150 +6669,120 @@ type SecurityHostRow struct {
 
 // SecurityPage renders the fleet security dashboard — convergence,
 // CVE counts, hardening scores, and the AI chat drawer overlay.
-// SecurityPageData is the full /security page model: shared convergence
-// status, the security-scan rollup (incl. per-host tables), cert-expiry,
-// and the 30-day trends. The data fields are produced by
-// DataSource.SecurityPageData so a peer bolt can build its own and the
-// federated viewer can render it for a per-bolt scope (ADR-037 slice 5,
-// "detail pages route to owner"); the viewer supplies the PageData chrome
-// and QueryTimeoutSec locally after the fetch. Plain exported fields →
-// JSON-round-trippable across the wire.
-type SecurityPageData struct {
-	PageData
-	ConvergencePct  float64
-	Total           int64
-	Converged       int64
-	Degraded        int64
-	Failed          int64
-	NoData          int64
-	Changed         int64
-	Diverged        int64
-	Offline         int64
-	Security        SecurityScanPageData
-	Certs           CertExpirySummary
-	QueryTimeoutSec int
-	CVETrend        []float64
-	HardeningTrend  []float64
-	// FleetAggregate marks the multi-bolt Fleet view: the scalar rollups are
-	// merged across bolts but the per-host tables and sparklines are omitted
-	// (they don't aggregate at scale) — the template hides them and shows a
-	// "select a bolt for per-host detail" note (ADR-037 slice 5).
-	FleetAggregate bool
-}
-
-// securityQueryTimeoutSec is the live-drill-down dispatch budget, derived
-// from this (viewing) bolt's check-in interval — applied locally on both
-// the local and route-to-owner paths.
-func (h *Handler) securityQueryTimeoutSec() int {
-	s := int(h.baseInterval.Seconds()*2.5 + 10)
-	if s < 30 {
-		s = 30
-	}
-	return s
-}
-
-// securityFleetPageData builds the multi-bolt Fleet view of /security from
-// the merged security summary + scoped convergence (ADR-037 slice 5): the
-// fleet-wide scalar scanner rollups and the deduped CVE list. Per-host
-// tables, cert drill-downs, and trends are omitted (FleetAggregate) — they
-// don't aggregate at scale; drill into a bolt tab for those. ok=false on
-// fan-out failure → the caller renders locally.
-func (h *Handler) securityFleetPageData(ctx context.Context) (SecurityPageData, bool) {
-	sec, ok := h.scopedSecurity(ctx, scopeFleet)
-	if !ok {
-		return SecurityPageData{}, false
-	}
-	conv := h.scopedConvergence(scopeFleet)
-
-	var crit, high, med, low int
-	cveEntries := make([]CVEEntry, 0, len(sec.UniqueCVEs))
-	for _, c := range sec.UniqueCVEs {
-		switch c.Severity {
-		case "critical":
-			crit++
-		case "high":
-			high++
-		case "medium":
-			med++
-		case "low":
-			low++
-		}
-		cveEntries = append(cveEntries, CVEEntry{CVEID: c.ID, Severity: c.Severity})
-	}
-
-	return SecurityPageData{
-		ConvergencePct: convergence.ConvergedPct(int64(conv.Converged), int64(conv.Total-conv.Offline)),
-		Total:          int64(conv.Total),
-		Converged:      int64(conv.Converged),
-		Degraded:       int64(conv.Degraded),
-		Failed:         int64(conv.Failed),
-		NoData:         int64(conv.NoData),
-		Changed:        int64(conv.Changed),
-		Diverged:       int64(conv.Diverged),
-		Offline:        int64(conv.Offline),
-		Security: SecurityScanPageData{
-			UniqueCVEs:     int64(len(sec.UniqueCVEs)),
-			UniqueCritical: int64(crit),
-			UniqueHigh:     int64(high),
-			UniqueMedium:   int64(med),
-			UniqueLow:      int64(low),
-			LynisAvgScore:  int64(sec.LynisAvg()),
-			LynisWarnings:  int64(sec.LynisWarnings),
-			RootkitClean:   int64(sec.RootkitClean),
-			RootkitWarning: int64(sec.RootkitWarnings),
-			ClamavClean:    int64(sec.ClamavClean),
-			ClamavInfected: int64(sec.ClamavInfected),
-			AideClean:      int64(sec.AideClean),
-			AideChanged:    int64(sec.AideChanged),
-			ScapScanned:    int64(sec.ScapScanned),
-			ScapClean:      int64(sec.ScapClean),
-			ScapHighFail:   int64(sec.ScapHighFail),
-			ScannedHosts:   int64(sec.ScannedHosts),
-			TotalHosts:     int64(sec.TotalHosts),
-			CVEs:           cveEntries,
-		},
-		Certs: CertExpirySummary{
-			ExpiringSoon:  sec.CertsExpiringSoon,
-			Expired:       sec.CertsExpired,
-			ExpiringIn7:   sec.CertsExpiringIn7,
-			ExpiringIn30:  sec.CertsExpiringIn30,
-			HostsAffected: sec.CertHostsAffected,
-		},
-		FleetAggregate: true,
-	}, true
-}
-
-// securityScopedData resolves the /security page data for the active scope
-// (ADR-037 slice 5): a peer bolt routes to its owner (full detail), the
-// multi-bolt Fleet scope renders the merged aggregate, and everything else
-// (this bolt / standalone / single-bolt) renders the full local page.
-func (h *Handler) securityScopedData(ctx context.Context, r *http.Request, scope string) SecurityPageData {
-	var data SecurityPageData
-	switch {
-	case h.routeScopedPage(ctx, scope, pageSecurity, "", &data):
-		return data
-	case scope == scopeFleet && h.scopedAway(ctx, scope):
-		if fd, ok := h.securityFleetPageData(ctx); ok {
-			return fd
-		}
-	}
-	return h.dataSource.SecurityPageData(ctx, h.baseInterval, h.offlineThreshold)
-}
-
 func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
-	data := h.securityScopedData(r.Context(), r, h.resolveScope(r))
-	data.PageData = PageData{Title: "Security", ActiveNav: "security"}
-	data.QueryTimeoutSec = h.securityQueryTimeoutSec()
+	ctx := r.Context()
+
+	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
+
+	secData := h.dataSource.SecurityScanData()
+	certData := h.dataSource.CertExpirySummary()
+
+	// Query timeout = 2.5× check-in interval (agent needs to poll, promote, respond).
+	queryTimeoutSec := int(h.baseInterval.Seconds()*2.5 + 10)
+	if queryTimeoutSec < 30 {
+		queryTimeoutSec = 30
+	}
+
+	// Load 30-day security posture trend.
+	var cveTrend, hardeningTrend []float64
+	if h.queries != nil {
+		history, err := h.queries.ListSecurityPostureHistory(ctx, 30)
+		if err == nil {
+			// Reverse for chronological order (query returns DESC).
+			for i := len(history) - 1; i >= 0; i-- {
+				cveTrend = append(cveTrend, float64(history[i].CveCritical+history[i].CveHigh))
+				hardeningTrend = append(hardeningTrend, float64(history[i].AvgHardening))
+			}
+		}
+	}
+
+	data := struct {
+		PageData
+		ConvergencePct  float64
+		Total           int64
+		Converged       int64
+		Degraded        int64
+		Failed          int64
+		NoData          int64
+		Changed         int64
+		Diverged        int64
+		Offline         int64
+		Security        SecurityScanPageData
+		Certs           CertExpirySummary
+		QueryTimeoutSec int
+		CVETrend        []float64
+		HardeningTrend  []float64
+	}{
+		PageData:        PageData{Title: "Security", ActiveNav: "security"},
+		ConvergencePct:  convData.ConvergencePct,
+		Total:           convData.Total,
+		Converged:       convData.Converged,
+		Degraded:        convData.Degraded,
+		Failed:          convData.Failed,
+		NoData:          convData.NoData,
+		Changed:         convData.Changed,
+		Diverged:        convData.Diverged,
+		Offline:         convData.Offline,
+		Security:        secData,
+		Certs:           certData,
+		QueryTimeoutSec: queryTimeoutSec,
+		CVETrend:        cveTrend,
+		HardeningTrend:  hardeningTrend,
+	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "security", data)
 }
 
 // SecurityStatus renders the convergence+security left-panel fragment for HTMX polling.
 func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
-	// Same scope routing as SecurityPage, so the HTMX poll keeps showing the
-	// selected bolt's (or the Fleet aggregate's) status (ADR-037 slice 5).
-	data := h.securityScopedData(r.Context(), r, h.resolveScope(r))
-	data.Locale = h.localeFromRequest(r)
+	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
+
+	secData := h.dataSource.SecurityScanData()
+	certData := h.dataSource.CertExpirySummary()
+
+	// Load 30-day security posture trend (same as SecurityPage).
+	var cveTrend, hardeningTrend []float64
+	if h.queries != nil {
+		history, err := h.queries.ListSecurityPostureHistory(r.Context(), 30)
+		if err == nil {
+			for i := len(history) - 1; i >= 0; i-- {
+				cveTrend = append(cveTrend, float64(history[i].CveCritical+history[i].CveHigh))
+				hardeningTrend = append(hardeningTrend, float64(history[i].AvgHardening))
+			}
+		}
+	}
+
+	data := struct {
+		Locale         string
+		ConvergencePct float64
+		Total          int64
+		Converged      int64
+		Degraded       int64
+		Failed         int64
+		NoData         int64
+		Changed        int64
+		Diverged       int64
+		Offline        int64
+		Security       SecurityScanPageData
+		Certs          CertExpirySummary
+		CVETrend       []float64
+		HardeningTrend []float64
+	}{
+		Locale:         h.localeFromRequest(r),
+		ConvergencePct: convData.ConvergencePct,
+		Total:          convData.Total,
+		Converged:      convData.Converged,
+		Degraded:       convData.Degraded,
+		Failed:         convData.Failed,
+		NoData:         convData.NoData,
+		Changed:        convData.Changed,
+		Diverged:       convData.Diverged,
+		Offline:        convData.Offline,
+		Security:       secData,
+		Certs:          certData,
+		CVETrend:       cveTrend,
+		HardeningTrend: hardeningTrend,
+	}
 	h.renderer.RenderFragment(w, "security", "security-status", data)
 }
 
@@ -8450,20 +7892,28 @@ func (h *Handler) SetTraitLookup(tl TraitLookup) {
 // from raw traits here — so the /envoys "Agent Health" column, the
 // dashboard "Agent Health" card, and the /agent-health table all agree
 // on the same severity classification per envoy.
-// enrichEnvoyAgentVersions layers the agent-version trait fallback onto
-// locally-built rows — the DB column can be empty even when the trait has
-// it. The Agent-Health composite is enriched upstream in
-// DataSource.EnvoysPageData (so it survives a route-to-owner render); this
-// fallback needs the local trait cache, so it's applied only on the local
-// path (ADR-037 slice 5b).
-func (h *Handler) enrichEnvoyAgentVersions(rows []EnvoyRow) {
-	if h.traitLookup == nil {
-		return
-	}
+func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 	for i := range rows {
-		if rows[i].AgentVersion == "" {
+		// Agent version from traits (always available, even if DB column is empty).
+		if rows[i].AgentVersion == "" && h.traitLookup != nil {
 			if v := h.traitLookup.EnvoyTrait(rows[i].ID, "identity.agent_version"); v != "" {
 				rows[i].AgentVersion = v
+			}
+		}
+		// Agent Health composite. Routed through fleetpressure — the
+		// canonical per-envoy projection that already covers FDs, host
+		// FD%, OOM-recent, rootfs %, inode %, and repo-health on one
+		// severity axis. The pill color follows Health; the hover
+		// title lists the contributing per-axis values so operators
+		// see the breakdown without leaving the page.
+		if h.dataSource != nil {
+			if p, ok := h.dataSource.EnvoyPressure(rows[i].ID); ok {
+				rows[i].HealthSeverity = p.Health
+				if p.Health != fleetpressure.Unknown {
+					rows[i].HealthSummary = HealthSummary(p)
+					pCopy := p
+					rows[i].Pressure = &pCopy
+				}
 			}
 		}
 	}

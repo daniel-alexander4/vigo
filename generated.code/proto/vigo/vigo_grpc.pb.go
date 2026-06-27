@@ -482,11 +482,6 @@ const (
 	VigoAdmin_ListWebhooks_FullMethodName          = "/vigo.v1.VigoAdmin/ListWebhooks"
 	VigoAdmin_DeleteWebhook_FullMethodName         = "/vigo.v1.VigoAdmin/DeleteWebhook"
 	VigoAdmin_GetConvergenceSummary_FullMethodName = "/vigo.v1.VigoAdmin/GetConvergenceSummary"
-	VigoAdmin_GetSecuritySummary_FullMethodName    = "/vigo.v1.VigoAdmin/GetSecuritySummary"
-	VigoAdmin_GetRiskSummary_FullMethodName        = "/vigo.v1.VigoAdmin/GetRiskSummary"
-	VigoAdmin_GetComplianceSummary_FullMethodName  = "/vigo.v1.VigoAdmin/GetComplianceSummary"
-	VigoAdmin_GetHealthSummary_FullMethodName      = "/vigo.v1.VigoAdmin/GetHealthSummary"
-	VigoAdmin_GetScopedPageData_FullMethodName     = "/vigo.v1.VigoAdmin/GetScopedPageData"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
@@ -529,46 +524,6 @@ type VigoAdminClient interface {
 	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error)
 	// GetConvergenceSummary returns aggregate convergence status across all envoys.
 	GetConvergenceSummary(ctx context.Context, in *GetConvergenceSummaryRequest, opts ...grpc.CallOption) (*GetConvergenceSummaryResponse, error)
-	// GetSecuritySummary returns this bolt's local security posture rollup —
-	// the dashboard Security Posture column's data (deduped unique CVEs,
-	// cert-expiry buckets, running-CVE counts, rootkit warnings). It is a
-	// leaf read: it returns THIS bolt's partition only and never fans out,
-	// so the federated-UI viewer (ADR-037) can fan it out to peers without
-	// recursion. Unique CVEs ride as the per-bolt deduped CVE-ID set so the
-	// viewer unions them across bolts (summing counts double-counts shared
-	// CVEs); every other field is an additive per-host count.
-	GetSecuritySummary(ctx context.Context, in *GetSecuritySummaryRequest, opts ...grpc.CallOption) (*GetSecuritySummaryResponse, error)
-	// GetRiskSummary returns this bolt's risk-posture rollup for the
-	// dashboard Risk column (ADR-037). Leaf read — never fans out. Ships
-	// score_sum + scored_count (not a pre-divided average) so the federated
-	// viewer re-means across bolts correctly; the severity buckets are
-	// additive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,
-	// which the hand-written /api/v1/risk/{envoyID} route would shadow).
-	GetRiskSummary(ctx context.Context, in *GetRiskSummaryRequest, opts ...grpc.CallOption) (*GetRiskSummaryResponse, error)
-	// GetComplianceSummary returns this bolt's standards-compliance rollup
-	// for the dashboard Standards Compliance column (ADR-037 slice 4, the
-	// dashboard-card path). Leaf read — never fans out. Reads this bolt's
-	// latest compliance_history snapshot and ships the additive control
-	// buckets plus pct_sum + pct_count (NOT a pre-divided percent), so the
-	// federated viewer re-means across bolts exactly as the local aggregator
-	// does (unweighted mean over per-framework percents). Buckets sum
-	// additively across partitions. NOTE: this is the partition-summed
-	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
-	// org-wide compliance report/PDF) is a separate, larger slice.
-	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
-	// GetHealthSummary returns this bolt's agent-health (fleetpressure)
-	// rollup for the federated /agent-health Fleet view (ADR-037 slice 5).
-	// Leaf read — never fans out. Counts are additive across bolts; the worst
-	// severity and the max-open-FDs host are reductions (worst/max wins).
-	GetHealthSummary(ctx context.Context, in *GetHealthSummaryRequest, opts ...grpc.CallOption) (*GetHealthSummaryResponse, error)
-	// GetScopedPageData returns THIS bolt's data for one rich UI page,
-	// JSON-encoded (the ui.<Page>Data struct, data fields only). It is a leaf
-	// read — never fans out — so the federated-UI viewer can route a per-bolt
-	// page tab to the owning bolt (ADR-037 slice 5, "detail pages route to
-	// owner") and render the returned data in its own chrome/locale. Generic
-	// by design: ONE RPC serves every scope-aware page, keyed by page_id,
-	// rather than a typed RPC per page. Pull-on-view only — never gossiped.
-	GetScopedPageData(ctx context.Context, in *GetScopedPageDataRequest, opts ...grpc.CallOption) (*GetScopedPageDataResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -751,56 +706,6 @@ func (c *vigoAdminClient) GetConvergenceSummary(ctx context.Context, in *GetConv
 	return out, nil
 }
 
-func (c *vigoAdminClient) GetSecuritySummary(ctx context.Context, in *GetSecuritySummaryRequest, opts ...grpc.CallOption) (*GetSecuritySummaryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetSecuritySummaryResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_GetSecuritySummary_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vigoAdminClient) GetRiskSummary(ctx context.Context, in *GetRiskSummaryRequest, opts ...grpc.CallOption) (*GetRiskSummaryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRiskSummaryResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_GetRiskSummary_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vigoAdminClient) GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetComplianceSummaryResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_GetComplianceSummary_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vigoAdminClient) GetHealthSummary(ctx context.Context, in *GetHealthSummaryRequest, opts ...grpc.CallOption) (*GetHealthSummaryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetHealthSummaryResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_GetHealthSummary_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vigoAdminClient) GetScopedPageData(ctx context.Context, in *GetScopedPageDataRequest, opts ...grpc.CallOption) (*GetScopedPageDataResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetScopedPageDataResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_GetScopedPageData_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vigoAdminClient) GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetEnvoyConvergenceResponse)
@@ -877,46 +782,6 @@ type VigoAdminServer interface {
 	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
 	// GetConvergenceSummary returns aggregate convergence status across all envoys.
 	GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error)
-	// GetSecuritySummary returns this bolt's local security posture rollup —
-	// the dashboard Security Posture column's data (deduped unique CVEs,
-	// cert-expiry buckets, running-CVE counts, rootkit warnings). It is a
-	// leaf read: it returns THIS bolt's partition only and never fans out,
-	// so the federated-UI viewer (ADR-037) can fan it out to peers without
-	// recursion. Unique CVEs ride as the per-bolt deduped CVE-ID set so the
-	// viewer unions them across bolts (summing counts double-counts shared
-	// CVEs); every other field is an additive per-host count.
-	GetSecuritySummary(context.Context, *GetSecuritySummaryRequest) (*GetSecuritySummaryResponse, error)
-	// GetRiskSummary returns this bolt's risk-posture rollup for the
-	// dashboard Risk column (ADR-037). Leaf read — never fans out. Ships
-	// score_sum + scored_count (not a pre-divided average) so the federated
-	// viewer re-means across bolts correctly; the severity buckets are
-	// additive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,
-	// which the hand-written /api/v1/risk/{envoyID} route would shadow).
-	GetRiskSummary(context.Context, *GetRiskSummaryRequest) (*GetRiskSummaryResponse, error)
-	// GetComplianceSummary returns this bolt's standards-compliance rollup
-	// for the dashboard Standards Compliance column (ADR-037 slice 4, the
-	// dashboard-card path). Leaf read — never fans out. Reads this bolt's
-	// latest compliance_history snapshot and ships the additive control
-	// buckets plus pct_sum + pct_count (NOT a pre-divided percent), so the
-	// federated viewer re-means across bolts exactly as the local aggregator
-	// does (unweighted mean over per-framework percents). Buckets sum
-	// additively across partitions. NOTE: this is the partition-summed
-	// dashboard rollup — auditor-grade per-control fleet reconciliation (the
-	// org-wide compliance report/PDF) is a separate, larger slice.
-	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
-	// GetHealthSummary returns this bolt's agent-health (fleetpressure)
-	// rollup for the federated /agent-health Fleet view (ADR-037 slice 5).
-	// Leaf read — never fans out. Counts are additive across bolts; the worst
-	// severity and the max-open-FDs host are reductions (worst/max wins).
-	GetHealthSummary(context.Context, *GetHealthSummaryRequest) (*GetHealthSummaryResponse, error)
-	// GetScopedPageData returns THIS bolt's data for one rich UI page,
-	// JSON-encoded (the ui.<Page>Data struct, data fields only). It is a leaf
-	// read — never fans out — so the federated-UI viewer can route a per-bolt
-	// page tab to the owning bolt (ADR-037 slice 5, "detail pages route to
-	// owner") and render the returned data in its own chrome/locale. Generic
-	// by design: ONE RPC serves every scope-aware page, keyed by page_id,
-	// rather than a typed RPC per page. Pull-on-view only — never gossiped.
-	GetScopedPageData(context.Context, *GetScopedPageDataRequest) (*GetScopedPageDataResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
 	GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
@@ -986,21 +851,6 @@ func (UnimplementedVigoAdminServer) DeleteWebhook(context.Context, *DeleteWebhoo
 }
 func (UnimplementedVigoAdminServer) GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetConvergenceSummary not implemented")
-}
-func (UnimplementedVigoAdminServer) GetSecuritySummary(context.Context, *GetSecuritySummaryRequest) (*GetSecuritySummaryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetSecuritySummary not implemented")
-}
-func (UnimplementedVigoAdminServer) GetRiskSummary(context.Context, *GetRiskSummaryRequest) (*GetRiskSummaryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRiskSummary not implemented")
-}
-func (UnimplementedVigoAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
-}
-func (UnimplementedVigoAdminServer) GetHealthSummary(context.Context, *GetHealthSummaryRequest) (*GetHealthSummaryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetHealthSummary not implemented")
-}
-func (UnimplementedVigoAdminServer) GetScopedPageData(context.Context, *GetScopedPageDataRequest) (*GetScopedPageDataResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetScopedPageData not implemented")
 }
 func (UnimplementedVigoAdminServer) GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEnvoyConvergence not implemented")
@@ -1323,96 +1173,6 @@ func _VigoAdmin_GetConvergenceSummary_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_GetSecuritySummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetSecuritySummaryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).GetSecuritySummary(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_GetSecuritySummary_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).GetSecuritySummary(ctx, req.(*GetSecuritySummaryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _VigoAdmin_GetRiskSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRiskSummaryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).GetRiskSummary(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_GetRiskSummary_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).GetRiskSummary(ctx, req.(*GetRiskSummaryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _VigoAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetComplianceSummaryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).GetComplianceSummary(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_GetComplianceSummary_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).GetComplianceSummary(ctx, req.(*GetComplianceSummaryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _VigoAdmin_GetHealthSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetHealthSummaryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).GetHealthSummary(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_GetHealthSummary_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).GetHealthSummary(ctx, req.(*GetHealthSummaryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _VigoAdmin_GetScopedPageData_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetScopedPageDataRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).GetScopedPageData(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_GetScopedPageData_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).GetScopedPageData(ctx, req.(*GetScopedPageDataRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _VigoAdmin_GetEnvoyConvergence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEnvoyConvergenceRequest)
 	if err := dec(in); err != nil {
@@ -1555,26 +1315,6 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetConvergenceSummary",
 			Handler:    _VigoAdmin_GetConvergenceSummary_Handler,
-		},
-		{
-			MethodName: "GetSecuritySummary",
-			Handler:    _VigoAdmin_GetSecuritySummary_Handler,
-		},
-		{
-			MethodName: "GetRiskSummary",
-			Handler:    _VigoAdmin_GetRiskSummary_Handler,
-		},
-		{
-			MethodName: "GetComplianceSummary",
-			Handler:    _VigoAdmin_GetComplianceSummary_Handler,
-		},
-		{
-			MethodName: "GetHealthSummary",
-			Handler:    _VigoAdmin_GetHealthSummary_Handler,
-		},
-		{
-			MethodName: "GetScopedPageData",
-			Handler:    _VigoAdmin_GetScopedPageData_Handler,
 		},
 		{
 			MethodName: "GetEnvoyConvergence",

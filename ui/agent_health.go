@@ -4,13 +4,10 @@
 package ui
 
 import (
-	"context"
-	"log/slog"
 	"net/http"
 	"sort"
 
 	"git.alexander4.io/vigo/server/fleetpressure"
-	"git.alexander4.io/vigo/server/spanner"
 )
 
 // AgentHealthPageData feeds the `/agent-health` fleet page. The summary
@@ -21,59 +18,27 @@ type AgentHealthPageData struct {
 	PageData
 	Summary fleetpressure.FleetSummary
 	Envoys  []fleetpressure.EnvoyPressure
-	// FleetAggregate marks the multi-bolt Fleet view: the merged rollup
-	// renders but the per-envoy table is omitted (it doesn't aggregate at
-	// scale) — drill into a bolt tab for it (ADR-037 slice 5).
-	FleetAggregate bool
-}
-
-// scopedHealth returns the fleet-merged agent-health rollup: fan out
-// GetHealthSummary to peers + fold in this bolt's own (ADR-037 slice 5).
-func (h *Handler) scopedHealth(ctx context.Context, scope string) (fleetpressure.FleetSummary, bool) {
-	if h.spannerAdmin == nil || scope != scopeFleet {
-		return fleetpressure.FleetSummary{}, false
-	}
-	peers, err := h.spannerAdmin.AggregateHealthFanout(ctx)
-	if err != nil {
-		slog.Warn("scoped agent-health fan-out failed", "error", err)
-		return fleetpressure.FleetSummary{}, false
-	}
-	local := h.dataSource.FleetPressure()
-	return spanner.MergeHealthSummaries([]fleetpressure.FleetSummary{peers, local}), true
-}
-
-// agentHealthScopedData resolves the /agent-health page data for the active
-// scope: a peer bolt routes to its owner (full table), the multi-bolt Fleet
-// scope renders the merged rollup (no per-envoy table), everything else
-// renders the full local page.
-func (h *Handler) agentHealthScopedData(ctx context.Context, r *http.Request, scope string) AgentHealthPageData {
-	var data AgentHealthPageData
-	switch {
-	case h.routeScopedPage(ctx, scope, pageAgentHealth, "", &data):
-		return data
-	case scope == scopeFleet && h.scopedAway(ctx, scope):
-		if s, ok := h.scopedHealth(ctx, scope); ok {
-			return AgentHealthPageData{Summary: s, FleetAggregate: true}
-		}
-	}
-	return h.dataSource.AgentHealthData()
 }
 
 // AgentHealth renders the per-envoy health table — open FDs, host FD%,
 // rootfs%, inode%, repo health, composite — sorted worst-first so the
 // degraded envoys lead. Rows link to each envoy's detail page.
 func (h *Handler) AgentHealth(w http.ResponseWriter, r *http.Request) {
-	data := h.agentHealthScopedData(r.Context(), r, h.resolveScope(r))
+	summary, envoys := h.dataSource.FleetPressureDetail()
 	// Sort worst-Health first, then by Hostname for a deterministic
 	// secondary order. Unknown sorts last (nothing to look at).
-	sort.SliceStable(data.Envoys, func(i, j int) bool {
-		hi, hj := healthSortKey(data.Envoys[i].Health), healthSortKey(data.Envoys[j].Health)
+	sort.SliceStable(envoys, func(i, j int) bool {
+		hi, hj := healthSortKey(envoys[i].Health), healthSortKey(envoys[j].Health)
 		if hi != hj {
 			return hi < hj
 		}
-		return data.Envoys[i].Hostname < data.Envoys[j].Hostname
+		return envoys[i].Hostname < envoys[j].Hostname
 	})
-	data.PageData = PageData{Title: "Agent Health", ActiveNav: "agent-health"}
+	data := AgentHealthPageData{
+		PageData: PageData{Title: "Agent Health", ActiveNav: "agent-health"},
+		Summary:  summary,
+		Envoys:   envoys,
+	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "agent-health", data)
 }

@@ -107,29 +107,6 @@
         ]
       }
     },
-    "/api/v1/compliance/summary": {
-      "get": {
-        "summary": "GetComplianceSummary returns this bolt's standards-compliance rollup\nfor the dashboard Standards Compliance column (ADR-037 slice 4, the\ndashboard-card path). Leaf read — never fans out. Reads this bolt's\nlatest compliance_history snapshot and ships the additive control\nbuckets plus pct_sum + pct_count (NOT a pre-divided percent), so the\nfederated viewer re-means across bolts exactly as the local aggregator\ndoes (unweighted mean over per-framework percents). Buckets sum\nadditively across partitions. NOTE: this is the partition-summed\ndashboard rollup — auditor-grade per-control fleet reconciliation (the\norg-wide compliance report/PDF) is a separate, larger slice.",
-        "operationId": "VigoAdmin_GetComplianceSummary",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetComplianceSummaryResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
-    },
     "/api/v1/convergence": {
       "get": {
         "summary": "GetConvergenceSummary returns aggregate convergence status across all envoys.",
@@ -449,29 +426,6 @@
         ]
       }
     },
-    "/api/v1/risk-summary": {
-      "get": {
-        "summary": "GetRiskSummary returns this bolt's risk-posture rollup for the\ndashboard Risk column (ADR-037). Leaf read — never fans out. Ships\nscore_sum + scored_count (not a pre-divided average) so the federated\nviewer re-means across bolts correctly; the severity buckets are\nadditive. Path is /api/v1/risk-summary (not /api/v1/risk/summary,\nwhich the hand-written /api/v1/risk/{envoyID} route would shadow).",
-        "operationId": "VigoAdmin_GetRiskSummary",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetRiskSummaryResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
-    },
     "/api/v1/runs": {
       "get": {
         "summary": "ListRuns lists recent runs, optionally filtered by envoy.",
@@ -538,29 +492,6 @@
             "type": "string"
           }
         ],
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
-    },
-    "/api/v1/security/summary": {
-      "get": {
-        "summary": "GetSecuritySummary returns this bolt's local security posture rollup —\nthe dashboard Security Posture column's data (deduped unique CVEs,\ncert-expiry buckets, running-CVE counts, rootkit warnings). It is a\nleaf read: it returns THIS bolt's partition only and never fans out,\nso the federated-UI viewer (ADR-037) can fan it out to peers without\nrecursion. Unique CVEs ride as the per-bolt deduped CVE-ID set so the\nviewer unions them across bolts (summing counts double-counts shared\nCVEs); every other field is an additive per-host count.",
-        "operationId": "VigoAdmin_GetSecuritySummary",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetSecuritySummaryResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
         "tags": [
           "VigoAdmin"
         ]
@@ -856,19 +787,6 @@
         }
       }
     },
-    "v1CveSeverity": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "severity": {
-          "type": "string",
-          "title": "critical | high | medium | low | info"
-        }
-      },
-      "description": "CveSeverity is one deduped CVE on a bolt — the CVE ID plus the highest\nseverity any host on that bolt reported it at. The federated viewer\nunions these by ID across bolts (taking the max severity) so the\nfleet unique-CVE count is correct and not double-counted."
-    },
     "v1DeleteEnvoyResponse": {
       "type": "object"
     },
@@ -954,41 +872,6 @@
         }
       }
     },
-    "v1GetComplianceSummaryResponse": {
-      "type": "object",
-      "properties": {
-        "satisfied": {
-          "type": "integer",
-          "format": "int32",
-          "description": "Additive control-bucket counts summed over this bolt's enabled\nframeworks (per-framework buckets are disjoint, so they never\ndouble-count; across bolts they sum as partition-scoped instances)."
-        },
-        "waived": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "partial": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "notSatisfied": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "total": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "pctSum": {
-          "type": "number",
-          "format": "double",
-          "description": "pct_sum / pct_count carry the un-divided numerator and denominator of\nthe unweighted per-framework-percent mean (one count per framework\nthat has controls), so the viewer re-means over the bolt union:\nPct = pct_sum / pct_count."
-        },
-        "pctCount": {
-          "type": "integer",
-          "format": "int32"
-        }
-      }
-    },
     "v1GetConvergenceSummaryResponse": {
       "type": "object",
       "properties": {
@@ -1064,55 +947,6 @@
         }
       }
     },
-    "v1GetRiskSummaryResponse": {
-      "type": "object",
-      "properties": {
-        "scoreSum": {
-          "type": "string",
-          "format": "int64",
-          "description": "score_sum / scored_count let the viewer re-mean across bolts\n(avg = score_sum / scored_count); the buckets are additive counts."
-        },
-        "scoredCount": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "critical": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "high": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "medium": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "low": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "maxScore": {
-          "type": "integer",
-          "format": "int32",
-          "description": "For the federated /risk PAGE Fleet view (ADR-037 slice 5): the bolt's\ntop-N riskiest envoys (re-ranked to a global top-N at the viewer) and\nits factor rollup (summed by name across bolts). max_score is maxed."
-        },
-        "topEnvoys": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1RiskTopEnvoy"
-          }
-        },
-        "topFactors": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1RiskFactorRollup"
-          }
-        }
-      }
-    },
     "v1GetRunResponse": {
       "type": "object",
       "properties": {
@@ -1125,121 +959,6 @@
             "type": "object",
             "$ref": "#/definitions/v1ResourceRunResult"
           }
-        }
-      }
-    },
-    "v1GetSecuritySummaryResponse": {
-      "type": "object",
-      "properties": {
-        "uniqueCves": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1CveSeverity"
-          },
-          "description": "Deduped unique CVEs on this bolt (union across bolts at the viewer)."
-        },
-        "certsExpiringSoon": {
-          "type": "integer",
-          "format": "int32",
-          "description": "Additive per-host counts (a host belongs to one bolt → summable)."
-        },
-        "certsExpired": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "certsExpiringIn7": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "certsExpiringIn30": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "certHostsAffected": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "rootkitWarnings": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "runningCvesTotal": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "runningCvesCritical": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "runningCvesHigh": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "runningCvesMedium": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "runningCvesLow": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "runningCveHostsAffected": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "lynisScoreSum": {
-          "type": "string",
-          "format": "int64",
-          "description": "Summable scanner rollups for the federated /security PAGE Fleet view\n(ADR-037 slice 5). All additive across bolts except the Lynis average,\nwhich ships as score_sum + scored_count so the viewer re-means\ncorrectly (not an average-of-averages)."
-        },
-        "lynisScoredCount": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "lynisWarnings": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "rootkitClean": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "clamavClean": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "clamavInfected": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "aideClean": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "aideChanged": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "scapScanned": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "scapClean": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "scapHighFail": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "scannedHosts": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "totalHosts": {
-          "type": "integer",
-          "format": "int32"
         }
       }
     },
@@ -1379,43 +1098,6 @@
     },
     "v1RevokeEnvoyResponse": {
       "type": "object"
-    },
-    "v1RiskFactorRollup": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "totalPoints": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "envoyCount": {
-          "type": "integer",
-          "format": "int32"
-        }
-      }
-    },
-    "v1RiskTopEnvoy": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        },
-        "score": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "level": {
-          "type": "string"
-        },
-        "topFactor": {
-          "type": "string"
-        }
-      }
     },
     "v1RollbackResponse": {
       "type": "object",

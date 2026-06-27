@@ -10,8 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +21,6 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/db"
-	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/spanner"
 )
@@ -669,99 +666,6 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 	resp := convergenceCountersToProto(s.localConvergenceCounters())
 	finalizeConvergencePct(resp)
 	return resp, nil
-}
-
-// GetSecuritySummary returns THIS bolt's security-posture rollup (ADR-037
-// slice 2). It is a leaf read — it never fans out, so the federated-UI
-// viewer can fan it out to every roster bolt without recursion. The
-// security computation lives on fleet.DataSource; build one over this
-// bolt's own index/stores (NewDataSource is cheap — lazy caches) and
-// convert to the wire form via the spanner federation type.
-func (s *AdminService) GetSecuritySummary(_ context.Context, _ *pb.GetSecuritySummaryRequest) (*pb.GetSecuritySummaryResponse, error) {
-	if s.fleetIndex == nil {
-		return &pb.GetSecuritySummaryResponse{}, nil
-	}
-	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
-	return spanner.SecuritySummaryToProto(ds.SecuritySummary().ToSpanner()), nil
-}
-
-// GetRiskSummary returns THIS bolt's risk-posture rollup (ADR-037 slice
-// 3) — a leaf read that never fans out, so the federated viewer can fan
-// it to every roster bolt without recursion.
-func (s *AdminService) GetRiskSummary(_ context.Context, _ *pb.GetRiskSummaryRequest) (*pb.GetRiskSummaryResponse, error) {
-	if s.fleetIndex == nil {
-		return &pb.GetRiskSummaryResponse{}, nil
-	}
-	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
-	return spanner.RiskSummaryToProto(ds.RiskSummary(s.baseInterval, s.offlineThreshold).ToSpanner()), nil
-}
-
-// GetComplianceSummary returns THIS bolt's standards-compliance rollup
-// (ADR-037 slice 4) — a leaf read that never fans out, so the federated
-// viewer can fan it to every roster bolt without recursion. Reads this
-// bolt's latest compliance_history snapshot via the DataSource SoT.
-func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
-	if s.fleetIndex == nil {
-		return &pb.GetComplianceSummaryResponse{}, nil
-	}
-	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
-	return spanner.ComplianceSummaryToProto(ds.ComplianceSummary(ctx).ToSpanner()), nil
-}
-
-// GetHealthSummary returns THIS bolt's agent-health (fleetpressure) rollup
-// (ADR-037 slice 5) — a leaf read that never fans out.
-func (s *AdminService) GetHealthSummary(_ context.Context, _ *pb.GetHealthSummaryRequest) (*pb.GetHealthSummaryResponse, error) {
-	if s.fleetIndex == nil {
-		return &pb.GetHealthSummaryResponse{}, nil
-	}
-	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
-	return spanner.HealthSummaryToProto(ds.FleetPressure()), nil
-}
-
-// GetScopedPageData returns THIS bolt's data for one rich UI page,
-// JSON-encoded (ADR-037 slice 5). A leaf read — never fans out — so the
-// federated viewer can route a per-bolt page tab to the owning bolt and
-// render the result in its own chrome. The page struct is built via the
-// same fleet.DataSource the local UI uses, so a routed render is identical
-// to a local one. Generic: one switch keyed by page_id, not a typed RPC
-// per page.
-func (s *AdminService) GetScopedPageData(ctx context.Context, req *pb.GetScopedPageDataRequest) (*pb.GetScopedPageDataResponse, error) {
-	if s.fleetIndex == nil {
-		return &pb.GetScopedPageDataResponse{}, nil
-	}
-	ds := fleet.NewDataSource(s.fleetIndex, s.queries, s.runStore, s.configStore)
-	var v any
-	switch req.PageId {
-	case "security":
-		v = ds.SecurityPageData(ctx, s.baseInterval, s.offlineThreshold)
-	case "risk":
-		v = ds.RiskPostureData(s.baseInterval, s.offlineThreshold)
-	case "agent-health":
-		v = ds.AgentHealthData()
-	case "compliance":
-		v = ds.ComplianceLandingData(ctx)
-	case "runs":
-		q, _ := url.ParseQuery(req.Query)
-		v = ds.RunsData(q.Get("status"))
-	case "envoys":
-		q, _ := url.ParseQuery(req.Query)
-		offset, _ := strconv.Atoi(q.Get("offset"))
-		if offset < 0 {
-			offset = 0
-		}
-		v = ds.EnvoysPageData(s.baseInterval, s.offlineThreshold,
-			q.Get("conv"), q.Get("drift"), q.Get("reach"), q.Get("search"),
-			q.Get("env"), q.Get("tag"), q.Get("role"), q.Get("os"),
-			q.Get("arch"), q.Get("configcrate"), q.Get("compliance"),
-			q.Get("sort"), q.Get("dir"), offset)
-	default:
-		return nil, status.Errorf(codes.InvalidArgument, "unknown scoped page %q", req.PageId)
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "marshal scoped page %q: %v", req.PageId, err)
-	}
-	return &pb.GetScopedPageDataResponse{Json: b}, nil
 }
 
 func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoyConvergenceRequest) (*pb.GetEnvoyConvergenceResponse, error) {

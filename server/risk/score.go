@@ -63,13 +63,8 @@ type EnvoyRisk struct {
 
 // FleetRisk is the aggregated risk posture for the entire fleet.
 type FleetRisk struct {
-	TotalEnvoys  int `json:"total_envoys"`
-	ScoredEnvoys int `json:"scored_envoys"`
-	// ScoreSum is the sum of every scored envoy's score (AvgScore =
-	// ScoreSum/ScoredEnvoys). Exposed so a federated viewer can re-mean
-	// across bolts from per-bolt count+sum (ADR-037) — averaging per-bolt
-	// averages would mis-weight a small bolt equal to a large one.
-	ScoreSum     int64         `json:"score_sum"`
+	TotalEnvoys  int           `json:"total_envoys"`
+	ScoredEnvoys int           `json:"scored_envoys"`
 	AvgScore     float64       `json:"avg_score"`
 	MaxScore     int           `json:"max_score"`
 	Distribution map[Level]int `json:"distribution"`
@@ -257,7 +252,6 @@ func ScoreFleet(envoys []EnvoyInput, baseInterval, offlineThreshold time.Duratio
 		}
 	}
 
-	fr.ScoreSum = totalScore
 	if fr.ScoredEnvoys > 0 {
 		fr.AvgScore = float64(totalScore) / float64(fr.ScoredEnvoys)
 	}

@@ -43,7 +43,6 @@
 {{end}}
 
 {{define "compliance-status"}}
-{{if .FleetAggregate}}<p class="scope-notice">{{T $.Locale "compliance.fleet_aggregate_note"}}</p>{{end}}
 {{if .HasStandards}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">

@@ -9,7 +9,7 @@
     {{/* ── Left panel: convergence + reports + security ── */}}
     <div class="security-panel"
          id="security-status"
-         hx-get="/ui/fragments/security-status{{if .Scope}}?scope={{.Scope}}{{end}}"
+         hx-get="/ui/fragments/security-status"
          hx-trigger="every {{.PollInterval}}"
          hx-swap="morph:innerHTML"
          hx-disinherit="*"
@@ -40,12 +40,7 @@
 
 
 {{define "security-status"}}
-        {{if $.FleetAggregate}}
-        <p class="scope-notice">{{T $.Locale "security.fleet_aggregate_note"}}</p>
-        {{end}}
-        {{/* CVE Impact Analysis — search runs over the local partition, so
-             it's hidden in the Fleet aggregate (drill into a bolt). */}}
-        {{if not $.FleetAggregate}}
+        {{/* CVE Impact Analysis */}}
         <div class="security-section">
             <h3>{{T $.Locale "security.cve_impact"}}</h3>
             <form class="u-blk2" hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML">
@@ -59,7 +54,6 @@
             </form>
             <div id="cve-results"></div>
         </div>
-        {{end}}
 
         {{/* Security Posture Trends */}}
         {{if or .CVETrend .HardeningTrend}}
@@ -118,10 +112,6 @@
             <p class="text-muted u-fs-12px-m-4px-0-0">SCAP / STIG: {{.Security.ScapScanned}} {{T $.Locale "security.scap_scanned"}} &middot; <span class="text-success">{{.Security.ScapClean}} {{T $.Locale "security.scap_clean"}}</span> &middot; <span class="{{if .Security.ScapHighFail}}text-danger{{end}}">{{.Security.ScapHighFail}} {{T $.Locale "security.scap_high_fail"}}</span></p>
             {{end}}
 
-            {{/* Per-host detail tables don't aggregate at scale; the Fleet
-                 view shows the merged scalar rollups only and points the
-                 operator at a bolt tab for per-host detail (ADR-037). */}}
-            {{if not $.FleetAggregate}}
             {{/* ── Unique CVEs by Host panel ──
                  Single canonical "CVEs by host" panel. Targeted by the
                  Unique CVEs stat-card click and by every cross-page
@@ -281,7 +271,6 @@
                     </table>
                 </div>
             </div>
-            {{end}}
 
         </div>
         {{end}}

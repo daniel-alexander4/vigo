@@ -671,15 +671,6 @@ a.dash-column--link:hover {
    rule is hard to spot on a card-sized target, so override with a thicker
    brand-colored ring + the same lift hover applies — symmetric feedback
    between mouse hover and keyboard focus. */
-/* Footer "open full view" link on the /fleet overview summary cards. */
-.card__link {
-    display: inline-block;
-    margin-top: 12px;
-    font-size: 0.9em;
-    color: var(--color-brand);
-    text-decoration: none;
-}
-.card__link:hover { text-decoration: underline; }
 a.dash-column--link:focus-visible {
     outline: 3px solid var(--color-brand);
     outline-offset: 3px;
@@ -1861,77 +1852,6 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     background: var(--color-brand, #2d7a4a);
     color: #fff;
     border-color: var(--color-brand, #2d7a4a);
-}
-
-/* === Spanner scope tabs (ADR-037 federated UI) === */
-.scope-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 16px;
-}
-.scope-tab {
-    /* Match the topbar account buttons (.topbar__logout): same height,
-       12px/500 text, pill border so the scope strip reads as the same
-       control family rather than a taller, square-cornered outlier. */
-    padding: 6px 16px;
-    border: 1px solid var(--color-border, #ddd);
-    border-radius: 999px;
-    background: var(--color-bg);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1;
-    color: var(--color-text-muted);
-    text-decoration: none;
-}
-.scope-tab:hover {
-    background: var(--color-bg-secondary, #f5f5f5);
-}
-.scope-tab--active {
-    background: var(--color-brand, #2d7a4a);
-    color: #fff;
-    border-color: var(--color-brand, #2d7a4a);
-}
-.scope-tab__self {
-    opacity: 0.75;
-    font-size: 11px;
-}
-/* /fleet drill strip in the topbar (ADR-037 "D"): tabs are boosted <a>
-   ?scope= links now, and the strip sits inline in the header. The a.* link
-   states pin the muted/active colors so the UA visited/link rules (higher
-   specificity than .scope-tab alone) can't bleed through in either theme. */
-.topbar__scope {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-right: auto; /* strip left; account controls stay flush right */
-}
-.topbar__scope .scope-tabs {
-    margin-bottom: 0;
-    flex-wrap: nowrap;
-}
-a.scope-tab:link,
-a.scope-tab:visited {
-    color: var(--color-text-muted);
-}
-a.scope-tab--active:link,
-a.scope-tab--active:visited {
-    color: #fff;
-}
-.scope-caption {
-    color: var(--subtext0);
-    font-size: 0.8125rem;
-    white-space: nowrap;
-}
-.scope-notice {
-    margin: 8px 0 16px;
-    padding: 10px 14px;
-    border: 1px solid var(--color-border, #ddd);
-    border-left: 3px solid var(--color-brand, #2d7a4a);
-    border-radius: 4px;
-    background: var(--color-bg-secondary, #f5f5f5);
-    color: var(--color-text-secondary, #666);
-    font-size: 0.875rem;
 }
 
 /* === Waiver inline detail === */

@@ -45,7 +45,7 @@
 </div>
 {{end}}
 
-{{if and (not $.ScopedAway) .NoEnvoys}}
+{{if .NoEnvoys}}
 <div class="welcome-card">
     <h2>{{T $.Locale "dashboard.welcome.heading"}}</h2>
     <p>{{T $.Locale "dashboard.welcome.intro_pre"}}<em>envoys</em>{{T $.Locale "dashboard.welcome.intro_post"}} <strong>{{T $.Locale "dashboard.welcome.on_server_host"}}</strong>{{T $.Locale "dashboard.welcome.intro_tail"}}</p>
@@ -60,7 +60,7 @@
 </div>
 {{else}}
 <div id="stats"
-     hx-get="/ui/fragments/dashboard-stats{{if .Scope}}?scope={{.Scope}}{{end}}"
+     hx-get="/ui/fragments/dashboard-stats"
      hx-trigger="every {{.PollInterval}}"
      hx-swap="morph:innerHTML"
      hx-disinherit="*"
@@ -68,7 +68,6 @@
     {{template "dashboard-stats" .}}
 </div>
 
-{{if not $.ScopedAway}}
 <div id="pressure"
      hx-get="/ui/fragments/dashboard-pressure"
      hx-trigger="load, every {{.PollInterval}}"
@@ -96,7 +95,6 @@
     "Search"                ""
     "ReadOnly"              false}}
 {{template "dashboard-activity" .}}
-{{end}}
 {{end}}
 
 {{end}}

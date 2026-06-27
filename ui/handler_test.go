@@ -4,7 +4,6 @@
 package ui
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -420,9 +419,6 @@ func (m *footprintMock) DashboardStatsData(d, o time.Duration) DashboardStatsFra
 func (m *footprintMock) EnvoysData(d, o time.Duration, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir string, offset, limit int) EnvoysPageData {
 	return m.base.EnvoysData(d, o, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir, offset, limit)
 }
-func (m *footprintMock) EnvoysPageData(d, o time.Duration, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir string, offset int) EnvoysPageData {
-	return m.base.EnvoysPageData(d, o, conv, drift, reach, q, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir, offset)
-}
 func (m *footprintMock) EnvoyDetailData(id string, d, o time.Duration) (EnvoyDetailPageData, error) {
 	return m.base.EnvoyDetailData(id, d, o)
 }
@@ -457,19 +453,6 @@ func (m *footprintMock) EnvoyCertDetails(id, b string) ([]CertDetail, string, bo
 	return m.base.EnvoyCertDetails(id, b)
 }
 func (m *footprintMock) RunningCVESummary() RunningCVESummary { return m.base.RunningCVESummary() }
-func (m *footprintMock) SecuritySummary() SecuritySummary     { return m.base.SecuritySummary() }
-func (m *footprintMock) RiskSummary(b, o time.Duration) RiskSummary {
-	return m.base.RiskSummary(b, o)
-}
-func (m *footprintMock) ComplianceSummary(ctx context.Context) ComplianceSummary {
-	return m.base.ComplianceSummary(ctx)
-}
-func (m *footprintMock) SecurityPageData(ctx context.Context, b, o time.Duration) SecurityPageData {
-	return m.base.SecurityPageData(ctx, b, o)
-}
-func (m *footprintMock) ComplianceLandingData(ctx context.Context) StandardsPageData {
-	return m.base.ComplianceLandingData(ctx)
-}
 func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 	return fleetpressure.FleetSummary{
 		MaxOpenFDs:         640,
@@ -484,9 +467,6 @@ func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 }
 func (m *footprintMock) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
 	return m.FleetPressure(), nil
-}
-func (m *footprintMock) AgentHealthData() AgentHealthPageData {
-	return AgentHealthPageData{Summary: m.FleetPressure()}
 }
 func (m *footprintMock) EnvoyFreshness(id string) (time.Time, time.Duration, bool) {
 	return m.base.EnvoyFreshness(id)
@@ -1091,10 +1071,6 @@ func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration
 	}
 }
 
-func (m *mockDataSource) EnvoysPageData(d, o time.Duration, conv, drift, reach, search, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir string, offset int) EnvoysPageData {
-	return m.EnvoysData(d, o, conv, drift, reach, search, env, tag, role, os, arch, configcrate, compliance, sortCol, sortDir, offset, 100)
-}
-
 func (m *mockDataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error) {
 	var found *testEnvoy
 	for i := range m.data.envoys {
@@ -1344,36 +1320,12 @@ func (m *mockDataSource) RunningCVESummary() RunningCVESummary {
 	return RunningCVESummary{}
 }
 
-func (m *mockDataSource) SecuritySummary() SecuritySummary {
-	return SecuritySummary{}
-}
-
-func (m *mockDataSource) RiskSummary(_, _ time.Duration) RiskSummary {
-	return RiskSummary{}
-}
-
-func (m *mockDataSource) ComplianceSummary(_ context.Context) ComplianceSummary {
-	return ComplianceSummary{}
-}
-
-func (m *mockDataSource) SecurityPageData(_ context.Context, _, _ time.Duration) SecurityPageData {
-	return SecurityPageData{}
-}
-
-func (m *mockDataSource) ComplianceLandingData(_ context.Context) StandardsPageData {
-	return StandardsPageData{}
-}
-
 func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {
 	return fleetpressure.FleetSummary{}
 }
 
 func (m *mockDataSource) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
 	return fleetpressure.FleetSummary{}, nil
-}
-
-func (m *mockDataSource) AgentHealthData() AgentHealthPageData {
-	return AgentHealthPageData{}
 }
 
 func (m *mockDataSource) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {

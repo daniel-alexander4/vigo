@@ -141,9 +141,6 @@
             window.location.reload();
         }
     });
-    // The /fleet section's per-bolt drill strip is plain boosted <a> ?scope=
-    // links (ADR-037 "D") — no cookie, no JS. The old vigo_scope scope-tab
-    // handlers were removed with the per-page scope tabs.
 
     // --- submit (data-submit) ------------------------------------------------
     document.addEventListener("submit", function (e) {

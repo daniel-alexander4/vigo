@@ -1,9 +1,0 @@
-{{define "fleet-scope-strip"}}
-{{if $.ScopeTabs}}
-<nav class="topbar__scope scope-tabs" aria-label="{{T $.Locale "spanner.scope_aria"}}">
-    {{range $.ScopeTabs}}
-    <a href="?scope={{.Key | urlquery}}" class="scope-tab{{if .Active}} scope-tab--active{{end}}"{{if .Active}} aria-current="true"{{end}}>{{if .IsFleet}}{{T $.Locale "spanner.tab_fleet"}}{{else}}{{.Label}}{{if .IsLocal}} <span class="scope-tab__self">{{T $.Locale "spanner.tab_this_bolt_suffix"}}</span>{{end}}{{end}}</a>
-    {{end}}
-</nav>
-{{end}}
-{{end}}

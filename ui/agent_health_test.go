@@ -17,13 +17,6 @@ type agentHealthMock struct {
 	DataSource
 }
 
-// AgentHealthData mirrors FleetPressureDetail so the page (which now routes
-// through AgentHealthData) renders the same table the mock seeds.
-func (m *agentHealthMock) AgentHealthData() AgentHealthPageData {
-	s, e := m.FleetPressureDetail()
-	return AgentHealthPageData{Summary: s, Envoys: e}
-}
-
 func (m *agentHealthMock) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
 	return fleetpressure.FleetSummary{
 			WorstSeverity: fleetpressure.Fail,
