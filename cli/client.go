@@ -63,11 +63,12 @@ func (c *apiClient) getRaw(path string) (*http.Response, error) {
 	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("cannot reach server: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("server returned %d", resp.StatusCode)
+		return nil, statusError(resp.StatusCode, body)
 	}
 	return resp, nil
 }
@@ -80,7 +81,7 @@ func (c *apiClient) get(path string, result any) error {
 	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 	return c.decodeResponse(resp, result)
@@ -104,7 +105,7 @@ func (c *apiClient) post(path string, body, result any) error {
 	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 	return c.decodeResponse(resp, result)
@@ -128,7 +129,7 @@ func (c *apiClient) put(path string, body, result any) error {
 	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 	return c.decodeResponse(resp, result)
@@ -159,7 +160,7 @@ func (c *apiClient) postNoTimeout(path string, body, result any) error {
 	longClient.Timeout = 0
 	resp, err := longClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 	return c.decodeResponse(resp, result)
@@ -190,7 +191,7 @@ func (c *apiClient) postStream(path string, body any, onMessage func(map[string]
 	streamClient.Timeout = 0
 	resp, err := streamClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -229,7 +230,7 @@ func (c *apiClient) postRaw(path string, body io.Reader, headers map[string]stri
 	uploadClient.Timeout = 0
 	resp, err := uploadClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 	return c.decodeResponse(resp, result)
@@ -244,7 +245,7 @@ func (c *apiClient) delete(path string, result any) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 	return c.decodeResponse(resp, result)
@@ -270,6 +271,27 @@ type httpStatusError struct {
 
 func (e *httpStatusError) Error() string { return e.msg }
 
+// statusError builds the canonical non-2xx error, extracting a
+// human-readable message from the server's JSON {message}/{error}
+// envelope when present and falling back to the raw body. Shared by
+// decodeResponse and getRaw so a failed GET surfaces the server's
+// message instead of a bare "server returned <code>".
+func statusError(code int, body []byte) *httpStatusError {
+	msg := fmt.Sprintf("server returned %d: %s", code, string(body))
+	var errBody struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	if json.Unmarshal(body, &errBody) == nil {
+		if errBody.Message != "" {
+			msg = fmt.Sprintf("server returned %d: %s", code, errBody.Message)
+		} else if errBody.Error != "" {
+			msg = fmt.Sprintf("server returned %d: %s", code, errBody.Error)
+		}
+	}
+	return &httpStatusError{Code: code, Body: body, msg: msg}
+}
+
 func (c *apiClient) decodeResponse(resp *http.Response, result any) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -277,20 +299,7 @@ func (c *apiClient) decodeResponse(resp *http.Response, result any) error {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// Try to extract a human-readable message from JSON error bodies.
-		msg := fmt.Sprintf("server returned %d: %s", resp.StatusCode, string(body))
-		var errBody struct {
-			Message string `json:"message"`
-			Error   string `json:"error"`
-		}
-		if json.Unmarshal(body, &errBody) == nil {
-			if errBody.Message != "" {
-				msg = fmt.Sprintf("server returned %d: %s", resp.StatusCode, errBody.Message)
-			} else if errBody.Error != "" {
-				msg = fmt.Sprintf("server returned %d: %s", resp.StatusCode, errBody.Error)
-			}
-		}
-		return &httpStatusError{Code: resp.StatusCode, Body: body, msg: msg}
+		return statusError(resp.StatusCode, body)
 	}
 
 	if result != nil && len(body) > 0 {

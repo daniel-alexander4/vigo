@@ -113,7 +113,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("cannot reach server: %w", err)
 	}
 	defer resp.Body.Close()
 

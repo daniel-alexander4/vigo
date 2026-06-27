@@ -53,7 +53,7 @@ Examples:
 			if output != "" {
 				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
-					return fmt.Errorf("creating output file: %w", err)
+					return fmt.Errorf("creating output file %s: %w", output, err)
 				}
 				defer f.Close()
 				w = f
@@ -76,7 +76,7 @@ Examples:
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
 			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
-				return fmt.Errorf("writing output: %w", err)
+				return fmt.Errorf("writing output to %s: %w", output, err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
 		} else {
@@ -120,7 +120,7 @@ Examples:
 			if output != "" {
 				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
-					return fmt.Errorf("creating output file: %w", err)
+					return fmt.Errorf("creating output file %s: %w", output, err)
 				}
 				defer f.Close()
 				w = f
@@ -142,7 +142,7 @@ Examples:
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
 			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
-				return fmt.Errorf("writing output: %w", err)
+				return fmt.Errorf("writing output to %s: %w", output, err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
 		} else {
@@ -184,7 +184,7 @@ Examples:
 			if output != "" {
 				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
-					return fmt.Errorf("creating output file: %w", err)
+					return fmt.Errorf("creating output file %s: %w", output, err)
 				}
 				defer f.Close()
 				w = f
@@ -205,7 +205,7 @@ Examples:
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
 			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
-				return fmt.Errorf("writing output: %w", err)
+				return fmt.Errorf("writing output to %s: %w", output, err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
 		} else {
@@ -247,7 +247,7 @@ Examples:
 			if output != "" {
 				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
-					return fmt.Errorf("creating output file: %w", err)
+					return fmt.Errorf("creating output file %s: %w", output, err)
 				}
 				defer f.Close()
 				w = f
@@ -268,7 +268,7 @@ Examples:
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
 			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
-				return fmt.Errorf("writing output: %w", err)
+				return fmt.Errorf("writing output to %s: %w", output, err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
 		} else {
@@ -303,7 +303,7 @@ func makeReportCmd(use, short, apiPath string) *cobra.Command {
 				if output != "" {
 					f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 					if err != nil {
-						return fmt.Errorf("creating output file: %w", err)
+						return fmt.Errorf("creating output file %s: %w", output, err)
 					}
 					defer f.Close()
 					w = f
@@ -324,7 +324,7 @@ func makeReportCmd(use, short, apiPath string) *cobra.Command {
 			data, _ := json.MarshalIndent(report, "", "  ")
 			if output != "" {
 				if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
-					return fmt.Errorf("writing output: %w", err)
+					return fmt.Errorf("writing output to %s: %w", output, err)
 				}
 				fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
 			} else {
@@ -390,7 +390,7 @@ Examples:
 			if output != "" {
 				f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 				if err != nil {
-					return fmt.Errorf("creating output file: %w", err)
+					return fmt.Errorf("creating output file %s: %w", output, err)
 				}
 				defer f.Close()
 				w = f
@@ -411,7 +411,7 @@ Examples:
 		data, _ := json.MarshalIndent(report, "", "  ")
 		if output != "" {
 			if err := os.WriteFile(output, append(data, '\n'), 0600); err != nil {
-				return fmt.Errorf("writing output: %w", err)
+				return fmt.Errorf("writing output to %s: %w", output, err)
 			}
 			fmt.Fprintf(os.Stderr, "Report written to %s\n", output)
 		} else {
@@ -534,7 +534,7 @@ Examples:
 		}
 		f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
-			return fmt.Errorf("creating output file: %w", err)
+			return fmt.Errorf("creating output file %s: %w", output, err)
 		}
 		defer f.Close()
 		n, err := io.Copy(f, resp.Body)

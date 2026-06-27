@@ -125,6 +125,18 @@ func (h *S3CredentialsHandler) handleDelete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	id := r.PathValue("access_key_id")
+	// Probe first so revoking an unknown access-key-id returns 404 rather than
+	// an opaque 500/silent success (Lookup returns nil for an unknown id).
+	existing, err := h.store.Lookup(r.Context(), id)
+	if err != nil {
+		slog.Error("looking up curator s3 credential before revoke", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("curator S3 credential %q not found", id))
+		return
+	}
 	if err := h.store.Revoke(r.Context(), id); err != nil {
 		slog.Error("revoking curator s3 credential", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to revoke credential")

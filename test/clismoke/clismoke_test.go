@@ -334,6 +334,21 @@ func TestCLIErrorSurface(t *testing.T) {
 	} else if !strings.Contains(out, "401") && !strings.Contains(strings.ToLower(out), "auth") {
 		t.Errorf("envoys list with junk token: want a 401/auth error, got:\n%s", truncate(out, 1500))
 	}
+
+	// Creating a webuser that already exists → 409 conflict with an actionable
+	// hint, not an opaque 500. The headline fix: a UNIQUE-constraint violation
+	// used to collapse to `server returned 500: failed to create user`, leaving
+	// the operator unable to tell it was their own duplicate.
+	const dup = "clismoke-dupe-viewer"
+	if _, err := runCLI(t, "webusers", "create", "--username", dup, "--role", "viewer", "--no-password"); err != nil {
+		t.Fatalf("first webusers create (%s): %v", dup, err)
+	}
+	out, err = runCLI(t, "webusers", "create", "--username", dup, "--role", "viewer", "--no-password")
+	if err == nil {
+		t.Errorf("duplicate webusers create should fail, got success:\n%s", truncate(out, 1500))
+	} else if !strings.Contains(out, "409") && !strings.Contains(strings.ToLower(out), "already exists") {
+		t.Errorf("duplicate webusers create: want a 409/already-exists error, got:\n%s", truncate(out, 1500))
+	}
 }
 
 // TestCLIConfigPublish proves `config publish --server-root` is relocatable:

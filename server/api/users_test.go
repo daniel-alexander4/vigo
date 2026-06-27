@@ -133,6 +133,53 @@ func TestUsers_CreateUserReservedUsername(t *testing.T) {
 	}
 }
 
+// TestUsers_CreateUserDuplicate_Conflict pins the exemplar fix: creating a
+// user whose username already exists returns 409 with an actionable hint, not
+// an opaque 500 (the UNIQUE-constraint violation used to collapse to "failed
+// to create user").
+func TestUsers_CreateUserDuplicate_Conflict(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"bob","role":"viewer"}`
+	first := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	firstRec := httptest.NewRecorder()
+	mux.ServeHTTP(firstRec, first)
+	if firstRec.Code != http.StatusCreated {
+		t.Fatalf("first create: expected 201, got %d: %s", firstRec.Code, firstRec.Body.String())
+	}
+
+	second := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, second)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("duplicate create: expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "already exists") {
+		t.Errorf("409 body should explain the duplicate, got %q", rec.Body.String())
+	}
+}
+
+// TestUsers_DeleteUnknown_NotFound pins that deleting an unknown id returns
+// 404, not a generic 500 / silent success.
+func TestUsers_DeleteUnknown_NotFound(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := userRequestWithUser("DELETE", "/api/v1/users/does-not-exist", nil, "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("delete unknown id: expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestUsers_CreateUserInvalidRole(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)

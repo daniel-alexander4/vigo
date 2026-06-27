@@ -219,6 +219,68 @@ func TestTaskHandler_List(t *testing.T) {
 	}
 }
 
+// insertTaskRun seeds one task_runs row with the given status and returns its id.
+func insertTaskRun(t *testing.T, sqlDB *sql.DB, status string) string {
+	t.Helper()
+	id := uuid.New().String()
+	if _, err := sqlDB.Exec(
+		`INSERT INTO task_runs (id, command, target_glob, operator, status, total_targets) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, "cmd", "*", "admin", status, 1); err != nil {
+		t.Fatalf("insert task run: %v", err)
+	}
+	return id
+}
+
+// TestTaskHandler_CancelUnknown_NotFound pins that cancelling an unknown task
+// id returns 404 — it used to silently "succeed" with 200 (the guarded UPDATE
+// affects 0 rows for an unknown id without erroring).
+func TestTaskHandler_CancelUnknown_NotFound(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	handler := NewTaskHandler(db.New(sqlDB), &stubDispatcher{}, false)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/api/v1/task/does-not-exist/cancel", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("cancel unknown id: expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTaskHandler_CancelFinished_Conflict pins that cancelling an
+// already-finished task returns 409, not a silent 200.
+func TestTaskHandler_CancelFinished_Conflict(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	id := insertTaskRun(t, sqlDB, "complete")
+	handler := NewTaskHandler(db.New(sqlDB), &stubDispatcher{}, false)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/api/v1/task/"+id+"/cancel", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("cancel finished task: expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTaskHandler_CancelRunning_OK confirms the happy path still cancels.
+func TestTaskHandler_CancelRunning_OK(t *testing.T) {
+	sqlDB := openTaskTestDB(t)
+	id := insertTaskRun(t, sqlDB, "running")
+	handler := NewTaskHandler(db.New(sqlDB), &stubDispatcher{}, false)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("POST", "/api/v1/task/"+id+"/cancel", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cancel running task: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestTaskHandler_ListEmpty(t *testing.T) {
 	sqlDB := openTaskTestDB(t)
 	handler := NewTaskHandler(db.New(sqlDB), &stubDispatcher{}, false)

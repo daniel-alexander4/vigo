@@ -189,6 +189,11 @@ const LocalAdminUserID = "localhost"
 // [IsReservedPrincipal]).
 var ErrReservedUsername = errors.New("username is reserved")
 
+// ErrUserExists is returned by [UserStore.Create] when the username is
+// already taken (a UNIQUE-constraint violation on users.username).
+// Handlers map it to 409 Conflict rather than a generic 500.
+var ErrUserExists = errors.New("username already exists")
+
 // IsReservedPrincipal reports whether s is an identifier reserved for a
 // synthetic principal — today only the local-admin bootstrap user
 // ([LocalAdminUserID]). No users-table row may take it as id or username, or

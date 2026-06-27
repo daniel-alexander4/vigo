@@ -326,6 +326,23 @@ func (h *TaskHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	// Probe first so an unknown id is a clean 404 and an already-finished run
+	// is a 409 — CancelTaskRun is a guarded UPDATE (status IN pending/running)
+	// that silently affects 0 rows otherwise, which used to read as success.
+	run, err := h.queries.GetTaskRun(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "task "+id+" not found")
+		return
+	}
+	if err != nil {
+		slog.Error("looking up task run before cancel", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if run.Status != "pending" && run.Status != "running" {
+		writeError(w, http.StatusConflict, fmt.Sprintf("task %s is already %s — only pending or running tasks can be cancelled", id, run.Status))
+		return
+	}
 	if err := h.queries.CancelTaskRun(ctx, id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to cancel task: "+err.Error())
 		return

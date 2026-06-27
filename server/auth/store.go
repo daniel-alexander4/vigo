@@ -11,7 +11,16 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
+	"github.com/mattn/go-sqlite3"
 )
+
+// isUniqueViolation reports whether err is a SQLite UNIQUE-constraint
+// violation (mattn/go-sqlite3). It lets Create turn a duplicate-username
+// insert into a 409-mappable ErrUserExists instead of an opaque 500.
+func isUniqueViolation(err error) bool {
+	var serr sqlite3.Error
+	return errors.As(err, &serr) && serr.ExtendedCode == sqlite3.ErrConstraintUnique
+}
 
 // UserStore provides user CRUD operations backed by sqlc queries.
 // In spanner mode the optional signer stamps origin_bolt + signature
@@ -122,6 +131,9 @@ func (s *UserStore) Create(ctx context.Context, params db.InsertUserParams) (*Us
 	// simple. The pattern below does exactly that.
 	u, err := s.queries.InsertUser(ctx, params)
 	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrUserExists
+		}
 		return nil, err
 	}
 	if s.signer != nil {

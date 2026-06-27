@@ -212,6 +212,10 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("username %q is reserved", req.Username))
 			return
 		}
+		if errors.Is(err, auth.ErrUserExists) {
+			writeError(w, http.StatusConflict, fmt.Sprintf("user %q already exists — use `vigocli webusers set-password --username %s` to change its password", req.Username, req.Username))
+			return
+		}
 		slog.Error("creating user", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create user")
 		return
@@ -358,8 +362,18 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up username before deleting for the audit log.
-	deleted, _ := h.store.GetByID(r.Context(), id)
+	// Look up the user first — for the audit username and to return a clean
+	// 404 (rather than an opaque 500/false-success) when the id is unknown.
+	deleted, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		slog.Error("fetching user before delete", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if deleted == nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("user %q not found", id))
+		return
+	}
 
 	if err := h.store.Delete(r.Context(), id); err != nil {
 		slog.Error("deleting user", "error", err)
