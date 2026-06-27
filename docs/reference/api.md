@@ -501,6 +501,24 @@ Admits a joining bolt. Verifies the invite bundle's signature + freshness, rejec
 }
 ```
 
+### POST /api/v1/spanner/bolt/peer-admit
+
+**Permission:** Self-signature authenticated (not Bearer-gated — the server-to-server call a joining bolt makes on boot under config-driven peering).
+
+Admits a joining bolt via config-driven hands-off peering (no invite token). The founder honors this only when three checks pass: the request's `spanner_id` matches this federation, the joiner's Ed25519 self-signature verifies against the pubkey it presents, and the HTTP source address resolves to one of this bolt's configured `spanner.peers` (the founder's peers list is its who-may-join allowlist). Admission is founder-routed — only the founder mints rows; a non-founder bolt returns `403` with the roster so a misdirected joiner can discover the real founder. The minted row is token-less (`admitted_by` is the founder, no consumed token). Idempotent: re-admitting an already-rostered bolt returns the current roster without a second insert. The joiner reaches this endpoint automatically on boot when `spanner.peers` is set; the shared fleet CA is established out-of-band (`vigocli spanner ca export|import`), never over this channel.
+
+**Request body:**
+
+```json
+{
+  "joiner_pubkey": "...",
+  "hostname": "joiner.example.com",
+  "pattern_claims": ["*.us-east.*"],
+  "spanner_id": "alexander4-prod",
+  "signature": "..."
+}
+```
+
 ### POST /api/v1/spanner/bolt/join
 
 **Permission:** Admin role

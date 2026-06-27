@@ -50,7 +50,7 @@ func newCeremonyServer(t *testing.T, spannerID, hostname string, patterns []stri
 	queries := db.New(sqlDB)
 	id := testBoltIdentity(t)
 
-	h := NewSpannerAdmissionHandler(sqlDB, queries, id, spannerID, hostname, patterns, nil, httpClient)
+	h := NewSpannerAdmissionHandler(sqlDB, queries, id, spannerID, hostname, patterns, nil, nil, httpClient)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)

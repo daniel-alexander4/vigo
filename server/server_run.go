@@ -57,6 +57,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startHTTPServer()
 	s.startS3Server()
 	s.startSpannerGossip(ctx)
+	s.startSpannerAutoAdmit(ctx)
 
 	slog.Info("server ready",
 		"mode", s.mode,
@@ -547,4 +548,25 @@ func (s *Server) startSpannerGossip(ctx context.Context) {
 		return
 	}
 	daemon.SafeGo("spanner-gossip", func() { s.spannerGossip.Run(ctx) })
+}
+
+// startSpannerAutoAdmit runs the config-driven hands-off peering loop
+// (ADR-026): when spanner.peers is set, a joining bolt that has no
+// founder row yet POSTs its self-signed identity to each peer until the
+// founder admits it and returns a founder-signed roster, which is
+// CRDT-merged to seed the local roster; the gossiper maintains
+// convergence from there. No-op in standalone mode (gossiper nil), when
+// no peers are configured, or once a founder row is already local (the
+// founder itself, or a joiner that already bootstrapped). Runs off the
+// check-in hot path with exponential backoff.
+func (s *Server) startSpannerAutoAdmit(ctx context.Context) {
+	if s.spannerGossip == nil || len(s.cfg.Spanner.Peers) == 0 {
+		return
+	}
+	peers := s.cfg.Spanner.Peers
+	hostname := s.cfg.Server.Hostname
+	patterns := s.cfg.Spanner.Patterns
+	daemon.SafeGo("spanner-auto-admit", func() {
+		s.spannerGossip.AutoAdmit(ctx, peers, hostname, patterns)
+	})
 }

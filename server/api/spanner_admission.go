@@ -52,6 +52,7 @@ type SpannerAdmissionHandler struct {
 	spannerID   string
 	hostname    string   // this vigosrv's own envoy hostname
 	patterns    []string // this bolt's configured pattern claims
+	peers       []string // configured spanner.peers — the founder's who-may-join allowlist (source-addr gate)
 	auditWriter auditRecorder
 	httpClient  *http.Client // for the cross-vigosrv /admit call from /join
 	// fleetIndex is the local observability source for the Slice
@@ -70,7 +71,7 @@ func (h *SpannerAdmissionHandler) SetFleetIndex(fi *fleet.FleetIndex) {
 // may be nil (standalone mode or a non-local secrets backend); in
 // that case every mutating endpoint returns 503 — the ceremony
 // needs a bolt identity to sign with.
-func NewSpannerAdmissionHandler(sqlDB *sql.DB, queries *db.Queries, boltID *bolt.Identity, spannerID, hostname string, patterns []string, auditWriter auditRecorder, httpClient *http.Client) *SpannerAdmissionHandler {
+func NewSpannerAdmissionHandler(sqlDB *sql.DB, queries *db.Queries, boltID *bolt.Identity, spannerID, hostname string, patterns, peers []string, auditWriter auditRecorder, httpClient *http.Client) *SpannerAdmissionHandler {
 	if httpClient == nil {
 		// The /join → /admit call crosses to a separate vigosrv
 		// deployment whose CA this server does not hold, so TLS chain
@@ -92,6 +93,7 @@ func NewSpannerAdmissionHandler(sqlDB *sql.DB, queries *db.Queries, boltID *bolt
 		spannerID:   spannerID,
 		hostname:    hostname,
 		patterns:    patterns,
+		peers:       peers,
 		auditWriter: auditWriter,
 		httpClient:  httpClient,
 	}
@@ -113,6 +115,11 @@ func (h *SpannerAdmissionHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/spanner/init", admin(http.HandlerFunc(h.handleInit)))
 	mux.Handle("POST /api/v1/spanner/bolt/invite", admin(http.HandlerFunc(h.handleInvite)))
 	mux.Handle("POST /api/v1/spanner/bolt/admit", http.HandlerFunc(h.handleAdmit))
+	// Config-driven hands-off peering (ADR-026) — a joining bolt POSTs its
+	// self-signed identity here on boot; only the founder admits. Bare like
+	// /admit: the joiner has no operator session, authenticated by
+	// spanner_id + self-signature + source-addr allowlist (see handlePeerAdmit).
+	mux.Handle("POST /api/v1/spanner/bolt/peer-admit", http.HandlerFunc(h.handlePeerAdmit))
 	mux.Handle("POST /api/v1/spanner/bolt/join", admin(http.HandlerFunc(h.handleJoin)))
 	mux.Handle("GET /api/v1/spanner/roster", read(http.HandlerFunc(h.handleRoster)))
 	// Inter-bolt gossip pulls — signature-authenticated, registered bare

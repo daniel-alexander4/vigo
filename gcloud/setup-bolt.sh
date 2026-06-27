@@ -13,10 +13,15 @@
 # why one license is shared across all load-test bolts. NOT a production pattern —
 # real deployments bind each server to its own fingerprint.
 #
-# The spanner ceremony (init / invite / join) is driven AFTER this by the operator
-# — see provision-spanner.sh next-steps.
+# Founder: run 'vigocli spanner init' once after this. Joiners: set SPANNER_PEERS to
+# the founder's address and stage the shared CA (/tmp/fleet-ca{,_key}) — the joiner
+# auto-admits on boot, no manual invite/join ceremony. (The legacy ceremony still
+# works if SPANNER_PEERS is unset — see provision-spanner.sh next-steps.)
 #
-#   sudo SPANNER_ID=alexander4-test BOLT_PATTERNS='*.a.test' bash /tmp/setup-bolt.sh
+#   # founder (lists the joiners as its who-may-join allowlist):
+#   sudo SPANNER_ID=alexander4-test BOLT_PATTERNS='*.a.test' SPANNER_PEERS='10.0.0.3' bash /tmp/setup-bolt.sh
+#   # joiner (points at the founder + adopts its CA):
+#   sudo SPANNER_ID=alexander4-test BOLT_PATTERNS='*.b.test' SPANNER_PEERS='10.0.0.2' bash /tmp/setup-bolt.sh
 set -euo pipefail
 
 AR_HOST=us-west1-docker.pkg.dev
@@ -76,6 +81,25 @@ yq -i '.spanner.transport.multicast_group = "224.0.0.45"' "$DATA/server.yaml"
 yq -i '.spanner.transport.multicast_port = 1534'    "$DATA/server.yaml"
 yq -i '.spanner.fallback_admin = "local"'           "$DATA/server.yaml"
 yq -i '.license.mode = "local"'                     "$DATA/server.yaml"   # each bolt counts its own; aggregate needs all bolts gossiping first
+# Config-driven hands-off peering (ADR-026): on the founder, SPANNER_PEERS is the
+# joiners' who-may-join allowlist; on a joiner, point it at the founder. Comma-
+# separated. Joiners auto-admit on boot — no manual invite/join ceremony.
+if [ -n "${SPANNER_PEERS:-}" ]; then
+  peers_json="[\"$(echo "$SPANNER_PEERS" | sed 's/[[:space:]]//g; s/,/","/g')\"]"
+  yq -i ".spanner.peers = ${peers_json}" "$DATA/server.yaml"
+  echo "  spanner.peers = ${peers_json}"
+fi
+
+# Shared fleet CA (off-wire): if the founder's CA material was staged here, drop it
+# into the bolt's tls/ BEFORE boot. vigosrv's EnsureTLSCerts re-signs this bolt a
+# correct server cert from the shared CA on boot (the staged SANs won't match), so
+# peer mTLS and routed-envoy check-in both verify against one CA.
+if [ -f /tmp/fleet-ca ] && [ -f /tmp/fleet-ca_key ]; then
+  echo "== Adopt shared fleet CA (staged from the founder) =="
+  install -m 644 /tmp/fleet-ca     "${DATA}/tls/ca"
+  install -m 600 /tmp/fleet-ca_key "${DATA}/tls/ca_key"
+  rm -f "${DATA}/tls/cert" "${DATA}/tls/key"   # force EnsureTLSCerts to re-sign from the shared CA
+fi
 
 echo "== Secrets vault init+unlock (pty-fed) =="
 CREDS="${DATA}/.bolt-creds"
@@ -107,4 +131,8 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 docker logs vigo 2>&1 | grep -iE "spanner|bolt|max_connections|listening|started|refus|fail" | tail -8 || true
-echo "== Bolt ready (run 'vigocli spanner init' on bolt-1, then invite/join the rest) =="
+if [ -n "${SPANNER_PEERS:-}" ]; then
+  echo "== Bolt ready (config-driven peering: founder runs 'vigocli spanner init'; joiners auto-admit on boot) =="
+else
+  echo "== Bolt ready (run 'vigocli spanner init' on bolt-1, then invite/join the rest) =="
+fi

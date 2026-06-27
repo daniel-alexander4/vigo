@@ -27,6 +27,7 @@ spanner:
   mode: spanner
   spanner_id: alexander4-prod        # the federation id — identical on every bolt
   patterns: ["*.east.example.com"]   # the hostname partition THIS bolt owns
+  peers: ["10.0.0.2", "10.0.0.3"]    # config-driven hands-off peering (optional) — see below
   snapshot:
     tier1_interval: 30s
     tier2_interval: 5m
@@ -38,7 +39,7 @@ spanner:
 
 `spanner_id` must match across every bolt. Each bolt's `patterns` must not overlap with any other bolt's — the loader refuses an overlapping config at publish time and at boot.
 
-Peer discovery is gossip-driven. There is no bootstrap-peer seed list in `server.yaml`: a joining bolt learns the roster through the admission ceremony below, and the CRDT-replicated roster is the peer list from then on.
+There are two ways to admit bolts into the spanner: **config-driven peering** (`spanner.peers`, hands-off — recommended) and the **manual invite/join ceremony** (a one-shot token). Both are founder-routed: the founder (whoever ran `vigocli spanner init`) is the sole admission authority, and once a bolt is admitted the CRDT-replicated roster is the peer list from then on. Pick one; you don't need both.
 
 ## Found the spanner
 
@@ -50,9 +51,38 @@ vigocli spanner init
 
 This writes the founding bolt's self-admission row, signed with the bolt's Ed25519 identity (`/srv/vigo/bolt/identity.wrapped`, generated on first boot in spanner mode).
 
-## Admit the other bolts
+## Establish the shared fleet CA
 
-For each additional server, run the admission ceremony. On any **existing member**, mint a single-use invite bundle:
+Whichever admission path you use, every bolt must share **one fleet CA** — peer mTLS and routed-envoy check-in both verify against it. The CA private key is established **out of band; it never crosses the network.** On the founder:
+
+```bash
+vigocli spanner ca export --out fleet-ca.pem   # CA cert + private key PEM bundle, 0600
+```
+
+The bundle holds the fleet's crown-jewel private key — keep it `0600` and move it over a secure channel (scp, not email). On each joining server:
+
+```bash
+vigocli spanner ca import --from fleet-ca.pem  # installs the CA + re-signs this bolt's server cert from it
+```
+
+Restart vigosrv on the joiner afterward to load the adopted CA.
+
+Keeping the CA off the wire is what makes the config-driven admission gate (below) safe: a rogue bolt that talks its way past the IP allowlist is bounded — it can pollute observability and play license-count games, but it cannot read fleet data, receive routed envoys, or mint trusted certs, because all of those sit behind the fleet-CA mTLS it doesn't hold.
+
+## Admit the other bolts — config-driven peering (recommended)
+
+Set `spanner.peers` and restart; no tokens, no ceremony. The list is **asymmetric**:
+
+- On the **founder**, `peers` is the *who-may-join allowlist* — list each joining bolt's address. A joiner's boot-time admission request is honored only if its source address resolves to an entry here.
+- On each **joiner**, `peers` points at the founder (you can also list the other bolts for gossip). After setting `mode: spanner`, the shared `spanner_id`, its own non-overlapping `patterns`, and importing the fleet CA, restart.
+
+On boot, a joiner with no roster yet POSTs its self-signed identity to each peer until the founder admits it and returns a founder-signed roster; the joiner CRDT-merges it and starts gossiping. This runs off the check-in hot path with retry/backoff, so a briefly-unreachable founder is tolerated. A bolt that already has a roster (the founder, or a joiner that already bootstrapped) does nothing.
+
+`spanner.peers` entries are `host` or `host:port` (HTTPS REST port, default `8443`).
+
+## Admit the other bolts — manual invite/join ceremony
+
+If you'd rather hand out one-shot tokens instead of listing addresses, leave `spanner.peers` empty and run the ceremony. On any **existing member**, mint a single-use invite bundle:
 
 ```bash
 vigocli spanner bolt invite --ttl 24h

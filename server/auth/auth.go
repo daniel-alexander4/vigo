@@ -135,6 +135,12 @@ var publicPaths = map[string]bool{
 	// the handler. Without this, the default `basic` auth 401s the cross-bolt
 	// /admit call and `spanner bolt join` can never complete.
 	"/api/v1/spanner/bolt/admit": true,
+	// Spanner config-driven hands-off peering (ADR-026) — a joining bolt POSTs
+	// its self-signed identity here on boot for the founder to auto-admit it.
+	// Bare like /admit above: the joiner carries no operator session;
+	// authenticated by the federation's spanner_id + the joiner's Ed25519
+	// self-signature + the founder's source-address allowlist (handlePeerAdmit).
+	"/api/v1/spanner/bolt/peer-admit": true,
 	// Spanner Tier-2 gossip pulls (ADR-026) — a PEER bolt's gossiper GETs
 	// these on the Tier-2 cadence with no operator session and verifies the
 	// founder/bolt SIGNATURE on the payload (server/spanner MergeSnapshot),

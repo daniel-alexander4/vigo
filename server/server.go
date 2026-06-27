@@ -1154,7 +1154,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// Spanner Slice 2A.2 — membership ceremony (ADR-026). Founds a
 	// spanner, mints join invites, admits joining bolts. Needs the
 	// local bolt identity to sign admission rows + invite bundles.
-	spannerAdmissionHandler := api.NewSpannerAdmissionHandler(s.db, s.queries, s.boltID, s.cfg.Spanner.SpannerID, s.cfg.Server.Hostname, s.cfg.Spanner.Patterns, s.auditWriter, nil)
+	spannerAdmissionHandler := api.NewSpannerAdmissionHandler(s.db, s.queries, s.boltID, s.cfg.Spanner.SpannerID, s.cfg.Server.Hostname, s.cfg.Spanner.Patterns, s.cfg.Spanner.Peers, s.auditWriter, nil)
 	// Slice 2-ii-a: the in-memory fleet index backs the signed
 	// /fleet-snapshot endpoint a peer's gossiper pulls.
 	spannerAdmissionHandler.SetFleetIndex(s.fleetIndex)

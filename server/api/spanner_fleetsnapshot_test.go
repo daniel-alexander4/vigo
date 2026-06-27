@@ -35,7 +35,7 @@ func newFleetSnapshotHandler(t *testing.T, envoys []fleet.EnvoyState) (*SpannerA
 		fi.AddEnvoy(es, nil)
 	}
 
-	h := NewSpannerAdmissionHandler(sqlDB, queries, id, "test-spanner", "bolt.example.com", []string{"*"}, nil, nil)
+	h := NewSpannerAdmissionHandler(sqlDB, queries, id, "test-spanner", "bolt.example.com", []string{"*"}, nil, nil, nil)
 	h.SetFleetIndex(fi)
 	return h, id.PublicKey
 }
@@ -84,7 +84,7 @@ func TestFleetSnapshotEndpointSignsAndServes(t *testing.T) {
 func TestFleetSnapshotEndpoint503WithoutFleetIndex(t *testing.T) {
 	sqlDB := testutil.OpenMigratedTestDB(t)
 	h := NewSpannerAdmissionHandler(sqlDB, db.New(sqlDB), testBoltIdentity(t),
-		"test-spanner", "bolt.example.com", []string{"*"}, nil, nil)
+		"test-spanner", "bolt.example.com", []string{"*"}, nil, nil, nil)
 	// No SetFleetIndex call → 503.
 
 	rec := httptest.NewRecorder()
@@ -97,7 +97,7 @@ func TestFleetSnapshotEndpoint503WithoutFleetIndex(t *testing.T) {
 func TestFleetSnapshotEndpoint503WithoutBoltIdentity(t *testing.T) {
 	sqlDB := testutil.OpenMigratedTestDB(t)
 	h := NewSpannerAdmissionHandler(sqlDB, db.New(sqlDB), nil,
-		"test-spanner", "bolt.example.com", []string{"*"}, nil, nil)
+		"test-spanner", "bolt.example.com", []string{"*"}, nil, nil, nil)
 	h.SetFleetIndex(fleet.NewFleetIndex())
 
 	rec := httptest.NewRecorder()

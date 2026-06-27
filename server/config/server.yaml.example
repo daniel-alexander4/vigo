@@ -199,14 +199,15 @@ watcher:
 # ── Spanner ────────────────────────────────────────────────────────────
 # Peer-equal control-plane federation (ADR-026). Omit for single-server
 # deployments. Every bolt's config has the same shape — one operator
-# founds the spanner with `vigocli spanner init`, the rest join with
-# `vigocli spanner join`. Peer discovery is gossip-driven; there is no
-# bootstrap-peer seed list.
+# founds the spanner with `vigocli spanner init`; the rest are admitted either
+# by config-driven hands-off peering (set `peers` — recommended) or the manual
+# `vigocli spanner bolt invite`/`join` token ceremony (leave `peers` empty).
 
 # spanner:
 #   mode: spanner                                # standalone | spanner
 #   spanner_id: "alexander4-prod"                # federation id (required when mode = spanner)
 #   patterns: ["*.dc1.*"]                        # hostname globs this bolt owns (no overlap with peers)
+#   peers: ["10.0.0.2", "10.0.0.3"]              # optional: config-driven hands-off peering. On the founder, the joiners' who-may-join allowlist; on a joiner, point at the founder. Shared fleet CA is still established out-of-band (vigocli spanner ca export|import).
 #   snapshot:
 #     tier1_interval: "30s"                      # multicast counter-gossip cadence
 #     tier2_interval: "5m"                       # roster-snapshot cadence

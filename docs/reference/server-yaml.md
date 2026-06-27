@@ -356,6 +356,7 @@ spanner:
   mode: spanner
   spanner_id: "alexander4-prod"
   patterns: ["*.us-west.*"]
+  peers: ["10.0.0.2", "10.0.0.3"]   # optional — config-driven hands-off peering
   snapshot:
     tier1_interval: 30s
     tier2_interval: 5m
@@ -370,13 +371,14 @@ spanner:
 | `mode` | `standalone` | `standalone` (single vigosrv) or `spanner` (a peer-equal bolt). The pre-Phase-3 `founder`/`joiner` values are retired — the loader hard-errors on them. |
 | `spanner_id` | (required when mode = spanner) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every bolt in the spanner; embedded in every signed admission row. |
 | `patterns` | (required when mode = spanner) | Hostname glob patterns this bolt owns. First-match-wins across the spanner; loader refuses overlap with another bolt's patterns at publish time + boot time. |
+| `peers` | (empty) | Addresses (`host` or `host:port`, HTTPS REST port, default `8443`) of other bolts, enabling **config-driven hands-off peering** (ADR-026). When set, a joining bolt auto-admits with the founder on boot — no manual `spanner bolt invite`/`join` token ceremony. Asymmetric: on the founder, `peers` is the who-may-join allowlist (a joiner's source address must resolve to an entry); on a joiner, point it at the founder. The shared fleet CA is still established out-of-band (`vigocli spanner ca export`/`import`), never over this channel. Empty = gossip/ceremony discovery only. |
 | `transport.multicast_group` | `224.0.0.45` | IPv4 multicast group for Tier-1 counter gossip. |
 | `transport.multicast_port` | `1534` | UDP port for Tier-1 counter gossip. |
 | `snapshot.tier1_interval` | `30s` | Tier-1 counter-gossip cadence. |
 | `snapshot.tier2_interval` | `5m` | Tier-2 roster-snapshot cadence. |
 | `fallback_admin` | `local` | Fleet-wide admin-read source: `local` aggregates `ListEnvoys` / `GetConvergenceSummary` from the gossip-backed observability cache (every bolt's signed `/fleet-snapshot`); `fanout` queries every roster bolt's admin gRPC live and merges. Both produce identically-shaped responses. `ListRuns` is unaffected by this switch — runs are never gossiped, so a per-envoy query always routes to the owning bolt and a global runs list always fans out to every bolt. |
 
-Peer discovery is gossip-driven — there is no `bootstrap_peers` seed list. A joining bolt learns the roster through the `vigocli spanner join` admission ceremony, and the CRDT-replicated roster is the peer list from then on. Bolts are identified by their Ed25519 pubkey (`server/bolt/identity.wrapped`), not a YAML-configured ID.
+There are two admission paths (both founder-routed). With `peers` set, a joining bolt auto-admits with the founder on boot (config-driven peering, recommended). Without it, peer discovery is gossip-driven — there is no `bootstrap_peers` seed list — and a joining bolt learns the roster through the `vigocli spanner bolt join` admission ceremony. Either way, the CRDT-replicated roster is the peer list from then on. Bolts are identified by their Ed25519 pubkey (`server/bolt/identity.wrapped`), not a YAML-configured ID.
 
 ### Bolt identity
 
