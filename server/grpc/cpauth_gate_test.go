@@ -24,8 +24,10 @@ import (
 )
 
 // adminMethod is a representative privileged VigoAdmin RPC the network
-// interceptor must gate.
-const adminMethod = "/vigo.VigoAdmin/EnrollEnvoy"
+// interceptor must gate. Use the generated FullMethodName constant — the real
+// "/vigo.v1.VigoAdmin/EnrollEnvoy" — so this test exercises the actual wire
+// method name, not a stale literal the runtime never produces.
+const adminMethod = pb.VigoAdmin_EnrollEnvoy_FullMethodName
 
 // cpauthCtx builds an incoming context carrying a control-plane signed call
 // from the given identity (network path: no UDS peer).

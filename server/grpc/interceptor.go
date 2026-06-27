@@ -36,6 +36,15 @@ import (
 // defaultSignatureWindow is used when no custom window is provided.
 const defaultSignatureWindow = 5 * time.Minute
 
+// vigoAdminMethodPrefix is the gRPC method-name prefix for every VigoAdmin
+// RPC, derived from the generated service descriptor so it can never drift
+// from the wire format. gRPC FullMethod is "/<package>.<Service>/<Method>";
+// the proto package is vigo.v1, so this is "/vigo.v1.VigoAdmin/". Deriving it
+// (rather than hardcoding) is deliberate: a prior hardcoded "/vigo.VigoAdmin/"
+// silently stopped matching after the package gained its .v1 version segment,
+// which disabled the roster-bolt control-plane gate entirely.
+var vigoAdminMethodPrefix = "/" + pb.VigoAdmin_ServiceDesc.ServiceName + "/"
+
 // SignatureVerifyInterceptor returns a unary server interceptor that verifies
 // ED25519 signatures on agent requests (SEC-03). The Register RPC is skipped
 // because the agent does not have a UUID yet during enrollment.
@@ -68,7 +77,7 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 		// is exempt — a network caller cannot present a Unix-socket peer addr,
 		// so this transport check is the unforgeable boundary, not an
 		// exemption a forged request can satisfy.
-		if strings.HasPrefix(info.FullMethod, "/vigo.VigoAdmin/") && !isLocalSocket(ctx) {
+		if strings.HasPrefix(info.FullMethod, vigoAdminMethodPrefix) && !isLocalSocket(ctx) {
 			if err := verifyRosterBoltCall(ctx, queries, sigWindow); err != nil {
 				slog.Warn("rejected control-plane RPC", "method", info.FullMethod, "error", err)
 				return nil, err

@@ -645,29 +645,13 @@ func TestInterceptorReportTraitsExpiredTimestamp(t *testing.T) {
 	}
 }
 
-// TestInterceptorAdminRPCPassesThrough verifies that unrecognized RPC methods
-// (like admin RPCs) pass through the interceptor without signature verification.
-func TestInterceptorAdminRPCPassesThrough(t *testing.T) {
-	queries := db.New(testDB)
-	fi := fleet.NewFleetIndex()
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
-
-	called := false
-	handler := func(ctx context.Context, req any) (any, error) {
-		called = true
-		return req, nil
-	}
-
-	// Use a fake admin method name.
-	info := makeInfo("/vigo.v1.VigoAdmin/ListEnvoys")
-	_, err := interceptor(context.Background(), "admin-request", info, handler)
-	if err != nil {
-		t.Fatalf("admin RPC should pass through, got: %v", err)
-	}
-	if !called {
-		t.Fatal("handler was not called for admin RPC")
-	}
-}
+// NOTE: the former TestInterceptorAdminRPCPassesThrough was removed — it
+// asserted that a networked "/vigo.v1.VigoAdmin/ListEnvoys" call with no
+// control-plane signature *passes through* the interceptor, which is exactly
+// the vulnerability the stale "/vigo.VigoAdmin/" prefix caused. Networked
+// VigoAdmin RPCs must now be gated by verifyRosterBoltCall; that behavior is
+// covered by cpauth_gate_test.go (unsigned→Unauthenticated, valid roster
+// bolt→pass, non-roster→PermissionDenied, UDS→exempt).
 
 // TestInterceptorFutureTimestampRejected verifies that a timestamp in the
 // future beyond the signature window is rejected.
