@@ -24,7 +24,7 @@ Hardlink-based incremental directory snapshots. Creates dated snapshot directori
 `backup` performs an action with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command (e.g. to prune the snapshots it created).
 
 - `on_revert:` — a shell command, run locally on the agent, that undoes the resource. Inert until triggered.
-- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent). `revert: true` with no `on_revert:` is rejected at `config publish`. Set `on_revert: none` to declare the action has **no inverse** — it is then omitted from configcrate retraction (`state: absent`) rather than reverted, and `revert: true` + `on_revert: none` is rejected as a contradiction.
 - A normal (non-revert) apply clears a spent revert, re-arming it.
 
 Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.

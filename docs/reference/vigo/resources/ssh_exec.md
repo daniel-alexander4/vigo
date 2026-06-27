@@ -35,7 +35,7 @@ Without guards, the command runs on every convergence.
 `ssh_exec` runs an arbitrary command with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command. Unlike local [`exec`](exec.md), the inverse runs **on the remote device** — the agent re-dispatches over the same SSH connection (with the idempotency guards stripped so it runs unconditionally), not via local `sh -c`.
 
 - `on_revert:` — a command, run on the device, that undoes the resource. Inert until triggered.
-- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent — it never re-runs). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent — it never re-runs). `revert: true` with no `on_revert:` is rejected at `config publish`. Set `on_revert: none` to declare the action has **no inverse** — it is then omitted from configcrate retraction (`state: absent`) rather than reverted, and `revert: true` + `on_revert: none` is rejected as a contradiction.
 - A normal (non-revert) apply clears a spent revert, re-arming it.
 
 Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.

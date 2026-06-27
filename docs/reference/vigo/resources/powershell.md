@@ -29,7 +29,7 @@ If none of the guards are specified, the command runs on every convergence. Alwa
 `powershell` runs an arbitrary script with no inferable inverse, so reversal is **operator-declared**: pair the resource with an `on_revert:` command. The inverse runs via `powershell.exe` (same flags as `command`, with the idempotency guards stripped so it runs unconditionally), not via `sh -c`.
 
 - `on_revert:` — a PowerShell command that undoes the resource. Inert until triggered.
-- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent — it never re-runs). `revert: true` with no `on_revert:` is rejected at `config publish`.
+- `revert: true` runs `on_revert:` once, then reports settled on subsequent runs (idempotent — it never re-runs). `revert: true` with no `on_revert:` is rejected at `config publish`. Set `on_revert: none` to declare the action has **no inverse** — it is then omitted from configcrate retraction (`state: absent`) rather than reverted, and `revert: true` + `on_revert: none` is rejected as a contradiction.
 - A normal (non-revert) apply clears a spent revert, re-arming it.
 
 Removing the resource from config does **not** undo it — that only stops enforcement. Use `revert: true` with a declared `on_revert:` to actively undo.
