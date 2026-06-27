@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:73d434a45765dfdddb44ac057b5d3524144b5287880872b99f1935e41cc98748 -->
+<!-- vigo-i18n source_sha:16dc31de6dcdfd04eb72aba2ef40a783f2f08b12d1fd7b807953fe77a9e5bfab -->
 
 # Mettre en place un Spanner (fédération entre pairs égaux)
 
@@ -28,6 +28,7 @@ spanner:
   mode: spanner
   spanner_id: alexander4-prod        # the federation id — identical on every bolt
   patterns: ["*.east.example.com"]   # the hostname partition THIS bolt owns
+  peers: ["10.0.0.2", "10.0.0.3"]    # config-driven hands-off peering (optional) — see below
   snapshot:
     tier1_interval: 30s
     tier2_interval: 5m
@@ -39,7 +40,7 @@ spanner:
 
 `spanner_id` doit correspondre sur tous les bolts. Les `patterns` de chaque bolt ne doivent chevaucher ceux d'aucun autre bolt — le chargeur refuse une configuration avec chevauchement au moment de la publication et au démarrage.
 
-La découverte des pairs est pilotée par gossip. Il n'y a pas de liste de pairs d'amorçage dans `server.yaml` : un bolt qui rejoint apprend le registre via la cérémonie d'admission ci-dessous, et le registre répliqué en CRDT est dès lors la liste des pairs.
+Il existe deux façons d'admettre des bolts dans le spanner : le **peering piloté par la configuration** (`spanner.peers`, sans intervention — recommandé) et la **cérémonie manuelle d'invitation/jonction** (un jeton à usage unique). Les deux sont routées par le fondateur : le fondateur (celui qui a exécuté `vigocli spanner init`) est la seule autorité d'admission, et une fois un bolt admis, le registre répliqué en CRDT est dès lors la liste des pairs. Choisissez l'une ; vous n'avez pas besoin des deux.
 
 ## Fonder le spanner
 
@@ -51,9 +52,38 @@ vigocli spanner init
 
 Cela écrit la ligne d'auto-admission du bolt fondateur, signée avec l'identité Ed25519 du bolt (`/srv/vigo/bolt/identity.wrapped`, générée au premier démarrage en mode spanner).
 
-## Admettre les autres bolts
+## Établir la CA de flotte partagée
 
-Pour chaque serveur supplémentaire, exécutez la cérémonie d'admission. Sur n'importe quel **membre existant**, générez un lot d'invitation à usage unique :
+Quel que soit le chemin d'admission que vous utilisez, chaque bolt doit partager **une seule CA de flotte** — le mTLS entre pairs et le check-in des Envoys routés se vérifient tous deux contre elle. La clé privée de la CA est établie **hors bande ; elle ne traverse jamais le réseau.** Sur le fondateur :
+
+```bash
+vigocli spanner ca export --out fleet-ca.pem   # CA cert + private key PEM bundle, 0600
+```
+
+Le lot contient la clé privée la plus précieuse de la flotte — gardez-le en `0600` et déplacez-le sur un canal sécurisé (scp, pas par e-mail). Sur chaque serveur qui rejoint :
+
+```bash
+vigocli spanner ca import --from fleet-ca.pem  # installs the CA + re-signs this bolt's server cert from it
+```
+
+Redémarrez vigosrv sur le serveur qui rejoint ensuite pour charger la CA adoptée.
+
+Garder la CA hors du réseau est ce qui rend sûre la barrière d'admission pilotée par la configuration (ci-dessous) : un bolt malveillant qui parvient à franchir la liste d'autorisation d'IP est borné — il peut polluer l'observabilité et jouer avec le décompte des licences, mais il ne peut pas lire les données de la flotte, recevoir des Envoys routés, ni générer des certificats de confiance, car tout cela se trouve derrière le mTLS de la CA de flotte qu'il ne détient pas.
+
+## Admettre les autres bolts — peering piloté par la configuration (recommandé)
+
+Définissez `spanner.peers` et redémarrez ; pas de jetons, pas de cérémonie. La liste est **asymétrique** :
+
+- Sur le **fondateur**, `peers` est la *liste d'autorisation de qui-peut-rejoindre* — listez l'adresse de chaque bolt qui rejoint. La requête d'admission au démarrage d'un bolt qui rejoint n'est honorée que si son adresse source correspond à une entrée ici.
+- Sur chaque **bolt qui rejoint**, `peers` pointe vers le fondateur (vous pouvez aussi lister les autres bolts pour le gossip). Après avoir défini `mode: spanner`, le `spanner_id` partagé, ses propres `patterns` sans chevauchement, et importé la CA de flotte, redémarrez.
+
+Au démarrage, un bolt qui rejoint et qui n'a pas encore de registre fait un POST de son identité auto-signée vers chaque pair jusqu'à ce que le fondateur l'admette et renvoie un registre signé par le fondateur ; le bolt qui rejoint le fusionne en CRDT et commence à diffuser par gossip. Cela s'exécute hors du chemin critique du check-in avec retry/backoff, de sorte qu'un fondateur brièvement injoignable est toléré. Un bolt qui a déjà un registre (le fondateur, ou un bolt qui rejoint et qui s'est déjà amorcé) ne fait rien.
+
+Les entrées de `spanner.peers` sont au format `host` ou `host:port` (port REST HTTPS, `8443` par défaut).
+
+## Admettre les autres bolts — cérémonie manuelle d'invitation/jonction
+
+Si vous préférez distribuer des jetons à usage unique plutôt que de lister des adresses, laissez `spanner.peers` vide et exécutez la cérémonie. Sur n'importe quel **membre existant**, générez un lot d'invitation à usage unique :
 
 ```bash
 vigocli spanner bolt invite --ttl 24h
