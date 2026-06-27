@@ -54,6 +54,25 @@ func TestResolveScopeCookiePrecedence(t *testing.T) {
 	}
 }
 
+// fleetScope drives the dedicated /fleet/* section (ADR-037 "D"): it is the
+// federated view by definition, so it NEVER reads the vigo_scope cookie (which
+// belongs to the per-bolt local pages) — only an explicit ?scope=<bolt> drills
+// to one bolt, otherwise Fleet.
+func TestFleetScopeIgnoresCookie(t *testing.T) {
+	h := &Handler{}
+
+	r := httptest.NewRequest("GET", "/fleet/security", nil)
+	r.AddCookie(&http.Cookie{Name: scopeCookieName, Value: "deadbeefpubkey"})
+	if got := h.fleetScope(r); got != scopeFleet {
+		t.Errorf("fleetScope must ignore the cookie, got %q want %q", got, scopeFleet)
+	}
+
+	r2 := httptest.NewRequest("GET", "/fleet/security?scope=deadbeefpubkey", nil)
+	if got := h.fleetScope(r2); got != "deadbeefpubkey" {
+		t.Errorf("explicit ?scope= should drill to the bolt, got %q", got)
+	}
+}
+
 // Standalone scope is cosmetic: every scope value renders the full local
 // dashboard (Path A), never the reduced federated view — so no card is ever
 // hidden on a single server.

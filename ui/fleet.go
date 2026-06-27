@@ -56,3 +56,83 @@ func (h *Handler) FleetOverview(w http.ResponseWriter, r *http.Request) {
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "fleet-overview", data)
 }
+
+// The /fleet/<page> handlers are the dedicated federated views (ADR-037
+// "D"): each reuses the SAME *ScopedData builder + template as its per-bolt
+// page, but resolves scope via fleetScope (federated by default, never the
+// cookie) and renders under the Fleet nav group. The cookie-driven scope-tab
+// strip is suppressed here (ScopeTabs = nil) — the /fleet section's per-bolt
+// drill is query-based (?scope=) and arrives in slice 3 alongside stripping
+// the tabs from the local pages. Until then these show the fleet aggregate;
+// a hand-entered ?scope=<bolt> already route-to-owners one bolt.
+
+// fleetCommon applies the shared /fleet-section chrome to a built page: the
+// Fleet nav highlight, and the fleet scope pinned onto PageData so the page's
+// HTMX poll fragments (which carry ?scope={{.Scope}}) stay in the federated
+// view rather than reverting to the cookie's bolt. The cookie-driven scope-tab
+// strip is suppressed — the /fleet section's query-based drill lands in
+// slice 3.
+func (h *Handler) fleetCommon(pd *PageData, title string, r *http.Request) {
+	scope := h.fleetScope(r)
+	*pd = PageData{Title: title, ActiveNav: "fleet"}
+	h.setCommonWithRequest(pd, r)
+	pd.Scope = scope
+	pd.ScopedAway = h.scopedAway(r.Context(), scope)
+	pd.ScopeTabs = nil
+}
+
+func (h *Handler) FleetSecurity(w http.ResponseWriter, r *http.Request) {
+	data := h.securityScopedData(r.Context(), r, h.fleetScope(r))
+	data.QueryTimeoutSec = h.securityQueryTimeoutSec()
+	h.fleetCommon(&data.PageData, "Security", r)
+	h.renderer.Render(w, "security", data)
+}
+
+func (h *Handler) FleetRisk(w http.ResponseWriter, r *http.Request) {
+	data := h.riskScopedData(r.Context(), r, h.fleetScope(r))
+	if level := r.URL.Query().Get("level"); level != "" {
+		var filtered []RiskEnvoyDetail
+		for _, e := range data.Envoys {
+			if e.Level == level {
+				filtered = append(filtered, e)
+			}
+		}
+		data.Envoys = filtered
+		data.LevelFilter = level
+	}
+	h.fleetCommon(&data.PageData, "Risk Posture", r)
+	h.renderer.Render(w, "risk", data)
+}
+
+func (h *Handler) FleetCompliance(w http.ResponseWriter, r *http.Request) {
+	data := h.complianceScopedData(r.Context(), r, h.fleetScope(r))
+	h.fleetCommon(&data.PageData, "Compliance", r)
+	h.renderer.Render(w, "compliance", data)
+}
+
+func (h *Handler) FleetRuns(w http.ResponseWriter, r *http.Request) {
+	data := h.runsScopedData(r.Context(), r, h.fleetScope(r))
+	sortCol := r.URL.Query().Get("sort")
+	sortDir := r.URL.Query().Get("dir")
+	if sortDir != "asc" && sortDir != "desc" {
+		sortDir = "desc"
+	}
+	sortRunRows(data.Runs, sortCol, sortDir)
+	data.StatusFilter = r.URL.Query().Get("status")
+	data.SortColumn = sortCol
+	data.SortDir = sortDir
+	h.fleetCommon(&data.PageData, "Runs", r)
+	h.renderer.Render(w, "runs", data)
+}
+
+func (h *Handler) FleetAgentHealth(w http.ResponseWriter, r *http.Request) {
+	data := h.agentHealthScopedData(r.Context(), r, h.fleetScope(r))
+	h.fleetCommon(&data.PageData, "Agent Health", r)
+	h.renderer.Render(w, "agent-health", data)
+}
+
+func (h *Handler) FleetEnvoys(w http.ResponseWriter, r *http.Request) {
+	data := h.resolveEnvoysData(r.Context(), r, h.fleetScope(r))
+	h.fleetCommon(&data.PageData, "Envoys", r)
+	h.renderer.Render(w, "envoys", data)
+}

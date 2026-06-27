@@ -959,10 +959,17 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	if h.spannerAdmin != nil {
 		mux.HandleFunc("GET /spanner", h.Spanner)
 		mux.HandleFunc("GET /spanner/bolts/{id}", h.BoltDetail)
-		// Fleet-wide aggregate surface (ADR-037): the one page that fans out
-		// across the spanner and merges. Spanner-only — standalone has no
-		// federation to aggregate.
+		// Fleet-wide aggregate surface (ADR-037 "D"): the dedicated section
+		// that fans out across the spanner and merges. Spanner-only —
+		// standalone has no federation to aggregate. Each page reuses its
+		// per-bolt builder + template at federated scope.
 		mux.HandleFunc("GET /fleet", h.FleetOverview)
+		mux.HandleFunc("GET /fleet/security", h.FleetSecurity)
+		mux.HandleFunc("GET /fleet/risk", h.FleetRisk)
+		mux.HandleFunc("GET /fleet/compliance", h.FleetCompliance)
+		mux.HandleFunc("GET /fleet/runs", h.FleetRuns)
+		mux.HandleFunc("GET /fleet/agent-health", h.FleetAgentHealth)
+		mux.HandleFunc("GET /fleet/envoys", h.FleetEnvoys)
 	}
 
 	// Docs pages (only registered when docsDir is configured and exists)
@@ -2774,6 +2781,20 @@ func (h *Handler) resolveScope(r *http.Request) string {
 	return scopeFleet
 }
 
+// fleetScope is the scope resolver for the dedicated /fleet/* section
+// (ADR-037 "D"). Unlike resolveScope it NEVER reads the vigo_scope cookie —
+// the cookie belongs to the per-bolt local pages. The /fleet section is the
+// federated view by definition: it shows the fleet aggregate unless an
+// explicit ?scope=<bolt-pubkey> drills to one bolt (route-to-owner). This
+// keeps the two surfaces independent — a bolt-focused cookie on a local page
+// never bleeds into the fleet aggregate, and vice versa.
+func (h *Handler) fleetScope(r *http.Request) string {
+	if s := r.URL.Query().Get("scope"); s != "" {
+		return s
+	}
+	return scopeFleet
+}
+
 // scopedAway reports whether a scope routes to the reduced federated/scoped
 // render (dashboardScoped) instead of the full local dashboard. It is true
 // only for a genuinely multi-bolt fleet viewed at fleet scope or a peer
@@ -4053,8 +4074,7 @@ var integrationExamples = map[string]IntegrationExample{
 // Fleet scope merges the control coverage across bolts (waivers stay this
 // bolt's — config is per-bolt), and everything else renders the full local
 // page.
-func (h *Handler) complianceScopedData(ctx context.Context, r *http.Request) StandardsPageData {
-	scope := h.resolveScope(r)
+func (h *Handler) complianceScopedData(ctx context.Context, r *http.Request, scope string) StandardsPageData {
 	var data StandardsPageData
 	switch {
 	case h.routeScopedPage(ctx, scope, pageCompliance, "", &data):
@@ -4081,7 +4101,7 @@ func (h *Handler) complianceScopedData(ctx context.Context, r *http.Request) Sta
 }
 
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
-	data := h.complianceScopedData(r.Context(), r)
+	data := h.complianceScopedData(r.Context(), r, h.resolveScope(r))
 	data.PageData = PageData{Title: "Compliance", ActiveNav: "compliance"}
 	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
@@ -4190,7 +4210,7 @@ func (h *Handler) PlatformCompliance(w http.ResponseWriter, r *http.Request) {
 // for HTMX polling — same scope routing as the page so the poll keeps showing
 // the selected bolt's (or the Fleet aggregate's) coverage (ADR-037 slice 5).
 func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
-	data := h.complianceScopedData(r.Context(), r)
+	data := h.complianceScopedData(r.Context(), r, h.resolveScope(r))
 	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
 }
@@ -4422,8 +4442,7 @@ func (h *Handler) riskFleetPageData(ctx context.Context) (RiskPosturePageData, b
 // riskScopedData resolves the /risk page data for the active scope: a peer
 // bolt routes to its owner (full detail), the multi-bolt Fleet scope renders
 // the merged aggregate, everything else renders the full local page.
-func (h *Handler) riskScopedData(ctx context.Context, r *http.Request) RiskPosturePageData {
-	scope := h.resolveScope(r)
+func (h *Handler) riskScopedData(ctx context.Context, r *http.Request, scope string) RiskPosturePageData {
 	var data RiskPosturePageData
 	switch {
 	case h.routeScopedPage(ctx, scope, pageRisk, "", &data):
@@ -4437,7 +4456,7 @@ func (h *Handler) riskScopedData(ctx context.Context, r *http.Request) RiskPostu
 }
 
 func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
-	data := h.riskScopedData(r.Context(), r)
+	data := h.riskScopedData(r.Context(), r, h.resolveScope(r))
 	data.PageData = PageData{Title: "Risk Posture", ActiveNav: "risk"}
 	levelFilter := r.URL.Query().Get("level")
 	data.LevelFilter = levelFilter
@@ -5111,7 +5130,7 @@ func (h *Handler) ComplianceExecutiveFragment(w http.ResponseWriter, r *http.Req
 // Envoys renders the envoys list page with optional axis filters
 // (?conv=, ?drift=, ?reach=) and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
-	data := h.resolveEnvoysData(r.Context(), r)
+	data := h.resolveEnvoysData(r.Context(), r, h.resolveScope(r))
 	data.ScopeAware = true
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
@@ -5124,8 +5143,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 // slice — approach A), everything else renders the full local list. Shared
 // by the page handler AND the stats/table polling fragments so a peer-bolt
 // view doesn't revert to local data on the next poll tick.
-func (h *Handler) resolveEnvoysData(ctx context.Context, r *http.Request) EnvoysPageData {
-	scope := h.resolveScope(r)
+func (h *Handler) resolveEnvoysData(ctx context.Context, r *http.Request, scope string) EnvoysPageData {
 	var data EnvoysPageData
 	switch {
 	case h.routeScopedPage(ctx, scope, pageEnvoys, r.URL.RawQuery, &data):
@@ -5940,8 +5958,7 @@ func standardDisplayNameFromSlug(slug string) string {
 // status-filtered on the owner), the multi-bolt Fleet scope shows a
 // drill-to-bolt note (runs are per-bolt — no cross-bolt concat), everything
 // else renders the full local list.
-func (h *Handler) runsScopedData(ctx context.Context, r *http.Request) RunsPageData {
-	scope := h.resolveScope(r)
+func (h *Handler) runsScopedData(ctx context.Context, r *http.Request, scope string) RunsPageData {
 	var data RunsPageData
 	switch {
 	case h.routeScopedPage(ctx, scope, pageRuns, r.URL.RawQuery, &data):
@@ -5960,7 +5977,7 @@ func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 		sortDir = "desc" // runs default newest-first
 	}
 
-	data := h.runsScopedData(r.Context(), r)
+	data := h.runsScopedData(r.Context(), r, h.resolveScope(r))
 	sortRunRows(data.Runs, sortCol, sortDir)
 	data.StatusFilter = statusFilter
 	data.SortColumn = sortCol
@@ -6261,7 +6278,7 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	// Shares the page resolver so a peer-bolt scope keeps showing that
 	// bolt's table across poll ticks (ADR-037 slice 5b). Scope is set so the
 	// load-more trigger carries it (this fragment skips setCommonWithRequest).
-	data := h.resolveEnvoysData(r.Context(), r)
+	data := h.resolveEnvoysData(r.Context(), r, h.resolveScope(r))
 	data.Locale = h.localeFromRequest(r)
 	data.Scope = h.resolveScope(r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
@@ -6273,7 +6290,7 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 // table itself are outside this region so the operator's typed query
 // and scrolled position survive every refresh tick.
 func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
-	data := h.resolveEnvoysData(r.Context(), r)
+	data := h.resolveEnvoysData(r.Context(), r, h.resolveScope(r))
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-stats", data)
 }
@@ -7446,8 +7463,7 @@ func (h *Handler) securityFleetPageData(ctx context.Context) (SecurityPageData, 
 // (ADR-037 slice 5): a peer bolt routes to its owner (full detail), the
 // multi-bolt Fleet scope renders the merged aggregate, and everything else
 // (this bolt / standalone / single-bolt) renders the full local page.
-func (h *Handler) securityScopedData(ctx context.Context, r *http.Request) SecurityPageData {
-	scope := h.resolveScope(r)
+func (h *Handler) securityScopedData(ctx context.Context, r *http.Request, scope string) SecurityPageData {
 	var data SecurityPageData
 	switch {
 	case h.routeScopedPage(ctx, scope, pageSecurity, "", &data):
@@ -7461,7 +7477,7 @@ func (h *Handler) securityScopedData(ctx context.Context, r *http.Request) Secur
 }
 
 func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
-	data := h.securityScopedData(r.Context(), r)
+	data := h.securityScopedData(r.Context(), r, h.resolveScope(r))
 	data.PageData = PageData{Title: "Security", ActiveNav: "security"}
 	data.QueryTimeoutSec = h.securityQueryTimeoutSec()
 	data.ScopeAware = true
@@ -7473,7 +7489,7 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 	// Same scope routing as SecurityPage, so the HTMX poll keeps showing the
 	// selected bolt's (or the Fleet aggregate's) status (ADR-037 slice 5).
-	data := h.securityScopedData(r.Context(), r)
+	data := h.securityScopedData(r.Context(), r, h.resolveScope(r))
 	data.Locale = h.localeFromRequest(r)
 	h.renderer.RenderFragment(w, "security", "security-status", data)
 }

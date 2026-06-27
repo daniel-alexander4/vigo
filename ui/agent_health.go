@@ -46,8 +46,7 @@ func (h *Handler) scopedHealth(ctx context.Context, scope string) (fleetpressure
 // scope: a peer bolt routes to its owner (full table), the multi-bolt Fleet
 // scope renders the merged rollup (no per-envoy table), everything else
 // renders the full local page.
-func (h *Handler) agentHealthScopedData(ctx context.Context, r *http.Request) AgentHealthPageData {
-	scope := h.resolveScope(r)
+func (h *Handler) agentHealthScopedData(ctx context.Context, r *http.Request, scope string) AgentHealthPageData {
 	var data AgentHealthPageData
 	switch {
 	case h.routeScopedPage(ctx, scope, pageAgentHealth, "", &data):
@@ -64,7 +63,7 @@ func (h *Handler) agentHealthScopedData(ctx context.Context, r *http.Request) Ag
 // rootfs%, inode%, repo health, composite — sorted worst-first so the
 // degraded envoys lead. Rows link to each envoy's detail page.
 func (h *Handler) AgentHealth(w http.ResponseWriter, r *http.Request) {
-	data := h.agentHealthScopedData(r.Context(), r)
+	data := h.agentHealthScopedData(r.Context(), r, h.resolveScope(r))
 	// Sort worst-Health first, then by Hostname for a deterministic
 	// secondary order. Unknown sorts last (nothing to look at).
 	sort.SliceStable(data.Envoys, func(i, j int) bool {
