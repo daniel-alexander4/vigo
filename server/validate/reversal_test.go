@@ -54,6 +54,45 @@ func TestReversal_CommandRevertWithOnRevert_IsClean(t *testing.T) {
 	}
 }
 
+// revert: true with on_revert: none is a contradiction — none declares the
+// action has no inverse, so it cannot also be reverted. Caught at publish so the
+// agent never receives a resource that would run `sh -c none`.
+func TestReversal_CommandRevertWithOnRevertNone_IsError(t *testing.T) {
+	mod := Configcrate{
+		Name: "m",
+		Resources: []Resource{
+			{Name: "harden", Type: "exec", Attributes: map[string]any{
+				"command":   "chmod 0600 /etc/crontab",
+				"onlyif":    "true",
+				"revert":    true,
+				"on_revert": "none",
+			}},
+		},
+	}
+	findings := ValidateConfigcrate(mod)
+	if !hasMessageContaining(findings, "on_revert: none") {
+		t.Fatalf("expected revert+none contradiction error, got: %+v", findings)
+	}
+}
+
+// on_revert: none WITHOUT revert: true is the no-inverse declaration — valid,
+// no finding (it's consumed by configcrate retraction, which omits the resource).
+func TestReversal_OnRevertNoneWithoutRevert_IsClean(t *testing.T) {
+	mod := Configcrate{
+		Name: "m",
+		Resources: []Resource{
+			{Name: "harden", Type: "exec", Attributes: map[string]any{
+				"command":   "chmod 0600 /etc/crontab",
+				"on_revert": "none",
+			}},
+		},
+	}
+	findings := ValidateConfigcrate(mod)
+	if hasMessageContaining(findings, "on_revert") {
+		t.Fatalf("on_revert: none without revert should be clean, got: %+v", findings)
+	}
+}
+
 // Group B (value-setters) infer their inverse from a snapshot — revert: true
 // needs no on_revert:.
 func TestReversal_ValueSetterRevertNeedsNoOnRevert(t *testing.T) {

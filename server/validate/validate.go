@@ -131,6 +131,23 @@ var CommandReversibleTypes = map[string]bool{
 	"ssh_exec": true, "powershell": true,
 }
 
+// OnRevertNone is the reserved `on_revert:` value declaring that a command
+// resource has *no inverse* — an enforce/apply action (tighten perms, reload a
+// daemon, enable a service) whose removable state, if any, is owned by sibling
+// resources that retract on their own. Under configcrate retraction
+// (`state: absent`) such a resource is omitted from the retracted set rather
+// than reverted; it is never run as a literal command. Distinct from an empty
+// `on_revert:` ("forgot to decide" — still a publish error under retraction).
+const OnRevertNone = "none"
+
+// IsOnRevertNone reports whether an `on_revert:` value is the no-inverse
+// sentinel. Whitespace-tolerant, exact-match otherwise — the single decision
+// point shared by the loader's retraction transform and validateReversal so the
+// two can't drift on what counts as `none`.
+func IsOnRevertNone(onRevert string) bool {
+	return strings.TrimSpace(onRevert) == OnRevertNone
+}
+
 // ParamSpec describes a single attribute's validation constraints.
 type ParamSpec struct {
 	Required bool // must be present and non-empty
@@ -666,13 +683,24 @@ func validateReversal(base Finding, res Resource) []Finding {
 	if !attrIsTrue(res.Attributes, "revert") {
 		return nil
 	}
-	if CommandReversibleTypes[res.Type] && attrString(res.Attributes, "on_revert") == "" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = fmt.Sprintf(
-			"%s sets revert: true but declares no on_revert: — actions have no inferable inverse; "+
-				"declare the command to run on revert, or remove revert:", res.Type)
-		return []Finding{f}
+	if CommandReversibleTypes[res.Type] {
+		onRevert := attrString(res.Attributes, "on_revert")
+		if onRevert == "" {
+			f := base
+			f.Severity = SeverityError
+			f.Message = fmt.Sprintf(
+				"%s sets revert: true but declares no on_revert: — actions have no inferable inverse; "+
+					"declare the command to run on revert, or remove revert:", res.Type)
+			return []Finding{f}
+		}
+		if IsOnRevertNone(onRevert) {
+			f := base
+			f.Severity = SeverityError
+			f.Message = fmt.Sprintf(
+				"%s sets revert: true with on_revert: none — these contradict: on_revert: none declares the "+
+					"action has no inverse, so it cannot be reverted. Remove revert:, or give a real on_revert: command.", res.Type)
+			return []Finding{f}
+		}
 	}
 	return nil
 }

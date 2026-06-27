@@ -2833,6 +2833,9 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 
 	// Resolve module definitions into Configcrates, carrying conditional fields.
 	var configcrates []Configcrate
+	// Names of resources omitted by retraction (on_revert: none); their dangling
+	// depends_on/before edges are scrubbed below before resolution returns.
+	omittedNames := map[string]bool{}
 	for _, ref := range configcrateRefs {
 		defName := ref.Name
 		if ref.BaseName != "" {
@@ -2884,11 +2887,19 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 		// form so a single ref reverses the whole configcrate. Shares the
 		// reversal SoT (validate) with the .retract generator.
 		if ref.State == ConfigcrateStateAbsent {
+			kept := resources[:0]
 			for j := range resources {
-				if rerr := retractResourceInPlace(&resources[j]); rerr != nil {
+				omit, rerr := retractResourceInPlace(&resources[j])
+				if rerr != nil {
 					return nil, fmt.Errorf("configcrate %q marked state: absent: %w", modName, rerr)
 				}
+				if omit {
+					omittedNames[resources[j].Name] = true
+					continue
+				}
+				kept = append(kept, resources[j])
 			}
+			resources = kept
 		}
 		configcrates = append(configcrates, Configcrate{
 			Name:       modName,
@@ -2914,6 +2925,22 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 				}
 			}
 			configcrates[i].Resources = filtered
+		}
+	}
+
+	// Scrub references to retraction-omitted resources (on_revert: none). An
+	// omitted resource may still be named in a surviving resource's
+	// depends_on/before anywhere in the stack — and the agent's DAG build treats
+	// a missing depends_on target as fatal, aborting the whole convergence. Drop
+	// the dangling edges so an omitted resource leaves no trace. (notify/subscribes
+	// to a missing target are silently ignored agent-side, so they need no scrub.)
+	if len(omittedNames) > 0 {
+		for i := range configcrates {
+			for j := range configcrates[i].Resources {
+				res := &configcrates[i].Resources[j]
+				res.DependsOn = dropNames(res.DependsOn, omittedNames)
+				res.Before = dropNames(res.Before, omittedNames)
+			}
 		}
 	}
 
@@ -3610,10 +3637,17 @@ func tagCarrierTiers(
 // configcrate referenced with state: absent reverses everything it manages.
 // State-managed types flip via the shared reversal SoT (validate); command and
 // value-setter types revert via revert:/on_revert:. Types that can't be
-// reversed in this build (e.g. cisco/junos stanza setters, Windows-only
-// policy setters) return a legible error naming the resource and type — the
-// operator falls back to a .retract configcrate for those.
-func retractResourceInPlace(res *ResourceConfig) error {
+// reversed in this build (e.g. cisco/junos stanza setters, Windows-only policy
+// setters) return a legible error naming the resource and type — the operator
+// falls back to a .retract configcrate for those.
+//
+// It returns omit=true when the resource should be dropped from the retracted
+// set entirely (a command declaring `on_revert: none` — an apply/enforce action
+// with no inverse; its removable state, if any, is owned by sibling resources).
+// Callers that omit a resource must also scrub its name from every surviving
+// resource's depends_on/before (see dropNames) — the agent's DAG build treats a
+// missing depends_on target as fatal.
+func retractResourceInPlace(res *ResourceConfig) (omit bool, err error) {
 	if res.Attributes == nil {
 		res.Attributes = make(map[string]any)
 	}
@@ -3621,22 +3655,45 @@ func retractResourceInPlace(res *ResourceConfig) error {
 		for k, v := range attrs {
 			res.Attributes[k] = v
 		}
-		return nil
+		return false, nil
 	}
 	if validate.CommandReversibleTypes[res.Type] {
-		if s, _ := res.Attributes["on_revert"].(string); strings.TrimSpace(s) == "" {
-			return fmt.Errorf("resource %q (type %q) needs an on_revert: command before it can be retracted", res.Name, res.Type)
+		s, _ := res.Attributes["on_revert"].(string)
+		switch {
+		case strings.TrimSpace(s) == "":
+			return false, fmt.Errorf("resource %q (type %q) needs an on_revert: command before it can be retracted, or on_revert: none if the action has no inverse", res.Name, res.Type)
+		case validate.IsOnRevertNone(s):
+			// No inverse: omit from the retracted set. Running it would
+			// re-enforce; any removable state it produced is retracted by its
+			// sibling file/package/service resources.
+			return true, nil
 		}
 		res.Attributes["revert"] = true
-		return nil
+		return false, nil
 	}
 	if validate.ReversibleTypes[res.Type] {
 		// Group B value-setter (hostname, timezone): reverts by restoring a
 		// snapshotted prior value — no on_revert: required.
 		res.Attributes["revert"] = true
-		return nil
+		return false, nil
 	}
-	return fmt.Errorf("resource %q (type %q) is not reversible — it cannot be retracted by state: absent; use a .retract configcrate or drop the reference", res.Name, res.Type)
+	return false, fmt.Errorf("resource %q (type %q) is not reversible — it cannot be retracted by state: absent; use a .retract configcrate or drop the reference", res.Name, res.Type)
+}
+
+// dropNames removes any element of slice present in drop, compacting in place
+// (the caller owns a cloned slice). Returns the input unchanged when there is
+// nothing to drop.
+func dropNames(slice []string, drop map[string]bool) []string {
+	if len(slice) == 0 || len(drop) == 0 {
+		return slice
+	}
+	kept := slice[:0]
+	for _, s := range slice {
+		if !drop[s] {
+			kept = append(kept, s)
+		}
+	}
+	return kept
 }
 
 func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEnvOverrides map[string]map[string]*PerEnvOverrideBlock) {

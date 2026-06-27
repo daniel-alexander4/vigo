@@ -32,7 +32,7 @@ func resourceAttr(t *testing.T, cfg *EnvoyConfig, configcrate, resource, attr st
 func TestRetractResourceInPlace(t *testing.T) {
 	t.Run("state type flips to absent", func(t *testing.T) {
 		r := &ResourceConfig{Name: "f", Type: "file", Attributes: map[string]any{"target_path": "/etc/x", "state": "present"}}
-		if err := retractResourceInPlace(r); err != nil {
+		if _, err := retractResourceInPlace(r); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if r.Attributes["state"] != "absent" {
@@ -42,7 +42,7 @@ func TestRetractResourceInPlace(t *testing.T) {
 
 	t.Run("service stops and disables", func(t *testing.T) {
 		r := &ResourceConfig{Name: "s", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"}}
-		if err := retractResourceInPlace(r); err != nil {
+		if _, err := retractResourceInPlace(r); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if r.Attributes["state"] != "stopped" {
@@ -55,7 +55,7 @@ func TestRetractResourceInPlace(t *testing.T) {
 
 	t.Run("command type needs on_revert", func(t *testing.T) {
 		r := &ResourceConfig{Name: "e", Type: "exec", Attributes: map[string]any{"command": "touch /x"}}
-		err := retractResourceInPlace(r)
+		_, err := retractResourceInPlace(r)
 		if err == nil || !strings.Contains(err.Error(), "on_revert") {
 			t.Fatalf("expected on_revert error, got %v", err)
 		}
@@ -63,7 +63,7 @@ func TestRetractResourceInPlace(t *testing.T) {
 
 	t.Run("command type with on_revert reverts", func(t *testing.T) {
 		r := &ResourceConfig{Name: "e", Type: "exec", Attributes: map[string]any{"command": "touch /x", "on_revert": "rm /x"}}
-		if err := retractResourceInPlace(r); err != nil {
+		if _, err := retractResourceInPlace(r); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if r.Attributes["revert"] != true {
@@ -71,9 +71,23 @@ func TestRetractResourceInPlace(t *testing.T) {
 		}
 	})
 
+	t.Run("command with on_revert: none is omitted", func(t *testing.T) {
+		r := &ResourceConfig{Name: "e", Type: "exec", Attributes: map[string]any{"command": "ufw enable", "on_revert": "none"}}
+		omit, err := retractResourceInPlace(r)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !omit {
+			t.Errorf("on_revert: none should omit the resource, got omit=false")
+		}
+		if r.Attributes["revert"] == true {
+			t.Errorf("omitted resource must not be marked revert: true")
+		}
+	})
+
 	t.Run("value setter reverts via snapshot", func(t *testing.T) {
 		r := &ResourceConfig{Name: "h", Type: "hostname", Attributes: map[string]any{"hostname": "web01"}}
-		if err := retractResourceInPlace(r); err != nil {
+		if _, err := retractResourceInPlace(r); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if r.Attributes["revert"] != true {
@@ -83,7 +97,7 @@ func TestRetractResourceInPlace(t *testing.T) {
 
 	t.Run("non-reversible type errors legibly", func(t *testing.T) {
 		r := &ResourceConfig{Name: "iface", Type: "cisco_interface", Attributes: map[string]any{}}
-		err := retractResourceInPlace(r)
+		_, err := retractResourceInPlace(r)
 		if err == nil || !strings.Contains(err.Error(), "not reversible") {
 			t.Fatalf("expected not-reversible error, got %v", err)
 		}
@@ -142,6 +156,78 @@ envoys:
 	keep := cs.Get("keep.example.com")
 	if got := resourceAttr(t, keep, "dockercrate", "docker-pkg", "state"); got != "present" {
 		t.Errorf("kept package state = %v, want present", got)
+	}
+}
+
+// TestConfigcrateRetraction_OnRevertNoneOmitsAndScrubs verifies that an
+// on_revert: none command is omitted from the retracted configcrate AND that a
+// surviving resource's depends_on no longer references it — otherwise the
+// agent's DAG build (a missing depends_on target is fatal) would abort the whole
+// convergence.
+func TestConfigcrateRetraction_OnRevertNoneOmitsAndScrubs(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeFile(t, filepath.Join(dir, "configcrates", "hardencrate.vgo"), `
+name: hardencrate
+resources:
+  - name: drop-conf
+    type: file
+    state: present
+    target_path: /etc/app/cis.conf
+    content: "x"
+    owner: root
+    group: root
+    mode: "0644"
+  - name: apply-perms
+    type: exec
+    command: chmod 0600 /etc/app/cis.conf
+    onlyif: "true"
+    on_revert: none
+    depends_on: [drop-conf]
+  - name: reload-app
+    type: service
+    state: running
+    service: app
+    depends_on: [apply-perms]
+`)
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+envoys:
+  - match: "retract.example.com"
+    configcrates:
+      - {name: hardencrate, state: absent}
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := cs.Get("retract.example.com")
+
+	var mod *Configcrate
+	for i := range cfg.Configcrates {
+		if cfg.Configcrates[i].Name == "hardencrate" {
+			mod = &cfg.Configcrates[i]
+		}
+	}
+	if mod == nil {
+		t.Fatal("hardencrate not resolved")
+	}
+
+	for _, r := range mod.Resources {
+		if r.Name == "apply-perms" {
+			t.Fatalf("on_revert: none resource should be omitted, but it is present")
+		}
+		// The surviving service depended on the omitted exec — that edge must be scrubbed.
+		if r.Name == "reload-app" {
+			for _, dep := range r.DependsOn {
+				if dep == "apply-perms" {
+					t.Errorf("reload-app still depends_on omitted apply-perms — agent DAG would abort")
+				}
+			}
+		}
+	}
+	// And the surviving resources are genuinely retracted.
+	if got := resourceAttr(t, cfg, "hardencrate", "drop-conf", "state"); got != "absent" {
+		t.Errorf("drop-conf state = %v, want absent", got)
 	}
 }
 

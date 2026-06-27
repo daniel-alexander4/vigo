@@ -30,7 +30,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chown root:root /etc/crontab && chmod 0600 /etc/crontab
     onlyif: "! stat -c '%a %U:%G' /etc/crontab | grep -q '600 root:root'"
 
@@ -38,7 +38,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chown root:root /etc/cron.hourly && chmod 0700 /etc/cron.hourly
     onlyif: "test -d /etc/cron.hourly && ! stat -c '%a %U:%G' /etc/cron.hourly | grep -q '700 root:root'"
 
@@ -46,7 +46,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chown root:root /etc/cron.daily && chmod 0700 /etc/cron.daily
     onlyif: "test -d /etc/cron.daily && ! stat -c '%a %U:%G' /etc/cron.daily | grep -q '700 root:root'"
 
@@ -54,7 +54,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chown root:root /etc/cron.weekly && chmod 0700 /etc/cron.weekly
     onlyif: "test -d /etc/cron.weekly && ! stat -c '%a %U:%G' /etc/cron.weekly | grep -q '700 root:root'"
 
@@ -62,7 +62,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chown root:root /etc/cron.monthly && chmod 0700 /etc/cron.monthly
     onlyif: "test -d /etc/cron.monthly && ! stat -c '%a %U:%G' /etc/cron.monthly | grep -q '700 root:root'"
 
@@ -70,7 +70,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chown root:root /etc/cron.d && chmod 0700 /etc/cron.d
     onlyif: "test -d /etc/cron.d && ! stat -c '%a %U:%G' /etc/cron.d | grep -q '700 root:root'"
 
@@ -90,7 +90,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 0600 /etc/ssh/sshd_config && chown root:root /etc/ssh/sshd_config
     onlyif: "! stat -c '%a %U:%G' /etc/ssh/sshd_config | grep -q '600 root:root'"
 
@@ -222,7 +222,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: |
       if ! grep -q "remember=" /etc/pam.d/common-password; then
         sed -i '/pam_unix.so/ s/$/ remember=5/' /etc/pam.d/common-password
@@ -244,7 +244,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: |
       sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS\t{{ .Vars.pass_max_days }}/' /etc/login.defs
       sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS\t{{ .Vars.pass_min_days }}/' /etc/login.defs
@@ -255,7 +255,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: |
       for user in $(awk -F: '($3 < 1000 && $1 != "root") {print $1}' /etc/passwd); do
         usermod -L -s /usr/sbin/nologin "$user" 2>/dev/null || true
@@ -266,7 +266,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: usermod -g 0 root
     onlyif: "! id -g root | grep -q '^0$'"
 

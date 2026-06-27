@@ -102,6 +102,41 @@ invalid `state:` value.
 - Reverse-DAG teardown is out of scope — idempotent forward-DAG convergence
   suffices for retraction.
 
+## Follow-up: `on_revert: none` (no-inverse command resources)
+
+The original cut errored at publish on any command resource in an `absent`
+configcrate that lacked an `on_revert:` — correct fail-closed behavior, but it
+blocked retraction of configcrates built from **enforce/apply** execs that have
+no meaningful inverse (CIS hardening is the motivating case: `chmod` on
+OS-owned files, `sysctl --system`, `ufw enable`). Forcing a no-op
+`on_revert: "true"` on each would be a lie that also runs `sh -c true` every
+retract cycle.
+
+Added the reserved value **`on_revert: none`** (`validate.OnRevertNone`): a
+command resource declaring it has *no inverse*. Under retraction such a resource
+is **omitted** from the configcrate rather than reverted — its removable state,
+if any, is owned by sibling `file`/`package`/`service` resources that retract on
+their own. Fail-closed is preserved: a *bare-empty* `on_revert:` still errors
+("forgot to decide"); `none` is a deliberate, reviewed declaration. `revert:
+true` + `on_revert: none` is a rejected contradiction.
+
+Two implementation points were load-bearing:
+
+- **Dangling-edge scrub.** The agent's DAG build treats a missing `depends_on`
+  target as fatal and aborts the *entire* convergence (and server publish
+  validation only *warns* on an unknown target). So omitting a resource is unsafe
+  on its own — the loader also scrubs the omitted name from every surviving
+  resource's `depends_on`/`before`, fleet-wide. (`notify`/`subscribes` to a
+  missing target are silently ignored agent-side, so they need no scrub.)
+- **Server-side only.** Because retraction omits the resource and validation
+  rejects the `revert: true` + `none` contradiction, the agent never receives a
+  resource carrying `none` as a live revert command — no agent change or redeploy.
+
+Retraction still **removes, not restores**: an `on_revert: none` action that
+mutated OS-owned state (tightened perms, a kernel boot param) is not undone; only
+Vigo-managed artifacts are cleaned up. Documented in
+`configcrate-language.md` (Reversal + Retraction).
+
 ## Alternatives considered
 
 - **Monotonic absent-wins** (any carrier's `absent` retracts, no un-retract).

@@ -916,6 +916,22 @@ There are three flavors:
 
 Reversal is **idempotent**: once honored it reports settled on subsequent runs (it never flaps or re-runs), and a normal (non-revert) apply re-arms it. `modlint` annotates every reversible resource's `#~` comment so the lever is visible where you read the resource.
 
+### `on_revert: none` — declaring an action has no inverse
+
+Many command resources are pure **enforce/apply actions** — tighten permissions on an OS-owned file (`chmod 0600 /etc/crontab`), reload a daemon (`sysctl --system`, `augenrules --load`), enable a service (`ufw enable`). These create no removable artifact of their own (the perms stay, the daemon is already managed elsewhere), so there's no command to put in `on_revert:`, and writing a no-op one would be a lie. Declare the truth instead:
+
+```yaml
+- name: tighten-crontab
+  type: exec
+  command: "chmod 0600 /etc/crontab && chown root:root /etc/crontab"
+  onlyif: "! stat -c '%a %U:%G' /etc/crontab | grep -q '600 root:root'"
+  on_revert: none        # this action has no inverse
+```
+
+`on_revert: none` only matters under **configcrate retraction** (`state: absent`, below): a resource marked `none` is **omitted** from the retracted configcrate — it isn't run, and Vigo automatically scrubs any `depends_on`/`before` references to it so the dependency graph stays intact. During normal (`present`) enforcement the resource runs its `command:` as usual; `none` is ignored. Setting `revert: true` together with `on_revert: none` is a contradiction and is rejected at `config publish`.
+
+Use `none` when the action's removable state (if any) is owned by a **sibling** `file`/`package`/`service` resource in the same configcrate (those retract on their own). Use a real `on_revert:` when the action leaves state with no sibling to clean it up (e.g. an `exec` that appends a kernel boot parameter to `/etc/default/grub`) — there, omitting it would silently orphan that change.
+
 > Reversal currently covers the action/value types above. The stanza/policy setters (`cisco_interface`, `junos_interface`, `local_security_policy`, `service_recovery_windows`) are a tracked follow-on — their prior state is a multi-field structure or sits on a remote device this build doesn't yet snapshot.
 
 ## Combining Patterns
@@ -1839,7 +1855,9 @@ envoys:
 
 - `state:` is only valid on `configcrates:` references, not `usercrates:` — usercrate retraction would remove the user, which is intentionally not an inline operation.
 - A configcrate that contains a resource type Vigo can't yet reverse (e.g. the cisco/junos stanza setters, Windows-only policy setters) **errors at publish**, naming the resource and type. Use a `.retract` configcrate (below) for those.
-- A command-type resource (`exec`, `replace`, …) inside an `absent` configcrate must already declare an `on_revert:` command, or publish errors — there's no generic inverse for an arbitrary command.
+- A command-type resource (`exec`, `replace`, …) inside an `absent` configcrate must already declare an `on_revert:` command **or `on_revert: none`** (the action has no inverse — it's then omitted from the retraction), or publish errors — there's no generic inverse for an arbitrary command.
+
+> **Retraction removes; it does not restore.** Retracting a configcrate flips its stateful resources to `absent`/`stopped` (files deleted, packages removed, services stopped) and runs declared `on_revert:` inverses, but it does **not** undo what an irreversible action changed: an `on_revert: none` exec that tightened permissions on an OS-owned file leaves those permissions tightened, and any OS-state a no-inverse action mutated stays mutated. Inline retraction cleanly removes **Vigo-managed artifacts** — for a full return to a prior baseline you must author the reversal explicitly (a real `on_revert:` or a `.retract` configcrate).
 
 This is the declarative complement to the AI-assisted `.retract` workflow below: the inline flag covers the common case (reverse a configcrate built from reversible resources) with version-controlled intent that flips with the config; the `.retract` generator handles arbitrary resources the AI must reason about.
 

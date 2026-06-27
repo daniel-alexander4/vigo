@@ -1222,7 +1222,7 @@ func generateResourceComment(res resource) string {
 // non-reversible type. SoT: validate.ReversibleTypes / CommandReversibleTypes.
 func reversalNote(typ string) string {
 	if vigovalidate.CommandReversibleTypes[typ] {
-		return " — reversible: set revert: true with on_revert: to undo"
+		return " — reversible: set revert: true with on_revert: to undo, or on_revert: none if the action has no inverse"
 	}
 	if vigovalidate.ReversibleTypes[typ] {
 		return " — reversible: set revert: true to restore the prior value"

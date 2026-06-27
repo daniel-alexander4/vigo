@@ -12,7 +12,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 644 /etc/passwd && chown root:root /etc/passwd
     onlyif: "! stat -c '%a %U:%G' /etc/passwd | grep -q '644 root:root'"
 
@@ -20,7 +20,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 644 /etc/passwd- && chown root:root /etc/passwd-
     onlyif: "test -f /etc/passwd- && ! stat -c '%a %U:%G' /etc/passwd- | grep -q '644 root:root'"
 
@@ -28,7 +28,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 640 /etc/shadow && chown root:shadow /etc/shadow
     onlyif: "! stat -c '%a' /etc/shadow | grep -q '640'"
 
@@ -36,7 +36,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 640 /etc/shadow- && chown root:shadow /etc/shadow-
     onlyif: "test -f /etc/shadow- && ! stat -c '%a' /etc/shadow- | grep -q '640'"
 
@@ -44,7 +44,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 644 /etc/group && chown root:root /etc/group
     onlyif: "! stat -c '%a %U:%G' /etc/group | grep -q '644 root:root'"
 
@@ -52,7 +52,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 644 /etc/group- && chown root:root /etc/group-
     onlyif: "test -f /etc/group- && ! stat -c '%a %U:%G' /etc/group- | grep -q '644 root:root'"
 
@@ -60,7 +60,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 640 /etc/gshadow && chown root:shadow /etc/gshadow
     onlyif: "! stat -c '%a' /etc/gshadow | grep -q '640'"
 
@@ -68,7 +68,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: chmod 640 /etc/gshadow- && chown root:shadow /etc/gshadow-
     onlyif: "test -f /etc/gshadow- && ! stat -c '%a' /etc/gshadow- | grep -q '640'"
 
@@ -87,7 +87,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: |
       for user in $(awk -F: '($2 == "") {print $1}' /etc/shadow); do
         passwd -l "$user"
@@ -102,7 +102,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: "true"
     onlyif: "! awk -F: '($3 == 0 && $1 != \"root\") {found=1} END {exit !found}' /etc/passwd"
 
@@ -110,7 +110,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: "true"
     onlyif: "! echo \"$PATH\" | grep -q '::' && ! echo \"$PATH\" | grep -q ':$'"
 
@@ -118,7 +118,7 @@ resources:
     type: exec
     # reversible — declare 'revert: true' and `on_revert: "<undo command>"` to undo this action. Double check the below commands to ensure they are correct.
     #~ revert: false
-    #~ on_revert: ""  # no safe automatic inverse — supply manually
+    on_revert: none
     command: |
       for dir in $(awk -F: '($3 >= 1000 && $7 != "/usr/sbin/nologin" && $7 != "/bin/false") {print $6}' /etc/passwd); do
         if [ -d "$dir" ]; then
