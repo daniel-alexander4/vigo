@@ -60,6 +60,6 @@
     {{end}}
 </div>
 {{if $.ScopedAway}}
-<p class="scope-notice">{{if $.SecurityFederated}}{{T $.Locale "spanner.scope_detail_notice_partial"}}{{else}}{{T $.Locale "spanner.scope_detail_notice"}}{{end}}</p>
+<p class="scope-notice">{{if eq $.Scope "fleet"}}{{T $.Locale "spanner.scope_detail_notice_partial"}}{{else}}{{T $.Locale "spanner.scope_peer_notice"}}{{end}}</p>
 {{end}}
 {{end}}

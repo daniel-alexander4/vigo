@@ -913,6 +913,61 @@ func (a *SpannerAdmin) ScopedPageDataFromBolt(ctx context.Context, boltPubkey, p
 	return resp.Json, nil
 }
 
+// peerSummaryCall is the single-peer analogue of fanOut for a per-bolt
+// dashboard tab (ADR-037 "B1"): resolve one bolt's hostname from the roster,
+// dial it, and run one summary RPC. Leaf call, pull-on-view — used when the
+// dashboard scope names a specific peer bolt rather than the fleet aggregate.
+func (a *SpannerAdmin) peerSummaryCall(ctx context.Context, boltPubkey string, fn func(context.Context, *PeerConn) (any, error)) (any, error) {
+	host := hostnameOfPeer(ctx, a, boltPubkey)
+	if host == "" {
+		return nil, fmt.Errorf("no roster hostname for bolt %s", boltPubkey)
+	}
+	pc, err := a.dialBolt(host)
+	if err != nil {
+		return nil, fmt.Errorf("dialing bolt %s: %w", host, err)
+	}
+	defer pc.Close()
+	callCtx, cancel := context.WithTimeout(ctx, fanOutTimeout)
+	defer cancel()
+	return fn(callCtx, pc)
+}
+
+// PeerSecuritySummary fetches one peer bolt's Security Posture summary for the
+// per-bolt dashboard tab (ADR-037 B1). Fan-out-only metric; pull-on-view.
+func (a *SpannerAdmin) PeerSecuritySummary(ctx context.Context, boltPubkey string) (SecuritySummary, error) {
+	v, err := a.peerSummaryCall(ctx, boltPubkey, func(ctx context.Context, pc *PeerConn) (any, error) {
+		return pc.Admin.GetSecuritySummary(ctx, &pb.GetSecuritySummaryRequest{})
+	})
+	if err != nil {
+		return SecuritySummary{}, err
+	}
+	return SecuritySummaryFromProto(v.(*pb.GetSecuritySummaryResponse)), nil
+}
+
+// PeerRiskSummary fetches one peer bolt's Risk summary for the per-bolt
+// dashboard tab (ADR-037 B1).
+func (a *SpannerAdmin) PeerRiskSummary(ctx context.Context, boltPubkey string) (RiskSummary, error) {
+	v, err := a.peerSummaryCall(ctx, boltPubkey, func(ctx context.Context, pc *PeerConn) (any, error) {
+		return pc.Admin.GetRiskSummary(ctx, &pb.GetRiskSummaryRequest{})
+	})
+	if err != nil {
+		return RiskSummary{}, err
+	}
+	return RiskSummaryFromProto(v.(*pb.GetRiskSummaryResponse)), nil
+}
+
+// PeerComplianceSummary fetches one peer bolt's Standards Compliance summary
+// for the per-bolt dashboard tab (ADR-037 B1).
+func (a *SpannerAdmin) PeerComplianceSummary(ctx context.Context, boltPubkey string) (ComplianceSummary, error) {
+	v, err := a.peerSummaryCall(ctx, boltPubkey, func(ctx context.Context, pc *PeerConn) (any, error) {
+		return pc.Admin.GetComplianceSummary(ctx, &pb.GetComplianceSummaryRequest{})
+	})
+	if err != nil {
+		return ComplianceSummary{}, err
+	}
+	return ComplianceSummaryFromProto(v.(*pb.GetComplianceSummaryResponse)), nil
+}
+
 // --- agent-health summary (ADR-037 slice 5, fan-out-only) ---
 
 // MergeHealthSummaries folds per-bolt fleetpressure rollups into one fleet

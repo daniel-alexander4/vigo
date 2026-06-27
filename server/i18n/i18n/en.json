@@ -1344,6 +1344,7 @@
   "spanner.scope_aria": "Fleet scope",
   "spanner.scope_detail_notice": "Showing fleet-wide convergence. Per-bolt security, risk, compliance and certificate detail lives on each bolt's own tab; fleet-wide detail views are rolling out (ADR-037).",
   "spanner.scope_detail_notice_partial": "Showing fleet-wide totals across every dashboard card. Full per-bolt detail pages still live on each bolt's own tab (ADR-037).",
+  "spanner.scope_peer_notice": "Showing this bolt's summary. Open its Security, Risk, Compliance and Envoys tabs for full per-host detail.",
   "spanner.tab_fleet": "Fleet",
   "spanner.tab_this_bolt_suffix": "(this bolt)",
   "spanner.seconds_ago": "s ago",

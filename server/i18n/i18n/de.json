@@ -1344,6 +1344,7 @@
   "spanner.scope_aria": "Flottenbereich",
   "spanner.scope_detail_notice": "Flottenweite Konvergenz wird angezeigt. Details zu Sicherheit, Risiko, Compliance und Zertifikaten pro Bolt finden Sie im jeweiligen Bolt-Tab; flottenweite Detailansichten werden schrittweise eingeführt (ADR-037).",
   "spanner.scope_detail_notice_partial": "Flottenweite Summen für alle Dashboard-Karten werden angezeigt. Die detaillierten Per-Bolt-Seiten finden Sie weiterhin im jeweiligen Bolt-Tab (ADR-037).",
+  "spanner.scope_peer_notice": "Zusammenfassung dieses Bolts. Öffnen Sie die Tabs Sicherheit, Risiko, Compliance und Envoys für die vollständigen Details pro Host.",
   "spanner.tab_fleet": "Flotte",
   "spanner.tab_this_bolt_suffix": "(dieser Bolt)",
   "spanner.seconds_ago": "s her",

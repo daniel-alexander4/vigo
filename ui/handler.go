@@ -2752,11 +2752,12 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // fleet.read (i.e., the compliance role) get redirected to
 // /compliance instead — the dashboard is a fleet-state surface and
 // has no compliance-shaped fallback worth rendering.
-// resolveScope returns the active scope from ?scope=, defaulting to
-// scopeFleet. The dashboard always shows the Fleet | <bolt> tab strip — in
-// standalone too (ADR-037) — so the default is scopeFleet in both modes.
-// In standalone the scope is cosmetic: scopedAway is false for every value,
-// so any tab renders the full local dashboard.
+// resolveScope returns the active scope: an explicit ?scope= wins (deep
+// links), then the persisted vigo_scope cookie (the header selector), else
+// scopeFleet. The header scope selector renders only for a genuine multi-bolt
+// federation; standalone and single-bolt deployments hide it (buildScopeTabs
+// returns nil) and scopedAway is false for every value there, so the full
+// local dashboard always renders regardless of the resolved scope.
 func (h *Handler) resolveScope(r *http.Request) string {
 	if s := r.URL.Query().Get("scope"); s != "" {
 		return s
@@ -2782,8 +2783,8 @@ func (h *Handler) scopedAway(ctx context.Context, scope string) bool {
 	if h.spannerAdmin == nil {
 		return false // standalone: tabs are cosmetic, always the full local render
 	}
-	if scope == "" || scope == h.spannerAdmin.LocalPubkey() {
-		return false // this bolt's own tab → full local detail
+	if scope == "" || scope == scopeLocal || scope == h.spannerAdmin.LocalPubkey() {
+		return false // this bolt's own tab (or a stale standalone "local" cookie) → full local detail
 	}
 	roster, err := h.spannerAdmin.BoltRoster(ctx)
 	if err != nil {
@@ -2842,8 +2843,17 @@ func (h *Handler) scopedConvergence(scope string) spanner.ConvergenceCounters {
 // shows the "detail not yet federated" notice. ok=false when not federated
 // or the fan-out failed (the caller leaves the column hidden).
 func (h *Handler) scopedSecurity(ctx context.Context, scope string) (spanner.SecuritySummary, bool) {
-	if h.spannerAdmin == nil || scope != scopeFleet {
+	if h.spannerAdmin == nil {
 		return spanner.SecuritySummary{}, false
+	}
+	if scope != scopeFleet {
+		// Per-bolt tab (ADR-037 B1): that one peer's own summary.
+		s, err := h.spannerAdmin.PeerSecuritySummary(ctx, scope)
+		if err != nil {
+			slog.Warn("scoped security peer fetch failed", "scope", scope, "error", err)
+			return spanner.SecuritySummary{}, false
+		}
+		return s, true
 	}
 	peers, err := h.spannerAdmin.AggregateSecurityFanout(ctx)
 	if err != nil {
@@ -2859,8 +2869,17 @@ func (h *Handler) scopedSecurity(ctx context.Context, scope string) (spanner.Sec
 // re-mean across the union. Only fleet scope is federated for risk in
 // slice 3. ok=false otherwise or on fan-out failure.
 func (h *Handler) scopedRisk(ctx context.Context, scope string) (spanner.RiskSummary, bool) {
-	if h.spannerAdmin == nil || scope != scopeFleet {
+	if h.spannerAdmin == nil {
 		return spanner.RiskSummary{}, false
+	}
+	if scope != scopeFleet {
+		// Per-bolt tab (ADR-037 B1): that one peer's own summary.
+		r, err := h.spannerAdmin.PeerRiskSummary(ctx, scope)
+		if err != nil {
+			slog.Warn("scoped risk peer fetch failed", "scope", scope, "error", err)
+			return spanner.RiskSummary{}, false
+		}
+		return r, true
 	}
 	peers, err := h.spannerAdmin.AggregateRiskFanout(ctx)
 	if err != nil {
@@ -2880,8 +2899,17 @@ func (h *Handler) scopedRisk(ctx context.Context, scope string) (spanner.RiskSum
 // across the union; auditor-grade per-control reconciliation is a separate
 // (report/PDF) slice.
 func (h *Handler) scopedCompliance(ctx context.Context, scope string) (spanner.ComplianceSummary, bool) {
-	if h.spannerAdmin == nil || scope != scopeFleet {
+	if h.spannerAdmin == nil {
 		return spanner.ComplianceSummary{}, false
+	}
+	if scope != scopeFleet {
+		// Per-bolt tab (ADR-037 B1): that one peer's own summary.
+		c, err := h.spannerAdmin.PeerComplianceSummary(ctx, scope)
+		if err != nil {
+			slog.Warn("scoped compliance peer fetch failed", "scope", scope, "error", err)
+			return spanner.ComplianceSummary{}, false
+		}
+		return c, true
 	}
 	peers, err := h.spannerAdmin.AggregateComplianceFanout(ctx)
 	if err != nil {

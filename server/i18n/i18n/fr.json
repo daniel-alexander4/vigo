@@ -1344,6 +1344,7 @@
   "spanner.scope_aria": "Portée de la flotte",
   "spanner.scope_detail_notice": "Affichage de la convergence à l'échelle de la flotte. Le détail sécurité, risque, conformité et certificats par bolt se trouve dans l'onglet de chaque bolt ; les vues détaillées à l'échelle de la flotte arrivent progressivement (ADR-037).",
   "spanner.scope_detail_notice_partial": "Affichage des totaux à l'échelle de la flotte pour toutes les cartes du tableau de bord. Les pages de détail par bolt se trouvent toujours dans l'onglet de chaque bolt (ADR-037).",
+  "spanner.scope_peer_notice": "Affichage du résumé de ce bolt. Ouvrez ses onglets Sécurité, Risque, Conformité et Envoys pour le détail complet par hôte.",
   "spanner.tab_fleet": "Flotte",
   "spanner.tab_this_bolt_suffix": "(ce bolt)",
   "spanner.seconds_ago": " s",

@@ -1344,6 +1344,7 @@
   "spanner.scope_aria": "Âmbito da frota",
   "spanner.scope_detail_notice": "A mostrar a convergência de toda a frota. O detalhe de segurança, risco, conformidade e certificados por bolt está no separador de cada bolt; as vistas detalhadas de toda a frota estão a ser implementadas (ADR-037).",
   "spanner.scope_detail_notice_partial": "A mostrar os totais de toda a frota em todos os cartões do painel. As páginas de detalhe por bolt continuam no separador de cada bolt (ADR-037).",
+  "spanner.scope_peer_notice": "A mostrar o resumo deste bolt. Abra os separadores Segurança, Risco, Conformidade e Envoys para o detalhe completo por host.",
   "spanner.tab_fleet": "Frota",
   "spanner.tab_this_bolt_suffix": "(este bolt)",
   "spanner.seconds_ago": "s atrás",
