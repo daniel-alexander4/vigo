@@ -15,7 +15,9 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,6 +106,78 @@ func TestBootstrapScript_SingleQuotesInterpolatedValues(t *testing.T) {
 	}
 	if !strings.Contains(script, "'https://server.example.com:8443'") {
 		t.Error("server address should be single-quoted in bootstrap script")
+	}
+}
+
+// TestShellQuoters pins the escape rules for the two bootstrap templates.
+// shq (POSIX sh) rewrites each ' as '\''; psq (PowerShell) doubles it. Both
+// wrap the whole value so the templates carry no surrounding quotes of their
+// own. This is the source of truth the injection defense rests on.
+func TestShellQuoters(t *testing.T) {
+	cases := []struct{ in, wantShq, wantPsq string }{
+		{"plain", "'plain'", "'plain'"},
+		{"", "''", "''"},
+		{"a'b", `'a'\''b'`, "'a''b'"},
+		{"';id;'", `''\'';id;'\'''`, "''';id;'''"},
+	}
+	for _, c := range cases {
+		if got := shq(c.in); got != c.wantShq {
+			t.Errorf("shq(%q) = %q, want %q", c.in, got, c.wantShq)
+		}
+		if got := psq(c.in); got != c.wantPsq {
+			t.Errorf("psq(%q) = %q, want %q", c.in, got, c.wantPsq)
+		}
+	}
+}
+
+// TestBootstrapScript_TokenNotShellInjectable proves the attacker-controlled
+// ?token= cannot break out of its shell literal. It renders a token crafted
+// to inject a command under a naive single-quote wrap, then evaluates the
+// generated TOKEN= assignment in a real sh and confirms (a) the injected
+// command never runs and (b) $TOKEN ends up holding the payload verbatim.
+func TestBootstrapScript_TokenNotShellInjectable(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	dir := t.TempDir()
+	caFile := filepath.Join(dir, "ca.crt")
+	if err := os.WriteFile(caFile, []byte("FAKE"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
+
+	// The injected command uses substitution (`$(echo N)`) so its executed
+	// output ("INJECTED") differs from the literal payload text — otherwise a
+	// correctly-held token, which contains the payload verbatim, would trip a
+	// naive substring check.
+	payload := `x'; echo I$(echo N)JECTED; '`
+	req := httptest.NewRequest(http.MethodGet, "/bootstrap?token="+url.QueryEscape(payload), nil)
+	w := httptest.NewRecorder()
+	h.BootstrapScript(w, req)
+	body, _ := io.ReadAll(w.Result().Body)
+
+	var tokenLine string
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, "TOKEN=") {
+			tokenLine = line
+			break
+		}
+	}
+	if tokenLine == "" {
+		t.Fatal("no TOKEN= assignment in rendered script")
+	}
+
+	// Evaluate the assignment in sh and print $TOKEN. If the wrap leaked, the
+	// injected `echo INJECTED` fires; if it held, stdout is exactly the payload.
+	out, err := exec.Command("sh", "-c", tokenLine+`; printf '%s' "$TOKEN"`).CombinedOutput()
+	if err != nil {
+		t.Fatalf("sh eval failed: %v (line %q)", err, tokenLine)
+	}
+	if strings.Contains(string(out), "INJECTED") {
+		t.Fatalf("shell injection executed — output %q from line %q", out, tokenLine)
+	}
+	if string(out) != payload {
+		t.Fatalf("TOKEN = %q, want %q", out, payload)
 	}
 }
 
