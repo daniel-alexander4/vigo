@@ -71,58 +71,119 @@ fn verify_worm(
         return Ok((VerificationStatus::Fail, issues.join("; "), evidence));
     }
 
-    // --- Test 1: Attempt to write a new file (must fail) ---
-    let test_file = worm_dir.join(".connwaer_worm_test");
-    let write_blocked = match std::fs::File::create(&test_file) {
-        Ok(mut f) => {
-            // File created — try to write.
-            let wrote = f.write_all(b"connwaer worm test").is_ok();
-            // Clean up if we managed to create it.
-            let _ = std::fs::remove_file(&test_file);
-            // If we successfully wrote, WORM is NOT enforcing.
-            !wrote
-        }
-        Err(e) => {
-            // Permission denied or read-only = WORM is working.
-            let blocked = matches!(
-                e.kind(),
-                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
-            );
-            if !blocked {
-                // Some other error — still count as blocked but note it.
-                evidence.push(Evidence {
-                    key: "write_error_kind".to_string(),
-                    value: serde_json::json!(format!("{:?}", e.kind())),
-                    detail: format!("Write attempt error: {e}"),
-                });
+    // Tracks whether any test produced POSITIVE proof of immutability.
+    // Pass requires at least one — a mere failure to write (permission
+    // denied, read-only) proves nothing about WORM and must never be
+    // reported as verified (honest-compliance: these controls escalate
+    // FINRA SEC 17a-4 findings to "satisfied").
+    let mut positive_proof = false;
+    // Set when the probe was created THIS run and is still mutable —
+    // possibly inside a WORM auto-commit window (e.g. SnapLock), so it
+    // downgrades the run to Warn instead of Fail; the pre-existing probe
+    // gives the real verdict from the next run onward.
+    let mut commit_window_note = false;
+    // Set when the probe couldn't be created at all (no positive proof
+    // possible from Test 1).
+    let mut probe_unavailable: Option<String> = None;
+
+    // --- Test 1: probe-file immutability ---
+    //
+    // WORM means write-once-read-many: creating a NEW object is allowed;
+    // mutating or deleting an EXISTING one is not. So the probe is a file
+    // of our own: create it if missing (on genuine WORM it becomes a
+    // permanent, tiny resident of the store — by design), then attempt to
+    // overwrite, append to, and delete it. All three blocked on a probe
+    // is positive proof; any succeeding on a pre-existing probe is a hard
+    // failure. The delete attempt runs LAST and only if overwrite/append
+    // were blocked, so a mutable store keeps its probe for next run's
+    // pre-existing (Fail) verdict rather than resetting to fresh.
+    let probe = worm_dir.join(".connwaer_worm_test");
+    let pre_existing = probe.exists();
+    let mut probe_present = pre_existing;
+    if !pre_existing {
+        match std::fs::File::create(&probe) {
+            Ok(mut f) => {
+                let _ = f.write_all(b"connwaer WORM probe - this file must remain immutable\n");
+                probe_present = true;
             }
-            true
+            Err(e) => {
+                probe_unavailable = Some(format!("{:?}: {e}", e.kind()));
+            }
         }
-    };
+    }
 
-    evidence.push(Evidence {
-        key: "write_test_blocked".to_string(),
-        value: serde_json::json!(write_blocked),
-        detail: if write_blocked {
-            "Write attempt to WORM path was correctly blocked".to_string()
+    if probe_present {
+        let overwrote = std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&probe)
+            .and_then(|mut f| f.write_all(b"connwaer WORM probe - this file must remain immutable\n"))
+            .is_ok();
+        let appended = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&probe)
+            .and_then(|mut f| f.write_all(b"#"))
+            .is_ok();
+        // Only attempt delete if the store blocked the writes — see above.
+        let deleted = if !overwrote && !appended {
+            std::fs::remove_file(&probe).is_ok()
         } else {
-            "WARNING: Write to WORM path was NOT blocked".to_string()
-        },
-    });
+            false
+        };
+        let mutable = overwrote || appended || deleted;
 
-    if !write_blocked {
-        issues.push("write to WORM path was not blocked — immutability not enforced".to_string());
+        evidence.push(Evidence {
+            key: "probe_mutation".to_string(),
+            value: serde_json::json!({
+                "pre_existing": pre_existing,
+                "overwrite_blocked": !overwrote,
+                "append_blocked": !appended,
+                "delete_blocked": !deleted,
+            }),
+            detail: if mutable {
+                format!(
+                    "probe file {} was mutable (overwrite blocked: {}, append blocked: {}, delete blocked: {})",
+                    probe.display(), !overwrote, !appended, !deleted
+                )
+            } else {
+                format!("probe file {} resisted overwrite, append, and delete", probe.display())
+            },
+        });
+
+        if !mutable {
+            positive_proof = true;
+        } else if pre_existing {
+            issues.push("existing probe file in the WORM path was modified/deleted — immutability not enforced".to_string());
+        } else {
+            // Freshly created and still mutable: possibly within a WORM
+            // auto-commit window. Not proof either way — re-verify next run.
+            commit_window_note = true;
+        }
+    } else {
+        evidence.push(Evidence {
+            key: "probe_unavailable".to_string(),
+            value: serde_json::json!(probe_unavailable),
+            detail: "could not create a probe file, so immutability could not be exercised — this proves lack of write access, not WORM".to_string(),
+        });
     }
 
     // --- Test 2: Check mount options (Linux) ---
     #[cfg(target_os = "linux")]
     {
         if let Ok(mounts) = std::fs::read_to_string("/proc/mounts") {
+            // Longest matching mount point wins, and matches only on path
+            // component boundaries (`/d` must not claim `/data`).
             let mount_line = mounts.lines()
-                .find(|l| {
+                .filter(|l| {
                     let parts: Vec<&str> = l.split_whitespace().collect();
-                    parts.len() >= 2 && worm_path.starts_with(parts[1])
-                });
+                    if parts.len() < 2 {
+                        return false;
+                    }
+                    let mp = parts[1].trim_end_matches('/');
+                    worm_path.trim_end_matches('/') == mp
+                        || (worm_path.starts_with(mp) && worm_path[mp.len()..].starts_with('/'))
+                })
+                .max_by_key(|l| l.split_whitespace().nth(1).map_or(0, |mp| mp.len()));
 
             if let Some(line) = mount_line {
                 let parts: Vec<&str> = line.split_whitespace().collect();
@@ -144,14 +205,18 @@ fn verify_worm(
                     .and_then(|v| v.as_str());
                 if let Some(expected) = expected_options {
                     let has_expected = expected.split(',')
-                        .all(|opt| options.contains(opt.trim()));
+                        .all(|opt| options.split(',').any(|o| o == opt.trim()));
                     evidence.push(Evidence {
                         key: "expected_options_present".to_string(),
                         value: serde_json::json!(has_expected),
                         detail: format!("Expected options '{}': {}", expected,
                             if has_expected { "present" } else { "MISSING" }),
                     });
-                    if !has_expected {
+                    if has_expected {
+                        // Operator explicitly declared the mount contract and
+                        // the kernel confirms it — counts as positive proof.
+                        positive_proof = true;
+                    } else {
                         issues.push(format!("expected mount options '{}' not found", expected));
                     }
                 }
@@ -215,6 +280,7 @@ fn verify_worm(
                     value: serde_json::json!(stdout),
                     detail: format!("Cloud WORM check passed: {}", stdout.lines().next().unwrap_or("")),
                 });
+                positive_proof = true;
             }
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr).trim().to_string();
@@ -226,16 +292,27 @@ fn verify_worm(
         }
     }
 
-    let status = if issues.is_empty() {
-        VerificationStatus::Pass
+    // Pass requires POSITIVE proof (probe mutation blocked, cloud check
+    // passed, or a declared-and-present mount contract) and zero issues.
+    // No issues but no proof either → Warn: the check ran but could not
+    // demonstrate immutability, and it must not attest what it can't show.
+    let (status, summary) = if !issues.is_empty() {
+        (VerificationStatus::Fail, issues.join("; "))
+    } else if positive_proof {
+        (
+            VerificationStatus::Pass,
+            "WORM immutability verified — probe mutation blocked / declared proof present".to_string(),
+        )
+    } else if commit_window_note {
+        (
+            VerificationStatus::Warn,
+            "probe file created this run is still mutable — possibly within a WORM auto-commit window; re-verifies on the next run".to_string(),
+        )
     } else {
-        VerificationStatus::Fail
-    };
-
-    let summary = if issues.is_empty() {
-        "WORM immutability verified — write blocked, integrity confirmed".to_string()
-    } else {
-        issues.join("; ")
+        (
+            VerificationStatus::Warn,
+            "no positive immutability proof — the probe could not be created (no write access to the WORM path); grant connwaer write access to the ingest path, or configure cloud_check_command / expected_mount_options".to_string(),
+        )
     };
 
     Ok((status, summary, evidence))
@@ -246,4 +323,128 @@ fn file_sha256(path: &str) -> Result<String> {
     let data = std::fs::read(path)?;
     let hash = Sha256::digest(&data);
     Ok(hex::encode(hash))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn config(params: &[(&str, serde_json::Value)]) -> super::super::CapabilityConfig {
+        super::super::CapabilityConfig {
+            enabled: true,
+            params: params.iter().map(|(k, v)| (k.to_string(), v.clone())).collect(),
+            thresholds: HashMap::new(),
+        }
+    }
+
+    fn worm_config(dir: &std::path::Path) -> super::super::CapabilityConfig {
+        config(&[("worm_path", serde_json::json!(dir.to_str().unwrap()))])
+    }
+
+    #[test]
+    fn no_worm_path_is_skipped() {
+        let (status, _, _) = verify_worm(&config(&[])).unwrap();
+        assert!(matches!(status, VerificationStatus::Skipped));
+    }
+
+    #[test]
+    fn missing_path_is_fail() {
+        let (status, summary, _) =
+            verify_worm(&config(&[("worm_path", serde_json::json!("/nonexistent/worm/dir"))])).unwrap();
+        assert!(matches!(status, VerificationStatus::Fail));
+        assert!(summary.contains("does not exist"));
+    }
+
+    /// The false-attestation regression: a directory the process simply can't
+    /// write to (ordinary POSIX perms) used to report Pass — "WORM verified".
+    /// It proves nothing about WORM and must be Warn.
+    #[test]
+    fn unwritable_dir_is_warn_not_pass() {
+        if nix::unistd::geteuid().is_root() {
+            return; // root bypasses mode bits; the scenario can't be built
+        }
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut perms = std::fs::metadata(dir.path()).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o555);
+        std::fs::set_permissions(dir.path(), perms.clone()).unwrap();
+
+        let (status, summary, _) = verify_worm(&worm_config(dir.path())).unwrap();
+
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+        std::fs::set_permissions(dir.path(), perms).unwrap();
+
+        assert!(
+            matches!(status, VerificationStatus::Warn),
+            "no-write-access must be Warn (no proof), got {status}: {summary}"
+        );
+        assert!(summary.contains("no positive immutability proof"));
+    }
+
+    /// A plain writable directory: run 1 creates the probe and finds it
+    /// mutable — Warn (possible WORM auto-commit window), probe left behind.
+    /// Run 2 sees the pre-existing probe still mutable — hard Fail.
+    #[test]
+    fn writable_dir_warns_then_fails() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cfg = worm_config(dir.path());
+
+        let (status1, summary1, _) = verify_worm(&cfg).unwrap();
+        assert!(
+            matches!(status1, VerificationStatus::Warn),
+            "fresh mutable probe must be Warn, got {status1}: {summary1}"
+        );
+        assert!(summary1.contains("auto-commit window"));
+        assert!(dir.path().join(".connwaer_worm_test").exists(), "probe must persist for the next run");
+
+        let (status2, summary2, _) = verify_worm(&cfg).unwrap();
+        assert!(
+            matches!(status2, VerificationStatus::Fail),
+            "pre-existing mutable probe must be Fail, got {status2}: {summary2}"
+        );
+        assert!(summary2.contains("immutability not enforced"));
+    }
+
+    #[test]
+    fn cloud_check_success_is_positive_proof() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cfg = config(&[
+            ("worm_path", serde_json::json!(dir.path().to_str().unwrap())),
+            ("cloud_check_command", serde_json::json!("true")),
+        ]);
+        let (status, _, _) = verify_worm(&cfg).unwrap();
+        assert!(matches!(status, VerificationStatus::Pass));
+    }
+
+    #[test]
+    fn cloud_check_failure_is_fail() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let cfg = config(&[
+            ("worm_path", serde_json::json!(dir.path().to_str().unwrap())),
+            ("cloud_check_command", serde_json::json!("false")),
+        ]);
+        let (status, summary, _) = verify_worm(&cfg).unwrap();
+        assert!(matches!(status, VerificationStatus::Fail));
+        assert!(summary.contains("cloud WORM check failed"));
+    }
+
+    #[test]
+    fn tampered_verify_file_is_fail() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let archived = dir.path().join("record.dat");
+        std::fs::write(&archived, b"archived record").unwrap();
+        let cfg = config(&[
+            ("worm_path", serde_json::json!(dir.path().to_str().unwrap())),
+            (
+                "verify_files",
+                serde_json::json!([{
+                    "path": archived.to_str().unwrap(),
+                    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                }]),
+            ),
+        ]);
+        let (status, summary, _) = verify_worm(&cfg).unwrap();
+        assert!(matches!(status, VerificationStatus::Fail));
+        assert!(summary.contains("hash mismatch"));
+    }
 }
