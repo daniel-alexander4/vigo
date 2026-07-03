@@ -982,6 +982,16 @@ fn converge_local(
     // Load accepted policy bundle.
     let (version, bundle) = store.policy.load(&rtxn).ok()??;
 
+    // Reconstruct accepted_at from the persisted store if it wasn't set this
+    // process lifetime (e.g. a restart while the server is unreachable).
+    // Without this the max-age guard below is silently disabled after a
+    // restart (accepted_at == 0), re-applying an arbitrarily stale bundle.
+    if policy_state.accepted_at == 0 {
+        if let Ok(Some(ts)) = store.policy.load_timestamp(&rtxn) {
+            policy_state.accepted_at = ts;
+        }
+    }
+
     // Check bundle expiry before converging.
     if bundle.max_age_seconds > 0 && policy_state.accepted_at > 0 {
         let age = policy_state.bundle_age_secs();

@@ -15,6 +15,11 @@ use prost::Message;
 const POLICY_KEY: &str = "current";
 /// Key for the cached policy version.
 const VERSION_KEY: &str = "version";
+/// Key for the Unix-seconds timestamp of when the bundle was last stored.
+/// Persisted so the offline max-age check survives a process restart —
+/// otherwise the in-memory `accepted_at` resets to 0 and an arbitrarily
+/// stale cached bundle would re-apply forever.
+const TIMESTAMP_KEY: &str = "accepted_at";
 
 /// LMDB-backed policy bundle cache.
 pub struct PolicyCache {
@@ -41,7 +46,26 @@ impl PolicyCache {
         self.db.put(wtxn, POLICY_KEY, &bytes)?;
         self.db
             .put(wtxn, VERSION_KEY, &version.to_le_bytes())?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        self.db.put(wtxn, TIMESTAMP_KEY, &now.to_le_bytes())?;
         Ok(())
+    }
+
+    /// Load the Unix-seconds timestamp of the last stored bundle. Used on
+    /// restart to reconstruct `accepted_at` so the offline max-age guard
+    /// keeps working when the server is unreachable.
+    pub fn load_timestamp(&self, rtxn: &RoTxn<'_>) -> Result<Option<u64>> {
+        match self.db.get(rtxn, TIMESTAMP_KEY)? {
+            Some(b) if b.len() == 8 => {
+                let mut arr = [0u8; 8];
+                arr.copy_from_slice(b);
+                Ok(Some(u64::from_le_bytes(arr)))
+            }
+            _ => Ok(None),
+        }
     }
 
     /// Load the cached policy bundle and its version.
@@ -103,5 +127,31 @@ mod tests {
 
         let rtxn = store.read_txn().unwrap();
         assert!(store.policy.load(&rtxn).unwrap().is_none());
+    }
+
+    #[test]
+    fn store_persists_timestamp() {
+        // The persisted timestamp is what lets the offline max-age guard
+        // survive a restart (accepted_at reconstructed from it).
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+        let bundle = PolicyBundle { policy_version: 1, ..Default::default() };
+
+        let mut wtxn = store.write_txn().unwrap();
+        store.policy.store(&mut wtxn, 1, &bundle).unwrap();
+        wtxn.commit().unwrap();
+
+        let rtxn = store.read_txn().unwrap();
+        let ts = store.policy.load_timestamp(&rtxn).unwrap();
+        assert!(ts.is_some(), "store must persist a timestamp");
+        assert!(ts.unwrap() > 0);
+    }
+
+    #[test]
+    fn load_timestamp_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+        let rtxn = store.read_txn().unwrap();
+        assert!(store.policy.load_timestamp(&rtxn).unwrap().is_none());
     }
 }
