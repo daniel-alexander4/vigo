@@ -22,6 +22,64 @@ fn password_matches_shadow(plaintext: &str, shadow_entry: &str) -> bool {
     sha512_check(plaintext, shadow_entry).is_ok()
 }
 
+fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+/// Days since the Unix epoch (1970-01-01) for a Y-M-D date, or `None` if the
+/// components are out of range. Pure arithmetic (no chrono dep), mirroring the
+/// calendar math in `backup.rs`.
+fn ymd_to_epoch_days(y: i32, m: u32, d: u32) -> Option<i64> {
+    if y < 1970 || !(1..=12).contains(&m) || d < 1 {
+        return None;
+    }
+    let mdays = [
+        31,
+        if is_leap_year(y) { 29 } else { 28 },
+        31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+    ];
+    if d > mdays[(m - 1) as usize] {
+        return None;
+    }
+    let mut days: i64 = 0;
+    for year in 1970..y {
+        days += if is_leap_year(year) { 366 } else { 365 };
+    }
+    for month_days in &mdays[..(m - 1) as usize] {
+        days += *month_days as i64;
+    }
+    Some(days + (d as i64 - 1))
+}
+
+/// Normalize an `expiredate:` param to days-since-epoch for idempotency
+/// comparison. `usermod --expiredate` accepts `YYYY-MM-DD`, a raw day count, or
+/// `-1`/`""` (never). Returns:
+///   `Some(Some(days))` — a concrete expiry date,
+///   `Some(None)`       — "never",
+///   `None`             — unparseable (caller applies to be safe).
+fn parse_expiredate(param: &str) -> Option<Option<i64>> {
+    let p = param.trim();
+    if p.is_empty() || p == "-1" {
+        return Some(None);
+    }
+    if let Ok(days) = p.parse::<i64>() {
+        return Some(Some(days));
+    }
+    let parts: Vec<&str> = p.split('-').collect();
+    if parts.len() == 3 {
+        if let (Ok(y), Ok(m), Ok(d)) = (
+            parts[0].parse::<i32>(),
+            parts[1].parse::<u32>(),
+            parts[2].parse::<u32>(),
+        ) {
+            if let Some(days) = ymd_to_epoch_days(y, m, d) {
+                return Some(Some(days));
+            }
+        }
+    }
+    None
+}
+
 // compute_shadow_hash produces a `$6$<random-salt>$<hash>` string suitable
 // for `usermod -p`. A fresh random salt is generated each call — operators
 // who reset to the same plaintext still get a different on-disk entry.
@@ -43,7 +101,7 @@ pub struct UserExecutor {
 
 struct PasswdEntry {
     uid: String,
-    _gid: String,
+    gid: String,
     gecos: String,
     home: String,
     shell: String,
@@ -69,7 +127,7 @@ impl UserExecutor {
             if fields.len() >= 7 && fields[0] == name {
                 return Ok(Some(PasswdEntry {
                     uid: fields[2].to_string(),
-                    _gid: fields[3].to_string(),
+                    gid: fields[3].to_string(),
                     gecos: fields[4].to_string(),
                     home: fields[5].to_string(),
                     shell: fields[6].to_string(),
@@ -91,6 +149,56 @@ impl UserExecutor {
             }
         }
         Ok(String::new())
+    }
+
+    /// Read the `idx`-th (0-based) colon field of the user's /etc/shadow line.
+    /// Returns `None` if the user isn't present or the field is empty. Used for
+    /// idempotency comparisons: field 4 = max-age, field 7 = expire-date days.
+    fn shadow_field(&self, name: &str, idx: usize) -> Option<String> {
+        let f = std::fs::File::open(&self.shadow_path).ok()?;
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
+            let fields: Vec<&str> = line.split(':').collect();
+            if !fields.is_empty() && fields[0] == name {
+                return fields.get(idx).filter(|s| !s.is_empty()).map(|s| s.to_string());
+            }
+        }
+        None
+    }
+
+    /// Current account-expiry as days-since-epoch, or `None` for "never"
+    /// (empty shadow field 8 / unparseable).
+    fn shadow_expire_days(&self, name: &str) -> Option<i64> {
+        self.shadow_field(name, 7).and_then(|s| s.parse::<i64>().ok())
+    }
+
+    /// Resolve a group name-or-gid to its numeric GID, matching `known_groups`'
+    /// `getent`-then-/etc/group style (`getent group` accepts either a name or a
+    /// numeric key, so one lookup normalizes both input forms). Returns `None`
+    /// when the group can't be resolved (e.g. one created later in the same run).
+    fn resolve_gid(&self, group: &str) -> Option<String> {
+        if group.parse::<u64>().is_ok() {
+            return Some(group.to_string());
+        }
+        if let Ok(o) = self.runner.run("getent", &["group", group]) {
+            if o.status.success() {
+                if let Some(line) = String::from_utf8_lossy(&o.stdout).lines().next() {
+                    let fields: Vec<&str> = line.split(':').collect();
+                    if fields.len() >= 3 && !fields[2].is_empty() {
+                        return Some(fields[2].to_string());
+                    }
+                }
+            }
+        }
+        // Fallback for environments without getent (musl, busybox images).
+        if let Ok(f) = File::open("/etc/group") {
+            for line in BufReader::new(f).lines().map_while(Result::ok) {
+                let fields: Vec<&str> = line.split(':').collect();
+                if fields.len() >= 3 && fields[0] == group {
+                    return Some(fields[2].to_string());
+                }
+            }
+        }
+        None
     }
 
     fn current_groups(&self, name: &str) -> Vec<String> {
@@ -847,15 +955,35 @@ impl UserExecutor {
 
                     if let Some(group) = params.get("group") {
                         if !group.is_empty() {
-                            needs_update = true;
-                            mod_args.extend(["-g".into(), group.clone()]);
+                            // Only re-set the primary group if it actually
+                            // differs from the current gid — otherwise usermod
+                            // reruns and reports changed every cycle. An
+                            // unresolvable group (created later in the same run)
+                            // falls through to apply.
+                            let differs = match self.resolve_gid(group) {
+                                Some(desired_gid) => desired_gid != entry.gid,
+                                None => true,
+                            };
+                            if differs {
+                                needs_update = true;
+                                mod_args.extend(["-g".into(), group.clone()]);
+                            }
                         }
                     }
 
                     if let Some(expiredate) = params.get("expiredate") {
                         if !expiredate.is_empty() {
-                            needs_update = true;
-                            mod_args.extend(["--expiredate".into(), expiredate.clone()]);
+                            // Compare against the current shadow expiry (field 8,
+                            // days-since-epoch) so a stable date doesn't rerun
+                            // usermod every cycle. Unparseable → apply to be safe.
+                            let differs = match parse_expiredate(expiredate) {
+                                Some(desired) => desired != self.shadow_expire_days(&name),
+                                None => true,
+                            };
+                            if differs {
+                                needs_update = true;
+                                mod_args.extend(["--expiredate".into(), expiredate.clone()]);
+                            }
                         }
                     }
 
@@ -917,10 +1045,31 @@ impl UserExecutor {
                         }
                     }
 
-                    // Check password_max_age (always apply if set — chage is idempotent).
+                    // Check password_max_age against the current shadow max-age
+                    // (field 5). `chage` is idempotent on disk, but re-running it
+                    // (and reporting changed) every cycle contaminates drift
+                    // detection — so only apply when it actually differs. This
+                    // gates BOTH needs_update and the chage call below.
+                    let mut max_age_changed = false;
                     if let Some(max_age) = params.get("password_max_age") {
                         if !max_age.is_empty() {
-                            needs_update = true;
+                            // Compare numerically so a non-canonical param
+                            // ("060", " 60") doesn't re-apply forever against
+                            // the canonical value chage writes back.
+                            let current = self.shadow_field(&name, 4);
+                            let differs = match (
+                                max_age.trim().parse::<i64>(),
+                                current.as_deref().and_then(|c| c.parse::<i64>().ok()),
+                            ) {
+                                (Ok(desired), Some(cur)) => desired != cur,
+                                // Unparseable param or no current value →
+                                // apply; chage surfaces a bad param visibly.
+                                _ => true,
+                            };
+                            if differs {
+                                max_age_changed = true;
+                                needs_update = true;
+                            }
                         }
                     }
 
@@ -1119,9 +1268,10 @@ impl UserExecutor {
                         }
                     }
 
-                    // Apply password max age.
-                    if let Some(max_age) = params.get("password_max_age") {
-                        if !max_age.is_empty() {
+                    // Apply password max age (only when it actually differs —
+                    // see the max_age_changed compare above).
+                    if max_age_changed {
+                        if let Some(max_age) = params.get("password_max_age") {
                             match self.runner.run("chage", &["-M", max_age, &name]) {
                                 Ok(o) if !o.status.success() => {
                                     partial_errors.push(format!("chage -M: {}", String::from_utf8_lossy(&o.stderr)));
@@ -1752,6 +1902,169 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "chage");
         assert_eq!(calls[0].1, vec!["-M", "60", "deploy"]);
+    }
+
+    /// Boilerplate: an existing `deploy` user (uid/gid 1001) plus the given
+    /// shadow line, with a mock runner seeded with `responses`.
+    fn update_exec(
+        dir: &std::path::Path,
+        shadow_line: &str,
+        responses: Vec<std::process::Output>,
+    ) -> (UserExecutor, Arc<std::sync::Mutex<Vec<(String, Vec<String>)>>>) {
+        let passwd = dir.join("passwd");
+        let shadow = dir.join("shadow");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndeploy:x:1001:1001::/home/deploy:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(&shadow, shadow_line).unwrap();
+        let mock = MockRunner::new(responses);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.join("policy").to_str().unwrap().to_string(),
+        };
+        (exec, calls)
+    }
+
+    // ── Idempotency: a second convergence with an unchanged value must be a
+    //    no-op (Action::None, no usermod/chage). These pin the fix for the
+    //    group/expiredate/password_max_age re-apply-every-cycle bugs. ──
+
+    #[test]
+    fn group_unchanged_is_idempotent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // deploy's gid is already 1001; a numeric group needs no getent lookup.
+        let (exec, calls) = update_exec(dir.path(), "deploy:$6$abc:19000:0:99999:7:::\n", vec![]);
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("state", "present"), ("group", "1001")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(calls.lock().unwrap().is_empty(), "no command should run");
+    }
+
+    #[test]
+    fn group_changed_runs_usermod() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (exec, calls) =
+            update_exec(dir.path(), "deploy:$6$abc:19000:0:99999:7:::\n", vec![ok_output("")]);
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("state", "present"), ("group", "2000")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "usermod");
+        assert_eq!(calls[0].1, vec!["-g", "2000", "deploy"]);
+    }
+
+    #[test]
+    fn expiredate_unchanged_is_idempotent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // shadow field 8 (expire) = 20000 days; desired matches (raw day count).
+        let (exec, calls) = update_exec(dir.path(), "deploy:$6$abc:19000:0:99999:7::20000:\n", vec![]);
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("state", "present"), ("expiredate", "20000")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn expiredate_changed_runs_usermod() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (exec, calls) =
+            update_exec(dir.path(), "deploy:$6$abc:19000:0:99999:7::20000:\n", vec![ok_output("")]);
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("state", "present"), ("expiredate", "20001")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "usermod");
+        assert_eq!(calls[0].1, vec!["--expiredate", "20001", "deploy"]);
+    }
+
+    #[test]
+    fn password_max_age_unchanged_is_idempotent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // shadow field 5 (max) = 60; desired matches → no chage.
+        let (exec, calls) = update_exec(dir.path(), "deploy:$6$abc:19000:0:60:7:::\n", vec![]);
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("state", "present"), ("password_max_age", "60")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(calls.lock().unwrap().is_empty(), "chage must not run when max-age is unchanged");
+    }
+
+    #[test]
+    fn all_three_params_unchanged_is_one_noop_cycle() {
+        // The composite convergence-noise regression: a user resource carrying
+        // group + expiredate + password_max_age, all already satisfied, must be
+        // a clean no-op — Action::None, changed=false, zero subprocesses.
+        let dir = tempfile::TempDir::new().unwrap();
+        let (exec, calls) = update_exec(dir.path(), "deploy:$6$abc:19000:0:60:7::20000:\n", vec![]);
+        let result = exec.execute(
+            &make_params(&[
+                ("username", "deploy"),
+                ("state", "present"),
+                ("group", "1001"),
+                ("expiredate", "20000"),
+                ("password_max_age", "60"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        assert!(calls.lock().unwrap().is_empty(), "a settled user must spawn nothing");
+    }
+
+    #[test]
+    fn password_max_age_non_canonical_numeral_is_idempotent() {
+        // "060" == 60 numerically; a string compare would re-apply forever.
+        let dir = tempfile::TempDir::new().unwrap();
+        let (exec, calls) = update_exec(dir.path(), "deploy:$6$abc:19000:0:60:7:::\n", vec![]);
+        let result = exec.execute(
+            &make_params(&[("username", "deploy"), ("state", "present"), ("password_max_age", "060")]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn ymd_to_epoch_days_known_dates() {
+        assert_eq!(ymd_to_epoch_days(1970, 1, 1), Some(0));
+        assert_eq!(ymd_to_epoch_days(1970, 1, 2), Some(1));
+        assert_eq!(ymd_to_epoch_days(1971, 1, 1), Some(365));
+        assert_eq!(ymd_to_epoch_days(2000, 1, 1), Some(10957));
+        assert_eq!(ymd_to_epoch_days(2021, 1, 1), Some(18628));
+        // Out of range.
+        assert_eq!(ymd_to_epoch_days(1969, 1, 1), None);
+        assert_eq!(ymd_to_epoch_days(2021, 13, 1), None);
+        assert_eq!(ymd_to_epoch_days(2021, 2, 30), None);
+        assert_eq!(ymd_to_epoch_days(2020, 2, 29), Some(18321)); // leap day valid
+    }
+
+    #[test]
+    fn parse_expiredate_forms() {
+        assert_eq!(parse_expiredate(""), Some(None)); // never
+        assert_eq!(parse_expiredate("-1"), Some(None)); // never
+        assert_eq!(parse_expiredate("20000"), Some(Some(20000))); // raw days
+        assert_eq!(parse_expiredate("2000-01-01"), Some(Some(10957))); // ymd
+        assert_eq!(parse_expiredate("garbage"), None); // unparseable
+        assert_eq!(parse_expiredate("2021-02-30"), None); // invalid ymd
     }
 
     #[test]

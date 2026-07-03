@@ -22,8 +22,8 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `authorized_keys` | No | -- | SSH authorized keys content (written to `~/.ssh/authorized_keys`). |
 | `system` | No | `false` | If `true`, create a system account (`useradd --system`). |
 | `manage_home` | No | `true` | If `false`, skip `-m` flag on `useradd` (no home dir creation). If `true`, `userdel -r` removes home on delete. |
-| `password_max_age` | No | -- | Maximum password age in days. Runs `chage -M <days>` after create/update. |
-| `expiredate` | No | -- | Account expiration date (`YYYY-MM-DD`). Passed to `useradd --expiredate` / `usermod --expiredate`. |
+| `password_max_age` | No | -- | Maximum password age in days. Runs `chage -M <days>` on create, and on update only when it differs from the current `/etc/shadow` value. |
+| `expiredate` | No | -- | Account expiration date (`YYYY-MM-DD` or days since epoch). Passed to `useradd --expiredate` on create; on update, applied via `usermod --expiredate` only when it differs from the current `/etc/shadow` expiry. |
 | `purge_groups` | No | `false` | When `true` with `groups`, removes user from supplementary groups not in the list (`usermod -G` instead of `-aG`). |
 | `sudo_passwd` | No | `false` | If `true`, grant sudo access with password required. Writes `/etc/sudoers.d/<username>`. Mutually exclusive with `sudo_nopasswd`. |
 | `sudo_nopasswd` | No | `false` | If `true`, grant passwordless sudo access. Writes `/etc/sudoers.d/<username>` with `NOPASSWD`. Mutually exclusive with `sudo_passwd`. |
