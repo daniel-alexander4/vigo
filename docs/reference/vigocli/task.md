@@ -61,9 +61,16 @@ with `{"forced":true}` in the payload; refused dispatches (operator
 declined, no `--force`) land as `task.blocked` with the matched pattern.
 
 `--force` does **not** bypass the agent's guardrails on each envoy —
-that list (`agent/src/guardrails.rs`) is the final safety boundary and
-is hardcoded. A `--force`'d command that the agent still refuses will
-come back as `rejected` per target.
+they are hardcoded (`agent/src/guardrails.rs`) and not server-overridable.
+A `--force`'d command the agent still refuses comes back as `rejected`
+per target. Note what those guardrails guarantee: the **structural**
+checks (file / service / package / process / systemd-drop-in resources,
+matched against canonically-resolved targets) are a hard stop. The scan
+of **free-form shell commands** (`exec`, ad-hoc pushes, and the embedded
+commands of resources like `backup`/`cron`) is **best-effort** — a
+heuristic that catches accidents and unsophisticated abuse but is
+trivially evadable by a determined command author, so don't rely on it
+as a boundary for arbitrary shell.
 
 ### Examples
 
