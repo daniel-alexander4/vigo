@@ -70,7 +70,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -325,13 +325,26 @@ async fn handle_client(
         "gitback helper: HELLO parsed"
     );
 
-    let home = match home_for_uid(uid) {
-        Ok(p) => p,
+    let (username, home) = match passwd_entry_for_uid(uid) {
+        Ok(v) => v,
         Err(e) => {
             let _ = write_half.write_all(format!("ERR {}\n", sanitize_err(&e.to_string())).as_bytes()).await;
             return Err(e);
         }
     };
+
+    // Usercrate-policy gate (default-deny both layers, ADR-002 model).
+    // The crypto token chain proves puddle membership but NOT that this
+    // envoy's operator still authorizes this user for gitback — a
+    // revoked `gitback: true` flag scrubs only the user-owned
+    // ~/.vigo-gitback/, so a restored tokens.json would otherwise still
+    // verify. Mirror curator's helper, which gates on the policy flag
+    // before any git operation. Read verbs (RESOLVE-NAME/STATUS) are
+    // pure lookups handled above and stay ungated.
+    if let Err(e) = enforce_gitback_policy(&username) {
+        let _ = write_half.write_all(format!("ERR {}\n", sanitize_err(&e.to_string())).as_bytes()).await;
+        return Err(e);
+    }
 
     let chain = match authorize(&home, &project_id) {
         Ok(c) => c,
@@ -701,15 +714,33 @@ async fn read_header<R>(reader: &mut BufReader<R>) -> Result<String>
 where
     R: tokio::io::AsyncRead + Unpin,
 {
-    let mut line = String::new();
-    let n = reader.read_line(&mut line).await.context("read_line")?;
-    if n == 0 {
-        bail!("client closed connection before HELLO");
+    // Read the HELLO line one byte at a time, capping allocation at
+    // MAX_HEADER_BYTES. `read_line` would grow the String unbounded on a
+    // newline-less stream (the length check only fires AFTER the whole
+    // line is buffered) — a pre-auth allocation DoS on the 0666 socket.
+    // We can't `.take()` the underlying reader: the same reader carries
+    // the git smart-protocol tunnel after the handshake, and a cap there
+    // would truncate the tunnel. Reads are buffered, so byte-at-a-time is
+    // cheap; the header is a short one-shot line.
+    let mut buf = Vec::new();
+    loop {
+        let mut byte = [0u8; 1];
+        let n = reader.read(&mut byte).await.context("read_line")?;
+        if n == 0 {
+            if buf.is_empty() {
+                bail!("client closed connection before HELLO");
+            }
+            break;
+        }
+        buf.push(byte[0]);
+        if byte[0] == b'\n' {
+            break;
+        }
+        if buf.len() > MAX_HEADER_BYTES {
+            bail!("HELLO line too long (>{} bytes)", MAX_HEADER_BYTES);
+        }
     }
-    if line.len() > MAX_HEADER_BYTES {
-        bail!("HELLO line too long ({} bytes)", line.len());
-    }
-    Ok(line)
+    String::from_utf8(buf).context("HELLO line is not valid UTF-8")
 }
 
 fn parse_header(line: &str) -> Result<([u8; ID_LEN], Service)> {
@@ -848,6 +879,40 @@ fn resolve_name_via_local_claim(uid: u32, name: &str, handle: &str) -> Option<(S
     Some((super::project_state::hex_id(&pid), hex::encode(pk)))
 }
 
+/// Enforce the caller's usercrate `gitback` flag before a git operation
+/// — the user layer of the two-layer swarm authorization model (ADR-002).
+/// Mirrors curator's helper, which gates on `caller.policy.curator`
+/// before serving. Reads `/var/lib/vigo/usercrate-policy/<user>.json`; a
+/// missing file (user never enrolled in a gitback usercrate) or
+/// `gitback: false` denies. This is what makes a flag revocation actually
+/// bite: without it, a user whose flag was removed could restore a
+/// backed-up ~/.vigo-gitback/tokens.json and resume push/fetch, since the
+/// crypto chain alone still verifies.
+fn enforce_gitback_policy(username: &str) -> Result<()> {
+    // VIGO_USERCRATE_POLICY_DIR overrides the policy dir for test
+    // isolation, mirroring VIGO_GITBACK_PASSWD_FILE above; production
+    // reads the daemon-canonical POLICY_DIR. The daemon runs as root in a
+    // controlled (systemd) environment where these overrides are unset.
+    let dir = std::env::var_os("VIGO_USERCRATE_POLICY_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(crate::swarm::policy::POLICY_DIR));
+    enforce_gitback_policy_at(&dir, username)
+}
+
+/// Directory-overridable form of [`enforce_gitback_policy`]. Production
+/// uses [`crate::swarm::policy::POLICY_DIR`]; tests pass a tempdir.
+fn enforce_gitback_policy_at(dir: &Path, username: &str) -> Result<()> {
+    let policy = crate::swarm::policy::read_user_policy_at(dir, username)
+        .with_context(|| format!("reading usercrate policy for {username}"))?;
+    if !policy.gitback {
+        bail!(
+            "user {username} is not authorized to use gitback on this envoy \
+             (set `gitback: true` on the user resource in the usercrate)"
+        );
+    }
+    Ok(())
+}
+
 fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
     // Project must exist locally (founder issued / joined).
     let cfg = ProjectConfig::load(home, project_id)
@@ -975,37 +1040,44 @@ fn sanitize_err(s: &str) -> String {
 
 // ---------- /etc/passwd lookup ----------
 
-/// Resolve a UID to its home directory by reading `/etc/passwd`.
+/// Resolve a UID to its `(username, home)` by reading `/etc/passwd`.
 /// We deliberately do not call `getpwuid_r(3)` — direct read keeps
 /// the daemon's external surface tiny and avoids any NSS plugin
 /// (LDAP, SSSD, etc.) hitting a slow remote on the request path.
 /// For Vigo's target (a per-host agent serving local users) the
-/// passwd file is authoritative.
-fn home_for_uid(uid: u32) -> Result<PathBuf> {
+/// passwd file is authoritative. The username is needed to look up the
+/// caller's usercrate policy flag.
+fn passwd_entry_for_uid(uid: u32) -> Result<(String, PathBuf)> {
     let path = std::env::var_os("VIGO_GITBACK_PASSWD_FILE")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/etc/passwd"));
     let body = std::fs::read_to_string(&path)
         .with_context(|| format!("read {}", path.display()))?;
-    home_for_uid_in(&body, uid)
+    passwd_entry_for_uid_in(&body, uid)
         .ok_or_else(|| anyhow!("no passwd entry for uid {}", uid))
 }
 
-fn home_for_uid_in(passwd_body: &str, uid: u32) -> Option<PathBuf> {
+/// Resolve a UID to its home directory only. Thin wrapper for callers
+/// (the RESOLVE-NAME self-claim path) that don't need the username.
+fn home_for_uid(uid: u32) -> Result<PathBuf> {
+    passwd_entry_for_uid(uid).map(|(_, home)| home)
+}
+
+fn passwd_entry_for_uid_in(passwd_body: &str, uid: u32) -> Option<(String, PathBuf)> {
     for line in passwd_body.lines() {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
         // passwd line: name:passwd:uid:gid:gecos:home:shell
         let mut parts = line.splitn(7, ':');
-        let _name = parts.next()?;
+        let name = parts.next()?;
         let _pw = parts.next()?;
         let line_uid: u32 = parts.next()?.parse().ok()?;
         let _gid = parts.next()?;
         let _gecos = parts.next()?;
         let home = parts.next()?;
         if line_uid == uid {
-            return Some(PathBuf::from(home));
+            return Some((name.to_string(), PathBuf::from(home)));
         }
     }
     None
@@ -1110,9 +1182,15 @@ root:x:0:0:root:/root:/bin/bash
 daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
 dan:x:1000:1000:Dan,,,:/home/dan:/bin/zsh
 ";
-        assert_eq!(home_for_uid_in(body, 0), Some(PathBuf::from("/root")));
-        assert_eq!(home_for_uid_in(body, 1000), Some(PathBuf::from("/home/dan")));
-        assert_eq!(home_for_uid_in(body, 9999), None);
+        assert_eq!(
+            passwd_entry_for_uid_in(body, 0),
+            Some(("root".to_string(), PathBuf::from("/root")))
+        );
+        assert_eq!(
+            passwd_entry_for_uid_in(body, 1000),
+            Some(("dan".to_string(), PathBuf::from("/home/dan")))
+        );
+        assert_eq!(passwd_entry_for_uid_in(body, 9999), None);
     }
 
     #[test]
@@ -1122,7 +1200,70 @@ dan:x:1000:1000:Dan,,,:/home/dan:/bin/zsh
 
 dan:x:1000:1000:Dan:/home/dan:/bin/zsh
 ";
-        assert_eq!(home_for_uid_in(body, 1000), Some(PathBuf::from("/home/dan")));
+        assert_eq!(
+            passwd_entry_for_uid_in(body, 1000),
+            Some(("dan".to_string(), PathBuf::from("/home/dan")))
+        );
+    }
+
+    #[test]
+    fn enforce_gitback_policy_gates_on_flag() {
+        use crate::swarm::policy::{write_user_policy_at, UserPolicy};
+        let dir = tempfile::TempDir::new().unwrap();
+
+        // No policy file → deny (user never enrolled in a gitback usercrate).
+        assert!(enforce_gitback_policy_at(dir.path(), "dan").is_err());
+
+        // gitback: false → deny (flag revoked; a restored tokens.json must
+        // NOT re-arm push/fetch).
+        write_user_policy_at(
+            dir.path(),
+            "dan",
+            &UserPolicy { gitback: false, ..Default::default() },
+        )
+        .unwrap();
+        assert!(enforce_gitback_policy_at(dir.path(), "dan").is_err());
+
+        // gitback: true → allow.
+        write_user_policy_at(
+            dir.path(),
+            "dan",
+            &UserPolicy { gitback: true, ..Default::default() },
+        )
+        .unwrap();
+        assert!(enforce_gitback_policy_at(dir.path(), "dan").is_ok());
+    }
+
+    #[tokio::test]
+    async fn read_header_caps_oversized_line() {
+        // A newline-less stream longer than MAX_HEADER_BYTES must error
+        // rather than grow the buffer unbounded (pre-auth allocation DoS
+        // on the 0666 socket).
+        let big = vec![b'A'; MAX_HEADER_BYTES + 100];
+        let mut br = BufReader::new(&big[..]);
+        let err = read_header(&mut br).await.unwrap_err();
+        assert!(err.to_string().contains("too long"), "err={err}");
+    }
+
+    #[tokio::test]
+    async fn read_header_reads_line_and_leaves_tunnel_intact() {
+        // The cap must bound only the header line — the bytes after the
+        // newline belong to the git smart-protocol tunnel and must stay
+        // readable from the same reader.
+        let input = b"HELLO abc gitback\nTUNNEL-BYTES";
+        let mut br = BufReader::new(&input[..]);
+        let line = read_header(&mut br).await.unwrap();
+        assert_eq!(line, "HELLO abc gitback\n");
+        let mut rest = Vec::new();
+        br.read_to_end(&mut rest).await.unwrap();
+        assert_eq!(rest, b"TUNNEL-BYTES");
+    }
+
+    #[tokio::test]
+    async fn read_header_errors_on_empty_stream() {
+        let mut br = BufReader::new(&b""[..]);
+        let err = read_header(&mut br).await.unwrap_err();
+        assert!(err.to_string().contains("before HELLO"), "err={err}");
     }
 
     /// End-to-end: bind a daemon on a tempfile socket, connect a
@@ -1155,14 +1296,27 @@ dan:x:1000:1000:Dan:/home/dan:/bin/zsh
         );
         std::fs::write(&passwd_path, passwd_body).unwrap();
 
+        // Seed a gitback:true policy for test-user so the request clears
+        // the usercrate-policy gate and reaches the project.json check
+        // this test targets.
+        let policy_dir = temp.path().join("usercrate-policy");
+        crate::swarm::policy::write_user_policy_at(
+            &policy_dir,
+            "test-user",
+            &crate::swarm::policy::UserPolicy { gitback: true, ..Default::default() },
+        )
+        .unwrap();
+
         // Test-isolation env vars; remove on test exit.
         std::env::set_var("VIGO_GITBACK_SOCKET_PATH", &sock_path);
         std::env::set_var("VIGO_GITBACK_PASSWD_FILE", &passwd_path);
+        std::env::set_var("VIGO_USERCRATE_POLICY_DIR", &policy_dir);
         struct CleanupEnv;
         impl Drop for CleanupEnv {
             fn drop(&mut self) {
                 std::env::remove_var("VIGO_GITBACK_SOCKET_PATH");
                 std::env::remove_var("VIGO_GITBACK_PASSWD_FILE");
+                std::env::remove_var("VIGO_USERCRATE_POLICY_DIR");
             }
         }
         let _cleanup = CleanupEnv;
