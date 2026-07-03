@@ -123,7 +123,7 @@ fn canonicalize_meaningful(v: &serde_json::Value) -> serde_json::Value {
         Value::Array(arr) => {
             let mut items: Vec<Value> = arr.iter().map(canonicalize_meaningful).collect();
             // Sort by serialized form so set-equal arrays in any order hash equal.
-            items.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            items.sort_by_key(|a| a.to_string());
             Value::Array(items)
         }
         other => other.clone(),
