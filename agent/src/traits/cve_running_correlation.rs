@@ -33,7 +33,6 @@ use anyhow::Result;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
 
 /// Scanner-output directory shared with `security_scan`.
@@ -522,44 +521,22 @@ fn prepend<'a>(first: &'a str, rest: &[&'a str]) -> Vec<&'a str> {
 /// stderr is deliberately ignored so non-fatal warnings from
 /// dpkg-query / rpm don't pollute the trait.
 fn run_with_timeout(cmd: &str, args: &[&str]) -> Option<String> {
-    use std::io::Read;
-    use std::process::Stdio;
-    let mut child = Command::new(cmd)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) if status.success() => {
-                let mut out = String::new();
-                if let Some(mut s) = child.stdout.take() {
-                    s.read_to_string(&mut out).ok();
-                }
-                return Some(out);
-            }
-            Ok(Some(_)) => {
-                // Non-zero exit — still read stdout because dpkg-query -S
-                // returns 1 when some paths don't match but prints hits.
-                let mut out = String::new();
-                if let Some(mut s) = child.stdout.take() {
-                    s.read_to_string(&mut out).ok();
-                }
-                return if out.is_empty() { None } else { Some(out) };
-            }
-            Ok(None) => {
-                if start.elapsed() >= PKG_LOOKUP_TIMEOUT {
-                    let _ = child.kill();
-                    return None;
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(_) => return None,
-        }
+    // Route through the executor runner: it puts the child in its own process
+    // group and, on the deadline, SIGTERM→SIGKILLs the whole tree, while
+    // `wait_with_output` drains stdout concurrently — so a dpkg-query that
+    // emits more than the pipe buffer can't block on a full pipe and get
+    // killed as a false timeout (which returned nothing on large hosts).
+    let output =
+        crate::executors::run_command_niced_timeout(cmd, args, 0, PKG_LOOKUP_TIMEOUT).ok()?;
+    // dpkg-query -S exits 1 when some paths don't match but still prints hits,
+    // so read stdout regardless of exit code.
+    let out = String::from_utf8_lossy(&output.stdout).into_owned();
+    if output.status.success() {
+        Some(out)
+    } else if out.is_empty() {
+        None
+    } else {
+        Some(out)
     }
 }
 
@@ -568,6 +545,16 @@ mod tests {
     use super::*;
     use std::fs;
     use std::os::unix::fs::symlink;
+
+    // A package query emitting more than the pipe buffer must be drained fully,
+    // not deadlock on a full stdout pipe and get killed as a false timeout
+    // (which returned None on large hosts before routing through the runner).
+    #[test]
+    fn run_with_timeout_drains_output_larger_than_pipe_buffer() {
+        let out = run_with_timeout("sh", &["-c", "head -c 200000 /dev/zero | tr '\\0' 'x'"]);
+        let out = out.expect("large output should be drained, not lost to a false timeout");
+        assert_eq!(out.len(), 200_000);
+    }
 
     #[test]
     fn test_collect_returns_shape_on_empty_host() {

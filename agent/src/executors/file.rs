@@ -540,7 +540,7 @@ fn run_stream_edit_pipeline(
         let input_hash = sha256_hex(&data);
         let start = Instant::now();
 
-        let output = super::run_command_with_stdin_timeout(script, &[], &data, timeout)
+        let output = super::run_command_with_stdin_niced_timeout(script, &[], &data, 0, timeout)
             .map_err(|e| {
                 warn!(
                     script = %script,

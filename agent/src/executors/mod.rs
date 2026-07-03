@@ -334,6 +334,27 @@ pub fn run_command_niced(name: &str, args: &[&str], nice_level: i32) -> std::io:
     cmd.output()
 }
 
+/// Writes `data` to a child's stdin on a detached thread, tolerating a broken
+/// pipe. A child that exits before consuming all of stdin closes the pipe —
+/// its exit status, not the write, is what matters, so `BrokenPipe` is not an
+/// error here. Draining stdin on its own thread also lets `wait_with_output`
+/// drain stdout/stderr concurrently, so a child that emits a large amount of
+/// output before reading all of stdin can't deadlock against our write. The
+/// stdin handle is moved in and dropped (EOF) when the write completes.
+fn spawn_stdin_writer(stdin: Option<std::process::ChildStdin>, data: &[u8]) {
+    let Some(mut stdin) = stdin else { return };
+    let data = data.to_vec();
+    std::thread::spawn(move || {
+        use std::io::Write;
+        if let Err(e) = stdin.write_all(&data) {
+            if e.kind() != std::io::ErrorKind::BrokenPipe {
+                tracing::debug!(error = %e, "writing stdin to child failed");
+            }
+        }
+        // stdin dropped here → EOF for the child.
+    });
+}
+
 /// Runs a command with stdin piped in.
 pub fn run_command_with_stdin(
     name: &str,
@@ -350,7 +371,6 @@ pub fn run_command_with_stdin_niced(
     stdin_data: &[u8],
     nice_level: i32,
 ) -> std::io::Result<Output> {
-    use std::io::Write;
     use std::process::{Command, Stdio};
 
     let mut cmd = Command::new(name);
@@ -366,10 +386,7 @@ pub fn run_command_with_stdin_niced(
     crate::platform::process::apply_oom_score_adj(&mut cmd);
     let mut child = cmd.spawn()?;
 
-    if let Some(ref mut stdin) = child.stdin {
-        stdin.write_all(stdin_data)?;
-    }
-
+    spawn_stdin_writer(child.stdin.take(), stdin_data);
     child.wait_with_output()
 }
 
@@ -448,7 +465,6 @@ pub fn run_command_with_stdin_niced_timeout(
     nice_level: i32,
     timeout: std::time::Duration,
 ) -> std::io::Result<Output> {
-    use std::io::Write;
     use std::process::{Command, Stdio};
     use std::sync::mpsc;
     use std::thread;
@@ -476,10 +492,7 @@ pub fn run_command_with_stdin_niced_timeout(
     let mut child = cmd.spawn()?;
     let pid = child.id();
 
-    if let Some(ref mut stdin) = child.stdin {
-        stdin.write_all(stdin_data)?;
-    }
-    drop(child.stdin.take());
+    spawn_stdin_writer(child.stdin.take(), stdin_data);
 
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
@@ -501,50 +514,6 @@ pub fn run_command_with_stdin_niced_timeout(
                 ),
             ))
         }
-    }
-}
-
-/// Runs a command with stdin piped in and a per-process timeout.
-/// If the process doesn't complete within `timeout`, it is killed.
-pub fn run_command_with_stdin_timeout(
-    name: &str,
-    args: &[&str],
-    stdin_data: &[u8],
-    timeout: std::time::Duration,
-) -> std::io::Result<Output> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    use std::sync::mpsc;
-    use std::thread;
-
-    let mut cmd = Command::new(name);
-    cmd.args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    // Make this child the first OOM-kill target so host workloads win under
-    // memory pressure (do NOT cap RLIMIT_AS — it crashes Go/JVM CLIs).
-    crate::platform::process::apply_oom_score_adj(&mut cmd);
-    let mut child = cmd.spawn()?;
-
-    if let Some(ref mut stdin) = child.stdin {
-        stdin.write_all(stdin_data)?;
-    }
-    // Drop stdin to signal EOF.
-    drop(child.stdin.take());
-
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let result = child.wait_with_output();
-        let _ = tx.send(result);
-    });
-
-    match rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(_) => Err(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            format!("{} timed out after {:.0}s", name, timeout.as_secs_f64()),
-        )),
     }
 }
 
@@ -662,6 +631,49 @@ impl CommandRunner for DefaultRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The stdin writers must tolerate a child that exits without consuming all
+    // of stdin: the unread payload closes as a broken pipe on the writer
+    // thread, which is swallowed so the caller sees the child's real exit
+    // status rather than an io error. (Regression for the `script_exit_nonzero`
+    // flake — a script that exits before reading its JSON stdin.)
+    #[cfg(unix)]
+    #[test]
+    fn run_with_stdin_tolerates_child_ignoring_stdin() {
+        let out = run_command_with_stdin("true", &[], &vec![b'x'; 200_000]).unwrap();
+        assert!(out.status.success());
+    }
+
+    // The stdin write and the stdout drain must run concurrently: `cat` echoes
+    // a >64KiB payload, which deadlocks on a full pipe unless something drains
+    // stdout while we still feed stdin. `wait_with_output` drains stdout/stderr
+    // while `spawn_stdin_writer` feeds stdin on its own thread.
+    #[cfg(unix)]
+    #[test]
+    fn run_with_stdin_drains_output_larger_than_pipe_buffer() {
+        let payload = vec![b'a'; 512 * 1024];
+        let out = run_command_with_stdin("cat", &[], &payload).unwrap();
+        assert!(out.status.success());
+        assert_eq!(out.stdout.len(), payload.len());
+    }
+
+    // Same concurrent-drain guarantee on the kill-capable timeout path (the one
+    // the stream_edit pipeline now uses).
+    #[cfg(unix)]
+    #[test]
+    fn run_with_stdin_timeout_drains_output_larger_than_pipe_buffer() {
+        let payload = vec![b'b'; 512 * 1024];
+        let out = run_command_with_stdin_niced_timeout(
+            "cat",
+            &[],
+            &payload,
+            0,
+            std::time::Duration::from_secs(10),
+        )
+        .unwrap();
+        assert!(out.status.success());
+        assert_eq!(out.stdout.len(), payload.len());
+    }
 
     #[test]
     fn action_display() {

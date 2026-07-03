@@ -26,9 +26,6 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-use std::process::Command;
-
 pub fn collect() -> Result<Value> {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
@@ -100,9 +97,10 @@ fn parse_inspect_output(raw: &str) -> Vec<Value> {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn run_docker(args: &[&str]) -> String {
-    Command::new("docker")
-        .args(args)
-        .output()
+    // A wedged docker socket must not hang the collector; the outer collector
+    // timeout can't kill a spawn_blocking task, so give the child its own 4s
+    // deadline (under the 5s collector budget) with a kill on expiry.
+    crate::executors::run_command_niced_timeout("docker", args, 0, std::time::Duration::from_secs(4))
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())

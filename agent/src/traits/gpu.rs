@@ -40,13 +40,19 @@ fn device_key(d: &Value) -> String {
 }
 
 fn nvidia_smi_devices() -> Option<Vec<Value>> {
-    let output = Command::new("nvidia-smi")
-        .args([
+    // 4s internal deadline (under the 5s collector timeout): a wedged GPU can
+    // leave nvidia-smi in D-state, and the outer collector timeout can't kill a
+    // spawn_blocking task — route through the runner so the child is killed.
+    let output = crate::executors::run_command_niced_timeout(
+        "nvidia-smi",
+        &[
             "--query-gpu=name,driver_version,vbios_version,memory.total",
             "--format=csv,noheader,nounits",
-        ])
-        .output()
-        .ok()?;
+        ],
+        0,
+        std::time::Duration::from_secs(4),
+    )
+    .ok()?;
 
     if !output.status.success() {
         return None;

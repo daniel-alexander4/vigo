@@ -124,9 +124,12 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
         }
     };
 
-    // Take stdout/stderr handles so we can read them after wait().
-    let stdout_pipe = child.stdout.take();
-    let stderr_pipe = child.stderr.take();
+    // Drain stdout/stderr CONCURRENTLY with the wait: a child emitting more
+    // than the ~64KiB pipe buffer would otherwise block on a full pipe and
+    // never exit, so `child.wait()` would ride to the timeout and its output
+    // would be lost. Spawned reader tasks keep the pipes drained as it runs.
+    let stdout_task = tokio::spawn(read_pipe(child.stdout.take(), MAX_STDOUT));
+    let stderr_task = tokio::spawn(read_pipe(child.stderr.take(), MAX_STDERR));
 
     let timeout = tokio::time::sleep(std::time::Duration::from_secs(timeout_secs));
     tokio::pin!(timeout);
@@ -162,9 +165,9 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
         }
     };
 
-    // Read captured output from pipes.
-    let stdout = read_pipe(stdout_pipe, MAX_STDOUT).await;
-    let stderr = read_pipe(stderr_pipe, MAX_STDERR).await;
+    // Readers drained concurrently; collect them now that the child has exited.
+    let stdout = stdout_task.await.unwrap_or_default();
+    let stderr = stderr_task.await.unwrap_or_default();
 
     let exit_code = wait_status.and_then(|s| s.code()).unwrap_or(-1);
     let actual_status = if exit_code != 0 && status_str == "complete" {
@@ -193,11 +196,14 @@ async fn collect_child_output(
     status: &str,
     traceparent: &str,
 ) -> TaskResult {
-    let stdout_pipe = child.stdout.take();
-    let stderr_pipe = child.stderr.take();
+    // Drain concurrently with the wait (see `execute` for the deadlock this
+    // avoids); the child here has usually already exited, but a large final
+    // burst of output can still fill the pipe before wait() observes exit.
+    let stdout_task = tokio::spawn(read_pipe(child.stdout.take(), MAX_STDOUT));
+    let stderr_task = tokio::spawn(read_pipe(child.stderr.take(), MAX_STDERR));
     let wait_status = child.wait().await.ok();
-    let stdout = read_pipe(stdout_pipe, MAX_STDOUT).await;
-    let stderr = read_pipe(stderr_pipe, MAX_STDERR).await;
+    let stdout = stdout_task.await.unwrap_or_default();
+    let stderr = stderr_task.await.unwrap_or_default();
     let exit_code = wait_status.and_then(|s| s.code()).unwrap_or(-1);
     let actual_status = if exit_code != 0 && status == "complete" {
         "failed"
@@ -345,6 +351,34 @@ mod tests {
         let result = execute(&dispatch, &cancel).await;
         assert_eq!(result.exit_code, 42);
         assert_eq!(result.status, "failed");
+    }
+
+    // A command emitting far more than the ~64KiB pipe buffer must complete
+    // promptly with its full output — before the concurrent-drain fix the
+    // child blocked on a full stdout pipe, never exited, and rode to the
+    // timeout with truncated output.
+    #[tokio::test]
+    async fn execute_drains_output_larger_than_pipe_buffer() {
+        let cancel = CancellationToken::new();
+        let dispatch = TaskDispatch {
+            task_id: "test-bigout".to_string(),
+            command: "head -c 200000 /dev/zero | tr '\\0' 'x'".to_string(),
+            timeout_seconds: 10,
+            env: BTreeMap::new(),
+            nice: 0,
+            traceparent: String::new(),
+        };
+
+        let start = Instant::now();
+        let result = execute(&dispatch, &cancel).await;
+        assert_eq!(result.status, "complete", "should exit cleanly, not time out");
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.stdout.len(), 200_000, "full output must be captured");
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(5),
+            "should not ride to the timeout, took {:?}",
+            start.elapsed()
+        );
     }
 
     #[tokio::test]

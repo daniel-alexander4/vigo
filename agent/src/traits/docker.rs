@@ -37,10 +37,12 @@ pub fn collect() -> Result<Value> {
 }
 
 fn collect_running_containers() -> Vec<String> {
-    let output = match Command::new("docker")
-        .args(["ps", "--format", "{{.Names}}"])
-        .output()
-    {
+    let output = match crate::executors::run_command_niced_timeout(
+        "docker",
+        &["ps", "--format", "{{.Names}}"],
+        0,
+        std::time::Duration::from_secs(4),
+    ) {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => return vec![],
     };
@@ -57,9 +59,10 @@ fn collect_running_containers() -> Vec<String> {
 }
 
 fn run_docker(args: &[&str]) -> String {
-    Command::new("docker")
-        .args(args)
-        .output()
+    // A wedged docker socket must not hang the collector; the outer collector
+    // timeout can't kill a spawn_blocking task, so give the child its own 4s
+    // deadline (under the 5s collector budget) with a kill on expiry.
+    crate::executors::run_command_niced_timeout("docker", args, 0, std::time::Duration::from_secs(4))
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
