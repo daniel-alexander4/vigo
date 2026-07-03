@@ -25,6 +25,11 @@ use tracing::{info, warn};
 /// plenty of headroom while keeping a long-lived agent's memory bounded.
 const STREAM_EDIT_CACHE_CAP: usize = 1024;
 
+/// Bounded timeout for a file `validate:` command. Without it a hung linter
+/// blocks the file write with no kill; 60s is generous for a real config
+/// check while keeping a wedged validator off the convergence cycle.
+const VALIDATE_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Cached result of a stream_edit pipeline run.
 #[derive(Clone)]
 struct StreamEditCacheEntry {
@@ -377,7 +382,7 @@ fn handle_present(
         // Niced + OOM-adjusted via the shared helper so a heavy validate
         // command (e.g. a config linter) stays an invisible background citizen
         // rather than spawning at full priority.
-        let output = super::run_command_niced("sh", &["-c", &cmd_str], 10).map_err(|e| {
+        let output = super::run_command_niced_timeout("sh", &["-c", &cmd_str], 10, VALIDATE_TIMEOUT).map_err(|e| {
             let _ = fs::remove_file(&tmp_path);
             format!("validate command failed to execute: {}", e)
         })?;

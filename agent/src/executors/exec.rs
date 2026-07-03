@@ -31,8 +31,14 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tracing::warn;
+
+/// Bounded timeout for onlyif/unless guard commands. Guards are meant to be
+/// quick checks (test/pgrep/etc.); a hung guard would otherwise block the
+/// whole convergence cycle with no kill. Independent of the resource's
+/// `timeout:` (which bounds the main command and can legitimately be hours).
+const GUARD_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Runs commands with idempotency guards.
 pub struct ExecExecutor {
@@ -354,7 +360,7 @@ fn execute_exec(
                     let (prog, args) =
                         build_wrapped_command(onlyif, cwd, user, &env_pairs, shell);
                     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-                    let out = runner.run(&prog, &arg_refs);
+                    let out = runner.run_niced_timeout(&prog, &arg_refs, 0, GUARD_TIMEOUT);
                     match out {
                         Ok(o) if o.status.success() => {} // guard passed
                         _ => {
@@ -373,7 +379,7 @@ fn execute_exec(
                     let (prog, args) =
                         build_wrapped_command(unless, cwd, user, &env_pairs, shell);
                     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-                    let out = runner.run(&prog, &arg_refs);
+                    let out = runner.run_niced_timeout(&prog, &arg_refs, 0, GUARD_TIMEOUT);
                     if let Ok(o) = out {
                         if o.status.success() {
                             result.action = Action::Skipped;
@@ -582,7 +588,7 @@ fn execute_exec(
         } else if has_secret_file {
             let sf = params.get("secret_file")
                 .ok_or_else(|| format!("exec {}: secret_file param missing", cmd_label))?;
-            run_with_secret_file(runner, command, sf, cwd, user, &env_pairs, shell)
+            run_with_secret_file(runner, command, sf, cwd, user, &env_pairs, shell, nice_level, timeout_dur)
         } else {
             let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs, shell);
             let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -631,6 +637,8 @@ fn run_with_secret_file(
     user: Option<&str>,
     env_pairs: &[(String, String)],
     shell: Option<&str>,
+    nice_level: i32,
+    timeout: Option<Duration>,
 ) -> Result<std::process::Output, String> {
     let tmp_dir = std::env::temp_dir();
     let tmp_path = tmp_dir.join(format!("vigo-secret-{}", uuid::Uuid::new_v4()));
@@ -648,7 +656,13 @@ fn run_with_secret_file(
     let resolved = command.replace("{{secret_file}}", &tmp_path_str);
     let (prog, args) = build_wrapped_command(&resolved, cwd, user, env_pairs, shell);
     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let result = runner.run(&prog, &arg_refs);
+    // Honor the resource's nice level + timeout, matching the non-secret exec
+    // branch — a secret_file exec must not run at full priority with no
+    // kill-on-hang backstop.
+    let result = match timeout {
+        Some(dur) => runner.run_niced_timeout(&prog, &arg_refs, nice_level, dur),
+        None => runner.run_niced(&prog, &arg_refs, nice_level),
+    };
 
     // Always clean up.
     let _ = fs::remove_file(&tmp_path);

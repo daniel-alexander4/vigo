@@ -108,6 +108,26 @@ fn overlay_path(vm_name: &str) -> String {
     format!("{LIBVIRT_IMAGES_DIR}/{vm_name}.qcow2")
 }
 
+/// Escape XML metacharacters in a value interpolated into the domain XML.
+/// Covers the five predefined entities; `'` matters because the domain
+/// template uses single-quoted attributes. A tiny local helper is the right
+/// altitude here — the input is operator-authored (typo hardening), and a
+/// full XML library would force rewriting an otherwise-fine template.
+fn xml_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// Build a minimal but valid libvirt KVM domain XML. v1 is single disk +
 /// single NIC; the disk is always the qcow2 overlay; the seed ISO (if
 /// present) attaches as a second virtio CD-ROM.
@@ -119,10 +139,17 @@ fn build_domain_xml(
     seed_iso: Option<&str>,
     network_bridge: Option<&str>,
 ) -> String {
+    // Escape the free-text / operator-derived fields. vm_name and
+    // network_bridge come straight from the operator; overlay_path and the
+    // seed ISO path embed vm_name verbatim. A `<`/`&`/`'` in a name would
+    // otherwise produce malformed libvirt domain XML. Numeric fields
+    // (memory_mib, vcpu) are parsed to integers upstream and are safe.
+    let name_esc = xml_escape(vm_name);
+    let overlay_esc = xml_escape(overlay_path);
     let mut xml = String::with_capacity(1024);
     xml.push_str(&format!(
         r#"<domain type='kvm'>
-  <name>{vm_name}</name>
+  <name>{name_esc}</name>
   <memory unit='MiB'>{memory_mib}</memory>
   <currentMemory unit='MiB'>{memory_mib}</currentMemory>
   <vcpu placement='static'>{vcpu}</vcpu>
@@ -143,25 +170,27 @@ fn build_domain_xml(
     <emulator>/usr/bin/qemu-system-x86_64</emulator>
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2'/>
-      <source file='{overlay_path}'/>
+      <source file='{overlay_esc}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
 "#
     ));
     if let Some(seed) = seed_iso {
+        let seed_esc = xml_escape(seed);
         xml.push_str(&format!(
             "    <disk type='file' device='cdrom'>\n\
              \x20     <driver name='qemu' type='raw'/>\n\
-             \x20     <source file='{seed}'/>\n\
+             \x20     <source file='{seed_esc}'/>\n\
              \x20     <target dev='sda' bus='sata'/>\n\
              \x20     <readonly/>\n\
              \x20   </disk>\n"
         ));
     }
     if let Some(bridge) = network_bridge {
+        let bridge_esc = xml_escape(bridge);
         xml.push_str(&format!(
             "    <interface type='bridge'>\n\
-             \x20     <source bridge='{bridge}'/>\n\
+             \x20     <source bridge='{bridge_esc}'/>\n\
              \x20     <model type='virtio'/>\n\
              \x20   </interface>\n"
         ));
@@ -681,6 +710,34 @@ mod tests {
         assert!(xml.contains("/var/lib/libvirt/images/web01-seed-abc.iso"));
         assert!(xml.contains("<source bridge='br0'/>"));
         assert!(xml.contains("model type='virtio'"));
+    }
+
+    #[test]
+    fn domain_xml_escapes_special_chars() {
+        // A vm_name / bridge with XML metacharacters must be escaped, not
+        // emitted raw (which would corrupt the domain definition).
+        let xml = build_domain_xml(
+            "we<b>&'01",
+            2,
+            2048,
+            "/img/we&b.qcow2",
+            None,
+            Some("br&'0"),
+        );
+        assert!(
+            xml.contains("<name>we&lt;b&gt;&amp;&apos;01</name>"),
+            "name not escaped: {xml}"
+        );
+        assert!(
+            xml.contains("<source file='/img/we&amp;b.qcow2'/>"),
+            "overlay path not escaped: {xml}"
+        );
+        assert!(
+            xml.contains("<source bridge='br&amp;&apos;0'/>"),
+            "bridge not escaped: {xml}"
+        );
+        // The raw, unescaped name must not leak through.
+        assert!(!xml.contains("<name>we<b>"), "raw metacharacters leaked: {xml}");
     }
 
     #[test]

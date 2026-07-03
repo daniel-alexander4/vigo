@@ -56,7 +56,22 @@ impl Executor for ReplaceExecutor {
         let region_start = params.get("region_start").map(|s| s.as_str());
         let region_end = params.get("region_end").map(|s| s.as_str());
 
-        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Nothing to replace in a file that doesn't exist.
+                result.action = Action::None;
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+            Err(e) => {
+                // A real-but-unreadable target (permission denied, non-UTF-8
+                // binary, I/O error) must NOT silently report "settled".
+                result.error = Some(format!("replace executor: reading {}: {}", path, e));
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
         let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
 
         if lines.is_empty() {
@@ -158,6 +173,41 @@ mod tests {
         let params = make_params(&[("target_path", "/tmp/x"), ("replacement", "bar")]);
         let result = exec.execute(&params, false);
         assert!(result.error.unwrap().contains("match_pattern param is required"));
+    }
+
+    #[test]
+    fn missing_file_is_noop() {
+        // A target that doesn't exist has nothing to replace — no-op, no error.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nope");
+        let params = make_params(&[
+            ("target_path", path.to_str().unwrap()),
+            ("match_pattern", "a"),
+            ("replacement", "b"),
+        ]);
+        let result = ReplaceExecutor.execute(&params, false);
+        assert_eq!(result.action, Action::None);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn unreadable_binary_file_errors() {
+        // A non-UTF-8 file must surface an error, not silently report settled
+        // (the old unwrap_or_default() mapped it to an empty no-op).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bin");
+        std::fs::write(&path, [0xff, 0xfe, 0x00, 0x01]).unwrap();
+        let params = make_params(&[
+            ("target_path", path.to_str().unwrap()),
+            ("match_pattern", "a"),
+            ("replacement", "b"),
+        ]);
+        let result = ReplaceExecutor.execute(&params, false);
+        assert!(
+            result.error.is_some(),
+            "expected an error for an unreadable file, got action {:?}",
+            result.action
+        );
     }
 
     #[test]

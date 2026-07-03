@@ -8,7 +8,12 @@ use sha_crypt::{sha512_check, sha512_simple, Sha512Params};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// Bounded timeout for directory lookups (getent/id). These can block
+/// indefinitely under a wedged LDAP/AD/SSSD backend; a short cap keeps a
+/// single user resource from stalling the whole convergence cycle.
+const LOOKUP_TIMEOUT: Duration = Duration::from_secs(15);
 
 // password_matches_shadow returns true iff the SHA-512-crypt entry in
 // /etc/shadow represents the given plaintext. Any non-$6$ entry (locked "!",
@@ -179,7 +184,7 @@ impl UserExecutor {
         if group.parse::<u64>().is_ok() {
             return Some(group.to_string());
         }
-        if let Ok(o) = self.runner.run("getent", &["group", group]) {
+        if let Ok(o) = self.runner.run_niced_timeout("getent", &["group", group], 0, LOOKUP_TIMEOUT) {
             if o.status.success() {
                 if let Some(line) = String::from_utf8_lossy(&o.stdout).lines().next() {
                     let fields: Vec<&str> = line.split(':').collect();
@@ -202,7 +207,7 @@ impl UserExecutor {
     }
 
     fn current_groups(&self, name: &str) -> Vec<String> {
-        match self.runner.run("id", &["-nG", name]) {
+        match self.runner.run_niced_timeout("id", &["-nG", name], 0, LOOKUP_TIMEOUT) {
             Ok(o) if o.status.success() => {
                 String::from_utf8_lossy(&o.stdout)
                     .split_whitespace()
@@ -226,7 +231,7 @@ impl UserExecutor {
     /// on the system at all.
     fn known_groups(&self) -> HashSet<String> {
         let mut groups = HashSet::new();
-        if let Ok(o) = self.runner.run("getent", &["group"]) {
+        if let Ok(o) = self.runner.run_niced_timeout("getent", &["group"], 0, LOOKUP_TIMEOUT) {
             if o.status.success() {
                 for line in String::from_utf8_lossy(&o.stdout).lines() {
                     if let Some((name, _)) = line.split_once(':') {
