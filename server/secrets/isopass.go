@@ -73,14 +73,14 @@ func (p *IsopassProvider) Get(ctx context.Context, key string) (string, error) {
 		return "", err
 	}
 
+	// The isopass endpoint is a fuzzy `query` search, so its result list may
+	// contain near-matches for a key that doesn't exist. Require an exact Name
+	// match and fail closed otherwise — never fall back to results[0], which
+	// would hand the caller a *different* secret's value.
 	for _, r := range results {
 		if r.Name == key {
 			return r.Value, nil
 		}
-	}
-
-	if len(results) > 0 {
-		return results[0].Value, nil
 	}
 
 	return "", fmt.Errorf("secret %q not found in isopass", key)
@@ -108,14 +108,11 @@ func (p *IsopassProvider) GetVersion(ctx context.Context, key string) (int, erro
 		return 0, err
 	}
 
+	// Exact-match only — never a near-match's version (see Get).
 	for _, r := range results {
 		if r.Name == key {
 			return r.Version, nil
 		}
-	}
-
-	if len(results) > 0 {
-		return results[0].Version, nil
 	}
 
 	return 0, fmt.Errorf("secret %q not found in isopass", key)

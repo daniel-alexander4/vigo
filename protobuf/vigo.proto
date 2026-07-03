@@ -435,7 +435,7 @@ message ResourceRunResult {
   bool changed = 5;
   string error_message = 6;
   int32 duration_ms = 7;
-  bytes previous_content = 8;  // file executor: content before overwrite (for snapshots)
+  reserved 8;                  // was previous_content — removed (plaintext-secret leak; nothing read it back)
   string content_hash = 9;     // file executor: SHA-256 of the new content
   string file_path = 10;       // file executor: absolute path of the managed file
 }

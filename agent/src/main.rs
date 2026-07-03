@@ -1120,7 +1120,6 @@ async fn run_once(cli: &Cli, module_filter: Option<String>, dry_run: bool) -> Re
                     changed: r.changed,
                     error_message: r.error.clone().unwrap_or_default(),
                     duration_ms: r.duration_ms,
-                    previous_content: r.previous_content.clone().unwrap_or_default(),
                     content_hash: r.content_hash.clone().unwrap_or_default(),
                     file_path: r.file_path.clone().unwrap_or_default(),
                 })

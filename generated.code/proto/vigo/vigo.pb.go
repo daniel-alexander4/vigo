@@ -1673,9 +1673,8 @@ type ResourceRunResult struct {
 	Changed         bool                   `protobuf:"varint,5,opt,name=changed,proto3" json:"changed,omitempty"`
 	ErrorMessage    string                 `protobuf:"bytes,6,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	DurationMs      int32                  `protobuf:"varint,7,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
-	PreviousContent []byte                 `protobuf:"bytes,8,opt,name=previous_content,json=previousContent,proto3" json:"previous_content,omitempty"` // file executor: content before overwrite (for snapshots)
-	ContentHash     string                 `protobuf:"bytes,9,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`             // file executor: SHA-256 of the new content
-	FilePath        string                 `protobuf:"bytes,10,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`                     // file executor: absolute path of the managed file
+	ContentHash     string                 `protobuf:"bytes,9,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"` // file executor: SHA-256 of the new content
+	FilePath        string                 `protobuf:"bytes,10,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`         // file executor: absolute path of the managed file
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1757,13 +1756,6 @@ func (x *ResourceRunResult) GetDurationMs() int32 {
 		return x.DurationMs
 	}
 	return 0
-}
-
-func (x *ResourceRunResult) GetPreviousContent() []byte {
-	if x != nil {
-		return x.PreviousContent
-	}
-	return nil
 }
 
 func (x *ResourceRunResult) GetContentHash() string {
@@ -7186,7 +7178,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12 \n" +
 	"\vtraceparent\x18\x06 \x01(\tR\vtraceparent\x12\x1f\n" +
 	"\vtotal_count\x18\a \x01(\x05R\n" +
-	"totalCount\"\xf6\x02\n" +
+	"totalCount\"\xd1\x02\n" +
 	"\x11ResourceRunResult\x12)\n" +
 	"\x10configcrate_name\x18\x01 \x01(\tR\x0fconfigcrateName\x12#\n" +
 	"\rresource_type\x18\x02 \x01(\tR\fresourceType\x12#\n" +
@@ -7195,11 +7187,10 @@ const file_vigo_proto_rawDesc = "" +
 	"\achanged\x18\x05 \x01(\bR\achanged\x12#\n" +
 	"\rerror_message\x18\x06 \x01(\tR\ferrorMessage\x12\x1f\n" +
 	"\vduration_ms\x18\a \x01(\x05R\n" +
-	"durationMs\x12)\n" +
-	"\x10previous_content\x18\b \x01(\fR\x0fpreviousContent\x12!\n" +
+	"durationMs\x12!\n" +
 	"\fcontent_hash\x18\t \x01(\tR\vcontentHash\x12\x1b\n" +
 	"\tfile_path\x18\n" +
-	" \x01(\tR\bfilePath\":\n" +
+	" \x01(\tR\bfilePathJ\x04\b\b\x10\t\":\n" +
 	"\x14ReportResultResponse\x12\"\n" +
 	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xcb\x01\n" +
 	"\x13ReportTraitsRequest\x12\x19\n" +

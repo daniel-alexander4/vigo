@@ -1263,29 +1263,33 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	// --- Password Inheritance ---
 	trace.SecretsProvider = cs.backend
 
-	// Scan module definition vars for secret: references.
+	// Scan module definition vars + resource attributes for secret: references
+	// (embedded/compound refs included, via the shared scanner).
 	for _, mod := range cfg.Configcrates {
 		if def, ok := cs.configcrateDefs[mod.Name]; ok {
 			for k, v := range def.Vars {
-				if s, ok := v.(string); ok && strings.HasPrefix(s, "secret:") {
-					trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-						Key:         k,
-						Path:        strings.TrimPrefix(s, "secret:"),
-						Source:      "var",
-						Configcrate: mod.Name,
-					})
-				}
-			}
-			// Scan resource attributes for secret: references.
-			for _, res := range def.Resources {
-				for attrKey, attrVal := range res.Attributes {
-					if s, ok := attrVal.(string); ok && strings.HasPrefix(s, "secret:") {
+				if s, ok := v.(string); ok {
+					for _, path := range secretRefsInValue(s) {
 						trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-							Key:         attrKey,
-							Path:        strings.TrimPrefix(s, "secret:"),
-							Source:      "resource:" + mod.Name + "/" + res.Name + "/" + attrKey,
+							Key:         k,
+							Path:        path,
+							Source:      "var",
 							Configcrate: mod.Name,
 						})
+					}
+				}
+			}
+			for _, res := range def.Resources {
+				for attrKey, attrVal := range res.Attributes {
+					if s, ok := attrVal.(string); ok {
+						for _, path := range secretRefsInValue(s) {
+							trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+								Key:         attrKey,
+								Path:        path,
+								Source:      "resource:" + mod.Name + "/" + res.Name + "/" + attrKey,
+								Configcrate: mod.Name,
+							})
+						}
 					}
 				}
 			}
@@ -1294,21 +1298,23 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 
 	// Scan envoy-level vars for secret: references.
 	for k, v := range envoyEntry.Vars {
-		if s, ok := v.(string); ok && strings.HasPrefix(s, "secret:") {
-			trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-				Key:         k,
-				Path:        strings.TrimPrefix(s, "secret:"),
-				Source:      "var",
-				Configcrate: "",
-			})
+		if s, ok := v.(string); ok {
+			for _, path := range secretRefsInValue(s) {
+				trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+					Key:         k,
+					Path:        path,
+					Source:      "var",
+					Configcrate: "",
+				})
+			}
 		}
 	}
 
 	// Network device credential.
-	if envoyEntry.Credential != "" && strings.HasPrefix(envoyEntry.Credential, "secret:") {
+	for _, path := range secretRefsInValue(envoyEntry.Credential) {
 		trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
 			Key:         "credential",
-			Path:        strings.TrimPrefix(envoyEntry.Credential, "secret:"),
+			Path:        path,
 			Source:      "credential",
 			Configcrate: "",
 		})
@@ -3261,15 +3267,13 @@ func (cs *ConfigStore) AllDeviceEntries() []DeviceEntry {
 // whose configuration contains a "secret:<secretPath>" reference. Used by
 // the rotation watcher to identify which envoys need force-push.
 func (cs *ConfigStore) EnvoysReferencingSecret(secretPath string) []string {
-	needle := secretPrefix + secretPath
-
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
 	// Check which modules reference this secret.
 	affectedConfigcrates := make(map[string]bool)
 	for name, mod := range cs.rawConfigcrates {
-		if configcrateDefReferencesSecret(mod, needle) {
+		if configcrateDefReferencesSecret(mod, secretPath) {
 			affectedConfigcrates[name] = true
 		}
 	}
@@ -3277,7 +3281,7 @@ func (cs *ConfigStore) EnvoysReferencingSecret(secretPath string) []string {
 	// Find entries that use affected modules or have the secret in their vars.
 	var patterns []string
 	for _, entry := range cs.entries {
-		if entryReferencesSecret(entry.config, affectedConfigcrates, needle) {
+		if entryReferencesSecret(entry.config, affectedConfigcrates) {
 			patterns = append(patterns, entry.match)
 		}
 	}
@@ -3291,17 +3295,20 @@ func (cs *ConfigStore) SecretPaths() []string {
 	defer cs.mu.RUnlock()
 
 	seen := make(map[string]bool)
+	addRefs := func(v any) {
+		if s, ok := v.(string); ok {
+			for _, key := range secretRefsInValue(s) {
+				seen[key] = true
+			}
+		}
+	}
 	for _, mod := range cs.rawConfigcrates {
 		for _, v := range mod.Vars {
-			if s, ok := v.(string); ok && strings.HasPrefix(s, secretPrefix) {
-				seen[strings.TrimPrefix(s, secretPrefix)] = true
-			}
+			addRefs(v)
 		}
 		for _, res := range mod.Resources {
 			for _, v := range res.Attributes {
-				if s, ok := v.(string); ok && strings.HasPrefix(s, secretPrefix) {
-					seen[strings.TrimPrefix(s, secretPrefix)] = true
-				}
+				addRefs(v)
 			}
 		}
 	}
@@ -4372,18 +4379,23 @@ func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretE
 			})
 			continue
 		}
-		if strings.HasPrefix(str, secretPrefix) {
-			key := strings.TrimPrefix(str, secretPrefix)
-			if _, err := cs.provider.Get(context.Background(), key); err != nil {
-				errs = append(errs, &SecretError{
-					Match:  match,
-					Attr:   k,
-					Secret: key,
-					Err:    err,
-				})
-				continue
-			}
-			vars[k] = formatSecretPlaceholder(key)
+		if !strings.Contains(str, secretPrefix) {
+			continue
+		}
+		// Route through the shared scanner so embedded/compound refs in a var
+		// value resolve exactly like the detection side reports them — the
+		// same predicate resolveConfigcrateSecrets uses for resource attrs.
+		resolved, failures := cs.resolveSecretsInValue(str)
+		for _, f := range failures {
+			errs = append(errs, &SecretError{
+				Match:  match,
+				Attr:   k,
+				Secret: f.key,
+				Err:    f.err,
+			})
+		}
+		if len(failures) == 0 {
+			vars[k] = resolved
 		}
 	}
 	return errs
@@ -4450,42 +4462,95 @@ type secretResolveFailure struct {
 //
 // Placeholder markers are emitted exactly once per ref — they are not
 // re-scanned for nested `secret:` content.
-func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolveFailure) {
+// secretRefSpan is one `secret:` reference located inside a value: the byte
+// range it occupies and the key it names (empty for a bare `secret:` with no
+// key). Positions let substitution rewrite in place; the key lets detection
+// enumerate refs.
+type secretRefSpan struct {
+	start int    // index of "secret:"
+	end   int    // index just past the key
+	key   string // the secret path ("" for a bare "secret:")
+}
+
+// scanSecretRefs is the single source of truth for "what is a secret
+// reference." It walks str and returns every `secret:` occurrence — including
+// refs embedded mid-string and multiple refs in one compound value (e.g.
+// `PW=secret:vigo/db/pw,DB=app`) — using the canonical key tokenization
+// (isSecretKeyChar). Both the substitution path (resolveSecretsInValue) and
+// every detection path (SecretPaths, configcrateDefReferencesSecret, the
+// config-trace scan) are built on this, so detection can never drift from what
+// substitution actually resolves.
+func scanSecretRefs(str string) []secretRefSpan {
 	if !strings.Contains(str, secretPrefix) {
+		return nil
+	}
+	var spans []secretRefSpan
+	i := 0
+	for i < len(str) {
+		rel := strings.Index(str[i:], secretPrefix)
+		if rel < 0 {
+			break
+		}
+		start := i + rel
+		keyStart := start + len(secretPrefix)
+		keyEnd := keyStart
+		for keyEnd < len(str) && isSecretKeyChar(str[keyEnd]) {
+			keyEnd++
+		}
+		spans = append(spans, secretRefSpan{start: start, end: keyEnd, key: str[keyStart:keyEnd]})
+		if keyEnd == keyStart {
+			// Bare `secret:` (no key) — advance past the prefix so the scan
+			// doesn't loop forever on the same position.
+			i = keyStart
+		} else {
+			i = keyEnd
+		}
+	}
+	return spans
+}
+
+// secretRefsInValue returns the distinct non-empty secret keys referenced in
+// str, embedded/compound refs included. This is the detection predicate that
+// replaced the old whole-value HasPrefix/exact-equality checks, which missed
+// any ref not occupying the entire value.
+func secretRefsInValue(str string) []string {
+	var keys []string
+	seen := make(map[string]bool)
+	for _, sp := range scanSecretRefs(str) {
+		if sp.key != "" && !seen[sp.key] {
+			seen[sp.key] = true
+			keys = append(keys, sp.key)
+		}
+	}
+	return keys
+}
+
+func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolveFailure) {
+	spans := scanSecretRefs(str)
+	if len(spans) == 0 {
 		return str, nil
 	}
 	var b strings.Builder
 	b.Grow(len(str))
 	var failures []secretResolveFailure
-	i := 0
-	for i < len(str) {
-		rel := strings.Index(str[i:], secretPrefix)
-		if rel < 0 {
-			b.WriteString(str[i:])
-			break
-		}
-		b.WriteString(str[i : i+rel])
-		keyStart := i + rel + len(secretPrefix)
-		keyEnd := keyStart
-		for keyEnd < len(str) && isSecretKeyChar(str[keyEnd]) {
-			keyEnd++
-		}
-		key := str[keyStart:keyEnd]
-		if key == "" {
-			// Bare `secret:` with no key — preserve verbatim, advance past it.
+	prev := 0
+	for _, sp := range spans {
+		b.WriteString(str[prev:sp.start]) // literal text before this ref
+		if sp.key == "" {
+			// Bare `secret:` with no key — preserve verbatim.
 			b.WriteString(secretPrefix)
-			i = keyStart
+			prev = sp.start + len(secretPrefix)
 			continue
 		}
-		if _, err := cs.provider.Get(context.Background(), key); err != nil {
-			failures = append(failures, secretResolveFailure{key: key, err: err})
-			b.WriteString(secretPrefix)
-			b.WriteString(key)
+		if _, err := cs.provider.Get(context.Background(), sp.key); err != nil {
+			failures = append(failures, secretResolveFailure{key: sp.key, err: err})
+			b.WriteString(str[sp.start:sp.end]) // preserve raw secret:key
 		} else {
-			b.WriteString(formatSecretPlaceholder(key))
+			b.WriteString(formatSecretPlaceholder(sp.key))
 		}
-		i = keyEnd
+		prev = sp.end
 	}
+	b.WriteString(str[prev:]) // trailing literal
 	return b.String(), failures
 }
 
@@ -4577,17 +4642,29 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 	return nil
 }
 
-// configcrateDefReferencesSecret checks if a module definition's resources contain
-// the given secret reference string.
-func configcrateDefReferencesSecret(def *ConfigcrateDefinition, needle string) bool {
+// configcrateDefReferencesSecret reports whether a configcrate definition's
+// vars or resource attributes reference secretPath — including embedded and
+// compound refs, via the shared scanner (a whole-value match would miss a ref
+// buried inside a larger value like `env: "PW=secret:vigo/db/pw,DB=app"`).
+func configcrateDefReferencesSecret(def *ConfigcrateDefinition, secretPath string) bool {
+	references := func(v any) bool {
+		if s, ok := v.(string); ok {
+			for _, key := range secretRefsInValue(s) {
+				if key == secretPath {
+					return true
+				}
+			}
+		}
+		return false
+	}
 	for _, v := range def.Vars {
-		if s, ok := v.(string); ok && s == needle {
+		if references(v) {
 			return true
 		}
 	}
 	for _, res := range def.Resources {
 		for _, v := range res.Attributes {
-			if s, ok := v.(string); ok && s == needle {
+			if references(v) {
 				return true
 			}
 		}
@@ -4598,7 +4675,7 @@ func configcrateDefReferencesSecret(def *ConfigcrateDefinition, needle string) b
 // entryReferencesSecret checks if an envoy entry uses any affected module.
 // cfg.Vars is already resolved, so checking it would never match the raw
 // secret: prefix; only modules need the affected-check.
-func entryReferencesSecret(cfg *EnvoyConfig, affectedConfigcrates map[string]bool, _ string) bool {
+func entryReferencesSecret(cfg *EnvoyConfig, affectedConfigcrates map[string]bool) bool {
 	for _, mod := range cfg.Configcrates {
 		if affectedConfigcrates[mod.Name] {
 			return true

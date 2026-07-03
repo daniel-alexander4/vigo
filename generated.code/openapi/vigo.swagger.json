@@ -953,11 +953,6 @@
           "type": "integer",
           "format": "int32"
         },
-        "previousContent": {
-          "type": "string",
-          "format": "byte",
-          "title": "file executor: content before overwrite (for snapshots)"
-        },
         "contentHash": {
           "type": "string",
           "title": "file executor: SHA-256 of the new content"

@@ -243,8 +243,6 @@ pub struct ResourceResult {
     pub changed: bool,
     pub error: Option<String>,
     pub duration_ms: i32,
-    /// File executor: content of the file before overwrite (for server-side snapshots).
-    pub previous_content: Option<Vec<u8>>,
     /// File executor: SHA-256 hex of the new content written.
     pub content_hash: Option<String>,
     /// File executor: absolute path of the managed file.
@@ -264,7 +262,6 @@ impl ResourceResult {
             changed: false,
             error: None,
             duration_ms: 0,
-            previous_content: None,
             content_hash: None,
             file_path: None,
             skip_reason: None,

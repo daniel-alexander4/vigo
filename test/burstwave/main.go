@@ -62,7 +62,7 @@ func main() {
 	resultsPerReport := flag.Int("results-per-report", 12, "ResourceRunResults per ReportResult (run_result rows written per report)")
 	changedRatio := flag.Float64("changed-ratio", 0.15, "fraction of results with changed=true")
 	errorRatio := flag.Float64("error-ratio", 0.02, "fraction of results carrying an error_message")
-	snapshotBytes := flag.Int("snapshot-bytes", 0, "if >0, changed file results carry this many bytes of previous_content")
+	snapshotBytes := flag.Int("snapshot-bytes", 0, "if >0, changed file results carry a file_path → exercises the InsertFileSnapshot write path")
 	warmupSec := flag.Int("warmup", 30, "warmup phase (seconds) for cohort A — discarded from A's measured percentiles")
 	durationSec := flag.Int("duration", 300, "measured/firing window (seconds) for each cohort")
 	secondBurstAt := flag.Float64("second-burst-at", 0.8, "release cohort B at this fraction of A's measured window (0.8 = 80%)")
@@ -521,13 +521,6 @@ func runAgentLoop(ctx context.Context, a reportLoopArgs) {
 
 func buildResultTemplate(n int, changedRatio, errorRatio float64, snapshotBytes int, rng *rand.Rand) []*pb.ResourceRunResult {
 	types := []string{"file", "package", "service"}
-	var snap []byte
-	if snapshotBytes > 0 {
-		snap = make([]byte, snapshotBytes)
-		for i := range snap {
-			snap[i] = 'x'
-		}
-	}
 	out := make([]*pb.ResourceRunResult, n)
 	for j := 0; j < n; j++ {
 		rt := types[j%len(types)]
@@ -548,7 +541,8 @@ func buildResultTemplate(n int, changedRatio, errorRatio float64, snapshotBytes 
 			mr.ErrorMessage = "simulated convergence error"
 		}
 		if changed && rt == "file" && snapshotBytes > 0 {
-			mr.PreviousContent = snap
+			// file_path on a changed file result triggers the InsertFileSnapshot
+			// write path server-side (content is no longer shipped).
 			mr.FilePath = fmt.Sprintf("/etc/vigo-wave/res-%02d.conf", j)
 			mr.ContentHash = "0000000000000000000000000000000000000000000000000000000000000000"
 		}

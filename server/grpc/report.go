@@ -141,21 +141,18 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		})
 	}
 
-	// Capture file snapshots (previous content before overwrite) for rollback support.
-	// Skip files larger than 1 MiB to avoid bloating the DB.
-	const maxSnapshotSize = 1 << 20
+	// Record a file-snapshot row for each changed file, so a later Rollback can
+	// confirm the path was managed here and force-push the desired policy. Only
+	// path + content_hash are stored — the agent no longer ships prior file
+	// content (a plaintext-secret leak that nothing read back).
 	for _, result := range req.GetResults() {
-		if result.GetResourceType() != "file" || len(result.GetPreviousContent()) == 0 {
-			continue
-		}
-		if len(result.GetPreviousContent()) > maxSnapshotSize {
+		if result.GetResourceType() != "file" || !result.GetChanged() || result.GetFilePath() == "" {
 			continue
 		}
 		if err := s.queries.InsertFileSnapshot(ctx, db.InsertFileSnapshotParams{
 			EnvoyID:     envoyID,
 			FilePath:    result.GetFilePath(),
 			ContentHash: result.GetContentHash(),
-			Content:     result.GetPreviousContent(),
 			RunID:       sql.NullString{String: runID, Valid: true},
 		}); err != nil {
 			slog.Error("failed to save file snapshot",

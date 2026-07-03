@@ -2,7 +2,7 @@
 
 **How does a secret get into a config without ever sitting in the config?**
 
-You reference it. Anywhere a value can appear in a `.vgo` file, you write `secret:<path>` instead of the literal — `dsn: "secret:vigo/db/dsn"`. Vigo resolves the real value at the last possible moment, on the agent, at apply time, and never before.
+You reference it. Anywhere a value can appear in a `.vgo` file, you write `secret:<path>` instead of the literal — `dsn: "secret:vigo/db/dsn"`. A ref can also sit **embedded inside a larger value**, including several in one compound string — `env: "PW=secret:vigo/db/pw,DB=app"` resolves the `secret:vigo/db/pw` token in place and leaves the rest literal (a ref runs up to the first character that isn't part of a path). Whole-value or embedded, every ref is validated at load and force-pushed on rotation. Vigo resolves the real value at the last possible moment, on the agent, at apply time, and never before.
 
 ## The path a secret does *not* take
 

@@ -74,6 +74,12 @@ func mockIsopassServer(t *testing.T) *httptest.Server {
 			"vigo/tls/cert": {
 				{"id": "secret-2", "name": "vigo/tls/cert", "value": "-----BEGIN CERTIFICATE-----\nMIIB...", "version": 1},
 			},
+			// A fuzzy query that has no exact secret but the search engine
+			// returns a NEAR-match (a different secret's name). Exercises the
+			// no-exact-match path: Get/GetVersion must fail, never return this.
+			"vigo/db/dsn-typo": {
+				{"id": "secret-1", "name": "vigo/db/dsn", "value": "/srv/vigo/db/vigo.db", "version": 2},
+			},
 		}
 
 		results, ok := secrets[body.Query]
@@ -110,6 +116,27 @@ func TestIsopassGetNotFound(t *testing.T) {
 
 	_, err = p.Get(context.Background(), "nonexistent/secret")
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+// TestIsopassNearMatchNotFound is the regression for the wrong-secret fallback:
+// when the fuzzy search returns results but none exactly names the requested
+// key, Get/GetVersion must fail-closed, never hand back the near-match's value
+// or version (which would be a *different* secret).
+func TestIsopassNearMatchNotFound(t *testing.T) {
+	srv := mockIsopassServer(t)
+	defer srv.Close()
+
+	p, err := NewIsopassProvider(srv.URL, "test-bearer-token", false)
+	require.NoError(t, err)
+	defer p.Close()
+
+	_, err = p.Get(context.Background(), "vigo/db/dsn-typo")
+	require.Error(t, err, "a near-match must not resolve as the requested key")
+	assert.Contains(t, err.Error(), "not found")
+
+	_, err = p.GetVersion(context.Background(), "vigo/db/dsn-typo")
+	require.Error(t, err, "GetVersion must fail-closed on no exact match")
 	assert.Contains(t, err.Error(), "not found")
 }
 

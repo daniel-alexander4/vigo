@@ -161,7 +161,6 @@ type FileSnapshot struct {
 	EnvoyID     string         `json:"envoy_id"`
 	FilePath    string         `json:"file_path"`
 	ContentHash string         `json:"content_hash"`
-	Content     []byte         `json:"content"`
 	CreatedAt   time.Time      `json:"created_at"`
 	RunID       sql.NullString `json:"run_id"`
 }

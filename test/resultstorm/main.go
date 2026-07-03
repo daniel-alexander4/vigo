@@ -56,7 +56,7 @@ func main() {
 	resultsPerReport := flag.Int("results-per-report", 12, "ResourceRunResults per report (= run_result rows written per report)")
 	changedRatio := flag.Float64("changed-ratio", 0.15, "fraction of results with changed=true (drives drift.detected + DriftDetected metric + snapshot eligibility)")
 	errorRatio := flag.Float64("error-ratio", 0.02, "fraction of results carrying an error_message (drives 'failure' run status)")
-	snapshotBytes := flag.Int("snapshot-bytes", 0, "if >0, changed file results carry this many bytes of previous_content → exercises the InsertFileSnapshot write path (heavier; off by default)")
+	snapshotBytes := flag.Int("snapshot-bytes", 0, "if >0, changed file results carry a file_path → exercises the InsertFileSnapshot write path (off by default)")
 	warmupSec := flag.Int("warmup", 30, "warmup phase (seconds) — discarded from measured percentiles")
 	durationSec := flag.Int("duration", 300, "measured phase (seconds)")
 	rpcTimeout := flag.Duration("rpc-timeout", 30*time.Second, "per-ReportResult deadline; exceeded → DeadlineExceeded (write queued behind the SQLite writer too long)")
@@ -483,13 +483,6 @@ func runReportLoop(ctx context.Context, a reportLoopArgs) {
 // report so the client stays allocation-light.
 func buildResultTemplate(m int, changedRatio, errorRatio float64, snapshotBytes int, rng *rand.Rand) []*pb.ResourceRunResult {
 	types := []string{"file", "package", "service"}
-	var snap []byte
-	if snapshotBytes > 0 {
-		snap = make([]byte, snapshotBytes)
-		for i := range snap {
-			snap[i] = 'x'
-		}
-	}
 	out := make([]*pb.ResourceRunResult, m)
 	for j := 0; j < m; j++ {
 		rt := types[j%len(types)]
@@ -512,7 +505,8 @@ func buildResultTemplate(m int, changedRatio, errorRatio float64, snapshotBytes 
 			mr.ErrorMessage = "simulated convergence error"
 		}
 		if changed && rt == "file" && snapshotBytes > 0 {
-			mr.PreviousContent = snap
+			// file_path on a changed file result triggers the InsertFileSnapshot
+			// write path server-side (content is no longer shipped).
 			mr.FilePath = fmt.Sprintf("/etc/vigo-storm/res-%02d.conf", j)
 			mr.ContentHash = "0000000000000000000000000000000000000000000000000000000000000000"
 		}

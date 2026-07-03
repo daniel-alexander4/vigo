@@ -848,6 +848,59 @@ envoys:
 	}
 }
 
+// TestCompoundSecretRefDetection is the regression for the rotation-detection
+// drift: a secret referenced only *inside* a compound value (not the whole
+// value) was substituted by resolveSecretsInValue but invisible to SecretPaths
+// and EnvoysReferencingSecret — so the rotation watcher never polled it and
+// never force-pushed on rotation, leaving a rotated credential live. Both
+// detectors now route through the same scanner as substitution.
+func TestCompoundSecretRefDetection(t *testing.T) {
+	dir := setupDir(t)
+
+	// The db_password secret appears embedded in a compound env value, not as
+	// the whole attribute — exactly the shape the old HasPrefix/== checks missed.
+	writeFile(t, filepath.Join(dir, "configcrates", "app.vgo"), `
+name: app
+resources:
+  - name: config
+    type: file
+    state: present
+    target_path: /etc/app/config
+    content: "DB_URL=postgres://app:secret:myapp/db/password@localhost/app,POOL=10"
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "web-*"
+    configcrates: [app]
+`)
+
+	mp := &mockProvider{secrets: map[string]string{
+		"myapp/db/password": "resolved-value",
+	}}
+	store, err := NewConfigStore(dir, mp, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	// SecretPaths (the watcher's poll list) must include the embedded ref.
+	paths := store.SecretPaths()
+	found := false
+	for _, p := range paths {
+		if p == "myapp/db/password" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("SecretPaths() missed the compound-embedded ref; got %v", paths)
+	}
+
+	// EnvoysReferencingSecret (the force-push targeting) must match it too.
+	patterns := store.EnvoysReferencingSecret("myapp/db/password")
+	if len(patterns) != 1 || patterns[0] != "web-*" {
+		t.Errorf("EnvoysReferencingSecret missed the compound-embedded ref; got %v", patterns)
+	}
+}
+
 func TestSourceFileLoading(t *testing.T) {
 	dir := setupDir(t)
 

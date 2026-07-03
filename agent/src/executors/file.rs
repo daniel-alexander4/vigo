@@ -285,18 +285,11 @@ fn handle_present(
         return Ok(());
     }
 
-    // Capture previous content before overwrite (for server-side snapshots).
-    // Skip files larger than 1 MiB to avoid excessive memory/network usage.
-    const MAX_SNAPSHOT_SIZE: u64 = 1 << 20;
+    // Take a local pre-change disk snapshot for rollback. The prior content is
+    // deliberately NOT captured into the run result / sent to the server — that
+    // was a plaintext-secret leak (a content-managed key/.env shipped its old
+    // contents on every change) and nothing ever read it back.
     if file_existed {
-        if let Ok(meta) = fs::metadata(path) {
-            if meta.len() <= MAX_SNAPSHOT_SIZE {
-                if let Ok(prev) = fs::read(path) {
-                    result.previous_content = Some(prev);
-                }
-            }
-        }
-
         if let Some(ref mgr) = snapshot_mgr {
             if !run_id.is_empty() {
                 if let Err(e) = mgr.save(path, run_id) {
@@ -806,6 +799,11 @@ mod tests {
         assert_eq!(result.action, Action::Updated);
         assert!(result.changed);
         assert_eq!(fs::read_to_string(&path).unwrap(), "new content\n");
+        // The change carries file_path + content_hash so the server can record
+        // a rollback snapshot marker — but NOT the prior file content. Shipping
+        // the old bytes was a plaintext-secret leak; that field no longer exists.
+        assert_eq!(result.file_path.as_deref(), Some(path_str));
+        assert!(result.content_hash.is_some());
     }
 
     #[test]

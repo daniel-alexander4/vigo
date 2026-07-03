@@ -11,15 +11,14 @@ import (
 )
 
 const insertFileSnapshot = `-- name: InsertFileSnapshot :exec
-INSERT INTO file_snapshots (envoy_id, file_path, content_hash, content, run_id)
-VALUES (?1, ?2, ?3, ?4, ?5)
+INSERT INTO file_snapshots (envoy_id, file_path, content_hash, run_id)
+VALUES (?1, ?2, ?3, ?4)
 `
 
 type InsertFileSnapshotParams struct {
 	EnvoyID     string         `json:"envoy_id"`
 	FilePath    string         `json:"file_path"`
 	ContentHash string         `json:"content_hash"`
-	Content     []byte         `json:"content"`
 	RunID       sql.NullString `json:"run_id"`
 }
 
@@ -28,14 +27,13 @@ func (q *Queries) InsertFileSnapshot(ctx context.Context, arg InsertFileSnapshot
 		arg.EnvoyID,
 		arg.FilePath,
 		arg.ContentHash,
-		arg.Content,
 		arg.RunID,
 	)
 	return err
 }
 
 const listFileSnapshots = `-- name: ListFileSnapshots :many
-SELECT id, envoy_id, file_path, content_hash, content, created_at, run_id
+SELECT id, envoy_id, file_path, content_hash, created_at, run_id
 FROM file_snapshots
 WHERE envoy_id = ?1 AND file_path = ?2
 ORDER BY created_at DESC
@@ -60,7 +58,6 @@ func (q *Queries) ListFileSnapshots(ctx context.Context, arg ListFileSnapshotsPa
 			&i.EnvoyID,
 			&i.FilePath,
 			&i.ContentHash,
-			&i.Content,
 			&i.CreatedAt,
 			&i.RunID,
 		); err != nil {

@@ -1,10 +1,10 @@
-<!-- vigo-i18n source_sha:572340bd4be57ef45e77a75d4c60a59f45989b45d829677e2cd6aaa176d0ccaa -->
+<!-- vigo-i18n source_sha:bbff9c973172ac2243f67af0a5dd3beec2dfc2f85739f42d3a9e3d2b026038ce -->
 
 # Secrets
 
 **Comment un secret entre-t-il dans une configuration sans jamais y figurer ?**
 
-Vous le référencez. Partout où une valeur peut apparaître dans un fichier `.vgo`, vous écrivez `secret:<path>` au lieu de la valeur littérale — `dsn: "secret:vigo/db/dsn"`. Vigo résout la valeur réelle au dernier moment possible, sur l'agent, à l'instant de l'application, et jamais avant.
+Vous le référencez. Partout où une valeur peut apparaître dans un fichier `.vgo`, vous écrivez `secret:<path>` au lieu de la valeur littérale — `dsn: "secret:vigo/db/dsn"`. Une référence peut aussi être **intégrée à l'intérieur d'une valeur plus grande**, y compris plusieurs dans une seule chaîne composée — `env: "PW=secret:vigo/db/pw,DB=app"` résout le jeton `secret:vigo/db/pw` sur place et laisse le reste littéral (une référence s'étend jusqu'au premier caractère qui ne fait pas partie d'un chemin). Valeur entière ou intégrée, chaque référence est validée au chargement et force-poussée lors de la rotation. Vigo résout la valeur réelle au dernier moment possible, sur l'agent, à l'instant de l'application, et jamais avant.
 
 ## Le chemin qu'un secret ne prend *pas*
 
