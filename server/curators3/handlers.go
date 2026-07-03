@@ -68,6 +68,12 @@ func (s *Server) serveObject(w http.ResponseWriter, r *http.Request, resolved *R
 		writeS3Error(w, r, http.StatusNotFound, "NoSuchKey", "no such platform build")
 		return
 	}
+	// The catalog is built from agent-reported traits; never let a
+	// non-sha value reach the filesystem join (path traversal).
+	if !isHex64(platform.BlobSha) {
+		writeS3Error(w, r, http.StatusNotFound, "NoSuchKey", "the artifact blob is not held by this server")
+		return
+	}
 	f, err := os.Open(filepath.Join(s.blobsDir, platform.BlobSha))
 	if err != nil {
 		writeS3Error(w, r, http.StatusNotFound, "NoSuchKey", "the artifact blob is not held by this server")

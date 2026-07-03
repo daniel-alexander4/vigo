@@ -164,6 +164,38 @@ func TestGetObjectNotFound(t *testing.T) {
 	}
 }
 
+// TestGetObjectTraversalBlobSha pins the path-traversal guard: the catalog is
+// built from agent-reported traits, so a compromised envoy can publish an
+// arbitrary string as blob_sha. A non-64-hex value must 404 without the bytes
+// it points at ever being served.
+func TestGetObjectTraversalBlobSha(t *testing.T) {
+	leakDir := t.TempDir()
+	secret := []byte("SECRET-FILE-CONTENTS")
+	if err := os.WriteFile(filepath.Join(leakDir, "leak.txt"), secret, 0o644); err != nil {
+		t.Fatalf("write leak fixture: %v", err)
+	}
+
+	for _, evil := range []string{
+		"../" + filepath.Base(leakDir) + "/leak.txt", // sibling-dir escape (provably reachable from blobsDir)
+		"../../../../etc/passwd",
+		"not-a-sha",
+		"", // empty sha must not open blobsDir itself
+	} {
+		b := newBed(t)
+		v := b.catalog.cat.Artifacts[0].Body.Versions["1.0"]
+		v.Platforms[0].BlobSha = evil
+		b.catalog.cat.Artifacts[0].Body.Versions["1.0"] = v
+
+		rec := b.do(t, http.MethodGet, "/vigo-curator/"+testPubkey+"/foo/1.0/linux-amd64")
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("blob_sha %q: status = %d, want 404", evil, rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), string(secret)) {
+			t.Fatalf("blob_sha %q: traversal leaked file contents", evil)
+		}
+	}
+}
+
 func TestListObjectsV2(t *testing.T) {
 	b := newBed(t)
 	rec := b.do(t, http.MethodGet, "/vigo-curator?list-type=2")
