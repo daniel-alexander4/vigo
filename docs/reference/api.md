@@ -1468,6 +1468,20 @@ Update a user account. Admin only. Each field (`role`, `display_name`, `email`, 
 
 Delete a user account. Admin only. Cannot delete the last admin.
 
+### POST /api/v1/users/{id}/revoke-sessions
+
+**Permission:** Admin role
+
+Destroy every active web session for the target user and return the count revoked. Admin only. This is the server-side hook for credential changes that happen off the server — notably `vigocli webusers set-password`, which writes the new password hash straight into the secrets vault and never otherwise contacts the server; without an explicit revoke, a session opened with the old password stays valid until it times out. Writes a `user.sessions_revoked` audit entry.
+
+**Response (200 OK):**
+
+```json
+{
+  "revoked": 2
+}
+```
+
 ### POST /api/v1/users/totp/setup
 
 **Permission:** Authenticated (own account)
@@ -2172,6 +2186,8 @@ Search for a specific CVE across the fleet. Returns all affected hosts with pack
 ## Compliance Reports
 
 Framework-specific compliance reports in JSON and printable HTML formats. Each framework has a JSON endpoint and a self-contained, print-friendly HTML endpoint.
+
+**Permission:** every report route (JSON and `.html`, including the executive summary) requires `compliance.read` — the same gate as the OSCAL export and audit-bundle. The `admin`, `viewer`, and `compliance` roles all hold it.
 
 | Method | Path | Framework |
 |--------|------|-----------|

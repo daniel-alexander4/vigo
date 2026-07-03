@@ -201,8 +201,50 @@ var webusersSetPasswordCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Password set for user %s.\n", userUsername)
+
+		// The password lives in the vault; the server was never in the loop,
+		// so any session opened with the OLD password is still live. Revoke
+		// them so a compromise-driven reset takes effect immediately. Best-
+		// effort: the password is already changed, so a server that's down
+		// only means the operator must revoke manually.
+		if n, err := revokeWebuserSessions(userUsername); err != nil {
+			fmt.Printf("  Warning: could not revoke existing sessions (%v).\n", err)
+			fmt.Printf("  Any session opened with the old password stays valid until it times out.\n")
+		} else if n > 0 {
+			fmt.Printf("  Revoked %d active session(s) — the user must log in again.\n", n)
+		}
 		return nil
 	},
+}
+
+// revokeWebuserSessions resolves the username to its user ID and asks the
+// server to destroy that user's active sessions. Returns the number revoked.
+func revokeWebuserSessions(username string) (int, error) {
+	client := newAPIClient()
+	var users []struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}
+	if err := client.get("/api/v1/users", &users); err != nil {
+		return 0, err
+	}
+	var userID string
+	for _, u := range users {
+		if u.Username == username {
+			userID = u.ID
+			break
+		}
+	}
+	if userID == "" {
+		return 0, fmt.Errorf("user %q not found on the server", username)
+	}
+	var resp struct {
+		Revoked int `json:"revoked"`
+	}
+	if err := client.post("/api/v1/users/"+userID+"/revoke-sessions", nil, &resp); err != nil {
+		return 0, err
+	}
+	return resp.Revoked, nil
 }
 
 var webusersSetRoleCmd = &cobra.Command{

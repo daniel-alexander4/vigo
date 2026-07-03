@@ -77,17 +77,40 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig, sessions *SessionManag
 	}, nil
 }
 
+// flexBool unmarshals an OIDC claim that may arrive as a JSON boolean
+// (`true`) or, from some IdPs (e.g. Keycloak), a JSON string ("true").
+// Plain `bool` would fail the whole claims unmarshal on the string form
+// and break login; this keeps the well-behaved-bool case identical while
+// tolerating the string case. Any non-true value (including a malformed
+// claim) reads as false — fail-closed for a security-gating flag.
+type flexBool bool
+
+func (b *flexBool) UnmarshalJSON(data []byte) error {
+	switch string(data) {
+	case "true", `"true"`:
+		*b = true
+	default:
+		*b = false
+	}
+	return nil
+}
+
 // isBootstrapAdmin reports whether the OIDC identity (subject/email) matches
 // the configured bootstrap admin. Both config fields empty ⇒ never matches,
 // so new users default to viewer and admin is granted explicitly via
 // `vigocli webusers set-role`. This replaces the prior "first OIDC login when
 // admin count is zero" rule, which silently promoted whoever logged in first
 // on an IdP that allows self-registration.
-func (p *OIDCProvider) isBootstrapAdmin(subject, email string) bool {
+func (p *OIDCProvider) isBootstrapAdmin(subject, email string, emailVerified bool) bool {
 	if p.bootstrapAdminSubject != "" && subject == p.bootstrapAdminSubject {
 		return true
 	}
-	if p.bootstrapAdminEmail != "" && email == p.bootstrapAdminEmail {
+	// Email matching requires the IdP to have verified the address. Without
+	// this check, any IdP that lets a user self-set an unverified email would
+	// let an attacker claim the configured admin email and be provisioned as
+	// admin on first login. Subject matching is unaffected — the subject is
+	// IdP-assigned and stable.
+	if p.bootstrapAdminEmail != "" && emailVerified && email == p.bootstrapAdminEmail {
 		return true
 	}
 	return false
@@ -205,9 +228,10 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Extract claims.
 	var claims struct {
-		Subject string `json:"sub"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
+		Subject       string   `json:"sub"`
+		Email         string   `json:"email"`
+		EmailVerified flexBool `json:"email_verified"`
+		Name          string   `json:"name"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		slog.Error("oidc claims extraction failed", "error", err)
@@ -228,7 +252,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		// configured bootstrap identity (opt-in); otherwise an operator
 		// promotes via `vigocli webusers set-role` on the server host.
 		role := "viewer"
-		if p.isBootstrapAdmin(claims.Subject, claims.Email) {
+		if p.isBootstrapAdmin(claims.Subject, claims.Email, bool(claims.EmailVerified)) {
 			role = "admin"
 			slog.Info("OIDC bootstrap admin matched — provisioning as admin", "subject", claims.Subject)
 		}

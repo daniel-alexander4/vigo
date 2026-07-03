@@ -455,7 +455,6 @@ func (h *ConfigHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 // RecordPublish records a config publish for audit trail.
 func (h *ConfigHandler) RecordPublish(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Operator     string   `json:"operator"`
 		ChangedFiles []string `json:"changed_files"`
 		RemovedFiles []string `json:"removed_files"`
 		DiffSummary  string   `json:"diff_summary"`
@@ -465,11 +464,15 @@ func (h *ConfigHandler) RecordPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The operator is the authenticated caller, never a client-supplied
+	// field, so the audit actor and config_publishes.operator can't be forged.
+	operator := actorFromRequest(r)
+
 	changedJSON, _ := json.Marshal(req.ChangedFiles)
 	removedJSON, _ := json.Marshal(req.RemovedFiles)
 
 	p, err := h.queries.InsertConfigPublish(r.Context(), db.InsertConfigPublishParams{
-		Operator:     req.Operator,
+		Operator:     operator,
 		ChangedFiles: string(changedJSON),
 		RemovedFiles: string(removedJSON),
 		DiffSummary:  req.DiffSummary,
@@ -479,7 +482,7 @@ func (h *ConfigHandler) RecordPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "config.publish_recorded", req.Operator, "rest",
+	recordAudit(r.Context(), h.auditWriter, "config.publish_recorded", operator, "rest",
 		fmt.Sprintf("publish %s recorded: %d changed, %d removed", p.ID, len(req.ChangedFiles), len(req.RemovedFiles)), "")
 
 	writeJSON(w, r, http.StatusCreated, map[string]any{"id": p.ID})

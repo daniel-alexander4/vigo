@@ -46,8 +46,7 @@ func (h *WorkflowHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type workflowRunRequest struct {
-	Name     string `json:"name"`
-	Operator string `json:"operator"`
+	Name string `json:"name"`
 }
 
 // HandleRun starts a new workflow execution.
@@ -61,11 +60,12 @@ func (h *WorkflowHandler) HandleRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	if req.Operator == "" {
-		req.Operator = "api"
-	}
+	// The operator is the authenticated caller, never a client-supplied
+	// field — otherwise an authenticated admin could forge the actor on the
+	// hash chain and in workflow_runs.operator.
+	operator := actorFromRequest(r)
 
-	runID, err := h.engine.RunWorkflow(r.Context(), req.Name, req.Operator)
+	runID, err := h.engine.RunWorkflow(r.Context(), req.Name, operator)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -73,7 +73,7 @@ func (h *WorkflowHandler) HandleRun(w http.ResponseWriter, r *http.Request) {
 
 	// Record tamper-evident audit event — every workflow start is on
 	// the hash chain so a "who ran what when" reconstruction is durable.
-	recordAudit(r.Context(), h.auditWriter, "workflow.dispatch", req.Operator, "rest",
+	recordAudit(r.Context(), h.auditWriter, "workflow.dispatch", operator, "rest",
 		req.Name, "")
 
 	writeJSON(w, r, http.StatusCreated, map[string]string{"id": runID, "status": "running"})

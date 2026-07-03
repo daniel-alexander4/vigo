@@ -131,6 +131,7 @@ func (h *UsersHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/users", http.HandlerFunc(h.handleCreate)) // special: first-user bootstrap
 	mux.Handle("PUT /api/v1/users/{id}", adminMW(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("DELETE /api/v1/users/{id}", adminMW(http.HandlerFunc(h.handleDelete)))
+	mux.Handle("POST /api/v1/users/{id}/revoke-sessions", adminMW(http.HandlerFunc(h.handleRevokeSessions)))
 	mux.Handle("POST /api/v1/users/totp/setup", authMW(http.HandlerFunc(h.handleTOTPSetup)))
 	mux.Handle("POST /api/v1/users/totp/confirm", authMW(http.HandlerFunc(h.handleTOTPConfirm)))
 	mux.Handle("POST /api/v1/users/totp/disable", authMW(http.HandlerFunc(h.handleTOTPDisable)))
@@ -408,6 +409,48 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	recordAudit(r.Context(), h.auditWriter, "user.delete", actor, "rest", fmt.Sprintf("deleted user %s", deletedName), "")
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRevokeSessions destroys every active session for the target user.
+// It's the server-side hook for credential changes that happen off the
+// server — notably `vigocli webusers set-password`, which writes the new
+// hash straight into the secrets vault and never otherwise touches the
+// server, so without this an attacker's pre-reset session would keep
+// authenticating until idle timeout. Admin-gated; the caller's own session
+// is unaffected unless they revoke themselves.
+func (h *UsersHandler) handleRevokeSessions(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	target, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		slog.Error("fetching user before session revoke", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if target == nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("user %q not found", id))
+		return
+	}
+
+	if h.sessions == nil {
+		writeError(w, http.StatusServiceUnavailable, "session management is not configured on this server")
+		return
+	}
+
+	n, err := h.sessions.DestroyUserSessions(r.Context(), id)
+	if err != nil {
+		slog.Warn("destroying sessions on revoke", "user", target.Username, "destroyed", n, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to revoke all sessions")
+		return
+	}
+
+	actor := ""
+	if u := auth.UserFromContext(r.Context()); u != nil {
+		actor = u.Username
+	}
+	recordAudit(r.Context(), h.auditWriter, "user.sessions_revoked", actor, "rest", fmt.Sprintf("revoked %d session(s) for %s", n, target.Username), "")
+
+	writeJSON(w, r, http.StatusOK, map[string]any{"revoked": n})
 }
 
 // handleTOTPSetup generates a TOTP secret and returns the otpauth URL.

@@ -255,6 +255,8 @@ steps:
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
+	// The body carries a forged operator; the handler must ignore it and
+	// attribute to the authenticated caller (adminReq stamps "admin").
 	body := `{"name":"trivial","operator":"alice"}`
 	req := httptest.NewRequest("POST", "/api/v1/workflows", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
@@ -270,8 +272,9 @@ steps:
 	if ev.EventType != "workflow.dispatch" {
 		t.Errorf("expected workflow.dispatch event, got %q", ev.EventType)
 	}
-	if ev.Actor != "alice" {
-		t.Errorf("expected actor=alice, got %q", ev.Actor)
+	// Actor is the authenticated caller, never the forged body operator.
+	if ev.Actor != "admin" {
+		t.Errorf("expected actor=admin (authenticated caller), got %q", ev.Actor)
 	}
 	if ev.Summary != "trivial" {
 		t.Errorf("expected summary=trivial, got %q", ev.Summary)

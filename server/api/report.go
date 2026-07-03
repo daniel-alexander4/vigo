@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/audit"
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
@@ -225,36 +226,46 @@ func (h *ReportHandler) connwaerControlStatus(capability, controlTitle string) (
 			"Vigo Connwaer performs this verification. Learn more at https://vigo.dev/connwaer", controlTitle)
 }
 
-// RegisterRoutes mounts report endpoints.
+// RegisterRoutes mounts report endpoints. Every framework report is a
+// compliance-evidence artifact, so all routes gate on compliance.read —
+// matching the sibling OSCAL-export (export.go) and audit-bundle
+// (audit_bundle.go) routes. The authProvider.Middleware at the mux mount
+// only authenticates; without this wrapper a compliance-role token
+// (denied audit.read) could still read the report bodies and their
+// embedded audit-chain status summary.
 func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/report/compliance", h.handleComplianceReport)
-	mux.HandleFunc("GET /api/v1/report/compliance.html", h.handleComplianceReportHTML)
-	mux.HandleFunc("GET /api/v1/report/hitrust", h.handleHITRUSTReport)
-	mux.HandleFunc("GET /api/v1/report/hitrust.html", h.handleHITRUSTReportHTML)
-	mux.HandleFunc("GET /api/v1/report/soc2", h.handleSOC2Report)
-	mux.HandleFunc("GET /api/v1/report/soc2.html", h.handleSOC2ReportHTML)
-	mux.HandleFunc("GET /api/v1/report/pci", h.handlePCIReport)
-	mux.HandleFunc("GET /api/v1/report/pci.html", h.handlePCIReportHTML)
-	mux.HandleFunc("GET /api/v1/report/nist", h.handleNISTReport)
-	mux.HandleFunc("GET /api/v1/report/nist.html", h.handleNISTReportHTML)
-	mux.HandleFunc("GET /api/v1/report/iso27001", h.handleISO27001Report)
-	mux.HandleFunc("GET /api/v1/report/iso27001.html", h.handleISO27001ReportHTML)
-	mux.HandleFunc("GET /api/v1/report/gdpr", h.handleGDPRReport)
-	mux.HandleFunc("GET /api/v1/report/gdpr.html", h.handleGDPRReportHTML)
-	mux.HandleFunc("GET /api/v1/report/nerccip", h.handleNERCCIPReport)
-	mux.HandleFunc("GET /api/v1/report/nerccip.html", h.handleNERCCIPReportHTML)
-	mux.HandleFunc("GET /api/v1/report/cyberessentials", h.handleCyberEssentialsReport)
-	mux.HandleFunc("GET /api/v1/report/cyberessentials.html", h.handleCyberEssentialsReportHTML)
-	mux.HandleFunc("GET /api/v1/report/iec62443", h.handleIEC62443Report)
-	mux.HandleFunc("GET /api/v1/report/iec62443.html", h.handleIEC62443ReportHTML)
-	mux.HandleFunc("GET /api/v1/report/executive", h.handleExecutiveReport)
-	mux.HandleFunc("GET /api/v1/report/executive.html", h.handleExecutiveReportHTML)
-	mux.HandleFunc("GET /api/v1/report/cisubuntu", h.handleCISUbuntuReport)
-	mux.HandleFunc("GET /api/v1/report/cisubuntu.html", h.handleCISUbuntuReportHTML)
-	mux.HandleFunc("GET /api/v1/report/cisrhel", h.handleCISRHELReport)
-	mux.HandleFunc("GET /api/v1/report/cisrhel.html", h.handleCISRHELReportHTML)
-	mux.HandleFunc("GET /api/v1/report/nydfscyber", h.handleNYDFSCyberReport)
-	mux.HandleFunc("GET /api/v1/report/nydfscyber.html", h.handleNYDFSCyberReportHTML)
+	read := auth.RequirePermission(auth.PermComplianceRead)
+	report := func(pattern string, handler http.HandlerFunc) {
+		mux.Handle(pattern, read(handler))
+	}
+	report("GET /api/v1/report/compliance", h.handleComplianceReport)
+	report("GET /api/v1/report/compliance.html", h.handleComplianceReportHTML)
+	report("GET /api/v1/report/hitrust", h.handleHITRUSTReport)
+	report("GET /api/v1/report/hitrust.html", h.handleHITRUSTReportHTML)
+	report("GET /api/v1/report/soc2", h.handleSOC2Report)
+	report("GET /api/v1/report/soc2.html", h.handleSOC2ReportHTML)
+	report("GET /api/v1/report/pci", h.handlePCIReport)
+	report("GET /api/v1/report/pci.html", h.handlePCIReportHTML)
+	report("GET /api/v1/report/nist", h.handleNISTReport)
+	report("GET /api/v1/report/nist.html", h.handleNISTReportHTML)
+	report("GET /api/v1/report/iso27001", h.handleISO27001Report)
+	report("GET /api/v1/report/iso27001.html", h.handleISO27001ReportHTML)
+	report("GET /api/v1/report/gdpr", h.handleGDPRReport)
+	report("GET /api/v1/report/gdpr.html", h.handleGDPRReportHTML)
+	report("GET /api/v1/report/nerccip", h.handleNERCCIPReport)
+	report("GET /api/v1/report/nerccip.html", h.handleNERCCIPReportHTML)
+	report("GET /api/v1/report/cyberessentials", h.handleCyberEssentialsReport)
+	report("GET /api/v1/report/cyberessentials.html", h.handleCyberEssentialsReportHTML)
+	report("GET /api/v1/report/iec62443", h.handleIEC62443Report)
+	report("GET /api/v1/report/iec62443.html", h.handleIEC62443ReportHTML)
+	report("GET /api/v1/report/executive", h.handleExecutiveReport)
+	report("GET /api/v1/report/executive.html", h.handleExecutiveReportHTML)
+	report("GET /api/v1/report/cisubuntu", h.handleCISUbuntuReport)
+	report("GET /api/v1/report/cisubuntu.html", h.handleCISUbuntuReportHTML)
+	report("GET /api/v1/report/cisrhel", h.handleCISRHELReport)
+	report("GET /api/v1/report/cisrhel.html", h.handleCISRHELReportHTML)
+	report("GET /api/v1/report/nydfscyber", h.handleNYDFSCyberReport)
+	report("GET /api/v1/report/nydfscyber.html", h.handleNYDFSCyberReportHTML)
 	h.registerAuditBundleRoute(mux)
 }
 

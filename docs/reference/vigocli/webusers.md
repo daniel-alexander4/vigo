@@ -75,6 +75,12 @@ that stores the value verbatim, and basic auth verifies against a bcrypt hash,
 so a directly-written value will not authenticate. See
 [vigocli secrets](secrets.md) for the vault itself.
 
+After the password is written, `set-password` asks the server to revoke that
+user's active web sessions, so a session opened with the old password stops
+authenticating immediately rather than lingering until idle timeout. This is a
+best-effort call: if the server is unreachable, the password is still changed
+and the command prints a warning telling you to revoke sessions manually.
+
 ### set-role
 
 Change an existing user's role. Permissions are recalculated from the new role and the change is written to the audit log.

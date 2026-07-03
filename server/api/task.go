@@ -60,7 +60,6 @@ func (h *TaskHandler) RegisterRoutes(mux *http.ServeMux) {
 type dispatchRequest struct {
 	Command     string            `json:"command"`
 	Target      string            `json:"target"`
-	Operator    string            `json:"operator"`
 	Timeout     int32             `json:"timeout"`
 	Nice        int32             `json:"nice"`
 	BatchSize   string            `json:"batchSize"`
@@ -102,14 +101,17 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named task definition (task.require_definition is enabled)")
 		return
 	}
-	if req.Operator == "" {
-		req.Operator = "api"
-	}
+	// The operator is the authenticated caller — never a client-supplied
+	// field. Trusting a request body value would let an authenticated admin
+	// forge the actor recorded in the hash-chained audit log and in
+	// task_runs.operator. Middleware guarantees a user is present on this
+	// push.execute-gated route.
+	operator := actorFromRequest(r)
 
 	result, err := h.dispatcher.DispatchPush(r.Context(), isgrpc.DispatchParams{
 		Command:     req.Command,
 		TargetSpec:  req.Target,
-		Operator:    req.Operator,
+		Operator:    operator,
 		TimeoutSecs: req.Timeout,
 		Nice:        req.Nice,
 		BatchSize:   req.BatchSize,
@@ -126,7 +128,7 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 			// Guardrail block — surface a structured 400 so the CLI can
 			// prompt + retry with --force. Audit the block so a refused
 			// dispatch is as durable as a successful one.
-			recordAudit(r.Context(), h.auditWriter, "task.blocked", req.Operator, "rest",
+			recordAudit(r.Context(), h.auditWriter, "task.blocked", operator, "rest",
 				req.Command+" on "+req.Target,
 				fmt.Sprintf(`{"reason":%q,"pattern":%q}`, v.Reason, v.Pattern))
 			writeJSON(w, r, http.StatusBadRequest, blockedResponse{
@@ -149,7 +151,7 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		if req.Force {
 			payload = `{"forced":true}`
 		}
-		recordAudit(r.Context(), h.auditWriter, "task.dispatch", req.Operator, "rest",
+		recordAudit(r.Context(), h.auditWriter, "task.dispatch", operator, "rest",
 			req.Command+" on "+req.Target, payload)
 	}
 

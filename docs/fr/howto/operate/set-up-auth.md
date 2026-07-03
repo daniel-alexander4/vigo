@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:78ed4fec52a290858f0046f6487570172d0d6866c06b8f2914ea72a14e910168 -->
+<!-- vigo-i18n source_sha:624a522f57895b7ea3283100338380211022f96b97d1ce20932ae183c7128069 -->
 
 ---
 title: Authentification
@@ -90,6 +90,22 @@ vigocli webusers set-password --username alice
 vigocli webusers set-password --username <username>
 ```
 
+Après avoir écrit le nouveau mot de passe, cette commande révoque également les
+sessions web actives de l'utilisateur, de sorte qu'une session ouverte avec
+l'ancien mot de passe cesse immédiatement de fonctionner (important après une
+réinitialisation motivée par une compromission).
+
+### Limitation du débit de connexion
+
+Les points de terminaison HTTP de connexion et de TOTP sont soumis à une
+limitation de débit par IP client (10 tentatives/minute, rafale de 10) pour
+borner le forçage brute des mots de passe et des codes TOTP. Elle est activée
+par défaut et ne nécessite aucune configuration — un humain qui se trompe
+plusieurs fois de mot de passe ne la remarque jamais, tandis qu'un attaquant
+automatisé obtient un `429 Too Many Requests`. Chaque tentative bloquée est
+enregistrée comme un événement d'audit `auth.rate_limited`. (C'est l'équivalent
+HTTP du limiteur de débit des check-ins gRPC.)
+
 ### Accès CLI (jeton local-admin)
 
 Lorsque `vigocli` s'exécute sur l'hôte serveur, il s'authentifie avec le **jeton local-admin** — un identifiant que le serveur génère au premier démarrage et persiste à `/srv/vigo/cli-admin-token` (mode `0600`, possédé par `root`). `vigocli` le lit automatiquement lorsqu'aucun jeton par-utilisateur n'est configuré, donc `sudo vigocli ...` fonctionne sur l'hôte serveur sans configuration. L'accès CLI distant nécessite toujours un jeton d'API par-utilisateur via `vigocli auth set-token`.
@@ -171,7 +187,14 @@ l'auto-inscription). Accordez le premier admin de l'une des deux façons :
     # bootstrap_admin_subject: "auth0|abc123"    # match on the sub claim
   ```
 
-  Les deux vides (la valeur par défaut) signifie aucun auto-admin.
+  Les deux vides (la valeur par défaut) signifie aucun auto-admin. **La
+  correspondance par e-mail n'est honorée que lorsque l'IdP marque l'adresse
+  comme vérifiée** (`email_verified: true` dans le jeton d'identité) — sinon
+  elle est ignorée, de sorte qu'un IdP qui laisse un utilisateur définir
+  lui-même un e-mail non vérifié ne peut pas être utilisé pour revendiquer
+  l'adresse admin. Sur les IdP où la vérification de l'e-mail est incertaine,
+  utilisez `bootstrap_admin_subject` (le claim `sub` est attribué par l'IdP et
+  ne peut pas être usurpé).
 
 - **CLI (hors-bande) :** faites connecter l'utilisateur une fois (créant sa ligne viewer),
   puis promouvez-le depuis l'hôte serveur :

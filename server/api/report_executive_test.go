@@ -29,6 +29,41 @@ func newExecutiveTestHandler(t *testing.T, fi *fleet.FleetIndex, queries *db.Que
 	return h, mux
 }
 
+// TestExecutiveReport_RBAC proves the report routes require compliance.read.
+// Before this gate they registered with a bare mux.HandleFunc — any
+// authenticated principal, including a future narrow token, could read the
+// report bodies and their embedded audit-chain status. A principal lacking
+// compliance.read now gets 403; one holding it (admin) gets 200.
+func TestExecutiveReport_RBAC(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	fi := fleet.NewFleetIndex()
+	_, mux := newExecutiveTestHandler(t, fi, queries)
+
+	// viewerReq carries only fleet.read (no compliance.read) → refused.
+	req := httptest.NewRequest("GET", "/api/v1/report/executive", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, viewerReq(req))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("no compliance.read: expected 403, got %d", rec.Code)
+	}
+
+	// Unauthenticated (no user in context) → 401.
+	req = httptest.NewRequest("GET", "/api/v1/report/executive", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous: expected 401, got %d", rec.Code)
+	}
+
+	// admin holds compliance.read → allowed.
+	req = httptest.NewRequest("GET", "/api/v1/report/executive", nil)
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestExecutiveReport_JSONContent(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
@@ -42,7 +77,7 @@ func TestExecutiveReport_JSONContent(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/report/executive", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -91,7 +126,7 @@ func TestExecutiveReport_HTMLContent(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/report/executive.html", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -124,7 +159,7 @@ func TestExecutiveReport_DownloadHeader(t *testing.T) {
 	// JSON download.
 	req := httptest.NewRequest("GET", "/api/v1/report/executive?download=1", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	cd := rec.Header().Get("Content-Disposition")
 	if !strings.Contains(cd, "attachment") || !strings.Contains(cd, "vigo-executive-") {
@@ -134,7 +169,7 @@ func TestExecutiveReport_DownloadHeader(t *testing.T) {
 	// HTML download.
 	req = httptest.NewRequest("GET", "/api/v1/report/executive.html?download=1", nil)
 	rec = httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	cd = rec.Header().Get("Content-Disposition")
 	if !strings.Contains(cd, "attachment") || !strings.Contains(cd, ".html") {
@@ -150,7 +185,7 @@ func TestExecutiveReport_EmptyFleet(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/report/executive", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -184,7 +219,7 @@ func TestExecutiveReport_TopIssuesOrdering(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/report/executive", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var report ExecutiveReport
 	json.NewDecoder(rec.Body).Decode(&report)
@@ -242,7 +277,7 @@ func TestExecutiveReport_TrendOrdering(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/report/executive", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var report ExecutiveReport
 	json.NewDecoder(rec.Body).Decode(&report)

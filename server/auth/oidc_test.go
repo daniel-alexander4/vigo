@@ -116,27 +116,59 @@ func TestOIDCMiddleware_NoAuth_RemoteAPI_Returns401(t *testing.T) {
 
 // TestOIDCProvider_isBootstrapAdmin verifies the opt-in bootstrap-admin gate:
 // no match when unconfigured (default → viewer), match by subject or email
-// when configured.
+// when configured — and, for email, only when the IdP marked it verified.
 func TestOIDCProvider_isBootstrapAdmin(t *testing.T) {
 	// Unconfigured: never an admin (the default — replaces first-login auto-admin).
 	off := &OIDCProvider{}
-	if off.isBootstrapAdmin("auth0|abc", "anyone@example.com") {
+	if off.isBootstrapAdmin("auth0|abc", "anyone@example.com", true) {
 		t.Error("unconfigured provider must never bootstrap-admin")
 	}
 
+	// Subject matching ignores the email + verified flag entirely.
 	bySub := &OIDCProvider{bootstrapAdminSubject: "auth0|abc"}
-	if !bySub.isBootstrapAdmin("auth0|abc", "") {
+	if !bySub.isBootstrapAdmin("auth0|abc", "", false) {
 		t.Error("expected match on configured subject")
 	}
-	if bySub.isBootstrapAdmin("auth0|other", "auth0|abc") {
+	if bySub.isBootstrapAdmin("auth0|other", "auth0|abc", true) {
 		t.Error("subject config must not match on the email field")
 	}
 
 	byEmail := &OIDCProvider{bootstrapAdminEmail: "admin@example.com"}
-	if !byEmail.isBootstrapAdmin("auth0|xyz", "admin@example.com") {
-		t.Error("expected match on configured email")
+	if !byEmail.isBootstrapAdmin("auth0|xyz", "admin@example.com", true) {
+		t.Error("expected match on configured, verified email")
 	}
-	if byEmail.isBootstrapAdmin("auth0|xyz", "someone@example.com") {
+	// The escalation this fix closes: matching email but NOT verified.
+	if byEmail.isBootstrapAdmin("auth0|xyz", "admin@example.com", false) {
+		t.Error("unverified email must not bootstrap-admin even when it matches")
+	}
+	if byEmail.isBootstrapAdmin("auth0|xyz", "someone@example.com", true) {
 		t.Error("non-matching email must not bootstrap-admin")
+	}
+}
+
+// TestFlexBool covers the email_verified claim arriving as a JSON bool or,
+// from some IdPs, a JSON string — and that anything else reads false
+// (fail-closed for a security-gating flag).
+func TestFlexBool(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"true", true},
+		{`"true"`, true},
+		{"false", false},
+		{`"false"`, false},
+		{"null", false},
+		{`"yes"`, false},
+		{"1", false},
+	}
+	for _, c := range cases {
+		var b flexBool
+		if err := b.UnmarshalJSON([]byte(c.in)); err != nil {
+			t.Fatalf("UnmarshalJSON(%s): unexpected error %v", c.in, err)
+		}
+		if bool(b) != c.want {
+			t.Errorf("flexBool(%s) = %v, want %v", c.in, bool(b), c.want)
+		}
 	}
 }

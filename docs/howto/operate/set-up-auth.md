@@ -89,6 +89,19 @@ vigocli webusers set-password --username alice
 vigocli webusers set-password --username <username>
 ```
 
+After writing the new password, this also revokes the user's active web
+sessions, so any session opened with the old password stops working
+immediately (important after a compromise-driven reset).
+
+### Login Rate Limiting
+
+The HTTP login and TOTP endpoints are rate-limited per client IP (10
+attempts/minute, burst 10) to bound password and TOTP-code brute force. It is
+on by default and needs no configuration — a human mistyping a password a few
+times never notices it, while an automated attacker gets a `429 Too Many
+Requests`. Each throttled attempt is recorded as an `auth.rate_limited` audit
+event. (This is the HTTP counterpart to the gRPC check-in rate limiter.)
+
 ### CLI Access (Local-Admin Token)
 
 When `vigocli` runs on the server host it authenticates with the **local-admin token** — a credential the server mints on first boot and persists at `/srv/vigo/cli-admin-token` (mode `0600`, `root`-owned). `vigocli` reads it automatically when no per-user token is configured, so `sudo vigocli ...` works on the server host with no setup. Remote CLI access still requires a per-user API token via `vigocli auth set-token`.
@@ -170,7 +183,12 @@ two ways:
     # bootstrap_admin_subject: "auth0|abc123"    # match on the sub claim
   ```
 
-  Both empty (the default) means no auto-admin.
+  Both empty (the default) means no auto-admin. **Email matching is honored
+  only when the IdP marks the address verified** (`email_verified: true` in the
+  ID token) — otherwise it's ignored, so an IdP that lets a user self-set an
+  unverified email can't be used to claim the admin address. On IdPs where email
+  verification is uncertain, use `bootstrap_admin_subject` (the `sub` claim is
+  IdP-assigned and can't be spoofed).
 
 - **CLI (out-of-band):** have the user log in once (creating their viewer row),
   then promote them from the server host:

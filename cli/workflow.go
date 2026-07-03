@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -22,16 +21,7 @@ var workflowRunCmd = &cobra.Command{
 	Short: "Start a named workflow and optionally wait for all steps to complete",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		operator, _ := cmd.Flags().GetString("operator")
 		wait, _ := cmd.Flags().GetBool("wait")
-
-		if operator == "" {
-			if u, err := user.Current(); err == nil {
-				operator = u.Username
-			} else {
-				operator = "vigocli"
-			}
-		}
 
 		client := newAPIClient()
 
@@ -40,8 +30,7 @@ var workflowRunCmd = &cobra.Command{
 			Status string `json:"status"`
 		}
 		err := client.post("/api/v1/workflows", map[string]any{
-			"name":     args[0],
-			"operator": operator,
+			"name": args[0],
 		}, &resp)
 		if err != nil {
 			return err
@@ -229,7 +218,6 @@ func printWorkflowResults(resp *workflowResponse) {
 }
 
 func init() {
-	workflowRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
 	workflowRunCmd.Flags().Bool("wait", false, "Wait for workflow to complete")
 	workflowListCmd.Flags().Int("limit", 20, "Maximum number of workflows to display")
 

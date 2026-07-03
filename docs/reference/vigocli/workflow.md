@@ -30,7 +30,6 @@ vigocli workflow run <name> [flags]
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--operator` | | current user | Operator name for audit |
 | `--wait` | | `false` | Wait for workflow to complete |
 
 ### Examples

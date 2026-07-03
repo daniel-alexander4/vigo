@@ -443,6 +443,8 @@ func TestTaskHandler_DispatchBlockedByGuardrail(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
+	// The body carries a forged operator; the handler must ignore it and
+	// attribute to the authenticated caller (adminReq stamps "admin").
 	body := `{"command":"systemctl stop vigo-envoy","target":"*","operator":"alice"}`
 	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
@@ -470,8 +472,9 @@ func TestTaskHandler_DispatchBlockedByGuardrail(t *testing.T) {
 	if !strings.Contains(audit.events[0].Payload, "systemctl stop vigo") {
 		t.Errorf("expected payload to carry matched pattern, got %q", audit.events[0].Payload)
 	}
-	if audit.events[0].Actor != "alice" {
-		t.Errorf("expected actor=alice, got %q", audit.events[0].Actor)
+	// Actor is the authenticated caller, never the forged body operator.
+	if audit.events[0].Actor != "admin" {
+		t.Errorf("expected actor=admin (authenticated caller), got %q", audit.events[0].Actor)
 	}
 }
 

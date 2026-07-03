@@ -777,7 +777,7 @@ type OIDCAuthConfig struct {
 	RedirectURL  string   `yaml:"redirect_url" doc:"Redirect URL registered with the provider (must point at this server's /auth/callback)." example:"https://vigo.example.com/auth/callback"`
 	Scopes       []string `yaml:"scopes" doc:"Scopes requested during the auth code flow." default:"[openid,profile,email]" example:"[openid, profile, email, groups]"`
 
-	BootstrapAdminEmail   string `yaml:"bootstrap_admin_email" doc:"Email of the OIDC identity to provision as admin on first login (empty = no auto-admin; grant roles via 'vigocli webusers set-role')." example:"admin@example.com"`
+	BootstrapAdminEmail   string `yaml:"bootstrap_admin_email" doc:"Email of the OIDC identity to provision as admin on first login (empty = no auto-admin; grant roles via 'vigocli webusers set-role'). Matched only when the IdP marks the email verified (email_verified: true); prefer bootstrap_admin_subject on IdPs allowing unverified email." example:"admin@example.com"`
 	BootstrapAdminSubject string `yaml:"bootstrap_admin_subject" doc:"OIDC subject (sub claim) of the identity to provision as admin on first login. Use instead of email when the IdP's email is not stable." example:"auth0|abc123"`
 }
 

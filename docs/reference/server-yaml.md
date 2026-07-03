@@ -163,6 +163,9 @@ auth:
     # Optional: provision exactly one identity as admin on its first login.
     # Leave both unset (default) and all new OIDC users are viewers — grant
     # admin explicitly with `vigocli webusers set-role --role admin`.
+    # Email matching is honored only when the IdP marks the address verified
+    # (`email_verified: true`). Prefer bootstrap_admin_subject on IdPs that
+    # allow self-set/unverified email.
     bootstrap_admin_email: "admin@example.com"
 
 # Disable auth (development only)
@@ -174,7 +177,7 @@ auth:
 |-------|---------|-------------|
 | `method` | `basic` | `basic`, `oidc`, `isowebauth`, or `none` |
 | `session_idle_timeout` | `15m` | Idle timeout before session expires |
-| `oidc.bootstrap_admin_email` | (none) | Email of the OIDC identity to provision as admin on first login. Empty disables auto-admin. |
+| `oidc.bootstrap_admin_email` | (none) | Email of the OIDC identity to provision as admin on first login. Matched only when the IdP marks the email verified (`email_verified: true`); otherwise ignored. Empty disables auto-admin. |
 | `oidc.bootstrap_admin_subject` | (none) | OIDC `sub` claim of the identity to provision as admin (use when email is not stable). |
 
 ## smtp

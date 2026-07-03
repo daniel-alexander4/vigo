@@ -31,7 +31,6 @@ vigocli task run <command-or-task-name> [flags]
 |------|-------|---------|-------------|
 | `--target` | | | Target spec: hostname, glob (`*.web.*`), UUID, or trait filter (`os.distro=ubuntu`) |
 | `--timeout` | | `60` | Command timeout in seconds |
-| `--operator` | | current user | Operator name for audit |
 | `--batch-size` | | | Batch size: count (`5`) or percentage (`25%`) |
 | `--max-failures` | | | Max failures before abort: count (`2`) or percentage (`10%`) |
 | `--health-check-url` | | | URL to probe between batches (abort on non-2xx) |
@@ -59,6 +58,10 @@ Proceed anyway? [y/N]
 step. Bypassed dispatches land on the audit hash chain as `task.dispatch`
 with `{"forced":true}` in the payload; refused dispatches (operator
 declined, no `--force`) land as `task.blocked` with the matched pattern.
+
+The audit actor for both events is the **authenticated caller** (the API
+token or session that made the request), derived server-side — it is not a
+client-supplied value, so it cannot be forged.
 
 `--force` does **not** bypass the agent's guardrails on each envoy —
 they are hardcoded (`agent/src/guardrails.rs`) and not server-overridable.

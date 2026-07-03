@@ -90,7 +90,6 @@ func (s *stubProvider) Close() error { return nil }
 type Options struct {
 	CheckURLs  bool
 	URLTimeout time.Duration // default 10s if zero
-	Operator   string        // who performed this publish (defaults to $USER)
 	Diff       bool          // compute and print line-level diffs
 
 	// NoPrune disables the post-validation pruning of unreachable modules,

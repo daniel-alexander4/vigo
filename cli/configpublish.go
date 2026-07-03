@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
@@ -39,18 +38,11 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
 		urlTimeout, _ := cmd.Flags().GetDuration("url-timeout")
-		operator, _ := cmd.Flags().GetString("operator")
 		showDiff, _ := cmd.Flags().GetBool("diff")
 		askAI, _ := cmd.Flags().GetBool("ask-ai")
 		filePath, _ := cmd.Flags().GetString("file")
 		noPrune, _ := cmd.Flags().GetBool("no-prune")
 		serverRoot, _ := cmd.Flags().GetString("server-root")
-
-		if operator == "" {
-			if u, err := user.Current(); err == nil {
-				operator = u.Username
-			}
-		}
 
 		// Anchor the three publish dirs on --server-root (default /srv/vigo),
 		// mirroring the server's 0.75.8 serverRoot anchoring. PathsUnder is the
@@ -64,7 +56,6 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			HistoryDir: historyDir,
 			CheckURLs:  !skipURLCheck,
 			URLTimeout: urlTimeout,
-			Operator:   operator,
 			Diff:       showDiff,
 			NoPrune:    noPrune,
 		}
@@ -80,7 +71,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 				return err
 			}
 			fmt.Printf("Published: %s\n", filePath)
-			recordPublish(operator, res)
+			recordPublish(res)
 			reloadServer(stacksDir)
 			return nil
 		}
@@ -127,7 +118,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			fmt.Println(res.DiffSummary)
 		}
 
-		recordPublish(operator, res)
+		recordPublish(res)
 		reloadServer(stacksDir)
 
 		// Module retraction: generate retract modules for removed modules
@@ -600,10 +591,11 @@ func publishRunGit(dir string, args ...string) error {
 }
 
 // recordPublish sends publish metadata to the server for audit (best-effort).
-func recordPublish(operator string, res *publish.Result) {
+// The operator is derived server-side from the authenticated caller, never
+// sent from here — a client-supplied actor could forge the audit-chain entry.
+func recordPublish(res *publish.Result) {
 	client := newAPIClient()
 	_ = client.post("/api/v1/config/publishes", map[string]any{
-		"operator":      operator,
 		"changed_files": res.Changed,
 		"removed_files": res.Removed,
 		"diff_summary":  res.DiffSummary,
@@ -811,7 +803,6 @@ func init() {
 	configPublishCmd.Flags().Bool("dry-run", false, "validate only, do not publish")
 	configPublishCmd.Flags().Bool("skip-url-check", false, "skip HTTP aliveness checks for URLs")
 	configPublishCmd.Flags().Duration("url-timeout", 10*time.Second, "timeout per URL check")
-	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
 	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stacks/)")

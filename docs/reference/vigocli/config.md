@@ -361,7 +361,6 @@ vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 | `--dry-run` | `false` | Validate only |
 | `--skip-url-check` | `false` | Skip HTTP aliveness checks for URLs |
 | `--url-timeout` | `10s` | Timeout per URL aliveness check |
-| `--operator` | `$USER` | Operator name for audit trail |
 | `--diff` | `false` | Show line-level diff for each changed file |
 | `--ask-ai` | `false` | Ask AI to suggest fixes for validation errors |
 | `--no-prune` | `false` | Publish every file in `stacks/` verbatim — skip the reachability prune |

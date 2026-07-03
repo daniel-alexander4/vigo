@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +35,6 @@ var taskRunCmd = &cobra.Command{
 		target, _ := cmd.Flags().GetString("target")
 		timeout, _ := cmd.Flags().GetInt("timeout")
 		nice, _ := cmd.Flags().GetInt("nice")
-		operator, _ := cmd.Flags().GetString("operator")
 		batchSize, _ := cmd.Flags().GetString("batch-size")
 		maxFailures, _ := cmd.Flags().GetString("max-failures")
 		healthCheck, _ := cmd.Flags().GetString("health-check-url")
@@ -46,13 +44,6 @@ var taskRunCmd = &cobra.Command{
 
 		if target == "" && len(paramFlags) == 0 {
 			return fmt.Errorf("--target is required")
-		}
-		if operator == "" {
-			if u, err := user.Current(); err == nil {
-				operator = u.Username
-			} else {
-				operator = "vigocli"
-			}
 		}
 
 		// Parse --param key=value flags.
@@ -70,7 +61,6 @@ var taskRunCmd = &cobra.Command{
 		// Build the dispatch request.
 		body := map[string]any{
 			"target":      target,
-			"operator":    operator,
 			"timeout":     timeout,
 			"nice":        nice,
 			"batchSize":   batchSize,
@@ -412,7 +402,6 @@ func init() {
 	taskRunCmd.Flags().String("target", "", "Target spec: hostname, glob ('*.web.*'), UUID, or trait filter (os.distro=ubuntu)")
 	taskRunCmd.Flags().Int("timeout", 60, "Command timeout in seconds")
 	taskRunCmd.Flags().Int("nice", 0, "CPU/IO priority 0-19 (0=normal, 19=lowest)")
-	taskRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
 	taskRunCmd.Flags().String("batch-size", "", "Batch size: count (5) or percentage (25%)")
 	taskRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")
 	taskRunCmd.Flags().String("health-check-url", "", "URL to probe between batches (abort on non-2xx)")

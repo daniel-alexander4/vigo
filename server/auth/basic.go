@@ -47,6 +47,7 @@ type BasicProvider struct {
 	secrets     secrets.Provider
 	auditWriter auditRecorder
 	i18n        config.I18nSection
+	authLimiter *authLimiter
 }
 
 // NewBasicProvider creates a BasicProvider.
@@ -56,6 +57,11 @@ func NewBasicProvider(sessions *SessionManager, userStore *UserStore, tokenStore
 		userStore:  userStore,
 		tokenStore: tokenStore,
 		secrets:    secretsProvider,
+		// 10 attempts/min per IP, burst 10 — invisible to a human mistyping a
+		// password a few times, but throttles automated login + TOTP brute
+		// force to a crawl. On by default; the HTTP auth path is otherwise
+		// unthrottled (unlike the gRPC check-in path).
+		authLimiter: newAuthLimiter(10, 10),
 	}
 }
 
@@ -147,6 +153,20 @@ func (p *BasicProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /logout", p.handleLogout)
 }
 
+// allowAuthAttempt applies the per-IP auth rate limit and audits a denial.
+// Nil-guarded so tests that construct a bare BasicProvider aren't throttled.
+func (p *BasicProvider) allowAuthAttempt(r *http.Request) bool {
+	if p.authLimiter == nil {
+		return true
+	}
+	ip := clientIP(r)
+	if p.authLimiter.allow(ip) {
+		return true
+	}
+	recordAudit(r.Context(), p.auditWriter, "auth.rate_limited", "", "auth", "auth attempt rate-limited", fmt.Sprintf(`{"ip":%q}`, ip))
+	return false
+}
+
 func (p *BasicProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	// If already logged in, redirect to dashboard.
 	user := p.sessions.GetUser(r.Context())
@@ -159,6 +179,10 @@ func (p *BasicProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) 
 
 func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	locale := i18n.LocaleFromRequest(p.i18n, r)
+	if !p.allowAuthAttempt(r) {
+		http.Error(w, "too many authentication attempts — wait a minute and try again", http.StatusTooManyRequests)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		serveLoginPage(w, locale, "auth.err.invalid_request")
 		return
@@ -245,6 +269,10 @@ func (p *BasicProvider) handleTOTPPage(w http.ResponseWriter, r *http.Request) {
 
 func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request) {
 	locale := i18n.LocaleFromRequest(p.i18n, r)
+	if !p.allowAuthAttempt(r) {
+		http.Error(w, "too many authentication attempts — wait a minute and try again", http.StatusTooManyRequests)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		serveTOTPPage(w, locale, "auth.err.invalid_request")
 		return
