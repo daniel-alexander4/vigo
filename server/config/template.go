@@ -6,6 +6,7 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -75,11 +76,61 @@ func evalTraitFunc(funcName, argStr string, traits map[string]any) bool {
 	case "arch":
 		return strings.EqualFold(traitValue(traits, "os.arch"), argStr)
 	case "version_ge":
-		return traitValue(traits, "os.version") >= argStr
+		return versionGE(traitValue(traits, "os.version"), argStr)
 	case "has_display":
 		return traitValue(traits, "display.server") != "" && traitValue(traits, "display.server") != "none"
 	}
 	return false
+}
+
+// versionGE reports whether version string a is >= b, comparing dotted
+// numeric components rather than lexically ("9" >= "10" must be false).
+// Each component is parsed up to its first non-digit, so a platform suffix
+// like FreeBSD's "14.0-RELEASE" reads as (14, 0); a missing component is
+// treated as 0 ("9" == "9.0", "9" < "9.5"). Inputs with no leading digits
+// compare as 0. OS version strings never carry semver pre-release/build
+// metadata, so a full semver parser would be over-built here.
+func versionGE(a, b string) bool {
+	return compareVersions(a, b) >= 0
+}
+
+func compareVersions(a, b string) int {
+	as := strings.Split(a, ".")
+	bs := strings.Split(b, ".")
+	n := len(as)
+	if len(bs) > n {
+		n = len(bs)
+	}
+	for i := 0; i < n; i++ {
+		var av, bv int
+		if i < len(as) {
+			av = leadingInt(as[i])
+		}
+		if i < len(bs) {
+			bv = leadingInt(bs[i])
+		}
+		if av != bv {
+			if av < bv {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+// leadingInt parses the leading run of digits in s, returning 0 if there are
+// none (tolerates suffixes like "-RELEASE" on a version component).
+func leadingInt(s string) int {
+	end := 0
+	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0
+	}
+	n, _ := strconv.Atoi(s[:end])
+	return n
 }
 
 // RenderVars renders Go template syntax in var values in declaration order.
