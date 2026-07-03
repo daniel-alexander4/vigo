@@ -53,6 +53,18 @@ const multicastReadBuf = 4096
 // loops back to check ctx — the clean-shutdown poll interval.
 const multicastReadDeadline = 2 * time.Second
 
+// tier1RateLimit / tier1RateBurst bound how many inbound Tier-1 datagrams
+// the listener processes per second before the sender-lookup DB read.
+// Legitimate Tier-1 traffic is one digest per roster bolt per
+// tier1_interval (default 30s) — a handful per second even for a large
+// spanner — so this generous global cap is invisible to real peers while
+// a LAN flooder (spanner_id is not secret) is reduced to cheap
+// token-bucket rejects instead of a ListBolts query per packet.
+const (
+	tier1RateLimit = 64  // sustained datagrams/sec processed
+	tier1RateBurst = 128 // immediate burst absorbed
+)
+
 // digestMessage is the signed Tier-1 announcement a bolt multicasts
 // every snapshot.tier1_interval. It carries no hostname — the pull
 // target is resolved from the local roster, never the wire.
@@ -294,6 +306,13 @@ func (g *Gossiper) runTier1Listener(ctx context.Context, founderPubkeyHook func(
 				continue
 			}
 			slog.Warn("spanner tier-1 listener: read failed; continuing", "error", err)
+			continue
+		}
+		// Rate-gate before any decode or DB read: a spanner_id-knowing
+		// LAN flooder is capped to cheap rejects here rather than one
+		// ListBolts query per packet.
+		if !g.tier1Limiter.Allow() {
+			slog.Debug("spanner tier-1 listener: inbound rate limit exceeded; dropping datagram")
 			continue
 		}
 		datagram := make([]byte, n)

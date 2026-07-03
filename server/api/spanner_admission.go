@@ -614,6 +614,43 @@ func (h *SpannerAdmissionHandler) handleRoster(w http.ResponseWriter, r *http.Re
 	writeJSON(w, r, http.StatusOK, map[string]any{"roster": boltsToRosterRows(roster)})
 }
 
+// authenticatePull gates the session-less Tier-2 gossip pull endpoints
+// (/snapshot, /fleet-snapshot). They serve the full replicated user
+// directory + roster + envoy inventory and ride a plain-TLS, no-client-cert
+// listener, so without this any host reaching the REST port could read it
+// all. It verifies the Ed25519 pull-proof header and confirms the signer is
+// a non-revoked roster member — the same membership predicate the Tier-1
+// multicast listener enforces. On failure it writes the HTTP error and
+// returns false; the caller returns immediately. Peer bootstrap is
+// unaffected: a joiner seeds its roster via /peer-admit (separately authed),
+// so it is already a roster member by the time it pulls a snapshot.
+func (h *SpannerAdmissionHandler) authenticatePull(w http.ResponseWriter, r *http.Request) bool {
+	pubHex, err := spanner.VerifyPullRequest(r, spanner.PullAuthWindow)
+	if err != nil {
+		slog.Debug("spanner pull: rejecting unsigned/invalid request", "path", r.URL.Path, "remote", r.RemoteAddr, "error", err)
+		writeError(w, http.StatusForbidden, "spanner pull requires a valid roster-member signature")
+		return false
+	}
+	roster, err := h.queries.ListBolts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		return false
+	}
+	for i := range roster {
+		if roster[i].Pubkey == pubHex {
+			if roster[i].RevokedAt.Valid {
+				slog.Debug("spanner pull: rejecting revoked roster member", "sender", pubHex, "remote", r.RemoteAddr)
+				writeError(w, http.StatusForbidden, "spanner pull: signer is revoked")
+				return false
+			}
+			return true
+		}
+	}
+	slog.Debug("spanner pull: rejecting non-member signer", "sender", pubHex, "remote", r.RemoteAddr)
+	writeError(w, http.StatusForbidden, "spanner pull: signer is not a roster member")
+	return false
+}
+
 // handleSnapshot returns this bolt's full CRDT state — the
 // spanner_bolts roster plus the spanner_consumed_tokens G-Set rows
 // the roster's consumed_token_hash FKs point at. This is the
@@ -622,6 +659,9 @@ func (h *SpannerAdmissionHandler) handleRoster(w http.ResponseWriter, r *http.Re
 // spanner.MergeSnapshot. The stored per-row signatures are served
 // verbatim — no re-signing, no version field.
 func (h *SpannerAdmissionHandler) handleSnapshot(w http.ResponseWriter, r *http.Request) {
+	if !h.authenticatePull(w, r) {
+		return
+	}
 	roster, err := h.queries.ListBolts(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())

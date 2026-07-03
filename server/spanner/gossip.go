@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	vigoauth "git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
@@ -71,6 +73,15 @@ type Gossiper struct {
 	mcastGroup    string             // IPv4 multicast group for Tier-1 (spanner.transport.multicast_group)
 	mcastPort     int                // UDP port for Tier-1 (spanner.transport.multicast_port)
 	tier1Interval time.Duration      // Tier-1 digest cadence (spanner.snapshot.tier1_interval)
+
+	// tier1Limiter caps how many inbound Tier-1 datagrams the listener
+	// processes per second before the sender-lookup DB read. spanner_id
+	// is not secret, so a LAN attacker could otherwise flood cheap UDP
+	// and force one ListBolts query per packet; this reduces a flood to
+	// a token-bucket trickle of cheap rejects. Global (not per-source):
+	// the source addr is discarded on read, and legitimate Tier-1
+	// traffic is inherently low-rate.
+	tier1Limiter *rate.Limiter
 
 	// pullDebounce records the last Tier-1-triggered pull time per peer
 	// pubkey-hex; allowTier1Pull enforces pullDebounceWindow against it.
@@ -182,6 +193,7 @@ func NewGossiper(sqlDB *sql.DB, queries *db.Queries, ownPubkeyHex, httpsPort str
 		mcastGroup:    mcastGroup,
 		mcastPort:     mcastPort,
 		tier1Interval: tier1Interval,
+		tier1Limiter:  rate.NewLimiter(tier1RateLimit, tier1RateBurst),
 		pullDebounce:  make(map[string]time.Time),
 		observ:        NewObservabilityCache(),
 	}
@@ -307,6 +319,7 @@ func (g *Gossiper) pullFleetSnapshot(ctx context.Context, peerHostname, peerPubk
 	if err != nil {
 		return fmt.Errorf("building fleet-snapshot request: %w", err)
 	}
+	SignPullRequest(req, g.signingKey, g.ownPubkey)
 	resp, err := g.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("calling peer /fleet-snapshot: %w", err)
@@ -360,6 +373,7 @@ func (g *Gossiper) pullAndMerge(ctx context.Context, peerHostname string, founde
 	if err != nil {
 		return 0, fmt.Errorf("building snapshot request: %w", err)
 	}
+	SignPullRequest(req, g.signingKey, g.ownPubkey)
 	resp, err := g.httpClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("calling peer /snapshot: %w", err)

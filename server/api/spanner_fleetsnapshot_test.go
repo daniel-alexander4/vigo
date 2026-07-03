@@ -5,6 +5,7 @@ package api
 
 import (
 	"crypto/ed25519"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -40,6 +41,29 @@ func newFleetSnapshotHandler(t *testing.T, envoys []fleet.EnvoyState) (*SpannerA
 	return h, id.PublicKey
 }
 
+// authedPull seeds a fresh, unrevoked roster member into q and returns a GET
+// to path carrying that member's valid Ed25519 pull-proof header — enough to
+// clear authenticatePull so a test can exercise the serve/503 logic behind
+// it. authenticatePull matches on pubkey + revoked state and does not
+// re-verify the admission signature, so a placeholder admission sig is fine.
+func authedPull(t *testing.T, q *db.Queries, path string) *http.Request {
+	t.Helper()
+	signer := testBoltIdentity(t)
+	pubHex := hex.EncodeToString(signer.PublicKey)
+	if err := q.InsertBolt(t.Context(), db.InsertBoltParams{
+		Pubkey:     pubHex,
+		Hostname:   "member.example.com",
+		AdmittedAt: time.Now().Unix(),
+		AdmittedBy: pubHex,
+		Signature:  []byte("placeholder"),
+	}); err != nil {
+		t.Fatalf("seed roster member: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	spanner.SignPullRequest(req, signer.SigningKey, pubHex)
+	return req
+}
+
 func TestFleetSnapshotEndpointSignsAndServes(t *testing.T) {
 	h, pubkey := newFleetSnapshotHandler(t, []fleet.EnvoyState{
 		{ID: "e1", Hostname: "h1.example.com", IP: "10.0.0.1", ConvergenceStatus: "converged",
@@ -49,7 +73,7 @@ func TestFleetSnapshotEndpointSignsAndServes(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/spanner/fleet-snapshot", nil)
+	req := authedPull(t, h.queries, "/api/v1/spanner/fleet-snapshot")
 	h.handleFleetSnapshot(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -81,6 +105,57 @@ func TestFleetSnapshotEndpointSignsAndServes(t *testing.T) {
 	}
 }
 
+// TestSnapshotAuthGate proves the finding fix: the two session-less gossip
+// pull endpoints refuse an unsigned caller, a caller signed by a non-roster
+// key, and a caller signed by a revoked member — closing the anonymous
+// full-user-directory read.
+func TestSnapshotAuthGate(t *testing.T) {
+	h, _ := newFleetSnapshotHandler(t, nil)
+
+	// (a) unsigned → 403 on both endpoints.
+	for name, hf := range map[string]http.HandlerFunc{
+		"snapshot":       h.handleSnapshot,
+		"fleet-snapshot": h.handleFleetSnapshot,
+	} {
+		rec := httptest.NewRecorder()
+		hf(rec, httptest.NewRequest(http.MethodGet, "/api/v1/spanner/"+name, nil))
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("unsigned %s pull returned %d, want 403", name, rec.Code)
+		}
+	}
+
+	// (b) signed by a key not in the roster → 403.
+	stranger := testBoltIdentity(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/spanner/snapshot", nil)
+	spanner.SignPullRequest(req, stranger.SigningKey, hex.EncodeToString(stranger.PublicKey))
+	rec := httptest.NewRecorder()
+	h.handleSnapshot(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("non-member pull returned %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+
+	// (c) signed by a member whose row is revoked → 403.
+	revoked := testBoltIdentity(t)
+	pubHex := hex.EncodeToString(revoked.PublicKey)
+	if err := h.queries.InsertBolt(t.Context(), db.InsertBoltParams{
+		Pubkey:     pubHex,
+		Hostname:   "revoked.example.com",
+		AdmittedAt: time.Now().Unix(),
+		AdmittedBy: pubHex,
+		RevokedAt:  sql.NullInt64{Int64: time.Now().Unix(), Valid: true},
+		Signature:  []byte("placeholder"),
+	}); err != nil {
+		t.Fatalf("seed revoked member: %v", err)
+	}
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/spanner/snapshot", nil)
+	spanner.SignPullRequest(req2, revoked.SigningKey, pubHex)
+	rec2 := httptest.NewRecorder()
+	h.handleSnapshot(rec2, req2)
+	if rec2.Code != http.StatusForbidden {
+		t.Errorf("revoked-member pull returned %d, want 403; body=%s", rec2.Code, rec2.Body.String())
+	}
+}
+
 func TestFleetSnapshotEndpoint503WithoutFleetIndex(t *testing.T) {
 	sqlDB := testutil.OpenMigratedTestDB(t)
 	h := NewSpannerAdmissionHandler(sqlDB, db.New(sqlDB), testBoltIdentity(t),
@@ -88,7 +163,7 @@ func TestFleetSnapshotEndpoint503WithoutFleetIndex(t *testing.T) {
 	// No SetFleetIndex call → 503.
 
 	rec := httptest.NewRecorder()
-	h.handleFleetSnapshot(rec, httptest.NewRequest(http.MethodGet, "/api/v1/spanner/fleet-snapshot", nil))
+	h.handleFleetSnapshot(rec, authedPull(t, h.queries, "/api/v1/spanner/fleet-snapshot"))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("fleet-snapshot without a fleet index returned %d, want 503", rec.Code)
 	}
@@ -101,7 +176,7 @@ func TestFleetSnapshotEndpoint503WithoutBoltIdentity(t *testing.T) {
 	h.SetFleetIndex(fleet.NewFleetIndex())
 
 	rec := httptest.NewRecorder()
-	h.handleFleetSnapshot(rec, httptest.NewRequest(http.MethodGet, "/api/v1/spanner/fleet-snapshot", nil))
+	h.handleFleetSnapshot(rec, authedPull(t, h.queries, "/api/v1/spanner/fleet-snapshot"))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("fleet-snapshot without a bolt identity returned %d, want 503", rec.Code)
 	}

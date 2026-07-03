@@ -27,6 +27,9 @@ import (
 // bolt identity (to sign) and a fleet index (the observability
 // source); 503s when either is absent.
 func (h *SpannerAdmissionHandler) handleFleetSnapshot(w http.ResponseWriter, r *http.Request) {
+	if !h.authenticatePull(w, r) {
+		return
+	}
 	if h.boltID == nil {
 		writeError(w, http.StatusServiceUnavailable, "fleet snapshot requires a bolt identity (spanner mode + local secrets backend)")
 		return

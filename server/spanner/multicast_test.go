@@ -367,6 +367,26 @@ func newTier1Fixture(t *testing.T) *tier1Fixture {
 	return &tier1Fixture{crdtFixture: cf, g: g, pulledHost: pulled}
 }
 
+// TestNewGossiperRateLimitsTier1 guards the Tier-1 flood backstop: the
+// listener rate-gates inbound datagrams before the sender-lookup DB read,
+// so a spanner_id-knowing LAN flooder is reduced to cheap token-bucket
+// rejects. Asserts the limiter is wired and that traffic past the burst is
+// denied.
+func TestNewGossiperRateLimitsTier1(t *testing.T) {
+	g := NewGossiper(nil, nil, "pk", "8443", 0, testSpannerID, nil, "224.0.0.45", 1534, 0, http.DefaultClient)
+	if g.tier1Limiter == nil {
+		t.Fatal("NewGossiper must wire a Tier-1 rate limiter")
+	}
+	for i := 0; i < tier1RateBurst; i++ {
+		if !g.tier1Limiter.Allow() {
+			t.Fatalf("datagram %d within the burst was denied", i)
+		}
+	}
+	if g.tier1Limiter.Allow() {
+		t.Error("datagram past the burst should be rate-limited")
+	}
+}
+
 // recordingTransport records the host of every request it sees on
 // pulled, then fails the request. pullAndMerge surfaces the failure as
 // a logged error; the test asserts only on the recorded host.
