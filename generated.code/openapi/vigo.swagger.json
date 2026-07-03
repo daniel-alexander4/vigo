@@ -529,91 +529,6 @@
           "VigoAdmin"
         ]
       }
-    },
-    "/api/v1/webhooks": {
-      "get": {
-        "summary": "ListWebhooks lists all registered webhooks.",
-        "operationId": "VigoAdmin_ListWebhooks",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListWebhooksResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "VigoAdmin"
-        ]
-      },
-      "post": {
-        "summary": "AddWebhook registers a new webhook endpoint.",
-        "operationId": "VigoAdmin_AddWebhook",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1AddWebhookResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1AddWebhookRequest"
-            }
-          }
-        ],
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
-    },
-    "/api/v1/webhooks/{id}": {
-      "delete": {
-        "summary": "DeleteWebhook removes a webhook by ID.",
-        "operationId": "VigoAdmin_DeleteWebhook",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DeleteWebhookResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
     }
   },
   "definitions": {
@@ -697,31 +612,6 @@
         }
       }
     },
-    "v1AddWebhookRequest": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string"
-        },
-        "secret": {
-          "type": "string"
-        },
-        "events": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "v1AddWebhookResponse": {
-      "type": "object",
-      "properties": {
-        "webhook": {
-          "$ref": "#/definitions/v1WebhookInfo"
-        }
-      }
-    },
     "v1ApprovedPattern": {
       "type": "object",
       "properties": {
@@ -788,9 +678,6 @@
       }
     },
     "v1DeleteEnvoyResponse": {
-      "type": "object"
-    },
-    "v1DeleteWebhookResponse": {
       "type": "object"
     },
     "v1DryRunResponse": {
@@ -1022,18 +909,6 @@
         }
       }
     },
-    "v1ListWebhooksResponse": {
-      "type": "object",
-      "properties": {
-        "webhooks": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1WebhookInfo"
-          }
-        }
-      }
-    },
     "v1PlannedAction": {
       "type": "object",
       "properties": {
@@ -1146,30 +1021,6 @@
         "skippedCount": {
           "type": "integer",
           "format": "int32"
-        }
-      }
-    },
-    "v1WebhookInfo": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "events": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "active": {
-          "type": "boolean"
         }
       }
     }

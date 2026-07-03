@@ -19,7 +19,6 @@ const (
 	PermWorkflowExecute    = "workflow.execute"
 	PermUsersManage        = "users.manage"
 	PermTokensManage       = "tokens.manage"
-	PermWebhooksManage     = "webhooks.manage"
 	PermBackupManage       = "backup.manage"
 	PermEnrollManage       = "enrollment.manage"
 	PermAuditRead          = "audit.read"
@@ -33,7 +32,7 @@ var AllPermissions = []string{
 	PermFleetRead, PermFleetWrite,
 	PermConfigPublish, PermConfigRollback,
 	PermPushExecute, PermQueryExecute, PermWorkflowExecute,
-	PermUsersManage, PermTokensManage, PermWebhooksManage,
+	PermUsersManage, PermTokensManage,
 	PermBackupManage, PermEnrollManage, PermAuditRead,
 	PermComplianceRead, PermComplianceDocsWrite, PermComplianceDocsPurge,
 }

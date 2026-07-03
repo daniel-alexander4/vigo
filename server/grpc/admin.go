@@ -618,20 +618,6 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	return &pb.DryRunResponse{Actions: actions}, nil
 }
 
-// ---------- Webhooks (removed — use native integrations in server.yaml) ----------
-
-func (s *AdminService) AddWebhook(ctx context.Context, _ *pb.AddWebhookRequest) (*pb.AddWebhookResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "webhooks removed — configure native integrations in server.yaml")
-}
-
-func (s *AdminService) ListWebhooks(ctx context.Context, _ *pb.ListWebhooksRequest) (*pb.ListWebhooksResponse, error) {
-	return &pb.ListWebhooksResponse{}, nil
-}
-
-func (s *AdminService) DeleteWebhook(ctx context.Context, _ *pb.DeleteWebhookRequest) (*pb.DeleteWebhookResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "webhooks removed — configure native integrations in server.yaml")
-}
-
 // ---------- Convergence ----------
 
 func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConvergenceSummaryRequest) (*pb.GetConvergenceSummaryResponse, error) {

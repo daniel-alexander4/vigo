@@ -152,28 +152,6 @@ service VigoAdmin {
     };
   }
 
-  // AddWebhook registers a new webhook endpoint.
-  rpc AddWebhook(AddWebhookRequest) returns (AddWebhookResponse) {
-    option (google.api.http) = {
-      post: "/api/v1/webhooks"
-      body: "*"
-    };
-  }
-
-  // ListWebhooks lists all registered webhooks.
-  rpc ListWebhooks(ListWebhooksRequest) returns (ListWebhooksResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/webhooks"
-    };
-  }
-
-  // DeleteWebhook removes a webhook by ID.
-  rpc DeleteWebhook(DeleteWebhookRequest) returns (DeleteWebhookResponse) {
-    option (google.api.http) = {
-      delete: "/api/v1/webhooks/{id}"
-    };
-  }
-
   // GetConvergenceSummary returns aggregate convergence status across all envoys.
   rpc GetConvergenceSummary(GetConvergenceSummaryRequest) returns (GetConvergenceSummaryResponse) {
     option (google.api.http) = {
@@ -782,40 +760,6 @@ message GenerateTokenRequest {}
 
 message GenerateTokenResponse {
   string token = 1;
-}
-
-// =============================================================================
-// Webhook messages
-// =============================================================================
-
-message AddWebhookRequest {
-  string url = 1;
-  string secret = 2;
-  repeated string events = 3;
-}
-
-message AddWebhookResponse {
-  WebhookInfo webhook = 1;
-}
-
-message ListWebhooksRequest {}
-
-message ListWebhooksResponse {
-  repeated WebhookInfo webhooks = 1;
-}
-
-message DeleteWebhookRequest {
-  string id = 1;
-}
-
-message DeleteWebhookResponse {}
-
-message WebhookInfo {
-  string id = 1;
-  string url = 2;
-  repeated string events = 3;
-  google.protobuf.Timestamp created_at = 4;
-  bool active = 5;
 }
 
 // =============================================================================

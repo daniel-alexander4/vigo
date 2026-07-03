@@ -253,7 +253,6 @@ Three roles are supported:
 | Run workflows | Yes | No | No |
 | Execute queries | Yes | No | No |
 | Manage enrollment patterns | Yes | No | No |
-| Manage webhooks | Yes | No | No |
 | Manage users | Yes | No | No |
 | Run health checks | Yes | No | No |
 | Create/download backups | Yes | No | No |
@@ -276,7 +275,6 @@ Beyond the role labels, each user has a permission set stored as a JSON array. A
 | `workflow.execute` | Run / abort workflows | Yes | No | No |
 | `users.manage` | Create/delete/modify users | Yes | No | No |
 | `tokens.manage` | Manage API tokens | Yes | No | No |
-| `webhooks.manage` | Manage webhooks | Yes | No | No |
 | `backup.manage` | Create/download backups | Yes | No | No |
 | `enrollment.manage` | Manage enrollment patterns | Yes | No | No |
 | `audit.read` | View raw audit-log chain | Yes | Yes | **No** |

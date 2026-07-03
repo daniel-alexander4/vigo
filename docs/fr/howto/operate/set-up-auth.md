@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0c308c6b23392f0ab1413342a45c928cfbcfff5071ff664da73e8729ba701688 -->
+<!-- vigo-i18n source_sha:78ed4fec52a290858f0046f6487570172d0d6866c06b8f2914ea72a14e910168 -->
 
 ---
 title: Authentification
@@ -254,7 +254,6 @@ Trois rôles sont pris en charge :
 | Exécuter des workflows | Oui | Non | Non |
 | Exécuter des requêtes | Oui | Non | Non |
 | Gérer les motifs d'enrôlement | Oui | Non | Non |
-| Gérer les webhooks | Oui | Non | Non |
 | Gérer les utilisateurs | Oui | Non | Non |
 | Lancer des contrôles de santé | Oui | Non | Non |
 | Créer/télécharger des sauvegardes | Oui | Non | Non |
@@ -277,7 +276,6 @@ Au-delà des étiquettes de rôle, chaque utilisateur dispose d'un ensemble de p
 | `workflow.execute` | Exécuter / interrompre des workflows | Oui | Non | Non |
 | `users.manage` | Créer/supprimer/modifier des utilisateurs | Oui | Non | Non |
 | `tokens.manage` | Gérer les jetons d'API | Oui | Non | Non |
-| `webhooks.manage` | Gérer les webhooks | Oui | Non | Non |
 | `backup.manage` | Créer/télécharger des sauvegardes | Oui | Non | Non |
 | `enrollment.manage` | Gérer les motifs d'enrôlement | Oui | Non | Non |
 | `audit.read` | Voir la chaîne du journal d'audit brut | Oui | Oui | **Non** |

@@ -109,21 +109,6 @@ vigocli rollback <hostname-or-uuid> --file /etc/nginx/nginx.conf
 vigocli rollback <hostname-or-uuid> --run <run-id>
 ```
 
-### webhooks -- Webhook management
-
-```bash
-# Register a webhook
-vigocli webhooks add https://hooks.example.com/vigo \
-  --secret <hmac-secret> \
-  --events "run.failure,drift.detected"
-
-# List webhooks
-vigocli webhooks list
-
-# Delete a webhook
-vigocli webhooks delete <id>
-```
-
 ### packages -- Package audit
 
 ```bash

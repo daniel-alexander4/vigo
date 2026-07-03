@@ -478,9 +478,6 @@ const (
 	VigoAdmin_ListRuns_FullMethodName              = "/vigo.v1.VigoAdmin/ListRuns"
 	VigoAdmin_GetRun_FullMethodName                = "/vigo.v1.VigoAdmin/GetRun"
 	VigoAdmin_GenerateToken_FullMethodName         = "/vigo.v1.VigoAdmin/GenerateToken"
-	VigoAdmin_AddWebhook_FullMethodName            = "/vigo.v1.VigoAdmin/AddWebhook"
-	VigoAdmin_ListWebhooks_FullMethodName          = "/vigo.v1.VigoAdmin/ListWebhooks"
-	VigoAdmin_DeleteWebhook_FullMethodName         = "/vigo.v1.VigoAdmin/DeleteWebhook"
 	VigoAdmin_GetConvergenceSummary_FullMethodName = "/vigo.v1.VigoAdmin/GetConvergenceSummary"
 	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
@@ -516,12 +513,6 @@ type VigoAdminClient interface {
 	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*GetRunResponse, error)
 	// GenerateToken generates a cryptographically random one-time enrollment token.
 	GenerateToken(ctx context.Context, in *GenerateTokenRequest, opts ...grpc.CallOption) (*GenerateTokenResponse, error)
-	// AddWebhook registers a new webhook endpoint.
-	AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error)
-	// ListWebhooks lists all registered webhooks.
-	ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error)
-	// DeleteWebhook removes a webhook by ID.
-	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error)
 	// GetConvergenceSummary returns aggregate convergence status across all envoys.
 	GetConvergenceSummary(ctx context.Context, in *GetConvergenceSummaryRequest, opts ...grpc.CallOption) (*GetConvergenceSummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
@@ -666,36 +657,6 @@ func (c *vigoAdminClient) GenerateToken(ctx context.Context, in *GenerateTokenRe
 	return out, nil
 }
 
-func (c *vigoAdminClient) AddWebhook(ctx context.Context, in *AddWebhookRequest, opts ...grpc.CallOption) (*AddWebhookResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddWebhookResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_AddWebhook_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vigoAdminClient) ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListWebhooksResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_ListWebhooks_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vigoAdminClient) DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteWebhookResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_DeleteWebhook_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vigoAdminClient) GetConvergenceSummary(ctx context.Context, in *GetConvergenceSummaryRequest, opts ...grpc.CallOption) (*GetConvergenceSummaryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetConvergenceSummaryResponse)
@@ -774,12 +735,6 @@ type VigoAdminServer interface {
 	GetRun(context.Context, *GetRunRequest) (*GetRunResponse, error)
 	// GenerateToken generates a cryptographically random one-time enrollment token.
 	GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error)
-	// AddWebhook registers a new webhook endpoint.
-	AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error)
-	// ListWebhooks lists all registered webhooks.
-	ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error)
-	// DeleteWebhook removes a webhook by ID.
-	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
 	// GetConvergenceSummary returns aggregate convergence status across all envoys.
 	GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error)
 	// GetEnvoyConvergence returns convergence details for a single envoy.
@@ -839,15 +794,6 @@ func (UnimplementedVigoAdminServer) GetRun(context.Context, *GetRunRequest) (*Ge
 }
 func (UnimplementedVigoAdminServer) GenerateToken(context.Context, *GenerateTokenRequest) (*GenerateTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GenerateToken not implemented")
-}
-func (UnimplementedVigoAdminServer) AddWebhook(context.Context, *AddWebhookRequest) (*AddWebhookResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AddWebhook not implemented")
-}
-func (UnimplementedVigoAdminServer) ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListWebhooks not implemented")
-}
-func (UnimplementedVigoAdminServer) DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteWebhook not implemented")
 }
 func (UnimplementedVigoAdminServer) GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetConvergenceSummary not implemented")
@@ -1101,60 +1047,6 @@ func _VigoAdmin_GenerateToken_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_AddWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddWebhookRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).AddWebhook(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_AddWebhook_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).AddWebhook(ctx, req.(*AddWebhookRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _VigoAdmin_ListWebhooks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListWebhooksRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).ListWebhooks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_ListWebhooks_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).ListWebhooks(ctx, req.(*ListWebhooksRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _VigoAdmin_DeleteWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteWebhookRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).DeleteWebhook(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_DeleteWebhook_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).DeleteWebhook(ctx, req.(*DeleteWebhookRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _VigoAdmin_GetConvergenceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetConvergenceSummaryRequest)
 	if err := dec(in); err != nil {
@@ -1299,18 +1191,6 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GenerateToken",
 			Handler:    _VigoAdmin_GenerateToken_Handler,
-		},
-		{
-			MethodName: "AddWebhook",
-			Handler:    _VigoAdmin_AddWebhook_Handler,
-		},
-		{
-			MethodName: "ListWebhooks",
-			Handler:    _VigoAdmin_ListWebhooks_Handler,
-		},
-		{
-			MethodName: "DeleteWebhook",
-			Handler:    _VigoAdmin_DeleteWebhook_Handler,
 		},
 		{
 			MethodName: "GetConvergenceSummary",

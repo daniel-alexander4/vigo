@@ -422,15 +422,6 @@ type User struct {
 	TotpLastConsumedStep int64         `json:"totp_last_consumed_step"`
 }
 
-type Webhook struct {
-	ID        string    `json:"id"`
-	Url       string    `json:"url"`
-	Secret    string    `json:"secret"`
-	Events    string    `json:"events"`
-	CreatedAt time.Time `json:"created_at"`
-	Active    int64     `json:"active"`
-}
-
 type WorkflowRun struct {
 	ID            string         `json:"id"`
 	WorkflowName  string         `json:"workflow_name"`
