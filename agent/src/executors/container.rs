@@ -13,6 +13,7 @@
 //! `swarm.curator.local_port` for `artifact:` to work.
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -21,6 +22,16 @@ const DOCKER: &str = "docker";
 /// Hard timeout on every Docker daemon call. Long enough for cold-cache image
 /// inspect; short enough that a hung daemon doesn't stall convergence.
 const DAEMON_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Timeout for `docker pull`. Image pulls cross the network and can be large,
+/// so this is far more generous than DAEMON_TIMEOUT — but still bounded so a
+/// wedged pull can't stall convergence indefinitely.
+const PULL_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Label docker preserves on the created container, carrying a fingerprint of
+/// the desired spec so drift in ANY create param (not just the image) is
+/// detected on the next reconcile.
+const SPEC_HASH_LABEL: &str = "vigo.spec-hash";
 
 /// Health-poll cadence for `wait_for_healthy`. Docker's healthcheck loop is
 /// what actually determines health; this is just how often the agent asks.
@@ -47,20 +58,37 @@ impl ContainerExecutor {
             .run_niced_timeout(DOCKER, args, 0, DAEMON_TIMEOUT)
     }
 
-    fn container_status(&self, name: &str) -> Option<String> {
-        let output = self
-            .run(&["inspect", "--format", "{{.State.Status}}", name])
-            .ok()?;
-        if output.status.success() {
-            Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-        } else {
+    /// Like `run`, but with a caller-chosen timeout — used for `docker pull`,
+    /// which needs far more headroom than a daemon inspect.
+    fn run_timeout(
+        &self,
+        args: &[&str],
+        timeout: Duration,
+    ) -> std::io::Result<std::process::Output> {
+        self.runner.run_niced_timeout(DOCKER, args, 0, timeout)
+    }
+
+    /// Read the `vigo.spec-hash` label off a running container. Returns None
+    /// when the container has no such label — either it predates this managed
+    /// label (adopted on the next reconcile) or the inspect failed.
+    fn container_spec_hash(&self, name: &str) -> Option<String> {
+        let fmt = format!("{{{{index .Config.Labels \"{SPEC_HASH_LABEL}\"}}}}");
+        let output = self.run(&["inspect", "--format", &fmt, name]).ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // docker prints "<no value>" when the label key is absent.
+        if s.is_empty() || s == "<no value>" {
             None
+        } else {
+            Some(s)
         }
     }
 
-    fn container_image(&self, name: &str) -> Option<String> {
+    fn container_status(&self, name: &str) -> Option<String> {
         let output = self
-            .run(&["inspect", "--format", "{{.Config.Image}}", name])
+            .run(&["inspect", "--format", "{{.State.Status}}", name])
             .ok()?;
         if output.status.success() {
             Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -113,39 +141,14 @@ impl ContainerExecutor {
         params: &HashMap<String, String>,
     ) -> Vec<String> {
         let mut args = vec!["create".to_string(), "--name".into(), name.into()];
+        args.extend(container_flags(params));
 
-        push_repeated(&mut args, params, "ports", "-p");
-        push_repeated(&mut args, params, "env", "-e");
-        push_repeated(&mut args, params, "volumes", "-v");
-        push_repeated(&mut args, params, "tmpfs", "--tmpfs");
-        push_repeated(&mut args, params, "cap_drop", "--cap-drop");
-        push_repeated(&mut args, params, "cap_add", "--cap-add");
-        push_repeated(&mut args, params, "labels", "--label");
-        push_repeated(&mut args, params, "log_options", "--log-opt");
-
-        push_single(&mut args, params, "network", "--network");
-        push_single(&mut args, params, "restart", "--restart");
-        push_single(&mut args, params, "user", "--user");
-        push_single(&mut args, params, "log_driver", "--log-driver");
-
-        push_single(&mut args, params, "healthcheck_command", "--health-cmd");
-        push_single(&mut args, params, "healthcheck_interval", "--health-interval");
-        push_single(&mut args, params, "healthcheck_timeout", "--health-timeout");
-        push_single(&mut args, params, "healthcheck_retries", "--health-retries");
-        push_single(
-            &mut args,
-            params,
-            "healthcheck_start_period",
-            "--health-start-period",
-        );
-
-        if params
-            .get("read_only")
-            .map(|s| s == "true")
-            .unwrap_or(false)
-        {
-            args.push("--read-only".into());
-        }
+        // Managed spec fingerprint — a label docker preserves so the next
+        // reconcile can detect drift in any create param, not just the image.
+        // Kept out of container_flags (and thus out of the hash) so it is not
+        // self-referential.
+        args.push("--label".into());
+        args.push(format!("{SPEC_HASH_LABEL}={}", spec_hash(image, params)));
 
         args.push(image.into());
 
@@ -159,6 +162,70 @@ impl ContainerExecutor {
 
         args
     }
+}
+
+/// Build the create-flag args — everything between `--name <name>` and the
+/// image that defines the container's spec. Shared by build_create_args and
+/// spec_hash so the drift fingerprint can never diverge from what is actually
+/// created.
+fn container_flags(params: &HashMap<String, String>) -> Vec<String> {
+    let mut args = Vec::new();
+
+    push_repeated(&mut args, params, "ports", "-p");
+    push_repeated(&mut args, params, "env", "-e");
+    push_repeated(&mut args, params, "volumes", "-v");
+    push_repeated(&mut args, params, "tmpfs", "--tmpfs");
+    push_repeated(&mut args, params, "cap_drop", "--cap-drop");
+    push_repeated(&mut args, params, "cap_add", "--cap-add");
+    push_repeated(&mut args, params, "labels", "--label");
+    push_repeated(&mut args, params, "log_options", "--log-opt");
+
+    push_single(&mut args, params, "network", "--network");
+    push_single(&mut args, params, "restart", "--restart");
+    push_single(&mut args, params, "user", "--user");
+    push_single(&mut args, params, "log_driver", "--log-driver");
+
+    push_single(&mut args, params, "healthcheck_command", "--health-cmd");
+    push_single(&mut args, params, "healthcheck_interval", "--health-interval");
+    push_single(&mut args, params, "healthcheck_timeout", "--health-timeout");
+    push_single(&mut args, params, "healthcheck_retries", "--health-retries");
+    push_single(
+        &mut args,
+        params,
+        "healthcheck_start_period",
+        "--health-start-period",
+    );
+
+    if params
+        .get("read_only")
+        .map(|s| s == "true")
+        .unwrap_or(false)
+    {
+        args.push("--read-only".into());
+    }
+
+    args
+}
+
+/// Fingerprint the desired container spec — all create flags plus image and
+/// command — so a change to ANY of them (not just the image) flips the stored
+/// SPEC_HASH_LABEL and forces a recreate on the next reconcile. The hash is a
+/// fingerprint, not a semantic diff: two arg orderings that mean the same to
+/// docker but differ byte-wise hash differently and trigger one spurious
+/// recreate — an accepted cost for detecting real drift.
+fn spec_hash(image: &str, params: &HashMap<String, String>) -> String {
+    let mut h = Sha256::new();
+    for a in container_flags(params) {
+        h.update(a.as_bytes());
+        h.update([0]);
+    }
+    h.update(b"image\0");
+    h.update(image.as_bytes());
+    if let Some(cmd) = params.get("command") {
+        h.update(b"\0command\0");
+        h.update(cmd.as_bytes());
+    }
+    h.finalize().iter().take(16).map(|b| format!("{:02x}", b)).collect()
 }
 
 /// Translate an `artifact:` param value into the docker-pull URL that hits
@@ -311,8 +378,13 @@ impl Executor for ContainerExecutor {
                 }
 
                 if exists && running {
-                    let current_image = self.container_image(&name).unwrap_or_default();
-                    if current_image == image {
+                    // Compare the full desired spec via the managed label, not
+                    // just the image — so a change to ports/env/volumes/etc.
+                    // recreates the container instead of silently settling. A
+                    // container created before this label existed reports None
+                    // here and is recreated once to adopt the fingerprint.
+                    let desired = spec_hash(&image, params);
+                    if self.container_spec_hash(&name).as_deref() == Some(desired.as_str()) {
                         result.action = Action::None;
                         result.duration_ms = start.elapsed().as_millis() as i32;
                         return result;
@@ -369,7 +441,22 @@ impl Executor for ContainerExecutor {
                 }
 
                 if pull == "always" || (pull == "missing" && !exists) {
-                    let _ = self.run(&["pull", &image]);
+                    match self.run_timeout(&["pull", &image], PULL_TIMEOUT) {
+                        Ok(o) if !o.status.success() => {
+                            result.error = Some(format!(
+                                "docker pull: {}",
+                                String::from_utf8_lossy(&o.stderr).trim()
+                            ));
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
+                        Err(e) => {
+                            result.error = Some(format!("docker pull: {}", e));
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
+                        _ => {}
+                    }
                 }
 
                 let create_args = self.build_create_args(&name, &image, params);
@@ -487,10 +574,43 @@ mod tests {
     }
 
     #[test]
-    fn running_container_already_running_same_image() {
+    fn running_container_matching_spec_is_noop() {
+        // A running container whose stored spec-hash matches the desired spec
+        // settles with no changes — status inspect + spec-hash inspect only.
+        let params = make_params(&[
+            ("container", "web"),
+            ("image", "nginx:latest"),
+            ("state", "running"),
+        ]);
+        let expected = spec_hash("nginx:latest", &params);
         let mock = MockRunner::new(vec![
             ok_output("running\n"),
-            ok_output("nginx:latest\n"),
+            ok_output(&format!("{expected}\n")),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(&params, false);
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2); // status inspect + spec-hash inspect
+    }
+
+    #[test]
+    fn running_container_spec_drift_recreates() {
+        // Same image, but the stored spec-hash no longer matches (e.g. ports
+        // changed) → the container is recreated instead of silently settling.
+        // Sequence: status, spec-hash, stop, rm, create, start.
+        let mock = MockRunner::new(vec![
+            ok_output("running\n"),
+            ok_output("stale-hash\n"), // != desired spec_hash → drift
+            ok_output(""),             // stop
+            ok_output(""),             // rm
+            ok_output(""),             // create
+            ok_output(""),             // start
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = ContainerExecutor {
@@ -501,16 +621,32 @@ mod tests {
                 ("container", "web"),
                 ("image", "nginx:latest"),
                 ("state", "running"),
+                ("ports", "8080:80"),
             ]),
             false,
         );
-        assert_eq!(result.action, Action::None);
-        assert!(!result.changed);
-        assert!(result.error.is_none());
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
         let calls = calls.lock().unwrap();
-        assert_eq!(calls.len(), 2);
-        assert_eq!(calls[0].0, "docker");
-        assert_eq!(calls[1].0, "docker");
+        assert_eq!(calls.len(), 6);
+        assert_eq!(calls[2].1[0], "stop");
+        assert_eq!(calls[3].1[0], "rm");
+        assert_eq!(calls[4].1[0], "create");
+        assert_eq!(calls[5].1[0], "start");
+    }
+
+    #[test]
+    fn spec_hash_reflects_every_managed_param() {
+        let base = make_params(&[("container", "web"), ("ports", "80:80")]);
+        let ports_changed = make_params(&[("container", "web"), ("ports", "8080:80")]);
+        // Same inputs → same hash (idempotent).
+        assert_eq!(spec_hash("nginx:latest", &base), spec_hash("nginx:latest", &base));
+        // A port edit changes the fingerprint (the drift the old image-only
+        // check missed).
+        assert_ne!(spec_hash("nginx:latest", &base), spec_hash("nginx:latest", &ports_changed));
+        // An image change changes it too.
+        assert_ne!(spec_hash("nginx:latest", &base), spec_hash("nginx:1.25", &base));
     }
 
     #[test]

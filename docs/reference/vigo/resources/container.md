@@ -80,13 +80,13 @@ When `healthcheck_command` is set and `state: running`, the agent waits up to 2 
 
 ## States
 
-- **`running`** -- Ensure the container is running. If it does not exist, create and start it. If it exists but is stopped, start it. If it exists and is running with a different image, recreate it.
+- **`running`** -- Ensure the container is running. If it does not exist, create and start it. If it exists but is stopped, start it. If it exists and is running but its spec has drifted (image or any other managed setting -- ports, env, volumes, restart policy, etc.), recreate it.
 - **`stopped`** -- Ensure the container is stopped. If running, stop it.
 - **`absent`** -- Remove the container. If running, stop it first.
 
 ## Idempotency
 
-Uses `docker inspect` to check the container's current status and image. For `state: running`, if the container is running with the correct image, no action is taken. Image changes trigger a stop-remove-recreate cycle. Every daemon call has a 10-second timeout so a hung Docker daemon never stalls convergence.
+At create time the agent stamps a `vigo.spec-hash` label -- a fingerprint of the full desired spec (image plus every create setting) -- onto the container. On each reconcile it reads that label back via `docker inspect`; for `state: running`, if the running container's fingerprint matches the desired spec, no action is taken, and any drift (a changed image, port, env var, volume, restart policy, and so on) triggers a stop-remove-recreate cycle. A container created before this label existed is recreated once to adopt the fingerprint. Daemon calls have a 10-second timeout and image pulls a 5-minute timeout, so a hung Docker daemon or a slow registry never stalls convergence; a failed pull surfaces as an error rather than silently using a stale local image.
 
 ## Examples
 
