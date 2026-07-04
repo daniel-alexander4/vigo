@@ -239,7 +239,11 @@ ON CONFLICT(pubkey) DO UPDATE SET
 WHERE (excluded.admitted_at > spanner_bolts.admitted_at
        OR (excluded.admitted_at = spanner_bolts.admitted_at
            AND excluded.revoked_at IS NOT NULL
-           AND spanner_bolts.revoked_at IS NULL))
+           AND (spanner_bolts.revoked_at IS NULL
+                OR excluded.revoked_at < spanner_bolts.revoked_at
+                OR (excluded.revoked_at = spanner_bolts.revoked_at
+                    AND COALESCE(excluded.revoked_by, '')
+                        < COALESCE(spanner_bolts.revoked_by, '')))))
   AND NOT (spanner_bolts.revoked_at IS NOT NULL
            AND excluded.revoked_at IS NULL)
 `
@@ -257,6 +261,19 @@ type MergeBoltLWWParams struct {
 	Signature         []byte         `json:"signature"`
 }
 
+// MergeBoltLWW's comparator is a total order so every replica converges:
+//  1. newer admitted_at wins outright;
+//  2. at equal admitted_at, revoked beats live (revoke-wins);
+//  3. at equal admitted_at with BOTH sides revoked, the smallest
+//     (revoked_at, revoked_by) tuple wins -- first revocation is the
+//     operative event, and the deterministic tiebreak keeps concurrent
+//     revokes from wedging both merge directions (each side keeping its
+//     own tuple -> permanent Tier-1 digest divergence). COALESCE because
+//     NULL comparisons are false in both directions and would deadlock
+//     the tie. Mirrors MergeUserLWW's origin_bolt tiebreak.
+//
+// The trailing guard is absolute revoke-wins: a live row never
+// overwrites a revoked row, since pubkey rotation is forbidden.
 func (q *Queries) MergeBoltLWW(ctx context.Context, arg MergeBoltLWWParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, mergeBoltLWW,
 		arg.Pubkey,
@@ -307,7 +324,7 @@ func (q *Queries) MergeConsumedToken(ctx context.Context, arg MergeConsumedToken
 
 const revokeBolt = `-- name: RevokeBolt :exec
 UPDATE spanner_bolts
-SET revoked_at = ?2, revoked_by = ?3, signature = ?4
+SET revoked_at = ?2, revoked_by = ?3
 WHERE pubkey = ?1
   AND revoked_at IS NULL
 `
@@ -316,15 +333,14 @@ type RevokeBoltParams struct {
 	Pubkey    string         `json:"pubkey"`
 	RevokedAt sql.NullInt64  `json:"revoked_at"`
 	RevokedBy sql.NullString `json:"revoked_by"`
-	Signature []byte         `json:"signature"`
 }
 
+// RevokeBolt leaves the signature column untouched: it holds the
+// ADMISSION signature, which MergeSnapshot re-verifies on every pull
+// (with revoked_* stripped) -- overwriting it would make peers drop the
+// row at verification. A signed revocation attestation is a separate,
+// not-yet-built column (bolt-revocation feature, deferred).
 func (q *Queries) RevokeBolt(ctx context.Context, arg RevokeBoltParams) error {
-	_, err := q.db.ExecContext(ctx, revokeBolt,
-		arg.Pubkey,
-		arg.RevokedAt,
-		arg.RevokedBy,
-		arg.Signature,
-	)
+	_, err := q.db.ExecContext(ctx, revokeBolt, arg.Pubkey, arg.RevokedAt, arg.RevokedBy)
 	return err
 }

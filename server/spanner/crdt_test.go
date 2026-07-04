@@ -129,6 +129,9 @@ func sameRosterState(t *testing.T, a, b map[string]db.SpannerBolt) {
 		if ra.RevokedAt.Valid != rb.RevokedAt.Valid || ra.RevokedAt.Int64 != rb.RevokedAt.Int64 {
 			t.Errorf("%s revoked_at differs: %v != %v", pk, ra.RevokedAt, rb.RevokedAt)
 		}
+		if ra.RevokedBy.Valid != rb.RevokedBy.Valid || ra.RevokedBy.String != rb.RevokedBy.String {
+			t.Errorf("%s revoked_by differs: %v != %v", pk, ra.RevokedBy, rb.RevokedBy)
+		}
 	}
 }
 
@@ -184,6 +187,61 @@ func TestMergeSnapshotOrderIndependent(t *testing.T) {
 	}
 	if got := fb.rosterState()[bolt1].Hostname; got != "b1-renamed.example.com" {
 		t.Errorf("fb bolt1 hostname = %q, want the LWW winner b1-renamed.example.com", got)
+	}
+}
+
+// TestMergeSnapshotConcurrentRevokeConverges pins the deterministic
+// revoke-vs-revoke tiebreak: two nodes revoke the same bolt
+// concurrently (equal admitted_at, differing revoked_at/revoked_by);
+// after exchanging snapshots both ways, both DBs must hold the SAME
+// tuple — the smallest (revoked_at, revoked_by) — and compute the same
+// Tier-1 digest. Before the tiebreak, both merge directions were
+// no-ops and the digests diverged permanently (endless no-op pulls).
+func TestMergeSnapshotConcurrentRevokeConverges(t *testing.T) {
+	fa := newCRDTFixture(t)
+	fb := &crdtFixture{
+		t: t, sqlDB: testutil.OpenMigratedTestDB(t),
+		founderPub: fa.founderPub, founderKey: fa.founderKey, founderHex: fa.founderHex,
+	}
+	fb.q = db.New(fb.sqlDB)
+
+	target := hexKey(0x44)
+
+	// Node A's view: revoked earlier (the operative first revocation).
+	revA := fa.revokedRow(target, "t.example.com", 100, 500)
+	revA.RevokedBy = "revoker-a"
+	// Node B's view: a concurrent, later revocation by someone else.
+	revB := fa.revokedRow(target, "t.example.com", 100, 600)
+	revB.RevokedBy = "revoker-b"
+
+	snapA := Snapshot{Roster: []RosterRow{fa.founderSelfRow(), revA}}
+	snapB := Snapshot{Roster: []RosterRow{fa.founderSelfRow(), revB}}
+
+	// fa: A then B. fb: B then A.
+	fa.merge(snapA)
+	fa.merge(snapB)
+	fb.merge(snapB)
+	fb.merge(snapA)
+
+	sameRosterState(t, fa.rosterState(), fb.rosterState())
+
+	// Both must have converged on the smallest tuple, (500, revoker-a).
+	got := fa.rosterState()[target]
+	if got.RevokedAt.Int64 != 500 || got.RevokedBy.String != "revoker-a" {
+		t.Errorf("winner = (%d, %q), want (500, revoker-a)", got.RevokedAt.Int64, got.RevokedBy.String)
+	}
+
+	// The Tier-1 digests must agree, or the fleet pulls forever.
+	rowsA, err := fa.q.ListBolts(t.Context())
+	if err != nil {
+		t.Fatalf("ListBolts fa: %v", err)
+	}
+	rowsB, err := fb.q.ListBolts(t.Context())
+	if err != nil {
+		t.Fatalf("ListBolts fb: %v", err)
+	}
+	if da, db2 := Tier1Digest(rowsA, nil), Tier1Digest(rowsB, nil); da != db2 {
+		t.Errorf("Tier-1 digests diverge after convergent merge: %s != %s", da, db2)
 	}
 }
 

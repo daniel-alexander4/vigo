@@ -113,7 +113,6 @@ func TestOwningBoltRevokedExcluded(t *testing.T) {
 		Pubkey:    gone,
 		RevokedAt: sql.NullInt64{Int64: 999, Valid: true},
 		RevokedBy: sql.NullString{String: "op", Valid: true},
-		Signature: []byte("sig"),
 	}); err != nil {
 		t.Fatalf("RevokeBolt: %v", err)
 	}

@@ -41,10 +41,14 @@ import (
 //     union is idempotent and order-independent.
 //
 // Merge commutativity holds because both per-row merges are
-// commutative: the LWW comparator is a total order on (admitted_at,
-// revoke-state) so the winner is independent of apply order, and the
-// G-Set union is set union. Applying snapshot A then B yields the
-// same DB state as B then A.
+// commutative: the LWW comparator is a total order — newer admitted_at
+// wins; at equal admitted_at revoked beats live; and between two
+// revocations the smallest (revoked_at, revoked_by) tuple wins — so the
+// winner is independent of apply order, and the G-Set union is set
+// union. Applying snapshot A then B yields the same DB state as B
+// then A. (Without the revoke-vs-revoke tiebreak, concurrent revokes
+// of one bolt wedged both merge directions and the Tier-1 digests —
+// which hash the exact revoked_at — diverged permanently.)
 
 // RosterRow is the JSON wire projection of a spanner_bolts row — the
 // canonical shape that crosses /snapshot, /admit, /join, and /roster.

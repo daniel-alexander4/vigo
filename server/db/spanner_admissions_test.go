@@ -53,6 +53,14 @@ func mergeParams(pubkey, patternClaims string, revokedAt sql.NullInt64, admitted
 	return MergeBoltLWWParams(boltParams(pubkey, patternClaims, revokedAt, admittedAt))
 }
 
+// revokedByParams is mergeParams with an explicit revoked_by, for the
+// concurrent-revoke tiebreak cases (fixed admitted_at 100).
+func revokedByParams(pubkey, patternClaims string, revokedAt int64, revokedBy sql.NullString) MergeBoltLWWParams {
+	p := mergeParams(pubkey, patternClaims, sql.NullInt64{Int64: revokedAt, Valid: true}, 100)
+	p.RevokedBy = revokedBy
+	return p
+}
+
 func tokenParams(tokenHash string, consumedAt int64) ConsumeTokenParams {
 	return ConsumeTokenParams{
 		TokenHash:      tokenHash,
@@ -129,7 +137,6 @@ func TestRevokeBolt(t *testing.T) {
 		Pubkey:    pubA,
 		RevokedAt: sql.NullInt64{Int64: 500, Valid: true},
 		RevokedBy: sql.NullString{String: pubB, Valid: true},
-		Signature: []byte{0x01},
 	}); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
@@ -197,6 +204,45 @@ func TestMergeBoltLWW(t *testing.T) {
 			incoming:    mergeParams(pubA, `["r2"]`, sql.NullInt64{Int64: 200, Valid: true}, 200),
 			wantMutated: true,
 			wantPattern: `["r2"]`,
+		},
+		// Concurrent revoke at equal admitted_at: the smallest
+		// (revoked_at, revoked_by) tuple wins deterministically in BOTH
+		// directions — without the tiebreak each direction was a no-op
+		// and replicas held different tuples forever.
+		{
+			name:        "concurrent_revoke_earlier_revoked_at_wins",
+			existing:    mergeParams(pubA, `["late"]`, sql.NullInt64{Int64: 600, Valid: true}, 100),
+			incoming:    mergeParams(pubA, `["early"]`, sql.NullInt64{Int64: 500, Valid: true}, 100),
+			wantMutated: true,
+			wantPattern: `["early"]`,
+		},
+		{
+			name:        "concurrent_revoke_later_revoked_at_loses",
+			existing:    mergeParams(pubA, `["early"]`, sql.NullInt64{Int64: 500, Valid: true}, 100),
+			incoming:    mergeParams(pubA, `["late"]`, sql.NullInt64{Int64: 600, Valid: true}, 100),
+			wantMutated: false,
+			wantPattern: `["early"]`,
+		},
+		{
+			name:        "concurrent_revoke_equal_at_smaller_revoked_by_wins",
+			existing:    revokedByParams(pubA, `["byB"]`, 500, sql.NullString{String: "bolt-b", Valid: true}),
+			incoming:    revokedByParams(pubA, `["byA"]`, 500, sql.NullString{String: "bolt-a", Valid: true}),
+			wantMutated: true,
+			wantPattern: `["byA"]`,
+		},
+		{
+			name:        "concurrent_revoke_equal_at_null_revoked_by_wins_as_empty",
+			existing:    revokedByParams(pubA, `["named"]`, 500, sql.NullString{String: "bolt-a", Valid: true}),
+			incoming:    revokedByParams(pubA, `["anon"]`, 500, sql.NullString{}),
+			wantMutated: true,
+			wantPattern: `["anon"]`,
+		},
+		{
+			name:        "concurrent_revoke_identical_tuple_is_noop",
+			existing:    revokedByParams(pubA, `["same"]`, 500, sql.NullString{String: "bolt-a", Valid: true}),
+			incoming:    revokedByParams(pubA, `["same"]`, 500, sql.NullString{String: "bolt-a", Valid: true}),
+			wantMutated: false,
+			wantPattern: `["same"]`,
 		},
 	}
 
