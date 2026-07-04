@@ -346,7 +346,9 @@ func (e *Enforcer) loadAndCheckLocked() error {
 			if e.graceStart == nil {
 				now := time.Now()
 				e.graceStart = &now
-				writeGraceStart(e.graceDir, now)
+				if err := writeGraceStart(e.graceDir, now); err != nil {
+					slog.Warn("license grace start not persisted — grace clock resets on restart", "error", err)
+				}
 			}
 			return nil
 		}
