@@ -8,11 +8,14 @@
 //! runs `dpkg --configure` before falling back to `apt-get install`.
 //! Network transient errors are retried with backoff before giving up.
 
-use super::PackageManager;
 use super::errors::{ErrorClass, classify_apt_error};
-use std::process::Command;
+use super::{PKG_MUTATE_TIMEOUT, PKG_QUERY_TIMEOUT, PackageManager, run_pkg};
 use std::sync::Mutex;
 use tracing::warn;
+
+/// Debconf must never prompt — set on every command that can run
+/// maintainer scripts (apt-get, dpkg --configure/-i).
+const NONINTERACTIVE: [(&str, &str); 1] = [("DEBIAN_FRONTEND", "noninteractive")];
 
 /// APT package manager for Debian-family systems.
 pub struct AptManager {
@@ -28,12 +31,20 @@ impl AptManager {
         }
     }
 
-    /// Parse dpkg -s output into (status, version).
+    /// Query and parse `dpkg -s` into (status, version).
     fn dpkg_status(name: &str) -> Result<(String, String), String> {
-        let output = Command::new("dpkg")
-            .args(["-s", name])
-            .output()
-            .map_err(|e| format!("dpkg -s {}: {}", name, e))?;
+        Self::parse_dpkg_status(name, run_pkg("dpkg", &["-s", name], &[], PKG_QUERY_TIMEOUT))
+    }
+
+    /// A non-zero dpkg *exit* means "not installed" — but only a real exit.
+    /// A spawn failure or timeout (`Err`) must propagate as an error, never
+    /// fold into not-installed: converge would otherwise install over a
+    /// package whose status query merely timed out.
+    fn parse_dpkg_status(
+        name: &str,
+        result: std::io::Result<std::process::Output>,
+    ) -> Result<(String, String), String> {
+        let output = result.map_err(|e| format!("dpkg -s {}: {}", name, e))?;
 
         if !output.status.success() {
             return Ok(("not-installed".to_string(), String::new()));
@@ -90,10 +101,7 @@ fn apt_get_with_retry(args: &[&str], desc: &str) -> Result<(), String> {
     let mut network_retries = 0u32;
 
     loop {
-        let output = Command::new("apt-get")
-            .args(args)
-            .env("DEBIAN_FRONTEND", "noninteractive")
-            .output()
+        let output = run_pkg("apt-get", args, &NONINTERACTIVE, PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("apt-get {}: {}", desc, e))?;
 
         if output.status.success() {
@@ -171,10 +179,9 @@ impl PackageManager for AptManager {
         let (status, _) = Self::dpkg_status(name)?;
         if Self::is_broken(&status) {
             // Attempt dpkg --configure before full install.
-            let configure = Command::new("dpkg")
-                .args(["--configure", name])
-                .output()
-                .map_err(|e| format!("dpkg --configure {}: {}", name, e))?;
+            let configure =
+                run_pkg("dpkg", &["--configure", name], &NONINTERACTIVE, PKG_MUTATE_TIMEOUT)
+                    .map_err(|e| format!("dpkg --configure {}: {}", name, e))?;
 
             if configure.status.success() {
                 // Verify it's now properly installed.
@@ -188,16 +195,17 @@ impl PackageManager for AptManager {
 
         // Local .deb files must be installed via dpkg, not apt-get.
         if name.ends_with(".deb") && std::path::Path::new(name).exists() {
-            let output = Command::new("dpkg")
-                .args(["-i", name])
-                .output()
+            let output = run_pkg("dpkg", &["-i", name], &NONINTERACTIVE, PKG_MUTATE_TIMEOUT)
                 .map_err(|e| format!("dpkg -i {}: {}", name, e))?;
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 // Try to fix missing dependencies.
-                let _ = Command::new("apt-get")
-                    .args(["install", "-y", "--fix-broken"])
-                    .output();
+                let _ = run_pkg(
+                    "apt-get",
+                    &["install", "-y", "--fix-broken"],
+                    &NONINTERACTIVE,
+                    PKG_MUTATE_TIMEOUT,
+                );
                 return Err(stderr.to_string());
             }
             return Ok(());
@@ -271,9 +279,7 @@ impl PackageManager for AptManager {
     }
 
     fn hold(&self, name: &str) -> Result<(), String> {
-        let output = Command::new("apt-mark")
-            .args(["hold", name])
-            .output()
+        let output = run_pkg("apt-mark", &["hold", name], &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("apt-mark hold {}: {}", name, e))?;
 
         if !output.status.success() {
@@ -284,9 +290,7 @@ impl PackageManager for AptManager {
     }
 
     fn unhold(&self, name: &str) -> Result<(), String> {
-        let output = Command::new("apt-mark")
-            .args(["unhold", name])
-            .output()
+        let output = run_pkg("apt-mark", &["unhold", name], &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("apt-mark unhold {}: {}", name, e))?;
 
         if !output.status.success() {
@@ -309,10 +313,13 @@ impl PackageManager for AptManager {
     }
 
     fn installed_snapshot(&self) -> Result<String, String> {
-        let output = Command::new("dpkg-query")
-            .args(["-W", "-f=${Package} ${Version}\n"])
-            .output()
-            .map_err(|e| format!("dpkg-query snapshot: {}", e))?;
+        let output = run_pkg(
+            "dpkg-query",
+            &["-W", "-f=${Package} ${Version}\n"],
+            &[],
+            PKG_QUERY_TIMEOUT,
+        )
+        .map_err(|e| format!("dpkg-query snapshot: {}", e))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -329,6 +336,36 @@ impl PackageManager for AptManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn dpkg_status_timeout_is_an_error_not_absent() {
+        // The hazard this pins: a timed-out/killed `dpkg -s` must surface as
+        // Err — folding it into "not-installed" would make converge install
+        // over an already-present package.
+        let timed_out = Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "dpkg timed out after 60s",
+        ));
+        let res = AptManager::parse_dpkg_status("nginx", timed_out);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("timed out"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dpkg_status_nonzero_exit_is_not_installed() {
+        use std::os::unix::process::ExitStatusExt;
+        // A genuine non-zero dpkg exit (package unknown) still folds to
+        // not-installed.
+        let output = std::process::Output {
+            status: std::process::ExitStatus::from_raw(0x100), // exit code 1
+            stdout: Vec::new(),
+            stderr: b"dpkg-query: package 'nginx' is not installed".to_vec(),
+        };
+        let res = AptManager::parse_dpkg_status("nginx", Ok(output)).unwrap();
+        assert_eq!(res, ("not-installed".to_string(), String::new()));
+    }
 
     #[test]
     fn lock_error_detected() {

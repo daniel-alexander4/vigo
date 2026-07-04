@@ -134,10 +134,45 @@ pub fn detect(os_family: &str, os_distro: &str) -> Result<Box<dyn PackageManager
     }
 }
 
+/// Nice level for every package-manager subprocess. A positive level also
+/// engages ionice (`apply_nice` maps it to a best-effort IO class) —
+/// invisible-agent doctrine on the most I/O-expensive agent operation.
+const PKG_NICE: i32 = 10;
+
+/// Budget for pure queries (dpkg -s, dpkg-query, `which`, backend
+/// query/snapshot). Local package-DB reads; seconds at worst.
+const PKG_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Budget for mutations (install/remove/upgrade/configure/hold) and cache
+/// updates. Deliberately generous — a legitimate upgrade-all on a stale host
+/// runs tens of minutes, and killing it mid-transaction is worse than a late
+/// cleanup. This is the orphan-cleanup backstop layered UNDER the runner's
+/// 300s scope-level detection (which reports the overrun but cannot kill),
+/// not the responsiveness bound.
+const PKG_MUTATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// Run a package-manager command with the house discipline: nice+ionice
+/// (PKG_NICE), own process group, oom-adj, output drained concurrently,
+/// bounded by `timeout` with a SIGTERM→SIGKILL tree kill. `envs` are set on
+/// the child. A timeout surfaces as `Err` (`io::ErrorKind::TimedOut`) —
+/// callers must NEVER fold it into a "non-zero exit means not installed"
+/// interpretation (see `AptManager::parse_dpkg_status`).
+fn run_pkg(
+    program: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+    timeout: std::time::Duration,
+) -> std::io::Result<std::process::Output> {
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    super::run_built_command_niced_timeout(cmd, program, PKG_NICE, timeout)
+}
+
 fn command_exists(name: &str) -> bool {
-    std::process::Command::new("which")
-        .arg(name)
-        .output()
+    run_pkg("which", &[name], &[], PKG_QUERY_TIMEOUT)
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -505,9 +540,7 @@ impl PackageManager for GenericPkgMgr {
     fn is_installed(&self, name: &str) -> Result<(bool, String), String> {
         let mut args: Vec<&str> = self.query_args.to_vec();
         args.push(name);
-        let output = std::process::Command::new(self.query_cmd)
-            .args(&args)
-            .output()
+        let output = run_pkg(self.query_cmd, &args, &[], PKG_QUERY_TIMEOUT)
             .map_err(|e| format!("query {}: {}", name, e))?;
 
         if output.status.success() {
@@ -522,9 +555,8 @@ impl PackageManager for GenericPkgMgr {
     fn install(&self, name: &str, version: &str) -> Result<(), String> {
         let pkg = self.format_pkg(name, version);
         let args = self.build_args(self.install_args, &pkg);
-        let output = std::process::Command::new(self.cmd)
-            .args(&args)
-            .output()
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = run_pkg(self.cmd, &str_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} install {}: {}", self.cmd, name, e))?;
 
         if !output.status.success() {
@@ -543,9 +575,8 @@ impl PackageManager for GenericPkgMgr {
             }
         }
         args.push(name.to_string());
-        let output = std::process::Command::new(self.remove_cmd)
-            .args(&args)
-            .output()
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = run_pkg(self.remove_cmd, &str_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} remove {}: {}", self.remove_cmd, name, e))?;
 
         if !output.status.success() {
@@ -566,9 +597,8 @@ impl PackageManager for GenericPkgMgr {
 
         let pkg = self.format_pkg(name, version);
         let args = self.build_args(dg_args, &pkg);
-        let output = std::process::Command::new(self.cmd)
-            .args(&args)
-            .output()
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = run_pkg(self.cmd, &str_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} downgrade {}: {}", self.cmd, name, e))?;
 
         if !output.status.success() {
@@ -583,9 +613,7 @@ impl PackageManager for GenericPkgMgr {
             return Ok(());
         };
 
-        let output = std::process::Command::new(self.cmd)
-            .args(cache_args)
-            .output()
+        let output = run_pkg(self.cmd, cache_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} update cache: {}", self.cmd, e))?;
 
         // dnf/yum check-update exits 100 when updates are available — not an error.
@@ -606,9 +634,8 @@ impl PackageManager for GenericPkgMgr {
         };
 
         let args = self.build_args(ug_args, name);
-        let output = std::process::Command::new(self.cmd)
-            .args(&args)
-            .output()
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = run_pkg(self.cmd, &str_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} upgrade {}: {}", self.cmd, name, e))?;
 
         if !output.status.success() {
@@ -624,9 +651,7 @@ impl PackageManager for GenericPkgMgr {
         };
         let mut full_args: Vec<&str> = args.to_vec();
         full_args.push(name);
-        let output = std::process::Command::new(cmd)
-            .args(&full_args)
-            .output()
+        let output = run_pkg(cmd, &full_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} hold {}: {}", cmd, name, e))?;
 
         if !output.status.success() {
@@ -642,9 +667,7 @@ impl PackageManager for GenericPkgMgr {
         };
         let mut full_args: Vec<&str> = args.to_vec();
         full_args.push(name);
-        let output = std::process::Command::new(cmd)
-            .args(&full_args)
-            .output()
+        let output = run_pkg(cmd, &full_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} unhold {}: {}", cmd, name, e))?;
 
         if !output.status.success() {
@@ -670,9 +693,7 @@ impl PackageManager for GenericPkgMgr {
         }
 
         let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        let output = std::process::Command::new(self.cmd)
-            .args(&str_args)
-            .output()
+        let output = run_pkg(self.cmd, &str_args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} upgrade all: {}", self.cmd, e))?;
 
         if !output.status.success() {
@@ -687,9 +708,7 @@ impl PackageManager for GenericPkgMgr {
             return Ok(());
         };
 
-        let output = std::process::Command::new(self.cmd)
-            .args(args)
-            .output()
+        let output = run_pkg(self.cmd, args, &[], PKG_MUTATE_TIMEOUT)
             .map_err(|e| format!("{} post_cleanup: {}", self.cmd, e))?;
 
         if !output.status.success() {
@@ -700,9 +719,7 @@ impl PackageManager for GenericPkgMgr {
     }
 
     fn installed_snapshot(&self) -> Result<String, String> {
-        let output = std::process::Command::new(self.query_cmd)
-            .args(self.snapshot_args)
-            .output()
+        let output = run_pkg(self.query_cmd, self.snapshot_args, &[], PKG_QUERY_TIMEOUT)
             .map_err(|e| format!("{} snapshot: {}", self.query_cmd, e))?;
 
         if !output.status.success() {
@@ -720,6 +737,32 @@ impl PackageManager for GenericPkgMgr {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn run_pkg_kills_wedged_command() {
+        // A wedged package command (held dpkg lock, dead mirror) must be
+        // killed at the deadline, not hang the converge thread forever.
+        let start = std::time::Instant::now();
+        let err = run_pkg("sleep", &["60"], &[], std::time::Duration::from_secs(1)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+        // 1s budget + 5s SIGTERM grace + slack — nowhere near the sleep's 60s.
+        assert!(start.elapsed() < std::time::Duration::from_secs(20));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_pkg_sets_envs_and_passes_output() {
+        let out = run_pkg(
+            "sh",
+            &["-c", "printf %s \"$DEBIAN_FRONTEND\""],
+            &[("DEBIAN_FRONTEND", "noninteractive")],
+            std::time::Duration::from_secs(10),
+        )
+        .unwrap();
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "noninteractive");
+    }
 
     #[test]
     fn detect_debian() {

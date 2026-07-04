@@ -16,7 +16,7 @@ Installs, upgrades, and removes OS packages. Auto-detects the system's package m
 | `lock_version` | No | `false` | When `true`, holds the package at its installed version after install/upgrade. Requires `version` parameter (except on `state: absent` or `state: latest`). APT uses `apt-mark hold/unhold`, DNF uses `dnf versionlock add/delete`, Zypper uses `addlock/removelock`, Brew uses `pin/unpin`. On `state: absent`, automatically unholds before removing. |
 | `post_cleanup` | No | `false` | When `true`, removes orphaned dependencies after a successful install or upgrade. APT uses `apt-get autoremove -y`, DNF/YUM use `autoremove -y`, FreeBSD pkg uses `autoremove -y`, Brew uses `cleanup`. Non-fatal — if cleanup fails, the install/upgrade still reports success. |
 | `flags` | No | -- | Extra flags appended to install/upgrade/remove commands. Space-separated string (e.g., `"--no-install-recommends --fix-broken"`). Flags are passed directly to the underlying package manager command. |
-| `timeout` | No | -- | Execution timeout in seconds. Reserved for future use — currently parsed and validated but not wired into execution (the runner's 300s resource timeout applies). |
+| `timeout` | No | -- | Execution timeout in seconds. Reserved for future use — currently parsed and validated but not wired into execution (built-in bounds apply: 60s for status queries, 1h for install/remove/upgrade; the runner additionally reports any resource exceeding 300s). |
 | `retries` | No | -- | Number of retry attempts. Reserved for future use — APT and the runner already handle retries internally. |
 | `retry_delay` | No | -- | Seconds between retries. Reserved for future use. |
 
@@ -257,6 +257,7 @@ Network transient errors (DNS resolution failure, connection timeout) are retrie
 - `lock_version` requires the `version` parameter on `state: present` but not on `state: absent` or `state: latest`.
 - `purge` is only valid with `state: absent`.
 - `flags` are split on whitespace and appended to the package manager command for install, upgrade, downgrade, and remove operations.
-- `timeout`, `retries`, and `retry_delay` are parsed and validated but not yet wired into execution — the runner's 300s timeout and APT's internal retry logic apply.
+- `timeout`, `retries`, and `retry_delay` are parsed and validated but not yet wired into execution — built-in bounds and APT's internal retry logic apply.
+- Every package-manager command runs at reduced CPU and I/O priority (nice + ionice) and is bounded: status queries are killed after 60s, mutations (install/remove/upgrade, including their whole process tree) after 1h. A killed command surfaces as a resource error, never as a wrong "not installed" reading.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

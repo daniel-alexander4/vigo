@@ -400,12 +400,27 @@ pub fn run_command_niced_timeout(
     nice_level: i32,
     timeout: std::time::Duration,
 ) -> std::io::Result<Output> {
-    use std::process::{Command, Stdio};
+    let mut cmd = std::process::Command::new(name);
+    cmd.args(args);
+    run_built_command_niced_timeout(cmd, name, nice_level, timeout)
+}
+
+/// Core of [`run_command_niced_timeout`] for callers that need to prepare
+/// the `Command` themselves (env vars, cwd): applies nice/ionice (when
+/// `nice_level > 0`), own process group, oom-adj, pipes output, and
+/// enforces the timeout with a process-tree kill. `display_name` labels
+/// the `TimedOut` error.
+pub fn run_built_command_niced_timeout(
+    mut cmd: std::process::Command,
+    display_name: &str,
+    nice_level: i32,
+    timeout: std::time::Duration,
+) -> std::io::Result<Output> {
+    use std::process::Stdio;
     use std::sync::mpsc;
     use std::thread;
 
-    let mut cmd = Command::new(name);
-    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     if nice_level > 0 {
         crate::platform::process::apply_nice(&mut cmd, nice_level);
     }
@@ -444,7 +459,7 @@ pub fn run_command_niced_timeout(
                 std::io::ErrorKind::TimedOut,
                 format!(
                     "{} timed out after {:.0}s",
-                    name,
+                    display_name,
                     timeout.as_secs_f64()
                 ),
             ))
