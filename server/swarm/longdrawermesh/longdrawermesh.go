@@ -23,15 +23,20 @@ import (
 
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/swarm/filemeshcore"
 )
 
-// EnvoyInput decouples this package from server/fleet so both the
-// UI and REST handler can consume it without an import cycle.
-type EnvoyInput struct {
-	ID       string
-	Hostname string
-	Revoked  bool
-}
+// EnvoyInput, FileRow, FileCellPerEnvoy, and TombstoneRow are the
+// file-mesh shapes shared with lockboxmesh — aliased from filemeshcore,
+// which also owns the status-derivation machine. Aliases keep every
+// existing consumer (`longdrawermesh.FileRow`, …) and the JSON wire
+// contract unchanged.
+type (
+	EnvoyInput       = filemeshcore.EnvoyInput
+	FileRow          = filemeshcore.FileRow
+	FileCellPerEnvoy = filemeshcore.FileCellPerEnvoy
+	TombstoneRow     = filemeshcore.TombstoneRow
+)
 
 // Fleet is the top-level aggregated view.
 type Fleet struct {
@@ -75,32 +80,6 @@ type EnvoyPresence struct {
 	FileCount    int    `json:"file_count"`
 	FilesDigest  string `json:"files_digest,omitempty"`
 	TombstoneCount int  `json:"tombstone_count"`
-}
-
-// FileRow joins one filename across every envoy that knows about
-// it. Status is per-(user,filename): "live" if every reporting
-// envoy has it with a matching sha, "divergent" if sha disagrees,
-// "partial" if some envoys have it and some don't, "tombstoned"
-// if every reporting envoy has a tombstone for it.
-type FileRow struct {
-	Name    string            `json:"name"`
-	Status  string            `json:"status"` // live | divergent | partial | tombstoned
-	PerEnvoy []FileCellPerEnvoy `json:"per_envoy"`
-}
-
-type FileCellPerEnvoy struct {
-	Hostname string `json:"hostname"`
-	State    string `json:"state"` // live | tombstoned | missing
-	Sha256   string `json:"sha256,omitempty"`
-	Size     uint64 `json:"size,omitempty"`
-	Mtime    int64  `json:"mtime,omitempty"`
-}
-
-// TombstoneRow summarizes a deletion propagation across the mesh.
-type TombstoneRow struct {
-	Name         string   `json:"name"`
-	DeletionTime int64    `json:"deletion_time"`
-	KnownOn      []string `json:"known_on"` // envoys that hold this tombstone
 }
 
 // Staleness cutoff — an envoy whose most recent longdrawer trait is
@@ -279,13 +258,13 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 			presence.TombstoneCount = us.TombstoneCount
 			// Contribute to the file row index below.
 			for _, f := range us.Files {
-				summary.Files = appendFileCell(
+				summary.Files = filemeshcore.AppendFileCell(
 					summary.Files, r.hostname, f.Name, f.Sha256, f.Size, f.Mtime, "live")
 			}
 			for _, t := range us.Tombstones {
-				summary.Files = appendFileCell(
+				summary.Files = filemeshcore.AppendFileCell(
 					summary.Files, r.hostname, t.Name, "", 0, t.DeletionTime, "tombstoned")
-				summary.Tombstones = mergeTombstone(summary.Tombstones, t.Name, t.DeletionTime, r.hostname)
+				summary.Tombstones = filemeshcore.MergeTombstone(summary.Tombstones, t.Name, t.DeletionTime, r.hostname)
 			}
 		}
 		summary.Envoys = append(summary.Envoys, presence)
@@ -294,117 +273,25 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 		return summary.Envoys[i].Hostname < summary.Envoys[j].Hostname
 	})
 
-	// Post-process: compute per-file status + divergence list;
-	// fill missing cells with "missing"; compute fileCount.
-	finalizeFiles(&summary)
-	finalizeTombstones(&summary)
+	// Post-process: fill missing cells, derive per-file status +
+	// divergence list, and count — the shared file-mesh machine.
+	summary.FileCount, summary.TotalBytes, summary.Divergences =
+		filemeshcore.FinalizeFiles(summary.Files, reportingHosts(summary.Envoys))
+	filemeshcore.FinalizeTombstones(summary.Tombstones)
 
 	return summary
 }
 
-func finalizeTombstones(summary *UserSummary) {
-	for i := range summary.Tombstones {
-		sort.Strings(summary.Tombstones[i].KnownOn)
-	}
-	sort.Slice(summary.Tombstones, func(i, j int) bool {
-		return summary.Tombstones[i].Name < summary.Tombstones[j].Name
-	})
-}
-
-func appendFileCell(files []FileRow, hostname, name, sha string, size uint64, mtime int64, state string) []FileRow {
-	for i := range files {
-		if files[i].Name == name {
-			files[i].PerEnvoy = append(files[i].PerEnvoy, FileCellPerEnvoy{
-				Hostname: hostname, State: state, Sha256: sha, Size: size, Mtime: mtime,
-			})
-			return files
+// reportingHosts is the hostnames whose presence status is "reporting"
+// — the envoys against which a file's absence counts as "missing".
+func reportingHosts(envoys []EnvoyPresence) []string {
+	hosts := make([]string, 0, len(envoys))
+	for _, ep := range envoys {
+		if ep.Status == "reporting" {
+			hosts = append(hosts, ep.Hostname)
 		}
 	}
-	return append(files, FileRow{
-		Name: name,
-		PerEnvoy: []FileCellPerEnvoy{{
-			Hostname: hostname, State: state, Sha256: sha, Size: size, Mtime: mtime,
-		}},
-	})
-}
-
-func mergeTombstone(rows []TombstoneRow, name string, deletionTime int64, hostname string) []TombstoneRow {
-	for i := range rows {
-		if rows[i].Name == name {
-			rows[i].KnownOn = append(rows[i].KnownOn, hostname)
-			if deletionTime > rows[i].DeletionTime {
-				rows[i].DeletionTime = deletionTime
-			}
-			return rows
-		}
-	}
-	return append(rows, TombstoneRow{Name: name, DeletionTime: deletionTime, KnownOn: []string{hostname}})
-}
-
-func finalizeFiles(summary *UserSummary) {
-	// Count total unique files.
-	summary.FileCount = 0
-	for i := range summary.Files {
-		f := &summary.Files[i]
-		// Fill missing envoys for completeness.
-		seen := make(map[string]struct{}, len(f.PerEnvoy))
-		for _, c := range f.PerEnvoy {
-			seen[c.Hostname] = struct{}{}
-		}
-		for _, ep := range summary.Envoys {
-			if ep.Status != "reporting" {
-				continue
-			}
-			if _, ok := seen[ep.Hostname]; !ok {
-				f.PerEnvoy = append(f.PerEnvoy, FileCellPerEnvoy{
-					Hostname: ep.Hostname, State: "missing",
-				})
-			}
-		}
-		sort.Slice(f.PerEnvoy, func(a, b int) bool {
-			return f.PerEnvoy[a].Hostname < f.PerEnvoy[b].Hostname
-		})
-
-		// Derive status.
-		liveCount := 0
-		tombCount := 0
-		missingCount := 0
-		shas := make(map[string]struct{})
-		var maxSize uint64
-		for _, c := range f.PerEnvoy {
-			switch c.State {
-			case "live":
-				liveCount++
-				if c.Sha256 != "" {
-					shas[c.Sha256] = struct{}{}
-				}
-				if c.Size > maxSize {
-					maxSize = c.Size
-				}
-			case "tombstoned":
-				tombCount++
-			case "missing":
-				missingCount++
-			}
-		}
-		switch {
-		case tombCount > 0 && liveCount == 0:
-			f.Status = "tombstoned"
-		case liveCount > 0 && len(shas) > 1:
-			f.Status = "divergent"
-			summary.Divergences = append(summary.Divergences, f.Name)
-		case missingCount > 0 && liveCount > 0:
-			f.Status = "partial"
-			summary.Divergences = append(summary.Divergences, f.Name)
-		default:
-			f.Status = "live"
-		}
-		if liveCount > 0 {
-			summary.FileCount++
-			summary.TotalBytes += int64(maxSize)
-		}
-	}
-	sort.Slice(summary.Files, func(i, j int) bool { return summary.Files[i].Name < summary.Files[j].Name })
+	return hosts
 }
 
 // EnvoyFile is one longdrawer file present on a given envoy, projected
