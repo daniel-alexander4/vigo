@@ -2,7 +2,7 @@ pub mod cron;
 pub mod dag;
 
 use anyhow::{Context, Result};
-use chrono::Utc;
+use chrono::{Timelike, Utc};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,9 +21,13 @@ struct CapabilityState {
     schedule: CronSchedule,
     config: capability::CapabilityConfig,
     last_run: Option<Instant>,
+    /// Wall-clock minute of the last cron fire. Cron matches are
+    /// minute-granular while the loop wakes every 30s, so without this a
+    /// matching minute fires twice.
+    last_cron_minute: Option<chrono::NaiveDateTime>,
 }
 
-/// Run the scheduler loop. Evaluates cron/interval schedules every 60 seconds,
+/// Run the scheduler loop. Evaluates cron/interval schedules every 30 seconds,
 /// respects depends_on ordering, spawns capabilities with timeout.
 pub async fn run(
     cfg: &ConnwaerConfig,
@@ -69,11 +73,11 @@ pub async fn run(
             kind,
             schedule,
             config: capability::CapabilityConfig {
-                enabled: entry.enabled,
                 params: entry.params.clone(),
                 thresholds: entry.thresholds.clone(),
             },
             last_run: None,
+            last_cron_minute: None,
         });
     }
 
@@ -96,10 +100,17 @@ pub async fn run(
         }
 
         let now_utc = Utc::now().naive_utc();
+        let cycle_minute = now_utc
+            .with_second(0)
+            .and_then(|t| t.with_nanosecond(0))
+            .unwrap_or(now_utc);
 
         for cap_state in &mut caps {
             let should_run = match &cap_state.schedule {
-                CronSchedule::Cron { .. } => cap_state.schedule.matches(&now_utc),
+                CronSchedule::Cron { .. } => {
+                    cap_state.schedule.matches(&now_utc)
+                        && cap_state.last_cron_minute != Some(cycle_minute)
+                }
                 CronSchedule::Interval { seconds } => {
                     match cap_state.last_run {
                         None => true,
@@ -110,6 +121,9 @@ pub async fn run(
 
             if !should_run {
                 continue;
+            }
+            if matches!(cap_state.schedule, CronSchedule::Cron { .. }) {
+                cap_state.last_cron_minute = Some(cycle_minute);
             }
 
             let name = cap_state.kind.name();
@@ -126,14 +140,18 @@ pub async fn run(
                 platform: platform.clone(),
                 version: version.to_string(),
             };
+            let verify_ctx = ctx.clone();
 
             tracing::info!("{name}: running (timeout: {}s)", timeout.as_secs());
             let start = Instant::now();
 
-            // Run with timeout. inst is moved into the closure.
+            // Run with timeout. inst is moved into the closure. The timeout
+            // is a backstop only — spawn_blocking can't be cancelled, so the
+            // real bound is exec::run's per-subprocess deadline; this fires
+            // only if a capability hangs in pure Rust.
             let result = tokio::time::timeout(
                 timeout,
-                tokio::task::spawn_blocking(move || inst.verify(&ctx)),
+                tokio::task::spawn_blocking(move || inst.verify(&verify_ctx)),
             ).await;
 
             let elapsed = start.elapsed();
@@ -150,24 +168,24 @@ pub async fn run(
                         "status": cap_result.status.to_string(),
                     });
                     let _ = trends.record_run(name, &cap_result.status.to_string(), &metrics);
-                    alerts.evaluate(&cap_result);
+                    tokio::task::block_in_place(|| alerts.evaluate(&cap_result));
                 }
                 Ok(Ok(Err(e))) => {
                     tracing::error!("{name}: verification error: {e:#}");
-                    let r = write_error_result(name, &e, elapsed, &results_dir, &hostname, &platform, version, &controls);
-                    alerts.evaluate(&r);
+                    let r = write_error_result(name, &e, elapsed, &ctx, &controls);
+                    tokio::task::block_in_place(|| alerts.evaluate(&r));
                 }
                 Ok(Err(e)) => {
                     tracing::error!("{name}: task panicked: {e}");
                     let err = anyhow::anyhow!("task panicked: {e}");
-                    let r = write_error_result(name, &err, elapsed, &results_dir, &hostname, &platform, version, &controls);
-                    alerts.evaluate(&r);
+                    let r = write_error_result(name, &err, elapsed, &ctx, &controls);
+                    tokio::task::block_in_place(|| alerts.evaluate(&r));
                 }
                 Err(_) => {
                     tracing::error!("{name}: timed out after {}s", timeout.as_secs());
                     let err = anyhow::anyhow!("timed out after {}s", timeout.as_secs());
-                    let r = write_error_result(name, &err, elapsed, &results_dir, &hostname, &platform, version, &controls);
-                    alerts.evaluate(&r);
+                    let r = write_error_result(name, &err, elapsed, &ctx, &controls);
+                    tokio::task::block_in_place(|| alerts.evaluate(&r));
                 }
             }
         }
@@ -184,7 +202,8 @@ pub async fn run(
             }
         }
 
-        // Sleep until next minute boundary (for cron) or 30 seconds (for intervals).
+        // Fixed 30s wake: two chances per minute to catch a cron match
+        // (last_cron_minute dedupes them) and interval-schedule granularity.
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(30)) => {}
             _ = shutdown.changed() => {
@@ -205,10 +224,7 @@ fn write_error_result(
     name: &str,
     err: &anyhow::Error,
     elapsed: Duration,
-    results_dir: &PathBuf,
-    hostname: &str,
-    platform: &str,
-    version: &str,
+    ctx: &CapabilityContext,
     controls: &[String],
 ) -> capability::CapabilityResult {
     let error_result = capability::CapabilityResult {
@@ -220,11 +236,11 @@ fn write_error_result(
         started_at: Utc::now().to_rfc3339(),
         completed_at: Utc::now().to_rfc3339(),
         duration_ms: elapsed.as_millis() as u64,
-        platform: platform.to_string(),
-        hostname: hostname.to_string(),
-        version: version.to_string(),
+        platform: ctx.platform.clone(),
+        hostname: ctx.hostname.clone(),
+        version: ctx.version.clone(),
         error: Some(format!("{err:#}")),
     };
-    let _ = results::write_result(results_dir, &error_result);
+    let _ = results::write_result(&ctx.results_dir, &error_result);
     error_result
 }

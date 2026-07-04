@@ -1,12 +1,12 @@
-/// NIST SP 800-22 Test 6: Discrete Fourier Transform (Spectral).
-///
-/// Converts bits to +1/-1, computes the FFT, and counts how many magnitude
-/// peaks fall below the 95% threshold. A significant deviation from the
-/// expected count indicates non-randomness.
-///
-/// Uses radix-2 Cooley-Tukey FFT (O(n log n)) instead of the naive DFT,
-/// allowing input up to 1,000,000 bits while staying fast.
-/// Input is truncated to the largest power-of-two ≤ min(n, 1_000_000).
+//! NIST SP 800-22 Test 6: Discrete Fourier Transform (Spectral).
+//!
+//! Converts bits to +1/-1, computes the FFT, and counts how many magnitude
+//! peaks fall below the 95% threshold. A significant deviation from the
+//! expected count indicates non-randomness.
+//!
+//! Uses radix-2 Cooley-Tukey FFT (O(n log n)) instead of the naive DFT,
+//! allowing input up to 1,000,000 bits while staying fast.
+//! Input is truncated to the largest power-of-two ≤ min(n, 1_000_000).
 
 pub fn test(bits: &[u8]) -> f64 {
     let max_bits = 1_000_000;
@@ -140,7 +140,7 @@ mod tests {
         // Random-ish bits should give a p-value > 0.01.
         let bits: Vec<u8> = (0..2000).map(|i| ((i * 7 + 13) % 2) as u8).collect();
         let p = test(&bits);
-        assert!(p >= 0.0 && p <= 1.0, "p-value out of range: {p}");
+        assert!((0.0..=1.0).contains(&p), "p-value out of range: {p}");
     }
 
     #[test]

@@ -1,5 +1,5 @@
-/// DAG topological sort for capability depends_on ordering.
-/// Uses Kahn's algorithm with clear cycle detection.
+//! DAG topological sort for capability depends_on ordering.
+//! Uses Kahn's algorithm with clear cycle detection.
 
 use anyhow::{bail, Result};
 use std::collections::{HashMap, HashSet, VecDeque};

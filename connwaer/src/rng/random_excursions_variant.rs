@@ -1,9 +1,9 @@
-/// NIST SP 800-22 Test 15: Random Excursions Variant.
-///
-/// Counts the total number of times the random walk visits each state
-/// in {-9, ..., -1, 1, ..., 9}. The deviation from the expected count
-/// (equal to the number of cycles) is tested using the erfc function.
-/// Requires at least 500 cycles (zero crossings).
+//! NIST SP 800-22 Test 15: Random Excursions Variant.
+//!
+//! Counts the total number of times the random walk visits each state
+//! in {-9, ..., -1, 1, ..., 9}. The deviation from the expected count
+//! (equal to the number of cycles) is tested using the erfc function.
+//! Requires at least 500 cycles (zero crossings).
 
 pub fn test(bits: &[u8]) -> Vec<(i32, f64)> {
     let n = bits.len();

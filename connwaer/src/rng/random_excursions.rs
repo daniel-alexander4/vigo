@@ -1,9 +1,9 @@
-/// NIST SP 800-22 Test 14: Random Excursions.
-///
-/// Converts the sequence to a random walk and counts visits to states
-/// {-4, -3, -2, -1, 1, 2, 3, 4} within each cycle (return to zero).
-/// The distribution of visit counts is compared against the expected
-/// distribution using a chi-squared test. Requires at least 500 cycles.
+//! NIST SP 800-22 Test 14: Random Excursions.
+//!
+//! Converts the sequence to a random walk and counts visits to states
+//! {-4, -3, -2, -1, 1, 2, 3, 4} within each cycle (return to zero).
+//! The distribution of visit counts is compared against the expected
+//! distribution using a chi-squared test. Requires at least 500 cycles.
 
 pub fn test(bits: &[u8]) -> Vec<(i32, f64)> {
     let n = bits.len();

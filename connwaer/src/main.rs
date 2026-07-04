@@ -6,6 +6,7 @@ mod alerting;
 mod bootstrap;
 mod capability;
 mod config;
+mod exec;
 mod license;
 mod platform;
 mod results;
@@ -244,7 +245,6 @@ fn run_once(cfg: &ConnwaerConfig, trends: &Arc<TrendStore>) -> Result<()> {
 
         let ctx = CapabilityContext {
             config: capability::CapabilityConfig {
-                enabled: entry.enabled,
                 params: entry.params.clone(),
                 thresholds: entry.thresholds.clone(),
             },
@@ -313,7 +313,6 @@ fn cmd_verify(config_path: &str, cli_log_level: &str, cap_name: &str) -> Result<
 
     let cap_config = cfg.capabilities.get(cap_name)
         .map(|e| capability::CapabilityConfig {
-            enabled: e.enabled,
             params: e.params.clone(),
             thresholds: e.thresholds.clone(),
         })

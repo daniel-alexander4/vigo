@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::Result;
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,8 +8,7 @@ pub struct LogReview;
 
 impl Capability for LogReview {
     fn name(&self) -> &'static str { "log_review" }
-    fn display_name(&self) -> &'static str { "Automated Log Review" }
-    fn controls(&self) -> &'static [&'static str] { &["PCI-10.4.1"] }
+    fn controls(&self) -> &'static [&'static str] { &["PCI-DSS-10.4.1"] }
 
     fn supported(&self) -> bool {
         cfg!(target_os = "linux") || cfg!(target_os = "windows")
@@ -101,7 +100,7 @@ fn verify_linux(
     let mut issues = Vec::new();
 
     // Check if auditd is running.
-    let auditd_active = run_command("systemctl", &["is-active", "auditd"])
+    let auditd_active = exec::stdout_of("systemctl", &["is-active", "auditd"])
         .map(|s| s == "active")
         .unwrap_or(false);
 
@@ -119,7 +118,7 @@ fn verify_linux(
     }
 
     // Count audit rules.
-    let rule_count = run_command("auditctl", &["-l"])
+    let rule_count = exec::stdout_of("auditctl", &["-l"])
         .map(|o| o.lines().filter(|l| !l.trim().is_empty() && !l.starts_with("No rules")).count())
         .unwrap_or(0);
 
@@ -143,7 +142,7 @@ fn verify_linux(
     let mut rule_results = Vec::new();
 
     for rule in DEFAULT_RULES {
-        let count = run_command("ausearch", rule.ausearch_args)
+        let count = exec::stdout_of("ausearch", rule.ausearch_args)
             .map(|o| o.lines().filter(|l| l.starts_with("type=")).count() as u64)
             .unwrap_or(0);
 
@@ -215,7 +214,7 @@ fn verify_windows(
     let mut issues = Vec::new();
 
     // Check Windows Event Log service.
-    let eventlog_running = run_command("sc.exe", &["query", "EventLog"])
+    let eventlog_running = exec::stdout_of("sc.exe", &["query", "EventLog"])
         .map(|s| s.contains("RUNNING"))
         .unwrap_or(false);
 
@@ -231,7 +230,7 @@ fn verify_windows(
     }
 
     // Check for failed logon events (Event ID 4625) in last 24 hours.
-    let failed_logons = run_command(
+    let failed_logons = exec::stdout_of(
         "powershell.exe",
         &["-NoProfile", "-Command",
           "(Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4625; StartTime=(Get-Date).AddDays(-1)} -ErrorAction SilentlyContinue | Measure-Object).Count"],
@@ -252,7 +251,7 @@ fn verify_windows(
     }
 
     // Check for privilege escalation (Event ID 4672 — special privileges).
-    let priv_events = run_command(
+    let priv_events = exec::stdout_of(
         "powershell.exe",
         &["-NoProfile", "-Command",
           "(Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4672; StartTime=(Get-Date).AddDays(-1)} -ErrorAction SilentlyContinue | Measure-Object).Count"],
@@ -265,7 +264,7 @@ fn verify_windows(
     });
 
     // Check for account management events (4720=created, 4726=deleted).
-    let account_events = run_command(
+    let account_events = exec::stdout_of(
         "powershell.exe",
         &["-NoProfile", "-Command",
           "(Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4720,4722,4723,4724,4725,4726; StartTime=(Get-Date).AddDays(-1)} -ErrorAction SilentlyContinue | Measure-Object).Count"],
@@ -298,12 +297,4 @@ fn verify_windows(
     };
 
     Ok((status, summary, evidence))
-}
-
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }

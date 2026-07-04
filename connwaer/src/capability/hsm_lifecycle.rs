@@ -7,7 +7,6 @@ pub struct HsmLifecycle;
 
 impl Capability for HsmLifecycle {
     fn name(&self) -> &'static str { "hsm_lifecycle" }
-    fn display_name(&self) -> &'static str { "HSM Key Lifecycle" }
     fn controls(&self) -> &'static [&'static str] { &["CCSS-9.1"] }
 
     fn verify(&self, ctx: &CapabilityContext) -> Result<CapabilityResult> {

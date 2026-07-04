@@ -1,4 +1,4 @@
-/// Platform detection helpers.
+//! Platform detection helpers.
 
 pub fn platform_name() -> &'static str {
     #[cfg(target_os = "linux")]

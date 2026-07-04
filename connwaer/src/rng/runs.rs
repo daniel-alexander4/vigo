@@ -1,8 +1,8 @@
-/// NIST SP 800-22 Test 3: Runs.
-///
-/// Determines whether the number of runs (uninterrupted sequences of
-/// identical bits) is as expected for a random sequence. A pre-test checks
-/// that the proportion of ones is close enough to 0.5.
+//! NIST SP 800-22 Test 3: Runs.
+//!
+//! Determines whether the number of runs (uninterrupted sequences of
+//! identical bits) is as expected for a random sequence. A pre-test checks
+//! that the proportion of ones is close enough to 0.5.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len();

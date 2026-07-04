@@ -1,3 +1,4 @@
+use crate::exec;
 use anyhow::Result;
 use std::io::Write;
 use std::time::Instant;
@@ -8,7 +9,6 @@ pub struct WormVerify;
 
 impl Capability for WormVerify {
     fn name(&self) -> &'static str { "worm_verify" }
-    fn display_name(&self) -> &'static str { "WORM Storage Verification" }
     fn controls(&self) -> &'static [&'static str] { &["SEC-17a4-1", "SEC-17a4-2"] }
 
     fn verify(&self, ctx: &CapabilityContext) -> Result<CapabilityResult> {
@@ -269,9 +269,9 @@ fn verify_worm(
     let cloud_check = config.params.get("cloud_check_command")
         .and_then(|v| v.as_str());
     if let Some(cmd) = cloud_check {
-        let output = std::process::Command::new("sh")
-            .args(["-c", cmd])
-            .output();
+        // Bounded just under the capability's 300s budget; the process-group
+        // kill reaches whatever the operator's shell line spawned.
+        let output = exec::run_shell(cmd, std::time::Duration::from_secs(290));
         match output {
             Ok(o) if o.status.success() => {
                 let stdout = String::from_utf8_lossy(&o.stdout).trim().to_string();
@@ -332,7 +332,6 @@ mod tests {
 
     fn config(params: &[(&str, serde_json::Value)]) -> super::super::CapabilityConfig {
         super::super::CapabilityConfig {
-            enabled: true,
             params: params.iter().map(|(k, v)| (k.to_string(), v.clone())).collect(),
             thresholds: HashMap::new(),
         }

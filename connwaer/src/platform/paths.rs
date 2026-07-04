@@ -1,4 +1,4 @@
-/// Platform-specific default paths for Connwaer.
+//! Platform-specific default paths for Connwaer.
 
 #[cfg(unix)]
 pub const DEFAULT_CONFIG_PATH: &str = "/etc/connwaer/connwaer.yaml";

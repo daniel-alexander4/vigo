@@ -1,8 +1,8 @@
-/// NIST SP 800-22 Test 5: Binary Matrix Rank.
-///
-/// Forms 32x32 binary matrices from consecutive bits and computes the rank
-/// of each via Gauss elimination over GF(2). The distribution of ranks is
-/// compared against the expected distribution using a chi-squared statistic.
+//! NIST SP 800-22 Test 5: Binary Matrix Rank.
+//!
+//! Forms 32x32 binary matrices from consecutive bits and computes the rank
+//! of each via Gauss elimination over GF(2). The distribution of ranks is
+//! compared against the expected distribution using a chi-squared statistic.
 
 pub fn test(bits: &[u8]) -> f64 {
     let m = 32;
@@ -51,20 +51,17 @@ fn binary_matrix_rank(bits: &[u8], rows: usize, cols: usize) -> usize {
     let mut rank = 0;
     for col in 0..cols {
         // Find pivot.
-        let mut pivot = None;
-        for row in rank..rows {
-            if matrix[row][col] == 1 {
-                pivot = Some(row);
-                break;
-            }
-        }
-        let Some(pivot_row) = pivot else { continue };
+        let Some(pivot_row) = (rank..rows).find(|&row| matrix[row][col] == 1) else {
+            continue;
+        };
         matrix.swap(rank, pivot_row);
-        // Eliminate.
-        for row in 0..rows {
-            if row != rank && matrix[row][col] == 1 {
-                for c in 0..cols {
-                    matrix[row][c] ^= matrix[rank][c];
+        // Eliminate (pivot row cloned so the borrow checker allows XOR-ing
+        // it into every other row).
+        let pivot_vals = matrix[rank].clone();
+        for (row, row_vals) in matrix.iter_mut().enumerate() {
+            if row != rank && row_vals[col] == 1 {
+                for (cell, p) in row_vals.iter_mut().zip(&pivot_vals) {
+                    *cell ^= *p;
                 }
             }
         }

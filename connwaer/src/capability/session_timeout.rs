@@ -1,3 +1,5 @@
+#[cfg(target_os = "windows")]
+use crate::exec;
 use anyhow::Result;
 #[cfg(target_os = "windows")]
 use std::process::Command;
@@ -9,8 +11,7 @@ pub struct SessionTimeout;
 
 impl Capability for SessionTimeout {
     fn name(&self) -> &'static str { "session_timeout" }
-    fn display_name(&self) -> &'static str { "Session Timeout Verification" }
-    fn controls(&self) -> &'static [&'static str] { &["HIPAA-164.312(a)(2)(iii)", "PCI-DSS-8.1.8"] }
+    fn controls(&self) -> &'static [&'static str] { &["HIPAA-164.312(a)(2)(iii)", "PCI-DSS-8.2.8"] }
 
     fn supported(&self) -> bool {
         cfg!(target_os = "linux") || cfg!(target_os = "windows")
@@ -278,7 +279,7 @@ fn verify_windows(
         .unwrap_or(900);
 
     // --- Check screen lock timeout via registry ---
-    let inactivity_timeout = run_command(
+    let inactivity_timeout = exec::stdout_of(
         "reg",
         &["query",
           "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
@@ -325,7 +326,7 @@ fn verify_windows(
     }
 
     // --- Check screensaver lock ---
-    let screensaver_active = run_command(
+    let screensaver_active = exec::stdout_of(
         "reg",
         &["query",
           "HKCU\\Control Panel\\Desktop",
@@ -342,7 +343,7 @@ fn verify_windows(
     }
 
     // --- Check RDP idle disconnect timeout ---
-    let rdp_idle = run_command(
+    let rdp_idle = exec::stdout_of(
         "reg",
         &["query",
           "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services",
@@ -420,13 +421,4 @@ fn verify_windows(
     };
 
     Ok((status, summary, evidence))
-}
-
-#[cfg(target_os = "windows")]
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }

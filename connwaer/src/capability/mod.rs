@@ -73,6 +73,7 @@ pub struct CapabilityResult {
 }
 
 /// Context passed to every capability during verification.
+#[derive(Clone)]
 pub struct CapabilityContext {
     pub config: CapabilityConfig,
     pub results_dir: std::path::PathBuf,
@@ -85,27 +86,27 @@ pub struct CapabilityContext {
 /// Per-capability configuration from the YAML config file.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct CapabilityConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub params: HashMap<String, serde_json::Value>,
     #[serde(default)]
     pub thresholds: HashMap<String, serde_json::Value>,
 }
 
-fn default_true() -> bool {
-    true
-}
 
 /// The interface every capability implements.
 pub trait Capability: Send + Sync {
     /// Machine name — matches JSON filename (e.g., "app_allowlisting", "rng_validation").
     fn name(&self) -> &'static str;
 
-    /// Human-readable display name.
-    fn display_name(&self) -> &'static str;
-
-    /// Compliance control IDs this capability addresses.
+    /// Compliance control IDs this capability addresses, as
+    /// `<FRAMEWORK>-<control>` strings. Evidence-facing only (serialized into
+    /// each result and surfaced as `connwaer.<capability>.controls.*`
+    /// traits) — the server's escalation logic keys on the capability name
+    /// via its own cross-walk, `connwaerCapabilityByControl` in
+    /// `server/api/report.go`. Keep the control numbers in sync with that
+    /// map when either side changes. rng_validation's IDs are external
+    /// standard citations with no server-side counterpart (excluded from the
+    /// gaming catalogs by the control-scope policy).
     fn controls(&self) -> &'static [&'static str];
 
     /// Execute the verification and return a result.

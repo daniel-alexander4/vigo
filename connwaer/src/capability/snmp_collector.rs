@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::net::UdpSocket;
 use std::time::{Duration, Instant};
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,7 +7,6 @@ pub struct SnmpCollector;
 
 impl Capability for SnmpCollector {
     fn name(&self) -> &'static str { "snmp_collector" }
-    fn display_name(&self) -> &'static str { "SNMP Compliance Collection" }
     fn controls(&self) -> &'static [&'static str] { &[] }
 
     fn verify(&self, ctx: &CapabilityContext) -> Result<CapabilityResult> {
@@ -158,11 +156,10 @@ fn snmp_get_v2c(addr: &str, community: &str, oid_str: &str) -> Result<String> {
         .map_err(|e| anyhow::anyhow!("SNMP GET {oid_str} from {addr}: {e:?}"))?;
 
     // Extract the first varbind value.
-    let mut result = String::from("no response");
-    for (_, val) in response.varbinds {
-        result = format!("{:?}", val);
-        break;
-    }
+    let mut varbinds = response.varbinds;
+    let result = varbinds.next()
+        .map(|(_, val)| format!("{val:?}"))
+        .unwrap_or_else(|| String::from("no response"));
 
     Ok(result)
 }

@@ -1,12 +1,12 @@
-/// NIST SP 800-22 Test 12: Approximate Entropy.
-///
-/// Similar to the serial test but uses an entropy-based statistic. Compares
-/// the frequency of overlapping patterns of length m and m+1 to detect
-/// regularity (lack of randomness) in the sequence.
+//! NIST SP 800-22 Test 12: Approximate Entropy.
+//!
+//! Similar to the serial test but uses an entropy-based statistic. Compares
+//! the frequency of overlapping patterns of length m and m+1 to detect
+//! regularity (lack of randomness) in the sequence.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len();
-    let m = ((n as f64).log2() as usize).saturating_sub(5).max(2).min(10);
+    let m = ((n as f64).log2() as usize).saturating_sub(5).clamp(2, 10);
 
     let phi_m = phi(bits, m);
     let phi_m1 = phi(bits, m + 1);

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::io::Write;
 use std::os::unix::net::UnixDatagram;
 
 use crate::capability::CapabilityResult;

@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
+use crate::exec;
+use anyhow::Result;
 use std::net::TcpStream;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -9,7 +9,6 @@ pub struct KillSwitch;
 
 impl Capability for KillSwitch {
     fn name(&self) -> &'static str { "kill_switch" }
-    fn display_name(&self) -> &'static str { "Kill Switch Validation" }
     fn controls(&self) -> &'static [&'static str] { &["RTS7-Art14-1"] }
 
     fn verify(&self, ctx: &CapabilityContext) -> Result<CapabilityResult> {
@@ -106,14 +105,14 @@ fn validate_kill_switch(
     }
 
     // --- Check 3: Dry-run execution ---
-    let mut cmd = Command::new(binary);
-    cmd.arg(dry_run_flag);
+    let mut args: Vec<&str> = vec![dry_run_flag];
     if let Some(cfg_path) = config_path {
         // Common pattern: --config <path>.
-        cmd.args(["--config", cfg_path]);
+        args.extend(["--config", cfg_path]);
     }
 
-    let dry_run_result = cmd.output();
+    // Bounded just under the capability's 300s budget.
+    let dry_run_result = exec::run(binary, &args, std::time::Duration::from_secs(290));
     match dry_run_result {
         Ok(output) => {
             let exit_ok = output.status.success();

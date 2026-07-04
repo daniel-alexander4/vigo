@@ -1,8 +1,8 @@
-/// NIST SP 800-22 Test 10: Linear Complexity.
-///
-/// Divides the sequence into blocks and computes the linear complexity of
-/// each using the Berlekamp-Massey algorithm. The distribution of
-/// complexity values is compared against the expected distribution.
+//! NIST SP 800-22 Test 10: Linear Complexity.
+//!
+//! Divides the sequence into blocks and computes the linear complexity of
+//! each using the Berlekamp-Massey algorithm. The distribution of
+//! complexity values is compared against the expected distribution.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len();
@@ -17,7 +17,7 @@ pub fn test(bits: &[u8]) -> f64 {
     let mu = m as f64 / 2.0
         + (9.0 + if m % 2 == 0 { -1.0 } else { 1.0 }) / 36.0;
 
-    let mut freq = vec![0u64; 7]; // K+1 = 7 classes
+    let mut freq = [0u64; 7]; // K+1 = 7 classes
 
     for i in 0..num_blocks {
         let block = &bits[i * m..(i + 1) * m];

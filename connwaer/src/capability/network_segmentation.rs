@@ -8,8 +8,7 @@ pub struct NetworkSegmentation;
 
 impl Capability for NetworkSegmentation {
     fn name(&self) -> &'static str { "network_segmentation" }
-    fn display_name(&self) -> &'static str { "Network Segmentation" }
-    fn controls(&self) -> &'static [&'static str] { &["PCI-DSS-1.3", "NIST-AC-4"] }
+    fn controls(&self) -> &'static [&'static str] { &["PCI-DSS-1.4.1", "NIST-AC-4"] }
 
     fn verify(&self, ctx: &CapabilityContext) -> Result<CapabilityResult> {
         let start = Instant::now();

@@ -7,7 +7,6 @@ pub struct CapacityMonitor;
 
 impl Capability for CapacityMonitor {
     fn name(&self) -> &'static str { "capacity_monitor" }
-    fn display_name(&self) -> &'static str { "Capacity Monitoring" }
     fn controls(&self) -> &'static [&'static str] { &["RTS7-Art11-1", "RTS7-Art11-2"] }
 
     fn verify(&self, ctx: &CapabilityContext) -> Result<CapabilityResult> {
@@ -153,8 +152,6 @@ fn run_benchmarks(
 
     let status = if issues.is_empty() {
         VerificationStatus::Pass
-    } else if issues.iter().any(|i| i.contains("exceeds")) {
-        VerificationStatus::Warn
     } else {
         VerificationStatus::Warn
     };

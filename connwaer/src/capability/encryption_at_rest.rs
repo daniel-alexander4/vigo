@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::Result;
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,8 +8,7 @@ pub struct EncryptionAtRest;
 
 impl Capability for EncryptionAtRest {
     fn name(&self) -> &'static str { "encryption_at_rest" }
-    fn display_name(&self) -> &'static str { "Encryption at Rest" }
-    fn controls(&self) -> &'static [&'static str] { &["HIPAA-164.312(a)(2)(iv)", "PCI-DSS-3.4"] }
+    fn controls(&self) -> &'static [&'static str] { &["HIPAA-164.312(a)(2)(iv)", "PCI-DSS-3.5.1"] }
 
     fn supported(&self) -> bool {
         cfg!(target_os = "linux") || cfg!(target_os = "windows")
@@ -65,7 +64,7 @@ fn verify_linux(
 
     if volumes.is_empty() {
         // Auto-discover: use lsblk to find all block devices and check for crypto_LUKS.
-        if let Some(lsblk_out) = run_command("lsblk", &["--fs", "--json"]) {
+        if let Some(lsblk_out) = exec::stdout_of("lsblk", &["--fs", "--json"]) {
             match serde_json::from_str::<serde_json::Value>(&lsblk_out) {
                 Ok(json) => {
                     let mut encrypted = Vec::new();
@@ -103,7 +102,7 @@ fn verify_linux(
         for vol in &volumes {
             let vol_name = vol.rsplit('/').next().unwrap_or(vol);
 
-            if let Some(status_out) = run_command("cryptsetup", &["status", vol_name]) {
+            if let Some(status_out) = exec::stdout_of("cryptsetup", &["status", vol_name]) {
                 let is_active = status_out.contains("is active");
                 let cipher = status_out.lines()
                     .find(|l| l.trim().starts_with("cipher:"))
@@ -132,7 +131,7 @@ fn verify_linux(
                 }
             } else {
                 // cryptsetup status failed -- try lsblk for this device.
-                let fstype = run_command("lsblk", &["--noheadings", "-o", "FSTYPE", vol])
+                let fstype = exec::stdout_of("lsblk", &["--noheadings", "-o", "FSTYPE", vol])
                     .unwrap_or_default();
                 let is_luks = fstype.trim() == "crypto_LUKS";
 
@@ -158,7 +157,7 @@ fn verify_linux(
     if let Some(tde_cmd) = config.params.get("tde_check_command").and_then(|v| v.as_str()) {
         let parts: Vec<&str> = tde_cmd.split_whitespace().collect();
         if !parts.is_empty() {
-            let tde_out = run_command(parts[0], &parts[1..]);
+            let tde_out = exec::stdout_of(parts[0], &parts[1..]);
             let tde_ok = tde_out.is_some();
             evidence.push(Evidence {
                 key: "tde_check".to_string(),
@@ -234,7 +233,7 @@ fn verify_windows(
         .unwrap_or_else(|| vec!["C:".to_string()]);
 
     for drive in &drives {
-        if let Some(bde_out) = run_command("manage-bde", &["-status", drive]) {
+        if let Some(bde_out) = exec::stdout_of("manage-bde", &["-status", drive]) {
             let protection_on = bde_out.contains("Protection On");
             let encryption_pct = bde_out.lines()
                 .find(|l| l.contains("Percentage Encrypted"))
@@ -300,7 +299,7 @@ fn verify_windows(
     if let Some(tde_cmd) = config.params.get("tde_check_command").and_then(|v| v.as_str()) {
         let parts: Vec<&str> = tde_cmd.split_whitespace().collect();
         if !parts.is_empty() {
-            let tde_out = run_command(parts[0], &parts[1..]);
+            let tde_out = exec::stdout_of(parts[0], &parts[1..]);
             let tde_ok = tde_out.is_some();
             evidence.push(Evidence {
                 key: "tde_check".to_string(),
@@ -326,12 +325,4 @@ fn verify_windows(
     };
 
     Ok((status, summary, evidence))
-}
-
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }

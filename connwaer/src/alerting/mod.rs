@@ -75,16 +75,16 @@ impl AlertDispatcher {
 
         // Fire webhooks.
         for target in &self.config.webhooks {
-            if severity_meets_min(severity, &target.severity_min) {
+            if should_deliver(severity, &target.severity_min) {
                 if let Err(e) = webhook::send(target, result, severity) {
-                    tracing::error!("webhook alert to {} failed: {e:#}", target.url);
+                    tracing::error!("webhook alert failed: {e:#}");
                 }
             }
         }
 
         // Fire commands.
         for target in &self.config.commands {
-            if severity_meets_min(severity, &target.severity_min) {
+            if should_deliver(severity, &target.severity_min) {
                 if let Err(e) = command::run(target, result) {
                     tracing::error!("command alert '{}' failed: {e:#}", target.command);
                 }
@@ -94,7 +94,7 @@ impl AlertDispatcher {
         // Fire syslog.
         #[cfg(unix)]
         if let Some(target) = &self.config.syslog {
-            if severity_meets_min(severity, &target.severity_min) {
+            if should_deliver(severity, &target.severity_min) {
                 if let Err(e) = syslog::send(target, result, severity) {
                     tracing::error!("syslog alert failed: {e:#}");
                 }
@@ -103,13 +103,46 @@ impl AlertDispatcher {
     }
 }
 
+/// Decide whether an alert of `severity` reaches a target with the given
+/// `severity_min`. Recovery is an event class, not a severity: once the
+/// global `recovery_alerts` gate admitted it, per-target severity floors
+/// don't apply — a floor of "fail" is about failure noise, not about muting
+/// the all-clear.
+fn should_deliver(severity: &str, min: &str) -> bool {
+    severity == "recovery" || severity_meets_min(severity, min)
+}
+
 /// Check if the given severity meets the minimum threshold.
 fn severity_meets_min(severity: &str, min: &str) -> bool {
     let level = |s: &str| match s {
-        "recovery" => 0,
         "warn" => 1,
         "fail" | "error" => 2,
         _ => 0,
     };
     level(severity) >= level(min)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn severity_floor() {
+        assert!(severity_meets_min("fail", "fail"));
+        assert!(severity_meets_min("error", "fail"));
+        assert!(severity_meets_min("fail", "warn"));
+        assert!(severity_meets_min("warn", "warn"));
+        assert!(!severity_meets_min("warn", "fail"));
+    }
+
+    #[test]
+    fn recovery_bypasses_the_floor() {
+        // The bug this pins: at the default severity_min ("fail"), recovery
+        // alerts were silently dropped — recovery_alerts: true reached no
+        // default target.
+        assert!(should_deliver("recovery", "fail"));
+        assert!(should_deliver("recovery", "warn"));
+        assert!(!should_deliver("warn", "fail"));
+        assert!(should_deliver("fail", "fail"));
+    }
 }

@@ -1,4 +1,3 @@
-pub mod watch;
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -106,7 +105,8 @@ pub struct AlertingConfig {
     #[serde(default = "default_dedup_window")]
     pub dedup_window_seconds: u64,
 
-    /// Send an alert when a previously-failing capability passes.
+    /// Send an alert when a previously-failing capability passes. Recovery
+    /// alerts go to every target regardless of its severity_min.
     #[serde(default)]
     pub recovery_alerts: bool,
 }
@@ -117,6 +117,7 @@ pub struct WebhookTarget {
     #[serde(default)]
     pub headers: HashMap<String, String>,
     /// Minimum severity to trigger this webhook: "fail", "warn", or "error".
+    /// Recovery alerts (if enabled) are delivered regardless of this floor.
     #[serde(default = "default_severity_min")]
     pub severity_min: String,
 }

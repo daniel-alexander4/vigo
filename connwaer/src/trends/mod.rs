@@ -48,16 +48,10 @@ impl TrendStore {
     ) -> Result<Vec<RunRecord>> {
         let conn = self.conn.lock().map_err(|e| anyhow::anyhow!("lock: {e}"))?;
         let mut stmt = conn.prepare(
-            "SELECT id, capability, status, metrics, timestamp FROM runs WHERE capability = ?1 ORDER BY timestamp DESC LIMIT ?2",
+            "SELECT metrics FROM runs WHERE capability = ?1 ORDER BY timestamp DESC LIMIT ?2",
         )?;
         let rows = stmt.query_map(rusqlite::params![capability, limit], |row| {
-            Ok(RunRecord {
-                id: row.get(0)?,
-                capability: row.get(1)?,
-                status: row.get(2)?,
-                metrics: row.get(3)?,
-                timestamp: row.get(4)?,
-            })
+            Ok(RunRecord { metrics: row.get(0)? })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
@@ -82,7 +76,6 @@ impl TrendStore {
                 slope_per_day: 0.0,
                 data_points: records.len(),
                 projected_exhaustion: None,
-                latest_value: None,
             });
         }
 
@@ -106,7 +99,6 @@ impl TrendStore {
                 slope_per_day: 0.0,
                 data_points: points.len(),
                 projected_exhaustion: None,
-                latest_value,
             });
         }
 
@@ -141,7 +133,6 @@ impl TrendStore {
             slope_per_day: slope,
             data_points: points.len(),
             projected_exhaustion,
-            latest_value,
         })
     }
 
@@ -160,12 +151,10 @@ impl TrendStore {
 }
 
 #[derive(Debug)]
+/// A recorded run's metrics JSON. Rows are selected per capability, so the
+/// record carries only the payload the trend math consumes.
 pub struct RunRecord {
-    pub id: i64,
-    pub capability: String,
-    pub status: String,
     pub metrics: String,
-    pub timestamp: String,
 }
 
 #[derive(Debug)]
@@ -173,7 +162,6 @@ pub struct TrendResult {
     pub slope_per_day: f64,
     pub data_points: usize,
     pub projected_exhaustion: Option<String>,
-    pub latest_value: Option<f64>,
 }
 
 #[cfg(test)]
@@ -189,7 +177,8 @@ mod tests {
 
         let runs = store.query_runs("backup_restore", 10).unwrap();
         assert_eq!(runs.len(), 2);
-        assert_eq!(runs[0].capability, "backup_restore");
+        let m: serde_json::Value = serde_json::from_str(&runs[0].metrics).unwrap();
+        assert!(m.get("rto_seconds").is_some());
     }
 
     #[test]
@@ -230,7 +219,7 @@ mod tests {
         assert_eq!(result.data_points, 10);
         assert!(result.slope_per_day > 0.0, "slope should be positive");
         assert!(result.projected_exhaustion.is_some(), "should project exhaustion");
-        assert!(result.latest_value.unwrap() > 80.0);
+        assert!(result.slope_per_day > 0.0);
     }
 
     #[test]

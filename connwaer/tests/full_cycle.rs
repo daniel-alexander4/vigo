@@ -1,4 +1,4 @@
-/// Integration test: write a temp config, run a single cycle, verify JSON results appear.
+//! Integration test: write a temp config, run a single cycle, verify JSON results appear.
 
 use std::io::Write;
 use std::process::Command;

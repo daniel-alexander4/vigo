@@ -8,7 +8,6 @@ pub struct RngValidation;
 
 impl Capability for RngValidation {
     fn name(&self) -> &'static str { "rng_validation" }
-    fn display_name(&self) -> &'static str { "RNG Statistical Validation" }
     fn controls(&self) -> &'static [&'static str] { &["NGC-TS-4.2", "MGA-RGR-6.1"] }
 
     fn timeout(&self) -> Duration {
@@ -22,22 +21,6 @@ impl Capability for RngValidation {
         let (status, summary, evidence) = run_rng_validation(&ctx.config)?;
 
         let elapsed = start.elapsed();
-
-        // Record to trends for drift detection.
-        let passed_count = evidence.iter()
-            .find(|e| e.key == "tests_passed")
-            .and_then(|e| e.value.as_u64())
-            .unwrap_or(0);
-        let total_count = evidence.iter()
-            .find(|e| e.key == "tests_total")
-            .and_then(|e| e.value.as_u64())
-            .unwrap_or(0);
-        let metrics = serde_json::json!({
-            "tests_passed": passed_count,
-            "tests_total": total_count,
-            "duration_ms": elapsed.as_millis() as u64,
-        });
-        let _ = ctx.trends_db.record_run("rng_validation", &status.to_string(), &metrics);
 
         Ok(CapabilityResult {
             capability: self.name().to_string(),

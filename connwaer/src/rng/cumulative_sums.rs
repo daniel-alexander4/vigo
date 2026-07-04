@@ -1,8 +1,8 @@
-/// NIST SP 800-22 Test 13: Cumulative Sums (Cusums).
-///
-/// Determines whether the cumulative sum of the adjusted (-1/+1) sequence
-/// is too large or too small, indicating too many zeros or ones at the
-/// start of the sequence. Tests both forward and reverse directions.
+//! NIST SP 800-22 Test 13: Cumulative Sums (Cusums).
+//!
+//! Determines whether the cumulative sum of the adjusted (-1/+1) sequence
+//! is too large or too small, indicating too many zeros or ones at the
+//! start of the sequence. Tests both forward and reverse directions.
 
 pub fn test(bits: &[u8]) -> (f64, f64) {
     let n = bits.len();

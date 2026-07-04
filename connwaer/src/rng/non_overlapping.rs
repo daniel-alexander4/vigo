@@ -1,9 +1,9 @@
-/// NIST SP 800-22 Test 7: Non-overlapping Template Matching.
-///
-/// Searches for occurrences of a non-periodic template pattern ("000000001")
-/// across blocks of the sequence. When a match is found, the search skips
-/// past it (non-overlapping). The distribution of match counts is tested
-/// against the expected chi-squared distribution.
+//! NIST SP 800-22 Test 7: Non-overlapping Template Matching.
+//!
+//! Searches for occurrences of a non-periodic template pattern ("000000001")
+//! across blocks of the sequence. When a match is found, the search skips
+//! past it (non-overlapping). The distribution of match counts is tested
+//! against the expected chi-squared distribution.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len();

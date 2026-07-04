@@ -1,8 +1,8 @@
-/// NIST SP 800-22 Test 9: Maurer's Universal Statistical Test.
-///
-/// Measures the compressibility of the sequence. A truly random sequence
-/// cannot be significantly compressed. Uses L=7 bit blocks with Q=1280
-/// initialization blocks.
+//! NIST SP 800-22 Test 9: Maurer's Universal Statistical Test.
+//!
+//! Measures the compressibility of the sequence. A truly random sequence
+//! cannot be significantly compressed. Uses L=7 bit blocks with Q=1280
+//! initialization blocks.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len();

@@ -1,7 +1,7 @@
-/// NIST SP 800-22 Test 1: Frequency (Monobit).
-///
-/// Determines whether the number of ones and zeros in the sequence are
-/// approximately equal, as expected for a truly random sequence.
+//! NIST SP 800-22 Test 1: Frequency (Monobit).
+//!
+//! Determines whether the number of ones and zeros in the sequence are
+//! approximately equal, as expected for a truly random sequence.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len() as f64;

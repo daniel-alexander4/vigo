@@ -1,8 +1,8 @@
-/// NIST SP 800-22 Test 8: Overlapping Template Matching.
-///
-/// Similar to non-overlapping template matching, but allows overlapping
-/// occurrences. Uses a template of 9 consecutive ones. The distribution
-/// of match counts per block is compared to the Poisson expectation.
+//! NIST SP 800-22 Test 8: Overlapping Template Matching.
+//!
+//! Similar to non-overlapping template matching, but allows overlapping
+//! occurrences. Uses a template of 9 consecutive ones. The distribution
+//! of match counts per block is compared to the Poisson expectation.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len();
@@ -18,14 +18,14 @@ pub fn test(bits: &[u8]) -> f64 {
     let eta = lambda / 2.0;
 
     // Compute expected probabilities using Poisson.
-    let mut pi = vec![0.0f64; 6];
+    let mut pi = [0.0f64; 6];
     pi[0] = (-eta).exp();
     for k in 1..5 {
         pi[k] = pi[k - 1] * eta / k as f64;
     }
     pi[5] = 1.0 - pi[0..5].iter().sum::<f64>();
 
-    let mut freq = vec![0u64; 6];
+    let mut freq = [0u64; 6];
     for i in 0..num_blocks {
         let block = &bits[i * block_size..std::cmp::min((i + 1) * block_size, n)];
         let count = count_overlapping(block, &template).min(5);

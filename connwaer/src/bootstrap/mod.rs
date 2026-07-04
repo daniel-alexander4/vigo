@@ -8,11 +8,11 @@ use anyhow::Result;
 pub fn install_service() -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        return systemd::install();
+        systemd::install()
     }
     #[cfg(windows)]
     {
-        return windows_service::install();
+        windows_service::install()
     }
     #[cfg(not(any(target_os = "linux", windows)))]
     {

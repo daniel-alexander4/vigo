@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::{bail, Context, Result};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,7 +8,6 @@ pub struct BackupRestore;
 
 impl Capability for BackupRestore {
     fn name(&self) -> &'static str { "backup_restore" }
-    fn display_name(&self) -> &'static str { "Backup Restore Testing" }
     fn controls(&self) -> &'static [&'static str] { &["FINRA-BCP-1", "FINRA-BCP-2"] }
 
     fn timeout(&self) -> Duration {
@@ -219,16 +218,9 @@ fn run_restore_test(
 
 /// Run a shell command and return stdout on success, or error message on failure.
 fn run_shell_command(cmd: &str) -> Result<String> {
-    #[cfg(unix)]
-    let output = Command::new("sh")
-        .args(["-c", cmd])
-        .output()
-        .with_context(|| format!("executing: {cmd}"))?;
-
-    #[cfg(windows)]
-    let output = Command::new("cmd.exe")
-        .args(["/C", cmd])
-        .output()
+    // Budget sits just under the capability's 1h timeout so the process-group
+    // kill (and a real error result) land before the scheduler's backstop.
+    let output = exec::run_shell(cmd, std::time::Duration::from_secs(3590))
         .with_context(|| format!("executing: {cmd}"))?;
 
     if !output.status.success() {

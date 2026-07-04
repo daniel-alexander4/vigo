@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::{Context, Result};
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,7 +8,6 @@ pub struct AppAllowlisting;
 
 impl Capability for AppAllowlisting {
     fn name(&self) -> &'static str { "app_allowlisting" }
-    fn display_name(&self) -> &'static str { "Application Allowlisting" }
     fn controls(&self) -> &'static [&'static str] { &["CE-MW-4"] }
 
     fn supported(&self) -> bool {
@@ -86,7 +85,7 @@ fn verify_linux(
     };
 
     let summary = if issues.is_empty() {
-        format!("Application allowlisting active and enforcing")
+        "Application allowlisting active and enforcing".to_string()
     } else {
         issues.join("; ")
     };
@@ -103,7 +102,7 @@ fn verify_fapolicyd(evidence: &mut Vec<Evidence>, issues: &mut Vec<String>) -> R
     });
 
     // Check if fapolicyd service is active.
-    let active = run_command("systemctl", &["is-active", "fapolicyd"]);
+    let active = exec::stdout_of("systemctl", &["is-active", "fapolicyd"]);
     let is_active = active.as_deref() == Some("active");
     evidence.push(Evidence {
         key: "service_active".to_string(),
@@ -116,7 +115,7 @@ fn verify_fapolicyd(evidence: &mut Vec<Evidence>, issues: &mut Vec<String>) -> R
     }
 
     // Check fapolicyd enforcement mode via fapolicyctl.
-    if let Some(status_output) = run_command("fapolicyctl", &["status"]) {
+    if let Some(status_output) = exec::stdout_of("fapolicyctl", &["status"]) {
         let enforcing = status_output.contains("enforcing");
         evidence.push(Evidence {
             key: "enforcing".to_string(),
@@ -143,7 +142,7 @@ fn verify_fapolicyd(evidence: &mut Vec<Evidence>, issues: &mut Vec<String>) -> R
     }
 
     // Count rules.
-    if let Some(rules_output) = run_command("fapolicyctl", &["list"]) {
+    if let Some(rules_output) = exec::stdout_of("fapolicyctl", &["list"]) {
         let rule_count = rules_output.lines().count();
         evidence.push(Evidence {
             key: "rule_count".to_string(),
@@ -199,21 +198,17 @@ fn test_unauthorized_exec() -> Result<bool> {
     }
 
     // Attempt to execute. If fapolicyd is working, this should fail.
-    let result = Command::new(&test_binary).output();
+    let result = exec::run(&test_binary.to_string_lossy(), &[], exec::PROBE_TIMEOUT);
 
     match result {
         Ok(output) => {
             // If it ran successfully, fapolicyd did NOT block it.
             Ok(!output.status.success() || !String::from_utf8_lossy(&output.stdout).contains("connwaer_test_ok"))
         }
-        Err(e) => {
-            // Permission denied = blocked by fapolicyd.
-            if e.kind() == std::io::ErrorKind::PermissionDenied {
-                Ok(true)
-            } else {
-                // Other error (e.g., ENOEXEC) — treat as blocked.
-                Ok(true)
-            }
+        Err(_) => {
+            // Failure to execute at all (permission denied, ENOEXEC, killed
+            // at the deadline) counts as blocked.
+            Ok(true)
         }
     }
 }
@@ -232,7 +227,7 @@ fn verify_windows(
     });
 
     // Check AppLocker service (AppIDSvc).
-    let svc_status = run_command("sc.exe", &["query", "AppIDSvc"]);
+    let svc_status = exec::stdout_of("sc.exe", &["query", "AppIDSvc"]);
     let is_running = svc_status.as_ref().map(|s| s.contains("RUNNING")).unwrap_or(false);
     evidence.push(Evidence {
         key: "service_active".to_string(),
@@ -244,7 +239,7 @@ fn verify_windows(
     }
 
     // Check for AppLocker policy via PowerShell.
-    if let Some(policy_output) = run_command(
+    if let Some(policy_output) = exec::stdout_of(
         "powershell.exe",
         &["-NoProfile", "-Command", "Get-AppLockerPolicy -Effective -Xml | Select-String -Pattern 'RuleCollection'"],
     ) {
@@ -264,7 +259,7 @@ fn verify_windows(
     }
 
     // Check enforcement mode.
-    if let Some(mode_output) = run_command(
+    if let Some(mode_output) = exec::stdout_of(
         "powershell.exe",
         &["-NoProfile", "-Command", "Get-AppLockerPolicy -Effective | Select-Object -ExpandProperty RuleCollections | Select-Object -First 1 -ExpandProperty EnforcementMode"],
     ) {
@@ -293,21 +288,10 @@ fn verify_windows(
     Ok((status, summary, evidence))
 }
 
-/// Run a command, return stdout trimmed, or None on failure.
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-}
-
 /// Check if a command exists on the system.
 #[cfg(target_os = "linux")]
 fn which_exists(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
-        .output()
+    exec::run("which", &[cmd], exec::PROBE_TIMEOUT)
         .map(|o| o.status.success())
         .unwrap_or(false)
 }

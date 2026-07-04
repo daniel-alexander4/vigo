@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::Result;
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,8 +8,7 @@ pub struct PasswordPolicy;
 
 impl Capability for PasswordPolicy {
     fn name(&self) -> &'static str { "password_policy" }
-    fn display_name(&self) -> &'static str { "Password Policy Testing" }
-    fn controls(&self) -> &'static [&'static str] { &["NIST-800-63B", "PCI-DSS-8.3"] }
+    fn controls(&self) -> &'static [&'static str] { &["NIST-IA-5", "PCI-DSS-8.3.6"] }
 
     fn supported(&self) -> bool {
         cfg!(target_os = "linux") || cfg!(target_os = "windows")
@@ -206,7 +205,7 @@ fn verify_linux(
     } else {
         // pwscore returning None means it exited non-zero (rejected the password) or isn't installed.
         // Check if pwscore exists first.
-        if run_command("which", &["pwscore"]).is_some() {
+        if exec::stdout_of("which", &["pwscore"]).is_some() {
             // pwscore exists and rejected the password -- good.
             evidence.push(Evidence {
                 key: "pwscore_weak_test".to_string(),
@@ -248,7 +247,7 @@ fn verify_windows(
         .unwrap_or(true);
 
     // Query password policy via `net accounts`.
-    if let Some(net_out) = run_command("net", &["accounts"]) {
+    if let Some(net_out) = exec::stdout_of("net", &["accounts"]) {
         let mut min_length: u64 = 0;
         let mut lockout_threshold: u64 = 0;
         let mut max_age: u64 = 0;
@@ -300,7 +299,7 @@ fn verify_windows(
 
     // Check complexity via secedit export or PowerShell.
     if require_complexity {
-        if let Some(complexity_out) = run_command(
+        if let Some(complexity_out) = exec::stdout_of(
             "powershell.exe",
             &["-NoProfile", "-Command",
               "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name 'NoLMHash' -ErrorAction SilentlyContinue).NoLMHash"],
@@ -310,7 +309,7 @@ fn verify_windows(
         }
 
         // Use secedit to export and check password complexity.
-        let secedit_check = run_command(
+        let secedit_check = exec::stdout_of(
             "powershell.exe",
             &["-NoProfile", "-Command",
               "secedit /export /cfg $env:TEMP\\connwaer_secpol.cfg /quiet; Get-Content $env:TEMP\\connwaer_secpol.cfg | Select-String 'PasswordComplexity'"],
@@ -344,34 +343,11 @@ fn verify_windows(
     Ok((status, summary, evidence))
 }
 
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-}
-
 /// Run a command with data piped to stdin.
 #[cfg(target_os = "linux")]
 fn run_command_with_stdin(cmd: &str, args: &[&str], stdin_data: &str) -> Option<String> {
-    use std::io::Write;
-    let mut child = Command::new(cmd)
-        .args(args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .ok()?;
-
-    if let Some(ref mut stdin) = child.stdin {
-        let _ = stdin.write_all(stdin_data.as_bytes());
-    }
-
-    let output = child.wait_with_output().ok()?;
-    if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        None
-    }
+    exec::run_with_stdin(cmd, args, Some(stdin_data.as_bytes()), exec::PROBE_TIMEOUT)
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }

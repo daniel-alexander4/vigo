@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::Result;
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,8 +8,7 @@ pub struct PrivilegeEscalation;
 
 impl Capability for PrivilegeEscalation {
     fn name(&self) -> &'static str { "privilege_escalation" }
-    fn display_name(&self) -> &'static str { "Privilege Escalation Audit" }
-    fn controls(&self) -> &'static [&'static str] { &["NIST-AC-6", "CIS-6.1"] }
+    fn controls(&self) -> &'static [&'static str] { &["NIST-AC-6"] }
 
     fn supported(&self) -> bool {
         cfg!(target_os = "linux") || cfg!(target_os = "windows")
@@ -70,7 +69,7 @@ fn verify_linux(
 
     // --- Find SUID binaries ---
     // Use timeout to prevent hanging on very large filesystems.
-    let suid_output = run_command(
+    let suid_output = exec::stdout_of(
         "timeout",
         &["120", "find", "/", "-perm", "-4000", "-type", "f"],
     );
@@ -108,7 +107,7 @@ fn verify_linux(
     }
 
     // --- Check for unexpected file capabilities ---
-    let getcap_output = run_command(
+    let getcap_output = exec::stdout_of(
         "timeout",
         &["60", "getcap", "-r", "/"],
     );
@@ -153,7 +152,7 @@ fn verify_linux(
     }
 
     // --- Check for world-writable files in system directories ---
-    let writable_output = run_command(
+    let writable_output = exec::stdout_of(
         "timeout",
         &["30", "find", "/usr", "/etc", "-type", "f", "-perm", "-o+w"],
     );
@@ -179,8 +178,6 @@ fn verify_linux(
 
     let status = if issues.is_empty() {
         VerificationStatus::Pass
-    } else if issues.iter().any(|i| i.contains("SUID")) {
-        VerificationStatus::Warn
     } else {
         VerificationStatus::Warn
     };
@@ -233,7 +230,7 @@ fn verify_windows(
     let mut issues = Vec::new();
 
     // --- Check for unquoted service paths ---
-    if let Some(svc_out) = run_command(
+    if let Some(svc_out) = exec::stdout_of(
         "powershell.exe",
         &["-NoProfile", "-Command",
           "Get-WmiObject win32_service | Where-Object { $_.PathName -notmatch '^\".+\"' -and $_.PathName -match '.+ .+' } | Select-Object Name, PathName | Format-List"],
@@ -258,7 +255,7 @@ fn verify_windows(
     }
 
     // --- Check users in local Administrators group ---
-    if let Some(admin_out) = run_command("net", &["localgroup", "Administrators"]) {
+    if let Some(admin_out) = exec::stdout_of("net", &["localgroup", "Administrators"]) {
         // Parse members between the dashed lines.
         let members: Vec<String> = admin_out.lines()
             .skip_while(|l| !l.starts_with("---"))
@@ -285,7 +282,7 @@ fn verify_windows(
     }
 
     // --- Check for AlwaysInstallElevated registry key ---
-    if let Some(reg_out) = run_command(
+    if let Some(reg_out) = exec::stdout_of(
         "reg",
         &["query", "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "/v", "AlwaysInstallElevated"],
     ) {
@@ -312,13 +309,4 @@ fn verify_windows(
     };
 
     Ok((status, summary, evidence))
-}
-
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }

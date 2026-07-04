@@ -1,7 +1,7 @@
-/// NIST SP 800-22 Test 2: Frequency within a Block.
-///
-/// Divides the sequence into non-overlapping blocks and determines whether
-/// the proportion of ones in each block is approximately 0.5.
+//! NIST SP 800-22 Test 2: Frequency within a Block.
+//!
+//! Divides the sequence into non-overlapping blocks and determines whether
+//! the proportion of ones in each block is approximately 0.5.
 
 pub fn test(bits: &[u8], block_size: usize) -> f64 {
     let n = bits.len();

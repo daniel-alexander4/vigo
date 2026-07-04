@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::Result;
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,8 +8,7 @@ pub struct TimeSync;
 
 impl Capability for TimeSync {
     fn name(&self) -> &'static str { "time_sync" }
-    fn display_name(&self) -> &'static str { "Time Synchronization" }
-    fn controls(&self) -> &'static [&'static str] { &["PCI-DSS-10.4", "NIST-AU-8"] }
+    fn controls(&self) -> &'static [&'static str] { &["PCI-DSS-10.6.1", "NIST-AU-8"] }
 
     fn supported(&self) -> bool {
         cfg!(target_os = "linux") || cfg!(target_os = "windows")
@@ -20,26 +19,18 @@ impl Capability for TimeSync {
         let started_at = chrono::Utc::now().to_rfc3339();
 
         #[cfg(target_os = "linux")]
-        let (status, summary, evidence, offset_ms) = verify_linux(&ctx.config)?;
+        let (status, summary, evidence) = verify_linux(&ctx.config)?;
 
         #[cfg(target_os = "windows")]
-        let (status, summary, evidence, offset_ms) = verify_windows(&ctx.config)?;
+        let (status, summary, evidence) = verify_windows(&ctx.config)?;
 
         #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-        let (status, summary, evidence, offset_ms) = (
+        let (status, summary, evidence) = (
             VerificationStatus::Skipped,
             "Not supported on this platform".to_string(),
             vec![],
-            None::<f64>,
         );
 
-        // Record offset to trends DB for drift monitoring.
-        if let Some(offset) = offset_ms {
-            let metrics = serde_json::json!({
-                "offset_ms": offset,
-            });
-            let _ = ctx.trends_db.record_run("time_sync", &status.to_string(), &metrics);
-        }
 
         let elapsed = start.elapsed();
         Ok(CapabilityResult {
@@ -62,7 +53,7 @@ impl Capability for TimeSync {
 #[cfg(target_os = "linux")]
 fn verify_linux(
     config: &super::CapabilityConfig,
-) -> Result<(VerificationStatus, String, Vec<Evidence>, Option<f64>)> {
+) -> Result<(VerificationStatus, String, Vec<Evidence>)> {
     let mut evidence = Vec::new();
     let mut issues = Vec::new();
     let mut measured_offset: Option<f64> = None;
@@ -72,16 +63,16 @@ fn verify_linux(
         .unwrap_or(100.0);
 
     // --- Check which NTP service is running ---
-    let chronyd_active = run_command("systemctl", &["is-active", "chronyd"])
+    let chronyd_active = exec::stdout_of("systemctl", &["is-active", "chronyd"])
         .map(|s| s == "active")
         .unwrap_or(false);
-    let ntpd_active = run_command("systemctl", &["is-active", "ntpd"])
+    let ntpd_active = exec::stdout_of("systemctl", &["is-active", "ntpd"])
         .map(|s| s == "active")
         .unwrap_or(false);
-    let ntp_active = run_command("systemctl", &["is-active", "ntp"])
+    let ntp_active = exec::stdout_of("systemctl", &["is-active", "ntp"])
         .map(|s| s == "active")
         .unwrap_or(false);
-    let timesyncd_active = run_command("systemctl", &["is-active", "systemd-timesyncd"])
+    let timesyncd_active = exec::stdout_of("systemctl", &["is-active", "systemd-timesyncd"])
         .map(|s| s == "active")
         .unwrap_or(false);
 
@@ -112,7 +103,7 @@ fn verify_linux(
 
     // --- Query offset based on the active service ---
     if chronyd_active {
-        if let Some(tracking_out) = run_command("chronyc", &["tracking"]) {
+        if let Some(tracking_out) = exec::stdout_of("chronyc", &["tracking"]) {
             // Parse "System time" and "Last offset" lines.
             let mut sync_source = String::new();
             let mut system_time_offset: Option<f64> = None;
@@ -128,14 +119,14 @@ fn verify_linux(
                     // "System time     : 0.000012345 seconds fast of NTP time"
                     system_time_offset = line.split(':').nth(1)
                         .and_then(|s| {
-                            let parts: Vec<&str> = s.trim().split_whitespace().collect();
+                            let parts: Vec<&str> = s.split_whitespace().collect();
                             parts.first().and_then(|v| v.parse::<f64>().ok())
                         });
                 } else if line.starts_with("Last offset") {
                     // "Last offset     : +0.000001234 seconds"
                     last_offset = line.split(':').nth(1)
                         .and_then(|s| {
-                            let val = s.trim().split_whitespace().next().unwrap_or("");
+                            let val = s.split_whitespace().next().unwrap_or("");
                             val.trim_start_matches('+').parse::<f64>().ok()
                         });
                 }
@@ -160,7 +151,7 @@ fn verify_linux(
             }
         }
     } else if ntpd_active || ntp_active {
-        if let Some(ntpq_out) = run_command("ntpq", &["-p"]) {
+        if let Some(ntpq_out) = exec::stdout_of("ntpq", &["-p"]) {
             // Parse ntpq output: look for the active peer (marked with *).
             let mut sync_source = String::new();
             let mut offset_ms_val: Option<f64> = None;
@@ -196,7 +187,7 @@ fn verify_linux(
             }
         }
     } else if timesyncd_active {
-        if let Some(timectl_out) = run_command("timedatectl", &["show-timesync"]) {
+        if let Some(timectl_out) = exec::stdout_of("timedatectl", &["show-timesync"]) {
             // Parse NTPMessage and server info.
             let mut server = String::new();
 
@@ -217,7 +208,7 @@ fn verify_linux(
         }
 
         // Try timedatectl status for sync status.
-        if let Some(status_out) = run_command("timedatectl", &["status"]) {
+        if let Some(status_out) = exec::stdout_of("timedatectl", &["status"]) {
             let synced = status_out.contains("synchronized: yes") ||
                          status_out.contains("NTP synchronized: yes");
             evidence.push(Evidence {
@@ -234,7 +225,7 @@ fn verify_linux(
     // --- Optional: manual NTP server check ---
     if let Some(ntp_server) = config.params.get("ntp_server").and_then(|v| v.as_str()) {
         // Use chronyd -Q or ntpdate -q for a one-shot query.
-        if let Some(ntpdate_out) = run_command("ntpdate", &["-q", ntp_server]) {
+        if let Some(ntpdate_out) = exec::stdout_of("ntpdate", &["-q", ntp_server]) {
             // Parse "offset X.XXXX sec"
             if let Some(offset_str) = ntpdate_out.lines().last() {
                 if let Some(pos) = offset_str.find("offset") {
@@ -273,13 +264,13 @@ fn verify_linux(
         issues.join("; ")
     };
 
-    Ok((status, summary, evidence, measured_offset))
+    Ok((status, summary, evidence))
 }
 
 #[cfg(target_os = "windows")]
 fn verify_windows(
     config: &super::CapabilityConfig,
-) -> Result<(VerificationStatus, String, Vec<Evidence>, Option<f64>)> {
+) -> Result<(VerificationStatus, String, Vec<Evidence>)> {
     let mut evidence = Vec::new();
     let mut issues = Vec::new();
     let mut measured_offset: Option<f64> = None;
@@ -289,7 +280,7 @@ fn verify_windows(
         .unwrap_or(100.0);
 
     // Check w32time service status.
-    let svc_status = run_command("sc.exe", &["query", "w32time"]);
+    let svc_status = exec::stdout_of("sc.exe", &["query", "w32time"]);
     let is_running = svc_status.as_ref().map(|s| s.contains("RUNNING")).unwrap_or(false);
 
     evidence.push(Evidence {
@@ -303,7 +294,7 @@ fn verify_windows(
     }
 
     // Query time sync status via w32tm.
-    if let Some(w32tm_out) = run_command("w32tm", &["/query", "/status"]) {
+    if let Some(w32tm_out) = exec::stdout_of("w32tm", &["/query", "/status"]) {
         let mut source = String::new();
         let mut stratum: u32 = 0;
 
@@ -336,7 +327,7 @@ fn verify_windows(
 
     // Query offset via w32tm /stripchart (one-shot).
     if let Some(ntp_server) = config.params.get("ntp_server").and_then(|v| v.as_str()) {
-        if let Some(strip_out) = run_command(
+        if let Some(strip_out) = exec::stdout_of(
             "w32tm",
             &["/stripchart", &format!("/computer:{}", ntp_server), "/samples:1", "/dataonly"],
         ) {
@@ -383,13 +374,5 @@ fn verify_windows(
         issues.join("; ")
     };
 
-    Ok((status, summary, evidence, measured_offset))
-}
-
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    Ok((status, summary, evidence))
 }

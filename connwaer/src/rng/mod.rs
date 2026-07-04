@@ -1,10 +1,10 @@
-/// NIST SP 800-22 Statistical Test Suite for Random Number Generators.
-///
-/// Implements the 15 standard tests. Each test accepts a bitstream and returns
-/// a p-value. A p-value >= alpha (typically 0.01) means the sequence passes
-/// that test (i.e., is consistent with randomness).
-///
-/// Reference: https://csrc.nist.gov/publications/detail/sp/800-22/rev-1a/final
+//! NIST SP 800-22 Statistical Test Suite for Random Number Generators.
+//!
+//! Implements the 15 standard tests. Each test accepts a bitstream and returns
+//! a p-value. A p-value >= alpha (typically 0.01) means the sequence passes
+//! that test (i.e., is consistent with randomness).
+//!
+//! Reference: https://csrc.nist.gov/publications/detail/sp/800-22/rev-1a/final
 
 pub mod frequency;
 pub mod block_frequency;
@@ -199,7 +199,7 @@ fn igamc_cf(a: f64, x: f64) -> f64 {
     let mut d = 0.0_f64;
     for i in 1..200 {
         let an = if i % 2 == 1 {
-            ((i as f64 + 1.0) / 2.0) as f64 - a
+            (i as f64 + 1.0) / 2.0 - a
         } else {
             (i as f64) / 2.0
         };

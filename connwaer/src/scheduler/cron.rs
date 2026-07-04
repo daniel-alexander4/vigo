@@ -1,9 +1,9 @@
-/// Hand-rolled cron expression parser. Supports:
-/// - Standard 5-field: "minute hour day-of-month month day-of-week"
-/// - Shortcuts: @daily, @hourly, @weekly, @monthly, @yearly
-/// - Interval: @every 5m, @every 1h, @every 30s
-///
-/// Field syntax: *, */N, N, N-M, N-M/S, comma-separated lists
+//! Hand-rolled cron expression parser. Supports:
+//! - Standard 5-field: "minute hour day-of-month month day-of-week"
+//! - Shortcuts: @daily, @hourly, @weekly, @monthly, @yearly
+//! - Interval: @every 5m, @every 1h, @every 30s
+//!
+//! Field syntax: *, */N, N, N-M, N-M/S, comma-separated lists
 
 use anyhow::{bail, Result};
 use chrono::{Datelike, NaiveDateTime, Timelike};
@@ -17,6 +17,13 @@ pub enum CronSchedule {
         days_of_month: Vec<u32>,
         months: Vec<u32>,
         days_of_week: Vec<u32>,
+        /// Whether the day-of-month / day-of-week fields were written as
+        /// something other than `*`. Captured at parse time (a `*` expands to
+        /// the full range, so the matcher can't tell after the fact) to
+        /// implement Vixie cron's day rule: when BOTH day fields are
+        /// restricted, a time matches if EITHER does.
+        dom_restricted: bool,
+        dow_restricted: bool,
     },
     /// Fixed interval in seconds.
     Interval { seconds: u64 },
@@ -58,18 +65,42 @@ impl CronSchedule {
         let months = parse_field(fields[3], 1, 12, "month")?;
         let days_of_week = parse_field(fields[4], 0, 6, "day-of-week")?;
 
-        Ok(Self::Cron { minutes, hours, days_of_month, months, days_of_week })
+        Ok(Self::Cron {
+            minutes,
+            hours,
+            days_of_month,
+            months,
+            days_of_week,
+            dom_restricted: fields[2] != "*",
+            dow_restricted: fields[4] != "*",
+        })
     }
 
     /// Check if the given time matches this schedule.
     pub fn matches(&self, dt: &NaiveDateTime) -> bool {
         match self {
-            Self::Cron { minutes, hours, days_of_month, months, days_of_week } => {
+            Self::Cron {
+                minutes,
+                hours,
+                days_of_month,
+                months,
+                days_of_week,
+                dom_restricted,
+                dow_restricted,
+            } => {
+                let dom_match = days_of_month.contains(&dt.day());
+                let dow_match = days_of_week.contains(&dt.weekday().num_days_from_sunday());
+                // Vixie cron: both day fields restricted → OR; otherwise AND
+                // (an unrestricted field matches every day anyway).
+                let day_match = if *dom_restricted && *dow_restricted {
+                    dom_match || dow_match
+                } else {
+                    dom_match && dow_match
+                };
                 minutes.contains(&dt.minute())
                     && hours.contains(&dt.hour())
-                    && days_of_month.contains(&dt.day())
                     && months.contains(&dt.month())
-                    && days_of_week.contains(&dt.weekday().num_days_from_sunday())
+                    && day_match
             }
             Self::Interval { .. } => {
                 // Interval schedules are handled by the scheduler loop, not by time matching.
@@ -78,13 +109,6 @@ impl CronSchedule {
         }
     }
 
-    /// For interval schedules, return the interval in seconds.
-    pub fn interval_seconds(&self) -> Option<u64> {
-        match self {
-            Self::Interval { seconds } => Some(*seconds),
-            _ => None,
-        }
-    }
 }
 
 /// Parse a single cron field (e.g., "*/5", "1-15", "1,3,5", "*").
@@ -205,6 +229,13 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
 
+    fn interval_secs(s: &CronSchedule) -> Option<u64> {
+        match s {
+            CronSchedule::Interval { seconds } => Some(*seconds),
+            _ => None,
+        }
+    }
+
     fn dt(year: i32, month: u32, day: u32, hour: u32, min: u32) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(year, month, day)
             .unwrap()
@@ -275,6 +306,34 @@ mod tests {
     }
 
     #[test]
+    fn dom_dow_both_restricted_is_or() {
+        // Vixie semantics: "1st of the month OR any Monday".
+        let s = CronSchedule::parse("0 0 1 * 1").unwrap();
+        // 2026-06-01 is both the 1st and a Monday.
+        assert!(s.matches(&dt(2026, 6, 1, 0, 0)));
+        // 2026-07-01 is a Wednesday — matches via day-of-month.
+        assert!(s.matches(&dt(2026, 7, 1, 0, 0)));
+        // 2026-07-06 is a Monday — matches via day-of-week.
+        assert!(s.matches(&dt(2026, 7, 6, 0, 0)));
+        // 2026-07-07 is a Tuesday the 7th — matches neither.
+        assert!(!s.matches(&dt(2026, 7, 7, 0, 0)));
+    }
+
+    #[test]
+    fn dom_only_restricted_is_and() {
+        let s = CronSchedule::parse("0 0 1 * *").unwrap();
+        assert!(s.matches(&dt(2026, 7, 1, 0, 0)));
+        assert!(!s.matches(&dt(2026, 7, 6, 0, 0)));
+    }
+
+    #[test]
+    fn dow_only_restricted_is_and() {
+        let s = CronSchedule::parse("0 0 * * 1").unwrap();
+        assert!(s.matches(&dt(2026, 7, 6, 0, 0))); // Monday
+        assert!(!s.matches(&dt(2026, 7, 1, 0, 0))); // Wednesday the 1st
+    }
+
+    #[test]
     fn shortcut_daily() {
         let s = CronSchedule::parse("@daily").unwrap();
         assert!(s.matches(&dt(2026, 3, 27, 0, 0)));
@@ -291,19 +350,19 @@ mod tests {
     #[test]
     fn parse_every_interval() {
         let s = CronSchedule::parse("@every 5m").unwrap();
-        assert_eq!(s.interval_seconds(), Some(300));
+        assert_eq!(interval_secs(&s), Some(300));
     }
 
     #[test]
     fn parse_every_compound() {
         let s = CronSchedule::parse("@every 1h30m").unwrap();
-        assert_eq!(s.interval_seconds(), Some(5400));
+        assert_eq!(interval_secs(&s), Some(5400));
     }
 
     #[test]
     fn parse_every_seconds() {
         let s = CronSchedule::parse("@every 30s").unwrap();
-        assert_eq!(s.interval_seconds(), Some(30));
+        assert_eq!(interval_secs(&s), Some(30));
     }
 
     #[test]

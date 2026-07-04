@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::Result;
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,8 +8,7 @@ pub struct IntegrityMonitoring;
 
 impl Capability for IntegrityMonitoring {
     fn name(&self) -> &'static str { "integrity_monitoring" }
-    fn display_name(&self) -> &'static str { "File Integrity Monitoring" }
-    fn controls(&self) -> &'static [&'static str] { &["PCI-DSS-11.5", "NIST-SI-7"] }
+    fn controls(&self) -> &'static [&'static str] { &["PCI-DSS-11.5.2", "NIST-SI-7"] }
 
     fn supported(&self) -> bool {
         cfg!(target_os = "linux") || cfg!(target_os = "windows")
@@ -72,7 +71,7 @@ fn verify_linux(
         .unwrap_or(0);
 
     // --- Check AIDE ---
-    let aide_version = run_command(aide_binary, &["--version"]);
+    let aide_version = exec::stdout_of(aide_binary, &["--version"]);
     let aide_installed = aide_version.is_some();
 
     evidence.push(Evidence {
@@ -122,10 +121,10 @@ fn verify_linux(
 
             if run_check {
                 // aide --check exits 0 if no changes, non-zero if changes detected.
-                let check_output = Command::new(aide_binary)
-                    .args(["--check"])
-                    .output()
-                    .ok();
+                // Bounded just under the capability's 600s budget so the
+                // group kill lands before the scheduler's backstop.
+                let check_output =
+                    exec::run(aide_binary, &["--check"], std::time::Duration::from_secs(570)).ok();
 
                 if let Some(output) = check_output {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -185,7 +184,7 @@ fn verify_linux(
             tool_found = true;
             ossec_name = name;
 
-            if let Some(status_out) = run_command(path, &["status"]) {
+            if let Some(status_out) = exec::stdout_of(path, &["status"]) {
                 ossec_running = status_out.contains("is running");
                 evidence.push(Evidence {
                     key: format!("{}_status", name.to_lowercase()),
@@ -205,7 +204,7 @@ fn verify_linux(
 
     // Also check via systemctl for wazuh-agent.
     if !tool_found {
-        let wazuh_active = run_command("systemctl", &["is-active", "wazuh-agent"])
+        let wazuh_active = exec::stdout_of("systemctl", &["is-active", "wazuh-agent"])
             .map(|s| s == "active")
             .unwrap_or(false);
         if wazuh_active {
@@ -264,7 +263,7 @@ fn verify_windows(
     // --- Check for OSSEC/Wazuh service ---
     let ossec_services = ["OssecSvc", "WazuhSvc"];
     for svc in &ossec_services {
-        if let Some(svc_out) = run_command("sc.exe", &["query", svc]) {
+        if let Some(svc_out) = exec::stdout_of("sc.exe", &["query", svc]) {
             let is_running = svc_out.contains("RUNNING");
             let name = if *svc == "OssecSvc" { "OSSEC" } else { "Wazuh" };
             tool_found = true;
@@ -290,7 +289,7 @@ fn verify_windows(
             .and_then(|v| v.as_str())
             .unwrap_or("tripwire.exe");
 
-        if let Some(tw_out) = run_command(tripwire_check, &["--version"]) {
+        if let Some(tw_out) = exec::stdout_of(tripwire_check, &["--version"]) {
             tool_found = true;
             evidence.push(Evidence {
                 key: "tripwire_installed".to_string(),
@@ -301,7 +300,7 @@ fn verify_windows(
     }
 
     // --- Check Windows built-in: System File Checker last result ---
-    if let Some(sfc_log) = run_command(
+    if let Some(sfc_log) = exec::stdout_of(
         "powershell.exe",
         &["-NoProfile", "-Command",
           "Select-String -Path $env:SystemRoot\\Logs\\CBS\\CBS.log -Pattern 'Verify complete' -Context 0,0 | Select-Object -Last 1 | ForEach-Object { $_.Line }"],
@@ -338,12 +337,4 @@ fn verify_windows(
     };
 
     Ok((status, summary, evidence))
-}
-
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }

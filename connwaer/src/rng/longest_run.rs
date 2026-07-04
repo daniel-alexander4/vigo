@@ -1,8 +1,8 @@
-/// NIST SP 800-22 Test 4: Longest Run of Ones in a Block.
-///
-/// Determines whether the longest run of ones within M-bit blocks is
-/// consistent with what would be expected in a random sequence.
-/// Block size M and expected distribution depend on sequence length.
+//! NIST SP 800-22 Test 4: Longest Run of Ones in a Block.
+//!
+//! Determines whether the longest run of ones within M-bit blocks is
+//! consistent with what would be expected in a random sequence.
+//! Block size M and expected distribution depend on sequence length.
 
 pub fn test(bits: &[u8]) -> f64 {
     let n = bits.len();

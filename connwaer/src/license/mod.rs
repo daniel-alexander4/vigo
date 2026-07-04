@@ -1,10 +1,10 @@
-/// License verification for Connwaer.
-///
-/// Reads the Vigo license file (.lic), verifies the Ed25519 signature, and
-/// checks that the "connwaer" feature is present in the Features field.
-///
-/// The license format matches the Go server: JSON with payload + signature.
-/// Signature is base64-encoded Ed25519 over canonical JSON (sorted keys, no whitespace).
+//! License verification for Connwaer.
+//!
+//! Reads the Vigo license file (.lic), verifies the Ed25519 signature, and
+//! checks that the "connwaer" feature is present in the Features field.
+//!
+//! The license format matches the Go server: JSON with payload + signature.
+//! Signature is base64-encoded Ed25519 over canonical JSON (sorted keys, no whitespace).
 
 use anyhow::{bail, Context, Result};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};

@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::Result;
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,7 +8,6 @@ pub struct Sandboxing;
 
 impl Capability for Sandboxing {
     fn name(&self) -> &'static str { "sandboxing" }
-    fn display_name(&self) -> &'static str { "Application Sandboxing" }
     fn controls(&self) -> &'static [&'static str] { &["CE-MW-5"] }
 
     fn supported(&self) -> bool {
@@ -114,7 +113,7 @@ fn verify_selinux(evidence: &mut Vec<Evidence>, issues: &mut Vec<String>) -> Res
         detail: "SELinux detected".to_string(),
     });
 
-    if let Some(mode) = run_command("getenforce", &[]) {
+    if let Some(mode) = exec::stdout_if_ok("getenforce", &[]) {
         let enforcing = mode.trim().eq_ignore_ascii_case("enforcing");
         evidence.push(Evidence {
             key: "selinux_mode".to_string(),
@@ -126,7 +125,7 @@ fn verify_selinux(evidence: &mut Vec<Evidence>, issues: &mut Vec<String>) -> Res
         }
     }
 
-    if let Some(sestatus) = run_command("sestatus", &[]) {
+    if let Some(sestatus) = exec::stdout_if_ok("sestatus", &[]) {
         let policy_line = sestatus.lines()
             .find(|l| l.contains("Loaded policy name"))
             .map(|l| l.trim().to_string());
@@ -150,7 +149,7 @@ fn verify_apparmor(evidence: &mut Vec<Evidence>, issues: &mut Vec<String>) -> Re
         detail: "AppArmor detected".to_string(),
     });
 
-    if let Some(status_output) = run_command("aa-status", &["--json"]) {
+    if let Some(status_output) = exec::stdout_if_ok("aa-status", &["--json"]) {
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&status_output) {
             let enforce = parsed.get("profiles")
                 .and_then(|p| p.get("enforce"))
@@ -209,7 +208,7 @@ fn verify_windows() -> Result<(VerificationStatus, String, Vec<Evidence>)> {
     let mut issues = Vec::new();
 
     // Check Credential Guard via DeviceGuard WMI.
-    if let Some(dg_output) = run_command(
+    if let Some(dg_output) = exec::stdout_if_ok(
         "powershell.exe",
         &["-NoProfile", "-Command",
           "Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\\Microsoft\\Windows\\DeviceGuard | ConvertTo-Json -Compress"],
@@ -255,7 +254,7 @@ fn verify_windows() -> Result<(VerificationStatus, String, Vec<Evidence>)> {
     }
 
     // Check Defender Application Guard.
-    if let Some(dag_output) = run_command(
+    if let Some(dag_output) = exec::stdout_if_ok(
         "powershell.exe",
         &["-NoProfile", "-Command",
           "(Get-WindowsOptionalFeature -Online -FeatureName Windows-Defender-ApplicationGuard).State"],
@@ -282,20 +281,9 @@ fn verify_windows() -> Result<(VerificationStatus, String, Vec<Evidence>)> {
     Ok((status, summary, evidence))
 }
 
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-}
-
 #[cfg(target_os = "linux")]
 fn which_exists(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
-        .output()
+    exec::run("which", &[cmd], exec::PROBE_TIMEOUT)
         .map(|o| o.status.success())
         .unwrap_or(false)
 }

@@ -1,5 +1,5 @@
+use crate::exec;
 use anyhow::{Context, Result};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};
@@ -8,7 +8,6 @@ pub struct BcpTest;
 
 impl Capability for BcpTest {
     fn name(&self) -> &'static str { "bcp_test" }
-    fn display_name(&self) -> &'static str { "Business Continuity Testing" }
     fn controls(&self) -> &'static [&'static str] { &["FINRA-BCP-3", "MGA-RGR-5.2", "UKGC-RTS-5B"] }
 
     fn timeout(&self) -> Duration {
@@ -241,16 +240,9 @@ fn run_bcp_test(
 
 /// Run a shell command, return (exit_code, stdout, stderr).
 fn run_shell_command(cmd: &str) -> Result<(i32, String, String)> {
-    #[cfg(unix)]
-    let output = Command::new("sh")
-        .args(["-c", cmd])
-        .output()
-        .with_context(|| format!("executing: {cmd}"))?;
-
-    #[cfg(windows)]
-    let output = Command::new("cmd.exe")
-        .args(["/C", cmd])
-        .output()
+    // Budget sits just under the capability's 2h timeout so the process-group
+    // kill (and a real error result) land before the scheduler's backstop.
+    let output = exec::run_shell(cmd, std::time::Duration::from_secs(7190))
         .with_context(|| format!("executing: {cmd}"))?;
 
     let exit_code = output.status.code().unwrap_or(-1);
