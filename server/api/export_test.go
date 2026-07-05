@@ -74,7 +74,7 @@ func TestExportSIEMBasic(t *testing.T) {
 	now := time.Now().UTC()
 	insertExportTestData(t, sqlDB, "web01", now)
 
-	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, config.ExportSection{SIEM: true})
+	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, nil, config.ExportSection{SIEM: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -144,7 +144,7 @@ func TestExportSIEMSinceFilter(t *testing.T) {
 	insertExportTestData(t, sqlDB, "web-old", old)
 	insertExportTestData(t, sqlDB, "web-new", recent)
 
-	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, config.ExportSection{SIEM: true})
+	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, nil, config.ExportSection{SIEM: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -177,7 +177,7 @@ func TestExportSIEMEnvoyFilter(t *testing.T) {
 	insertExportTestData(t, sqlDB, "web01", now)
 	insertExportTestData(t, sqlDB, "db01", now)
 
-	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, config.ExportSection{SIEM: true})
+	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, nil, config.ExportSection{SIEM: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -207,7 +207,7 @@ func TestExportSIEMLimit(t *testing.T) {
 	now := time.Now().UTC()
 	insertExportTestData(t, sqlDB, "web01", now) // inserts 2 results
 
-	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, config.ExportSection{SIEM: true})
+	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), nil, nil, config.ExportSection{SIEM: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -247,7 +247,7 @@ func TestExportCMDBBasic(t *testing.T) {
 		},
 	}, nil)
 
-	handler := NewExportHandler(nil, fi, nil, config.ExportSection{CMDB: true})
+	handler := NewExportHandler(nil, fi, nil, nil, config.ExportSection{CMDB: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -302,7 +302,7 @@ func TestExportCMDBStatusFilter(t *testing.T) {
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
 
-	handler := NewExportHandler(nil, fi, nil, config.ExportSection{CMDB: true})
+	handler := NewExportHandler(nil, fi, nil, nil, config.ExportSection{CMDB: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -344,7 +344,7 @@ func TestExportCMDBEnvironmentFilter(t *testing.T) {
 		"web02.staging": "staging",
 	})
 
-	handler := NewExportHandler(nil, fi, configStore, config.ExportSection{CMDB: true})
+	handler := NewExportHandler(nil, fi, configStore, nil, config.ExportSection{CMDB: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -370,8 +370,16 @@ func TestExportCMDBEnvironmentFilter(t *testing.T) {
 	}
 }
 
-func TestExportOSCALStub(t *testing.T) {
-	handler := NewExportHandler(nil, fleet.NewFleetIndex(), nil, config.ExportSection{OSCAL: true})
+func TestExportOSCAL(t *testing.T) {
+	// OSCAL now routes through the honest per-control HIPAA producer, so
+	// it needs a real report handler (DB for the audit-chain lookup +
+	// config store for per-control coverage). With an empty fleet every
+	// control is genuinely uncovered — which is exactly what the export
+	// must report, rather than the old all-satisfied stub.
+	sqlDB := openMigratedTestDB(t)
+	configStore := newTestConfigStore(t, map[string]string{"web01": "prod"})
+	rh := NewReportHandler(db.New(sqlDB), fleet.NewFleetIndex(), configStore, "test")
+	handler := NewExportHandler(db.New(sqlDB), fleet.NewFleetIndex(), configStore, rh, config.ExportSection{OSCAL: true})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -417,6 +425,39 @@ func TestExportOSCALStub(t *testing.T) {
 	if len(findings) < 13 {
 		t.Errorf("expected at least 13 findings, got %d", len(findings))
 	}
+
+	// Honesty check: with an empty fleet, no control may report the OSCAL
+	// "satisfied" state — the old stub hardcoded all of them satisfied.
+	// Every finding must also carry the vigo-status prop and a random UUID.
+	seenUUIDs := make(map[string]bool)
+	for _, f := range findings {
+		fm := f.(map[string]any)
+		u, _ := fm["uuid"].(string)
+		if u == "" || seenUUIDs[u] {
+			t.Errorf("finding UUID missing or duplicated: %q", u)
+		}
+		seenUUIDs[u] = true
+
+		target := fm["target"].(map[string]any)
+		status := target["status"].(map[string]any)
+		if status["state"] == "satisfied" {
+			t.Errorf("control %v reported satisfied against an empty fleet — dishonest", fm["title"])
+		}
+
+		props, ok := fm["props"].([]any)
+		if !ok || len(props) == 0 {
+			t.Fatalf("finding %v missing props", fm["title"])
+		}
+		var hasStatus bool
+		for _, p := range props {
+			if pm := p.(map[string]any); pm["name"] == "vigo-status" {
+				hasStatus = true
+			}
+		}
+		if !hasStatus {
+			t.Errorf("finding %v missing vigo-status prop", fm["title"])
+		}
+	}
 }
 
 // newTestConfigStore creates a ConfigStore backed by a temp directory with a
@@ -460,7 +501,7 @@ func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigSt
 
 func TestExportDisabledEndpoints(t *testing.T) {
 	// All exports disabled — endpoints should not be registered.
-	handler := NewExportHandler(nil, fleet.NewFleetIndex(), nil, config.ExportSection{})
+	handler := NewExportHandler(nil, fleet.NewFleetIndex(), nil, nil, config.ExportSection{})
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

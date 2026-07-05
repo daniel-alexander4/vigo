@@ -1926,8 +1926,9 @@ Download the latest backup archive as a `.tar.gz` file. Requires admin authentic
 
 **Permission:** `compliance.read`
 
-Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `findings` array is currently empty; future versions will map Vigo compliance data to OSCAL control findings.
+Returns an OSCAL Assessment Results JSON envelope (v1.1.2) for the HIPAA framework, scored against the live fleet. Each control from Vigo's HIPAA catalog becomes one finding, produced by the same honest per-control scorer that backs the HIPAA PDF report and audit bundle — never a hardcoded status.
 
+Each finding's OSCAL `status.state` is mapped conservatively: only a genuinely `satisfied` control maps to `satisfied`; `partial`, `waived`, and `not_satisfied` all map to `not-satisfied` so a consumer reading only the state field never over-reads Vigo's posture. The finer real status is preserved in per-finding `props` (namespace `https://vigo.dev/ns/oscal`): `vigo-status` (satisfied / partial / waived / not_satisfied), `vigo-scope` (enforced / attested / documented / not_applicable), and `vigo-fleet-percent` (percentage of active envoys covering the control). All `uuid` fields are freshly random per request.
 
 **Response:**
 
@@ -1936,18 +1937,40 @@ Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `fi
   "assessment-results": {
     "uuid": "...",
     "metadata": {
-      "title": "Vigo Assessment Results",
+      "title": "Vigo HIPAA Assessment Results",
       "last-modified": "2026-03-13T10:00:00Z",
-      "version": "1.0.0",
+      "version": "0.76.79",
       "oscal-version": "1.1.2"
     },
     "results": [
       {
         "uuid": "...",
-        "title": "Vigo Compliance Assessment",
+        "title": "Vigo HIPAA Compliance Assessment",
+        "description": "Automated assessment of HIPAA Security Rule technical controls implemented by Vigo, scored against the live fleet.",
         "start": "2026-03-13T10:00:00Z",
-        "findings": [],
-        "remarks": "Stub: OSCAL findings mapping is not yet implemented."
+        "reviewed-controls": {
+          "control-selections": [
+            {"description": "HIPAA Security Rule 45 CFR 164.302–318"}
+          ]
+        },
+        "findings": [
+          {
+            "uuid": "...",
+            "title": "164.312(a)(1) Access Control",
+            "description": "...evidence string from the live scorer...",
+            "props": [
+              {"name": "vigo-status", "value": "satisfied", "ns": "https://vigo.dev/ns/oscal"},
+              {"name": "vigo-scope", "value": "enforced", "ns": "https://vigo.dev/ns/oscal"},
+              {"name": "vigo-fleet-percent", "value": "100.0", "ns": "https://vigo.dev/ns/oscal"}
+            ],
+            "target": {
+              "type": "control",
+              "target-id": "164.312(a)(1)",
+              "title": "Access Control",
+              "status": {"state": "satisfied"}
+            }
+          }
+        ]
       }
     ]
   }

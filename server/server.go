@@ -1234,9 +1234,11 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	taskHandler := api.NewTaskHandler(s.queries, s.agentSvc, s.cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(s.auditWriter)
 	queryHandler := api.NewQueryHandler(s.agentSvc)
-	exportHandler := api.NewExportHandler(s.queries, s.fleetIndex, s.configStore, s.cfg.Export)
 	s.reportHandler = api.NewReportHandler(s.queries, s.fleetIndex, s.configStore, version)
 	s.reportHandler.SetAuditWriter(s.auditWriter)
+	// The OSCAL export routes through the report handler's honest per-control
+	// producer, so it must be constructed after reportHandler exists.
+	exportHandler := api.NewExportHandler(s.queries, s.fleetIndex, s.configStore, s.reportHandler, s.cfg.Export)
 	cveHandler := api.NewCVEHandler(s.fleetIndex)
 	peerHandler := api.NewPeerHandler(s.peerService)
 

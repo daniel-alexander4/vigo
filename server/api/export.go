@@ -5,10 +5,11 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
@@ -18,19 +19,23 @@ import (
 
 // ExportHandler serves compliance framework export endpoints (SIEM, CMDB, OSCAL).
 type ExportHandler struct {
-	queries     *db.Queries
-	fleetIndex  *fleet.FleetIndex
-	configStore *config.ConfigStore
-	exportCfg   config.ExportSection
+	queries       *db.Queries
+	fleetIndex    *fleet.FleetIndex
+	configStore   *config.ConfigStore
+	reportHandler *ReportHandler
+	exportCfg     config.ExportSection
 }
 
 // NewExportHandler creates an ExportHandler with the given dependencies.
-func NewExportHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, configStore *config.ConfigStore, exportCfg config.ExportSection) *ExportHandler {
+// reportHandler is the honest per-control compliance producer the OSCAL
+// export routes through — it must be non-nil whenever OSCAL is enabled.
+func NewExportHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, configStore *config.ConfigStore, reportHandler *ReportHandler, exportCfg config.ExportSection) *ExportHandler {
 	return &ExportHandler{
-		queries:     queries,
-		fleetIndex:  fleetIndex,
-		configStore: configStore,
-		exportCfg:   exportCfg,
+		queries:       queries,
+		fleetIndex:    fleetIndex,
+		configStore:   configStore,
+		reportHandler: reportHandler,
+		exportCfg:     exportCfg,
 	}
 }
 
@@ -253,47 +258,64 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, records)
 }
 
+// oscalStatusNS namespaces the Vigo-specific props we hang off each
+// OSCAL finding — the real per-control status and fleet coverage that
+// don't fit OSCAL's binary satisfied/not-satisfied state field.
+const oscalStatusNS = "https://vigo.dev/ns/oscal"
+
 func (h *ExportHandler) handleOSCAL(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	// Build findings from HIPAA control mappings.
+	// Route through the honest per-control compliance producer rather
+	// than a hardcoded all-satisfied table. BuildFrameworkReport("compliance")
+	// is the HIPAA framework — the same real, fleet-scored control set the
+	// PDF report and audit bundle emit. Every control's OSCAL state reflects
+	// the actual fleet posture.
+	report, err := h.reportHandler.BuildFrameworkReport(r, "compliance")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to build compliance report")
+		return
+	}
+
+	type oscalProp struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+		NS    string `json:"ns,omitempty"`
+	}
 	type oscalFinding struct {
 		UUID        string         `json:"uuid"`
 		Title       string         `json:"title"`
 		Description string         `json:"description"`
+		Props       []oscalProp    `json:"props,omitempty"`
 		Target      map[string]any `json:"target"`
 	}
 
-	controlMappings := []struct {
-		id, title, status, desc string
-	}{
-		{"164.312(a)(1)", "Access Control", "satisfied", "Authentication required on all access, RBAC with fine-grained permissions"},
-		{"164.312(a)(2)(i)", "Unique User Identification", "satisfied", "Per-user accounts with unique UUIDs"},
-		{"164.312(a)(2)(ii)", "Emergency Access Procedure", "satisfied", "Localhost trust with audited emergency-access CLI command"},
-		{"164.312(a)(2)(iii)", "Automatic Logoff", "satisfied", "15-minute idle session timeout"},
-		{"164.312(a)(2)(iv)", "Encryption and Decryption", "satisfied", "AES-256-GCM for secrets and backups"},
-		{"164.312(b)", "Audit Controls", "satisfied", "SHA-256 hash chain audit trail with auth/user/token events"},
-		{"164.312(c)(1)", "Integrity", "satisfied", "ED25519 signatures, hash chain tamper detection"},
-		{"164.312(d)", "Person or Entity Authentication", "satisfied", "Basic/OIDC/isowebauth with optional TOTP MFA"},
-		{"164.312(e)(1)", "Transmission Security", "satisfied", "mTLS (TLS 1.3) on all traffic"},
-		{"164.312(e)(2)(ii)", "Encryption (Transmission)", "satisfied", "No plaintext transport"},
-		{"164.310(d)(2)(i)", "Disposal", "satisfied", "Documented decommissioning procedures"},
-		{"164.308(a)(5)(ii)(D)", "Password Management", "satisfied", "12-char minimum, complexity rules, bcrypt"},
-		{"164.308(a)(6)(ii)", "Response and Reporting", "satisfied", "Documented incident response plan"},
-	}
-
-	findings := make([]oscalFinding, len(controlMappings))
-	for i, c := range controlMappings {
+	findings := make([]oscalFinding, len(report.Controls))
+	for i, c := range report.Controls {
+		// Conservative mapping: only a genuinely satisfied control maps to
+		// the OSCAL "satisfied" state. partial / waived / not_satisfied all
+		// map to "not-satisfied" so a reader parsing only the state field
+		// never over-reads Vigo's posture. The real status is preserved in
+		// the vigo-status prop for consumers that want the finer grade.
+		state := "not-satisfied"
+		if c.Status == "satisfied" {
+			state = "satisfied"
+		}
 		findings[i] = oscalFinding{
-			UUID:        fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1),
-			Title:       c.id + " " + c.title,
-			Description: c.desc,
+			UUID:        uuid.NewString(),
+			Title:       c.ControlID + " " + c.Title,
+			Description: c.Evidence,
+			Props: []oscalProp{
+				{Name: "vigo-status", Value: c.Status, NS: oscalStatusNS},
+				{Name: "vigo-scope", Value: c.Scope, NS: oscalStatusNS},
+				{Name: "vigo-fleet-percent", Value: strconv.FormatFloat(c.FleetPercent, 'f', 1, 64), NS: oscalStatusNS},
+			},
 			Target: map[string]any{
 				"type":      "control",
-				"target-id": c.id,
-				"title":     c.title,
+				"target-id": c.ControlID,
+				"title":     c.Title,
 				"status": map[string]string{
-					"state": c.status,
+					"state": state,
 				},
 			},
 		}
@@ -301,22 +323,22 @@ func (h *ExportHandler) handleOSCAL(w http.ResponseWriter, r *http.Request) {
 
 	oscal := map[string]any{
 		"assessment-results": map[string]any{
-			"uuid": "00000000-0000-4000-8000-000000000000",
+			"uuid": uuid.NewString(),
 			"metadata": map[string]any{
 				"title":         "Vigo HIPAA Assessment Results",
 				"last-modified": now,
-				"version":       "1.0.0",
+				"version":       report.Version,
 				"oscal-version": "1.1.2",
 			},
 			"results": []map[string]any{
 				{
-					"uuid":        "00000000-0000-4000-8000-000000000100",
+					"uuid":        uuid.NewString(),
 					"title":       "Vigo HIPAA Compliance Assessment",
-					"description": "Automated assessment of HIPAA Security Rule technical controls implemented by Vigo.",
+					"description": "Automated assessment of HIPAA Security Rule technical controls implemented by Vigo, scored against the live fleet.",
 					"start":       now,
 					"reviewed-controls": map[string]any{
 						"control-selections": []map[string]any{
-							{"description": "HIPAA Security Rule 45 CFR 164.312"},
+							{"description": "HIPAA Security Rule 45 CFR 164.302–318"},
 						},
 					},
 					"findings": findings,

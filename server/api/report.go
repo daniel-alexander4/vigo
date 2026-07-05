@@ -126,14 +126,21 @@ func (h *ReportHandler) AuditStatus(ctx context.Context) AuditChainStatus {
 func (h *ReportHandler) refreshAuditStatusAsync() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	v, err := h.verifyAuditChain(ctx)
 	c := &h.auditStatusCache
-	c.mu.Lock()
+	// Clear the in-flight flag via defer so a panic in the O(N) chain walk
+	// (recovered by daemon.SafeGo) can't wedge refreshing=true forever and
+	// permanently stop future refreshes from being kicked.
+	defer func() {
+		c.mu.Lock()
+		c.refreshing = false
+		c.mu.Unlock()
+	}()
+	v, err := h.verifyAuditChain(ctx)
 	if err == nil {
+		c.mu.Lock()
 		c.store(v)
+		c.mu.Unlock()
 	}
-	c.refreshing = false
-	c.mu.Unlock()
 }
 
 // verifyAuditChain runs the incremental audit-chain verify via the handler's
