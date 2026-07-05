@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.76.80"
+version = "0.76.81"
 edition = "2021"
 description = "Vigo Distributed State Enforcement Agent"
 license = "LicenseRef-Proprietary"
@@ -80,6 +80,12 @@ tar = { version = "0.4", default-features = false }
 # gzip inflate for compressed policy bundles (server sends large bundles in
 # CheckInResponse.policy_bundle_gzip). Already in the graph via `age`.
 flate2 = "1"
+
+# Zip-slip-safe archive extraction for the source_package executor (its inner
+# sha256 pin is only checked post-extraction, so a shell-out to `unzip` could
+# write outside the temp dir first). Pure-Rust deflate via the already-present
+# flate2 — no C deps, musl-clean.
+zip = { version = "8", default-features = false, features = ["deflate"] }
 
 # Misc
 regex-lite = "0.1"

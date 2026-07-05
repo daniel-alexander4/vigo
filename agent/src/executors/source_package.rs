@@ -313,7 +313,10 @@ impl Executor for SourcePackageExecutor {
 
         let strip_str = strip_components.to_string();
 
-        let extract_result = match archive_format {
+        // Extraction outcome as a plain Result<(), String>: tar goes through
+        // the CLI (GNU/bsdtar refuse `..`/absolute entries by default), zip
+        // goes through the zip-slip-safe in-Rust extractor.
+        let extract_result: Result<(), String> = match archive_format {
             ArchiveFormat::TarGz | ArchiveFormat::TarBz2 | ArchiveFormat::TarXz => {
                 let flag = match archive_format {
                     ArchiveFormat::TarGz => "-xzf",
@@ -326,26 +329,24 @@ impl Executor for SourcePackageExecutor {
                     args.push("--strip-components");
                     args.push(&strip_str);
                 }
-                self.runner
+                match self
+                    .runner
                     .run_niced_timeout("tar", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
-            }
-            ArchiveFormat::Zip => {
-                let zip_result = self.runner.run("unzip", &["-o", &source_path, "-d", &extract_dir]);
-                // strip_components for zip requires post-extraction move.
-                if strip_components > 0 {
-                    if let Ok(ref o) = zip_result {
-                        if o.status.success() {
-                            if let Err(e) = zip_strip_components(&extract_dir, strip_components) {
-                                let _ = std::fs::remove_dir_all(&tmp_dir);
-                                result.error = Some(format!("strip_components on zip: {}", e));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
-                            }
-                        }
-                    }
+                {
+                    Ok(o) if o.status.success() => Ok(()),
+                    Ok(o) => Err(String::from_utf8_lossy(&o.stderr).to_string()),
+                    Err(e) => Err(e.to_string()),
                 }
-                zip_result
             }
+            ArchiveFormat::Zip => extract_zip_safe(&source_path, &extract_dir).and_then(|()| {
+                // strip_components for zip requires a post-extraction move.
+                if strip_components > 0 {
+                    zip_strip_components(&extract_dir, strip_components)
+                        .map_err(|e| format!("strip_components on zip: {}", e))
+                } else {
+                    Ok(())
+                }
+            }),
             ArchiveFormat::Raw => {
                 // Not an archive — copy the source straight to target.
                 if let Err(e) = std::fs::copy(&source_path, &target) {
@@ -366,21 +367,11 @@ impl Executor for SourcePackageExecutor {
             }
         };
 
-        match extract_result {
-            Ok(o) if !o.status.success() => {
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                let _ = std::fs::remove_dir_all(&tmp_dir);
-                result.error = Some(format!("extract archive: {}", stderr));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-            Err(e) => {
-                let _ = std::fs::remove_dir_all(&tmp_dir);
-                result.error = Some(format!("extract archive: {}", e));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-            _ => {}
+        if let Err(e) = extract_result {
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            result.error = Some(format!("extract archive: {}", e));
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
         }
 
         // Find the target binary in extracted files.
@@ -578,6 +569,52 @@ fn closest_existing_ancestor(path: &str) -> String {
     }
 }
 
+/// Extract a zip archive into `dest_dir`, rejecting any entry whose path would
+/// escape the destination (absolute or `..` traversal — classic zip-slip).
+/// Replaces a `unzip -o` shell-out that had no such guard: because the source
+/// archive is extracted BEFORE the sha256 pin is checked (the pin verifies the
+/// extracted inner binary, not the archive), a malicious archive could write
+/// outside the temp dir as the agent's uid before any verification ran.
+/// `enclosed_name()` returns `None` for exactly the unsafe entries. tar keeps
+/// its CLI path — GNU/bsdtar refuse traversal entries by default.
+fn extract_zip_safe(archive_path: &str, dest_dir: &str) -> Result<(), String> {
+    let file = std::fs::File::open(archive_path)
+        .map_err(|e| format!("open zip {}: {}", archive_path, e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("read zip: {}", e))?;
+    let dest = std::path::Path::new(dest_dir);
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("zip entry {}: {}", i, e))?;
+        // The zip-slip guard: None for absolute paths or any `..` component.
+        let rel = entry
+            .enclosed_name()
+            .ok_or_else(|| format!("unsafe path in zip archive: {}", entry.name()))?;
+        let outpath = dest.join(rel);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&outpath)
+                .map_err(|e| format!("mkdir {}: {}", outpath.display(), e))?;
+            continue;
+        }
+        if let Some(parent) = outpath.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("mkdir {}: {}", parent.display(), e))?;
+        }
+        let mut outfile = std::fs::File::create(&outpath)
+            .map_err(|e| format!("create {}: {}", outpath.display(), e))?;
+        std::io::copy(&mut entry, &mut outfile)
+            .map_err(|e| format!("write {}: {}", outpath.display(), e))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Some(mode) = entry.unix_mode() {
+                let _ = std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// For zip archives: walk N levels deep and move contents up to the extract root.
 fn zip_strip_components(extract_dir: &str, levels: u32) -> Result<(), String> {
     let base = std::path::PathBuf::from(extract_dir);
@@ -712,6 +749,58 @@ mod tests {
             "unexpected error: {:?}",
             msg
         );
+    }
+
+    #[test]
+    fn extract_zip_safe_rejects_traversal() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("evil.zip");
+        {
+            let f = std::fs::File::create(&zip_path).unwrap();
+            let mut zw = zip::ZipWriter::new(f);
+            let opts = zip::write::SimpleFileOptions::default();
+            zw.start_file("../escape.txt", opts).unwrap();
+            zw.write_all(b"pwned").unwrap();
+            zw.finish().unwrap();
+        }
+        let extract_dir = dir.path().join("extract");
+        std::fs::create_dir_all(&extract_dir).unwrap();
+
+        let res = extract_zip_safe(zip_path.to_str().unwrap(), extract_dir.to_str().unwrap());
+        assert!(res.is_err(), "traversal entry must be rejected");
+        assert!(
+            res.unwrap_err().contains("unsafe path"),
+            "wrong rejection reason"
+        );
+        // The `..` target (a sibling of extract_dir) must never have been written.
+        assert!(
+            !dir.path().join("escape.txt").exists(),
+            "zip-slip wrote outside the destination"
+        );
+    }
+
+    #[test]
+    fn extract_zip_safe_extracts_normal() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("ok.zip");
+        {
+            let f = std::fs::File::create(&zip_path).unwrap();
+            let mut zw = zip::ZipWriter::new(f);
+            let opts = zip::write::SimpleFileOptions::default();
+            zw.start_file("bin/tool", opts).unwrap();
+            zw.write_all(b"#!/bin/sh\necho hi\n").unwrap();
+            zw.finish().unwrap();
+        }
+        let extract_dir = dir.path().join("extract");
+        std::fs::create_dir_all(&extract_dir).unwrap();
+
+        let res = extract_zip_safe(zip_path.to_str().unwrap(), extract_dir.to_str().unwrap());
+        assert!(res.is_ok(), "normal extract failed: {:?}", res);
+        let extracted = extract_dir.join("bin/tool");
+        assert!(extracted.exists(), "nested entry not extracted");
+        assert_eq!(std::fs::read(&extracted).unwrap(), b"#!/bin/sh\necho hi\n");
     }
 
     #[test]
