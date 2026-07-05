@@ -94,3 +94,14 @@ server/swarm/manifest.go:292:\bcairn\b
 # The code occurrence was fixed 2026-06-15; the review doc keeps the original
 # finding text as a historical record, so allowlist that one line.
 docs/internal.docs/code-review-by-subsystem-2026-06-14.md:405:\bswarmgit\b
+
+# The config loader hard-errors on the retired 0.66.0 federation keys
+# (tungol → spanner, steorra → bolt). These lines ARE the migration
+# guard + its doc comment — they must name the retired keys to detect
+# and reject them. The reversion plan doc records the experiment.
+docs/internal.docs/plans/vigo-plan-spanner-redesign-2026-05-16.md:33:\btungol
+server/config/server.go:204:\btungol
+server/config/server.go:205:\bsteorra
+server/config/server.go:230:\btungol
+server/config/server.go:235:\bTungol
+server/config/server.go:238:\btungol

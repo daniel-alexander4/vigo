@@ -251,6 +251,7 @@ func (g *Gossiper) autoAdmitPeer(ctx context.Context, peer, hostname string, pat
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// best-effort: body only enriches the error we already return.
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("peer-admit returned %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}

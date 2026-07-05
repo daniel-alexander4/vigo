@@ -10,6 +10,7 @@ package integrations
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -591,37 +592,10 @@ func (c *connectwiseTarget) Dispatch(ctx context.Context, e Event) error {
 	return postJSON(ctx, c.client, url, headers, payload)
 }
 
+// basicAuth returns the base64 of "user:pass"-style credentials for an
+// HTTP Basic Authorization header.
 func basicAuth(creds string) string {
-	return base64Encode([]byte(creds))
-}
-
-func base64Encode(data []byte) string {
-	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-	var b strings.Builder
-	for i := 0; i < len(data); i += 3 {
-		var n uint32
-		remaining := len(data) - i
-		n = uint32(data[i]) << 16
-		if remaining > 1 {
-			n |= uint32(data[i+1]) << 8
-		}
-		if remaining > 2 {
-			n |= uint32(data[i+2])
-		}
-		b.WriteByte(alphabet[(n>>18)&0x3f])
-		b.WriteByte(alphabet[(n>>12)&0x3f])
-		if remaining > 1 {
-			b.WriteByte(alphabet[(n>>6)&0x3f])
-		} else {
-			b.WriteByte('=')
-		}
-		if remaining > 2 {
-			b.WriteByte(alphabet[n&0x3f])
-		} else {
-			b.WriteByte('=')
-		}
-	}
-	return b.String()
+	return base64.StdEncoding.EncodeToString([]byte(creds))
 }
 
 // --- Splunk HEC ---
@@ -766,7 +740,7 @@ func (l *lokiTarget) Dispatch(ctx context.Context, e Event) error {
 	if l.cfg.BearerToken != "" {
 		headers["Authorization"] = "Bearer " + l.cfg.BearerToken
 	} else if l.cfg.Username != "" {
-		headers["Authorization"] = "Basic " + base64Encode([]byte(l.cfg.Username+":"+l.cfg.Password))
+		headers["Authorization"] = "Basic " + basicAuth(l.cfg.Username+":"+l.cfg.Password)
 	}
 
 	url := strings.TrimSuffix(l.cfg.URL, "/") + "/loki/api/v1/push"

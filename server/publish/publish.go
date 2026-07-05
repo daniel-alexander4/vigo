@@ -835,6 +835,7 @@ func atomicSync(stacks, live string) (int, error) {
 				return totalFiles, fmt.Errorf("reading %s: %w", name, readErr)
 			}
 			dstPath := filepath.Join(live, name)
+			// best-effort: missing/unreadable dst reads as empty → "differs" → write.
 			dstData, _ := os.ReadFile(dstPath)
 			if string(srcData) != string(dstData) {
 				if writeErr := os.WriteFile(dstPath, srcData, 0o640); writeErr != nil {

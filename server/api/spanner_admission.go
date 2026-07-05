@@ -502,6 +502,7 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// best-effort: body only enriches the error we already return.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		writeError(w, http.StatusBadGateway, fmt.Sprintf("inviter /admit returned %d: %s", resp.StatusCode, string(body)))
 		return

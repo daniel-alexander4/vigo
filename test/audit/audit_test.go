@@ -634,14 +634,18 @@ func TestNoIgnoredErrors(t *testing.T) {
 		`os\.WriteFile\(`,
 	}
 
-	// Build a combined pattern: _ = <dangerous func> or _ , _ = ...
-	// We look for lines where the error is assigned to _.
-	// Pattern: starts with _ = or _, _ = or has _ = at the beginning, then a call.
-	// Keep it practical: look for "_ = funcName(" or "_ , _ = funcName(" patterns.
+	// Build a pattern per dangerous func matching any assignment whose
+	// error slot is discarded to `_` — both the value-kept form
+	// (`data, _ := os.ReadFile(...)`) and the all-blank forms
+	// (`_ = os.Remove(...)`, `_, _ := os.Open(...)`). The `_` must sit
+	// in the error position: preceded by `, ` (a later return) or
+	// standing alone as the sole target. The dangerous-func whitelist
+	// is the discriminator — this deliberately does NOT fire on Go's
+	// `v, ok := m[k]` / type-assertion / bool-return idioms, whose
+	// dropped slot isn't an error and which never call these funcs.
 	patterns := make([]*regexp.Regexp, 0, len(dangerousFuncs))
 	for _, fn := range dangerousFuncs {
-		// Match: _ = os.Open(  or  _, _ = os.Open(
-		re := regexp.MustCompile(`_\s*(?:,\s*_)?\s*[:=]\s*` + fn)
+		re := regexp.MustCompile(`(?:,\s*_|(?:^|[^,\w.])_)\s*:?=\s*` + fn)
 		patterns = append(patterns, re)
 	}
 
@@ -677,14 +681,11 @@ func TestNoIgnoredErrors(t *testing.T) {
 			lineNo++
 			line := scanner.Text()
 
-			// Skip lines with an explanatory comment (intentional ignore).
-			if strings.Contains(line, "//") {
-				prevLine = line
-				continue
-			}
-			// Skip if previous line has a comment explaining the ignore.
-			if strings.Contains(prevLine, "// ignore") || strings.Contains(prevLine, "// best-effort") ||
-				strings.Contains(prevLine, "// intentional") || strings.Contains(prevLine, "// nolint") {
+			// An ignore is intentional only when it carries a standard
+			// annotation — on this line or the one above. A bare `//`
+			// (e.g. a URL in a string) no longer suppresses the check,
+			// which used to blind it to any commented line.
+			if hasIgnoreAnnotation(line) || hasIgnoreAnnotation(prevLine) {
 				prevLine = line
 				continue
 			}
@@ -707,6 +708,18 @@ func TestNoIgnoredErrors(t *testing.T) {
 		t.Errorf("found %d ignored error returns in server/ code:\n  %s",
 			len(violations), strings.Join(violations, "\n  "))
 	}
+}
+
+// hasIgnoreAnnotation reports whether a line carries a standard
+// intentional-ignore marker. This is the sanctioned way to tell
+// TestNoIgnoredErrors a dropped error is deliberate.
+func hasIgnoreAnnotation(line string) bool {
+	for _, marker := range []string{"// ignore", "// best-effort", "// intentional", "// nolint"} {
+		if strings.Contains(line, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------- 6. TestNoSecretsInLogs ----------

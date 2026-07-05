@@ -263,3 +263,18 @@ func TestLooksSynthetic(t *testing.T) {
 		}
 	}
 }
+
+func TestValidIPPrefix(t *testing.T) {
+	valid := []string{"10.100", "10.200", "0.0", "255.255", "192.168"}
+	for _, s := range valid {
+		if !validIPPrefix(s) {
+			t.Errorf("validIPPrefix(%q) = false, want true", s)
+		}
+	}
+	invalid := []string{"10", "10.100.5", "10.100.5.3", "10.999", "256.1", "not.ip", "10.", ".10", "", "-1.0"}
+	for _, s := range invalid {
+		if validIPPrefix(s) {
+			t.Errorf("validIPPrefix(%q) = true, want false", s)
+		}
+	}
+}

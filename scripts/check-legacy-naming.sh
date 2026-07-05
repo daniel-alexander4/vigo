@@ -104,6 +104,27 @@ TOKENS=(
   '\bstockpile\b'
   '\bStockpile\b'
   '\bSTOCKPILE\b'
+  # --- 0.66.0 tungol -> spanner / steorra -> bolt revert. The Old-English
+  #     federation vocabulary from the 2026-05-16 spanner-redesign draft
+  #     was reverted on 2026-05-19. The loader hard-errors on the retired
+  #     `tungol:` / `steorras:` / `steorra_id:` keys (server/config/server.go);
+  #     those guard lines + the reversion plan doc are allowlisted. Open
+  #     trailing edge on `steorra` because it only ever appeared suffixed
+  #     (`steorras`, `steorra_id`), never as a bare word.
+  '\btungol'
+  '\bTungol'
+  '\bTUNGOL'
+  '\bsteorra'
+  '\bSteorra'
+  '\bSTEORRA'
+  # --- pre-0.30 vigocrypt -> lockbox / vigosync -> longdrawer. Retired
+  #     per-user state-dir names; the 0.29->0.30 migration script and the
+  #     factory-reset substrate test name them literally (both whole-file
+  #     allowlisted).
+  '\bvigocrypt\b'
+  '\bVigocrypt\b'
+  '\bvigosync\b'
+  '\bVigosync\b'
 )
 
 # Legacy paths. These would silently break runtime because the new

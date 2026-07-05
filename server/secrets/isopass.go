@@ -157,6 +157,7 @@ func (p *IsopassProvider) exchangeToken(ctx context.Context) error {
 		return fmt.Errorf("isopass authentication failed -- check bearer token")
 	}
 	if resp.StatusCode/100 != 2 {
+		// best-effort: body only enriches the error we already return.
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("isopass token exchange failed (status %d): %s",
 			resp.StatusCode, string(body))
@@ -207,6 +208,7 @@ func (p *IsopassProvider) search(ctx context.Context, query string) ([]searchRes
 		return nil, fmt.Errorf("isopass authentication failed -- check bearer token")
 	}
 	if resp.StatusCode/100 != 2 {
+		// best-effort: body only enriches the error we already return.
 		respBody, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("isopass search failed (status %d): %s",
 			resp.StatusCode, string(respBody))

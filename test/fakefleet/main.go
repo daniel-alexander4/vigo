@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"git.alexander4.io/vigo/server/publish"
@@ -118,6 +120,22 @@ func main() {
 // The admin token falls back to the root-only local-admin token file,
 // matching how vigocli authenticates on the server host — that keeps the
 // systemd service unit free of any secret.
+// validIPPrefix reports whether s is exactly two dotted octets, each
+// 0-255 — the shape synthIP requires ("A.B" → "A.B.x.x").
+func validIPPrefix(s string) bool {
+	parts := strings.Split(s, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	for _, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 0 || n > 255 {
+			return false
+		}
+	}
+	return true
+}
+
 func parseFlags(cmd string, args []string) config {
 	fs := newFlagSet(cmd)
 	grpcAddr := fs.String("server", "127.0.0.1:1530", "gRPC server address (host:port)")
@@ -147,6 +165,17 @@ func parseFlags(cmd string, args []string) config {
 	ipPrefix := fs.String("ip-prefix", "", "first two octets of synthetic IPs as \"A.B\" (create only) — e.g. 10.100 → 10.100.x.x, so a spanner bolt's envoys share a recognizable /16. Empty = the default 10.x.x.x spread")
 	noVitalsHash := fs.Bool("no-vitals-hash", false, "omit vitals_state_hash (ADR-033 Option C) from check-ins, so the server re-persists every churny tick — the 'before' leg of the Option C CPU A/B against one server image")
 	_ = fs.Parse(args)
+
+	// synthIP splices --ip-prefix in verbatim as the leading two octets;
+	// a malformed value silently produces invalid addresses (e.g. "10" →
+	// "10.5.3", "10.100.5" → "10.100.5.5.3"). Validate the one raw string
+	// here, the single choke point before it fans out to gen.
+	if *ipPrefix != "" && !validIPPrefix(*ipPrefix) {
+		fmt.Fprintf(os.Stderr,
+			"invalid --ip-prefix %q: want exactly two octets \"A.B\", each 0-255 (e.g. 10.100)\n",
+			*ipPrefix)
+		os.Exit(2)
+	}
 
 	// Apply the Option C A/B toggle as a process-wide setting (buildCheckInReq
 	// reads it like agentVersion). Default keeps the faithful split-agent behavior.

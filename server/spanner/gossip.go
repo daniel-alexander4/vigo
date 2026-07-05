@@ -327,6 +327,7 @@ func (g *Gossiper) pullFleetSnapshot(ctx context.Context, peerHostname, peerPubk
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// best-effort: body only enriches the error we already return.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("peer /fleet-snapshot returned %d: %s", resp.StatusCode, string(body))
 	}
@@ -381,6 +382,7 @@ func (g *Gossiper) pullAndMerge(ctx context.Context, peerHostname string, founde
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// best-effort: body only enriches the error we already return.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return 0, fmt.Errorf("peer /snapshot returned %d: %s", resp.StatusCode, string(body))
 	}

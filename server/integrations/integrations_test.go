@@ -5,6 +5,7 @@ package integrations
 
 import (
 	"context"
+	"encoding/base64"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -189,4 +190,26 @@ func TestDispatcher_RecoversFromTargetPanic(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("inflight slot count %d after drain — panic leaked a slot", len(d.inflight))
+}
+
+// basicAuth builds the Authorization header for eight outbound
+// integrations (ConnectWise, ServiceNow, Jira, Zendesk, …). It must
+// match RFC 4648 standard base64 with padding exactly — a divergence
+// would silently break every one of those Basic-auth handshakes.
+func TestBasicAuth(t *testing.T) {
+	cases := []string{
+		"",                    // empty
+		"a",                   // 1-byte tail → "==" padding
+		"ab",                  // 2-byte tail → "=" padding
+		"abc",                 // exact 3-byte group, no padding
+		"user:pass",           // typical credential
+		"company+public:priv", // ConnectWise-shaped
+		"api-token:X",         // Freshservice-shaped
+	}
+	for _, in := range cases {
+		want := base64.StdEncoding.EncodeToString([]byte(in))
+		if got := basicAuth(in); got != want {
+			t.Errorf("basicAuth(%q) = %q, want %q", in, got, want)
+		}
+	}
 }
