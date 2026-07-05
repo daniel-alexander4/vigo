@@ -10,6 +10,11 @@
 pub mod apt;
 pub mod errors;
 
+// Discipline constants (PKG_NICE, PKG_QUERY_TIMEOUT, PKG_MUTATE_TIMEOUT) are
+// single-sourced in the parent `executors` module — shared with the
+// package/repository/source executors so the budgets can't drift.
+use super::{PKG_MUTATE_TIMEOUT, PKG_NICE, PKG_QUERY_TIMEOUT};
+
 /// Abstraction over OS package managers.
 pub trait PackageManager: Send + Sync {
     /// Check if a package is installed. Returns (installed, version).
@@ -133,23 +138,6 @@ pub fn detect(os_family: &str, os_distro: &str) -> Result<Box<dyn PackageManager
         }
     }
 }
-
-/// Nice level for every package-manager subprocess. A positive level also
-/// engages ionice (`apply_nice` maps it to a best-effort IO class) —
-/// invisible-agent doctrine on the most I/O-expensive agent operation.
-const PKG_NICE: i32 = 10;
-
-/// Budget for pure queries (dpkg -s, dpkg-query, `which`, backend
-/// query/snapshot). Local package-DB reads; seconds at worst.
-const PKG_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
-
-/// Budget for mutations (install/remove/upgrade/configure/hold) and cache
-/// updates. Deliberately generous — a legitimate upgrade-all on a stale host
-/// runs tens of minutes, and killing it mid-transaction is worse than a late
-/// cleanup. This is the orphan-cleanup backstop layered UNDER the runner's
-/// 300s scope-level detection (which reports the overrun but cannot kill),
-/// not the responsiveness bound.
-const PKG_MUTATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
 
 /// Run a package-manager command with the house discipline: nice+ionice
 /// (PKG_NICE), own process group, oom-adj, output drained concurrently,

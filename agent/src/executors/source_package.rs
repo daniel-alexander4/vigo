@@ -4,7 +4,9 @@
 //! Source package executor — downloads and extracts archives idempotently.
 
 use super::download::{download_with_retry, sanitize_url_filename, DownloadConfig};
-use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
+use super::{
+    Action, CommandRunner, DefaultRunner, Executor, ResourceResult, PKG_MUTATE_TIMEOUT, PKG_NICE,
+};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::Read;
@@ -196,7 +198,10 @@ impl Executor for SourcePackageExecutor {
 
         // 2. Check unless guard.
         if !unless_cmd.is_empty() {
-            if let Ok(o) = self.runner.run("sh", &["-c", &unless_cmd]) {
+            if let Ok(o) =
+                self.runner
+                    .run_niced_timeout("sh", &["-c", &unless_cmd], PKG_NICE, PKG_MUTATE_TIMEOUT)
+            {
                 if o.status.success() {
                     result.action = Action::None;
                     result.duration_ms = start.elapsed().as_millis() as i32;
@@ -321,7 +326,8 @@ impl Executor for SourcePackageExecutor {
                     args.push("--strip-components");
                     args.push(&strip_str);
                 }
-                self.runner.run("tar", &args)
+                self.runner
+                    .run_niced_timeout("tar", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
             }
             ArchiveFormat::Zip => {
                 let zip_result = self.runner.run("unzip", &["-o", &source_path, "-d", &extract_dir]);

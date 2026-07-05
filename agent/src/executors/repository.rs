@@ -11,7 +11,10 @@
 //! - Pacman (Arch) — `/etc/pacman.conf` section-based
 //! - Zypper (SUSE/openSUSE) — `zypper addrepo`/`removerepo` commands
 
-use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
+use super::{
+    Action, CommandRunner, DefaultRunner, Executor, ResourceResult, PKG_MUTATE_TIMEOUT, PKG_NICE,
+    PKG_QUERY_TIMEOUT,
+};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -76,9 +79,9 @@ impl AptRepoManager {
         let _ = std::fs::create_dir_all("/etc/apt/keyrings");
 
         let tmp_key = format!("/tmp/vigo-key-{}.asc", name);
-        let downloaded = match self.runner.run("curl", &["-fsSL", key_url, "-o", &tmp_key]) {
+        let downloaded = match self.runner.run_niced_timeout("curl", &["-fsSL", key_url, "-o", &tmp_key], PKG_NICE, PKG_MUTATE_TIMEOUT) {
             Ok(o) if o.status.success() => true,
-            _ => match self.runner.run("wget", &["-qO", &tmp_key, key_url]) {
+            _ => match self.runner.run_niced_timeout("wget", &["-qO", &tmp_key, key_url], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                 Ok(o2) if o2.status.success() => true,
                 _ => {
                     return Err(format!(
@@ -95,7 +98,7 @@ impl AptRepoManager {
             }
 
             // Dearmor: convert ASCII-armored key to binary GPG format.
-            let dearmor = self.runner.run(
+            let dearmor = self.runner.run_niced_timeout(
                 "sh",
                 &[
                     "-c",
@@ -104,6 +107,8 @@ impl AptRepoManager {
                         key_path, tmp_key, tmp_key, key_path
                     ),
                 ],
+                PKG_NICE,
+                PKG_MUTATE_TIMEOUT,
             );
             let _ = std::fs::remove_file(&tmp_key);
             if let Err(e) = dearmor {
@@ -123,7 +128,7 @@ impl AptRepoManager {
         key_path: &str,
         expected: &str,
     ) -> Result<(), String> {
-        let result = self.runner.run(
+        let result = self.runner.run_niced_timeout(
             "gpg",
             &[
                 "--batch",
@@ -133,6 +138,8 @@ impl AptRepoManager {
                 "--import",
                 key_path,
             ],
+            PKG_NICE,
+            PKG_QUERY_TIMEOUT,
         );
         match result {
             Ok(output) if output.status.success() => {
@@ -357,7 +364,7 @@ impl RepoManager for AptRepoManager {
         }
 
         // Refresh and capture errors — a GPG or repo error here is actionable.
-        match self.runner.run("apt-get", &["update", "-qq"]) {
+        match self.runner.run_niced_timeout("apt-get", &["update", "-qq"], PKG_NICE, PKG_MUTATE_TIMEOUT) {
             Ok(o) if !o.status.success() => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 let lower = stderr.to_lowercase();
@@ -381,7 +388,7 @@ impl RepoManager for AptRepoManager {
                                 name, e,
                             ));
                         }
-                        match self.runner.run("apt-get", &["update", "-qq"]) {
+                        match self.runner.run_niced_timeout("apt-get", &["update", "-qq"], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                             Ok(o2) if o2.status.success() => return Ok(()),
                             Ok(o2) => {
                                 let stderr2 = String::from_utf8_lossy(&o2.stderr);
@@ -503,7 +510,7 @@ impl RepoManager for DnfRepoManager {
         _key_fingerprint: &str,
     ) -> Result<(), String> {
         if !key_url.is_empty() {
-            let _ = self.runner.run("rpm", &["--import", key_url]);
+            let _ = self.runner.run_niced_timeout("rpm", &["--import", key_url], PKG_NICE, PKG_MUTATE_TIMEOUT);
         }
 
         let path = format!("/etc/yum.repos.d/{}.repo", name);
@@ -637,7 +644,7 @@ impl RepoManager for ApkRepoManager {
         self.write_lines(&lines)?;
 
         // Refresh package index.
-        let _ = self.runner.run("apk", &["update"]);
+        let _ = self.runner.run_niced_timeout("apk", &["update"], PKG_NICE, PKG_MUTATE_TIMEOUT);
         Ok(())
     }
 
@@ -770,10 +777,10 @@ impl RepoManager for PacmanRepoManager {
         if !fpr.is_empty() {
             let _ = self
                 .runner
-                .run("pacman-key", &["--recv-keys", fpr]);
+                .run_niced_timeout("pacman-key", &["--recv-keys", fpr], PKG_NICE, PKG_MUTATE_TIMEOUT);
             let _ = self
                 .runner
-                .run("pacman-key", &["--lsign-key", fpr]);
+                .run_niced_timeout("pacman-key", &["--lsign-key", fpr], PKG_NICE, PKG_MUTATE_TIMEOUT);
         }
 
         let content = self.read_conf();
@@ -802,7 +809,7 @@ impl RepoManager for PacmanRepoManager {
         self.write_conf(&new_content)?;
 
         // Refresh package database.
-        let _ = self.runner.run("pacman", &["-Sy", "--noconfirm"]);
+        let _ = self.runner.run_niced_timeout("pacman", &["-Sy", "--noconfirm"], PKG_NICE, PKG_MUTATE_TIMEOUT);
         Ok(())
     }
 
@@ -840,7 +847,7 @@ impl ZypperRepoManager {
 impl RepoManager for ZypperRepoManager {
     fn is_present(&self, name: &str) -> bool {
         // Check if zypper knows about this repo.
-        match self.runner.run("zypper", &["repos", "-u"]) {
+        match self.runner.run_niced_timeout("zypper", &["repos", "-u"], PKG_NICE, PKG_QUERY_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 stdout.lines().any(|l| l.contains(name))
@@ -851,7 +858,7 @@ impl RepoManager for ZypperRepoManager {
 
     fn current_content(&self, name: &str) -> Option<String> {
         // Return the repo info from zypper as the "content" for comparison.
-        match self.runner.run("zypper", &["repos", "-d", name]) {
+        match self.runner.run_niced_timeout("zypper", &["repos", "-d", name], PKG_NICE, PKG_QUERY_TIMEOUT) {
             Ok(output) if output.status.success() => {
                 Some(String::from_utf8_lossy(&output.stdout).to_string())
             }
@@ -882,19 +889,21 @@ impl RepoManager for ZypperRepoManager {
         _key_fingerprint: &str,
     ) -> Result<(), String> {
         if !key_url.is_empty() {
-            let _ = self.runner.run("rpm", &["--import", key_url]);
+            let _ = self.runner.run_niced_timeout("rpm", &["--import", key_url], PKG_NICE, PKG_MUTATE_TIMEOUT);
         }
 
         // Remove first if already present (to update URL).
         if self.is_present(name) {
             let _ = self
                 .runner
-                .run("zypper", &["--non-interactive", "removerepo", name]);
+                .run_niced_timeout("zypper", &["--non-interactive", "removerepo", name], PKG_NICE, PKG_MUTATE_TIMEOUT);
         }
 
-        let result = self.runner.run(
+        let result = self.runner.run_niced_timeout(
             "zypper",
             &["--non-interactive", "addrepo", "-f", repo.trim(), name],
+            PKG_NICE,
+            PKG_MUTATE_TIMEOUT,
         );
         match result {
             Ok(o) if o.status.success() => {}
@@ -915,16 +924,18 @@ impl RepoManager for ZypperRepoManager {
         }
 
         if !enabled {
-            let _ = self.runner.run(
+            let _ = self.runner.run_niced_timeout(
                 "zypper",
                 &["--non-interactive", "modifyrepo", "-d", name],
+                PKG_NICE,
+                PKG_MUTATE_TIMEOUT,
             );
         }
 
         // Refresh.
         let _ = self
             .runner
-            .run("zypper", &["--non-interactive", "refresh"]);
+            .run_niced_timeout("zypper", &["--non-interactive", "refresh"], PKG_NICE, PKG_MUTATE_TIMEOUT);
         Ok(())
     }
 
@@ -934,7 +945,7 @@ impl RepoManager for ZypperRepoManager {
         }
         match self
             .runner
-            .run("zypper", &["--non-interactive", "removerepo", name])
+            .run_niced_timeout("zypper", &["--non-interactive", "removerepo", name], PKG_NICE, PKG_MUTATE_TIMEOUT)
         {
             Ok(o) if o.status.success() => Ok(()),
             Ok(o) => {

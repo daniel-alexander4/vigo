@@ -7,7 +7,7 @@
 //! Retries on transient network errors (DNS failure, connection timeout, etc.)
 //! with exponential backoff.
 
-use super::CommandRunner;
+use super::{CommandRunner, PKG_NICE};
 use std::time::Duration;
 use tracing::warn;
 
@@ -81,6 +81,9 @@ pub fn download_with_retry(
 /// Attempt a single download: try curl first, fall back to wget.
 fn try_download(runner: &dyn CommandRunner, config: &DownloadConfig) -> Result<(), String> {
     let timeout_str = config.timeout_secs.to_string();
+    // Tree-kill backstop 30s beyond curl/wget's own --max-time/--timeout, so the
+    // process self-exits first and this only fires on a wedged download.
+    let tree_kill = Duration::from_secs(config.timeout_secs.saturating_add(30));
 
     // Build curl args.
     let mut curl_args = vec!["-fsSL", "--max-time", &timeout_str, "-o", config.dest];
@@ -90,7 +93,7 @@ fn try_download(runner: &dyn CommandRunner, config: &DownloadConfig) -> Result<(
     }
     curl_args.push(config.url);
 
-    match runner.run("curl", &curl_args) {
+    match runner.run_niced_timeout("curl", &curl_args, PKG_NICE, tree_kill) {
         Ok(o) if o.status.success() => Ok(()),
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr);
@@ -102,7 +105,7 @@ fn try_download(runner: &dyn CommandRunner, config: &DownloadConfig) -> Result<(
             }
             wget_args.push(config.url);
 
-            match runner.run("wget", &wget_args) {
+            match runner.run_niced_timeout("wget", &wget_args, PKG_NICE, tree_kill) {
                 Ok(o2) if o2.status.success() => Ok(()),
                 Ok(o2) => {
                     let stderr2 = String::from_utf8_lossy(&o2.stderr);
@@ -133,7 +136,7 @@ fn try_download(runner: &dyn CommandRunner, config: &DownloadConfig) -> Result<(
             }
             wget_args.push(config.url);
 
-            match runner.run("wget", &wget_args) {
+            match runner.run_niced_timeout("wget", &wget_args, PKG_NICE, tree_kill) {
                 Ok(o) if o.status.success() => Ok(()),
                 Ok(o) => {
                     let stderr = String::from_utf8_lossy(&o.stderr);

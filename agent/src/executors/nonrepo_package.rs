@@ -8,7 +8,10 @@
 //! [`download_with_retry()`](super::download::download_with_retry) helper.
 
 use super::download::{download_with_retry, sanitize_url_filename, DownloadConfig};
-use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
+use super::{
+    Action, CommandRunner, DefaultRunner, Executor, ResourceResult, PKG_MUTATE_TIMEOUT, PKG_NICE,
+    PKG_QUERY_TIMEOUT,
+};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::Read;
@@ -242,7 +245,7 @@ impl Executor for NonRepoPackageExecutor {
 
         // Run pre_install hook if specified.
         if !pre_install.is_empty() {
-            match self.runner.run("sh", &["-c", &pre_install]) {
+            match self.runner.run_niced_timeout("sh", &["-c", &pre_install], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                 Ok(o) if !o.status.success() => {
                     let stderr = String::from_utf8_lossy(&o.stderr);
                     result.error = Some(format!(
@@ -401,7 +404,7 @@ impl Executor for NonRepoPackageExecutor {
 
         // Run post_install hook if specified.
         if !post_install.is_empty() {
-            match self.runner.run("sh", &["-c", &post_install]) {
+            match self.runner.run_niced_timeout("sh", &["-c", &post_install], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                 Ok(o) if !o.status.success() => {
                     let stderr = String::from_utf8_lossy(&o.stderr);
                     result.error = Some(format!(
@@ -574,7 +577,7 @@ fn check_installed(
     match format {
         PackageFormat::Deb => {
             // dpkg -s <name>
-            match runner.run("dpkg", &["-s", name]) {
+            match runner.run_niced_timeout("dpkg", &["-s", name], PKG_NICE, PKG_QUERY_TIMEOUT) {
                 Ok(o) if o.status.success() => {
                     let stdout = String::from_utf8_lossy(&o.stdout);
                     let status_line = stdout
@@ -601,9 +604,9 @@ fn check_installed(
                             status = status_line,
                             "nonrepo_package: dpkg broken state, attempting repair"
                         );
-                        let _ = runner.run("dpkg", &["--configure", name]);
+                        let _ = runner.run_niced_timeout("dpkg", &["--configure", name], PKG_NICE, PKG_MUTATE_TIMEOUT);
                         // Re-check after repair.
-                        if let Ok(o2) = runner.run("dpkg", &["-s", name]) {
+                        if let Ok(o2) = runner.run_niced_timeout("dpkg", &["-s", name], PKG_NICE, PKG_QUERY_TIMEOUT) {
                             if o2.status.success() {
                                 let stdout2 = String::from_utf8_lossy(&o2.stdout);
                                 if stdout2.lines().any(|l| l.starts_with("Status:") && l.contains("install ok installed")) {
@@ -624,7 +627,7 @@ fn check_installed(
         }
         PackageFormat::Rpm => {
             // rpm -q <name> --queryformat '%{VERSION}-%{RELEASE}'
-            match runner.run("rpm", &["-q", name, "--queryformat", "%{VERSION}-%{RELEASE}"]) {
+            match runner.run_niced_timeout("rpm", &["-q", name, "--queryformat", "%{VERSION}-%{RELEASE}"], PKG_NICE, PKG_QUERY_TIMEOUT) {
                 Ok(o) if o.status.success() => {
                     let version = String::from_utf8_lossy(&o.stdout).trim().to_string();
                     if version.is_empty() || version.contains("not installed") {
@@ -638,7 +641,7 @@ fn check_installed(
         }
         PackageFormat::Pkg => {
             // macOS: pkgutil --pkg-info <name>
-            match runner.run("pkgutil", &["--pkg-info", name]) {
+            match runner.run_niced_timeout("pkgutil", &["--pkg-info", name], PKG_NICE, PKG_QUERY_TIMEOUT) {
                 Ok(o) if o.status.success() => {
                     let stdout = String::from_utf8_lossy(&o.stdout);
                     let ver = stdout
@@ -656,9 +659,11 @@ fn check_installed(
             #[cfg(windows)]
             {
                 // Try wmic product where Name='<name>' get Version
-                match runner.run(
+                match runner.run_niced_timeout(
                     "wmic",
                     &["product", "where", &format!("Name='{}'", name), "get", "Version", "/value"],
+                    PKG_NICE,
+                    PKG_QUERY_TIMEOUT,
                 ) {
                     Ok(o) if o.status.success() => {
                         let stdout = String::from_utf8_lossy(&o.stdout);
@@ -724,7 +729,7 @@ fn install_package(
                 }
                 args.extend(&extra);
                 args.push(path);
-                runner.run("dpkg", &args)
+                runner.run_niced_timeout("dpkg", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
             }
             PackageFormat::Rpm => {
                 let mut args = vec!["-U"];
@@ -733,17 +738,17 @@ fn install_package(
                 }
                 args.extend(&extra);
                 args.push(path);
-                runner.run("rpm", &args)
+                runner.run_niced_timeout("rpm", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
             }
             PackageFormat::Pkg => {
                 let mut args = vec!["-pkg", path, "-target", "/"];
                 args.extend(&extra);
-                runner.run("installer", &args)
+                runner.run_niced_timeout("installer", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
             }
             PackageFormat::Msi => {
                 let mut args = vec!["/i", path, "/qn"];
                 args.extend(&extra);
-                runner.run("msiexec", &args)
+                runner.run_niced_timeout("msiexec", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
             }
         };
 
@@ -817,25 +822,25 @@ fn handle_absent(
             let mut args = if purge { vec!["--purge"] } else { vec!["-r"] };
             args.extend(&extra);
             args.push(name);
-            runner.run("dpkg", &args)
+            runner.run_niced_timeout("dpkg", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
         }
         PackageFormat::Rpm => {
             let mut args = vec!["-e"];
             args.extend(&extra);
             args.push(name);
-            runner.run("rpm", &args)
+            runner.run_niced_timeout("rpm", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
         }
         PackageFormat::Pkg => {
             // macOS has no clean uninstall for .pkg, but pkgutil --forget removes receipt.
             let mut args = vec!["--forget"];
             args.extend(&extra);
             args.push(name);
-            runner.run("pkgutil", &args)
+            runner.run_niced_timeout("pkgutil", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
         }
         PackageFormat::Msi => {
             let mut args = vec!["/x", name, "/qn"];
             args.extend(&extra);
-            runner.run("msiexec", &args)
+            runner.run_niced_timeout("msiexec", &args, PKG_NICE, PKG_MUTATE_TIMEOUT)
         }
     };
 
@@ -861,12 +866,12 @@ fn lock_package_version(
     format: PackageFormat,
 ) -> Result<(), String> {
     let output = match format {
-        PackageFormat::Deb => runner.run("apt-mark", &["hold", name]),
+        PackageFormat::Deb => runner.run_niced_timeout("apt-mark", &["hold", name], PKG_NICE, PKG_MUTATE_TIMEOUT),
         PackageFormat::Rpm => {
             // Try dnf versionlock first, fall back to yum versionlock.
-            match runner.run("dnf", &["versionlock", "add", name]) {
+            match runner.run_niced_timeout("dnf", &["versionlock", "add", name], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                 Ok(o) if o.status.success() => return Ok(()),
-                _ => runner.run("yum", &["versionlock", "add", name]),
+                _ => runner.run_niced_timeout("yum", &["versionlock", "add", name], PKG_NICE, PKG_MUTATE_TIMEOUT),
             }
         }
         PackageFormat::Pkg | PackageFormat::Msi => {
@@ -897,9 +902,11 @@ fn lock_package_version(
 fn fix_dependencies(runner: &dyn CommandRunner, format: PackageFormat) -> Result<(), String> {
     match format {
         PackageFormat::Deb => {
-            let output = runner.run(
+            let output = runner.run_niced_timeout(
                 "env",
                 &["DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y", "-qq"],
+                PKG_NICE,
+                PKG_MUTATE_TIMEOUT,
             );
             match output {
                 Ok(o) if o.status.success() => Ok(()),
@@ -920,14 +927,14 @@ fn fix_dependencies(runner: &dyn CommandRunner, format: PackageFormat) -> Result
             // DNF/YUM don't have a direct equivalent, but `dnf install -y` after
             // an rpm -U will pull in any missing deps. Only run if deps are broken.
             // Check for missing deps first with rpm --verify.
-            let check = runner.run("rpm", &["--verify", "--nodeps"]);
+            let check = runner.run_niced_timeout("rpm", &["--verify", "--nodeps"], PKG_NICE, PKG_MUTATE_TIMEOUT);
             match check {
                 Ok(o) if o.status.success() => Ok(()), // No broken deps.
                 _ => {
                     // Try dnf first, fall back to yum.
-                    match runner.run("dnf", &["install", "-y", "--best", "--allowerasing"]) {
+                    match runner.run_niced_timeout("dnf", &["install", "-y", "--best", "--allowerasing"], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                         Ok(o) if o.status.success() => Ok(()),
-                        _ => match runner.run("yum", &["install", "-y"]) {
+                        _ => match runner.run_niced_timeout("yum", &["install", "-y"], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                             Ok(o) if o.status.success() => Ok(()),
                             Ok(o) => {
                                 let stderr = String::from_utf8_lossy(&o.stderr);
@@ -950,12 +957,12 @@ fn fix_dependencies(runner: &dyn CommandRunner, format: PackageFormat) -> Result
 /// Update the package cache before install.
 fn run_update_cache(runner: &dyn CommandRunner, format: PackageFormat) -> Result<(), String> {
     let output = match format {
-        PackageFormat::Deb => runner.run("env", &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update", "-qq"]),
+        PackageFormat::Deb => runner.run_niced_timeout("env", &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update", "-qq"], PKG_NICE, PKG_MUTATE_TIMEOUT),
         PackageFormat::Rpm => {
             // dnf/yum check-update returns 100 when updates are available — not an error.
-            match runner.run("dnf", &["check-update"]) {
+            match runner.run_niced_timeout("dnf", &["check-update"], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                 Ok(o) if o.status.success() || o.status.code() == Some(100) => return Ok(()),
-                _ => runner.run("yum", &["check-update"]),
+                _ => runner.run_niced_timeout("yum", &["check-update"], PKG_NICE, PKG_MUTATE_TIMEOUT),
             }
         }
         PackageFormat::Pkg | PackageFormat::Msi => return Ok(()),
@@ -978,11 +985,11 @@ fn run_update_cache(runner: &dyn CommandRunner, format: PackageFormat) -> Result
 /// Remove orphaned dependencies after install. Non-fatal if it fails.
 fn run_post_cleanup(runner: &dyn CommandRunner, format: PackageFormat) -> Result<(), String> {
     let output = match format {
-        PackageFormat::Deb => runner.run("env", &["DEBIAN_FRONTEND=noninteractive", "apt-get", "autoremove", "-y", "-qq"]),
+        PackageFormat::Deb => runner.run_niced_timeout("env", &["DEBIAN_FRONTEND=noninteractive", "apt-get", "autoremove", "-y", "-qq"], PKG_NICE, PKG_MUTATE_TIMEOUT),
         PackageFormat::Rpm => {
-            match runner.run("dnf", &["autoremove", "-y"]) {
+            match runner.run_niced_timeout("dnf", &["autoremove", "-y"], PKG_NICE, PKG_MUTATE_TIMEOUT) {
                 Ok(o) if o.status.success() => return Ok(()),
-                _ => runner.run("yum", &["autoremove", "-y"]),
+                _ => runner.run_niced_timeout("yum", &["autoremove", "-y"], PKG_NICE, PKG_MUTATE_TIMEOUT),
             }
         }
         PackageFormat::Pkg | PackageFormat::Msi => return Ok(()),

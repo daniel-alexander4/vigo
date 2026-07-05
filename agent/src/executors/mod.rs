@@ -312,6 +312,25 @@ pub trait Executor: Send + Sync {
     }
 }
 
+/// Nice level for every package/repository/source subprocess. A positive
+/// level also engages ionice (`apply_nice` maps it to a best-effort IO class)
+/// — invisible-agent doctrine on the most I/O-expensive agent operations.
+/// Shared by the pkgmgr backends and the package/repository/source executors.
+pub(crate) const PKG_NICE: i32 = 10;
+
+/// Budget for pure queries (dpkg -s, rpm -q, `which`, repo listing). Local
+/// package-DB reads; seconds at worst.
+pub(crate) const PKG_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Budget for mutations (install/remove/upgrade/configure/hold/extract) and
+/// network index refreshes (apt-get update, pacman -Sy, zypper refresh, key
+/// imports). Deliberately generous — a legitimate upgrade-all on a stale host
+/// runs tens of minutes, and killing it mid-transaction is worse than a late
+/// cleanup. This is the orphan-cleanup backstop layered UNDER the runner's
+/// 300s scope-level detection (which reports the overrun but cannot kill),
+/// not the responsiveness bound.
+pub(crate) const PKG_MUTATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
+
 /// Runs a command and returns (stdout, success).
 /// This is the default command runner used by executors.
 pub fn run_command(name: &str, args: &[&str]) -> std::io::Result<Output> {
