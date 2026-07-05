@@ -428,7 +428,8 @@ func (m *footprintMock) EnvoyRunsData(id string) (EnvoyRunsFragmentData, error) 
 func (m *footprintMock) EnvoyTraitsData(id string) (EnvoyTraitsFragmentData, error) {
 	return m.base.EnvoyTraitsData(id)
 }
-func (m *footprintMock) RunsData(s string) RunsPageData { return m.base.RunsData(s) }
+func (m *footprintMock) FleetTraitKeyCounts() map[string]int { return m.base.FleetTraitKeyCounts() }
+func (m *footprintMock) RunsData(s string) RunsPageData      { return m.base.RunsData(s) }
 func (m *footprintMock) RunDetailData(id string) (RunDetailPageData, error) {
 	return m.base.RunDetailData(id)
 }
@@ -1133,6 +1134,18 @@ func (m *mockDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, e
 	return EnvoyRunsFragmentData{Runs: runs}, nil
 }
 
+func (m *mockDataSource) FleetTraitKeyCounts() map[string]int {
+	counts := map[string]int{}
+	for _, traits := range m.data.traits {
+		flat := map[string]any{}
+		flattenTraits("", traits, flat)
+		for k := range flat {
+			counts[k]++
+		}
+	}
+	return counts
+}
+
 func (m *mockDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error) {
 	parsedID, _ := uuid.Parse(envoyID)
 	traits := m.data.traits[parsedID]
@@ -1512,5 +1525,30 @@ func TestPlatformComplianceUnknownFrameworkEmpty(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "No platform controls reference this framework") {
 		t.Error("PlatformCompliance with unknown framework should show empty-state message")
+	}
+}
+
+// TestInventoryTraitIndexFragment covers the trait-index modal render path
+// after it was switched to source key counts from the in-memory fleet index
+// (FleetTraitKeyCounts) instead of re-querying + re-parsing every envoy's DB
+// trait blob. Keys are grouped by namespace into the modal.
+func TestInventoryTraitIndexFragment(t *testing.T) {
+	h := newTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/inventory-trait-index", nil)
+	rec := httptest.NewRecorder()
+
+	h.InventoryTraitIndexFragment(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"trait-index-modal", "os.family", "hardware.cpu_count", `data-ns-header="os"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("trait-index modal missing %q", want)
+		}
+	}
+	if strings.Contains(body, "<!DOCTYPE") {
+		t.Error("fragment should not be a full HTML document")
 	}
 }

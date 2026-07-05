@@ -1113,6 +1113,24 @@ func (ds *DataSource) EnvoyTraitsData(envoyID string) (ui.EnvoyTraitsFragmentDat
 	return ui.BuildTraitsFragment(cf.Traits, cf.CollectedAt), nil
 }
 
+// FleetTraitKeyCounts counts, per flattened trait key, how many non-revoked
+// envoys report it — read from the in-memory index rather than re-querying and
+// JSON-parsing every envoy's trait blob. EnvoyState.Traits is already the
+// flattened, packages-pruned map (see fleet.FlattenForIndex), so the trait
+// catalog it feeds stays bounded and fleet-size-stable.
+func (ds *DataSource) FleetTraitKeyCounts() map[string]int {
+	counts := make(map[string]int)
+	for _, e := range ds.fleet.AllEnvoys() {
+		if e.Revoked {
+			continue
+		}
+		for k := range e.Traits {
+			counts[k]++
+		}
+	}
+	return counts
+}
+
 func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 	ctx := context.Background()
 	allRuns, err := ds.queries.ListAllRuns(ctx, 100)

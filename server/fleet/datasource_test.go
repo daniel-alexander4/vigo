@@ -146,3 +146,40 @@ func TestEnvoyDriftLabel_LookupAndFallback(t *testing.T) {
 		t.Errorf("EnvoyDriftLabel(unknown) = %q, want \"\" (fallback)", got)
 	}
 }
+
+// TestFleetTraitKeyCounts checks the trait-index data source: it counts each
+// flattened key across non-revoked envoys and skips revoked ones. Packages are
+// pruned upstream in FlattenForIndex (see TestFlattenForIndex) before traits
+// ever reach EnvoyState.Traits, so they are already absent here — that is what
+// keeps the trait-index modal bounded and fleet-size-stable.
+func TestFleetTraitKeyCounts(t *testing.T) {
+	fi := NewFleetIndex()
+	pubKey := genKey(t)
+
+	fi.AddEnvoy(EnvoyState{ID: "h1", Hostname: "host1", Traits: map[string]string{
+		"os.distro": "ubuntu", "memory.total": "16G",
+	}}, pubKey)
+	fi.AddEnvoy(EnvoyState{ID: "h2", Hostname: "host2", Traits: map[string]string{
+		"os.distro": "debian", "disk.0.size": "1T",
+	}}, pubKey)
+	// A revoked envoy must not contribute keys — mirrors the not-revoked
+	// filter the old GetAllLatestTraits SQL applied.
+	fi.AddEnvoy(EnvoyState{ID: "h3", Hostname: "host3", Revoked: true, Traits: map[string]string{
+		"os.distro": "arch", "gpu.0.model": "nvidia",
+	}}, pubKey)
+
+	counts := NewDataSource(fi, nil, nil, nil).FleetTraitKeyCounts()
+
+	if counts["os.distro"] != 2 {
+		t.Errorf("os.distro count = %d, want 2 (revoked host3 excluded)", counts["os.distro"])
+	}
+	if counts["memory.total"] != 1 {
+		t.Errorf("memory.total count = %d, want 1", counts["memory.total"])
+	}
+	if counts["disk.0.size"] != 1 {
+		t.Errorf("disk.0.size count = %d, want 1", counts["disk.0.size"])
+	}
+	if _, ok := counts["gpu.0.model"]; ok {
+		t.Error("revoked envoy's keys must not appear in the trait index")
+	}
+}
