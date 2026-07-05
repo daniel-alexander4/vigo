@@ -618,6 +618,22 @@ impl UserExecutor {
             }
         };
 
+        // The scrub runs as root over paths under the user's own home, so
+        // a malicious user could plant a symlink where a state dir is
+        // expected to redirect a root delete. Resolve the target uid and
+        // route every removal through scrub_user_dir, which refuses to
+        // follow a symlink. Fail closed if the uid can't be resolved —
+        // scrubbing with an unknown owner is exactly what we're guarding.
+        let uid = match crate::platform::users::lookup_user(username) {
+            Some(info) => info.uid,
+            None => {
+                errors.push(format!(
+                    "swarm scrub: cannot resolve uid for {username} — skipping state removal"
+                ));
+                return errors;
+            }
+        };
+
         let scrub_puddle = matches!(scope, ScrubScope::PuddleAndLockbox);
         let scrub_gitback = matches!(scope, ScrubScope::Gitback);
         let scrub_curator = matches!(scope, ScrubScope::Curator);
@@ -641,50 +657,30 @@ impl UserExecutor {
             }
             for dir in [".vigo-puddle", ".lockbox", "lockbox", ".vigo-gitback", ".vigo-curator", ".vigo-poolq"] {
                 let path = home.join(dir);
-                if path.exists() {
-                    if let Err(e) = std::fs::remove_dir_all(&path) {
-                        errors.push(format!(
-                            "removing {} for {username}: {e}",
-                            path.display()
-                        ));
-                    }
+                if let Err(e) = crate::platform::users::scrub_user_dir(&path, uid) {
+                    errors.push(format!("removing {} for {username}: {e}", path.display()));
                 }
             }
         }
 
         if scrub_gitback {
             let gm = home.join(".vigo-gitback");
-            if gm.exists() {
-                if let Err(e) = std::fs::remove_dir_all(&gm) {
-                    errors.push(format!(
-                        "removing {} for {username}: {e}",
-                        gm.display()
-                    ));
-                }
+            if let Err(e) = crate::platform::users::scrub_user_dir(&gm, uid) {
+                errors.push(format!("removing {} for {username}: {e}", gm.display()));
             }
         }
 
         if scrub_curator {
             let cm = home.join(".vigo-curator");
-            if cm.exists() {
-                if let Err(e) = std::fs::remove_dir_all(&cm) {
-                    errors.push(format!(
-                        "removing {} for {username}: {e}",
-                        cm.display()
-                    ));
-                }
+            if let Err(e) = crate::platform::users::scrub_user_dir(&cm, uid) {
+                errors.push(format!("removing {} for {username}: {e}", cm.display()));
             }
         }
 
         if scrub_poolq {
             let pq = home.join(".vigo-poolq");
-            if pq.exists() {
-                if let Err(e) = std::fs::remove_dir_all(&pq) {
-                    errors.push(format!(
-                        "removing {} for {username}: {e}",
-                        pq.display()
-                    ));
-                }
+            if let Err(e) = crate::platform::users::scrub_user_dir(&pq, uid) {
+                errors.push(format!("removing {} for {username}: {e}", pq.display()));
             }
         }
 

@@ -386,6 +386,20 @@ impl Executor for SourcePackageExecutor {
 
         match source_file {
             Some(src) => {
+                // Verify the extracted binary's hash BEFORE installing it —
+                // a mismatched binary must never reach the target path (it
+                // used to be copied + chmod/chowned first, then verified, so
+                // a bad binary landed installed). Matches update::apply's
+                // verify-then-write order. (src and target are byte-identical
+                // once copied, so hashing src is equivalent for the match
+                // case and strictly safer for the mismatch case.)
+                verify_sha256(&src, &sha256, &mut result);
+                if result.error.is_some() {
+                    let _ = std::fs::remove_dir_all(&tmp_dir);
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+
                 // Ensure parent dir exists.
                 if let Some(parent) = std::path::Path::new(&target).parent() {
                     let _ = std::fs::create_dir_all(parent);
@@ -399,7 +413,6 @@ impl Executor for SourcePackageExecutor {
                 }
                 set_file_mode(&target, mode);
                 apply_owner_group(&target, &owner, &group, &mut result);
-                verify_sha256(&target, &sha256, &mut result);
                 if result.error.is_none() {
                     write_version_marker(&target, &version);
                 }
@@ -899,6 +912,33 @@ mod tests {
         // No curl/wget calls
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 0, "dry_run should not call any commands, got {:?}", *calls);
+    }
+
+    #[test]
+    fn verify_sha256_gate() {
+        // The install path verifies the extracted binary via this gate
+        // BEFORE copying it to target; a mismatch sets result.error, which
+        // the caller checks to bail before the copy. Pin all three arms.
+        let dir = tempfile::TempDir::new().unwrap();
+        let f = dir.path().join("bin");
+        std::fs::write(&f, b"the real bytes").unwrap();
+        let path = f.to_str().unwrap();
+        let good = file_sha256(path).unwrap();
+
+        // Match → no error.
+        let mut r = ResourceResult::new("source_package", "t");
+        verify_sha256(path, &good, &mut r);
+        assert!(r.error.is_none());
+
+        // Mismatch → error (the reorder relies on this to skip install).
+        let mut r = ResourceResult::new("source_package", "t");
+        verify_sha256(path, "0000000000000000000000000000000000000000000000000000000000000000", &mut r);
+        assert!(r.error.as_deref().unwrap().contains("sha256 mismatch"));
+
+        // Empty expected → skip (no error).
+        let mut r = ResourceResult::new("source_package", "t");
+        verify_sha256(path, "", &mut r);
+        assert!(r.error.is_none());
     }
 
     #[test]

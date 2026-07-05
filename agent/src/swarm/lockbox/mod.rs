@@ -304,31 +304,51 @@ async fn process_one_leave(
         warn!("lockbox: DAEMON_TLS not initialised, skipping LEAVE fan-out (peers catch up via staleness)");
     }
 
-    // Scrub user-side state per flags.
+    // Scrub user-side state per flags. This runs as root over paths under
+    // the user's own home, so a malicious user could symlink a state dir
+    // to redirect a root delete. Resolve the target uid and gate the
+    // removals on real-owned-directory checks. If the uid can't be
+    // resolved, skip the destructive steps (the LEAVE fan-out already
+    // fired above; the sentinel is still cleared below).
+    let uid = crate::platform::users::lookup_user(user).map(|u| u.uid);
+
     if spec.purge_content {
         let content = config::content_dir(home);
-        if content.exists() {
-            if let Err(e) = fs::remove_dir_all(&content) {
-                warn!(path = %content.display(), error = %e, "lockbox: purge ~/lockbox/ failed");
+        match uid {
+            Some(uid) => {
+                if let Err(e) = crate::platform::users::scrub_user_dir(&content, uid) {
+                    warn!(path = %content.display(), error = %e, "lockbox: purge ~/lockbox/ failed");
+                }
             }
+            None => warn!(user = %user, "lockbox: cannot resolve uid, skipping ~/lockbox/ purge"),
         }
     }
     if !spec.keep_identity {
         let dot = config::dot_dir(home);
-        // Preserve leave.pending (we're about to remove it) by
-        // removing items individually. Belt-and-suspenders: the
-        // rm-pending step at the end still fires even if this loop
-        // raced some other file.
-        for name in [
-            "identity.age",
-            "identity.salt",
-            "recipients.txt",
-            "config.yaml",
-        ] {
-            let p = dot.join(name);
-            if p.exists() {
-                let _ = fs::remove_file(&p);
+        // The fixed filenames are removed *through* ~/.lockbox, so a
+        // symlinked ~/.lockbox would redirect a root remove_file
+        // elsewhere. Only touch these files if ~/.lockbox is a real
+        // directory owned by the target user.
+        let dot_ok = uid.is_some_and(|uid| crate::platform::users::is_real_dir_owned_by(&dot, uid));
+        if dot_ok {
+            // Preserve leave.pending (we're about to remove it) by
+            // removing items individually. Belt-and-suspenders: the
+            // rm-pending step at the end still fires even if this loop
+            // raced some other file.
+            for name in [
+                "identity.age",
+                "identity.salt",
+                "recipients.txt",
+                "config.yaml",
+            ] {
+                let p = dot.join(name);
+                if p.exists() {
+                    let _ = fs::remove_file(&p);
+                }
             }
+        } else {
+            warn!(user = %user, path = %dot.display(),
+                "lockbox: ~/.lockbox is not a real user-owned dir, skipping identity wipe");
         }
     }
 

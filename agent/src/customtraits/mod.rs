@@ -77,6 +77,22 @@ impl Executor {
 
             match downloader.download_custom_trait(&entry.name).await {
                 Ok(data) => {
+                    // Verify the downloaded bytes against the manifest hash
+                    // BEFORE writing/executing — a corrupt or tampered
+                    // download must never land executable on disk or run
+                    // (mirrors the self-update verify-then-write order in
+                    // update::apply). The hash was previously only checked on
+                    // the next sync, so a bad binary ran at least once.
+                    let got = compute_sha256(&data);
+                    if got != entry.sha256 {
+                        warn!(
+                            name = %entry.name,
+                            expected = %entry.sha256,
+                            got = %got,
+                            "custom trait hash mismatch — skipping (not written, not run)",
+                        );
+                        continue;
+                    }
                     let path = self.cache_dir.join(&entry.name);
                     if let Err(e) = write_executable(&path, &data) {
                         warn!(name = %entry.name, error = %e, "failed to write custom trait");
@@ -370,6 +386,32 @@ mod tests {
 
         assert!(!custom.contains_key("bad-trait"));
         assert!(custom.contains_key("good-trait"));
+    }
+
+    #[tokio::test]
+    async fn sync_and_run_hash_mismatch_not_written_or_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut dl = MockDownloader::new();
+
+        // The downloader serves bytes that do NOT match the manifest hash
+        // (tampered/corrupt download). It must be neither written to the
+        // cache dir nor executed.
+        let served = make_script(r#"{"evil":true}"#);
+        dl.data.insert("tampered".into(), served);
+
+        let exec = Executor::new(dir.path(), Duration::from_secs(10));
+        let manifest = vec![ManifestEntry {
+            name: "tampered".into(),
+            sha256: compute_sha256(b"the bytes the server actually vouched for"),
+        }];
+
+        let result = exec.sync_and_run(&mut dl, &manifest).await.unwrap();
+
+        // Downloaded once, but rejected: nothing landed on disk...
+        assert_eq!(dl.called.get("tampered"), Some(&1));
+        assert!(!dir.path().join("tampered").exists(), "mismatched binary was written");
+        // ...and it never ran.
+        assert!(result.get("custom").is_none());
     }
 
     #[tokio::test]
