@@ -429,6 +429,9 @@ func (m *footprintMock) EnvoyTraitsData(id string) (EnvoyTraitsFragmentData, err
 	return m.base.EnvoyTraitsData(id)
 }
 func (m *footprintMock) FleetTraitKeyCounts() map[string]int { return m.base.FleetTraitKeyCounts() }
+func (m *footprintMock) FleetInventorySnapshot() []InventoryEnvoy {
+	return m.base.FleetInventorySnapshot()
+}
 func (m *footprintMock) RunsData(s string) RunsPageData      { return m.base.RunsData(s) }
 func (m *footprintMock) RunDetailData(id string) (RunDetailPageData, error) {
 	return m.base.RunDetailData(id)
@@ -1146,6 +1149,24 @@ func (m *mockDataSource) FleetTraitKeyCounts() map[string]int {
 	return counts
 }
 
+func (m *mockDataSource) FleetInventorySnapshot() []InventoryEnvoy {
+	var out []InventoryEnvoy
+	for _, e := range m.data.envoys {
+		traits, ok := m.data.traits[e.id]
+		if !ok || len(traits) == 0 {
+			continue
+		}
+		flatMap := map[string]any{}
+		flattenTraits("", traits, flatMap)
+		flat := make(map[string]string, len(flatMap))
+		for k, v := range flatMap {
+			flat[k] = fmt.Sprint(v)
+		}
+		out = append(out, InventoryEnvoy{Hostname: e.hostname, Traits: flat, LastSeen: e.lastSeen})
+	}
+	return out
+}
+
 func (m *mockDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error) {
 	parsedID, _ := uuid.Parse(envoyID)
 	traits := m.data.traits[parsedID]
@@ -1550,5 +1571,43 @@ func TestInventoryTraitIndexFragment(t *testing.T) {
 	}
 	if strings.Contains(body, "<!DOCTYPE") {
 		t.Error("fragment should not be a full HTML document")
+	}
+}
+
+// TestInventorySummaryFromSnapshot covers the Inventory page summary cards
+// after they moved off the per-request DB re-parse (GetAllLatestTraits) onto
+// the in-memory fleet snapshot (FleetInventorySnapshot). It verifies the
+// has-traits filter (an envoy with no traits is excluded from the total), the
+// OS-label card, and that staleness now keys on LastSeen.
+func TestInventorySummaryFromSnapshot(t *testing.T) {
+	now := time.Now()
+	fresh, stale, noTraits := uuid.New(), uuid.New(), uuid.New()
+	td := defaultTestData()
+	td.envoys = []testEnvoy{
+		{id: fresh, hostname: "fresh.example.com", lastSeen: now},
+		{id: stale, hostname: "stale.example.com", lastSeen: now.Add(-30 * 24 * time.Hour)},
+		{id: noTraits, hostname: "bare.example.com", lastSeen: now},
+	}
+	td.traits = map[uuid.UUID]map[string]any{
+		fresh: {"os": map[string]any{"distro": "ubuntu", "version": "20.04"}},
+		stale: {"os": map[string]any{"distro": "ubuntu", "version": "20.04"}},
+	}
+	h := newTestHandlerWithData(t, td)
+
+	req := httptest.NewRequest(http.MethodGet, "/inventory", nil)
+	rec := httptest.NewRecorder()
+	h.Inventory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	// bare.example.com has no traits → excluded, so the total is 2, not 3.
+	if !strings.Contains(body, "ubuntu 20.04") {
+		t.Error("OS-summary card missing 'ubuntu 20.04' label")
+	}
+	// The 30-day-old envoy is stale by LastSeen; the fresh one is not.
+	if !strings.Contains(body, `text-warning">1`) {
+		t.Error("stale count should be 1 (the LastSeen-old envoy)")
 	}
 }

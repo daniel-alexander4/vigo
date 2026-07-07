@@ -1131,6 +1131,29 @@ func (ds *DataSource) FleetTraitKeyCounts() map[string]int {
 	return counts
 }
 
+// FleetInventorySnapshot returns every non-revoked envoy that has reported
+// traits, projected to the flattened trait map + last-check-in time the
+// /inventory summary cards need. Read from the in-memory index (EnvoyState.Traits
+// is already flattened and packages-pruned), so the top-nav Inventory page no
+// longer re-parses every envoy's ~190 KB DB trait blob on each visit. The
+// revoked + has-traits filter mirrors GetAllLatestTraits's SQL semantics so the
+// card counts stay equivalent.
+func (ds *DataSource) FleetInventorySnapshot() []ui.InventoryEnvoy {
+	envoys := ds.fleet.AllEnvoys()
+	out := make([]ui.InventoryEnvoy, 0, len(envoys))
+	for _, e := range envoys {
+		if e.Revoked || len(e.Traits) == 0 {
+			continue
+		}
+		out = append(out, ui.InventoryEnvoy{
+			Hostname: e.Hostname,
+			Traits:   e.Traits,
+			LastSeen: e.LastSeen,
+		})
+	}
+	return out
+}
+
 func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 	ctx := context.Background()
 	allRuns, err := ds.queries.ListAllRuns(ctx, 100)

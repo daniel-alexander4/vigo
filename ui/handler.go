@@ -75,6 +75,13 @@ type DataSource interface {
 	// notably packages.* is pruned (FlattenForIndex), so the browsable trait
 	// catalog stays bounded and fleet-size-stable. Backs the trait-index modal.
 	FleetTraitKeyCounts() map[string]int
+	// FleetInventorySnapshot returns every non-revoked envoy that has reported
+	// traits, each with its already-flattened trait map and last-check-in time,
+	// read from the in-memory index. Backs the /inventory summary cards — avoids
+	// re-querying and JSON-parsing every envoy's ~190 KB trait blob on each
+	// page load. Inherits the index flattening (packages.* pruned, see
+	// fleet.FlattenForIndex), so the walk cost stays fleet-size-stable.
+	FleetInventorySnapshot() []InventoryEnvoy
 	RunsData(statusFilter string) RunsPageData
 	RunDetailData(runID string) (RunDetailPageData, error)
 	// EnvoyDriftLabel returns the envoy's current drift-axis label
@@ -7053,43 +7060,45 @@ type inventoryGroupRow struct {
 	Hosts []string // first N hostnames
 }
 
+// InventoryEnvoy is one envoy's already-flattened trait snapshot for the
+// Inventory dashboard summary cards. Sourced from the in-memory fleet index
+// (fleet.EnvoyState.Traits, packages-pruned) rather than a per-request re-parse
+// of every envoy's DB trait blob. LastSeen is the last check-in time, used for
+// the staleness card.
+type InventoryEnvoy struct {
+	Hostname string
+	Traits   map[string]string // flattened, packages-pruned (fleet.FlattenForIndex)
+	LastSeen time.Time
+}
+
 // Inventory renders the fleet inventory dashboard with summary cards,
 // grouped views, change log, and a power-user filter bar.
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	all, _ := h.queries.GetAllLatestTraits(ctx)
+	// Summary cards read the in-memory fleet index (each envoy's already-
+	// flattened, packages-pruned trait map) instead of GetAllLatestTraits +
+	// a per-request JSON re-parse of every envoy's ~190 KB blob. That kept
+	// this top-nav page allocating multi-GB of transient parse state on every
+	// visit at fleet scale — a hot-path cost, so it moved to the index (same
+	// migration as the trait-index modal, commit b707d44b).
+	envoys := h.dataSource.FleetInventorySnapshot()
 
 	// --- Summary cards ---
-	totalEnvoys := len(all)
+	totalEnvoys := len(envoys)
 	osCounts := map[string]int{}
 	staleCount := 0
 	staleCutoff := time.Now().Add(-7 * 24 * time.Hour)
 
 	type parsedEnvoy struct {
 		Hostname string
-		Traits   map[string]any
 		Flat     map[string]string
 	}
-	var parsed []parsedEnvoy
+	parsed := make([]parsedEnvoy, 0, len(envoys))
 
-	for _, t := range all {
-		var traits map[string]any
-		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
-			continue
-		}
-		flatMap := make(map[string]any)
-		flattenTraits("", traits, flatMap)
-		flat := make(map[string]string, len(flatMap))
-		for k, v := range flatMap {
-			flat[k] = fmt.Sprint(v)
-		}
-		parsed = append(parsed, parsedEnvoy{
-			Hostname: t.Hostname, Traits: traits, Flat: flat,
-		})
+	for _, e := range envoys {
+		parsed = append(parsed, parsedEnvoy{Hostname: e.Hostname, Flat: e.Traits})
 
-		distro := inventoryTraverse(traits, "os.distro")
-		version := inventoryTraverse(traits, "os.version")
+		distro := e.Traits["os.distro"]
+		version := e.Traits["os.version"]
 		osLabel := strings.TrimSpace(distro)
 		if version != "-" && version != "" {
 			osLabel = strings.TrimSpace(osLabel + " " + version)
@@ -7098,7 +7107,11 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 			osCounts[osLabel]++
 		}
 
-		if t.CollectedAt.Before(staleCutoff) {
+		// Staleness is keyed on last check-in (LastSeen). The DB path keyed on
+		// the trait-snapshot CollectedAt, which under ADR-033 Option C freezes
+		// between meaningful trait changes and so mislabeled an actively-
+		// checking-in envoy as stale; LastSeen is the correct signal.
+		if e.LastSeen.Before(staleCutoff) {
 			staleCount++
 		}
 	}
@@ -7116,8 +7129,8 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	// EOL OS check.
 	var eolHosts, eolSoonHosts []string
 	for _, p := range parsed {
-		distro := inventoryTraverse(p.Traits, "os.distro")
-		version := inventoryTraverse(p.Traits, "os.version")
+		distro := p.Flat["os.distro"]
+		version := p.Flat["os.version"]
 		if distro == "-" || distro == "" {
 			continue
 		}
