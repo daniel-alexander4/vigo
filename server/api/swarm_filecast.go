@@ -195,7 +195,8 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	manifestPath := filepath.Join(h.seedDir, label+".swarm")
 	manifest := fmt.Sprintf(`{"target":%q,"retention":%q}`, target, retention)
 	if err := os.WriteFile(manifestPath, []byte(manifest), 0644); err != nil {
-		writeError(w, http.StatusInternalServerError, "writing manifest: "+err.Error())
+		slog.Error("writing manifest", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -203,7 +204,8 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	tmp, err := os.CreateTemp(h.seedDir, ".upload-*")
 	if err != nil {
 		os.Remove(manifestPath)
-		writeError(w, http.StatusInternalServerError, "creating temp file: "+err.Error())
+		slog.Error("creating temp file", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	tmpPath := tmp.Name()
@@ -232,12 +234,14 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("payload exceeded swarm.filecast.max_size_bytes (%d)", maxSize))
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "writing file: "+err.Error())
+		slog.Error("writing file", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(manifestPath)
-		writeError(w, http.StatusInternalServerError, "closing temp file: "+err.Error())
+		slog.Error("closing temp file", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -249,7 +253,8 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		// Cross-device: copy + delete.
 		if copyErr := copyFile(tmpPath, destPath); copyErr != nil {
 			os.Remove(manifestPath)
-			writeError(w, http.StatusInternalServerError, "moving file: "+copyErr.Error())
+			slog.Error("moving file", "error", copyErr)
+			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 	}

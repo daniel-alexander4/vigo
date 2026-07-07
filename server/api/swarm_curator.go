@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -146,7 +147,8 @@ func (h *CuratorHandler) handleResolve(w http.ResponseWriter, r *http.Request) {
 	}
 	cat, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building catalog: "+err.Error())
+		slog.Error("building catalog", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	e := cat.LookupByID(artifactID)
@@ -190,7 +192,8 @@ func (h *CuratorHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 	}
 	cat, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building catalog: "+err.Error())
+		slog.Error("building catalog", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	// The sha must be referenced by at least one non-blocked catalog entry.
@@ -219,7 +222,8 @@ func (h *CuratorHandler) handleBlob(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "stat blob: "+err.Error())
+		slog.Error("stat blob", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -247,7 +251,8 @@ type listResponse struct {
 func (h *CuratorHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	cat, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building catalog: "+err.Error())
+		slog.Error("building catalog", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	blocked, _ := h.queries.ListBlockedArtifacts(r.Context())
@@ -271,7 +276,8 @@ func (h *CuratorHandler) handleInspect(w http.ResponseWriter, r *http.Request) {
 	}
 	cat, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building catalog: "+err.Error())
+		slog.Error("building catalog", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	e := cat.LookupByID(id)
@@ -298,7 +304,8 @@ func (h *CuratorHandler) handleVersions(w http.ResponseWriter, r *http.Request) 
 	}
 	cat, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building catalog: "+err.Error())
+		slog.Error("building catalog", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	e := cat.LookupByID(id)
@@ -323,7 +330,8 @@ type fleetResponse struct {
 func (h *CuratorHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 	cat, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building catalog: "+err.Error())
+		slog.Error("building catalog", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	parts := cat.Participants
@@ -355,7 +363,8 @@ func (h *CuratorHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 		BlockedBy:  actor,
 		Reason:     reason,
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "blocking artifact: "+err.Error())
+		slog.Error("blocking artifact", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	// `isBlocked` is consulted on every resolve/blob; the catalog snapshot's
@@ -375,7 +384,8 @@ func (h *CuratorHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.queries.UnblockArtifact(r.Context(), id); err != nil {
-		writeError(w, http.StatusInternalServerError, "unblocking artifact: "+err.Error())
+		slog.Error("unblocking artifact", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	h.agg.InvalidateCache()

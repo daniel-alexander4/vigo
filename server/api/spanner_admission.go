@@ -155,13 +155,15 @@ func (h *SpannerAdmissionHandler) handleInit(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusConflict, "this server already holds a spanner_bolts row — the spanner is already founded here")
 		return
 	} else if !errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusInternalServerError, "checking for existing founder row: "+err.Error())
+		slog.Error("checking for existing founder row", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	patternClaims, err := json.Marshal(h.patterns)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "encoding pattern claims: "+err.Error())
+		slog.Error("encoding pattern claims", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -176,12 +178,14 @@ func (h *SpannerAdmissionHandler) handleInit(w http.ResponseWriter, r *http.Requ
 	}
 	sig, err := spanner.SignAdmissionRow(h.boltID.SigningKey, row)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "signing founder admission row: "+err.Error())
+		slog.Error("signing founder admission row", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	if err := h.queries.InsertBolt(r.Context(), admissionRowToInsertParams(row, sig)); err != nil {
-		writeError(w, http.StatusInternalServerError, "inserting founder row: "+err.Error())
+		slog.Error("inserting founder row", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -230,12 +234,14 @@ func (h *SpannerAdmissionHandler) handleInvite(w http.ResponseWriter, r *http.Re
 	peerAddr := "https://" + h.hostname + ":8443"
 	bundle, err := spanner.MintInviteBundle(h.boltID.SigningKey, h.spannerID, peerAddr, ttl)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "minting invite bundle: "+err.Error())
+		slog.Error("minting invite bundle", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	bundleStr, err := spanner.MarshalBundle(bundle)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "marshalling invite bundle: "+err.Error())
+		slog.Error("marshalling invite bundle", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -309,7 +315,8 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 	// Replay check: a bundle's token may be consumed exactly once.
 	consumed, err := h.queries.IsTokenConsumed(r.Context(), tokenHash)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "checking token replay: "+err.Error())
+		slog.Error("checking token replay", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if consumed != 0 {
@@ -322,7 +329,8 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 	ownPubkey := h.localPubkeyHex()
 	patternClaims, err := json.Marshal(req.PatternClaims)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "encoding pattern claims: "+err.Error())
+		slog.Error("encoding pattern claims", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -337,7 +345,8 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 	}
 	sig, err := spanner.SignAdmissionRow(h.boltID.SigningKey, row)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "signing joiner admission row: "+err.Error())
+		slog.Error("signing joiner admission row", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -345,7 +354,8 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 	// the token row INSERTed first because it is the FK target of
 	// spanner_bolts.consumed_token_hash.
 	if err := h.admitTx(r.Context(), tokenHash, ownPubkey, req.JoinerPubkey, bundle.ExpiresAt, now, row, sig); err != nil {
-		writeError(w, http.StatusInternalServerError, "admitting bolt: "+err.Error())
+		slog.Error("admitting bolt", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -358,13 +368,15 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 
 	roster, err := h.queries.ListBolts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		slog.Error("listing roster", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	tokens, err := h.collectConsumedTokens(r.Context(), roster)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+err.Error())
+		slog.Error("collecting consumed tokens", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -482,14 +494,16 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 		Bundle:        req.Bundle,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "encoding admit request: "+err.Error())
+		slog.Error("encoding admit request", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	httpReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost,
 		req.FromAddr+"/api/v1/spanner/bolt/admit", bytes.NewReader(admitBody))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building admit request: "+err.Error())
+		slog.Error("building admit request", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -504,7 +518,8 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// best-effort: body only enriches the error we already return.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("inviter /admit returned %d: %s", resp.StatusCode, string(body)))
+		slog.Error("inviter /admit non-200", "status", resp.StatusCode, "body", string(body))
+		writeError(w, http.StatusBadGateway, "internal error")
 		return
 	}
 
@@ -545,7 +560,8 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 	// lands.
 	written, err := h.persistRoster(r.Context(), admitResp.ConsumedTokens, admitResp.Roster)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "persisting roster: "+err.Error())
+		slog.Error("persisting roster", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -609,7 +625,8 @@ func (h *SpannerAdmissionHandler) persistRoster(ctx context.Context, tokens []sp
 func (h *SpannerAdmissionHandler) handleRoster(w http.ResponseWriter, r *http.Request) {
 	roster, err := h.queries.ListBolts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		slog.Error("listing roster", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, r, http.StatusOK, map[string]any{"roster": boltsToRosterRows(roster)})
@@ -634,7 +651,8 @@ func (h *SpannerAdmissionHandler) authenticatePull(w http.ResponseWriter, r *htt
 	}
 	roster, err := h.queries.ListBolts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		slog.Error("listing roster", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return false
 	}
 	for i := range roster {
@@ -665,12 +683,14 @@ func (h *SpannerAdmissionHandler) handleSnapshot(w http.ResponseWriter, r *http.
 	}
 	roster, err := h.queries.ListBolts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		slog.Error("listing roster", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	tokens, err := h.collectConsumedTokens(r.Context(), roster)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+err.Error())
+		slog.Error("collecting consumed tokens", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	// ADR-030 Slice 2-iii-c: webusers CRDT rides the admissions
@@ -679,7 +699,8 @@ func (h *SpannerAdmissionHandler) handleSnapshot(w http.ResponseWriter, r *http.
 	// 2-iii-f's first-startup re-signing pass, not before.
 	userRows, err := h.queries.ListUsersForReplication(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "listing users for replication: "+err.Error())
+		slog.Error("listing users for replication", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	users := make([]spanner.UserSnapshotRow, 0, len(userRows))
@@ -764,7 +785,8 @@ func (h *SpannerAdmissionHandler) handlePeerAdmit(w http.ResponseWriter, r *http
 
 	roster, err := h.queries.ListBolts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		slog.Error("listing roster", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -780,7 +802,8 @@ func (h *SpannerAdmissionHandler) handlePeerAdmit(w http.ResponseWriter, r *http
 		// real founder (its spanner.peers should point at the founder).
 		tokens, tErr := h.collectConsumedTokens(r.Context(), roster)
 		if tErr != nil {
-			writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+tErr.Error())
+			slog.Error("collecting consumed tokens", "error", tErr)
+			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		writeJSON(w, r, http.StatusForbidden, spanner.PeerAdmitResponse{
@@ -795,7 +818,8 @@ func (h *SpannerAdmissionHandler) handlePeerAdmit(w http.ResponseWriter, r *http
 	if existing, gErr := h.queries.GetBolt(r.Context(), req.JoinerPubkey); gErr == nil {
 		tokens, tErr := h.collectConsumedTokens(r.Context(), roster)
 		if tErr != nil {
-			writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+tErr.Error())
+			slog.Error("collecting consumed tokens", "error", tErr)
+			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		writeJSON(w, r, http.StatusOK, spanner.PeerAdmitResponse{
@@ -806,14 +830,16 @@ func (h *SpannerAdmissionHandler) handlePeerAdmit(w http.ResponseWriter, r *http
 		})
 		return
 	} else if !errors.Is(gErr, sql.ErrNoRows) {
-		writeError(w, http.StatusInternalServerError, "checking existing roster row: "+gErr.Error())
+		slog.Error("checking existing roster row", "error", gErr)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	// Mint a founder-signed, token-less admission row for the joiner.
 	patternClaims, err := json.Marshal(req.PatternClaims)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "encoding pattern claims: "+err.Error())
+		slog.Error("encoding pattern claims", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	now := time.Now().UnixMilli()
@@ -827,11 +853,13 @@ func (h *SpannerAdmissionHandler) handlePeerAdmit(w http.ResponseWriter, r *http
 	}
 	sig, err := spanner.SignAdmissionRow(h.boltID.SigningKey, row)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "signing peer admission row: "+err.Error())
+		slog.Error("signing peer admission row", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if err := h.queries.InsertBolt(r.Context(), admissionRowToInsertParams(row, sig)); err != nil {
-		writeError(w, http.StatusInternalServerError, "inserting peer admission row: "+err.Error())
+		slog.Error("inserting peer admission row", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -842,12 +870,14 @@ func (h *SpannerAdmissionHandler) handlePeerAdmit(w http.ResponseWriter, r *http
 	// Re-list so the response carries the newly inserted row.
 	roster, err = h.queries.ListBolts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		slog.Error("listing roster", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	tokens, err := h.collectConsumedTokens(r.Context(), roster)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+err.Error())
+		slog.Error("collecting consumed tokens", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, r, http.StatusOK, spanner.PeerAdmitResponse{

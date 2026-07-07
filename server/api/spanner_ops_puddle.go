@@ -120,7 +120,7 @@ func (h *SpannerOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http
 	pending, err := puddle.LoadPendingPair(h.opsDir)
 	if err != nil {
 		slog.Warn("ops-puddle pair-claim: load pending failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "reading pending-pair: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if pending == nil {
@@ -154,21 +154,21 @@ func (h *SpannerOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http
 	// the not-used record before this write lands.
 	if err := puddle.MarkPendingPairUsed(h.opsDir); err != nil {
 		slog.Error("ops-puddle pair-claim: failed to mark pending used", "error", err)
-		writeError(w, http.StatusInternalServerError, "marking pair code used: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	ops, err := puddle.LoadOpsPuddle(deriver, h.opsDir)
 	if err != nil {
 		slog.Error("ops-puddle pair-claim: load ops-puddle failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "loading ops-puddle: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	members, err := puddle.AppendMember(h.opsDir, req.JoiningPubkey)
 	if err != nil {
 		slog.Error("ops-puddle pair-claim: append member failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "appending member: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 

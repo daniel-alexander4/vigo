@@ -1079,6 +1079,15 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// Wire the cross-envoy lockbox cleanup callback fired by
 	// AdminService.RevokeEnvoy / DeleteEnvoy. Dispatches one
 	// `_apply-evict --hostname <h> --all-users` task to every envoy.
+	//
+	// Spanner note: TargetSpec "*" resolves against this bolt's local
+	// fleetIndex/queries (see grpc/taskdispatch.go resolveTargets), so in
+	// spanner mode the eviction fans only to the local bolt's partition —
+	// envoys homed on peer bolts keep the retired hostname in their lockbox
+	// recipients list. That's hygiene-only, not a confidentiality gap: lockbox
+	// is per-envoy-keyed, so a stale recipient entry holds no key anyone can
+	// use, and the retired envoy is revoked/deleted regardless. A spanner-wide
+	// fan-out isn't worth the cross-bolt routing for a cosmetic cleanup.
 	s.adminSvc.SetSwarmCleanup(func(ctx context.Context, hostname string) error {
 		cmd := fmt.Sprintf("vigo swarm lockbox _apply-evict --hostname %s --all-users", hostname)
 		_, err := s.agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{

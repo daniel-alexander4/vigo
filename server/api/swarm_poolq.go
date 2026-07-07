@@ -5,6 +5,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -157,7 +158,8 @@ func summarize(t poolqmesh.Topic, blocked map[string]struct{}) topicSummary {
 func (h *PoolqHandler) handleTopics(w http.ResponseWriter, r *http.Request) {
 	snap, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building snapshot: "+err.Error())
+		slog.Error("building snapshot", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	blocked := h.blockedSet(r.Context())
@@ -196,7 +198,8 @@ func (h *PoolqHandler) handleHead(w http.ResponseWriter, r *http.Request) {
 	}
 	snap, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building snapshot: "+err.Error())
+		slog.Error("building snapshot", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	t := snap.LookupByID(id)
@@ -240,7 +243,8 @@ func (h *PoolqHandler) handleRange(w http.ResponseWriter, r *http.Request) {
 	}
 	snap, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building snapshot: "+err.Error())
+		slog.Error("building snapshot", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	t := snap.LookupByID(id)
@@ -276,7 +280,8 @@ func (h *PoolqHandler) handleLog(w http.ResponseWriter, r *http.Request) {
 	}
 	snap, err := h.snapshot(r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "building snapshot: "+err.Error())
+		slog.Error("building snapshot", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	t := snap.LookupByID(id)
@@ -306,7 +311,8 @@ func (h *PoolqHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 		BlockedBy: actor,
 		Reason:    reason,
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "blocking topic: "+err.Error())
+		slog.Error("blocking topic", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	// The snapshot cache doesn't gate the `isBlocked` check (DB roundtrip on
@@ -327,7 +333,8 @@ func (h *PoolqHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.queries.UnblockPoolqTopic(r.Context(), id); err != nil {
-		writeError(w, http.StatusInternalServerError, "unblocking topic: "+err.Error())
+		slog.Error("unblocking topic", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	h.agg.InvalidateCache()

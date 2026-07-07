@@ -169,11 +169,18 @@ pub fn is_real_dir_owned_by(path: &Path, _uid: u32) -> bool {
 ///   - a real directory owned by someone else → refused (should never
 ///     happen under the user's own home; refusing is the safe default).
 ///
-/// NOTE: this is a check-then-act guard, so a TOCTOU window remains — an
-/// attacker who swaps the path between the lstat and the remove can still
-/// win the race. It closes the standing exploit (a persistently-planted
-/// symlink awaiting the next flag-revocation scrub); a fully race-free
-/// version needs `O_NOFOLLOW` `openat` + `fstatat` on a held fd.
+/// NOTE: this is a check-then-act guard, so a lstat→remove TOCTOU window
+/// remains in principle. In practice the dangerous outcome — following a
+/// symlink swapped in after the lstat and deleting across a boundary — is
+/// already blocked by the stdlib: since Rust 1.63 (CVE-2022-21658)
+/// `remove_dir_all` opens each component with `O_NOFOLLOW` semantics and
+/// refuses to recurse through a symlink, so a post-lstat swap fails closed
+/// rather than redirecting the delete. The only reachable residual is the
+/// target user planting a real dir they own at this path and losing it on
+/// the scrub — self-harm by the very user being scrubbed, no privilege
+/// boundary crossed. A fully explicit race-free version (`O_NOFOLLOW`
+/// `openat` + `fstatat` on a held fd) would remove the reliance on that
+/// stdlib guarantee but buys no security property it doesn't already hold.
 #[cfg(unix)]
 pub fn scrub_user_dir(path: &Path, uid: u32) -> std::io::Result<()> {
     use std::os::unix::fs::MetadataExt;
