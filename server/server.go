@@ -268,6 +268,24 @@ type Server struct {
 	s3Srv *http.Server
 }
 
+// commercialLicenseChecker is the slice of the license enforcer the
+// spanner-mode gate depends on. Narrowed to an interface so spannerAllowed is
+// unit-testable without constructing a full *license.Enforcer.
+type commercialLicenseChecker interface {
+	IsCommercialLicense() bool
+}
+
+// spannerAllowed reports whether the server may start in the configured mode
+// under the current license. Spanner federation requires a commercial (paid)
+// tier; any non-standalone mode on a non-commercial tier is refused.
+// Standalone is always allowed. Returns nil when startup may proceed.
+func spannerAllowed(mode config.SpannerMode, enforcer commercialLicenseChecker) error {
+	if mode != config.ModeStandalone && !enforcer.IsCommercialLicense() {
+		return fmt.Errorf("spanner mode requires a commercial license — the community/free tier does not support spanner")
+	}
+	return nil
+}
+
 // NewServer constructs a *Server from configFile. Performs no I/O beyond
 // reading the config + opening the database + materializing identity
 // keys on first boot; does not open network listeners, install signal
@@ -599,8 +617,8 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// non-commercial tier (community/free, legacy aliases, unknown). The
 	// predicate is tier-based (tessera's RequiresBinding), not a single
 	// license_id, so a hand-signed community license cannot unlock it.
-	if s.mode != config.ModeStandalone && !s.enforcer.IsCommercialLicense() {
-		return nil, fmt.Errorf("spanner mode requires a commercial license — the community/free tier does not support spanner")
+	if err := spannerAllowed(s.mode, s.enforcer); err != nil {
+		return nil, err
 	}
 
 	// --- Auth ---
