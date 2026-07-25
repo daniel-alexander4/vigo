@@ -68,7 +68,8 @@ If the `package` parameter is not specified, the package name is extracted from 
 
 After `dpkg -i` or `rpm -U`, the executor automatically resolves unmet dependencies:
 
-- **Debian/Ubuntu**: Runs `apt-get install -f -y` to pull in missing deps from configured repos. If dep resolution fails, the resource reports an error — the package may be left in a broken state that will be repaired on the next cycle.
+- **Debian/Ubuntu**: Runs `apt-get install -f -y` to pull in missing deps from configured repos. This runs both after a clean install *and* after `dpkg -i` exits non-zero reporting dependency problems — the ordinary outcome for a `.deb` whose dependencies aren't installed yet, which leaves the package unpacked but unconfigured. In that case the executor re-checks `dpkg -s` afterwards and only reports success once the package is actually `install ok installed`; the original `dpkg` error surfaces if it isn't. If dep resolution itself fails, the resource reports an error — the package may be left in a broken state that will be repaired on the next cycle.
+  Failures that `apt-get install -f` cannot repair (corrupt archive, architecture mismatch) are reported directly without invoking the fixer, so a bad download doesn't mutate unrelated packages.
 - **RPM (RHEL/Fedora)**: Checks for broken deps via `rpm --verify`, then runs `dnf install -y` (or `yum install -y`) to fix them.
 - **macOS/Windows**: No additional dep resolution (package managers handle deps internally).
 

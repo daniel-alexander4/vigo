@@ -253,6 +253,39 @@ resources:
 
 The command is skipped on normal check-ins and only runs when the watched secret is rotated or when another resource triggers it via notify. `when: "changed"` can be combined with other expressions: `when: "changed && os_family('debian')"`.
 
+## Guardrails
+
+The agent refuses to run an `exec` whose command would damage Vigo itself. A refusal is logged as `GUARDRAIL BLOCKED` with a reason and the resource is reported failed; the guardrails are hardcoded in the agent and cannot be relaxed from the server.
+
+Two checks apply to `command`:
+
+- **Dangerous patterns** — literal strings that stop, delete, or kill the agent, server, or CLI (`systemctl stop vigo-envoy`, `pkill vigo`, `rm -rf /etc/vigo`, …).
+- **Deletion near a protected path** — if the command contains `rm ` or `unlink ` *anywhere*, the **entire command string** is scanned for Vigo's protected paths (`/var/lib/vigo/`, `/etc/vigo/`, `/usr/local/sbin/vigo`, …) and blocked on any match.
+
+The second check is deliberately fail-closed and does **not** honor the exempt-path carve-out that structural `file`/`directory` resources get for `/var/lib/vigo/security/`. In a free-form command the real target of the `rm` can't be isolated from the rest of the string, so an exempt-substring escape would itself be a bypass (`rm -rf /var/lib/vigo && ls /var/lib/vigo/security`).
+
+The practical consequence: a command that writes output under `/var/lib/vigo/security/` **and** cleans up a temp directory in the same shell line is blocked, even though both halves are individually legal.
+
+```yaml
+# Blocked — the `rm` makes the whole string subject to the path scan, and
+# --output matches /var/lib/vigo/.
+- name: run-scanner
+  type: exec
+  command: sh -c 'scanner --output /var/lib/vigo/security/out.json / && rm -rf /tmp/scanner-*'
+
+# Allowed — split the cleanup into its own resource that names no protected path.
+- name: run-scanner
+  type: exec
+  command: sh -c 'scanner --output /var/lib/vigo/security/out.json /'
+
+- name: run-scanner-cleanup
+  type: exec
+  command: sh -c 'rm -rf /tmp/scanner-*'
+  depends_on: [run-scanner]
+```
+
+Prefer a structural `file` or `directory` resource over a shell `rm` wherever one fits — those are checked against the resolved target and do honor the exempt path.
+
 ## When NOT to Use exec
 
 Use a specialized executor instead of `exec` whenever one exists. Specialized executors provide idempotency, cross-platform support, and error handling that raw shell commands don't.

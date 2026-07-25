@@ -383,6 +383,39 @@ impl Executor for NonRepoPackageExecutor {
                 result.action = if installed { Action::Updated } else { Action::Created };
                 result.changed = true;
             }
+            Err(e) if format == PackageFormat::Deb && is_dependency_error(&e) => {
+                // `dpkg -i` exits non-zero when the .deb's own dependencies
+                // aren't installed yet: the package lands unpacked-but-
+                // unconfigured. That is the ordinary path for any .deb with
+                // repo dependencies, and it is precisely what `apt-get
+                // install -f` repairs — so run the fixer here too, not only
+                // after a clean install, and re-verify before reporting.
+                tracing::warn!(
+                    package = %pkg_name,
+                    "nonrepo_package: unmet dependencies after install, resolving from repos"
+                );
+                if let Err(fe) = fix_dependencies(&*self.runner, format) {
+                    result.error = Some(format!(
+                        "nonrepo_package executor: dependency resolution failed: {} (install reported: {})",
+                        fe, e
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+
+                // The fixer exiting 0 doesn't prove this package configured —
+                // apt may have resolved other broken packages and left this
+                // one alone. Confirm against dpkg before claiming success.
+                let (now_installed, _) = check_installed(&*self.runner, &pkg_name, format);
+                if !now_installed {
+                    result.error = Some(e);
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+
+                result.action = if installed { Action::Updated } else { Action::Created };
+                result.changed = true;
+            }
             Err(e) => {
                 result.error = Some(e);
                 result.duration_ms = start.elapsed().as_millis() as i32;
@@ -697,6 +730,14 @@ fn is_lock_error(stderr: &str) -> bool {
     stderr.contains("Could not get lock")
         || stderr.contains("Unable to acquire")
         || stderr.contains("database is locked")
+}
+
+/// Check if a `dpkg -i` failure is an unmet-dependency failure — the package
+/// unpacked fine but couldn't be configured because its dependencies aren't
+/// installed. Repairable by `apt-get install -f`; distinct from a corrupt
+/// archive, an arch mismatch, or a conffile prompt, which are not.
+fn is_dependency_error(msg: &str) -> bool {
+    msg.contains("dependency problems") || msg.contains("Unmet dependencies")
 }
 
 /// Install a downloaded package file.
@@ -1225,6 +1266,84 @@ mod tests {
         assert_eq!(calls[3].0, "env");
         assert!(calls[3].1.contains(&"install".to_string()));
         assert!(calls[3].1.contains(&"-f".to_string()));
+    }
+
+    // --- present: dpkg -i fails on unmet deps -> apt-get -f repairs it ---
+
+    const DPKG_DEP_FAILURE: &str = "dpkg: dependency problems prevent configuration of hesplay:\n \
+        hesplay depends on mpv | ffmpeg; however:\n  Package mpv is not installed.\n";
+
+    #[test]
+    fn present_unmet_deps_resolved_by_fixer() {
+        let mock = MockRunner::new(vec![
+            fail_output("package not installed"), // dpkg -s (not installed)
+            ok_output(""),                        // curl download
+            fail_output(DPKG_DEP_FAILURE),        // dpkg -i (unpacked, unconfigured)
+            ok_output(""),                        // env apt-get install -f (dep fix)
+            ok_output("Status: install ok installed\nVersion: 1.2.3\n"), // dpkg -s re-verify
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "present")]),
+            false,
+        );
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 5);
+        assert_eq!(calls[3].0, "env");
+        assert!(calls[3].1.contains(&"-f".to_string()));
+        // The re-verify is what separates "apt fixed it" from "apt fixed
+        // something else and left this package unconfigured".
+        assert_eq!(calls[4].0, "dpkg");
+        assert!(calls[4].1.contains(&"-s".to_string()));
+    }
+
+    #[test]
+    fn present_unmet_deps_still_broken_after_fixer_errors() {
+        let mock = MockRunner::new(vec![
+            fail_output("package not installed"), // dpkg -s (not installed)
+            ok_output(""),                        // curl download
+            fail_output(DPKG_DEP_FAILURE),        // dpkg -i (unpacked, unconfigured)
+            ok_output(""),                        // env apt-get install -f (claims success)
+            fail_output("package not installed"), // dpkg -s re-verify: still not configured
+        ]);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "present")]),
+            false,
+        );
+        let err = result.error.expect("expected the install failure to surface");
+        assert!(err.contains("dependency problems"), "unexpected error: {}", err);
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn non_dependency_install_failure_skips_fixer() {
+        let mock = MockRunner::new(vec![
+            fail_output("package not installed"), // dpkg -s (not installed)
+            ok_output(""),                        // curl download
+            fail_output("dpkg: error: cannot access archive: No such file or directory"),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "present")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        // A corrupt archive is not repairable by `apt-get install -f`; the
+        // fixer must not run and mutate unrelated packages.
+        assert_eq!(calls.lock().unwrap().len(), 3);
     }
 
     // --- present: already installed, version matches -> no-op ---
