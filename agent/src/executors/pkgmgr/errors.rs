@@ -100,6 +100,16 @@ pub fn classify_apt_error(stderr: &str) -> ErrorClass {
         return ErrorClass::RepoError;
     }
 
+    // Architecture mismatch. Checked before PackageNotFound: it is the more
+    // specific reading of the same "has no installation candidate" string, so
+    // the broader test below would otherwise shadow it and this arm could
+    // never be reached.
+    if lower.contains("has no installation candidate")
+        && (lower.contains("but it is not installable") || lower.contains("wrong architecture"))
+    {
+        return ErrorClass::ArchMismatch;
+    }
+
     // Package not found.
     if lower.contains("unable to locate package")
         || lower.contains("has no installation candidate")
@@ -107,13 +117,6 @@ pub fn classify_apt_error(stderr: &str) -> ErrorClass {
         || lower.contains("no candidate ver")
     {
         return ErrorClass::PackageNotFound;
-    }
-
-    // Architecture mismatch.
-    if lower.contains("has no installation candidate")
-        && (lower.contains("but it is not installable") || lower.contains("wrong architecture"))
-    {
-        return ErrorClass::ArchMismatch;
     }
 
     // Dependency conflicts.
@@ -216,9 +219,16 @@ pub fn classify_error(pkg_mgr_cmd: &str, stderr: &str) -> ErrorClass {
     match pkg_mgr_cmd {
         "apt-get" | "dpkg" => classify_apt_error(stderr),
         "dnf" | "yum" => classify_dnf_error(stderr),
-        // Other package managers: best-effort classification using apt patterns
-        // (many error strings are similar across managers).
-        _ => classify_apt_error(stderr),
+        // Backend unknown — the runner's post-execution classify has the
+        // resource type but not the manager the executor actually shelled out
+        // to, so it passes "". Try apt patterns first (many error strings are
+        // shared), then fall back to dnf rather than surrendering to `Other`:
+        // a dnf-only string like "depsolve" would otherwise never classify on
+        // an RPM host.
+        _ => match classify_apt_error(stderr) {
+            ErrorClass::Other => classify_dnf_error(stderr),
+            class => class,
+        },
     }
 }
 
@@ -326,6 +336,36 @@ mod tests {
     fn apt_disk_full() {
         let stderr = "E: You don't have enough free space in /var/cache/apt/archives/.";
         assert_eq!(classify_apt_error(stderr), ErrorClass::DiskFull);
+    }
+
+    #[test]
+    fn arch_mismatch_wins_over_package_not_found() {
+        // Both arms match "has no installation candidate"; the arch-specific
+        // reading is the more precise one and must not be shadowed.
+        let stderr = "E: Package 'foo:i386' has no installation candidate but it is not installable";
+        assert_eq!(classify_apt_error(stderr), ErrorClass::ArchMismatch);
+    }
+
+    #[test]
+    fn plain_missing_candidate_is_package_not_found() {
+        let stderr = "E: Package 'nosuchpkg' has no installation candidate";
+        assert_eq!(classify_apt_error(stderr), ErrorClass::PackageNotFound);
+    }
+
+    #[test]
+    fn unknown_backend_falls_through_to_dnf_patterns() {
+        // The runner classifies with an empty backend name because it knows the
+        // resource type, not the manager the executor shelled out to. A
+        // dnf-only string must still classify rather than landing in `Other`.
+        let stderr = "Error: Depsolve Error occurred: problem with installed package";
+        assert_eq!(classify_apt_error(stderr), ErrorClass::Other);
+        assert_eq!(classify_error("", stderr), ErrorClass::DependencyConflict);
+    }
+
+    #[test]
+    fn unknown_backend_still_prefers_apt_classification() {
+        let stderr = "E: You don't have enough free space in /var/cache/apt/archives/.";
+        assert_eq!(classify_error("", stderr), ErrorClass::DiskFull);
     }
 
     #[test]

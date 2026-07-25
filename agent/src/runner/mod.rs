@@ -733,11 +733,17 @@ fn execute_resource(
             "exec" | "source_package" | "custom" | "package" | "repository" | "nonrepo_package" => 300,
             _ => 60,
         };
+        // Same parser the exec executor uses for `timeout:` — a bare integer or
+        // a suffixed duration ("15m", "4h"). A plain `.parse::<u64>()` here
+        // silently rejected every suffixed value and fell back to the default,
+        // so `timeout: "15m"` reported a timeout at the 300s default while the
+        // executor let the child run to 900s.
         let timeout_secs: u64 = node
             .params
             .get("timeout_secs")
             .or_else(|| node.params.get("timeout"))
-            .and_then(|v| v.parse().ok())
+            .and_then(|v| crate::executors::exec::parse_duration(v))
+            .map(|d| d.as_secs())
             .unwrap_or(default_timeout);
 
         // Pass the computed default down so subprocess-spawning executors can
