@@ -14,7 +14,7 @@ use crate::policy::{template, when};
 use crate::proto;
 use anyhow::{Context, Result};
 use serde_json::Value;
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// Evaluate a policy bundle using the agent's traits.
 /// Returns compiled proto modules in the same format the runner expects.
@@ -106,6 +106,22 @@ pub fn eval_bundle(
             } else {
                 pres.when.clone()
             };
+
+            // A templated when: reads very differently before and after var
+            // substitution — the configcrate's own `vars:` default is often
+            // overridden by common.vgo or the match block, so the literal in
+            // the .vgo file is not what actually gates the resource. Log both
+            // forms so diagnosing "why did this run?" doesn't require dumping
+            // the cached bundle out of LMDB.
+            if pres.when.contains("{{") {
+                debug!(
+                    module = %pmod.name,
+                    resource = %pres.name,
+                    raw = %pres.when,
+                    rendered = %rendered_when,
+                    "when template rendered"
+                );
+            }
 
             // Evaluate resource when expression.
             let (should_include, agent_when) = match evaluate_resource_when(&rendered_when, &vars) {
