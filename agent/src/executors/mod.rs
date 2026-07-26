@@ -439,7 +439,20 @@ pub fn run_built_command_niced_timeout(
     use std::sync::mpsc;
     use std::thread;
 
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    // stdin MUST be /dev/null, never inherited. The `pre_exec` below puts this
+    // child in its own process group; a process in a *background* process group
+    // that reads the controlling terminal is sent SIGTTIN, whose default action
+    // is to stop the process — state `T`, forever, holding whatever lock it had
+    // taken. `spawn()` inherits stdin by default (unlike `output()`, which nulls
+    // it), so without this line every foreground exec launched from a terminal
+    // is one stdin-reading maintainer script away from an unkillable-looking
+    // hang with no output. Debian maintainer scripts do read stdin directly, so
+    // DEBIAN_FRONTEND=noninteractive does not cover this. The background exec
+    // path already nulls stdin (see `executors/exec.rs`); this is the same rule
+    // for the foreground path.
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     if nice_level > 0 {
         crate::platform::process::apply_nice(&mut cmd, nice_level);
     }
@@ -466,22 +479,190 @@ pub fn run_built_command_niced_timeout(
         let _ = tx.send(result);
     });
 
-    match rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(_) => {
-            // Fire-and-forget kill — we don't wait for the reaper thread
-            // above, it will eventually drain the zombie. Logging handled
-            // by the caller via the TimedOut error.
-            let grace = std::time::Duration::from_secs(5);
+    wait_with_heartbeat(rx, pid, display_name, timeout)
+}
+
+/// How often a still-running child is sampled while we wait for it.
+///
+/// Nothing is emitted before the first tick, so ordinary sub-15s commands stay
+/// completely silent — the heartbeat only ever talks about commands that are
+/// already slow enough for an operator to wonder about.
+#[cfg(not(test))]
+const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Tests need the tick to fire promptly — the mechanism under test is "what
+/// happens on a tick", not the production cadence. Shortening it here keeps the
+/// stopped-child test at well under a second instead of 15s+.
+#[cfg(test)]
+const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Consecutive idle heartbeats (no CPU burned, no bytes moved) before a child
+/// is called stalled. Four ticks ≈ 60s, long enough that a slow mirror or a big
+/// fsync doesn't get reported as a hang.
+const STALL_TICKS: u32 = 4;
+
+/// Waits for a child's output, reporting progress while it runs and killing it
+/// early if it can provably never finish.
+///
+/// This exists because "slow" and "hung" are indistinguishable from the outside:
+/// the child's stdout is a pipe we don't drain until it exits, so a long
+/// `apt-get upgrade` and a wedged process both present as a dead terminal. Each
+/// tick samples procfs (see [`crate::platform::procprogress`]) and reports what
+/// the tree is actually doing — phase, state, bytes moved — so the operator can
+/// tell the two apart without attaching strace.
+///
+/// Two conditions are called out:
+///
+/// * **Stopped** (`T`, nothing runnable) — cannot resume without a SIGCONT, so
+///   it is killed immediately rather than sitting on the convergence cycle until
+///   the timeout expires. With a generous `timeout:` that would otherwise wedge
+///   a run for the better part of an hour.
+/// * **Stalled** (no CPU, no I/O across [`STALL_TICKS`]) — warned about but not
+///   killed: a process blocked on a slow network read looks identical, and the
+///   timeout is already the backstop for that.
+///
+/// The command string is never logged here — only the pid and the phase read
+/// out of procfs — so a `sensitive: true` command cannot leak through the
+/// heartbeat.
+fn wait_with_heartbeat(
+    rx: std::sync::mpsc::Receiver<std::io::Result<Output>>,
+    pid: u32,
+    display_name: &str,
+    timeout: std::time::Duration,
+) -> std::io::Result<Output> {
+    use crate::platform::procprogress;
+    use std::io::IsTerminal;
+    use std::sync::mpsc::RecvTimeoutError;
+    use std::time::Instant;
+
+    // Grace before SIGKILL. Short under test so the kill path doesn't dominate
+    // the suite's runtime; 5s in production so a killed child can unwind.
+    #[cfg(not(test))]
+    let grace = std::time::Duration::from_secs(5);
+    #[cfg(test)]
+    let grace = std::time::Duration::from_millis(100);
+
+    let started = Instant::now();
+    let deadline = started + timeout;
+    // One-shot `vigo run` has a terminal and an operator watching it, so
+    // progress belongs at info. The daemon has neither — there, routine
+    // progress is debug and only the anomalies (below) reach the journal.
+    let interactive = std::io::stderr().is_terminal();
+
+    let mut prev: Option<procprogress::ProcSample> = None;
+    let mut idle_ticks: u32 = 0;
+
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
             crate::platform::process::kill_process_tree(pid, grace);
-            Err(std::io::Error::new(
+            return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 format!(
                     "{} timed out after {:.0}s",
                     display_name,
                     timeout.as_secs_f64()
                 ),
-            ))
+            ));
+        }
+        // Never overshoot the deadline: the last slice is whatever is left.
+        let slice = HEARTBEAT_INTERVAL.min(deadline - now);
+
+        match rx.recv_timeout(slice) {
+            Ok(result) => return result,
+            // The reaper thread panicked without sending. Nothing will ever
+            // arrive, so don't spin until the deadline.
+            Err(RecvTimeoutError::Disconnected) => {
+                crate::platform::process::kill_process_tree(pid, grace);
+                return Err(std::io::Error::other(format!(
+                    "{} wait thread died before reporting an exit status",
+                    display_name
+                )));
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                let elapsed = started.elapsed().as_secs();
+                let sample = procprogress::sample_tree(pid);
+                let phase = sample
+                    .as_ref()
+                    .and_then(|s| s.phase.as_deref())
+                    .unwrap_or(display_name);
+
+                // Stopped and nothing runnable: this never recovers on its own.
+                if sample.as_ref().is_some_and(|s| s.is_wedged()) {
+                    tracing::warn!(
+                        pid = pid,
+                        command = display_name,
+                        phase = phase,
+                        elapsed_secs = elapsed,
+                        "child process is STOPPED and cannot make progress \
+                         (SIGTTIN/SIGTTOU from touching the terminal, or an \
+                         external SIGSTOP) — killing it"
+                    );
+                    crate::platform::process::kill_process_tree(pid, grace);
+                    return Err(std::io::Error::other(format!(
+                        "{} was stopped after {}s without exiting \
+                         (SIGTTIN/SIGTTOU or SIGSTOP); killed",
+                        display_name, elapsed
+                    )));
+                }
+
+                let (state, procs, io_delta) = match (&sample, &prev) {
+                    (Some(now_s), Some(before)) => {
+                        (now_s.state, now_s.procs, now_s.io_delta(before))
+                    }
+                    (Some(now_s), None) => (now_s.state, now_s.procs, 0),
+                    // No procfs (non-Linux, or the tree just exited): still
+                    // report that we're waiting, just without the detail.
+                    (None, _) => ('?', 0, 0),
+                };
+
+                let idle = match (&sample, &prev) {
+                    (Some(now_s), Some(before)) => now_s.idle_since(before),
+                    _ => false,
+                };
+                idle_ticks = if idle { idle_ticks + 1 } else { 0 };
+
+                if idle_ticks >= STALL_TICKS {
+                    tracing::warn!(
+                        pid = pid,
+                        command = display_name,
+                        phase = phase,
+                        state = %state,
+                        elapsed_secs = elapsed,
+                        idle_secs = idle_ticks as u64 * HEARTBEAT_INTERVAL.as_secs(),
+                        "child has burned no CPU and moved no bytes — may be hung; \
+                         letting it run until its timeout"
+                    );
+                    // Re-arm rather than warning on every subsequent tick.
+                    idle_ticks = 0;
+                } else if interactive {
+                    tracing::info!(
+                        pid = pid,
+                        command = display_name,
+                        phase = phase,
+                        state = %state,
+                        procs = procs,
+                        elapsed_secs = elapsed,
+                        io_delta_bytes = io_delta,
+                        "still running"
+                    );
+                } else {
+                    tracing::debug!(
+                        pid = pid,
+                        command = display_name,
+                        phase = phase,
+                        state = %state,
+                        procs = procs,
+                        elapsed_secs = elapsed,
+                        io_delta_bytes = io_delta,
+                        "still running"
+                    );
+                }
+
+                if sample.is_some() {
+                    prev = sample;
+                }
+            }
         }
     }
 }
@@ -531,21 +712,11 @@ pub fn run_command_with_stdin_niced_timeout(
         let _ = tx.send(result);
     });
 
-    match rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(_) => {
-            let grace = std::time::Duration::from_secs(5);
-            crate::platform::process::kill_process_tree(pid, grace);
-            Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!(
-                    "{} timed out after {:.0}s",
-                    name,
-                    timeout.as_secs_f64()
-                ),
-            ))
-        }
-    }
+    // Same heartbeat as the no-stdin path: this one also runs in its own
+    // process group, so it is subject to the same stop-forever failure mode if
+    // anything in the tree opens /dev/tty directly (piped stdin closes the
+    // common route, not that one).
+    wait_with_heartbeat(rx, pid, name, timeout)
 }
 
 /// Trait for injectable command runners (enables testing).
@@ -662,6 +833,77 @@ impl CommandRunner for DefaultRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A foreground exec must get /dev/null on stdin, never the caller's
+    // terminal. `spawn()` inherits stdin by default and the child runs in its
+    // own process group, so an inherited terminal means the first child that
+    // reads stdin is sent SIGTTIN and stops forever — state `T`, no output, no
+    // exit, holding whatever lock it took. `wc -c` reporting 0 bytes is the
+    // observable proof that stdin is an immediately-EOF /dev/null.
+    #[cfg(unix)]
+    #[test]
+    fn foreground_exec_gets_null_stdin_not_the_terminal() {
+        let out = run_command_niced_timeout(
+            "sh",
+            &["-c", "wc -c"],
+            0,
+            std::time::Duration::from_secs(30),
+        )
+        .expect("command runs");
+        assert!(out.status.success());
+        let n: u64 = String::from_utf8_lossy(&out.stdout)
+            .trim()
+            .parse()
+            .expect("wc -c prints a count");
+        assert_eq!(n, 0, "stdin should be empty /dev/null, got {n} bytes");
+    }
+
+    // A child that stops itself can never finish on its own. The heartbeat must
+    // notice and kill it rather than letting it sit on the convergence cycle
+    // until the timeout — which, with the generous `timeout:` a package upgrade
+    // wants, is the difference between a 15s reported failure and an hour of
+    // apparent hang. The timeout here is deliberately far longer than the test
+    // should take: if the heartbeat misses it, the assertion on elapsed time is
+    // what fails, not a hang.
+    #[cfg(unix)]
+    #[test]
+    fn stopped_child_is_detected_and_killed_before_its_timeout() {
+        let timeout = std::time::Duration::from_secs(60);
+        let started = std::time::Instant::now();
+        let err = run_command_niced_timeout("sh", &["-c", "kill -STOP $$; sleep 60"], 0, timeout)
+            .expect_err("a stopped child must be reported as an error");
+        let elapsed = started.elapsed();
+
+        assert!(
+            err.to_string().contains("stopped"),
+            "error should name the stop as the cause, got: {err}"
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(30),
+            "should be killed on a heartbeat tick, not at the {}s timeout (took {:?})",
+            timeout.as_secs(),
+            elapsed
+        );
+    }
+
+    // The counterpart to the test above: a slow-but-working child must be left
+    // alone. This is the false positive that would matter most in production —
+    // killing a legitimate long `apt-get upgrade` mid-transaction is far worse
+    // than the hang we set out to fix. The command sleeps through many heartbeat
+    // ticks while writing, and must still exit on its own terms.
+    #[cfg(unix)]
+    #[test]
+    fn slow_but_working_child_is_not_killed() {
+        let out = run_command_niced_timeout(
+            "sh",
+            &["-c", "for i in 1 2 3 4 5; do echo tick; sleep 0.2; done"],
+            0,
+            std::time::Duration::from_secs(60),
+        )
+        .expect("a slow child must be allowed to finish");
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout).lines().count(), 5);
+    }
 
     // The stdin writers must tolerate a child that exits without consuming all
     // of stdin: the unread payload closes as a broken pipe on the writer

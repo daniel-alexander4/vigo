@@ -19,7 +19,7 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `logoutput` | No | `true` | When `false`, suppress stdout/stderr in error messages. |
 | `background` | No | `false` | When `true`, spawn the command and return immediately without waiting for completion. Guards still run synchronously. No output capture or exit code checking. Background commands auto-nice to 19 unless overridden by `nice`. |
 | `nice` | No | `0` | CPU/IO priority level 0–19 (0 = normal, 19 = lowest). Background execs default to 19. On Linux, also sets I/O priority: `nice >= 15` drops into the ionice `idle` class (only runs I/O when nothing else wants the disk); `nice < 15` uses ionice best-effort with a proportional level. |
-| `timeout` | No | -- | Per-process execution ceiling. No operator-facing default — but when unset, foreground execs still inherit the runner's per-resource default ceiling (300s for `exec`) so a wedged child can't freeze the convergence cycle; set `timeout:` explicitly to raise or lower it. Accepts a bare integer (seconds) or a duration suffix: `s`, `m`, `h` (e.g., `"30s"`, `"45m"`, `"4h"`). On expiry the agent SIGTERMs the child's process group, waits 5s, then SIGKILLs. Background execs are exempt from the default and run unbounded unless `timeout:` is set; they release their PID tracking on timeout so the next convergence cycle is free to respawn. |
+| `timeout` | No | -- | Per-process execution ceiling. No operator-facing default — but when unset, foreground execs still inherit the runner's per-resource default ceiling (300s for `exec`) so a wedged child can't freeze the convergence cycle; set `timeout:` explicitly to raise or lower it. Accepts a bare integer (seconds) or a duration suffix: `s`, `m`, `h` (e.g., `"30s"`, `"45m"`, `"4h"`). On expiry the agent SIGCONTs the child's process group (so a stopped child can act on what follows), SIGTERMs it, waits 5s, then SIGKILLs. Background execs are exempt from the default and run unbounded unless `timeout:` is set; they release their PID tracking on timeout so the next convergence cycle is free to respawn. |
 | `retries` | No | `0` | Number of retry attempts on failure. Only the command is retried — guards are not re-evaluated. Background execs are not retried. |
 | `retry_delay` | No | `5` | Seconds to wait between retry attempts. |
 | `sensitive` | No | `false` | When `true`, suppress the command string from result names, logs, and error messages. Distinct from `logoutput: false` which only suppresses stdout/stderr. |
@@ -309,5 +309,32 @@ Use a specialized executor instead of `exec` whenever one exists. Specialized ex
 - `sensitive` and `logoutput` are complementary: `logoutput: false` suppresses stdout/stderr from errors while still showing the command string; `sensitive: true` suppresses the command string itself (and all output on failure). Both can be used together.
 - `retries` wraps only the command execution. Guards (`onlyif`/`unless`) run once before any attempts. Background execs (`background: true`) are never retried.
 - The `shell` parameter sets the shell for both the main command and guard commands. When `user` is set, commands run via `su -c` regardless of shell override.
+- **Commands never inherit a terminal.** Unless you set `stdin:`, the command's stdin is `/dev/null` and reads return EOF immediately. Commands must be non-interactive: a command that waits for input gets an empty read, not a prompt. This is also why an interactive command cannot hang a run — see [Progress reporting](#progress-reporting).
+
+## Progress reporting
+
+A command's output is captured, not streamed, so it appears only when the command finishes. For a command that runs for minutes — a large package upgrade, an image build — that would otherwise mean no feedback at all, so the agent samples the running process every 15 seconds and reports what it is doing:
+
+```
+still running  pid=6801 phase=dpkg state=D procs=3 elapsed_secs=134 io_delta_bytes=48291840
+```
+
+`phase` is the deepest running child process, which names the stage for free (`http` while a package manager downloads, `dpkg` while it unpacks). `state` is the process state, and it is the field worth reading:
+
+| State | Meaning |
+|---|---|
+| `R` | Running on CPU. |
+| `D` | Uninterruptible disk wait — **normal** for a package unpack on slow storage. Working, not hung. |
+| `S` | Sleeping, typically waiting on the network. |
+| `T` | **Stopped.** Never healthy; see below. |
+
+These lines are logged at `info` when `vigo run` is attached to a terminal and at `debug` in the daemon, so the journal stays quiet. The command string itself is never logged here, so `sensitive: true` commands are unaffected. Nothing is emitted before the first 15-second tick, so ordinary short commands stay silent.
+
+Two conditions are called out regardless of log level:
+
+- **Stopped** — a process tree in state `T` with nothing runnable cannot resume on its own. The agent logs a warning and kills it immediately rather than waiting out `timeout:`. The usual cause is a child that tried to read the terminal; the second is an external `SIGSTOP`.
+- **Stalled** — no CPU consumed and no bytes moved for 60 seconds. The agent warns but does **not** kill, because a command legitimately blocked on a slow network read looks identical. `timeout:` remains the backstop.
+
+Progress detail comes from procfs and is Linux-only. On other platforms the heartbeat still reports elapsed time, without `phase`, `state`, or byte counts.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

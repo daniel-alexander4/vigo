@@ -21,6 +21,14 @@ use std::time::Duration;
 #[cfg(unix)]
 pub fn kill_process_tree(pid: u32, grace: Duration) {
     let pgid = nix::unistd::Pid::from_raw(pid as i32);
+    // SIGCONT first. A *stopped* process (state `T` — SIGTTIN/SIGTTOU from
+    // touching the terminal, or an external SIGSTOP) does not act on SIGTERM:
+    // the signal just sits pending until something resumes it, so the whole
+    // grace period elapses and the process dies to the SIGKILL below without
+    // ever running its cleanup. Resuming it first means a stopped `apt-get`
+    // gets a real chance to unwind and release the dpkg lock. Harmless no-op
+    // for a group that was never stopped.
+    let _ = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGCONT);
     if let Err(e) = nix::sys::signal::killpg(pgid, nix::sys::signal::Signal::SIGTERM) {
         tracing::warn!(pid = pid, error = %e, "SIGTERM to process group failed");
     }

@@ -11,4 +11,5 @@ pub mod os_info;
 pub mod paths;
 pub mod permissions;
 pub mod process;
+pub mod procprogress;
 pub mod users;

@@ -77,6 +77,21 @@ Direct SSH to the envoy host (not via scrier) is rejected. Usually disk-pressure
 
 **Fix:** check disk + load. Vigo's swarm subsystems refuse pushes below 10% free disk — that often correlates with sshd misbehavior on the same host. Clear journald + apt cache; restart sshd if needed.
 
+### `vigo run` sits with no output
+
+A command's output is captured, not streamed, so a long resource looks identical to a wedged one until it finishes. Since 0.76.89 the agent breaks the tie itself: every 15 seconds it logs a `still running` line with the process state and the bytes moved, so `state=D` with a climbing `io_delta_bytes` tells you a slow package unpack is working. See [Progress reporting](../../reference/vigo/resources/exec.md#progress-reporting).
+
+**If it really is wedged**, the agent now says so and kills it: `child process is STOPPED and cannot make progress`. The cause is a command that tried to read the terminal. Foreground commands get `/dev/null` on stdin, so this only happens when something opens `/dev/tty` directly — some Debian maintainer scripts do, and `DEBIAN_FRONTEND=noninteractive` does not prevent it.
+
+**Fix:** make the command non-interactive. To confirm the diagnosis by hand:
+
+```bash
+ps -o pid,stat,wchan:20,args -p <pid>   # STAT of T = stopped; D = working on disk
+ls -l /proc/<pid>/fd/0                  # should be /dev/null, never /dev/pts/N
+```
+
+A `T` in `STAT` is never healthy. `D` almost always is.
+
 ## Diagnostic Tools
 
 ### vigo status (agent-side)
