@@ -559,7 +559,14 @@ fn execute_resource(
     // "when: changed" — only run when triggered by notify/subscribes/watch_secret.
     // Can be combined with other expressions: "when: changed && os_family('debian')"
     let triggered = node.params.get("_triggered").map(|s| s == "true").unwrap_or(false);
-    if node.when.contains("changed") && !triggered {
+    // Parse to decide this, rather than a substring test: `contains("changed")`
+    // also matches an ordinary var like `unchanged_files`, which would silently
+    // demote a normal conditional into a trigger-only resource that never runs.
+    // An unparseable expression is left to the evaluator below to report.
+    let gates_on_changed = crate::policy::when::parse(&node.when)
+        .map(|e| crate::policy::when::references_changed(&e))
+        .unwrap_or(false);
+    if gates_on_changed && !triggered {
         return ResourceResult {
             configcrate_name: String::new(),
             resource_type: node.resource_type.clone(),
@@ -574,14 +581,19 @@ fn execute_resource(
     }
 
     // Check when expression (agent-side builtins).
-    // Strip "changed" (already handled above) so the parser doesn't choke on it.
-    let when_expr = node.when.replace("changed", "true");
+    let when_expr = node.when.clone();
     if !when_expr.is_empty() && when_expr != "true" {
         match crate::policy::when::parse(&when_expr) {
             Ok(expr) => {
-                // Evaluate with builtin function resolver and no var substitution
-                // (vars already resolved by eval_bundle).
-                let var_fn = |_name: &str| false;
+                // Vars are already resolved by eval_bundle, so every remaining
+                // VarRef is false — except the `changed` sentinel. Reaching here
+                // means the gate above let us through, i.e. either the resource
+                // was triggered or it never gated on `changed` at all, so
+                // resolving it to true is correct in both cases. (Previously
+                // this was a naive `replace("changed", "true")` on the raw
+                // string, which also rewrote the inside of any identifier or
+                // quoted argument containing the substring.)
+                let var_fn = |name: &str| name == crate::policy::when::CHANGED_SENTINEL;
                 let func_fn = |name: &str, args: &[String]| {
                     crate::policy::when::evaluate_builtin(name, args, traits)
                 };
@@ -2752,6 +2764,116 @@ mod tests {
         // The final result for restart-sshd should be the triggered run, not skipped.
         let sshd_result = results.iter().find(|r| r.resource_name == "restart-sshd").unwrap();
         assert_ne!(sshd_result.action, Action::Skipped, "restart-sshd should have been triggered");
+    }
+
+    /// End-to-end: PolicyBundle → eval_bundle → converge.
+    ///
+    /// The other notify tests hand-build `Configcrate` structs and call
+    /// `converge` directly, which skips `eval_bundle` — the stage that actually
+    /// decides which resources reach the runner. That gap hid three separate
+    /// defects at once, all of which silently dropped the notify target before
+    /// the runner could trigger it:
+    ///
+    ///   1. `changed` was looked up as a var, missed, and resolved false.
+    ///   2. `changed && <func>` short-circuited to false in the tristate pass
+    ///      off that same VarRef.
+    ///   3. `&&` wasn't lexed at all agent-side, so the expression failed to
+    ///      parse and the resource was dropped on the error path.
+    ///
+    /// Any of the three alone breaks every `notify:`/`subscribes:` chain in the
+    /// fleet while the suite stays green, so this test walks the real pipeline
+    /// and uses the compound form to cover all three.
+    #[test]
+    fn notify_survives_the_full_eval_bundle_to_runner_pipeline() {
+        use crate::proto::{PolicyBundle, PolicyConfigcrate, PolicyResource};
+
+        let bundle = PolicyBundle {
+            policy_version: 1,
+            configcrates: vec![PolicyConfigcrate {
+                name: "ssh-hardening".to_string(),
+                resources: vec![
+                    PolicyResource {
+                        name: "sshd-config".to_string(),
+                        r#type: "mock".to_string(),
+                        attributes: [("name".to_string(), "sshd-config".to_string())].into(),
+                        notify: vec!["restart-sshd".to_string()],
+                        ..Default::default()
+                    },
+                    PolicyResource {
+                        name: "restart-sshd".to_string(),
+                        r#type: "mock".to_string(),
+                        when: "changed && os_family('debian')".to_string(),
+                        attributes: [("name".to_string(), "restart-sshd".to_string())].into(),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let traits = serde_json::json!({"os": {"family": "debian"}});
+        let modules = crate::policy::eval::eval_bundle(Some(&bundle), &traits)
+            .expect("bundle evaluates");
+
+        // The trigger target must survive evaluation at all — this is where it
+        // used to vanish.
+        let names: Vec<&str> = modules
+            .iter()
+            .flat_map(|m| m.resources.iter())
+            .map(|r| r.name.as_str())
+            .collect();
+        assert!(
+            names.contains(&"restart-sshd"),
+            "the notify target was dropped before reaching the runner; got {names:?}"
+        );
+
+        let exec = TrackingExecutor::new(vec![
+            ("sshd-config", Action::Updated, true),
+            ("restart-sshd", Action::None, false),
+        ]);
+        let calls = Arc::clone(&exec.calls);
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
+            data_dir: None,
+        };
+        let results = converge(
+            &modules,
+            &executors,
+            &mut cache,
+            &opts,
+            &traits,
+            &mut pkg_breaker::PackageBreaker::new(),
+        );
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(
+            recorded.len(),
+            2,
+            "expected the config write plus the triggered restart, got: {:?}",
+            *recorded
+        );
+        // The `true` is the _triggered flag — proof it ran via notify, not on
+        // its own account.
+        assert_eq!(recorded[1], ("restart-sshd".to_string(), true));
+
+        let restart = results
+            .iter()
+            .find(|r| r.resource_name == "restart-sshd")
+            .expect("restart-sshd in results");
+        assert_ne!(
+            restart.action,
+            Action::Skipped,
+            "restart-sshd should have been triggered by notify"
+        );
     }
 
     /// Intra-module subscribes: service with subscribes: [sshd-config]

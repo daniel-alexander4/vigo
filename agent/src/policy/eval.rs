@@ -228,6 +228,17 @@ fn evaluate_resource_when(
 
     let expr = when::parse(when_str)?;
 
+    // `changed` is the runner's notify sentinel, not a var. Only the runner can
+    // know its value — it is set per-execution from whether a notify woke this
+    // resource. Evaluating it here would look it up in vars, miss, and resolve
+    // false (and for `changed && <func>` the tristate pass short-circuits the
+    // whole expression to false off that same VarRef), dropping the resource
+    // from the bundle before the runner could ever trigger it. Pass the
+    // expression through untouched and let the runner decide.
+    if when::references_changed(&expr) {
+        return Ok((true, when_str.to_string()));
+    }
+
     if !when::contains_func_calls(&expr) {
         // Pure var expression — evaluate fully.
         let result = when::eval(&expr, &|name| when::when_var_is_true(name, vars))?;
@@ -252,6 +263,72 @@ mod tests {
 
     fn must_marshal_vars(vars: &Value) -> Vec<u8> {
         serde_json::to_vec(vars).unwrap()
+    }
+
+    // `changed` is a runner-level sentinel, not a var: the runner gates on it
+    // via the `_triggered` param it sets during the notify second pass
+    // (runner/mod.rs). But eval_bundle runs FIRST, and it treats every bare
+    // identifier as a var lookup — `changed` is never in vars, so it evaluates
+    // false and the resource is dropped from the bundle before the runner can
+    // ever trigger it. Every `notify:`/`subscribes:` target in the fleet is
+    // therefore silently unreachable.
+    #[test]
+    fn when_changed_resource_survives_eval_bundle() {
+        let bundle = PolicyBundle {
+            policy_version: 1,
+            configcrates: vec![PolicyConfigcrate {
+                name: "svc".to_string(),
+                resources: vec![PolicyResource {
+                    name: "restart-on-change".to_string(),
+                    r#type: "service".to_string(),
+                    when: "changed".to_string(),
+                    attributes: [("state".to_string(), "restarted".to_string())].into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let modules = eval_bundle(Some(&bundle), &json!(null)).unwrap();
+        let kept: Vec<_> = modules.iter().flat_map(|m| &m.resources).collect();
+        assert_eq!(
+            kept.len(),
+            1,
+            "a `when: changed` resource must reach the runner so notify can trigger it; \
+             eval_bundle dropped it instead"
+        );
+    }
+
+    // Same defect via the compound form. `tristate_eval` maps VarRef -> Some(false)
+    // unconditionally, so `changed && <func>` short-circuits to false and is
+    // dropped even though the func half is genuinely unknown at this stage.
+    #[test]
+    fn when_changed_and_builtin_survives_eval_bundle() {
+        let bundle = PolicyBundle {
+            policy_version: 1,
+            configcrates: vec![PolicyConfigcrate {
+                name: "svc".to_string(),
+                resources: vec![PolicyResource {
+                    name: "reload-on-change".to_string(),
+                    r#type: "exec".to_string(),
+                    when: "changed && os_family('debian')".to_string(),
+                    attributes: [("command".to_string(), "systemctl daemon-reload".to_string())]
+                        .into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let modules = eval_bundle(Some(&bundle), &json!(null)).unwrap();
+        let kept: Vec<_> = modules.iter().flat_map(|m| &m.resources).collect();
+        assert_eq!(
+            kept.len(),
+            1,
+            "`when: changed && os_family(...)` must reach the runner; eval_bundle dropped it"
+        );
     }
 
     #[test]

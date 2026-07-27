@@ -103,6 +103,29 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 tokens.push(Token { kind: TokenKind::Not });
                 pos += 1;
             }
+            // `&&` / `||` alongside the word forms. server/conditionals/when.go
+            // lexes both (tokAnd/tokOr), the docs use the symbolic form, and the
+            // fleet's configcrates are written with it — an expression the
+            // server can't fully resolve (agent-side builtins, or the `changed`
+            // sentinel) is handed to the agent verbatim, so this side has to
+            // accept the same grammar or the resource is dropped on a parse
+            // error it never had server-side.
+            '&' => {
+                if pos + 1 < chars.len() && chars[pos + 1] == '&' {
+                    tokens.push(Token { kind: TokenKind::And });
+                    pos += 2;
+                } else {
+                    bail!("expected '&&' at position {}, found single '&'", pos);
+                }
+            }
+            '|' => {
+                if pos + 1 < chars.len() && chars[pos + 1] == '|' {
+                    tokens.push(Token { kind: TokenKind::Or });
+                    pos += 2;
+                } else {
+                    bail!("expected '||' at position {}, found single '|'", pos);
+                }
+            }
             _ if ch.is_alphabetic() || ch == '_' => {
                 let start = pos;
                 while pos < chars.len() && (chars[pos].is_alphanumeric() || chars[pos] == '_') {
@@ -300,6 +323,30 @@ pub fn contains_func_calls(expr: &WhenExpr) -> bool {
             contains_func_calls(left) || contains_func_calls(right)
         }
         WhenExpr::FuncCall { .. } => true,
+    }
+}
+
+/// The identifier reserved for the runner's notify/subscribes trigger.
+///
+/// It is deliberately NOT a var: nothing ever puts it in the vars map, and the
+/// runner decides its value at execution time from whether the resource was
+/// woken by a notify. Anything evaluating a `when:` expression before that
+/// point must treat it as unknown rather than looking it up.
+pub const CHANGED_SENTINEL: &str = "changed";
+
+/// True if the expression gates on the `changed` sentinel.
+///
+/// Use this instead of a substring test on the raw expression — `contains
+/// ("changed")` also matches an ordinary var like `unchanged_files`, which
+/// would silently turn a normal conditional into a trigger-only resource.
+pub fn references_changed(expr: &WhenExpr) -> bool {
+    match expr {
+        WhenExpr::BoolLit(_) | WhenExpr::FuncCall { .. } => false,
+        WhenExpr::VarRef(name) => name == CHANGED_SENTINEL,
+        WhenExpr::Not(operand) => references_changed(operand),
+        WhenExpr::And(left, right) | WhenExpr::Or(left, right) => {
+            references_changed(left) || references_changed(right)
+        }
     }
 }
 
