@@ -594,6 +594,8 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateFieldEdit(base, res)...)
 	case "nonrepo_package":
 		findings = append(findings, validateNonRepoPackage(base, res)...)
+	case "package":
+		findings = append(findings, validatePackage(base, res)...)
 	}
 
 	// Reversal: applies across the Group A command-reversible set, so it's a
@@ -626,11 +628,19 @@ var stateValues = map[string][]string{
 	"swap":              {"present", "absent", "on", "off"},
 	"kernel_module":     {"present", "absent", "loaded", "unloaded"},
 	"network_interface": {"present", "absent", "up", "down"},
-	"package":           {"present", "absent", "latest"},
-	"npm":               {"present", "absent", "latest"},
-	"pip":               {"present", "absent", "latest"},
-	"gem":               {"present", "absent", "latest"},
-	"nonrepo_package":   {"present", "absent", "latest"},
+}
+
+// retiredStateLatestTypes names the package-family types whose `state: latest`
+// was retired in favor of `version: latest` (0.76.91) — state is the lifecycle
+// lever (present|absent); which version to hold is the version param's axis.
+// validateStateValue points migrations at the new spelling instead of emitting
+// the generic invalid-state message.
+var retiredStateLatestTypes = map[string]bool{
+	"package":         true,
+	"npm":             true,
+	"pip":             true,
+	"gem":             true,
+	"nonrepo_package": true,
 }
 
 // defaultStateValues is the universal vocabulary for state-consuming types not
@@ -670,6 +680,10 @@ func validateStateValue(base Finding, res Resource) []Finding {
 	}
 	f := base
 	f.Severity = SeverityError
+	if state == "latest" && retiredStateLatestTypes[res.Type] {
+		f.Message = fmt.Sprintf("type %q: state: latest was retired — use version: latest (see docs/reference/vigo/resources/package.md)", res.Type)
+		return []Finding{f}
+	}
 	f.Message = fmt.Sprintf("invalid state %q for type %q — must be one of: %s", state, res.Type, strings.Join(allowed, ", "))
 	return []Finding{f}
 }
@@ -993,6 +1007,40 @@ func validateNonRepoPackage(base Finding, res Resource) []Finding {
 			f.Message = fmt.Sprintf("nonrepo_package url must end in .deb, .rpm, .pkg, or .msi (got %q)", filepath.Base(url))
 			findings = append(findings, f)
 		}
+	}
+
+	return findings
+}
+
+// validatePackage guards the package resource's cross-param rules at publish,
+// mirroring the agent-side checks so a misuse errors at `config publish`
+// rather than as a red resource at apply time. Templated values pass through —
+// the agent validates the rendered form.
+func validatePackage(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	name := attrString(res.Attributes, "package")
+	if name == "" {
+		name = attrString(res.Attributes, "name")
+	}
+	version := attrString(res.Attributes, "version")
+	state := attrString(res.Attributes, "state")
+	if strings.Contains(version, "{{") || strings.Contains(state, "{{") {
+		return nil
+	}
+
+	if strings.TrimSpace(name) == "*" && (version != "latest" || (state != "" && state != "present")) {
+		f := base
+		f.Severity = SeverityError
+		f.Message = `package "*" (wildcard) requires version: latest with state: present`
+		findings = append(findings, f)
+	}
+
+	if attrBool(res.Attributes, "lock_version") && version == "latest" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "lock_version conflicts with version: latest — a hold blocks exactly the upgrades latest exists to perform"
+		findings = append(findings, f)
 	}
 
 	return findings

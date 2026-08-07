@@ -67,6 +67,29 @@ impl Executor for GemExecutor {
         let current = self.get_version(gem_cmd, &name);
 
         match state {
+            "present" if version == "latest" => {
+                result.action = Action::Updated;
+                result.changed = true;
+
+                if dry_run {
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+
+                let mut args = vec!["update", &name];
+                if no_document {
+                    args.push("--no-document");
+                }
+
+                match self.runner.run(gem_cmd, &args) {
+                    Ok(o) if !o.status.success() => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        result.error = Some(format!("gem update: {}", stderr));
+                    }
+                    Err(e) => result.error = Some(format!("gem update: {}", e)),
+                    _ => {}
+                }
+            }
             "present" => {
                 if let Some(ref cur) = current {
                     if version.is_empty() || *cur == version {
@@ -104,27 +127,8 @@ impl Executor for GemExecutor {
                 }
             }
             "latest" => {
-                result.action = Action::Updated;
-                result.changed = true;
-
-                if dry_run {
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
-                }
-
-                let mut args = vec!["update", &name];
-                if no_document {
-                    args.push("--no-document");
-                }
-
-                match self.runner.run(gem_cmd, &args) {
-                    Ok(o) if !o.status.success() => {
-                        let stderr = String::from_utf8_lossy(&o.stderr);
-                        result.error = Some(format!("gem update: {}", stderr));
-                    }
-                    Err(e) => result.error = Some(format!("gem update: {}", e)),
-                    _ => {}
-                }
+                result.error =
+                    Some("gem executor: state: latest was retired — use version: latest".into());
             }
             "absent" => {
                 if current.is_none() {
@@ -271,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn latest_calls_update() {
+    fn version_latest_calls_update() {
         let mock = MockRunner::new(vec![
             ok_output("rails (6.0.0)\n"), // gem list
             ok_output(""),                 // gem update
@@ -281,7 +285,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("package", "rails"), ("state", "latest")]),
+            &make_params(&[("package", "rails"), ("version", "latest")]),
             false,
         );
         assert_eq!(result.action, Action::Updated);
@@ -292,6 +296,25 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert!(calls[1].1.contains(&"update".to_string()));
         assert!(calls[1].1.contains(&"rails".to_string()));
+    }
+
+    #[test]
+    fn state_latest_retired_errors() {
+        let mock = MockRunner::new(vec![
+            ok_output("rails (6.0.0)\n"), // gem list
+        ]);
+        let exec = GemExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "rails"), ("state", "latest")]),
+            false,
+        );
+        assert!(result
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("state: latest was retired — use version: latest"));
     }
 
     #[test]

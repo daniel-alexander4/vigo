@@ -8,16 +8,17 @@ Manages Ruby gems via the gem command. Supports version pinning and custom gem c
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `package` | Yes | -- | Gem name. |
-| `state` | Yes | -- | Desired state: `present`, `absent`, or `latest`. |
-| `version` | No | -- | Specific version to install. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
+| `version` | No | -- | Specific version to install, or `latest` to keep the gem at the newest published version. |
 | `gem_cmd` | No | `gem` | The gem command to use. |
 | `no_document` | No | `true` | If `true`, install with `--no-document` to skip documentation generation. Set to `false` to include docs. |
 
 ## States
 
-- **`present`** -- Ensure the gem is installed. If `version` is specified and the installed version differs, install the specified version.
+- **`present`** -- Ensure the gem is installed. If `version` is specified and the installed version differs, install the specified version. With `version: latest`, update to the newest version (`gem update`).
 - **`absent`** -- Uninstall the gem (with `--executables --all`).
-- **`latest`** -- Update the gem to the latest version (`gem update`).
+
+`state: latest` was retired — declare `version: latest` instead.
 
 ## Idempotency
 
@@ -51,7 +52,8 @@ resources:
   - name: Keep rubocop up to date
     type: gem
     package: rubocop
-    state: latest
+    version: latest
+    state: present
 ```
 
 ### Uninstall

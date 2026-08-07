@@ -8,13 +8,15 @@ Manages Windows packages using the first available package manager: Chocolatey, 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `package` | Yes | -- | Package name/ID. |
-| `state` | Yes | -- | Desired state: `present`, `absent`, or `latest`. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
+| `version` | No | -- | `latest` keeps the package at the newest version the backend offers (install if missing, upgrade otherwise). Specific-version pinning is not supported by this executor. |
 
 ## States
 
-- **`present`** -- Ensure the package is installed.
+- **`present`** -- Ensure the package is installed. With `version: latest`, install if not present, or upgrade if already installed.
 - **`absent`** -- Uninstall the package.
-- **`latest`** -- Install if not present, or upgrade if already installed.
+
+`state: latest` was retired — declare `version: latest` instead.
 
 ## Package Manager Detection
 
@@ -48,7 +50,8 @@ resources:
   - name: Keep 7-Zip updated
     type: package
     package: 7zip
-    state: latest
+    version: latest
+    state: present
 ```
 
 ### Uninstall

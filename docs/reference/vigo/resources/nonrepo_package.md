@@ -12,8 +12,8 @@ For packages available in system repositories (apt, dnf, brew, etc.), use the [p
 | `url` | Conditional | -- | Download URL for the package file. Required unless `artifact:` is set; the two are mutually exclusive. |
 | `artifact` | Conditional | -- | Curator artifact reference (ADR-024, 0.51.5+) — one of `<name>:<tag>` (implicit-namespace; the unique fleet name claim), `<puddle-name>/<name>:<tag>`, or `<artifact_id>/<name>:<tag>`. `@<version>` form also accepted. The executor resolves via curator's [Resolver](../../../howto/swarm/set-up-curator.md#read-side--server-mediated-universal), pulls + verifies the bytes, and installs from the materialized path under `/var/lib/vigo/artifacts/`. The signed `blob_sha` is the integrity guarantee, so `sha256:` alongside `artifact:` is redundant and rejected at validate time. Format is sniffed from magic bytes (`.deb` / `.rpm` / `.pkg` / `.msi`). Package name defaults to the catalog entry's `name`; override with `package:` if the dpkg/rpm package name differs. |
 | `package` | No | auto-detect | Package name for installed-state checks. Auto-detected from URL filename for `url:`; defaults to the artifact's catalog `name` for `artifact:`. |
-| `version` | No | -- | Expected installed version. Enables upgrade detection -- if the installed version differs, the new package is downloaded and installed. |
-| `state` | Yes | -- | Desired state: `present`, `absent`, or `latest`. |
+| `version` | No | -- | Expected installed version. Enables upgrade detection -- if the installed version differs, the new package is downloaded and installed. The special value `latest` always downloads and installs (useful when the URL points to a "latest" build with no stable version number); pair with `sha256` to skip redundant installs. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `sha256` | No | -- | Expected SHA-256 hash of the downloaded file. Verified before install. Only valid with `url:` — for `artifact:`, the catalog entry's signed blob_sha is the integrity guarantee. |
 | `lock_version` | No | `false` | Hold/lock the package version after install (`apt-mark hold` / `dnf versionlock`). |
 | `allow_downgrade` | No | `false` | Allow installing an older version than what is currently installed (`dpkg --force-downgrade` / `rpm --oldpackage`). |
@@ -32,9 +32,10 @@ For packages available in system repositories (apt, dnf, brew, etc.), use the [p
 
 ## States
 
-- **`present`** -- Install the package if not present, or upgrade if `version` is specified and differs from the installed version.
+- **`present`** -- Install the package if not present, or upgrade if `version` is specified and differs from the installed version. With `version: latest`, always download and install; hash comparison via `sha256` avoids redundant installs.
 - **`absent`** -- Remove the package if installed. Add `purge: true` to also remove configuration files (Debian only).
-- **`latest`** -- Always download and install (useful when the URL points to a "latest" build with no stable version number). Hash comparison via `sha256` avoids redundant installs.
+
+`state: latest` was retired — declare `version: latest` instead.
 
 ## Format Detection
 
@@ -61,7 +62,7 @@ If the `package` parameter is not specified, the package name is extracted from 
 2. Check installed status: `dpkg -s` for .deb, `rpm -q` for .rpm, `pkgutil --pkg-info` for .pkg.
 3. If installed and `version` matches the installed version, no-op.
 4. If installed but `version` differs, download and upgrade.
-5. `state: latest` without `version` always downloads and installs (use `sha256` to skip redundant installs).
+5. `version: latest` always downloads and installs (use `sha256` to skip redundant installs).
 6. `state: absent` uninstalls if present.
 
 ## Dependency Resolution

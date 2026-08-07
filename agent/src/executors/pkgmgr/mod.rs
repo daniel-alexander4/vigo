@@ -58,7 +58,7 @@ pub trait PackageManager: Send + Sync {
         Ok(())
     }
     /// Upgrade all installed packages to their latest available versions.
-    /// Used when `package: "*"` with `state: latest`.
+    /// Used when `package: "*"` with `version: latest`.
     fn upgrade_all(&self) -> Result<(), String> {
         Err("upgrade_all not supported by this package manager".to_string())
     }
@@ -197,7 +197,7 @@ pub struct GenericPkgMgr {
     /// Optional downgrade args. If set, `downgrade()` runs `[cmd] [downgrade_args...] <pkg>`.
     /// If None, downgrade falls back to install.
     downgrade_args: Option<&'static [&'static str]>,
-    /// Optional upgrade args (for `state: latest` without a target version).
+    /// Optional upgrade args (for `version: latest` without a pinned target).
     /// If None, falls back to install args.
     upgrade_args: Option<&'static [&'static str]>,
     /// Optional cache update command + args. If set, `update_cache()` runs these before install.
@@ -217,7 +217,7 @@ pub struct GenericPkgMgr {
     upgrade_all_args: Option<&'static [&'static str]>,
     /// Args for listing every installed package with its version, run as
     /// `[query_cmd] [snapshot_args...]`. Used to snapshot state before and
-    /// after an upgrade so `state: latest` can report `changed` honestly.
+    /// after an upgrade so `version: latest` can report `changed` honestly.
     snapshot_args: &'static [&'static str],
     /// Extra flags appended to install/upgrade/remove commands.
     /// Mutex for interior mutability — set per-invocation from the executor wrapper.

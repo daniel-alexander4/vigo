@@ -5,10 +5,10 @@ package modlint
 
 import "fmt"
 
-// packageStateLatestRule emits an info-level notice when a `package`
-// or `nonrepo_package` resource declares `state: latest`.
+// packageVersionLatestRule emits an info-level notice when a `package`
+// or `nonrepo_package` resource declares `version: latest`.
 //
-// Why notice: `state: latest` makes the package manager check
+// Why notice: `version: latest` makes the package manager check
 // upstream for newer versions on every check-in cycle. On Debian/
 // Ubuntu that's an `apt-get update` + `apt-cache policy` round-trip
 // every 30s; on RHEL family it's a `yum check-update` or `dnf
@@ -22,26 +22,26 @@ import "fmt"
 //
 // Severity: Info — non-actionable for correctness. Operators who
 // don't want the notice can pin a version explicitly.
-type packageStateLatestRule struct{}
+type packageVersionLatestRule struct{}
 
-func (packageStateLatestRule) id() string { return "package-state-latest" }
+func (packageVersionLatestRule) id() string { return "package-version-latest" }
 
-func (packageStateLatestRule) apply(mod *configcrate, _ Options) []Finding {
+func (packageVersionLatestRule) apply(mod *configcrate, _ Options) []Finding {
 	var out []Finding
 	for _, res := range mod.Resources {
 		if res.Type != "package" && res.Type != "nonrepo_package" {
 			continue
 		}
-		if attrStr(res.Attrs, "state") != "latest" {
+		if attrStr(res.Attrs, "version") != "latest" {
 			continue
 		}
 		out = append(out, Finding{
 			Severity: Info,
 			Line:     res.Line,
 			Column:   res.Column,
-			RuleID:   "package-state-latest",
+			RuleID:   "package-version-latest",
 			Message: fmt.Sprintf(
-				"resource %q: state: latest queries upstream every check-in cycle — pin a version unless you intentionally want continuous-update behavior",
+				"resource %q: version: latest queries upstream every check-in cycle — pin a version unless you intentionally want continuous-update behavior",
 				res.Name,
 			),
 		})
@@ -49,4 +49,4 @@ func (packageStateLatestRule) apply(mod *configcrate, _ Options) []Finding {
 	return out
 }
 
-func init() { register(packageStateLatestRule{}) }
+func init() { register(packageVersionLatestRule{}) }

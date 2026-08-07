@@ -10,7 +10,8 @@ resources:
   - name: apt-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     post_cleanup: true
     flags: "--fix-missing -o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef'"
@@ -22,7 +23,8 @@ resources:
   - name: dnf-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     post_cleanup: true
     when: "os_family('redhat') && has_command('dnf')"
@@ -33,7 +35,8 @@ resources:
   - name: yum-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     post_cleanup: true
     when: "os_family('redhat') && !has_command('dnf')"
@@ -44,7 +47,8 @@ resources:
   - name: zypper-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     when: "os_family('suse')"
     notify: [reboot-if-needed]
@@ -54,7 +58,8 @@ resources:
   - name: apk-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     when: "os_family('alpine')"
 
@@ -63,7 +68,8 @@ resources:
   - name: pacman-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     when: "os_family('arch')"
     notify: [reboot-if-needed]
@@ -73,7 +79,8 @@ resources:
   - name: pkg-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     post_cleanup: true
     when: "os('freebsd')"
@@ -84,7 +91,8 @@ resources:
   - name: pkg-add-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     when: "os('openbsd')"
 
   # --- NetBSD ---
@@ -92,7 +100,8 @@ resources:
   - name: pkgin-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     when: "os('netbsd')"
     notify: [reboot-if-needed]
@@ -102,7 +111,8 @@ resources:
   - name: ips-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     when: "os('illumos')"
     notify: [reboot-if-needed]
 
@@ -111,7 +121,8 @@ resources:
   - name: brew-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: true
     when: "os('darwin')"
 
@@ -120,7 +131,8 @@ resources:
   - name: choco-upgrade
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     when: "os('windows') && has_command('choco')"
     notify: [reboot-if-needed-windows]
 

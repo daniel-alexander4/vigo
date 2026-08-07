@@ -66,6 +66,26 @@ impl Executor for PipExecutor {
         let current = self.get_version(&pip, &name);
 
         match state {
+            "present" if version == "latest" => {
+                if dry_run {
+                    result.action = Action::Updated;
+                    result.changed = true;
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+
+                match self.runner.run(&pip, &["install", "--upgrade", &name]) {
+                    Ok(o) if !o.status.success() => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        result.error = Some(format!("pip install --upgrade: {}", stderr));
+                    }
+                    Err(e) => result.error = Some(format!("pip install --upgrade: {}", e)),
+                    _ => {
+                        result.action = Action::Updated;
+                        result.changed = true;
+                    }
+                }
+            }
             "present" => {
                 // The intended action depends on current state; commit it
                 // to `result` only after the runner reports success (or on
@@ -115,24 +135,8 @@ impl Executor for PipExecutor {
                 }
             }
             "latest" => {
-                if dry_run {
-                    result.action = Action::Updated;
-                    result.changed = true;
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
-                }
-
-                match self.runner.run(&pip, &["install", "--upgrade", &name]) {
-                    Ok(o) if !o.status.success() => {
-                        let stderr = String::from_utf8_lossy(&o.stderr);
-                        result.error = Some(format!("pip install --upgrade: {}", stderr));
-                    }
-                    Err(e) => result.error = Some(format!("pip install --upgrade: {}", e)),
-                    _ => {
-                        result.action = Action::Updated;
-                        result.changed = true;
-                    }
-                }
+                result.error =
+                    Some("pip executor: state: latest was retired — use version: latest".into());
             }
             "absent" => {
                 if current.is_none() {
@@ -231,6 +235,50 @@ mod tests {
         assert_eq!(result.action, Action::None);
         assert!(!result.changed);
         assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn version_latest_calls_upgrade() {
+        let mock = MockRunner::new(vec![
+            ok_output("Name: requests\nVersion: 1.0.0\n"), // pip3 show
+            ok_output(""),                                  // pip3 install --upgrade requests
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests"), ("version", "latest")]),
+            false,
+        );
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert!(calls[1].1.contains(&"install".to_string()));
+        assert!(calls[1].1.contains(&"--upgrade".to_string()));
+        assert!(calls[1].1.contains(&"requests".to_string()));
+    }
+
+    #[test]
+    fn state_latest_retired_errors() {
+        let mock = MockRunner::new(vec![
+            ok_output("Name: requests\nVersion: 1.0.0\n"), // pip3 show
+        ]);
+        let exec = PipExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "requests"), ("state", "latest")]),
+            false,
+        );
+        assert!(result
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("state: latest was retired — use version: latest"));
     }
 
     #[test]

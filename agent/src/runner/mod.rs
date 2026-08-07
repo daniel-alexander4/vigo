@@ -1195,8 +1195,18 @@ impl Executor for PackageExecutorWrapper {
         let retries = params.get("retries").and_then(|s| s.parse::<u32>().ok());
         let retry_delay = params.get("retry_delay").and_then(|s| s.parse::<u64>().ok());
 
-        // Validate: lock_version requires version (except on absent/latest).
-        if lock_version && version.is_empty() && state != "absent" && state != "latest" {
+        // Validate: lock_version conflicts with version: latest — a hold
+        // blocks exactly the upgrades latest exists to perform.
+        if lock_version && version == "latest" {
+            result.error = Some(
+                "package executor: lock_version conflicts with version: latest".to_string(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        // Validate: lock_version requires version (except on absent).
+        if lock_version && version.is_empty() && state != "absent" {
             result.error = Some(
                 "package executor: lock_version requires version parameter".to_string(),
             );
@@ -1234,9 +1244,9 @@ impl Executor for PackageExecutorWrapper {
 
         // Wildcard: upgrade all packages in a single transaction.
         if name_param.trim() == "*" {
-            if pkg_params.state != "latest" {
+            if pkg_params.version != "latest" || pkg_params.state != "present" {
                 result.error = Some(
-                    "package executor: package \"*\" (wildcard) requires state: latest".to_string(),
+                    "package executor: package \"*\" (wildcard) requires version: latest".to_string(),
                 );
                 self.pkg_mgr.clear_flags();
                 result.duration_ms = start.elapsed().as_millis() as i32;
@@ -1353,6 +1363,9 @@ impl PackageExecutorWrapper {
 
         match p.state {
             "present" => {
+                if p.version == "latest" {
+                    return self.keep_at_latest(name, p, installed, dry_run);
+                }
                 if installed {
                     if !p.version.is_empty() && current_version != p.version {
                         // Version mismatch — upgrade or downgrade.
@@ -1413,52 +1426,9 @@ impl PackageExecutorWrapper {
                 result
             }
             "latest" => {
-                if installed {
-                    // Already installed — upgrade to latest.
-                    if p.update_cache {
-                        if let Err(e) = self.pkg_mgr.update_cache() {
-                            result.error = Some(format!("update cache: {}", e));
-                            return result;
-                        }
-                    }
-                    if dry_run {
-                        // Can't observe a real change without running it.
-                        result.action = Action::Updated;
-                        result.changed = true;
-                        return result;
-                    }
-                    // Snapshot before/after so `changed` reflects whether
-                    // the upgrade actually moved a version (drift honesty).
-                    let before = self.pkg_mgr.installed_snapshot();
-                    if let Err(e) = self.pkg_mgr.upgrade_latest(name) {
-                        result.error = Some(format!("upgrade package {}: {}", name, e));
-                        return result;
-                    }
-                    let after = self.pkg_mgr.installed_snapshot();
-                    if snapshot_changed(before, after) {
-                        result.action = Action::Updated;
-                        result.changed = true;
-                    } else {
-                        result.action = Action::None;
-                        result.changed = false;
-                    }
-                    return result;
-                }
-                // Not installed — install it first.
-                if p.update_cache {
-                    if let Err(e) = self.pkg_mgr.update_cache() {
-                        result.error = Some(format!("update cache: {}", e));
-                        return result;
-                    }
-                }
-                result.action = Action::Created;
-                result.changed = true;
-                if dry_run {
-                    return result;
-                }
-                if let Err(e) = self.pkg_mgr.install(name, "") {
-                    result.error = Some(format!("install package {}: {}", name, e));
-                }
+                result.error = Some(
+                    "package executor: state: latest was retired — use version: latest".to_string(),
+                );
                 result
             }
             "absent" => {
@@ -1492,12 +1462,62 @@ impl PackageExecutorWrapper {
             }
             _ => {
                 result.error = Some(format!(
-                    "package executor: unknown state {:?} (expected present, latest, or absent)",
+                    "package executor: unknown state {:?} (expected present or absent)",
                     p.state
                 ));
                 result
             }
         }
+    }
+
+    /// `version: latest` — install if missing, otherwise upgrade to the
+    /// newest available version. `changed` is derived by diffing installed
+    /// snapshots so a no-movement upgrade doesn't report drift every cycle.
+    fn keep_at_latest(
+        &self,
+        name: &str,
+        p: &PackageParams,
+        installed: bool,
+        dry_run: bool,
+    ) -> ResourceResult {
+        let mut result = ResourceResult::new("package", name);
+        if p.update_cache {
+            if let Err(e) = self.pkg_mgr.update_cache() {
+                result.error = Some(format!("update cache: {}", e));
+                return result;
+            }
+        }
+        if !installed {
+            result.action = Action::Created;
+            result.changed = true;
+            if dry_run {
+                return result;
+            }
+            if let Err(e) = self.pkg_mgr.install(name, "") {
+                result.error = Some(format!("install package {}: {}", name, e));
+            }
+            return result;
+        }
+        if dry_run {
+            // Can't observe a real change without running the upgrade.
+            result.action = Action::Updated;
+            result.changed = true;
+            return result;
+        }
+        let before = self.pkg_mgr.installed_snapshot();
+        if let Err(e) = self.pkg_mgr.upgrade_latest(name) {
+            result.error = Some(format!("upgrade package {}: {}", name, e));
+            return result;
+        }
+        let after = self.pkg_mgr.installed_snapshot();
+        if snapshot_changed(before, after) {
+            result.action = Action::Updated;
+            result.changed = true;
+        } else {
+            result.action = Action::None;
+            result.changed = false;
+        }
+        result
     }
 }
 
@@ -3162,13 +3182,13 @@ mod tests {
     }
 
     #[test]
-    fn pkg_state_latest_installed() {
+    fn pkg_version_latest_installed() {
         let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
         let calls = Arc::clone(&mock.calls);
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "nginx"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), false);
         assert!(result.error.is_none());
         assert!(result.changed);
@@ -3179,13 +3199,13 @@ mod tests {
     }
 
     #[test]
-    fn pkg_state_latest_not_installed() {
+    fn pkg_version_latest_not_installed() {
         let mock = MockPkgMgr::new(vec![]);
         let calls = Arc::clone(&mock.calls);
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "nginx"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), false);
         assert!(result.error.is_none());
         assert!(result.changed);
@@ -3288,13 +3308,13 @@ mod tests {
     }
 
     #[test]
-    fn pkg_state_latest_with_update_cache() {
+    fn pkg_version_latest_with_update_cache() {
         let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
         let calls = Arc::clone(&mock.calls);
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "nginx"),
-            ("state", "latest"),
+            ("version", "latest"),
             ("update_cache", "true"),
         ]), false);
         assert!(result.error.is_none());
@@ -3363,7 +3383,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "*"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), false);
         assert!(result.error.is_none());
         assert!(result.changed);
@@ -3380,7 +3400,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "*"),
-            ("state", "latest"),
+            ("version", "latest"),
             ("update_cache", "true"),
         ]), false);
         assert!(result.error.is_none());
@@ -3399,7 +3419,42 @@ mod tests {
             ("state", "present"),
         ]), false);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("requires state: latest"));
+        assert!(result.error.unwrap().contains("requires version: latest"));
+    }
+
+    #[test]
+    fn pkg_state_latest_retired_errors() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("state: latest was retired — use version: latest"));
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0, "retired state must not touch the package manager");
+    }
+
+    #[test]
+    fn pkg_lock_version_conflicts_with_latest() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("version", "latest"),
+            ("lock_version", "true"),
+        ]), false);
+        assert!(result.error.is_some());
+        assert!(result
+            .error
+            .unwrap()
+            .contains("lock_version conflicts with version: latest"));
     }
 
     #[test]
@@ -3409,7 +3464,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "*"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), true);
         assert!(result.error.is_none());
         assert!(result.changed);
@@ -3424,7 +3479,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "*"),
-            ("state", "latest"),
+            ("version", "latest"),
             ("post_cleanup", "true"),
         ]), false);
         assert!(result.error.is_none());
@@ -3441,7 +3496,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "*"),
-            ("state", "latest"),
+            ("version", "latest"),
             ("flags", "--fix-missing"),
         ]), false);
         assert!(result.error.is_none());
@@ -3457,7 +3512,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "*"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), false);
         assert!(result.error.is_none());
         assert!(!result.changed, "no-op upgrade must not report changed");
@@ -3470,7 +3525,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "*"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), false);
         assert!(result.error.is_none());
         assert!(result.changed, "real upgrade must report changed");
@@ -3484,7 +3539,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "nginx"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), false);
         assert!(result.error.is_none());
         assert!(!result.changed, "no-op upgrade must not report changed");
@@ -3498,7 +3553,7 @@ mod tests {
         let exec = pkg_exec(mock);
         let result = exec.execute(&pkg_params(vec![
             ("package", "nginx"),
-            ("state", "latest"),
+            ("version", "latest"),
         ]), false);
         assert!(result.error.is_none());
         assert!(result.changed, "real upgrade must report changed");

@@ -1009,16 +1009,10 @@ var executorStateVocab = map[string][]string{
 	"kernel_module": {"present", "absent", "loaded", "unloaded"},
 	// network_interface.rs:197 ["present","up","down","absent"].contains(state)
 	"network_interface": {"present", "absent", "up", "down"},
-	// package_windows.rs:256,275,294; generic package executor (runner/mod.rs) same
-	"package": {"present", "absent", "latest"},
-	// npm.rs:62,100,121
-	"npm": {"present", "absent", "latest"},
-	// pip.rs:69,117,137
-	"pip": {"present", "absent", "latest"},
-	// gem.rs:70,106,129
-	"gem": {"present", "absent", "latest"},
-	// nonrepo_package.rs:183 matches!(present|absent|latest)
-	"nonrepo_package": {"present", "absent", "latest"},
+	// The package family (package, npm, pip, gem, nonrepo_package) is default
+	// present|absent since 0.76.91 — `state: latest` was retired in favor of
+	// `version: latest` (retiredStateLatestTypes in validate.go carries the
+	// pointed migration error).
 }
 
 // TestStateValuesMatchExecutors guards the stateValues *values* against executor
@@ -1100,7 +1094,6 @@ func TestStateValueValidation(t *testing.T) {
 		{"mount", "unmounted", map[string]any{"path": "/mnt", "device": "/dev/sdb", "fstype": "ext4"}, false},
 		{"swap", "on", map[string]any{"path": "/swap"}, false}, // BSD alias
 		{"kernel_module", "loaded", map[string]any{"module": "br_netfilter"}, false},
-		{"package", "latest", map[string]any{"package": "nginx"}, false},
 		{"vm", "defined", map[string]any{"vm": "web", "image": "x"}, false},
 		{"vm", "present", map[string]any{"vm": "web", "image": "x"}, true}, // vm has no present
 	}
@@ -1108,6 +1101,63 @@ func TestStateValueValidation(t *testing.T) {
 		if got := hasInvalidStateErr(check(c.typ, c.state, c.extra)); got != c.wantErr {
 			t.Errorf("%s state=%q: invalid-state error = %v, want %v", c.typ, c.state, got, c.wantErr)
 		}
+	}
+}
+
+// TestStateLatestRetired asserts the package family rejects the retired
+// `state: latest` with a pointed migration error naming the new spelling —
+// not the generic invalid-state message.
+func TestStateLatestRetired(t *testing.T) {
+	for _, typ := range []string{"package", "npm", "pip", "gem", "nonrepo_package"} {
+		attrs := map[string]any{"state": "latest", "package": "nginx"}
+		if typ == "nonrepo_package" {
+			attrs["url"] = "https://example.com/nginx.deb"
+		}
+		findings := ValidateConfigcrate(Configcrate{Name: "m", Resources: []Resource{{Name: "r", Type: typ, Attributes: attrs}}})
+		found := false
+		for _, f := range findings {
+			if f.Severity == SeverityError && strings.Contains(f.Message, "state: latest was retired — use version: latest") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: expected retired state: latest error, got: %s", typ, FormatFindings(findings))
+		}
+	}
+}
+
+// TestPackageCrossParamRules covers validatePackage: the wildcard shape and
+// the lock_version × version: latest contradiction.
+func TestPackageCrossParamRules(t *testing.T) {
+	check := func(attrs map[string]any) []Finding {
+		return ValidateConfigcrate(Configcrate{Name: "m", Resources: []Resource{{Name: "r", Type: "package", Attributes: attrs}}})
+	}
+	hasErr := func(findings []Finding, substr string) bool {
+		for _, f := range findings {
+			if f.Severity == SeverityError && strings.Contains(f.Message, substr) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// version: latest with state: present is the valid keep-at-newest shape.
+	if f := check(map[string]any{"package": "nginx", "state": "present", "version": "latest"}); HasErrors(f) {
+		t.Errorf("version: latest should validate cleanly, got: %s", FormatFindings(f))
+	}
+	// Wildcard upgrade-all.
+	if f := check(map[string]any{"package": "*", "state": "present", "version": "latest"}); HasErrors(f) {
+		t.Errorf("wildcard with version: latest should validate cleanly, got: %s", FormatFindings(f))
+	}
+	if f := check(map[string]any{"package": "*", "state": "present"}); !hasErr(f, `requires version: latest`) {
+		t.Errorf("wildcard without version: latest should error, got: %s", FormatFindings(f))
+	}
+	if f := check(map[string]any{"package": "nginx", "state": "present", "version": "latest", "lock_version": true}); !hasErr(f, "lock_version conflicts with version: latest") {
+		t.Errorf("lock_version + version: latest should error, got: %s", FormatFindings(f))
+	}
+	// Templated values defer to the agent.
+	if f := check(map[string]any{"package": "nginx", "state": "present", "version": "{{.Vars.v}}", "lock_version": true}); HasErrors(f) {
+		t.Errorf("templated version should defer to the agent, got: %s", FormatFindings(f))
 	}
 }
 

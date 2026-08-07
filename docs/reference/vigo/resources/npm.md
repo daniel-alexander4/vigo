@@ -8,15 +8,16 @@ Manages Node.js packages globally via npm.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `package` | Yes | -- | Package name. |
-| `state` | Yes | -- | Desired state: `present`, `absent`, or `latest`. |
-| `version` | No | -- | Specific version to install. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
+| `version` | No | -- | Specific version to install, or `latest` to keep the package at the newest published version. |
 | `npm_cmd` | No | `npm` | The npm command to use. |
 
 ## States
 
-- **`present`** -- Ensure the package is installed globally. If `version` is specified and the installed version differs, install the specified version.
+- **`present`** -- Ensure the package is installed globally. If `version` is specified and the installed version differs, install the specified version. With `version: latest`, install or upgrade to the newest version (`npm install -g <package>@latest`).
 - **`absent`** -- Uninstall the package globally.
-- **`latest`** -- Install or upgrade to the latest version (`npm install -g <package>@latest`).
+
+`state: latest` was retired — declare `version: latest` instead.
 
 ## Idempotency
 
@@ -50,7 +51,8 @@ resources:
   - name: Keep npm up to date
     type: npm
     package: npm
-    state: latest
+    version: latest
+    state: present
 ```
 
 ### Uninstall

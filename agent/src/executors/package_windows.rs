@@ -233,6 +233,7 @@ impl Executor for PackageWindowsExecutor {
             .get("state")
             .map(|s| s.as_str())
             .unwrap_or("present");
+        let version = params.get("version").map(|s| s.as_str()).unwrap_or("");
 
         let backend = match Self::detect_backend() {
             Ok(b) => b,
@@ -253,6 +254,35 @@ impl Executor for PackageWindowsExecutor {
         };
 
         match state {
+            "present" if version == "latest" => {
+                if !installed {
+                    // Not installed at all — install it.
+                    result.action = Action::Created;
+                    result.changed = true;
+
+                    if dry_run {
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
+
+                    if let Err(e) = Self::install(backend, &name) {
+                        result.error = Some(e);
+                    }
+                } else {
+                    // Already installed — attempt upgrade.
+                    result.action = Action::Updated;
+                    result.changed = true;
+
+                    if dry_run {
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
+
+                    if let Err(e) = Self::upgrade(backend, &name) {
+                        result.error = Some(e);
+                    }
+                }
+            }
             "present" => {
                 if installed {
                     result.action = Action::None;
@@ -292,33 +322,10 @@ impl Executor for PackageWindowsExecutor {
                 }
             }
             "latest" => {
-                if !installed {
-                    // Not installed at all — install it.
-                    result.action = Action::Created;
-                    result.changed = true;
-
-                    if dry_run {
-                        result.duration_ms = start.elapsed().as_millis() as i32;
-                        return result;
-                    }
-
-                    if let Err(e) = Self::install(backend, &name) {
-                        result.error = Some(e);
-                    }
-                } else {
-                    // Already installed — attempt upgrade.
-                    result.action = Action::Updated;
-                    result.changed = true;
-
-                    if dry_run {
-                        result.duration_ms = start.elapsed().as_millis() as i32;
-                        return result;
-                    }
-
-                    if let Err(e) = Self::upgrade(backend, &name) {
-                        result.error = Some(e);
-                    }
-                }
+                result.error = Some(
+                    "package_windows executor: state: latest was retired — use version: latest"
+                        .to_string(),
+                );
             }
             _ => {
                 result.error = Some(format!(

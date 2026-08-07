@@ -58,7 +58,8 @@ resources:
   - name: Kernel update
     type: package
     package: linux-image-generic
-    state: latest
+    version: latest
+    state: present
 
   - name: Reboot if needed
     type: reboot

@@ -8,17 +8,18 @@ Manages Python packages via pip. Supports version pinning, virtualenvs, and cust
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `package` | Yes | -- | Package name. |
-| `state` | Yes | -- | Desired state: `present`, `absent`, or `latest`. |
-| `version` | No | -- | Specific version to install (e.g., `2.28.0`). |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
+| `version` | No | -- | Specific version to install (e.g., `2.28.0`), or `latest` to keep the package at the newest published version. |
 | `extra_args` | No | -- | Additional arguments passed to `pip install` (space-separated). |
 | `pip_cmd` | No | `pip3` | The pip command to use. |
 | `virtualenv` | No | -- | Path to a virtualenv. If set, uses `<virtualenv>/bin/<pip_cmd>`. |
 
 ## States
 
-- **`present`** -- Ensure the package is installed. If `version` is specified and the installed version differs, upgrade to the specified version.
+- **`present`** -- Ensure the package is installed. If `version` is specified and the installed version differs, upgrade to the specified version. With `version: latest`, upgrade to the newest version (`pip install --upgrade`).
 - **`absent`** -- Uninstall the package.
-- **`latest`** -- Upgrade the package to the latest version (`pip install --upgrade`).
+
+`state: latest` was retired — declare `version: latest` instead.
 
 ## Idempotency
 
@@ -62,7 +63,8 @@ resources:
   - name: Keep boto3 up to date
     type: pip
     package: boto3
-    state: latest
+    version: latest
+    state: present
 ```
 
 ### Uninstall
@@ -83,6 +85,6 @@ Cross-platform. Requires pip to be installed.
 
 - The `extra_args` parameter is split on whitespace and appended to the `pip install` command.
 - When using `virtualenv`, the pip binary path is constructed as `<virtualenv>/bin/<pip_cmd>`.
-- The `latest` state always runs `pip install --upgrade`, so it always reports `changed: true`.
+- `version: latest` always runs `pip install --upgrade`, so it always reports `changed: true`.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

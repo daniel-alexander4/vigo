@@ -135,7 +135,7 @@ var generatedSchemas = map[string][]string{
 	"network_vlan":             {"credential", "device_type", "host", "name", "port", "state", "username", "vlan", "vlan_name"},
 	"nonrepo_package":          {"allow_downgrade", "artifact", "flags", "headers", "lock_version", "package", "post_cleanup", "post_install", "pre_install", "purge", "retries", "retry_delay", "sha256", "state", "timeout", "update_cache", "url", "version"},
 	"npm":                      {"npm_cmd", "package", "state", "version"},
-	"package":                  {"package", "state"},
+	"package":                  {"package", "state", "version"},
 	"pip":                      {"extra_args", "package", "pip_cmd", "state", "version", "virtualenv"},
 	"powershell":               {"command", "cwd", "environment", "onlyif", "unless"},
 	"process":                  {"count", "kill_timeout", "match_mode", "max", "min", "process", "restart_method", "restart_unit", "signal", "state"},

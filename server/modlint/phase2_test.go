@@ -322,9 +322,31 @@ resources:
 	}
 }
 
-// --- package-state-latest ---
+// --- package-version-latest ---
 
-func TestLint_PackageStateLatest_Info(t *testing.T) {
+func TestLint_PackageVersionLatest_Info(t *testing.T) {
+	input := `name: m
+resources:
+  - name: vim
+    type: package
+    package: vim
+    version: latest
+    state: present
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected no errors, got: %v", r.Errors)
+	}
+	f := findFinding(r, "package-version-latest")
+	if f == nil {
+		t.Fatalf("expected package-version-latest finding, got %v", r.Findings)
+	}
+	if f.Severity != Info {
+		t.Errorf("severity = %q, want info", f.Severity)
+	}
+}
+
+func TestLint_PackageStateLatest_Retired(t *testing.T) {
 	input := `name: m
 resources:
   - name: vim
@@ -333,15 +355,17 @@ resources:
     state: latest
 `
 	r := Lint([]byte(input), Options{})
-	if !r.OK() {
-		t.Fatalf("expected no errors, got: %v", r.Errors)
+	if r.OK() {
+		t.Fatalf("expected retired state: latest to error, got findings only: %v", r.Findings)
 	}
-	f := findFinding(r, "package-state-latest")
-	if f == nil {
-		t.Fatalf("expected package-state-latest finding, got %v", r.Findings)
+	found := false
+	for _, e := range r.Errors {
+		if strings.Contains(e, "state: latest was retired — use version: latest") {
+			found = true
+		}
 	}
-	if f.Severity != Info {
-		t.Errorf("severity = %q, want info", f.Severity)
+	if !found {
+		t.Errorf("expected pointed retirement error, got: %v", r.Errors)
 	}
 }
 

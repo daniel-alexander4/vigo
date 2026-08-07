@@ -59,6 +59,27 @@ impl Executor for NpmExecutor {
         let current = self.get_version(npm_cmd, &name);
 
         match state {
+            "present" if version == "latest" => {
+                if dry_run {
+                    result.action = Action::Updated;
+                    result.changed = true;
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+
+                let pkg_spec = format!("{}@latest", name);
+                match self.runner.run(npm_cmd, &["install", "-g", &pkg_spec]) {
+                    Ok(o) if !o.status.success() => {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        result.error = Some(format!("npm install latest: {}", stderr));
+                    }
+                    Err(e) => result.error = Some(format!("npm install latest: {}", e)),
+                    _ => {
+                        result.action = Action::Updated;
+                        result.changed = true;
+                    }
+                }
+            }
             "present" => {
                 // Commit action/changed only after the runner reports success.
                 let intended = if let Some(ref cur) = current {
@@ -98,25 +119,8 @@ impl Executor for NpmExecutor {
                 }
             }
             "latest" => {
-                if dry_run {
-                    result.action = Action::Updated;
-                    result.changed = true;
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
-                }
-
-                let pkg_spec = format!("{}@latest", name);
-                match self.runner.run(npm_cmd, &["install", "-g", &pkg_spec]) {
-                    Ok(o) if !o.status.success() => {
-                        let stderr = String::from_utf8_lossy(&o.stderr);
-                        result.error = Some(format!("npm install latest: {}", stderr));
-                    }
-                    Err(e) => result.error = Some(format!("npm install latest: {}", e)),
-                    _ => {
-                        result.action = Action::Updated;
-                        result.changed = true;
-                    }
-                }
+                result.error =
+                    Some("npm executor: state: latest was retired — use version: latest".into());
             }
             "absent" => {
                 if current.is_none() {
@@ -268,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn latest_installs_at_latest() {
+    fn version_latest_installs_at_latest() {
         let json = r#"{"dependencies":{"express":{"version":"4.18.0"}}}"#;
         let mock = MockRunner::new(vec![
             ok_output(json), // npm list
@@ -279,7 +283,7 @@ mod tests {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[("package", "express"), ("state", "latest")]),
+            &make_params(&[("package", "express"), ("version", "latest")]),
             false,
         );
         assert_eq!(result.action, Action::Updated);
@@ -290,6 +294,24 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert!(calls[1].1.contains(&"install".to_string()));
         assert!(calls[1].1.contains(&"express@latest".to_string()));
+    }
+
+    #[test]
+    fn state_latest_retired_errors() {
+        let json = r#"{"dependencies":{"express":{"version":"4.18.0"}}}"#;
+        let mock = MockRunner::new(vec![ok_output(json)]); // npm list only
+        let exec = NpmExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[("package", "express"), ("state", "latest")]),
+            false,
+        );
+        assert!(result
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("state: latest was retired — use version: latest"));
     }
 
     #[test]

@@ -183,9 +183,17 @@ impl Executor for NonRepoPackageExecutor {
         result.resource_name = pkg_name.clone();
 
         // Validate state.
-        if !matches!(state, "present" | "absent" | "latest") {
+        if state == "latest" {
+            result.error = Some(
+                "nonrepo_package executor: state: latest was retired — use version: latest"
+                    .to_string(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+        if !matches!(state, "present" | "absent") {
             result.error = Some(format!(
-                "nonrepo_package executor: invalid state {:?} (expected present, absent, or latest)",
+                "nonrepo_package executor: invalid state {:?} (expected present or absent)",
                 state
             ));
             result.duration_ms = start.elapsed().as_millis() as i32;
@@ -209,7 +217,10 @@ impl Executor for NonRepoPackageExecutor {
         let (installed, installed_version) = check_installed(&*self.runner, &pkg_name, format);
 
         if installed {
-            if state == "present" && !version.is_empty() {
+            if version == "latest" {
+                // version: latest — always proceed to download; the sha256
+                // comparison downstream avoids a redundant install.
+            } else if !version.is_empty() {
                 if installed_version.as_deref() == Some(version.as_str()) {
                     // Exact version match — no-op.
                     debug!(
@@ -222,7 +233,7 @@ impl Executor for NonRepoPackageExecutor {
                     return result;
                 }
                 // Version differs — fall through to download and install (upgrade).
-            } else if state == "present" {
+            } else {
                 // No version specified, already installed — no-op.
                 debug!(
                     package = %pkg_name,
@@ -232,7 +243,6 @@ impl Executor for NonRepoPackageExecutor {
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
-            // state == "latest" — always proceed to download.
         }
 
         // For dry_run, report what would happen without downloading.

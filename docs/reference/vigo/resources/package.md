@@ -7,13 +7,13 @@ Installs, upgrades, and removes OS packages. Auto-detects the system's package m
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `package` | Yes | -- | Package name. Supports comma-separated lists for multiple packages. Use `"*"` with `state: latest` to upgrade all installed packages. |
-| `state` | Yes | -- | Desired state: `present`, `latest`, or `absent`. |
-| `version` | No | -- | Specific version to install. Format depends on the package manager (e.g., `1.2.3-1` for APT/DNF). |
+| `package` | Yes | -- | Package name. Supports comma-separated lists for multiple packages. Use `"*"` with `version: latest` to upgrade all installed packages. |
+| `state` | Yes | -- | Desired state: `present` or `absent`. |
+| `version` | No | -- | Which version to hold. A specific version pins it — format depends on the package manager (e.g., `1.2.3-1` for APT/DNF). The special value `latest` keeps the package at the newest version the repository offers. Omitted: any installed version satisfies the resource. |
 | `allow_downgrade` | No | `false` | When `true`, uses downgrade-safe commands when changing to a different version. APT uses `--allow-downgrades`, DNF/YUM use `dnf downgrade`/`yum downgrade`. Other package managers fall back to a regular install. |
 | `purge` | No | `false` | When `true` and `state: absent`, removes config files too. APT uses `apt-get purge`, others fall back to regular remove. |
 | `update_cache` | No | `false` | When `true`, updates the package cache before install/upgrade. APT runs `apt-get update -qq`, DNF/YUM run `check-update`, APK runs `apk update`, etc. |
-| `lock_version` | No | `false` | When `true`, holds the package at its installed version after install/upgrade. Requires `version` parameter (except on `state: absent` or `state: latest`). APT uses `apt-mark hold/unhold`, DNF uses `dnf versionlock add/delete`, Zypper uses `addlock/removelock`, Brew uses `pin/unpin`. On `state: absent`, automatically unholds before removing. |
+| `lock_version` | No | `false` | When `true`, holds the package at its installed version after install/upgrade. Requires the `version` parameter (except on `state: absent`) and conflicts with `version: latest` — a hold blocks exactly the upgrades `latest` exists to perform. APT uses `apt-mark hold/unhold`, DNF uses `dnf versionlock add/delete`, Zypper uses `addlock/removelock`, Brew uses `pin/unpin`. On `state: absent`, automatically unholds before removing. |
 | `post_cleanup` | No | `false` | When `true`, removes orphaned dependencies after a successful install or upgrade. APT uses `apt-get autoremove -y`, DNF/YUM use `autoremove -y`, FreeBSD pkg uses `autoremove -y`, Brew uses `cleanup`. Non-fatal — if cleanup fails, the install/upgrade still reports success. |
 | `flags` | No | -- | Extra flags appended to install/upgrade/remove commands. Space-separated string (e.g., `"--no-install-recommends --fix-broken"`). Flags are passed directly to the underlying package manager command. |
 | `timeout` | No | -- | Execution timeout in seconds. Reserved for future use — currently parsed and validated but not wired into execution (built-in bounds apply: 60s for status queries, 1h for install/remove/upgrade; the runner additionally reports any resource exceeding 300s). |
@@ -22,15 +22,20 @@ Installs, upgrades, and removes OS packages. Auto-detects the system's package m
 
 ## States
 
-- **`present`** -- Ensure the package is installed. If `version` is specified and the installed version differs, upgrade (or downgrade if `allow_downgrade: true`) to the specified version.
-- **`latest`** -- Ensure the package is at the latest available version. If not installed, install it. If installed, always run an upgrade to pick up the newest version from the repository. APT uses `apt-get install --only-upgrade -y`, DNF uses `dnf upgrade -y`, others use their native upgrade commands.
+- **`present`** -- Ensure the package is installed. Which version is the `version` parameter's axis: a specific version upgrades (or downgrades if `allow_downgrade: true`) on mismatch; `version: latest` keeps it at the newest available (see below); omitted, any installed version satisfies the resource.
 - **`absent`** -- Remove the package. If `purge: true`, also removes config files.
+
+`state: latest` was retired — declare `version: latest` instead. State is the resource's lifecycle lever (`present`/`absent`); which version to hold belongs to `version`.
+
+## `version: latest`
+
+Keeps the package at the latest available version. If not installed, install it. If installed, always run an upgrade to pick up the newest version from the repository. APT uses `apt-get install --only-upgrade -y`, DNF uses `dnf upgrade -y`, others use their native upgrade commands.
 
 ## Idempotency
 
-Queries the package manager to check if the package is installed and its current version. Only installs, upgrades, or removes when drift is detected. `state: latest` always attempts an upgrade when the package is already installed (the package manager itself is idempotent if already at the latest version).
+Queries the package manager to check if the package is installed and its current version. Only installs, upgrades, or removes when drift is detected. `version: latest` always attempts an upgrade when the package is already installed (the package manager itself is idempotent if already at the latest version).
 
-`state: latest` reports `changed` honestly: the agent snapshots the installed-package set before and after the upgrade and reports a change **only when something actually moved**. A `latest` upgrade (single package or `package: "*"`) that finds nothing to do reports `Settled` — it does not inflate `ChangedCount` or trip drift detection on a fleet that runs a routine upgrade configcrate every cycle. (If the snapshot can't be taken, the run falls back to reporting a change.)
+`version: latest` reports `changed` honestly: the agent snapshots the installed-package set before and after the upgrade and reports a change **only when something actually moved**. A `latest` upgrade (single package or `package: "*"`) that finds nothing to do reports `Settled` — it does not inflate `ChangedCount` or trip drift detection on a fleet that runs a routine upgrade configcrate every cycle. (If the snapshot can't be taken, the run falls back to reporting a change.)
 
 ## Package Manager Detection
 
@@ -86,19 +91,21 @@ resources:
   - name: Keep nginx up to date
     type: package
     package: nginx
-    state: latest
+    version: latest
+    state: present
 ```
 
 ### Upgrade all packages
 
-Use `package: "*"` with `state: latest` to upgrade all installed packages in a single transaction. This is the idiomatic replacement for `apt-get upgrade` / `dnf upgrade` — it routes through the package resilience system (error classification, circuit breaker, blocked outcome) so a single broken repo doesn't fail the entire upgrade.
+Use `package: "*"` with `version: latest` to upgrade all installed packages in a single transaction. This is the idiomatic replacement for `apt-get upgrade` / `dnf upgrade` — it routes through the package resilience system (error classification, circuit breaker, blocked outcome) so a single broken repo doesn't fail the entire upgrade.
 
 ```yaml
 resources:
   - name: Upgrade all
     type: package
     package: "*"
-    state: latest
+    version: latest
+    state: present
     update_cache: "true"
     post_cleanup: "true"
     flags: "--fix-missing"
@@ -254,7 +261,7 @@ Network transient errors (DNS resolution failure, connection timeout) are retrie
 - APT lock contention is retried with exponential backoff (3s, 6s, 12s).
 - `DEBIAN_FRONTEND=noninteractive` is set for APT operations.
 - If no supported package manager is detected, the executor logs a warning and all `package` resources will fail with an error.
-- `lock_version` requires the `version` parameter on `state: present` but not on `state: absent` or `state: latest`.
+- `lock_version` requires the `version` parameter on `state: present` but not on `state: absent`, and conflicts with `version: latest` (rejected at publish).
 - `purge` is only valid with `state: absent`.
 - `flags` are split on whitespace and appended to the package manager command for install, upgrade, downgrade, and remove operations.
 - `timeout`, `retries`, and `retry_delay` are parsed and validated but not yet wired into execution — built-in bounds and APT's internal retry logic apply.
