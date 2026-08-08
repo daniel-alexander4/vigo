@@ -213,8 +213,24 @@ impl Executor for NonRepoPackageExecutor {
             );
         }
 
-        // Check if already installed and at the right version.
-        let (installed, installed_version) = check_installed(&*self.runner, &pkg_name, format);
+        // Check if already installed and at the right version. A query that
+        // FAILED (vs answered "absent") is a hard stop before any download or
+        // install decision — acting on it is how a niced dpkg -s hiccup
+        // becomes a phantom fresh-install of the pinned version, i.e. a
+        // downgrade of a hand-upgraded box (raspberrypi, 2026-08-08). The
+        // next convergence run re-asks.
+        let (installed, installed_version) = match check_installed(&*self.runner, &pkg_name, format) {
+            Ok(v) => v,
+            Err(why) => {
+                result.error = Some(format!(
+                    "nonrepo_package executor: cannot determine whether {} is installed ({}); \
+                     refusing to act — a failed query must not read as an absent package",
+                    pkg_name, why
+                ));
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
 
         if installed {
             if version == "latest" {
@@ -416,7 +432,10 @@ impl Executor for NonRepoPackageExecutor {
                 // The fixer exiting 0 doesn't prove this package configured —
                 // apt may have resolved other broken packages and left this
                 // one alone. Confirm against dpkg before claiming success.
-                let (now_installed, _) = check_installed(&*self.runner, &pkg_name, format);
+                let now_installed = matches!(
+                    check_installed(&*self.runner, &pkg_name, format),
+                    Ok((true, _))
+                );
                 if !now_installed {
                     result.error = Some(e);
                     result.duration_ms = start.elapsed().as_millis() as i32;
@@ -611,12 +630,24 @@ fn package_name_from_url(url: &str, format: PackageFormat) -> String {
 // Installed check
 // ---------------------------------------------------------------------------
 
-/// Check if a package is installed and return (installed, version).
+/// Check whether a package is installed: `Ok((installed, version))` from a
+/// query that ANSWERED, `Err(why)` from a query that FAILED.
+///
+/// The distinction is load-bearing (the pkgmgr family learned it first — see
+/// `run_pkg`'s doc comment): `execute()` fresh-installs over "not installed",
+/// so folding a timeout or an unclassifiable exit into `(false, None)` turns
+/// a wobbly `dpkg -s` into a phantom install of the crate's pinned version —
+/// which is a DOWNGRADE on any box hand-upgraded past it. Exactly that
+/// happened on raspberrypi (2026-08-08 02:43 UTC: run-result
+/// `action=created` for a package dpkg's log shows installed for hours;
+/// hesplay 0.45.11 silently replaced by 0.45.10). Only a query that plainly
+/// says "not installed" may answer absent; everything else is an error the
+/// caller must refuse to act on — the next convergence run re-asks.
 fn check_installed(
     runner: &dyn CommandRunner,
     name: &str,
     format: PackageFormat,
-) -> (bool, Option<String>) {
+) -> Result<(bool, Option<String>), String> {
     match format {
         PackageFormat::Deb => {
             // dpkg -s <name>
@@ -634,7 +665,7 @@ fn check_installed(
                             .lines()
                             .find(|l| l.starts_with("Version:"))
                             .map(|l| l.trim_start_matches("Version:").trim().to_string());
-                        return (true, ver);
+                        return Ok((true, ver));
                     }
 
                     // Broken state (half-installed, half-configured, reinst-required, etc.)
@@ -648,24 +679,35 @@ fn check_installed(
                             "nonrepo_package: dpkg broken state, attempting repair"
                         );
                         let _ = runner.run_niced_timeout("dpkg", &["--configure", name], PKG_NICE, PKG_MUTATE_TIMEOUT);
-                        // Re-check after repair.
-                        if let Ok(o2) = runner.run_niced_timeout("dpkg", &["-s", name], PKG_NICE, PKG_QUERY_TIMEOUT) {
-                            if o2.status.success() {
+                        // Re-check after repair. A re-check that FAILS must
+                        // propagate — the old code swallowed it into "not
+                        // installed", the same fail-open in a second coat.
+                        return match runner.run_niced_timeout("dpkg", &["-s", name], PKG_NICE, PKG_QUERY_TIMEOUT) {
+                            Ok(o2) if o2.status.success() => {
                                 let stdout2 = String::from_utf8_lossy(&o2.stdout);
                                 if stdout2.lines().any(|l| l.starts_with("Status:") && l.contains("install ok installed")) {
                                     let ver = stdout2
                                         .lines()
                                         .find(|l| l.starts_with("Version:"))
                                         .map(|l| l.trim_start_matches("Version:").trim().to_string());
-                                    return (true, ver);
+                                    Ok((true, ver))
+                                } else {
+                                    // The query answered: known package, still
+                                    // not properly installed — installing is
+                                    // the remediation.
+                                    Ok((false, None))
                                 }
                             }
-                        }
+                            Ok(o2) => classify_deb_query_failure(&o2),
+                            Err(e) => Err(format!("dpkg -s {} (post-repair re-check): {}", name, e)),
+                        };
                     }
 
-                    (false, None)
+                    // The query answered with a known-but-not-installed state.
+                    Ok((false, None))
                 }
-                _ => (false, None),
+                Ok(o) => classify_deb_query_failure(&o),
+                Err(e) => Err(format!("dpkg -s {}: {}", name, e)),
             }
         }
         PackageFormat::Rpm => {
@@ -674,12 +716,31 @@ fn check_installed(
                 Ok(o) if o.status.success() => {
                     let version = String::from_utf8_lossy(&o.stdout).trim().to_string();
                     if version.is_empty() || version.contains("not installed") {
-                        (false, None)
+                        Ok((false, None))
                     } else {
-                        (true, Some(version))
+                        Ok((true, Some(version)))
                     }
                 }
-                _ => (false, None),
+                // rpm -q exits non-zero for a genuinely absent package, saying
+                // so on stdout; anything else non-zero is a failed query.
+                Ok(o) => {
+                    let text = format!(
+                        "{}{}",
+                        String::from_utf8_lossy(&o.stdout),
+                        String::from_utf8_lossy(&o.stderr)
+                    );
+                    if text.contains("not installed") {
+                        Ok((false, None))
+                    } else {
+                        Err(format!(
+                            "rpm -q {} exited {:?}: {}",
+                            name,
+                            o.status.code(),
+                            text.trim()
+                        ))
+                    }
+                }
+                Err(e) => Err(format!("rpm -q {}: {}", name, e)),
             }
         }
         PackageFormat::Pkg => {
@@ -691,9 +752,28 @@ fn check_installed(
                         .lines()
                         .find(|l| l.starts_with("version:"))
                         .map(|l| l.trim_start_matches("version:").trim().to_string());
-                    (true, ver)
+                    Ok((true, ver))
                 }
-                _ => (false, None),
+                // pkgutil exits non-zero with "No receipt for ..." when the
+                // package is genuinely absent.
+                Ok(o) => {
+                    let text = format!(
+                        "{}{}",
+                        String::from_utf8_lossy(&o.stdout),
+                        String::from_utf8_lossy(&o.stderr)
+                    );
+                    if text.contains("No receipt") {
+                        Ok((false, None))
+                    } else {
+                        Err(format!(
+                            "pkgutil --pkg-info {} exited {:?}: {}",
+                            name,
+                            o.status.code(),
+                            text.trim()
+                        ))
+                    }
+                }
+                Err(e) => Err(format!("pkgutil --pkg-info {}: {}", name, e)),
             }
         }
         PackageFormat::Msi => {
@@ -715,19 +795,45 @@ fn check_installed(
                             .find(|l| l.starts_with("Version="))
                             .map(|l| l.trim_start_matches("Version=").trim().to_string());
                         if ver.is_some() {
-                            (true, ver)
+                            Ok((true, ver))
                         } else {
-                            (false, None)
+                            Ok((false, None))
                         }
                     }
-                    _ => (false, None),
+                    Ok(o) => Err(format!(
+                        "wmic product query for {} exited {:?}",
+                        name,
+                        o.status.code()
+                    )),
+                    Err(e) => Err(format!("wmic product query for {}: {}", name, e)),
                 }
             }
             #[cfg(not(windows))]
             {
-                (false, None)
+                Ok((false, None))
             }
         }
+    }
+}
+
+/// Classify a non-success `dpkg -s` exit: dpkg says "is not installed" for a
+/// genuinely absent package (a clean answer), while a locked status database,
+/// an OOM-killed child or any other failure is a query that did NOT answer —
+/// and must never read as absence.
+fn classify_deb_query_failure(o: &std::process::Output) -> Result<(bool, Option<String>), String> {
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    if text.contains("is not installed") {
+        Ok((false, None))
+    } else {
+        Err(format!(
+            "dpkg -s exited {:?}: {}",
+            o.status.code(),
+            text.trim()
+        ))
     }
 }
 
@@ -847,7 +953,21 @@ fn handle_absent(
 ) -> ResourceResult {
     let mut result = ResourceResult::new("nonrepo_package", name);
 
-    let (installed, _) = check_installed(runner, name, format);
+    let installed = match check_installed(runner, name, format) {
+        Ok((i, _)) => i,
+        Err(why) => {
+            // Fail safe in the other direction too: an unanswerable query
+            // must not settle as "already absent" — that would hide real
+            // drift behind a wobbly dpkg.
+            result.error = Some(format!(
+                "nonrepo_package executor: cannot determine whether {} is installed ({}); \
+                 refusing to act on state: absent",
+                name, why
+            ));
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+    };
     if !installed {
         result.action = Action::None;
         result.duration_ms = start.elapsed().as_millis() as i32;
@@ -1246,7 +1366,7 @@ mod tests {
     #[test]
     fn present_not_installed_installs() {
         let mock = MockRunner::new(vec![
-            fail_output("package not installed"),  // dpkg -s (not installed)
+            fail_output("dpkg-query: package 'myapp' is not installed and no information is available"),  // dpkg -s (not installed)
             ok_output(""),                         // curl download
             ok_output(""),                         // dpkg -i
             ok_output(""),                         // env apt-get install -f (dep fix)
@@ -1286,7 +1406,7 @@ mod tests {
     #[test]
     fn present_unmet_deps_resolved_by_fixer() {
         let mock = MockRunner::new(vec![
-            fail_output("package not installed"), // dpkg -s (not installed)
+            fail_output("dpkg-query: package 'myapp' is not installed and no information is available"), // dpkg -s (not installed)
             ok_output(""),                        // curl download
             fail_output(DPKG_DEP_FAILURE),        // dpkg -i (unpacked, unconfigured)
             ok_output(""),                        // env apt-get install -f (dep fix)
@@ -1317,11 +1437,11 @@ mod tests {
     #[test]
     fn present_unmet_deps_still_broken_after_fixer_errors() {
         let mock = MockRunner::new(vec![
-            fail_output("package not installed"), // dpkg -s (not installed)
+            fail_output("dpkg-query: package 'myapp' is not installed and no information is available"), // dpkg -s (not installed)
             ok_output(""),                        // curl download
             fail_output(DPKG_DEP_FAILURE),        // dpkg -i (unpacked, unconfigured)
             ok_output(""),                        // env apt-get install -f (claims success)
-            fail_output("package not installed"), // dpkg -s re-verify: still not configured
+            fail_output("dpkg-query: package 'myapp' is not installed and no information is available"), // dpkg -s re-verify: still not configured
         ]);
         let exec = NonRepoPackageExecutor {
             runner: Box::new(mock),
@@ -1338,7 +1458,7 @@ mod tests {
     #[test]
     fn non_dependency_install_failure_skips_fixer() {
         let mock = MockRunner::new(vec![
-            fail_output("package not installed"), // dpkg -s (not installed)
+            fail_output("dpkg-query: package 'myapp' is not installed and no information is available"), // dpkg -s (not installed)
             ok_output(""),                        // curl download
             fail_output("dpkg: error: cannot access archive: No such file or directory"),
         ]);
@@ -1452,7 +1572,7 @@ mod tests {
     #[test]
     fn absent_not_installed_noop() {
         let mock = MockRunner::new(vec![
-            fail_output("package not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed and no information is available"), // dpkg -s
         ]);
         let exec = NonRepoPackageExecutor {
             runner: Box::new(mock),
@@ -1503,7 +1623,7 @@ mod tests {
     #[test]
     fn lock_version_after_install() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"), // dpkg -s
             ok_output(""),                // curl download
             ok_output(""),                // dpkg -i
             ok_output(""),                // env apt-get install -f (dep fix)
@@ -1536,7 +1656,7 @@ mod tests {
     #[test]
     fn pre_post_install_commands_run() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"), // dpkg -s
             ok_output(""),                // pre_install: sh -c "echo pre"
             ok_output(""),                // curl download
             ok_output(""),                // dpkg -i
@@ -1582,7 +1702,7 @@ mod tests {
         let _actual_hash = file_sha256(pkg_path.to_str().unwrap()).unwrap();
 
         let mock = MockRunner::new(vec![
-            fail_output("not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"), // dpkg -s
             ok_output(""),                // curl download (will write to tmp dir)
         ]);
         let exec = NonRepoPackageExecutor {
@@ -1614,7 +1734,7 @@ mod tests {
     #[test]
     fn dry_run_does_not_download() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"), // dpkg -s
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = NonRepoPackageExecutor {
@@ -1829,7 +1949,7 @@ mod tests {
     #[test]
     fn dep_resolution_failure_is_fatal() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"), // dpkg -s
             ok_output(""),                // curl download
             ok_output(""),                // dpkg -i
             fail_output("E: Unable to correct problems, you have held broken packages."), // env apt-get install -f
@@ -1853,7 +1973,7 @@ mod tests {
     #[test]
     fn update_cache_runs_before_install() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"), // dpkg -s
             ok_output(""),                // curl download
             ok_output(""),                // env apt-get update (cache update)
             ok_output(""),                // dpkg -i
@@ -1888,7 +2008,7 @@ mod tests {
     #[test]
     fn post_cleanup_runs_after_install() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"), // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"), // dpkg -s
             ok_output(""),                // curl download
             ok_output(""),                // dpkg -i
             ok_output(""),                // env apt-get install -f (dep fix)
@@ -1947,7 +2067,7 @@ mod tests {
     #[test]
     fn lock_retry_on_contention() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"),                               // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"),                               // dpkg -s
             ok_output(""),                                               // curl download
             fail_output("E: Could not get lock /var/lib/dpkg/lock"),    // dpkg -i (lock held, retry 1)
             ok_output(""),                                               // dpkg -i (retry succeeds)
@@ -2027,7 +2147,7 @@ mod tests {
     #[test]
     fn flags_passed_to_installer() {
         let mock = MockRunner::new(vec![
-            fail_output("not installed"),  // dpkg -s
+            fail_output("dpkg-query: package 'myapp' is not installed"),  // dpkg -s
             ok_output(""),                 // curl download
             ok_output(""),                 // dpkg -i --force-confold
             ok_output(""),                 // env apt-get install -f (dep fix)
@@ -2049,5 +2169,118 @@ mod tests {
         let calls = calls.lock().unwrap();
         let install_call = &calls[2];
         assert!(install_call.1.contains(&"--force-confold".to_string()));
+    }
+
+    // --- check_installed fail-safe: a failed query must never read as absent ---
+    //
+    // The raspberrypi incident (2026-08-08 02:43 UTC): a dpkg -s that did not
+    // answer was folded into "not installed", and the executor fresh-installed
+    // the crate's pinned version over a newer hand-installed build — a phantom
+    // downgrade. These pin the fix: only a query that plainly says the package
+    // is absent may trigger an install; timeouts and unclassifiable failures
+    // are a resource error and NOTHING is downloaded or installed.
+
+    #[test]
+    fn query_timeout_refuses_to_install() {
+        let mock = MockRunner::empty();
+        mock.responses.lock().unwrap().push(Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "dpkg -s timed out after 30s",
+        )));
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "present")]),
+            false,
+        );
+        let err = result.error.expect("a timed-out query must be a resource error");
+        assert!(err.contains("cannot determine"), "unexpected error text: {err}");
+        assert!(!result.changed);
+        // The one call is the query itself — no download, no dpkg -i.
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1, "acted on an unanswered query: {calls:?}");
+        assert_eq!(calls[0].0, "dpkg");
+        assert!(calls[0].1.contains(&"-s".to_string()));
+    }
+
+    #[test]
+    fn unclassifiable_query_failure_refuses_to_install() {
+        // Non-zero exit WITHOUT dpkg's "is not installed" answer — a locked
+        // status database, an OOM-killed child, garbage. Must refuse, not
+        // install.
+        let mock = MockRunner::new(vec![
+            fail_output("dpkg: error: dpkg status database is locked by another process"),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "present")]),
+            false,
+        );
+        assert!(result.error.is_some(), "a failed query must surface as an error");
+        assert!(!result.changed);
+        assert_eq!(calls.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn clean_not_installed_answer_still_installs() {
+        // The genuine-absence path must keep working: dpkg's real wording on a
+        // clean "absent" answer proceeds to install (dry_run keeps the test to
+        // the decision itself).
+        let mock = MockRunner::new(vec![fail_output(
+            "dpkg-query: package 'myapp' is not installed and no information is available",
+        )]);
+        let exec = NonRepoPackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "present")]),
+            true,
+        );
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+    }
+
+    #[test]
+    fn repair_recheck_failure_refuses_to_install() {
+        // Broken-state repair path: the post-repair re-check failing must
+        // propagate — the old code swallowed it into "not installed".
+        let mock = MockRunner::empty();
+        {
+            let mut r = mock.responses.lock().unwrap();
+            r.push(Ok(ok_output("Status: install ok half-installed\n"))); // dpkg -s
+            r.push(Ok(ok_output("")));                                     // dpkg --configure
+            r.push(Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "dpkg -s timed out",
+            ))); // re-check
+        }
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "present")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(!result.changed);
+        assert_eq!(calls.lock().unwrap().len(), 3, "must stop after the failed re-check");
+    }
+
+    #[test]
+    fn absent_refuses_on_failed_query() {
+        // The other direction of the same rule: state: absent must not settle
+        // as "already gone" off a query that never answered.
+        let mock = MockRunner::empty();
+        mock.responses.lock().unwrap().push(Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "dpkg -s timed out",
+        )));
+        let exec = NonRepoPackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[("url", deb_url()), ("state", "absent")]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(!result.changed);
+        assert_eq!(result.action, Action::None);
     }
 }
