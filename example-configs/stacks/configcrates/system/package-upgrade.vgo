@@ -2,6 +2,9 @@ name: package-upgrade
 description: Upgrade all system packages across Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows
 
 vars:
+  # Set false to upgrade packages but never reboot automatically (workstations,
+  # anything with an operator sitting in front of it). Consumed by the onlyif
+  # guards on reboot-if-needed / reboot-if-needed-windows below.
   upgrade_reboot: true
 
 resources:
@@ -142,15 +145,25 @@ resources:
     type: exec
     command: "shutdown -r +1 'Rebooting after package upgrade'"
     when: changed
-    # Reboot if either signal is present:
+    # Reboot only if upgrade_reboot is on AND a reboot signal is present:
     #   Debian/Ubuntu — /var/run/reboot-required flag file
     #   RHEL/Fedora   — needs-restarting -r exits 1
     # Each branch is parenthesised so the success of one short-circuits
     # the other without leaking $? from a partial command.
-    onlyif: "(test -f /var/run/reboot-required) || (needs-restarting -r 2>/dev/null; test $? -eq 1)"
+    #
+    # upgrade_reboot is gated here rather than in `when:` on purpose. A var
+    # referenced alongside the `changed` sentinel resolves to false on the
+    # agent (eval_bundle passes `changed` expressions through unsubstituted,
+    # and the runner resolves every non-`changed` VarRef to false), so
+    # `when: changed && upgrade_reboot` would never fire. The template
+    # renderer has no if/else — only value substitution — so the var is
+    # compared as a string in the guard itself.
+    onlyif: "test '{{ .Vars.upgrade_reboot }}' = 'true' && (test -f /var/run/reboot-required || (needs-restarting -r 2>/dev/null; test $? -eq 1))"
 
   - name: reboot-if-needed-windows
     type: exec
     command: "shutdown /r /t 60 /c \"Rebooting after package upgrade\""
     when: changed
-    onlyif: "powershell -Command \"(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue) -ne $null\""
+    # Same upgrade_reboot gate as the Unix branch, in cmd syntax: `exit /b 1`
+    # ends the guard before the pending-rename probe ever runs.
+    onlyif: "if /i not \"{{ .Vars.upgrade_reboot }}\"==\"true\" exit /b 1 & powershell -Command \"(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue) -ne $null\""
