@@ -379,14 +379,44 @@ rm -f /usr/local/bin/vigo
 # Clear shell command cache so the new path is found immediately.
 hash -r 2>/dev/null || true
 
+# TLS trust for everything below. The server embeds its own CA here so the
+# binary download, the checksum fetch and the enrollment handshake are all
+# verified instead of blindly accepted.
+#
+# This cannot retroactively secure the fetch of *this script* — that hop has no
+# trust anchor yet and is trust-on-first-use by construction. If you fetched it
+# across an untrusted network, compare the fingerprint printed below against
+# the server before letting the install proceed.
+CA_FILE="${DATA_DIR}/ca.crt"
+cat > "$CA_FILE" << 'VIGO_CA_PEM'
+{{.CACert}}
+VIGO_CA_PEM
+
+if grep -q "BEGIN CERTIFICATE" "$CA_FILE" 2>/dev/null; then
+    chmod 0644 "$CA_FILE"
+    CURL_TLS="--cacert $CA_FILE"
+    BOOTSTRAP_CA="--ca-file $CA_FILE"
+    if command -v openssl > /dev/null 2>&1; then
+        CA_FP=$(openssl x509 -in "$CA_FILE" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+        [ -n "$CA_FP" ] && echo "Server CA SHA256: ${CA_FP}"
+    fi
+else
+    echo "WARNING: server embedded no CA certificate - falling back to unverified TLS."
+    echo "         On an untrusted network an on-path attacker can substitute the agent binary."
+    rm -f "$CA_FILE"
+    CURL_TLS="-k"
+    BOOTSTRAP_CA=""
+fi
+
 # Download agent binary (always replaces existing).
 echo "Downloading agent binary..."
-curl -sSfk "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/vigo"
+# shellcheck disable=SC2086 # $CURL_TLS is two args, deliberately unquoted.
+curl -sSf $CURL_TLS "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/vigo"
 chmod +x "${INSTALL_DIR}/vigo"
 
 # Verify binary integrity via SHA256 checksum.
 echo "Verifying binary checksum..."
-EXPECTED=$(curl -sSfk "${SERVER_ADDR}/api/v1/agent/latest?os=${OS}&arch=${ARCH}" | \
+EXPECTED=$(curl -sSf $CURL_TLS "${SERVER_ADDR}/api/v1/agent/latest?os=${OS}&arch=${ARCH}" | \
     sed -n 's/.*"sha256" *: *"\([a-f0-9]*\)".*/\1/p')
 if [ -n "$EXPECTED" ]; then
     if command -v sha256sum > /dev/null 2>&1; then
@@ -413,8 +443,8 @@ fi
 
 # Download license and commercial terms into the agent data directory.
 echo "Downloading license terms..."
-curl -sSfk "${SERVER_ADDR}/license/LICENSE" -o "${DATA_DIR}/LICENSE" 2>/dev/null || true
-curl -sSfk "${SERVER_ADDR}/license/COMMERCIAL-TERMS.md" -o "${DATA_DIR}/COMMERCIAL-TERMS.md" 2>/dev/null || true
+curl -sSf $CURL_TLS "${SERVER_ADDR}/license/LICENSE" -o "${DATA_DIR}/LICENSE" 2>/dev/null || true
+curl -sSf $CURL_TLS "${SERVER_ADDR}/license/COMMERCIAL-TERMS.md" -o "${DATA_DIR}/COMMERCIAL-TERMS.md" 2>/dev/null || true
 
 # Bootstrap the agent (generates keys, CSR, registers with server, receives certs).
 # Always pass --force: this script cleans local state above, so re-enrollment is expected.
@@ -423,7 +453,9 @@ BOOTSTRAP_ARGS="--server ${SERVER_ADDR} --force"
 if [ -n "$TOKEN" ]; then
     BOOTSTRAP_ARGS="${BOOTSTRAP_ARGS} --token ${TOKEN}"
 fi
-"${INSTALL_DIR}/vigo" bootstrap ${BOOTSTRAP_ARGS}
+# shellcheck disable=SC2086 # both vars are deliberately word-split into args.
+# --ca-file is a global flag and must precede the subcommand.
+"${INSTALL_DIR}/vigo" ${BOOTSTRAP_CA} bootstrap ${BOOTSTRAP_ARGS}
 
 # Extract gRPC server address (strip protocol and port, add :1530).
 # Install service based on detected init system.
@@ -577,6 +609,17 @@ func (h *Handler) BootstrapScript(w http.ResponseWriter, r *http.Request) {
 		host := r.Host
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
+		}
+		// Normalise the IPv6 bracketing. SplitHostPort strips the brackets
+		// when it succeeds but leaves them in place when it fails (a Host with
+		// no port at all), so strip unconditionally and re-add only for IPv6 —
+		// otherwise the two paths disagree and one of them double-brackets.
+		// A bare IPv6 address in a URL authority is malformed: every `curl` in
+		// the generated script dies with "URL using bad/illegal format".
+		// Any colon surviving the port split means IPv6 (zone IDs included).
+		host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]"
 		}
 		serverAddr = "https://" + host + h.serverAddr
 	}

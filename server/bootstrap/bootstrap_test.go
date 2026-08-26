@@ -582,3 +582,176 @@ func TestAgentDownload_RejectsInvalidOsArch(t *testing.T) {
 		}
 	}
 }
+
+// TestBootstrapScript_IPv6HostIsBracketed guards the derived-SERVER_ADDR path.
+// net.SplitHostPort strips the brackets off an IPv6 Host header, and the
+// derivation used to concatenate the bare address straight back into a URL —
+// so an envoy bootstrapping over IPv6 received
+// SERVER_ADDR='https://2605:...:8443' and every curl in the script died with
+// "curl: (3) URL using bad/illegal format or missing URL". IPv4 and DNS hosts
+// were unaffected, which is why it survived: only an external IPv6 enrollment
+// reaches it.
+func TestBootstrapScript_IPv6HostIsBracketed(t *testing.T) {
+	dir := t.TempDir()
+	caFile := filepath.Join(dir, "ca.crt")
+	if err := os.WriteFile(caFile, []byte("FAKE"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		host string
+		want string
+	}{
+		{"ipv6 global", "[2605:59ca:351a:aa10:ca2d:4a18:1168:6a4c]:8443",
+			"SERVER_ADDR='https://[2605:59ca:351a:aa10:ca2d:4a18:1168:6a4c]:8443'"},
+		{"ipv6 loopback", "[::1]:8443", "SERVER_ADDR='https://[::1]:8443'"},
+		{"ipv6 no port", "[fd48:4af5:19b5:10::1]", "SERVER_ADDR='https://[fd48:4af5:19b5:10::1]:8443'"},
+		{"ipv6 zone id", "[fe80::1%25eth0]:8443", "SERVER_ADDR='https://[fe80::1%25eth0]:8443'"},
+		{"ipv4 unchanged", "192.168.1.215:8443", "SERVER_ADDR='https://192.168.1.215:8443'"},
+		{"dns unchanged", "danlap:8443", "SERVER_ADDR='https://danlap:8443'"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// A bare ":port" is what triggers deriving the address from Host.
+			h := NewHandler(":8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
+
+			req := httptest.NewRequest(http.MethodGet, "/bootstrap", nil)
+			req.Host = tc.host
+			w := httptest.NewRecorder()
+			h.BootstrapScript(w, req)
+
+			body, _ := io.ReadAll(w.Result().Body)
+			if !strings.Contains(string(body), tc.want) {
+				var got string
+				for _, line := range strings.Split(string(body), "\n") {
+					if strings.HasPrefix(line, "SERVER_ADDR=") {
+						got = line
+						break
+					}
+				}
+				t.Errorf("Host %q:\n want %s\n  got %s", tc.host, tc.want, got)
+			}
+		})
+	}
+}
+
+// writeCAFile drops a syntactically real PEM so the template's
+// "BEGIN CERTIFICATE" gate behaves the way it will in production.
+func writeCAFile(t *testing.T, dir string) string {
+	t.Helper()
+	pem := "-----BEGIN CERTIFICATE-----\nMIIBfakefakefake\n-----END CERTIFICATE-----\n"
+	f := filepath.Join(dir, "ca.crt")
+	if err := os.WriteFile(f, []byte(pem), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func bootstrapBody(t *testing.T, h *Handler) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/bootstrap", nil)
+	w := httptest.NewRecorder()
+	h.BootstrapScript(w, req)
+	body, _ := io.ReadAll(w.Result().Body)
+	return string(body)
+}
+
+// TestBootstrapScript_EmbedsCAAndVerifies pins the trust wiring. bootstrapData
+// carried a CACert field that neither template referenced, so every fetch in
+// the script ran `curl -sSfk` and enrollment ran with verification disabled —
+// tolerable on a trusted LAN, not over the internet. The CA is now embedded and
+// used, and the only remaining unverified hop is the fetch of the script itself,
+// which has no trust anchor available by construction.
+func TestBootstrapScript_EmbedsCAAndVerifies(t *testing.T) {
+	dir := t.TempDir()
+	caFile := writeCAFile(t, dir)
+	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
+	body := bootstrapBody(t, h)
+
+	// Match the dashed delimiter, not the bare words: the script's own
+	// `grep -q "BEGIN CERTIFICATE"` gate would satisfy a looser check.
+	if !strings.Contains(body, "-----BEGIN CERTIFICATE-----") {
+		t.Error("CA PEM should be embedded in the script")
+	}
+	if !strings.Contains(body, `CURL_TLS="--cacert $CA_FILE"`) {
+		t.Error("curl should be pointed at the embedded CA")
+	}
+	if !strings.Contains(body, `BOOTSTRAP_CA="--ca-file $CA_FILE"`) {
+		t.Error("agent enrollment should be pointed at the embedded CA")
+	}
+	// No fetch may still be hardcoding -k now that a CA is available.
+	if strings.Contains(body, "curl -sSfk") {
+		t.Error("no curl should hardcode -k when a CA is embedded")
+	}
+}
+
+// TestBootstrapScript_CAFileFlagPrecedesSubcommand guards an ordering trap:
+// --ca-file is parsed in the agent's GLOBAL arg loop, and once that loop sees a
+// subcommand every later arg is handed to the subcommand, whose bootstrap arm
+// ends in `_ => bail!("unknown bootstrap flag")`. Emitting
+// `vigo bootstrap --ca-file …` would therefore abort enrollment outright.
+func TestBootstrapScript_CAFileFlagPrecedesSubcommand(t *testing.T) {
+	dir := t.TempDir()
+	caFile := writeCAFile(t, dir)
+	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
+	body := bootstrapBody(t, h)
+
+	const want = `"${INSTALL_DIR}/vigo" ${BOOTSTRAP_CA} bootstrap ${BOOTSTRAP_ARGS}`
+	if !strings.Contains(body, want) {
+		t.Errorf("enrollment line must place the global --ca-file before the subcommand.\nwant: %s", want)
+	}
+}
+
+// TestBootstrapScript_FallsBackWhenNoCA covers the degraded path: a server with
+// no readable CA file still has to produce a working script, but must say out
+// loud that the install is unverified rather than failing silently closed.
+func TestBootstrapScript_FallsBackWhenNoCA(t *testing.T) {
+	dir := t.TempDir()
+	// Empty caFile path -> os.ReadFile fails -> CACert is "".
+	h := NewHandler("https://server:8443", "", filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
+	body := bootstrapBody(t, h)
+
+	if strings.Contains(body, "-----BEGIN CERTIFICATE-----") {
+		t.Error("no CA should be embedded when the server has none")
+	}
+	if !strings.Contains(body, `CURL_TLS="-k"`) {
+		t.Error("should fall back to unverified TLS when no CA is available")
+	}
+	if !strings.Contains(body, "WARNING: server embedded no CA certificate") {
+		t.Error("the degraded path must warn that the install is unverified")
+	}
+}
+
+// TestBootstrapScript_IsValidShell runs the generated script through `sh -n`.
+// The script is piped straight into `sh` as root on a fresh host, so a syntax
+// error is an unrecoverable install failure with no useful diagnostic. Both the
+// CA-present and CA-absent renderings have to parse.
+func TestBootstrapScript_IsValidShell(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh available")
+	}
+	dir := t.TempDir()
+	caFile := writeCAFile(t, dir)
+
+	for _, tc := range []struct {
+		name string
+		ca   string
+	}{
+		{"with CA", caFile},
+		{"without CA", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewHandler("https://server:8443", tc.ca, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
+			script := filepath.Join(t.TempDir(), "bootstrap.sh")
+			if err := os.WriteFile(script, []byte(bootstrapBody(t, h)), 0644); err != nil {
+				t.Fatal(err)
+			}
+			out, err := exec.Command("sh", "-n", script).CombinedOutput()
+			if err != nil {
+				t.Errorf("generated script is not valid sh: %v\n%s", err, out)
+			}
+		})
+	}
+}

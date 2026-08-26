@@ -46,7 +46,19 @@ pub struct RegisterResponse {
 }
 
 /// POST the bootstrap registration request and return the signed certs.
-pub async fn register(server: &str, req: &RegisterRequest) -> Result<RegisterResponse> {
+///
+/// `ca_pem` is the fleet CA in PEM form, when the operator supplied one via
+/// `--ca-file` (the bootstrap script writes the server-embedded copy out for
+/// exactly this). With it, enrollment verifies the server against that CA like
+/// any other connection. Without it we fall back to an unverified handshake —
+/// the historical behaviour, and trust-on-first-use: whoever answers gets to
+/// hand us the CA we will trust from then on. That is tolerable on a trusted
+/// LAN and is not tolerable across the public internet, so the caller warns.
+pub async fn register(
+    server: &str,
+    req: &RegisterRequest,
+    ca_pem: Option<&str>,
+) -> Result<RegisterResponse> {
     let url = format!(
         "{}/api/v1/bootstrap/register",
         server.trim_end_matches('/')
@@ -55,10 +67,30 @@ pub async fn register(server: &str, req: &RegisterRequest) -> Result<RegisterRes
     let body = serde_json::to_vec(req).context("serialize register request")?;
     let url_clone = url.clone();
 
+    // Parse the CA up front so a malformed --ca-file fails loudly here rather
+    // than silently degrading to an unverified handshake inside the blocking
+    // task. A CA that does not parse is an operator error, not a reason to
+    // trust the network.
+    let root_cert = match ca_pem {
+        Some(pem) => Some(
+            ureq::tls::Certificate::from_pem(pem.as_bytes())
+                .map_err(|e| anyhow::anyhow!("parse CA certificate for bootstrap: {}", e))?,
+        ),
+        None => None,
+    };
+
     let resp_bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let tls = ureq::tls::TlsConfig::builder()
-            .disable_verification(true) // Bootstrap happens before we have TLS certs
-            .build();
+        let tls_builder = ureq::tls::TlsConfig::builder();
+        let tls = match root_cert {
+            // Verify against the supplied fleet CA — normal hostname/SAN
+            // checking applies, which is what we want: the server cert carries
+            // the address the operator typed.
+            Some(cert) => tls_builder
+                .root_certs(ureq::tls::RootCerts::new_with_certs(&[cert]))
+                .build(),
+            // No CA available: bootstrap predates having any trust anchor.
+            None => tls_builder.disable_verification(true).build(),
+        };
 
         let agent = ureq::Agent::new_with_config(
             ureq::config::Config::builder()

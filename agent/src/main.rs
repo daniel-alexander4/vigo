@@ -2211,7 +2211,27 @@ async fn async_main() -> Result<()> {
                 token: token.clone(),
                 force: *force,
             };
-            let resp = bootstrap::client::register(bootstrap_server, &req).await?;
+            // Verify enrollment against the fleet CA when the operator gave us
+            // one. The bootstrap script writes the server-embedded CA out and
+            // passes --ca-file; without it this handshake is trust-on-first-use,
+            // which is fine on a trusted LAN and is not fine over the internet.
+            let bootstrap_ca = match cli.ca_file.as_deref() {
+                Some(path) => Some(
+                    std::fs::read_to_string(path)
+                        .with_context(|| format!("read CA file {}", path))?,
+                ),
+                None => {
+                    warn!(
+                        "no --ca-file given: enrolling over an unverified TLS connection \
+                         (trust-on-first-use). Safe on a trusted network; over the public \
+                         internet an on-path attacker can impersonate the server."
+                    );
+                    None
+                }
+            };
+            let resp =
+                bootstrap::client::register(bootstrap_server, &req, bootstrap_ca.as_deref())
+                    .await?;
 
             // Save TLS artifacts and envoy UUID.
             auth::keypair::save_tls_key(&cli.data_dir, &tls_key)?;
