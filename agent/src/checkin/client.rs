@@ -287,11 +287,14 @@ impl Client {
             format!("https://{}", server_addr)
         };
 
-        let domain = server_addr
-            .trim_start_matches("https://")
-            .split(':')
-            .next()
-            .unwrap_or("localhost");
+        // Not `.split(':').next()` — that takes everything before the first
+        // colon, which for an IPv6 literal is "[2605", and tonic rejects it
+        // with a bare "configure TLS". rustls wants the address unbracketed so
+        // it parses as an IP and matches the cert's IP SAN.
+        let domain = match crate::bootstrap::tls_server_name(server_addr) {
+            "" => "localhost",
+            d => d,
+        };
         tls_config = tls_config.domain_name(domain);
 
         Channel::from_shared(endpoint_uri)

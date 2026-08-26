@@ -2249,16 +2249,13 @@ async fn async_main() -> Result<()> {
             }
 
             // Persist server address so subsequent runs don't need --server.
-            let grpc_addr = format!(
-                "{}:{}",
-                bootstrap_server
-                    .trim_start_matches("http://")
-                    .trim_start_matches("https://")
-                    .split(':')
-                    .next()
-                    .unwrap_or(bootstrap_server),
-                grpc_port
-            );
+            // Use the shared helper rather than re-deriving inline: the
+            // inline version split on the FIRST colon, which turned
+            // https://[2605:59ca::1]:8443 into "[2605" and persisted
+            // `server = [2605:1530`. bootstrap::derive_grpc_addr strips the
+            // port by rfind + digit check, which leaves an IPv6 authority's
+            // brackets intact.
+            let grpc_addr = bootstrap::derive_grpc_addr(bootstrap_server, grpc_port);
             let mut config_pairs: Vec<(&str, &str)> =
                 vec![("server", &grpc_addr), ("api_addr", bootstrap_server)];
             let fb_str = resp.fallback_servers.join(",");

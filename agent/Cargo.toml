@@ -48,7 +48,12 @@ serde_yaml = "0.9"
 # HTTP (bootstrap + self-update + server-directed mTLS calls — blocking,
 # no async runtime overhead). Used where standard hostname verification is
 # correct (talks to the configured server, or pre-enrollment).
-ureq = { version = "3", features = ["rustls", "json"] }
+# 3.4 is a hard floor, not cosmetic: through 3.3 the rustls connector fed
+# Authority::host() straight to ServerName::try_from, and that keeps the
+# brackets on an IPv6 literal — every https://[::1]-style URL died with
+# "Rustls invalid dns name error". 3.4 switched to host_bare(), which strips
+# them. Bootstrap enrollment over IPv6 depends on this.
+ureq = { version = "3.4", features = ["rustls", "json"] }
 
 # HTTP (swarm peer-by-IP content plane). reqwest's blocking client lets us
 # inject a custom rustls ClientConfig via `use_preconfigured_tls` so peer

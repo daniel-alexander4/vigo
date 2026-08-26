@@ -46,8 +46,22 @@ checkin:
 bootstrap:
   cert_validity: "8760h"
   trusted_enrollment:
+    # The CIDR check runs against the real TCP source address, so an envoy that
+    # enrolls over IPv6 is matched on its v6 address and the v4 ranges below
+    # never see it — it is refused with no obvious reason. These are the v6
+    # analogues of the private v4 ranges: fc00::/7 is the ULA space (RFC 4193),
+    # fe80::/10 link-local, ::1/128 loopback.
+    # A globally-routable v6 prefix is site-specific; add yours here if envoys
+    # enroll over one, or give those envoys a token instead.
     - pattern: "*"
-      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8"]
+      cidrs:
+        - "192.168.0.0/16"
+        - "127.0.0.0/8"
+        - "172.16.0.0/12"
+        - "10.0.0.0/8"
+        - "fc00::/7"
+        - "fe80::/10"
+        - "::1/128"
 
 
 # ── Webhooks ──────────────────────────────────────────────────────────────
