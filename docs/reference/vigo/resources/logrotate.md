@@ -7,7 +7,7 @@ Manages logrotate configuration files in `/etc/logrotate.d/`.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `name` | Yes | -- | Configuration name (used as the filename: `/etc/logrotate.d/<name>`). |
+| `name` | Yes | -- | The resource's own `name:` -- used as the filename (`/etc/logrotate.d/<name>`). Do not add a second `name:` key. |
 | `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `path` | Yes (for present) | -- | Log file path or glob pattern (e.g., `/var/log/myapp/*.log`). |
 | `frequency` | No | `weekly` | Rotation frequency: `daily`, `weekly`, `monthly`, `yearly`. |
@@ -31,15 +31,38 @@ Manages logrotate configuration files in `/etc/logrotate.d/`.
 
 Computes the SHA-256 hash of the desired configuration content and compares it against the existing file. Only writes when the content differs.
 
+## Choosing a path
+
+Declare one resource per application whose logs nothing else already owns.
+
+**Never use a catch-all pattern** such as `/var/log/*.log` or `/var/log/*/*.log`.
+Distro packages ship their own configs in `/etc/logrotate.d/` (`apt`,
+`alternatives`, `rsyslog`, ...), and logrotate treats a log claimed by two
+configs as a fatal `duplicate log entry`. It then skips the **entire file**
+containing the duplicate -- so the catch-all silently rotates nothing, and
+`logrotate.service` exits non-zero on every run.
+
+To find what is genuinely unowned on a host:
+
+```bash
+for f in /var/log/*.log /var/log/*/*.log; do
+  grep -qlF -- "$f" /etc/logrotate.d/* 2>/dev/null || echo "unowned: $f"
+done
+```
+
+Leave these to the tools that already manage them: `/var/log/audit/*` (auditd
+rotates via `max_log_file`/`num_logs`; rotating it externally breaks the audit
+trail) and `/var/log/Xorg.*.log` (Xorg keeps its own generations).
+
 ## Examples
 
 ### Basic
 
 ```yaml
 resources:
-  - name: myapp-logs
+  - name: myapp
     type: logrotate
-    name: myapp
+    state: present
     path: /var/log/myapp/*.log
     frequency: daily
     rotate: "7"
@@ -49,9 +72,9 @@ resources:
 
 ```yaml
 resources:
-  - name: nginx-logs
+  - name: nginx
     type: logrotate
-    name: nginx
+    state: present
     path: /var/log/nginx/*.log
     frequency: daily
     rotate: "14"
@@ -59,14 +82,17 @@ resources:
     postrotate: "/usr/sbin/nginx -s reload"
 ```
 
-
 ### With copytruncate
+
+Use `copytruncate` for a daemon that holds its log open and never reopens it.
+A `create`-style rotate would leave the process writing to the unlinked inode,
+so the new file would stay empty forever.
 
 ```yaml
 resources:
-  - name: app-logs
+  - name: myapp-service
     type: logrotate
-    name: myapp
+    state: present
     path: /var/log/myapp.log
     copytruncate: "true"
     frequency: daily
@@ -78,9 +104,8 @@ resources:
 
 ```yaml
 resources:
-  - name: old-logrotate
+  - name: old-app
     type: logrotate
-    name: old-app
     state: absent
 ```
 

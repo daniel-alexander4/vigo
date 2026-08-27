@@ -3,7 +3,7 @@ name: logrotate
 compliance:
   provides: [log-rotation]
 vars:
-  rotate: 14
+  rotate_count: 14
   rotate_size: 100M
 
 resources:
@@ -12,10 +12,18 @@ resources:
     package: logrotate
     state: present
 
-  - name: system-logrotate
+  # Declare one resource per application whose logs nothing else owns.
+  #
+  # Do NOT write catch-all patterns such as /var/log/*.log or /var/log/*/*.log.
+  # Distro packages ship their own configs in /etc/logrotate.d/ (apt,
+  # alternatives, rsyslog, ...), and logrotate treats a log claimed twice as a
+  # fatal "duplicate log entry" -- it then skips the ENTIRE file containing the
+  # duplicate, so a catch-all silently disables itself and makes
+  # logrotate.service exit non-zero on every run.
+  - name: myapp-logrotate
     type: logrotate
     state: present
-    path: /var/log/*.log
+    path: /var/log/myapp/*.log
     frequency: daily
     rotate: "{{ .Vars.rotate_count }}"
     size: "{{ .Vars.rotate_size }}"
@@ -23,13 +31,16 @@ resources:
     delaycompress: "true"
     missingok: "true"
     notifempty: "true"
-    create: "0640 root adm"
+    create: 0640 root adm
     depends_on: [install-logrotate]
 
-  - name: service-logrotate
+  # Use copytruncate for daemons that hold their log file open and never
+  # reopen it. A create-style rotate would leave the process writing to the
+  # unlinked inode, so the new file stays empty forever.
+  - name: myservice-logrotate
     type: logrotate
     state: present
-    path: /var/log/*/*.log
+    path: /var/log/myservice.log
     frequency: daily
     rotate: "{{ .Vars.rotate_count }}"
     size: "{{ .Vars.rotate_size }}"
@@ -37,5 +48,5 @@ resources:
     delaycompress: "true"
     missingok: "true"
     notifempty: "true"
-    create: "0640 root adm"
+    copytruncate: "true"
     depends_on: [install-logrotate]
