@@ -79,3 +79,7 @@ docs.archived/
 
 # project instructions stay local (Dan's convention, 2026-07-09)
 /CLAUDE.md
+
+# Claude Code local context — never committed
+.claude/
+CLAUDE.md
