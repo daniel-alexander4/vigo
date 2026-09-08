@@ -24,8 +24,10 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/freshness"
+	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/traits"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
@@ -521,7 +523,15 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		// Keep fleetpressure's churny health fields current every tick, decoupled
 		// from the now-rare persist (ADR-033 Option C companion).
 		if s.fleetIndex != nil {
-			s.fleetIndex.SetLiveVitals(envoyID, extractLiveVitals(volTop))
+			lv := extractLiveVitals(volTop)
+			if s.fleetIndex.SetLiveVitals(envoyID, lv) {
+				// The host lost power since its last check-in. This is an
+				// event, not a state: it is dispatched once, at the edge, and
+				// never folded into the agent-health composite, where a
+				// 30-day-old unfixable fact would pin an envoy degraded for a
+				// month. Detached so a slow webhook can't stall the stream.
+				daemon.SafeGo("power-loss-alert", func() { s.alertPowerLoss(envoyID, lv) })
+			}
 		}
 		// Update swarm peer tracker when agents report cached blobs.
 		if s.peerTracker != nil {
@@ -1206,6 +1216,48 @@ func (s *AgentService) collectManifestEntries() []*pb.SwarmManifestEntry {
 // PeerTracker for each blob the agent has cached. This is the bridge between
 // agent trait reports and swarm distribution tracking. An absent "swarm" key
 // arrives as a nil RawMessage and is a no-op.
+// alertPowerLoss dispatches the edge where an envoy's reported
+// unclean-shutdown count rose — the host lost power with no graceful
+// shutdown, which nothing else in the product can see. An envoy that hard-cuts
+// while off-network reports it on reconnect, so this fires late rather than
+// not at all: the 2026-09-04 incident was invisible precisely because the
+// laptop was on a foreign network for the whole crash window.
+//
+// Deliberately carries no paired clear event, because there is nothing to
+// clear — a power loss is a fact about the past, not a condition that
+// resolves. That is also why its severity must stay below the level that
+// opens an incident nobody can close.
+func (s *AgentService) alertPowerLoss(envoyID string, lv map[string]string) {
+	if s.integrations == nil {
+		return
+	}
+	hostname := envoyID
+	if s.fleetIndex != nil {
+		if ts, ok, _ := s.fleetIndex.GetEnvoyLite(envoyID); ok && ts.Hostname != "" {
+			hostname = ts.Hostname
+		}
+	}
+	count := lv[traits.UncleanShutdowns30d]
+	details := map[string]any{
+		"unclean_shutdowns_30d": count,
+		"boot_transitions_30d":  lv[traits.BootTransitions30d],
+	}
+	if d := lv[traits.LastUncleanDate]; d != "" {
+		details["last_unclean_date"] = d
+	}
+	slog.Warn("envoy reported a power loss",
+		"envoy_id", envoyID, "hostname", hostname, "unclean_shutdowns_30d", count)
+	s.integrations.Dispatch(integrations.Event{
+		Name:      "envoy.power_loss",
+		Timestamp: time.Now().UTC(),
+		Hostname:  hostname,
+		EnvoyID:   envoyID,
+		Summary: fmt.Sprintf("%s lost power without a graceful shutdown (%s in the last 30 days)",
+			hostname, count),
+		Details: details,
+	})
+}
+
 func (s *AgentService) ingestSwarmTraits(envoyID string, swarmRaw json.RawMessage) {
 	if len(swarmRaw) == 0 {
 		return

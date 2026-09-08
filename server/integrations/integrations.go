@@ -56,6 +56,17 @@ func DefaultSeverity(eventName string) Severity {
 		return Warning
 	case eventName == "envoy.stale" || eventName == "envoy.offline":
 		return Warning
+	// A power loss already happened and cannot be cleared: there is no
+	// counterpart to `envoy.online` that would ever resolve it, and the
+	// incident-opening backends send event_action "trigger" for every
+	// non-resolve event regardless of severity (see isResolveEvent). Grading
+	// it Info keeps it at notify-don't-page — it reaches Slack, Loki, Splunk
+	// and the SIEMs, and reaches PagerDuty only if an operator deliberately
+	// lowers minSeverity and accepts closing the incident by hand. Stated as
+	// an explicit arm rather than left to the default so the grading is a
+	// decision on the page instead of an accident.
+	case eventName == "envoy.power_loss":
+		return Info
 	case eventName == "envoy.revoked":
 		return Warning
 	case eventName == "resource.blocked":

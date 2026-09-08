@@ -35,6 +35,7 @@ fn unit_file() -> String {
          ExecStart={}\n\
          Restart=always\n\
          RestartSec=10\n\
+         TimeoutStopSec=15\n\
          LimitNOFILE=65536\n\
          \n\
          [Install]\n\
@@ -209,6 +210,10 @@ mod tests {
         // template and forgets one.
         assert!(unit.contains("LimitNOFILE=65536"));
         assert!(unit.contains("Wants=network-online.target"));
+        // Bounds the shutdown hook that records a clean stop. Without an
+        // explicit value systemd waits its 90s default before SIGKILL, so a
+        // wedged teardown would stall every reboot on every envoy.
+        assert!(unit.contains("TimeoutStopSec=15"));
     }
 
     /// Bare unit that lacks every safety knob — exact shape that
@@ -234,6 +239,7 @@ mod tests {
         assert!(after.contains("LimitNOFILE=65536"));
         assert!(after.contains("Wants=network-online.target"));
         assert!(after.contains("Restart=always"));
+        assert!(after.contains("TimeoutStopSec=15"));
         assert_eq!(after, unit_file(), "rewritten content should equal template exactly");
 
         // Second call: contents now match → no rewrite, no error.

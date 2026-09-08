@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/convergence"
+	"git.alexander4.io/vigo/server/traits"
 	voied25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 )
 
@@ -953,20 +954,59 @@ func (es *EnvoyState) ObservedCycle() time.Duration {
 // so AllEnvoys / Snapshot readers can share the map without a deep copy. A nil/
 // empty overlay is a no-op (keeps the last known values rather than blanking the
 // health card). In-memory only; never flushed.
-func (f *FleetIndex) SetLiveVitals(id string, lv map[string]string) {
+//
+// Returns true when the envoy's reported unclean-shutdown count rose against
+// the previous overlay — the edge meaning this host lost power since its last
+// check-in. The comparison lives here because this is the one place holding
+// both the old and new maps under the stripe lock; the caller dispatches off
+// the lock. A first observation (no previous overlay) never reports an edge:
+// the count is a 30-day history the agent may have been carrying since before
+// this server process started, and replaying it as news on every restart would
+// page an operator for events they already saw.
+func (f *FleetIndex) SetLiveVitals(id string, lv map[string]string) (powerLoss bool) {
 	if len(lv) == 0 {
-		return
+		return false
 	}
 	f.mu.RLock()
 	ts := f.envoys[id]
 	f.mu.RUnlock()
 	if ts == nil {
-		return
+		return false
 	}
 	lk := f.lockFor(id)
 	lk.Lock()
+	powerLoss = uncleanCountRose(ts.liveVitals, lv)
 	ts.liveVitals = lv
 	lk.Unlock()
+	return powerLoss
+}
+
+// uncleanCountRose reports whether the unclean-shutdown count went up between
+// two overlays. Both sides must parse: an unparseable or absent value on
+// either side is "don't know", never an edge, so a detector that stops
+// reporting cannot manufacture an alert and one that starts reporting cannot
+// replay its backlog.
+func uncleanCountRose(old, next map[string]string) bool {
+	prev, ok := parseCount(old[traits.UncleanShutdowns30d])
+	if !ok {
+		return false
+	}
+	cur, ok := parseCount(next[traits.UncleanShutdowns30d])
+	if !ok {
+		return false
+	}
+	return cur > prev
+}
+
+func parseCount(s string) (uint64, bool) {
+	if s == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // SetCertPin records the envoy's enrolled mTLS client-cert SPKI hash (hex

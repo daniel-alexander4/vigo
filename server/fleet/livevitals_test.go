@@ -46,3 +46,79 @@ func TestLiveVitalsOverlay(t *testing.T) {
 		t.Errorf("nil overlay should keep prior live value, got %q", got)
 	}
 }
+
+// TestSetLiveVitalsPowerLossEdge covers the one edge that turns into an
+// operator-visible alert. The asymmetry matters in both directions: a count
+// that rises is news, and a count that appears for the first time is not.
+func TestSetLiveVitalsPowerLossEdge(t *testing.T) {
+	const key = "host_self.unclean_shutdowns_30d"
+
+	tests := []struct {
+		name string
+		old  map[string]string
+		next map[string]string
+		want bool
+	}{
+		{
+			name: "count rose",
+			old:  map[string]string{key: "1"},
+			next: map[string]string{key: "2"},
+			want: true,
+		},
+		{
+			// The agent carries a 30-day history the server has never seen.
+			// Replaying it on every vigosrv restart would page for events the
+			// operator already handled.
+			name: "first observation is never an edge",
+			old:  nil,
+			next: map[string]string{key: "3"},
+			want: false,
+		},
+		{
+			name: "unchanged count is not an edge",
+			old:  map[string]string{key: "2"},
+			next: map[string]string{key: "2"},
+			want: false,
+		},
+		{
+			// Events aging out of the window lower the count. Not news.
+			name: "count fell",
+			old:  map[string]string{key: "3"},
+			next: map[string]string{key: "1"},
+			want: false,
+		},
+		{
+			// A detector that stops reporting must not manufacture an alert.
+			name: "key disappeared",
+			old:  map[string]string{key: "1"},
+			next: map[string]string{"agent_self.open_fds": "10"},
+			want: false,
+		},
+		{
+			name: "unparseable new value is not an edge",
+			old:  map[string]string{key: "1"},
+			next: map[string]string{key: "not-a-number"},
+			want: false,
+		},
+		{
+			name: "unparseable old value is not an edge",
+			old:  map[string]string{key: ""},
+			next: map[string]string{key: "5"},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fi := NewFleetIndex()
+			fi.AddEnvoy(EnvoyState{ID: "e1", Hostname: "h1"}, nil)
+			if tc.old != nil {
+				fi.SetLiveVitals("e1", tc.old)
+			}
+			got := fi.SetLiveVitals("e1", tc.next)
+			if got != tc.want {
+				t.Errorf("power-loss edge = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

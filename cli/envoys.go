@@ -103,12 +103,53 @@ var envoysShowCmd = &cobra.Command{
 			fmt.Printf("Convergence: %s\n", convResp.Status)
 		}
 
+		printPowerHistory(client, c.Hostname)
+
 		if len(c.PendingRotatedSecrets) > 0 {
 			fmt.Printf("Pending secrets: %s\n", strings.Join(c.PendingRotatedSecrets, ", "))
 		}
 
 		return nil
 	},
+}
+
+// printPowerHistory shows whether this host has been losing power without a
+// graceful shutdown. Silent when the agent reports nothing — an older agent,
+// a platform with no detector, or a first boot — because "no line" is honest
+// there and "0 power losses" would not be.
+func printPowerHistory(client *apiClient, hostname string) {
+	if hostname == "" {
+		return
+	}
+	var resp struct {
+		Traits map[string]any `json:"traits"`
+	}
+	if err := client.get("/api/v1/envoys/"+hostname+"/traits", &resp); err != nil {
+		return
+	}
+	hostSelf, _ := resp.Traits["host_self"].(map[string]any)
+	if hostSelf == nil {
+		return
+	}
+	// Counts are reported only by an armed detector; anything else means the
+	// agent has not observed a boot transition yet and has no answer to give.
+	if state, _ := hostSelf["power_detector_state"].(string); state != "armed" {
+		return
+	}
+	unclean, ok := hostSelf["unclean_shutdowns_30d"].(float64)
+	if !ok {
+		return
+	}
+	transitions, _ := hostSelf["boot_transitions_30d"].(float64)
+	if unclean == 0 {
+		fmt.Printf("Power:      clean (0 of %.0f reboots lost power, last 30d)\n", transitions)
+		return
+	}
+	line := fmt.Sprintf("%.0f of %.0f reboots lost power, last 30d", unclean, transitions)
+	if date, _ := hostSelf["last_unclean_date"].(string); date != "" {
+		line += ", most recently " + date
+	}
+	fmt.Printf("Power:      %s\n", line)
 }
 
 var envoysRevokeCmd = &cobra.Command{

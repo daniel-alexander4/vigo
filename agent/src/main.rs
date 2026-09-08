@@ -754,6 +754,70 @@ fn resolve_tls_paths(
     (ca, cert, key)
 }
 
+/// Published once the state store is open so the shutdown hook can reach it.
+/// The hook is installed before the store opens (it has to be, so a boot-time
+/// server outage stays cancellable), and by the time any signal realistically
+/// arrives the store is here.
+static SHUTDOWN_STATE_STORE: std::sync::OnceLock<std::sync::Arc<state::StateStore>> =
+    std::sync::OnceLock::new();
+
+/// How long the shutdown hook may spend marking the session clean.
+///
+/// LMDB's writer lock is process-wide, so this can queue behind an in-flight
+/// converge. Overrunning is not worth blocking a reboot for: the cost of
+/// giving up is one false power-loss event, while the cost of holding the
+/// process open is systemd SIGKILLing us mid-write at `TimeoutStopSec`.
+const CLEAN_MARK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Completes on SIGINT or SIGTERM.
+///
+/// `tokio::signal::ctrl_c()` is SIGINT only; systemd stops the unit with
+/// SIGTERM, so handling just the former means no shutdown path at all under
+/// the way the agent is actually run.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        // A failed registration must not silently leave the agent unstoppable
+        // *or* silently un-markable — fall back to SIGINT alone and say so.
+        let mut term = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(error = %e, "could not register SIGTERM handler; graceful shutdown limited to SIGINT");
+                let _ = tokio::signal::ctrl_c().await;
+                return;
+            }
+        };
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = tokio::signal::ctrl_c() => {}
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+/// Record that this session went down gracefully.
+///
+/// The write runs on a blocking thread and is bounded: `heed::RwTxn` is not
+/// `Send`, so a transaction must never be held across an await point, and the
+/// whole operation must never outlive the shutdown budget.
+async fn mark_power_session_clean() {
+    let Some(store) = SHUTDOWN_STATE_STORE.get().cloned() else {
+        return;
+    };
+    let write = tokio::task::spawn_blocking(move || state::power::mark_session_clean(&store));
+    match tokio::time::timeout(CLEAN_MARK_TIMEOUT, write).await {
+        Ok(Ok(Ok(()))) => info!("recorded clean shutdown"),
+        Ok(Ok(Err(e))) => warn!(error = %e, "could not record clean shutdown; next boot will read it as a power loss"),
+        Ok(Err(e)) => warn!(error = %e, "clean-shutdown write panicked"),
+        Err(_) => warn!("clean-shutdown write timed out; next boot will read it as a power loss"),
+    }
+}
+
 /// Classify a check-in error into a short human-readable reason and a
 /// "scary" flag used for color-coding stderr output.
 ///
@@ -1279,11 +1343,24 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // server that's down at agent boot can be retried (and cancelled) rather
     // than exiting the process. The in-loop Backoff only engages after the
     // first connect succeeds, so we mirror it here for the boot-time path.
+    //
+    // SIGTERM is the one that matters: systemd stops the unit with SIGTERM,
+    // never SIGINT. This comment claimed both for a long time while only
+    // `ctrl_c()` — SIGINT — was wired, so every `systemctl stop` relied on
+    // SIGTERM's default disposition and the process died with no shutdown
+    // path at all. That is also what makes the power-loss record below
+    // trustworthy: without a SIGTERM handler every graceful reboot would be
+    // recorded as a hard cut.
     let cancel = tokio_util::sync::CancellationToken::new();
     let cancel_clone = cancel.clone();
     tokio::spawn(async move {
-        let _ = tokio::signal::ctrl_c().await;
+        shutdown_signal().await;
         info!("received shutdown signal");
+        // Mark the session clean *before* cancelling. Cancelling returns the
+        // daemon loop, which returns `async_main`, which drops the runtime —
+        // a write started after that point can lose the race with process
+        // exit and leave the record dirty, costing a false power-loss event.
+        mark_power_session_clean().await;
         cancel_clone.cancel();
     });
 
@@ -1374,6 +1451,34 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 None
             }
         };
+
+    // Evaluate the previous session against this boot, then re-arm. Must run
+    // before the first check-in so the verdict is on the wire immediately, and
+    // before the shutdown hook can fire so the hook re-marks a fresh record
+    // rather than the one we are about to read.
+    if let Some(store) = &state_store {
+        let _ = SHUTDOWN_STATE_STORE.set(store.clone());
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        match state::power::evaluate(store, state::power::read_boot_id(), now) {
+            Ok(status) => {
+                if status.unclean_30d > 0 {
+                    warn!(
+                        unclean_shutdowns_30d = status.unclean_30d,
+                        boot_transitions_30d = status.transitions_30d,
+                        "host has lost power without a graceful shutdown"
+                    );
+                }
+                traits::host_self::set_power_status(status);
+            }
+            // A failure here must leave the fields absent rather than zeroed:
+            // nothing is published, so the collector omits them and the server
+            // reads unknown instead of healthy.
+            Err(e) => warn!(error = %e, "power-loss record unavailable this boot"),
+        }
+    }
 
     // Wrap reversible executors with the persistent reversal store so the
     // `revert:` lever can capture/restore prior values and run `on_revert:`

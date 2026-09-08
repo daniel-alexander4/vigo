@@ -135,6 +135,45 @@ fn parse_battery(get: impl Fn(&str) -> Option<String>) -> (serde_json::Map<Strin
         dev.insert("energy_full_design_wh".into(), json!(round1(design_uwh as f64 / 1_000_000.0)));
     }
 
+    // Delivery-side readings, in volts and watts. These are the fields that
+    // separate a pack that has lost *capacity* from one that has lost the
+    // ability to *deliver current* — a pack can read 93% and still sag below
+    // the EC's cutoff on a transient, which removes power with nothing logged.
+    //
+    // Reported raw and deliberately unclassified. `voltage_min_design` is NOT
+    // usable as a discharge floor: measured on two of this fleet's laptops it
+    // carries the pack's *nominal* voltage (11.25 V and 11.1 V, both 3.7-3.75
+    // V/cell across 3 cells) rather than the ~3.0 V/cell empty cutoff, so a
+    // "margin" derived from it goes negative during ordinary discharge. It is
+    // emitted as what the firmware says, for a human to interpret.
+    //
+    // Note also what a check-in-cadence sample cannot do: the sag that drops
+    // a machine lasts milliseconds. These fields trend a pack over weeks; they
+    // do not catch the event.
+    let volts = |k: &str| get(k).and_then(|s| s.parse::<f64>().ok()).map(|v| v / 1_000_000.0);
+    let voltage_now_v = volts("voltage_now");
+    if let Some(v) = voltage_now_v {
+        dev.insert("voltage_now_v".into(), json!(round2(v)));
+    }
+    if let Some(v) = volts("voltage_min_design").filter(|v| *v > 0.0) {
+        dev.insert("voltage_min_design_v".into(), json!(round2(v)));
+    }
+
+    // Instantaneous load. The energy family reports it directly; the charge
+    // family (danlap's pack, and every battery with no `energy_*` node) does
+    // not, and there `voltage_now × current_now` is the only way to get a
+    // figure at all. Both are the same physical quantity, so one key.
+    let load_w = get("power_now")
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|p| p / 1_000_000.0)
+        .or_else(|| {
+            let amps = get("current_now").and_then(|s| s.parse::<f64>().ok())? / 1_000_000.0;
+            Some(voltage_now_v? * amps.abs())
+        });
+    if let Some(w) = load_w {
+        dev.insert("power_now_w".into(), json!(round2(w)));
+    }
+
     // Time-to-empty / time-to-full (seconds), only while actively
     // (dis)charging. Prefer the energy family (µWh ÷ µW); fall back to the
     // charge family (µAh ÷ µA) for batteries that don't report energy_*.
@@ -172,6 +211,12 @@ fn parse_battery(get: impl Fn(&str) -> Option<String>) -> (serde_json::Map<Strin
 
 fn round1(v: f64) -> f64 {
     (v * 10.0).round() / 10.0
+}
+
+/// Two places for volts and watts — a 10 mV drift is the resolution that
+/// matters when watching a pack sag, and one place would hide it.
+fn round2(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
 }
 
 #[cfg(test)]
@@ -275,6 +320,68 @@ mod tests {
             ("power_now", "0"),
         ]));
         assert!(!zero_dev.contains_key("time_to_empty_secs"));
+    }
+
+    #[test]
+    fn test_parse_battery_delivery_fields_energy_family() {
+        // annlap's real numbers: 12.268 V now, 11.1 V "min design", 5 W load.
+        let (dev, _) = parse_battery(getter(&[
+            ("status", "Discharging"),
+            ("voltage_now", "12268000"),
+            ("voltage_min_design", "11100000"),
+            ("power_now", "5000000"),
+            ("energy_now", "20000000"),
+            ("energy_full", "37880000"),
+        ]));
+        assert_eq!(dev["voltage_now_v"], json!(12.27));
+        assert_eq!(dev["voltage_min_design_v"], json!(11.1));
+        assert_eq!(dev["power_now_w"], json!(5.0));
+    }
+
+    #[test]
+    fn test_parse_battery_load_synthesized_for_charge_family() {
+        // danlap's pack: no power_now / energy_* at all, so the only way to a
+        // load figure is voltage_now × current_now.
+        let (dev, _) = parse_battery(getter(&[
+            ("status", "Discharging"),
+            ("voltage_now", "12000000"),
+            ("current_now", "1500000"),
+            ("charge_now", "4000000"),
+            ("charge_full", "5000000"),
+        ]));
+        assert_eq!(dev["power_now_w"], json!(18.0), "12 V × 1.5 A");
+    }
+
+    #[test]
+    fn test_parse_battery_load_uses_current_magnitude() {
+        // Some drivers report current_now signed while discharging; power is
+        // a magnitude either way, and a negative watt figure is nonsense.
+        let (dev, _) = parse_battery(getter(&[
+            ("voltage_now", "12000000"),
+            ("current_now", "-1500000"),
+        ]));
+        assert_eq!(dev["power_now_w"], json!(18.0));
+    }
+
+    #[test]
+    fn test_parse_battery_delivery_fields_omitted_when_absent() {
+        // Firmware that populates none of them must yield no keys at all,
+        // never a zero that reads as a real measurement.
+        let (dev, _) = parse_battery(getter(&[("capacity", "80")]));
+        assert!(!dev.contains_key("voltage_now_v"));
+        assert!(!dev.contains_key("voltage_min_design_v"));
+        assert!(!dev.contains_key("power_now_w"));
+    }
+
+    #[test]
+    fn test_parse_battery_zero_voltage_min_design_omitted() {
+        // A zero here is firmware declining to answer, not an 0 V floor.
+        let (dev, _) = parse_battery(getter(&[
+            ("voltage_now", "12000000"),
+            ("voltage_min_design", "0"),
+        ]));
+        assert_eq!(dev["voltage_now_v"], json!(12.0));
+        assert!(!dev.contains_key("voltage_min_design_v"));
     }
 
     #[test]

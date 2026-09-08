@@ -4,11 +4,13 @@
 //! Persistent LMDB-backed state store for the agent.
 //!
 //! Enables offline convergence by caching policy bundles, file checksums,
-//! traits, and pending results across agent restarts.
+//! traits, and pending results across agent restarts, and records whether the
+//! host's previous session ended in a graceful shutdown (see [`power`]).
 
 pub mod checksums;
 pub mod pending;
 pub mod policy;
+pub mod power;
 pub mod reversal;
 pub mod server_key;
 pub mod ssh_keys;
@@ -23,8 +25,10 @@ use tracing::info;
 /// Maximum LMDB map size: 256 MB.
 const MAP_SIZE: usize = 256 * 1024 * 1024;
 
-/// Maximum number of named databases within the environment.
-const MAX_DBS: u32 = 10;
+/// Maximum number of named databases within the environment. Headroom is
+/// deliberate: nine are in use, and hitting the ceiling is a runtime failure
+/// at store-open, not a compile error.
+const MAX_DBS: u32 = 16;
 
 /// Persistent state store backed by LMDB.
 ///
@@ -41,13 +45,14 @@ pub struct StateStore {
     pub ssh_keys: ssh_keys::SshKeysCache,
     pub swarm_retention: swarm_retention::SwarmRetentionCache,
     pub reversal: reversal::ReversalCache,
+    pub power: power::PowerCache,
 }
 
 impl StateStore {
     /// Open (or create) the state store at the given directory path.
     ///
     /// The directory is created if it does not exist. Uses 256MB map size
-    /// and up to 8 named databases.
+    /// and up to [`MAX_DBS`] named databases.
     pub fn open(dir: &Path) -> Result<Self> {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("creating state directory {}", dir.display()))?;
@@ -70,6 +75,7 @@ impl StateStore {
         let ssh_keys = ssh_keys::SshKeysCache::open(&env, &mut wtxn)?;
         let swarm_retention = swarm_retention::SwarmRetentionCache::open(&env, &mut wtxn)?;
         let reversal = reversal::ReversalCache::open(&env, &mut wtxn)?;
+        let power = power::PowerCache::open(&env, &mut wtxn)?;
 
         wtxn.commit()?;
 
@@ -85,6 +91,7 @@ impl StateStore {
             ssh_keys,
             swarm_retention,
             reversal,
+            power,
         })
     }
 

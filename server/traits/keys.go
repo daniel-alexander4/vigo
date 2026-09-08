@@ -104,3 +104,30 @@ const (
 	RunningCVEMedium   = "cve_running_correlation.summary.medium"
 	RunningCVELow      = "cve_running_correlation.summary.low"
 )
+
+// Host power-loss detection (`host_self` collector). The agent records on the
+// way down whether each session ended gracefully and reports what it found at
+// the next boot — the server cannot derive this, because a hard cut is defined
+// by the absence of anything being written.
+//
+// These are the Go half of a cross-language pair; the Rust emitter is
+// `agent/src/traits/host_self.rs`. Nothing in either toolchain compares them,
+// so `test/audit` TestPowerTraitKeysMatchAgent does.
+const (
+	// PowerDetectorState is "armed" | "first_boot" | "unsupported". The two
+	// counts below are reported ONLY when armed — a zero from a detector that
+	// has never observed a boot transition must not read as a healthy zero.
+	PowerDetectorState = "host_self.power_detector_state"
+
+	// UncleanShutdowns30d counts host power losses in a rolling 30-day window.
+	UncleanShutdowns30d = "host_self.unclean_shutdowns_30d"
+
+	// BootTransitions30d counts ALL reboots in the same window — the
+	// denominator that makes a zero numerator readable.
+	BootTransitions30d = "host_self.boot_transitions_30d"
+
+	// LastUncleanDate is the newest power loss as YYYY-MM-DD. Day granularity
+	// is deliberate: on a personal machine a wall-clock stamp records when a
+	// named person was at it, and every viewer can read traits.
+	LastUncleanDate = "host_self.last_unclean_date"
+)

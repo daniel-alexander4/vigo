@@ -6,7 +6,8 @@
 //! [`super::agent_self`]; per-mountpoint disk in [`mountpoints`]; system
 //! memory in [`memory`]. This collector covers the in-between signals
 //! that matter for "is this host about to fall over": **kernel-wide FD
-//! consumption**, **total process count**, and **recent OOM events**.
+//! consumption**, **total process count**, **recent OOM events**, and
+//! **whether the host's previous session ended in a power loss**.
 //!
 //! Trait namespace: `host_self`
 //!   - fd_used: bytes currently allocated to file table entries
@@ -16,6 +17,22 @@
 //!   - proc_count: number of `/proc/<pid>` entries seen
 //!   - oom_recent: 1 if dmesg/kern.log has fired the OOM killer in the
 //!     last hour, 0 otherwise
+//!   - power_detector_state: `armed` | `first_boot` | `unsupported` —
+//!     whether the two counts below mean anything
+//!   - unclean_shutdowns_30d: host power losses observed in the last 30
+//!     days (omitted unless `armed`)
+//!   - boot_transitions_30d: all reboots observed in the same window —
+//!     the denominator that makes a zero numerator readable (omitted
+//!     unless `armed`)
+//!   - last_unclean_date: `YYYY-MM-DD` of the newest power loss, omitted
+//!     when there is none
+//!
+//! The power fields ride here rather than in a collector of their own
+//! because `oom_recent` already established the shape: an
+//! abnormal-termination count the server reads as a flat key. They are
+//! computed once at startup by [`crate::state::power::evaluate`] and
+//! published through [`set_power_status`]; `collect` never touches LMDB,
+//! which has no state handle at collector dispatch.
 //!
 //! Linux only. macOS/BSD/Windows return `Value::Null` — none of them
 //! expose `/proc/sys/fs/file-nr` or `/proc` the same way, and `lsof -nP
@@ -28,8 +45,19 @@
 //! Errors are silently swallowed and the field is reported as 0; the
 //! point of the collector is signal not certainty.
 
+use crate::state::power::PowerStatus;
 use anyhow::Result;
 use serde_json::{json, Value};
+use std::sync::OnceLock;
+
+/// Set once at process start, before the first check-in.
+static POWER_STATUS: OnceLock<PowerStatus> = OnceLock::new();
+
+/// Publish the startup power verdict for `collect` to report. Called once
+/// from the agent's entry point; subsequent calls are no-ops.
+pub fn set_power_status(status: PowerStatus) {
+    let _ = POWER_STATUS.set(status);
+}
 
 pub fn collect() -> Result<Value> {
     #[cfg(target_os = "linux")]
@@ -55,13 +83,43 @@ fn collect_linux() -> Value {
     let proc_count = count_proc_entries();
     let oom_recent = recent_oom_kill();
 
-    json!({
+    let mut out = json!({
         "fd_used": fd_used,
         "fd_max": fd_max,
         "fd_pct": fd_pct,
         "proc_count": proc_count,
         "oom_recent": oom_recent,
-    })
+    });
+    add_power_fields(&mut out, POWER_STATUS.get());
+    out
+}
+
+/// Merge the startup power verdict into the collector's object.
+///
+/// The counts are emitted **only** when the detector is armed. Emitting `0`
+/// for a detector that has never observed a boot transition would be
+/// indistinguishable on the wire from a host that has genuinely not lost
+/// power — and the server's health rollup treats a missing key as unknown but
+/// a zero as good news, so the difference is the whole point.
+#[cfg(target_os = "linux")]
+fn add_power_fields(out: &mut Value, status: Option<&PowerStatus>) {
+    use crate::state::power::DetectorState;
+
+    let Some(obj) = out.as_object_mut() else { return };
+    let Some(status) = status else { return };
+
+    obj.insert(
+        "power_detector_state".into(),
+        json!(status.detector.as_str()),
+    );
+    if status.detector != DetectorState::Armed {
+        return;
+    }
+    obj.insert("unclean_shutdowns_30d".into(), json!(status.unclean_30d));
+    obj.insert("boot_transitions_30d".into(), json!(status.transitions_30d));
+    if let Some(date) = &status.last_unclean_date {
+        obj.insert("last_unclean_date".into(), json!(date));
+    }
 }
 
 /// Read /proc/sys/fs/file-nr: three whitespace-separated numbers —
@@ -216,5 +274,64 @@ mod tests {
         assert!(proc_count > 0, "proc_count should see at least the test process");
         // oom_recent is 0 or 1 — our test shouldn't see anything unexpected.
         assert!(oom == 0 || oom == 1, "oom_recent must be 0 or 1, got {}", oom);
+    }
+
+    #[cfg(target_os = "linux")]
+    fn status(detector: crate::state::power::DetectorState, unclean: usize) -> PowerStatus {
+        PowerStatus {
+            detector,
+            unclean_30d: unclean,
+            transitions_30d: 9,
+            last_unclean_date: (unclean > 0).then(|| "2026-09-04".to_string()),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn power_fields_absent_when_nothing_was_published() {
+        // A store that failed to open must not fabricate a healthy zero.
+        let mut v = json!({"fd_used": 1});
+        add_power_fields(&mut v, None);
+        assert!(v.get("power_detector_state").is_none());
+        assert!(v.get("unclean_shutdowns_30d").is_none());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn power_counts_omitted_unless_armed() {
+        use crate::state::power::DetectorState;
+        for state in [DetectorState::Unsupported, DetectorState::FirstBoot] {
+            let mut v = json!({});
+            add_power_fields(&mut v, Some(&status(state, 0)));
+            assert_eq!(v["power_detector_state"], json!(state.as_str()));
+            assert!(
+                v.get("unclean_shutdowns_30d").is_none(),
+                "{} must not report a count that would read as healthy",
+                state.as_str()
+            );
+            assert!(v.get("boot_transitions_30d").is_none());
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn power_counts_present_and_zero_when_armed_and_clean() {
+        use crate::state::power::DetectorState;
+        let mut v = json!({});
+        add_power_fields(&mut v, Some(&status(DetectorState::Armed, 0)));
+        assert_eq!(v["power_detector_state"], json!("armed"));
+        assert_eq!(v["unclean_shutdowns_30d"], json!(0));
+        assert_eq!(v["boot_transitions_30d"], json!(9), "the denominator is what makes the 0 readable");
+        assert!(v.get("last_unclean_date").is_none());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn power_date_reported_only_when_there_is_an_unclean_event() {
+        use crate::state::power::DetectorState;
+        let mut v = json!({});
+        add_power_fields(&mut v, Some(&status(DetectorState::Armed, 3)));
+        assert_eq!(v["unclean_shutdowns_30d"], json!(3));
+        assert_eq!(v["last_unclean_date"], json!("2026-09-04"));
     }
 }

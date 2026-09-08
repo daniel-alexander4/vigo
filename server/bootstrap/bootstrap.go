@@ -473,6 +473,7 @@ Type=simple
 ExecStart=/usr/local/sbin/vigo
 Restart=always
 RestartSec=10
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
