@@ -1364,6 +1364,55 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         cancel_clone.cancel();
     });
 
+    // The state store opens here, BEFORE the initial connect, because the
+    // power record must be evaluated and re-armed on every boot — including
+    // boots where the server is unreachable and the loop below spins in
+    // backoff for hours. A laptop that hard-cuts repeatedly while off-network
+    // is exactly the case this feature exists for; arming only after a
+    // successful connect would collapse a run of power losses into the single
+    // one that happened to be followed by a connection.
+    // Open persistent state store for offline convergence.
+    let state_dir = platform::paths::default_state_dir();
+    let state_store: Option<std::sync::Arc<state::StateStore>> =
+        match state::StateStore::open(&state_dir) {
+            Ok(s) => {
+                info!(path = %state_dir.display(), "persistent state store ready");
+                Some(std::sync::Arc::new(s))
+            }
+            Err(e) => {
+                warn!(error = %e, "could not open state store, offline convergence disabled");
+                None
+            }
+        };
+
+    // Evaluate the previous session against this boot, then re-arm. Must run
+    // before the first check-in so the verdict is on the wire immediately, and
+    // before the shutdown hook can fire so the hook re-marks a fresh record
+    // rather than the one we are about to read.
+    if let Some(store) = &state_store {
+        let _ = SHUTDOWN_STATE_STORE.set(store.clone());
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        match state::power::evaluate(store, state::power::read_boot_id(), now) {
+            Ok(status) => {
+                if status.unclean_30d > 0 {
+                    warn!(
+                        unclean_shutdowns_30d = status.unclean_30d,
+                        boot_transitions_30d = status.transitions_30d,
+                        "host has lost power without a graceful shutdown"
+                    );
+                }
+                traits::host_self::set_power_status(status);
+            }
+            // A failure here must leave the fields absent rather than zeroed:
+            // nothing is published, so the collector omits them and the server
+            // reads unknown instead of healthy.
+            Err(e) => warn!(error = %e, "power-loss record unavailable this boot"),
+        }
+    }
+
     // Initial connect with cancel-aware exponential backoff. A boot-time
     // server outage is retried indefinitely (the agent must never crash on
     // server unavailability) until the server returns or shutdown is
@@ -1435,50 +1484,6 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         runner::build_executors_with_snapshots(&os_family, &os_distro, Some(snapshot_mgr));
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
 
-    // (Cancellation token + signal handler were set up before the initial
-    // connect above so a boot-time outage is retried rather than fatal.)
-
-    // Open persistent state store for offline convergence.
-    let state_dir = platform::paths::default_state_dir();
-    let state_store: Option<std::sync::Arc<state::StateStore>> =
-        match state::StateStore::open(&state_dir) {
-            Ok(s) => {
-                info!(path = %state_dir.display(), "persistent state store ready");
-                Some(std::sync::Arc::new(s))
-            }
-            Err(e) => {
-                warn!(error = %e, "could not open state store, offline convergence disabled");
-                None
-            }
-        };
-
-    // Evaluate the previous session against this boot, then re-arm. Must run
-    // before the first check-in so the verdict is on the wire immediately, and
-    // before the shutdown hook can fire so the hook re-marks a fresh record
-    // rather than the one we are about to read.
-    if let Some(store) = &state_store {
-        let _ = SHUTDOWN_STATE_STORE.set(store.clone());
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-        match state::power::evaluate(store, state::power::read_boot_id(), now) {
-            Ok(status) => {
-                if status.unclean_30d > 0 {
-                    warn!(
-                        unclean_shutdowns_30d = status.unclean_30d,
-                        boot_transitions_30d = status.transitions_30d,
-                        "host has lost power without a graceful shutdown"
-                    );
-                }
-                traits::host_self::set_power_status(status);
-            }
-            // A failure here must leave the fields absent rather than zeroed:
-            // nothing is published, so the collector omits them and the server
-            // reads unknown instead of healthy.
-            Err(e) => warn!(error = %e, "power-loss record unavailable this boot"),
-        }
-    }
 
     // Wrap reversible executors with the persistent reversal store so the
     // `revert:` lever can capture/restore prior values and run `on_revert:`
