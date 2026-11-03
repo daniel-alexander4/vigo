@@ -2,20 +2,26 @@
 
 Distributed state enforcement for servers, network devices, and workstations. Agents on managed nodes pull desired state from a central server via gRPC over mTLS, apply idempotent changes, and report results back.
 
-Far more than configuration management. One server holds tens of thousands of nodes at a tight 1-second cadence — hundreds of thousands at a relaxed one — RAM-bound and linear at **~620 KB/node** with a realistic inventory (size per the [sizing guide](docs/howto/operate/sizing.md)), with peer-equal `spanner` federation beyond a single host's ceiling. Around the convergence engine (69 resource types, 50 trait collectors, 7 operating systems — Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) Vigo bundles regulatory-framework compliance scoring + GRC export, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration (ad-hoc tasks, workflows, rolling execution, live queries), a read-only AI assistant, RBAC with pluggable authentication (basic, OIDC, SSH key signing), a tamper-evident audit log, and a web dashboard. One binary, every feature in every tier.
+Far more than configuration management. One server holds tens of thousands of nodes at a tight 1-second cadence — hundreds of thousands at a relaxed one — RAM-bound and linear at **~620 KB/node** with a realistic inventory (size per the [sizing guide](docs/howto/operate/sizing.md)), with peer-equal `spanner` federation beyond a single host's ceiling. Around the convergence engine (69 resource types, 50 trait collectors, 7 operating systems — Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) Vigo bundles regulatory-framework compliance scoring + GRC export, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration (ad-hoc tasks, workflows, rolling execution, live queries), a read-only AI assistant, RBAC with pluggable authentication (basic, OIDC, SSH key signing), a tamper-evident audit log, and a web dashboard.
+
+Open source under the [Apache License 2.0](LICENSE): every feature, no node limits, no paid tiers.
 
 ## Quickstart
 
-### 1. Start the server
+### 1. Build and start the server
+
+Prebuilt images are not published yet, so build from source. You need Docker, Go 1.25 and a Rust toolchain.
 
 ```bash
+git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
+IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # the local image tag
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
-cd /srv/vigo
-docker compose up -d
+docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+cd /srv/vigo && docker compose up -d
 ```
 
-The first command seeds `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs. The second starts the server. Dashboard at `https://localhost:8443/`.
+`--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs; `docker compose up -d` starts the server. Dashboard at `https://localhost:8443/`. Then enroll the server's own agent over loopback: `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`.
 
 ### 2. Bootstrap managed nodes
 
@@ -33,11 +39,11 @@ The server generates a script on the fly that downloads the agent binary for the
 
 ### 3. Define desired state
 
-Map hostnames to modules and roles in `.vgo` files (YAML syntax):
+Map hostnames to configcrates and roles in `.vgo` files (YAML syntax):
 
 ```yaml
-# example-configs/envoys.vgo
-nodes:
+# stacks/envoys.vgo
+envoys:
   - match: "web01.example.com"
     environment: production
     roles: [webserver]
@@ -51,7 +57,7 @@ nodes:
       pg_max_connections: "200"
 
   - match: "monitoring.example.com"
-    modules: [prometheus, grafana, node-exporter]
+    configcrates: [prometheus, grafana, node-exporter]
 ```
 
 ### 4. Publish and verify
@@ -69,7 +75,7 @@ Or open the web dashboard at `https://<server-ip>:8443/`.
 ### Nginx with templated config
 
 ```yaml
-# example-configs/stacks/modules/nginx.vgo
+# stacks/configcrates/nginx.vgo
 name: nginx
 vars:
   worker_processes: "auto"
@@ -100,7 +106,7 @@ resources:
 ### PostgreSQL with secrets
 
 ```yaml
-# example-configs/stacks/modules/postgresql.vgo
+# stacks/configcrates/postgresql.vgo
 name: postgresql
 vars:
   pg_password: "secret:vigo/postgres/password"
@@ -146,7 +152,7 @@ resources:
 ### Docker container with resource wiring
 
 ```yaml
-# example-configs/stacks/modules/redis.vgo
+# stacks/configcrates/redis.vgo
 name: redis
 vars:
   redis_password: "secret:vigo/redis/password"
@@ -176,7 +182,7 @@ resources:
 ### OS-conditional packages
 
 ```yaml
-# example-configs/stacks/modules/webserver.vgo
+# stacks/configcrates/webserver.vgo
 name: webserver
 vars:
   is_debian:
@@ -205,7 +211,7 @@ resources:
 ### User accounts with SSH keys
 
 ```yaml
-# example-configs/stacks/modules/ops-users.vgo
+# stacks/configcrates/ops-users.vgo
 name: ops-users
 resources:
   - name: deploy-user
@@ -227,7 +233,7 @@ resources:
 ### Exec with idempotency guards
 
 ```yaml
-# example-configs/stacks/modules/certbot.vgo
+# stacks/configcrates/certbot.vgo
 name: certbot
 vars:
   domain: "example.com"
@@ -247,7 +253,7 @@ resources:
 ### Firewall rules
 
 ```yaml
-# example-configs/stacks/modules/firewall.vgo
+# stacks/configcrates/firewall.vgo
 name: firewall
 resources:
   - name: allow-ssh
@@ -275,7 +281,7 @@ resources:
 ### Cron job
 
 ```yaml
-# example-configs/stacks/modules/backups.vgo
+# stacks/configcrates/backups.vgo
 name: backups
 resources:
   - name: backup-script
@@ -299,7 +305,7 @@ resources:
 ### Network device configuration
 
 ```yaml
-# example-configs/stacks/modules/switch-baseline.vgo
+# stacks/configcrates/switch-baseline.vgo
 name: switch-baseline
 resources:
   - name: set-ntp
@@ -323,18 +329,18 @@ resources:
 ### Roles and match blocks
 
 ```yaml
-# example-configs/roles/webserver.vgo
-name: webserver
-modules: [nginx, certbot, firewall, ops-users, node-exporter]
+# stacks/roles.vgo
+roles:
+  - name: webserver
+    configcrates: [nginx, certbot, firewall, ops-users, node-exporter]
 
-# example-configs/roles/database.vgo
-name: database
-modules: [postgresql, backups, firewall, ops-users, node-exporter]
+  - name: database
+    configcrates: [postgresql, backups, firewall, ops-users, node-exporter]
 ```
 
 ```yaml
-# example-configs/envoys.vgo
-nodes:
+# stacks/envoys.vgo
+envoys:
   - match: "web*.example.com"
     environment: production
     roles: [webserver]
@@ -458,11 +464,12 @@ Two backends: **local** (default, AES-256-GCM encrypted files on disk) and **iso
 
 ## Spanner
 
-Hub-spoke scaling for large fleets. A hub aggregates data from bolts, each handling a partition of nodes. Per-bolt compliance metrics, drill-down views, and envoy reassignment with drain support. (The YAML config block in `server.yaml` is still named `spanner:` through Phase 0 of the spanner→spanner redesign — operator-facing CLI / UI / REST / metrics speak spanner/bolt.)
+Peer-equal federation for fleets beyond one server. Each bolt is a write-equal peer owning a hostname-pattern partition; every bolt holds the full admissions roster, replicated over gossip, so admin reads, enrollment, force-push, reassign and drain work from any bolt. No hub. Configured under `spanner:` in `server.yaml`; driven by `vigocli spanner`.
 
 ## License
 
 [Apache License 2.0](LICENSE). Copyright (c) 2026 Alexander4, LLC.
 Contributions are welcome under the same license with a DCO sign-off — see
 [CONTRIBUTING.md](CONTRIBUTING.md). The Vigo name and logo are trademarks; see
-[TRADEMARKS.md](TRADEMARKS.md).
+[TRADEMARKS.md](TRADEMARKS.md). Questions and bug reports: open an issue, or
+email vigo.support@alexander4.io.
