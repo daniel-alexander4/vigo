@@ -255,5 +255,3 @@ be3f86c5-c809-4989-a014-20a9d9647b2b  cb4acb1f-f995-4026-a01e-f5390283ca6c  2026
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*
-
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

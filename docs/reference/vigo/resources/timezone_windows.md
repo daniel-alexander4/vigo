@@ -45,5 +45,3 @@ Windows only. On Linux, `type: timezone` maps to the [timezone](timezone.md) exe
 
 - Uses Windows timezone names (e.g., `Eastern Standard Time`), not IANA names (e.g., `America/New_York`).
 - To list available timezone names on Windows, run `tzutil /l`.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

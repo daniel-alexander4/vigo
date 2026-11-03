@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:73d9428a764ce2f2dada279cfbaba8e9c20f6f3c63760e387b07ef066f162a8e -->
+<!-- vigo-i18n source_sha:74ab73021c878c779504bb6d6b27ea209b836efc292e6b9c65597471668b2a5d -->
 
 # Scrier
 
@@ -26,6 +26,3 @@ Voyez cela comme un **accès distant inversé** : au lieu de « opérateur → p
 - [Configurer Scrier](../howto/operate/set-up-scrier.md) — correspondances d'utilisateurs, clés SSH, première session.
 - [`vigocli scrier`](../reference/vigocli/scrier.md) + le terminal navigateur dans l'UI.
 - [Le modèle de sécurité](security-model.md) — où se situe Scrier dans la posture.
-
----
-*Confidentiel — Alexander4, LLC. Reproduction interdite.*

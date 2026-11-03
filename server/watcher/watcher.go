@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package watcher polls isopass for secret version changes and triggers
 // force-push re-convergence for envoys whose configs reference rotated secrets.

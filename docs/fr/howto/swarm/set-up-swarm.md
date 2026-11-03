@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:5d4922da3dad5258337c470d5e3cada34db83d91f0d8077279997d272507fdf7 -->
+<!-- vigo-i18n source_sha:57558740d0d5b65a7926b432aa3f92dc109ed75064ba2530bc37f12679848e42 -->
 
 # Configurer Swarm
 
@@ -391,5 +391,3 @@ Ce qui se passe pour chaque action qu'un opérateur peut effectuer sur le semeur
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir [licence](../../legal/license.md).*

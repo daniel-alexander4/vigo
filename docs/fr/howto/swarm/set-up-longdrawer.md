@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:3056a192068f4754745621c0141361cd16b08a0c8995cf49c33b807a4fe93143 -->
+<!-- vigo-i18n source_sha:1306f79061af384ad4873c4d5def842e25c32fa2a7f6739a44183ba6a059d031 -->
 
 # Mettre en place Longdrawer
 
@@ -189,5 +189,3 @@ Les changements de liste de motifs enregistrent des entrées de chaîne d'audit 
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

@@ -280,5 +280,3 @@ The API is **read-only** — every write or management verb returns an S3 `405`;
 
 ---
 *Verified on Vigo 0.66.28 · 2026-05-22.*
-
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../../legal/license.md).*

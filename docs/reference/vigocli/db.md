@@ -82,6 +82,3 @@ The database file grows to its **working-set high-water mark** and then plateaus
 The file only shrinks on disk when you run `db vacuum` (a full rewrite — exclusive lock, ~2× disk, many minutes on a multi-GB DB). That's an **occasional operator action**, not routine maintenance: run it once after a large one-time `db prune` (e.g. right after enabling or lowering `database.retention` on a DB that accumulated more history than the new window allows), not on a schedule. The server has no automatic online shrink — under WAL, `auto_vacuum`/`incremental_vacuum` can't reclaim effectively, so the freelist-reuse plateau is the intended steady state. The daily retention pruner logs a one-line recommendation if the freelist ever grows large enough that a vacuum would meaningfully shrink the file.
 
 If `db backup` (Litestream) is enabled, schedule any `db vacuum` deliberately: a full vacuum rewrites the entire file and triggers a complete re-replication to remote storage.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

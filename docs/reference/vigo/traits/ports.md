@@ -48,5 +48,3 @@ See [When Expressions](../../../reference/configcrate-language.md) for details.
 ## Classification
 
 **Volatile** -- listening ports change as services start and stop. Collected every cycle.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

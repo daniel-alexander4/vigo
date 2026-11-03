@@ -487,6 +487,3 @@ Last reload: 2026-05-24T13:14:15Z
 $ vigocli config status >/dev/null && echo ok || echo broken
 ok
 ```
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

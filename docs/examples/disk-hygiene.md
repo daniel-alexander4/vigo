@@ -91,6 +91,3 @@ This role enforces **preventive policies** — it configures the system so disk 
 - **Scan for and delete arbitrary large files.** Use `vigocli query` to find large files across the fleet when an alert fires.
 - **Alert on disk/inode thresholds.** That's the job of the disk trait collector + server-side alerting (webhooks/SMTP).
 - **Replace service-specific logrotate configs.** Service configcrates (nginx, postgres, etc.) manage their own log rotation. This role handles system-wide defaults.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

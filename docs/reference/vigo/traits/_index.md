@@ -134,5 +134,3 @@ Traits are available as `.Traits` in Go templates within `content:` attributes:
     CPUs: {{ .Traits.hardware.cpu_count }}
     Memory: {{ .Traits.hardware.memory_mb }} MB
 ```
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

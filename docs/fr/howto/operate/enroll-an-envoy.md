@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:8be02f81149387c443c6e2b9f1df5a13cb2bc5a5d9fe25e86c745ddabb0ae7ae -->
+<!-- vigo-i18n source_sha:ee5df72a9bf3a8c1039658fd777362696e4046c353651f0513857325457da2f9 -->
 
 # Enrôler un Envoy
 
@@ -234,5 +234,3 @@ Dans l'interface Web, le nouvel Envoy apparaît dans `/envoys` avec une heure de
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../../legal/license.md).*

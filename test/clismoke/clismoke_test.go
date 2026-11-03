@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package clismoke is an end-to-end smoke test for vigocli against a real,
 // ephemeral vigosrv. It boots the shipped server binary into a throwaway

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Sysctl executor for macOS and BSD — uses `sysctl -w` for runtime, `/etc/sysctl.conf` for persistence.
 

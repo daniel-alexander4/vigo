@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:09f1f0cff303391fef68f4e6daf93f8dbac6ada45dad7a65e3d57e45095e80a3 -->
+<!-- vigo-i18n source_sha:7e53d1429f9026bc00769b6a580cc0825b8cf20a3077ba80016a79ab876d6c1b -->
 
 # Dimensionner un hôte vigosrv
 
@@ -81,5 +81,3 @@ Les chiffres sont mesurés hors-machine sur GCP (VM serveur + VM(s) de harnais s
 
 ---
 *Vérifié sur Vigo 0.76.35 · 2026-06-24. Ancrage : 8 vCPU / 32 Go mesuré ; lignes plus grandes calculées.*
-
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../../legal/license.md).*

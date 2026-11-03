@@ -43,5 +43,3 @@ Parses `/proc/meminfo` for `MemTotal`, `MemFree`, `MemAvailable`, `Buffers`, `Ca
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -37,5 +37,3 @@ Supported mappings include: EST, CST, MST, PST, AKST, HST, UTC, GMT, CET, WET, E
 
 ## Platform
 Windows
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

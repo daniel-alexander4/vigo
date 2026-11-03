@@ -9,6 +9,3 @@ Day-to-day operation: install, enroll, auth, monitoring, remote access, backup/D
 - **Scale** — [sizing](sizing.md) · [Spanner federation](set-up-spanner.md)
 - **Special** — [network devices](set-up-network-devices.md) · [local package mirrors](set-up-local-package-mirrors.md)
 - **When something breaks** — [troubleshoot](troubleshoot.md)
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

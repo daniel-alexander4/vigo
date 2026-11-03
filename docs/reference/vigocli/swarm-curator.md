@@ -231,6 +231,3 @@ vigocli swarm curator show e3b0c44298fc --json | jq '[.entry.body.versions[].pla
 - ADR-024 — curator P2P artifact registry — the design
 - [`vigocli swarm gitback`](swarm-gitback.md) — the analogous fleet view for personal-DR git mirrors
 - [`vigocli swarm filecast`](swarm-filecast.md) — admin-pushed *one-off* file distribution (curator is for named, versioned, mutable-tag artifacts)
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

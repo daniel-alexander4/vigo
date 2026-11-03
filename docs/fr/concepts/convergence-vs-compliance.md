@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:bde3e89a647e523babf914ee52ab6d7f72c046f59ee477bc7330ac2d5a5b510d -->
+<!-- vigo-i18n source_sha:3b06522761dccf9e0d82cde1d9f3b49c74820a8ad33959ba2efdb89dfb64d62d -->
 
 # Convergence et conformité
 
@@ -40,6 +40,3 @@ Les confondre produit un reporting malhonnête — « 100 % convergé » n'est p
 - Les cartes de convergence et de conformité du tableau de bord (séparées, avec un détail propre à chacune).
 - [Reporting de conformité](../howto/compliance/compliance-reporting.md) — générer la couverture par cadre.
 - [Configcrates](configcrates.md) — ce que la convergence applique.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:dd3909ec6c9344c9f299e55ed1a122fa0c11d3a4878079bf4d99d110770637f2 -->
+<!-- vigo-i18n source_sha:4df8dd227236f7df6625e0ed3f75c1e72091ed26825966f2fe50a740062cb3a5 -->
 
 # Migrer depuis un autre CM
 
@@ -9,6 +9,3 @@ Vous venez d'un autre système de gestion de configuration ? Lisez le guide corr
 - [Depuis Chef](migrate-from-chef.md)
 - [Depuis Salt](migrate-from-salt.md)
 - [Depuis CFEngine](migrate-from-cfengine.md)
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

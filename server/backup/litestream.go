@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package backup manages continuous SQLite WAL replication via Litestream.
 // It generates a litestream config file and runs `litestream replicate` as a

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package auth provides pluggable authentication for the Vigo web UI and
 // REST API. Three methods are supported: "basic" (default, username/password

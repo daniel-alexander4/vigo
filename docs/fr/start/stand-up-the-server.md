@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:34c0470e40888ff3ca69b36fa3ca012fc8b6c7bd2d1903f0a7537a4ca9a569f9 -->
+<!-- vigo-i18n source_sha:7896a6d17b1cc44356748f370a4903ccda7a2438695670b4f6dd573f450c900d -->
 
 # 1 · Mettre le serveur en service
 
@@ -53,6 +53,3 @@ La politique d'enrôlement de confiance par défaut (CIDR privés + loopback) si
 Vous disposez de : un serveur en bonne santé, une session navigateur et un envoy en cours de convergence. Si le tableau de bord affiche toujours zéro envoy après une minute, voir [Installation](../howto/operate/install.md#troubleshooting).
 
 **Suite :** [Enrôler votre premier envoy →](enroll-your-first-envoy.md) — une machine *distincte*.
-
----
-*Confidentiel — Alexander4, LLC. Reproduction interdite.*

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package httpsec centralizes the HTTP security response headers — including
 // the Content-Security-Policy — applied to every HTML surface Vigo serves:

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:75901714d6c4ca60a6520d55c77bfd889d4fda40f5eae360c6311b9cf198f61f -->
+<!-- vigo-i18n source_sha:168f483951b557d89c3f824cfb5fa47ac054bdcbb2037036b7e62a9c3066ff55 -->
 
 # Fédération Spanner
 
@@ -37,6 +37,3 @@ Vous pouvez exécuter les deux : la HA au sein d'une partition, Spanner entre le
 - [Configurer Spanner](../howto/operate/set-up-spanner.md) — fonder, inviter, joindre.
 - L'interface `/spanner` + [`vigocli spanner`](../reference/vigocli/spanner.md).
 - [Haute disponibilité](high-availability.md) — l'autre axe de la montée en charge.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

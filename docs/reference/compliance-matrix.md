@@ -118,6 +118,3 @@ Vigo's reports state what enforcement and trait collection can prove. The follow
 - **WORM archival of arbitrary data** — Vigo's audit log is hash-chained and tamper-evident, but it isn't a WORM storage system. Pair with Connwaer's WORM verification or an external WORM store.
 
 Honest reporting is a feature. Auditors prefer "Vigo enforces X, we attest Y separately" over "Vigo claims everything."
-
----
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

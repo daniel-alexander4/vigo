@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:65241151b1fc5a3280026b9d642abee15330efba0a60236e62970a67e8e0c00b -->
+<!-- vigo-i18n source_sha:06da21afa744ad0d5df7f25f0d2c4dddf9975119ddb00f1a62bd70302120b73f -->
 
 # Exemples pas à pas
 
@@ -38,5 +38,3 @@ Tous les exemples suivent ces motifs :
 - Les templates Go (`{{ }}`) ne sont utilisés que dans les attributs `content:`
 - Les paquets conditionnés à l'OS utilisent des ressources séparées avec des expressions `when:`
 - Les secrets utilisent le préfixe `secret:` et sont résolus par le fournisseur de secrets
----
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../legal/license.md).*

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Pluggable trait collectors that gather system information from managed envoys.
 //! Traits are used in Go templates as .Traits.os.family, .Traits.hardware.cpu_count, etc.

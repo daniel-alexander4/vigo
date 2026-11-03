@@ -140,5 +140,3 @@ Windows only. Requires administrator privileges for `secedit /configure`.
 - Audit policy values: `0` = no auditing, `1` = success only, `2` = failure only, `3` = both success and failure.
 - Changes take effect immediately after `secedit /configure` completes. No reboot is required.
 - Temporary files created during export and configure are cleaned up automatically.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

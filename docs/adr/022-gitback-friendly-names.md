@@ -188,6 +188,3 @@ no fork-upstream-tracking; no per-tenant name namespaces (v1); no P2P gossip
 channel for name claims in the initial cut (deferrable +1). `public_read`
 (letting non-members clone via the friendly URL) is its own orthogonal
 feature, not part of this ADR.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

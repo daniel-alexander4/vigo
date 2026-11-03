@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:7e93d5934dc142cdb8e8b97e69d7c0b6bcfadd77e880a01ca08b2f61b81805a8 -->
+<!-- vigo-i18n source_sha:8167b12600e9df9c5b1afff714b674f8f9312ae65fe9a5881a1b41ec3ea7ab29 -->
 
 # Publier votre configuration
 
@@ -316,5 +316,3 @@ Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
 
 ---
 *Vérifié sur Vigo 0.65.10 · 2026-05-18.*
-
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../../legal/license.md).*

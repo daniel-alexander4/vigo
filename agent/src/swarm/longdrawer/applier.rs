@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Apply reconciliation actions: fetch files from peers and write them to
 //! the user's ~/longdrawer/ with correct ownership, or delete local files.

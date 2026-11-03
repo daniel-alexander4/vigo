@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Database backup executor — dumps databases using native tools, then
 //! stores the dumps in hardlink-based incremental snapshot directories.

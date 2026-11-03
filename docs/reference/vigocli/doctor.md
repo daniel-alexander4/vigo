@@ -101,5 +101,3 @@ vigocli doctor --pre-start --config /srv/vigo/server.yaml
 ## Related
 
 - [validate](validate.md) -- validate .vgo configuration files
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package puddlemesh builds the fleet-wide puddle observability view by
 // aggregating per-envoy `puddle` trait payloads keyed on the puddle

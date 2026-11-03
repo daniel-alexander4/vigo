@@ -41,5 +41,3 @@ Logged-in users are collected by parsing the output of the `who` command. Accoun
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

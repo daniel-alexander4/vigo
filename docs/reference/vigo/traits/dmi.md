@@ -60,5 +60,3 @@ Per-DIMM `memory_devices` are parsed directly from the raw SMBIOS type-17 record
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

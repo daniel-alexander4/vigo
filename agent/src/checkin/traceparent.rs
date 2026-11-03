@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! W3C traceparent generation and parsing for cross-process log correlation
 //! (ADR-028). Format: `00-<trace_id_32hex>-<span_id_16hex>-<flags_2hex>`,

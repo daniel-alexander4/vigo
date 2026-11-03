@@ -81,5 +81,3 @@ Cross-platform.
 - Field numbering is 1-based (field 1 is the first field).
 - The `extend_fields` parameter handles cases where the line has fewer fields than `select_field` by padding with empty fields.
 - Operations `append`/`prepend`/`delete` work on multi-value fields separated by `value_separator`.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

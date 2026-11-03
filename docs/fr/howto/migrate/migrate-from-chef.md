@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:8b5fdbae155970a9c2c5bbbb3fa7f515db6b9a589fed4e3b20cdea92216a8959 -->
+<!-- vigo-i18n source_sha:ecc323565c9482872158cce56b1290b9e7233dd8e0b2ca5ff10767e10e6c2350 -->
 
 # Migration depuis Chef
 
@@ -330,5 +330,3 @@ Le fournisseur de secrets résout les références au moment de la compilation d
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

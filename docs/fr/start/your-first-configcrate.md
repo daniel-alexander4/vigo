@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:feeaad7b2cdc633380273885ccdce6351a6d58fd7de90740a92da669b2d1960d -->
+<!-- vigo-i18n source_sha:99c9751ca1e3f62d7787d856e1965417683ae0b919c5e0171ac7a318e68ab6a0 -->
 
 # 3 · Votre premier configcrate
 
@@ -64,6 +64,3 @@ Vous avez écrit, lié, publié et fait converger un configcrate, et vu une dér
 **Suite :** [Votre premier rapport de conformité →](your-first-compliance-report.md)
 
 Voir aussi : [Écrire votre premier configcrate](../howto/configcrates/write-your-first-configcrate.md) et la [référence de rédaction des configcrates](../reference/configcrate-language.md) pour la surface complète (conditionnels, templates, rôles, environnements).
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:c06a832cab741b0a3de4745a34d9d5bb09cf70002d54d25289194bf10c604b9b -->
+<!-- vigo-i18n source_sha:e5be23f0b1f21f6daa8255dd86453062dd006964302d3d15d146bd1352bd6e4c -->
 
 # Démarrage rapide
 
@@ -124,6 +124,3 @@ Ou via l'interface Web à `https://localhost:8443/runs`. Vous devriez voir `motd
 - [Référence / vigocli](reference/vigocli/) — chaque commande CLI
 - [Référence / ressources de l'agent](reference/vigo/resources/) — chaque type d'exécuteur
 - [Référence / traits de l'agent](reference/vigo/traits/) — chaque collecteur de traits
-
----
-*Confidentiel — Alexander4, LLC. Reproduction interdite. Voir [legal/license.md](legal/license.md).*

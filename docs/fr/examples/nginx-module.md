@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:9eeee526a3f35d141ad3fe364b980340b90ec574846040dd6d7b474190250403 -->
+<!-- vigo-i18n source_sha:e5a5286608e874a6f9707c359ea9cf6015a196a42a6c5856ada70f4969034c66 -->
 
 # Configcrate Nginx
 
@@ -121,5 +121,3 @@ Les variables au niveau du nœud surchargent les valeurs par défaut de la confi
 ```
 
 Notez que la clé SSL utilise `secret:` -- le fournisseur de secrets la résout, et le contenu n'est jamais stocké en clair dans les fichiers de configuration.
----
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir la [licence](../legal/license.md).*

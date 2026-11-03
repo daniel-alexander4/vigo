@@ -62,5 +62,3 @@ Walks `/sys/class/power_supply/`. Each `Battery`-type entry named `BAT*` contrib
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

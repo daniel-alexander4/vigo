@@ -47,5 +47,3 @@ Pure sysfs reads; no `lsblk`/`smartctl` subprocess.
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -118,5 +118,3 @@ The event is recorded as `emergency.access` in the SHA-256 hash chain and cannot
 | `--reason` | Required. The reason for emergency access. |
 
 See [Emergency Access Procedure](../compliance-matrix.md) for the full procedure.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

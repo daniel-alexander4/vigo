@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:6c80a79b4803ea54ac102605e222253aafd4e52ea11cd63f3ad9c843b7987bce -->
+<!-- vigo-i18n source_sha:edf383a1effbb0bd3f9d7b766e5ecfb696ad5afc83f9ceb20f057ae99f4fc86b -->
 
 # Vigo
 
@@ -46,6 +46,3 @@ Mais l'échelle n'en est que la moitié. Vigo est **bien plus que de la gestion 
 | **Vous cherchez une information ?** | [Référence](reference/) — vigocli, ressources de l'agent, traits de l'agent, API REST, server.yaml, le langage des configcrates |
 | **Vous voulez le modèle mental ?** | [Concepts](concepts/) — architecture, convergence vs conformité, le Swarm, l'identité Puddle, le modèle de sécurité |
 | **Que signifie un terme ?** | [Glossaire](glossary.md) |
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [legal/license.md](legal/license.md).*

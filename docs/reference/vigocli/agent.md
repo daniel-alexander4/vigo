@@ -221,5 +221,3 @@ vigo version
 - [Compiled Promises](../../reference/configcrate-language.md) -- Offline convergence and LMDB state store
 - [Guardrails](../../howto/operate/troubleshoot.md) -- Self-protection for agent paths
 - [Troubleshooting](../../howto/operate/troubleshoot.md) -- Common issues and diagnostics
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

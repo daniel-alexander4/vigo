@@ -35,5 +35,3 @@ Runs `wmic os get LastBootUpTime /value` and parses the WMI datetime format (`yy
 
 ## Platform
 Windows
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

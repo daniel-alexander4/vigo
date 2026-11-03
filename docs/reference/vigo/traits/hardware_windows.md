@@ -41,5 +41,3 @@ Uses three `wmic` commands:
 
 ## Platform
 Windows
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

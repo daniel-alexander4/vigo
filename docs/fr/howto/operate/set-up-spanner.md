@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:16dc31de6dcdfd04eb72aba2ef40a783f2f08b12d1fd7b807953fe77a9e5bfab -->
+<!-- vigo-i18n source_sha:ab8e6393de2a62ec7ea478a460d0ff31b808a0a0cdcc9f89b5ee83c984af0f0f -->
 
 # Mettre en place un Spanner (fédération entre pairs égaux)
 
@@ -158,5 +158,3 @@ La page `/spanner` liste chaque bolt du spanner — une ligne par bolt, le bolt 
 
 ---
 *Vérifié sur Vigo 0.66.12 · 2026-05-21.*
-
-*Confidentiel — Alexander4, LLC. Reproduction interdite. Voir [../legal/license.md](../../legal/license.md).*

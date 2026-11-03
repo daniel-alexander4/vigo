@@ -84,5 +84,3 @@ Windows only.
 - Environment variable changes take effect for new processes only. Running processes retain their original environment until restarted.
 - To modify `PATH`, set the full desired value. The executor does not support appending to existing values -- use the [`powershell`](powershell.md) executor for PATH manipulation if needed.
 - Value comparison is exact (case-sensitive). If the current value differs in any way, the variable is updated.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

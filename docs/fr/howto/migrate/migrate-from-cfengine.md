@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:8e08f8cd9a84ff71c66a423c16e45e4f114a4510772973d1e7d1ac427998465c -->
+<!-- vigo-i18n source_sha:8054630f95a68b4c22cc60c962a5ce877e6bb04ed47cb57003e14ee67a7852d3 -->
 
 # Migration depuis CFEngine
 
@@ -342,5 +342,3 @@ Le fournisseur de secrets résout les références au moment de la compilation d
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

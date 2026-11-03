@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:44cd988f2b84f52c99945cd45b93b69d141d78c0b006c27cba95b2d862d24a16 -->
+<!-- vigo-i18n source_sha:d2b5eaeed58c23ca59bf17ab63cdf56bd92a68d5081fe1c94898aa4929a512e7 -->
 
 # Sauvegarder et restaurer
 
@@ -317,5 +317,3 @@ Litestream couvre la base de données SQLite avec une réplication quasi en temp
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

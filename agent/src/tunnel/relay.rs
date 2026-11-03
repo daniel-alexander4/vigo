@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! TunnelRelay: opens a TunnelStream RPC on a dedicated gRPC connection,
 //! receives a TunnelOpen instruction from the server, connects to the

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0d662af52cbaa20e3fdf64596001ab03465e37f9595a671fe840ab76ee847b13 -->
+<!-- vigo-i18n source_sha:8b19848ec17204e7fa498f508559644d756fad9201ffc26bf50afdbf0066cc42 -->
 
 # 4 · Votre premier rapport de conformité
 
@@ -53,6 +53,3 @@ Vous avez mis en place un serveur, enrôlé des envoys, écrit et fait converger
 - **[Concepts](../concepts/_index.md)** — le modèle mental derrière ce que vous venez de faire.
 - **[Guides pratiques](../howto/_index.md)** — les sous-systèmes Swarm, l'authentification, la surveillance, la sauvegarde/reprise, la migration depuis un autre CM.
 - **[Référence](../reference/_index.md)** — chaque commande, ressource, trait et clé de configuration.
-
----
-*Confidentiel — Alexander4, LLC. Reproduction interdite.*

@@ -134,6 +134,3 @@ Linux, macOS, FreeBSD, Windows. Requires the appropriate dump tool to be install
 - The dump runs as the agent's user (root). For Postgres, use `db_user: postgres` to run as the postgres system user via `pg_dump -U`.
 - Snapshot directories use the same `YYYY.JJJ.HH.MM` naming as the backup executor.
 - Unlike the backup executor, db_backup does not use hardlinks between snapshots — each dump is a fresh file. The snapshot directory structure provides dated organization and retention.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

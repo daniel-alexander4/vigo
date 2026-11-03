@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:86da83862c444b6a0c942ba1237775debc6b213189f493f332be499044ff5383 -->
+<!-- vigo-i18n source_sha:d299388880fb26d0e0a6672b2fc271fc399f9e8273b55600eaa3f7ed8acef101 -->
 
 # Écrire votre premier configcrate
 
@@ -256,5 +256,3 @@ be3f86c5-c809-4989-a014-20a9d9647b2b  cb4acb1f-f995-4026-a01e-f5390283ca6c  2026
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../../legal/license.md).*

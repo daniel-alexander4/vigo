@@ -204,5 +204,3 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 - `secret:` prefix — credentials resolved server-side at check-in
 
 See [Multi-Axis Config](../reference/configcrate-language.md) for the full canonical model.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

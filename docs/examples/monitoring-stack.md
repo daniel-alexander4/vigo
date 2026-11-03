@@ -206,5 +206,3 @@ envoys:
 ## Adding Vigo Metrics
 
 Point Prometheus at the Vigo server's `/metrics` endpoint to monitor the configuration management system itself. See [Prometheus Metrics](../howto/operate/set-up-monitoring.md) for available metrics and Grafana dashboard suggestions.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

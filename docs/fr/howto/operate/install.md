@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:78b6c22ee9e441b082975ddc2feb334b7cd06ef94fb9c3008d3512eaa265abec -->
+<!-- vigo-i18n source_sha:1e228dbf5ca5a7a568d00410c11b70e64f1659c0369720f5fbfdc0251954ff93 -->
 
 # Installer le serveur Vigo
 
@@ -258,5 +258,3 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../../legal/license.md).*

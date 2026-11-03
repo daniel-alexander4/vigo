@@ -122,6 +122,3 @@ Or the Web UI at `https://localhost:8443/runs`. You should see `motd` applied su
 - [Reference / vigocli](reference/vigocli/) — every CLI command
 - [Reference / agent resources](reference/vigo/resources/) — every executor type
 - [Reference / agent traits](reference/vigo/traits/) — every trait collector
-
----
-*Confidential — Alexander4, LLC. Not for redistribution. See [legal/license.md](legal/license.md).*

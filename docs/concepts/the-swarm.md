@@ -37,6 +37,3 @@ The destructive lever is the **usercrate flag** — removing it scrubs the user'
 - [Puddle identity](puddle-identity.md) — the per-user anchor everything builds on.
 - [Set up swarm](../howto/swarm/set-up-swarm.md), then [gitback](../howto/swarm/set-up-gitback.md) · [lockbox](../howto/swarm/set-up-lockbox.md) · [curator](../howto/swarm/set-up-curator.md) · [poolq](../howto/swarm/set-up-poolq.md) · [longdrawer](../howto/swarm/set-up-longdrawer.md).
 - The `/swarm/*` UI pages and [`vigocli swarm`](../reference/vigocli/swarm.md).
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

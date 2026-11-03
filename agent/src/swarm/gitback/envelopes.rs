@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Revocation + leave + delegation envelopes for ADR-015 / ADR-019
 //! unified-substrate gitback.

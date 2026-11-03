@@ -86,6 +86,3 @@ of the agent's own secret memory. It is distinct from
 [`examples/security-hardening.md`](../../examples/security-hardening.md), which is
 about using Vigo *configcrates* to harden the managed nodes themselves (firewall,
 SSH, sudo policy).
-
----
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../../legal/license.md).*

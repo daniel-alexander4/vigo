@@ -162,6 +162,3 @@ vigocli inventory query 'cloud.region=eu-*'
 | `cloud.tags` | Instance tags/labels as key-value pairs |
 
 All traits are collected automatically from the cloud provider's IMDS. No configuration needed.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

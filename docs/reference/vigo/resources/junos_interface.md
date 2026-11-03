@@ -56,5 +56,3 @@ resources:
 ## Platform
 
 This executor is available on all platforms. It runs on the gateway envoy and connects to the target Junos device over SSH.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

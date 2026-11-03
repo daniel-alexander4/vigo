@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:118b053cc12d0264f7ce1934ff63ab134db0c15080186b959259247f4ba7ab9c -->
+<!-- vigo-i18n source_sha:eaa5bc95032f25f2fbf5b97c61a0f366051ae1c29c46ba6058f6fee853774594 -->
 
 # Migration depuis Ansible
 
@@ -343,5 +343,3 @@ Les secrets sont résolus côté serveur lors de la compilation du bundle. La va
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

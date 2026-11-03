@@ -143,5 +143,3 @@ Risk scores range from 0 (lowest risk) to 100 (highest risk), capped at 100.
 - [cve](cve.md) -- search for hosts affected by a specific CVE
 - [report](report.md) -- generate compliance reports
 - [doctor](doctor.md) -- run health checks
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

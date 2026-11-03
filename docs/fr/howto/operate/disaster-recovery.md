@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:56da9643093df83a647103f1424b1e7114ae2eb8f1101cf5e82cb4f04739fc58 -->
+<!-- vigo-i18n source_sha:4f737148b57a1a6a9278b9b399f10351cd77a6a58d30550376e3624bec00802b -->
 
 # Reprise après sinistre
 
@@ -267,5 +267,3 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

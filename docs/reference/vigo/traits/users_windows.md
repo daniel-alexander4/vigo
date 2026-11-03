@@ -34,5 +34,3 @@ Runs `net user` and parses the output. The command outputs a header line, a sepa
 
 ## Platform
 Windows
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

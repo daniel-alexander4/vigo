@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0be044869c7ccd81560c34a2ead7413ab02695c62591d38f3e55a1a4c8d90f44 -->
+<!-- vigo-i18n source_sha:29f35c0a8f3a71f23dec56dd398466332c0a62614e82642002d05c6cc085de12 -->
 
 # Tutoriels
 
@@ -8,6 +8,3 @@ Orientés apprentissage, pratiques. Un parcours idéal qui vous mène de zéro �
 2. [**Enrôler votre premier Envoy**](enroll-your-first-envoy.md) — générez un jeton, installez l'agent et observez le premier check-in arriver.
 3. [**Votre premier configcrate**](your-first-configcrate.md) — écrivez un petit configcrate, faites-en `config publish` et observez-le converger sur le tableau de bord.
 4. [**Votre premier rapport de conformité**](your-first-compliance-report.md) — pointez un référentiel sur le parc, lisez la couverture et exportez vos preuves.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

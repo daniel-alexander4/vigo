@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:70c74bfef766a4bc0728c1d140ed0e7f768a0dc7451f7de69cc5d4bd73fc8d78 -->
+<!-- vigo-i18n source_sha:37d7737c23f6ee13158a1be9569a6c70fd63da803de2e18c80b6fd2373b6860b -->
 
 # Architecture
 
@@ -29,6 +29,3 @@ Le modèle est **pull** : il n'y a pas de canal push du serveur vers le nœud po
 - [Configcrates](configcrates.md) — comment l'état désiré est écrit et résolu.
 - [Le modèle de sécurité](security-model.md) — mTLS, signature, RBAC, la chaîne d'audit.
 - [Installer le serveur](../howto/operate/install.md) · [Enrôler un envoy](../howto/operate/enroll-an-envoy.md) — la boucle, mise en place pour de vrai.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

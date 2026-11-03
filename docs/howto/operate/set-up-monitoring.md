@@ -297,8 +297,6 @@ tuning:
 ```
 
 See [Tuning Parameters](troubleshoot.md) for all tuning options.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*
 
 
 ---
@@ -635,5 +633,3 @@ Or import into Grafana via Alerting → Alert rules → Import. Route alerts to 
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*
-
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

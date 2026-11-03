@@ -7,6 +7,3 @@ Coming from another configuration-management system? Read the guide for yours on
 - [From Chef](migrate-from-chef.md)
 - [From Salt](migrate-from-salt.md)
 - [From CFEngine](migrate-from-cfengine.md)
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

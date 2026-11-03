@@ -154,5 +154,3 @@ Cross-platform. The `owner` and `group` parameters are Unix-only (no-op on Windo
 - The `version` marker file (`<target_path>.vigo-version`) is a plain text file containing the version string. It is removed when `state: absent`.
 - `strip_components` works identically to tar's `--strip-components` flag. For zip archives, it moves the contents of the Nth-level directory up to the extraction root.
 - The disk space pre-flight checks the filesystem where `target_path` lives, not `/tmp`. If the target directory doesn't exist yet, it checks the closest existing ancestor.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

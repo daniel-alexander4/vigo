@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Generic 8-digit claim-code primitives shared by `pair` (initial
 //! join, ADR-014) and `rekey` (puddle keypair rotation, ADR-018).

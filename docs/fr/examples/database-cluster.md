@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:f8b23408f17bdd8efb6f3cc22915dd703b52a30528a8a6b4f92a7bf67a6f697b -->
+<!-- vigo-i18n source_sha:378a7c6b36e8df0f5177993dc793e5719339f84da0aa7f26445e4eead82e5dda -->
 
 # Cluster de base de données
 
@@ -205,5 +205,3 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 - préfixe `secret:` — identifiants résolus côté serveur au check-in
 
 Voir [Configuration multi-axes](../reference/configcrate-language.md) pour le modèle canonique complet.
----
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir la [licence](../legal/license.md).*

@@ -88,5 +88,3 @@ Cross-platform.
 | [file_line](file_line.md) | Ensuring a single line exists or is absent |
 | [replace](replace.md) | Regex find-and-replace for scattered settings |
 | [file](file.md) | Replacing the entire file content from a template |
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

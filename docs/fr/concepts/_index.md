@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:b04e3d183cca07c9464c6d09a8be6c6479fae3bf7960c2a77aaa4c27ee42cdac -->
+<!-- vigo-i18n source_sha:80d50a5a7fa530030e475a4897f88cf89dadd293c369883f1e694d83ff80787a -->
 
 # Concepts
 
@@ -15,6 +15,3 @@ Orienté compréhension. Le modèle mental derrière Vigo — comment les pièce
 - [**Le modèle de sécurité**](security-model.md) — mTLS, signature ed25519, RBAC et la chaîne de hachage d'audit.
 - [**Le modèle de conformité**](compliance-model.md) — frameworks, capacités, bundles, Connwaer et dérogations.
 - [**Haute disponibilité**](high-availability.md) — réplicas pairs, Spanner et état durable.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

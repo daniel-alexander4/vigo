@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Region computation — constrains file operations to a section between two
 //! regex anchors. Used by replace, field_edit, and file_line executors.

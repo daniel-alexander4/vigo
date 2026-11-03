@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:c4f8cda642af25cb8fecca092bfea43bb669843171be5faf1bc0171a9c8cf097 -->
+<!-- vigo-i18n source_sha:47bd05bdba63b1ad27e080c09c5e122b028c3c3a705ca4a9799fe02e9f2f89ae -->
 
 # Stack de supervision
 
@@ -207,5 +207,3 @@ envoys:
 ## Ajout des métriques Vigo
 
 Pointez Prometheus vers le point de terminaison `/metrics` du serveur Vigo pour superviser le système de gestion de configuration lui-même. Consultez [Métriques Prometheus](../howto/operate/set-up-monitoring.md) pour les métriques disponibles et des suggestions de tableaux de bord Grafana.
----
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../legal/license.md).*

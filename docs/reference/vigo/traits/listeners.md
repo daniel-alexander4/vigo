@@ -100,5 +100,3 @@ Both collectors run on every check-in.
 ## Classification
 
 **Stable** — listener set changes on service restart, not at the pace of check-in cycles. Cached across convergence cycles.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -93,5 +93,3 @@ vigocli server status
 ## See Also
 
 - [Peer Replication](../../howto/operate/troubleshoot.md) -- full operational guide
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

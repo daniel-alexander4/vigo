@@ -43,5 +43,3 @@ On Linux, calls `localtime_r` and `gmtime_r` via libc to get local and UTC time 
 
 ## Platform
 Linux, Windows (cross-platform)
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

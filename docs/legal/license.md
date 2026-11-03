@@ -1,48 +1,20 @@
+# License
 
-# Documentation License
+Last updated 2026-11-03.
 
-Last updated 2026-05-13.
+Vigo — the server (`vigosrv`), the agent (`vigo`), the CLI (`vigocli`),
+Connwaer, and this documentation — is open source under the
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The full
+text ships as `LICENSE` in the repository root.
 
-## Proprietary and Confidential
+You may use, copy, modify and redistribute the software and its
+documentation, commercially or not, provided you keep the license and the
+`NOTICE` file with what you distribute and mark files you changed.
 
-This documentation is the proprietary and confidential property of Alexander4, LLC. It is provided exclusively to licensed users of Vigo and Connwaer for the purpose of operating and maintaining the software.
+Third-party components keep their own licenses; see
+`THIRD-PARTY-NOTICES.go.txt` and `THIRD-PARTY-NOTICES.rust.txt`.
 
-The documentation is part of the Software as defined in the Vigo Proprietary License (see `LICENSE` in the repository root). All restrictions, use prohibitions, and termination provisions in the LICENSE apply to this documentation.
+The Vigo and Connwaer names and logo are trademarks of Alexander4, LLC and
+are not covered by the Apache License; see `TRADEMARKS.md`.
 
-## Restrictions
-
-You may not, without prior written consent from Alexander4, LLC:
-
-- **Redistribute** this documentation in any form -- electronic, printed, or otherwise -- to any person or entity not authorized under your license agreement.
-- **Publish** this documentation on any public website, wiki, knowledge base, file-sharing service, or other publicly accessible system.
-- **Copy or excerpt** substantial portions of this documentation into your own internal or external documentation, training materials, or knowledge bases.
-- **Remove or alter** any confidentiality notices, copyright notices, or proprietary markings.
-
-## Fair Use
-
-Brief quotation of this documentation for purposes of commentary,
-review, education, or technical discussion is permitted, provided
-proper attribution to Alexander4, LLC is given. This includes quoting
-passages in blog posts, conference presentations, or technical articles
-about Vigo, and reproducing screenshots of the Software's user
-interface. This exception does not permit reproduction of substantial
-portions of the documentation or systematic extraction of content.
-
-## Permitted Use
-
-You may:
-
-- View and use this documentation for operating Vigo and Connwaer within your organization.
-- Share this documentation with employees and contractors who are directly involved in operating or maintaining your Vigo installation, provided they are bound by confidentiality obligations no less protective than those in your license agreement.
-- Print copies for your own internal reference, provided all confidentiality notices are preserved.
-
-## Confidentiality in Signed Agreements
-
-If you have executed a Commercial License Agreement, Design Partner Agreement, or NDA with Alexander4, LLC, the confidentiality obligations in that agreement apply to this documentation. Unauthorized sharing of documentation marked as confidential constitutes a breach of that agreement, subject to the cure and termination provisions therein.
-
-## Contact
-
-Questions about documentation licensing or requests for redistribution permission:
-
-Alexander4, LLC
-vigo.licensing@alexander4.io
+Questions: vigo.licensing@alexander4.io

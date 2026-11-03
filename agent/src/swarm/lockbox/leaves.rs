@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Lockbox membership LEAVE records — the authoritative log of "which
 //! age pubkeys are no longer recipients for this user."

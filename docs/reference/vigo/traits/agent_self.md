@@ -60,6 +60,3 @@ The collector is classified `volatile` — it refreshes every cycle. The point i
 ## Platform
 
 Linux + macOS. BSD platforms return zeroed fields; Windows N/A.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

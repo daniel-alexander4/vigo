@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0807cf0b14ca7c602935c2f1baa4ac6b31245ad2e40a3f50e6b0fb0a42ac6d7a -->
+<!-- vigo-i18n source_sha:c0637bf20ec88a1762cb5895b6ec5cf42d355361ba2ac71befbb9eda6559c361 -->
 
 ---
 title: Acheminer les événements vers Grafana Loki
@@ -150,7 +150,3 @@ Après publication :
 4. Exécutez `vigocli config publish` sur des stacks inchangés — cela déclenche un événement `audit.config_published` que vous trouverez sous `{service="vigo", event_name="audit.config_published"}`.
 
 Si Loki renvoie un `4xx`, vérifiez dans les logs du serveur la présence de `integration dispatch failed target=loki` ; le message d'erreur transporte le code de réponse de Loki (généralement 401 / 403 pour l'authentification, ou 400 pour un en-tête de tenant malformé).
-
----
-
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

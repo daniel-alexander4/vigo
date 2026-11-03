@@ -119,5 +119,3 @@ Server-side allowlist filtering (configured in `server.yaml` under `compliance.a
 ## Classification
 
 **Stable** — source lists change infrequently. Cached across convergence cycles.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

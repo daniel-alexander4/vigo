@@ -39,5 +39,3 @@ Uses `nix::unistd` to call `getuid()`, `getgid()`, and `geteuid()`. Resolves the
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

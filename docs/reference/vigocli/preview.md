@@ -59,5 +59,3 @@ Output is colorized when writing to a terminal: `create` in green, `update` in y
 - [task](task.md) -- dispatch ad-hoc tasks
 - [validate](validate.md) -- validate .vgo configuration files
 - [rollback](rollback.md) -- rollback to a previous state
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

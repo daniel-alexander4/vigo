@@ -93,5 +93,3 @@ vigocli backup inspect <path>
   ]
 }
 ```
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

@@ -40,5 +40,3 @@ Runs `wmic logicaldisk where DriveType=3 get DeviceID,Size,FreeSpace /value` to 
 
 ## Platform
 Windows
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -47,6 +47,3 @@ Two envoys, both checking in. Nothing is being *enforced* yet — you haven't wr
 **Next:** [Your first configcrate →](your-first-configcrate.md)
 
 See also: [Enroll an envoy](../howto/operate/enroll-an-envoy.md) for the full procedure (offline installs, custom service managers, re-enrollment).
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

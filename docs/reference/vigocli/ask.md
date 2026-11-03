@@ -71,5 +71,3 @@ The response is streamed via Server-Sent Events (SSE) when the server supports i
 - [envoys](envoys.md) -- manage enrolled envoys
 - [query](query.md) -- query trait values directly
 - [validate](validate.md) -- validate .vgo files programmatically
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

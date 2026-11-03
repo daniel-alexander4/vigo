@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package fleetpressure is the single source of truth for translating
 // per-envoy resource-and-repo traits into an "agent health" composite —

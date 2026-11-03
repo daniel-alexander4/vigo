@@ -148,7 +148,3 @@ After publish:
 4. Run `vigocli config publish` against any unchanged stacks — that fires an `audit.config_published` event you can find at `{service="vigo", event_name="audit.config_published"}`.
 
 If Loki returns `4xx`, check the server logs for `integration dispatch failed target=loki`; the error message carries the Loki response code (usually 401 / 403 from auth, or 400 from a malformed tenant header).
-
----
-
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

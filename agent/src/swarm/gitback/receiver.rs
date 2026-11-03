@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Cross-task handle for swarm wanted-labels — the only piece of the
 //! legacy receiver path still in service after ADR-015 step 4. The

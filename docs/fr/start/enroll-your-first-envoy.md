@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:9980a02575243600e3e288944635336f2baa57284e28a1cb7fd09d81c2260bc7 -->
+<!-- vigo-i18n source_sha:7ffe22fa8c58e5c852079d8889c00ac0695b52c565eff45e3f219568e29d3caf -->
 
 # 2 · Enrôlez votre premier Envoy
 
@@ -49,6 +49,3 @@ Deux Envoys, tous deux en check-in. Rien n'est encore *appliqué* — vous n'ave
 **Suivant :** [Votre premier configcrate →](your-first-configcrate.md)
 
 Voir aussi : [Enrôler un Envoy](../howto/operate/enroll-an-envoy.md) pour la procédure complète (installations hors ligne, gestionnaires de services personnalisés, ré-enrôlement).
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

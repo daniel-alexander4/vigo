@@ -13,6 +13,3 @@ Understanding-oriented. The mental model behind Vigo — how the pieces fit and 
 - [**The security model**](security-model.md) — mTLS, ed25519 signing, RBAC, and the audit hash chain.
 - [**The compliance model**](compliance-model.md) — frameworks, capabilities, bundles, Connwaer, and waivers.
 - [**High availability**](high-availability.md) — peer replicas, spanner, and durable state.
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

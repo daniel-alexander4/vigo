@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! SO_PEERCRED helper — resolve the connecting Unix user's UID for any
 //! root-owned helper daemon on a `UnixListener` socket.

@@ -41,5 +41,3 @@ Returns `manager: "none"` with an empty package map if neither package manager i
 
 ## Platform
 Windows
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

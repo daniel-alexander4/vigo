@@ -106,5 +106,3 @@ Fields added during the rename: `cn`, `sans`, `issuer`, `serial`, `not_before`, 
 ## Classification
 
 **Stable** — certificate files change infrequently. Cached across convergence cycles.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

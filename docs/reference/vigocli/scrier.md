@@ -76,6 +76,3 @@ Nothing touches the customer's firewall: the envoy's outbound TCP to the Vigo se
 - Session recording (`scrier.recording_enabled` is a schema placeholder; no writes yet for browser or CLI sessions).
 - `scp` / file transfer.
 - Windows — the CLI command is built under `//go:build unix`.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:754d87f271966d77f013bb1f62f77a50ba94b623fc2d7750094680ab539f1c9c -->
+<!-- vigo-i18n source_sha:46b5ddc8451df58d8031bac7a8ca44caa5c2496e288c186da780cda2a4a145ea -->
 
 # Configcrates
 
@@ -42,6 +42,3 @@ environments.vgo  >  match-block vars  >  inherited vars  >  configcrate default
 - [Écrire votre premier configcrate](../howto/configcrates/write-your-first-configcrate.md) — pratique.
 - [Écriture des configcrates](../reference/configcrate-language.md) — la référence d'écriture complète.
 - [Publier la configuration](../howto/configcrates/publish-config.md) — valider + pousser vers la flotte.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

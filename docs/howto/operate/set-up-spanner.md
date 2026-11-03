@@ -157,5 +157,3 @@ The `/spanner` page lists every bolt in the spanner — one row each, with the b
 
 ---
 *Verified on Vigo 0.66.12 · 2026-05-21.*
-
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../../legal/license.md).*

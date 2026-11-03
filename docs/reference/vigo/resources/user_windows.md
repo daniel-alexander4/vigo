@@ -64,5 +64,3 @@ Windows only. On Linux, `type: user` maps to the [user](user.md) executor.
 - Uses `net user` for account creation/deletion and `net localgroup` for group membership.
 - Group membership comparison is case-insensitive.
 - When creating a user with a password, the password is passed as a positional argument to `net user`.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

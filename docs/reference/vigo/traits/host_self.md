@@ -77,6 +77,3 @@ An increase in `unclean_shutdowns_30d` dispatches an `envoy.power_loss` integrat
 ## Platform
 
 Linux only. macOS, BSD, and Windows return `null` for the entire trait — none of them expose `/proc/sys/fs/file-nr` or `/proc` the same way, and substituting `lsof | wc -l` would mean spawning a subprocess on every check-in.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

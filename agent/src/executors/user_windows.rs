@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 #![cfg(windows)]
 
 //! Windows user executor — manages local users via `net user` and `net localgroup`.

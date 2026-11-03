@@ -3,7 +3,7 @@ name = "vigo"
 version = "0.76.94"
 edition = "2021"
 description = "Vigo Distributed State Enforcement Agent"
-license = "LicenseRef-Proprietary"
+license = "Apache-2.0"
 
 [dependencies]
 # gRPC + Proto

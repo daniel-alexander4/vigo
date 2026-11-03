@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Lockbox session helper daemon — holds the unwrapped age
 //! identity in RAM between CLI invocations in one user login

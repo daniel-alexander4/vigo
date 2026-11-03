@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Resolve a curator artifact reference to a blob, fetch the bytes, verify, and
 //! materialize them under `/var/lib/vigo/artifacts/` (ADR-024).

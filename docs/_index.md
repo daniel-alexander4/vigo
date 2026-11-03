@@ -15,6 +15,3 @@ These docs are for operators — the person installing Vigo, enrolling envoys, w
 | **Define a term** | [Glossary](glossary.md) |
 
 The audience is the operator. Engineer-internal rationale lives in the ADRs and the source code; marketing copy lives on vigo-web.
-
----
-*Confidential — Alexander4, LLC. Not for redistribution. See [legal/license.md](legal/license.md).*

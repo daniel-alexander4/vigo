@@ -257,5 +257,3 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*
-
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

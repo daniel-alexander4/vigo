@@ -105,5 +105,3 @@ Windows only.
 - When only `source_path` is provided (no thumbprint), the certificate is imported on every run where the executor detects it as missing. Providing a thumbprint avoids duplicate imports.
 - Use the `secret:` prefix for PFX passwords to keep them out of plaintext config.
 - The imported certificate's thumbprint is exposed so downstream tooling can bind it (e.g. to an HTTPS listener) via the standard Windows APIs.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

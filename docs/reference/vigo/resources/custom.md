@@ -101,5 +101,3 @@ Cross-platform. Scripts must be executable and available at the configured path.
 - Errors from the script (non-zero exit, invalid JSON, or a non-empty `error` field) are reported as resource failures.
 - Scripts should respect the `dry_run` flag and avoid mutating system state when it is `true`.
 - A script that hangs is killed on `timeout` expiry (or the per-resource default if `timeout` is unset) and reported as a timeout failure -- a wedged custom script cannot stall convergence.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

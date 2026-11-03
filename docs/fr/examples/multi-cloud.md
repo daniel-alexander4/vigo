@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0a4e0475ef0b534dd543ea936163d970a9c27d8ac84058414426d28704a60fba -->
+<!-- vigo-i18n source_sha:19d4f2c258ec013e00c3d32c356c4cfa138d61454e2a60efedaba18143674795 -->
 
 # Configuration multi-cloud
 
@@ -163,6 +163,3 @@ vigocli inventory query 'cloud.region=eu-*'
 | `cloud.tags` | Étiquettes/labels d'instance sous forme de paires clé-valeur |
 
 Tous les traits sont collectés automatiquement depuis l'IMDS du fournisseur cloud. Aucune configuration requise.
-
----
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir la [licence](../legal/license.md).*

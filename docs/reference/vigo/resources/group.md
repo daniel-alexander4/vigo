@@ -87,5 +87,3 @@ Linux only.
 ## Notes
 
 - Uses `groupadd`, `groupmod`, and `groupdel` commands.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

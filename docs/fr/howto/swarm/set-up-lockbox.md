@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:424fc26baeb18a111d3296c652a85906901aefc86ca5186c7319de192cbc5d31 -->
+<!-- vigo-i18n source_sha:a628cf5566f5e1a8d0efa51050e42ca0cd33fe0c32a0f2655eb89512b0ad6d4f -->
 
 # Configurer Lockbox
 
@@ -174,5 +174,3 @@ La Phase 1 n'a pas de séquestre de clé. Perdez la phrase de passe sur chaque e
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

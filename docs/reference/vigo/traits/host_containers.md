@@ -60,6 +60,3 @@ The `container:` resource type creates and removes containers; this trait report
 ## Platform
 
 Linux + macOS. Other platforms return `null` for the entire trait.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

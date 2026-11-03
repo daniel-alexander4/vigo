@@ -137,5 +137,3 @@ nginx       service    nginx              restart   true     -
 
 - [envoys](envoys.md) -- manage enrolled envoys
 - [task](task.md) -- dispatch ad-hoc tasks
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

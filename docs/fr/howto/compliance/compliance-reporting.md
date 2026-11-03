@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:8669d93e6f5aeb75a089dae855b597f9eaf58b882f2ceb06edf1c3cdd9fa6679 -->
+<!-- vigo-i18n source_sha:f951da3e3caa36e0b0e766dc6db3d3acf713793ff06b4875954f5b0be065499a -->
 
 # Rapports de conformité
 
@@ -190,5 +190,3 @@ La matrice des frameworks vous indique quels contrôles chaque framework exige e
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

@@ -116,6 +116,3 @@ Linux, macOS, FreeBSD, Windows (NTFS). Uses `std::fs::hard_link` which maps to P
 - Directory permissions are preserved on Unix.
 - The executor runs with `nice`/`ionice` priorities inherited from the agent process.
 - Snapshot directory names use UTC time.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

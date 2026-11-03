@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! HTTPS route handler for serving longdrawer file contents + per-user state
 //! to peer agents. Piggybacks on the swarm peer HTTPS server on port 1531

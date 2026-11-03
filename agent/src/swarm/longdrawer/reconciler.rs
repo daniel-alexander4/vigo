@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Pure reconciliation logic: given local state and a peer announcement,
 //! compute the actions to take locally and the tombstones to merge.

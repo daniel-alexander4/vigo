@@ -38,6 +38,3 @@ Conflating them produces dishonest reporting — "100% converged" is not "100% c
 - The dashboard's convergence + compliance cards (separate, drill down separately).
 - [Compliance reporting](../howto/compliance/compliance-reporting.md) — generate framework coverage.
 - [Configcrates](configcrates.md) — what convergence enforces.
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! anchor — the puddle-rooted ownership/access primitive shared by every
 //! swarm content subsystem that's "founded by a puddle, mutable by its members."

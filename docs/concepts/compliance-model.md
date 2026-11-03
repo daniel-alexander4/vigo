@@ -33,6 +33,3 @@ Per-control pass/fail evidence pushes to GRC platforms (Vanta, Drata, Securefram
 - [Compliance reporting](../howto/compliance/compliance-reporting.md) — generate + export.
 - [Compliance matrix](../reference/compliance-matrix.md) — the per-control reference.
 - [`vigocli compliance`](../reference/vigocli/compliance.md).
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! hostdox — let each envoy resolve its swarm peers' hostnames to
 //! their LAN addresses by maintaining a delimited block in `/etc/hosts`

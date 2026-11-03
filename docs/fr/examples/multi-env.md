@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d075b3a931ef407213a7b4caebea1d3a044e296d8d48d3d26e4598ac3ca96f70 -->
+<!-- vigo-i18n source_sha:9ea42acf9f77a8726bd4830e5e0571d720073b64c44715d63f8dcb4b5e11b085 -->
 
 # Configuration multi-environnement
 
@@ -98,5 +98,3 @@ Au moment du check-in, le serveur :
 ## Des secrets distincts par environnement
 
 Comme le mot de passe de la base de données réside lui aussi dans `environments.vgo`, chaque environnement obtient naturellement son propre chemin de secret — aucune duplication par bloc match n'est nécessaire. Le fournisseur de secrets résout le préfixe `secret:` au moment du check-in.
----
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir la [licence](../legal/license.md).*

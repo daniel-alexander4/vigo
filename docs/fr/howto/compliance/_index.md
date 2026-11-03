@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:c3fa6b705f06a3eeb211f6794f478e7e885df667ee4e5a95a505c7d75a43025a -->
+<!-- vigo-i18n source_sha:a607d53943b358933b8cec2524d90e0cacb8cc77a3e7710097eabdb48014e106 -->
 
 # Conformité
 
@@ -7,6 +7,3 @@ Transformer l'application des politiques en couverture de référentiels et en p
 - [Rapports de conformité](compliance-reporting.md) — générer la couverture par référentiel et l'exporter.
 
 Voir aussi le [modèle de conformité](../../concepts/compliance-model.md) pour comprendre comment la couverture est déterminée.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

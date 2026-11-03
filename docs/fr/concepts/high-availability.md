@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:7579ca73aadbe3e66f94083ee96ae4b8d78342d5101d41abcc3431c224e43fb2 -->
+<!-- vigo-i18n source_sha:c1c916efa94131fd05f9dd6cf4d24710d65cea6f485ebed79f8e979a22c8fd4a -->
 
 # Haute disponibilité
 
@@ -39,6 +39,3 @@ Aucun Envoy n'a jamais été « hors service » — seulement non observé.
 - [Sauvegarde et récupération](../howto/operate/backup-and-recovery.md) · [Reprise après sinistre](../howto/operate/disaster-recovery.md).
 - [Fédération Spanner](spanner-federation.md) — l'axe de montée en charge.
 - [`vigocli server`](../reference/vigocli/server.md) · [`vigocli backup`](../reference/vigocli/backup.md).
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

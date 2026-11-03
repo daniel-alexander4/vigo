@@ -489,5 +489,3 @@ Cela re-sème `server.yaml`, `.env`, `docker-compose.yml`, les certificats TLS e
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Reproduction interdite. Voir [../legal/license.md](../../legal/license.md).*

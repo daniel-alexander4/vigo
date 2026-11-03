@@ -27,5 +27,3 @@ Run `vigocli sandgorgon --help` for current flags and defaults.
 ## See also
 
 - [Sandgorgon](../../overview.md) — bare-metal lifecycle subsystem overview
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

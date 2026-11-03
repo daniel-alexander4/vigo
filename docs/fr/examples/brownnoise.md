@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:daafcaecd580ca9d8b306ef49253688567c5a8ba48ae8d66090b2cf7025ecd76 -->
+<!-- vigo-i18n source_sha:8183dfc2173ffa53bb23391e42061fc799dc75b6407256094801071d336e3d8f -->
 
 # Générateur de bruit brun
 
@@ -203,5 +203,3 @@ Surchargez les vars au niveau du nœud pour ajuster le son et cibler le bon pér
 | `brownnoise_alsa_card` | `0` | Index de carte pour `amixer -c` |
 | `brownnoise_alsa_control` | `PCM` | Contrôle du mélangeur à régler (p. ex. `PCM`, `Master`) |
 | `brownnoise_alsa_level` | `60` | Pourcentage du niveau de lecture à régler et maintenir |
----
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir [licence](../legal/license.md).*

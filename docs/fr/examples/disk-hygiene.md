@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:85a18ed65b5f2876845490688ad60a90c024950526a4408e7b093447f315695e -->
+<!-- vigo-i18n source_sha:837497f8ff0bb2ddd1a09092b412cd16a1ba5bce1b3ee1fbe65957201723baba -->
 
 # Hygiène du disque
 
@@ -92,6 +92,3 @@ Ce rôle applique des **politiques préventives** — il configure le système p
 - **Rechercher et supprimer des fichiers volumineux arbitraires.** Utilisez `vigocli query` pour trouver les fichiers volumineux à travers le parc lorsqu'une alerte se déclenche.
 - **Alerter sur des seuils de disque/inodes.** C'est le rôle du collecteur de trait disque + l'alerte côté serveur (webhooks/SMTP).
 - **Remplacer les configurations logrotate propres aux services.** Les configcrates de service (nginx, postgres, etc.) gèrent leur propre rotation des journaux. Ce rôle gère les valeurs par défaut à l'échelle du système.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

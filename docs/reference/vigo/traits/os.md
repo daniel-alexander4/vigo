@@ -87,5 +87,3 @@ Parses `/etc/os-release` for distribution identity fields (`ID`, `ID_LIKE`, `VER
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

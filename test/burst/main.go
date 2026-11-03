@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // vigo-burst measures the server's response to a mass config-publish
 // burst: a healthy fleet of N envoys in steady-state CheckIn cycle gets

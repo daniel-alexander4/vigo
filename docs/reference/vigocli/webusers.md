@@ -115,5 +115,3 @@ vigocli webusers delete --username alice
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--username` | — | Username (required) |
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

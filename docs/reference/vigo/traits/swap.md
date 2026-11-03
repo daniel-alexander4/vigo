@@ -45,5 +45,3 @@ Parses `/proc/swaps`, skipping the header line. Each line provides the swap devi
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

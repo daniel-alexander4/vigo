@@ -86,5 +86,3 @@ pages are linked under their parent.
 | [swarm puddle](swarm-puddle.md) | Puddle fleet view + cross-envoy ops (eviction, names) |
 | [swarm curator](swarm-curator.md) | Fleet view of the [curator](../../howto/swarm/set-up-curator.md) artifact registry + admin block (ADR-024) |
 | [swarm poolq](swarm-poolq.md) | Fleet view of the [poolq](../../howto/swarm/set-up-poolq.md) ordered-log queue + admin block (ADR-029) |
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

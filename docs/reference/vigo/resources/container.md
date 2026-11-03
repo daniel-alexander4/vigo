@@ -208,5 +208,3 @@ Cross-platform. Requires Docker installed and the Docker daemon running. Declare
 - The `pull` parameter controls when images are pulled. `missing` (default) pulls only when the image is not locally available; `always` re-pulls every convergence; `never` skips pull entirely (assumes the image is already local).
 - Port, env, volume, tmpfs, cap_drop, cap_add, labels, and log_options parameters are comma-separated lists.
 - Image removal is not part of this resource. To garbage-collect unused images, run `exec: docker image prune -f` on a schedule (a first-class `container_image_prune:` resource may land later).
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

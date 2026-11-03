@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package task provides the task timeout reaper — a background goroutine
 // that marks expired task runs and their pending targets as timed out.

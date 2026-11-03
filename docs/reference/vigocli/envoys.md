@@ -307,5 +307,3 @@ The agent compares its compiled-in version against the server's advertised versi
 - [runs](runs.md) -- view run history for envoys
 - [inventory](inventory.md) -- query envoys by traits
 - [task](task.md) -- dispatch ad-hoc commands to envoys
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

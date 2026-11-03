@@ -80,5 +80,3 @@ The figures are measured off-box on GCP (server VM + separate harness VM(s), so 
 
 ---
 *Verified on Vigo 0.76.35 · 2026-06-24. Anchor: 8 vCPU / 32 GB measured; larger rows calculated.*
-
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

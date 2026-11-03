@@ -315,5 +315,3 @@ Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
 
 ---
 *Verified on Vigo 0.65.10 · 2026-05-18.*
-
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

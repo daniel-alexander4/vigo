@@ -142,5 +142,3 @@ Then `userdel -r` is safe.
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*
-
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../../legal/license.md).*

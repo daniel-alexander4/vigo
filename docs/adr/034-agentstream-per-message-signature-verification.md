@@ -1,6 +1,6 @@
 <!--
 Copyright (c) 2026 Alexander4, LLC
-SPDX-License-Identifier: LicenseRef-Proprietary
+SPDX-License-Identifier: Apache-2.0
 -->
 
 # ADR-034: AgentStream per-message ed25519 verification

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:10f57b5327d8a8fee8823f0e2ec34c70d11c55aa559a6dbfa6e45b3c15cf40e2 -->
+<!-- vigo-i18n source_sha:e234cb91cbfbf58f3fbc1249b67ce6a863afb88d498cd0986865e96e86d94f8e -->
 
 # Gestion des nœuds Kubernetes
 
@@ -436,5 +436,3 @@ Le DAG des configcrates garantit un ordonnancement correct :
 | Règles de pare-feu pour les ports k8s | Politiques réseau |
 | Correctifs OS + coordination des redémarrages | Mises à niveau du cluster (kubeadm upgrade) |
 | Certificats des nœuds (PKI au niveau de l'hôte) | Jetons ServiceAccount, RBAC |
----
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir la [licence](../legal/license.md).*

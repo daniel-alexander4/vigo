@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Host-level resource pressure indicators that don't fit in any
 //! existing trait collector. The agent's own footprint goes in

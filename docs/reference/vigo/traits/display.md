@@ -59,5 +59,3 @@ resources:
 ## Classification
 
 Stable collector — display server availability rarely changes. Cached across check-in cycles.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

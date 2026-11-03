@@ -336,5 +336,3 @@ Two conditions are called out regardless of log level:
 - **Stalled** — no CPU consumed and no bytes moved for 60 seconds. The agent warns but does **not** kill, because a command legitimately blocked on a slow network read looks identical. `timeout:` remains the backstop.
 
 Progress detail comes from procfs and is Linux-only. On other platforms the heartbeat still reports elapsed time, without `phase`, `state`, or byte counts.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

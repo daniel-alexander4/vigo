@@ -172,5 +172,3 @@ See `example-configs/stacks/workflows/` for 10 pre-built security and operationa
 
 - [task](task.md) -- dispatch individual ad-hoc tasks
 - [runs](runs.md) -- view convergence run history
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

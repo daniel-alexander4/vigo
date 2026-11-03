@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package i18n is the shared localization catalog and per-request locale
 // resolution for Vigo's web surfaces. It lives outside the ui package so

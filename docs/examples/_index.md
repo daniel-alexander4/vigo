@@ -37,5 +37,3 @@ All examples follow these patterns:
 - Go templates (`{{ }}`) are only used in `content:` attributes
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

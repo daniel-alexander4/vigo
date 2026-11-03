@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Trust-on-first-use (TOFU) cache of `(hostname → Ed25519 pubkey)` for
 //! verifying gitback multicast announcement signatures.

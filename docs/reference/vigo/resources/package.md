@@ -266,5 +266,3 @@ Network transient errors (DNS resolution failure, connection timeout) are retrie
 - `flags` are split on whitespace and appended to the package manager command for install, upgrade, downgrade, and remove operations.
 - `timeout`, `retries`, and `retry_delay` are parsed and validated but not yet wired into execution — built-in bounds and APT's internal retry logic apply.
 - Every package-manager command runs at reduced CPU and I/O priority (nice + ionice) and is bounded: status queries are killed after 60s, mutations (install/remove/upgrade, including their whole process tree) after 1h. A killed command surfaces as a resource error, never as a wrong "not installed" reading.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

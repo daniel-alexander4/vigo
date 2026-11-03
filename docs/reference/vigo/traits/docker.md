@@ -45,5 +45,3 @@ First checks if `docker` is available via `which`. If not installed, returns def
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d24df79c84421a6b0553576c63b133a101ec484feed11c16d34964bf87ab631b -->
+<!-- vigo-i18n source_sha:e7c0f215bf068d34b3748ed6956b3f7c329cb58d5a737b36259193d6ac5e0f41 -->
 
 # Configurer Gitback
 
@@ -143,5 +143,3 @@ Ensuite `userdel -r` est sûr.
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

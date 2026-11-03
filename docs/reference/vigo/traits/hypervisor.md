@@ -47,5 +47,3 @@ The canonical gate for the [`vm:`](../resources/vm.md) executor — only declare
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

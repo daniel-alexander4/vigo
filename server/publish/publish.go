@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package publish implements a publishing pipeline for envoy configuration.
 // Operators edit .vgo files in the stacks directory. The publish command

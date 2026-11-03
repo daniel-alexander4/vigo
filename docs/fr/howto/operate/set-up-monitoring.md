@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:b1b41242fa73bf81ea5c658490f94ba66c39941ce76da4052e3d2d15304fc420 -->
+<!-- vigo-i18n source_sha:446b1c9cb92f18689b2e139220fc8f1896dcd503c003b58d13dfaa4e5f2ec384 -->
 
 # Mettre en place la supervision
 
@@ -298,8 +298,6 @@ tuning:
 ```
 
 Voir [Paramètres de réglage](troubleshoot.md) pour toutes les options de réglage.
----
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir la [licence](../../legal/license.md).*
 
 
 ---
@@ -636,5 +634,3 @@ Ou importez dans Grafana via Alerting → Alert rules → Import. Routez les ale
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir la [licence](../../legal/license.md).*

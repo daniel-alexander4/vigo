@@ -59,5 +59,3 @@ To inspect the generated completion script without installing it:
 vigocli completion bash    # bash script
 vigocli completion zsh     # zsh script
 ```
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

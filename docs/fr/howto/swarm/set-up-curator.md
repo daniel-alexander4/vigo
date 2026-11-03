@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:e9992ff9b2df17103c5bd4ac38dc4c75159f15fe02643ca3e4dffad8f45c901a -->
+<!-- vigo-i18n source_sha:711e41c838a32e709a11f041ef50ce6858fab9a1092e46cfc3d77e75c47f77a5 -->
 
 # Configurer Curator
 
@@ -281,5 +281,3 @@ L'API est en **lecture seule** — chaque verbe d'écriture ou de gestion renvoi
 
 ---
 *Vérifié sur Vigo 0.66.28 · 2026-05-22.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

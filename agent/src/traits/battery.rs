@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Battery health collector (Linux). Reads `/sys/class/power_supply/{AC,BAT*}`
 //! and reports per-battery charge level, wear health (`energy_full` ÷

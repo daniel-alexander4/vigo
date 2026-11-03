@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:806b1ae9a40108444a0f8d2247b71c90208c03906cad27cc2460569a9731cb28 -->
+<!-- vigo-i18n source_sha:408923eb7988cd42b22f984f50f4e2fc441e4da99d96a473df9613ef37a32ed6 -->
 
 # Migration depuis Salt
 
@@ -339,5 +339,3 @@ Les secrets sont résolus côté serveur au moment de la compilation du bundle. 
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

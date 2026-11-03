@@ -51,6 +51,3 @@ You've stood up a server, enrolled envoys, written and converged a configcrate, 
 - **[Concepts](../concepts/_index.md)** — the mental model behind what you just did.
 - **[How-to guides](../howto/_index.md)** — the swarm subsystems, auth, monitoring, backup/DR, migrating from another CM.
 - **[Reference](../reference/_index.md)** — every command, resource, trait, and config key.
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

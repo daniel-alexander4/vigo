@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:3830bd60d5ec1f14ee7d63a5e4dce1f32317aefb6f8d78078b528d71e9d4926d -->
+<!-- vigo-i18n source_sha:4468f1fceb6b71c9acc173381f8ff9a8047a11283e0968542a95ae1cd2410aa5 -->
 
 # Exploitation
 
@@ -11,6 +11,3 @@ Exploitation au quotidien : installation, enrôlement, authentification, supervi
 - **Mettre à l'échelle** — [dimensionnement](sizing.md) · [fédération Spanner](set-up-spanner.md)
 - **Cas particuliers** — [équipements réseau](set-up-network-devices.md) · [miroirs de paquets locaux](set-up-local-package-mirrors.md)
 - **Quand quelque chose casse** — [dépanner](troubleshoot.md)
-
----
-*Confidentiel — Alexander4, LLC. Diffusion interdite.*

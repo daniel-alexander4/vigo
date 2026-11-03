@@ -380,6 +380,3 @@ The destructive lever is the **usercrate `curator: bool` flag**. Removing it tri
 - [`vigo swarm puddle`](agent-swarm-puddle.md) — the per-user identity that anchors curator artifacts
 - [`vigo swarm gitback`](agent-swarm-gitback.md) — the sibling subsystem curator's access primitives derive from
 - [user executor](../vigo/resources/user.md) — where the `curator: bool` flag goes
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

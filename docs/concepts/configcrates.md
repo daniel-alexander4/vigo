@@ -40,6 +40,3 @@ environments.vgo  >  match-block vars  >  inherited vars  >  configcrate default
 - [Write your first configcrate](../howto/configcrates/write-your-first-configcrate.md) — hands-on.
 - [Writing configcrates](../reference/configcrate-language.md) — the full authoring reference.
 - [Publish config](../howto/configcrates/publish-config.md) — validate + push to the fleet.
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

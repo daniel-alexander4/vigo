@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:6048ec9a976c13bd52c5b7277ea254f2d87227611d86720316309ea298218b2b -->
+<!-- vigo-i18n source_sha:c2257a357fb1cc792dc829010dfb608d4e15bcb97f09165787bd764abaf09803 -->
 
 # Configurer Scrier
 
@@ -167,5 +167,3 @@ sequenceDiagram
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

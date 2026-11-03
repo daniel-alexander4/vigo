@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:62d99560f518d533896d47c955ee02840bba737d13136e886561e8215226f448 -->
+<!-- vigo-i18n source_sha:bd70f4bca69376b9032e75346a6d103c2b99146f7d9473f49f1a4cfdcc24ed35 -->
 
 # Identité Puddle
 
@@ -32,6 +32,3 @@ Le cloisonnement. Un seul Envoy compromis ne doit pas permettre de déchiffrer t
 - [Le Swarm](the-swarm.md) — ce que les Puddles autorisent.
 - [Configurer un Puddle](../howto/swarm/set-up-puddle.md) — appairer, rejoindre, nommer.
 - L'interface `/swarm/puddle` + [`vigocli swarm puddle`](../reference/vigocli/swarm-puddle.md) — vue de la flotte.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

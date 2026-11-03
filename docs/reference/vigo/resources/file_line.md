@@ -94,5 +94,3 @@ Cross-platform.
 | [ini](ini.md) | Managing key=value pairs within INI-style [section] files |
 | [json_file](json_file.md) | Setting values in JSON files by dot-path |
 | [field_edit](field_edit.md) | Editing fields in columnar files like `/etc/passwd` |
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

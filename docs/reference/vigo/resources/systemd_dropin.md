@@ -114,5 +114,3 @@ Linux only (systemd).
 - `systemctl daemon-reload` runs automatically after any change -- you do not need a separate exec resource for this.
 - When removing a drop-in with `state: absent`, the empty `.d` directory is cleaned up automatically.
 - Drop-in file permissions are set to `0644` (readable by all, writable by root).
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

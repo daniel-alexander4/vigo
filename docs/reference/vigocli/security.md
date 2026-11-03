@@ -15,5 +15,3 @@ Run `vigocli security --help` on a live server for the current set of subcommand
 
 - [Risk Scoring](../compliance-matrix.md) — how scores are computed
 - [Tamper-Evident Audit](../compliance-matrix.md) — hash-chained audit trail
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

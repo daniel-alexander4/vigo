@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:e0c4289e63169ed6ad045bd1f951750c2a98f5015a22da515c05c79eac8ca625 -->
+<!-- vigo-i18n source_sha:77c5569caa58bb120b45270603d6edb9c3750a34690d7610d520b540de93bcb8 -->
 
 # Le modèle de conformité
 
@@ -35,6 +35,3 @@ Les preuves de réussite/échec par contrôle sont poussées vers les plateforme
 - [Rapports de conformité](../howto/compliance/compliance-reporting.md) — générer + exporter.
 - [Matrice de conformité](../reference/compliance-matrix.md) — la référence par contrôle.
 - [`vigocli compliance`](../reference/vigocli/compliance.md).
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

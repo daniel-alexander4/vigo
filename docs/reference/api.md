@@ -2400,6 +2400,3 @@ Server-internal maintenance verbs. Same role-gate as the rest of the `vigocli db
 
 - **POST /api/v1/db/analyze** — run SQLite `ANALYZE` to refresh the query planner's statistics. _(admin)_
 - **POST /api/v1/db/prune** — prune historical tables (runs, audit, runs-resources) to their configured retention windows. _(admin)_
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:50c175e791df9d96f6698ee7ea4c3b2a4357236330e17892d015e67fb667b242 -->
+<!-- vigo-i18n source_sha:907a57a2403a76e2799a73de1cb2e5daf8dd82a28bf459387add02af820db078 -->
 
 
 # Configurer des équipements réseau
@@ -213,5 +213,3 @@ Les équipements réseau participent pleinement au système de conformité de Vi
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Reproduction interdite. Voir [../legal/license.md](../../legal/license.md).*

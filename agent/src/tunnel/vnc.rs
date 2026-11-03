@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! VNC shadow session support — find the console X display, prompt for consent,
 //! spawn x11vnc on a dynamic port, and return the port for the tunnel relay.

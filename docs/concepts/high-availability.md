@@ -37,6 +37,3 @@ No envoy was ever "down" — only un-observed.
 - [Backup and recovery](../howto/operate/backup-and-recovery.md) · [Disaster recovery](../howto/operate/disaster-recovery.md).
 - [Spanner federation](spanner-federation.md) — the scale-out axis.
 - [`vigocli server`](../reference/vigocli/server.md) · [`vigocli backup`](../reference/vigocli/backup.md).
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

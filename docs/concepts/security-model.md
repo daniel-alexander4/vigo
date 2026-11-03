@@ -32,6 +32,3 @@ Trust is **rooted in keys, not networks**: mTLS for the channel, ed25519 for eve
 
 - [Secrets](secrets.md) · [Scrier](scrier.md) · [Puddle identity](puddle-identity.md).
 - The `/security` UI (CVE, attack surface, signed binaries, hardening warnings).
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

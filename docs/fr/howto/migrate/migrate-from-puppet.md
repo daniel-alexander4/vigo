@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:70c816c2a283f8d53dd9846137ce8ba6092a9767911c190fa630fb19ea413038 -->
+<!-- vigo-i18n source_sha:461d1dcfc856bf1db4836183de384ab95fe479582516aee728cc2594c9b872e3 -->
 
 # Migrer depuis Puppet
 
@@ -327,5 +327,3 @@ Le fournisseur de secrets résout les références `secret:` à la compilation d
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Reproduction interdite. Voir [../legal/license.md](../../legal/license.md).*

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Hostname executor for BSD (FreeBSD/NetBSD) — writes `/etc/rc.conf` via sysrc (FreeBSD)
 //! or `/etc/myname` (OpenBSD/NetBSD).

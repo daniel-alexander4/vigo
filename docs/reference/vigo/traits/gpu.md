@@ -52,5 +52,3 @@ Tries `nvidia-smi` first with `--query-gpu=name,driver_version,vbios_version,mem
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

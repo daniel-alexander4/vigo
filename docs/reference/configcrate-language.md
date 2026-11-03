@@ -594,8 +594,6 @@ After `vigocli config publish` syncs files to `.live/`, it calls the server's re
 
 No server restart needed. Config parse errors are logged and trigger an SMTP notification if configured.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 ---
 ## Resource Language
@@ -1008,8 +1006,6 @@ Default timeouts by resource type:
 | `exec`, `source_package`, `nonrepo_package`, `custom`, `package`, `repository` | 300s (5 min) |
 | All others (`file`, `service`, `user`, etc.) | 60s |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 ---
 ## When Expressions
@@ -1261,8 +1257,6 @@ All matching cases contribute configcrates. A configcrate with its own `when:` k
 3. Role definition `when:`
 4. Role ref `when:` (at the match block)
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 ---
 ## Templates
@@ -1456,8 +1450,6 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 
 **Fix:** Use vars to set the service name directly as a resource attribute.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 ---
 ## Multi-Axis Configuration
@@ -1671,8 +1663,6 @@ The convention:
 - **Dropping a file into `usercrates/` and assuming it applies.** As of 0.54.0 the directory is a library; a usercrate is inert until positively included via a carrier's `usercrates:` field. Include fleet-wide users in `stacks/common.vgo`; scope-restricted users in the scoped carrier (subdir `common.vgo`, match block, role, or per-env override).
 - **One human across multiple files.** Splitting a human's config across files makes history noisier without benefit. The opposite — multiple humans per file (a team / role / on-call rotation crate) — is supported when the group genuinely moves together; drop the bundle from a carrier's `usercrates:` list to remove it cleanly.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 ---
 ## Tag/Host/Trait Lookup Tables
@@ -2043,6 +2033,3 @@ Cache entries live under the agent's state directory and are pruned when their c
 A script that exits non-zero fails the whole pipeline; the resource is reported as failed and the file is not written. The next convergence attempt re-runs the pipeline from scratch (cache miss is forced on the stage that failed).
 
 Scripts should be pure transformations — stateless, deterministic, no side effects. Writing to disk, hitting the network, or depending on external state defeats caching and creates flaky convergence.
-
----
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

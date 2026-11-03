@@ -326,5 +326,3 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*
-
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../../legal/license.md).*

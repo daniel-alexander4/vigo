@@ -37,5 +37,3 @@ CPU count is determined by counting `processor` entries in `/proc/cpuinfo`. Tota
 
 ## Platform
 Linux
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

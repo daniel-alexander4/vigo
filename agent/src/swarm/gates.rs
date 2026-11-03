@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Shared gate-evaluation helper for the six swarm content subsystems
 //! (payload, gitback, curator, poolq, lockbox, longdrawer).

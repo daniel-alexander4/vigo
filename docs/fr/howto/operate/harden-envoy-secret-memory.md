@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:dc73f096b4e76075a7c947bbe0cdfc5e91a893c8d7c0ab8274233c8505df80d4 -->
+<!-- vigo-i18n source_sha:21cd4c58f0052a45bc981cefe6df053a5c96ba25882afc7866760e443285a975 -->
 
 # Durcir un Envoy contre la divulgation des secrets en mémoire
 
@@ -89,6 +89,3 @@ divulgation de la mémoire de secrets de l'agent lui-même. Elle se distingue de
 [`examples/security-hardening.md`](../../examples/security-hardening.md), qui porte sur
 l'utilisation de *configcrates* Vigo pour durcir les nœuds gérés eux-mêmes (pare-feu,
 SSH, politique sudo).
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

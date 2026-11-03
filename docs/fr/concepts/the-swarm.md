@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d2fb12b07d960130f31e24e40ee9bd758ee0a1123a1c66c1ef95654a5929eb49 -->
+<!-- vigo-i18n source_sha:7cabe8aa25cb96a5026d2e083d2387fccb7ae7321e8e078c45bde9757d096440 -->
 
 # Le Swarm
 
@@ -39,6 +39,3 @@ Le levier destructeur est le **drapeau usercrate** — le retirer efface les don
 - [Identité puddle](puddle-identity.md) — l'ancre par utilisateur sur laquelle tout repose.
 - [Mettre en place le Swarm](../howto/swarm/set-up-swarm.md), puis [gitback](../howto/swarm/set-up-gitback.md) · [lockbox](../howto/swarm/set-up-lockbox.md) · [curator](../howto/swarm/set-up-curator.md) · [poolq](../howto/swarm/set-up-poolq.md) · [longdrawer](../howto/swarm/set-up-longdrawer.md).
 - Les pages d'interface `/swarm/*` et [`vigocli swarm`](../reference/vigocli/swarm.md).
-
----
-*Confidentiel — Alexander4, LLC. Reproduction interdite.*

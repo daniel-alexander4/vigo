@@ -63,5 +63,3 @@ The `file` executor also supports a `secontext` parameter to set the SELinux con
 ## Platform Support
 
 Linux only. Requires `ls`, `chcon`, and optionally `semanage`/`restorecon` for persistent rules.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

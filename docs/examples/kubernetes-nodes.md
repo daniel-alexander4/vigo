@@ -435,5 +435,3 @@ The configcrate DAG ensures correct ordering:
 | Firewall rules for k8s ports | Network policies |
 | OS patching + reboot coordination | Cluster upgrades (kubeadm upgrade) |
 | Node certificates (host-level PKI) | ServiceAccount tokens, RBAC |
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

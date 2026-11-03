@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Preempt sentinel — allows `vigo run` to interrupt an in-progress daemon
 //! convergence. The sentinel is a file at `<data_dir>/preempt`. When present,

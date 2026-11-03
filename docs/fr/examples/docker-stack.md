@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:f8ac6b71e0c9ce3fe87861a23dc06437016f57d2d59401912da06483877a2517 -->
+<!-- vigo-i18n source_sha:11cb82200674aaf072471a3957a9d37b602ef44881794828d8f1873b229c3097 -->
 
 # Gestion d'une stack Docker
 
@@ -148,5 +148,3 @@ L'exécuteur `container` est idempotent :
 - Si le conteneur existe avec la mauvaise image, il est arrêté, supprimé et recréé
 - Si le conteneur existe et est arrêté, il est démarré
 - Si le conteneur existe et correspond à l'état désiré, aucune action n'est entreprise
----
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir la [licence](../legal/license.md).*

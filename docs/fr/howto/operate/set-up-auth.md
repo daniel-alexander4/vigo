@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:624a522f57895b7ea3283100338380211022f96b97d1ce20932ae183c7128069 -->
+<!-- vigo-i18n source_sha:b07d0bf28b83a5c9c6a9bec7df3171e4be36c9eaa5df682a64609e2de501501f -->
 
 ---
 title: Authentification
@@ -482,5 +482,3 @@ Vérifiez que le jeton n'a pas expiré. Listez vos jetons avec `vigocli auth sta
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](../../legal/license.md).*

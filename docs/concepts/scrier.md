@@ -24,6 +24,3 @@ Think of it as **reverse remote access**: instead of "operator → firewall → 
 - [Set up Scrier](../howto/operate/set-up-scrier.md) — user mappings, SSH keys, first session.
 - [`vigocli scrier`](../reference/vigocli/scrier.md) + the browser terminal in the UI.
 - [The security model](security-model.md) — where Scrier sits in the posture.
-
----
-*Confidential — Alexander4, LLC. Not for redistribution.*

@@ -202,5 +202,3 @@ Secrets are not resolved during tests (a null provider is used). Resources with 
 - [validate](validate.md) — check YAML syntax and idempotency
 - [preview](preview.md) — preview planned changes against live envoys
 - [Composition Patterns](../../reference/configcrate-language.md) — config reuse patterns
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

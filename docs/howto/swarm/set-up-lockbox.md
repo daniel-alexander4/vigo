@@ -172,5 +172,3 @@ Phase 1 has no key escrow. Lose the passphrase on every envoy → data is unreco
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*
-
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../../legal/license.md).*

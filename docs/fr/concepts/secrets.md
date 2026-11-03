@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:bbff9c973172ac2243f67af0a5dd3beec2dfc2f85739f42d3a9e3d2b026038ce -->
+<!-- vigo-i18n source_sha:b51979f5ee69e03a65042bd335c65c45010ff72fbf8a45fff79eb5d9192a6c13 -->
 
 # Secrets
 
@@ -31,6 +31,3 @@ La surface opérateur (`vigocli secrets {init,unlock,rotate,set,reveal,…}`) es
 - [Gérer les secrets](../reference/vigocli/secrets.md) — la surface CLI.
 - [Durcir la mémoire des secrets](../howto/operate/harden-envoy-secret-memory.md) — verrouiller le cache en RAM de l'agent.
 - [Le modèle de sécurité](security-model.md) — où se situent les secrets dans la posture globale.
-
----
-*Confidentiel — Alexander4, LLC. Reproduction interdite.*

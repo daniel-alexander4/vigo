@@ -64,5 +64,3 @@ macOS and BSD (FreeBSD, OpenBSD). On Linux, the same `type: firewall` maps to th
 - Flushing a rule (`state: absent`) flushes all rules in the `vigo` anchor.
 - For complex rulesets, consider using a `file` resource for `/etc/pf.conf` with a `notify` to reload via `exec`.
 - The `enabled` parameter controls PF itself and returns immediately without processing rules.
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

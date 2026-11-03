@@ -61,5 +61,3 @@ stacks/configcrates/app.vgo: [error] app: resource "deploy" (exec) missing idemp
 - [envoys preview](preview.md) -- preview planned changes
 - [doctor](doctor.md) -- server health checks including config validation
 - [config publish](config.md#config-publish) -- full validation + linting pipeline
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

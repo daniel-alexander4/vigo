@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:bdbbded2295d63b00174ed95a3b9ff0b72c9b8e5bbcc0f0dc6d313e2b25a6791 -->
+<!-- vigo-i18n source_sha:1c7941aa6bd65fffc911c803b2d3a99362a74038f32b613d982a9665fa4fd5b2 -->
 
 # Le modèle de sécurité
 
@@ -34,6 +34,3 @@ La confiance est **ancrée dans les clés, pas dans les réseaux** : mTLS pour l
 
 - [Secrets](secrets.md) · [Scrier](scrier.md) · [Identité Puddle](puddle-identity.md).
 - L'interface `/security` (CVE, surface d'attaque, binaires signés, avertissements de durcissement).
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer.*

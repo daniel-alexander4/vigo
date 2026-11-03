@@ -183,6 +183,3 @@ State changes don't lose data — the overlay is preserved. Switching back to `s
 - Copy-rather-than-overlay disk staging (overlays are the only mode).
 
 These are clean follow-on scopes — none of the v1 architecture forecloses them.
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

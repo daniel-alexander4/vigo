@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:b36af3afd80e4608e42a6bb30b35da3b26291e284457015fa41a6a1816fddd09 -->
+<!-- vigo-i18n source_sha:3498b5f3366e91f155303c54f3d2338d567572b228b003070f3eb6ca6ec6af8d -->
 
 # Durcissement de la sécurité
 
@@ -221,5 +221,3 @@ Les déclarations `depends_on` créent un DAG :
 4. **sudo-config** -- aucune dépendance, peut s'exécuter en parallèle de firewall
 
 Cela garantit que le pare-feu est configuré avant le durcissement de SSH, et que fail2ban démarre une fois la configuration SSH en place.
----
-*Confidentiel -- Alexander4, LLC. Reproduction interdite. Voir la [licence](../legal/license.md).*

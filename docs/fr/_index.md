@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d734bf34dfd42925406fb9d832e87850b0093e00f36efc3be7e3003a9df3f443 -->
+<!-- vigo-i18n source_sha:0afc60824a79205fe980beb2a4b97de4746005125439582004849199884b7092 -->
 
 # Documentation Vigo
 
@@ -16,6 +16,3 @@ Cette documentation s'adresse aux opérateurs — la personne qui installe Vigo,
 | **Définir un terme** | [Glossaire](glossary.md) |
 
 Le public visé est l'opérateur. Les justifications internes destinées aux ingénieurs résident dans les ADR et le code source ; les contenus marketing se trouvent sur vigo-web.
-
----
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [legal/license.md](legal/license.md).*

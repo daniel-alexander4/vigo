@@ -44,6 +44,3 @@ But scale is only half of it. Vigo is **far more than configuration management**
 | **Looking something up?** | [Reference](reference/) — vigocli, agent resources, agent traits, REST API, server.yaml, the configcrate language |
 | **Want the mental model?** | [Concepts](concepts/) — architecture, convergence vs compliance, the swarm, puddle identity, the security model |
 | **What's a term mean?** | [Glossary](glossary.md) |
-
----
-*Confidential — Alexander4, LLC. Not for redistribution. See [legal/license.md](legal/license.md).*

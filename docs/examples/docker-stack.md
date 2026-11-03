@@ -147,5 +147,3 @@ The `container` executor is idempotent:
 - If the container exists with the wrong image, it is stopped, removed, and recreated
 - If the container exists and is stopped, it is started
 - If the container exists and matches the desired state, no action is taken
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

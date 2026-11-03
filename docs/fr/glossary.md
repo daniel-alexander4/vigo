@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:7b506bf6d71947a0be236bf23657c2d0ab742abbc418e378a0c894b3b2cda910 -->
+<!-- vigo-i18n source_sha:c462d2e59fb0411b8cd14e07a643026684035e3cfd3b6b7cfc68c110158c37aa -->
 
 # Glossaire
 
@@ -199,6 +199,3 @@ L'arbre de templates d'installation en lecture seule, un frère de [stacks](#sta
 ## live
 
 L'arbre de sortie publiée validée sous [stacks](#stacks), à `/srv/vigo/.live/`. `vigocli config publish` linte [stacks](#stacks) et synchronise atomiquement les octets canoniques ici ; le serveur lit `.live/` à chaque rechargement. Verrouillé en lecture seule entre les publishs. Ne jamais éditer à la main — le validateur de noms de fichiers du loader refusera le rechargement sur un fichier mal placé. Renommé de `structure/` (0.28.0) en `.live/` en 0.33.1.
-
----
-*Confidentiel -- Alexander4, LLC. Ne pas redistribuer. Voir [licence](legal/license.md).*

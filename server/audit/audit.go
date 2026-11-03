@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package audit provides a tamper-evident audit trail using a SHA-256 hash
 // chain. Each entry includes the hash of the previous entry, making

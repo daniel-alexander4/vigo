@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! `git-remote-gitback` body — the user-side half of the helper-daemon
 //! transport (ADR-015). Invoked by git when it sees a `gitback://` URL

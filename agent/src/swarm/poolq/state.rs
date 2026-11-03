@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! Per-user / per-topic on-disk paths for poolq, and the atomic write helpers
 //! the publish path uses. The Slice-3 trait collector walks this layout

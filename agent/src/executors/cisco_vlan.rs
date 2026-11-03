@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 //! cisco_vlan executor — manages VLANs on Cisco IOS/NX-OS switches over SSH.
 //!

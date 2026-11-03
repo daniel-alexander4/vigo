@@ -316,5 +316,3 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 ---
 *Verified on Vigo 0.51.6 · 2026-05-13.*
-
-*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../../legal/license.md).*

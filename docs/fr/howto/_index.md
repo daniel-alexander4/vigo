@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:f3f3d9a9186e7df46e2c06f7382d2df89b03fd798553de27d0f32d1a1fd7239b -->
+<!-- vigo-i18n source_sha:a07e7788179ab20831953d0c8606cf2a3e3cccd719b7ef776ff15b89a1e4debd -->
 
 # Guides pratiques
 
@@ -33,5 +33,3 @@ Les guides de migration en bas de page s'adressent à ceux qui viennent d'un aut
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Reproduction interdite. Voir [../legal/license.md](../legal/license.md).*

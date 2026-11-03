@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:956d4c3bca751f70afe8bdc3c48255c3442277971ac08cdbbac85a27a89b4b13 -->
+<!-- vigo-i18n source_sha:50b5273f9d643148add08f1bc15d57afce137534bb468e4d3bb325682d337f49 -->
 
 # Configurer un Puddle
 
@@ -171,5 +171,3 @@ La santé est `Healthy` / `Warning` / `Degraded` ; un puddle dont les envoys son
 
 ---
 *Vérifié sur Vigo 0.51.6 · 2026-05-13.*
-
-*Confidentiel — Alexander4, LLC. Ne pas redistribuer. Voir [../legal/license.md](../../legal/license.md).*

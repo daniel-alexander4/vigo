@@ -462,4 +462,7 @@ Hub-spoke scaling for large fleets. A hub aggregates data from bolts, each handl
 
 ## License
 
-Proprietary. Copyright (c) 2026 Alexander4, LLC.
+[Apache License 2.0](LICENSE). Copyright (c) 2026 Alexander4, LLC.
+Contributions are welcome under the same license with a DCO sign-off — see
+[CONTRIBUTING.md](CONTRIBUTING.md). The Vigo name and logo are trademarks; see
+[TRADEMARKS.md](TRADEMARKS.md).

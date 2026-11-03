@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: LicenseRef-Proprietary
+// SPDX-License-Identifier: Apache-2.0
 
 // Package filemeshcore holds the file-mesh status machinery shared by
 // longdrawermesh and lockboxmesh — the two swarm meshes that project a

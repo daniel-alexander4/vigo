@@ -3469,15 +3469,6 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     border-radius: 10px;
 }
 
-.docs-confidential {
-    margin-top: 48px;
-    padding-top: 16px;
-    border-top: 1px solid var(--color-border);
-    font-size: 11px;
-    color: var(--color-muted);
-    text-align: center;
-}
-
 @media (max-width: 960px) {
     .docs-layout {
         grid-template-columns: 1fr;
@@ -3509,20 +3500,6 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     .sec-spinner {
         animation-duration: 1.5s !important;
         animation-iteration-count: infinite !important;
-    }
-}
-
-@media print {
-    .docs-confidential-print {
-        display: none;
-    }
-    @page {
-        margin-bottom: 1.5cm;
-        @bottom-center {
-            content: "Confidential — Alexander4, LLC. Not for redistribution.";
-            font-size: 9px;
-            color: #888;
-        }
     }
 }
 

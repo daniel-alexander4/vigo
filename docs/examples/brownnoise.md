@@ -202,5 +202,3 @@ Override vars at the node level to tune the sound and target the right device:
 | `brownnoise_alsa_card` | `0` | Card index for `amixer -c` |
 | `brownnoise_alsa_control` | `PCM` | Mixer control to set (e.g. `PCM`, `Master`) |
 | `brownnoise_alsa_level` | `60` | Playback level percentage to set and hold |
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
