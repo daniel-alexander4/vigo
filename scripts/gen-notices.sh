@@ -33,7 +33,6 @@ go-licenses csv ./server/... ./cli/... > "$WORK/golic.csv" 2>/dev/null
 go-licenses save ./server/... ./cli/... \
   --save_path="$WORK/go-notices" \
   --ignore git.alexander4.io/vigo \
-  --ignore git.alexander4.io/tessera \
   --force 2>/dev/null
 
 echo "==> Go: assembling THIRD-PARTY-NOTICES.go.txt"

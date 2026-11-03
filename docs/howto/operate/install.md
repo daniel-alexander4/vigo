@@ -28,7 +28,6 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── server.yaml              # server config
 ├── .env                     # non-secret env vars
 ├── tls/                     # mTLS certificates (auto-generated)
-├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
 ├── stacks/                  # operator-edited config tree
@@ -238,7 +237,6 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
   database ................ OK
   tls ..................... OK (expires 2027-05-05)
   secrets ................. OK (local)
-  license ................. OK (Compliant, 5/100 envoys)
   spanner .................. SKIP (standalone)
   integrations ............ SKIP (no integrations configured)
   config .................. OK (43 configcrates, 5 entries)
@@ -247,7 +245,7 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
   Status: healthy
 ```
 
-`SKIP` is expected for `spanner` (you're not running hub-spoke) and `integrations` (you haven't wired any external alerting yet). `database / tls / secrets / license / config` should all be `OK` on a fresh install. A `WARN` on `stale_envoys` after the first check-in cycle means at least one envoy hasn't reported in `2.5 × max(interval, observed_cycle)` seconds — go look at it.
+`SKIP` is expected for `spanner` (you're not running hub-spoke) and `integrations` (you haven't wired any external alerting yet). `database / tls / secrets / config` should all be `OK` on a fresh install. A `WARN` on `stale_envoys` after the first check-in cycle means at least one envoy hasn't reported in `2.5 × max(interval, observed_cycle)` seconds — go look at it.
 
 ## What's next
 

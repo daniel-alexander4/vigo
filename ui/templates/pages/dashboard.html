@@ -26,25 +26,6 @@
     </div>
 </div>
 
-{{if .LicenseCapacityLevel}}
-<div class="license-banner license-banner--{{.LicenseCapacityLevel}}" role="status" aria-live="polite">
-    <svg class="license-banner__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 9v4"/>
-        <path d="M12 17h.01"/>
-        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-    </svg>
-    <div class="license-banner__body">
-        <div class="license-banner__title">
-            {{if eq .LicenseCapacityLevel "critical"}}{{T $.Locale "dashboard.license.at_capacity"}}{{else}}{{T $.Locale "dashboard.license.nearing_capacity"}}{{end}}
-        </div>
-        <div class="license-banner__message">{{if eq .LicenseCapacityLevel "critical"}}{{printf (T $.Locale "dashboard.license.at_capacity_msg") .LicenseCapacityActive .LicenseCapacityMax}}{{else}}{{printf (T $.Locale "dashboard.license.nearing_capacity_msg") .LicenseCapacityActive .LicenseCapacityMax .LicenseCapacitySlotsRemaining}}{{end}}</div>
-    </div>
-    <div class="license-banner__actions">
-        <a href="/license" class="btn btn--sm">{{T $.Locale "chrome.view_license"}}</a>
-    </div>
-</div>
-{{end}}
-
 {{if .NoEnvoys}}
 <div class="welcome-card">
     <h2>{{T $.Locale "dashboard.welcome.heading"}}</h2>

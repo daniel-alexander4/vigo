@@ -24,7 +24,7 @@ Distinct from [convergence](#convergence): convergence is "did my configcrates a
 
 ## connwaer
 
-A standalone Rust agent for active compliance verification — checking things Vigo can't prove through enforcement alone (WORM storage, RNG validation, encryption at rest, network segmentation). Runs alongside the vigo agent on enrolled envoys. Separate product with its own license file and independent node counting. See the [Connwaer docs](reference/compliance-matrix.md).
+A standalone Rust agent for active compliance verification — checking things Vigo can't prove through enforcement alone (WORM storage, RNG validation, encryption at rest, network segmentation). Runs alongside the vigo agent on enrolled envoys.. See the [Connwaer docs](reference/compliance-matrix.md).
 
 ## convergence
 

@@ -21,15 +21,7 @@ SEED_DIR="/seed"
 mkdir -p "${VIGO_STACKS}/configcrates" "${VIGO_STACKS}/templates" "${VIGO_STACKS}/tasks" "${VIGO_STACKS}/workflows" "${VIGO_STACKS}/usercrates"
 mkdir -p -m 750 "${VIGO_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
-mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
-
-# ---------------------------------------------------------------------------
-# Lock down license file permissions if present
-# ---------------------------------------------------------------------------
-
-for f in "${DATA_DIR}"/license/*.lic; do
-    [ -f "$f" ] && chmod 600 "$f"
-done
+mkdir -p -m 700 "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------
 # Write default .env if missing
@@ -53,11 +45,11 @@ ENVEOF
 fi
 
 # ---------------------------------------------------------------------------
-# Copy license and commercial terms (always overwrite — keep current)
+# Copy the Apache-2.0 LICENSE and NOTICE (always overwrite — keep current)
 # ---------------------------------------------------------------------------
 
 cp "${SEED_DIR}/LICENSE" "${DATA_DIR}/LICENSE"
-cp "${SEED_DIR}/COMMERCIAL-TERMS.md" "${DATA_DIR}/COMMERCIAL-TERMS.md"
+cp "${SEED_DIR}/NOTICE" "${DATA_DIR}/NOTICE"
 
 # ---------------------------------------------------------------------------
 # Copy server.yaml if missing
@@ -140,10 +132,6 @@ mkdir -p "${EXAMPLES_DIR}"
 # destinations relative to stacks/ directly.
 find "${SEED_DIR}/example-configs/stacks" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/stacks/}"
-    # Skip compliance configcrates — gated behind paid license.
-    case "$rel" in
-        configcrates/compliance/*) continue ;;
-    esac
     dest="${EXAMPLES_DIR}/${rel}"
     mkdir -p "$(dirname "$dest")"
     cp "$src" "$dest"

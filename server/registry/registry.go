@@ -8,14 +8,11 @@
 // handler), TrustedRegister (bootstrap HTTP + trusted CIDR patterns), and
 // CreateEnvoy (hub→bolt AdminService.EnrollEnvoy) — funnel through the same
 // internal chokepoint. That chokepoint holds the registry-wide mutex for the
-// duration of the license gate check, the DB insert, and the FleetIndex
-// update, which makes the operation atomic across all three paths: two
-// concurrent registrations at the node limit cannot both pass the gate.
+// duration of the hostname-conflict check, the DB insert, and the FleetIndex
+// update, which makes the operation atomic across all three paths.
 //
-// The license gate is injected via SetEnrollmentGate so this package does not
-// import server/license directly. The FleetIndex is injected via
-// SetFleetIndex so registry can keep the in-memory active count in sync with
-// DB writes under the same mutex.
+// The FleetIndex is injected via SetFleetIndex so registry can keep the
+// in-memory index in sync with DB writes under the same mutex.
 package registry
 
 import (
@@ -48,70 +45,31 @@ var (
 	ErrHostnameInUse     = errors.New("an active envoy with this hostname already exists (use force to replace)")
 )
 
-// EnrollmentGate is the policy interface the registry consults before
-// inserting a new envoy. Implemented by *license.Enforcer. Defined here as an
-// interface to avoid a registry → license import cycle and to make the
-// registry unit-testable with a trivial stub.
-type EnrollmentGate interface {
-	// CurrentCount returns the licensed-count source of truth: the local
-	// fleet count in local mode, the gossip-aggregated fleet-wide count in
-	// aggregate mode. The registry reads it here (rather than off its own
-	// FleetIndex) so the gate enforces against the correct count for the
-	// license mode, then passes the result to RegistrationAllowedAt under
-	// the same mutex.
-	CurrentCount(ctx context.Context) (int, error)
-
-	// RegistrationAllowedAt returns nil if a new envoy may be registered
-	// given the supplied live active count, or an error describing why it
-	// is blocked. Implementations must not read the count themselves —
-	// passing it in guarantees the caller's count-check and DB insert
-	// happen under the same mutex.
-	RegistrationAllowedAt(currentCount int) error
-
-	// RecordEnforcementError increments an internal counter when the gate
-	// fails closed on a non-policy error (e.g., count unavailable).
-	RecordEnforcementError()
-
-	// RecordEnrollmentBlocked increments an internal counter when the
-	// hard node-count gate rejects an enrollment specifically.
-	RecordEnrollmentBlocked()
-}
-
 // Registry manages envoy enrollment: approved pattern creation, agent
 // registration with glob matching and bcrypt token validation, and
 // envoy revocation. All enrollment operations are serialized by a single
-// mutex (enrollMu) so the license gate check and the DB + FleetIndex
+// mutex (enrollMu) so the hostname check and the DB + FleetIndex
 // mutations form one atomic unit.
 type Registry struct {
 	queries *db.Queries
 
 	enrollMu sync.Mutex // serializes all enrollment operations
 
-	// Optional collaborators, set via Set*. Nil-safe: a Registry with no
-	// gate or fleet index still functions (useful for tests), it just
-	// skips the license check and the in-memory index update.
-	gate  EnrollmentGate
+	// Optional collaborator, set via SetFleetIndex. Nil-safe: a Registry
+	// with no fleet index still functions (useful for tests), it just skips
+	// the in-memory index update.
 	fleet *fleet.FleetIndex
 }
 
 // NewRegistry creates a Registry backed by the given sqlc Queries.
-// Callers should wire the license gate via SetEnrollmentGate and the
-// fleet index via SetFleetIndex before accepting enrollment traffic.
+// Callers should wire the fleet index via SetFleetIndex before accepting
+// enrollment traffic.
 func NewRegistry(queries *db.Queries) *Registry {
 	return &Registry{queries: queries}
 }
 
-// SetEnrollmentGate installs the license policy gate. If nil, the registry
-// runs without license enforcement — intended only for tests.
-func (r *Registry) SetEnrollmentGate(g EnrollmentGate) {
-	r.enrollMu.Lock()
-	defer r.enrollMu.Unlock()
-	r.gate = g
-}
-
-// SetFleetIndex wires the in-memory fleet index. The registry uses it both
-// for the live active count (driving the license gate) and for inserting
-// new envoys atomically alongside the DB write.
+// SetFleetIndex wires the in-memory fleet index, which the registry updates
+// atomically alongside each DB write.
 func (r *Registry) SetFleetIndex(fi *fleet.FleetIndex) {
 	r.enrollMu.Lock()
 	defer r.enrollMu.Unlock()
@@ -149,8 +107,7 @@ func (r *Registry) AddApprovedPattern(ctx context.Context, pattern, token string
 // an envoy record, marks the pattern as used, and returns the envoy UUID string.
 //
 // If force is true and an active envoy with the same hostname exists, the old
-// envoy is revoked first — under the same mutex — so a force-replace at the
-// node limit is net-zero and the license gate sees the post-revoke count.
+// envoy is revoked first, under the same mutex.
 // If force is false, registration is rejected when the hostname is in use.
 func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token string, force bool) (string, error) {
 	if hostname == "" {
@@ -194,7 +151,7 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 			continue
 		}
 
-		// Pattern + token matched — run the gate and create the envoy.
+		// Pattern + token matched — create the envoy.
 		envoyID, err := r.insertEnvoyLocked(ctx, hostname, ip, pubkeyPEM)
 		if err != nil {
 			return "", err
@@ -268,7 +225,6 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 // CreateEnvoy creates an envoy record without token validation. Used by
 // AdminService.EnrollEnvoy (hub→bolt enrollment routing) where the hub has
 // already validated the enrollment token before calling into the bolt.
-// Still runs the license gate so bolt-level limits are enforced.
 func (r *Registry) CreateEnvoy(ctx context.Context, hostname, ip, pubkeyPEM string, force bool) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")
@@ -306,33 +262,9 @@ func (r *Registry) SetEnvoyCertPin(ctx context.Context, envoyID, spki string) er
 }
 
 // insertEnvoyLocked is the single chokepoint where every enrollment path
-// lands after its own validation. Caller must hold r.enrollMu. The license
-// gate, DB insert, and FleetIndex update happen in that order under the
-// same mutex, so two concurrent enrollments at the node limit cannot both
-// pass the gate.
+// lands after its own validation. Caller must hold r.enrollMu. The DB insert
+// and FleetIndex update happen under the same mutex.
 func (r *Registry) insertEnvoyLocked(ctx context.Context, hostname, ip, pubkeyPEM string) (string, error) {
-	// License gate — hard count check before any DB work.
-	if r.gate != nil {
-		if r.fleet == nil {
-			r.gate.RecordEnforcementError()
-			return "", fmt.Errorf("license enforcement: fleet index not wired up")
-		}
-		// Source the count from the gate's mode-aware counter, not the local
-		// FleetIndex directly: in aggregate mode (spanner) the gate must
-		// enforce against the gossip-wide fleet count, not just this bolt's
-		// partition. In local mode this resolves to the same FleetIndex count.
-		// Read under enrollMu so the check and the DB+index insert stay atomic.
-		currentCount, err := r.gate.CurrentCount(ctx)
-		if err != nil {
-			r.gate.RecordEnforcementError()
-			return "", fmt.Errorf("license enforcement: count unavailable: %w", err)
-		}
-		if err := r.gate.RegistrationAllowedAt(currentCount); err != nil {
-			r.gate.RecordEnrollmentBlocked()
-			return "", err
-		}
-	}
-
 	envoy, err := r.queries.CreateEnvoy(ctx, db.CreateEnvoyParams{
 		Hostname:  hostname,
 		IpAddress: ip,
@@ -342,10 +274,7 @@ func (r *Registry) insertEnvoyLocked(ctx context.Context, hostname, ip, pubkeyPE
 		return "", fmt.Errorf("creating envoy: %w", err)
 	}
 
-	// Mirror into FleetIndex under the same mutex so the next gate check
-	// sees the incremented count. The callers formerly did this themselves
-	// after Registry returned, which left a TOCTOU window where two
-	// concurrent registrations could both observe a pre-insert count.
+	// Mirror into FleetIndex under the same mutex as the DB insert.
 	if r.fleet != nil {
 		pubKey, _ := db.ParsePubKey(pubkeyPEM)
 		r.fleet.AddEnvoy(fleet.EnvoyState{
@@ -408,8 +337,7 @@ func (r *Registry) RevokeEnvoy(ctx context.Context, envoyID string) error {
 
 // checkHostnameConflictLocked checks if a hostname is already in use by an
 // active or revoked envoy. If force is true and an active envoy exists, it
-// is revoked in both the DB and FleetIndex (freeing a slot for the gate
-// check that follows). Caller must hold r.enrollMu.
+// is revoked in both the DB and FleetIndex. Caller must hold r.enrollMu.
 func (r *Registry) checkHostnameConflictLocked(ctx context.Context, hostname string, force bool) (string, error) {
 	existing, err := r.queries.GetActiveEnvoyByHostname(ctx, hostname)
 	if err == nil {
@@ -417,10 +345,7 @@ func (r *Registry) checkHostnameConflictLocked(ctx context.Context, hostname str
 		if !force {
 			return "", ErrHostnameInUse
 		}
-		// Force: revoke the old envoy first, both DB and FleetIndex, so
-		// the subsequent gate check sees the decremented count. This
-		// makes --force replacement net-zero at the node limit: the
-		// slot is freed before the gate is consulted.
+		// Force: revoke the old envoy first, both DB and FleetIndex.
 		if err := r.queries.RevokeEnvoy(ctx, existing.ID); err != nil {
 			return "", fmt.Errorf("revoking existing envoy %s: %w", existing.ID, err)
 		}

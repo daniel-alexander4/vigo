@@ -7,7 +7,6 @@ A spanner is a set of vigosrv servers — **bolts** — that share one fleet as 
 
 **When you'd skip this:** smaller fleets (a single-server `standalone` deployment is the default and the right answer for almost every operator); fleets that need HA but not horizontal sharding (use `server/peer/` primary/secondary replication instead — see the `peers:` section in `server.yaml`).
 
-> **License requirement:** Spanner needs a **commercial** license. Any non-commercial tier — the built-in free license (100 envoys), a hand-issued community/unlimited license, or any tier that does not require machine binding — does not support `spanner` mode; the server refuses to start with `spanner.mode: spanner` on such a license. Commercial licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — moving a bolt to a new machine requires a new license.
 
 ## Modes
 
@@ -67,7 +66,7 @@ vigocli spanner ca import --from fleet-ca.pem  # installs the CA + re-signs this
 
 Restart vigosrv on the joiner afterward to load the adopted CA.
 
-Keeping the CA off the wire is what makes the config-driven admission gate (below) safe: a rogue bolt that talks its way past the IP allowlist is bounded — it can pollute observability and play license-count games, but it cannot read fleet data, receive routed envoys, or mint trusted certs, because all of those sit behind the fleet-CA mTLS it doesn't hold.
+Keeping the CA off the wire is what makes the config-driven admission gate (below) safe: a rogue bolt that talks its way past the IP allowlist is bounded — it can pollute observability, but it cannot read fleet data, receive routed envoys, or mint trusted certs, because all of those sit behind the fleet-CA mTLS it doesn't hold.
 
 ## Admit the other bolts — config-driven peering (recommended)
 
@@ -135,10 +134,6 @@ The agent handles reconnection automatically — on its next check-in it is redi
 
 There is no hub-side health probe and no auto-drain. A silent bolt is detected by the gossip freshness thresholds (`spanner.freshness.stale_after`) and surfaces in `vigocli spanner status` as a stale snapshot age. Recovery is automatic when the bolt resumes gossiping. To take a bolt out of service deliberately, drain it (above) before stopping it.
 
-## License enforcement
-
-With `license.mode: aggregate`, every bolt independently sums the fleet-wide node count from the gossip-replicated roster and enforces against it — there is no designated enforcer. With `license.mode: local` (the default), each bolt counts only its own envoys.
-
 ## Web UI
 
 The `/spanner` page lists every bolt in the spanner — one row each, with the bolt serving the page tagged **this bolt**. Peer rows come from the gossip-backed observability cache (with a snapshot age); the local row is live from this bolt's own fleet index, so the view is identical no matter which bolt's UI you open. `/spanner/bolts/{pubkey}` drills into a bolt's convergence breakdown and envoy roster.
@@ -152,7 +147,6 @@ The `/spanner` page lists every bolt in the spanner — one row each, with the b
 
 - **HA for an individual bolt** → `server/peer/` primary/secondary replication, configured per bolt independently of the spanner.
 - **A bolt is wedged** → `vigocli spanner status` shows a stale snapshot age; drain it with `vigocli spanner bolt drain <pubkey>`.
-- **License is too small / wrong tier** → spanner needs a commercial license; a free or community-tier license is refused regardless of node count. See [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
 - **Cross-bolt convergence lags** → the Tier-1 counter-gossip cadence is `30s` by default; reduce `spanner.snapshot.tier1_interval` for tighter cross-bolt convergence.
 
 ---

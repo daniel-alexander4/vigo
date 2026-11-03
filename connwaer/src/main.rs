@@ -7,7 +7,6 @@ mod bootstrap;
 mod capability;
 mod config;
 mod exec;
-mod license;
 mod platform;
 mod results;
 mod rng;
@@ -156,27 +155,6 @@ fn cmd_run(config_path: &str, cli_log_level: &str, once: bool) -> Result<()> {
 
     // Apply resource guardrails before any capability work.
     platform::resource::apply(&cfg.resource_limits);
-
-    // License check (warn but don't block — allows evaluation without license).
-    let license_dir = std::path::Path::new(&cfg.license_dir);
-    match license::License::load_dir(license_dir) {
-        Ok(lic) => {
-            if lic.is_expired() {
-                tracing::warn!("license {} is expired ({})", lic.payload.license_id, lic.payload.expires_at);
-            }
-            if !lic.has_feature("connwaer") {
-                tracing::warn!(
-                    "license {} does not include the 'connwaer' feature — running in evaluation mode",
-                    lic.payload.license_id,
-                );
-            } else {
-                tracing::info!("license valid: {} ({})", lic.payload.license_id, lic.payload.tier);
-            }
-        }
-        Err(e) => {
-            tracing::warn!("no valid license found: {e} — running in evaluation mode");
-        }
-    }
 
     let trends = Arc::new(
         TrendStore::open(std::path::Path::new(&cfg.trends_db))

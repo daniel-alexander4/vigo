@@ -65,12 +65,6 @@ A resource declares state that some external process keeps reverting (a package 
 
 **Fix:** the previous good `.live/` is restored automatically; the operator sees the rollback in `vigocli config history` and the publish-audit-log. Inspect the runs that triggered the rollback to find what changed; fix and re-publish.
 
-### License-related enrollment refusal
-
-Agent registration refused at the server because the enrolled-envoy count would exceed the license cap.
-
-**Fix:** see `vigocli license` for current usage / cap. Revoke unused envoys (`vigocli envoys revoke <uuid>`) before adding new ones, or upgrade the license tier.
-
 ### `kex_exchange_identification: read: Connection reset by peer` on an envoy's sshd (not scrier)
 
 Direct SSH to the envoy host (not via scrier) is rejected. Usually disk-pressure or resource-starvation on the host.
@@ -120,7 +114,7 @@ The `doctor` command checks all server subsystems and reports their health:
 vigocli doctor
 ```
 
-This runs 8 checks: database, TLS certificates, secrets provider, license, spanner, SMTP, config, and stale envoys. Each check reports `pass`, `warn`, `fail`, or `skip`.
+This runs 7 checks: database, TLS certificates, secrets provider, spanner, SMTP, config, and stale envoys. Each check reports `pass`, `warn`, `fail`, or `skip`.
 
 ### vigocli runs
 
@@ -475,17 +469,17 @@ vigocli envoys revoke <old-uuid>
 
 ### Resetting the Server
 
-To wipe all server state and start fresh (preserves license):
+To wipe all server state and start fresh:
 
 ```bash
 cd /srv/vigo
 docker compose down
-sudo find /srv/vigo -mindepth 1 -path /srv/vigo/license -prune -o -print0 | xargs -0 rm -rf
+sudo find /srv/vigo -mindepth 1 -delete
 docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
 docker compose up -d
 ```
 
-This re-seeds `server.yaml`, `.env`, `docker-compose.yml`, TLS certs, and examples. Your license file is preserved.
+This re-seeds `server.yaml`, `.env`, `docker-compose.yml`, TLS certs, and examples.
 
 ---
 

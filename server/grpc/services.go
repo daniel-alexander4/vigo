@@ -17,7 +17,6 @@ import (
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/integrations"
-	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/spanner"
@@ -62,7 +61,6 @@ type AgentService struct {
 	// standalone). Register dispatches: spannerAdmin != nil →
 	// OwningBolt redirect; else local-only.
 	spannerAdmin     *spanner.SpannerAdmin
-	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher // async run persistence from delta events
 	reassignStore    *ReassignStore    // pending envoy reassignments (bolt side)

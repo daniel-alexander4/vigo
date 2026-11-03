@@ -411,19 +411,6 @@ peers:
 | `servers[].sync_interval` | `10s` | Push interval to this peer |
 | `servers[].pubkey` | (required) | Peer's service-account (puddle) Ed25519 key, from its startup `puddle service-account identity ready` log line. Authorizes HA peer RPCs (SyncStream/Promote/Status); replication **fails closed** without it. Local secrets backend only. Configure the same `peers` block on every node. |
 
-## license
-
-License enforcement behavior.
-
-```yaml
-license:
-  mode: "local"                      # "local" or "aggregate"
-```
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `mode` | `local` | `local`: count nodes on this server. `aggregate`: every spanner bolt sums the fleet-wide node count from the gossip-replicated roster and gates enrollment against it independently. Best-effort: the count comes from eventually-consistent gossip, so simultaneous enrollments on different bolts near the cap can both pass — the fleet-wide limit is a soft cap, not a hard guarantee (consensus-free by design, ADR-026). Requires `spanner.mode: spanner` — rejected at config load on a standalone server. |
-
 ## publish
 
 Blast radius protection on config publish.
@@ -613,7 +600,6 @@ paths:
   tasks: "stacks/tasks"
   workflows: "stacks/workflows"
   agent_dist: "dist/agent"
-  license_dir: "/srv/vigo/license"
 ```
 
 ## watcher

@@ -398,36 +398,6 @@ html:not(.theme-dark) .sidebar__logo-img--light { display: inline; }
     opacity: 0.85;
 }
 
-/* === License Banner === */
-.license-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
-    margin-bottom: 20px;
-    background: var(--color-warning-bg);
-    border: 1px solid var(--color-warning);
-    border-radius: var(--radius);
-    font-size: 13px;
-    color: var(--color-text);
-}
-
-.license-banner__text {
-    font-weight: 500;
-}
-
-.license-banner__link {
-    color: var(--color-warning);
-    font-weight: 600;
-    text-decoration: none;
-    white-space: nowrap;
-    margin-left: 16px;
-}
-
-.license-banner__link:hover {
-    text-decoration: underline;
-}
-
 /* === Top Bar === */
 .topbar {
     display: flex;
@@ -1119,18 +1089,6 @@ a.dash-column--link:focus-visible {
     text-align: center;
     padding: 40px;
     color: var(--color-text-muted);
-}
-
-/* Highlight a tier row when it matches the customer's current plan on
-   /support. Uses the Catppuccin accent tokens so it tracks the active
-   theme (Latte Lavender on light, Mocha Lavender on dark) without
-   per-theme overrides. */
-.table tbody tr.tier-row--active {
-    background: var(--color-accent-bg);
-    box-shadow: inset 3px 0 0 0 var(--color-accent);
-}
-.table tbody tr.tier-row--active:hover {
-    background: var(--color-accent-bg);
 }
 
 .table .table-time {
@@ -4605,60 +4563,6 @@ a.time-relative:hover {
 .gauge-legend__swatch--info { background: var(--color-brand); }
 .gauge-legend__swatch--warning { background: var(--color-warning); }
 .gauge-legend__swatch--danger { background: var(--color-danger); }
-
-/* === License Capacity Banner ===
- * Rendered at the top of the dashboard when the fleet is at or near the
- * license node cap. Uses the existing warning/danger palette so it matches
- * the site's other alerting surfaces. Dismissible within the page render
- * cycle is intentional — the server re-sends it on every load while the
- * condition holds, so closing it in one tab doesn't hide it forever. */
-.license-banner {
-    display: flex;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 16px 20px;
-    margin: 0 0 20px 0;
-    border-radius: 6px;
-    border-left-width: 4px;
-    border-left-style: solid;
-}
-.license-banner--warning {
-    background: var(--color-warning-bg);
-    border-left-color: var(--color-warning);
-    color: var(--color-warning);
-}
-.license-banner--critical {
-    background: var(--color-danger-bg);
-    border-left-color: var(--color-danger);
-    color: var(--color-danger);
-}
-.license-banner__icon {
-    width: 24px;
-    height: 24px;
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-.license-banner__body {
-    flex: 1;
-    min-width: 0;
-}
-.license-banner__title {
-    font-weight: 600;
-    font-size: 15px;
-    margin-bottom: 4px;
-}
-.license-banner__message {
-    font-size: 13px;
-    color: var(--color-text-muted, #555);
-}
-.license-banner--critical .license-banner__message,
-.license-banner--warning .license-banner__message {
-    color: inherit;
-    opacity: 0.88;
-}
-.license-banner__actions {
-    flex-shrink: 0;
-}
 
 /* === Flex Utility Classes === */
 .flex { display: flex; }

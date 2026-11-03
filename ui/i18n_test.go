@@ -86,19 +86,19 @@ func TestRenderLocale(t *testing.T) {
 	}
 
 	en := render("en")
-	if !strings.Contains(en, "Support tiers") {
-		t.Error("en render missing original English heading 'Support tiers'")
+	if !strings.Contains(en, "Getting help") {
+		t.Error("en render missing original English heading 'Getting help'")
 	}
-	if strings.Contains(en, "Niveaux d'assistance") {
+	if strings.Contains(en, "Obtenir de l'aide") {
 		t.Error("en render unexpectedly contains French")
 	}
 
 	fr := render("fr")
-	if !strings.Contains(fr, "Niveaux d&#39;assistance") && !strings.Contains(fr, "Niveaux d'assistance") {
-		t.Error("fr render missing French heading 'Niveaux d'assistance'")
+	if !strings.Contains(fr, "Obtenir de l&#39;aide") && !strings.Contains(fr, "Obtenir de l'aide") {
+		t.Error("fr render missing French heading 'Obtenir de l'aide'")
 	}
-	if strings.Contains(fr, "Support tiers") {
-		t.Error("fr render still shows English heading 'Support tiers'")
+	if strings.Contains(fr, "Getting help") {
+		t.Error("fr render still shows English heading 'Getting help'")
 	}
 }
 

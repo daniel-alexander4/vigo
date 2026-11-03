@@ -66,12 +66,6 @@ Une ressource déclare un état qu'un processus externe ne cesse d'annuler (un g
 
 **Correction :** le précédent `.live/` valide est restauré automatiquement ; l'opérateur voit le rollback dans `vigocli config history` et dans le journal d'audit de publication. Inspectez les exécutions qui ont déclenché le rollback pour trouver ce qui a changé ; corrigez et republiez.
 
-### Refus d'enrôlement lié à la licence
-
-L'enregistrement de l'agent a été refusé par le serveur car le nombre d'Envoys enrôlés dépasserait le plafond de la licence.
-
-**Correction :** voir `vigocli license` pour l'usage / le plafond actuels. Révoquez les Envoys inutilisés (`vigocli envoys revoke <uuid>`) avant d'en ajouter de nouveaux, ou montez de palier de licence.
-
 ### `kex_exchange_identification: read: Connection reset by peer` sur le sshd d'un Envoy (pas scrier)
 
 La connexion SSH directe vers l'hôte de l'Envoy (pas via scrier) est rejetée. Généralement pression disque ou pénurie de ressources sur l'hôte.
@@ -106,7 +100,7 @@ La commande `doctor` vérifie tous les sous-systèmes du serveur et rapporte leu
 vigocli doctor
 ```
 
-Elle effectue 8 contrôles : base de données, certificats TLS, fournisseur de secrets, licence, spanner, SMTP, config, et Envoys périmés. Chaque contrôle rapporte `pass`, `warn`, `fail` ou `skip`.
+Elle effectue 7 contrôles : base de données, certificats TLS, fournisseur de secrets, spanner, SMTP, config, et Envoys périmés. Chaque contrôle rapporte `pass`, `warn`, `fail` ou `skip`.
 
 ### vigocli runs
 
@@ -461,17 +455,17 @@ vigocli envoys revoke <old-uuid>
 
 ### Réinitialiser le serveur
 
-Pour effacer tout l'état du serveur et repartir à neuf (préserve la licence) :
+Pour effacer tout l'état du serveur et repartir à neuf :
 
 ```bash
 cd /srv/vigo
 docker compose down
-sudo find /srv/vigo -mindepth 1 -path /srv/vigo/license -prune -o -print0 | xargs -0 rm -rf
+sudo find /srv/vigo -mindepth 1 -delete
 docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
 docker compose up -d
 ```
 
-Cela re-sème `server.yaml`, `.env`, `docker-compose.yml`, les certificats TLS et les exemples. Votre fichier de licence est préservé.
+Cela re-sème `server.yaml`, `.env`, `docker-compose.yml`, les certificats TLS et les exemples.
 
 ---
 

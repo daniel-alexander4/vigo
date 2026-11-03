@@ -106,33 +106,6 @@ groups:
           summary: "Config reload p99 > 2.5s"
           description: "Publish + reload is getting slow. Stacks may have grown — check configcrate count and inheritance depth."
 
-  - name: vigo-license
-    rules:
-      - alert: VigoLicenseEnforcementErrors
-        expr: increase(vigo_license_enforcement_errors_total[5m]) > 0
-        labels:
-          severity: critical
-        annotations:
-          summary: "License enforcement is failing closed"
-          description: "The enforcement gate could not count active envoys (fleet index missing, count unavailable). New enrollments are being rejected until this clears."
-
-      - alert: VigoLicenseDaysRemainingLow
-        expr: vigo_license_days_remaining < 14 and vigo_license_days_remaining >= 0
-        labels:
-          severity: warning
-        annotations:
-          summary: "License expires in {{ $value }} day(s)"
-          description: "Renew before expiry to avoid grace → enrollment block → service stop progression."
-
-      - alert: VigoLicenseStageNonCompliant
-        expr: vigo_license_stage > 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "License stage = {{ $value }} (0=compliant, 1=grace, 2=enrollment_block, 3=service_stop)"
-          description: "Past the compliant stage. Resolve the license condition before service_stop is reached."
-
   - name: vigo-swarm
     rules:
       - alert: VigoSpannerBoltsRevokedHigh

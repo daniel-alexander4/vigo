@@ -30,7 +30,6 @@ vigocli doctor
   database ............. OK
   tls .................. OK (expires 2027-01-15)
   secrets .............. OK
-  license .............. OK
   spanner ............... OK
   integrations ......... OK
   config ............... OK

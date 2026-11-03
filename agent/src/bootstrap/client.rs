@@ -31,18 +31,6 @@ pub struct RegisterResponse {
     pub bolt_addr: String,
     #[serde(default)]
     pub fallback_servers: Vec<String>,
-    // License capacity hints populated by the server on successful
-    // enrollment. When `license_warning` is non-empty, the bootstrap
-    // caller should print it to stderr so the operator sees the
-    // "nearing cap" / "at capacity" notice in the curl one-liner output.
-    #[serde(default)]
-    pub envoys_active: i32,
-    #[serde(default)]
-    pub envoys_remaining: i32,
-    #[serde(default)]
-    pub license_max: i32,
-    #[serde(default)]
-    pub license_warning: String,
 }
 
 /// POST the bootstrap registration request and return the signed certs.

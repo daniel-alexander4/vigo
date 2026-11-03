@@ -27,8 +27,6 @@ import (
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
-	"git.alexander4.io/vigo/server/license"
-	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/secrets"
 )
 
@@ -63,22 +61,6 @@ func generateTestCerts(t *testing.T) (certFile, keyFile string) {
 	os.WriteFile(certFile, certPEM, 0644)
 	os.WriteFile(keyFile, keyPEM, 0600)
 	return
-}
-
-// newTestLicenseEnforcer creates a license enforcer with the built-in free license.
-func newTestLicenseEnforcer(t *testing.T) *license.Enforcer {
-	t.Helper()
-	licenseDir := t.TempDir()
-	graceDir := t.TempDir()
-
-	// LoadDir falls back to the built-in free license when no .lic files exist.
-	enforcer, err := license.NewEnforcer(licenseDir, graceDir, "", func(_ context.Context) (int, error) {
-		return 0, nil // 0 active envoys
-	}, nil, metrics.NewTestMetrics())
-	if err != nil {
-		t.Fatalf("new enforcer: %v", err)
-	}
-	return enforcer
 }
 
 // newDoctorTestConfigStore creates a minimal ConfigStore for doctor tests.
@@ -152,14 +134,12 @@ func TestDoctor_Healthy(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 
 	handler := NewDoctorHandler(DoctorConfig{
 		SQLDB:       sqlDB,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute,
@@ -213,14 +193,12 @@ func TestDoctor_Healthy(t *testing.T) {
 func TestDoctor_BadTLSCert(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 
 	handler := NewDoctorHandler(DoctorConfig{
 		SQLDB:       sqlDB,
 		CertFile:    "/nonexistent/cert.pem",
 		KeyFile:     "/nonexistent/key.pem",
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute,
@@ -254,14 +232,12 @@ func TestDoctor_CheckScopes(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 
 	handler := NewDoctorHandler(DoctorConfig{
 		SQLDB:       sqlDB,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute,
@@ -273,7 +249,6 @@ func TestDoctor_CheckScopes(t *testing.T) {
 		"database":             ScopeServer,
 		"tls":                  ScopeServer,
 		"secrets":              ScopeServer,
-		"license":              ScopeServer,
 		"spanner":              ScopeServer,
 		"integrations":         ScopeServer,
 		"config":               ScopeServer,
@@ -300,7 +275,6 @@ func TestDoctor_StaleEnvoys(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 
 	// Insert a envoy that was last seen 30 minutes ago (stale with 5min interval).
@@ -317,7 +291,6 @@ func TestDoctor_StaleEnvoys(t *testing.T) {
 		SQLDB:       sqlDB,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute, // 2*5min=10min threshold
@@ -343,14 +316,12 @@ func TestDoctor_ConfigReloadFailure(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newUnhealthyConfigStore(t)
 
 	handler := NewDoctorHandler(DoctorConfig{
 		SQLDB:       sqlDB,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute,
@@ -389,7 +360,6 @@ func TestDoctor_WebusersReplication_FlagsUnsigned(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 	userStore := auth.NewUserStore(queries)
 
@@ -401,7 +371,6 @@ func TestDoctor_WebusersReplication_FlagsUnsigned(t *testing.T) {
 		SQLDB:       sqlDB,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute,
@@ -433,7 +402,6 @@ func TestDoctor_WebusersReplication_AllSigned_Pass(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 	userStore := auth.NewUserStore(queries)
 	// No users at all → CountUnsignedUsers = 0 → Pass.
@@ -442,7 +410,6 @@ func TestDoctor_WebusersReplication_AllSigned_Pass(t *testing.T) {
 		SQLDB:       sqlDB,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute,
@@ -472,7 +439,6 @@ func TestDoctor_WebusersReplication_Standalone_Skip(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
-	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 	userStore := auth.NewUserStore(queries)
 
@@ -485,7 +451,6 @@ func TestDoctor_WebusersReplication_Standalone_Skip(t *testing.T) {
 		SQLDB:       sqlDB,
 		CertFile:    certFile,
 		KeyFile:     keyFile,
-		Enforcer:    enforcer,
 		ConfigStore: configStore,
 		Queries:     queries,
 		Interval:    5 * time.Minute,

@@ -14,7 +14,7 @@ import "path/filepath"
 
 // DefaultDir is the canonical filesystem location for the service-account
 // puddle's on-disk state. Operators rarely override this — the path
-// mirrors the convention used by /srv/vigo/stacks, /srv/vigo/license, etc.
+// mirrors the convention used by /srv/vigo/stacks, /srv/vigo/secrets, etc.
 const DefaultDir = "/srv/vigo/puddle"
 
 // File names inside the puddle dir. The per-user puddle uses identity.salt;

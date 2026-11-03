@@ -20,7 +20,6 @@ var protectedPaths = []string{
 	// Server
 	"/usr/local/sbin/vigosrv",
 	"/usr/local/bin/vigocli",
-	"/usr/local/sbin/tessera",
 	"/srv/vigo/",
 	"/etc/systemd/system/vigosrv.service",
 }

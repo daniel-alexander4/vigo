@@ -47,9 +47,7 @@ rm -rf /etc/vigo-envoy
 echo "Removing agent LMDB state (/var/lib/vigo)..."
 rm -rf /var/lib/vigo
 
-echo "Removing server data (/srv/vigo), preserving license..."
-find /srv/vigo -mindepth 1 \
-  -path /srv/vigo/license -prune -o \
-  -print0 | xargs -0 rm -rf
+echo "Removing server data (/srv/vigo)..."
+find /srv/vigo -mindepth 1 -delete
 
 echo "Done. Envoy is clean — ready to re-bootstrap."

@@ -105,25 +105,16 @@ type Collector struct {
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
 
-	// licenseRefresh re-sets the license gauges from the enforcer's
-	// mode-aware counter each tick, so vigo_license_envoys_used tracks the
-	// fleet within one collector interval instead of lagging until the
-	// enforcer's hourly tick. nil when there is no enforcer (kept an opaque
-	// callback so this package doesn't import server/license — which already
-	// imports this one).
-	licenseRefresh func()
-
 	// lastSwarmRefresh gates the swarm/spanner gauge refresh to
 	// swarmRefreshInterval. Mutated only from the single Run goroutine.
 	lastSwarmRefresh time.Time
 }
 
 // NewCollector creates a new metrics collector. fleetSource and swarmSource
-// may be nil (bolt mode / swarm disabled). licenseRefresh re-sets the license
-// gauges each tick and may be nil (no enforcer / tests). The Metrics value is
+// may be nil (bolt mode / swarm disabled). The Metrics value is
 // the per-instance collector set; the gauges it owns are the ones this
 // collector mutates each tick.
-func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, swarmSource SwarmSource, m *Metrics, baseInterval, offlineThreshold time.Duration, licenseRefresh func()) *Collector {
+func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, swarmSource SwarmSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
 	return &Collector{
 		queries:          queries,
 		sqlDB:            sqlDB,
@@ -132,19 +123,11 @@ func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, s
 		metrics:          m,
 		baseInterval:     baseInterval,
 		offlineThreshold: offlineThreshold,
-		licenseRefresh:   licenseRefresh,
 	}
 }
 
 // UpdateGauges queries the database and fleet and updates all gauge metrics.
 func (c *Collector) UpdateGauges(ctx context.Context) error {
-	// License gauges first — sourced from the enforcer's mode-aware counter,
-	// independent of the DB query below, so a ListEnvoys failure still lets
-	// vigo_license_envoys_used stay fresh.
-	if c.licenseRefresh != nil {
-		c.licenseRefresh()
-	}
-
 	envoys, err := c.queries.ListEnvoys(ctx)
 	if err != nil {
 		return err

@@ -97,7 +97,7 @@ watcher:
 #     - "admin@example.com"
 
 # ── Spanner ────────────────────────────────────────────────────────────
-# Requires a paid license. See server.yaml.example for peer-equal setup.
+# See server.yaml.example for peer-equal setup.
 #
 # spanner:
 #   mode: standalone                           # standalone | spanner

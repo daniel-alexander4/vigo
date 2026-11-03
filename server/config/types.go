@@ -163,7 +163,6 @@ type ServerConfig struct {
 	Peers        PeersSection        `yaml:"peers" docs:"reference/server-yaml#peers" doc:"Peer replication — primary or peer role plus the address list for server redundancy." long:"Active-passive replication that keeps one or more standby vigosrv instances file-synced with the primary, so a server outage doesn't strand the fleet. The primary streams config, secrets, and TLS files to each peer over gRPC; agents receive the peer list at enrollment and automatically fall back to one if the primary becomes unreachable. Configure this whenever the fleet is too large to tolerate an unplanned outage — promotion is then a single 'vigocli server promote' command on a surviving peer."`
 	Task         TaskSection         `yaml:"task" docs:"reference/server-yaml#task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task." long:"Controls ad-hoc task dispatch safety. When require_definition is on, every task sent via 'vigocli task dispatch' must reference a pre-reviewed task definition in /srv/vigo/stacks/tasks — direct shell commands are refused. Enable this in production to force peer review of anything an operator can fan out to a fleet; leave it off in dev where quick one-off commands are the whole point."`
 	Branding     BrandingSection     `yaml:"branding" docs:"reference/server-yaml#branding" doc:"Custom org name, logo, favicon, and light/dark/auto UI theme." long:"White-label the web UI with the organization's name (shown in the title bar and in exported reports), a custom logo and favicon, and a forced light/dark theme or auto. The logo is inlined into cover blocks of generated PDFs so emailed attestations carry the customer's brand. Useful for MSPs per-customer and for enterprises who want their audit reports to wear their own logo."`
-	License      LicenseSection      `yaml:"license" docs:"reference/server-yaml#license" doc:"License enforcement mode — local count or aggregated across spanner bolts." long:"How node-count enforcement aggregates across your topology — 'local' counts envoys registered against this single vigosrv, 'aggregated' sums counts across every bolt in a spanner deployment and enforces a single fleet-wide cap. Pick aggregated on MSP hubs or enterprise spanner setups where one license covers the full customer base. Misconfiguring this either blocks legitimate enrollments (too strict) or silently lets the fleet drift past the contract (too loose)."`
 	GRC          GRCSection          `yaml:"grc" docs:"reference/server-yaml#grc" doc:"GRC platform integrations (Vanta, Drata, ServiceNow) for pushing compliance evidence." long:"Outbound push of compliance evidence into third-party GRC platforms (Vanta, Drata, ServiceNow GRC, Hyperproof, and similar). Each GRC target has its own endpoint, token, and control-mapping block — the server translates Vigo's internal compliance state into whatever format the target expects. Configure this when the organization has already standardized on a GRC system and you want Vigo's evidence to land there without manual uploads."`
 	Integrations IntegrationsSection `yaml:"integrations" docs:"reference/server-yaml#integrations" doc:"Native external platform integrations — Slack, PagerDuty, Jira, ITSM, SIEM, and asset systems." long:"First-class integrations with operator-facing platforms — chat (Slack, Teams), paging (PagerDuty, Opsgenie), ticketing (Jira, Zendesk, Linear, ServiceNow, Freshservice), ITSM (ConnectWise, Autotask, NinjaRMM, Kaseya), SIEM/logging (Splunk, Elastic, Datadog, Sumo, Sentinel), and asset management (Device42, Snipe-IT). Each platform is its own subsection with its own toggle and credentials; prefer these over the legacy webhook path for anything important — native integrations carry context the webhook format can't."`
 	Risk         RiskSection         `yaml:"risk" docs:"reference/server-yaml#risk" doc:"Risk quantification — optional NVD CVE API enrichment." long:"Controls the per-envoy risk scoring engine. An optional NVD CVE API key enriches risk input data with CVSS metrics and vendor-attributed advisories — without it, CVE severity comes from the scanner output alone. Risk scores drive the dashboard Risk Posture column, the cyber-insurance attestation PDF, and compliance-visible drift signals, so enable the NVD key if the deployment is subject to insurance or audit scrutiny."`
@@ -692,17 +691,6 @@ type SnipeITIntegration struct {
 	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events." example:"[envoy.enrolled, envoy.decommissioned]"`
 }
 
-// LicenseSection configures license enforcement behavior.
-type LicenseSection struct {
-	// Mode controls how nodes are counted for license enforcement.
-	// "local" (default): count enrolled nodes on this server only.
-	// "aggregate": every spanner bolt sums the fleet-wide node count from
-	// the gossip-replicated roster and enforces against it independently —
-	// no designated enforcer (peer-equal, post-ADR-026). Spanner mode only;
-	// rejected at load outside spanner mode.
-	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local" example:"aggregate (spanner deployment)"`
-}
-
 // BrandingSection configures custom branding for the web UI.
 // When set, the UI displays the custom org name and serves logos
 // from the specified paths instead of the embedded Vigo defaults.
@@ -755,7 +743,6 @@ type PathsSection struct {
 	Tasks        string `yaml:"tasks" doc:"Reusable task definitions directory." default:".live/tasks" example:"/srv/vigo/stacks/.live/tasks"`
 	Workflows    string `yaml:"workflows" doc:"Workflow definitions directory." default:".live/workflows" example:"/srv/vigo/stacks/.live/workflows"`
 	AgentDist    string `yaml:"agent_dist" doc:"Agent binary distribution directory served to bootstrappers." default:"dist/agent" example:"/srv/vigo/dist/agent"`
-	LicenseDir   string `yaml:"license_dir" doc:"License file directory." default:"/srv/vigo/license" example:"/srv/vigo/license"`
 	Snapshots    string `yaml:"snapshots" doc:"Backup snapshot directory." default:"/srv/vigo/snapshots" example:"/srv/vigo/snapshots  (ideally on a separate volume)"`
 }
 

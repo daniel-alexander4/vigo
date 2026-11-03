@@ -1,7 +1,7 @@
 
 # Set up monitoring
 
-You'll finish this page with a Prometheus instance scraping the Vigo server, the five bundled Grafana dashboards loaded, and alert rules firing on the conditions that matter: stale envoys, convergence failures, license drift, and CVE counts.
+You'll finish this page with a Prometheus instance scraping the Vigo server, the five bundled Grafana dashboards loaded, and alert rules firing on the conditions that matter: stale envoys, convergence failures, and CVE counts.
 
 **When you'd use this:** any deployment where someone other than you needs to know about fleet anomalies. For a single-operator home lab, `vigocli doctor` + the Web UI dashboard is enough; Prometheus + Grafana starts paying for itself around five envoys or when you need history.
 
@@ -76,18 +76,6 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_smtp_sends_total` | Counter | `event`, `status` | Email send attempts by event type and outcome (success, error) |
-
-### License
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `vigo_license_envoys_used` | Gauge | Current number of active (non-revoked) envoys |
-| `vigo_license_envoys_max` | Gauge | Maximum envoys allowed by the license |
-| `vigo_license_stage` | Gauge | Enforcement stage: 0=compliant, 1=grace, 2=enrollment\_block, 3=service\_stop |
-| `vigo_license_days_remaining` | Gauge | Days until license expiry (negative if expired) |
-| `vigo_license_expiry_timestamp` | Gauge | Unix timestamp of license expiration date |
-| `vigo_license_enrollments_blocked_total` | Counter | Enrollments rejected by the hard node-count gate (active\_envoys >= max) |
-| `vigo_license_enforcement_errors_total` | Counter | Internal enforcement errors (count unavailable, fleet index missing) — gate fails closed on each |
 
 ### FleetIndex
 
@@ -255,18 +243,6 @@ scrape_configs:
 - **P95 delivery latency**: `histogram_quantile(0.95, rate(vigo_webhook_duration_seconds_bucket[5m]))`
 - Alert on `rate(vigo_webhook_deliveries_total{status="failed"}[5m]) > 0`
 
-### License
-
-- **Envoy utilization**: `vigo_license_envoys_used / vigo_license_envoys_max * 100`
-- **Days until expiry**: `vigo_license_days_remaining`
-- **Expiry date**: `timestamp(vigo_license_expiry_timestamp)` for Grafana absolute time display
-- Alert on `vigo_license_stage > 0` (any violation)
-- Alert on `vigo_license_envoys_used / vigo_license_envoys_max >= 0.9` (approaching limit — hard gate will start rejecting at 1.0)
-- Alert on `vigo_license_envoys_used >= vigo_license_envoys_max` (at capacity — next enrollment will be rejected)
-- Alert on `increase(vigo_license_enrollments_blocked_total[1h]) > 0` (any hard-gate rejection — operator needs to act)
-- Alert on `increase(vigo_license_enforcement_errors_total[5m]) > 0` (internal enforcement errors — investigate, gate is failing closed)
-- Alert on `vigo_license_days_remaining < 30` (license expiring soon)
-
 ### Server Health
 
 - **Uptime**: `vigo_uptime_seconds` (detects restarts in Grafana)
@@ -355,8 +331,7 @@ For hosts where Vigo isn't managing the monitoring stack, import each dashboard 
 | Active Nodes | Stat | `vigo_nodes_active_total` |
 | Compliance % | Gauge (0-100, red/yellow/green) | `vigo_compliance_pct` |
 | Uptime | Stat | `vigo_uptime_seconds` |
-| License Usage | Gauge (used vs max) | `vigo_license_envoys_used` / `vigo_license_envoys_max` |
-| License Days Remaining | Stat (red < 30, yellow < 90) | `vigo_license_days_remaining` |
+| Fleet size | Stat (enrolled vs active) | `vigo_nodes_total` / `vigo_nodes_active_total` |
 | Active Streams | Stat | `vigo_streams_active` |
 | Database Size | Stat | `vigo_database_size_bytes` |
 
@@ -612,7 +587,7 @@ A curated alert-rules file ships alongside the Grafana dashboards:
 [grafana/alerts.yaml](../grafana/alerts.yaml)
 ```
 
-Nineteen Prometheus rules across convergence (failed / degraded / diverged / offline), runs (p95 duration), security (sig-verify failures, critical CVEs), operability (config reload errors, secret resolution errors), license (enforcement errors, days remaining, stage), swarm (spanner bolt roster), and bursts (sustained gRPC rate, TLS handshake spike, sig-verify failures, in-flight CheckIn high-water, publish→converge p95 over SLO). Every rule references a metric defined in `server/metrics/registry.go`; thresholds are starting points — tune to your fleet.
+Sixteen Prometheus rules across convergence (failed / degraded / diverged / offline), runs (p95 duration), security (sig-verify failures, critical CVEs), operability (config reload errors, secret resolution errors), swarm (spanner bolt roster), and bursts (sustained gRPC rate, TLS handshake spike, sig-verify failures, in-flight CheckIn high-water, publish→converge p95 over SLO). Every rule references a metric defined in `server/metrics/registry.go`; thresholds are starting points — tune to your fleet.
 
 Load into a stock Prometheus:
 

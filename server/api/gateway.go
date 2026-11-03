@@ -18,7 +18,6 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
-	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/publish"
@@ -44,7 +43,7 @@ import (
 // reg is the per-instance prometheus registry whose collectors the /metrics
 // endpoint exposes; m is the same registry's collector set, threaded into
 // subhandlers (bootstrap, etc.) that emit metrics.
-func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, sandgorgonEnabled bool, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
+func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, publishCfg config.PublishSection, brandingCfg config.BrandingSection, sandgorgonEnabled bool, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
 	gwMux := runtime.NewServeMux()
 
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
@@ -59,7 +58,7 @@ func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Querie
 	// Mount UI routes. The FleetIndex is the UI data source — O(1)
 	// in-memory fleet queries; DB only for historical data.
 	customDS := fleet.NewDataSource(fleetIndex, queries, runStore, configStore)
-	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, offlineThreshold, serverAddr, caFile, agentDir, version, assistant, spannerAdmin, customDS, docsDir, authMethod, enforcer)
+	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, offlineThreshold, serverAddr, caFile, agentDir, version, assistant, spannerAdmin, customDS, docsDir, authMethod)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("creating UI handler: %w", err)
 	}

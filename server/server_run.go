@@ -32,12 +32,7 @@ import (
 // lives here. The pair was extracted from main.go::run() during the
 // Phase B refactor.
 func (s *Server) Run(ctx context.Context) error {
-	slog.Info("license loaded",
-		"license_id", s.enforcer.GetStatus().License.LicenseID,
-		"stage", s.enforcer.GetStatus().Stage.String(),
-	)
-
-	s.startLicenseEnforcement(ctx)
+	s.startPeerReplication(ctx)
 	s.startAsyncFlushers(ctx)
 	s.startRetentionAndBackup(ctx)
 	s.startTicketsRotation(ctx)
@@ -85,28 +80,23 @@ func (s *Server) Run(ctx context.Context) error {
 	return nil
 }
 
-// startLicenseEnforcement runs the license enforcer's periodic check
-// loop. The enforcer was wired with a stop-service callback during
-// NewServer that calls s.cancel on terminal license failure.
-func (s *Server) startLicenseEnforcement(ctx context.Context) {
-	daemon.SafeGo("license-enforcer", func() { s.enforcer.Run(ctx) })
-
-	// Peer replication: gRPC registration migrated into NewServer. The
-	// primary-side push loop is managed by setPrimaryPushing, which captures
-	// the lifecycle ctx here so a runtime Promote/Demote can start or stop it
-	// without a restart.
-	if s.peerService != nil {
-		s.peerPushMu.Lock()
-		s.peerPushCtx = ctx
-		s.peerPushMu.Unlock()
-		s.peerService.SetRoleChangeHook(s.setPrimaryPushing)
-		// Use the Service's effective role (already resolved in NewServer from
-		// server.yaml plus any persisted runtime transition), not a fresh read
-		// of cfg.Peers.Role — otherwise a restart after a runtime promote would
-		// start the pusher off the stale config role.
-		s.setPrimaryPushing(s.peerService.Role() == "primary")
+// startPeerReplication captures the lifecycle ctx for the HA push loop.
+// gRPC registration happens in NewServer; the primary-side push loop is
+// managed by setPrimaryPushing, which uses the ctx captured here so a runtime
+// Promote/Demote can start or stop it without a restart.
+func (s *Server) startPeerReplication(ctx context.Context) {
+	if s.peerService == nil {
+		return
 	}
-
+	s.peerPushMu.Lock()
+	s.peerPushCtx = ctx
+	s.peerPushMu.Unlock()
+	s.peerService.SetRoleChangeHook(s.setPrimaryPushing)
+	// Use the Service's effective role (already resolved in NewServer from
+	// server.yaml plus any persisted runtime transition), not a fresh read
+	// of cfg.Peers.Role — otherwise a restart after a runtime promote would
+	// start the pusher off the stale config role.
+	s.setPrimaryPushing(s.peerService.Role() == "primary")
 }
 
 // setPrimaryPushing starts or stops the outbound peer.Primary push loop to
@@ -307,11 +297,7 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 		fleetSource = &metricsFleetAdapter{fleetIndex: s.fleetIndex}
 		swarmSource = newMetricsSwarmAdapter(s)
 	}
-	var licenseRefresh func()
-	if s.enforcer != nil {
-		licenseRefresh = s.enforcer.RefreshMetrics
-	}
-	metricsCollector := metrics.NewCollector(s.queries, s.db, fleetSource, swarmSource, s.metrics, s.baseInterval, s.offlineThreshold, licenseRefresh)
+	metricsCollector := metrics.NewCollector(s.queries, s.db, fleetSource, swarmSource, s.metrics, s.baseInterval, s.offlineThreshold)
 	daemon.SafeGo("metrics-collector", func() { metricsCollector.Run(ctx, s.metricsInterval) })
 
 	// Start stale envoy checker — fires envoy.stale events on transition.

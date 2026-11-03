@@ -18,7 +18,6 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
-	"git.alexander4.io/vigo/server/license"
 )
 
 // CheckStatus represents the outcome of a single health check.
@@ -67,7 +66,6 @@ type DoctorConfig struct {
 	SQLDB            *sql.DB
 	CertFile         string
 	KeyFile          string
-	Enforcer         *license.Enforcer
 	ConfigStore      *config.ConfigStore
 	Queries          *db.Queries
 	UserStore        *auth.UserStore
@@ -87,7 +85,6 @@ type DoctorHandler struct {
 	sqlDB            *sql.DB
 	certFile         string
 	keyFile          string
-	enforcer         *license.Enforcer
 	configStore      *config.ConfigStore
 	queries          *db.Queries
 	userStore        *auth.UserStore
@@ -124,7 +121,6 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		sqlDB:            cfg.SQLDB,
 		certFile:         cfg.CertFile,
 		keyFile:          cfg.KeyFile,
-		enforcer:         cfg.Enforcer,
 		configStore:      cfg.ConfigStore,
 		queries:          cfg.Queries,
 		userStore:        cfg.UserStore,
@@ -154,7 +150,6 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 		h.checkDatabase(ctx),
 		h.checkTLS(),
 		h.checkSecrets(),
-		h.checkLicense(ctx),
 		h.checkSpanner(),
 		h.checkIntegrations(),
 		h.checkConfig(),
@@ -182,7 +177,6 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkDatabase(ctx),
 		h.checkTLS(),
 		h.checkSecrets(),
-		h.checkLicense(ctx),
 		h.checkSpanner(),
 		h.checkIntegrations(),
 		h.checkConfig(),
@@ -247,23 +241,6 @@ func (h *DoctorHandler) checkSecrets() DoctorCheck {
 		return DoctorCheck{Name: "secrets", Scope: ScopeServer, Status: StatusSkip}
 	}
 	return DoctorCheck{Name: "secrets", Scope: ScopeServer, Status: StatusPass, Message: h.secretsBackend}
-}
-
-func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
-	status := h.enforcer.GetStatus()
-
-	switch status.Stage {
-	case license.StageCompliant:
-		msg := fmt.Sprintf("%s, %d/%d envoys", status.Stage, status.ActiveEnvoys, status.MaxEnvoys)
-		if status.DaysRemaining > 0 && status.DaysRemaining <= 30 {
-			return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusWarn, Message: fmt.Sprintf("%s, expires in %d days", msg, status.DaysRemaining)}
-		}
-		return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusPass, Message: msg}
-	case license.StageGrace:
-		return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusWarn, Message: fmt.Sprintf("Grace Period: %s (%d days left)", status.Violation, status.GraceDaysLeft)}
-	default:
-		return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusFail, Message: fmt.Sprintf("%s: %s", status.Stage, status.Violation)}
-	}
 }
 
 func (h *DoctorHandler) checkSpanner() DoctorCheck {

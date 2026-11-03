@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -967,262 +966,53 @@ func TestCreateEnvoyDuplicateHostnameRejected(t *testing.T) {
 	}
 }
 
-// --- License enrollment gate tests ---
+// --- Fleet-index consistency tests ---
 
-// stubGate is a minimal EnrollmentGate for tests. It records every call and
-// can be configured to accept, reject, or fail closed on either the count
-// read or the policy check.
-//
-// count is the mode-aware count source the gate reports via CurrentCount —
-// modeling the enforcer's EnvoyCounter. newRegistryWithGate defaults it to the
-// wired FleetIndex's ActiveCount (local-mode parity, what every gate test
-// other than the aggregate-divergence one wants); a test can override it to
-// report a fleet-wide count divergent from the local fleet (aggregate mode).
-type stubGate struct {
-	maxAllowed   int        // reject if currentCount >= maxAllowed (set to -1 to always allow)
-	count        func() int // mode-aware count source; defaulted to fi.ActiveCount by the helper
-	errorOnCount bool       // if true, CurrentCount fails (counter unavailable)
-	errorOnCheck bool       // if true, RegistrationAllowedAt fails (gate internal error)
-
-	countCalls    int
-	calls         int
-	blockedCalls  int
-	errorCalls    int
-	rejectedCount int // count passed on the most recent rejection
-}
-
-func (s *stubGate) CurrentCount(_ context.Context) (int, error) {
-	s.countCalls++
-	if s.errorOnCount {
-		return 0, fmt.Errorf("stub: count unavailable")
-	}
-	if s.count != nil {
-		return s.count(), nil
-	}
-	return 0, nil
-}
-
-func (s *stubGate) RegistrationAllowedAt(currentCount int) error {
-	s.calls++
-	if s.errorOnCheck {
-		return fmt.Errorf("stub: count unavailable")
-	}
-	if s.maxAllowed >= 0 && currentCount >= s.maxAllowed {
-		s.rejectedCount = currentCount
-		return fmt.Errorf("stub: node limit reached (%d/%d)", currentCount, s.maxAllowed)
-	}
-	return nil
-}
-
-func (s *stubGate) RecordEnforcementError()  { s.errorCalls++ }
-func (s *stubGate) RecordEnrollmentBlocked() { s.blockedCalls++ }
-
-func newRegistryWithGate(t *testing.T, gate *stubGate) (*registry.Registry, *fleet.FleetIndex) {
+func newRegistryWithFleet(t *testing.T) (*registry.Registry, *fleet.FleetIndex) {
 	t.Helper()
 	reg := newTestRegistry(t)
 	fi := fleet.NewFleetIndex()
-	if gate.count == nil {
-		gate.count = fi.ActiveCount // local-mode parity: gate counts the live fleet
-	}
 	reg.SetFleetIndex(fi)
-	reg.SetEnrollmentGate(gate)
 	return reg, fi
 }
 
-// TestCreateEnvoy_GateAllowsBelowLimit verifies the gate is consulted and
-// enrollment proceeds when the live count is below the configured limit.
-func TestCreateEnvoy_GateAllowsBelowLimit(t *testing.T) {
-	gate := &stubGate{maxAllowed: 5}
-	reg, fi := newRegistryWithGate(t, gate)
+// TestCreateEnvoy_NoNodeLimit verifies enrollment has no node cap: well past
+// the former 100-node community limit, every enrollment succeeds and the
+// fleet index tracks each one.
+func TestCreateEnvoy_NoNodeLimit(t *testing.T) {
+	const n = 150
+	reg, fi := newRegistryWithFleet(t)
 	ctx := context.Background()
-
-	envoyID, err := reg.CreateEnvoy(ctx, "gate-below.example.com", "10.0.0.1", "pubkey-1", false)
-	if err != nil {
-		t.Fatalf("CreateEnvoy: %v", err)
-	}
-	if envoyID == "" {
-		t.Fatal("expected non-empty envoy id")
-	}
-	if gate.calls != 1 {
-		t.Errorf("expected 1 gate call, got %d", gate.calls)
-	}
-	if fi.ActiveCount() != 1 {
-		t.Errorf("expected fleet ActiveCount=1, got %d", fi.ActiveCount())
-	}
-	if gate.blockedCalls != 0 {
-		t.Errorf("expected no blocked calls, got %d", gate.blockedCalls)
-	}
-}
-
-// TestCreateEnvoy_GateBlocksAtLimit verifies the hard gate rejects when the
-// live count is at the configured limit, and that RecordEnrollmentBlocked is
-// called so the metric is incremented.
-func TestCreateEnvoy_GateBlocksAtLimit(t *testing.T) {
-	gate := &stubGate{maxAllowed: 3}
-	reg, fi := newRegistryWithGate(t, gate)
-	ctx := context.Background()
-
-	// Fill to the limit.
-	for i := 0; i < 3; i++ {
-		_, err := reg.CreateEnvoy(ctx, fmt.Sprintf("gate-fill-%d.example.com", i), "10.0.0.1", fmt.Sprintf("pk-%d", i), false)
-		if err != nil {
+	for i := 0; i < n; i++ {
+		if _, err := reg.CreateEnvoy(ctx, fmt.Sprintf("nolimit-%d.example.com", i), "10.0.0.1", fmt.Sprintf("pk-%d", i), false); err != nil {
 			t.Fatalf("CreateEnvoy #%d: %v", i, err)
 		}
 	}
-	if fi.ActiveCount() != 3 {
-		t.Fatalf("expected fleet ActiveCount=3, got %d", fi.ActiveCount())
-	}
-
-	// Next enrollment should be rejected by the gate.
-	_, err := reg.CreateEnvoy(ctx, "gate-over.example.com", "10.0.0.1", "pk-over", false)
-	if err == nil {
-		t.Fatal("expected gate rejection at count==max")
-	}
-	if !strings.Contains(err.Error(), "node limit") {
-		t.Errorf("expected error to mention node limit, got: %v", err)
-	}
-	if fi.ActiveCount() != 3 {
-		t.Errorf("ActiveCount should be unchanged after rejection, got %d", fi.ActiveCount())
-	}
-	if gate.blockedCalls != 1 {
-		t.Errorf("expected 1 RecordEnrollmentBlocked call, got %d", gate.blockedCalls)
+	if fi.ActiveCount() != n {
+		t.Errorf("expected ActiveCount=%d, got %d", n, fi.ActiveCount())
 	}
 }
 
-// TestCreateEnvoy_GateFailsClosedOnError verifies that a gate that returns an
-// error (e.g., counter unavailable) blocks the enrollment — no envoy created,
-// no fleet mutation.
-func TestCreateEnvoy_GateFailsClosedOnError(t *testing.T) {
-	gate := &stubGate{maxAllowed: 100, errorOnCheck: true}
-	reg, fi := newRegistryWithGate(t, gate)
+// TestForceReplace_NetZero verifies --force revokes the old envoy before the
+// new one is inserted, so the fleet index count is unchanged.
+func TestForceReplace_NetZero(t *testing.T) {
+	reg, fi := newRegistryWithFleet(t)
 	ctx := context.Background()
 
-	_, err := reg.CreateEnvoy(ctx, "fail-closed.example.com", "10.0.0.1", "pk-fc", false)
-	if err == nil {
-		t.Fatal("expected failure when gate errors")
-	}
-	if fi.ActiveCount() != 0 {
-		t.Errorf("expected no fleet additions on gate error, got ActiveCount=%d", fi.ActiveCount())
-	}
-}
-
-// TestCreateEnvoy_GateEnforcesModeAwareCount is the regression guard for the
-// aggregate-license enforcement fix: the registry must source the count from
-// the gate's mode-aware CurrentCount, NOT its own local FleetIndex. Here the
-// gate reports a fleet-wide count at the limit while this bolt's local fleet is
-// empty (the spanner aggregate-mode shape) — enrollment must still be rejected.
-// Before the fix the registry passed fleet.ActiveCount() (0) and would have let
-// the enrollment through, defeating the fleet-wide cap.
-func TestCreateEnvoy_GateEnforcesModeAwareCount(t *testing.T) {
-	gate := &stubGate{maxAllowed: 100, count: func() int { return 100 }}
-	reg, fi := newRegistryWithGate(t, gate)
-	ctx := context.Background()
-
-	if fi.ActiveCount() != 0 {
-		t.Fatalf("precondition: local fleet should be empty, got %d", fi.ActiveCount())
-	}
-
-	_, err := reg.CreateEnvoy(ctx, "agg-over.example.com", "10.0.0.9", "pk-agg", false)
-	if err == nil {
-		t.Fatal("expected rejection: fleet-wide count is at the limit even though the local fleet is empty")
-	}
-	if !strings.Contains(err.Error(), "node limit") {
-		t.Errorf("expected node-limit rejection, got: %v", err)
-	}
-	if gate.countCalls != 1 {
-		t.Errorf("expected CurrentCount consulted exactly once, got %d", gate.countCalls)
-	}
-	if gate.rejectedCount != 100 {
-		t.Errorf("gate should have been handed the fleet-wide count 100, got %d", gate.rejectedCount)
-	}
-	if gate.blockedCalls != 1 {
-		t.Errorf("expected 1 RecordEnrollmentBlocked, got %d", gate.blockedCalls)
-	}
-	if fi.ActiveCount() != 0 {
-		t.Errorf("no envoy should be created on rejection, got %d", fi.ActiveCount())
-	}
-}
-
-// TestCreateEnvoy_GateFailsClosedOnCountError verifies that when the mode-aware
-// count source itself errors (e.g. the aggregate cache is unavailable), the
-// registry fails closed: no policy check, no envoy, an enforcement error
-// recorded. The count read and the policy check are distinct failure surfaces.
-func TestCreateEnvoy_GateFailsClosedOnCountError(t *testing.T) {
-	gate := &stubGate{maxAllowed: 5, errorOnCount: true}
-	reg, fi := newRegistryWithGate(t, gate)
-	ctx := context.Background()
-
-	_, err := reg.CreateEnvoy(ctx, "count-err.example.com", "10.0.0.1", "pk-ce", false)
-	if err == nil {
-		t.Fatal("expected failure when the count source errors")
-	}
-	if !strings.Contains(err.Error(), "count unavailable") {
-		t.Errorf("expected count-unavailable error, got: %v", err)
-	}
-	if gate.calls != 0 {
-		t.Errorf("RegistrationAllowedAt must not run when the count read fails, got %d calls", gate.calls)
-	}
-	if gate.errorCalls != 1 {
-		t.Errorf("expected 1 RecordEnforcementError, got %d", gate.errorCalls)
-	}
-	if fi.ActiveCount() != 0 {
-		t.Errorf("no envoy should be created on count error, got %d", fi.ActiveCount())
-	}
-}
-
-// TestCreateEnvoy_NoFleetIndexFailsClosed verifies the registry reports an
-// enforcement error and rejects enrollment when a gate is wired but the
-// FleetIndex is not — the gate cannot run without a live count.
-func TestCreateEnvoy_NoFleetIndexFailsClosed(t *testing.T) {
-	gate := &stubGate{maxAllowed: 5}
-	reg := newTestRegistry(t)
-	reg.SetEnrollmentGate(gate) // gate set, but no fleet index
-	ctx := context.Background()
-
-	_, err := reg.CreateEnvoy(ctx, "no-fi.example.com", "10.0.0.1", "pk-no-fi", false)
-	if err == nil {
-		t.Fatal("expected failure when fleet index is not wired")
-	}
-	if !strings.Contains(err.Error(), "fleet index") {
-		t.Errorf("expected error to mention fleet index, got: %v", err)
-	}
-	if gate.errorCalls != 1 {
-		t.Errorf("expected 1 RecordEnforcementError, got %d", gate.errorCalls)
-	}
-}
-
-// TestForceReplace_AtLimit verifies that --force replacement succeeds even
-// when the fleet is at the node limit: the revoke-old step runs before the
-// gate check, so the gate sees the decremented count and the net enrollment
-// is zero. This is the critical correctness property for machine replacement.
-func TestForceReplace_AtLimit(t *testing.T) {
-	gate := &stubGate{maxAllowed: 3}
-	reg, fi := newRegistryWithGate(t, gate)
-	ctx := context.Background()
-
-	// Fill to the limit.
 	for i := 0; i < 3; i++ {
-		_, err := reg.CreateEnvoy(ctx, fmt.Sprintf("force-host-%d.example.com", i), "10.0.0.1", fmt.Sprintf("pk-%d", i), false)
-		if err != nil {
+		if _, err := reg.CreateEnvoy(ctx, fmt.Sprintf("force-host-%d.example.com", i), "10.0.0.1", fmt.Sprintf("pk-%d", i), false); err != nil {
 			t.Fatalf("CreateEnvoy #%d: %v", i, err)
 		}
 	}
-	if fi.ActiveCount() != 3 {
-		t.Fatalf("expected ActiveCount=3, got %d", fi.ActiveCount())
-	}
 
-	// Without --force, next enrollment of an existing hostname hits the
-	// "already in use" check before the gate runs.
 	_, err := reg.CreateEnvoy(ctx, "force-host-0.example.com", "10.0.0.2", "pk-replacement", false)
 	if !errors.Is(err, registry.ErrHostnameInUse) {
 		t.Errorf("expected ErrHostnameInUse without --force, got: %v", err)
 	}
 
-	// With --force at the limit, the revoke happens first, the gate sees
-	// count=2, and the new envoy slots in. Net-zero.
 	newID, err := reg.CreateEnvoy(ctx, "force-host-0.example.com", "10.0.0.2", "pk-replacement", true)
 	if err != nil {
-		t.Fatalf("force-replace at limit should succeed, got: %v", err)
+		t.Fatalf("force-replace should succeed, got: %v", err)
 	}
 	if newID == "" {
 		t.Fatal("expected non-empty new envoy id")
@@ -1230,87 +1020,57 @@ func TestForceReplace_AtLimit(t *testing.T) {
 	if fi.ActiveCount() != 3 {
 		t.Errorf("expected ActiveCount=3 after net-zero replacement, got %d", fi.ActiveCount())
 	}
-	if gate.blockedCalls != 0 {
-		t.Errorf("expected no blocked calls for force-replace at limit, got %d", gate.blockedCalls)
-	}
 }
 
-// TestConcurrentEnrollments_NoDoubleBook verifies the registry's serialization
-// mutex prevents two parallel enrollments from both passing the gate at the
-// boundary. Fires N concurrent CreateEnvoy calls against a registry with a
-// hard limit; exactly `limit` should succeed and the rest should fail.
-// This is the TOCTOU regression guard.
-func TestConcurrentEnrollments_NoDoubleBook(t *testing.T) {
-	const limit = 5
+// TestConcurrentEnrollments_IndexConsistent verifies the registry's
+// serialization mutex keeps the fleet index in step with the DB under
+// parallel enrollments: every racer succeeds and the index counts each once.
+func TestConcurrentEnrollments_IndexConsistent(t *testing.T) {
 	const racers = 20
-
-	gate := &stubGate{maxAllowed: limit}
-	reg, fi := newRegistryWithGate(t, gate)
+	reg, fi := newRegistryWithFleet(t)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
-	var successes int64
 	var failures int64
 	wg.Add(racers)
 	for i := 0; i < racers; i++ {
 		go func(idx int) {
 			defer wg.Done()
-			_, err := reg.CreateEnvoy(ctx, fmt.Sprintf("racer-%d.example.com", idx), "10.0.0.1", fmt.Sprintf("pk-%d", idx), false)
-			if err == nil {
-				atomic.AddInt64(&successes, 1)
-			} else {
+			if _, err := reg.CreateEnvoy(ctx, fmt.Sprintf("racer-%d.example.com", idx), "10.0.0.1", fmt.Sprintf("pk-%d", idx), false); err != nil {
 				atomic.AddInt64(&failures, 1)
 			}
 		}(i)
 	}
 	wg.Wait()
 
-	if successes != limit {
-		t.Errorf("expected exactly %d successes, got %d (failures=%d)", limit, successes, failures)
+	if failures != 0 {
+		t.Errorf("expected no failures, got %d", failures)
 	}
-	if failures != racers-limit {
-		t.Errorf("expected exactly %d failures, got %d", racers-limit, failures)
-	}
-	if fi.ActiveCount() != limit {
-		t.Errorf("expected ActiveCount=%d after race, got %d", limit, fi.ActiveCount())
+	if fi.ActiveCount() != racers {
+		t.Errorf("expected ActiveCount=%d after race, got %d", racers, fi.ActiveCount())
 	}
 }
 
 // TestRevokeEnvoy_DecrementsCount verifies that explicit revocation through
-// the registry decrements the FleetIndex active count, freeing a slot for a
-// new enrollment.
+// the registry decrements the FleetIndex active count.
 func TestRevokeEnvoy_DecrementsCount(t *testing.T) {
-	gate := &stubGate{maxAllowed: 2}
-	reg, fi := newRegistryWithGate(t, gate)
+	reg, fi := newRegistryWithFleet(t)
 	ctx := context.Background()
 
 	id1, err := reg.CreateEnvoy(ctx, "revoke-1.example.com", "10.0.0.1", "pk-1", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = reg.CreateEnvoy(ctx, "revoke-2.example.com", "10.0.0.2", "pk-2", false)
-	if err != nil {
+	if _, err := reg.CreateEnvoy(ctx, "revoke-2.example.com", "10.0.0.2", "pk-2", false); err != nil {
 		t.Fatal(err)
 	}
 	if fi.ActiveCount() != 2 {
 		t.Fatalf("expected ActiveCount=2, got %d", fi.ActiveCount())
 	}
-
-	// Third should be blocked.
-	if _, err := reg.CreateEnvoy(ctx, "revoke-3.example.com", "10.0.0.3", "pk-3", false); err == nil {
-		t.Fatal("expected rejection at limit")
-	}
-
-	// Revoke the first envoy — fleet count goes back to 1.
 	if err := reg.RevokeEnvoy(ctx, id1); err != nil {
 		t.Fatalf("RevokeEnvoy: %v", err)
 	}
 	if fi.ActiveCount() != 1 {
 		t.Errorf("expected ActiveCount=1 after revoke, got %d", fi.ActiveCount())
-	}
-
-	// Third enrollment now fits.
-	if _, err := reg.CreateEnvoy(ctx, "revoke-3.example.com", "10.0.0.3", "pk-3", false); err != nil {
-		t.Fatalf("expected enrollment to succeed after revoke, got: %v", err)
 	}
 }

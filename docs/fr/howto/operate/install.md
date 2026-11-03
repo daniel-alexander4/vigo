@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:1e228dbf5ca5a7a568d00410c11b70e64f1659c0369720f5fbfdc0251954ff93 -->
+<!-- vigo-i18n source_sha:75fc8f3adfbc6b35227f89adca534b6479d916d3e65c73af5b376712e19d793d -->
 
 # Installer le serveur Vigo
 
@@ -29,7 +29,6 @@ Cela peuple `/srv/vigo/` avec tout ce qui est nécessaire pour exécuter le serv
 ├── server.yaml              # server config
 ├── .env                     # non-secret env vars
 ├── tls/                     # mTLS certificates (auto-generated)
-├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
 ├── stacks/                  # operator-edited config tree
@@ -239,7 +238,6 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
   database ................ OK
   tls ..................... OK (expires 2027-05-05)
   secrets ................. OK (local)
-  license ................. OK (Compliant, 5/100 envoys)
   spanner .................. SKIP (standalone)
   integrations ............ SKIP (no integrations configured)
   config .................. OK (43 configcrates, 5 entries)
@@ -248,7 +246,7 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
   Status: healthy
 ```
 
-`SKIP` est attendu pour `spanner` (vous n'exécutez pas en mode hub-spoke) et `integrations` (vous n'avez pas encore branché d'alerting externe). `database / tls / secrets / license / config` devraient tous être `OK` sur une installation fraîche. Un `WARN` sur `stale_envoys` après le premier cycle de check-in signifie qu'au moins un envoy n'a pas remonté depuis `2.5 × max(interval, observed_cycle)` secondes — allez voir ce qui se passe.
+`SKIP` est attendu pour `spanner` (vous n'exécutez pas en mode hub-spoke) et `integrations` (vous n'avez pas encore branché d'alerting externe). `database / tls / secrets / config` devraient tous être `OK` sur une installation fraîche. Un `WARN` sur `stale_envoys` après le premier cycle de check-in signifie qu'au moins un envoy n'a pas remonté depuis `2.5 × max(interval, observed_cycle)` secondes — allez voir ce qui se passe.
 
 ## Et ensuite
 

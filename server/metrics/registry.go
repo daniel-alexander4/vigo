@@ -66,16 +66,6 @@ type Metrics struct {
 
 	SMTPSendsTotal *prometheus.CounterVec
 
-	// --- License ---
-
-	LicenseEnvoysUsed         prometheus.Gauge
-	LicenseEnvoysMax          prometheus.Gauge
-	LicenseStage              prometheus.Gauge
-	LicenseDaysRemaining      prometheus.Gauge
-	LicenseExpiryTimestamp    prometheus.Gauge
-	LicenseEnforcementErrors  prometheus.Counter
-	LicenseEnrollmentsBlocked prometheus.Counter
-
 	// --- FleetIndex ---
 
 	FleetIndexFlushDuration  prometheus.Histogram
@@ -344,37 +334,6 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_smtp_sends_total",
 			Help: "Total SMTP email sends by event and status.",
 		}, []string{"event", "status"}),
-
-		// --- License ---
-
-		LicenseEnvoysUsed: f.NewGauge(prometheus.GaugeOpts{
-			Name: "vigo_license_envoys_used",
-			Help: "Current number of active (non-revoked) envoys.",
-		}),
-		LicenseEnvoysMax: f.NewGauge(prometheus.GaugeOpts{
-			Name: "vigo_license_envoys_max",
-			Help: "Maximum envoys allowed by license.",
-		}),
-		LicenseStage: f.NewGauge(prometheus.GaugeOpts{
-			Name: "vigo_license_stage",
-			Help: "License enforcement stage (0=compliant, 1=grace, 2=enrollment_block, 3=service_stop).",
-		}),
-		LicenseDaysRemaining: f.NewGauge(prometheus.GaugeOpts{
-			Name: "vigo_license_days_remaining",
-			Help: "Days until license expiry (negative if expired).",
-		}),
-		LicenseExpiryTimestamp: f.NewGauge(prometheus.GaugeOpts{
-			Name: "vigo_license_expiry_timestamp",
-			Help: "Unix timestamp of license expiration date.",
-		}),
-		LicenseEnforcementErrors: f.NewCounter(prometheus.CounterOpts{
-			Name: "vigo_license_enforcement_errors_total",
-			Help: "Total license enforcement errors (count unavailable, fleet index missing, etc.). Gate fails closed on each increment.",
-		}),
-		LicenseEnrollmentsBlocked: f.NewCounter(prometheus.CounterOpts{
-			Name: "vigo_license_enrollments_blocked_total",
-			Help: "Total enrollments rejected because active envoys >= license max.",
-		}),
 
 		// --- FleetIndex ---
 

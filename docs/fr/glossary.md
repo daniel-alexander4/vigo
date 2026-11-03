@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:c462d2e59fb0411b8cd14e07a643026684035e3cfd3b6b7cfc68c110158c37aa -->
+<!-- vigo-i18n source_sha:de70111314a63e956a44e2f2628d015ce5d070abf4636f67cb3913bacdcea687 -->
 
 # Glossaire
 
@@ -25,7 +25,7 @@ Couverture des cadres de normes. Se divise en deux surfaces, tenues séparées d
 
 ## connwaer
 
-Un agent Rust autonome pour la vérification active de conformité — vérifiant des choses que Vigo ne peut pas prouver par la seule application (stockage WORM, validation RNG, chiffrement au repos, segmentation réseau). S'exécute aux côtés de l'agent vigo sur les Envoys enrôlés. Produit séparé avec son propre fichier de licence et un comptage de nœuds indépendant. Voir la [documentation Connwaer](reference/compliance-matrix.md).
+Un agent Rust autonome pour la vérification active de conformité — vérifiant des choses que Vigo ne peut pas prouver par la seule application (stockage WORM, validation RNG, chiffrement au repos, segmentation réseau). S'exécute aux côtés de l'agent vigo sur les Envoys enrôlés.. Voir la [documentation Connwaer](reference/compliance-matrix.md).
 
 ## convergence
 

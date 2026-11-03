@@ -76,13 +76,6 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		}
 	}
 
-	// Log warning on every check-in if license is in grace or enrollment-block.
-	if s.licenseEnforcer != nil {
-		if warn := s.licenseEnforcer.CheckInWarning(); warn != "" {
-			slog.Warn(warn, "envoy_id", envoyID, "trace_id", traceID)
-		}
-	}
-
 	// Record liveness — the envoy just contacted us.
 	if s.fleetIndex != nil {
 		s.fleetIndex.MarkSeen(envoyID, time.Now())

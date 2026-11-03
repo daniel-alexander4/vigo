@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:ab8e6393de2a62ec7ea478a460d0ff31b808a0a0cdcc9f89b5ee83c984af0f0f -->
+<!-- vigo-i18n source_sha:7f5a76e651b38678acd08a7eae466915fa9134d77ac9b6c50c50d7074c0b7102 -->
 
 # Mettre en place un Spanner (fédération entre pairs égaux)
 
@@ -8,7 +8,6 @@ Un spanner est un ensemble de serveurs vigosrv — les **bolts** — qui partage
 
 **Quand l'éviter :** les flottes plus petites (un déploiement `standalone` à serveur unique est le défaut et la bonne réponse pour presque tous les opérateurs) ; les flottes qui ont besoin de HA mais pas de sharding horizontal (utilisez plutôt la réplication primaire/secondaire de `server/peer/` — voir la section `peers:` dans `server.yaml`).
 
-> **Exigence de licence :** Spanner nécessite une licence **commerciale**. Tout palier non commercial — la licence gratuite intégrée (100 Envoys), une licence communautaire/illimitée émise à la main, ou tout palier qui n'exige pas de liaison machine — ne prend pas en charge le mode `spanner` ; le serveur refuse de démarrer avec `spanner.mode: spanner` sur une telle licence. Les licences commerciales sont liées à un serveur spécifique via une [empreinte machine](troubleshoot.md#machine-fingerprint-binding) — déplacer un bolt vers une nouvelle machine nécessite une nouvelle licence.
 
 ## Modes
 
@@ -68,7 +67,7 @@ vigocli spanner ca import --from fleet-ca.pem  # installs the CA + re-signs this
 
 Redémarrez vigosrv sur le serveur qui rejoint ensuite pour charger la CA adoptée.
 
-Garder la CA hors du réseau est ce qui rend sûre la barrière d'admission pilotée par la configuration (ci-dessous) : un bolt malveillant qui parvient à franchir la liste d'autorisation d'IP est borné — il peut polluer l'observabilité et jouer avec le décompte des licences, mais il ne peut pas lire les données de la flotte, recevoir des Envoys routés, ni générer des certificats de confiance, car tout cela se trouve derrière le mTLS de la CA de flotte qu'il ne détient pas.
+Garder la CA hors du réseau est ce qui rend sûre la barrière d'admission pilotée par la configuration (ci-dessous) : un bolt malveillant qui parvient à franchir la liste d'autorisation d'IP est borné — il peut polluer l'observabilité, mais il ne peut pas lire les données de la flotte, recevoir des Envoys routés, ni générer des certificats de confiance, car tout cela se trouve derrière le mTLS de la CA de flotte qu'il ne détient pas.
 
 ## Admettre les autres bolts — peering piloté par la configuration (recommandé)
 
@@ -136,10 +135,6 @@ L'agent gère la reconnexion automatiquement — à son prochain check-in, il es
 
 Il n'y a pas de sonde de santé côté hub ni de drainage automatique. Un bolt silencieux est détecté par les seuils de fraîcheur du gossip (`spanner.freshness.stale_after`) et apparaît dans `vigocli spanner status` comme une ancienneté d'instantané périmée. La récupération est automatique lorsque le bolt reprend la diffusion par gossip. Pour retirer un bolt du service délibérément, drainez-le (ci-dessus) avant de l'arrêter.
 
-## Application de la licence
-
-Avec `license.mode: aggregate`, chaque bolt somme indépendamment le nombre de nœuds à l'échelle de la flotte à partir du registre répliqué par gossip et applique la licence contre ce total — il n'y a pas d'applicateur désigné. Avec `license.mode: local` (le défaut), chaque bolt ne compte que ses propres Envoys.
-
 ## Interface web
 
 La page `/spanner` liste chaque bolt du spanner — une ligne par bolt, le bolt qui sert la page étant étiqueté **this bolt**. Les lignes des pairs proviennent du cache d'observabilité adossé au gossip (avec une ancienneté d'instantané) ; la ligne locale est en direct depuis l'index de flotte de ce bolt, de sorte que la vue est identique quel que soit le bolt dont vous ouvrez l'UI. `/spanner/bolts/{pubkey}` détaille la répartition de la convergence d'un bolt et son registre d'Envoys.
@@ -153,7 +148,6 @@ La page `/spanner` liste chaque bolt du spanner — une ligne par bolt, le bolt 
 
 - **HA pour un bolt individuel** → réplication primaire/secondaire `server/peer/`, configurée par bolt indépendamment du spanner.
 - **Un bolt est bloqué** → `vigocli spanner status` affiche une ancienneté d'instantané périmée ; drainez-le avec `vigocli spanner bolt drain <pubkey>`.
-- **La licence est trop petite / du mauvais palier** → spanner nécessite une licence commerciale ; une licence gratuite ou de palier communautaire est refusée quel que soit le nombre de nœuds. Voir [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) pour les reliaisons d'empreinte.
 - **La convergence inter-bolts est en retard** → la cadence du gossip de compteurs Tier-1 est de `30s` par défaut ; réduisez `spanner.snapshot.tier1_interval` pour une convergence inter-bolts plus serrée.
 
 ---

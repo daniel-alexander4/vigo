@@ -9,9 +9,6 @@ use crate::platform::paths;
 /// Top-level Connwaer configuration, loaded from YAML.
 #[derive(Debug, Deserialize)]
 pub struct ConnwaerConfig {
-    #[serde(default = "default_license_dir")]
-    pub license_dir: String,
-
     #[serde(default = "default_results_dir")]
     pub results_dir: String,
 
@@ -151,7 +148,6 @@ impl Default for AlertingConfig {
     }
 }
 
-fn default_license_dir() -> String { paths::DEFAULT_LICENSE_DIR.to_string() }
 fn default_results_dir() -> String { paths::DEFAULT_RESULTS_DIR.to_string() }
 fn default_trends_db() -> String { paths::DEFAULT_TRENDS_DB.to_string() }
 fn default_log_level() -> String { "info".to_string() }
@@ -294,7 +290,6 @@ alerting:
         let f = write_yaml("");
         let cfg = ConnwaerConfig::load(f.path()).unwrap();
         assert_eq!(cfg.log_level, "info");
-        assert_eq!(cfg.license_dir, paths::DEFAULT_LICENSE_DIR);
         assert_eq!(cfg.alerting.dedup_window_seconds, 3600);
         assert!(!cfg.alerting.recovery_alerts);
     }

@@ -61,14 +61,13 @@ pages are linked under their parent.
 ### Server administration
 | Command | Description |
 |---------|-------------|
-| [doctor](doctor.md) | Server health checks (config, TLS, secrets, DB, license, spanner) |
+| [doctor](doctor.md) | Server health checks (config, TLS, secrets, DB, spanner) |
 | [secrets](secrets.md) | Manage AES-256-GCM encrypted secrets |
 | [webusers](webusers.md) | Manage web UI + API user accounts |
 | [auth](auth.md) | Manage this CLI's auth token |
 | [backup](backup.md) | Create + restore full server backups |
 | [server](server.md) | Peer replication — promote to primary, check status |
 | [db](db.md) | Inspect + maintain the SQLite database |
-| [license](license.md) | View + install the server license |
 | [spanner](spanner.md) | Federated control-plane operations |
 | [sandgorgon](sandgorgon.md) | Bare-metal lifecycle — commission, provision, decommission |
 | `completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |

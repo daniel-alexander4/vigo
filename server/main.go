@@ -38,7 +38,6 @@ import (
 	vigoauth "git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/bolt"
 	"git.alexander4.io/vigo/server/config"
-	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
@@ -114,31 +113,11 @@ func run() error {
 
 	configFile := envOrDefault("VIGO_CONFIG_FILE", "server.yaml")
 
-	s, err := NewServer(ctx, cancel, configFile)
+	s, err := NewServer(ctx, configFile)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
-
-	// SIGHUP handler for license reload. Lives in the binary wrapper —
-	// signal handling is intentionally outside (*Server).Run so the
-	// Phase C test harness can drive a *Server without inheriting the
-	// process's signal disposition.
-	sighupCh := make(chan os.Signal, 1)
-	signal.Notify(sighupCh, syscall.SIGHUP)
-	go func() {
-		for range sighupCh {
-			daemon.Guard("sighup-license-reload", func() {
-				slog.Info("received SIGHUP, reloading license...")
-				if err := s.enforcer.Reload(); err != nil {
-					slog.Error("license reload failed", "error", err)
-				} else {
-					st := s.enforcer.GetStatus()
-					slog.Info("license reloaded", "stage", st.Stage.String())
-				}
-			})
-		}
-	}()
 
 	return s.Run(ctx)
 }

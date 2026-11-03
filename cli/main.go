@@ -51,7 +51,6 @@ func init() {
 		runsCmd,
 		taskCmd,
 		traitsCmd,
-		cliLicenseCmd,
 		doctorCmd,
 		askCmd,
 		workflowCmd,

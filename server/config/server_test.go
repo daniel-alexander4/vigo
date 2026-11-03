@@ -66,36 +66,6 @@ func TestLoadServerCertSANsMissingFile(t *testing.T) {
 	}
 }
 
-func TestLicenseModeAggregateRequiresSpanner(t *testing.T) {
-	tests := []struct {
-		name    string
-		yaml    string
-		wantErr bool
-	}{
-		{"aggregate in spanner mode", "license:\n  mode: aggregate\nspanner:\n  mode: spanner\n", false},
-		{"aggregate without spanner block", "license:\n  mode: aggregate\n", true},
-		{"aggregate in standalone", "license:\n  mode: aggregate\nspanner:\n  mode: standalone\n", true},
-		{"local mode fine", "license:\n  mode: local\n", false},
-		{"no license block fine", "server:\n  hostname: danlap\n", false},
-	}
-	prov := &mockProvider{secrets: map[string]string{}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "server.yaml")
-			if err := os.WriteFile(path, []byte(tt.yaml), 0644); err != nil {
-				t.Fatal(err)
-			}
-			_, err := LoadServerConfig(path, prov, "local")
-			if tt.wantErr && err == nil {
-				t.Errorf("LoadServerConfig(%q) = nil, want aggregate-requires-spanner error", tt.yaml)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("LoadServerConfig(%q) = %v, want nil", tt.yaml, err)
-			}
-		})
-	}
-}
-
 func TestDetectUnsupportedDriver(t *testing.T) {
 	tests := []struct {
 		name    string

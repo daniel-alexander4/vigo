@@ -119,9 +119,8 @@ echo "  ${IMAGE_VERSIONED}"
 echo "  ${IMAGE_FLOATING}"
 echo
 
-# Stage a self-contained build context (vigo + sibling tessera) so the
-# Docker build can resolve `replace git.alexander4.io/tessera => ../tessera`
-# from within its own context. Cleaned up by the EXIT trap.
+# Stage a trimmed build context (see stage-build-context.sh). Cleaned up by
+# the EXIT trap.
 STAGE_DIR="$(mktemp -d -t vigo-build-XXXXXX)"
 echo "==> staging build context at ${STAGE_DIR}"
 "${ROOT}/scripts/stage-build-context.sh" "${ROOT}" "${STAGE_DIR}"

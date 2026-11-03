@@ -77,11 +77,6 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"vigo_webhook_deliveries_total",
 		"vigo_webhook_duration_seconds",
 		"vigo_smtp_sends_total",
-		"vigo_license_envoys_used",
-		"vigo_license_envoys_max",
-		"vigo_license_stage",
-		"vigo_license_days_remaining",
-		"vigo_license_expiry_timestamp",
 		"vigo_uptime_seconds",
 		"vigo_build_info",
 		"vigo_streams_active",
@@ -120,11 +115,6 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	m.EnvoysActive.Set(3)
 	m.ConvergencePct.Set(0.85)
 	m.ConvergenceStatus.WithLabelValues("testnode", "converged").Set(1)
-	m.LicenseEnvoysUsed.Set(10)
-	m.LicenseEnvoysMax.Set(100)
-	m.LicenseStage.Set(0)
-	m.LicenseDaysRemaining.Set(365)
-	m.LicenseExpiryTimestamp.Set(1.8e9)
 	m.UptimeSeconds.Set(3600)
 	m.BuildInfo.WithLabelValues("dev").Set(1)
 	m.StreamsActive.Set(5)

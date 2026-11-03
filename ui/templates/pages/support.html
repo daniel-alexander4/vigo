@@ -3,91 +3,21 @@
     <h1>{{T $.Locale "support.title"}}</h1>
 </div>
 
-{{/* Resolve the current Tier row once so the hero can read SupportLevel,
-     ResponseTime, Channel without a second range. */}}
-{{- $active := "" -}}
-{{- $level := "" -}}
-{{- $response := "" -}}
-{{- $channel := "" -}}
-{{- range .Tiers -}}
-    {{- if eq .Name $.ActiveTier -}}
-        {{- $active = .Name -}}
-        {{- $level = .SupportLevel -}}
-        {{- $response = .ResponseTime -}}
-        {{- $channel = .Channel -}}
-    {{- end -}}
-{{- end -}}
-
 <div class="card u-p-1-75rem-1-5rem">
-    <div class="u-blk11">{{T $.Locale "support.your_plan"}}</div>
-    <div class="u-blk12">
-        <h2 class="u-fs-1-8rem-m-0">{{if $active}}{{$active}}{{else}}{{T $.Locale "support.unlicensed"}}{{end}}</h2>
-        {{if $level}}<span class="badge badge--info">{{$level}} {{T $.Locale "support.level_suffix"}}</span>{{end}}
-    </div>
-    {{if $response}}<div class="u-fs-1-05rem-mb-1rem">{{$response}} {{T $.Locale "support.via"}} {{$channel}}</div>{{end}}
+    <h2>{{T $.Locale "support.help_heading"}}</h2>
+    <p>{{T $.Locale "support.help_body"}}</p>
     <div class="u-blk13">
         <div><a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a></div>
-        {{if .LicenseID}}<div><code>{{.LicenseID}}</code></div>{{end}}
-        {{if .CustomerName}}<div>{{.CustomerName}}</div>{{end}}
     </div>
-</div>
-
-{{if .IsFreeTier}}
-<div class="card mt-3">
-    <h2>{{T $.Locale "support.community_heading"}}</h2>
-    <p>{{tSafe $.Locale "support.community_body"}}</p>
-    <p>{{tSafe $.Locale "support.community_upgrade"}}</p>
-</div>
-{{end}}
-
-<div class="card mt-3">
-    <h2>{{T $.Locale "support.tiers_heading"}}</h2>
-    <p>{{T $.Locale "support.tiers_body"}}</p>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>{{T $.Locale "support.th.tier"}}</th>
-                <th>{{T $.Locale "support.th.nodes"}}</th>
-                <th>{{T $.Locale "support.th.support_level"}}</th>
-                <th>{{T $.Locale "support.th.response_time"}}</th>
-                <th>{{T $.Locale "support.th.channel"}}</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Tiers}}
-            <tr{{if eq .Name $.ActiveTier}} class="tier-row--active"{{end}}>
-                <td><strong>{{.Name}}</strong></td>
-                <td>{{.MinNodes}}&ndash;{{.MaxNodes}}</td>
-                <td>{{.SupportLevel}}</td>
-                <td>{{.ResponseTime}}</td>
-                <td>{{.Channel}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
 </div>
 
 <div class="card mt-3">
     <h2>{{T $.Locale "support.filing_heading"}}</h2>
     <p>{{T $.Locale "support.filing_email_prefix"}} <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a>. {{T $.Locale "support.filing_include"}}</p>
     <ul>
-        <li>{{T $.Locale "support.filing_li_license"}} <code>{{if .LicenseID}}{{.LicenseID}}{{else}}{{T $.Locale "support.filing_no_license"}}{{end}}</code>{{if .CustomerName}} ({{.CustomerName}}){{end}}</li>
         <li>{{T $.Locale "support.filing_li_version"}}</li>
         <li>{{T $.Locale "support.filing_li_tried"}}</li>
         <li>{{T $.Locale "support.filing_li_logs"}} &mdash; <code>docker logs vigo</code> {{T $.Locale "support.or"}} <code>/var/log/vigo-agent.log</code></li>
     </ul>
-    <p>{{T $.Locale "support.filing_scope"}}</p>
-</div>
-
-<div class="card mt-3">
-    <h2>{{T $.Locale "support.critical_heading"}}{{if .CriticalEligible}} <span class="badge badge--info">{{T $.Locale "support.critical_eligible_badge"}}</span>{{end}}</h2>
-    <p>{{T $.Locale "support.critical_body_prefix"}} {{.CriticalFrom}} {{T $.Locale "support.critical_body_suffix"}}</p>
-    <p><strong>{{.CriticalResponse}}</strong> {{T $.Locale "support.critical_response_word"}}, <strong>{{.CriticalHours}}</strong>. {{T $.Locale "support.critical_channel_label"}} {{.CriticalChannel}}. {{T $.Locale "support.critical_pricing_label"}} {{.CriticalPricing}}. {{T $.Locale "support.critical_eligible_from_prefix"}} {{.CriticalFrom}} {{T $.Locale "support.critical_eligible_from_suffix"}}</p>
-    {{if .CriticalEligible}}
-    <p>{{T $.Locale "support.critical_add_prefix"}} <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a> {{T $.Locale "support.critical_add_suffix"}}</p>
-    {{else}}
-    <p>{{T $.Locale "support.critical_noqualify_prefix"}} {{.CriticalFrom}} {{T $.Locale "support.critical_noqualify_suffix"}}</p>
-    {{end}}
-    <p>{{T $.Locale "support.critical_247"}}</p>
 </div>
 {{end}}

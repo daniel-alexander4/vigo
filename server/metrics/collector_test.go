@@ -65,7 +65,7 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 	}
 
 	m := NewTestMetrics()
-	c := NewCollector(db.New(sqlDB), sqlDB, nil, nil, m, time.Minute, 0, nil)
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, nil, m, time.Minute, 0)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -107,7 +107,7 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	insertEnvoy(t, sqlDB, "t-4", "revoked.example.com", &seen4, true)
 
 	m := NewTestMetrics()
-	c := NewCollector(db.New(sqlDB), sqlDB, nil, nil, m, time.Minute, 0, nil)
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, nil, m, time.Minute, 0)
 	ctx := context.Background()
 
 	if err := c.UpdateGauges(ctx); err != nil {

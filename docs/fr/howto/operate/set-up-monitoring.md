@@ -1,8 +1,8 @@
-<!-- vigo-i18n source_sha:446b1c9cb92f18689b2e139220fc8f1896dcd503c003b58d13dfaa4e5f2ec384 -->
+<!-- vigo-i18n source_sha:e48f1ecd837bef96145d630d69d7a120d94695153e4c0ed691676006e7ef6333 -->
 
 # Mettre en place la supervision
 
-À la fin de cette page, vous disposerez d'une instance Prometheus qui scrape le serveur Vigo, des cinq tableaux de bord Grafana fournis et chargés, et de règles d'alerte qui se déclenchent sur les conditions qui comptent : Envoys obsolètes, échecs de convergence, dérive de licence et nombre de CVE.
+À la fin de cette page, vous disposerez d'une instance Prometheus qui scrape le serveur Vigo, des cinq tableaux de bord Grafana fournis et chargés, et de règles d'alerte qui se déclenchent sur les conditions qui comptent : Envoys obsolètes, échecs de convergence et nombre de CVE.
 
 **Quand l'utiliser :** tout déploiement où quelqu'un d'autre que vous doit être informé des anomalies de la flotte. Pour un home lab à opérateur unique, `vigocli doctor` + le tableau de bord de l'interface web suffisent ; Prometheus + Grafana commence à devenir rentable autour de cinq Envoys, ou lorsque vous avez besoin d'historique.
 
@@ -77,18 +77,6 @@ Couvre tous les RPC unaires (CheckIn, ReportResult, ReportTraits, Register). Les
 | Métrique | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_smtp_sends_total` | Counter | `event`, `status` | Tentatives d'envoi d'e-mail par type d'événement et résultat (success, error) |
-
-### Licence
-
-| Métrique | Type | Description |
-|--------|------|-------------|
-| `vigo_license_envoys_used` | Gauge | Nombre actuel d'Envoys actifs (non révoqués) |
-| `vigo_license_envoys_max` | Gauge | Nombre maximal d'Envoys autorisés par la licence |
-| `vigo_license_stage` | Gauge | Étape d'application : 0=compliant, 1=grace, 2=enrollment\_block, 3=service\_stop |
-| `vigo_license_days_remaining` | Gauge | Jours avant expiration de la licence (négatif si expirée) |
-| `vigo_license_expiry_timestamp` | Gauge | Timestamp Unix de la date d'expiration de la licence |
-| `vigo_license_enrollments_blocked_total` | Counter | Enrôlements rejetés par le plafond strict du nombre de nœuds (active\_envoys >= max) |
-| `vigo_license_enforcement_errors_total` | Counter | Erreurs internes d'application (décompte indisponible, index de flotte manquant) — le plafond échoue en mode fermé à chaque fois |
 
 ### FleetIndex
 
@@ -256,18 +244,6 @@ scrape_configs:
 - **Latence de livraison P95** : `histogram_quantile(0.95, rate(vigo_webhook_duration_seconds_bucket[5m]))`
 - Alertez sur `rate(vigo_webhook_deliveries_total{status="failed"}[5m]) > 0`
 
-### Licence
-
-- **Utilisation des Envoys** : `vigo_license_envoys_used / vigo_license_envoys_max * 100`
-- **Jours avant expiration** : `vigo_license_days_remaining`
-- **Date d'expiration** : `timestamp(vigo_license_expiry_timestamp)` pour un affichage en temps absolu dans Grafana
-- Alertez sur `vigo_license_stage > 0` (toute violation)
-- Alertez sur `vigo_license_envoys_used / vigo_license_envoys_max >= 0.9` (approche de la limite — le plafond strict commencera à rejeter à 1.0)
-- Alertez sur `vigo_license_envoys_used >= vigo_license_envoys_max` (à pleine capacité — le prochain enrôlement sera rejeté)
-- Alertez sur `increase(vigo_license_enrollments_blocked_total[1h]) > 0` (tout rejet par le plafond strict — l'opérateur doit agir)
-- Alertez sur `increase(vigo_license_enforcement_errors_total[5m]) > 0` (erreurs internes d'application — à investiguer, le plafond échoue en mode fermé)
-- Alertez sur `vigo_license_days_remaining < 30` (licence expirant bientôt)
-
 ### Santé du serveur
 
 - **Uptime** : `vigo_uptime_seconds` (détecte les redémarrages dans Grafana)
@@ -356,8 +332,7 @@ Pour les hôtes où Vigo ne gère pas la pile de supervision, importez chaque ta
 | Active Nodes | Stat | `vigo_nodes_active_total` |
 | Compliance % | Gauge (0-100, rouge/jaune/vert) | `vigo_compliance_pct` |
 | Uptime | Stat | `vigo_uptime_seconds` |
-| License Usage | Gauge (utilisé vs max) | `vigo_license_envoys_used` / `vigo_license_envoys_max` |
-| License Days Remaining | Stat (rouge < 30, jaune < 90) | `vigo_license_days_remaining` |
+| Fleet size | Stat (enrôlés vs actifs) | `vigo_nodes_total` / `vigo_nodes_active_total` |
 | Active Streams | Stat | `vigo_streams_active` |
 | Database Size | Stat | `vigo_database_size_bytes` |
 
@@ -613,7 +588,7 @@ Un fichier de règles d'alerte organisé est livré avec les tableaux de bord Gr
 [grafana/alerts.yaml](../grafana/alerts.yaml)
 ```
 
-Dix-neuf règles Prometheus couvrant la convergence (failed / degraded / diverged / offline), les exécutions (durée p95), la sécurité (échecs de vérif-signature, CVE critiques), l'opérabilité (erreurs de rechargement de config, erreurs de résolution de secret), la licence (erreurs d'application, jours restants, étape), Swarm (roster des Bolts Spanner) et les rafales (taux gRPC soutenu, pic de handshakes TLS, échecs de vérif-signature, niveau haut de CheckIns en vol, p95 publication→convergence dépassant le SLO). Chaque règle référence une métrique définie dans `server/metrics/registry.go` ; les seuils sont des points de départ — ajustez-les à votre flotte.
+Seize règles Prometheus couvrant la convergence (failed / degraded / diverged / offline), les exécutions (durée p95), la sécurité (échecs de vérif-signature, CVE critiques), l'opérabilité (erreurs de rechargement de config, erreurs de résolution de secret), Swarm (roster des Bolts Spanner) et les rafales (taux gRPC soutenu, pic de handshakes TLS, échecs de vérif-signature, niveau haut de CheckIns en vol, p95 publication→convergence dépassant le SLO). Chaque règle référence une métrique définie dans `server/metrics/registry.go` ; les seuils sont des points de départ — ajustez-les à votre flotte.
 
 Chargez dans un Prometheus standard :
 

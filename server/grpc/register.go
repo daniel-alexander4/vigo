@@ -12,24 +12,17 @@ import (
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/integrations"
-	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Register handles the VigoAgent.Register RPC. It delegates to the enrollment
-// registry, which runs the license gate, validates the one-time token against
+// registry, which validates the one-time token against
 // approved patterns, inserts the envoy in the DB and FleetIndex, and returns
 // the envoy ID. In a spanner, when another roster bolt owns the hostname's
 // pattern partition the envoy is re-enrolled on that bolt and its address is
 // returned to the agent (the peer-equal redirect, Slice 2-ii-b).
-//
-// All license enforcement lives inside registry.Register — this handler does
-// not call licenseEnforcer.RegistrationAllowedAt directly. That way the gate
-// check, DB insert, and FleetIndex mutation happen under the registry's
-// serialization mutex, eliminating the TOCTOU race where two concurrent
-// registrations at the node limit could both pass the old separate gate call.
 func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	slog.Info("register request",
 		"hostname", req.GetHostname(),
@@ -50,12 +43,6 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		)
 
 		switch {
-		case errors.Is(err, license.ErrNodeLimitReached):
-			return nil, status.Error(codes.PermissionDenied, err.Error())
-		case errors.Is(err, license.ErrEnrollmentBlocked), errors.Is(err, license.ErrServiceStopping):
-			return nil, status.Error(codes.PermissionDenied, err.Error())
-		case errors.Is(err, license.ErrCountUnavailable):
-			return nil, status.Error(codes.PermissionDenied, err.Error())
 		case errors.Is(err, registry.ErrNoMatchingPattern):
 			return &pb.RegisterResponse{
 				Success: false,

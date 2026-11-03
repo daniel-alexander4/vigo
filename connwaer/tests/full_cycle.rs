@@ -15,7 +15,6 @@ fn single_cycle_produces_results() {
         r#"
 results_dir: "{results}"
 trends_db: "{trends}"
-license_dir: "/nonexistent"
 log_level: warn
 
 capabilities:
@@ -88,7 +87,6 @@ fn verify_subcommand_outputs_json() {
         r#"
 results_dir: "{results}"
 trends_db: "{trends}"
-license_dir: "/nonexistent"
 log_level: error
 "#,
         results = results_dir.display(),
@@ -123,7 +121,6 @@ fn status_subcommand_works() {
         r#"
 results_dir: "{results}"
 trends_db: "{trends}"
-license_dir: "/nonexistent"
 log_level: error
 "#,
         results = results_dir.display(),

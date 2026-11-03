@@ -156,15 +156,6 @@ run_test "audit verify" $CLI audit verify --server "$SERVER"
 echo ""
 
 # -------------------------------------------------------------------
-# 3. license
-# -------------------------------------------------------------------
-echo -e "${BOLD}[license]${NC}"
-run_test "license status" $CLI license status --server "$SERVER"
-run_test "license fingerprint" $CLI license fingerprint --ca-file /srv/vigo/tls/ca 2>/dev/null || \
-    skip_test "license fingerprint" "ca file not found"
-echo ""
-
-# -------------------------------------------------------------------
 # 3. db
 # -------------------------------------------------------------------
 echo -e "${BOLD}[db]${NC}"

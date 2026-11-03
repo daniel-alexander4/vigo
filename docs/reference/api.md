@@ -349,7 +349,6 @@ Health check endpoint that validates server subsystems.
     {"name": "database", "scope": "server", "status": "pass"},
     {"name": "tls", "scope": "server", "status": "pass", "message": "expires 2027-03-13"},
     {"name": "secrets", "scope": "server", "status": "pass", "message": "local"},
-    {"name": "license", "scope": "server", "status": "pass", "message": "compliant, 42/100 envoys"},
     {"name": "spanner", "scope": "server", "status": "skip", "message": "standalone"},
     {"name": "integrations", "scope": "server", "status": "skip", "message": "no integrations configured"},
     {"name": "config", "scope": "server", "status": "pass", "message": "15 configcrates, 8 entries"},
@@ -359,42 +358,6 @@ Health check endpoint that validates server subsystems.
 ```
 
 Check statuses: `pass`, `warn`, `fail`, `skip`. Check scope: `server` (Vigo itself) or `puddle` (managed envoys). Overall status: `healthy`, `degraded`, `unhealthy`. The Vigo Health page renders only `server`-scope checks; `puddle` conditions surface on the dashboard and envoys views.
-
----
-
-## License
-
-### GET /api/v1/license
-
-**Permission:** `fleet.read`
-
-Returns current license status including stage, tier, envoy counts, and expiration.
-
-Customer identity (`customer_name`, `customer_id`, `license_id`) and the machine `fingerprint` are **admin-only** — for `viewer` and `compliance` callers these fields are blanked, leaving the operational fields (tier, counts, expiry) intact.
-
-**Response:**
-
-```json
-{
-  "stage": 0,
-  "license": {
-    "customer_name": "Acme Corp",
-    "customer_id": "acme",
-    "license_id": "lic-20260313-acme",
-    "tier": "enterprise",
-    "max_envoys": 500,
-    "issued_at": "2026-03-13",
-    "expires_at": "2027-03-13",
-    "version": 1
-  },
-  "active_envoys": 12,
-  "max_envoys": 500,
-  "expires_at": "2027-03-13",
-  "days_remaining": 365
-}
-```
-
-The `tier` field is `"free"`, `"standard"`, `"growth"`, or `"enterprise"`. Omitted for legacy licenses without a tier (treated as free).
 
 ---
 

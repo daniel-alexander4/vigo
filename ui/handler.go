@@ -40,7 +40,6 @@ import (
 	"git.alexander4.io/vigo/server/fleetpressure"
 	fwreg "git.alexander4.io/vigo/server/frameworks"
 	"git.alexander4.io/vigo/server/i18n"
-	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/spanner"
@@ -277,7 +276,6 @@ type Handler struct {
 	spannerAdmin      *spanner.SpannerAdmin
 	docsDir           string
 	docsNavByLocale   map[string][]DocsNavSection
-	enforcer          *license.Enforcer
 	peerSvc           *peer.Service
 	authEnabled       bool
 	authMethod        string
@@ -536,7 +534,7 @@ type CVERunningBinaryRef struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, spannerAdmin *spanner.SpannerAdmin, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, spannerAdmin *spanner.SpannerAdmin, customDS DataSource, docsDir string, authMethod string) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -561,7 +559,6 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		assistant:        assistant,
 		spannerAdmin:     spannerAdmin,
 		docsDir:          docsDir,
-		enforcer:         enforcer,
 		authEnabled:      true,
 		authMethod:       authMethod,
 		securityLive:     newSecurityLiveCache(),
@@ -799,8 +796,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Combined operations page (tasks + workflows)
 	mux.HandleFunc("GET /operations", h.Operations)
 
-	// License page
-	mux.HandleFunc("GET /license", h.License)
 
 	// Support page
 	mux.HandleFunc("GET /support", h.Support)
@@ -837,14 +832,6 @@ type PageData struct {
 	// and the dashboard renders the enrollment panel.
 	NoEnvoys       bool
 	CurrentUser    *AuthUser
-	LicenseWarning string // non-empty when an enforcement violation is active (server-supplied string)
-	// LicenseNearLimit gates the "approaching limit" banner, built in the
-	// template from the raw counts below so the sentence localizes via
-	// {{T}}. Mutually exclusive with LicenseWarning (the violation path).
-	LicenseNearLimit bool
-	LicenseActive    int    // active node count, for the approaching-limit banner
-	LicenseMax       int    // licensed node cap, for the approaching-limit banner
-	LicensePct       int    // active/max as a whole percent, for the approaching-limit banner
 	OrgName          string // custom org name from branding config
 	CustomLogo       bool   // true when a custom logo path is configured
 	CustomFavicon    bool   // true when a custom favicon path is configured
@@ -858,42 +845,14 @@ type PageData struct {
 	Locales []LocaleChoice
 }
 
-// LicensePageData holds data for the license status page.
-type LicensePageData struct {
-	PageData
-	Tier          string
-	CustomerName  string
-	LicenseID     string
-	MaxEnvoys     int
-	ActiveEnvoys  int
-	UsagePct      float64
-	ExpiresAt     string
-	DaysRemaining int
-	Stage         string
-	StageNum      int
-	Violation     string
-	IsFreeTier    bool
-}
-
-// SupportPageData holds data for the support options page. The tier
-// rows mirror license.Tiers at build time; the active tier is
-// determined from the license's MaxEnvoys band.
+// SupportPageData holds data for the support page.
 type SupportPageData struct {
 	PageData
-	Tiers            []license.Tier
-	ActiveTier       string // name of the tier matching this license
-	CustomerName     string
-	LicenseID        string
-	MaxEnvoys        int
-	IsFreeTier       bool
-	ContactEmail     string
-	CriticalEligible bool // true when active tier qualifies for the Critical add-on
-	CriticalFrom     string
-	CriticalResponse string
-	CriticalHours    string
-	CriticalChannel  string
-	CriticalPricing  string
+	ContactEmail string
 }
+
+// supportContactEmail is the inbox the support page points at.
+const supportContactEmail = "vigo.support@alexander4.io"
 
 // AuthUser is the UI-visible subset of auth.User (avoids import cycle).
 type AuthUser struct {
@@ -953,17 +912,6 @@ type DashboardPageData struct {
 	ActiveEnvoys     int
 	RecentFailures   int
 	DriftRate        float64
-	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
-	// LicenseCapacityLevel means the banner is not rendered. "warning"
-	// renders an orange notice (≥90% of cap), "critical" renders a red
-	// notice (100% of cap — next enrollment will be rejected).
-	LicenseCapacityLevel  string // "", "warning", or "critical"
-	LicenseCapacityActive int
-	LicenseCapacityMax    int
-	// LicenseCapacitySlotsRemaining is max-active, shown in the
-	// "nearing capacity" message; the template builds the localized
-	// sentence from these raw counts via {{T}} + printf.
-	LicenseCapacitySlotsRemaining int
 	RecentRuns                    []RunRow
 	FleetRows                     []FleetRow
 	FleetRowsCapped               bool // true when fleet table is capped (more envoys exist)
@@ -2354,7 +2302,7 @@ func formatPollInterval(checkIn time.Duration) string {
 	return fmt.Sprintf("%.0fs", checkIn.Seconds())
 }
 
-// setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
+// setCommon applies version, AI-enabled, spanner, and auth flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	pd.PollInterval = formatPollInterval(h.baseInterval)
@@ -2384,20 +2332,6 @@ func (h *Handler) setCommon(pd *PageData) {
 	// NoEnvoys gates the first-run UI — empty nav + dashboard enrollment panel.
 	pd.NoEnvoys = h.noEnvoys()
 
-	if h.enforcer != nil {
-		s := h.enforcer.GetStatus()
-		if s.Stage > 0 {
-			pd.LicenseWarning = s.Violation
-		} else if s.MaxEnvoys > 0 {
-			threshold := float64(s.MaxEnvoys) * 0.9
-			if float64(s.ActiveEnvoys) >= threshold {
-				pd.LicenseNearLimit = true
-				pd.LicenseActive = s.ActiveEnvoys
-				pd.LicenseMax = s.MaxEnvoys
-				pd.LicensePct = s.ActiveEnvoys * 100 / s.MaxEnvoys
-			}
-		}
-	}
 }
 
 // agentPlatforms scans agentDir for available OS/arch agent binaries.
@@ -2684,32 +2618,9 @@ func sparklineBounds(data []float64) (min, max int) {
 
 // dashboardData builds dashboard page data from the live FleetIndex
 // via the data source (single in-memory snapshot, no N+1 queries),
-// then layers on the license banner and recent-runs DB query.
+// then layers on the recent-runs DB query.
 func (h *Handler) dashboardData() DashboardPageData {
 	data := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
-
-	// License capacity banner: render once we know the live count and the
-	// license cap. Orange at ≥90% of cap, red at 100% (next enrollment
-	// will be rejected by the hard gate). Free tier is still subject to
-	// the same rules — a community user at the cap should see the banner too.
-	// ActiveEnvoys is the enforcer's mode-aware count (the licensed-count SoT:
-	// local FleetIndex locally, spanner-wide in aggregate mode) so the banner
-	// agrees with the /license page and header warning frame-for-frame.
-	if h.enforcer != nil {
-		if st := h.enforcer.GetStatus(); st.MaxEnvoys > 0 {
-			active := st.ActiveEnvoys
-			max := st.MaxEnvoys
-			data.LicenseCapacityActive = active
-			data.LicenseCapacityMax = max
-			switch {
-			case active >= max:
-				data.LicenseCapacityLevel = "critical"
-			case active*10 >= max*9: // ≥90%
-				data.LicenseCapacityLevel = "warning"
-				data.LicenseCapacitySlotsRemaining = max - active
-			}
-		}
-	}
 
 	// Recent runs (always from DB, lightweight query). h.queries is nil
 	// only in the early-boot window and unit tests — skip the query
@@ -6976,77 +6887,12 @@ func (h *Handler) AskStream(w http.ResponseWriter, r *http.Request) {
 
 // Admin handlers removed — all admin functions are CLI-only (vigocli).
 
-// License renders the license status page.
-func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
-	data := LicensePageData{
-		PageData: PageData{Title: "License", ActiveNav: "license"},
-	}
-
-	if h.enforcer != nil {
-		s := h.enforcer.GetStatus()
-		data.StageNum = int(s.Stage)
-		data.Stage = s.Stage.String()
-		// ActiveEnvoys is the enforcer's mode-aware count (the licensed-count
-		// SoT) — the local FleetIndex count in local mode, the spanner-wide
-		// aggregate in aggregate mode — so the page reflects what the license
-		// actually gates and agrees with the dashboard capacity banner +
-		// header warning, which read the same GetStatus() value.
-		data.ActiveEnvoys = s.ActiveEnvoys
-		data.MaxEnvoys = s.MaxEnvoys
-		data.ExpiresAt = s.ExpiresAt
-		data.DaysRemaining = s.DaysRemaining
-		data.Violation = s.Violation
-		data.IsFreeTier = !h.enforcer.IsCommercialLicense()
-		if s.MaxEnvoys > 0 {
-			data.UsagePct = float64(data.ActiveEnvoys) / float64(s.MaxEnvoys) * 100
-		}
-		if s.License != nil {
-			data.Tier = s.License.TierDisplayName()
-			data.CustomerName = s.License.CustomerName
-			data.LicenseID = s.License.LicenseID
-		}
-	}
-
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "license", data)
-}
-
-// Support renders the support options page: the full tier schedule
-// from license.Tiers with the customer's current tier highlighted,
-// plus Critical Support add-on info and the support inbox.
+// Support renders the support page: how to get help and what to include.
 func (h *Handler) Support(w http.ResponseWriter, r *http.Request) {
 	data := SupportPageData{
-		PageData:         PageData{Title: "Support", ActiveNav: "support"},
-		Tiers:            license.Tiers,
-		ContactEmail:     license.SupportContactEmail,
-		CriticalFrom:     license.CriticalSupportAddOn.EligibleFrom,
-		CriticalResponse: license.CriticalSupportAddOn.ResponseTime,
-		CriticalHours:    license.CriticalSupportAddOn.Hours,
-		CriticalChannel:  license.CriticalSupportAddOn.Channel,
-		CriticalPricing:  license.CriticalSupportAddOn.Pricing,
+		PageData:     PageData{Title: "Support", ActiveNav: "support"},
+		ContactEmail: supportContactEmail,
 	}
-
-	if h.enforcer != nil {
-		s := h.enforcer.GetStatus()
-		data.MaxEnvoys = s.MaxEnvoys
-		data.IsFreeTier = !h.enforcer.IsCommercialLicense()
-		if s.License != nil {
-			data.CustomerName = s.License.CustomerName
-			data.LicenseID = s.License.LicenseID
-		}
-		if t := license.TierForNodes(s.MaxEnvoys); t != nil {
-			data.ActiveTier = t.Name
-			// Growth and above qualify for the Critical Support add-on.
-			// Community is index 0, Starter 1, Growth 2.
-			for i := range license.Tiers {
-				if license.Tiers[i].Name == t.Name && i >= 2 {
-					data.CriticalEligible = true
-					break
-				}
-			}
-		}
-	}
-
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "support", data)
 }

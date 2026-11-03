@@ -20,7 +20,6 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
-	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/spanner"
@@ -84,7 +83,6 @@ type ServerConfig struct {
 	StreamSendBuffer           int                   // 0 → default 8
 	SpannerAdmin               *spanner.SpannerAdmin // non-nil in a spanner (mode != standalone); drives peer-equal admin reads
 	// SMTPNotifier removed — events route through Integrations dispatcher
-	LicenseEnforcer *license.Enforcer
 	TaskStore       *task.Store
 	FleetIndex      *fleet.FleetIndex       // in-memory index for hot-path operations
 	RunBatcher      *fleet.RunBatcher       // async run persistence from delta events
@@ -278,7 +276,6 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 		taskRouter:        newTaskRouter(cfg.Queries, cfg.Metrics),
 		queryRouter:       newQueryRouter(),
 		taskStore:         cfg.TaskStore,
-		licenseEnforcer:   cfg.LicenseEnforcer,
 		fleetIndex:        cfg.FleetIndex,
 		runBatcher:        cfg.RunBatcher,
 		reassignStore:     reassignStore,

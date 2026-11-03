@@ -5,11 +5,9 @@ package grpc
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
-	"git.alexander4.io/vigo/server/license"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -41,9 +39,7 @@ func (s *AdminService) SetReassignment(ctx context.Context, req *pb.SetReassignm
 // EnrollEnvoy handles the VigoAdmin.EnrollEnvoy RPC. This is a hub→bolt
 // internal RPC: the hub validates the enrollment token centrally, then calls
 // this on the target bolt to create the envoy record without re-validating
-// the token. The bolt still runs its own license gate inside
-// registry.CreateEnvoy so bolt-level node limits are enforced even on
-// hub-routed enrollments.
+// the token.
 func (s *AdminService) EnrollEnvoy(ctx context.Context, req *pb.EnrollEnvoyRequest) (*pb.EnrollEnvoyResponse, error) {
 	hostname := req.GetHostname()
 	ipAddress := req.GetIpAddress()
@@ -55,13 +51,6 @@ func (s *AdminService) EnrollEnvoy(ctx context.Context, req *pb.EnrollEnvoyReque
 
 	envoyID, err := s.registry.CreateEnvoy(ctx, hostname, ipAddress, pubkeyPEM, req.GetForce())
 	if err != nil {
-		switch {
-		case errors.Is(err, license.ErrNodeLimitReached),
-			errors.Is(err, license.ErrEnrollmentBlocked),
-			errors.Is(err, license.ErrServiceStopping),
-			errors.Is(err, license.ErrCountUnavailable):
-			return nil, status.Error(codes.PermissionDenied, err.Error())
-		}
 		return nil, status.Errorf(codes.Internal, "creating envoy: %v", err)
 	}
 

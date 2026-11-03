@@ -3,7 +3,6 @@ pub mod bootstrap;
 pub mod capability;
 pub mod config;
 pub mod exec;
-pub mod license;
 pub mod platform;
 pub mod results;
 pub mod rng;

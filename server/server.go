@@ -44,7 +44,6 @@ import (
 	isgrpc "git.alexander4.io/vigo/server/grpc"
 	"git.alexander4.io/vigo/server/hardening"
 	"git.alexander4.io/vigo/server/integrations"
-	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/publish"
@@ -107,8 +106,6 @@ type Server struct {
 	taskDir         string
 	workflowsDir    string
 	agentDir        string
-	licenseDir      string
-	licenseGraceDir string
 	liveDir         string // serverRoot/.live — validated published config the server reads
 	historyDir      string // serverRoot/config-history — rollback snapshots
 
@@ -126,15 +123,6 @@ type Server struct {
 	queries     *db.Queries
 	auditWriter *audit.Writer
 
-	// --- License ---
-	licenseMode string
-	enforcer    *license.Enforcer
-	// cancel is the process-lifecycle cancel func captured from
-	// signal.NotifyContext in main(). The license enforcer's
-	// stop-service callback invokes it on terminal license failure
-	// (downgrade past grace, expiry past grace, fingerprint mismatch).
-	// Construction-only; Run does not own it.
-	cancel context.CancelFunc
 
 	// --- Auth ---
 	authProvider vigoauth.Provider
@@ -205,11 +193,7 @@ type Server struct {
 	peerPushCtx context.Context
 	peerPushMu  sync.Mutex
 
-	// --- Forward-declared for closure access (assigned during NewServer
-	// construction below). envoyCounter (the license enforcer's count
-	// callback) captures these by reading through the *Server. Both stay
-	// nil through the license-enforcer assignment and are populated
-	// during the fleet-rehydrate + spanner-admin stages farther down
+	// --- Assigned during the fleet-rehydrate + spanner-admin stages of
 	// NewServer.
 	spannerAdmin *spanner.SpannerAdmin
 	fleetIndex   *fleet.FleetIndex
@@ -268,24 +252,6 @@ type Server struct {
 	s3Srv *http.Server
 }
 
-// commercialLicenseChecker is the slice of the license enforcer the
-// spanner-mode gate depends on. Narrowed to an interface so spannerAllowed is
-// unit-testable without constructing a full *license.Enforcer.
-type commercialLicenseChecker interface {
-	IsCommercialLicense() bool
-}
-
-// spannerAllowed reports whether the server may start in the configured mode
-// under the current license. Spanner federation requires a commercial (paid)
-// tier; any non-standalone mode on a non-commercial tier is refused.
-// Standalone is always allowed. Returns nil when startup may proceed.
-func spannerAllowed(mode config.SpannerMode, enforcer commercialLicenseChecker) error {
-	if mode != config.ModeStandalone && !enforcer.IsCommercialLicense() {
-		return fmt.Errorf("spanner mode requires a commercial license — the community/free tier does not support spanner")
-	}
-	return nil
-}
-
 // NewServer constructs a *Server from configFile. Performs no I/O beyond
 // reading the config + opening the database + materializing identity
 // keys on first boot; does not open network listeners, install signal
@@ -296,20 +262,13 @@ func spannerAllowed(mode config.SpannerMode, enforcer commercialLicenseChecker) 
 // (e.g. database PingContext during a slow Postgres handshake). It is
 // not the same as the ctx passed to Run — Run takes the process
 // lifecycle context.
-//
-// The cancel func is the process-lifecycle cancel captured from
-// signal.NotifyContext in main(); the license enforcer's stop-service
-// callback invokes it when the license fails terminally. NewServer
-// stores it on the Server so the enforcer construction can wire it,
-// but does not invoke it directly.
-func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string) (*Server, error) {
+func NewServer(ctx context.Context, configFile string) (*Server, error) {
 	s := &Server{
 		configFile: configFile,
 		serverRoot: filepath.Dir(configFile),
-		cancel:     cancel,
 	}
 	// Resolve serverRoot to an absolute path so every serverRoot-anchored dir
-	// (tls/, puddle/, tls-tickets/, cli-admin-token, .live/, license/) is
+	// (tls/, puddle/, tls-tickets/, cli-admin-token, .live/) is
 	// cwd-independent and logs clearly. In the default deployment configFile is
 	// "server.yaml" run from /srv/vigo, so this resolves to /srv/vigo — paths
 	// unchanged. An ephemeral instance points configFile at its own dir and
@@ -405,8 +364,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	s.taskDir = envOrDefault("VIGO_TASK_DIR", stringOrDefault(s.cfg.Paths.Tasks, filepath.Join(s.liveDir, "tasks")))
 	s.workflowsDir = envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(s.cfg.Paths.Workflows, filepath.Join(s.liveDir, "workflows")))
 	s.agentDir = envOrDefault("VIGO_AGENT_DIR", stringOrDefault(s.cfg.Paths.AgentDist, "dist/agent"))
-	s.licenseDir = stringOrDefault(s.cfg.Paths.LicenseDir, filepath.Join(s.serverRoot, "license"))
-	s.licenseGraceDir = s.licenseDir
 
 	// Determine spanner mode.
 	s.mode = s.cfg.Spanner.Mode
@@ -572,7 +529,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 	slog.Info("migrations complete")
 
-	// Initialize query layer early — needed for license envoy count.
+	// Initialize the query layer.
 	// Postgres: wrap the single pool with the placeholder rewriter so
 	// sqlc-generated `?` queries work ($1, $2, ...). SQLite: route reads to
 	// the read pool and writes to the single-writer pool via SplitDB.
@@ -586,40 +543,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 	// Initialize tamper-evident audit writer.
 	s.auditWriter = audit.NewWriter(s.queries)
-
-	// --- License ---
-
-	// Load and validate license.
-	//
-	// license.mode controls counting:
-	//   "local" (default): count enrolled nodes on this server only.
-	//   "aggregate": sum node counts across the whole spanner. Every
-	//                peer-equal bolt enforces independently off the
-	//                gossip-replicated roster — there is no designated
-	//                enforcer (ADR-026 peer-equal model).
-	s.licenseMode = s.cfg.License.Mode
-	if s.licenseMode == "" {
-		s.licenseMode = "local"
-	}
-
-	// s.envoyCount is the mode-aware licensed-count source of truth (see the
-	// method). It closes over *Server: s.spannerAdmin and s.fleetIndex stay
-	// nil through this assignment and are populated later in NewServer
-	// (fleet-rehydrate + spanner-admin stages), but the method reads them at
-	// call time, and the first call (enforcement ticker / first enrollment)
-	// lands well after they're set.
-	s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile, s.envoyCount, func() { s.cancel() }, s.metrics)
-	if err != nil {
-		return nil, fmt.Errorf("license: %w", err)
-	}
-
-	// Spanner requires a commercial license — reject spanner mode on any
-	// non-commercial tier (community/free, legacy aliases, unknown). The
-	// predicate is tier-based (tessera's RequiresBinding), not a single
-	// license_id, so a hand-signed community license cannot unlock it.
-	if err := spannerAllowed(s.mode, s.enforcer); err != nil {
-		return nil, err
-	}
 
 	// --- Auth ---
 
@@ -798,20 +721,15 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 	slog.Info("task definitions loaded", "count", len(s.taskStore.List()), "dir", s.taskDir)
 
-	// --- Fleet index: create + rehydrate. Populates s.fleetIndex so the
-	// license enforcer's envoyCounter closure (constructed above) reads
-	// the seeded index instead of the nil it saw at first assignment. ---
+	// --- Fleet index: create + rehydrate. ---
 	s.fleetIndex = fleet.NewFleetIndex()
 	if err := fleet.Rehydrate(ctx, s.fleetIndex, s.queries, s.runStore, s.baseInterval, s.offlineThreshold, s.configStore.ApprovedSources()); err != nil {
 		return nil, fmt.Errorf("rehydrating fleet index: %w", err)
 	}
 
-	// Wire the enrollment gate + fleet index into the registry. These
-	// collaborators make registry.Register's license check atomic with
-	// the DB insert and the FleetIndex update, closing the TOCTOU race
-	// and the bootstrap/admin bypass paths.
+	// Wire the fleet index into the registry so every enrollment path
+	// updates it under the same mutex as the DB insert.
 	s.reg.SetFleetIndex(s.fleetIndex)
-	s.reg.SetEnrollmentGate(s.enforcer)
 
 	// Sync envoy tags from hostcrate. Tags are derived from the hostcrate
 	// (single source of truth) and kept only in FleetIndex; syncing at
@@ -1015,7 +933,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		KeepaliveTime:              s.kaTime,
 		KeepaliveTimeout:           s.kaTimeout,
 		StreamSendBuffer:           s.cfg.Tuning.StreamSendBuffer,
-		LicenseEnforcer:            s.enforcer,
 		TaskStore:                  s.taskStore,
 		FleetIndex:                 s.fleetIndex,
 		RunBatcher:                 s.runBatcher,
@@ -1151,12 +1068,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// --- REST handlers (shared across standalone and spanner modes). ---
-	licenseHandler := api.NewLicenseHandler(s.enforcer)
 	doctorHandler := api.NewDoctorHandler(api.DoctorConfig{
 		SQLDB:            s.db,
 		CertFile:         s.cfg.Server.TLS.CertFile,
 		KeyFile:          s.cfg.Server.TLS.KeyFile,
-		Enforcer:         s.enforcer,
 		ConfigStore:      s.configStore,
 		Queries:          s.queries,
 		Interval:         s.baseInterval,
@@ -1415,7 +1330,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 				bh.SetCertValidity(certValidity)
 				bh.SetIntegrations(s.integrations)
 				bh.SetFleetIndex(s.fleetIndex)
-				bh.SetLicenseEnforcer(s.enforcer)
 				// Spanner: route REST bootstrap enrollments to the owning bolt,
 				// matching the gRPC Register path. Guard the nil so a typed-nil
 				// *SpannerAdmin isn't stored as a non-nil interface (standalone).
@@ -1464,7 +1378,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			slog.Info("curator S3 credential store ready")
 		}
 
-		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, "unix://"+s.adminSocketPath(), s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.cfg.Sandgorgon.Enabled, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.liveDir, s.historyDir, s.promReg, s.metrics, gwOpts...)
+		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, "unix://"+s.adminSocketPath(), s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.cfg.Publish, s.cfg.Branding, s.cfg.Sandgorgon.Enabled, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.liveDir, s.historyDir, s.promReg, s.metrics, gwOpts...)
 		if gwErr != nil {
 			return nil, fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
@@ -1519,7 +1433,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		uiHandler.SetIntegrationsConfig(s.cfg.Integrations, s.cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: s.fleetIndex})
 
-		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
 		spannerAdmissionHandler.RegisterRoutes(gwMux)
@@ -1665,9 +1578,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			s.scrierHandler.RegisterRoutes(gwMux)
 			uiHandler.SetScrierEnabled(true)
 		}
-		// Serve license files so agents can download them during bootstrap.
+		// Serve the Apache-2.0 LICENSE and NOTICE so the bootstrap script can
+		// ship them alongside the agent binary it installs (Apache §4).
 		gwMux.HandleFunc("GET /license/LICENSE", serveLicenseFile(s.serverRoot, "LICENSE"))
-		gwMux.HandleFunc("GET /license/COMMERCIAL-TERMS.md", serveLicenseFile(s.serverRoot, "COMMERCIAL-TERMS.md"))
+		gwMux.HandleFunc("GET /license/NOTICE", serveLicenseFile(s.serverRoot, "NOTICE"))
 		if !s.swarmEnabled && s.cfg.Swarm.Curator.S3Port != 0 {
 			slog.Warn("curator S3 API configured but disabled — this server does not run the curator substrate (swarm.enabled does not match this host)",
 				"port", s.cfg.Swarm.Curator.S3Port)
@@ -1686,21 +1600,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 // (NewServer) + teardown (Close) without bloating past the readable
 // line-count budget.
 
-// envoyCount returns the licensed-count source of truth, mode-aware. It is
-// the EnvoyCounter handed to the license enforcer and, via the enforcer's
-// CurrentCount, the count the enrollment gate enforces against.
-//
-// Aggregate mode (spanner): AggregateEnvoysLocal folds this bolt's fleet
-// index together with every gossiped peer roster, so each bolt computes the
-// same fleet-wide count and enforces the global node limit independently
-// (ADR-026 peer-equal — no designated enforcer). The count is best-effort:
-// it reflects the gossip cache, so concurrent enrollments across bolts at
-// fleet−1 can both pass. That softness is inherent to consensus-free
-// aggregation, not a defect of the gate.
-//
-// Local mode (default): the in-memory FleetIndex is the source of truth —
-// seeded from the DB at startup via Rehydrate and kept in sync by the
-// registry's serialized enrollment path. O(1), safe on the enrollment path.
 // peerSigner returns the control-plane signer for HA peer RPCs, built from
 // this server's puddle service-account identity, or nil when no identity is
 // available (non-local secrets backend) — in which case HA peer auth is
@@ -1710,23 +1609,6 @@ func (s *Server) peerSigner() credentials.PerRPCCredentials {
 		return nil
 	}
 	return cpauth.Signer(s.puddleID.SigningKey, hex.EncodeToString(s.puddleID.PublicKey))
-}
-
-func (s *Server) envoyCount(_ context.Context) (int, error) {
-	if s.licenseMode == "aggregate" && s.spannerAdmin != nil {
-		envoys, _ := s.spannerAdmin.AggregateEnvoysLocal()
-		total := 0
-		for _, e := range envoys {
-			if !e.Revoked {
-				total++
-			}
-		}
-		return total, nil
-	}
-	if s.fleetIndex == nil {
-		return 0, nil // pre-rehydrate — gate runs later
-	}
-	return s.fleetIndex.ActiveCount(), nil
 }
 
 // emitStartupHardeningFindings runs the defense-in-depth detectors

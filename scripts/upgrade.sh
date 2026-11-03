@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Rebuild and redeploy the Vigo server and agent binaries.
-# Preserves: server.yaml, .env, db/, secrets/, tls/, license/, config-history/
+# Preserves: server.yaml, .env, db/, secrets/, tls/, config-history/
 #
 # Usage:
 #   sudo scripts/upgrade.sh [components...] [--norun] [--push]
@@ -479,15 +479,14 @@ fi
 # Stage a self-contained Docker build context (shared by `server-only` and `full`)
 # ---------------------------------------------------------------------------
 #
-# vigo's go.mod has `replace git.alexander4.io/tessera => ../tessera`, but a
-# Docker build context can't reach a sibling dir — stage-build-context.sh
-# copies vigo + tessera into a temp dir and rewrites the replace directive.
+# stage-build-context.sh copies the repo into a temp dir, minus host build
+# outputs and other .dockerignore'd paths.
 
 STAGE_DIR=""
 if $DO_SERVERONLY || $DO_FULL; then
     STAGE_DIR="$(mktemp -d -t vigo-build-XXXXXX)"
     trap 'rm -rf "$STAGE_DIR"' EXIT
-    echo "Staging Docker build context at $STAGE_DIR (includes tessera)..."
+    echo "Staging Docker build context at $STAGE_DIR..."
     "$SCRIPT_DIR/stage-build-context.sh" "$REPO_DIR" "$STAGE_DIR"
 fi
 

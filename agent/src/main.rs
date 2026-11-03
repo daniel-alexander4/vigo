@@ -2386,20 +2386,6 @@ async fn async_main() -> Result<()> {
                 "bootstrap successful"
             );
 
-            // Surface license capacity warnings from the server. Printed
-            // to stderr so the curl one-liner shows the notice without
-            // polluting machine-readable stdout, and so it lands in the
-            // journal when invoked via bootstrap scripts.
-            if !resp.license_warning.is_empty() {
-                eprintln!("\nWARNING: {}\n", resp.license_warning);
-                if resp.license_max > 0 {
-                    eprintln!(
-                        "  Active envoys: {} / {} (remaining: {})\n",
-                        resp.envoys_active, resp.license_max, resp.envoys_remaining
-                    );
-                }
-            }
-
             // Install system service if requested.
             if *install_service {
                 let install_result = install_platform_service(bootstrap_server, grpc_port).await;

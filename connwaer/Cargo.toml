@@ -1,6 +1,6 @@
 [package]
 name = "connwaer"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 description = "Connwaer — active compliance verification agent"
 license = "Apache-2.0"
@@ -15,11 +15,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 
-# Crypto (license verification, checksums)
-ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
+# Crypto (checksums)
 sha2 = "0.10"
 hex = "0.4"
-base64 = "0.22"
 rand = "0.8"
 
 # SQLite (trend history)

@@ -2,10 +2,7 @@ module git.alexander4.io/vigo
 
 go 1.25.0
 
-replace git.alexander4.io/tessera => ../tessera
-
 require (
-	git.alexander4.io/tessera v0.1.0
 	github.com/alecthomas/chroma/v2 v2.23.1
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
@@ -17,6 +14,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0
 	github.com/lib/pq v1.11.2
 	github.com/mattn/go-sqlite3 v1.14.34
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
@@ -26,6 +24,7 @@ require (
 	golang.org/x/crypto v0.50.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.42.0
+	golang.org/x/text v0.36.0
 	golang.org/x/time v0.15.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57
 	google.golang.org/grpc v1.79.1
@@ -44,7 +43,6 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
@@ -54,6 +52,5 @@ require (
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 )

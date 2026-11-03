@@ -566,17 +566,6 @@ watcher:
 #   # stream_send_buffer: 8
 
 
-# ── License ───────────────────────────────────────────────────────────
-# Controls how nodes are counted for license enforcement.
-#
-# license:
-#   mode: "local"      # "local" (default): count nodes on this server
-#                      # "aggregate": every spanner bolt sums the fleet-wide
-#                      #   node count from the gossip-replicated roster and
-#                      #   enforces independently. Requires spanner.mode:
-#                      #   spanner — rejected at load on a standalone server.
-
-
 # ── Branding ──────────────────────────────────────────────────────────
 # Custom branding for the web UI. When set, overrides the default Vigo
 # logo and title with your organization's branding.
