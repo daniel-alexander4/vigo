@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:7e53d1429f9026bc00769b6a580cc0825b8cf20a3077ba80016a79ab876d6c1b -->
+<!-- vigo-i18n source_sha:a563b3771e996cd9eb7f5706a2f8053ba717037704f58c712a40dab2d9fb134d -->
 
 # Dimensionner un hôte vigosrv
 
@@ -8,7 +8,7 @@
 
 **Quand la sauter :** petites flottes — tout ce qui est en dessous de quelques milliers d'Envoys tourne bien en deçà du régime décrit ici, avec la config par défaut et n'importe quelle VM modeste.
 
-> Tous les chiffres dérivent du registre de mesures [`numbers-of-record.md`](../../internal.docs/numbers-of-record.md) (la source unique de vérité). La ligne **8 vCPU / 32 Go** est l'ancrage mesuré ; le reste s'en déduit par mise à l'échelle.
+> Tous les chiffres dérivent du registre de mesures du projet (la source unique de vérité). La ligne **8 vCPU / 32 Go** est l'ancrage mesuré ; le reste s'en déduit par mise à l'échelle.
 
 ## L'essentiel
 

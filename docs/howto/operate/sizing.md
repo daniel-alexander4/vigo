@@ -7,7 +7,7 @@ You'll finish this page knowing **how many envoys one server can comfortably hol
 
 **When you'd skip this:** small fleets — anything under a few thousand envoys runs well below the regime this page is about, with default config and any modest VM.
 
-> All figures derive from the measurement registry [`numbers-of-record.md`](../../internal.docs/numbers-of-record.md) (the single source of truth). The **8 vCPU / 32 GB** row is the measured anchor; the rest scale from it.
+> All figures derive from the project's measurement registry (the single source of truth). The **8 vCPU / 32 GB** row is the measured anchor; the rest scale from it.
 
 ## The headline
 

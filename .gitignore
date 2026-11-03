@@ -83,3 +83,6 @@ docs.archived/
 # Claude Code local context — never committed
 .claude/
 CLAUDE.md
+
+# Maintainer-only engineering + strategy memos — kept locally, never published.
+docs/internal.docs/

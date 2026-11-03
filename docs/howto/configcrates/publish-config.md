@@ -311,7 +311,6 @@ Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
 - **A publish landed but rolled itself back** → the convergence-rollback monitor caught it; inspect the audit log via `vigocli config history`.
 - **You need to verify what's live** → `vigocli config tree` shows the entire resolved tree as the server sees it.
 - **You published in spanner mode and one bolt's `config_version` is lagging** → check that bolt's `journalctl -u vigosrv` for `stackswatch` lines. The watcher uses a 250ms quiesce-debounce per ref-change, so brief skew is normal; persistent lag points at a stale ops-puddle gitback fetch (the peer-pull reactor hasn't run) or an unresponsive puddle helper daemon (`/var/run/vigo/puddle.sock`).
-- **You want the architectural narrative for spanner-mode distribution** → see `docs/internal.docs/design-config-distribution.md`.
 
 ---
 *Verified on Vigo 0.65.10 · 2026-05-18.*

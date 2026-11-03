@@ -221,6 +221,11 @@ type derivedRow struct {
 func parseDerivedRows(t *testing.T, root string) []derivedRow {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(root, "docs", "internal.docs", "numbers-of-record.md"))
+	if os.IsNotExist(err) {
+		// docs/internal.docs/ is maintainer-only and not part of the public
+		// repository; the registry guard runs where the registry exists.
+		t.Skip("numbers-of-record.md not present (maintainer-only)")
+	}
 	if err != nil {
 		t.Fatalf("reading numbers-of-record.md: %v", err)
 	}

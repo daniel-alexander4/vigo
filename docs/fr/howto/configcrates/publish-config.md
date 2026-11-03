@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:8167b12600e9df9c5b1afff714b674f8f9312ae65fe9a5881a1b41ec3ea7ab29 -->
+<!-- vigo-i18n source_sha:82bceba70e9c224a1ec47691344fb71185b66371ec143104643e7ca91a3a0d1b -->
 
 # Publier votre configuration
 
@@ -312,7 +312,6 @@ Published: 12 configcrates, 3 roles, 8 envoy entries (15 files synced)
 - **Une publication a abouti mais s'est auto-annulée** → le moniteur de rollback de convergence l'a détectée ; inspectez le journal d'audit via `vigocli config history`.
 - **Vous devez vérifier ce qui est live** → `vigocli config tree` affiche l'arbre résolu complet tel que le serveur le voit.
 - **Vous avez publié en mode Spanner et le `config_version` d'un bolt est en retard** → vérifiez le `journalctl -u vigosrv` de ce bolt pour les lignes `stackswatch`. Le watcher utilise un debounce de stabilisation de 250ms par changement de référence, donc un décalage bref est normal ; un retard persistant pointe vers un fetch gitback ops-puddle obsolète (le réacteur de peer-pull ne s'est pas exécuté) ou un démon helper puddle non réactif (`/var/run/vigo/puddle.sock`).
-- **Vous voulez le récit architectural de la distribution en mode Spanner** → voir `docs/internal.docs/design-config-distribution.md`.
 
 ---
 *Vérifié sur Vigo 0.65.10 · 2026-05-18.*
