@@ -4,7 +4,7 @@ Distributed state enforcement for servers, network devices, and workstations. Ag
 
 Far more than configuration management. One server holds tens of thousands of nodes at a tight 1-second cadence — hundreds of thousands at a relaxed one — RAM-bound and linear at **~620 KB/node** with a realistic inventory (size per the [sizing guide](docs/howto/operate/sizing.md)), with peer-equal `spanner` federation beyond a single host's ceiling. Around the convergence engine (69 resource types, 50 trait collectors, 7 operating systems — Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) Vigo bundles regulatory-framework compliance scoring + GRC export, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration (ad-hoc tasks, workflows, rolling execution, live queries), a read-only AI assistant, RBAC with pluggable authentication (basic, OIDC, SSH key signing), a tamper-evident audit log, and a web dashboard.
 
-Open source under the [Apache License 2.0](LICENSE): every feature, no node limits, no paid tiers.
+Vigo is open source under the [Apache License 2.0](LICENSE). Every feature is included, and there are no node limits or paid tiers.
 
 ## Quickstart
 
@@ -21,7 +21,7 @@ docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 cd /srv/vigo && docker compose up -d
 ```
 
-`--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs; `docker compose up -d` starts the server. Dashboard at `https://localhost:8443/`. Then enroll the server's own agent over loopback: `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`.
+`--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs, and `docker compose up -d` starts the server. The dashboard is at `https://localhost:8443/`. Then enroll the server's own agent over loopback with `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`.
 
 ### 2. Bootstrap managed nodes
 
@@ -464,12 +464,12 @@ Two backends: **local** (default, AES-256-GCM encrypted files on disk) and **iso
 
 ## Spanner
 
-Peer-equal federation for fleets beyond one server. Each bolt is a write-equal peer owning a hostname-pattern partition; every bolt holds the full admissions roster, replicated over gossip, so admin reads, enrollment, force-push, reassign and drain work from any bolt. No hub. Configured under `spanner:` in `server.yaml`; driven by `vigocli spanner`.
+Spanner federates fleets that outgrow one server. Each bolt is a write-equal peer that owns a hostname-pattern partition, and every bolt holds the full admissions roster through gossip, so admin reads, enrollment, force-push, reassign and drain work from any bolt without a hub. Configure it under `spanner:` in `server.yaml` and drive it with `vigocli spanner`.
 
 ## License
 
 [Apache License 2.0](LICENSE). Copyright (c) 2026 Alexander4, LLC.
 Contributions are welcome under the same license with a DCO sign-off — see
 [CONTRIBUTING.md](CONTRIBUTING.md). The Vigo name and logo are trademarks; see
-[TRADEMARKS.md](TRADEMARKS.md). Questions and bug reports: open an issue, or
+[TRADEMARKS.md](TRADEMARKS.md). For questions and bug reports, open an issue or
 email vigo.support@alexander4.io.
