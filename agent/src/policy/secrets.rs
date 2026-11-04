@@ -284,7 +284,7 @@ fn substitute_in_bundle(bundle: &mut proto::PolicyBundle, cache: &SecretCache) -
     }
     for m in bundle.configcrates.iter_mut() {
         if m.when.contains(PLACEHOLDER_BEGIN) {
-            m.when = substitute_in_string(&m.when, cache)?;
+            m.when = substitute_in_string_as(&m.when, cache, Encoding::WhenLiteral)?;
             if m.when.contains(PLACEHOLDER_BEGIN) {
                 bail!(
                     "placeholder survived substitution in module {}.when — refusing to apply",
@@ -294,7 +294,7 @@ fn substitute_in_bundle(bundle: &mut proto::PolicyBundle, cache: &SecretCache) -
         }
         for r in m.resources.iter_mut() {
             if r.when.contains(PLACEHOLDER_BEGIN) {
-                r.when = substitute_in_string(&r.when, cache)?;
+                r.when = substitute_in_string_as(&r.when, cache, Encoding::WhenLiteral)?;
                 if r.when.contains(PLACEHOLDER_BEGIN) {
                     bail!(
                         "placeholder survived substitution in resource {}.{}.when — refusing to apply",
@@ -307,7 +307,12 @@ fn substitute_in_bundle(bundle: &mut proto::PolicyBundle, cache: &SecretCache) -
                 if !v.contains(PLACEHOLDER_BEGIN) {
                     continue;
                 }
-                *v = substitute_in_string(v, cache)?;
+                // A list attribute rides as JSON text (server/grpc/policy.go
+                // buildPolicyConfigcrate json.Marshal): the placeholder sits
+                // inside a JSON string, so the value must be JSON-escaped or a
+                // secret holding `"` or `\` breaks the array.
+                let enc = if is_json_array(v) { Encoding::JsonString } else { Encoding::Raw };
+                *v = substitute_in_string_as(v, cache, enc)?;
                 if v.contains(PLACEHOLDER_BEGIN) {
                     bail!(
                         "placeholder survived substitution in {}.{}.{} — refusing to apply",
@@ -366,7 +371,40 @@ fn scan_into(s: &str, out: &mut HashSet<String>) {
     }
 }
 
+/// How a substituted secret is encoded into the text that carries it.
+#[derive(Clone, Copy)]
+enum Encoding {
+    /// Plain string: the value verbatim.
+    Raw,
+    /// Inside a JSON string literal: JSON-escaped, without the quotes.
+    JsonString,
+    /// Inside a single-quoted `when:` literal: `\` and `'` backslash-escaped,
+    /// the inverse of the lexer's unescape (policy/when.rs, server/conditionals).
+    WhenLiteral,
+}
+
+/// True when `s` is a JSON array — the wire form of a list attribute.
+fn is_json_array(s: &str) -> bool {
+    s.trim_start().starts_with('[') && serde_json::from_str::<Vec<Value>>(s).is_ok()
+}
+
+fn encode_secret(value: &str, enc: Encoding) -> String {
+    match enc {
+        Encoding::Raw => value.to_string(),
+        Encoding::JsonString => {
+            // Serializing a &str cannot fail and always yields `"…"`.
+            let quoted = serde_json::to_string(value).expect("serialize str");
+            quoted[1..quoted.len() - 1].to_string()
+        }
+        Encoding::WhenLiteral => value.replace('\\', "\\\\").replace('\'', "\\'"),
+    }
+}
+
 fn substitute_in_string(s: &str, cache: &SecretCache) -> Result<String> {
+    substitute_in_string_as(s, cache, Encoding::Raw)
+}
+
+fn substitute_in_string_as(s: &str, cache: &SecretCache, enc: Encoding) -> Result<String> {
     let mut out = String::with_capacity(s.len());
     let mut i = 0;
     loop {
@@ -390,7 +428,7 @@ fn substitute_in_string(s: &str, cache: &SecretCache) -> Result<String> {
         let value = cache
             .get(key)
             .ok_or_else(|| anyhow!("secret {key:?} not in cache after resolve"))?;
-        out.push_str(&value);
+        out.push_str(&encode_secret(&value, enc));
         i = key_end + PLACEHOLDER_END.len();
     }
 }
@@ -537,6 +575,36 @@ mod tests {
             bundle.configcrates[0].resources[0].attributes["content"],
             "cert=KEY-BYTES"
         );
+    }
+
+    /// A secret inside a list attribute (JSON text on the wire) or a `when:`
+    /// literal used to be pasted in raw, so a `"`/`\` broke the JSON and a
+    /// `'`/`\` broke the when lexer. The decoded value must equal the secret.
+    #[test]
+    fn substitute_escapes_for_json_lists_and_when_literals() {
+        let secret = r#"p"a\ss'w"#;
+        let cache = SecretCache::new();
+        cache.extend(HashMap::from([("vigo/x".to_string(), secret.to_string())]));
+        let mut bundle = make_bundle(
+            "{}",
+            vec![
+                ("args", r#"["--pw","__VIGO_SECRET__vigo/x__END_VIGO_SECRET__"]"#),
+                ("content", "pw=__VIGO_SECRET__vigo/x__END_VIGO_SECRET__"),
+            ],
+        );
+        bundle.configcrates[0].resources[0].when =
+            "token == '__VIGO_SECRET__vigo/x__END_VIGO_SECRET__'".to_string();
+        substitute_in_bundle(&mut bundle, &cache).unwrap();
+        let r = &bundle.configcrates[0].resources[0];
+        let list: Vec<String> = serde_json::from_str(&r.attributes["args"])
+            .expect("list attribute is still valid JSON after substitution");
+        assert_eq!(list, vec!["--pw".to_string(), secret.to_string()]);
+        assert_eq!(r.attributes["content"], format!("pw={secret}"));
+        let expr = crate::policy::when::parse(&r.when).expect("when still lexes");
+        let mut vars = serde_json::Map::new();
+        vars.insert("token".into(), Value::String(secret.to_string()));
+        let sub = crate::policy::when::substitute_vars(&expr, &vars);
+        assert!(crate::policy::when::eval(&sub, &|_| false).unwrap());
     }
 
     #[test]
