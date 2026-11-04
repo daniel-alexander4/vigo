@@ -103,3 +103,25 @@ func TestHeaders_SetsLockedCSP(t *testing.T) {
 		t.Error("X-Frame-Options missing")
 	}
 }
+
+// TestScrierTerminalCSP_WidensOnlyStyleElements: the scrier terminal policy
+// may admit xterm's runtime <style> elements and nothing else — scripts and
+// style attributes stay locked.
+func TestScrierTerminalCSP_WidensOnlyStyleElements(t *testing.T) {
+	got := directives(ScrierTerminalCSP)
+	locked := directives(CSP)
+	for k, v := range locked {
+		if got[k] != v {
+			t.Errorf("%s = %q, want the locked %q", k, got[k], v)
+		}
+	}
+	if got["style-src-elem"] != "'self' 'unsafe-inline'" {
+		t.Errorf("style-src-elem = %q", got["style-src-elem"])
+	}
+	if len(got) != len(locked)+1 {
+		t.Errorf("ScrierTerminalCSP widens more than style-src-elem: %s", ScrierTerminalCSP)
+	}
+	if strings.Contains(got["script-src"], "unsafe") {
+		t.Errorf("script-src must stay locked: %s", ScrierTerminalCSP)
+	}
+}

@@ -37,7 +37,7 @@ you don't run any setup verb. The chain, first hit wins:
 4. `$SUDO_USER`'s home directory → same pubkey filenames. Belt-and-suspenders for `sudo vigocli` invocations that don't go through `su -`.
 5. Error: `cannot auto-detect your SSH pubkey … pass --ssh-key-file PATH`.
 
-The auto-detected pubkey is shipped with the connect request and write-through-stored on your web user (`users.ssh_public_key`) so subsequent browser sessions reuse it.
+The server only accepts a pubkey that is already stored on a web user (`users.ssh_public_key`, set by `vigocli webusers create|update --ssh-key-file`); nothing is written back. With a per-user API token the key must be the one stored on your own web user. With the server host's local-admin token (`sudo vigocli`, no per-user token), the key must be stored on exactly one admin web user, and the session is recorded under that user. Any other key is refused, so you cannot land as an OS user by naming their public key.
 
 **Flags:**
 
@@ -67,6 +67,7 @@ Nothing touches the customer's firewall: the envoy's outbound TCP to the Vigo se
 
 - Admin role on the CLI's token (same gate the browser flow uses).
 - The CLI can auto-detect a pubkey via the chain above, OR you pass `--ssh-key-file`.
+- That pubkey is the one stored on your web user (or, with the local-admin token, on exactly one admin web user).
 - That pubkey is in `~/.ssh/authorized_keys` of some regular (non-root) user on the target envoy.
 - The envoy must have `sshd` listening on `127.0.0.1:22`; Scrier does not expose SSH on the envoy's external interface.
 - stdin and stdout must both be TTYs — piped invocations are refused with a clear error.

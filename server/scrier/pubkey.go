@@ -4,79 +4,143 @@
 package scrier
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 
 	"golang.org/x/crypto/ssh"
+
+	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/db"
 )
 
-// sshPubkeyFetcher is the narrow interface the scrier websocket uses to
-// fetch a webuser's current SSH public key on the protocol-setup hot path.
-// Implemented by `*db.Queries.GetUserSSHPublicKey` in production; a fake
-// satisfies it in [TestResolveVerifyPubkey].
-type sshPubkeyFetcher interface {
+// sshPubkeyStore is the narrow interface the scrier websocket uses to read
+// webusers' stored SSH public keys at session setup. Implemented by
+// `*db.Queries` in production; a fake satisfies it in the pubkey tests.
+type sshPubkeyStore interface {
 	GetUserSSHPublicKey(ctx context.Context, id string) (string, error)
+	ListUsers(ctx context.Context) ([]db.User, error)
+}
+
+// verifyIdentity is the outcome of [resolveVerifyPubkey]: the SSH public
+// key the agent scans authorized_keys files for, and the webuser it is
+// stored for. The session's DB row and audit entries are attributed to
+// that webuser.
+type verifyIdentity struct {
+	Pubkey   string
+	UserID   string
+	Username string
 }
 
 // resolveVerifyPubkey returns the SSH public key the agent will scan
-// authorized_keys files against. The CLI path wins (requestedPubkey is
-// supplied inline at every connect — see `cli/scrier_ssh.go::resolveOperatorPubkey`);
-// for the browser path, we read the current value of `users.ssh_public_key`
-// directly from the DB rather than the session-cached `User.SSHPublicKey`.
+// authorized_keys files against, together with the webuser it belongs to.
 //
-// The session blob is a gob snapshot of the `auth.User` struct at login
-// time. `ssh_public_key` has its own write-through lifecycle —
-// `vigocli webusers create --role admin` and `vigocli webusers set-role
-// --role admin` both auto-seed it from the matching OS user's home dir —
-// and the session is not invalidated on those writes. Reading from the
-// session was a stale-read trap: an operator who ran set-role mid-session
-// and immediately tried browser scrier got "no SSH pubkey available"
-// even though the DB column was populated. Logging out and back in was
-// the workaround. Fixed by sourcing the pubkey from the DB at connect time.
+// The verify key is always a key stored on a webuser row
+// (`users.ssh_public_key`, set by `vigocli webusers create|update
+// --ssh-key-file`). The agent lands the session as whichever OS user holds
+// that key, so the stored key is what binds a webuser to one OS user
+// (admin webusers map 1:1 to human OS users). A key in the connect request
+// is never trusted on its own — it carries no proof of possession — so an
+// admin cannot name some other user's public key and land as them:
 //
-// Returns (verifyPubkey, error). Errors:
-//   - requestedPubkey is non-empty but fails to parse → "invalid SSH pubkey in connect request: …"
-//   - DB lookup failed (other than sql.ErrNoRows; that decays to empty) → "fetching SSH pubkey: …"
+//   - A real webuser (browser or CLI with a per-user token): the stored key
+//     is the verify key. A requested key (the CLI sends one) must equal it.
+//   - The local-admin principal (`sudo vigocli` on the server host, which
+//     has no users row): the requested key is required and must be the
+//     stored key of exactly one admin webuser; the session is attributed to
+//     that webuser. The caller is root on the server host, so this adds
+//     attribution rather than authority.
 //
-// An empty return value (no requested key, no DB row, or DB row holds an
-// empty string) is NOT an error — the caller surfaces the operator-
-// facing "no SSH pubkey available" message at the call site.
-func resolveVerifyPubkey(ctx context.Context, q sshPubkeyFetcher, userID, requestedPubkey string) (string, error) {
+// The stored key is read from the DB at connect time, not from the
+// session-cached `User.SSHPublicKey`: the session blob is a login-time
+// snapshot and the key has its own write lifecycle.
+//
+// An empty Pubkey with a nil error means no key is stored for the caller;
+// the call site surfaces the operator-facing "no SSH pubkey available"
+// message.
+func resolveVerifyPubkey(ctx context.Context, q sshPubkeyStore, user *vigoauth.User, requestedPubkey string) (verifyIdentity, error) {
+	var requested ssh.PublicKey
 	if requestedPubkey != "" {
-		key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(requestedPubkey))
+		key, err := parseEd25519(requestedPubkey, "in connect request")
 		if err != nil {
-			return "", fmt.Errorf("invalid SSH pubkey in connect request: %w", err)
+			return verifyIdentity{}, err
 		}
-		if key.Type() != ssh.KeyAlgoED25519 {
-			return "", fmt.Errorf("scrier requires ed25519 pubkey, got %s", key.Type())
-		}
-		return requestedPubkey, nil
+		requested = key
 	}
 	if q == nil {
-		return "", nil
+		return verifyIdentity{}, nil
 	}
-	pubkey, err := q.GetUserSSHPublicKey(ctx, userID)
+
+	if user.ID == vigoauth.LocalAdminUserID {
+		return resolveLocalAdmin(ctx, q, requested, requestedPubkey)
+	}
+
+	stored, err := q.GetUserSSHPublicKey(ctx, user.ID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return verifyIdentity{}, fmt.Errorf("fetching SSH pubkey: %w", err)
+	}
+	if stored == "" {
+		return verifyIdentity{}, nil
+	}
+	// Validate the stored key the same way as the inline one — closes the
+	// forced-downgrade vector of a non-Ed25519 key stored via `vigocli
+	// webusers update --ssh-key-file`.
+	storedKey, err := parseEd25519(stored, "stored for user "+user.Username)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil
+		return verifyIdentity{}, err
+	}
+	if requested != nil && !sameKey(requested, storedKey) {
+		return verifyIdentity{}, fmt.Errorf("the SSH pubkey in the connect request is not the one stored for webuser %s — run `vigocli webusers update --username %s --ssh-key-file <your .pub>` or pass --ssh-key-file with the stored key", user.Username, user.Username)
+	}
+	return verifyIdentity{Pubkey: stored, UserID: user.ID, Username: user.Username}, nil
+}
+
+// resolveLocalAdmin maps the local-admin principal's requested key to the
+// one admin webuser that stores it.
+func resolveLocalAdmin(ctx context.Context, q sshPubkeyStore, requested ssh.PublicKey, requestedPubkey string) (verifyIdentity, error) {
+	if requested == nil {
+		return verifyIdentity{}, errors.New("the local-admin token has no stored SSH pubkey — the CLI must send your key (pass --ssh-key-file)")
+	}
+	users, err := q.ListUsers(ctx)
+	if err != nil {
+		return verifyIdentity{}, fmt.Errorf("listing webusers: %w", err)
+	}
+	var match *db.User
+	for i := range users {
+		u := &users[i]
+		if u.Role != "admin" || u.SshPublicKey == "" {
+			continue
 		}
-		return "", fmt.Errorf("fetching SSH pubkey: %w", err)
+		key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(u.SshPublicKey))
+		if err != nil || !sameKey(key, requested) {
+			continue
+		}
+		if match != nil {
+			return verifyIdentity{}, fmt.Errorf("SSH pubkey is stored for more than one admin webuser (%s, %s); scrier cannot attribute the session", match.Username, u.Username)
+		}
+		match = u
 	}
-	if pubkey == "" {
-		return "", nil
+	if match == nil {
+		return verifyIdentity{}, errors.New("SSH pubkey is not stored for any admin webuser — run `vigocli webusers create|update --username <yourname> --role admin --ssh-key-file <your .pub>` first")
 	}
-	// Validate the DB-fetched key the same way as the inline-supplied one —
-	// closes the forced-downgrade vector where an admin storing a non-Ed25519
-	// key via `vigocli webusers update --ssh-key-file` would slip past
-	// inline-only validation. Defense-in-depth at the read boundary.
-	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(pubkey))
+	return verifyIdentity{Pubkey: requestedPubkey, UserID: match.ID, Username: match.Username}, nil
+}
+
+func parseEd25519(authorizedKey, where string) (ssh.PublicKey, error) {
+	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(authorizedKey))
 	if err != nil {
-		return "", fmt.Errorf("invalid SSH pubkey in DB for user %s: %w", userID, err)
+		return nil, fmt.Errorf("invalid SSH pubkey %s: %w", where, err)
 	}
 	if key.Type() != ssh.KeyAlgoED25519 {
-		return "", fmt.Errorf("scrier requires ed25519 pubkey, got %s", key.Type())
+		return nil, fmt.Errorf("scrier requires ed25519 pubkey, got %s", key.Type())
 	}
-	return pubkey, nil
+	return key, nil
+}
+
+// sameKey compares the wire encoding, so comments and whitespace in the
+// authorized_keys line do not matter.
+func sameKey(a, b ssh.PublicKey) bool {
+	return bytes.Equal(a.Marshal(), b.Marshal())
 }

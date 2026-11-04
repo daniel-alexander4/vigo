@@ -1042,6 +1042,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 		s.agentSvc.SetTunnelManager(tm)
 		s.scrierHandler = vigoscrier.NewHandler(tm, s.fleetIndex, s.queries, version, s.baseInterval, s.offlineThreshold)
 		s.scrierHandler.SetAuditWriter(s.auditWriter)
+		s.scrierHandler.SetMetrics(s.metrics)
 		slog.Info("scrier remote access enabled",
 			"guacd", s.cfg.Scrier.ScrierGuacdAddr(),
 			"max_sessions", s.cfg.Scrier.ScrierMaxSessions(),

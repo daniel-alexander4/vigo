@@ -15,10 +15,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -34,8 +36,16 @@ import (
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/httpsec"
+	"git.alexander4.io/vigo/server/metrics"
 	"github.com/google/uuid"
 )
+
+// staticFS holds the session pages' CSS and JS, served at /scrier/assets/.
+// External assets are what let the pages run under the locked CSP.
+//
+//go:embed static
+var staticFS embed.FS
 
 // SSHPubkeyAuth holds the SSH pubkey auth parameters for a Scrier session.
 // The agent scans every regular user's authorized_keys for VerifyPubkey to
@@ -95,6 +105,7 @@ type scrierSession struct {
 	tunnelID    string
 	tunnelDone  chan struct{}
 	sshUsername string
+	recordUser  string // webuser the session's DB row + audit entries name
 
 	// SSH-specific (xterm.js path):
 	sshClient  *ssh.Client
@@ -163,6 +174,7 @@ type Handler struct {
 	fleetIndex   *fleet.FleetIndex
 	queries      *db.Queries
 	auditWriter  AuditRecorder
+	metrics      *metrics.Metrics
 	version      string
 	connectWait  string // human-readable max wait (check-in interval + 20%)
 	tmplSSH      *template.Template
@@ -222,12 +234,47 @@ func (h *Handler) SetAuditWriter(w AuditRecorder) {
 	h.auditWriter = w
 }
 
+// SetMetrics attaches the Prometheus collectors; the scrier record-error
+// counter lives there.
+func (h *Handler) SetMetrics(m *metrics.Metrics) {
+	h.metrics = m
+}
+
+// recordFailed logs and counts a failed write to the remote-session record
+// (DB session row or audit entry). The session carries on: a recording
+// failure must be visible, but tearing down a live admin shell over it
+// would not restore the record.
+func (h *Handler) recordFailed(op, sessionID string, err error) {
+	slog.Error("scrier: session record write failed", "op", op, "session_id", sessionID, "error", err)
+	if h.metrics != nil {
+		h.metrics.ScrierRecordErrors.WithLabelValues(op).Inc()
+	}
+}
+
 // RegisterRoutes registers the Scrier endpoints.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /scrier/{id}", h.HandleSession)
 	mux.HandleFunc("POST /api/v1/scrier/connect", h.HandleConnect)
 	mux.HandleFunc("GET /api/v1/scrier/sessions/{id}/status", h.HandleSessionStatus)
 	mux.HandleFunc("GET /ws/scrier/{id}", h.HandleRelay)
+	mux.HandleFunc("GET /scrier/assets/{name}", h.HandleAsset)
+}
+
+// HandleAsset serves the session pages' embedded CSS/JS. It sits behind
+// the auth middleware like the pages themselves.
+func (h *Handler) HandleAsset(w http.ResponseWriter, r *http.Request) {
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		http.Error(w, "assets unavailable", http.StatusInternalServerError)
+		return
+	}
+	name := r.PathValue("name")
+	if !fs.ValidPath(name) {
+		http.NotFound(w, r)
+		return
+	}
+	httpsec.Headers(w)
+	http.ServeFileFS(w, r, sub, name)
 }
 
 // --- Phase 0: Session page ---
@@ -289,11 +336,14 @@ func (h *Handler) HandleSession(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	switch protocol {
 	case "ssh":
+		// xterm.js injects runtime <style> elements; see ScrierTerminalCSP.
+		httpsec.HeadersWithCSP(w, httpsec.ScrierTerminalCSP)
 		if err := h.tmplSSH.Execute(w, data); err != nil {
 			slog.Error("scrier: session template render failed", "protocol", protocol, "error", err)
 		}
 	default:
 		// RDP and VNC both use the Guacamole template.
+		httpsec.Headers(w)
 		if err := h.tmplRDP.Execute(w, data); err != nil {
 			slog.Error("scrier: session template render failed", "protocol", protocol, "error", err)
 		}
@@ -308,12 +358,12 @@ type connectRequest struct {
 	Port     uint32 `json:"port"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
-	// SSHPublicKey lets the operator's CLI ship a freshly-detected pubkey
-	// per session (see cli/scrier_ssh.go::resolveOperatorPubkey). When
-	// present, the server validates it, writes it through to the calling
-	// user's users.ssh_public_key row, and uses it as the verify source
-	// for this session. When absent (browser path), the server falls back
-	// to the stored value.
+	// SSHPublicKey is the pubkey the operator's CLI auto-detects per
+	// session (cli/scrier_ssh.go::resolveOperatorPubkey). It is never
+	// trusted on its own: it must equal the key stored on the caller's
+	// webuser row, or — for the local-admin token — be the stored key of
+	// exactly one admin webuser (see [resolveVerifyPubkey]). Nothing is
+	// written back. The browser path omits it and uses the stored key.
 	SSHPublicKey string `json:"ssh_public_key,omitempty"`
 }
 
@@ -402,41 +452,34 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	ctx := context.Background()
 
-	// SSH pubkey auth: the web user's own pubkey is the verify source. The
-	// agent will scan every regular user's authorized_keys for it and land
-	// the operator in whichever OS user owns the match.
-	//
-	// Two ingress paths:
-	//   CLI path — the request carries the operator's freshly-detected
-	//     pubkey (cli/scrier_ssh.go::resolveOperatorPubkey). We validate
-	//     it and use it for THIS session.
-	//   Browser path — no pubkey in the request; we read the CURRENT
-	//     value of users.ssh_public_key directly from the DB via
-	//     [resolveVerifyPubkey]. NOT the session-cached User.SSHPublicKey:
-	//     the session blob is a gob snapshot at login time, and the SSH
-	//     pubkey has its own write-through lifecycle (`vigocli webusers
-	//     {create,set-role} --role admin` auto-seed it). Reading from the
-	//     session was a stale-read trap — an operator who ran set-role
-	//     mid-session and immediately attempted browser scrier got
-	//     "no SSH pubkey available" until they logged out + back in.
-	//     The pubkey is set canonically by `vigocli webusers create
-	//     --role admin` (new user) or `vigocli webusers set-role --role
-	//     admin` (existing user) — both auto-read from the matching OS
-	//     user's home dir.
-	//
-	// No write-through: persisting per-user state from an opportunistic
-	// runtime side-effect was previously a silent fail for peer-authed
-	// CLI runs (the synthetic loopback admin's user.ID didn't match a
-	// real row, so the UPDATE affected zero rows and returned nil). The
-	// admin-webuser-create flow now owns DB-side pubkey state; this
-	// handler is a consumer only.
+	// Every session leaves the map: armed here, before any early return,
+	// so a session whose setup fails is removed once the poller has had
+	// the expiry window to read its error.
+	defer h.armExpiry(sess)
+
+	// Who the session is recorded as. For SSH it is the webuser whose
+	// stored key the agent verifies against (see [resolveVerifyPubkey]);
+	// RDP/VNC carry no key and record the caller.
+	recordUserID, recordUsername := user.ID, user.Username
+
+	// SSH pubkey auth: the verify key is the one stored on a webuser row,
+	// read from the DB at connect time. The agent scans every regular
+	// user's authorized_keys for it and lands the operator in whichever OS
+	// user owns the match. A key in the connect request (CLI path) must
+	// match the stored key; it is never used on its own.
 	var sshAuth *SSHPubkeyAuth
 	if sess.protocol == "ssh" {
-		verifyPubkey, err := resolveVerifyPubkey(ctx, h.queries, user.ID, sess.requestedPubkey)
+		var store sshPubkeyStore
+		if h.queries != nil {
+			store = h.queries
+		}
+		ident, err := resolveVerifyPubkey(ctx, store, user, sess.requestedPubkey)
 		if err != nil {
 			sess.setStatus(statusError, err.Error())
 			return
 		}
+		verifyPubkey := ident.Pubkey
+		recordUserID, recordUsername = ident.UserID, ident.Username
 		if verifyPubkey == "" {
 			sess.setStatus(statusError,
 				"no SSH pubkey available — for browser scrier, run `vigocli webusers set-role --username <yourname> --role admin` (existing user) or `vigocli webusers create --username <yourname> --role admin` (new user) from the server host; both seed your DB-side pubkey from your OS user's ~/.ssh/id_*.pub. For CLI scrier, the CLI auto-detects and sends inline.")
@@ -482,28 +525,49 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	}
 
 	// Record session in DB.
+	sess.mu.Lock()
+	sess.recordUser = recordUsername
+	sess.mu.Unlock()
+
 	if h.queries != nil {
-		_, _ = h.queries.InsertScrierSession(ctx, db.InsertScrierSessionParams{
+		if _, err := h.queries.InsertScrierSession(ctx, db.InsertScrierSessionParams{
 			EnvoyID:    sess.envoyID,
-			UserID:     user.ID,
-			Username:   user.Username,
+			UserID:     recordUserID,
+			Username:   recordUsername,
 			Protocol:   sess.protocol,
 			TargetPort: int64(sess.port),
 			TunnelID:   tunnelID,
-		})
+		}); err != nil {
+			h.recordFailed("session_insert", sess.id, err)
+		}
 	}
 
 	if h.auditWriter != nil {
-		_ = h.auditWriter.Record(ctx, "scrier.connect", user.Username, "web_ui",
-			fmt.Sprintf("opened %s session to %s (port %d)", sess.protocol, sess.hostname, sess.port), "")
+		if err := h.auditWriter.Record(ctx, "scrier.connect", recordUsername, auditSource(user),
+			fmt.Sprintf("opened %s session to %s (port %d)", sess.protocol, sess.hostname, sess.port), ""); err != nil {
+			h.recordFailed("audit_connect", sess.id, err)
+		}
 	}
+}
 
-	// Clean up sessions that never get a WebSocket connection or that
-	// failed setup. The claim flag is the single SoT for "who owns
-	// teardown": if HandleRelay already claimed, this no-ops; if we
-	// claim, the relay handler will see claimed=true at its entry
-	// check and respond 409 Conflict rather than enter a relay loop
-	// against a session whose underlying resources we're closing.
+// auditSource names the caller's credential in scrier audit entries: the
+// local-admin token is root on the server host acting for the webuser the
+// session is attributed to.
+func auditSource(user *vigoauth.User) string {
+	if user.ID == vigoauth.LocalAdminUserID {
+		return "local_admin"
+	}
+	return "web_ui"
+}
+
+// armExpiry schedules the session's removal from h.sessions. It covers
+// sessions that never get a WebSocket connection and sessions whose setup
+// failed (kept for one expiry window so the status poller can read the
+// error, then dropped). The claim flag is the single SoT for "who owns
+// teardown": if HandleRelay already claimed, this no-ops; if we claim,
+// the relay handler sees claimed=true at its entry check and responds
+// 409 Conflict rather than relay against resources we're closing.
+func (h *Handler) armExpiry(sess *scrierSession) {
 	time.AfterFunc(h.sessionExpiry, func() {
 		defer daemon.Recover("scrier-session-expiry", nil)
 		if !sess.claim() {
@@ -771,7 +835,12 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	sess.setStatus(statusRelaying, "")
 
 	// Accept WebSocket — SSH uses no subprotocol, RDP/VNC use "guacamole".
-	opts := &websocket.AcceptOptions{InsecureSkipVerify: true}
+	// The library's default Origin check stays on: a browser upgrade must
+	// carry an Origin whose host is this request's Host (the scrier page
+	// is served by this same listener), which is what stops a foreign page
+	// riding the admin's session cookie into a shell. A request with no
+	// Origin (vigocli) is not a browser and passes.
+	opts := &websocket.AcceptOptions{}
 	if sess.protocol == "rdp" || sess.protocol == "vnc" {
 		opts.Subprotocols = []string{"guacamole"}
 	}
@@ -806,15 +875,25 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	duration := time.Since(startedAt).Round(time.Second)
 
 	if h.queries != nil {
-		_ = h.queries.EndScrierSession(context.Background(), db.EndScrierSessionParams{
+		if err := h.queries.EndScrierSession(context.Background(), db.EndScrierSessionParams{
 			Status:   "closed",
 			TunnelID: sess.tunnelID,
-		})
+		}); err != nil {
+			h.recordFailed("session_end", sessionID, err)
+		}
 	}
 
 	if h.auditWriter != nil {
-		_ = h.auditWriter.Record(context.Background(), "scrier.disconnect", user.Username, "web_ui",
-			fmt.Sprintf("closed %s session to %s after %s", sess.protocol, sess.hostname, duration), "")
+		sess.mu.Lock()
+		actor := sess.recordUser
+		sess.mu.Unlock()
+		if actor == "" {
+			actor = user.Username
+		}
+		if err := h.auditWriter.Record(context.Background(), "scrier.disconnect", actor, auditSource(user),
+			fmt.Sprintf("closed %s session to %s after %s", sess.protocol, sess.hostname, duration), ""); err != nil {
+			h.recordFailed("audit_disconnect", sessionID, err)
+		}
 	}
 
 	slog.Info("scrier websocket relay ended",

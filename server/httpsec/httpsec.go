@@ -66,6 +66,17 @@ const cspTail = "base-uri 'none'; form-action 'self'; object-src 'none'; frame-a
 // blocks. Every other HTML surface keeps CSP.
 const IsowebauthLoginCSP = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' " + IsowebauthSignerOrigin + "; " + cspTail
 
+// ScrierTerminalCSP is CSP plus one widened directive, for the scrier SSH
+// terminal page ONLY. xterm.js 5.5's DOM renderer injects two <style>
+// elements at runtime (theme colours and per-font cell dimensions, both
+// computed in the browser, so no hash can cover them). Under CSP those are
+// blocked and the terminal renders black-on-black — measured in headless
+// Chrome. style-src-elem admits <style> elements only: style= attributes
+// stay blocked by style-src, and script-src stays locked, which is the
+// directive that stands between an XSS and a root shell. The RDP/VNC page
+// (Guacamole styles through the CSSOM, which CSP does not govern) keeps CSP.
+const ScrierTerminalCSP = "default-src 'self'; script-src 'self'; style-src 'self'; style-src-elem 'self' 'unsafe-inline'; " + cspTail
+
 // IsowebauthSignerOrigin is the local signing app's origin the isowebauth
 // login script fetches; it must match ui/static/js/isowebauth.js.
 const IsowebauthSignerOrigin = "http://127.0.0.1:7890"

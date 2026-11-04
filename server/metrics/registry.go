@@ -169,6 +169,10 @@ type Metrics struct {
 	// --- Auth ---
 
 	APITokenLastUsedUpdateErrors prometheus.Counter
+
+	// --- Scrier ---
+
+	ScrierRecordErrors *prometheus.CounterVec
 }
 
 // NewMetrics constructs the collector set, registering each into the
@@ -599,6 +603,13 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_apitoken_lastused_update_errors_total",
 			Help: "API-token last_used_at DB write failures (best-effort; token validation succeeded). Persistent non-zero values indicate DB unhealth on the auth path.",
 		}),
+
+		// --- Scrier ---
+
+		ScrierRecordErrors: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_scrier_record_errors_total",
+			Help: "Scrier remote-session record writes that failed, by op (session_insert, session_end, audit_connect, audit_disconnect). Any non-zero value is a gap in the remote-shell audit trail.",
+		}, []string{"op"}),
 	}
 }
 

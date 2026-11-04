@@ -9,69 +9,154 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/db"
 )
 
-// fakeFetcher implements [sshPubkeyFetcher] with a canned response per
-// user_id and an injectable error. Lets the helper be exercised without
-// a real Queries / DB.
-type fakeFetcher struct {
-	pubkeys map[string]string
-	err     error
+// fakeStore implements [sshPubkeyStore] with canned rows and an injectable
+// error, so the helper is exercised without a real DB.
+type fakeStore struct {
+	users []db.User
+	err   error
 }
 
-func (f *fakeFetcher) GetUserSSHPublicKey(_ context.Context, id string) (string, error) {
+func (f *fakeStore) GetUserSSHPublicKey(_ context.Context, id string) (string, error) {
 	if f.err != nil {
 		return "", f.err
 	}
-	pk, ok := f.pubkeys[id]
-	if !ok {
-		return "", sql.ErrNoRows
+	for _, u := range f.users {
+		if u.ID == id {
+			return u.SshPublicKey, nil
+		}
 	}
-	return pk, nil
+	return "", sql.ErrNoRows
 }
 
-// A valid ed25519 pubkey for the parse-validation paths.
-const testPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEQiISM8yaMfJhysMR7ZM80c0w4lnwe/lgyPyzeSCEKI test@vigo"
+func (f *fakeStore) ListUsers(_ context.Context) ([]db.User, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.users, nil
+}
 
-// TestResolveVerifyPubkey_DBReadOverridesEmptySession is the load-bearing
-// regression: an operator who runs `vigocli webusers set-role --role
-// admin` mid-session and immediately attempts browser scrier gets the
-// freshly-seeded DB pubkey, not the stale empty value from their
-// session-cached User snapshot. Pre-fix, the websocket handler read
-// `user.SSHPublicKey` directly from the session blob and surfaced
-// "no SSH pubkey available" even though the DB column was populated;
-// the workaround was log-out + log-back-in.
-func TestResolveVerifyPubkey_DBReadOverridesEmptySession(t *testing.T) {
-	f := &fakeFetcher{pubkeys: map[string]string{"u-1": testPubkey}}
-	got, err := resolveVerifyPubkey(context.Background(), f, "u-1", "")
+// Valid ed25519 pubkeys for the parse-validation paths.
+const (
+	testPubkey      = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEQiISM8yaMfJhysMR7ZM80c0w4lnwe/lgyPyzeSCEKI test@vigo"
+	testOtherPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTnhQDY+EoHzuH6lTBahbzZVGcRcGEjhBBg0CLVK+cd other@vigo"
+)
+
+func alice() *vigoauth.User { return &vigoauth.User{ID: "u-1", Username: "alice", Role: "admin"} }
+
+func localAdmin() *vigoauth.User {
+	return &vigoauth.User{ID: vigoauth.LocalAdminUserID, Username: vigoauth.LocalAdminUserID, Role: "admin"}
+}
+
+func storeWith(rows ...db.User) *fakeStore { return &fakeStore{users: rows} }
+
+func row(id, username, role, key string) db.User {
+	return db.User{ID: id, Username: username, Role: role, SshPublicKey: key}
+}
+
+// TestResolveVerifyPubkey_StoredKeyIsVerifySource: the browser path (no
+// requested key) uses the key read fresh from the DB, not the session's
+// login-time snapshot.
+func TestResolveVerifyPubkey_StoredKeyIsVerifySource(t *testing.T) {
+	got, err := resolveVerifyPubkey(context.Background(), storeWith(row("u-1", "alice", "admin", testPubkey)), alice(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != testPubkey {
-		t.Errorf("verify pubkey = %q, want fresh DB value", got)
+	if got.Pubkey != testPubkey || got.UserID != "u-1" || got.Username != "alice" {
+		t.Errorf("got %+v, want alice's stored key", got)
 	}
 }
 
-// TestResolveVerifyPubkey_RequestedWins pins the CLI path: a connect
-// request that carries an explicit pubkey wins over whatever the DB says
-// for that user. Lets a CLI invocation under sudo use the operator's own
-// key, not the target webuser's stored key.
-func TestResolveVerifyPubkey_RequestedWins(t *testing.T) {
-	f := &fakeFetcher{pubkeys: map[string]string{"u-1": "ssh-rsa AAAA-DB-key user@host"}}
-	got, err := resolveVerifyPubkey(context.Background(), f, "u-1", testPubkey)
+// TestResolveVerifyPubkey_RequestedMatchingStoredAccepted: the CLI path
+// with the caller's own key passes; the comment may differ.
+func TestResolveVerifyPubkey_RequestedMatchingStoredAccepted(t *testing.T) {
+	requested := strings.TrimSuffix(testPubkey, "test@vigo") + "laptop"
+	got, err := resolveVerifyPubkey(context.Background(), storeWith(row("u-1", "alice", "admin", testPubkey)), alice(), requested)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != testPubkey {
-		t.Errorf("requested pubkey should win, got %q", got)
+	if got.Pubkey != testPubkey {
+		t.Errorf("verify key = %q, want the stored key", got.Pubkey)
+	}
+}
+
+// TestResolveVerifyPubkey_RequestedNotStoredRejected is the regression: an
+// admin naming another user's public key in the connect request must not
+// get it used as the verify key (it would land them as that OS user).
+func TestResolveVerifyPubkey_RequestedNotStoredRejected(t *testing.T) {
+	s := storeWith(row("u-1", "alice", "admin", testPubkey), row("u-2", "bob", "admin", testOtherPubkey))
+	_, err := resolveVerifyPubkey(context.Background(), s, alice(), testOtherPubkey)
+	if err == nil {
+		t.Fatal("a requested key that is not the caller's stored key must be refused")
+	}
+	if !strings.Contains(err.Error(), "not the one stored") {
+		t.Errorf("error should name the mismatch, got: %v", err)
+	}
+}
+
+// TestResolveVerifyPubkey_RequestedWithNoStoredKeyIsEmpty: a caller with
+// no stored key cannot supply one inline.
+func TestResolveVerifyPubkey_RequestedWithNoStoredKeyIsEmpty(t *testing.T) {
+	got, err := resolveVerifyPubkey(context.Background(), storeWith(row("u-1", "alice", "admin", "")), alice(), testPubkey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Pubkey != "" {
+		t.Errorf("no stored key must resolve empty, got %q", got.Pubkey)
+	}
+}
+
+// TestResolveVerifyPubkey_LocalAdminMapsToOwningAdmin: the local-admin
+// token's requested key resolves to the admin webuser storing it, and the
+// session is attributed to that webuser.
+func TestResolveVerifyPubkey_LocalAdminMapsToOwningAdmin(t *testing.T) {
+	s := storeWith(row("u-1", "alice", "admin", testPubkey), row("u-2", "bob", "admin", testOtherPubkey))
+	got, err := resolveVerifyPubkey(context.Background(), s, localAdmin(), testOtherPubkey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.UserID != "u-2" || got.Username != "bob" || got.Pubkey != testOtherPubkey {
+		t.Errorf("got %+v, want bob", got)
+	}
+}
+
+// TestResolveVerifyPubkey_LocalAdminUnknownKeyRejected: a key no admin
+// webuser stores is refused, and so is one stored only on a viewer.
+func TestResolveVerifyPubkey_LocalAdminUnknownKeyRejected(t *testing.T) {
+	s := storeWith(row("u-1", "alice", "admin", testPubkey), row("u-3", "carol", "viewer", testOtherPubkey))
+	if _, err := resolveVerifyPubkey(context.Background(), s, localAdmin(), testOtherPubkey); err == nil {
+		t.Fatal("a key stored only on a non-admin webuser must be refused")
+	}
+	if _, err := resolveVerifyPubkey(context.Background(), storeWith(), localAdmin(), testPubkey); err == nil {
+		t.Fatal("a key stored on no webuser must be refused")
+	}
+}
+
+// TestResolveVerifyPubkey_LocalAdminAmbiguousRejected: two admin rows
+// sharing a key cannot be attributed.
+func TestResolveVerifyPubkey_LocalAdminAmbiguousRejected(t *testing.T) {
+	s := storeWith(row("u-1", "alice", "admin", testPubkey), row("u-2", "bob", "admin", testPubkey))
+	if _, err := resolveVerifyPubkey(context.Background(), s, localAdmin(), testPubkey); err == nil {
+		t.Fatal("a key shared by two admin webusers must be refused")
+	}
+}
+
+// TestResolveVerifyPubkey_LocalAdminNeedsRequestedKey: the synthetic
+// principal has no stored key, so it must send one.
+func TestResolveVerifyPubkey_LocalAdminNeedsRequestedKey(t *testing.T) {
+	if _, err := resolveVerifyPubkey(context.Background(), storeWith(row("u-1", "alice", "admin", testPubkey)), localAdmin(), ""); err == nil {
+		t.Fatal("local admin without a requested key must be refused")
 	}
 }
 
 // TestResolveVerifyPubkey_RequestedInvalid: a malformed requested pubkey
-// is a 400-class user error, not a fall-through to the DB.
+// is an error, not a fall-through to the DB.
 func TestResolveVerifyPubkey_RequestedInvalid(t *testing.T) {
-	f := &fakeFetcher{pubkeys: map[string]string{"u-1": testPubkey}}
-	_, err := resolveVerifyPubkey(context.Background(), f, "u-1", "not a valid ssh key")
+	_, err := resolveVerifyPubkey(context.Background(), storeWith(row("u-1", "alice", "admin", testPubkey)), alice(), "not a valid ssh key")
 	if err == nil {
 		t.Fatal("expected error on malformed requested pubkey")
 	}
@@ -80,17 +165,15 @@ func TestResolveVerifyPubkey_RequestedInvalid(t *testing.T) {
 	}
 }
 
-// TestResolveVerifyPubkey_NoRowsIsEmpty: a missing user row decays to
-// the empty string, not an error. The caller surfaces the operator-
-// facing "no SSH pubkey available" message at the call site.
+// TestResolveVerifyPubkey_NoRowsIsEmpty: a missing user row decays to an
+// empty key; the caller surfaces "no SSH pubkey available".
 func TestResolveVerifyPubkey_NoRowsIsEmpty(t *testing.T) {
-	f := &fakeFetcher{pubkeys: map[string]string{}}
-	got, err := resolveVerifyPubkey(context.Background(), f, "u-missing", "")
+	got, err := resolveVerifyPubkey(context.Background(), storeWith(), alice(), "")
 	if err != nil {
 		t.Fatalf("unexpected error on missing row: %v", err)
 	}
-	if got != "" {
-		t.Errorf("missing user should resolve to empty pubkey, got %q", got)
+	if got.Pubkey != "" {
+		t.Errorf("missing user should resolve to empty pubkey, got %q", got.Pubkey)
 	}
 }
 
@@ -98,78 +181,40 @@ func TestResolveVerifyPubkey_NoRowsIsEmpty(t *testing.T) {
 // surfaces as an error rather than being swallowed.
 func TestResolveVerifyPubkey_DBErrorPropagates(t *testing.T) {
 	boom := errors.New("connection refused")
-	f := &fakeFetcher{err: boom}
-	_, err := resolveVerifyPubkey(context.Background(), f, "u-1", "")
-	if err == nil {
-		t.Fatal("expected error on DB failure")
-	}
+	_, err := resolveVerifyPubkey(context.Background(), &fakeStore{err: boom}, alice(), "")
 	if !errors.Is(err, boom) {
 		t.Errorf("DB error should propagate, got: %v", err)
 	}
 }
 
-// TestResolveVerifyPubkey_NilFetcher: a nil queries handle decays to
-// the empty string. Defensive against early-boot / misconfigured
-// callers; the caller's empty-pubkey error surfaces a real
-// operator-facing message.
-func TestResolveVerifyPubkey_NilFetcher(t *testing.T) {
-	got, err := resolveVerifyPubkey(context.Background(), nil, "u-1", "")
+// TestResolveVerifyPubkey_NilStore: no DB handle decays to empty.
+func TestResolveVerifyPubkey_NilStore(t *testing.T) {
+	got, err := resolveVerifyPubkey(context.Background(), nil, alice(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "" {
-		t.Errorf("nil fetcher should resolve to empty, got %q", got)
+	if got.Pubkey != "" {
+		t.Errorf("nil store should resolve to empty, got %q", got.Pubkey)
 	}
 }
 
-// A valid 1024-bit RSA pubkey (generated via `ssh-keygen -t rsa -b 1024`
-// for this test fixture). Used to drive the non-Ed25519 rejection
-// path: parses cleanly via ssh.ParseAuthorizedKey, then fails the
-// ED25519 type assertion. 1024-bit is fine for a unit fixture — we're
-// not using the key, only validating it gets rejected.
+// A valid 1024-bit RSA pubkey, used to drive the non-Ed25519 rejection.
 const testRSAPubkey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQDTkv6Gqrk3xK/mEUUT4BIhFX0ZVmIuKWshqwV8fCS5USmIUwL/kGkdjQ1vW6BeVRJBUEo8f7fx6cUizbhRo1zHOlsPRJb+kIYlKS2R9IiFMvCgZDuUWjZZLqmf0URmZ9vC7pOZcnhL0QMd0o9F9GZM8wWAMVTy3u3rDtUsiFNA+Q== test@vigo"
 
-// TestResolveVerifyPubkey_RequestedNonEd25519Rejected pins the
-// downgrade-guard at the inline (CLI) path. A non-Ed25519 connect
-// request (RSA here) is rejected with a clear error before the agent
-// ever sees it. The scrier per-session contract is Ed25519-only.
+// TestResolveVerifyPubkey_RequestedNonEd25519Rejected pins the downgrade
+// guard at the inline (CLI) path.
 func TestResolveVerifyPubkey_RequestedNonEd25519Rejected(t *testing.T) {
-	f := &fakeFetcher{pubkeys: map[string]string{"u-1": testPubkey}}
-	_, err := resolveVerifyPubkey(context.Background(), f, "u-1", testRSAPubkey)
-	if err == nil {
-		t.Fatal("expected error for non-Ed25519 requested pubkey")
-	}
-	if !strings.Contains(err.Error(), "ed25519") {
-		t.Errorf("error should name the required algorithm, got: %v", err)
+	_, err := resolveVerifyPubkey(context.Background(), storeWith(row("u-1", "alice", "admin", testPubkey)), alice(), testRSAPubkey)
+	if err == nil || !strings.Contains(err.Error(), "ed25519") {
+		t.Errorf("non-Ed25519 requested key must be refused naming ed25519, got: %v", err)
 	}
 }
 
-// TestResolveVerifyPubkey_DBNonEd25519Rejected pins the symmetric
-// downgrade-guard at the DB-read path — closes the vector where an
-// admin storing an RSA key via `vigocli webusers update --ssh-key-file`
-// would slip past inline-only validation. Defense-in-depth at the
-// boundary that consumes the value.
+// TestResolveVerifyPubkey_DBNonEd25519Rejected pins the same guard at the
+// DB-read path.
 func TestResolveVerifyPubkey_DBNonEd25519Rejected(t *testing.T) {
-	f := &fakeFetcher{pubkeys: map[string]string{"u-1": testRSAPubkey}}
-	_, err := resolveVerifyPubkey(context.Background(), f, "u-1", "")
-	if err == nil {
-		t.Fatal("expected error for non-Ed25519 DB pubkey")
-	}
-	if !strings.Contains(err.Error(), "ed25519") {
-		t.Errorf("error should name the required algorithm, got: %v", err)
-	}
-}
-
-// TestResolveVerifyPubkey_DBEmptyString: an empty (but no-err) DB row
-// decays to "" — same as the sql.ErrNoRows path. Don't try to parse
-// an empty string as an SSH key.
-func TestResolveVerifyPubkey_DBEmptyString(t *testing.T) {
-	f := &fakeFetcher{pubkeys: map[string]string{"u-1": ""}}
-	got, err := resolveVerifyPubkey(context.Background(), f, "u-1", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != "" {
-		t.Errorf("empty DB pubkey should resolve to empty, got %q", got)
+	_, err := resolveVerifyPubkey(context.Background(), storeWith(row("u-1", "alice", "admin", testRSAPubkey)), alice(), "")
+	if err == nil || !strings.Contains(err.Error(), "ed25519") {
+		t.Errorf("non-Ed25519 stored key must be refused naming ed25519, got: %v", err)
 	}
 }

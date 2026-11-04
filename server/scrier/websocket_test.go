@@ -39,9 +39,9 @@ func (f *fakeTunnelOpener) SSHResult(_ string) (string, string) {
 	return "operator", ""
 }
 
-func (f *fakeTunnelOpener) ActiveSessions() int  { return 0 }
+func (f *fakeTunnelOpener) ActiveSessions() int        { return 0 }
 func (f *fakeTunnelOpener) HasAgentStream(string) bool { return true }
-func (f *fakeTunnelOpener) GuacdAddr() string    { return "127.0.0.1:0" }
+func (f *fakeTunnelOpener) GuacdAddr() string          { return "127.0.0.1:0" }
 
 // newRelayTestSession constructs a relay-ready scrierSession backed by
 // in-memory pipes. The ptyOut/ptyIn pair lets tests inject SSH-side
@@ -248,16 +248,9 @@ func TestSessionExpiry_ClaimRaceWithRelay(t *testing.T) {
 	h.sessions[sess.id] = sess
 	h.sessionsMu.Unlock()
 
-	// Arm the expiry timer manually with the injected duration. The
-	// production path arms it inside setupSession; the test exercises
-	// just the lifecycle, not the full setup chain.
-	time.AfterFunc(h.sessionExpiry, func() {
-		if !sess.claim() {
-			return
-		}
-		h.cleanupSession(sess)
-		h.removeSession(sess.id)
-	})
+	// Arm the production expiry timer directly; the test exercises just
+	// the lifecycle, not the full setup chain.
+	h.armExpiry(sess)
 
 	// Wait for expiry to claim + clean up.
 	time.Sleep(150 * time.Millisecond)

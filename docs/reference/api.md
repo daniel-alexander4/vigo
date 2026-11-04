@@ -2280,7 +2280,7 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 
 ### Scrier
 
-- **POST /api/v1/scrier/connect** — Phase 1 of a Scrier session: validates the requested envoy + protocol (`ssh`/`rdp`/`vnc`), creates a session record, and kicks off the agent-side tunnel + SSH/guacd setup in the background. Body `{envoy_id, protocol, port, width, height, ssh_public_key?}`. Returns `{session_id, status}` (status is `waiting` on accept). _(admin)_
+- **POST /api/v1/scrier/connect** — Phase 1 of a Scrier session: validates the requested envoy + protocol (`ssh`/`rdp`/`vnc`), creates a session record, and kicks off the agent-side tunnel + SSH/guacd setup in the background. Body `{envoy_id, protocol, port, width, height, ssh_public_key?}`; `ssh_public_key` must equal the key stored on the caller's web user (for the local-admin token, the key of exactly one admin web user) or setup fails. Returns `{session_id, status}` (status is `waiting` on accept). _(admin)_
 - **GET /api/v1/scrier/sessions/{id}/status** — poll the setup state of one session. Returns `{status, error?}` where status is one of `waiting` / `connecting` / `ready` / `error`. The browser/CLI polls this until `ready`, then opens the WebSocket relay at `/ws/scrier/{id}`. _(admin; session owner only)_
 - **GET /api/v1/scrier/users** — list the Scrier OS-user mapping table.
 - **PUT /api/v1/scrier/users/{username}/osuser** — set the mapping for one admin username.

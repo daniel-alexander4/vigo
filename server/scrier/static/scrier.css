@@ -1,0 +1,57 @@
+/* Scrier session pages (SSH + RDP/VNC). Served from the scrier package's
+   own embedded assets so the pages run under the locked CSP: no inline
+   <style>, no style= attributes, no inline handlers. */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; background: #1e1e2e; color: #cdd6f4; font-family: system-ui, sans-serif; }
+.scrier-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 16px; background: #181825; border-bottom: 1px solid #313244;
+    font-size: 13px; height: 36px;
+}
+.scrier-toolbar .info { display: flex; align-items: center; gap: 12px; }
+.scrier-toolbar .actions { display: flex; gap: 6px; align-items: center; }
+.scrier-toolbar .badge {
+    background: #313244; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.scrier-toolbar button {
+    background: #45475a; border: none; color: #cdd6f4; padding: 4px 12px;
+    border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.scrier-toolbar button:hover { background: #585b70; }
+.scrier-toolbar .disconnect { background: #f38ba8; color: #1e1e2e; }
+.scrier-toolbar .disconnect:hover { background: #eba0ac; }
+#scrier-display {
+    width: 100%; height: calc(100vh - 36px);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+}
+#scrier-display.scale-1to1 { overflow: auto; justify-content: flex-start; align-items: flex-start; }
+#scrier-display .xterm { height: 100%; }
+#scrier-status { color: #a6adc8; font-size: 14px; text-align: center; }
+#scrier-status.error { color: #f38ba8; }
+.spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid #585b70; border-top-color: #89b4fa;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#scrier-osk {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0;
+    background: #181825; border-top: 1px solid #313244; z-index: 100;
+}
+#scrier-osk.open { display: block; }
+#scrier-osk.keys { padding: 4px 8px; text-align: center; }
+#scrier-osk.keys.open { display: flex; flex-wrap: wrap; justify-content: center; }
+#scrier-osk button {
+    background: #45475a; color: #cdd6f4; border: none;
+    padding: 6px 10px; margin: 3px; border-radius: 4px;
+    cursor: pointer; font-size: 12px;
+}
+#scrier-osk button:hover { background: #585b70; }
+.scrier-ended { text-align: center; padding: 40px; }
+.scrier-reconnect {
+    margin-top: 16px; padding: 8px 20px; background: #89b4fa; color: #1e1e2e;
+    border: none; border-radius: 4px; cursor: pointer; font-size: 14px;
+}
