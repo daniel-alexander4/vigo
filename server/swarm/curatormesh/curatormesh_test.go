@@ -4,19 +4,48 @@
 package curatormesh
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
 	"testing"
 )
 
-// pk32 returns a deterministic 32-byte hex pubkey from a seed byte.
+// testKeys maps a pk32 pubkey hex back to its private key so entry() can sign.
+var testKeys = map[string]ed25519.PrivateKey{}
+
+// pk32 returns a deterministic 32-byte hex Ed25519 pubkey from a seed byte
+// (the public half of the key seeded with 32×seed), remembering the private
+// half for entry()/signEntry.
 func pk32(seed byte) string {
 	var b [32]byte
 	for i := range b {
 		b[i] = seed
 	}
-	return hex.EncodeToString(b[:])
+	k := ed25519.NewKeyFromSeed(b[:])
+	h := hex.EncodeToString(k.Public().(ed25519.PublicKey))
+	testKeys[h] = k
+	return h
+}
+
+// signEntry re-signs e with the key behind its signing_puddle_pubkey (Go
+// canonicalBytes — pinned to the Rust signer by the verify_test.go vectors).
+// Entries whose signer is not a pk32 key are left untouched.
+func signEntry(e CatalogEntry) CatalogEntry {
+	k, ok := testKeys[e.Body.SigningPuddlePubkey]
+	if !ok {
+		return e
+	}
+	dels, err := decodeDelegations(e.Body.Delegations)
+	if err != nil {
+		panic(err)
+	}
+	msg, err := canonicalBytes(&e.Body, dels)
+	if err != nil {
+		panic(err)
+	}
+	e.Signature = hex.EncodeToString(ed25519.Sign(k, msg))
+	return e
 }
 
 // wantID is the reference artifact_id for (founderHex, name).
@@ -32,10 +61,10 @@ func wantID(t *testing.T, founderHex, name string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// entry builds a minimal CatalogEntry. signature is left as a label so
-// tiebreak behaviour is observable in tests.
+// entry builds a minimal CatalogEntry, validly signed when founderHex is a
+// pk32 key (sig is then ignored); otherwise sig is kept as given.
 func entry(founderHex, name string, issuedAt int64, sig string) CatalogEntry {
-	return CatalogEntry{
+	return signEntry(CatalogEntry{
 		Body: CatalogEntryBody{
 			SchemaVersion:       1,
 			Name:                name,
@@ -44,11 +73,11 @@ func entry(founderHex, name string, issuedAt int64, sig string) CatalogEntry {
 			SigningPuddlePubkey: founderHex,
 			Versions: map[string]ArtifactVersion{
 				"1.0.0": {Platforms: []Platform{
-					{OS: "linux", Arch: "amd64", BlobSha: "aa", Size: 10},
-					{OS: "linux", Arch: "arm64", BlobSha: "bb", Size: 11},
+					{OS: "linux", Arch: "amd64", BlobSha: strings.Repeat("aa", 32), Size: 10},
+					{OS: "linux", Arch: "arm64", BlobSha: strings.Repeat("bb", 32), Size: 11},
 				}},
 				"2.0.0": {Platforms: []Platform{
-					{OS: "linux", Arch: "amd64", BlobSha: "cc", Size: 20},
+					{OS: "linux", Arch: "amd64", BlobSha: strings.Repeat("cc", 32), Size: 20},
 				}},
 			},
 			Tags:       map[string]string{"latest": "2.0.0", "stable": "1.0.0", "dangling": "9.9.9"},
@@ -57,7 +86,7 @@ func entry(founderHex, name string, issuedAt int64, sig string) CatalogEntry {
 			IssuedAt:   issuedAt,
 		},
 		Signature: sig,
-	}
+	})
 }
 
 func envelope(entries ...CatalogEntry) *curatorTraitEnvelope {
@@ -106,7 +135,7 @@ func TestAggregateDedupLWW(t *testing.T) {
 	if got == nil {
 		t.Fatal("tool not found")
 	}
-	if got.Body.IssuedAt != 200 || got.Signature != "new" {
+	if got.Body.IssuedAt != 200 || got.Signature != newer.Signature {
 		t.Fatalf("LWW failed: got issued_at=%d sig=%s", got.Body.IssuedAt, got.Signature)
 	}
 	// Participants are the contributing hostnames, sorted.
@@ -126,21 +155,30 @@ func TestAggregateDedupLWW(t *testing.T) {
 
 func TestAggregateTiebreakBySignature(t *testing.T) {
 	f := pk32(0x44)
-	// Same issued_at → higher signature hex wins, deterministically.
+	// Same issued_at → higher signature hex wins, deterministically. Two
+	// distinct valid entries (different target ⇒ different signature).
+	a := entry(f, "t", 100, "")
+	b := a
+	b.Body.Target = "other"
+	b = signEntry(b)
+	want := a.Signature
+	if b.Signature > want {
+		want = b.Signature
+	}
 	cat := aggregate([]envelopeRow{
-		{hostname: "h1", envelope: envelope(entry(f, "t", 100, "aaa"))},
-		{hostname: "h2", envelope: envelope(entry(f, "t", 100, "zzz"))},
+		{hostname: "h1", envelope: envelope(a)},
+		{hostname: "h2", envelope: envelope(b)},
 	})
 	got := cat.LookupByName(f, "t")
-	if got == nil || got.Signature != "zzz" {
+	if got == nil || got.Signature != want {
 		t.Fatalf("tiebreak: got %+v", got)
 	}
 	// Reversed input order — same winner.
 	cat = aggregate([]envelopeRow{
-		{hostname: "h2", envelope: envelope(entry(f, "t", 100, "zzz"))},
-		{hostname: "h1", envelope: envelope(entry(f, "t", 100, "aaa"))},
+		{hostname: "h2", envelope: envelope(b)},
+		{hostname: "h1", envelope: envelope(a)},
 	})
-	if got := cat.LookupByName(f, "t"); got == nil || got.Signature != "zzz" {
+	if got := cat.LookupByName(f, "t"); got == nil || got.Signature != want {
 		t.Fatalf("tiebreak not order-independent: got %+v", got)
 	}
 }
@@ -209,7 +247,7 @@ func TestResolveVersion(t *testing.T) {
 
 func TestResolvePlatform(t *testing.T) {
 	e := entry(pk32(0x88), "n", 1, "s")
-	if p := ResolvePlatform(&e, "1.0.0", "linux", "arm64"); p == nil || p.BlobSha != "bb" {
+	if p := ResolvePlatform(&e, "1.0.0", "linux", "arm64"); p == nil || p.BlobSha != strings.Repeat("bb", 32) {
 		t.Fatalf("ResolvePlatform 1.0.0/linux/arm64: %+v", p)
 	}
 	if p := ResolvePlatform(&e, "2.0.0", "linux", "amd64"); p == nil || p.Size != 20 {

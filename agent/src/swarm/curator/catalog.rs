@@ -680,4 +680,67 @@ mod tests {
         assert!(validate_artifact_name(&"a".repeat(64)).is_err()); // 64 lowercase hex
         assert!(validate_artifact_name(&format!("g{}", "a".repeat(63))).is_ok()); // 64 chars but not all hex
     }
+
+    /// Fixed-key catalog entries for the Go server-side verifier
+    /// (`server/swarm/curatormesh/verify_test.go`). Ed25519 is deterministic,
+    /// so these exact JSON strings are what this signer produces; the Go
+    /// test verifies them byte-for-byte. Regenerate both sides together if
+    /// the entry shape or `canonical_bytes` ever changes.
+    fn go_vector_entries() -> (CatalogEntry, CatalogEntry) {
+        let founder = SigningKey::from_bytes(&[0x11; 32]);
+        let rekeyed = SigningKey::from_bytes(&[0x22; 32]);
+
+        let mut plain = body_for(&founder, &founder, "vigo-agent");
+        plain.versions.insert(
+            "0.9.0".to_string(),
+            ArtifactVersion {
+                platforms: vec![
+                    Platform {
+                        os: "linux".to_string(),
+                        arch: "arm64".to_string(),
+                        blob_sha: "b".repeat(64),
+                        size: 7,
+                    },
+                    Platform {
+                        os: "darwin".to_string(),
+                        arch: "arm64".to_string(),
+                        blob_sha: "c".repeat(64),
+                        size: 1 << 40,
+                    },
+                ],
+            },
+        );
+        plain.tags.insert("stable".to_string(), "0.9.0".to_string());
+        plain.recipients = vec![pub_hex(&rekeyed), pub_hex(&founder)];
+        plain.target = "*.web.example.com".to_string();
+        plain.issued_at = 1_762_000_000_123;
+        let plain = CatalogEntry::issue(&founder, plain).unwrap();
+
+        let mut chained = body_for(&founder, &rekeyed, "app");
+        chained.kind = KIND_GENERIC.to_string();
+        chained.issued_at = 1_762_000_999_000;
+        let aid = artifact_id_for(&founder.verifying_key().to_bytes(), "app");
+        chained.delegations = vec![DelegationEnvelope::build(
+            &founder,
+            &aid,
+            &rekeyed.verifying_key().to_bytes(),
+            1_762_000_500,
+        )];
+        let chained = CatalogEntry::issue(&rekeyed, chained).unwrap();
+        (plain, chained)
+    }
+
+    const GO_VECTOR_PLAIN: &str = r#"{"body":{"schema_version":2,"name":"vigo-agent","kind":"generic","founder_puddle_pubkey":"d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737","signing_puddle_pubkey":"d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737","versions":{"0.9.0":{"platforms":[{"os":"linux","arch":"arm64","blob_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","size":7},{"os":"darwin","arch":"arm64","blob_sha":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","size":1099511627776}]},"1.0.0":{"platforms":[{"os":"linux","arch":"amd64","blob_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":12345}]}},"tags":{"latest":"1.0.0","stable":"0.9.0"},"recipients":["a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0","d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"],"target":"*.web.example.com","issued_at":1762000000123},"signature":"f112eda3dccd85ca23b2930106794c52a36e1093139bce1d75e8c8699a646c5f3c1bd403cfd846c6c6c53e157114959e23ea203552019a678c5f602e15010b0d"}"#;
+    const GO_VECTOR_CHAINED: &str = r#"{"body":{"schema_version":2,"name":"app","kind":"generic","founder_puddle_pubkey":"d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737","signing_puddle_pubkey":"a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0","versions":{"1.0.0":{"platforms":[{"os":"linux","arch":"amd64","blob_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":12345}]}},"tags":{"latest":"1.0.0"},"recipients":["*"],"target":"*","issued_at":1762000999000,"delegations":[{"project_id":"c6d907581c7e0227fee5b6f265d81feab6d61fce9a7d53a184bb135f1479373e","old_founder_pubkey":"d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737","new_founder_pubkey":"a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0","delegated_at":1762000500,"signature":"dd8835033074c53238ec10b88c752f37fffddd8eb1293438d228e00f3cf36c7ae64755d88601b707f13b14ab9968a21f88443221e608d46c9f181735ad3e6101"}]},"signature":"dd862cfe3a467704bb5020f9b06268c4cd2eb5967a42713101e0bf8b789c2e71ee23c4e47a3032212ffce5651253d5d0983a5fe192b5e9c07c35757fe92ba709"}"#;
+
+    #[test]
+    fn go_verifier_vectors_are_stable() {
+        let (plain, chained) = go_vector_entries();
+        let p = serde_json::to_string(&plain).unwrap();
+        let c = serde_json::to_string(&chained).unwrap();
+        println!("GO_VECTOR_PLAIN={p}");
+        println!("GO_VECTOR_CHAINED={c}");
+        assert_eq!(p, GO_VECTOR_PLAIN, "plain vector drifted — update the Go test too");
+        assert_eq!(c, GO_VECTOR_CHAINED, "chained vector drifted — update the Go test too");
+    }
 }

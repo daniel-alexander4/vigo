@@ -6,14 +6,13 @@
 // published by local users — keyed on `artifact_id = sha256(founder_puddle_pubkey ‖ name)`,
 // last-write-wins on `issued_at` (ADR-024).
 //
-// The server publishes, never arbitrates: catalog entries flow through this
-// package verbatim. It does NOT verify signatures or delegation chains — the
-// agent resolver and `vigocli swarm curator inspect` do that end-to-end (so a
-// forged entry never gets *materialized*, even if a misbehaving envoy reports
-// it). That's the same stance `gitbackmesh` takes for puddle name claims, and it
-// keeps this package free of a Go-side Ed25519 / canonical-bytes twin of
-// `agent/src/swarm/curator/catalog.rs`. The only crypto here is the SHA-256 that
-// derives the artifact_id (a plain hash, not a signature).
+// Every entry's signature and ADR-019 delegation chain is verified (verify.go,
+// the byte-exact twin of `agent/src/swarm/curator/catalog.rs`) BEFORE it can
+// win: the winner is served verbatim to consumers that verify nothing (the
+// curators3 S3 facade, the UI, the manifest feed), and `issued_at` is chosen by
+// whoever reported the entry, so an unverified entry let any enrolled envoy
+// repoint or widen another publisher's artifact. Unverifiable entries are
+// dropped, the same as a missing trait. Agents still verify end-to-end.
 //
 // Resolution helpers — tag → version → platform, and the recipient-gate
 // predicate — live here so the REST handlers (ADR-024 slice 3) and the CLI views
@@ -30,6 +29,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -60,8 +60,8 @@ type Catalog struct {
 
 // --- catalog-entry shapes, deserialized from the agent's `curator` trait.
 // Field names mirror agent/src/swarm/curator/catalog.rs's serde output exactly.
-// `signature` and `delegations` flow through verbatim — the server doesn't
-// verify them.
+// `signature` and `delegations` flow through verbatim (re-served to agents,
+// which re-verify); aggregate verifies them first (VerifyEntry).
 
 type CatalogEntry struct {
 	Body      CatalogEntryBody `json:"body"`
@@ -284,7 +284,9 @@ type envelopeRow struct {
 // arbitrary but deterministic; same-id entries are necessarily from the same
 // founder, so a tie is two publishes at the same millisecond), and collect the
 // contributing hostnames. Entries with an unparseable `founder_puddle_pubkey`
-// are dropped — same as a missing trait.
+// or that fail VerifyEntry are dropped — same as a missing trait. Only a
+// verified entry can win, so `issued_at` is the founder's (or its delegate's)
+// signed claim, never the reporting envoy's.
 func aggregate(rows []envelopeRow) *Catalog {
 	byID := make(map[string]CatalogEntry)
 	participants := make(map[string]struct{})
@@ -293,6 +295,11 @@ func aggregate(rows []envelopeRow) *Catalog {
 		for _, e := range row.envelope.Artifacts {
 			id, err := ArtifactID(e)
 			if err != nil {
+				continue
+			}
+			if vErr := VerifyEntry(&e); vErr != nil {
+				slog.Warn("curatormesh: dropping unverifiable catalog entry",
+					"reported_by", row.hostname, "artifact_id", id, "name", e.Body.Name, "error", vErr)
 				continue
 			}
 			cur, ok := byID[id]
