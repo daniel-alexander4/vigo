@@ -15,7 +15,7 @@ Prebuilt images are not published yet, so build from source. You need Docker, Go
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
 sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
-IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # the local image tag
+IMAGE=vigo:latest   # the local image tag
 sudo mkdir -p /srv/vigo
 docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 cd /srv/vigo && docker compose up -d

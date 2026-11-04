@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:ac8adff7cbe315d72336f65085ada87f1c341c82e6a1776b763d1c33c871657d -->
+<!-- vigo-i18n source_sha:08690d0f27ccd154fe19215f0d5582c7dd3bc6e5986ac1bbf7249edb1607bee1 -->
 
 # Résoudre les problèmes courants
 
@@ -489,7 +489,7 @@ Pour effacer tout l'état du serveur et repartir à neuf :
 cd /srv/vigo
 docker compose down
 sudo find /srv/vigo -mindepth 1 -delete
-docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
 docker compose up -d
 ```
 

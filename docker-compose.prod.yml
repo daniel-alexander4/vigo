@@ -1,11 +1,10 @@
-# Production compose — runs the image tagged below.
+# Production compose — runs the locally built image vigo:latest.
 #
-# The registry is private (maintainer-only); images are not published for
-# anonymous pull. Build the image locally first (`sudo scripts/upgrade.sh
-# full --norun`, which tags it with this name), then seed and start — see
-# README.md "Quickstart":
+# Images are not published. Build the image locally first
+# (`sudo scripts/upgrade.sh full --norun`, which tags it vigo:latest), then
+# seed and start — see README.md "Quickstart":
 #   sudo mkdir -p /srv/vigo
-#   docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
+#   docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
 #   cd /srv/vigo && docker compose up -d
 #
 # Optional services — set COMPOSE_PROFILES in .env:
@@ -15,7 +14,10 @@
 
 services:
   vigo:
-    image: us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
+    image: vigo:latest
+    # Local build only: never try to pull this name from a registry. A missing
+    # image is then a clear "no such image" rather than a pull from Docker Hub.
+    pull_policy: never
     container_name: vigo
     restart: unless-stopped
     # Host networking: the server binds 1530 (gRPC), 8443 (REST/UI), and 1531

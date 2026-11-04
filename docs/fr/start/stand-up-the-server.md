@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d07fc5f5063b590c0185114604637fcfc659eeabab7ab8d3492164cf8a2cb14f -->
+<!-- vigo-i18n source_sha:2e4c6cbdd1669dd5cf945f84c00dbd43bef022c8c9ae974ca419964d9a00f5a8 -->
 
 # 1 · Mettre le serveur en service
 
@@ -19,7 +19,7 @@ Aucune image précompilée n'est encore publiée : compilez d'abord l'image du s
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
 sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
-IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # le tag que la compilation donne à l'image locale
+IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```
 
 Initialisez ensuite le répertoire de données et démarrez le serveur :

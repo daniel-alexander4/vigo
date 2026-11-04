@@ -30,7 +30,8 @@ set -euo pipefail
 #
 # Modifiers:
 #   --norun  Build/swap but do not restart or redeploy the container.
-#   --push   Push the rebuilt image to the registry (requires `full`).
+#   --push   Push the rebuilt image to the registry as :latest and :<VERSION>
+#            (requires `full`; target from VIGO_REGISTRY_IMAGE).
 #
 # Rules:
 #   - No components  → defaults to `full amd64 arm64` (full durable build).
@@ -53,7 +54,11 @@ set -euo pipefail
 #   sudo scripts/upgrade.sh deploy          # …deploy it later
 
 DATA_DIR="/srv/vigo"
-IMAGE="us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest"
+# The local image name: what the build tags and docker-compose.yml runs.
+IMAGE="vigo:latest"
+# Where --push sends it (the maintainer's private registry; override with
+# VIGO_REGISTRY_IMAGE to push elsewhere). Pushed as :latest and :<VERSION>.
+REGISTRY_IMAGE="${VIGO_REGISTRY_IMAGE:-us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo}"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run as root: sudo $0" >&2
@@ -663,9 +668,13 @@ if $DO_FULL; then
         -f "$STAGE_DIR/Dockerfile.server" -t "$IMAGE" "$STAGE_DIR"
 
     if $PUSH; then
-        echo "Pushing image to registry..."
-        docker push "$IMAGE"
-        echo "Pushed $IMAGE"
+        echo "Pushing image to $REGISTRY_IMAGE..."
+        push_version="$(tr -d '[:space:]' < "$REPO_DIR/VERSION")"
+        for tag in latest "$push_version"; do
+            docker tag "$IMAGE" "$REGISTRY_IMAGE:$tag"
+            docker push "$REGISTRY_IMAGE:$tag"
+        done
+        echo "Pushed $REGISTRY_IMAGE:latest and :$push_version"
     fi
 
     # Keep the deployed scripts in sync with the repo. The compose file is

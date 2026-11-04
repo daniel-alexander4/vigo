@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:420168e31704172ab80802444bba12c130d00322e6eef97a369bd37efbe480c5 -->
+<!-- vigo-i18n source_sha:d4f5d004da9919183100a8eefa61c20adf3d28783bd470cd8a733d7f96121c42 -->
 
 # Démarrage rapide
 
@@ -11,7 +11,7 @@ Aucune image précompilée n'est encore publiée : compilez d'abord l'image du s
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
 sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
-IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # le tag que la compilation donne à l'image locale
+IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```
 
 ```bash

@@ -17,7 +17,7 @@ Prebuilt images are not published yet, so build the server image from source fir
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
 sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
-IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # the tag the build gives the local image
+IMAGE=vigo:latest   # the tag the build gives the local image
 ```
 
 Then seed the data directory and start it:

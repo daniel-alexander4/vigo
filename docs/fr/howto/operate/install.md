@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:3e7565e02720c2885d51cde0a4b26bf9f73243b83a60c9b010aae3da8aa8ada3 -->
+<!-- vigo-i18n source_sha:33519c66fbb96b4420b2f897e38790739ede1a0f019e3bc57f4e48876aaee417 -->
 
 # Installer le serveur Vigo
 
@@ -21,7 +21,7 @@ Aucune image précompilée n'est encore publiée : compilez d'abord l'image du s
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
 sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
-IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # le tag que la compilation donne à l'image locale
+IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```
 
 ```bash

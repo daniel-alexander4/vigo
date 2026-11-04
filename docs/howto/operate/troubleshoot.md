@@ -488,7 +488,7 @@ To wipe all server state and start fresh:
 cd /srv/vigo
 docker compose down
 sudo find /srv/vigo -mindepth 1 -delete
-docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
 docker compose up -d
 ```
 
