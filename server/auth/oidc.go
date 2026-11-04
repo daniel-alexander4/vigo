@@ -6,6 +6,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -190,20 +191,41 @@ func (p *OIDCProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	nonce, err := generateRandomState()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	// PKCE (RFC 7636, S256) binds the authorization code to this browser
+	// session: a code intercepted on the redirect cannot be redeemed
+	// without the verifier, which never leaves the server. The nonce binds
+	// the ID token to this login attempt, so a token minted for another
+	// flow cannot be replayed into this one.
+	verifier := oauth2.GenerateVerifier()
 	p.sessions.Put(r.Context(), "oauth_state", state)
-	http.Redirect(w, r, p.oauth2Cfg.AuthCodeURL(state), http.StatusFound)
+	p.sessions.Put(r.Context(), "oauth_verifier", verifier)
+	p.sessions.Put(r.Context(), "oauth_nonce", nonce)
+	http.Redirect(w, r, p.oauth2Cfg.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce)), http.StatusFound)
 }
 
 func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// Verify state.
+	// Pop all three login-attempt values together so none outlives the
+	// attempt, whatever the outcome.
 	expectedState := p.sessions.PopString(r.Context(), "oauth_state")
+	verifier := p.sessions.PopString(r.Context(), "oauth_verifier")
+	expectedNonce := p.sessions.PopString(r.Context(), "oauth_nonce")
 	if r.URL.Query().Get("state") != expectedState || expectedState == "" {
 		http.Error(w, "invalid state parameter", http.StatusBadRequest)
 		return
 	}
+	if verifier == "" || expectedNonce == "" {
+		http.Error(w, "login attempt expired — start again", http.StatusBadRequest)
+		return
+	}
 
-	// Exchange code for tokens.
-	oauth2Token, err := p.oauth2Cfg.Exchange(r.Context(), r.URL.Query().Get("code"))
+	// Exchange code for tokens, proving possession of the PKCE verifier.
+	oauth2Token, err := p.oauth2Cfg.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(verifier))
 	if err != nil {
 		slog.Error("oidc code exchange failed", "error", err)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "auth", "code exchange failed", fmt.Sprintf(`{"ip":%q,"error":%q}`, r.RemoteAddr, err.Error()))
@@ -222,6 +244,11 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("oidc token verification failed", "error", err)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "auth", "token verification failed", fmt.Sprintf(`{"ip":%q,"error":%q}`, r.RemoteAddr, err.Error()))
+		http.Error(w, "token verification failed", http.StatusUnauthorized)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(expectedNonce)) != 1 {
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "auth", "id_token nonce mismatch", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		http.Error(w, "token verification failed", http.StatusUnauthorized)
 		return
 	}
@@ -277,17 +304,30 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		if role == "admin" {
 			recordAudit(r.Context(), p.auditWriter, "user.role_change", username, "auth", fmt.Sprintf("%s provisioned as admin via OIDC bootstrap", username), fmt.Sprintf(`{"subject":%q}`, claims.Subject))
 		}
-	} else {
-		// Update display name and email from IdP on each login.
-		_ = p.userStore.Update(r.Context(), db.UpdateUserParams{
-			ID:          user.ID,
-			DisplayName: claims.Name,
-			Email:       claims.Email,
-			Role:        user.Role,
-			Permissions: PermissionsJSON(user.Role),
-		})
-		user.DisplayName = claims.Name
-		user.Email = claims.Email
+	} else if claims.Name != user.DisplayName || claims.Email != user.Email {
+		// Refresh display name and email from the IdP when they changed.
+		// Every other column is carried over as stored: UpdateUser writes
+		// all of them, so passing role defaults or an empty key here would
+		// reset the user's permissions and wipe their SSH pubkey (which
+		// backs scrier) on every login. Skipping the no-change case also
+		// keeps a plain login from re-signing the row and churning the
+		// spanner replication comparator.
+		perms, _ := json.Marshal(user.Permissions)
+		if err := p.userStore.Update(r.Context(), db.UpdateUserParams{
+			ID:           user.ID,
+			DisplayName:  claims.Name,
+			Email:        claims.Email,
+			Role:         user.Role,
+			Permissions:  string(perms),
+			SshPublicKey: user.SSHPublicKey,
+		}); err != nil {
+			// The login itself is valid; a stale profile is not a reason
+			// to refuse it. Surface the failure instead of discarding it.
+			slog.Error("oidc profile refresh failed", "user", user.Username, "error", err)
+		} else {
+			user.DisplayName = claims.Name
+			user.Email = claims.Email
+		}
 	}
 
 	// Create session.
