@@ -43,7 +43,6 @@ var protectedPaths = []string{
 	// Server
 	"/usr/local/sbin/vigosrv",
 	"/usr/local/bin/vigocli",
-	"/usr/local/sbin/vigo-license-manager",
 	"/srv/vigo/",
 	"/etc/systemd/system/vigosrv.service",
 }
@@ -82,7 +81,6 @@ var dangerousPatterns = []string{
 	"rm /usr/local/sbin/vigo",
 	"rm /usr/local/sbin/vigosrv",
 	"rm /usr/local/bin/vigocli",
-	"rm /usr/local/sbin/vigo-license-manager",
 	"rm -rf /etc/vigo",
 	"rm -rf /var/lib/vigo",
 	"rm -rf /srv/vigo",

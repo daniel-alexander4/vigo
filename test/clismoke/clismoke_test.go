@@ -44,6 +44,7 @@ var (
 	srvURL         string   // https://127.0.0.1:<apiPort>
 	cliBin         string   // bin/vigocli
 	cliEnv         []string // os.Environ() + VIGO_CONFIG_DIR (points vigocli at the temp admin token)
+	serverCAFile   string   // the temp server's CA, so vigocli verifies it instead of /srv/vigo/tls/ca
 	sampleEnvoyID  string   // a real enrolled envoy UUID, from fakefleet's state manifest
 	sampleHostname string   // its hostname
 )
@@ -130,8 +131,9 @@ func run(m *testing.M) (code int) {
 	}
 	// vigocli pins the server CA for a loopback --server; point it at the temp
 	// instance's CA rather than the host's /srv/vigo/tls/ca.
+	serverCAFile = filepath.Join(tmp, "tls", "ca")
 	cliEnv = append(os.Environ(), "VIGO_CONFIG_DIR="+cfgDir,
-		"VIGO_CA_FILE="+filepath.Join(tmp, "tls", "ca"))
+		"VIGO_CA_FILE="+serverCAFile)
 
 	// Enroll a small synthetic fleet. --server-root anchors fakefleet's whole
 	// flow on tmp: it writes the config tree under tmp/stacks and publishes it
@@ -478,7 +480,7 @@ func runCLIWithToken(t *testing.T, token string, args ...string) (string, error)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, cliBin, full...)
-	cmd.Env = append(os.Environ(), "VIGO_CONFIG_DIR="+dir)
+	cmd.Env = append(os.Environ(), "VIGO_CONFIG_DIR="+dir, "VIGO_CA_FILE="+serverCAFile)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
