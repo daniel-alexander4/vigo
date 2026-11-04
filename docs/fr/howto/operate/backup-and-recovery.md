@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d2b5eaeed58c23ca59bf17ab63cdf56bd92a68d5081fe1c94898aa4929a512e7 -->
+<!-- vigo-i18n source_sha:14725cb81b5f5aeaf9093c550cde2c338c3be98ed632336faaedc56e8341e547 -->
 
 # Sauvegarder et restaurer
 
@@ -61,7 +61,7 @@ backup:
 
 ## Fonctionnement
 
-1. Au démarrage, si `backup.url` est défini, le serveur génère un fichier de configuration Litestream et lance `litestream replicate` en tant que sous-processus.
+1. Au démarrage, si `backup.url` est défini, le serveur génère un fichier de configuration Litestream (un fichier temporaire privé en 0600) et lance `litestream replicate` en tant que sous-processus supervisé. Si Litestream s'arrête pendant que le serveur tourne, le serveur consigne une erreur et le relance avec un backoff exponentiel (1s, doublé jusqu'à 5m). Les clés d'accès parviennent à Litestream par son environnement, jamais par sa ligne de commande ni par le fichier de configuration ; définissez-les dans `server.yaml` sous forme de références `secret:` pour que le texte en clair ne réside que dans le backend de secrets.
 2. Litestream surveille en continu le WAL SQLite et réplique les changements vers le backend configuré.
 
 3. Des instantanés périodiques sont créés et les anciens sont élagués selon le paramètre `retention`.
@@ -92,6 +92,13 @@ Pour restaurer à partir d'une sauvegarde :
 
 Vérifiez la sortie du sous-processus Litestream dans les journaux du serveur. Litestream consigne l'état de la réplication, la création d'instantanés et toute erreur sur stdout/stderr, que le serveur capture.
 
+Deux séries Prometheus sur `GET /metrics` (présentes uniquement lorsque `backup.url` est défini) indiquent si la réplication tourne réellement :
+
+| Métrique | Signification |
+|---|---|
+| `vigo_backup_replicator_running` | 1 tant qu'un processus Litestream est actif, 0 lorsqu'il est arrêté ou en attente de relance. Alertez sur `== 0` pendant plus de quelques minutes. |
+| `vigo_backup_replicator_exits_total` | Nombre de fois où Litestream s'est arrêté de manière inattendue et a été relancé. Une valeur croissante signifie que les sauvegardes sont instables. |
+
 Si le binaire Litestream est introuvable dans le PATH, le serveur consigne un avertissement mais continue de fonctionner sans sauvegarde.
 
 ---
@@ -112,10 +119,10 @@ La commande lit `server.yaml` pour trouver le chemin de la base de données, pui
 
 1. Crée un instantané de la base de données SQLite à l'aide de l'API de sauvegarde de sqlite3 (sûr avec des écrivains WAL concurrents)
 2. Copie `stacks/` (source de vérité de la configuration)
-3. Copie `secrets/` (déjà chiffré au repos en AES-256-GCM)
+3. Copie `secrets/` (déjà chiffré au repos en AES-256-GCM). La clé maîtresse `secrets/.master.key` n'est incluse **qu'avec `--encrypt`** : placée à côté du texte chiffré qu'elle déchiffre, elle ferait d'une archive non chiffrée une copie en clair de tous les secrets. Sans `--encrypt`, conservez la clé maîtresse en lieu sûr séparément et remettez-la en place avant de démarrer un serveur restauré.
 4. Copie `tls/` (CA + certificats serveur)
 5. Copie `server.yaml`
-6. Écrit un `manifest.json` contenant les métadonnées
+6. Écrit un `manifest.json` contenant les métadonnées (le DSN de la base de données y est enregistré sans son éventuel mot de passe)
 
 Chaque sauvegarde génère automatiquement un fichier annexe de somme de contrôle SHA-256 (`.sha256`) pour la vérification d'intégrité.
 
@@ -188,7 +195,7 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 │   ├── envoys/
 │   └── vars/
 ├── secrets/
-│   └── (encrypted files, directory structure preserved)
+│   └── (encrypted files, directory structure preserved; .master.key only with --encrypt)
 ├── tls/
 │   └── (cert, key, ca, ca_key PEM files)
 └── server.yaml

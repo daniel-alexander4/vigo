@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:fba1ff6f4def8e5d8dd1dd3d45ca86b51c75228b604eee6561af4af7c744e5c6 -->
+<!-- vigo-i18n source_sha:eeb45b74dc929b0f7240c1d53ad09c91d86ba3edebe6a8f7ae03e7865176df1e -->
 
 ---
 title: Corréler les logs serveur + agent par trace_id
@@ -17,7 +17,7 @@ title: Corréler les logs serveur + agent par trace_id
 Chaque requête initiée par l'agent (`CheckIn`, `ReportResult`, `ReportTraits`) et chaque événement poussé par le serveur que l'agent traite (`TaskDispatch`, `ForcePush`) porte une chaîne W3C `traceparent` dans le corps du message proto. Le serveur et l'agent extraient tous deux la portion `trace_id` (32 hex) et l'attachent à :
 
 - **Serveur** — chaque ligne de log `slog` pour cette opération. Champ : `trace_id`.
-- **Serveur** — la charge utile de l'événement d'intégration à `Event.Details["trace_id"]` pour chaque `run.*`, `drift.detected`, `resource.blocked`. Loki, Splunk, Sentinel, etc. la voient tous.
+- **Serveur** — la charge utile de l'événement d'intégration à `Event.Details["trace_id"]` pour chaque `run.*`, `drift.detected`, `resource.blocked`, `resource.unblocked`. Loki, Splunk, Sentinel, etc. la voient tous.
 - **Agent** — chaque ligne de log `tracing` émise sous le span de l'opération. Même nom de champ : `trace_id`.
 
 `TaskDispatch` fait l'aller-retour de bout en bout : le serveur génère le `trace_id` lors du dispatch, l'agent l'utilise pour les logs d'exécution, et le renvoie dans `TaskResult` — ainsi le « received task result » côté serveur et le « executing task » côté agent partagent le même champ.

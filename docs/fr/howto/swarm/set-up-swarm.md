@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:57558740d0d5b65a7926b432aa3f92dc109ed75064ba2530bc37f12679848e42 -->
+<!-- vigo-i18n source_sha:9dbef6a2ea1ed0b673abb3eabd07c3924b54f9bcc0caca1c873cf26855312b70 -->
 
 # Configurer Swarm
 
@@ -190,7 +190,7 @@ Tous les blobs Swarm ont une rétention par défaut de **7 jours**.
 vigocli swarm revoke <sha256>
 ```
 
-Ceci marque la semence comme révoquée dans le tracker, enregistre une révocation dans le manifeste CRDT, et propage la révocation à tous les Envoys via gossip. Chaque Envoy évince le blob de son cache dès réception de la révocation. Sur un LAN, toutes les copies sont supprimées en quelques secondes. Les Envoys d'autres sous-réseaux reçoivent la révocation à leur check-in suivant. La révocation initiée par l'opérateur et la révocation pilotée par la rétention passent par un code identique — le seul `unlink` sur le système de fichiers se produit 7 jours plus tard dans `cleanup_graveyard`.
+Ceci marque la semence comme révoquée dans le tracker, enregistre une révocation dans le manifeste CRDT, et transmet la révocation à chaque Envoy avec sa prochaine réponse de check-in. Chaque Envoy évince le blob de son cache dès réception de la révocation. Les révocations ne proviennent que du serveur : le gossip de manifeste entre Envoys n'est pas signé, il transporte donc les entrées actives mais jamais une révocation. La révocation initiée par l'opérateur et la révocation pilotée par la rétention passent par un code identique — le seul `unlink` sur le système de fichiers se produit 7 jours plus tard dans `cleanup_graveyard`.
 
 **Re-semence :** Pour redistribuer un contenu révoqué, replacez le fichier et le manifeste `.swarm` dans `seed/`. Au check-in suivant, le collecteur de traits re-hache le fichier, le serveur enregistre une nouvelle entrée active dans le manifeste CRDT (le nouvel horodatage l'emporte sur l'ancienne révocation), et la distribution reprend. Le hachage SHA256 est basé sur le contenu — même fichier = même hachage — donc les téléchargements partiels des tours précédents reprennent automatiquement. Les entrées de la carte des pairs pour le SHA révoqué sont purgées lors de l'éviction, de sorte que le téléchargement re-semé démarre avec une découverte de pairs fraîche plutôt qu'en se fiant à des revendications obsolètes du tour précédent.
 
@@ -200,10 +200,10 @@ Chaque Envoy maintient un fichier manifeste local à `/var/lib/vigo/swarm/manife
 
 Vous n'avez pas besoin de gérer le manifeste directement — il est maintenu par l'agent. Le manifeste garantit que :
 
-- Les révocations se propagent sur toute la flotte en quelques secondes (via multicast + synchronisation entre pairs)
+- Les nouveaux blobs se propagent entre Envoys en quelques secondes (via multicast + synchronisation entre pairs)
+- Les révocations ne proviennent que de la réponse de check-in du serveur ; un pair ne peut ni révoquer un blob ni annuler une révocation, et une entrée de pair datée de plus de 5 minutes dans le futur est ignorée
 - Les blobs révoqués ne peuvent pas être ré-enregistrés par des rapports de traits obsolètes
 - Les Envoys hors ligne se mettent à jour lorsqu'ils se reconnectent
-- Une panne du serveur n'empêche pas les révocations entre Envoys sur le même LAN
 
 Les entrées de manifeste révoquées sont élaguées après 7 jours.
 

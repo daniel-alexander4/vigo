@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:82bceba70e9c224a1ec47691344fb71185b66371ec143104643e7ca91a3a0d1b -->
+<!-- vigo-i18n source_sha:0a74ee874ca9d9456ec0c385ad6a6d400628b696b96c02e809d9679fc5e27bba -->
 
 # Publier votre configuration
 
@@ -11,7 +11,7 @@
 Les opérateurs éditent les fichiers `.vgo` dans `stacks/`. La commande `config publish` les valide en utilisant la même logique que le chargeur de configuration du serveur, détecte les changements, puis les propage vers `/srv/vigo/.live/` — le répertoire verrouillé en lecture seule depuis lequel le serveur lit (le contenu reflète directement `stacks/` ; pas d'espace de noms interne). La propagation prend deux formes :
 
 - **Mode standalone** — la CLI synchronise atomiquement l'arbre validé dans le `.live/` local et appelle le déclencheur de rechargement REST. Un seul vigosrv, un seul système de fichiers ; la publication est terminée quand l'échange est effectué.
-- **Mode Spanner** — la CLI commite l'arbre validé dans le projet gitback stacks de l'ops-puddle et le pousse vers le dépôt bare local. La goroutine d'arrière-plan `stackswatch` sur chaque vigosrv (y compris celui d'origine) voit la nouvelle référence, archive `HEAD` dans son `.live/` local, et recharge. La CLI interroge ensuite `GET /api/v1/config/version` jusqu'à ce qu'elle s'incrémente avant de signaler le succès.
+- **Mode Spanner** — la CLI commite l'arbre validé dans le projet gitback stacks de l'ops-puddle et le pousse vers le dépôt bare local. La goroutine d'arrière-plan `stackswatch` sur chaque vigosrv (y compris celui d'origine) voit la nouvelle référence, archive `HEAD`, le valide et le publie dans son `.live/` local par le même pipeline qu'une publication locale (instantané, verrou, vérification du gel), et recharge. La CLI interroge ensuite `GET /api/v1/config/version` jusqu'à ce qu'elle s'incrémente avant de signaler le succès.
 
 Les deux modes partagent le même verbe visible par l'opérateur (`vigocli config publish`) et le même pipeline de validation. Le mode est auto-détecté via `GET /api/v1/spanner/status`.
 
@@ -105,7 +105,7 @@ flowchart LR
 5. Les URL HTTP/HTTPS dans les **configcrates modifiés uniquement** sont sondées pour leur disponibilité (HEAD avec repli GET). Les configcrates inchangés sont ignorés.
 6. La CLI appelle `GET /api/v1/spanner/status` pour détecter le mode. Les vigosrv standalone passent par l'étape 7a ; les vigosrv en mode Spanner passent par l'étape 7b.
 7. **(7a, standalone)** Élague l'arbre de staging de tout configcrate / usercrate / template qu'aucun porteur ne référence (sauf si `--no-prune` est défini), puis le synchronise atomiquement dans `.live/` (voir [Synchronisation atomique — mode standalone](#atomic-sync--standalone-mode) ci-dessous), et appelle `POST /api/v1/config/reload` pour déclencher un rechargement côté serveur.
-   **(7b, spanner)** Commite l'arbre de staging dans le clone local du projet gitback stacks de l'ops-puddle et le pousse vers le dépôt bare à `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` via `file://`. La goroutine `stackswatch` locale voit la nouvelle référence, archive `HEAD` dans `.live/`, et recharge. La CLI interroge `GET /api/v1/config/version` jusqu'à ce qu'elle s'incrémente (délai de 30s) avant de déclarer le succès. Les autres vigosrv du spanner reçoivent les octets via le peer-pull du substrat gitback au prochain cycle du réacteur et exécutent le même chemin de surveillance localement.
+   **(7b, spanner)** Commite l'arbre de staging dans le clone local du projet gitback stacks de l'ops-puddle et le pousse vers le dépôt bare à `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` via `file://`. La goroutine `stackswatch` locale voit la nouvelle référence, archive `HEAD`, le valide et le publie dans `.live/` (un arbre qui échoue à la validation, ou un gel de publication, laisse `.live/` inchangé), et recharge. La CLI interroge `GET /api/v1/config/version` jusqu'à ce qu'elle s'incrémente (délai de 30s) avant de déclarer le succès. Les autres vigosrv du spanner reçoivent les octets via le peer-pull du substrat gitback au prochain cycle du réacteur et exécutent le même chemin de surveillance localement.
 8. `.live/` et `stacks-examples/` (frères de `stacks/` sous `/srv/vigo/`) ne sont jamais lus par le publieur.
 9. Si rien n'a changé, la commande signale « Nothing to publish » et ne touche pas à `.live/`.
 

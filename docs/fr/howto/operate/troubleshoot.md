@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:3720b19197fe76855a43593fdd8bd6ecdd3ee4dd2fefa2d500b8ac35a6655e66 -->
+<!-- vigo-i18n source_sha:dc0749d42576d42a026e7bf498987c0291bcbb5bca1dc44674b1b09d68577b0e -->
 
 # Résoudre les problèmes courants
 
@@ -450,12 +450,13 @@ sudo systemctl daemon-reload
 sudo rm -rf /etc/vigo-envoy
 sudo rm -rf /var/lib/vigo
 sudo rm -f /usr/local/sbin/vigo
+sudo rm -f /usr/local/bin/git-remote-gitback
 
 # 3. Re-bootstrap
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-Ou utilisez le script de réinitialisation :
+Ou utilisez le script de réinitialisation, qui exécute les mêmes étapes. Il ne touche jamais à l'état du serveur dans `/srv/vigo`, il est donc sans risque sur un hôte serveur qui exécute son propre Envoy :
 
 ```bash
 sudo scripts/reset-envoy.sh

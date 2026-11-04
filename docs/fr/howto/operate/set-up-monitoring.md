@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d2e270c58b5888424edb946b208113b5e01a39cd4ce2b1044fb5fad237ae96d8 -->
+<!-- vigo-i18n source_sha:ad0a577bf634e3785e133b8bcecafe6cc2b1b3348e00c931c4072bf978520f28 -->
 
 # Mettre en place la supervision
 

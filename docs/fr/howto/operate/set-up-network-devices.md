@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:907a57a2403a76e2799a73de1cb2e5daf8dd82a28bf459387add02af820db078 -->
+<!-- vigo-i18n source_sha:92e18a462087169c6fb0cb027b6fcc3d695993702424803079f7564d5765a3df -->
 
 
 # Configurer des équipements réseau
@@ -121,7 +121,22 @@ Les équipements s'authentifient par mot de passe ou par clé SSH, déterminé a
 - Si l'identifiant contient `PRIVATE KEY`, l'authentification par clé est utilisée
 - Sinon, l'authentification par mot de passe est utilisée
 
-Les clés d'hôte sont vérifiées selon le principe Trust On First Use (TOFU) : la première connexion accepte et met en cache la clé d'hôte de l'équipement. Les connexions suivantes vérifient par rapport à la clé mise en cache. Un écart constitue une erreur bloquante (possible attaque de l'homme du milieu).
+Les clés d'hôte sont vérifiées selon le principe Trust On First Use (TOFU) : la première connexion depuis la passerelle épingle la clé d'hôte de l'équipement dans le magasin d'état de l'agent passerelle, indexée par `host:port`. Chaque connexion ultérieure doit présenter cette même clé. Une clé différente constitue une erreur bloquante (possible attaque de l'homme du milieu) et l'équipement n'est pas touché. Sans magasin d'état fonctionnel, la passerelle refuse de se connecter plutôt que de sauter la vérification.
+
+Pour afficher les clés épinglées sur un Envoy passerelle :
+
+```bash
+sudo vigo ssh-hostkey list
+```
+
+Si la clé d'hôte d'un équipement a changé de manière légitime (réinstallation, clé régénérée), effacez son épinglage sur la passerelle. La connexion suivante épingle la nouvelle clé :
+
+```bash
+sudo vigo ssh-hostkey forget 10.0.1.1        # port 22
+sudo vigo ssh-hostkey forget 10.0.1.1:2222   # non-default port
+```
+
+Utilisez l'adresse à laquelle la passerelle se connecte (`ip_address`, ou le nom d'hôte lorsque `ip_address` n'est pas défini).
 
 ## Exécuteurs réseau
 
@@ -208,7 +223,7 @@ Les équipements réseau participent pleinement au système de conformité de Vi
 ## Et ensuite
 
 - **Écrire des configcrates contre les exécuteurs d'équipement** → voir `cisco_vlan`, `network_ntp`, `network_syslog`, `network_user` dans la référence des ressources. Les exécuteurs multiplateformes abstraient les différences entre types d'équipements là où c'est possible.
-- **La clé d'hôte SSH d'un équipement a changé** → le cache TOFU génère une erreur bloquante ; enquêtez avant de l'effacer. Si le changement est légitime, supprimez la clé mise en cache sur la passerelle et reconvergez.
+- **La clé d'hôte SSH d'un équipement a changé** → la passerelle refuse de se connecter ; enquêtez avant d'effacer l'épinglage. Si le changement est légitime, exécutez `sudo vigo ssh-hostkey forget <address>[:<port>]` sur la passerelle et reconvergez.
 - **La passerelle ne peut pas joindre un équipement** → [Résoudre les problèmes courants](troubleshoot.md) couvre la matrice de connectivité du mandataire-passerelle.
 
 ---

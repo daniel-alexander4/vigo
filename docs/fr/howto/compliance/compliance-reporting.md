@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:f951da3e3caa36e0b0e766dc6db3d3acf713793ff06b4875954f5b0be065499a -->
+<!-- vigo-i18n source_sha:2c5c51e8b1b30a86316237f9ef94e383a2e4015ae2a5c87f3a2d53be2d5c3874 -->
 
 # Rapports de conformité
 
@@ -89,15 +89,18 @@ Les exportateurs GRC de Vigo formatent les preuves réussite/échec par contrôl
 
 ```yaml
 grc:
-  enabled: true
-  vendor: vanta              # or drata | secureframe | laika | thoropass | servicenow | generic
-  endpoint: "https://api.vanta.com/v1/..."
-  token: "secret:grc/vanta/token"
-  push_interval: "1h"
-  frameworks: [soc2, iso-27001]
+  integrations:
+    - name: vanta            # or drata | secureframe | laika | thoropass | servicenow; any other name sends the generic payload
+      enabled: true
+      endpoint: "https://api.vanta.com/v1/evidence"
+      api_key: "secret:vigo/grc/vanta-api-key"
+      push_interval: "1h"
+      frameworks:            # Vigo framework key -> the platform's framework ID
+        soc2: "soc2-2017"
+        iso-27001: "iso-27001-2022"
 ```
 
-Consultez `reference/server-yaml.md` pour le schéma complet par fournisseur.
+Consultez [`grc` dans la référence server.yaml](../../reference/server-yaml.md#grc) pour l'ensemble des champs.
 
 ## Dérogations
 

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0d19777a2057d6a993227a7f49081a33621f58b4f27a9a595f456dd1a324f1c3 -->
+<!-- vigo-i18n source_sha:c34df237122dc01ecb1a048cfefc5be460197b636b07d9c083ee38060f7af7ad -->
 
 ---
 title: Authentification
@@ -110,7 +110,7 @@ HTTP du limiteur de débit des check-ins gRPC.)
 
 Lorsque `vigocli` s'exécute sur l'hôte serveur, il s'authentifie avec le **jeton local-admin** — un identifiant que le serveur génère au premier démarrage et persiste à `/srv/vigo/cli-admin-token` (mode `0600`, possédé par `root`). `vigocli` le lit automatiquement lorsqu'aucun jeton par-utilisateur n'est configuré, donc `sudo vigocli ...` fonctionne sur l'hôte serveur sans configuration. L'accès CLI distant nécessite toujours un jeton d'API par-utilisateur via `vigocli auth set-token`.
 
-Le jeton contrôle l'accès au niveau du *système de fichiers*, pas de l'IP qui se connecte : seul un appelant capable de lire le fichier `0600` possédé par root est admin. Un utilisateur non-root disposant d'un shell sur l'hôte serveur — qui ne peut pas lire le fichier — obtient `401`. C'est le même contrôle qui protège déjà la clé maîtresse des secrets et le binaire `vigocli` lui-même.
+Le jeton contrôle l'accès au niveau du *système de fichiers*, pas de l'IP qui se connecte : seul un appelant capable de lire le fichier `0600` possédé par root est admin. Un utilisateur non-root disposant d'un shell sur l'hôte serveur — qui ne peut pas lire le fichier — obtient `401`. C'est le même contrôle qui protège déjà la clé maîtresse des secrets et le binaire `vigocli` lui-même. Le serveur vérifie ce contrôle au démarrage : si le fichier de jeton est lisible par le groupe ou par les autres, n'appartient pas à l'utilisateur du serveur, est un lien symbolique ou ne contient pas de jeton `vgot_`, vigosrv refuse de démarrer et en donne la raison. Corrigez le mode (`chmod 600`) ou supprimez le fichier ; un nouveau jeton est généré au démarrage suivant.
 
 **Root uniquement sur le serveur.** Le binaire `vigocli` sur l'hôte serveur est installé à `/usr/local/bin/vigocli` avec le mode `0700` possédé par `root:root`, et le fichier de jeton local-admin est `0600 root`. Les utilisateurs non-root ne peuvent lire ni l'un ni l'autre, donc l'accès admin reste hors de leur portée. Les chemins d'installation (`Dockerfile.server`, `entrypoint.sh`, `scripts/upgrade.sh`) imposent le mode du binaire — si vous empaquetez vigocli sur un serveur par toute autre voie, définissez le même mode à la main. Les membres du groupe `docker` sont effectivement root sur l'hôte et peuvent toujours exécuter vigocli via `docker exec` ; gardez ce groupe restreint.
 
@@ -130,6 +130,8 @@ auth:
     redirect_url: "https://vigo.example.com:8443/auth/callback"
     scopes: [openid, profile, email]
 ```
+
+Chaque connexion utilise PKCE (`S256`) et envoie un nonce que le jeton d'identité renvoyé doit reprendre ; le fournisseur d'identité doit donc accepter un `code_challenge` dans la requête d'autorisation. Tous les fournisseurs ci-dessous le font. À chaque connexion, Vigo met à jour le nom d'affichage et l'adresse e-mail de l'utilisateur à partir du jeton d'identité ; le rôle, les permissions et la clé publique SSH restent tels qu'enregistrés.
 
 ### Exemples de fournisseurs
 
@@ -261,6 +263,10 @@ Les chemins suivants sont accessibles sans authentification quelle que soit la m
 
 Les lectures swarm destinées aux agents sont aussi publiques : la table des clés publiques de la flotte, la table des noms de puddle, `resolve` et `blob` de curator, et les lectures poolq `topics` et `topic/…`. Les routes de modération poolq `block`/`unblock` sont réservées aux administrateurs.
 
+## Protection contre les requêtes cross-origin
+
+Le serveur refuse avec `403` une requête de navigateur modifiant l'état (`POST`, `PUT`, `PATCH`, `DELETE`) provenant d'une autre origine. Il se fonde sur l'en-tête `Sec-Fetch-Site` du navigateur, ou sur l'en-tête `Origin` pour les navigateurs qui ne l'envoient pas. Cela empêche une page d'un autre site d'utiliser le cookie de session d'un opérateur connecté pour agir sur le serveur. Les requêtes qui ne portent aucun de ces en-têtes (vigocli, agents, `curl`) et celles authentifiées par un jeton d'API `Authorization: Bearer` ne sont pas concernées. Si vous placez l'interface derrière un reverse proxy, celui-ci doit transmettre l'en-tête `Host` d'origine.
+
 ## Rôles et permissions
 
 Trois rôles sont pris en charge :
@@ -290,17 +296,13 @@ Au-delà des étiquettes de rôle, chaque utilisateur dispose d'un ensemble de p
 
 | Permission | Description | Admin | Viewer | Compliance |
 |------------|-------------|-------|--------|------------|
-| `fleet.read` | Voir Envoys, exécutions, inventaire | Oui | Oui | Non |
+| `fleet.read` | Voir Envoys, exécutions, inventaire, tâches, workflows, sécurité, santé ; utiliser le tiroir IA de l'interface web | Oui | Oui | Non |
 | `fleet.write` | Modifier les étiquettes d'Envoy, la maintenance, forcer la mise à jour | Oui | Non | Non |
 | `config.publish` | Publier / geler / recharger la configuration | Oui | Non | Non |
 | `config.rollback` | Revenir à une version antérieure de la config | Oui | Non | Non |
 | `push.execute` | Lancer des tâches ad-hoc | Oui | Non | Non |
-| `query.execute` | Exécuter des requêtes de traits en direct (y compris AI ask) | Oui | Non | Non |
+| `query.execute` | Exécuter des requêtes de traits en direct (y compris REST `POST /api/v1/ask`) | Oui | Non | Non |
 | `workflow.execute` | Exécuter / interrompre des workflows | Oui | Non | Non |
-| `users.manage` | Créer/supprimer/modifier des utilisateurs | Oui | Non | Non |
-| `tokens.manage` | Gérer les jetons d'API | Oui | Non | Non |
-| `backup.manage` | Créer/télécharger des sauvegardes | Oui | Non | Non |
-| `enrollment.manage` | Gérer les motifs d'enrôlement | Oui | Non | Non |
 | `audit.read` | Voir la chaîne du journal d'audit brut | Oui | Oui | **Non** |
 | `compliance.read` | Voir les rapports de cadre + le paquet d'audit | Oui | Oui | Oui |
 | `compliance.docs.write` | Téléverser la documentation de conformité justificative | Oui | Non | Oui |
@@ -308,7 +310,7 @@ Au-delà des étiquettes de rôle, chaque utilisateur dispose d'un ensemble de p
 
 L'exclusion de `audit.read` sur le rôle compliance est délibérée : le journal d'audit brut à chaîne de hachage est réservé aux admins et viewers, tandis que l'export du paquet d'audit (un artefact de preuve de conformité par-cadre construit à partir des mêmes données) repose sur `compliance.read` pour que le rôle puisse télécharger ce qu'un auditeur demande sans se voir remettre l'intégralité du flux d'audit.
 
-Des ensembles de permissions personnalisés peuvent être attribués par-utilisateur via l'API REST pour adapter l'accès en dehors des trois rôles nommés (par exemple, un opérateur qui peut lancer des tâches mais pas gérer les utilisateurs, ou un viewer qui peut aussi publier la config).
+L'ensemble de permissions d'un utilisateur est celui par défaut de son rôle ; aucune API ne permet d'attribuer un ensemble personnalisé. La gestion des utilisateurs, des jetons d'API et des motifs d'enrôlement requiert le rôle admin lui-même, et non une permission. Un rôle que le serveur ne reconnaît pas n'obtient aucune permission.
 
 ## Authentification à deux facteurs (TOTP)
 
