@@ -368,15 +368,7 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 
 		// Check abort flag before dispatching.
 		if e.isAborted(runID) {
-			slog.Info("workflow: aborted", "workflow_run_id", runID, "at_step", step.Name)
-			now = sql.NullTime{Time: time.Now(), Valid: true}
-			persistErr(runID, e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
-				ID:            runID,
-				Status:        "aborted",
-				CurrentStep:   int64(currentIdx),
-				FinishedAt:    now,
-				FailureReason: sql.NullString{String: "operator_abort", Valid: true},
-			}))
+			e.markAborted(ctx, runID, currentIdx, step.Name)
 			return
 		}
 
@@ -442,6 +434,28 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 			return
 		}
 
+		// A real dispatch always returns the task run it created (only a
+		// dry-run returns no ID, and workflows never dry-run). Without an
+		// ID there is nothing to poll, so the step fails rather than
+		// polling a non-existent run forever.
+		if result == nil || result.ID == "" {
+			stepFinished := sql.NullTime{Time: time.Now(), Valid: true}
+			persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
+				ID:         stepResult.ID,
+				Status:     stepFailed,
+				StartedAt:  stepNow,
+				FinishedAt: stepFinished,
+			}))
+			if step.OnFailure != "" {
+				if idx, ok := stepIndex[step.OnFailure]; ok {
+					currentIdx = idx
+					continue
+				}
+			}
+			e.failWorkflow(ctx, runID, currentIdx, fmt.Sprintf("step %s: dispatch returned no task run id", step.Name))
+			return
+		}
+
 		// Update step with task run ID.
 		persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:        stepResult.ID,
@@ -462,7 +476,15 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 			FinishedAt: stepFinished,
 		}))
 
-		if stepStatus == "complete" {
+		if stepStatus == stepAborted {
+			// Operator abort is its own outcome: never an on_failure
+			// branch, never recorded as a failure. The dispatched task
+			// run was already cancelled by pollPushCompletion.
+			e.markAborted(ctx, runID, currentIdx, step.Name)
+			return
+		}
+
+		if stepStatus == stepComplete {
 			if step.OnSuccess != "" {
 				if idx, ok := stepIndex[step.OnSuccess]; ok {
 					currentIdx = idx
@@ -471,7 +493,7 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 			}
 			currentIdx++
 		} else {
-			// Step failed/aborted.
+			// Step failed, timed out, or its task run was cancelled.
 			if step.OnFailure != "" {
 				if idx, ok := stepIndex[step.OnFailure]; ok {
 					currentIdx = idx
@@ -498,37 +520,109 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 	slog.Info("workflow: completed", "workflow_run_id", runID)
 }
 
-// pollPushCompletion polls a task run until it finishes or the workflow is aborted.
+// Step outcomes recorded on workflow_step_results.status.
+const (
+	stepComplete = "complete"
+	stepFailed   = "failed"
+	stepAborted  = "aborted"
+	stepTimeout  = "timeout"
+)
+
+// pollInterval is how often pollPushCompletion reads the task run. A var
+// so tests can shorten it.
+var pollInterval = 2 * time.Second
+
+// maxConsecutivePollErrors is the error budget for reading the task run:
+// this many failed GetTaskRun calls in a row fail the step instead of
+// polling forever (about 30s at the default interval).
+const maxConsecutivePollErrors = 15
+
+// pollDeadlineSlack is added to the task run's own deadline
+// (created_at + timeout_secs) before the poll gives up. The task reaper
+// times a run out on a 30s tick, so the slack covers one reaper period
+// plus margin; the poll deadline is a backstop for a run the reaper
+// never finalized, not the primary timeout.
+const pollDeadlineSlack = 90 * time.Second
+
+// pollPushCompletion polls a task run until it finishes, the workflow is
+// aborted, the task run's deadline passes, or reading it keeps failing.
+//
+// On abort and on deadline the task run is cancelled, so its remaining
+// targets do not keep running across the fleet after the workflow has
+// stopped waiting for them.
 func (e *Engine) pollPushCompletion(ctx context.Context, workflowRunID, taskRunID string) string {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
+	consecutiveErrs := 0
 	for {
 		select {
 		case <-ctx.Done():
-			return "failed"
+			return stepFailed
 		case <-ticker.C:
 			if e.isAborted(workflowRunID) {
-				return "aborted"
+				e.cancelTaskRun(ctx, workflowRunID, taskRunID)
+				return stepAborted
 			}
 
 			taskRun, err := e.queries.GetTaskRun(ctx, taskRunID)
 			if err != nil {
-				slog.Error("workflow: failed to poll task run", "task_run_id", taskRunID, "error", err)
+				consecutiveErrs++
+				slog.Error("workflow: failed to poll task run", "task_run_id", taskRunID,
+					"consecutive_errors", consecutiveErrs, "error", err)
+				if consecutiveErrs >= maxConsecutivePollErrors {
+					return stepFailed
+				}
 				continue
 			}
+			consecutiveErrs = 0
 
 			switch taskRun.Status {
 			case "complete":
-				return "complete"
+				return stepComplete
 			case "failed":
-				return "failed"
+				return stepFailed
 			case "running", "pending":
+				timeout := time.Duration(taskRun.TimeoutSecs) * time.Second
+				if timeout <= 0 {
+					timeout = 60 * time.Second
+				}
+				if time.Since(taskRun.CreatedAt) > timeout+pollDeadlineSlack {
+					slog.Warn("workflow: task run past its deadline, cancelling",
+						"workflow_run_id", workflowRunID, "task_run_id", taskRunID)
+					e.cancelTaskRun(ctx, workflowRunID, taskRunID)
+					return stepTimeout
+				}
 				continue
 			default:
 				return taskRun.Status
 			}
 		}
+	}
+}
+
+// cancelTaskRun cancels a dispatched task run and its not-yet-finished
+// targets — the same guarded UPDATEs the REST cancel endpoint uses, so a
+// run that already finished is left alone.
+func (e *Engine) cancelTaskRun(ctx context.Context, workflowRunID, taskRunID string) {
+	persistErr(workflowRunID, e.queries.CancelTaskRun(ctx, taskRunID))
+	persistErr(workflowRunID, e.queries.CancelTaskRunTargets(ctx, taskRunID))
+}
+
+// markAborted records an operator abort: status "aborted", reason
+// "operator_abort". Distinct from failWorkflow so an abort never counts
+// as a failure.
+func (e *Engine) markAborted(ctx context.Context, runID string, step int, stepName string) {
+	slog.Info("workflow: aborted", "workflow_run_id", runID, "at_step", stepName)
+	persistErr(runID, e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
+		ID:            runID,
+		Status:        "aborted",
+		CurrentStep:   int64(step),
+		FinishedAt:    sql.NullTime{Time: time.Now(), Valid: true},
+		FailureReason: sql.NullString{String: "operator_abort", Valid: true},
+	}))
+	if e.metrics != nil {
+		e.metrics.WorkflowRunsTotal.WithLabelValues("aborted").Inc()
 	}
 }
 

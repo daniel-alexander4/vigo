@@ -61,7 +61,7 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_task_runs_total` | Counter | `status` | Completed task runs by final status (complete, failed) |
-| `vigo_workflow_runs_total` | Counter | `status` | Completed workflow runs by final status (complete, failed) |
+| `vigo_workflow_runs_total` | Counter | `status` | Completed workflow runs by final status (complete, failed, aborted) |
 
 ### Webhooks
 

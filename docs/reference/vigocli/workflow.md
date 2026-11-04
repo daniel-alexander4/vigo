@@ -126,7 +126,7 @@ w5e6f7g8    rotate-certs  failed     2/4    2026-03-12 09:00
 
 ## abort
 
-Abort a running workflow.
+Abort a running workflow. The workflow stops before its next step. If a step is in progress, its task run and its unfinished targets are cancelled too, the same as `POST /api/v1/task/{id}/cancel`. The run is recorded as `aborted`. It is never treated as a step failure, so no `on_failure` branch runs.
 
 ```bash
 vigocli workflow abort <id>

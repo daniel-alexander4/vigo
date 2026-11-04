@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:e48f1ecd837bef96145d630d69d7a120d94695153e4c0ed691676006e7ef6333 -->
+<!-- vigo-i18n source_sha:c731c15ef2b861c3bdc97f15dd1795ad9898925dce74adee88a5a1105ae9e469 -->
 
 # Mettre en place la supervision
 
@@ -62,7 +62,7 @@ Couvre tous les RPC unaires (CheckIn, ReportResult, ReportTraits, Register). Les
 | Métrique | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_task_runs_total` | Counter | `status` | Exécutions de tâches terminées par statut final (complete, failed) |
-| `vigo_workflow_runs_total` | Counter | `status` | Exécutions de workflows terminées par statut final (complete, failed) |
+| `vigo_workflow_runs_total` | Counter | `status` | Exécutions de workflows terminées par statut final (complete, failed, aborted) |
 
 ### Webhooks
 
