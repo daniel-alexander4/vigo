@@ -51,7 +51,7 @@ func TestVerifyStaleTimestamp(t *testing.T) {
 	pub, priv := mustKey(t)
 	pubHex := hex.EncodeToString(pub)
 	ts := strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10)
-	sig := ed25519.Sign(priv, signedMessage(ts))
+	sig := ed25519.Sign(priv, signedMessage(ts, "", nil))
 	md := metadata.New(map[string]string{
 		mdPubkey: pubHex,
 		mdTS:     ts,
