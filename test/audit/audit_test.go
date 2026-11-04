@@ -180,7 +180,7 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 	for _, m := range insertRe.FindAllStringSubmatch(string(data), -1) {
 		name := m[1]
 		// Skip test mocks.
-		if name == "mock" {
+		if name == "mock" || strings.HasPrefix(name, "mock-") {
 			continue
 		}
 		seen[name] = true

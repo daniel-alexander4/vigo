@@ -39,7 +39,7 @@ func builtinExecutorTypes(t *testing.T, root string) map[string]bool {
 	insertRe := regexp.MustCompile(`executors\.insert\("([^"]+)"`)
 	seen := map[string]bool{}
 	for _, m := range insertRe.FindAllStringSubmatch(string(data), -1) {
-		if m[1] == "mock" {
+		if m[1] == "mock" || strings.HasPrefix(m[1], "mock-") {
 			continue
 		}
 		seen[m[1]] = true
