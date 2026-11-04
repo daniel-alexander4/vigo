@@ -13,12 +13,13 @@ import (
 )
 
 const createRun = `-- name: CreateRun :one
-INSERT INTO runs (envoy_id, status, trigger, resource_count)
-VALUES (?, ?, ?, ?)
+INSERT INTO runs (id, envoy_id, status, trigger, resource_count)
+VALUES (?, ?, ?, ?, ?)
 RETURNING id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 `
 
 type CreateRunParams struct {
+	ID            string `json:"id"`
 	EnvoyID       string `json:"envoy_id"`
 	Status        string `json:"status"`
 	Trigger       string `json:"trigger"`
@@ -27,6 +28,7 @@ type CreateRunParams struct {
 
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
 	row := q.db.QueryRowContext(ctx, createRun,
+		arg.ID,
 		arg.EnvoyID,
 		arg.Status,
 		arg.Trigger,
@@ -259,12 +261,25 @@ func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 const listFailedRunsForDate = `-- name: ListFailedRunsForDate :many
 SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
-WHERE date(started_at) = ?1 AND status IN ('failure', 'partial')
+WHERE started_at >= datetime(?1)
+  AND started_at < datetime(?2)
+  AND status IN ('failure', 'blocked', 'partial')
 ORDER BY started_at ASC
+LIMIT ?3
 `
 
-func (q *Queries) ListFailedRunsForDate(ctx context.Context, startedAt time.Time) ([]Run, error) {
-	rows, err := q.db.QueryContext(ctx, listFailedRunsForDate, startedAt)
+type ListFailedRunsForDateParams struct {
+	DayStart interface{} `json:"day_start"`
+	DayEnd   interface{} `json:"day_end"`
+	RowLimit int64       `json:"row_limit"`
+}
+
+// Failed runs (errored or guardrail-blocked) started in [day_start, day_end).
+// A range on the bare column, not date(started_at), so idx_runs_started_at
+// serves it; datetime() normalizes the bound parameters to the stored
+// "YYYY-MM-DD HH:MM:SS" form so the text comparison is exact at the edges.
+func (q *Queries) ListFailedRunsForDate(ctx context.Context, arg ListFailedRunsForDateParams) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listFailedRunsForDate, arg.DayStart, arg.DayEnd, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

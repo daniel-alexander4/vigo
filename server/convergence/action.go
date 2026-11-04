@@ -14,6 +14,7 @@ const (
 	ActionCreate
 	ActionUpdate
 	ActionDelete
+	ActionBlocked // a guardrail refused the resource (ActionTakenBlocked)
 )
 
 // String returns the canonical lowercase form.
@@ -25,6 +26,8 @@ func (a Action) String() string {
 		return "update"
 	case ActionDelete:
 		return "delete"
+	case ActionBlocked:
+		return ActionTakenBlocked
 	default:
 		return "noop"
 	}
@@ -34,9 +37,9 @@ func (a Action) String() string {
 // Accepts both present-tense ("create") and past-tense ("created")
 // forms because the Rust agent emits past-tense via its Display impl
 // (Action::Created -> "created") while UI/CLI plan-preview surfaces
-// emit present-tense. Whitespace and case tolerant. Unknown vocabularies
-// — including the agent's "settled", "skipped", and "blocked" outcomes
-// — land in ActionNoop.
+// emit present-tense. Whitespace and case tolerant. The agent's "blocked"
+// outcome is its own bucket (a guardrail refused the change — not a no-op);
+// "settled", "skipped" and unknown vocabularies land in ActionNoop.
 func ClassifyAction(s string) Action {
 	switch strings.TrimSpace(strings.ToLower(s)) {
 	case "create", "created":
@@ -45,6 +48,8 @@ func ClassifyAction(s string) Action {
 		return ActionUpdate
 	case "delete", "deleted":
 		return ActionDelete
+	case ActionTakenBlocked:
+		return ActionBlocked
 	default:
 		return ActionNoop
 	}

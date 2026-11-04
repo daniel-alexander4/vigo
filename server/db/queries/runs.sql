@@ -1,6 +1,6 @@
 -- name: CreateRun :one
-INSERT INTO runs (envoy_id, status, trigger, resource_count)
-VALUES (?, ?, ?, ?)
+INSERT INTO runs (id, envoy_id, status, trigger, resource_count)
+VALUES (?, ?, ?, ?, ?)
 RETURNING id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger;
 
 -- name: GetRunByID :one
@@ -68,10 +68,17 @@ WHERE run_id IN (sqlc.slice('run_ids'))
 ORDER BY run_id, created_at ASC;
 
 -- name: ListFailedRunsForDate :many
+-- Failed runs (errored or guardrail-blocked) started in [day_start, day_end).
+-- A range on the bare column, not date(started_at), so idx_runs_started_at
+-- serves it; datetime() normalizes the bound parameters to the stored
+-- "YYYY-MM-DD HH:MM:SS" form so the text comparison is exact at the edges.
 SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger
 FROM runs
-WHERE date(started_at) = ?1 AND status IN ('failure', 'partial')
-ORDER BY started_at ASC;
+WHERE started_at >= datetime(sqlc.arg(day_start))
+  AND started_at < datetime(sqlc.arg(day_end))
+  AND status IN ('failure', 'blocked', 'partial')
+ORDER BY started_at ASC
+LIMIT sqlc.arg(row_limit);
 
 -- name: GetNextSuccessfulRun :one
 SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger

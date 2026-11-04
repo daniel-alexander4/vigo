@@ -6,7 +6,7 @@
 //
 //   - Failure axis: the agent's last run produced no failures
 //     (Converged), some failures (Degraded), or many (Failed). Computed
-//     by ComputeConvergence; typed as FailureLevel.
+//     by ComputeConvergence; typed as Status.
 //
 //   - Drift axis: the envoy's modules keep mutating across recent runs.
 //     A single run with changes is Changed; DivergedThreshold or more
@@ -22,9 +22,9 @@ package convergence
 // RunInfo holds the minimal information needed to compute convergence
 // state. Decoupled from db.Run to avoid package coupling.
 type RunInfo struct {
-	Status        string // agent's overall flag: "success" / "partial" / "failure" / "blocked" / ""
+	Status        string // run-level flag, one of the RunStatus* constants, or ""
 	ChangedCount  int64
-	FailedCount   int64
+	FailedCount   int64 // errored + guardrail-blocked resources (see summarizeResults)
 	ResourceCount int64
 }
 
@@ -53,11 +53,15 @@ const (
 // axis's job, not this function's.
 //
 // Rules, first match wins:
-//  1. No runs                              → "no data"
-//  2. last.Status == "blocked"             → "failed"  (no resources applied)
-//  3. last.FailedCount == 0 with recognized status → "converged"
-//  4. failure pct >= DegradedMaxPct        → "failed"
-//  5. otherwise (any FailedCount > 0)      → "degraded"
+//  1. No runs                                        → "no data"
+//  2. last.FailedCount == 0 with a recognized status → "converged"
+//  3. failure pct >= DegradedMaxPct                  → "failed"
+//  4. otherwise (any FailedCount > 0)                → "degraded"
+//
+// A guardrail-blocked resource is a failed resource: the ingest path counts it
+// into FailedCount, so a run with one blocked resource of 172 is Degraded, not
+// Failed — the same resource-granular split as an errored resource. The
+// run-level "blocked" status only says why resources failed.
 func ComputeConvergence(recentRuns []RunInfo) string {
 	if len(recentRuns) == 0 {
 		return "no data"
@@ -65,23 +69,17 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 
 	last := recentRuns[0]
 
-	// Blocked = infrastructure problem prevented application. Even with
-	// zero counts the envoy is not in its desired state, so this is a
-	// real failure on the failure axis. Operator drills into the run
-	// detail page for specifics.
-	if last.Status == "blocked" {
-		return "failed"
-	}
-
 	// Zero failures is converged regardless of changes. Drift is
 	// tracked separately on the drift axis (see ComputeDrift).
 	if last.FailedCount == 0 {
 		switch last.Status {
-		case "success", "partial", "failure":
+		case RunStatusSuccess, RunStatusPartial, RunStatusFailure:
 			return "converged"
 		}
 		// Empty / unknown status with zero counts → "no data"; this is
-		// not "converged at zero," it's "we don't know."
+		// not "converged at zero," it's "we don't know." A "blocked"
+		// run always carries its blocked resources in FailedCount, so
+		// blocked with zero failures is an inconsistent row, not converged.
 		return "no data"
 	}
 

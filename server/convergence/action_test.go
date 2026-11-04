@@ -40,7 +40,8 @@ func TestClassifyAction(t *testing.T) {
 		{"settled", ActionNoop},
 		{"none", ActionNoop},
 		{"skipped", ActionNoop},
-		{"blocked", ActionNoop},
+		{"blocked", ActionBlocked},
+		{" Blocked ", ActionBlocked},
 		{"unknown", ActionNoop},
 	}
 	for _, tc := range cases {

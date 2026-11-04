@@ -34,9 +34,11 @@ func TestComputeConvergence(t *testing.T) {
 		{"failure status with zero counts is converged", []RunInfo{{Status: "failure"}}, "converged"},
 		{"failure status with low fail pct is degraded by counts", []RunInfo{{Status: "failure", FailedCount: 1, ResourceCount: 100}}, "degraded"},
 
-		// Blocked is its own special case — modules didn't apply, treat
-		// as Failed on the failure axis regardless of counts.
-		{"blocked maps to failed", []RunInfo{{Status: "blocked"}}, "failed"},
+		// Blocked resources are failed resources (counted into FailedCount
+		// at ingest), classified by the same resource-granular fraction.
+		{"one blocked of 172 is degraded", []RunInfo{{Status: "blocked", FailedCount: 1, ResourceCount: 172}}, "degraded"},
+		{"blocked at 80% is failed", []RunInfo{{Status: "blocked", FailedCount: 8, ResourceCount: 10}}, "failed"},
+		{"blocked with zero failed is an inconsistent row", []RunInfo{{Status: "blocked", ResourceCount: 10}}, "no data"},
 
 		// Degenerate: failed > 0 but no module count → failed (don't lose the failure signal).
 		{"failed > 0 with zero modules", []RunInfo{{Status: "partial", FailedCount: 3}}, "failed"},

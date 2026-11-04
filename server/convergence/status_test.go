@@ -64,7 +64,8 @@ func TestComputeStatus(t *testing.T) {
 		{"agent failure with low fail pct -> degraded by counts", RunInfo{Status: "failure", FailedCount: 1, ResourceCount: 100}, StatusDegraded},
 		{"degraded", RunInfo{Status: "success", FailedCount: 5, ResourceCount: 10}, StatusDegraded},
 		{"empty", RunInfo{}, StatusNoData},
-		{"blocked is failed", RunInfo{Status: "blocked"}, StatusFailed},
+		{"one blocked of 100 is degraded", RunInfo{Status: "blocked", FailedCount: 1, ResourceCount: 100}, StatusDegraded},
+		{"mostly blocked is failed", RunInfo{Status: "blocked", FailedCount: 90, ResourceCount: 100}, StatusFailed},
 	}
 	for _, tc := range cases {
 		if got := ComputeStatus(tc.ri); got != tc.want {

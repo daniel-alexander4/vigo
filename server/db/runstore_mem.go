@@ -87,8 +87,12 @@ func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, er
 	if trigger == "" {
 		trigger = "scheduled"
 	}
+	id := arg.ID
+	if id == "" {
+		id = NewRunID()
+	}
 	run := Run{
-		ID:            uuid.New().String(),
+		ID:            id,
 		EnvoyID:       arg.EnvoyID,
 		StartedAt:     time.Now(),
 		Status:        arg.Status,
@@ -203,6 +207,8 @@ func (s *MemRunStore) FinishRun(_ context.Context, arg FinishRunParams) error {
 // RecordRun composes CreateRun → BatchCreateRunResults → FinishRun. The
 // in-memory store has no transactions, but each step takes the shard lock, so
 // the run lands consistently; the DB backend is the one with true atomicity.
+// FileSnapshots are not kept: the memory backend has no file_snapshots table
+// (Rollback evidence needs the DB backend).
 func (s *MemRunStore) RecordRun(ctx context.Context, arg RecordRunParams) (Run, error) {
 	run, err := s.CreateRun(ctx, arg.Run)
 	if err != nil {

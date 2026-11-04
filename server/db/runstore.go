@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 // RunStore abstracts run data storage. Two backends are available:
@@ -38,12 +40,19 @@ type RunStore interface {
 	LatestRunPerEnvoy(ctx context.Context, envoyIDs []string) (map[string]*Run, error)
 }
 
-// RecordRunParams bundles everything one convergence report writes. Results
-// carry blank RunID and Finish carries blank ID — RecordRun stamps both from
-// the run it creates, so the caller computes counts/status from the report
-// without needing the server-assigned run ID first.
+// RecordRunParams bundles everything one convergence report writes. Results,
+// FileSnapshots and Finish carry a blank run id — RecordRun stamps them from
+// the run it creates. Run.ID is the server-minted run id (NewRunID); left
+// blank, the store mints one. Callers that publish the id before the write
+// lands (the async delta path) mint it up front so the fleet index and the DB
+// row agree.
 type RecordRunParams struct {
-	Run     CreateRunParams
-	Results []CreateRunResultParams
-	Finish  FinishRunParams
+	Run           CreateRunParams
+	Results       []CreateRunResultParams
+	FileSnapshots []InsertFileSnapshotParams // changed file resources (Rollback evidence); DB store only
+	Finish        FinishRunParams
 }
+
+// NewRunID mints a server-side run id (UUIDv4 text, the same shape as the
+// runs.id column default). The agent's own run_id is never used as a key.
+func NewRunID() string { return uuid.New().String() }

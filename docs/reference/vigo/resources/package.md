@@ -244,7 +244,7 @@ The package executor classifies errors from the underlying package manager and r
 
 Infrastructure errors (broken repo, GPG, disk full) trigger a per-resource circuit breaker. After 3 consecutive infrastructure failures, the resource reports `blocked` and backs off to hourly retries instead of failing every convergence cycle. The breaker resets when the resource succeeds.
 
-Blocked resources report `action: blocked` to the server, which maps to `diverged` convergence status — the node is not converged, but alerts are not fired repeatedly.
+Blocked resources report `action: blocked` to the server, which counts each one as a failed resource — the node shows `degraded` (or `failed` at 80% or more failed or blocked resources), but alerts are not fired repeatedly.
 
 ### Disk Space Pre-flight
 

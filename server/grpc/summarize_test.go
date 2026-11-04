@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/convergence"
 )
 
 func rr(action string, changed bool, errMsg string) *pb.ResourceRunResult {
@@ -31,13 +32,13 @@ func TestSummarizeResults(t *testing.T) {
 				rr("updated", true, ""), rr("install", false, "boom"), rr("blocked", false, "guardrail"),
 			},
 			totalCount: 10,
-			total:      10, changed: 1, failed: 1, blocked: 1, skipped: 7, status: "failure",
+			total:      10, changed: 1, failed: 2, blocked: 1, skipped: 7, status: "failure",
 		},
 		{
-			name:       "blocked only → status blocked (not skipped)",
+			name:       "blocked only → status blocked, counted as a failed resource",
 			results:    []*pb.ResourceRunResult{rr("blocked", false, "guardrail")},
 			totalCount: 5,
-			total:      5, blocked: 1, skipped: 4, status: "blocked",
+			total:      5, failed: 1, blocked: 1, skipped: 4, status: "blocked",
 		},
 		{
 			name: "old agent (total_count 0) → falls back to len, counts settled rows",
@@ -56,6 +57,32 @@ func TestSummarizeResults(t *testing.T) {
 				t.Errorf("got total=%d changed=%d failed=%d blocked=%d skipped=%d status=%q;\n want total=%d changed=%d failed=%d blocked=%d skipped=%d status=%q",
 					total, changed, failed, blocked, skipped, status,
 					c.total, c.changed, c.failed, c.blocked, c.skipped, c.status)
+			}
+		})
+	}
+}
+
+// TestSummarizeResults_BlockedClassifiesByFraction: one guardrail-blocked
+// resource out of 172 is Degraded on the failure axis — the same
+// resource-granular split as one errored resource — not Failed outright.
+func TestSummarizeResults_BlockedClassifiesByFraction(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		results []*pb.ResourceRunResult
+		total   int32
+		want    string
+	}{
+		{"one blocked of 172", []*pb.ResourceRunResult{rr("blocked", false, "guardrail")}, 172, "degraded"},
+		{"one errored of 172", []*pb.ResourceRunResult{rr("install", false, "boom")}, 172, "degraded"},
+		{"all blocked", []*pb.ResourceRunResult{rr("blocked", false, "g"), rr("blocked", false, "g")}, 2, "failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			total, changed, failed, _, _, status := summarizeResults(tc.results, tc.total)
+			got := convergence.ComputeConvergence([]convergence.RunInfo{{
+				Status: status, ChangedCount: changed, FailedCount: failed, ResourceCount: total,
+			}})
+			if got != tc.want {
+				t.Errorf("classification = %q, want %q (status=%q failed=%d total=%d)", got, tc.want, status, failed, total)
 			}
 		})
 	}

@@ -45,6 +45,9 @@ func (s *DBRunStore) RecordRun(ctx context.Context, arg RecordRunParams) (Run, e
 	defer func() { _ = tx.Rollback() }() // no-op once committed
 
 	q := s.q.WithTx(tx)
+	if arg.Run.ID == "" {
+		arg.Run.ID = NewRunID()
+	}
 	run, err := q.CreateRun(ctx, arg.Run)
 	if err != nil {
 		return Run{}, fmt.Errorf("create run: %w", err)
@@ -54,6 +57,12 @@ func (s *DBRunStore) RecordRun(ctx context.Context, arg RecordRunParams) (Run, e
 	}
 	if err := batchInsertRunResults(ctx, tx, arg.Results); err != nil {
 		return Run{}, err
+	}
+	for _, fs := range arg.FileSnapshots {
+		fs.RunID = sql.NullString{String: run.ID, Valid: true}
+		if err := q.InsertFileSnapshot(ctx, fs); err != nil {
+			return Run{}, fmt.Errorf("insert file snapshot %s: %w", fs.FilePath, err)
+		}
 	}
 	arg.Finish.ID = run.ID
 	if err := q.FinishRun(ctx, arg.Finish); err != nil {
@@ -73,6 +82,9 @@ func (s *DBRunStore) RecordRun(ctx context.Context, arg RecordRunParams) (Run, e
 }
 
 func (s *DBRunStore) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
+	if arg.ID == "" {
+		arg.ID = NewRunID()
+	}
 	return s.q.CreateRun(ctx, arg)
 }
 

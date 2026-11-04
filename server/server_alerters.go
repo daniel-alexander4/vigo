@@ -78,17 +78,21 @@ func (s *Server) persistRiskSnapshot(ctx context.Context) {
 	}
 }
 
-// computeAndStoreMTTR scans yesterday's failed/partial runs, finds their
-// resolutions, and writes aggregate MTTR stats. Runs daily off the hot
+// computeAndStoreMTTR scans yesterday's (UTC) failed and blocked runs, finds
+// their resolutions, and writes aggregate MTTR stats. Runs daily off the hot
 // path.
 func (s *Server) computeAndStoreMTTR(ctx context.Context) {
-	yesterdayTime := time.Now().AddDate(0, 0, -1)
+	yesterdayTime := time.Now().UTC().AddDate(0, 0, -1)
 	yesterday := yesterdayTime.Format("2006-01-02")
 
-	failed, err := s.queries.ListFailedRunsForDate(ctx, yesterdayTime)
+	failed, err := s.queries.ListFailedRunsForDate(ctx, db.FailedRunsDayParams(yesterdayTime, db.FailedRunsDayLimit))
 	if err != nil {
 		slog.Error("mttr: failed to list failed runs", "date", yesterday, "error", err)
 		return
+	}
+	if len(failed) >= db.FailedRunsDayLimit {
+		slog.Warn("mttr: failed-run count hit the per-day cap; stats cover the first runs of the day only",
+			"date", yesterday, "cap", db.FailedRunsDayLimit)
 	}
 
 	var durations []int64

@@ -37,7 +37,8 @@ func TestUpdateRunStatus_MatchesComputeConvergence(t *testing.T) {
 		// converged so it doesn't taint the dashboard.
 		{"failure run with moderate failure ratio is degraded", "failure", 0, 2, 5, "degraded"},
 		{"failure run with no module counts is converged", "failure", 0, 0, 0, "converged"},
-		{"blocked run is failed (no resources applied)", "blocked", 0, 0, 5, "failed"},
+		{"blocked run with one blocked resource of 5 is degraded", "blocked", 0, 1, 5, "degraded"},
+		{"blocked run with every resource blocked is failed", "blocked", 0, 5, 5, "failed"},
 	}
 
 	for _, tc := range cases {
