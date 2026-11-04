@@ -154,10 +154,15 @@ type Result struct {
 	// no-op so callers can `defer res.Cleanup()` unconditionally.
 	cleanup func()
 
-	// ValidationErrors holds per-file validation errors from the config loader.
-	// Non-nil when modules have schema/idempotency violations but the publish
-	// can still proceed (the config store loads empty).
+	// ValidationErrors holds per-file validation errors from the config loader
+	// (idempotency and self-protection findings). Non-empty means the tree is
+	// NOT publishable: the loader would start the server with an empty config
+	// on its next restart. Publish and PublishFile refuse it; ValidateSource
+	// returns it so dry-run can list every failing file. See ValidationError.
 	ValidationErrors []FileError
+
+	// validationErr is the loader error ValidationErrors was built from.
+	validationErr error
 
 	// RemovedConfigcrateContent holds the YAML content of modules that were removed
 	// during this publish (read from .live/ before sync). Keyed by relative path.
@@ -169,6 +174,30 @@ type Result struct {
 	// path. Used by the retraction feature to pre-generate retract modules.
 	ChangedConfigcrateContent map[string][]byte `json:"-"`
 }
+
+// ValidationError returns a non-nil error when the validated tree carries
+// loader validation errors. It wraps the loader's *config.IdempotencyErrors
+// so callers can errors.As it. Publish and PublishFile return it instead of
+// syncing; the dry-run CLI path uses it to report failure.
+func (r *Result) ValidationError() error {
+	if r == nil || (len(r.ValidationErrors) == 0 && r.validationErr == nil) {
+		return nil
+	}
+	return &ValidationFailedError{Files: max(len(r.ValidationErrors), 1), Err: r.validationErr}
+}
+
+// ValidationFailedError is returned by Publish / PublishFile when the
+// source tree fails loader validation. Nothing is synced to .live.
+type ValidationFailedError struct {
+	Files int
+	Err   error
+}
+
+func (e *ValidationFailedError) Error() string {
+	return fmt.Sprintf("validation failed in %d file(s) — nothing published; fix the errors above and publish again", e.Files)
+}
+
+func (e *ValidationFailedError) Unwrap() error { return e.Err }
 
 // Cleanup removes the staging directory created during ValidateSource.
 // Safe to call multiple times. Callers — including the dry-run CLI path —
@@ -296,7 +325,8 @@ func ValidateSource(opts Options) (*Result, error) {
 	// staging-dir paths back to stacks-relative paths so error messages
 	// reference what the operator actually edits.
 	var valErrors []FileError
-	if reloadErr := store.LastReloadError(); reloadErr != nil {
+	reloadErr := store.LastReloadError()
+	if reloadErr != nil {
 		var ie *config.IdempotencyErrors
 		if errors.As(reloadErr, &ie) {
 			for _, m := range ie.Configcrates {
@@ -344,7 +374,10 @@ func ValidateSource(opts Options) (*Result, error) {
 	// .live/ carries only files some carrier can actually consume. The
 	// recomputed diff after the prune lets res.Removed surface every
 	// dropped file in the publish summary.
-	if !opts.NoPrune {
+	// A store that failed validation loaded empty, so its carrier graph
+	// reaches nothing and pruning against it would drop every crate.
+	// Skip the prune; Publish refuses this tree anyway.
+	if !opts.NoPrune && reloadErr == nil {
 		if err := pruneStaging(stagingDir, unused); err != nil {
 			cleanupOnError()
 			return nil, fmt.Errorf("pruning staging: %w", err)
@@ -368,6 +401,7 @@ func ValidateSource(opts Options) (*Result, error) {
 		Removed:          removed,
 		URLWarning:       urlWarning,
 		ValidationErrors: valErrors,
+		validationErr:    reloadErr,
 		stagingDir:       stagingDir,
 		cleanup:          cleanup,
 	}, nil
@@ -446,6 +480,14 @@ func Publish(opts Options, state *State) (*Result, error) {
 	// Always clean up the staging dir before returning, regardless of
 	// whether the sync runs (no-op early-return) or fails partway.
 	defer res.Cleanup()
+
+	// A tree with loader validation errors is never synced: the running
+	// server would reject it on reload, and on its next restart the loader
+	// would start with an EMPTY config for the whole fleet. The result is
+	// still returned so the caller can list the failing files.
+	if verr := res.ValidationError(); verr != nil {
+		return res, verr
+	}
 
 	if len(res.Changed) == 0 && len(res.Removed) == 0 {
 		return res, nil
@@ -986,21 +1028,31 @@ func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
 
 	opts = opts.resolvePaths()
 
-	// Determine the relative path within the stacks content tree.
-	// Accept either an absolute path or a relative path like "configcrates/nginx.vgo".
-	relPath := srcPath
-	if filepath.IsAbs(srcPath) {
-		if rel, err := filepath.Rel(opts.StacksDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
-			relPath = rel
-		} else {
-			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, opts.StacksDir)
-		}
-	}
-
-	// Validate the full config tree (cross-references require all files).
-	store, err := config.NewConfigStore(opts.StacksDir, &stubProvider{}, false)
+	relPath, err := containedRelPath(opts.StacksDir, srcPath)
 	if err != nil {
 		return nil, err
+	}
+
+	// Validate the full config tree through the same pipeline Publish
+	// uses (layout, modlint, staging canonicalisation, loader validation).
+	// NoPrune keeps the named file in staging even when no carrier routes
+	// to it yet — a single-file publish is often the first half of a pair.
+	vopts := opts
+	vopts.NoPrune = true
+	vres, err := ValidateSource(vopts)
+	if err != nil {
+		return nil, err
+	}
+	defer vres.Cleanup()
+	if verr := vres.ValidationError(); verr != nil {
+		return vres, verr
+	}
+
+	// The canonical (linted) bytes from staging are what lands in .live,
+	// matching a full publish.
+	data, err := os.ReadFile(filepath.Join(vres.stagingDir, relPath))
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", relPath, err)
 	}
 
 	// Unlock .live/ for writing, re-lock after.
@@ -1012,25 +1064,41 @@ func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
 		return nil, fmt.Errorf("creating target dir: %w", err)
 	}
-
-	// Read source and write to .live/.
-	data, err := os.ReadFile(filepath.Join(opts.StacksDir, relPath))
-	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", relPath, err)
-	}
 	if err := os.WriteFile(destPath, data, 0o640); err != nil {
 		return nil, fmt.Errorf("writing %s: %w", relPath, err)
 	}
 
-	stats := store.Stats()
+	// Snapshot .live for rollback support, as Publish does.
+	_, _ = SnapshotLive(opts.LiveDir, opts.HistoryDir, DefaultMaxVersions)
+
 	return &Result{
-		Configcrates: stats.Configcrates,
-		Roles:        len(store.ListRoleNames()),
-		Entries:      stats.Entries,
+		Configcrates: vres.Configcrates,
+		Roles:        vres.Roles,
+		Entries:      vres.Entries,
 		Files:        1,
 		AllFiles:     []string{relPath},
 		Changed:      []string{relPath},
 	}, nil
+}
+
+// containedRelPath resolves a single-file publish argument (absolute, or
+// relative to stacksDir) to a cleaned stacks-relative path, refusing any
+// path that escapes stacksDir — `../x` would otherwise read outside stacks
+// and write outside .live.
+func containedRelPath(stacksDir, p string) (string, error) {
+	rel := p
+	if filepath.IsAbs(p) {
+		r, err := filepath.Rel(filepath.Clean(stacksDir), filepath.Clean(p))
+		if err != nil {
+			return "", fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", p, stacksDir)
+		}
+		rel = r
+	}
+	rel = filepath.Clean(rel)
+	if rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("file %s is not inside %s — copy it there first or use a path relative to it", p, stacksDir)
+	}
+	return rel, nil
 }
 
 // CheckLivePermissions checks that .live is not world-writable. Returns a

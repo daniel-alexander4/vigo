@@ -51,8 +51,9 @@ func withTestDirs(t *testing.T) testEnv {
 		stacks: stacks,
 		live:   live,
 		opts: Options{
-			StacksDir: stacks,
-			LiveDir:   live,
+			StacksDir:  stacks,
+			LiveDir:    live,
+			HistoryDir: filepath.Join(t.TempDir(), "history"),
 		},
 	}
 }

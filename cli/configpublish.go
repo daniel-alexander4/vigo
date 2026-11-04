@@ -67,6 +67,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			}
 			res, err := publish.PublishFile(filePath, opts, nil)
 			if err != nil {
+				printValidationFailure(res, err)
 				suggestFixes(err, !askAI, opts)
 				return err
 			}
@@ -92,6 +93,11 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			if res.URLWarning != "" {
 				fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 			}
+			if verr := res.ValidationError(); verr != nil {
+				printPublishSummary(res)
+				suggestFixes(verr, !askAI, opts)
+				return verr
+			}
 			fmt.Printf("\n%s Validation passed: %d configcrates, %d roles, %d envoy entries\n",
 				green("✓"), res.Configcrates, res.Roles, res.Entries)
 			return nil
@@ -99,6 +105,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 
 		res, err := publish.Publish(opts, nil)
 		if err != nil {
+			printValidationFailure(res, err)
 			suggestFixes(err, !askAI, opts)
 			return err
 		}
@@ -196,10 +203,24 @@ func printPublishSummary(res *publish.Result) {
 	if len(res.Removed) > 0 {
 		fmt.Printf("  %s  %d removed\n", red("✗"), len(res.Removed))
 	}
-	if len(res.Changed) > 0 || len(res.Removed) > 0 {
+	if res.ValidationError() != nil {
+		fmt.Printf("  %s  nothing published — .live/ unchanged\n", red("✗"))
+	} else if len(res.Changed) > 0 || len(res.Removed) > 0 {
 		fmt.Printf("  %s  published to .live/\n", green("→"))
 	}
 	fmt.Println()
+}
+
+// printValidationFailure lists the failing files when Publish/PublishFile
+// refused a tree for loader validation errors (it returns the Result
+// alongside the error for exactly this). Any other error prints nothing.
+func printValidationFailure(res *publish.Result, err error) {
+	var vf *publish.ValidationFailedError
+	if res == nil || !errors.As(err, &vf) {
+		return
+	}
+	printFileList(res)
+	printPublishSummary(res)
 }
 
 // suggestFixes asks the AI assistant to suggest fixes for config errors.
