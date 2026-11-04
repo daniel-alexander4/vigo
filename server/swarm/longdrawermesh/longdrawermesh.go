@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
-	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
@@ -48,11 +47,11 @@ type Fleet struct {
 
 // Totals across all users and envoys.
 type Totals struct {
-	Users        int `json:"users"`
-	Envoys       int `json:"envoys"`
-	Files        int `json:"files"`
-	Tombstones   int `json:"tombstones"`
-	Divergences  int `json:"divergences"`
+	Users       int `json:"users"`
+	Envoys      int `json:"envoys"`
+	Files       int `json:"files"`
+	Tombstones  int `json:"tombstones"`
+	Divergences int `json:"divergences"`
 }
 
 // UserSummary rolls up one user's state across every envoy they're
@@ -74,12 +73,12 @@ type UserSummary struct {
 // not-reporting, and stale are distinct states so the UI can tell
 // rolling-upgrade envoys apart from dead ones.
 type EnvoyPresence struct {
-	Hostname     string `json:"hostname"`
-	Status       string `json:"status"` // reporting | not_reporting | stale
-	UpdatedAt    int64  `json:"updated_at,omitempty"`
-	FileCount    int    `json:"file_count"`
-	FilesDigest  string `json:"files_digest,omitempty"`
-	TombstoneCount int  `json:"tombstone_count"`
+	Hostname       string `json:"hostname"`
+	Status         string `json:"status"` // reporting | not_reporting | stale
+	UpdatedAt      int64  `json:"updated_at,omitempty"`
+	FileCount      int    `json:"file_count"`
+	FilesDigest    string `json:"files_digest,omitempty"`
+	TombstoneCount int    `json:"tombstone_count"`
 }
 
 // Staleness cutoff — an envoy whose most recent longdrawer trait is
@@ -94,30 +93,18 @@ const StaleAfter = 5 * time.Minute
 type Aggregator struct {
 	queries *db.Queries
 
-	mu       sync.Mutex
-	cache    *Fleet
-	cacheExp time.Time
-	ttl      time.Duration
+	// cache rebuilds outside its lock (swarm.MeshCache): a cache hit never
+	// waits behind a fleet-wide trait scan.
+	cache *swarm.MeshCache[*Fleet]
 }
 
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
+	return &Aggregator{queries: queries, cache: swarm.NewMeshCache[*Fleet](swarm.MeshCacheTTL)}
 }
 
 // Snapshot returns cached fleet view or rebuilds.
 func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.cache != nil && time.Now().Before(a.cacheExp) {
-		return a.cache, nil
-	}
-	fleet, err := a.build(ctx, envoys)
-	if err != nil {
-		return nil, err
-	}
-	a.cache = fleet
-	a.cacheExp = time.Now().Add(a.ttl)
-	return fleet, nil
+	return a.cache.Get(func() (*Fleet, error) { return a.build(ctx, envoys) })
 }
 
 // FullFileList pulls the full (not bounded to 20) file list for
@@ -230,6 +217,7 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 
 func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 	summary := UserSummary{User: user}
+	var idx filemeshcore.Index
 
 	// Per-envoy presence. Include every envoy — reporting or not
 	// — so rolling-upgrade gaps are visible.
@@ -258,13 +246,11 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 			presence.TombstoneCount = us.TombstoneCount
 			// Contribute to the file row index below.
 			for _, f := range us.Files {
-				summary.Files = filemeshcore.AppendFileCell(
-					summary.Files, r.hostname, f.Name, f.Sha256, f.Size, f.Mtime, "live")
+				idx.AddFileCell(r.hostname, f.Name, f.Sha256, f.Size, f.Mtime, "live")
 			}
 			for _, t := range us.Tombstones {
-				summary.Files = filemeshcore.AppendFileCell(
-					summary.Files, r.hostname, t.Name, "", 0, t.DeletionTime, "tombstoned")
-				summary.Tombstones = filemeshcore.MergeTombstone(summary.Tombstones, t.Name, t.DeletionTime, r.hostname)
+				idx.AddFileCell(r.hostname, t.Name, "", 0, t.DeletionTime, "tombstoned")
+				idx.MergeTombstone(t.Name, t.DeletionTime, r.hostname)
 			}
 		}
 		summary.Envoys = append(summary.Envoys, presence)
@@ -275,6 +261,7 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 
 	// Post-process: fill missing cells, derive per-file status +
 	// divergence list, and count — the shared file-mesh machine.
+	summary.Files, summary.Tombstones = idx.Files, idx.Tombstones
 	summary.FileCount, summary.TotalBytes, summary.Divergences =
 		filemeshcore.FinalizeFiles(summary.Files, reportingHosts(summary.Envoys))
 	filemeshcore.FinalizeTombstones(summary.Tombstones)
@@ -361,13 +348,13 @@ type traitEnvelope struct {
 }
 
 type userTrait struct {
-	User            string           `json:"user"`
-	FileCount       int              `json:"file_count"`
-	TotalBytes      int64            `json:"total_bytes"`
-	Files           []fileTrait      `json:"files"`
-	FilesDigest     string           `json:"files_digest"`
-	TombstoneCount  int              `json:"tombstone_count"`
-	Tombstones      []tombstoneTrait `json:"tombstones"`
+	User           string           `json:"user"`
+	FileCount      int              `json:"file_count"`
+	TotalBytes     int64            `json:"total_bytes"`
+	Files          []fileTrait      `json:"files"`
+	FilesDigest    string           `json:"files_digest"`
+	TombstoneCount int              `json:"tombstone_count"`
+	Tombstones     []tombstoneTrait `json:"tombstones"`
 }
 
 type fileTrait struct {

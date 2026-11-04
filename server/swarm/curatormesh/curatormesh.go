@@ -32,7 +32,6 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
@@ -209,10 +208,9 @@ func IsRecipient(e *CatalogEntry, envoyPuddlePubkeys []string) bool {
 type Aggregator struct {
 	queries *db.Queries
 
-	mu       sync.Mutex
-	cache    *Catalog
-	cacheExp time.Time
-	ttl      time.Duration
+	// cache rebuilds outside its lock (swarm.MeshCache): a cache hit or an
+	// InvalidateCache never waits behind a fleet-wide trait scan.
+	cache *swarm.MeshCache[*Catalog]
 }
 
 // NewAggregator constructs an aggregator over the given query layer with the
@@ -220,7 +218,7 @@ type Aggregator struct {
 // stay below a typical check-in interval so an operator refreshing the UI
 // sees data no more than one cycle stale.
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
+	return &Aggregator{queries: queries, cache: swarm.NewMeshCache[*Catalog](swarm.MeshCacheTTL)}
 }
 
 // SetTTL overrides the cache TTL — for tests + the rare deployment that wants
@@ -228,34 +226,23 @@ func NewAggregator(queries *db.Queries) *Aggregator {
 // entry so the new TTL takes effect on the next [Snapshot] (otherwise a
 // pre-SetTTL cache would survive until its old expiry, which would surprise an
 // operator setting TTL=0 to disable caching).
-func (a *Aggregator) SetTTL(d time.Duration) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.ttl = d
-	a.cache = nil
-	a.cacheExp = time.Time{}
-}
+func (a *Aggregator) SetTTL(d time.Duration) { a.cache.SetTTL(d) }
 
 // InvalidateCache forces the next [Snapshot] to rebuild. Use after an
 // authoritative state change (e.g., a [BlockArtifact] write) so the API
 // response reflects it immediately instead of waiting up to one TTL window.
-func (a *Aggregator) InvalidateCache() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.cache = nil
-	a.cacheExp = time.Time{}
-}
+func (a *Aggregator) InvalidateCache() { a.cache.Invalidate() }
 
 // Snapshot returns the cached fleet catalog or rebuilds it from the passed
 // envoy list. The cache key is implicit (the aggregator is per-server; the
 // envoy list comes from the same FleetIndex on every call), matching
 // gitbackmesh's contract.
 func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Catalog, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.cache != nil && time.Now().Before(a.cacheExp) {
-		return a.cache, nil
-	}
+	return a.cache.Get(func() (*Catalog, error) { return a.build(ctx, envoys), nil })
+}
+
+// build scans every non-revoked envoy's curator trait and aggregates it.
+func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) *Catalog {
 	rows := make([]envelopeRow, 0, len(envoys))
 	for _, e := range envoys {
 		if e.Revoked {
@@ -269,9 +256,7 @@ func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Catalo
 	}
 	cat := aggregate(rows)
 	cat.GeneratedAt = time.Now().UTC()
-	a.cache = cat
-	a.cacheExp = time.Now().Add(a.ttl)
-	return cat, nil
+	return cat
 }
 
 type envelopeRow struct {

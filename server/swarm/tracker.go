@@ -517,6 +517,13 @@ func (t *PeerTracker) Prune() {
 			delete(t.peers, sha)
 		}
 	}
+	// Skip records for a blob nobody seeds or holds any more describe
+	// nothing; without this the map only ever grows.
+	for sha := range t.skipped {
+		if _, seeded := t.seeds[sha]; !seeded && len(t.peers[sha]) == 0 {
+			delete(t.skipped, sha)
+		}
+	}
 }
 
 // RegisterSeed records an envoy-originated blob. Returns true if this is a
@@ -764,6 +771,7 @@ func (t *PeerTracker) RemoveSeed(sha256 string) {
 	}
 	delete(t.seeds, sha256)
 	delete(t.revoked, sha256)
+	delete(t.skipped, sha256)
 }
 
 // addSeedIndex / removeSeedIndex keep seedsByEnvoy + seedsByLabel in sync with

@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
-	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
@@ -94,29 +93,17 @@ const StaleAfter = 5 * time.Minute
 type Aggregator struct {
 	queries *db.Queries
 
-	mu       sync.Mutex
-	cache    *Fleet
-	cacheExp time.Time
-	ttl      time.Duration
+	// cache rebuilds outside its lock (swarm.MeshCache): a cache hit never
+	// waits behind a fleet-wide trait scan.
+	cache *swarm.MeshCache[*Fleet]
 }
 
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
+	return &Aggregator{queries: queries, cache: swarm.NewMeshCache[*Fleet](swarm.MeshCacheTTL)}
 }
 
 func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.cache != nil && time.Now().Before(a.cacheExp) {
-		return a.cache, nil
-	}
-	fleet, err := a.build(ctx, envoys)
-	if err != nil {
-		return nil, err
-	}
-	a.cache = fleet
-	a.cacheExp = time.Now().Add(a.ttl)
-	return fleet, nil
+	return a.cache.Get(func() (*Fleet, error) { return a.build(ctx, envoys) })
 }
 
 // FullFileList — UI drill-down for one (user × envoy) cell.
@@ -224,6 +211,7 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 
 func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 	summary := UserSummary{User: user}
+	var idx filemeshcore.Index
 
 	// Collect digests to detect recipient drift.
 	digests := make(map[string]struct{})
@@ -256,13 +244,11 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 			digests[presence.RecipientsDigest] = struct{}{}
 
 			for _, f := range us.Files {
-				summary.Files = filemeshcore.AppendFileCell(
-					summary.Files, r.hostname, f.Name, f.Sha256, f.Size, f.Mtime, "live")
+				idx.AddFileCell(r.hostname, f.Name, f.Sha256, f.Size, f.Mtime, "live")
 			}
 			for _, t := range us.Tombstones {
-				summary.Files = filemeshcore.AppendFileCell(
-					summary.Files, r.hostname, t.Name, "", 0, t.DeletionTime, "tombstoned")
-				summary.Tombstones = filemeshcore.MergeTombstone(summary.Tombstones, t.Name, t.DeletionTime, r.hostname)
+				idx.AddFileCell(r.hostname, t.Name, "", 0, t.DeletionTime, "tombstoned")
+				idx.MergeTombstone(t.Name, t.DeletionTime, r.hostname)
 			}
 		}
 		summary.Envoys = append(summary.Envoys, presence)
@@ -279,6 +265,7 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 	summary.RecipientDrift = len(digests) >= 2
 
 	// The shared file-mesh machine (status + divergence + counts).
+	summary.Files, summary.Tombstones = idx.Files, idx.Tombstones
 	summary.FileCount, summary.TotalBytes, summary.Divergences =
 		filemeshcore.FinalizeFiles(summary.Files, reportingHosts(summary.Envoys))
 	filemeshcore.FinalizeTombstones(summary.Tombstones)

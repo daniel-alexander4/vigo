@@ -101,9 +101,11 @@ func TestFinalizeFiles_SortedByName(t *testing.T) {
 
 // FinalizeTombstones sorts rows and their KnownOn lists deterministically.
 func TestFinalizeTombstones_Sorted(t *testing.T) {
-	rows := MergeTombstone(nil, "z.txt", 100, "plex")
-	rows = MergeTombstone(rows, "a.txt", 200, "plex")
-	rows = MergeTombstone(rows, "z.txt", 150, "annlap")
+	var idx Index
+	idx.MergeTombstone("z.txt", 100, "plex")
+	idx.MergeTombstone("a.txt", 200, "plex")
+	idx.MergeTombstone("z.txt", 150, "annlap")
+	rows := idx.Tombstones
 
 	FinalizeTombstones(rows)
 
@@ -117,5 +119,19 @@ func TestFinalizeTombstones_Sorted(t *testing.T) {
 	}
 	if z.DeletionTime != 150 {
 		t.Errorf("z.txt DeletionTime = %d, want 150 (latest)", z.DeletionTime)
+	}
+}
+
+// Cells for the same name coalesce into one row however many files there are.
+func TestIndexCoalescesByName(t *testing.T) {
+	var idx Index
+	idx.AddFileCell("a", "x.txt", "s1", 1, 1, "live")
+	idx.AddFileCell("a", "y.txt", "s2", 1, 1, "live")
+	idx.AddFileCell("b", "x.txt", "s1", 1, 1, "live")
+	if len(idx.Files) != 2 {
+		t.Fatalf("got %d rows, want 2", len(idx.Files))
+	}
+	if idx.Files[0].Name != "x.txt" || len(idx.Files[0].PerEnvoy) != 2 {
+		t.Fatalf("x.txt cells not coalesced: %+v", idx.Files[0])
 	}
 }

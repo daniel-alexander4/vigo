@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
@@ -160,10 +159,9 @@ type Aggregator struct {
 	// empty.
 	puddle *puddlemesh.Aggregator
 
-	mu       sync.Mutex
-	cache    *Fleet
-	cacheExp time.Time
-	ttl      time.Duration
+	// cache rebuilds outside its lock (swarm.MeshCache): a cache hit never
+	// waits behind a fleet-wide trait scan.
+	cache *swarm.MeshCache[*Fleet]
 }
 
 // NewAggregator builds an aggregator bound to the given query handle.
@@ -173,24 +171,13 @@ type Aggregator struct {
 // that an operator refreshing the page sees data no more than one
 // check-in stale.
 func NewAggregator(queries *db.Queries, puddle *puddlemesh.Aggregator) *Aggregator {
-	return &Aggregator{queries: queries, puddle: puddle, ttl: swarm.MeshCacheTTL}
+	return &Aggregator{queries: queries, puddle: puddle, cache: swarm.NewMeshCache[*Fleet](swarm.MeshCacheTTL)}
 }
 
 // Snapshot returns the cached fleet view or rebuilds it from the
 // passed envoy list.
 func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.cache != nil && time.Now().Before(a.cacheExp) {
-		return a.cache, nil
-	}
-	fleet, err := a.build(ctx, envoys)
-	if err != nil {
-		return nil, err
-	}
-	a.cache = fleet
-	a.cacheExp = time.Now().Add(a.ttl)
-	return fleet, nil
+	return a.cache.Get(func() (*Fleet, error) { return a.build(ctx, envoys) })
 }
 
 // build fetches every envoy's `gitback` trait, joins per-envoy

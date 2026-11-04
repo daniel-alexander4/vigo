@@ -34,7 +34,6 @@ import (
 	"errors"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
@@ -162,31 +161,25 @@ func (f *Fleet) LookupByOwner(name string) *PuddleSummary {
 type Aggregator struct {
 	queries *db.Queries
 
-	mu       sync.Mutex
-	cache    *Fleet
-	cacheExp time.Time
-	names    *FleetNames
-	namesExp time.Time
-	ttl      time.Duration
+	// Both caches rebuild outside their locks (swarm.MeshCache): a cache hit
+	// never waits behind a fleet-wide trait scan.
+	cache *swarm.MeshCache[*Fleet]
+	names *swarm.MeshCache[*FleetNames]
 }
 
 // NewAggregator builds an aggregator bound to the given query handle.
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries, ttl: swarm.MeshCacheTTL}
+	return &Aggregator{
+		queries: queries,
+		cache:   swarm.NewMeshCache[*Fleet](swarm.MeshCacheTTL),
+		names:   swarm.NewMeshCache[*FleetNames](swarm.MeshCacheTTL),
+	}
 }
 
 // Snapshot returns the cached puddle view or rebuilds it from the passed
 // envoy list.
 func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.cache != nil && time.Now().Before(a.cacheExp) {
-		return a.cache, nil
-	}
-	fleet := a.build(ctx, envoys)
-	a.cache = fleet
-	a.cacheExp = time.Now().Add(a.ttl)
-	return fleet, nil
+	return a.cache.Get(func() (*Fleet, error) { return a.build(ctx, envoys), nil })
 }
 
 // NamesSnapshot returns the cached friendly-name map or rebuilds it.
@@ -194,18 +187,12 @@ func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet,
 // single producer of the fleet name map (ADR-022); gitbackmesh and the
 // curator S3 facade consume it via [`ReverseNameMap`].
 func (a *Aggregator) NamesSnapshot(ctx context.Context, envoys []EnvoyInput) (*FleetNames, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.names != nil && time.Now().Before(a.namesExp) {
-		return a.names, nil
-	}
-	out := &FleetNames{
-		UpdatedAt: time.Now().UTC().Unix(),
-		Names:     groupNameClaims(a.loadAll(ctx, envoys)),
-	}
-	a.names = out
-	a.namesExp = time.Now().Add(a.ttl)
-	return out, nil
+	return a.names.Get(func() (*FleetNames, error) {
+		return &FleetNames{
+			UpdatedAt: time.Now().UTC().Unix(),
+			Names:     groupNameClaims(a.loadAll(ctx, envoys)),
+		}, nil
+	})
 }
 
 // loadAll fetches every non-revoked envoy's `puddle` trait envelope.

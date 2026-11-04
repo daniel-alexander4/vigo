@@ -49,38 +49,48 @@ type TombstoneRow struct {
 	KnownOn      []string `json:"known_on"` // envoys that hold this tombstone
 }
 
-// AppendFileCell records one envoy's state for a filename, coalescing
-// into the existing FileRow when the name is already present.
-func AppendFileCell(files []FileRow, hostname, name, sha string, size uint64, mtime int64, state string) []FileRow {
-	for i := range files {
-		if files[i].Name == name {
-			files[i].PerEnvoy = append(files[i].PerEnvoy, FileCellPerEnvoy{
-				Hostname: hostname, State: state, Sha256: sha, Size: size, Mtime: mtime,
-			})
-			return files
-		}
+// Index accumulates one user's file cells and tombstones across envoys.
+// Lookups by name go through maps, so building a summary is linear in the
+// number of reported entries rather than quadratic in the file count.
+// The zero value is ready to use.
+type Index struct {
+	Files      []FileRow
+	Tombstones []TombstoneRow
+	fileIdx    map[string]int
+	tombIdx    map[string]int
+}
+
+// AddFileCell records one envoy's state for a filename, coalescing into
+// the existing FileRow when the name is already present.
+func (x *Index) AddFileCell(hostname, name, sha string, size uint64, mtime int64, state string) {
+	cell := FileCellPerEnvoy{Hostname: hostname, State: state, Sha256: sha, Size: size, Mtime: mtime}
+	if x.fileIdx == nil {
+		x.fileIdx = make(map[string]int)
 	}
-	return append(files, FileRow{
-		Name: name,
-		PerEnvoy: []FileCellPerEnvoy{{
-			Hostname: hostname, State: state, Sha256: sha, Size: size, Mtime: mtime,
-		}},
-	})
+	if i, ok := x.fileIdx[name]; ok {
+		x.Files[i].PerEnvoy = append(x.Files[i].PerEnvoy, cell)
+		return
+	}
+	x.fileIdx[name] = len(x.Files)
+	x.Files = append(x.Files, FileRow{Name: name, PerEnvoy: []FileCellPerEnvoy{cell}})
 }
 
 // MergeTombstone folds one envoy's tombstone into the row set, tracking
 // which envoys hold it and keeping the latest deletion time.
-func MergeTombstone(rows []TombstoneRow, name string, deletionTime int64, hostname string) []TombstoneRow {
-	for i := range rows {
-		if rows[i].Name == name {
-			rows[i].KnownOn = append(rows[i].KnownOn, hostname)
-			if deletionTime > rows[i].DeletionTime {
-				rows[i].DeletionTime = deletionTime
-			}
-			return rows
-		}
+func (x *Index) MergeTombstone(name string, deletionTime int64, hostname string) {
+	if x.tombIdx == nil {
+		x.tombIdx = make(map[string]int)
 	}
-	return append(rows, TombstoneRow{Name: name, DeletionTime: deletionTime, KnownOn: []string{hostname}})
+	if i, ok := x.tombIdx[name]; ok {
+		r := &x.Tombstones[i]
+		r.KnownOn = append(r.KnownOn, hostname)
+		if deletionTime > r.DeletionTime {
+			r.DeletionTime = deletionTime
+		}
+		return
+	}
+	x.tombIdx[name] = len(x.Tombstones)
+	x.Tombstones = append(x.Tombstones, TombstoneRow{Name: name, DeletionTime: deletionTime, KnownOn: []string{hostname}})
 }
 
 // FinalizeTombstones sorts the row set and each row's KnownOn list so
