@@ -22,11 +22,16 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// syncDirs are the directories under serverRoot that the primary replicates.
-var syncDirs = []string{"stack", "secrets", "tls"}
+// maxReplicatedFileBytes caps one replicated file. A single PeerFileChange
+// must fit under the peer's 8 MiB gRPC receive limit (grpc/server.go); a file
+// past this is skipped with an error rather than wedging the stream in a
+// send-fail/reconnect loop.
+const maxReplicatedFileBytes = 7 << 20
 
-// syncFile is the standalone file under serverRoot that is replicated.
-const syncFile = "server.yaml"
+// fullSyncChunkBytes bounds the content carried by one PeerFullSync message.
+// The full sync is split into as many messages as it needs so no single
+// message approaches the receive limit.
+const fullSyncChunkBytes = 4 << 20
 
 // debounceDuration is the window for batching file changes before sending.
 const debounceDuration = 1 * time.Second
@@ -47,19 +52,27 @@ type Primary struct {
 
 	watcher *fsnotify.Watcher
 
+	// base is cancelled by Stop. It and cancel are created in NewPrimary so
+	// Stop never races Start for them and works even if Start never ran.
+	base   context.Context
+	cancel context.CancelFunc
+
 	mu      sync.Mutex
 	conns   []*peerConn
-	cancel  context.CancelFunc
+	started bool
 	stopped chan struct{}
 }
 
 // peerConn tracks the gRPC connection and stream to a single peer.
 type peerConn struct {
 	entry    config.PeerEntry
-	conn     *grpc.ClientConn
 	changeCh chan []*pb.PeerFileChange
-	cancel   context.CancelFunc
-	done     chan struct{}
+	// resync is signalled when a batch for this peer was dropped (changeCh
+	// full); the stream loop answers it with a fresh full sync so the drop is
+	// repaired rather than lost.
+	resync chan struct{}
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 // NewPrimary creates a Primary that will sync files from serverRoot to the
@@ -67,30 +80,45 @@ type peerConn struct {
 // to the outbound SyncStream so each peer can authorize it; nil on a non-local
 // secrets backend (peers reject the unsigned stream — replication fails closed).
 func NewPrimary(serverRoot string, peers []config.PeerEntry, tlsConfig *tls.Config, signer credentials.PerRPCCredentials) *Primary {
+	base, cancel := context.WithCancel(context.Background())
 	return &Primary{
 		serverRoot: serverRoot,
 		peers:      peers,
 		tlsConfig:  tlsConfig,
 		signer:     signer,
+		base:       base,
+		cancel:     cancel,
 		stopped:    make(chan struct{}),
 	}
 }
 
 // Start begins watching for file changes and connecting to peers.
-// It blocks until the context is cancelled or Stop is called.
+// It blocks until the context is cancelled or Stop is called. On return —
+// including an early error — every peer goroutine has exited and the watcher
+// is closed. Start runs at most once per Primary; after Stop it refuses.
 func (p *Primary) Start(ctx context.Context) error {
+	p.mu.Lock()
+	if p.started {
+		p.mu.Unlock()
+		return fmt.Errorf("peer primary: already started or stopped")
+	}
+	p.started = true
+	p.mu.Unlock()
+	defer close(p.stopped)
+
 	ctx, cancel := context.WithCancel(ctx)
-	p.cancel = cancel
+	defer cancel()
+	defer context.AfterFunc(p.base, cancel)()
 
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
-		cancel()
 		return fmt.Errorf("peer primary: create watcher: %w", err)
 	}
+	defer w.Close()
 	p.watcher = w
 
-	// Watch the sync directories recursively.
-	for _, dir := range syncDirs {
+	// Watch the replicated directories recursively.
+	for _, dir := range replicatedDirs {
 		abs := filepath.Join(p.serverRoot, dir)
 		if err := p.addWatchRecursive(abs); err != nil {
 			slog.Warn("peer primary: cannot watch directory", "dir", dir, "error", err)
@@ -116,34 +144,34 @@ func (p *Primary) Start(ctx context.Context) error {
 	// Run the file watcher event loop.
 	p.watchLoop(ctx)
 
-	close(p.stopped)
-	return nil
-}
-
-// Stop shuts down the watcher and all peer connections.
-func (p *Primary) Stop() {
-	if p.cancel != nil {
-		p.cancel()
-	}
-
-	if p.watcher != nil {
-		p.watcher.Close()
-	}
-
+	// Drain the peer goroutines before reporting stopped. Each closes its own
+	// gRPC connection on the way out.
 	p.mu.Lock()
 	conns := p.conns
 	p.conns = nil
 	p.mu.Unlock()
-
 	for _, pc := range conns {
 		pc.cancel()
 		<-pc.done
-		if pc.conn != nil {
-			pc.conn.Close()
-		}
 	}
+	return nil
+}
 
-	<-p.stopped
+// Stop shuts down the watcher and all peer connections and waits for Start to
+// return. Safe to call before, during, or after Start, and if Start failed
+// early; a Primary whose Start never ran returns immediately (and a Start
+// arriving after Stop refuses to run).
+func (p *Primary) Stop() {
+	p.cancel()
+	p.mu.Lock()
+	started := p.started
+	p.started = true
+	p.mu.Unlock()
+	if started {
+		<-p.stopped
+	} else {
+		close(p.stopped)
+	}
 	slog.Info("peer primary: stopped")
 }
 
@@ -227,24 +255,14 @@ func (p *Primary) watchLoop(ctx context.Context) {
 	}
 }
 
-// isSyncPath returns true if the absolute path falls within a sync directory
-// or is the server.yaml file.
+// isSyncPath returns true if the absolute path falls within the replicated
+// set (paths.go) — the same allowlist a peer enforces on receive.
 func (p *Primary) isSyncPath(absPath string) bool {
 	rel, err := filepath.Rel(p.serverRoot, absPath)
-	if err != nil {
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return false
 	}
-	// Exact match on server.yaml.
-	if rel == syncFile {
-		return true
-	}
-	// Prefix match on sync directories.
-	for _, dir := range syncDirs {
-		if rel == dir || strings.HasPrefix(rel, dir+string(filepath.Separator)) {
-			return true
-		}
-	}
-	return false
+	return replicatedTop(rel) != ""
 }
 
 // buildChanges reads the current state of each pending path and produces
@@ -273,6 +291,11 @@ func (p *Primary) buildChanges(pending map[string]struct{}) []*pb.PeerFileChange
 			continue
 		}
 
+		if info.Size() > maxReplicatedFileBytes {
+			slog.Error("peer primary: file too large to replicate, skipped",
+				"path", rel, "size", info.Size(), "max", maxReplicatedFileBytes)
+			continue
+		}
 		content, readErr := os.ReadFile(absPath)
 		if readErr != nil {
 			slog.Warn("peer primary: cannot read file", "path", rel, "error", readErr)
@@ -292,8 +315,8 @@ func (p *Primary) buildChanges(pending map[string]struct{}) []*pb.PeerFileChange
 
 // broadcast sends file changes to all connected peers by enqueueing them
 // on each peer's change channel. Non-blocking: if a peer's channel is full,
-// the changes are dropped with a warning (the peer will catch up on reconnect
-// via FullSync).
+// the batch is dropped and the peer is flagged for a resync — its stream loop
+// then sends a fresh full sync, which carries the dropped files.
 func (p *Primary) broadcast(changes []*pb.PeerFileChange) {
 	p.mu.Lock()
 	conns := make([]*peerConn, len(p.conns))
@@ -304,60 +327,103 @@ func (p *Primary) broadcast(changes []*pb.PeerFileChange) {
 		select {
 		case pc.changeCh <- changes:
 		default:
-			slog.Warn("peer primary: change channel full, dropping batch",
+			slog.Warn("peer primary: change channel full, dropping batch; full resync scheduled",
 				"addr", pc.entry.Addr, "files", len(changes))
+			select {
+			case pc.resync <- struct{}{}:
+			default: // a resync is already pending
+			}
 		}
 	}
 }
 
-// fullSync walks all sync directories and server.yaml, building a PeerFullSync.
-func (p *Primary) fullSync() *pb.PeerFullSync {
+// fullSync walks the replicated set and returns it as one or more PeerFullSync
+// messages, each carrying at most fullSyncChunkBytes of content (a single file
+// larger than the chunk travels alone; one past maxReplicatedFileBytes is
+// skipped with an error).
+func (p *Primary) fullSync() []*pb.PeerFullSync {
 	var files []*pb.PeerFileChange
 
-	for _, dir := range syncDirs {
+	add := func(path, rel string, info fs.FileInfo) {
+		if info.Size() > maxReplicatedFileBytes {
+			slog.Error("peer primary: full sync: file too large to replicate, skipped",
+				"path", rel, "size", info.Size(), "max", maxReplicatedFileBytes)
+			return
+		}
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			slog.Warn("peer primary: full sync: cannot read file", "path", rel, "error", readErr)
+			return
+		}
+		files = append(files, &pb.PeerFileChange{
+			Path:      rel,
+			Content:   content,
+			MtimeUnix: info.ModTime().Unix(),
+			Mode:      uint32(info.Mode().Perm()),
+		})
+	}
+
+	for _, dir := range replicatedDirs {
 		abs := filepath.Join(p.serverRoot, dir)
 		_ = filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+			if err != nil || !d.Type().IsRegular() {
 				return nil
 			}
 			rel, relErr := filepath.Rel(p.serverRoot, path)
 			if relErr != nil {
 				return nil
 			}
-			content, readErr := os.ReadFile(path)
-			if readErr != nil {
-				slog.Warn("peer primary: full sync: cannot read file", "path", rel, "error", readErr)
-				return nil
-			}
 			info, statErr := d.Info()
 			if statErr != nil {
 				return nil
 			}
-			files = append(files, &pb.PeerFileChange{
-				Path:      rel,
-				Content:   content,
-				MtimeUnix: info.ModTime().Unix(),
-				Mode:      uint32(info.Mode().Perm()),
-			})
+			add(path, rel, info)
 			return nil
 		})
 	}
 
-	// server.yaml
-	syPath := filepath.Join(p.serverRoot, syncFile)
-	if content, err := os.ReadFile(syPath); err == nil {
-		if info, statErr := os.Stat(syPath); statErr == nil {
-			files = append(files, &pb.PeerFileChange{
-				Path:      syncFile,
-				Content:   content,
-				MtimeUnix: info.ModTime().Unix(),
-				Mode:      uint32(info.Mode().Perm()),
-			})
-		}
+	syPath := filepath.Join(p.serverRoot, replicatedFile)
+	if info, err := os.Stat(syPath); err == nil && info.Mode().IsRegular() {
+		add(syPath, replicatedFile, info)
 	}
 
-	slog.Info("peer primary: full sync prepared", "files", len(files))
-	return &pb.PeerFullSync{Files: files}
+	chunks := chunkFullSync(files, fullSyncChunkBytes)
+	slog.Info("peer primary: full sync prepared", "files", len(files), "messages", len(chunks))
+	return chunks
+}
+
+// chunkFullSync splits files into PeerFullSync messages whose content sums to
+// at most limit bytes each; a file larger than limit gets a message of its own.
+// Always returns at least one message so an empty tree still announces itself.
+func chunkFullSync(files []*pb.PeerFileChange, limit int) []*pb.PeerFullSync {
+	var out []*pb.PeerFullSync
+	cur := &pb.PeerFullSync{}
+	size := 0
+	for _, f := range files {
+		n := len(f.Content)
+		if len(cur.Files) > 0 && size+n > limit {
+			out = append(out, cur)
+			cur = &pb.PeerFullSync{}
+			size = 0
+		}
+		cur.Files = append(cur.Files, f)
+		size += n
+	}
+	return append(out, cur)
+}
+
+// sendFullSync sends every full-sync chunk on stream and returns the file count.
+func (p *Primary) sendFullSync(stream grpc.BidiStreamingClient[pb.PeerSyncMessage, pb.PeerSyncMessage]) (int, error) {
+	n := 0
+	for _, chunk := range p.fullSync() {
+		if err := stream.Send(&pb.PeerSyncMessage{
+			Payload: &pb.PeerSyncMessage_FullSync{FullSync: chunk},
+		}); err != nil {
+			return n, err
+		}
+		n += len(chunk.Files)
+	}
+	return n, nil
 }
 
 // startPeer launches a goroutine that maintains a gRPC stream to a single peer.
@@ -367,6 +433,7 @@ func (p *Primary) startPeer(ctx context.Context, entry config.PeerEntry) *peerCo
 	pc := &peerConn{
 		entry:    entry,
 		changeCh: make(chan []*pb.PeerFileChange, 64),
+		resync:   make(chan struct{}, 1),
 		cancel:   peerCancel,
 		done:     make(chan struct{}),
 	}
@@ -404,7 +471,6 @@ func (p *Primary) peerLoop(ctx context.Context, pc *peerConn) {
 			backoff = nextBackoff(backoff)
 			continue
 		}
-		pc.conn = conn
 
 		client := pb.NewVigoPeerClient(conn)
 		stream, err := client.SyncStream(ctx)
@@ -420,13 +486,12 @@ func (p *Primary) peerLoop(ctx context.Context, pc *peerConn) {
 
 		slog.Info("peer primary: connected to peer", "addr", pc.entry.Addr)
 
-		// Send FullSync on initial connect.
-		full := p.fullSync()
-		err = stream.Send(&pb.PeerSyncMessage{
-			Payload: &pb.PeerSyncMessage_FullSync{
-				FullSync: full,
-			},
-		})
+		// Send FullSync on initial connect. A pending resync is satisfied by it.
+		select {
+		case <-pc.resync:
+		default:
+		}
+		sent, err := p.sendFullSync(stream)
 		if err != nil {
 			slog.Error("peer primary: full sync send failed", "addr", pc.entry.Addr, "error", err)
 			_ = stream.CloseSend()
@@ -438,7 +503,7 @@ func (p *Primary) peerLoop(ctx context.Context, pc *peerConn) {
 			continue
 		}
 
-		slog.Info("peer primary: full sync sent", "addr", pc.entry.Addr, "files", len(full.Files))
+		slog.Info("peer primary: full sync sent", "addr", pc.entry.Addr, "files", sent)
 		backoff = reconnectBase // Reset backoff on successful connect.
 
 		// Stream loop: send changes, receive acks.
@@ -488,6 +553,13 @@ func (p *Primary) streamLoop(
 
 		case err := <-ackErr:
 			return fmt.Errorf("recv: %w", err)
+
+		case <-pc.resync:
+			sent, err := p.sendFullSync(stream)
+			if err != nil {
+				return fmt.Errorf("resync send: %w", err)
+			}
+			slog.Info("peer primary: resync sent after dropped batch", "addr", pc.entry.Addr, "files", sent)
 
 		case changes := <-pc.changeCh:
 			for _, ch := range changes {

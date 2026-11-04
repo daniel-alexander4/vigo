@@ -29,7 +29,7 @@ const peerSigWindow = 5 * time.Minute
 
 // roleStateFile persists a runtime role transition (Promote/Demote) so it
 // survives a restart. It lives at serverRoot/peer-role, deliberately OUTSIDE
-// the replicated set (syncDirs + server.yaml) — a replicated role would let
+// the replicated set (replicatedDirs + replicatedFile, paths.go) — a replicated role would let
 // the primary's role overwrite every peer's. It overrides server.yaml's
 // peers.role at boot when present.
 const roleStateFile = "peer-role"
@@ -524,8 +524,10 @@ func (s *Service) PeerStatuses(ctx context.Context) []PeerInfo {
 }
 
 // handleFileChange writes a single file change to disk and returns an ack.
-// If the content is empty, the file is deleted. After writing to a path under stacks/,
-// the needsConfigReload flag is set so the caller can trigger a reload.
+// If the content is empty, the file is deleted. Only paths in the replicated set
+// (paths.go) are accepted, and never through a symlink that leaves it. After
+// writing under stacks/ or .live/, needsConfigReload is set so the caller can
+// trigger a reload.
 func (s *Service) handleFileChange(fc *pb.PeerFileChange, needsConfigReload *atomic.Bool) *pb.PeerSyncAck {
 	path := fc.GetPath()
 
@@ -538,7 +540,15 @@ func (s *Service) handleFileChange(fc *pb.PeerFileChange, needsConfigReload *ato
 		}
 	}
 
-	fullPath := filepath.Join(s.serverRoot, path)
+	fullPath, err := containedTarget(s.serverRoot, path)
+	if err != nil {
+		slog.Warn("peer sync: rejected path", "path", path, "error", err)
+		return &pb.PeerSyncAck{
+			Path:    path,
+			Success: false,
+			Error:   err.Error(),
+		}
+	}
 
 	// Deletion: empty content means remove the file.
 	if len(fc.GetContent()) == 0 {
@@ -567,6 +577,13 @@ func (s *Service) handleFileChange(fc *pb.PeerFileChange, needsConfigReload *ato
 			Success: false,
 			Error:   fmt.Sprintf("mkdir failed: %v", err),
 		}
+	}
+
+	// Re-check containment now the parent dirs exist: MkdirAll may have walked
+	// through a component that appeared since the first check.
+	if _, err := containedTarget(s.serverRoot, path); err != nil {
+		slog.Warn("peer sync: rejected path", "path", path, "error", err)
+		return &pb.PeerSyncAck{Path: path, Success: false, Error: err.Error()}
 	}
 
 	mode := os.FileMode(fc.GetMode())
@@ -614,17 +631,6 @@ func validatePath(path string) error {
 		}
 	}
 	return nil
-}
-
-// isConfigPath returns true if the path is under the config tree on the
-// wire — a config reload should be triggered after writing. Accepts both
-// post-0.28 paths under worksite/ and pre-0.28 paths under stacks/ or
-// .live/ for compatibility with peers that haven't upgraded yet.
-func isConfigPath(path string) bool {
-	normalized := filepath.ToSlash(path)
-	return strings.HasPrefix(normalized, "worksite/") ||
-		strings.HasPrefix(normalized, "stacks/") ||
-		strings.HasPrefix(normalized, ".live/")
 }
 
 // atomicWrite writes data to a temp file in the same directory, then renames it

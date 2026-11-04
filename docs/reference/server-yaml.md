@@ -393,6 +393,8 @@ Each spanner-mode vigosrv generates a per-host Ed25519 keypair at `/srv/vigo/bol
 
 Primary/peer server redundancy for HA.
 
+The primary replicates `stacks/`, `.live/`, `secrets/`, `tls/` and `server.yaml` under the server root to every peer: a full sync on connect, then file changes as they happen. A peer writes nothing outside that set — `peer-role`, `config-history/` and the database stay local. A file larger than 7 MiB is not replicated (the primary logs an error). Known limits: a file the primary deletes while a peer is disconnected stays on that peer, and a zero-byte file is replicated as a deletion.
+
 ```yaml
 peers:
   role: primary
