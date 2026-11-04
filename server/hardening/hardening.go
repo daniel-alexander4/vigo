@@ -31,14 +31,8 @@ import (
 // pubkey embedded in the .sig: that detects corruption but not tampering, and
 // we log that anti-tamper is in corruption-detection mode.
 //
-// BUILD-WIRING TODO: the Makefile derives the agent pubkey from SIGN_KEY
-// (VIGO_AGENT_SIGNING_PUBKEY) but the vigosrv `build`/`dist` targets do not yet
-// inject this -X flag. To enable tamper-evident mode, add to the vigosrv
-// go-build ldflags:
-//
-//	-X git.alexander4.io/vigo/server/hardening.serverSigningPubKey=$(VIGO_AGENT_SIGNING_PUBKEY)
-//
-// (reuse the same signing key the agent uses, or a server-specific one).
+// Set by the Makefile (`build`/`dist`, from SIGN_KEY) and by Dockerfile.server
+// when the signing_key build secret is supplied.
 var serverSigningPubKey = ""
 
 // VerifyBinarySignature checks a detached ED25519 signature file (.sig) against

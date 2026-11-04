@@ -64,10 +64,34 @@ COPY . .
 ENV CGO_CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2" \
     CGO_LDFLAGS="-Wl,-z,relro,-z,now,-z,noexecstack"
 
-RUN CGO_ENABLED=1 go build \
-    -tags 'netgo osusergo' -trimpath \
-    -ldflags="-s -w -buildid= -linkmode external -extldflags=-static -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
-    -o vigosrv ./server
+# vigosrv anti-tamper (server/hardening): with the operator's SIGN_KEY secret
+# the build bakes the key's pubkey into hardening.serverSigningPubKey and signs
+# the binary (vigosrv.sig, shipped next to it), so startup verifies against the
+# baked key and fails closed on a bad or missing .sig. The pubkey is derived
+# from the secret itself so it cannot disagree with the signature; it is the
+# same key the agent bakes as VIGO_AGENT_SIGNING_PUBKEY, and a mismatching
+# build-arg aborts the build. Without the secret vigosrv is built unbaked and
+# unsigned (corruption-detection mode, dev builds only).
+ARG VIGO_AGENT_SIGNING_PUBKEY=
+RUN --mount=type=secret,id=signing_key,target=/run/secrets/signing_key \
+    set -e; \
+    PUBKEY=""; \
+    if [ -s /run/secrets/signing_key ]; then \
+        PUBKEY="$(go run ./server/hardening/cmd/sign -key /run/secrets/signing_key -pubkey-only)"; \
+        if [ -n "$VIGO_AGENT_SIGNING_PUBKEY" ] && [ "$VIGO_AGENT_SIGNING_PUBKEY" != "$PUBKEY" ]; then \
+            echo "FATAL: VIGO_AGENT_SIGNING_PUBKEY does not match the signing_key secret" >&2; exit 1; \
+        fi; \
+    fi; \
+    CGO_ENABLED=1 go build \
+        -tags 'netgo osusergo' -trimpath \
+        -ldflags="-s -w -buildid= -linkmode external -extldflags=-static -X main.version=$(cat VERSION 2>/dev/null || echo dev) -X git.alexander4.io/vigo/server/hardening.serverSigningPubKey=$PUBKEY" \
+        -o vigosrv ./server; \
+    if [ -n "$PUBKEY" ]; then \
+        go run ./server/hardening/cmd/sign -key /run/secrets/signing_key -binary vigosrv -output vigosrv.sig; \
+        echo "signed vigosrv (anti-tamper: baked pubkey)"; \
+    else \
+        echo "WARNING: no SIGN_KEY secret supplied — vigosrv built unsigned (hardening runs in corruption-detection mode)"; \
+    fi
 
 RUN CGO_ENABLED=1 go build \
     -tags 'netgo osusergo' -trimpath \
@@ -123,7 +147,9 @@ RUN wget -q "https://github.com/benbjohnson/litestream/releases/download/${LITES
     && rm /tmp/litestream.tar.gz \
     && chmod +x /usr/local/bin/litestream
 
-COPY --from=go-builder /build/vigosrv /usr/local/sbin/vigosrv
+# vigosrv.sig exists only for a signed build; the glob keeps COPY from failing
+# when it is absent.
+COPY --from=go-builder /build/vigosrv /build/vigosrv.sig* /usr/local/sbin/
 COPY --from=go-builder /build/vigocli /usr/local/bin/vigocli
 RUN chmod 0700 /usr/local/bin/vigocli
 # Migrations are embedded in the vigosrv binary (migrations.FS) — no on-disk copy.

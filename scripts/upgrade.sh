@@ -535,10 +535,21 @@ if $DO_SERVERONLY; then
     cid="$(docker create vigo-uibuild:latest)"
     docker cp "$cid:/build/vigosrv" "$STAGE_DIR/vigosrv"
     docker cp "$cid:/build/vigocli" "$STAGE_DIR/vigocli"
+    # vigosrv.sig exists only when SIGN_KEY was supplied (signed build with
+    # the pubkey baked in). It must travel with the binary: a signed vigosrv
+    # without its .sig fails closed at startup, and a stale .sig next to a
+    # new binary fails its corruption check.
+    rm -f "$STAGE_DIR/vigosrv.sig"
+    docker cp "$cid:/build/vigosrv.sig" "$STAGE_DIR/vigosrv.sig" 2>/dev/null || true
     docker rm "$cid" >/dev/null
 
     # vigosrv → container (hot-swap; reverts on a container recreate).
     docker cp "$STAGE_DIR/vigosrv" vigo:/usr/local/sbin/vigosrv
+    if [ -s "$STAGE_DIR/vigosrv.sig" ]; then
+        docker cp "$STAGE_DIR/vigosrv.sig" vigo:/usr/local/sbin/vigosrv.sig
+    else
+        docker exec vigo rm -f /usr/local/sbin/vigosrv.sig
+    fi
     echo "  vigosrv → container ($(ls -lh "$STAGE_DIR/vigosrv" | awk '{print $5}'))"
 
     # vigocli → container + host. The go-builder vigocli is the exact binary
