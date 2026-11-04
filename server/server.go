@@ -551,8 +551,9 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 	}
 	s.queries = db.New(dbtx)
 
-	// Initialize tamper-evident audit writer.
-	s.auditWriter = audit.NewWriter(s.queries)
+	// Initialize the hash-chained audit writer; the head anchor file outside
+	// the DB lets Verify detect tail truncation.
+	s.auditWriter = audit.NewWriter(s.queries, audit.WithHeadFile(filepath.Join(s.serverRoot, audit.HeadAnchorFile)))
 
 	// --- Auth ---
 

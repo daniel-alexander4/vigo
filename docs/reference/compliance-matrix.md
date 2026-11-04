@@ -115,6 +115,6 @@ Vigo's reports state what enforcement and trait collection can prove. The follow
 - **Physical-security controls** — DC physical access, environmental controls, media destruction. Map to your DC provider's SOC 2 or to your physical-security policy.
 - **Organizational controls** — code-of-conduct, conflict-of-interest, segregation of duties at the org level.
 - **Sub-millisecond enforcement** — controls requiring sub-millisecond response (financial-services kill switches) need Connwaer or a dedicated runtime; Vigo's check-in interval bottom is ~15 seconds.
-- **WORM archival of arbitrary data** — Vigo's audit log is hash-chained and tamper-evident, but it isn't a WORM storage system. Pair with Connwaer's WORM verification or an external WORM store.
+- **WORM archival of arbitrary data** — Vigo's audit log is hash-chained: an edited row, a row deleted from the middle, or (via the `audit-head.json` anchor kept outside the database) rows deleted from the end all fail verification. The chain is unkeyed, so someone with write access to both the database and the server root can rewrite it end to end; it is not a WORM storage system. Fan the audit stream out to a SIEM (every entry is emitted as an `audit.<event>` integration event), and pair with Connwaer's WORM verification or an external WORM store.
 
 Honest reporting is a feature. Auditors prefer "Vigo enforces X, we attest Y separately" over "Vigo claims everything."

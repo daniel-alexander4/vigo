@@ -1,9 +1,20 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-// Package audit provides a tamper-evident audit trail using a SHA-256 hash
-// chain. Each entry includes the hash of the previous entry, making
-// modifications, deletions, or out-of-order insertions detectable.
+// Package audit provides an append-only audit trail linked by a SHA-256 hash
+// chain. Each entry includes the hash of the previous entry, so an edit to a
+// stored row, a deletion from the middle of the log, or an out-of-order insert
+// breaks the chain and Verify reports it. Deleting entries from the TAIL is
+// caught by the head anchor: the Writer records the newest entry's id and hash
+// in a file outside the database (headAnchorFile) and Verify checks that entry
+// still exists unchanged.
+//
+// What this does NOT detect: the chain is unkeyed, so anyone who can write the
+// database AND the head-anchor file can rewrite history and recompute every
+// hash. It detects accidental damage and database-only tampering (an edited or
+// restored DB file), not a root-level attacker on the server host. Ship the
+// audit stream off-host (the integrations dispatcher fans every entry out to
+// SIEM targets) for evidence an attacker on the box cannot rewrite.
 package audit
 
 import (
@@ -12,9 +23,12 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -36,27 +50,62 @@ const (
 	hashVersionV2 int64 = 2
 )
 
-// auditLoadTimeout bounds the startup-time DB lookup of the previous
-// chain hash. A wedged SQLite WAL checkpoint or slow-mount NFS path
-// must not pin server boot — chain reset is recoverable (logged at
-// Error level), startup hang is not.
+// auditLoadTimeout bounds each DB lookup of the chain head. A wedged SQLite
+// WAL checkpoint or slow-mount NFS path must not pin server boot: NewWriter
+// gives up after this long and the first Record retries the lookup instead.
 const auditLoadTimeout = 5 * time.Second
 
-// Writer appends tamper-evident entries to the audit trail. It maintains
-// the hash chain by tracking the previous entry's hash in memory.
-// All writes are serialized through a mutex.
+// HeadAnchorFile is the file name, under the server root, where the Writer
+// records the id and hash of the newest entry after every write. It lives
+// outside the database so deleting rows from the tail of the log (or restoring
+// an older database file) is detected: Verify requires the anchored entry to
+// still exist with the anchored hash.
+const HeadAnchorFile = "audit-head.json"
+
+// headAnchor is the newest entry the Writer knows it wrote.
+type headAnchor struct {
+	ID   int64  `json:"id"`
+	Hash string `json:"hash"`
+}
+
+// anchors maps a *db.Queries to the head anchor of the Writer that writes
+// through it, so the package-level VerifyFull (called by handlers holding only
+// the queries) can check for tail truncation. Values are *headAnchor; a nil
+// value or absent key means no anchor (no Writer, or an empty log).
+var anchors sync.Map
+
+func currentAnchor(q *db.Queries) *headAnchor {
+	if v, ok := anchors.Load(q); ok {
+		if a, _ := v.(*headAnchor); a != nil {
+			c := *a
+			return &c
+		}
+	}
+	return nil
+}
+
+// Writer appends entries to the audit hash chain. It tracks the previous
+// entry's hash in memory; all writes are serialized through a mutex.
 type Writer struct {
 	queries  *db.Queries
+	headPath string // "" = no persisted anchor; the in-memory anchor is still kept
 	mu       sync.Mutex
 	prevHash string // hash of the last entry (empty string for first entry)
 
-	// chainResetPending is set when NewWriter failed to load the prior chain
-	// head (timeout / corruption / schema mismatch) and started a fresh chain
-	// instead of pinning startup. The first Record writes an in-band
-	// `audit.chain_reset` marker (empty prev_hash) before the real event so the
-	// discontinuity is visible in the audit log itself — not only in slog.
-	chainResetPending bool
-	chainResetErr     string
+	// headLoaded is false until the chain head has been read from the DB.
+	// NewWriter tries once under auditLoadTimeout; if that fails, Record
+	// retries before every write and refuses to write until it succeeds.
+	// Writing without the head would start a second chain with an empty
+	// prev_hash, leaving VerifyFull invalid forever.
+	headLoaded bool
+
+	// pendingMarker is an in-band entry written, linked into the chain, ahead
+	// of the next event: the boot-time head load failed and was recovered
+	// (audit.head_load_deferred), or the persisted head anchor is missing from
+	// the DB (audit.head_mismatch — the tail of the log was truncated or an
+	// older DB was restored).
+	pendingMarkerType    string
+	pendingMarkerSummary string
 
 	// OnRecord, when set, is invoked after a successful chain-write with the
 	// same fields that were persisted. The server wires this to the
@@ -66,36 +115,139 @@ type Writer struct {
 	OnRecord func(eventType, actor, source, summary, payload string)
 }
 
-// NewWriter creates a Writer and loads the latest hash from the DB
-// to continue the chain. Bounded by auditLoadTimeout; on timeout or
-// any non-ErrNoRows error, the chain is reset to empty prevHash and
-// the error is logged so audit-trail reviewers see the boundary.
-func NewWriter(queries *db.Queries) *Writer {
+// WriterOption configures a Writer.
+type WriterOption func(*Writer)
+
+// WithHeadFile persists the head anchor at path (normally
+// <serverRoot>/audit-head.json) so tail truncation is detected across
+// restarts. Without it the anchor is kept in memory only.
+func WithHeadFile(path string) WriterOption {
+	return func(w *Writer) { w.headPath = path }
+}
+
+// NewWriter creates a Writer and loads the latest hash from the DB to continue
+// the chain. The DB lookup is bounded by auditLoadTimeout; on failure the
+// first Record retries it rather than pinning server startup.
+func NewWriter(queries *db.Queries, opts ...WriterOption) *Writer {
 	w := &Writer{queries: queries}
+	for _, o := range opts {
+		o(w)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), auditLoadTimeout)
 	defer cancel()
+	if err := w.loadHeadLocked(ctx); err != nil {
+		slog.Error("audit: failed to load chain head at boot; the first audit write will retry it",
+			"error", err, "timeout", auditLoadTimeout)
+		w.pendingMarkerType = "audit.head_load_deferred"
+		w.pendingMarkerSummary = "audit chain head could not be read at boot (" + err.Error() + "); recovered on first write, chain continues"
+	}
+	return w
+}
 
-	last, err := queries.GetLastAuditEntry(ctx)
+// loadHeadLocked reads the newest DB entry into prevHash and reconciles it
+// with the persisted head anchor. The caller holds w.mu (or owns w exclusively).
+func (w *Writer) loadHeadLocked(ctx context.Context) error {
+	var dbHead *headAnchor
+	last, err := w.queries.GetLastAuditEntry(ctx)
 	switch {
 	case err == nil:
-		w.prevHash = last.Hash
+		dbHead = &headAnchor{ID: last.ID, Hash: last.Hash}
 	case errors.Is(err, sql.ErrNoRows):
-		// First boot — no prior entries; prevHash stays empty.
+		// Empty log.
 	default:
-		// Timeout, DB corruption, schema mismatch, etc. — fail-open with
-		// a fresh chain so server startup isn't pinned, but surface the
-		// boundary loudly so the operator (and future audit-trail review)
-		// can bridge old-chain vs new-chain.
-		slog.Error("audit: failed to load last hash, starting fresh chain",
-			"error", err,
-			"timeout", auditLoadTimeout,
-		)
-		w.chainResetPending = true
-		w.chainResetErr = err.Error()
+		return err
 	}
 
-	return w
+	fileHead, ferr := w.readHeadFile()
+	if ferr != nil {
+		slog.Error("audit: unreadable head-anchor file; treating as absent", "path", w.headPath, "error", ferr)
+	}
+
+	anchor := dbHead
+	if fileHead != nil {
+		got, gerr := w.queries.GetAuditEntry(ctx, fileHead.ID)
+		switch {
+		case gerr == nil && got.Hash == fileHead.Hash:
+			// Anchored entry intact; the DB head is at or past it.
+		case gerr == nil || errors.Is(gerr, sql.ErrNoRows):
+			// The anchored entry is gone or changed: the tail was truncated or
+			// an older database was restored. Keep the stale anchor so Verify
+			// reports the mismatch, and record the event in-band ahead of the
+			// next entry, after which the anchor advances.
+			dbDesc := "empty log"
+			if dbHead != nil {
+				dbDesc = fmt.Sprintf("entry %d (%s)", dbHead.ID, dbHead.Hash)
+			}
+			slog.Error("audit: head anchor not found in database — log truncated or older DB restored",
+				"anchored_id", fileHead.ID, "anchored_hash", truncHash(fileHead.Hash), "db_head", dbDesc)
+			anchor = fileHead
+			w.pendingMarkerType = "audit.head_mismatch"
+			w.pendingMarkerSummary = fmt.Sprintf("audit head anchor entry %d (%s) is missing or altered; database head is %s",
+				fileHead.ID, fileHead.Hash, dbDesc)
+		default:
+			return gerr
+		}
+	}
+
+	w.prevHash = ""
+	if dbHead != nil {
+		w.prevHash = dbHead.Hash
+	}
+	w.headLoaded = true
+	anchors.Store(w.queries, anchor)
+	return nil
+}
+
+func (w *Writer) readHeadFile() (*headAnchor, error) {
+	if w.headPath == "" {
+		return nil, nil
+	}
+	b, err := os.ReadFile(w.headPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var a headAnchor
+	if err := json.Unmarshal(b, &a); err != nil {
+		return nil, err
+	}
+	if a.ID <= 0 || a.Hash == "" {
+		return nil, errors.New("head anchor has no id/hash")
+	}
+	return &a, nil
+}
+
+// writeHeadFile persists the anchor atomically (temp file + rename, 0600).
+func (w *Writer) writeHeadFile(a headAnchor) error {
+	if w.headPath == "" {
+		return nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(w.headPath), ".audit-head-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, w.headPath); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // timestampFormat is the layout used for hash computation. It must match
@@ -110,19 +262,24 @@ func (w *Writer) Record(ctx context.Context, eventType, actor, source, summary, 
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Fail-open boundary marker: if NewWriter started a fresh chain after a
-	// load error, the very first recorded event gets an in-band
-	// `audit.chain_reset` entry ahead of it (empty prev_hash) so a reviewer
-	// walking the chain sees the discontinuity in the log, not just in slog.
-	if w.chainResetPending {
-		// Clear first so a marker-insert failure doesn't loop on every Record.
-		w.chainResetPending = false
-		marker := "audit chain reset after load failure on boot: " + w.chainResetErr
-		if err := w.recordLocked(ctx, "audit.chain_reset", "system", "audit", marker, ""); err != nil {
-			// Best-effort: log and continue to the real event rather than
-			// dropping it. The slog.Error from NewWriter already flagged the gap.
-			slog.Error("audit: failed to write chain_reset marker", "error", err)
+	// The boot-time head load failed: retry it now. Writing without the head
+	// would fork the chain, so refuse the write until the head is known.
+	if !w.headLoaded {
+		lctx, cancel := context.WithTimeout(ctx, auditLoadTimeout)
+		err := w.loadHeadLocked(lctx)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("loading audit chain head: %w", err)
 		}
+	}
+
+	// In-band marker for a recovered head load or a detected head mismatch,
+	// linked into the chain like any other entry.
+	if w.pendingMarkerType != "" {
+		if err := w.recordLocked(ctx, w.pendingMarkerType, "system", "audit", w.pendingMarkerSummary, ""); err != nil {
+			return fmt.Errorf("writing %s marker: %w", w.pendingMarkerType, err)
+		}
+		w.pendingMarkerType, w.pendingMarkerSummary = "", ""
 	}
 
 	return w.recordLocked(ctx, eventType, actor, source, summary, payload)
@@ -151,6 +308,13 @@ func (w *Writer) recordLocked(ctx context.Context, eventType, actor, source, sum
 	}
 
 	w.prevHash = entry.Hash
+	anchor := headAnchor{ID: entry.ID, Hash: entry.Hash}
+	anchors.Store(w.queries, &anchor)
+	if err := w.writeHeadFile(anchor); err != nil {
+		// The entry is committed; a stale anchor file only weakens truncation
+		// detection across a restart until the next successful write.
+		slog.Error("audit: failed to persist head anchor", "path", w.headPath, "error", err)
+	}
 
 	slog.Debug("audit entry recorded",
 		"id", entry.ID,
@@ -166,13 +330,17 @@ func (w *Writer) recordLocked(ctx context.Context, eventType, actor, source, sum
 }
 
 // computeHashForVersion dispatches to the hash scheme a row was recorded with.
-// Unknown versions fall back to V1 (the historical default) so a future
-// downgrade can't silently report a clean chain by skipping verification.
-func computeHashForVersion(version int64, prevHash, timestamp, eventType, actor, source, summary, payload string) string {
-	if version == hashVersionV2 {
-		return computeHashV2(prevHash, timestamp, eventType, actor, source, summary, payload)
+// An unknown version is an error: verification refuses it rather than guessing
+// a scheme.
+func computeHashForVersion(version int64, prevHash, timestamp, eventType, actor, source, summary, payload string) (string, error) {
+	switch version {
+	case hashVersionV2:
+		return computeHashV2(prevHash, timestamp, eventType, actor, source, summary, payload), nil
+	case hashVersionV1:
+		return computeHashV1(prevHash, timestamp, eventType, actor, source, summary, payload), nil
+	default:
+		return "", fmt.Errorf("unknown hash_version %d", version)
 	}
-	return computeHashV1(prevHash, timestamp, eventType, actor, source, summary, payload)
 }
 
 // computeHashV1 is the legacy bare-concatenation scheme. FROZEN: it must remain
@@ -225,7 +393,10 @@ func verifyChainSegment(entries []db.AuditEntry, startPrevHash string) (lastHash
 		// Recompute with the scheme this row was recorded under. The stored
 		// hash never changes, so V1 rows verify with V1 and V2 rows with V2 —
 		// the chain stays continuous across the format bump.
-		expected := computeHashForVersion(e.HashVersion, prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Source, e.Summary, e.Payload)
+		expected, err := computeHashForVersion(e.HashVersion, prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Source, e.Summary, e.Payload)
+		if err != nil {
+			return prevHash, e.ID, fmt.Sprintf("entry %d: %v", e.ID, err)
+		}
 		if e.Hash != expected {
 			return prevHash, e.ID, fmt.Sprintf("hash mismatch at entry %d: expected %s, got %s", e.ID, truncHash(expected), truncHash(e.Hash))
 		}
@@ -310,6 +481,21 @@ func (v *Verifier) verify(ctx context.Context, forceFull bool) (*VerifyResult, e
 	lastHash, firstBroken, errMsg := verifyChainSegment(entries, startPrev)
 	if firstBroken != 0 {
 		return &VerifyResult{Valid: false, EntryCount: count, FirstBroken: firstBroken, Error: errMsg}, nil
+	}
+	// Tail truncation: the Writer's anchored head entry must still exist with
+	// the anchored hash. A clean walk cannot see rows that are simply gone.
+	if a := currentAnchor(v.queries); a != nil {
+		got, gerr := v.queries.GetAuditEntry(ctx, a.ID)
+		switch {
+		case errors.Is(gerr, sql.ErrNoRows):
+			return &VerifyResult{Valid: false, EntryCount: count, FirstBroken: a.ID,
+				Error: fmt.Sprintf("head anchor entry %d is missing: the log was truncated or an older database restored", a.ID)}, nil
+		case gerr != nil:
+			return nil, fmt.Errorf("reading head anchor entry: %w", gerr)
+		case got.Hash != a.Hash:
+			return &VerifyResult{Valid: false, EntryCount: count, FirstBroken: a.ID,
+				Error: fmt.Sprintf("head anchor entry %d hash changed: expected %s, got %s", a.ID, truncHash(a.Hash), truncHash(got.Hash))}, nil
+		}
 	}
 	if len(entries) > 0 {
 		v.ckptID = entries[len(entries)-1].ID
