@@ -19,8 +19,9 @@ import (
 //	[ciphertext: N * 32 bytes of ticket keys + 16 byte Poly1305 tag]
 //
 // N is recovered from len(ciphertext) - tagLen, divided by KeyLen.
-// Single version (0x01) for now; future rotation-format changes get
-// their own version byte and a dispatch in unwrap.
+// The version byte is bound as AEAD associated data, so it cannot be
+// rewritten without failing authentication. Single version (0x01) for
+// now; future format changes get their own byte and a dispatch in unwrap.
 const WrapVersion byte = 0x01
 
 const (
@@ -62,7 +63,7 @@ func wrap(payload, wrapKey []byte) ([]byte, error) {
 	out := make([]byte, 0, 1+nonceLen+len(payload)+tagLen)
 	out = append(out, WrapVersion)
 	out = append(out, nonce...)
-	out = aead.Seal(out, nonce, payload, nil)
+	out = aead.Seal(out, nonce, payload, []byte{WrapVersion})
 	return out, nil
 }
 
@@ -83,7 +84,7 @@ func unwrap(envelope, wrapKey []byte) ([]byte, error) {
 	}
 	nonce := envelope[1 : 1+nonceLen]
 	ciphertext := envelope[1+nonceLen:]
-	payload, err := aead.Open(nil, nonce, ciphertext, nil)
+	payload, err := aead.Open(nil, nonce, ciphertext, envelope[:1])
 	if err != nil {
 		return nil, errors.New("unwrap failed: wrong master key, corrupted envelope, or mismatched per-host salt")
 	}
@@ -91,4 +92,12 @@ func unwrap(envelope, wrapKey []byte) ([]byte, error) {
 		return nil, fmt.Errorf("unwrapped payload is %d bytes, not a multiple of %d", len(payload), KeyLen)
 	}
 	return payload, nil
+}
+
+// zero overwrites b in place. Used on derived wrap keys and plaintext
+// ticket-key payloads once they are no longer needed.
+func zero(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
 }

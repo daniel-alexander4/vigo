@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -41,6 +42,7 @@ type Store struct {
 
 	mu   sync.RWMutex
 	keys [][KeyLen]byte // [0] = active, [1] = grace (if present)
+	gen  uint64         // bumped on every key change; Apply's cache key
 }
 
 // EnsureStore loads the ticket-key store from dir, generating it on
@@ -52,10 +54,13 @@ type Store struct {
 // On subsequent calls: the salt is read, the wrap key re-derived, the
 // envelope unwrapped, and the recovered key list returned.
 //
-// A master-key rotation invalidates the wrap and surfaces an unwrap
-// error; recovery is operator-driven (delete the directory and re-init
-// — every envoy will full-handshake on its next CheckIn, the same
-// behaviour as a fresh deploy without persistence).
+// An envelope that fails to unwrap (master-key rotation, corruption,
+// or an envelope written by an older format) is replaced with a freshly
+// generated store and a warning is logged. Ticket keys carry no state
+// worth preserving at the cost of a failed boot: the only consequence of
+// regenerating is that every envoy full-handshakes on its next CheckIn,
+// the same as a fresh deploy without persistence. Filesystem and
+// key-derivation errors still fail closed.
 func EnsureStore(deriver KeyDeriver, dir string) (*Store, error) {
 	if deriver == nil {
 		return nil, errors.New("tickets: nil key deriver")
@@ -75,8 +80,18 @@ func EnsureStore(deriver KeyDeriver, dir string) (*Store, error) {
 	} else if err != nil {
 		return nil, fmt.Errorf("tickets: stat %s: %w", wrappedPath, err)
 	}
-	return loadStore(deriver, dir, wrappedPath, saltPath)
+	st, err := loadStore(deriver, dir, wrappedPath, saltPath)
+	if errors.Is(err, errUnwrap) {
+		slog.Warn("tls ticket-key envelope did not unwrap; regenerating (envoys will full-handshake once)",
+			"dir", dir, "error", err)
+		return initStore(deriver, dir, wrappedPath, saltPath)
+	}
+	return st, err
 }
+
+// errUnwrap marks a stored envelope (or salt) that could not be
+// recovered. EnsureStore regenerates on it; every other error is fatal.
+var errUnwrap = errors.New("ticket-key envelope unrecoverable")
 
 // Keys returns a copy of the current ticket-encryption keys, with the
 // active key first. Safe for concurrent calls; the returned slice is
@@ -90,25 +105,52 @@ func (s *Store) Keys() [][KeyLen]byte {
 }
 
 // Apply installs the store as the session-ticket-keys source on cfg
-// via cfg.GetConfigForClient. The callback closes over cfg so every
-// per-handshake clone preserves the caller's other settings
-// (ClientAuth, ClientCAs, GetCertificate, MinVersion, etc.) while
-// always getting the current key slice. Idempotent across rotations —
-// the store needs no config registry because the callback reads
-// store.keys at handshake time.
+// via cfg.GetConfigForClient. Every handshake gets a config carrying
+// the current key slice while preserving the caller's other settings
+// (ClientAuth, ClientCAs, GetCertificate, MinVersion, etc.). The
+// per-key-set clone is cached and rebuilt only when Rotate changes the
+// keys, so a handshake does not clone the config.
+//
+// A GetConfigForClient already installed on cfg is chained, not
+// overwritten: it runs first, and when it returns a config that config
+// (cloned) receives the current keys; when it returns nil the cached
+// clone of cfg is used, matching crypto/tls's own nil semantics.
 func (s *Store) Apply(cfg *tls.Config) {
 	if cfg == nil {
 		return
 	}
-	base := cfg // capture the caller's config; clone per handshake
-	cfg.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
-		out := base.Clone()
+	prior := cfg.GetConfigForClient
+	base := cfg.Clone() // snapshot without our callback
+	base.GetConfigForClient = nil
+
+	var (
+		cacheMu  sync.Mutex
+		cacheGen uint64
+		cached   *tls.Config
+	)
+	cfg.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+		if prior != nil {
+			pc, err := prior(hello)
+			if err != nil {
+				return nil, err
+			}
+			if pc != nil {
+				out := pc.Clone()
+				out.SetSessionTicketKeys(s.Keys())
+				return out, nil
+			}
+		}
 		s.mu.RLock()
-		keys := make([][KeyLen]byte, len(s.keys))
-		copy(keys, s.keys)
+		gen := s.gen
 		s.mu.RUnlock()
-		out.SetSessionTicketKeys(keys)
-		return out, nil
+		cacheMu.Lock()
+		defer cacheMu.Unlock()
+		if cached == nil || cacheGen != gen {
+			out := base.Clone()
+			out.SetSessionTicketKeys(s.Keys())
+			cached, cacheGen = out, gen
+		}
+		return cached, nil
 	}
 }
 
@@ -140,6 +182,7 @@ func (s *Store) Rotate() error {
 		s.keys = prev
 		return fmt.Errorf("tickets: persist after rotate: %w", err)
 	}
+	s.gen++
 	return nil
 }
 
@@ -173,16 +216,18 @@ func loadStore(deriver KeyDeriver, dir, wrappedPath, saltPath string) (*Store, e
 		return nil, fmt.Errorf("tickets: reading %s: %w", saltPath, err)
 	}
 	if len(salt) != SaltLen {
-		return nil, fmt.Errorf("tickets: salt at %s is %d bytes, expected %d", saltPath, len(salt), SaltLen)
+		return nil, fmt.Errorf("tickets: salt at %s is %d bytes, expected %d: %w", saltPath, len(salt), SaltLen, errUnwrap)
 	}
 	wrapKey, err := deriver.DeriveKey(HKDFPurpose, salt, wrapKeyLen)
 	if err != nil {
 		return nil, fmt.Errorf("tickets: derive wrap key: %w", err)
 	}
+	defer zero(wrapKey)
 	payload, err := unwrap(envelope, wrapKey)
 	if err != nil {
-		return nil, fmt.Errorf("tickets: %w", err)
+		return nil, fmt.Errorf("tickets: %w: %w", errUnwrap, err)
 	}
+	defer zero(payload)
 	keys := make([][KeyLen]byte, len(payload)/KeyLen)
 	for i := range keys {
 		copy(keys[i][:], payload[i*KeyLen:(i+1)*KeyLen])
@@ -197,10 +242,12 @@ func persistKeys(deriver KeyDeriver, dir string, salt []byte, keys [][KeyLen]byt
 	if err != nil {
 		return fmt.Errorf("derive wrap key: %w", err)
 	}
+	defer zero(wrapKey)
 	payload := make([]byte, 0, len(keys)*KeyLen)
 	for i := range keys {
 		payload = append(payload, keys[i][:]...)
 	}
+	defer zero(payload)
 	envelope, err := wrap(payload, wrapKey)
 	if err != nil {
 		return fmt.Errorf("wrap: %w", err)

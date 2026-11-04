@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -187,18 +188,133 @@ func TestWrappedFileIsMode0600(t *testing.T) {
 	}
 }
 
-func TestWrongMasterKeyFailsUnwrap(t *testing.T) {
+func TestWrongMasterKeyRegeneratesStore(t *testing.T) {
 	dir := t.TempDir()
 	d1 := newFakeDeriver(t)
-	if _, err := EnsureStore(d1, dir); err != nil {
+	first, err := EnsureStore(d1, dir)
+	if err != nil {
 		t.Fatalf("first EnsureStore: %v", err)
 	}
 
-	// Different master key, same salt path → unwrap must fail loudly,
-	// not return zero bytes.
+	// Different master key, same salt path → unwrap fails; the store
+	// must regenerate rather than fail the boot or return zero keys.
 	d2 := &fakeDeriver{master: bytes.Repeat([]byte{0xFF}, 32)}
-	if _, err := EnsureStore(d2, dir); err == nil {
-		t.Fatal("EnsureStore with wrong master key returned nil error")
+	second, err := EnsureStore(d2, dir)
+	if err != nil {
+		t.Fatalf("EnsureStore with wrong master key: %v", err)
+	}
+	k1, k2 := first.Keys(), second.Keys()
+	if len(k2) != 1 || isZero(k2[0][:]) || k2[0] == k1[0] {
+		t.Fatalf("regenerated store keys = %x, want one fresh non-zero key distinct from %x", k2, k1)
+	}
+	// The regenerated envelope is persisted under the new master key.
+	third, err := EnsureStore(d2, dir)
+	if err != nil {
+		t.Fatalf("reload after regenerate: %v", err)
+	}
+	if third.Keys()[0] != k2[0] {
+		t.Fatal("regenerated key did not persist")
+	}
+}
+
+// legacyEnvelope builds an envelope the pre-AAD way: version byte not
+// bound as associated data.
+func legacyEnvelope(t *testing.T, payload, wrapKey []byte) []byte {
+	t.Helper()
+	aead, err := chacha20poly1305.NewX(wrapKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := make([]byte, nonceLen)
+	out := append([]byte{WrapVersion}, nonce...)
+	return aead.Seal(out, nonce, payload, nil)
+}
+
+func TestUnwrap_VersionByteIsAuthenticated(t *testing.T) {
+	key := bytes.Repeat([]byte{7}, wrapKeyLen)
+	payload := bytes.Repeat([]byte{9}, KeyLen)
+	if _, err := unwrap(legacyEnvelope(t, payload, key), key); err == nil {
+		t.Fatal("envelope sealed without the version byte as AAD unwrapped; version byte is not authenticated")
+	}
+	env, err := wrap(payload, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := unwrap(env, key)
+	if err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("roundtrip: %v", err)
+	}
+}
+
+func TestEnsureStore_LegacyEnvelopeOnDiskRegenerates(t *testing.T) {
+	dir := t.TempDir()
+	d := newFakeDeriver(t)
+	if _, err := EnsureStore(d, dir); err != nil {
+		t.Fatal(err)
+	}
+	salt, err := os.ReadFile(SaltPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wk, err := d.DeriveKey(HKDFPurpose, salt, wrapKeyLen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyKey := bytes.Repeat([]byte{3}, KeyLen)
+	if err := os.WriteFile(WrappedPath(dir), legacyEnvelope(t, legacyKey, wk), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := EnsureStore(d, dir)
+	if err != nil {
+		t.Fatalf("EnsureStore over legacy envelope: %v", err)
+	}
+	if bytes.Equal(st.Keys()[0][:], legacyKey) {
+		t.Fatal("legacy envelope was accepted instead of regenerated")
+	}
+}
+
+func TestApply_ChainsPriorCallback(t *testing.T) {
+	store, err := EnsureStore(newFakeDeriver(t), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := 0
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	cfg.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		called++
+		return &tls.Config{MinVersion: tls.VersionTLS13, ServerName: "from-prior"}, nil
+	}
+	store.Apply(cfg)
+	got, err := cfg.GetConfigForClient(&tls.ClientHelloInfo{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if called != 1 {
+		t.Fatalf("prior GetConfigForClient called %d times, want 1", called)
+	}
+	if got == nil || got.ServerName != "from-prior" {
+		t.Fatalf("prior callback's config was discarded: %+v", got)
+	}
+}
+
+func TestApply_CachesCloneUntilRotate(t *testing.T) {
+	store, err := EnsureStore(newFakeDeriver(t), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS13}
+	store.Apply(cfg)
+	a, _ := cfg.GetConfigForClient(&tls.ClientHelloInfo{})
+	b, _ := cfg.GetConfigForClient(&tls.ClientHelloInfo{})
+	if a != b {
+		t.Fatal("config cloned on every handshake; want a cached clone between rotations")
+	}
+	if err := store.Rotate(); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := cfg.GetConfigForClient(&tls.ClientHelloInfo{})
+	if c == a {
+		t.Fatal("cached config not rebuilt after Rotate; new keys would never reach handshakes")
 	}
 }
 
@@ -210,4 +326,3 @@ func isZero(b []byte) bool {
 	}
 	return true
 }
-
