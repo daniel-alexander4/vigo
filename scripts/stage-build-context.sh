@@ -29,6 +29,8 @@ DEST_DIR="$2"
 rsync -a \
     --exclude='agent/target/' \
     --exclude='agent/.build/' \
+    --exclude='agent/fuzz/target/' \
+    --exclude='connwaer/target/' \
     --exclude='bin/' \
     --exclude='dist/server/' \
     --exclude='dist/cli/' \
