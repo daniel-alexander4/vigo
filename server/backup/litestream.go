@@ -13,9 +13,10 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Config holds backup replication settings from server.yaml.
@@ -31,74 +32,163 @@ type Config struct {
 	SyncInterval    string // e.g. "1s"
 }
 
+// Replicator supervision: litestream is restarted whenever it exits while the
+// server is running, with exponential backoff between attempts. A run that
+// stayed up for at least restartResetAfter resets the backoff.
+const (
+	restartMinBackoff = time.Second
+	restartMaxBackoff = 5 * time.Minute
+	restartResetAfter = time.Minute
+)
+
+// Metrics are the replicator's Prometheus series. Register them in the
+// server's registry with NewMetrics; a nil *Metrics records nothing.
+type Metrics struct {
+	// Running is 1 while a litestream process is up, 0 otherwise.
+	Running prometheus.Gauge
+	// Exits counts litestream exits while the server was running (each is
+	// followed by a restart after backoff).
+	Exits prometheus.Counter
+}
+
+// NewMetrics creates and registers the replicator metrics on reg.
+func NewMetrics(reg prometheus.Registerer) *Metrics {
+	m := &Metrics{
+		Running: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_backup_replicator_running",
+			Help: "1 while the litestream WAL replicator process is running, 0 while it is down or waiting to restart.",
+		}),
+		Exits: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vigo_backup_replicator_exits_total",
+			Help: "Times the litestream WAL replicator exited unexpectedly and was restarted.",
+		}),
+	}
+	reg.MustRegister(m.Running, m.Exits)
+	return m
+}
+
+func (m *Metrics) setRunning(up bool) {
+	if m == nil {
+		return
+	}
+	if up {
+		m.Running.Set(1)
+	} else {
+		m.Running.Set(0)
+	}
+}
+
+func (m *Metrics) exited() {
+	if m != nil {
+		m.Exits.Inc()
+	}
+}
+
 // Replicator manages a litestream subprocess for continuous WAL replication.
 type Replicator struct {
-	cfg        Config
-	configPath string // generated litestream config file
-	cmd        *exec.Cmd
+	cfg     Config
+	metrics *Metrics
+
+	// bin and the backoff bounds are fields so tests can supervise a stub.
+	bin        string
+	minBackoff time.Duration
+	maxBackoff time.Duration
+	resetAfter time.Duration
 }
 
 // NewReplicator creates a replicator. Call Start() to begin replication.
-func NewReplicator(cfg Config) *Replicator {
-	return &Replicator{cfg: cfg}
+// m may be nil.
+func NewReplicator(cfg Config, m *Metrics) *Replicator {
+	return &Replicator{
+		cfg:        cfg,
+		metrics:    m,
+		bin:        "litestream",
+		minBackoff: restartMinBackoff,
+		maxBackoff: restartMaxBackoff,
+		resetAfter: restartResetAfter,
+	}
 }
 
-// Start generates the litestream config and starts the subprocess.
-// Blocks until the context is cancelled, then stops litestream gracefully.
+// Start generates the litestream config and supervises `litestream
+// replicate` until ctx is cancelled: every unexpected exit is logged,
+// counted (vigo_backup_replicator_exits_total) and followed by a restart
+// after exponential backoff. Returns nil on cancellation; an error only for a
+// setup failure (no binary, bad URL) that a restart cannot fix.
 func (r *Replicator) Start(ctx context.Context) error {
 	if r.cfg.URL == "" {
 		return fmt.Errorf("backup URL is empty")
 	}
-
-	// Verify litestream binary exists.
-	path, err := exec.LookPath("litestream")
+	path, err := exec.LookPath(r.bin)
 	if err != nil {
 		return fmt.Errorf("litestream binary not found in PATH: %w", err)
 	}
 	slog.Info("litestream found", "path", path)
 
-	// Generate config file.
 	configPath, err := r.writeConfig()
 	if err != nil {
 		return fmt.Errorf("generating litestream config: %w", err)
 	}
-	r.configPath = configPath
 	defer os.Remove(configPath)
 
-	// Start litestream replicate subprocess.
-	r.cmd = exec.CommandContext(ctx, "litestream", "replicate", "-config", configPath)
-	r.cmd.Stdout = os.Stdout
-	r.cmd.Stderr = os.Stderr
+	slog.Info("starting litestream replication", "db", r.cfg.DBPath, "url", r.cfg.URL)
+	backoff := r.minBackoff
+	for {
+		started := time.Now()
+		runErr := r.runOnce(ctx, path, configPath)
+		r.metrics.setRunning(false)
+		if ctx.Err() != nil {
+			slog.Info("litestream replication stopped")
+			return nil
+		}
+		if time.Since(started) >= r.resetAfter {
+			backoff = r.minBackoff
+		}
+		r.metrics.exited()
+		slog.Error("litestream exited; backups are paused until it restarts",
+			"error", runErr, "uptime", time.Since(started).Round(time.Second), "restart_in", backoff)
+		select {
+		case <-ctx.Done():
+			slog.Info("litestream replication stopped")
+			return nil
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+		if backoff > r.maxBackoff {
+			backoff = r.maxBackoff
+		}
+	}
+}
 
-	// Pass S3/GCS credentials via environment.
-	r.cmd.Env = os.Environ()
+// runOnce runs one litestream replicate process to completion.
+func (r *Replicator) runOnce(ctx context.Context, bin, configPath string) error {
+	cmd := exec.CommandContext(ctx, bin, "replicate", "-config", configPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = r.credentialEnv()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting litestream: %w", err)
+	}
+	r.metrics.setRunning(true)
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("litestream exited: %w", err)
+	}
+	return fmt.Errorf("litestream exited with status 0")
+}
+
+// credentialEnv passes the S3/GCS credentials to litestream through its
+// environment: never argv (world-readable via /proc/<pid>/cmdline) and never
+// the generated config file on disk. The environment is readable only by the
+// same uid and root. In server.yaml the keys should be secret: references so
+// the plaintext lives only in the secrets backend.
+func (r *Replicator) credentialEnv() []string {
+	env := os.Environ()
 	if r.cfg.AccessKeyID != "" {
-		r.cmd.Env = append(r.cmd.Env,
+		env = append(env,
 			"AWS_ACCESS_KEY_ID="+r.cfg.AccessKeyID,
 			"AWS_SECRET_ACCESS_KEY="+r.cfg.SecretAccessKey,
 		)
 	}
-
-	slog.Info("starting litestream replication",
-		"db", r.cfg.DBPath,
-		"url", r.cfg.URL,
-	)
-
-	if err := r.cmd.Start(); err != nil {
-		return fmt.Errorf("starting litestream: %w", err)
-	}
-
-	// Wait for process to exit (normally via context cancellation).
-	err = r.cmd.Wait()
-	if ctx.Err() != nil {
-		// Context cancelled — normal shutdown.
-		slog.Info("litestream replication stopped")
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("litestream exited: %w", err)
-	}
-	return nil
+	return env
 }
 
 // Restore downloads the latest snapshot and WAL files from the replica,
@@ -114,16 +204,10 @@ func (r *Replicator) Restore(ctx context.Context) error {
 	}
 	defer os.Remove(configPath)
 
-	cmd := exec.CommandContext(ctx, "litestream", "restore", "-config", configPath, "-o", r.cfg.DBPath, r.cfg.DBPath)
+	cmd := exec.CommandContext(ctx, r.bin, "restore", "-config", configPath, "-o", r.cfg.DBPath, r.cfg.DBPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-	if r.cfg.AccessKeyID != "" {
-		cmd.Env = append(cmd.Env,
-			"AWS_ACCESS_KEY_ID="+r.cfg.AccessKeyID,
-			"AWS_SECRET_ACCESS_KEY="+r.cfg.SecretAccessKey,
-		)
-	}
+	cmd.Env = r.credentialEnv()
 
 	slog.Info("restoring database from litestream backup", "url", r.cfg.URL)
 	if err := cmd.Run(); err != nil {
@@ -133,7 +217,9 @@ func (r *Replicator) Restore(ctx context.Context) error {
 	return nil
 }
 
-// writeConfig generates a litestream YAML config file in a temp directory.
+// writeConfig generates the litestream YAML config in a fresh 0600 temp file
+// (os.CreateTemp: unpredictable name, O_EXCL), so another local user cannot
+// pre-create or swap it. The caller removes it.
 func (r *Replicator) writeConfig() (string, error) {
 	replicaType, bucket, path, err := parseReplicaURL(r.cfg.URL)
 	if err != nil {
@@ -187,12 +273,32 @@ func (r *Replicator) writeConfig() (string, error) {
 	b.WriteString("        retention: " + retention + "\n")
 	b.WriteString("        sync-interval: " + syncInterval + "\n")
 
-	tmpDir := os.TempDir()
-	configPath := filepath.Join(tmpDir, fmt.Sprintf("litestream-%d.yml", time.Now().UnixNano()))
-	if err := os.WriteFile(configPath, []byte(b.String()), 0600); err != nil {
+	f, err := os.CreateTemp("", "litestream-*.yml")
+	if err != nil {
+		return "", fmt.Errorf("creating config file: %w", err)
+	}
+	configPath := f.Name()
+	if _, err := f.WriteString(b.String()); err != nil {
+		f.Close()
+		os.Remove(configPath)
+		return "", fmt.Errorf("writing config: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(configPath)
 		return "", fmt.Errorf("writing config: %w", err)
 	}
 	return configPath, nil
+}
+
+// SQLitePathFromDSN returns the database file path named by a SQLite DSN:
+// a "file:" URI prefix and any "?pragma=..." query are stripped. Litestream
+// needs the file path, not the driver DSN.
+func SQLitePathFromDSN(dsn string) string {
+	p := strings.TrimPrefix(dsn, "file:")
+	if i := strings.IndexByte(p, '?'); i >= 0 {
+		p = p[:i]
+	}
+	return p
 }
 
 // parseReplicaURL extracts the replica type and components from a URL.
@@ -222,7 +328,7 @@ func parseReplicaURL(rawURL string) (replicaType, bucket, path string, err error
 // GenerateConfig returns the litestream YAML config content for the given settings.
 // Exported for testing.
 func GenerateConfig(cfg Config) (string, error) {
-	r := &Replicator{cfg: cfg}
+	r := NewReplicator(cfg, nil)
 	path, err := r.writeConfig()
 	if err != nil {
 		return "", err

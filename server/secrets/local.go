@@ -57,6 +57,10 @@ type LocalProvider struct {
 // Dir returns the secrets directory path.
 func (p *LocalProvider) Dir() string { return p.secretsDir }
 
+// MasterKeyFile is the name of the auto-generated master key inside the
+// secrets directory.
+const MasterKeyFile = ".master.key"
+
 // NewLocalProvider creates a provider that reads encrypted secrets from
 // secretsDir using the master key in keyFile. The key file must be exactly
 // 32 bytes (raw) or 64 hex characters, or any length (hashed with SHA-256).
@@ -71,7 +75,7 @@ func NewLocalProvider(keyFile, secretsDir string) (*LocalProvider, error) {
 
 	// No key file = auto-generate one inside the secrets directory.
 	if keyFile == "" {
-		keyFile = filepath.Join(secretsDir, ".master.key")
+		keyFile = filepath.Join(secretsDir, MasterKeyFile)
 		if _, err := os.Stat(keyFile); os.IsNotExist(err) {
 			key := make([]byte, 32)
 			if _, err := io.ReadFull(rand.Reader, key); err != nil {

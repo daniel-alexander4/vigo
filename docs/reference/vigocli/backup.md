@@ -21,7 +21,7 @@ The SQLite database is snapshotted using `VACUUM INTO`, which is safe with concu
 |------|---------|-------------|
 | `--server-yaml` | `/srv/vigo/server.yaml` | Path to server.yaml (used to find DB settings) |
 | `--server-root` | `/srv/vigo` | Root directory containing stacks/, secrets/, tls/ |
-| `--encrypt` | `false` | Encrypt with AES-256-GCM (prompts for password) |
+| `--encrypt` | `false` | Encrypt with AES-256-GCM (prompts for password). Only an encrypted archive includes the secrets master key (`secrets/.master.key`); without it, keep the master key safe separately. |
 
 **Examples:**
 
@@ -90,6 +90,7 @@ vigocli backup inspect <path>
     "secrets/db_pass",
     "tls/cert",
     "server.yaml"
-  ]
+  ],
+  "master_key_included": false
 }
 ```

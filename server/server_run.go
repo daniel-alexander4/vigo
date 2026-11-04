@@ -277,7 +277,7 @@ func (s *Server) startRetentionAndBackup(ctx context.Context) {
 	if !s.isPostgres && s.cfg.Backup.URL != "" {
 		replicator := backup.NewReplicator(backup.Config{
 			URL:             s.cfg.Backup.URL,
-			DBPath:          s.cfg.Database.DSN,
+			DBPath:          backup.SQLitePathFromDSN(s.cfg.Database.DSN),
 			AccessKeyID:     s.cfg.Backup.AccessKeyID,
 			SecretAccessKey: s.cfg.Backup.SecretAccessKey,
 			Region:          s.cfg.Backup.Region,
@@ -285,7 +285,7 @@ func (s *Server) startRetentionAndBackup(ctx context.Context) {
 			ForcePathStyle:  s.cfg.Backup.ForcePathStyle,
 			Retention:       s.cfg.Backup.Retention,
 			SyncInterval:    s.cfg.Backup.SyncInterval,
-		})
+		}, backup.NewMetrics(s.promReg))
 		s.goBG("litestream-replicator", func() {
 			if err := replicator.Start(ctx); err != nil && ctx.Err() == nil {
 				slog.Error("litestream replication failed", "error", err)

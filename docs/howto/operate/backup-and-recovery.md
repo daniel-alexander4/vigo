@@ -60,7 +60,7 @@ backup:
 
 ## How It Works
 
-1. On startup, if `backup.url` is set, the server generates a Litestream configuration file and starts `litestream replicate` as a subprocess.
+1. On startup, if `backup.url` is set, the server generates a Litestream configuration file (a private 0600 temp file) and starts `litestream replicate` as a supervised subprocess. If Litestream exits while the server is running, the server logs an error and restarts it with exponential backoff (1s doubling to 5m). The access keys reach Litestream through its environment, never its command line or the config file; set them in `server.yaml` as `secret:` references so the plaintext lives only in the secrets backend.
 2. Litestream continuously monitors the SQLite WAL and replicates changes to the configured backend.
 
 3. Periodic snapshots are created and old ones are pruned according to the `retention` setting.
@@ -91,6 +91,13 @@ To restore from a backup:
 
 Check the Litestream subprocess output in the server logs. Litestream logs replication status, snapshot creation, and any errors to stdout/stderr, which the server captures.
 
+Two Prometheus series on `GET /metrics` (present only when `backup.url` is set) tell you whether replication is actually running:
+
+| Metric | Meaning |
+|---|---|
+| `vigo_backup_replicator_running` | 1 while a Litestream process is up, 0 while it is down or waiting to restart. Alert on `== 0` for more than a few minutes. |
+| `vigo_backup_replicator_exits_total` | Times Litestream exited unexpectedly and was restarted. A rising value means backups are flapping. |
+
 If the Litestream binary is not found in PATH, the server logs a warning but continues running without backup.
 
 ---
@@ -111,10 +118,10 @@ The command reads `server.yaml` to find the database path, then:
 
 1. Snapshots the SQLite database using the sqlite3 backup API (safe with concurrent WAL writers)
 2. Copies `stacks/` (config source of truth)
-3. Copies `secrets/` (already AES-256-GCM encrypted at rest)
+3. Copies `secrets/` (already AES-256-GCM encrypted at rest). The master key `secrets/.master.key` is included **only with `--encrypt`**: next to the ciphertext it decrypts, it would make an unencrypted archive a plaintext copy of every secret. Without `--encrypt`, keep the master key safe separately and put it back before starting a restored server.
 4. Copies `tls/` (CA + server certs)
 5. Copies `server.yaml`
-6. Writes a `manifest.json` with metadata
+6. Writes a `manifest.json` with metadata (the database DSN is recorded with any password removed)
 
 Every backup automatically generates a SHA-256 checksum sidecar file (`.sha256`) for integrity verification.
 
@@ -187,7 +194,7 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 │   ├── envoys/
 │   └── vars/
 ├── secrets/
-│   └── (encrypted files, directory structure preserved)
+│   └── (encrypted files, directory structure preserved; .master.key only with --encrypt)
 ├── tls/
 │   └── (cert, key, ca, ca_key PEM files)
 └── server.yaml

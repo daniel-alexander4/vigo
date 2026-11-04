@@ -99,7 +99,7 @@ func TestGenerateConfig_S3(t *testing.T) {
 		AccessKeyID:     "AKID",
 		SecretAccessKey: "SECRET",
 		Region:          "us-west-2",
-		Retention:        "168h",
+		Retention:       "168h",
 		SyncInterval:    "5s",
 	}
 	content, err := GenerateConfig(cfg)
@@ -186,7 +186,7 @@ func TestGenerateConfig_Defaults(t *testing.T) {
 }
 
 func TestNewReplicator(t *testing.T) {
-	r := NewReplicator(Config{URL: "s3://bucket/path", DBPath: "/db/test.db"})
+	r := NewReplicator(Config{URL: "s3://bucket/path", DBPath: "/db/test.db"}, nil)
 	if r == nil {
 		t.Fatal("NewReplicator returned nil")
 	}

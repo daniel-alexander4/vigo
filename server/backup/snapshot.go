@@ -25,18 +25,26 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/argon2"
+
+	"git.alexander4.io/vigo/server/secrets"
 )
 
 // Manifest describes a backup archive.
 type Manifest struct {
-	Version       int       `json:"version"`
-	CreatedAt     time.Time `json:"created_at"`
-	VigoVersion string   `json:"vigo_version"`
-	DBDriver      string   `json:"db_driver"`
-	DBDSN         string   `json:"db_dsn"`
-	Files         []string `json:"files"`
-	SHA256        string   `json:"sha256,omitempty"` // hex-encoded hash of the archive
-	Encrypted     bool     `json:"encrypted,omitempty"`
+	Version     int       `json:"version"`
+	CreatedAt   time.Time `json:"created_at"`
+	VigoVersion string    `json:"vigo_version"`
+	DBDriver    string    `json:"db_driver"`
+	// DBDSN is the connection string with any password removed; a Postgres
+	// restore takes the password from PGPASSWORD.
+	DBDSN  string   `json:"db_dsn"`
+	Files  []string `json:"files"`
+	SHA256 string   `json:"sha256,omitempty"` // hex-encoded hash of the archive
+	// MasterKeyIncluded records whether secrets/.master.key is in the
+	// archive. It is only included in password-encrypted archives; otherwise
+	// the operator must keep the master key separately to read the secrets.
+	MasterKeyIncluded bool `json:"master_key_included"`
+	Encrypted         bool `json:"encrypted,omitempty"`
 }
 
 // CreateOptions configures what goes into a backup archive.
@@ -51,6 +59,11 @@ type CreateOptions struct {
 	DBDSN string
 	// VigoVersion is the server version string.
 	VigoVersion string
+	// IncludeMasterKey adds secrets/.master.key to the archive. Set it only
+	// when the archive will be password-encrypted (vigocli backup create
+	// --encrypt): next to the ciphertext it decrypts, the key makes an
+	// unencrypted archive a plaintext copy of every secret.
+	IncludeMasterKey bool
 }
 
 // RestoreOptions configures how a backup archive is restored.
@@ -184,17 +197,20 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 	dirMappings := []struct {
 		src     string
 		archive string
+		skip    func(rel string) bool
 	}{
-		{filepath.Join(serverRoot, "stacks"), "stacks"},
-		{filepath.Join(serverRoot, "secrets"), "secrets"},
-		{filepath.Join(serverRoot, "tls"), "tls"},
+		{filepath.Join(serverRoot, "stacks"), "stacks", nil},
+		{filepath.Join(serverRoot, "secrets"), "secrets", func(rel string) bool {
+			return !opts.IncludeMasterKey && rel == secrets.MasterKeyFile
+		}},
+		{filepath.Join(serverRoot, "tls"), "tls", nil},
 	}
 
 	for _, dm := range dirMappings {
 		if _, err := os.Stat(dm.src); os.IsNotExist(err) {
 			continue // optional directory
 		}
-		copied, err := copyTree(dm.src, filepath.Join(tmpDir, dm.archive))
+		copied, err := copyTree(dm.src, filepath.Join(tmpDir, dm.archive), dm.skip)
 		if err != nil {
 			return fmt.Errorf("copying %s: %w", dm.src, err)
 		}
@@ -216,14 +232,7 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 	}
 
 	// 4. Write manifest.
-	manifest := Manifest{
-		Version:       1,
-		CreatedAt:     time.Now().UTC(),
-		VigoVersion: opts.VigoVersion,
-		DBDriver:      dbDriver,
-		DBDSN:         opts.DBDSN,
-		Files:         files,
-	}
+	manifest := newManifest(opts, dbDriver, files)
 	manifestData, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling manifest: %w", err)
@@ -234,6 +243,28 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 
 	// 5. Create tar.gz.
 	return writeTarGz(archivePath, tmpDir)
+}
+
+// RedactDSN returns dsn with any password removed, for display and for the
+// manifest.
+func RedactDSN(dsn string) string {
+	redacted, _ := sanitizePgDSN(dsn)
+	return redacted
+}
+
+// newManifest builds the archive manifest. The DSN is recorded with any
+// password stripped: the manifest is readable without decrypting anything.
+func newManifest(opts CreateOptions, dbDriver string, files []string) Manifest {
+	redactedDSN := RedactDSN(opts.DBDSN)
+	return Manifest{
+		Version:           1,
+		CreatedAt:         time.Now().UTC(),
+		VigoVersion:       opts.VigoVersion,
+		DBDriver:          dbDriver,
+		DBDSN:             redactedDSN,
+		Files:             files,
+		MasterKeyIncluded: opts.IncludeMasterKey,
+	}
 }
 
 // RestoreArchive extracts a backup tar.gz and restores all components.
@@ -323,7 +354,7 @@ func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) 
 		if err := os.MkdirAll(rm.dst, 0700); err != nil {
 			return nil, fmt.Errorf("creating %s: %w", rm.dst, err)
 		}
-		if _, err := copyTree(srcDir, rm.dst); err != nil {
+		if _, err := copyTree(srcDir, rm.dst, nil); err != nil {
 			return nil, fmt.Errorf("restoring %s: %w", rm.src, err)
 		}
 	}
@@ -376,20 +407,44 @@ func ReadManifest(archivePath string) (*Manifest, error) {
 	}
 }
 
-// writeTarGz creates a tar.gz archive from a directory.
+// writeTarGz creates a tar.gz archive from a directory. The tar, gzip and file
+// writers are closed in order and their errors returned: a failed Close means
+// a truncated archive, which must not report success. On any error the
+// partial archive is removed.
 func writeTarGz(archivePath, srcDir string) error {
-	f, err := os.Create(archivePath)
+	f, err := os.OpenFile(archivePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("creating archive file: %w", err)
 	}
-	defer f.Close()
+	if err := writeTarGzTo(f, srcDir); err != nil {
+		if fi, lerr := os.Lstat(archivePath); lerr == nil && fi.Mode().IsRegular() {
+			os.Remove(archivePath)
+		}
+		return err
+	}
+	return nil
+}
 
-	gz := gzip.NewWriter(f)
-	defer gz.Close()
-
+// writeTarGzTo streams srcDir as tar.gz into w and closes the tar, gzip and
+// underlying writers in order, returning the first error.
+func writeTarGzTo(w io.WriteCloser, srcDir string) (retErr error) {
+	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
-	defer tw.Close()
+	defer func() {
+		if err := tw.Close(); err != nil && retErr == nil {
+			retErr = fmt.Errorf("finishing tar stream: %w", err)
+		}
+		if err := gz.Close(); err != nil && retErr == nil {
+			retErr = fmt.Errorf("finishing gzip stream: %w", err)
+		}
+		if err := w.Close(); err != nil && retErr == nil {
+			retErr = fmt.Errorf("closing archive file: %w", err)
+		}
+	}()
+	return walkIntoTar(tw, srcDir)
+}
 
+func walkIntoTar(tw *tar.Writer, srcDir string) error {
 	return filepath.Walk(srcDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -510,8 +565,9 @@ func copyFile(src, dst string) error {
 }
 
 // copyTree recursively copies a directory tree. Returns relative paths of all
-// files copied.
-func copyTree(srcDir, dstDir string) ([]string, error) {
+// files copied. skip, when non-nil, excludes files whose relative path it
+// reports true for.
+func copyTree(srcDir, dstDir string, skip func(rel string) bool) ([]string, error) {
 	var copied []string
 
 	err := filepath.Walk(srcDir, func(path string, info fs.FileInfo, err error) error {
@@ -528,6 +584,10 @@ func copyTree(srcDir, dstDir string) ([]string, error) {
 
 		if info.IsDir() {
 			return os.MkdirAll(target, info.Mode())
+		}
+
+		if skip != nil && skip(rel) {
+			return nil
 		}
 
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {

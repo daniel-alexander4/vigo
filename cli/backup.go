@@ -42,7 +42,8 @@ var backupCreateCmd = &cobra.Command{
 	Long: `Create a tar.gz backup archive containing:
   - SQLite database snapshot (safe with concurrent WAL writes)
   - Config files (stacks/)
-  - Encrypted secrets (secrets/)
+  - Encrypted secrets (secrets/); the master key (secrets/.master.key)
+    is included only with --encrypt, otherwise keep it safe separately
   - TLS certificates (tls/)
   - server.yaml
 
@@ -97,16 +98,32 @@ Examples:
 
 		// version is set at package level via -ldflags at build time.
 
+		// The password is collected before anything is written: an encrypted
+		// archive carries the secrets master key, so it must never sit on disk
+		// unencrypted for longer than the encryption step takes.
+		encrypt, _ := cmd.Flags().GetBool("encrypt")
+		var encPassword string
+		if encrypt {
+			encPassword, err = promptBackupPassword("Enter encryption password: ")
+			if err != nil {
+				return err
+			}
+		}
+
 		fmt.Printf("Creating backup archive: %s\n", archivePath)
-		fmt.Printf("  Database: %s (%s)\n", dbDSN, dbDriver)
+		fmt.Printf("  Database: %s (%s)\n", backup.RedactDSN(dbDSN), dbDriver)
 		fmt.Printf("  Server root: %s\n", serverRoot)
+		if !encrypt {
+			fmt.Printf("  Secrets master key: NOT included (use --encrypt to include it; otherwise keep %s/secrets/%s safe separately)\n", serverRoot, secrets.MasterKeyFile)
+		}
 
 		err = backup.CreateArchive(archivePath, backup.CreateOptions{
-			ServerYAMLPath: serverYAML,
-			ServerRoot:     serverRoot,
-			DBDriver:       dbDriver,
-			DBDSN:          dbDSN,
-			VigoVersion:  version,
+			ServerYAMLPath:   serverYAML,
+			ServerRoot:       serverRoot,
+			DBDriver:         dbDriver,
+			DBDSN:            dbDSN,
+			VigoVersion:      version,
+			IncludeMasterKey: encrypt,
 		})
 		if err != nil {
 			return fmt.Errorf("creating backup: %w", err)
@@ -122,15 +139,13 @@ Examples:
 		}
 
 		// Encrypt if requested.
-		encrypt, _ := cmd.Flags().GetBool("encrypt")
 		if encrypt {
-			pw, err := promptBackupPassword("Enter encryption password: ")
-			if err != nil {
-				return err
-			}
 			fmt.Println("Encrypting archive...")
-			if err := backup.EncryptFile(archivePath, pw); err != nil {
-				return fmt.Errorf("encrypting archive: %w", err)
+			if err := backup.EncryptFile(archivePath, encPassword); err != nil {
+				// The unencrypted archive holds the master key: never leave it.
+				os.Remove(archivePath)
+				os.Remove(archivePath + ".sha256")
+				return fmt.Errorf("encrypting archive (unencrypted archive removed): %w", err)
 			}
 			// Recompute hash of encrypted file and update sidecar.
 			hash, err = backup.HashFile(archivePath)
@@ -244,7 +259,7 @@ Examples:
 			fmt.Println("  Mode: database only")
 		}
 
-		_, err = backup.RestoreArchive(archivePath, backup.RestoreOptions{
+		restored, err := backup.RestoreArchive(archivePath, backup.RestoreOptions{
 			TargetDir: targetDir,
 			DBOnly:    dbOnly,
 			DryRun:    false,
@@ -253,6 +268,9 @@ Examples:
 			return fmt.Errorf("restoring backup: %w", err)
 		}
 
+		if !dbOnly && !restored.MasterKeyIncluded {
+			fmt.Printf("\nNOTE: this archive does not contain the secrets master key. Copy your saved %s into %s/secrets/ before starting vigosrv, or the restored secrets cannot be decrypted.\n", secrets.MasterKeyFile, targetDir)
+		}
 		fmt.Println("\nRestore complete. Next steps:")
 		fmt.Println("  1. Review server.yaml for any host-specific settings")
 		fmt.Println("  2. Run: vigocli config publish")
@@ -309,7 +327,7 @@ func init() {
 	backupCreateCmd.Flags().String("server-root", "/srv/vigo",
 		"Server root directory containing stacks/, secrets/, tls/")
 	backupCreateCmd.Flags().Bool("encrypt", false,
-		"Encrypt the archive with AES-256-GCM (prompts for password)")
+		"Encrypt the archive with AES-256-GCM (prompts for password); also includes the secrets master key")
 
 	backupRestoreCmd.Flags().String("target", "/srv/vigo",
 		"Root directory to restore into")
