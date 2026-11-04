@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"git.alexander4.io/vigo/server/secretref"
 	"git.alexander4.io/vigo/server/secrets"
 	"gopkg.in/yaml.v3"
 )
@@ -324,7 +325,11 @@ func resolveServerSecrets(cfg *ServerConfig, provider secrets.Provider, backend 
 	for _, f := range fields {
 		if strings.HasPrefix(*f.ptr, secretPrefix) {
 			key := strings.TrimPrefix(*f.ptr, secretPrefix)
-			val, err := provider.Get(context.Background(), key)
+			err := secretref.ValidateKey(key)
+			var val string
+			if err == nil {
+				val, err = provider.Get(context.Background(), key)
+			}
 			if err != nil {
 				errs = append(errs, &SecretError{
 					Match:  "server.yaml",

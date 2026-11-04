@@ -164,7 +164,10 @@ func (p *LocalProvider) GetBytes(ctx context.Context, key string) ([]byte, error
 // GetVersion returns the file modification time as a version number (unix seconds).
 // This allows the rotation watcher to detect when a secret has been re-encrypted.
 func (p *LocalProvider) GetVersion(_ context.Context, key string) (int, error) {
-	path := p.secretPath(key)
+	path, err := p.secretPath(key)
+	if err != nil {
+		return 0, err
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -217,8 +220,11 @@ func sanitizeSecret(s string) string {
 
 // Delete removes an encrypted secret file.
 func (p *LocalProvider) Delete(key string) error {
-	path := p.secretPath(key)
-	err := os.Remove(path)
+	path, err := p.secretPath(key)
+	if err != nil {
+		return err
+	}
+	err = os.Remove(path)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("deleting secret %q: %w", key, err)
 	}
@@ -301,26 +307,34 @@ func (p *LocalProvider) Decrypt(envelope []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// secretPath returns the filesystem path for a secret key.
-func (p *LocalProvider) secretPath(key string) string {
-	return filepath.Join(p.secretsDir, filepath.FromSlash(key))
+// secretPath returns the absolute filesystem path for a secret key, or an
+// error when the key would land outside the secrets directory (`..`
+// components, an absolute key) or on the directory itself. Every read,
+// write, stat and delete goes through it, so none can escape.
+func (p *LocalProvider) secretPath(key string) (string, error) {
+	absDir, err := filepath.Abs(p.secretsDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving secrets dir: %w", err)
+	}
+	absPath, err := filepath.Abs(filepath.Join(absDir, filepath.FromSlash(key)))
+	if err != nil {
+		return "", fmt.Errorf("resolving path for %q: %w", key, err)
+	}
+	if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) {
+		return "", fmt.Errorf("secret key %q escapes secrets directory", key)
+	}
+	return absPath, nil
 }
 
 // readAndDecrypt reads an encrypted file and decrypts it.
 func (p *LocalProvider) readAndDecrypt(key string) ([]byte, error) {
-	path := p.secretPath(key)
-
-	// Prevent path traversal.
-	absPath, err := filepath.Abs(path)
+	absPath, err := p.secretPath(key)
 	if err != nil {
-		return nil, fmt.Errorf("resolving path for %q: %w", key, err)
+		return nil, err
 	}
 	absDir, err := filepath.Abs(p.secretsDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving secrets dir: %w", err)
-	}
-	if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) {
-		return nil, fmt.Errorf("secret key %q escapes secrets directory", key)
 	}
 
 	// Resolve symlinks and re-check containment.
@@ -362,19 +376,13 @@ func (p *LocalProvider) readAndDecrypt(key string) ([]byte, error) {
 
 // encryptAndWrite encrypts data and writes it to the secret file atomically.
 func (p *LocalProvider) encryptAndWrite(key string, plaintext []byte) error {
-	path := p.secretPath(key)
-
-	// Prevent path traversal.
-	absPath, err := filepath.Abs(path)
+	absPath, err := p.secretPath(key)
 	if err != nil {
-		return fmt.Errorf("resolving path for %q: %w", key, err)
+		return err
 	}
 	absDir, err := filepath.Abs(p.secretsDir)
 	if err != nil {
 		return fmt.Errorf("resolving secrets dir: %w", err)
-	}
-	if !strings.HasPrefix(absPath, absDir+string(filepath.Separator)) {
-		return fmt.Errorf("secret key %q escapes secrets directory", key)
 	}
 
 	// Resolve symlinks on the parent directory to prevent symlink-based escapes.

@@ -294,10 +294,12 @@ resources:
 
 func TestLint_SecretPath_InvalidShape(t *testing.T) {
 	cases := []string{
-		"secret:",            // empty
-		"secret:Foo/Bar",     // uppercase
-		"secret:foo bar/baz", // whitespace
-		"secret:foo//bar",    // empty path component
+		"secret:",             // empty
+		"secret:Foo/Bar",      // uppercase
+		"secret:foo//bar",     // empty path component
+		"secret:vigo/../x",    // traversal
+		"secret:.master.key",  // hidden name
+		"PW=secret:vigo/../x", // embedded traversal
 	}
 	for _, bad := range cases {
 		input := `name: m

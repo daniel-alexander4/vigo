@@ -21,6 +21,7 @@ import (
 	"git.alexander4.io/vigo/server/conditionals"
 	"git.alexander4.io/vigo/server/frameworks"
 	"git.alexander4.io/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/secretref"
 	"git.alexander4.io/vigo/server/secrets"
 	"git.alexander4.io/vigo/server/validate"
 	"gopkg.in/yaml.v3"
@@ -174,7 +175,7 @@ var knownSecretFields = map[string]bool{
 	"webhook_secret": true,
 }
 
-const secretPrefix = "secret:"
+const secretPrefix = secretref.Prefix
 
 // Secret placeholder markers — substituted in for resolved secret values
 // during loader resolution so the resolved config (and the bundle it
@@ -206,7 +207,11 @@ type resolvedEntry struct {
 // cascading inheritance. Secret references are resolved via a
 // secrets.Provider. Reload triggered by config publish via REST endpoint.
 type ConfigStore struct {
-	mu              sync.RWMutex
+	mu sync.RWMutex
+	// reloadMu serializes whole loads. Publish, the stackswatch pull, the
+	// auto-rollback and the secrets watcher can all call Reload; without
+	// this an older tree read could finish last and overwrite a newer one.
+	reloadMu        sync.Mutex
 	entries         []resolvedEntry
 	index           *patternIndex                     // accelerated hostname lookup
 	rawConfigcrates map[string]*ConfigcrateDefinition // unresolved, for secret ref scanning
@@ -1268,28 +1273,24 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	for _, mod := range cfg.Configcrates {
 		if def, ok := cs.configcrateDefs[mod.Name]; ok {
 			for k, v := range def.Vars {
-				if s, ok := v.(string); ok {
-					for _, path := range secretRefsInValue(s) {
-						trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-							Key:         k,
-							Path:        path,
-							Source:      "var",
-							Configcrate: mod.Name,
-						})
-					}
+				for _, path := range secretRefsInAny(v) {
+					trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+						Key:         k,
+						Path:        path,
+						Source:      "var",
+						Configcrate: mod.Name,
+					})
 				}
 			}
 			for _, res := range def.Resources {
 				for attrKey, attrVal := range res.Attributes {
-					if s, ok := attrVal.(string); ok {
-						for _, path := range secretRefsInValue(s) {
-							trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-								Key:         attrKey,
-								Path:        path,
-								Source:      "resource:" + mod.Name + "/" + res.Name + "/" + attrKey,
-								Configcrate: mod.Name,
-							})
-						}
+					for _, path := range secretRefsInAny(attrVal) {
+						trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+							Key:         attrKey,
+							Path:        path,
+							Source:      "resource:" + mod.Name + "/" + res.Name + "/" + attrKey,
+							Configcrate: mod.Name,
+						})
 					}
 				}
 			}
@@ -1298,15 +1299,13 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 
 	// Scan envoy-level vars for secret: references.
 	for k, v := range envoyEntry.Vars {
-		if s, ok := v.(string); ok {
-			for _, path := range secretRefsInValue(s) {
-				trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
-					Key:         k,
-					Path:        path,
-					Source:      "var",
-					Configcrate: "",
-				})
-			}
+		for _, path := range secretRefsInAny(v) {
+			trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+				Key:         k,
+				Path:        path,
+				Source:      "var",
+				Configcrate: "",
+			})
 		}
 	}
 
@@ -2374,7 +2373,14 @@ func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "tem
 
 // loadAll reads module defs, role defs, and envoy YAML files, resolves
 // all entries, and atomically swaps the config.
+// testAfterReadHook, when non-nil, runs inside loadAllInner after the
+// tree has been read and before it is swapped in. Tests use it to hold a
+// load open while another reload races it.
+var testAfterReadHook func()
+
 func (cs *ConfigStore) loadAll() error {
+	cs.reloadMu.Lock()
+	defer cs.reloadMu.Unlock()
 	start := time.Now()
 	err := cs.loadAllInner()
 	elapsed := time.Since(start)
@@ -2530,6 +2536,10 @@ func (cs *ConfigStore) loadAllInner() error {
 
 	// Build pattern index for fast hostname lookup.
 	idx := buildPatternIndex(entries)
+
+	if testAfterReadHook != nil {
+		testAfterReadHook()
+	}
 
 	cs.mu.Lock()
 	cs.entries = entries
@@ -3101,18 +3111,19 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 	// entry; on success store the placeholder marker (the resolved value
 	// is fetched by the agent via ResolveSecrets when the gateway envoy
 	// applies the proxied-device session).
-	if cfg.Credential != "" && strings.HasPrefix(cfg.Credential, secretPrefix) {
-		key := strings.TrimPrefix(cfg.Credential, secretPrefix)
-		if _, err := cs.provider.Get(context.Background(), key); err != nil {
+	if strings.Contains(cfg.Credential, secretPrefix) {
+		resolved, failures := cs.resolveSecretsInValue(cfg.Credential)
+		for _, f := range failures {
 			secretErrs = append(secretErrs, &SecretError{
 				Match:   entry.Match,
 				Attr:    "credential",
-				Secret:  key,
-				Err:     err,
+				Secret:  f.key,
+				Err:     f.err,
 				Backend: cs.backend,
 			})
-		} else {
-			cfg.Credential = formatSecretPlaceholder(key)
+		}
+		if len(failures) == 0 {
+			cfg.Credential = resolved
 		}
 	}
 
@@ -3296,10 +3307,8 @@ func (cs *ConfigStore) SecretPaths() []string {
 
 	seen := make(map[string]bool)
 	addRefs := func(v any) {
-		if s, ok := v.(string); ok {
-			for _, key := range secretRefsInValue(s) {
-				seen[key] = true
-			}
+		for _, key := range secretRefsInAny(v) {
+			seen[key] = true
 		}
 	}
 	for _, mod := range cs.rawConfigcrates {
@@ -4362,30 +4371,17 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretError {
 	var errs []*SecretError
 	for k, v := range vars {
-		str, ok := v.(string)
-		if !ok {
+		if plain := knownSecretFieldErrors(match, k, v); len(plain) > 0 {
+			errs = append(errs, plain...)
 			continue
 		}
-		if knownSecretFields[k] && !strings.HasPrefix(str, secretPrefix) {
-			errs = append(errs, &SecretError{
-				Match:  match,
-				Attr:   k,
-				Secret: str,
-				Err: fmt.Errorf(
-					"known-secret field %q must use %q prefix (got %q) -- "+
-						"store secrets in isopass, not in config files",
-					k, secretPrefix, str,
-				),
-			})
-			continue
-		}
-		if !strings.Contains(str, secretPrefix) {
+		if !anyContainsSecretPrefix(v) {
 			continue
 		}
 		// Route through the shared scanner so embedded/compound refs in a var
-		// value resolve exactly like the detection side reports them — the
-		// same predicate resolveConfigcrateSecrets uses for resource attrs.
-		resolved, failures := cs.resolveSecretsInValue(str)
+		// value — including refs nested inside list and map values — resolve
+		// exactly like the detection side reports them.
+		resolved, failures := cs.resolveSecretsInAny(v)
 		for _, f := range failures {
 			errs = append(errs, &SecretError{
 				Match:  match,
@@ -4401,23 +4397,66 @@ func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretE
 	return errs
 }
 
+// plaintextWithheld stands in for the value of a known-secret field that
+// was set to plaintext. The value itself is a secret, so it never goes
+// into an error, a log line or a diagnostic.
+const plaintextWithheld = "<plaintext value withheld>"
+
+// knownSecretFieldErrors reports a known-secret field (at any depth of a
+// var's value) that holds something other than a `secret:` reference. The
+// offending value is never copied into the error.
+func knownSecretFieldErrors(match, key string, v any) []*SecretError {
+	var errs []*SecretError
+	var walk func(k string, v any)
+	walk = func(k string, v any) {
+		switch t := v.(type) {
+		case string:
+			if knownSecretFields[k] && !strings.HasPrefix(t, secretPrefix) {
+				errs = append(errs, &SecretError{
+					Match:  match,
+					Attr:   key,
+					Secret: plaintextWithheld,
+					Err: fmt.Errorf(
+						"known-secret field %q must use %q prefix (a plaintext value was found) -- "+
+							"store secrets in the secrets backend, not in config files",
+						k, secretPrefix,
+					),
+				})
+			}
+		case map[string]any:
+			for ck, cv := range t {
+				walk(ck, cv)
+			}
+		case map[any]any:
+			for ck, cv := range t {
+				if ks, ok := ck.(string); ok {
+					walk(ks, cv)
+				}
+			}
+		case []any:
+			for _, item := range t {
+				walk(k, item)
+			}
+		}
+	}
+	walk(key, v)
+	return errs
+}
+
 // resolveConfigcrateSecrets resolves secret: prefixes in module resource attributes.
-// It collects all failures rather than stopping at the first. Both whole-value
-// (`password: secret:vigo/db/pw`) and embedded (`env: "PW=secret:vigo/db/pw,DB=app"`)
-// occurrences are substituted via resolveSecretsInValue.
+// It collects all failures rather than stopping at the first. Whole-value
+// (`password: secret:vigo/db/pw`), embedded (`env: "PW=secret:vigo/db/pw,DB=app"`)
+// and nested (a ref inside a list or map attribute) occurrences are all
+// substituted via resolveSecretsInAny.
 func (cs *ConfigStore) resolveConfigcrateSecrets(match string, mod *Configcrate) []*SecretError {
 	var errs []*SecretError
 	for i := range mod.Resources {
 		attrs := mod.Resources[i].Attributes
 		for k, v := range attrs {
-			str, ok := v.(string)
-			if !ok {
+			if !anyContainsSecretPrefix(v) {
 				continue
 			}
-			if !strings.Contains(str, secretPrefix) {
-				continue
-			}
-			resolved, failures := cs.resolveSecretsInValue(str)
+			resolved, failures := cs.resolveSecretsInAny(v)
 			for _, f := range failures {
 				errs = append(errs, &SecretError{
 					Match:       match,
@@ -4436,6 +4475,108 @@ func (cs *ConfigStore) resolveConfigcrateSecrets(match string, mod *Configcrate)
 	return errs
 }
 
+// walkAnyStrings calls fn on every string reachable from v through lists
+// and maps — the shapes YAML decoding produces for var and attribute
+// values.
+func walkAnyStrings(v any, fn func(string)) {
+	switch t := v.(type) {
+	case string:
+		fn(t)
+	case []any:
+		for _, item := range t {
+			walkAnyStrings(item, fn)
+		}
+	case []string:
+		for _, item := range t {
+			fn(item)
+		}
+	case map[string]any:
+		for _, item := range t {
+			walkAnyStrings(item, fn)
+		}
+	case map[any]any:
+		for _, item := range t {
+			walkAnyStrings(item, fn)
+		}
+	}
+}
+
+// anyContainsSecretPrefix reports whether any string inside v contains the
+// `secret:` prefix.
+func anyContainsSecretPrefix(v any) bool {
+	found := false
+	walkAnyStrings(v, func(s string) {
+		if !found && strings.Contains(s, secretPrefix) {
+			found = true
+		}
+	})
+	return found
+}
+
+// secretRefsInAny is secretRefsInValue over every string inside v, so a ref
+// nested in a list or map value is detected the same way substitution
+// resolves it.
+func secretRefsInAny(v any) []string {
+	var keys []string
+	seen := make(map[string]bool)
+	walkAnyStrings(v, func(s string) {
+		for _, k := range secretRefsInValue(s) {
+			if !seen[k] {
+				seen[k] = true
+				keys = append(keys, k)
+			}
+		}
+	})
+	return keys
+}
+
+// resolveSecretsInAny is resolveSecretsInValue lifted over lists and maps.
+// It returns a substituted copy; the input is never mutated, because var
+// and attribute values can be shared with the raw definitions.
+func (cs *ConfigStore) resolveSecretsInAny(v any) (any, []secretResolveFailure) {
+	switch t := v.(type) {
+	case string:
+		return cs.resolveSecretsInValue(t)
+	case []any:
+		out := make([]any, len(t))
+		var fails []secretResolveFailure
+		for i, item := range t {
+			r, f := cs.resolveSecretsInAny(item)
+			out[i] = r
+			fails = append(fails, f...)
+		}
+		return out, fails
+	case []string:
+		out := make([]string, len(t))
+		var fails []secretResolveFailure
+		for i, item := range t {
+			r, f := cs.resolveSecretsInValue(item)
+			out[i] = r
+			fails = append(fails, f...)
+		}
+		return out, fails
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		var fails []secretResolveFailure
+		for k, item := range t {
+			r, f := cs.resolveSecretsInAny(item)
+			out[k] = r
+			fails = append(fails, f...)
+		}
+		return out, fails
+	case map[any]any:
+		out := make(map[any]any, len(t))
+		var fails []secretResolveFailure
+		for k, item := range t {
+			r, f := cs.resolveSecretsInAny(item)
+			out[k] = r
+			fails = append(fails, f...)
+		}
+		return out, fails
+	}
+	return v, nil
+}
+
 // secretResolveFailure captures a single unresolved secret reference inside
 // a compound attribute value. resolveSecretsInValue returns one per failed
 // lookup so the caller can decorate each with its surrounding context (match
@@ -4445,88 +4586,35 @@ type secretResolveFailure struct {
 	err error
 }
 
-// resolveSecretsInValue substitutes every `secret:<key>` substring in str
-// with a placeholder marker (`__VIGO_SECRET__<key>__END_VIGO_SECRET__`)
-// after validating that the key resolves against the provider — the
-// resolved plaintext value is discarded after the validation lookup.
-// A key runs from immediately after `secret:` up to the first byte that is
-// not a valid secret-key character (see isSecretKeyChar), so compound k=v
-// values like `PW=secret:vigo/db/pw,DB=app` work the same as whole-value
-// references. A `secret:` followed immediately by a non-key byte (e.g. the
-// literal text "`secret:`" in a config file's content) yields an empty key
-// and is preserved verbatim, not mistaken for a reference.
-//
-// Failures don't poison the whole string: any reference that fails to
-// validate is left in place (as `secret:<key>`) and reported. The caller
-// only commits the substituted value when failures is empty.
-//
-// Placeholder markers are emitted exactly once per ref — they are not
-// re-scanned for nested `secret:` content.
-// secretRefSpan is one `secret:` reference located inside a value: the byte
-// range it occupies and the key it names (empty for a bare `secret:` with no
-// key). Positions let substitution rewrite in place; the key lets detection
-// enumerate refs.
-type secretRefSpan struct {
-	start int    // index of "secret:"
-	end   int    // index just past the key
-	key   string // the secret path ("" for a bare "secret:")
-}
-
-// scanSecretRefs is the single source of truth for "what is a secret
-// reference." It walks str and returns every `secret:` occurrence — including
-// refs embedded mid-string and multiple refs in one compound value (e.g.
-// `PW=secret:vigo/db/pw,DB=app`) — using the canonical key tokenization
-// (isSecretKeyChar). Both the substitution path (resolveSecretsInValue) and
-// every detection path (SecretPaths, configcrateDefReferencesSecret, the
-// config-trace scan) are built on this, so detection can never drift from what
-// substitution actually resolves.
-func scanSecretRefs(str string) []secretRefSpan {
-	if !strings.Contains(str, secretPrefix) {
-		return nil
-	}
-	var spans []secretRefSpan
-	i := 0
-	for i < len(str) {
-		rel := strings.Index(str[i:], secretPrefix)
-		if rel < 0 {
-			break
-		}
-		start := i + rel
-		keyStart := start + len(secretPrefix)
-		keyEnd := keyStart
-		for keyEnd < len(str) && isSecretKeyChar(str[keyEnd]) {
-			keyEnd++
-		}
-		spans = append(spans, secretRefSpan{start: start, end: keyEnd, key: str[keyStart:keyEnd]})
-		if keyEnd == keyStart {
-			// Bare `secret:` (no key) — advance past the prefix so the scan
-			// doesn't loop forever on the same position.
-			i = keyStart
-		} else {
-			i = keyEnd
-		}
-	}
-	return spans
-}
-
 // secretRefsInValue returns the distinct non-empty secret keys referenced in
-// str, embedded/compound refs included. This is the detection predicate that
-// replaced the old whole-value HasPrefix/exact-equality checks, which missed
-// any ref not occupying the entire value.
+// str, embedded/compound refs included. Built on secretref.Scan, the one
+// definition of "what is a secret reference", so detection can never drift
+// from what substitution resolves.
 func secretRefsInValue(str string) []string {
 	var keys []string
 	seen := make(map[string]bool)
-	for _, sp := range scanSecretRefs(str) {
-		if sp.key != "" && !seen[sp.key] {
-			seen[sp.key] = true
-			keys = append(keys, sp.key)
+	for _, sp := range secretref.Scan(str) {
+		if sp.Key != "" && !seen[sp.Key] {
+			seen[sp.Key] = true
+			keys = append(keys, sp.Key)
 		}
 	}
 	return keys
 }
 
+// resolveSecretsInValue substitutes every `secret:<key>` substring in str
+// with a placeholder marker (`__VIGO_SECRET__<key>__END_VIGO_SECRET__`)
+// after checking the key against secretref.ValidateKey and the provider —
+// the resolved plaintext value is discarded after the validation lookup.
+// Tokenization is secretref.Scan, so compound k=v values like
+// `PW=secret:vigo/db/pw,DB=app` work the same as whole-value references,
+// and a bare `secret:` followed by a non-key byte is preserved verbatim.
+//
+// Failures don't poison the whole string: any reference that fails is left
+// in place (as `secret:<key>`) and reported. The caller only commits the
+// substituted value when failures is empty.
 func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolveFailure) {
-	spans := scanSecretRefs(str)
+	spans := secretref.Scan(str)
 	if len(spans) == 0 {
 		return str, nil
 	}
@@ -4535,41 +4623,25 @@ func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolv
 	var failures []secretResolveFailure
 	prev := 0
 	for _, sp := range spans {
-		b.WriteString(str[prev:sp.start]) // literal text before this ref
-		if sp.key == "" {
-			// Bare `secret:` with no key — preserve verbatim.
+		b.WriteString(str[prev:sp.Start]) // literal text before this ref
+		if sp.Key == "" {
 			b.WriteString(secretPrefix)
-			prev = sp.start + len(secretPrefix)
+			prev = sp.Start + len(secretPrefix)
 			continue
 		}
-		if _, err := cs.provider.Get(context.Background(), sp.key); err != nil {
-			failures = append(failures, secretResolveFailure{key: sp.key, err: err})
-			b.WriteString(str[sp.start:sp.end]) // preserve raw secret:key
+		if err := secretref.ValidateKey(sp.Key); err != nil {
+			failures = append(failures, secretResolveFailure{key: sp.Key, err: err})
+			b.WriteString(str[sp.Start:sp.End])
+		} else if _, err := cs.provider.Get(context.Background(), sp.Key); err != nil {
+			failures = append(failures, secretResolveFailure{key: sp.Key, err: err})
+			b.WriteString(str[sp.Start:sp.End]) // preserve raw secret:key
 		} else {
-			b.WriteString(formatSecretPlaceholder(sp.key))
+			b.WriteString(formatSecretPlaceholder(sp.Key))
 		}
-		prev = sp.end
+		prev = sp.End
 	}
 	b.WriteString(str[prev:]) // trailing literal
 	return b.String(), failures
-}
-
-// isSecretKeyChar reports whether c is valid inside a secret key. Secret keys
-// are provider paths (e.g. "vigo/db/dsn"): ASCII alphanumerics plus the path
-// punctuation `.` `_` `-` `/`. Any other byte terminates the key. This is an
-// allowlist on purpose — a denylist of separators can't tell a real reference
-// from literal `secret:` text in file content (documentation, comments,
-// the word "secret:" in prose), and would consume trailing punctuation
-// (a backtick, `<`, `*`) into a bogus key. The first non-key byte after
-// `secret:` yields an empty key, preserved verbatim by the caller.
-func isSecretKeyChar(c byte) bool {
-	switch {
-	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
-		return true
-	case c == '.', c == '_', c == '-', c == '/':
-		return true
-	}
-	return false
 }
 
 // resolveSourceFiles reads external template files referenced by the "source"
@@ -4648,11 +4720,9 @@ func resolveSourceFiles(defs map[string]*ConfigcrateDefinition, baseDir string) 
 // buried inside a larger value like `env: "PW=secret:vigo/db/pw,DB=app"`).
 func configcrateDefReferencesSecret(def *ConfigcrateDefinition, secretPath string) bool {
 	references := func(v any) bool {
-		if s, ok := v.(string); ok {
-			for _, key := range secretRefsInValue(s) {
-				if key == secretPath {
-					return true
-				}
+		for _, key := range secretRefsInAny(v) {
+			if key == secretPath {
+				return true
 			}
 		}
 		return false
