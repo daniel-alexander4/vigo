@@ -14,6 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/secrets"
 )
 
 // fakeCrypto is a deterministic identity-cipher for tests — keeps the
@@ -21,7 +22,7 @@ import (
 // inspect on-disk ciphertext directly to verify the round-trip.
 type fakeCrypto struct{}
 
-func (fakeCrypto) Encrypt(p []byte) ([]byte, error) {
+func (fakeCrypto) Encrypt(_ secrets.Purpose, _, p []byte) ([]byte, error) {
 	out := make([]byte, len(p))
 	for i, b := range p {
 		out[i] = b ^ 0x5A
@@ -29,7 +30,11 @@ func (fakeCrypto) Encrypt(p []byte) ([]byte, error) {
 	return out, nil
 }
 
-func (fakeCrypto) Decrypt(c []byte) ([]byte, error) {
+func (fakeCrypto) MigrateV0Envelope(_ secrets.Purpose, _, d []byte) ([]byte, bool, error) {
+	return d, false, nil
+}
+
+func (fakeCrypto) Decrypt(_ secrets.Purpose, _, c []byte) ([]byte, error) {
 	out := make([]byte, len(c))
 	for i, b := range c {
 		out[i] = b ^ 0x5A

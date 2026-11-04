@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -65,12 +66,15 @@ type Caps struct {
 }
 
 // Crypto wraps the AES-256-GCM envelope used for at-rest encryption.
-// In production this is a *secrets.LocalProvider; tests can supply a
-// minimal mock. The interface is small enough that no separate
-// abstraction lives outside this package.
+// In production this is a *secrets.LocalProvider (purpose
+// secrets.PurposeComplianceDoc, AAD = doc id, so a ciphertext copied over
+// another doc's file fails to open); tests can supply a minimal mock.
 type Crypto interface {
-	Encrypt(plaintext []byte) ([]byte, error)
-	Decrypt(envelope []byte) ([]byte, error)
+	Encrypt(purpose secrets.Purpose, aad, plaintext []byte) ([]byte, error)
+	Decrypt(purpose secrets.Purpose, aad, envelope []byte) ([]byte, error)
+	// MigrateV0Envelope re-seals a pre-v1 envelope (see secrets/envelope.go);
+	// called only by the one-shot migration in New.
+	MigrateV0Envelope(purpose secrets.Purpose, aad, data []byte) ([]byte, bool, error)
 }
 
 // compile-time check that LocalProvider satisfies Crypto.
@@ -110,13 +114,48 @@ func New(docsDir string, queries *db.Queries, crypto Crypto, caps Caps, mimeAllo
 	for _, m := range mimeAllowlist {
 		allow[strings.ToLower(strings.TrimSpace(m))] = struct{}{}
 	}
-	return &Store{
+	s := &Store{
 		docsDir:       docsDir,
 		queries:       queries,
 		crypto:        crypto,
 		caps:          caps,
 		mimeAllowlist: allow,
-	}, nil
+	}
+	s.migrateV0()
+	return s, nil
+}
+
+// migrateV0 re-seals every pre-v1 doc ciphertext as v1 (purpose + doc-id
+// AAD) in place. Idempotent; files that are neither are left alone.
+func (s *Store) migrateV0() {
+	entries, err := os.ReadDir(s.docsDir)
+	if err != nil {
+		return
+	}
+	var migrated, failed int
+	for _, e := range entries {
+		if !e.Type().IsRegular() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		path := filepath.Join(s.docsDir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		out, did, err := s.crypto.MigrateV0Envelope(secrets.PurposeComplianceDoc, []byte(e.Name()), data)
+		if err != nil || !did {
+			continue
+		}
+		if err := writeFileAtomic(path, out); err != nil {
+			failed++
+			slog.Error("compliancedocs: migrating doc to the v1 envelope failed", "doc", e.Name(), "error", err)
+			continue
+		}
+		migrated++
+	}
+	if migrated > 0 || failed > 0 {
+		slog.Info("compliancedocs: migrated legacy v0 docs to the v1 envelope", "migrated", migrated, "failed", failed)
+	}
 }
 
 // PutInput is the minimal information Put needs to create a new doc.
@@ -189,7 +228,7 @@ func (s *Store) Put(ctx context.Context, in PutInput) (db.ComplianceDoc, error) 
 	hash := sha256.Sum256(in.Plaintext)
 	hashHex := hex.EncodeToString(hash[:])
 
-	envelope, err := s.crypto.Encrypt(in.Plaintext)
+	envelope, err := s.crypto.Encrypt(secrets.PurposeComplianceDoc, []byte(id), in.Plaintext)
 	if err != nil {
 		return db.ComplianceDoc{}, fmt.Errorf("encrypt: %w", err)
 	}
@@ -250,7 +289,7 @@ func (s *Store) Get(ctx context.Context, id string) ([]byte, db.ComplianceDoc, e
 	if err != nil {
 		return nil, db.ComplianceDoc{}, fmt.Errorf("reading ciphertext: %w", err)
 	}
-	plaintext, err := s.crypto.Decrypt(envelope)
+	plaintext, err := s.crypto.Decrypt(secrets.PurposeComplianceDoc, []byte(id), envelope)
 	if err != nil {
 		return nil, db.ComplianceDoc{}, fmt.Errorf("decrypt: %w", err)
 	}

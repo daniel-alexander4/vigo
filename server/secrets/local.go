@@ -37,7 +37,8 @@ func pathToEnvVar(key string) string {
 // AES-256-GCM encrypted files under a directory, one file per secret path.
 //
 // Secret path "vigo/db/dsn" maps to file "<secrets_dir>/vigo/db/dsn".
-// Each file contains: 12-byte nonce || ciphertext || GCM tag (16 bytes).
+// Each file is a v1 envelope (envelope.go): magic || nonce || ciphertext ||
+// tag, under the "vigo-secret-v1" HKDF subkey with the secret path as AAD.
 //
 // If no key_file is specified, a master key is auto-generated at
 // <secrets_dir>/.master.key on first use. Secrets are never stored as plaintext.
@@ -45,7 +46,12 @@ func pathToEnvVar(key string) string {
 // For core keys not present in the secrets dir, falls back to built-in defaults.
 type LocalProvider struct {
 	secretsDir string
-	gcm        cipher.AEAD
+	// legacyV0 is AES-GCM keyed directly by the master key: the pre-v1
+	// envelope. Used only by MigrateV0Envelope; nothing else may open or
+	// seal with it.
+	legacyV0 cipher.AEAD
+	// aeads caches the per-purpose subkey AEADs (envelope.go).
+	aeads map[Purpose]cipher.AEAD
 	// masterKey is the normalized 32-byte master key. Held in memory for
 	// HKDF-based subkey derivation (see DeriveKey) so callers like the
 	// service-account puddle (ADR-025) can derive wrap keys without ever
@@ -108,11 +114,14 @@ func NewLocalProvider(keyFile, secretsDir string) (*LocalProvider, error) {
 		return nil, fmt.Errorf("creating GCM: %w", err)
 	}
 
-	return &LocalProvider{
+	p := &LocalProvider{
 		secretsDir: secretsDir,
-		gcm:        gcm,
+		legacyV0:   gcm,
 		masterKey:  key,
-	}, nil
+	}
+	// One-shot, idempotent: re-seal any pre-v1 secret files as v1.
+	p.migrateSecretsDir()
+	return p, nil
 }
 
 // DeriveKey returns a subkey derived from the master key via HKDF-SHA256.
@@ -246,7 +255,7 @@ func (p *LocalProvider) List() ([]string, error) {
 			return nil
 		}
 		// Skip the auto-generated master key file.
-		if d.Name() == ".master.key" {
+		if d.Name() == MasterKeyFile {
 			return nil
 		}
 		rel, err := filepath.Rel(p.secretsDir, path)
@@ -265,50 +274,6 @@ func (p *LocalProvider) List() ([]string, error) {
 // Close is a no-op for LocalProvider.
 func (p *LocalProvider) Close() error {
 	return nil
-}
-
-// Encrypt wraps plaintext with the local provider's master key. Output
-// is `nonce || ciphertext || GCM tag` — the same envelope format used
-// by readAndDecrypt for secrets on disk. Exposed for callers (compliance
-// docs store, audit-bundle export, etc.) that need to envelope-encrypt
-// bytes outside the secrets directory.
-func (p *LocalProvider) Encrypt(plaintext []byte) ([]byte, error) {
-	p.mu.RLock()
-	gcm := p.gcm
-	p.mu.RUnlock()
-	if gcm == nil {
-		return nil, fmt.Errorf("local provider not initialized")
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("generating nonce: %w", err)
-	}
-	out := make([]byte, 0, len(nonce)+len(plaintext)+gcm.Overhead())
-	out = append(out, nonce...)
-	out = gcm.Seal(out, nonce, plaintext, nil)
-	return out, nil
-}
-
-// Decrypt reverses Encrypt. Returns an error if the ciphertext is
-// truncated, corrupted, or wrapped under a different master key.
-func (p *LocalProvider) Decrypt(envelope []byte) ([]byte, error) {
-	p.mu.RLock()
-	gcm := p.gcm
-	p.mu.RUnlock()
-	if gcm == nil {
-		return nil, fmt.Errorf("local provider not initialized")
-	}
-	nonceSize := gcm.NonceSize()
-	if len(envelope) < nonceSize+gcm.Overhead() {
-		return nil, fmt.Errorf("envelope too short for nonce + GCM tag")
-	}
-	nonce := envelope[:nonceSize]
-	ct := envelope[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ct, nil)
-	if err != nil {
-		return nil, fmt.Errorf("decrypting envelope: %w (wrong master key?)", err)
-	}
-	return plaintext, nil
 }
 
 // secretPath returns the absolute filesystem path for a secret key, or an
@@ -354,27 +319,15 @@ func (p *LocalProvider) readAndDecrypt(key string) ([]byte, error) {
 		return nil, fmt.Errorf("secret key %q resolves outside secrets directory", key)
 	}
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
 	data, err := os.ReadFile(resolved)
 	if err != nil {
 		return nil, err
 	}
 
-	nonceSize := p.gcm.NonceSize()
-	if len(data) < nonceSize {
-		return nil, fmt.Errorf("secret %q: ciphertext too short", key)
-	}
-
-	nonce := data[:nonceSize]
-	encrypted := data[nonceSize:]
-
-	plaintext, err := p.gcm.Open(nil, nonce, encrypted, nil)
+	plaintext, err := p.Decrypt(purposeSecret, secretAAD(key), data)
 	if err != nil {
-		return nil, fmt.Errorf("decrypting secret %q: %w (wrong master key?)", key, err)
+		return nil, fmt.Errorf("decrypting secret %q: %w", key, err)
 	}
-
 	return plaintext, nil
 }
 
@@ -411,11 +364,10 @@ func (p *LocalProvider) encryptAndWrite(key string, plaintext []byte) error {
 		return fmt.Errorf("creating directory for %q: %w", key, err)
 	}
 
-	nonce := make([]byte, p.gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return fmt.Errorf("generating nonce: %w", err)
+	fileData, err := p.Encrypt(purposeSecret, secretAAD(key), plaintext)
+	if err != nil {
+		return fmt.Errorf("encrypting secret %q: %w", key, err)
 	}
-	fileData := p.gcm.Seal(nonce, nonce, plaintext, nil)
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
