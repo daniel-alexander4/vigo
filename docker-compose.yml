@@ -97,12 +97,12 @@ services:
     # Loopback only: guacd has no authentication, and on 0.0.0.0 it would be an
     # open RDP/VNC/SSH relay. `-L debug` is dev-only verbosity (this file is the
     # source-build compose); docker-compose.prod.yml runs at the default level.
-    command: ["-b", "127.0.0.1", "-L", "debug", "-f"]
+    command: ["/opt/guacamole/sbin/guacd", "-b", "127.0.0.1", "-L", "debug", "-f"]
     # Host-networked so the host-networked vigo server reaches it at 127.0.0.1:4822
     # (no bridge DNS). Mirrors docker-compose.prod.yml.
     network_mode: host
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4822 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3

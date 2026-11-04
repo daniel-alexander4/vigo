@@ -116,10 +116,10 @@ services:
     # 127.0.0.1:4822 (container-name DNS is unavailable without the bridge).
     # guacd has no authentication, so it binds loopback only: bound to 0.0.0.0
     # it would be an open RDP/VNC/SSH relay for anyone who can reach the host.
-    command: ["-b", "127.0.0.1", "-f"]
+    command: ["/opt/guacamole/sbin/guacd", "-b", "127.0.0.1", "-f"]
     network_mode: host
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4822 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
