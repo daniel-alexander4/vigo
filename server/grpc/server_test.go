@@ -364,6 +364,7 @@ func TestCheckInRevoked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	// Revoke the envoy.
 	if err := reg.RevokeEnvoy(ctx, envoyID); err != nil {
@@ -427,6 +428,7 @@ func TestCheckInSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	// CheckIn should succeed with valid signature.
 	agentClient := pb.NewVigoAgentClient(conn)
@@ -481,6 +483,7 @@ func TestCheckInBadSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	// Use a DIFFERENT key to sign (should fail verification).
 	_, wrongPriv, err := ed25519.GenerateKey(rand.Reader)
@@ -676,6 +679,7 @@ func TestCheckInStaleTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	// Timestamp 6 minutes in the past — outside the 5-minute window.
 	now := time.Now().Add(-6 * time.Minute)
@@ -732,6 +736,7 @@ func TestCheckInFutureTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	// Timestamp 6 minutes in the future — outside the 5-minute window.
 	now := time.Now().Add(6 * time.Minute)
@@ -788,6 +793,7 @@ func TestCheckInTimestampBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	agentClient := pb.NewVigoAgentClient(conn)
 
@@ -861,6 +867,7 @@ func TestCheckInTamperedSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
@@ -917,6 +924,7 @@ func TestCheckInTruncatedSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	now := time.Now()
 	tsStr := fmt.Sprintf("%d", now.Unix())
@@ -973,6 +981,7 @@ func TestCheckInMissingTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	// Create a valid signature with the current time, but omit the timestamp from the request.
 	now := time.Now()
@@ -1141,6 +1150,7 @@ func TestRevokeAfterCheckIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	agentClient := pb.NewVigoAgentClient(conn)
 

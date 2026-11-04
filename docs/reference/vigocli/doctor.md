@@ -35,9 +35,12 @@ vigocli doctor
   config ............... OK
   swarm_pattern_order .. OK
   stale_envoys ......... OK
+  unpinned_envoys ...... OK
 
   Status: healthy
 ```
+
+The `unpinned_envoys` check warns when non-revoked envoys have no enrolled mTLS client-cert pin. The server refuses their check-ins until they re-enroll (`curl -sSfk https://<server>:8443/bootstrap | sudo sh` on each host); the check names up to five of them, and the server's startup log lists up to twenty.
 
 The `swarm_pattern_order` check warns when `swarm.*.enabled` pattern lists in `server.yaml` contain deny entries shadowed by an earlier non-deny pattern (the silent-fail case `["*", "-rasp1"]` plus glob-shadow `["a*", "-annlap"]`). The same finding is logged at WARN by the server at startup and on every reload — see [Server Configuration](../../reference/server-yaml.md#swarm) for the order rules.
 

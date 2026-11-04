@@ -53,8 +53,8 @@ type EnvoyState struct {
 	// CertSPKI is the hex sha256 of the envoy's enrolled mTLS client-cert
 	// SubjectPublicKeyInfo (cert-pinning). The check-in verify path rejects a
 	// connection whose TLS peer cert SPKI doesn't match — a TLS-terminating
-	// proxy/MITM presents a different CA-signed cert. Empty = grandfathered
-	// (enrolled before pinning); enforced after the envoy's next (re)enrollment.
+	// proxy/MITM presents a different CA-signed cert. Empty = unpinned
+	// (enrolled before pinning): refused at check-in until it re-enrolls.
 	CertSPKI          string
 	EnrolledAt        time.Time
 	LastSeen          time.Time
@@ -181,6 +181,15 @@ type FleetIndex struct {
 	recentRuns         *ringBuffer
 	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
 
+	// revokedIDs is the set of every revoked envoy id, guarded by f.mu.
+	// Rehydrate loads only non-revoked envoys into envoys, so without this set
+	// a revoked id after a restart was indistinguishable from an unknown one
+	// and the check-in verify path had to read the DB to tell them apart.
+	// Seeded at boot from the DB (AddRevokedIDs); kept current by SetRevoked
+	// (revoke / force re-enroll), AddEnvoy and RemoveEnvoy (delete / purge /
+	// routed-enrollment cleanup).
+	revokedIDs map[string]struct{}
+
 	// byTraitMu / byStatusMu / recentRunsMu split out the reverse indexes and
 	// the recent-runs ring from f.mu. Each is mutated on its own hot path
 	// (UpdateTraits, UpdateRunStatus, AppendRecentRun) and at fleet scale
@@ -273,6 +282,7 @@ func NewFleetIndex() *FleetIndex {
 		recentRuns:         newRingBuffer(5000),
 		convergenceHistory: newConvergenceRing(30),
 		wakeChans:          make(map[string]chan struct{}),
+		revokedIDs:         make(map[string]struct{}),
 	}
 }
 
@@ -324,6 +334,45 @@ func (f *FleetIndex) IsActive(id string) bool {
 	defer f.mu.RUnlock()
 	src := f.envoys[id]
 	return src != nil && !src.Revoked
+}
+
+// IsRevokedID reports whether id is a revoked envoy — either one held in the
+// index with Revoked set, or one only known from the boot-time revoked set
+// (revoked envoys are not rehydrated). O(1), no DB read.
+func (f *FleetIndex) IsRevokedID(id string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	_, ok := f.revokedIDs[id]
+	return ok
+}
+
+// AddRevokedIDs seeds the revoked-id set. Rehydrate calls it at boot with
+// every revoked envoy id from the DB.
+func (f *FleetIndex) AddRevokedIDs(ids []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, id := range ids {
+		f.revokedIDs[id] = struct{}{}
+	}
+}
+
+// UnpinnedEnvoys returns every non-revoked envoy with no enrolled mTLS
+// client-cert pin, sorted by hostname. The check-in verify path refuses such
+// an envoy until it re-enrolls; the startup WARN reports them.
+func (f *FleetIndex) UnpinnedEnvoys() []TargetInfo {
+	f.mu.RLock()
+	var out []TargetInfo
+	for id, ts := range f.envoys {
+		lk := f.lockFor(id)
+		lk.Lock()
+		if !ts.Revoked && ts.CertSPKI == "" {
+			out = append(out, TargetInfo{EnvoyID: id, Hostname: ts.Hostname})
+		}
+		lk.Unlock()
+	}
+	f.mu.RUnlock()
+	sort.Slice(out, func(i, j int) bool { return out[i].Hostname < out[j].Hostname })
+	return out
 }
 
 // GetEnvoyLite returns a shallow copy of the EnvoyState without deep-copying
@@ -717,6 +766,11 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 
 	state := ts // copy
 	f.envoys[ts.ID] = &state
+	if ts.Revoked {
+		f.revokedIDs[ts.ID] = struct{}{}
+	} else {
+		delete(f.revokedIDs, ts.ID)
+	}
 	f.byHostname[ts.Hostname] = ts.ID
 	if pubKey != nil {
 		f.pubkeys[ts.ID] = pubKey
@@ -764,6 +818,10 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 	defer f.byTraitMu.Unlock()
 	f.byStatusMu.Lock()
 	defer f.byStatusMu.Unlock()
+
+	// A deleted envoy has no DB row, so it is unknown, not revoked — clear it
+	// even when only the revoked set knew it (revoked envoys aren't rehydrated).
+	delete(f.revokedIDs, id)
 
 	ts, ok := f.envoys[id]
 	if !ok {
@@ -825,6 +883,14 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 	// Lock-ordering: f.mu → byStatusMu (only one acquired beyond f.mu here).
 	f.byStatusMu.Lock()
 	defer f.byStatusMu.Unlock()
+
+	// Track the id in the revoked set even when the envoy isn't held in the
+	// index (a revoked envoy after restart), so verify never needs the DB.
+	if revoked {
+		f.revokedIDs[id] = struct{}{}
+	} else {
+		delete(f.revokedIDs, id)
+	}
 
 	ts, ok := f.envoys[id]
 	if !ok {

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:dc0749d42576d42a026e7bf498987c0291bcbb5bca1dc44674b1b09d68577b0e -->
+<!-- vigo-i18n source_sha:ac8adff7cbe315d72336f65085ada87f1c341c82e6a1776b763d1c33c871657d -->
 
 # Résoudre les problèmes courants
 
@@ -41,6 +41,18 @@ Le prédicat de fraîcheur a marqué l'Envoy hors ligne alors que l'agent tourne
 L'identité enrôlée de l'agent (son UUID client) n'a aucune ligne sur le serveur, si bien que chaque check-in est rejeté avec un `NotFound` gRPC et que l'agent recule (5 min) en continuant d'appliquer sa dernière politique en cache hors ligne. Cause : la base du serveur a été réinitialisée/reconstruite, ou l'Envoy a été supprimé (`vigocli envoys delete`) — pendant que l'agent continuait de tourner avec son ancien UUID. (À distinguer d'un Envoy *révoqué*, qui est rejeté avec `PermissionDenied "envoy is revoked"` et doit rester rejeté.) Le serveur journalise l'orphelin une fois toutes les 10 min sous `WARN check-in from unknown envoy`, et `vigo_sig_verify_failed_total{reason="envoy_not_found"}` grimpe.
 
 **Correction :** re-bootstrappez l'agent sur cet hôte pour le ré-enrôler avec une identité fraîche : `curl -sSfk https://<server>:8443/bootstrap | sudo sh`. (L'agent ne se ré-enrôle **pas** lui-même — le ré-enrôlement reste un acte délibéré et contrôlé.) Si l'hôte est mis hors service, arrêtez son agent à la place.
+
+### Check-in refusé : `envoy has no enrolled client certificate pin`
+
+L'Envoy a été enrôlé avant que le serveur n'épingle les certificats clients, ou son épingle n'a pas pu être enregistrée à l'enrôlement : le serveur n'a donc rien pour prouver que la connexion est directe et refuse chaque check-in avec un `Unauthenticated` gRPC. Le serveur liste ces Envoys dans un `WARN cert-pin: envoys with no enrolled client-cert pin` au démarrage, `vigocli doctor` les signale sous `unpinned_envoys`, et `vigo_sig_verify_failed_total{reason="cert_pin_missing"}` grimpe.
+
+**Correction :** ré-enrôlez l'agent sur chaque hôte listé : `curl -sSfk https://<server>:8443/bootstrap | sudo sh`. Le ré-enrôlement capture une nouvelle épingle.
+
+### Check-ins refusés avec `too many failed check-in verifications from this address`
+
+Avec `rate_limit.enabled`, une IP source qui envoie plus de `rate_limit.checkin_failures_per_ip` vérifications échouées par minute (identifiants d'Envoy inconnus ou révoqués, signatures invalides, refus d'épingle de certificat) voit ses check-ins refusés avec `ResourceExhausted` jusqu'à ce que le budget se reconstitue ; `vigo_checkin_ip_throttled_total` compte ces refus. Les check-ins sains ne consomment jamais ce budget : cela signifie que quelque chose derrière cette adresse échoue de façon répétée.
+
+**Correction :** trouvez l'agent défaillant derrière l'adresse (les lignes `WARN` du serveur pour les Envoys inconnus, révoqués ou sans épingle le nomment) et ré-enrôlez-le ou arrêtez-le. Si de nombreux Envoys partagent l'adresse et que quelques-uns doivent échouer un moment, augmentez `checkin_failures_per_ip` (voir [reference/server-yaml.md](../../reference/server-yaml.md#rate_limit)).
 
 ### `vigocli config publish` échoue avec des erreurs de validation
 

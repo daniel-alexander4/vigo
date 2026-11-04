@@ -41,6 +41,18 @@ The agent's enrolled identity (its client UUID) has no row on the server, so eve
 
 **Fix:** re-bootstrap the agent on that host to re-enroll it with a fresh identity: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`. (The agent does **not** re-enroll itself — re-enrollment stays a deliberate, gated act.) If the host is decommissioned, stop its agent instead.
 
+### Check-in refused: `envoy has no enrolled client certificate pin`
+
+The envoy was enrolled before the server pinned client certificates, or its pin failed to store at enrollment, so the server has nothing to prove the connection is direct and refuses every check-in with gRPC `Unauthenticated`. The server lists these envoys in a startup `WARN cert-pin: envoys with no enrolled client-cert pin`, `vigocli doctor` reports them under `unpinned_envoys`, and `vigo_sig_verify_failed_total{reason="cert_pin_missing"}` climbs.
+
+**Fix:** re-enroll the agent on each listed host: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`. Re-enrollment captures a fresh pin.
+
+### Check-ins refused with `too many failed check-in verifications from this address`
+
+With `rate_limit.enabled`, a source IP that sends more than `rate_limit.checkin_failures_per_ip` failed verifications a minute (unknown or revoked envoy ids, bad signatures, cert-pin refusals) has its check-ins refused with `ResourceExhausted` until the budget refills; `vigo_checkin_ip_throttled_total` counts the refusals. Healthy check-ins never spend the budget, so this means something behind that address is repeatedly failing.
+
+**Fix:** find the failing agent behind the address (the server's `WARN` lines for unknown, revoked or unpinned envoys name it) and re-enroll or stop it. If many envoys share the address and a few are expected to fail for a while, raise `checkin_failures_per_ip` (see [reference/server-yaml.md](../../reference/server-yaml.md#rate_limit)).
+
 ### `vigocli config publish` fails with validation errors
 
 The published config didn't pass one of the validation gates (YAML syntax, cross-reference integrity, circular dependency detection, idempotency, guardrails, URL aliveness).

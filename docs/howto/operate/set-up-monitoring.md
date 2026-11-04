@@ -103,6 +103,7 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_sig_verify_failed_total` | Counter | `reason` | Signature verification failures |
+| `vigo_checkin_ip_throttled_total` | Counter | | Check-ins refused because their source IP exceeded `rate_limit.checkin_failures_per_ip` failed verifications a minute |
 
 | `vigo_security_cve_critical` | Gauge | | Fleet-wide count of critical CVEs across all scanned hosts |
 | `vigo_security_cve_high` | Gauge | | Fleet-wide count of high CVEs across all scanned hosts |

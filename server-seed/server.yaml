@@ -138,8 +138,9 @@ watcher:
 # ── Rate Limiting ─────────────────────────────────────────────────────────
 # rate_limit:
 #   enabled: false
-#   checkin_per_envoy: 6
+#   checkin_per_envoy: 120
 #   checkin_global: 500
+#   checkin_failures_per_ip: 60
 
 # ── Maintenance ───────────────────────────────────────────────────────────
 # maintenance:

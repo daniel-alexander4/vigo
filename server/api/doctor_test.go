@@ -254,6 +254,7 @@ func TestDoctor_CheckScopes(t *testing.T) {
 		"config":               ScopeServer,
 		"swarm_pattern_order":  ScopeServer,
 		"stale_envoys":         ScopeFleet,
+		"unpinned_envoys":      ScopeFleet,
 		"webusers_replication": ScopeServer,
 	}
 	for _, c := range checks {
@@ -308,6 +309,57 @@ func TestDoctor_StaleEnvoys(t *testing.T) {
 	for _, c := range resp.Checks {
 		if c.Name == "stale_envoys" && c.Status != StatusWarn {
 			t.Errorf("expected stale_envoys check to warn, got %s: %s", c.Status, c.Message)
+		}
+	}
+}
+
+// TestDoctor_UnpinnedEnvoys: a non-revoked envoy with no enrolled cert pin is
+// reported (by hostname, with the re-enroll command); pinned and revoked
+// envoys are not.
+func TestDoctor_UnpinnedEnvoys(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	certFile, keyFile := generateTestCerts(t)
+	for _, row := range []struct {
+		id, host, pin string
+		revoked       int
+	}{
+		{"t-unpinned", "unpinned.host", "", 0},
+		{"t-pinned", "pinned.host", "abc123", 0},
+		{"t-revoked", "revoked.host", "", 1},
+	} {
+		if _, err := sqlDB.Exec(
+			`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem, cert_spki_sha256, revoked) VALUES (?, ?, ?, ?, ?, ?)`,
+			row.id, row.host, "10.0.0.1", "pubkey", row.pin, row.revoked,
+		); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	handler := NewDoctorHandler(DoctorConfig{
+		SQLDB: sqlDB, CertFile: certFile, KeyFile: keyFile,
+		ConfigStore: newDoctorTestConfigStore(t), Queries: queries, Interval: 5 * time.Minute,
+	})
+	_, checks := handler.RunChecks()
+	var got *DoctorCheck
+	for i := range checks {
+		if checks[i].Name == "unpinned_envoys" {
+			got = &checks[i]
+		}
+	}
+	if got == nil {
+		t.Fatal("unpinned_envoys check missing")
+	}
+	if got.Status != StatusWarn {
+		t.Fatalf("unpinned_envoys = %s (%s), want warn", got.Status, got.Message)
+	}
+	for _, want := range []string{"1 envoy(s)", "unpinned.host", "curl -sSfk https://<server>:8443/bootstrap | sudo sh"} {
+		if !strings.Contains(got.Message, want) {
+			t.Errorf("message %q missing %q", got.Message, want)
+		}
+	}
+	for _, not := range []string{"pinned.host,", "revoked.host"} {
+		if strings.Contains(got.Message, not) {
+			t.Errorf("message %q names %q", got.Message, not)
 		}
 	}
 }

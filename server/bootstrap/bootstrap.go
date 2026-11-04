@@ -815,15 +815,15 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 
 	// Pin the signed cert's SPKI so the check-in verify path can reject a
 	// TLS-terminating proxy/MITM presenting a different cert (cert-pinning).
-	// Best-effort: a failure here leaves the envoy grandfathered (verify path
-	// skips enforcement), not unenrolled — enrollment already succeeded.
+	// A failure here leaves the envoy enrolled but unpinned, and the verify
+	// path refuses an unpinned envoy — so it cannot check in until re-enrolled.
 	spki, perr := certPinFromPEM(signedCert)
 	if perr != nil {
-		slog.Warn("bootstrap: could not derive cert pin from signed cert; envoy grandfathered",
+		slog.Error("bootstrap: could not derive cert pin from signed cert; envoy will be refused at check-in until re-enrolled",
 			"hostname", req.Hostname, "envoy_id", envoyID, "error", perr)
 		spki = ""
 	} else if perr := h.registry.SetEnvoyCertPin(r.Context(), envoyID, spki); perr != nil {
-		slog.Warn("bootstrap: could not store cert pin; envoy grandfathered",
+		slog.Error("bootstrap: could not store cert pin; envoy will be refused at check-in until re-enrolled",
 			"hostname", req.Hostname, "envoy_id", envoyID, "error", perr)
 	}
 

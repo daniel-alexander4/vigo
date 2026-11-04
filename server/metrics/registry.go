@@ -87,6 +87,7 @@ type Metrics struct {
 	StreamsActive        prometheus.Gauge
 	CheckinSignatureMode *prometheus.GaugeVec
 	ProxyDetectedTotal   prometheus.Counter
+	CheckinIPThrottled   prometheus.Counter
 
 	// --- Secrets ---
 
@@ -378,6 +379,10 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_checkin_signature_mode",
 			Help: "Active held-stream signature verification mode (mode label, always 1). 'all' = every message verified; 'handshake-only' = stream-owner messages trusted after the verified handshake.",
 		}, []string{"mode"}),
+		CheckinIPThrottled: f.NewCounter(prometheus.CounterOpts{
+			Name: "vigo_checkin_ip_throttled_total",
+			Help: "Check-ins refused because their source IP exhausted its failed-verification budget (rate_limit.checkin_failures_per_ip). Only counted while rate_limit.enabled is true.",
+		}),
 		ProxyDetectedTotal: f.NewCounter(prometheus.CounterOpts{
 			Name: "vigo_checkin_proxy_detected_total",
 			Help: "Held-stream handshakes where a TLS-terminating proxy was detected (TLS peer cert ≠ the envoy's hostname) while stream_signature=handshake-only; per-message verification was re-enabled for that connection. Non-zero means handshake-only's direct-mTLS precondition is being violated.",

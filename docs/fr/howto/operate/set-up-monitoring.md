@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:ad0a577bf634e3785e133b8bcecafe6cc2b1b3348e00c931c4072bf978520f28 -->
+<!-- vigo-i18n source_sha:6fdd4bc07f4327f58ac2447f3e39dce3136fa9dd6b9beb35674192b54cc4db65 -->
 
 # Mettre en place la supervision
 
@@ -104,6 +104,7 @@ Couvre tous les RPC unaires (CheckIn, ReportResult, ReportTraits, Register). Les
 | Métrique | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_sig_verify_failed_total` | Counter | `reason` | Échecs de vérification de signature |
+| `vigo_checkin_ip_throttled_total` | Counter | | Check-ins refusés parce que leur IP source a dépassé `rate_limit.checkin_failures_per_ip` vérifications échouées par minute |
 
 | `vigo_security_cve_critical` | Gauge | | Nombre de CVE critiques à l'échelle de la flotte sur tous les hôtes scannés |
 | `vigo_security_cve_high` | Gauge | | Nombre de CVE élevées à l'échelle de la flotte sur tous les hôtes scannés |

@@ -117,6 +117,7 @@ func registerEnvoy(t *testing.T, addr, hostname, token string) (string, ed25519.
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinClientCert(t, reg, envoyID)
 
 	conn := dialTLS(t, addr)
 	t.Cleanup(func() { conn.Close() })

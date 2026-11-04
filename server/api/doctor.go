@@ -145,7 +145,12 @@ func (h *DoctorHandler) RegisterRoutes(mux *http.ServeMux) {
 // RunChecks executes all health checks and returns the overall status and results.
 // This is used by the UI health page via the HealthChecker interface.
 func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
-	ctx := context.Background()
+	return h.runChecks(context.Background())
+}
+
+// runChecks runs every check in display order and derives the overall status.
+// Shared by RunChecks (UI health page) and the /api/v1/doctor handler.
+func (h *DoctorHandler) runChecks(ctx context.Context) (string, []DoctorCheck) {
 	checks := []DoctorCheck{
 		h.checkDatabase(ctx),
 		h.checkTLS(),
@@ -155,6 +160,7 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 		h.checkConfig(),
 		h.checkSwarmPatterns(),
 		h.checkStaleEnvoys(ctx),
+		h.checkUnpinnedEnvoys(ctx),
 		h.checkWebusersReplication(ctx),
 	}
 	overall := "healthy"
@@ -171,31 +177,7 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 }
 
 func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	checks := []DoctorCheck{
-		h.checkDatabase(ctx),
-		h.checkTLS(),
-		h.checkSecrets(),
-		h.checkSpanner(),
-		h.checkIntegrations(),
-		h.checkConfig(),
-		h.checkSwarmPatterns(),
-		h.checkStaleEnvoys(ctx),
-		h.checkWebusersReplication(ctx),
-	}
-
-	overall := "healthy"
-	for _, c := range checks {
-		if c.Status == StatusFail {
-			overall = "unhealthy"
-			break
-		}
-		if c.Status == StatusWarn && overall == "healthy" {
-			overall = "degraded"
-		}
-	}
-
+	overall, checks := h.runChecks(r.Context())
 	writeJSON(w, r, http.StatusOK, DoctorResponse{
 		Status: overall,
 		Checks: checks,
@@ -362,6 +344,31 @@ func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
 		msg += ": " + joinHostnames(stale)
 	}
 	return DoctorCheck{Name: "stale_envoys", Scope: ScopeFleet, Status: StatusWarn, Message: msg}
+}
+
+// checkUnpinnedEnvoys reports non-revoked envoys with no enrolled mTLS
+// client-cert pin. The check-in verify path refuses them (fail-closed), so
+// each needs re-enrolling to capture a pin.
+func (h *DoctorHandler) checkUnpinnedEnvoys(ctx context.Context) DoctorCheck {
+	envoys, err := h.queries.ListEnvoys(ctx)
+	if err != nil {
+		return DoctorCheck{Name: "unpinned_envoys", Scope: ScopeFleet, Status: StatusFail, Message: err.Error()}
+	}
+	var unpinned []string
+	for _, e := range envoys {
+		if e.Revoked == 0 && e.CertSpkiSha256 == "" {
+			unpinned = append(unpinned, e.Hostname)
+		}
+	}
+	if len(unpinned) == 0 {
+		return DoctorCheck{Name: "unpinned_envoys", Scope: ScopeFleet, Status: StatusPass}
+	}
+	msg := fmt.Sprintf("%d envoy(s) have no enrolled client-cert pin and are refused at check-in", len(unpinned))
+	if len(unpinned) <= 5 {
+		msg += ": " + joinHostnames(unpinned)
+	}
+	msg += " — re-enroll each: curl -sSfk https://<server>:8443/bootstrap | sudo sh"
+	return DoctorCheck{Name: "unpinned_envoys", Scope: ScopeFleet, Status: StatusWarn, Message: msg}
 }
 
 func joinHostnames(names []string) string {

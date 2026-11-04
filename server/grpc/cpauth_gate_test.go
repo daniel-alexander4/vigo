@@ -59,7 +59,7 @@ func insertLiveBolt(t *testing.T, q *db.Queries, pubHex string) {
 // the handler.
 func TestInterceptorVigoAdminUnsignedRejected(t *testing.T) {
 	queries := db.New(testDB)
-	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics())
+	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics(), nil)
 
 	called := false
 	h := func(ctx context.Context, req any) (any, error) { called = true; return req, nil }
@@ -79,7 +79,7 @@ func TestInterceptorVigoAdminValidRosterBolt(t *testing.T) {
 	pubHex := hex.EncodeToString(pub)
 	queries := db.New(testDB)
 	insertLiveBolt(t, queries, pubHex)
-	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics())
+	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics(), nil)
 
 	called := false
 	h := func(ctx context.Context, req any) (any, error) { called = true; return req, nil }
@@ -98,7 +98,7 @@ func TestInterceptorVigoAdminNonRosterRejected(t *testing.T) {
 	pub, priv, _ := genKeyPair(t)
 	pubHex := hex.EncodeToString(pub) // never inserted into the roster
 	queries := db.New(testDB)
-	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics())
+	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics(), nil)
 
 	_, err := ic(cpauthCtx(t, priv, pubHex), &pb.EnrollEnvoyRequest{}, makeInfo(adminMethod), noopHandler)
 	if status.Code(err) != codes.PermissionDenied {
@@ -111,7 +111,7 @@ func TestInterceptorVigoAdminNonRosterRejected(t *testing.T) {
 // authed at the REST layer).
 func TestInterceptorVigoAdminUDSExempt(t *testing.T) {
 	queries := db.New(testDB)
-	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics())
+	ic := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics(), nil)
 
 	udsCtx := peer.NewContext(context.Background(), &peer.Peer{
 		Addr: &net.UnixAddr{Name: "/run/vigo/admin.sock", Net: "unix"},

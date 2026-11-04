@@ -107,3 +107,9 @@ WHERE id = ? AND ip_address != ?;
 
 -- name: UpdateEnvoyCertPin :exec
 UPDATE envoys SET cert_spki_sha256 = ? WHERE id = ?;
+
+-- name: ListRevokedEnvoyIDs :many
+-- IDs of every revoked envoy. Loaded into the fleet index at boot so the
+-- check-in verify path answers "revoked" without a DB read (rehydrate loads
+-- only non-revoked envoys).
+SELECT id FROM envoys WHERE revoked != 0;

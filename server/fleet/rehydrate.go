@@ -7,7 +7,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"git.alexander4.io/vigo/server/convergence"
@@ -184,14 +186,53 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		}
 	}
 
+	// Revoked envoys are not rehydrated (ListEnvoysWithLatestRun filters them),
+	// so seed the revoked-id set: the check-in verify path answers "revoked"
+	// from memory instead of reading the DB for every id it doesn't hold. Fatal
+	// on error — without the set a revoked envoy would read as unknown.
+	revokedIDs, err := queries.ListRevokedEnvoyIDs(ctx)
+	if err != nil {
+		return fmt.Errorf("rehydrate: listing revoked envoys: %w", err)
+	}
+	fi.AddRevokedIDs(revokedIDs)
+
 	elapsed := time.Since(start)
 	slog.Info("fleet index rehydrated",
 		"envoys", len(envoysWithRuns),
+		"revoked", len(revokedIDs),
 		"traits", len(allTraits),
 		"elapsed", elapsed,
 	)
 
+	warnUnpinnedEnvoys(fi)
+
 	return nil
+}
+
+// unpinnedWarnNames caps how many hostnames the startup unpinned-envoy WARN
+// lists; the count is always exact.
+const unpinnedWarnNames = 20
+
+// warnUnpinnedEnvoys logs one startup WARN naming the non-revoked envoys that
+// carry no enrolled cert pin. The verify path refuses them, so each must be
+// re-enrolled; `vigocli doctor` reports the same set.
+func warnUnpinnedEnvoys(fi *FleetIndex) {
+	unpinned := fi.UnpinnedEnvoys()
+	if len(unpinned) == 0 {
+		return
+	}
+	names := make([]string, 0, min(len(unpinned), unpinnedWarnNames))
+	for i, e := range unpinned {
+		if i == unpinnedWarnNames {
+			break
+		}
+		names = append(names, e.Hostname+" ("+e.EnvoyID+")")
+	}
+	slog.Warn("cert-pin: envoys with no enrolled client-cert pin will be refused at check-in until re-enrolled — run on each: curl -sSfk https://<server>:8443/bootstrap | sudo sh",
+		"count", len(unpinned),
+		"envoys", strings.Join(names, ", "),
+		"listed", len(names),
+	)
 }
 
 func nullStr(ns sql.NullString) string {

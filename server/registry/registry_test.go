@@ -1148,3 +1148,58 @@ func TestEnrollmentRejectsInvalidHostname(t *testing.T) {
 		}
 	}
 }
+
+// TestRevokePathsUpdateFleetRevokedSet: every registry path that revokes an
+// envoy marks it in the fleet index's revoked-id set, which the check-in
+// verify path consults instead of the DB — and a fresh enrollment is held in
+// the index (not revoked) the moment Register returns, so it can check in.
+func TestRevokePathsUpdateFleetRevokedSet(t *testing.T) {
+	reg := newTestRegistry(t)
+	fi := fleet.NewFleetIndex()
+	reg.SetFleetIndex(fi)
+	ctx := context.Background()
+
+	if _, err := reg.AddApprovedPattern(ctx, "rs1.example.com", "rs-token-1"); err != nil {
+		t.Fatal(err)
+	}
+	id1, err := reg.Register(ctx, "rs1.example.com", "10.0.9.1", "pubkey-1", "rs-token-1", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, revoked := fi.GetEnvoyLite(id1); !ok || revoked {
+		t.Fatalf("fresh enrollee: in index=%v revoked=%v, want held + not revoked", ok, revoked)
+	}
+	if fi.IsRevokedID(id1) {
+		t.Fatal("fresh enrollee is in the revoked set")
+	}
+
+	// Path 1: RevokeEnvoy.
+	if err := reg.RevokeEnvoy(ctx, id1); err != nil {
+		t.Fatal(err)
+	}
+	if !fi.IsRevokedID(id1) {
+		t.Error("RevokeEnvoy did not mark the id revoked in the fleet index")
+	}
+
+	// Path 2: force re-enrollment revokes the active envoy holding the hostname.
+	if _, err := reg.AddApprovedPattern(ctx, "rs2.example.com", "rs-token-2"); err != nil {
+		t.Fatal(err)
+	}
+	old, err := reg.Register(ctx, "rs2.example.com", "10.0.9.2", "pubkey-2", "rs-token-2", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.AddApprovedPattern(ctx, "rs2.example.com", "rs-token-3"); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := reg.Register(ctx, "rs2.example.com", "10.0.9.2", "pubkey-3", "rs-token-3", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fi.IsRevokedID(old) {
+		t.Error("force re-enrollment did not mark the replaced envoy revoked in the fleet index")
+	}
+	if fi.IsRevokedID(replacement) {
+		t.Error("force re-enrollment marked the replacement envoy revoked")
+	}
+}

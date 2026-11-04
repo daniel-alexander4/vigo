@@ -68,16 +68,16 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	localEnvoyID := envoyID
 
 	// Pin the client certificate this Register arrived on, as bootstrap does
-	// for the cert it signs: without it the envoy was never pinned and
-	// enforceCertPin skipped it forever. Best-effort like bootstrap — a
-	// failure leaves the envoy unpinned, not unenrolled.
+	// for the cert it signs. A failure leaves the envoy enrolled but unpinned,
+	// and enforceCertPin refuses an unpinned envoy — it cannot check in until
+	// re-enrolled.
 	spki, spkiErr := peerCertSPKI(ctx)
 	if spkiErr != nil {
-		slog.Warn("register: no client certificate to pin; envoy left unpinned",
+		slog.Error("register: no client certificate to pin; envoy will be refused at check-in until re-enrolled",
 			"hostname", req.GetHostname(), "envoy_id", localEnvoyID, "error", spkiErr)
 		spki = ""
 	} else if err := s.registry.SetEnvoyCertPin(ctx, localEnvoyID, spki); err != nil {
-		slog.Warn("register: could not store cert pin; envoy left unpinned",
+		slog.Error("register: could not store cert pin; envoy will be refused at check-in until re-enrolled",
 			"hostname", req.GetHostname(), "envoy_id", localEnvoyID, "error", err)
 	}
 

@@ -180,15 +180,23 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 		kaTimeout = 30 * time.Second
 	}
 
-	sigInterceptor := SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex, cfg.Metrics)
+	// Check-in rate limiting (rate_limit.enabled). The global cap runs as its
+	// own interceptor ahead of verification; the per-envoy and per-IP-failure
+	// limits ride the signature interceptor because they depend on whether the
+	// request verified. nil when disabled.
+	var checkInLim *CheckInLimiter
+	if cfg.RateLimit.Enabled {
+		checkInLim = NewCheckInLimiter(cfg.RateLimit, cfg.Metrics, cfg.Done)
+	}
+	sigInterceptor := SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex, cfg.Metrics, checkInLim)
 
 	// Recovery is outermost so it backstops panics in the rate-limit and
 	// signature-verify interceptors as well as the handler itself. grpc-go does
 	// not recover handler panics; without this a handler nil-deref crashes the
 	// whole process. The streaming sibling is the only stream interceptor.
 	interceptors := []grpc.UnaryServerInterceptor{RecoveryUnaryInterceptor(cfg.Metrics)}
-	if cfg.RateLimit.Enabled {
-		interceptors = append(interceptors, RateLimitInterceptor(cfg.RateLimit, cfg.Done))
+	if checkInLim != nil {
+		interceptors = append(interceptors, checkInLim.UnaryInterceptor())
 	}
 	interceptors = append(interceptors, sigInterceptor)
 

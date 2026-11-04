@@ -62,7 +62,7 @@ func (s *AdminService) EnrollEnvoy(ctx context.Context, req *pb.EnrollEnvoyReque
 	}
 	if spki != "" {
 		if err := s.registry.SetEnvoyCertPin(ctx, envoyID, spki); err != nil {
-			slog.Warn("enroll envoy: could not store cert pin; envoy left unpinned",
+			slog.Error("enroll envoy: could not store cert pin; envoy will be refused at check-in until re-enrolled",
 				"hostname", hostname, "envoy_id", envoyID, "error", err)
 		}
 	}

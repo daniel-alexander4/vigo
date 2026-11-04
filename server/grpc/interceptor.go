@@ -55,7 +55,14 @@ var vigoAdminMethodPrefix = "/" + pb.VigoAdmin_ServiceDesc.ServiceName + "/"
 // sigWindow configures the maximum age of a signed request before rejection
 // for replay prevention. If zero, defaults to 5 minutes. m owns the gRPC
 // request/sig-verify counters this interceptor mutates.
-func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) grpc.UnaryServerInterceptor {
+//
+// lim (nil = rate limiting disabled) supplies the two check-in limits that
+// depend on the verify outcome: a source IP over its failed-verification
+// budget is refused before any verify work, a failed verification charges
+// that budget, and the per-envoy bucket is charged only once the signature
+// has verified — so an unsigned request naming a victim's id cannot spend the
+// victim's budget.
+func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics, lim *CheckInLimiter) grpc.UnaryServerInterceptor {
 	if sigWindow == 0 {
 		sigWindow = defaultSignatureWindow
 	}
@@ -87,8 +94,21 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 		// Only verify agent RPCs that carry signatures.
 		switch r := req.(type) {
 		case *pb.CheckInRequest:
+			var ip string
+			if lim != nil {
+				ip = peerIP(ctx)
+				if lim.ipThrottled(ip) {
+					return nil, lim.throttledIP(ip)
+				}
+			}
 			newCtx, err := verifyCheckIn(ctx, queries, r, sigWindow, fleetIdx, m)
 			if err != nil {
+				if lim != nil && isVerifyFailure(err) {
+					lim.recordFailure(ip)
+				}
+				return nil, err
+			}
+			if err := lim.allowEnvoy(r.GetEnvoyId()); err != nil {
 				return nil, err
 			}
 			ctx = newCtx
@@ -134,6 +154,24 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 			)
 		}
 		return resp, err
+	}
+}
+
+// isVerifyFailure reports whether a check-in verify error is a failed
+// identity proof — unknown envoy, revoked envoy, bad signature or cert-pin
+// refusal — and so charges the source IP's failure budget. Clock skew is
+// excluded (an honest host with a drifting clock would otherwise throttle
+// every envoy behind its NAT address), as are malformed-request and internal
+// errors.
+func isVerifyFailure(err error) bool {
+	st := status.Convert(err)
+	switch st.Code() {
+	case codes.NotFound, codes.PermissionDenied:
+		return true
+	case codes.Unauthenticated:
+		return !strings.HasPrefix(st.Message(), clockSkewMsg)
+	default:
+		return false
 	}
 }
 
@@ -360,55 +398,92 @@ func verifyEnvoyIDSignature(ctx context.Context, queries *db.Queries, envoyID, t
 	return envoy, nil
 }
 
-// lookupEnvoyAndPubKey retrieves a envoy and its parsed ED25519 public key.
-// When a FleetIndex is available, the parsed pubkey is served from memory (O(1),
-// no PEM parse). Falls back to direct DB query.
-func resolveEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
-	// Fast path: FleetIndex returns parsed pubkey from memory.
-	if fleetIdx != nil {
-		pubKey := fleetIdx.GetPubKey(envoyID)
-		if pubKey != nil {
-			ts, ok, _ := fleetIdx.GetEnvoyLite(envoyID)
-			if ok {
-				envoy := fleetEnvoyToDB(ts)
-				return envoy, pubKey, nil
-			}
+// errRevoked is the refusal for a revoked envoy — every verify path returns
+// exactly this, whether the revoked bit came from the index or the DB.
+var errRevoked = status.Error(codes.PermissionDenied, "envoy is revoked")
+
+// unknownEnvoy is the refusal for an id with no enrolled envoy (never
+// enrolled, deleted, or a server DB reset left this agent orphaned). NotFound
+// (not Unauthenticated) so the agent can recognize "re-bootstrap required"
+// specifically and back off — distinct from bad-signature/clock-skew. Also a
+// client-auth event, so Warn not Error, throttled per envoy.
+func unknownEnvoy(envoyID string, cause error, m *metrics.Metrics) error {
+	m.SigVerifyFailed.WithLabelValues("envoy_not_found").Inc()
+	if defaultUnknownEnvoyLog.shouldLog(envoyID, time.Now()) {
+		args := []any{"envoy_id", envoyID}
+		if cause != nil {
+			args = append(args, "error", cause)
 		}
-		// Fall through to DB if not in FleetIndex.
+		slog.Warn("check-in from unknown envoy — not enrolled; agent must re-bootstrap", args...)
+	}
+	return status.Error(codes.NotFound, "unknown envoy: not enrolled — re-bootstrap this agent")
+}
+
+// resolveEnvoyAndPubKey retrieves an envoy and its parsed ED25519 public key.
+//
+// With a FleetIndex (every running server) this never reads the DB: every
+// enrollment path inserts into the index synchronously with the DB row
+// (registry.insertEnvoyLocked), Rehydrate loads every non-revoked envoy before
+// the gRPC listener starts, and the index's revoked-id set covers revoked
+// envoys, which are not rehydrated. So an id the index doesn't hold is
+// answered from memory — revoked → PermissionDenied, otherwise NotFound — and
+// a flood of made-up ids costs map lookups, not queries. The DB path remains
+// only for callers with no index (tests, tools).
+func resolveEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
+	if fleetIdx != nil {
+		ts, ok, revoked := fleetIdx.GetEnvoyLite(envoyID)
+		if !ok {
+			if fleetIdx.IsRevokedID(envoyID) {
+				m.SigVerifyFailed.WithLabelValues("revoked").Inc()
+				return db.Envoy{}, nil, errRevoked
+			}
+			return db.Envoy{}, nil, unknownEnvoy(envoyID, nil, m)
+		}
+		envoy := fleetEnvoyToDB(ts)
+		if revoked {
+			// lookupEnvoyAndPubKey refuses it; no key needed.
+			return envoy, nil, nil
+		}
+		if pubKey := fleetIdx.GetPubKey(envoyID); pubKey != nil {
+			return envoy, pubKey, nil
+		}
+		// Held without a parsed key (the stored PEM failed to parse at
+		// enrollment/rehydrate): parse the same PEM from memory so the error
+		// is the one the DB row would give.
+		pubKey, err := parseStoredPubKey(envoy.PubkeyPem)
+		if err != nil {
+			return db.Envoy{}, nil, err
+		}
+		return envoy, pubKey, nil
 	}
 
-	// Slow path: direct DB query + parse.
 	envoy, err := queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		m.SigVerifyFailed.WithLabelValues("envoy_not_found").Inc()
-		// Unknown id = no DB row (never enrolled, deleted, or a server DB
-		// reset left this agent orphaned). NotFound (not Unauthenticated)
-		// so the agent can recognize "re-bootstrap required" specifically
-		// and back off — distinct from bad-signature/clock-skew (also a
-		// client-auth event, so Warn not Error), throttled per envoy.
-		if defaultUnknownEnvoyLog.shouldLog(envoyID, time.Now()) {
-			slog.Warn("check-in from unknown envoy — not enrolled; agent must re-bootstrap",
-				"envoy_id", envoyID, "error", err)
-		}
-		return db.Envoy{}, nil, status.Error(codes.NotFound, "unknown envoy: not enrolled — re-bootstrap this agent")
+		return db.Envoy{}, nil, unknownEnvoy(envoyID, err, m)
 	}
+	pubKey, err := parseStoredPubKey(envoy.PubkeyPem)
+	if err != nil {
+		return db.Envoy{}, nil, err
+	}
+	return envoy, pubKey, nil
+}
 
-	block, _ := pem.Decode([]byte(envoy.PubkeyPem))
+// parseStoredPubKey parses an envoy's stored PEM public key, returning the
+// verify path's Internal errors for a malformed or non-ED25519 key.
+func parseStoredPubKey(pubkeyPEM string) (ed25519.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pubkeyPEM))
 	if block == nil {
-		return db.Envoy{}, nil, status.Error(codes.Internal, "invalid stored public key")
+		return nil, status.Error(codes.Internal, "invalid stored public key")
 	}
-
 	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return db.Envoy{}, nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
+		return nil, status.Errorf(codes.Internal, "parsing stored public key: %v", err)
 	}
-
 	pubKey, ok := parsed.(ed25519.PublicKey)
 	if !ok {
-		return db.Envoy{}, nil, status.Error(codes.Internal, "stored key is not ED25519")
+		return nil, status.Error(codes.Internal, "stored key is not ED25519")
 	}
-
-	return envoy, pubKey, nil
+	return pubKey, nil
 }
 
 // lookupEnvoyAndPubKey resolves the envoy + its ed25519 pubkey and enforces
@@ -416,9 +491,9 @@ func resolveEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID str
 // path bottoms out here, so binding both checks to it covers unary CheckIn/
 // ReportResult/ReportTraits/ResolveSecrets/Wake, the TunnelStream handshake and
 // the held-stream handshake at once. A revoked envoy still holds a valid key and
-// a CA-signed cert, so the revoked bit is the only thing that stops it. The
-// fast path reads it from the fleet index (fleetEnvoyToDB carries it); the
-// slow path reads the DB row. Held-stream messages that skip per-message
+// a CA-signed cert, so the revoked bit is the only thing that stops it. With a
+// fleet index it comes from memory (fleetEnvoyToDB carries it for held envoys;
+// the revoked-id set covers the rest); without one, from the DB row. Held-stream messages that skip per-message
 // verification (checkin.stream_signature: handshake-only) never reach here and
 // keep their own per-message revoked re-check in AgentStream.
 func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
@@ -428,7 +503,7 @@ func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID stri
 	}
 	if envoy.Revoked != 0 {
 		m.SigVerifyFailed.WithLabelValues("revoked").Inc()
-		return db.Envoy{}, nil, status.Error(codes.PermissionDenied, "envoy is revoked")
+		return db.Envoy{}, nil, errRevoked
 	}
 	if err := enforceCertPin(ctx, envoy, m); err != nil {
 		return db.Envoy{}, nil, err
@@ -436,28 +511,35 @@ func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID stri
 	return envoy, pubKey, nil
 }
 
-// certPinMismatchLog and grandfatheredPinLog throttle the two cert-pin warnings
-// to once per envoy per window (same pattern as defaultUnknownEnvoyLog).
+// certPinMismatchLog and unpinnedLog throttle the two cert-pin warnings to
+// once per envoy per window (same pattern as defaultUnknownEnvoyLog).
 var (
-	certPinMismatchLog  = newUnknownEnvoyLog(10 * time.Minute)
-	grandfatheredPinLog = newUnknownEnvoyLog(10 * time.Minute)
+	certPinMismatchLog = newUnknownEnvoyLog(10 * time.Minute)
+	unpinnedLog        = newUnknownEnvoyLog(10 * time.Minute)
 )
+
+// errUnpinned is the refusal for an envoy with no enrolled cert pin.
+var errUnpinned = status.Error(codes.Unauthenticated,
+	"envoy has no enrolled client certificate pin — re-enroll it: curl -sSfk https://<server>:8443/bootstrap | sudo sh")
 
 // enforceCertPin rejects a connection whose TLS client-cert SubjectPublicKeyInfo
 // doesn't match the envoy's enrolled pin — a TLS-terminating proxy or MITM
 // presenting a different CA-signed cert (mTLS is CA-chain-validated, not pinned
 // to the enrolled key, so directness must be enforced here). An empty stored pin
-// is a grandfathered envoy (enrolled before pinning); enforcement resumes after
-// its next re-enrollment, which captures a fresh pin. A nil/non-TLS peer or a
-// missing client cert fails closed.
+// (an envoy enrolled before pinning, or whose pin failed to store) fails closed
+// too: without a pin there is nothing to prove the connection is direct, so the
+// envoy is refused until re-enrollment captures one. The startup WARN and
+// `vigocli doctor` list such envoys. A nil/non-TLS peer or a missing client
+// cert fails closed.
 func enforceCertPin(ctx context.Context, envoy db.Envoy, m *metrics.Metrics) error {
 	pin := envoy.CertSpkiSha256
 	if pin == "" {
-		if grandfatheredPinLog.shouldLog(envoy.ID, time.Now()) {
-			slog.Warn("cert-pin: envoy has no enrolled cert pin (grandfathered) — re-enroll to enable TLS-terminating-proxy protection",
+		m.SigVerifyFailed.WithLabelValues("cert_pin_missing").Inc()
+		if unpinnedLog.shouldLog(envoy.ID, time.Now()) {
+			slog.Warn("cert-pin: envoy has no enrolled client-cert pin; rejecting — re-enroll it: curl -sSfk https://<server>:8443/bootstrap | sudo sh",
 				"envoy_id", envoy.ID, "hostname", envoy.Hostname)
 		}
-		return nil
+		return errUnpinned
 	}
 	got, err := peerCertSPKI(ctx)
 	if err != nil {
@@ -537,12 +619,16 @@ func verifyPayload(payload []byte, timestamp string, sig []byte, pub ed25519.Pub
 	return voied25519.Verify(voied25519.PublicKey(pub), msg, sig)
 }
 
+// clockSkewMsg prefixes checkTimestamp's refusal; isVerifyFailure keys on it
+// to keep clock skew out of the per-IP failure budget.
+const clockSkewMsg = "request timestamp too far from server time"
+
 // checkTimestamp verifies the timestamp is within the allowed window.
 func checkTimestamp(ts time.Time, window time.Duration) error {
 	diff := time.Since(ts)
 	if diff > window || diff < -window {
 		return status.Errorf(codes.Unauthenticated,
-			"request timestamp too far from server time (diff: %v, window: %v) — ensure NTP is running on both server and agent (e.g. timedatectl set-ntp true)",
+			clockSkewMsg+" (diff: %v, window: %v) — ensure NTP is running on both server and agent (e.g. timedatectl set-ntp true)",
 			diff, window)
 	}
 	return nil

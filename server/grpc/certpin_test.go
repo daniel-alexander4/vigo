@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	"git.alexander4.io/vigo/server/db"
@@ -22,8 +23,9 @@ import (
 // TestEnforceCertPin pins the cert-pinning enforcement: a connection whose TLS
 // client-cert SPKI matches the enrolled pin is accepted; a different cert (a
 // TLS-terminating proxy/MITM presenting its own CA-signed cert) is rejected
-// Unauthenticated; an empty stored pin (grandfathered envoy) skips enforcement;
-// and any uncertainty (no peer / no cert) fails closed.
+// Unauthenticated; an empty stored pin (an envoy enrolled before pinning) is
+// refused too, with the re-enroll command; and any uncertainty (no peer / no
+// cert) fails closed.
 func TestEnforceCertPin(t *testing.T) {
 	m := metrics.NewTestMetrics()
 
@@ -53,13 +55,18 @@ func TestEnforceCertPin(t *testing.T) {
 	}{
 		{"match accepted", ctxWithSPKI(enrolled), envoy(pinOf(enrolled)), false},
 		{"mismatch rejected", ctxWithSPKI([]byte("a-proxy-cert-spki")), envoy(pinOf(enrolled)), true},
-		{"grandfathered (empty pin) skips", ctxWithSPKI([]byte("anything")), envoy(""), false},
+		{"empty pin refused", ctxWithSPKI([]byte("anything")), envoy(""), true},
+		{"empty pin refused even with no peer", context.Background(), envoy(""), true},
 		{"no client cert fails closed", ctxWithSPKI(nil), envoy(pinOf(enrolled)), true},
 		{"no peer fails closed", context.Background(), envoy(pinOf(enrolled)), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := enforceCertPin(tt.ctx, tt.envoy, m)
+			if tt.envoy.CertSpkiSha256 == "" && err != nil &&
+				!strings.Contains(status.Convert(err).Message(), "curl -sSfk https://<server>:8443/bootstrap | sudo sh") {
+				t.Errorf("unpinned refusal %q does not tell the operator how to re-enroll", status.Convert(err).Message())
+			}
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("enforceCertPin = nil, want rejection")

@@ -792,3 +792,60 @@ func TestAdvanceConvergedVersion(t *testing.T) {
 		t.Error("forward adoption should be measured only once")
 	}
 }
+
+// TestRevokedIDSet: the revoked-id set the check-in verify path consults in
+// place of the DB tracks every mutation — SetRevoked for an envoy the index
+// holds and one it doesn't (revoked before a restart), the boot seed, a
+// delete (unknown, not revoked), and a re-add of a non-revoked envoy.
+func TestRevokedIDSet(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{ID: "held", Hostname: "h1"}, nil)
+
+	fi.SetRevoked("held", true)
+	if !fi.IsRevokedID("held") {
+		t.Error("SetRevoked(held, true) not reflected")
+	}
+	fi.SetRevoked("not-held", true)
+	if !fi.IsRevokedID("not-held") {
+		t.Error("SetRevoked on an id the index doesn't hold not reflected")
+	}
+	fi.SetRevoked("not-held", false)
+	if fi.IsRevokedID("not-held") {
+		t.Error("SetRevoked(id, false) left the id revoked")
+	}
+
+	fi.AddRevokedIDs([]string{"boot"})
+	if !fi.IsRevokedID("boot") {
+		t.Error("AddRevokedIDs not reflected")
+	}
+	fi.RemoveEnvoy("boot") // delete of a revoked envoy not held in the index
+	if fi.IsRevokedID("boot") {
+		t.Error("RemoveEnvoy left a deleted id in the revoked set")
+	}
+	fi.RemoveEnvoy("held")
+	if fi.IsRevokedID("held") {
+		t.Error("RemoveEnvoy left a held, deleted id in the revoked set")
+	}
+
+	fi.AddEnvoy(EnvoyState{ID: "readd", Hostname: "h2", Revoked: true}, nil)
+	if !fi.IsRevokedID("readd") {
+		t.Error("AddEnvoy of a revoked envoy not reflected")
+	}
+	fi.AddEnvoy(EnvoyState{ID: "readd", Hostname: "h2"}, nil)
+	if fi.IsRevokedID("readd") {
+		t.Error("AddEnvoy of a non-revoked envoy left it in the revoked set")
+	}
+}
+
+// TestUnpinnedEnvoys lists non-revoked envoys with no enrolled cert pin.
+func TestUnpinnedEnvoys(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{ID: "a", Hostname: "zeta"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "b", Hostname: "alpha"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "c", Hostname: "pinned", CertSPKI: "abc"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "d", Hostname: "revoked", Revoked: true}, nil)
+	got := fi.UnpinnedEnvoys()
+	if len(got) != 2 || got[0].Hostname != "alpha" || got[1].Hostname != "zeta" {
+		t.Fatalf("UnpinnedEnvoys = %+v, want alpha, zeta", got)
+	}
+}

@@ -919,8 +919,10 @@ type WebhookTuning struct {
 // RateLimitSection configures rate limiting for agent RPCs.
 type RateLimitSection struct {
 	Enabled         bool `yaml:"enabled" doc:"Enforce rate limits on agent RPCs." default:"false" example:"true (shared/public-facing servers)"`
-	CheckinPerEnvoy int  `yaml:"checkin_per_envoy" doc:"Per-envoy check-in rate cap in requests per minute. Sized above the 1s default cadence (60/min) so enabling rate limiting doesn't throttle the default." default:"120" example:"120 (default, ~1s cadence + headroom), 240 (aggressive), 12 (slow cadences)"`
-	CheckinGlobal   int  `yaml:"checkin_global" doc:"Global check-in rate cap in requests per second." default:"500" example:"500 (default), 5000 (large fleet)"`
+	CheckinPerEnvoy int  `yaml:"checkin_per_envoy" doc:"Per-envoy check-in rate cap in requests per minute, charged only after the request's signature verifies (an unsigned request carrying another envoy's id cannot spend that envoy's bucket). Sized above the 1s default cadence (60/min) so enabling rate limiting doesn't throttle the default." default:"120" example:"120 (default, ~1s cadence + headroom), 240 (aggressive), 12 (slow cadences)"`
+	CheckinGlobal   int  `yaml:"checkin_global" doc:"Global check-in rate cap in requests per second. Charged before signature verification (protects server capacity)." default:"500" example:"500 (default), 5000 (large fleet)"`
+	// CheckinFailuresPerIP is the failed-verification budget per source IP.
+	CheckinFailuresPerIP int `yaml:"checkin_failures_per_ip" doc:"Failed check-in verifications (unknown, revoked, bad signature, cert-pin mismatch) tolerated per source IP per minute. Only failures count, so a fleet behind one NAT address is never throttled by its own healthy check-ins. An address over the budget has its check-ins refused before any verify work." default:"60" example:"60 (default), 300 (many envoys behind one NAT, some mis-enrolled)"`
 }
 
 // MaintenanceSection configures global change freeze.

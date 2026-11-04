@@ -421,6 +421,36 @@ func (q *Queries) ListEnvoysOffset(ctx context.Context, arg ListEnvoysOffsetPara
 	return items, nil
 }
 
+const listRevokedEnvoyIDs = `-- name: ListRevokedEnvoyIDs :many
+SELECT id FROM envoys WHERE revoked != 0
+`
+
+// IDs of every revoked envoy. Loaded into the fleet index at boot so the
+// check-in verify path answers "revoked" without a DB read (rehydrate loads
+// only non-revoked envoys).
+func (q *Queries) ListRevokedEnvoyIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRevokedEnvoyIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeEnvoy = `-- name: RevokeEnvoy :exec
 UPDATE envoys
 SET revoked = true, revoked_at = datetime('now')

@@ -88,8 +88,8 @@ envoys:
 	addr, fi, cleanup := startFleetTestServer(t, configDir)
 	defer cleanup()
 
-	envoyID, _, priv, client := registerEnvoy(t, addr, "e2e-case01.test.example.com", "e2e-case-token")
-	fi.AddEnvoy(fleet.EnvoyState{ID: envoyID, Hostname: "e2e-case01.test.example.com"}, nil)
+	envoyID, pub, priv, client := registerEnvoy(t, addr, "e2e-case01.test.example.com", "e2e-case-token")
+	fi.AddEnvoy(fleet.EnvoyState{ID: envoyID, Hostname: "e2e-case01.test.example.com", CertSPKI: clientCertPin(t)}, pub)
 	resp, err := doCheckIn(t, client, envoyID, priv, "fp", 0)
 	if err != nil {
 		t.Fatalf("CheckIn: %v", err)

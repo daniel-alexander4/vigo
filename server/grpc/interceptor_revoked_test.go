@@ -24,7 +24,8 @@ import (
 // TestInterceptorRefusesRevokedEnvoy: a revoked envoy still holds a valid
 // ed25519 key and a CA-signed cert, so the revoked bit is the only thing that
 // stops it. Every signed unary agent RPC must be refused with PermissionDenied
-// on BOTH lookup paths — the fleet-index fast path and the DB slow path — and
+// on every lookup path — held in the fleet index, known only to the index's
+// revoked-id set (post-restart), and the no-index DB path — and
 // the same envoy un-revoked must pass (control), so the refusal is the revoked
 // bit and nothing else.
 func TestInterceptorRefusesRevokedEnvoy(t *testing.T) {
@@ -54,19 +55,32 @@ func TestInterceptorRefusesRevokedEnvoy(t *testing.T) {
 	}
 
 	for _, rpc := range rpcs {
-		for _, path := range []string{"fast", "slow"} {
+		// held: the envoy is in the fleet index with Revoked set (revoked
+		// during this process). revokedSet: only the index's revoked-id set
+		// knows it (revoked before a restart — rehydrate skips revoked rows).
+		// db: no fleet index; the DB row is read.
+		for _, path := range []string{"held", "revokedSet", "db"} {
 			for _, revoked := range []bool{false, true} {
 				name := fmt.Sprintf("%s/%s/revoked=%v", rpc.name, path, revoked)
 				t.Run(name, func(t *testing.T) {
 					pub, priv, pubPEM := genKeyPair(t)
 					queries := db.New(testDB)
-					ctx := context.Background()
+					ctx := pinnedCtx()
 					fi := fleet.NewFleetIndex()
 					var envoyID string
-					if path == "fast" {
+					switch path {
+					case "held":
 						envoyID = uuid.New().String()
-						fi.AddEnvoy(fleet.EnvoyState{ID: envoyID, Hostname: "rev-" + envoyID[:8] + ".example.com", PubkeyPEM: pubPEM, Revoked: revoked}, pub)
-					} else {
+						fi.AddEnvoy(fleet.EnvoyState{ID: envoyID, Hostname: "rev-" + envoyID[:8] + ".example.com", PubkeyPEM: pubPEM, CertSPKI: testPin, Revoked: revoked}, pub)
+					case "revokedSet":
+						envoyID = uuid.New().String()
+						if revoked {
+							fi.AddRevokedIDs([]string{envoyID})
+						} else {
+							fi.AddEnvoy(fleet.EnvoyState{ID: envoyID, Hostname: "rev-" + envoyID[:8] + ".example.com", PubkeyPEM: pubPEM, CertSPKI: testPin}, pub)
+						}
+					case "db":
+						fi = nil
 						e, err := queries.CreateEnvoy(ctx, db.CreateEnvoyParams{
 							Hostname:  "rev-" + uuid.New().String()[:8] + ".example.com",
 							IpAddress: "10.98.0.1",
@@ -76,6 +90,9 @@ func TestInterceptorRefusesRevokedEnvoy(t *testing.T) {
 							t.Fatalf("CreateEnvoy: %v", err)
 						}
 						envoyID = e.ID
+						if err := queries.UpdateEnvoyCertPin(ctx, db.UpdateEnvoyCertPinParams{CertSpkiSha256: testPin, ID: envoyID}); err != nil {
+							t.Fatalf("UpdateEnvoyCertPin: %v", err)
+						}
 						if revoked {
 							if err := queries.RevokeEnvoy(ctx, envoyID); err != nil {
 								t.Fatalf("RevokeEnvoy: %v", err)
@@ -83,7 +100,7 @@ func TestInterceptorRefusesRevokedEnvoy(t *testing.T) {
 						}
 					}
 
-					interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
+					interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics(), nil)
 					called := false
 					_, err := interceptor(ctx, rpc.build(envoyID, priv), makeInfo(rpc.method), func(ctx context.Context, r any) (any, error) {
 						called = true
@@ -98,8 +115,8 @@ func TestInterceptorRefusesRevokedEnvoy(t *testing.T) {
 					if called {
 						t.Fatal("handler ran for a revoked envoy")
 					}
-					if st, _ := status.FromError(err); st.Code() != codes.PermissionDenied {
-						t.Fatalf("revoked envoy: got %v, want PermissionDenied", err)
+					if st, _ := status.FromError(err); st.Code() != codes.PermissionDenied || st.Message() != "envoy is revoked" {
+						t.Fatalf("revoked envoy: got %v, want PermissionDenied \"envoy is revoked\"", err)
 					}
 				})
 			}
