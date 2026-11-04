@@ -106,3 +106,7 @@ Mirrors curator's posture exactly. Removing `poolq: true` from a user's usercrat
 - Agent-side fleet-log cache (curator's `catalog.json` is the precedent; additive over the v1 REST-only read).
 - Per-publisher block at the moderation layer (per-topic is sufficient until multi-writer exists).
 - Retention floor "always keep last N messages regardless of age" (v1 is age-only).
+
+## Note (2026-11-03): who verifies
+
+Two statements above went stale. "Matching curatormesh's stance": curatormesh now verifies catalog entries server-side (see the ADR-024 note of the same date), while `poolqmesh` still does not verify messages. And "every consumer rejects at signature verification" did not hold: the agent's `vigo swarm poolq read` and `tail` printed the REST range unverified. They now keep only messages whose signature verifies and whose `sha256(author ‖ topic_name)` is the requested topic, which is the v1 founder-only rule. `vigocli swarm poolq` still displays messages without verifying them.

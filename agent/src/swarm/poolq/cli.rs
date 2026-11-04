@@ -275,7 +275,7 @@ fn cmd_read(args: &[String]) -> Result<()> {
         topic_id_hex, from
     );
     let resp: RangeResponse = client.get_json(&path)?;
-    let mut msgs = resp.messages;
+    let mut msgs = verified_for_topic(resp.messages, &topic_id_hex);
     if let Some(n) = limit {
         msgs.truncate(n);
     }
@@ -313,15 +313,16 @@ fn cmd_tail(args: &[String]) -> Result<()> {
         "/api/v1/swarm/poolq/topic/{}/range?from={}",
         topic_id_hex, from
     ))?;
-    if resp.messages.is_empty() {
+    let msgs = verified_for_topic(resp.messages, &topic_id_hex);
+    if msgs.is_empty() {
         println!("Topic is empty.");
         return Ok(());
     }
     if as_json {
-        let bytes = serde_json::to_vec_pretty(&resp.messages).context("serializing messages")?;
+        let bytes = serde_json::to_vec_pretty(&msgs).context("serializing messages")?;
         println!("{}", String::from_utf8_lossy(&bytes));
     } else {
-        render_messages(&resp.messages);
+        render_messages(&msgs);
     }
     Ok(())
 }
@@ -453,6 +454,31 @@ fn parse_read_args(args: &[String], verb: &str) -> Result<(String, Option<usize>
         limit,
         as_json,
     ))
+}
+
+/// Keep only the messages that verify end to end for `topic_id_hex`: the
+/// Ed25519 signature checks under `author_puddle_pubkey`, and
+/// `sha256(author ‖ topic_name)` is the topic asked for. The second check is
+/// the v1 founder-only rule: topic_id commits to the founder's pubkey, so a
+/// message any other key signed derives a different id. The server relays
+/// the merged log without verifying it, so this is the consumer-side gate
+/// ADR-029 relies on. Rejected messages are reported on stderr and dropped.
+fn verified_for_topic(msgs: Vec<Message>, topic_id_hex: &str) -> Vec<Message> {
+    let want = topic_id_hex.to_ascii_lowercase();
+    let mut out = Vec::with_capacity(msgs.len());
+    for m in msgs {
+        let ok = m.verify_signature().is_ok()
+            && m.topic_id_hex().map(|id| id == want).unwrap_or(false);
+        if ok {
+            out.push(m);
+        } else {
+            eprintln!(
+                "warning: dropped unverified poolq message seq={} (bad signature or not signed by the topic founder)",
+                m.body.seq
+            );
+        }
+    }
+    out
 }
 
 fn render_messages(msgs: &[Message]) {
@@ -718,6 +744,38 @@ mod tests {
         let (id, name) = resolve_topic_ref(&hex, dir.path()).unwrap();
         assert_eq!(id, hex);
         assert!(name.is_none());
+    }
+
+    /// The read/tail paths used to print whatever the REST range returned;
+    /// the server does not verify messages, so a forged or foreign-signed
+    /// message reached the consumer. Only founder-signed, valid-signature
+    /// messages for the requested topic survive.
+    #[test]
+    fn verified_for_topic_drops_forged_and_foreign() {
+        use super::super::message::SCHEMA_VERSION;
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
+
+        let founder = SigningKey::generate(&mut OsRng);
+        let other = SigningKey::generate(&mut OsRng);
+        let body = |key: &SigningKey, seq: u64| MessageBody {
+            schema_version: SCHEMA_VERSION,
+            author_puddle_pubkey: hex::encode(key.verifying_key().to_bytes()),
+            topic_name: "alerts".into(),
+            seq,
+            posted_at: 1,
+            body: format!("m{seq}"),
+        };
+        let good = Message::issue(&founder, body(&founder, 1)).unwrap();
+        let topic = good.topic_id_hex().unwrap();
+        // Valid signature, wrong key: derives another topic id.
+        let foreign = Message::issue(&other, body(&other, 2)).unwrap();
+        // Founder's message with the body edited after signing.
+        let mut tampered = Message::issue(&founder, body(&founder, 3)).unwrap();
+        tampered.body.body = "evil".into();
+
+        let kept = verified_for_topic(vec![good.clone(), foreign, tampered], &topic);
+        assert_eq!(kept, vec![good]);
     }
 
     #[test]

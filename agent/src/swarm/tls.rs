@@ -6,7 +6,7 @@
 //! The three content-plane HTTP clients (lockbox pusher, peer_client,
 //! gitback fan-out) connect to *other envoys* by IP on port 1531. Those
 //! peers present an mTLS server cert issued by the fleet CA, but the cert's
-//! CN/SAN is the agent UUID — never the dialed IP — so rustls' standard
+//! CN/SAN is the envoy's hostname — never the dialed IP — so rustls' standard
 //! hostname verification always fails. The previous code reacted by turning
 //! verification off wholesale (`disable_verification(true)`), which also
 //! dropped the *chain* check: a LAN attacker answering on a peer's IP could
@@ -49,8 +49,8 @@ pub type SwarmAgent = reqwest::blocking::Client;
 
 /// Custom rustls server-cert verifier: accepts any server cert that chains
 /// to the fleet CA, regardless of the name on the cert. Hostname/SAN
-/// checking is deliberately skipped because envoy certs are CN'd by IP and
-/// we dial peers by IP. Everything else (chain to a trusted root, validity
+/// checking is deliberately skipped because envoy certs are CN'd by
+/// hostname (server/ca SignCSR) and we dial peers by IP. Everything else (chain to a trusted root, validity
 /// window, handshake-signature verification) is delegated to webpki, exactly
 /// as a stock verifier would.
 #[derive(Debug)]
