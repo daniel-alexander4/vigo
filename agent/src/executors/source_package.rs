@@ -524,34 +524,44 @@ fn write_version_marker(target: &str, version: &str) {
 /// Check available disk space on the filesystem containing the target path.
 /// Returns an error if less than MIN_DISK_SPACE is available.
 fn check_disk_space(target: &str) -> Result<(), String> {
+    check_disk_space_with(target, host_available_bytes)
+}
+
+/// [`check_disk_space`] against an injected free-bytes source, so tests do
+/// not depend on how full the build host's disk is (the swarm cache's
+/// `DiskProbe` pattern). A measurement error proceeds rather than blocks.
+fn check_disk_space_with(
+    target: &str,
+    available: fn(&str) -> Result<u64, String>,
+) -> Result<(), String> {
+    match available(target) {
+        Ok(avail) if avail < MIN_DISK_SPACE => Err(format!(
+            "source_package executor: insufficient disk space on target filesystem ({} MB available, need at least {} MB)",
+            avail / (1024 * 1024),
+            MIN_DISK_SPACE / (1024 * 1024),
+        )),
+        Ok(_) => Ok(()),
+        Err(e) => {
+            // If we can't check, proceed rather than blocking (e.g., path doesn't exist yet).
+            tracing::warn!(path = target, "disk space check failed (proceeding): {}", e);
+            Ok(())
+        }
+    }
+}
+
+/// Free bytes on the filesystem holding `target`'s closest existing ancestor.
+fn host_available_bytes(target: &str) -> Result<u64, String> {
     #[cfg(unix)]
     {
-        // Find the closest existing ancestor to statvfs against.
         let check_path = closest_existing_ancestor(target);
-        match nix::sys::statvfs::statvfs(check_path.as_str()) {
-            Ok(stat) => {
-                let avail = stat.blocks_available() * stat.fragment_size();
-                if avail < MIN_DISK_SPACE {
-                    let avail_mb = avail / (1024 * 1024);
-                    return Err(format!(
-                        "source_package executor: insufficient disk space on target filesystem ({} MB available, need at least {} MB)",
-                        avail_mb,
-                        MIN_DISK_SPACE / (1024 * 1024),
-                    ));
-                }
-                Ok(())
-            }
-            Err(e) => {
-                // If we can't check, proceed rather than blocking (e.g., path doesn't exist yet).
-                tracing::warn!(path = target, "disk space check failed (proceeding): {}", e);
-                Ok(())
-            }
-        }
+        nix::sys::statvfs::statvfs(check_path.as_str())
+            .map(|stat| stat.blocks_available() as u64 * stat.fragment_size() as u64)
+            .map_err(|e| e.to_string())
     }
     #[cfg(not(unix))]
     {
         let _ = target;
-        Ok(())
+        Err("disk space check not implemented on this platform".into())
     }
 }
 
@@ -1240,13 +1250,19 @@ mod tests {
         assert_eq!(calls[0].0, "curl");
     }
 
+    /// The disk pre-flight against an injected free-bytes source: it used to
+    /// statvfs the build host's real disk, so it passed or failed with how
+    /// full that disk was.
     #[test]
-    fn disk_space_check_passes_on_tmpdir() {
-        // Test that disk space check works on a real filesystem (tmpdir should have > 100MB).
-        let dir = tempfile::TempDir::new().unwrap();
-        let target = dir.path().join("mybin");
-        let result = check_disk_space(target.to_str().unwrap());
-        assert!(result.is_ok(), "disk space check should pass on tmpdir: {:?}", result);
+    fn disk_space_check_gates_on_available_bytes() {
+        let roomy: fn(&str) -> Result<u64, String> = |_| Ok(1 << 40);
+        let full: fn(&str) -> Result<u64, String> = |_| Ok(MIN_DISK_SPACE - 1);
+        let broken: fn(&str) -> Result<u64, String> = |_| Err("statvfs failed".into());
+        assert!(check_disk_space_with("/opt/x/bin", roomy).is_ok());
+        let err = check_disk_space_with("/opt/x/bin", full).unwrap_err();
+        assert!(err.contains("insufficient disk space"), "{err}");
+        // A measurement error proceeds rather than blocking the resource.
+        assert!(check_disk_space_with("/opt/x/bin", broken).is_ok());
     }
 
     #[test]

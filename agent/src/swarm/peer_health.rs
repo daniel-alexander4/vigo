@@ -221,6 +221,17 @@ pub fn is_self_pressured(purpose: &Purpose) -> bool {
     }
 }
 
+/// True if the filesystem holding `path` (or its nearest existing ancestor)
+/// is at or below the pressure threshold. `false` on measurement error, like
+/// [`is_self_pressured`]. For a store whose directory is configurable, so the
+/// check measures that store's own disk rather than the purpose default.
+pub fn is_path_pressured(path: &Path) -> bool {
+    match free_pct_for_path(path) {
+        Ok(pct) => pct <= min_free_pct(),
+        Err(_) => false,
+    }
+}
+
 // ── Internals ─────────────────────────────────────────────────────────
 
 struct CacheEntry {

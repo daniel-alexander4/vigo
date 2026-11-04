@@ -64,27 +64,27 @@ pub(crate) struct DiskProbe {
     /// Bytes available to unprivileged writers on the filesystem holding
     /// the given path.
     available: fn(&Path) -> Result<u64>,
-    /// Whether the swarm disk is at or below the pressure threshold.
-    pressured: fn() -> bool,
+    /// Whether the filesystem holding the given path is at or below the
+    /// pressure threshold.
+    pressured: fn(&Path) -> bool,
 }
 
 impl DiskProbe {
-    /// The real host measurements: statvfs / GetDiskFreeSpaceExW on the
-    /// cache dir, and the swarm-purpose pressure check.
+    /// The real host measurements, both on the cache's own dir:
+    /// statvfs / GetDiskFreeSpaceExW for free bytes, and the free-pct
+    /// pressure check. (The pressure check used to measure the default
+    /// swarm blob dir, so a cache on another volume was gated on the
+    /// wrong disk.)
     const HOST: DiskProbe = DiskProbe {
         available: available_disk_space,
-        pressured: || {
-            crate::swarm::peer_health::is_self_pressured(
-                &crate::swarm::peer_health::Purpose::Swarm,
-            )
-        },
+        pressured: crate::swarm::peer_health::is_path_pressured,
     };
 
     /// A disk with 1 TiB free and no pressure.
     #[cfg(test)]
     pub(crate) const ROOMY: DiskProbe = DiskProbe {
         available: |_| Ok(1 << 40),
-        pressured: || false,
+        pressured: |_| false,
     };
 
     /// A disk with 1 TiB free that is nonetheless past the pressure
@@ -92,7 +92,7 @@ impl DiskProbe {
     #[cfg(test)]
     pub(crate) const PRESSURED: DiskProbe = DiskProbe {
         available: |_| Ok(1 << 40),
-        pressured: || true,
+        pressured: |_| true,
     };
 }
 
@@ -443,7 +443,7 @@ impl BlobCache {
                 need_mb
             );
         }
-        if (self.disk_probe.pressured)() {
+        if (self.disk_probe.pressured)(&self.dir) {
             bail!(
                 "disk_pressure:free_pct_at_or_below={}",
                 crate::swarm::peer_health::min_free_pct()
@@ -544,6 +544,31 @@ extern "system" {
 mod tests {
     use super::*;
     
+
+    /// The pressure check used to measure the default swarm blob dir, not
+    /// the cache's own: a cache on a different volume was gated on the
+    /// wrong disk. Both probes must be asked about the cache dir.
+    #[test]
+    fn check_disk_space_measures_the_cache_dir() {
+        use std::sync::Mutex;
+        static SEEN: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+        let probe = DiskProbe {
+            available: |p| {
+                SEEN.lock().unwrap().push(p.to_path_buf());
+                Ok(1 << 40)
+            },
+            pressured: |p| {
+                SEEN.lock().unwrap().push(p.to_path_buf());
+                false
+            },
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let cache_dir = dir.path().join("custom-cache");
+        let cache = BlobCache::new(cache_dir.clone()).unwrap().with_disk_probe(probe);
+        cache.check_disk_space(1).unwrap();
+        let seen = SEEN.lock().unwrap().clone();
+        assert_eq!(seen, vec![cache_dir.clone(), cache_dir], "probes measured {seen:?}");
+    }
 
     #[test]
     fn test_write_and_read_chunk() {
@@ -675,7 +700,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut cache = BlobCache::new(dir.path().to_path_buf()).unwrap().with_disk_probe(DiskProbe {
             available: |_| Ok(600 * 1024 * 1024),
-            pressured: || false,
+            pressured: |_| false,
         });
         cache.set_reserve_mb(512);
         assert!(cache.check_disk_space(88 * 1024 * 1024).is_ok());
