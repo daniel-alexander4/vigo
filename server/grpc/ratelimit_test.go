@@ -5,7 +5,6 @@ package grpc
 
 import (
 	"context"
-	"runtime"
 	"testing"
 	"time"
 
@@ -110,20 +109,24 @@ func stopOnCleanup(t *testing.T) <-chan struct{} {
 // run forever (one leaked goroutine per constructed interceptor). Closing stop
 // must end it.
 func TestRateLimitInterceptor_EvictionStopsOnStop(t *testing.T) {
-	base := runtime.NumGoroutine()
+	base := evictionLoops.Load()
 	stop := make(chan struct{})
 	for range 20 {
 		_ = RateLimitInterceptor(config.RateLimitSection{Enabled: true}, stop)
 	}
-	if n := runtime.NumGoroutine(); n < base+20 {
-		t.Fatalf("expected 20 eviction goroutines running (base %d, now %d)", base, n)
+	deadline := time.Now().Add(3 * time.Second)
+	for evictionLoops.Load() < base+20 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if n := evictionLoops.Load(); n < base+20 {
+		t.Fatalf("expected 20 eviction loops running (base %d, now %d)", base, n)
 	}
 	close(stop)
-	deadline := time.Now().Add(3 * time.Second)
-	for runtime.NumGoroutine() > base+2 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	deadline = time.Now().Add(3 * time.Second)
+	for evictionLoops.Load() > base && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
 	}
-	if n := runtime.NumGoroutine(); n > base+2 {
-		t.Errorf("eviction goroutines still running after stop: base %d, now %d", base, n)
+	if n := evictionLoops.Load(); n != base {
+		t.Errorf("eviction loops still running after stop: base %d, now %d", base, n)
 	}
 }

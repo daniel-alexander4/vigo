@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
@@ -28,6 +29,10 @@ type perEnvoyEntry struct {
 // per-envoy and global rate limits on check-in RPCs. Non-check-in RPCs
 // pass through without rate limiting. The stale-entry eviction goroutine
 // exits when stop is closed (nil: runs for the process lifetime).
+// evictionLoops counts running eviction loops, so a test can prove they exit
+// on stop without counting every goroutine in the process.
+var evictionLoops atomic.Int64
+
 func RateLimitInterceptor(cfg config.RateLimitSection, stop <-chan struct{}) grpc.UnaryServerInterceptor {
 	perEnvoyRate := cfg.CheckinPerEnvoy
 	if perEnvoyRate <= 0 {
@@ -53,6 +58,8 @@ func RateLimitInterceptor(cfg config.RateLimitSection, stop <-chan struct{}) grp
 	// Evict stale per-envoy entries every 10 minutes until stop closes. Each
 	// sweep is guarded so a panic logs and the loop keeps evicting.
 	daemon.SafeGo("ratelimit-evict", func() {
+		evictionLoops.Add(1)
+		defer evictionLoops.Add(-1)
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for {
