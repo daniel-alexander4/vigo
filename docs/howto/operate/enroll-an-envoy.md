@@ -173,6 +173,9 @@ When `SIGN_KEY` is unset at build time, `build.rs` falls back to a 32-zero-byte 
 vigo register --token <token> --force
 ```
 
+**"bootstrap rejected (HTTP 400): hostname … contains an underscore":**
+- The certificate the server issues carries the hostname as a DNS name, and DNS hostnames allow only letters, digits and hyphens. Rename the host with hyphens (for example `sudo hostnamectl set-hostname web-01`) and run the bootstrap command again. Vigo has no option to enroll under a different name than the host's own.
+
 **Agent fails to register:**
 - Check that the server's gRPC port (1530) is reachable from the envoy
 - Verify the token hasn't already been used

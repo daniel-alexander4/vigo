@@ -47,6 +47,10 @@ func ValidateHostname(name string) error {
 		}
 		for i := 0; i < len(label); i++ {
 			c := label[i]
+			if c == '_' {
+				return fmt.Errorf("hostname %q contains an underscore, which DNS hostnames do not allow; "+
+					"rename the host using hyphens instead (for example with hostnamectl set-hostname) and enroll again", name)
+			}
 			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
 				return fmt.Errorf("hostname %q contains invalid character %q", name, c)
 			}

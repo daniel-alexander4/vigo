@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:65fc17562b6ed143d8d667e46e2be69eda543f5fa277696173d383d14c67f567 -->
+<!-- vigo-i18n source_sha:31e17d33a0bf295d9bbb45475989817f58f8d9c34aaa0dd17f07af35cdd9b121 -->
 
 # Enrôler un Envoy
 
@@ -173,6 +173,9 @@ Lorsque `SIGN_KEY` n'est pas défini au moment du build, `build.rs` retombe sur 
 ```bash
 vigo register --token <token> --force
 ```
+
+**« bootstrap rejected (HTTP 400): hostname … contains an underscore » :**
+- Le certificat émis par le serveur porte le nom d'hôte comme nom DNS, et un nom d'hôte DNS n'admet que des lettres, des chiffres et des tirets. Renommez l'hôte avec des tirets (par exemple `sudo hostnamectl set-hostname web-01`) puis relancez la commande de bootstrap. Vigo n'offre pas d'option pour s'enrôler sous un autre nom que celui de l'hôte.
 
 **L'agent échoue à s'enregistrer :**
 - Vérifiez que le port gRPC du serveur (1530) est joignable depuis l'Envoy

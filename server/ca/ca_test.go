@@ -206,6 +206,15 @@ func TestValidateHostname(t *testing.T) {
 	}
 }
 
+// An underscore is the commonest non-DNS hostname; its error must say what
+// to do, not just name the character.
+func TestValidateHostname_UnderscoreSaysRename(t *testing.T) {
+	err := ValidateHostname("web_01.example.com")
+	if err == nil || !strings.Contains(err.Error(), "underscore") || !strings.Contains(err.Error(), "rename the host") {
+		t.Fatalf("ValidateHostname(web_01.example.com) = %v, want an underscore error that says to rename the host", err)
+	}
+}
+
 // SignCSR itself refuses a wildcard / IP-literal name even if a caller
 // skipped the enrollment-time validation.
 func TestSignCSR_RejectsInvalidHostname(t *testing.T) {
