@@ -3,7 +3,11 @@
 
 package auth
 
-import "golang.org/x/crypto/bcrypt"
+import (
+	"sync"
+
+	"golang.org/x/crypto/bcrypt"
+)
 
 // HashPassword returns a bcrypt hash of a web-user password, suitable for
 // storage in the secrets vault. Web passwords are low-entropy and human-chosen,
@@ -17,6 +21,25 @@ func HashPassword(plaintext string) (string, error) {
 		return "", err
 	}
 	return string(h), nil
+}
+
+// dummyPasswordHash is a bcrypt hash at HashPassword's cost that no real
+// account holds; see burnPasswordVerify.
+var dummyPasswordHash = sync.OnceValue(func() string {
+	h, _ := HashPassword("vigo-dummy-password-never-valid")
+	return h
+})
+
+// passwordVerifier is the check burnPasswordVerify runs; a var so tests can
+// count the calls.
+var passwordVerifier = VerifyPassword
+
+// burnPasswordVerify runs one bcrypt comparison against a dummy hash and
+// discards the result. A login for an unknown user (or one with no password
+// on file) calls it so that failure costs what a wrong password costs, and
+// response time does not enumerate usernames.
+func burnPasswordVerify(plaintext string) {
+	_ = passwordVerifier(dummyPasswordHash(), plaintext)
 }
 
 // VerifyPassword reports whether plaintext matches a bcrypt hash produced by

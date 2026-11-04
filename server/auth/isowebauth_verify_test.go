@@ -80,3 +80,31 @@ func TestIsowebauthVerify_RateLimited(t *testing.T) {
 	second := iwaVerify(t, p, "nobody", "x")
 	assert.Equal(t, http.StatusTooManyRequests, second.Code)
 }
+
+// TestIsowebauthVerify_UnknownUserPaysVerifyCost: an unknown user (or one
+// with no key on file) used to return before ssh-keygen ran, so it answered
+// faster than a bad signature and response time enumerated usernames. Every
+// failure path must run exactly one verification, and a nil-error dummy
+// verify must still fail the login.
+func TestIsowebauthVerify_UnknownUserPaysVerifyCost(t *testing.T) {
+	p, _, _ := setupIsowebauthProvider(t)
+	p.namespace = "vigo"
+	_, err := p.userStore.Create(context.Background(), db.InsertUserParams{Username: "carol", Role: "viewer"})
+	require.NoError(t, err)
+
+	var calls []string
+	orig := verifySignature
+	t.Cleanup(func() { verifySignature = orig })
+	verifySignature = func(_ context.Context, username, pubkey, _, _, _ string) error {
+		calls = append(calls, username+"|"+pubkey)
+		return nil // even a "valid" dummy verify must not log anyone in
+	}
+
+	for _, user := range []string{"nobody", "carol"} {
+		calls = nil
+		rec := iwaVerify(t, p, user, "sig")
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, user)
+		require.Len(t, calls, 1, "%s: verifications run", user)
+		assert.Equal(t, user+"|"+dummyVerifyPubkey, calls[0], user)
+	}
+}

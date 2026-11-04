@@ -211,6 +211,7 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil {
+		burnPasswordVerify(password)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "unknown user", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return
@@ -224,11 +225,13 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	stored, err := p.secrets.Get(r.Context(), secretKey)
 	if err != nil {
 		slog.Debug("no password secret for user", "username", username, "error", err)
+		burnPasswordVerify(password)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return
 	}
 	if stored == "" {
+		burnPasswordVerify(password)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, locale, "auth.err.invalid_credentials")
 		return

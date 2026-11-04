@@ -174,6 +174,16 @@ func (p *IsowebauthProvider) handleChallenge(w http.ResponseWriter, r *http.Requ
 // is not a username oracle. The audit entry keeps the real reason.
 const verifyFailedMsg = "authentication failed"
 
+// dummyVerifyPubkey stands in for the missing key of an unknown user or a
+// user with no key on file. handleVerify still runs a full ssh-keygen verify
+// against it — and fails the request whatever the result — so those paths
+// cost what a bad signature costs and timing does not enumerate users.
+const dummyVerifyPubkey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBTnhQDY+EoHzuH6lTBahbzZVGcRcGEjhBBg0CLVK+cd"
+
+// verifySignature is the signature check handleVerify runs; a var so tests
+// can count the calls.
+var verifySignature = verifySSHSignature
+
 func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request) {
 	if !allowAuthAttempt(r, p.authLimiter, p.auditWriter) {
 		writeVerifyError(w, http.StatusTooManyRequests, "too many authentication attempts — wait a minute and try again")
@@ -205,19 +215,20 @@ func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	if user == nil {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "user not found", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		writeVerifyError(w, http.StatusUnauthorized, verifyFailedMsg)
-		return
-	}
-	if user.SSHPublicKey == "" {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "no SSH key configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+	if user == nil || user.SSHPublicKey == "" {
+		// Pay the same ssh-keygen cost as a bad signature, then fail.
+		_ = verifySignature(r.Context(), req.Username, dummyVerifyPubkey, req.Challenge, req.Signature, p.namespace)
+		reason := "user not found"
+		if user != nil {
+			reason = "no SSH key configured"
+		}
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", reason, fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		writeVerifyError(w, http.StatusUnauthorized, verifyFailedMsg)
 		return
 	}
 
 	// Verify the signature using ssh-keygen.
-	if err := verifySSHSignature(r.Context(), req.Username, user.SSHPublicKey, req.Challenge, req.Signature, p.namespace); err != nil {
+	if err := verifySignature(r.Context(), req.Username, user.SSHPublicKey, req.Challenge, req.Signature, p.namespace); err != nil {
 		slog.Warn("isowebauth signature verification failed", "username", req.Username, "error", err)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "signature verification failed", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		writeVerifyError(w, http.StatusUnauthorized, verifyFailedMsg)
