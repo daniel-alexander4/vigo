@@ -51,9 +51,9 @@ type NotifyFunc func(event string, details map[string]any)
 
 // RotationRecord contains the parameters for recording a secret rotation event.
 type RotationRecord struct {
-	SecretPath      string
-	OldVersion      string
-	NewVersion      string
+	SecretPath     string
+	OldVersion     string
+	NewVersion     string
 	AffectedEnvoys int32
 }
 
@@ -113,6 +113,22 @@ func (w *Watcher) SetNotifyFunc(fn NotifyFunc) {
 // maxBackoffMultiplier caps exponential backoff at 32x the poll interval.
 const maxBackoffMultiplier = 32
 
+// backoffSleep is the wait before the next poll after `failures` consecutive
+// provider failures: interval × 2^failures, capped at maxBackoffMultiplier×.
+// The exponent is clamped BEFORE the shift — an unclamped `1 << failures`
+// wraps to 0 at 64 failures (about a week of a down provider at the cap),
+// which made the sleep 0 and the loop hammer the provider.
+func backoffSleep(failures int, interval time.Duration) time.Duration {
+	if failures <= 0 {
+		return interval
+	}
+	multiplier := maxBackoffMultiplier
+	if failures < 6 { // 2^5 = 32 = maxBackoffMultiplier
+		multiplier = 1 << failures
+	}
+	return time.Duration(multiplier) * interval
+}
+
 // Run starts the polling loop. It initializes the version map, then checks
 // for rotations on each tick. On consecutive provider failures, it backs off
 // exponentially (2^failures * pollInterval, capped at 32x) to avoid hammering
@@ -126,13 +142,8 @@ func (w *Watcher) Run(ctx context.Context) error {
 
 	for {
 		// Compute next sleep: normal interval or backed-off interval on failures.
-		sleep := w.pollInterval
+		sleep := backoffSleep(w.consecutiveFailures, w.pollInterval)
 		if w.consecutiveFailures > 0 {
-			multiplier := 1 << w.consecutiveFailures // 2^failures
-			if multiplier > maxBackoffMultiplier {
-				multiplier = maxBackoffMultiplier
-			}
-			sleep = time.Duration(multiplier) * w.pollInterval
 			slog.Warn("watcher: backing off due to provider failures",
 				"consecutive_failures", w.consecutiveFailures,
 				"next_poll", sleep)
@@ -227,9 +238,9 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 
 		// Record audit event.
 		if err := w.db.CreateSecretRotationEvent(ctx, RotationRecord{
-			SecretPath:      path,
-			OldVersion:      strconv.Itoa(lastVersion),
-			NewVersion:      strconv.Itoa(currentVersion),
+			SecretPath:     path,
+			OldVersion:     strconv.Itoa(lastVersion),
+			NewVersion:     strconv.Itoa(currentVersion),
 			AffectedEnvoys: int32(len(affectedIDs)),
 		}); err != nil {
 			slog.Error("watcher: recording rotation event",
