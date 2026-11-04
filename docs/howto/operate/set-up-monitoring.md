@@ -30,7 +30,7 @@ The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (d
 | `vigo_checkin_age_seconds` | Histogram (snapshot) | | Current distribution of seconds since last check-in across non-revoked envoys. Replaced every collector tick, not cumulative: query it without `rate()` |
 | `vigo_envoy_state_transitions_total` | Counter | `transition` | Reachability edges: `offline` (non-stale→stale) and `online` (stale→non-stale). Rising `offline` transitions while envoys are live indicate the staleness floor is flapping them under load |
 
-The `vigo_checkin_age_seconds` histogram uses custom buckets: 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. The sub-60s buckets straddle the 30s staleness floor (`freshness.MinStaleThreshold`) so the histogram can measure how close healthy check-ins get to the stale boundary under a fast (1s-default) cadence. Each scrape shows the fleet as it is now (one sample per seen, non-revoked envoy), so `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)` is the current median age. It replaced per-envoy last-seen gauges to avoid cardinality explosion at scale.
+The `vigo_checkin_age_seconds` histogram uses custom buckets: 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. The sub-60s buckets straddle the 30s staleness floor (`freshness.MinStaleThreshold`) so the histogram can measure how close healthy check-ins get to the stale boundary under a fast cadence such as 1s. Each scrape shows the fleet as it is now (one sample per seen, non-revoked envoy), so `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)` is the current median age. It replaced per-envoy last-seen gauges to avoid cardinality explosion at scale.
 
 ### gRPC
 

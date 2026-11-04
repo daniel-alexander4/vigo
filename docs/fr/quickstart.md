@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:32f56b39ee41792ac45eeddd803fad9f76248e7fc54f74c7c33906cbd4a46e09 -->
+<!-- vigo-i18n source_sha:8b727a4657a4369906da7db84997ec1428fac70d99abf7ed6471da9cb49dd22a -->
 
 # Démarrage rapide
 
@@ -57,7 +57,7 @@ Le `-k` est intentionnel. Le serveur Vigo exécute sa propre autorité de certif
 
 Le script de bootstrap installe également le service propre à l'OS (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
 
-Après l'enrôlement, chaque Envoy apparaît dans le tableau de bord à `https://localhost:8443/envoys` et commence à faire un check-in toutes les 5 minutes.
+Après l'enrôlement, chaque Envoy apparaît dans le tableau de bord à `https://localhost:8443/envoys` et fait un check-in à l'intervalle défini par `checkin.interval` dans `server.yaml`.
 
 ## 3. Écrire un configcrate
 
@@ -109,7 +109,7 @@ sudo vigocli config publish
 
 Valide l'arborescence, synchronise vers `/srv/vigo/.live/`, déclenche un rechargement du serveur. Si la validation échoue, l'assistant IA intégré affiche des suggestions de correction dans votre terminal.
 
-## 6. Forcer un check-in immédiat (n'attendez pas 5 minutes)
+## 6. Forcer un check-in immédiat (sans attendre le suivant)
 
 ```bash
 sudo vigocli envoys push --all

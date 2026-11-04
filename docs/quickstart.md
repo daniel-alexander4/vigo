@@ -55,7 +55,7 @@ The `-k` is intentional. The Vigo server runs its own CA and presents a self-sig
 
 The bootstrap script also installs the per-OS service (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
 
-After enrollment each envoy appears in the dashboard at `https://localhost:8443/envoys` and begins checking in every 5 minutes.
+After enrollment each envoy appears in the dashboard at `https://localhost:8443/envoys` and checks in at the interval set by `checkin.interval` in `server.yaml`.
 
 ## 3. Write a configcrate
 
@@ -107,7 +107,7 @@ sudo vigocli config publish
 
 Validates the tree, syncs to `/srv/vigo/.live/`, triggers a server reload. If validation fails, the built-in AI assistant prints fix suggestions to your terminal.
 
-## 6. Force an immediate check-in (don't wait 5 minutes)
+## 6. Force an immediate check-in (don't wait for the next one)
 
 ```bash
 sudo vigocli envoys push --all

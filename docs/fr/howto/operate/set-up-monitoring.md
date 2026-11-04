@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:6fdd4bc07f4327f58ac2447f3e39dce3136fa9dd6b9beb35674192b54cc4db65 -->
+<!-- vigo-i18n source_sha:5fa791cafddf6931c90fd82623f5af585737ec32a47a8cd67e114869e4efcba4 -->
 
 # Mettre en place la supervision
 
@@ -31,7 +31,7 @@ Le serveur Vigo expose les métriques Prometheus sur `GET /metrics` sur le port 
 | `vigo_checkin_age_seconds` | Histogram (instantané) | | Distribution actuelle des secondes écoulées depuis le dernier check-in sur les Envoys non révoqués. Remplacée à chaque tick du collecteur, non cumulative : interrogez-la sans `rate()` |
 | `vigo_envoy_state_transitions_total` | Counter | `transition` | Bascules d'accessibilité : `offline` (non-obsolète→obsolète) et `online` (obsolète→non-obsolète). Une hausse des transitions `offline` alors que les Envoys sont actifs indique que le seuil d'obsolescence les fait osciller sous charge |
 
-L'histogramme `vigo_checkin_age_seconds` utilise des buckets personnalisés : 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. Les buckets sous les 60s chevauchent le seuil d'obsolescence de 30s (`freshness.MinStaleThreshold`) afin que l'histogramme puisse mesurer à quel point des check-ins sains s'approchent de la limite d'obsolescence sous une cadence rapide (1s par défaut). Chaque scrape montre la flotte telle qu'elle est maintenant (un échantillon par Envoy vu et non révoqué), donc `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)` donne l'âge médian actuel. Cela remplace les jauges de dernière-vue par Envoy pour éviter une explosion de cardinalité à l'échelle.
+L'histogramme `vigo_checkin_age_seconds` utilise des buckets personnalisés : 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. Les buckets sous les 60s chevauchent le seuil d'obsolescence de 30s (`freshness.MinStaleThreshold`) afin que l'histogramme puisse mesurer à quel point des check-ins sains s'approchent de la limite d'obsolescence sous une cadence rapide, par exemple 1s. Chaque scrape montre la flotte telle qu'elle est maintenant (un échantillon par Envoy vu et non révoqué), donc `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)` donne l'âge médian actuel. Cela remplace les jauges de dernière-vue par Envoy pour éviter une explosion de cardinalité à l'échelle.
 
 ### gRPC
 
