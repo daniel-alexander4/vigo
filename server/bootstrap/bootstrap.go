@@ -25,6 +25,7 @@ import (
 
 	"git.alexander4.io/vigo/server/ca"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/metrics"
@@ -75,6 +76,7 @@ type Handler struct {
 	// reservedNames: lower-cased DNS names of the server's own TLS cert;
 	// see SetReservedNames.
 	reservedNames map[string]bool
+	queries       *db.Queries // local envoy-row delete on a routed enrollment
 }
 
 // spannerRouter is the subset of *spanner.SpannerAdmin the REST bootstrap
@@ -310,6 +312,26 @@ func (h *Handler) SetFleetIndex(fi *fleet.FleetIndex) { h.fleetIndex = fi }
 // pass nil explicitly when there's no spanner.
 func (h *Handler) SetSpannerRouter(r spannerRouter) { h.spannerRouter = r }
 
+// SetQueries wires the query layer used to delete this bolt's local envoy row
+// when an enrollment is routed to the owning bolt.
+func (h *Handler) SetQueries(q *db.Queries) { h.queries = q }
+
+// dropRoutedLocalEnvoy removes this bolt's local record (DB row, then
+// FleetIndex entry) of an envoy whose enrollment was routed to the owning bolt.
+// Mirrors server/grpc/register.go. A delete failure is logged: the agent has
+// already been redirected and enrollment succeeded on the owning bolt.
+func (h *Handler) dropRoutedLocalEnvoy(ctx context.Context, envoyID string) {
+	if h.queries != nil {
+		if err := h.queries.DeleteEnvoy(ctx, envoyID); err != nil {
+			slog.Error("routed enrollment: failed to delete local envoy row; it will reappear as an offline envoy until deleted",
+				"envoy_id", envoyID, "error", err)
+		}
+	}
+	if h.fleetIndex != nil {
+		h.fleetIndex.RemoveEnvoy(envoyID)
+	}
+}
+
 // RegisterRoutes registers the bootstrap and agent distribution routes on the mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /bootstrap", h.BootstrapScript)
@@ -339,7 +361,7 @@ var bootstrapFuncs = template.FuncMap{
 }
 
 // shq single-quotes s for POSIX sh: wrap in '…' and rewrite each embedded ' as
-// '\'' (close quote, escaped literal quote, reopen).
+// '\” (close quote, escaped literal quote, reopen).
 func shq(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
@@ -692,14 +714,14 @@ type bootstrapRegisterRequest struct {
 
 // bootstrapRegisterResponse is the JSON response for POST /api/v1/bootstrap/register.
 type bootstrapRegisterResponse struct {
-	EnvoyID         string `json:"envoy_id"`
-	SignedCertPEM   string `json:"signed_cert_pem"`
-	CACertPEM       string `json:"ca_cert_pem"`
+	EnvoyID       string `json:"envoy_id"`
+	SignedCertPEM string `json:"signed_cert_pem"`
+	CACertPEM     string `json:"ca_cert_pem"`
 	// BoltAddr, when non-empty, is the gRPC address of the spanner bolt whose
 	// patterns own this hostname; the contacted bolt enrolled the envoy there
 	// and the agent must check in at this address (it carries the bolt-assigned
 	// EnvoyID above). Empty ⇒ this bolt owns it / standalone.
-	BoltAddr      string `json:"bolt_addr,omitempty"`
+	BoltAddr string `json:"bolt_addr,omitempty"`
 }
 
 // BootstrapRegister handles agent enrollment with CSR signing. If a token is
@@ -825,10 +847,11 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// When routed away, this bolt's local FleetIndex entry is redundant — the
-	// owning bolt holds the envoy now — so drop it to keep the local count right.
-	if h.fleetIndex != nil && boltAddr != "" {
-		h.fleetIndex.RemoveEnvoy(localEnvoyID)
+	// When routed away, the owning bolt holds the envoy now, so drop this
+	// bolt's local copies — the DB row too, or rehydrate brings it back on
+	// restart as a phantom offline envoy.
+	if boltAddr != "" {
+		h.dropRoutedLocalEnvoy(r.Context(), localEnvoyID)
 	}
 
 	h.metrics.EnrollmentsTotal.WithLabelValues("success").Inc()

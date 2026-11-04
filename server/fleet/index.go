@@ -1372,11 +1372,17 @@ func (f *FleetIndex) RegisterWake(id string) chan struct{} {
 	return ch
 }
 
-// UnregisterWake removes the wake channel for an envoy.
-func (f *FleetIndex) UnregisterWake(id string) {
+// UnregisterWake removes the wake channel for an envoy, but only if the stored
+// channel is still ch (the one the caller registered). A newer Wake call for
+// the same envoy replaces the entry in RegisterWake; the superseded call's
+// deferred unregister must not delete the newer caller's channel, or that
+// caller would never receive its signal.
+func (f *FleetIndex) UnregisterWake(id string, ch chan struct{}) {
 	f.wakeMu.Lock()
 	defer f.wakeMu.Unlock()
-	delete(f.wakeChans, id)
+	if cur, ok := f.wakeChans[id]; ok && cur == ch {
+		delete(f.wakeChans, id)
+	}
 }
 
 // SignalWake wakes an agent blocked on a Wake RPC by closing its channel.

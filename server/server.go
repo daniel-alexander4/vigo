@@ -1352,6 +1352,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 				if s.spannerAdmin != nil {
 					bh.SetSpannerRouter(s.spannerAdmin)
 				}
+				bh.SetQueries(s.queries)
 			})
 
 			if len(s.cfg.Bootstrap.TrustedPatterns) > 0 {

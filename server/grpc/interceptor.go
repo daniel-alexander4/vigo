@@ -317,39 +317,47 @@ func verifyResolveSecretsCtx(ctx context.Context, queries *db.Queries, req *pb.R
 // verifyWake validates the signature on a WakeRequest. WakeRequest carries a
 // string timestamp (like ResolveSecrets, not a protobuf Timestamp), and the
 // agent signs over the envoy_id bytes (agent/src/checkin/client.rs). No
-// envoy-context reuse downstream, so it returns only error; wake.go keeps its
-// own revoked check (none of the verify paths inspect revocation).
+// envoy-context reuse downstream, so it returns only error. Revocation is
+// enforced in lookupEnvoyAndPubKey.
 func verifyWake(ctx context.Context, queries *db.Queries, req *pb.WakeRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) error {
-	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
-	}
-	envoyID := req.GetEnvoyId()
+	_, err := verifyEnvoyIDSignature(ctx, queries, req.GetEnvoyId(), req.GetTimestamp(), req.GetSignature(), sigWindow, fleetIdx, m)
+	return err
+}
 
-	_, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
+// verifyEnvoyIDSignature verifies a request whose signed payload is the
+// envoy_id bytes and whose timestamp is a decimal-unix string — the Wake RPC
+// and the TunnelStream handshake. It runs the same gates as every other agent
+// verify path: UUID shape, lookupEnvoyAndPubKey (revocation + cert pin), the
+// signature-window timestamp check, then the ed25519 signature. Returns the
+// resolved envoy for callers that need it.
+func verifyEnvoyIDSignature(ctx context.Context, queries *db.Queries, envoyID, tsStr string, sig []byte, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, error) {
+	if _, err := uuid.Parse(envoyID); err != nil {
+		return db.Envoy{}, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
+	}
+
+	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
 	if err != nil {
-		return err
+		return db.Envoy{}, err
 	}
 
-	tsStr := req.GetTimestamp()
 	if tsStr == "" {
-		return status.Error(codes.InvalidArgument, "timestamp is required")
+		return db.Envoy{}, status.Error(codes.InvalidArgument, "timestamp is required")
 	}
 	tsUnix, err := strconv.ParseInt(tsStr, 10, 64)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "invalid timestamp: %v", err)
+		return db.Envoy{}, status.Errorf(codes.InvalidArgument, "invalid timestamp: %v", err)
 	}
 	if err := checkTimestamp(time.Unix(tsUnix, 0), sigWindow); err != nil {
 		m.SigVerifyFailed.WithLabelValues("timestamp_skew").Inc()
-		return err
+		return db.Envoy{}, err
 	}
 
-	payload := []byte(envoyID)
-	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey, envoyID, fleetIdx) {
+	if !verifyPayload([]byte(envoyID), tsStr, sig, pubKey, envoyID, fleetIdx) {
 		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
-		return status.Error(codes.Unauthenticated, "signature verification failed")
+		return db.Envoy{}, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
-	return nil
+	return envoy, nil
 }
 
 // lookupEnvoyAndPubKey retrieves a envoy and its parsed ED25519 public key.
@@ -403,14 +411,24 @@ func resolveEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID str
 	return envoy, pubKey, nil
 }
 
-// lookupEnvoyAndPubKey resolves the envoy + its ed25519 pubkey and enforces the
-// mTLS client-cert pin in one place — every signature-verify path bottoms out
-// here, so binding the pin check to it covers unary CheckIn/ReportResult/
-// ReportTraits/ResolveSecrets/Wake and the held-stream handshake at once.
+// lookupEnvoyAndPubKey resolves the envoy + its ed25519 pubkey and enforces
+// revocation and the mTLS client-cert pin in one place — every signature-verify
+// path bottoms out here, so binding both checks to it covers unary CheckIn/
+// ReportResult/ReportTraits/ResolveSecrets/Wake, the TunnelStream handshake and
+// the held-stream handshake at once. A revoked envoy still holds a valid key and
+// a CA-signed cert, so the revoked bit is the only thing that stops it. The
+// fast path reads it from the fleet index (fleetEnvoyToDB carries it); the
+// slow path reads the DB row. Held-stream messages that skip per-message
+// verification (checkin.stream_signature: handshake-only) never reach here and
+// keep their own per-message revoked re-check in AgentStream.
 func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
 	envoy, pubKey, err := resolveEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
 	if err != nil {
 		return db.Envoy{}, nil, err
+	}
+	if envoy.Revoked != 0 {
+		m.SigVerifyFailed.WithLabelValues("revoked").Inc()
+		return db.Envoy{}, nil, status.Error(codes.PermissionDenied, "envoy is revoked")
 	}
 	if err := enforceCertPin(ctx, envoy, m); err != nil {
 		return db.Envoy{}, nil, err

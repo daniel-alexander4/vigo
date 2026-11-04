@@ -103,13 +103,13 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}
 	}
 
-	// FleetIndex insertion is now handled inside registry.Register under
-	// the enrollment mutex, so we don't call AddEnvoy here. When the
-	// enrollment was routed to another roster bolt, this server's local
-	// FleetIndex entry is redundant — the owning bolt now holds the
-	// envoy — so remove it to keep the local active count accurate.
-	if s.fleetIndex != nil && boltAddr != "" {
-		s.fleetIndex.RemoveEnvoy(localEnvoyID)
+	// registry.Register inserted the envoy locally (DB row + FleetIndex,
+	// under the enrollment mutex). When the enrollment was routed to another
+	// roster bolt, the owning bolt holds the envoy now, so drop both local
+	// copies — removing only the FleetIndex entry left the DB row behind,
+	// and rehydrate brought it back on restart as a phantom offline envoy.
+	if boltAddr != "" {
+		s.dropRoutedLocalEnvoy(ctx, localEnvoyID)
 	}
 
 	slog.Info("envoy registered",
@@ -149,4 +149,21 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	}
 
 	return resp, nil
+}
+
+// dropRoutedLocalEnvoy removes this bolt's local record of an envoy whose
+// enrollment was routed to the owning bolt: the DB row first (so a restart's
+// rehydrate can't resurrect it), then the FleetIndex entry. A delete failure is
+// logged, not returned — the agent has already been redirected and the
+// enrollment itself succeeded on the owning bolt.
+func (s *AgentService) dropRoutedLocalEnvoy(ctx context.Context, envoyID string) {
+	if s.queries != nil {
+		if err := s.queries.DeleteEnvoy(ctx, envoyID); err != nil {
+			slog.Error("routed enrollment: failed to delete local envoy row; it will reappear as an offline envoy until deleted",
+				"envoy_id", envoyID, "error", err)
+		}
+	}
+	if s.fleetIndex != nil {
+		s.fleetIndex.RemoveEnvoy(envoyID)
+	}
 }

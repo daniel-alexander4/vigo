@@ -13,6 +13,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
@@ -142,7 +143,11 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 	if err != nil {
 		return err
 	}
-	if err := stream.Send(&pb.ServerStreamMessage{
+	// Every server→agent message on this stream goes through out: the writer
+	// goroutine (pushes) and the reader goroutine (in-stream replies) both send,
+	// and gRPC forbids concurrent SendMsg on one stream.
+	out := &serialSender{stream: stream}
+	if err := out.Send(&pb.ServerStreamMessage{
 		Msg: &pb.ServerStreamMessage_CheckInResponse{
 			CheckInResponse: resp,
 		},
@@ -157,15 +162,42 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 		"trace_id", handshakeTraceID,
 	)
 
+	return s.serveAgentStream(stream, out, as, envoyID, envoy, relaxThisStream)
+}
+
+// serialSender serializes Send on one AgentStream. gRPC-go forbids concurrent
+// SendMsg on a stream, and an AgentStream has two senders: the writer goroutine
+// forwarding server pushes (as.send) and the reader goroutine replying in-stream
+// (check-in responses, report/traits/delta acks). Replies go through the lock
+// directly rather than the bounded push channel, so they are never dropped.
+type serialSender struct {
+	mu     sync.Mutex
+	stream pb.VigoAgent_AgentStreamServer
+}
+
+func (o *serialSender) Send(msg *pb.ServerStreamMessage) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.stream.Send(msg)
+}
+
+// serveAgentStream runs a held stream after its handshake: a writer goroutine
+// forwarding pushes and a reader goroutine dispatching agent messages, both
+// sending through out. Returns when either finishes.
+func (s *AgentService) serveAgentStream(stream pb.VigoAgent_AgentStreamServer, out *serialSender, as *agentStream, envoyID string, envoy db.Envoy, relaxThisStream bool) error {
 	// Two goroutines: one reads from agent, one writes push messages.
 	errCh := make(chan error, 2)
 
-	// Writer: forward push messages from streamManager to gRPC stream.
+	// Writer: forward push messages from streamManager to gRPC stream. Same
+	// panic containment as the reader: outside the recovery interceptor's reach.
 	go func() {
+		defer daemon.Recover("agentstream-writer", func(any) {
+			errCh <- status.Error(codes.Internal, "agent stream writer panicked")
+		})
 		for {
 			select {
 			case msg := <-as.send:
-				if err := stream.Send(msg); err != nil {
+				if err := out.Send(msg); err != nil {
 					errCh <- err
 					return
 				}
@@ -237,7 +269,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 					s.metrics.AgentStreamHandlerErrors.WithLabelValues("check_in").Inc()
 					continue
 				}
-				if err := stream.Send(&pb.ServerStreamMessage{
+				if err := out.Send(&pb.ServerStreamMessage{
 					Msg: &pb.ServerStreamMessage_CheckInResponse{
 						CheckInResponse: resp,
 					},
@@ -282,7 +314,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 					s.metrics.AgentStreamHandlerErrors.WithLabelValues("report_result").Inc()
 					continue
 				}
-				if err := stream.Send(&pb.ServerStreamMessage{
+				if err := out.Send(&pb.ServerStreamMessage{
 					Msg: &pb.ServerStreamMessage_ReportResultAck{
 						ReportResultAck: resp,
 					},
@@ -306,7 +338,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 					s.metrics.AgentStreamHandlerErrors.WithLabelValues("report_traits").Inc()
 					continue
 				}
-				if err := stream.Send(&pb.ServerStreamMessage{
+				if err := out.Send(&pb.ServerStreamMessage{
 					Msg: &pb.ServerStreamMessage_ReportTraitsAck{
 						ReportTraitsAck: resp,
 					},
@@ -336,7 +368,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 				// identity model for Delta. The revocation re-check above
 				// still gates it.
 				ack := s.handleDelta(envoyID, envoy.Hostname, m.Delta)
-				if err := stream.Send(&pb.ServerStreamMessage{
+				if err := out.Send(&pb.ServerStreamMessage{
 					Msg: &pb.ServerStreamMessage_DeltaAck{DeltaAck: ack},
 				}); err != nil {
 					errCh <- err

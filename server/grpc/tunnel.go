@@ -8,7 +8,6 @@ import (
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/daemon"
-	"git.alexander4.io/vigo/server/db"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,35 +35,18 @@ func (s *AgentService) TunnelStream(stream pb.VigoAgent_TunnelStreamServer) erro
 	if envoyID == "" {
 		return status.Error(codes.InvalidArgument, "envoy_id required in handshake")
 	}
-
-	// Validate envoy exists and is not revoked.
-	envoy, exists, revoked := s.fleetIndex.GetEnvoyLite(envoyID)
-	if !exists {
-		return status.Errorf(codes.NotFound, "envoy %q not found", envoyID)
-	}
-	if revoked {
-		return status.Errorf(codes.PermissionDenied, "envoy %q is revoked", envoyID)
-	}
-
-	// Verify the handshake signature against the envoy's stored public key.
-	// The agent signs envoy_id+timestamp (same convention as gRPC interceptor).
 	if len(hs.Signature) == 0 {
 		return status.Error(codes.InvalidArgument, "signature required in handshake")
 	}
-	pubKey, err := db.ParsePubKey(envoy.PubkeyPEM)
+
+	// Verify the handshake through the same gates as every other agent RPC:
+	// revocation + mTLS cert pin (lookupEnvoyAndPubKey), the signature-window
+	// timestamp check (an old handshake signature can't be replayed forever),
+	// then the ed25519 signature over envoy_id+timestamp.
+	envoy, err := verifyEnvoyIDSignature(stream.Context(), s.queries, envoyID, hs.Timestamp, hs.Signature, s.signatureWindow, s.fleetIndex, s.metrics)
 	if err != nil {
-		slog.Error("scrier: failed to parse envoy pubkey", "envoy_id", envoyID, "error", err)
-		return status.Errorf(codes.Internal, "invalid envoy public key")
-	}
-	if !verifyPayload([]byte(envoyID), hs.Timestamp, hs.Signature, pubKey, envoyID, s.fleetIndex) {
-		slog.Warn("scrier: invalid tunnel handshake signature",
-			"envoy_id", envoyID,
-			"timestamp", hs.Timestamp,
-			"sig_len", len(hs.Signature),
-			"pubkey_len", len(pubKey),
-			"pubkey_pem_len", len(envoy.PubkeyPEM),
-		)
-		return status.Errorf(codes.PermissionDenied, "invalid handshake signature")
+		slog.Warn("scrier: tunnel handshake rejected", "envoy_id", envoyID, "error", err)
+		return err
 	}
 
 	slog.Info("scrier tunnel stream opened",

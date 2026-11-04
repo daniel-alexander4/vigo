@@ -92,6 +92,37 @@ func TestDBRunStore_RecordRun_RollsBackOnFailure(t *testing.T) {
 	}
 }
 
+// TestDBRunStore_RecordRun_BlockedStatus: summarizeResults emits "blocked" for a
+// run with a guardrail-blocked resource. Recording it against the real migrated
+// schema (not MemRunStore, which has no CHECK) must succeed — before 000028 the
+// runs.status CHECK rejected it and the whole RecordRun rolled back.
+func TestDBRunStore_RecordRun_BlockedStatus(t *testing.T) {
+	ctx := context.Background()
+	sqlDB := testutil.OpenMigratedTestDB(t)
+	if _, err := sqlDB.ExecContext(ctx,
+		"INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?,?,?,?)",
+		"env-1", "host-1", "10.0.0.1", "pk"); err != nil {
+		t.Fatalf("seed envoy: %v", err)
+	}
+	store := NewDBRunStore(New(sqlDB), sqlDB)
+
+	run, err := store.RecordRun(ctx, RecordRunParams{
+		Run:     CreateRunParams{EnvoyID: "env-1", Status: "running", Trigger: "scheduled", ResourceCount: 1},
+		Results: []CreateRunResultParams{{ConfigcrateName: "m1", ResourceType: "exec", ResourceName: "wipe", ActionTaken: "blocked"}},
+		Finish:  FinishRunParams{Status: "blocked"},
+	})
+	if err != nil {
+		t.Fatalf("RecordRun(status=blocked): %v", err)
+	}
+	got, err := store.GetRunByID(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("GetRunByID: %v", err)
+	}
+	if got.Status != "blocked" || !got.FinishedAt.Valid {
+		t.Errorf("persisted run = status %q finished=%v, want blocked + finished", got.Status, got.FinishedAt.Valid)
+	}
+}
+
 func TestMemRunStore_RecordRun(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemRunStore(20)

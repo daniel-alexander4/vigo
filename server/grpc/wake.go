@@ -23,21 +23,21 @@ func (s *AgentService) Wake(ctx context.Context, req *pb.WakeRequest) (*pb.WakeR
 		return nil, status.Error(codes.InvalidArgument, "envoy_id required")
 	}
 
-	// Validate envoy exists and is not revoked.
-	if s.fleetIndex != nil {
-		_, exists, revoked := s.fleetIndex.GetEnvoyLite(envoyID)
-		if !exists {
-			return nil, status.Error(codes.NotFound, "envoy not found")
-		}
-		if revoked {
-			return nil, status.Error(codes.PermissionDenied, "envoy is revoked")
-		}
+	// Revocation is enforced by the signature interceptor (verifyWake →
+	// lookupEnvoyAndPubKey), which runs before this handler on both the
+	// fleet-index and DB paths. Existence in the fleet index is still
+	// required: the wake channel lives there.
+	if s.fleetIndex == nil {
+		return nil, status.Error(codes.Unavailable, "wake requires the fleet index")
+	}
+	if _, exists, _ := s.fleetIndex.GetEnvoyLite(envoyID); !exists {
+		return nil, status.Error(codes.NotFound, "envoy not found")
 	}
 
 	// Register a wake channel. The channel is signaled when any subsystem
 	// needs this agent urgently (Scrier tunnel, task dispatch, etc.).
 	ch := s.fleetIndex.RegisterWake(envoyID)
-	defer s.fleetIndex.UnregisterWake(envoyID)
+	defer s.fleetIndex.UnregisterWake(envoyID, ch)
 
 	slog.Debug("agent wake registered", "envoy_id", envoyID)
 
