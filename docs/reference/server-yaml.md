@@ -349,7 +349,7 @@ grc:
 | `push_interval` | `6h` | How often to push evidence |
 | `frameworks` | (required) | Vigo standard key → GRC platform framework ID mapping |
 
-Each pushed framework carries the same numbers as that framework's compliance report: `satisfied`, `waived`, `partial` and `not_satisfied` control counts (they sum to `total_controls`), `coverage_percent`, and the active envoy count. Every control is listed with a fleet status: `satisfied` when every active envoy covers it, `waived` when every envoy has it waived, `not_satisfied` when none covers, waives or partially meets it, and `partial` otherwise. The evidence text gives the per-envoy split. Unknown framework keys are skipped with a warning.
+Each pushed framework carries the same numbers as that framework's compliance report: `satisfied`, `waived`, `partial` and `not_satisfied` control counts (they sum to `total_controls`), `coverage_percent`, and the active envoy count. Every control is listed with a fleet status: `satisfied` when every active envoy covers it, `waived` when every envoy has it waived, `not_satisfied` when none covers, waives or partially meets it, and `partial` otherwise. The evidence text gives the per-envoy split. A waived control is never sent as a failure: the generic adapter sends `waived`, Drata gets `not_applicable`, and Vanta, Laika, Secureframe, Thoropass and ServiceNow GRC (which have no waived state) get their passing status with the evidence prefixed "Waived (accepted exception, not enforced)". Unknown framework keys are skipped with a warning.
 
 ## spanner
 
@@ -416,7 +416,6 @@ peers:
 | `role` | `primary` | `primary` or `peer` |
 | `servers` | (empty) | List of peer servers |
 | `servers[].addr` | (required) | Peer gRPC address (`host:port`) |
-| `servers[].sync_interval` | `10s` | Push interval to this peer |
 | `servers[].pubkey` | (required) | Peer's service-account (puddle) Ed25519 key, from its startup `puddle service-account identity ready` log line. Authorizes HA peer RPCs (SyncStream/Promote/Status); replication **fails closed** without it. Local secrets backend only. Configure the same `peers` block on every node. |
 
 ## publish
@@ -473,6 +472,7 @@ ai:
 | `context_mode` | `auto` | `tools`, `prefetch`, or `auto` |
 | `api_key` | | API key for external providers (supports `secret:` prefix) |
 | `base_url` | | Auto for ollama; required for openai-compat |
+| `rate_limit` | `0` | Requests per minute per signed-in user; each user has their own bucket. `0` disables the cap |
 
 ## branding
 

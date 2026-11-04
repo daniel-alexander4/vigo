@@ -36,6 +36,17 @@ func GetAdapter(name string) Adapter {
 	}
 }
 
+// statusWaived is the EvidenceControl.Status buildPayload gives a control
+// every active envoy has waived (pusher.go).
+const statusWaived = "waived"
+
+// waivedNote prefixes the evidence of a waived control sent to a platform
+// whose status vocabulary has no waived/not-applicable state, so the control
+// is reported as passing but the record says why.
+func waivedNote(evidence string) string {
+	return "Waived (accepted exception, not enforced): " + evidence
+}
+
 // --- Generic (sends the payload as-is) ---
 
 type genericAdapter struct{}
@@ -65,15 +76,19 @@ func (v *vantaAdapter) Format(p *EvidencePayload) ([]byte, error) {
 	var tests []vantaTest
 	for _, fw := range p.Frameworks {
 		for _, c := range fw.Controls {
-			result := "FAIL"
-			if c.Status == "satisfied" {
+			result, desc := "FAIL", c.Evidence
+			switch c.Status {
+			case "satisfied":
 				result = "PASS"
+			case statusWaived:
+				// PASS/FAIL only: a waiver is an accepted exception, not a failure.
+				result, desc = "PASS", waivedNote(c.Evidence)
 			}
 			tests = append(tests, vantaTest{
 				ExternalID:  fmt.Sprintf("vigo-%s-%s", fw.ID, c.ID),
 				DisplayName: fmt.Sprintf("[%s] %s", fw.Name, c.Title),
 				Result:      result,
-				Description: c.Evidence,
+				Description: desc,
 				Timestamp:   p.Timestamp.Format(time.RFC3339),
 			})
 		}
@@ -91,10 +106,10 @@ type drataPayload struct {
 }
 
 type drataEvidence struct {
-	ControlID  string `json:"control_id"`
-	Status     string `json:"status"` // "passing", "failing", "not_applicable"
-	Evidence   string `json:"evidence"`
-	Source     string `json:"source"`
+	ControlID   string `json:"control_id"`
+	Status      string `json:"status"` // "passing", "failing", "not_applicable"
+	Evidence    string `json:"evidence"`
+	Source      string `json:"source"`
 	CollectedAt string `json:"collected_at"`
 }
 
@@ -103,10 +118,13 @@ func (d *drataAdapter) Format(p *EvidencePayload) ([]byte, error) {
 	for _, fw := range p.Frameworks {
 		for _, c := range fw.Controls {
 			status := "failing"
-			if c.Status == "satisfied" {
+			switch c.Status {
+			case "satisfied":
 				status = "passing"
-			} else if c.Status == "partial" {
+			case "partial":
 				status = "partially_passing"
+			case statusWaived:
+				status = "not_applicable"
 			}
 			evidence = append(evidence, drataEvidence{
 				ControlID:   fmt.Sprintf("%s-%s", fw.ID, c.ID),
@@ -142,17 +160,20 @@ func (s *secureframeAdapter) Format(p *EvidencePayload) ([]byte, error) {
 	var items []secureframeItem
 	for _, fw := range p.Frameworks {
 		for _, c := range fw.Controls {
-			status := "fail"
-			if c.Status == "satisfied" {
+			status, desc := "fail", c.Evidence
+			switch c.Status {
+			case "satisfied":
 				status = "pass"
-			} else if c.Status == "partial" {
+			case "partial":
 				status = "warning"
+			case statusWaived:
+				status, desc = "pass", waivedNote(c.Evidence)
 			}
 			items = append(items, secureframeItem{
 				Name:        fmt.Sprintf("[%s] %s", fw.Name, c.Title),
 				Status:      status,
 				ControlRef:  c.ID,
-				Description: c.Evidence,
+				Description: desc,
 				Source:      "vigo",
 				Timestamp:   p.Timestamp.Format(time.RFC3339),
 			})
@@ -193,29 +214,32 @@ type servicenowGRCPayload struct {
 }
 
 type servicenowRecord struct {
-	PolicyID    string `json:"policy_id"`
-	ControlID   string `json:"control_id"`
-	Status      string `json:"status"` // "compliant", "non_compliant", "partially_compliant"
-	Evidence    string `json:"evidence"`
-	AssessedAt  string `json:"assessed_at"`
-	Source      string `json:"source"`
+	PolicyID   string `json:"policy_id"`
+	ControlID  string `json:"control_id"`
+	Status     string `json:"status"` // "compliant", "non_compliant", "partially_compliant"
+	Evidence   string `json:"evidence"`
+	AssessedAt string `json:"assessed_at"`
+	Source     string `json:"source"`
 }
 
 func (s *servicenowGRCAdapter) Format(p *EvidencePayload) ([]byte, error) {
 	var records []servicenowRecord
 	for _, fw := range p.Frameworks {
 		for _, c := range fw.Controls {
-			status := "non_compliant"
-			if c.Status == "satisfied" {
+			status, ev := "non_compliant", c.Evidence
+			switch c.Status {
+			case "satisfied":
 				status = "compliant"
-			} else if c.Status == "partial" {
+			case "partial":
 				status = "partially_compliant"
+			case statusWaived:
+				status, ev = "compliant", waivedNote(c.Evidence)
 			}
 			records = append(records, servicenowRecord{
 				PolicyID:   fw.ID,
 				ControlID:  c.ID,
 				Status:     status,
-				Evidence:   c.Evidence,
+				Evidence:   ev,
 				AssessedAt: p.Timestamp.Format(time.RFC3339),
 				Source:     "vigo",
 			})

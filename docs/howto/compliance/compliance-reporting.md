@@ -88,15 +88,18 @@ Vigo's GRC exporters format per-control pass/fail evidence and POST it to your G
 
 ```yaml
 grc:
-  enabled: true
-  vendor: vanta              # or drata | secureframe | laika | thoropass | servicenow | generic
-  endpoint: "https://api.vanta.com/v1/..."
-  token: "secret:grc/vanta/token"
-  push_interval: "1h"
-  frameworks: [soc2, iso-27001]
+  integrations:
+    - name: vanta            # or drata | secureframe | laika | thoropass | servicenow; any other name sends the generic payload
+      enabled: true
+      endpoint: "https://api.vanta.com/v1/evidence"
+      api_key: "secret:vigo/grc/vanta-api-key"
+      push_interval: "1h"
+      frameworks:            # Vigo framework key -> the platform's framework ID
+        soc2: "soc2-2017"
+        iso-27001: "iso-27001-2022"
 ```
 
-See `reference/server-yaml.md` for the full per-vendor schema.
+See [`grc` in the server.yaml reference](../../reference/server-yaml.md#grc) for every field.
 
 ## Waivers
 

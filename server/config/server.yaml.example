@@ -253,7 +253,7 @@ watcher:
 #   max_tokens: 4096
 #   base_url: ""                               # auto for ollama; required for openai-compat
 #   api_key: "secret:vigo/ai/api_key"        # for claude/openai/openai-compat
-#   rate_limit: 0                              # requests/minute (0 = unlimited)
+#   rate_limit: 0                              # requests/minute per user (0 = unlimited)
 #   max_tool_rounds: 10
 #   context_mode: "auto"                       # tools | prefetch | auto
 #   docs_mode: "full"                          # full | condensed | off

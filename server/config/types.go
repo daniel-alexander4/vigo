@@ -727,12 +727,12 @@ type GRCSection struct {
 
 // GRCIntegration defines a single GRC platform connection.
 type GRCIntegration struct {
-	Name         string            `yaml:"name" doc:"GRC platform identifier." options:"vanta|drata|servicenow" example:"vanta, drata"`
+	Name         string            `yaml:"name" doc:"GRC platform identifier; selects the payload shape. Any other name sends the generic payload." options:"vanta|drata|secureframe|laika|thoropass|servicenow" example:"vanta, drata"`
 	Endpoint     string            `yaml:"endpoint" doc:"API endpoint URL for the GRC platform." example:"https://api.vanta.com/v1, https://public-api.drata.com"`
 	APIKey       string            `yaml:"api_key" doc:"API key / token for authentication (supports the secret: prefix)." example:"secret:vigo/grc/vanta_api_key"`
 	PushInterval string            `yaml:"push_interval" doc:"How often to push evidence as a Go duration string (e.g. 1h, 6h)." example:"1h, 6h, 24h (accepts s, m, h)"`
 	Enabled      bool              `yaml:"enabled" doc:"Whether this GRC connection is active." default:"false" example:"true"`
-	Frameworks   map[string]string `yaml:"frameworks" doc:"Map of Vigo framework key to the matching framework ID on the GRC side." example:"{soc2: soc2-type2, iso27001: iso_27001}"`
+	Frameworks   map[string]string `yaml:"frameworks" doc:"Map of Vigo framework key to the matching framework ID on the GRC side." example:"{soc2: soc2-type2, iso-27001: iso_27001}"`
 }
 
 // PathsSection configures directory paths for server subsystems.
@@ -802,14 +802,13 @@ type RetractionSection struct {
 // PeersSection configures peer replication for server redundancy.
 type PeersSection struct {
 	Role    string      `yaml:"role" doc:"Server role in the peer-replication group." options:"primary|peer" default:"primary" example:"primary (write leader), peer (read replica)"`
-	Servers []PeerEntry `yaml:"servers" doc:"Peer server addresses and push intervals." example:"see servers[].* fields"`
+	Servers []PeerEntry `yaml:"servers" doc:"Peer server addresses and service-account pubkeys." example:"see servers[].* fields"`
 }
 
 // PeerEntry defines a single peer server.
 type PeerEntry struct {
-	Addr         string `yaml:"addr" doc:"Peer gRPC address (host:port)." example:"vigo-replica-1.example.com:1530"`
-	SyncInterval string `yaml:"sync_interval" doc:"Push interval to this peer as a Go duration string." default:"10s" example:"5s, 10s, 30s (accepts s, m)"`
-	Pubkey       string `yaml:"pubkey" doc:"Peer's service-account (puddle) Ed25519 public key, from its startup 'puddle service-account identity ready' log line. Required to authorize HA peer RPCs (SyncStream/Promote/Status); peer replication fails closed without it. Local secrets backend only." example:"ed25519:1a2b3c…"`
+	Addr   string `yaml:"addr" doc:"Peer gRPC address (host:port)." example:"vigo-replica-1.example.com:1530"`
+	Pubkey string `yaml:"pubkey" doc:"Peer's service-account (puddle) Ed25519 public key, from its startup 'puddle service-account identity ready' log line. Required to authorize HA peer RPCs (SyncStream/Promote/Status); peer replication fails closed without it. Local secrets backend only." example:"ed25519:1a2b3c…"`
 }
 
 // TaskSection configures task dispatch behavior.
@@ -840,7 +839,7 @@ type AISection struct {
 	MaxTokens     int    `yaml:"max_tokens" doc:"Maximum output tokens per response." default:"4096" example:"2048 (tight), 4096 (default), 8192 (long-form)"`
 	BaseURL       string `yaml:"base_url" doc:"Provider base URL override (used for Ollama or Claude-compatible proxies)." example:"http://ollama.internal:11434, https://api.anthropic.com"`
 	APIKey        string `yaml:"api_key" doc:"Provider API key (supports the secret: prefix)." example:"secret:vigo/ai/api_key  (raw: sk-ant-api03-...)"`
-	RateLimit     int    `yaml:"rate_limit" doc:"Requests-per-minute cap on AI calls. 0 disables the cap." example:"60 (1/sec), 600 (10/sec), 0 (unlimited)"`
+	RateLimit     int    `yaml:"rate_limit" doc:"Requests-per-minute cap on AI calls, per signed-in user (each user has their own bucket). 0 disables the cap." example:"60 (1/sec), 600 (10/sec), 0 (unlimited)"`
 	MaxToolRounds int    `yaml:"max_tool_rounds" doc:"Maximum number of tool-use turns per conversation." default:"10" example:"5 (conservative), 10 (default), 20 (complex tasks)"`
 	ContextMode   string `yaml:"context_mode" doc:"How much fleet context the assistant gets per call." options:"full|summary|off" example:"summary (recommended), full (small fleets), off"`
 	DocsMode      string `yaml:"docs_mode" doc:"How much of the Vigo docs corpus the assistant is fed." options:"full|condensed|off" default:"full" example:"full (best answers), condensed (smaller context)"`
