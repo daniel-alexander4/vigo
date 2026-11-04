@@ -287,8 +287,8 @@ fn fetch(agent: &SwarmAgent, url: &str) -> Result<f64> {
     if status != reqwest::StatusCode::OK {
         bail!("status {}", status);
     }
-    let body = resp.text()?;
-    let parsed: HealthResponse = serde_json::from_str(&body)?;
+    let body = crate::swarm::peer_client::read_body_capped(resp, 4 << 10)?;
+    let parsed: HealthResponse = serde_json::from_slice(&body)?;
     if !parsed.free_pct.is_finite() {
         bail!("non-finite free_pct");
     }

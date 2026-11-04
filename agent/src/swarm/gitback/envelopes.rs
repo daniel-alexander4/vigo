@@ -351,8 +351,12 @@ impl RevokeEnvelope {
     /// 4. The leaf's `subject_puddle_pubkey` equals this envelope's
     ///    `signer_puddle_pubkey` — the chain proves *this* signer is the
     ///    admin, not merely that *some* admin exists.
-    pub fn verify_revoke_authority(&self) -> Result<()> {
-        use crate::swarm::anchor::tokens::{verify_chain, Role};
+    ///
+    /// The authority chain's founder delegations are reconciled with the
+    /// chain this envoy already knows ([`super::delegation_store`]), so a
+    /// retired founder key cannot authorize a revoke by omitting them.
+    pub fn verify_revoke_authority(&self, gitback_base: &std::path::Path) -> Result<()> {
+        use crate::swarm::anchor::tokens::Role;
 
         let raw = self
             .verify_signature()
@@ -369,14 +373,15 @@ impl RevokeEnvelope {
         // to keep the call shape identical to the push path.
         let founder = root.body.signer_puddle_pubkey;
 
-        verify_chain(
+        super::delegation_store::verify_chain_known(
+            gitback_base,
             &raw.project_id,
             &founder,
             &self.authority_delegations,
             &self.authority_chain,
             self.revoked_at,
         )
-        .map_err(|e| anyhow!("revoke authority chain verification: {}", e))?;
+        .map_err(|e| anyhow!("revoke authority chain verification: {:#}", e))?;
 
         // verify_chain guarantees the chain is non-empty, so last() is Some.
         let leaf = self
@@ -868,7 +873,7 @@ mod tests {
         let bootstrap = issue_bootstrap(&founder, "auth-proj", 99, None).unwrap();
         let env = RevokeEnvelope::build(&founder, &pid, &sample_tid(), 100, "compromised")
             .with_authority(vec![bootstrap], vec![]);
-        env.verify_revoke_authority()
+        env.verify_revoke_authority(tempfile::tempdir().unwrap().path())
             .expect("founder-signed revoke must be authorized");
     }
 
@@ -883,7 +888,7 @@ mod tests {
             issue_child(&founder, &bootstrap, &pub_bytes(&admin), Role::Admin, 99, None).unwrap();
         let env = RevokeEnvelope::build(&admin, &pid, &sample_tid(), 100, "rotate")
             .with_authority(vec![bootstrap, admin_tok], vec![]);
-        env.verify_revoke_authority()
+        env.verify_revoke_authority(tempfile::tempdir().unwrap().path())
             .expect("admin-child-signed revoke must be authorized");
     }
 
@@ -893,7 +898,7 @@ mod tests {
         let attacker = fresh_key();
         let env = RevokeEnvelope::build(&attacker, &sample_pid(), &sample_tid(), 100, "evil");
         assert!(
-            env.verify_revoke_authority().is_err(),
+            env.verify_revoke_authority(tempfile::tempdir().unwrap().path()).is_err(),
             "a revoke with no authority chain must be rejected"
         );
     }
@@ -909,7 +914,7 @@ mod tests {
             issue_child(&founder, &bootstrap, &pub_bytes(&member), Role::Member, 99, None).unwrap();
         let env = RevokeEnvelope::build(&member, &pid, &sample_tid(), 100, "nope")
             .with_authority(vec![bootstrap, member_tok], vec![]);
-        let err = env.verify_revoke_authority().unwrap_err();
+        let err = env.verify_revoke_authority(tempfile::tempdir().unwrap().path()).unwrap_err();
         assert!(
             err.to_string().contains("only admins"),
             "member-signed revoke must be rejected: {err}"
@@ -929,7 +934,7 @@ mod tests {
         let env = RevokeEnvelope::build(&attacker, &victim_pid, &sample_tid(), 100, "evil")
             .with_authority(vec![attacker_bootstrap], vec![]);
         assert!(
-            env.verify_revoke_authority().is_err(),
+            env.verify_revoke_authority(tempfile::tempdir().unwrap().path()).is_err(),
             "a chain rooted at a different founder must not authorize a revoke for the victim project"
         );
     }
@@ -949,7 +954,7 @@ mod tests {
         // founder's bootstrap whose subject is the founder.
         let env = RevokeEnvelope::build(&other, &pid, &sample_tid(), 100, "evil")
             .with_authority(vec![bootstrap], vec![]);
-        let err = env.verify_revoke_authority().unwrap_err();
+        let err = env.verify_revoke_authority(tempfile::tempdir().unwrap().path()).unwrap_err();
         assert!(
             err.to_string().contains("does not authorize the signing puddle"),
             "signer/leaf mismatch must be rejected: {err}"

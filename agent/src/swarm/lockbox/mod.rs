@@ -288,7 +288,7 @@ async fn process_one_leave(
     // Persist first, push second: if fan-out fails mid-flight we've
     // at least recorded the LEAVE locally. `apply_leave` is
     // idempotent across repeat deliveries.
-    apply_leave(user, &spec.age_pubkey, &spec.hostname, spec.leave_time, home)?;
+    apply_leave(user, &spec.age_pubkey, &spec.hostname, spec.leave_time, &envelope.signature, home)?;
 
     if let Some(tls) = DAEMON_TLS.get() {
         // Spawn into the runtime so the blocking pushes don't pin
@@ -433,6 +433,8 @@ pub(crate) fn record_and_fan_resurrect(machine: &str, user: &str, filename: &str
         load_local_signing_key(user).context("cannot load daemon signing key")?;
 
     let resurrect_time = now_secs();
+    let envelope =
+        resurrects::build_envelope(&signing_key, machine, user, filename, resurrect_time);
 
     if let Err(e) = resurrects::ResurrectsTable::modify(user, |table| {
         table.upsert(
@@ -440,6 +442,7 @@ pub(crate) fn record_and_fan_resurrect(machine: &str, user: &str, filename: &str
             resurrects::ResurrectRecord {
                 resurrect_time,
                 source_hostname: machine.to_string(),
+                signature: envelope.signature.clone(),
             },
         )
     }) {
@@ -450,9 +453,6 @@ pub(crate) fn record_and_fan_resurrect(machine: &str, user: &str, filename: &str
             "lockbox: resurrect record save failed"
         );
     }
-
-    let envelope =
-        resurrects::build_envelope(&signing_key, machine, user, filename, resurrect_time);
 
     if let Some(tls) = DAEMON_TLS.get() {
         // Spawn into the runtime so the blocking pushes don't pin the caller.
@@ -1049,9 +1049,13 @@ async fn catchup_tombstones_from(user: &str, source_hostname: &str, url: &str) -
 
     let remote: TombstoneTable =
         serde_json::from_slice(&body).context("parsing tombstones response")?;
+    // Each record must carry a DELETE signature by a signer in OUR peer
+    // table: the table came from whichever peer answered the GET.
+    let peers = PeerTable::load(user);
     let mut merged_snapshot: Option<TombstoneTable> = None;
     TombstoneTable::modify(user, |local| {
-        let changed = local.merge(&remote);
+        let changed =
+            local.merge_verified(&remote, |h| peers.sign_pubkey_for(h).map(str::to_string));
         if changed {
             merged_snapshot = Some(local.clone());
         }
@@ -1153,18 +1157,13 @@ async fn catchup_leaves_from(user: &str, source_hostname: &str, url: &str) -> Re
     // signed envelope's side effects (peer table prune + recipients
     // regen + reencrypt sentinel) only fire for entries we hadn't
     // already processed locally.
+    //
+    // Only records whose LEAVE signature verifies against the local peer
+    // table count: the table came from whichever peer answered the GET.
     let local_pre = leaves::LeavesTable::load(user);
-    let new_entries: Vec<(String, leaves::LeaveRecord)> = remote
-        .leaves
-        .iter()
-        .filter(|(pk, r)| {
-            local_pre
-                .leave_time_for(pk)
-                .map(|prior| r.leave_time > prior)
-                .unwrap_or(true)
-        })
-        .map(|(pk, r)| (pk.clone(), r.clone()))
-        .collect();
+    let peers = PeerTable::load(user);
+    let new_entries = local_pre
+        .verified_advances(&remote, |h| peers.sign_pubkey_for(h).map(str::to_string));
 
     if new_entries.is_empty() {
         return Ok(());
@@ -1184,6 +1183,7 @@ async fn catchup_leaves_from(user: &str, source_hostname: &str, url: &str) -> Re
             pubkey,
             &record.hostname_leaving,
             record.leave_time,
+            &record.signature,
             &home,
         ) {
             debug!(
@@ -1276,9 +1276,10 @@ async fn catchup_resurrects_from(user: &str, source_hostname: &str, url: &str) -
 
     let remote: resurrects::ResurrectsTable =
         serde_json::from_slice(&body).context("parsing resurrects response")?;
+    let peers = PeerTable::load(user);
     let mut merged_count = 0usize;
     resurrects::ResurrectsTable::modify(user, |local| {
-        if local.merge(&remote) {
+        if local.merge_verified(&remote, |h| peers.sign_pubkey_for(h).map(str::to_string)) {
             // Count merged-or-advanced entries. merge() returns true
             // if anything changed; use a quick second pass to count
             // for the log line.
@@ -1871,67 +1872,62 @@ pub fn chown_to_user_pub(_path: &Path, _username: &str) -> Result<()> {
 /// daemon-side state has already been written by the caller, so a
 /// missing or stale mirror only degrades CLI visibility — never
 /// correctness. No-op when the user has no resolvable home.
+///
+/// Root writes into a directory the user controls, so the write goes
+/// through [`write_user_mirror_at`]: `~/.lockbox` is opened no-follow and
+/// must be owned by the user (or root), and the file is created
+/// `O_EXCL|O_NOFOLLOW` beside it and renamed in by descriptor — a
+/// symlinked `~/.lockbox` or a link planted at the tmp name can never
+/// redirect the write or the chown.
+#[cfg(unix)]
 pub(crate) fn write_user_mirror_json(user: &str, filename: &str, json: &str) {
-    let home = match home_for_user(user) {
-        Some(h) => h,
-        None => {
-            debug!(user = %user, "lockbox: skipping user-mirror write (no home)");
-            return;
-        }
+    let Some(home) = home_for_user(user) else {
+        debug!(user = %user, "lockbox: skipping user-mirror write (no home)");
+        return;
+    };
+    let Some(info) = crate::platform::users::lookup_user(user) else {
+        debug!(user = %user, "lockbox: skipping user-mirror write (no passwd entry)");
+        return;
+    };
+    if let Err(e) = write_user_mirror_at(&home, info.uid, info.gid, filename, json.as_bytes()) {
+        debug!(user = %user, file = %filename, error = %e, "lockbox: user-mirror write failed");
+    }
+}
+
+/// Symlink-safe core of [`write_user_mirror_json`].
+#[cfg(unix)]
+pub(crate) fn write_user_mirror_at(
+    home: &Path,
+    uid: u32,
+    gid: u32,
+    filename: &str,
+    data: &[u8],
+) -> std::io::Result<()> {
+    use crate::platform::safe_path::SafeDir;
+    let anchor = SafeDir::open_anchor(home)?;
+    anchor.mkdir(".lockbox", 0o700)?;
+    let dot = anchor.subdir(".lockbox")?.require_owner(uid)?;
+    // A post-scrub recreate by root must hand the dir back to the user, or
+    // the next user-mode `lockbox unlock` cannot write into it.
+    if dot.stat_self()?.uid != uid {
+        dot.chown_self(Some(uid), Some(gid))?;
+    }
+    dot.write_atomic(filename, format!(".{filename}.tmp"), data, 0o600, Some((uid, gid)), None)
+}
+
+#[cfg(not(unix))]
+pub(crate) fn write_user_mirror_json(user: &str, filename: &str, json: &str) {
+    let Some(home) = home_for_user(user) else {
+        return;
     };
     let dot = home.join(".lockbox");
-    if let Err(e) = fs::create_dir_all(&dot) {
-        debug!(path = %dot.display(), error = %e, "lockbox: mkdir for user mirror");
+    if fs::create_dir_all(&dot).is_err() {
         return;
-    }
-    // Chown the dir to the user when the daemon (root) creates it.
-    // Without this, a post-scrub recreate ends up root-owned and the
-    // next user-mode `lockbox unlock` fails to bootstrap because
-    // chowning files into a root-owned dir from user context errors
-    // with EPERM. chown_to_user is idempotent — no-op when already
-    // user-owned. Best-effort like the rest of this writer.
-    #[cfg(unix)]
-    if let Err(e) = chown_to_user(&dot, user) {
-        debug!(path = %dot.display(), error = %e, "lockbox: chown user-mirror dir");
     }
     let path = dot.join(filename);
     let tmp = path.with_extension("json.tmp");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut f = match fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp)
-        {
-            Ok(f) => f,
-            Err(e) => {
-                debug!(path = %tmp.display(), error = %e, "lockbox: open user-mirror tmp");
-                return;
-            }
-        };
-        if let Err(e) = f.write_all(json.as_bytes()) {
-            debug!(path = %tmp.display(), error = %e, "lockbox: write user-mirror tmp");
-            return;
-        }
-        f.sync_all().ok();
-    }
-    #[cfg(not(unix))]
-    {
-        if let Err(e) = fs::write(&tmp, json.as_bytes()) {
-            debug!(path = %tmp.display(), error = %e, "lockbox: write user-mirror tmp");
-            return;
-        }
-    }
-    if let Err(e) = fs::rename(&tmp, &path) {
-        debug!(path = %path.display(), error = %e, "lockbox: rename user-mirror");
-        return;
-    }
-    #[cfg(unix)]
-    if let Err(e) = chown_to_user(&path, user) {
-        debug!(path = %path.display(), error = %e, "lockbox: chown user-mirror");
+    if fs::write(&tmp, json.as_bytes()).is_ok() {
+        let _ = fs::rename(&tmp, &path);
     }
 }
 
@@ -2284,6 +2280,7 @@ pub fn apply_leave(
     age_pubkey_leaving: &str,
     hostname_leaving: &str,
     leave_time: i64,
+    signature: &str,
     home: &Path,
 ) -> Result<()> {
     // 1. Peer table: drop the pubkey if still present, under the
@@ -2310,6 +2307,7 @@ pub fn apply_leave(
         let record = leaves::LeaveRecord {
             leave_time,
             hostname_leaving: hostname_leaving.to_string(),
+            signature: signature.to_string(),
         };
         leaves_changed = leaves.upsert(age_pubkey_leaving, record);
         leaves_changed
@@ -2629,7 +2627,6 @@ pub(crate) fn finalize_user_ciphertext(
 
 #[cfg(unix)]
 pub(crate) fn chown_to_user(path: &Path, username: &str) -> Result<()> {
-    use std::ffi::CString;
     use std::os::unix::fs::MetadataExt;
 
     // Look up uid + primary gid from /etc/passwd.
@@ -2647,23 +2644,53 @@ pub(crate) fn chown_to_user(path: &Path, username: &str) -> Result<()> {
 
             // Skip chown if already correct (idempotent / avoids needless
             // syscall + permission-check noise on re-convergence).
-            if let Ok(meta) = fs::metadata(path) {
+            if let Ok(meta) = fs::symlink_metadata(path) {
                 if meta.uid() == uid && meta.gid() == gid {
                     return Ok(());
                 }
             }
 
-            let c_path = CString::new(path.to_string_lossy().as_bytes())
-                .map_err(|_| anyhow::anyhow!("path has interior NUL"))?;
-            let rc = unsafe { libc::chown(c_path.as_ptr(), uid, gid) };
-            if rc != 0 {
-                return Err(std::io::Error::last_os_error()).with_context(|| {
-                    format!("chown {} to {}:{}", path.display(), uid, gid)
-                });
-            }
+            // lchown, never chown: these paths sit in a home the user
+            // controls, and chown(2) would follow a link they planted at
+            // the final component onto any root-owned file.
+            std::os::unix::fs::lchown(path, Some(uid), Some(gid))
+                .with_context(|| format!("lchown {} to {}:{}", path.display(), uid, gid))?;
             return Ok(());
         }
     }
     anyhow::bail!("user {} not found in /etc/passwd", username)
 }
 
+#[cfg(all(test, unix))]
+mod mirror_tests {
+    use super::write_user_mirror_at;
+    use std::os::unix::fs::symlink;
+
+    fn ids() -> (u32, u32) {
+        unsafe { (libc::getuid(), libc::getgid()) }
+    }
+
+    /// The root-side mirror writer must never follow a symlinked
+    /// `~/.lockbox` or a link planted at its tmp name.
+    #[test]
+    fn user_mirror_never_writes_through_a_symlink() {
+        let (uid, gid) = ids();
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let victim = outside.path().join("peers.json");
+        std::fs::write(&victim, b"precious").unwrap();
+
+        symlink(outside.path(), home.path().join(".lockbox")).unwrap();
+        assert!(write_user_mirror_at(home.path(), uid, gid, "peers.json", b"{}").is_err());
+        assert_eq!(std::fs::read(&victim).unwrap(), b"precious");
+
+        std::fs::remove_file(home.path().join(".lockbox")).unwrap();
+        std::fs::create_dir(home.path().join(".lockbox")).unwrap();
+        let target = outside.path().join("target");
+        std::fs::write(&target, b"precious").unwrap();
+        symlink(&target, home.path().join(".lockbox/.peers.json.tmp")).unwrap();
+        write_user_mirror_at(home.path(), uid, gid, "peers.json", b"{}").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"precious");
+        assert_eq!(std::fs::read(home.path().join(".lockbox/peers.json")).unwrap(), b"{}");
+    }
+}

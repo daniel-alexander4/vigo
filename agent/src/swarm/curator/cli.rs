@@ -182,8 +182,9 @@ LOCAL-CLEANUP VERBS:
     gc                              Free blob-cache disk: revoke `curator:`
                                     manifest entries WE SEEDED that no current
                                     catalog entry — local or cached fleet —
-                                    references anymore. Peers age them out via
-                                    the manifest's revocation gossip.
+                                    references anymore. Peers keep their copies
+                                    until retention prunes them (peer gossip
+                                    never carries a revocation).
     purge --yes                     Power-user wipe. As a non-root user,
                                     scrubs `~/.vigo-curator/`. As root, also
                                     wipes /var/lib/vigo/artifacts/catalog.json
@@ -1688,8 +1689,8 @@ fn cmd_gc(_args: &[String]) -> Result<()> {
         format_bytes(bytes_freed)
     );
     println!(
-        "Peers will evict their copies via the manifest's revocation gossip; local cache reclaim happens \
-         on the next retention prune cycle."
+        "Local cache reclaim happens on the next retention prune cycle. Peers keep their copies until \
+         their own retention prunes them: peer gossip never carries a revocation."
     );
     Ok(())
 }

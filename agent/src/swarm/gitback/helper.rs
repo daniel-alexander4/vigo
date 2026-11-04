@@ -81,7 +81,7 @@ use super::project_state::{
     parse_hex_id, project_repo_path, DelegationChain, ProjectConfig, TokenChain,
 };
 use crate::swarm::anchor::peer_uid::peer_uid;
-use crate::swarm::anchor::tokens::{verify_chain, ID_LEN};
+use crate::swarm::anchor::tokens::ID_LEN;
 use crate::swarm::HELPER_MAX_CONNECTIONS;
 use crate::update::TlsCerts;
 
@@ -162,6 +162,7 @@ pub async fn run(cancel: CancellationToken, tls: Option<TlsCerts>) -> Result<()>
                     Ok(v) => v,
                     Err(e) => {
                         tracing::debug!(error = %e, "helper accept error, continuing");
+                        crate::swarm::server::accept_error_backoff().await;
                         continue;
                     }
                 };
@@ -896,7 +897,13 @@ fn enforce_gitback_policy(username: &str) -> Result<()> {
     let dir = std::env::var_os("VIGO_USERCRATE_POLICY_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(crate::swarm::policy::POLICY_DIR));
-    enforce_gitback_policy_at(&dir, username)
+    enforce_gitback_policy_at(&dir, username)?;
+    // Envoy layer: the server's `swarm.gitback.enabled` pattern list for
+    // this host, as mirrored in state.json (fails closed).
+    if !crate::swarm::state_mirror::gate_active(crate::swarm::state_mirror::Gate::Gitback) {
+        bail!("gitback is not enabled for this envoy (swarm.gitback.enabled in server.yaml)");
+    }
+    Ok(())
 }
 
 /// Directory-overridable form of [`enforce_gitback_policy`]. Production
@@ -940,21 +947,29 @@ fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
         .ok_or_else(|| anyhow!("no tokens.json — re-run `vigo swarm gitback project join`"))?;
 
     // ADR-019: load the per-user delegation chain. Missing file =
-    // empty list = pre-rekey steady state, verifier behaves identically
-    // to pre-ADR-019. Non-empty = founder has rekeyed; the chain
-    // bridges genesis founder pubkey to the current signing identity.
+    // empty list = pre-rekey steady state. The file is user-writable, so
+    // it is only a *presented* chain: it is reconciled with the
+    // root-owned chain this envoy has already verified, and a user
+    // cannot regain a retired founder's window by truncating it.
     let delegations = DelegationChain::load(home, project_id)
         .with_context(|| format!("loading delegations.json for {}", super::project_state::hex_id(project_id)))?
         .map(|c| c.delegations)
         .unwrap_or_default();
 
     let now = chrono_now_secs();
-    verify_chain(project_id, &founder, &delegations, &chain.chain, now)
-        .map_err(|e| anyhow!("token chain rejected: {}", e))?;
+    let gitback_base = crate::platform::paths::default_gitback_dir();
+    super::delegation_store::verify_chain_known(
+        &gitback_base,
+        project_id,
+        &founder,
+        &delegations,
+        &chain.chain,
+        now,
+    )
+    .map_err(|e| anyhow!("token chain rejected: {:#}", e))?;
 
     // Reject any chain whose tokens have an active revocation. Match
     // by content-addressed token id; revocations can target any link.
-    let gitback_base = crate::platform::paths::default_gitback_dir();
     for (i, token) in chain.chain.iter().enumerate() {
         let tid = token.id();
         if is_token_revoked(&gitback_base, project_id, &tid) {

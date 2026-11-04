@@ -74,6 +74,9 @@ const TOMBSTONE_MAX_AGE_SECS: i64 = 30 * 24 * 3600;
 /// The swarm peer server port — longdrawer fetches file content from this port.
 const PEER_PORT: u16 = crate::swarm::server::DEFAULT_PORT;
 
+/// Cap on a peer's `/swarm/longdrawer/state/<user>` body.
+const MAX_STATE_BODY: u64 = 16 << 20;
+
 /// Spawn the longdrawer daemon. Runs until the cancellation token fires.
 ///
 /// Requires mTLS certs so it can fetch files from peers over HTTPS. If
@@ -343,7 +346,7 @@ fn pull_user_state(
     if status != reqwest::StatusCode::OK {
         anyhow::bail!("GET {} returned {}", url, status);
     }
-    let body = resp.bytes()?;
+    let body = crate::swarm::peer_client::read_body_capped(resp, MAX_STATE_BODY)?;
     let state: UserState = serde_json::from_slice(&body)
         .with_context(|| format!("parsing state JSON from {}", url))?;
     Ok(state)

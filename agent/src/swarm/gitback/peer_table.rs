@@ -164,9 +164,7 @@ impl PeerTable {
     /// `when:` expression evaluation is **not** performed here. In
     /// LAN mode the filter language is scoped to hostname/tags/user
     /// presence; anything richer would require shipping the full
-    /// trait set via multicast, which is out of scope. Sources that
-    /// need `when:` expressions over full traits should use the
-    /// `cross_subnet_mirrors:` explicit list (Phase 7) instead.
+    /// trait set via multicast, which is out of scope.
     pub fn filter_candidates(
         &self,
         owner: &str,

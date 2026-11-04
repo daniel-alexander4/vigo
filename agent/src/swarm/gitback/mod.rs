@@ -55,6 +55,7 @@
 //! collector now walks live per-user state directly.
 
 pub mod cli;
+pub mod delegation_store;
 pub mod dr_scope;
 pub mod envelopes;
 pub mod fan_out;
@@ -616,7 +617,7 @@ fn process_revoke_sentinel(
     // authority chaining back to the project founder. Without this any
     // puddle-key holder could forge a REVOKE for an arbitrary token_id.
     envelope
-        .verify_revoke_authority()
+        .verify_revoke_authority(gitback_base)
         .with_context(|| format!("unauthorized revoke envelope at {}", path.display()))?;
     envelopes::save_revoke(gitback_base, &envelope)
         .with_context(|| format!("persist revoke envelope from {}", path.display()))?;

@@ -85,6 +85,13 @@ pub const DIGEST_LEN: usize = 16;
 pub struct Tombstone {
     pub deletion_time: i64,
     pub source_hostname: String,
+    /// Hex Ed25519 signature of the originating DELETE envelope, by
+    /// `source_hostname`'s daemon key. Carried so catch-up peers can verify
+    /// the record against their own peer table ([`TombstoneTable::merge_verified`]).
+    /// Empty for a record this envoy could not sign (no signing key yet):
+    /// it gates locally but no peer will accept it.
+    #[serde(default)]
+    pub signature: String,
 }
 
 /// Per-user tombstone table. Persisted at
@@ -272,13 +279,38 @@ impl TombstoneTable {
         out
     }
 
-    /// Merge another table's entries into this one. Later
-    /// `deletion_time` wins per filename. Returns true if any
-    /// entry was added or advanced — caller should `save()` when
-    /// so.
-    pub fn merge(&mut self, other: &TombstoneTable) -> bool {
+    /// Merge a peer's table into this one, accepting only records whose
+    /// DELETE signature verifies against the signing pubkey `sign_pubkey_for`
+    /// returns for the record's `source_hostname` — the local peer table,
+    /// never the wire. An unverifiable record is dropped. Later
+    /// `deletion_time` wins per filename. Returns true if any entry was
+    /// added or advanced — caller should `save()` when so.
+    ///
+    /// There is deliberately no unverified merge: catch-up tables come from
+    /// any peer that answers the GET, and an unsigned record would let it
+    /// delete any file mesh-wide.
+    pub fn merge_verified(
+        &mut self,
+        other: &TombstoneTable,
+        sign_pubkey_for: impl Fn(&str) -> Option<String>,
+    ) -> bool {
         let mut changed = false;
         for (name, t) in &other.tombstones {
+            if self.active_deletion_time(name).is_some_and(|cur| cur >= t.deletion_time) {
+                continue;
+            }
+            let Some(pk) = sign_pubkey_for(&t.source_hostname) else {
+                continue;
+            };
+            if verify_record(&self.user, name, t, &pk).is_err() {
+                tracing::warn!(
+                    user = %self.user,
+                    filename = %name,
+                    signer = %t.source_hostname,
+                    "lockbox: dropping catch-up tombstone with a bad signature"
+                );
+                continue;
+            }
             if self.upsert(name, t.clone()) {
                 changed = true;
             }
@@ -348,13 +380,20 @@ pub struct DeleteEnvelope {
     pub signature: String,
 }
 
-/// Canonicalize the bytes that get signed / verified. Separator is
+/// Domain tag for DELETE signatures. RESURRECT and LEAVE envelopes are
+/// signed by the same daemon key over the same field shape, so each class
+/// carries its own tag: without it a DELETE replays as a RESURRECT and back.
+pub const DELETE_DOMAIN: &[u8] = b"vigo-lockbox-delete-v1\0";
+
+/// Canonicalize the bytes that get signed / verified. Prefixed with
+/// [`DELETE_DOMAIN`]. Separator is
 /// a single NUL so unusual filenames (e.g. containing `|`) can't
 /// collide with a different `user + filename` combination. Filenames
 /// still reject path separators, NULs, and dotfiles elsewhere in the
 /// pipeline — defense in depth.
 pub fn canonical_sign_bytes(user: &str, filename: &str, deletion_time: i64) -> Vec<u8> {
-    let mut out = Vec::with_capacity(user.len() + filename.len() + 16);
+    let mut out = Vec::with_capacity(DELETE_DOMAIN.len() + user.len() + filename.len() + 16);
+    out.extend_from_slice(DELETE_DOMAIN);
     out.extend_from_slice(user.as_bytes());
     out.push(0);
     out.extend_from_slice(filename.as_bytes());
@@ -414,6 +453,21 @@ pub fn verify_envelope(envelope: &DeleteEnvelope, expected_pubkey: &str) -> Resu
     Ok(())
 }
 
+/// Verify a stored tombstone record as the DELETE envelope it came from.
+pub fn verify_record(user: &str, filename: &str, t: &Tombstone, expected_pubkey: &str) -> Result<()> {
+    verify_envelope(
+        &DeleteEnvelope {
+            user: user.to_string(),
+            filename: filename.to_string(),
+            deletion_time: t.deletion_time,
+            source_hostname: t.source_hostname.clone(),
+            signer_pubkey: String::new(),
+            signature: t.signature.clone(),
+        },
+        expected_pubkey,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,6 +476,7 @@ mod tests {
         Tombstone {
             deletion_time: dt,
             source_hostname: "host-a".to_string(),
+            signature: String::new(),
         }
     }
 
@@ -494,20 +549,79 @@ mod tests {
         assert_ne!(d0, a.digest());
     }
 
+    /// A tombstone record carrying a genuine DELETE signature by `key`.
+    fn signed(key: &ed25519_dalek::SigningKey, host: &str, user: &str, name: &str, dt: i64) -> Tombstone {
+        let env = build_envelope(key, host, user, name, dt);
+        Tombstone { deletion_time: dt, source_hostname: host.to_string(), signature: env.signature }
+    }
+
     #[test]
-    fn merge_adopts_newer_entries() {
+    fn merge_adopts_newer_signed_entries() {
+        let key = crypt::generate_signing_keypair();
+        let pk = crypt::encode_sign_pubkey(&key.verifying_key());
         let mut a = TombstoneTable::empty("dan");
         a.upsert("foo.pdf", t(100));
         a.upsert("bar.pdf", t(100));
 
         let mut b = TombstoneTable::empty("dan");
-        b.upsert("bar.pdf", t(500)); // newer — should win
-        b.upsert("baz.pdf", t(100)); // new — should be added
+        b.upsert("bar.pdf", signed(&key, "host-a", "dan", "bar.pdf", 500)); // newer — should win
+        b.upsert("baz.pdf", signed(&key, "host-a", "dan", "baz.pdf", 100)); // new — should be added
 
-        assert!(a.merge(&b));
+        assert!(a.merge_verified(&b, |h| (h == "host-a").then(|| pk.clone())));
         assert_eq!(a.active_deletion_time("foo.pdf"), Some(100));
         assert_eq!(a.active_deletion_time("bar.pdf"), Some(500));
         assert_eq!(a.active_deletion_time("baz.pdf"), Some(100));
+    }
+
+    /// Catch-up must not let a peer that merely answers the GET delete
+    /// files: unsigned, forged, wrong-user and unknown-signer records are
+    /// all dropped.
+    #[test]
+    fn merge_verified_drops_unverifiable_records() {
+        let key = crypt::generate_signing_keypair();
+        let other = crypt::generate_signing_keypair();
+        let pk = crypt::encode_sign_pubkey(&key.verifying_key());
+        let lookup = |h: &str| (h == "host-a").then(|| pk.clone());
+        let mut remote = TombstoneTable::empty("dan");
+        remote.upsert("unsigned.pdf", t(100));
+        remote.upsert("forged.pdf", signed(&other, "host-a", "dan", "forged.pdf", 100));
+        remote.upsert("otheruser.pdf", signed(&key, "host-a", "eve", "otheruser.pdf", 100));
+        remote.upsert("unknown.pdf", signed(&key, "host-z", "dan", "unknown.pdf", 100));
+        remote.upsert("renamed.pdf", signed(&key, "host-a", "dan", "orig.pdf", 100));
+        let mut local = TombstoneTable::empty("dan");
+        assert!(!local.merge_verified(&remote, lookup));
+        assert!(local.tombstones.is_empty(), "{:?}", local.tombstones);
+    }
+
+    /// A DELETE signature must not verify as a RESURRECT (or LEAVE) over the
+    /// same fields: each class signs under its own domain tag.
+    #[test]
+    fn delete_signature_does_not_replay_as_resurrect() {
+        let key = crypt::generate_signing_keypair();
+        let pk = crypt::encode_sign_pubkey(&key.verifying_key());
+        let del = build_envelope(&key, "host-a", "dan", "foo.pdf", 12345);
+        let as_res = super::super::resurrects::ResurrectEnvelope {
+            user: del.user.clone(),
+            filename: del.filename.clone(),
+            resurrect_time: del.deletion_time,
+            source_hostname: del.source_hostname.clone(),
+            signer_pubkey: del.signer_pubkey.clone(),
+            signature: del.signature.clone(),
+        };
+        assert!(super::super::resurrects::verify_envelope(&as_res, &pk).is_err());
+        let res = super::super::resurrects::build_envelope(&key, "host-a", "dan", "foo.pdf", 12345);
+        let as_del = DeleteEnvelope {
+            user: res.user.clone(),
+            filename: res.filename.clone(),
+            deletion_time: res.resurrect_time,
+            source_hostname: res.source_hostname.clone(),
+            signer_pubkey: res.signer_pubkey.clone(),
+            signature: res.signature.clone(),
+        };
+        assert!(verify_envelope(&as_del, &pk).is_err());
+        let leave = super::super::leaves::build_envelope(&key, "host-a", "dan", "foo.pdf", 12345);
+        let leave_as_del = DeleteEnvelope { signature: leave.signature, ..as_del };
+        assert!(verify_envelope(&leave_as_del, &pk).is_err());
     }
 
     #[test]
@@ -565,6 +679,7 @@ mod tests {
         ResurrectRecord {
             resurrect_time: rt,
             source_hostname: "host-a".to_string(),
+            signature: String::new(),
         }
     }
 

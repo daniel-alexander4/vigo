@@ -67,11 +67,8 @@ pub struct ClaimRequest {
 
 /// Generate a fresh 8-digit claim code in `NNNN-NNNN` form. Source
 /// bytes come from the OS CSPRNG via `rand::thread_rng()`. 10^8 = 100M
-/// space; combined with the 5-minute TTL and single-use semantics,
-/// brute force across the wire is infeasible (10M requests in 5 min
-/// would saturate the receiver well before covering a reasonable
-/// fraction of the keyspace, and each request rides mTLS so every
-/// probe is from a fleet-CA-trusted peer).
+/// space; a session is deleted after [`MAX_CLAIM_FAILURES`] wrong codes,
+/// so a guesser gets that many tries per session, not the TTL's worth.
 pub fn generate_code() -> String {
     let mut buf = [0u8; 4];
     rand::thread_rng().fill_bytes(&mut buf);
@@ -91,6 +88,45 @@ pub fn hash_code(code: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(canonical.as_bytes());
     hex::encode(hasher.finalize())
+}
+
+/// Wrong codes tolerated per pending session before it is deleted. Without
+/// a bound any fleet envoy could walk the 10^8 code space during the TTL;
+/// with it, a session survives at most this many guesses.
+pub const MAX_CLAIM_FAILURES: u32 = 5;
+
+/// Per-session wrong-code counters, keyed by the pending session's stored
+/// code hash (a fresh `pair`/`rekey` mints a fresh code, so a fresh key).
+/// In memory on purpose: the pending file lives in the user's home and a
+/// counter there would be the guesser's to reset.
+static CLAIM_FAILURES: std::sync::Mutex<Option<std::collections::HashMap<String, u32>>> =
+    std::sync::Mutex::new(None);
+
+/// Record one wrong code against the session whose stored hash is
+/// `session_hash`. Returns true when the session has now used up its
+/// [`MAX_CLAIM_FAILURES`] and the caller must delete the pending file.
+pub fn record_claim_failure(session_hash: &str) -> bool {
+    let mut g = CLAIM_FAILURES.lock().unwrap_or_else(|p| p.into_inner());
+    let map = g.get_or_insert_with(Default::default);
+    if map.len() > 1024 {
+        map.clear();
+    }
+    let n = map.entry(session_hash.to_string()).or_insert(0);
+    *n += 1;
+    if *n >= MAX_CLAIM_FAILURES {
+        map.remove(session_hash);
+        true
+    } else {
+        false
+    }
+}
+
+/// Forget a session's counter (on success or expiry).
+pub fn clear_claim_failures(session_hash: &str) {
+    let mut g = CLAIM_FAILURES.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(map) = g.as_mut() {
+        map.remove(session_hash);
+    }
 }
 
 /// Constant-time hash comparison. Habit dictates the right primitive
@@ -189,18 +225,18 @@ pub fn parse_claim_path(path: &str, prefix: &str) -> Option<String> {
     Some(rest.to_string())
 }
 
-/// Read the request body up to `cap` bytes. Bails on overflow.
+/// Read the request body up to `cap` bytes, stopping the read at the
+/// cap (see [`crate::swarm::server::read_body_capped`]). Bails on overflow.
 pub async fn read_body_capped(
     req: Request<hyper::body::Incoming>,
     cap: usize,
 ) -> Result<Vec<u8>> {
-    use http_body_util::BodyExt;
-    let collected = req.into_body().collect().await.context("reading body")?;
-    let bytes = collected.to_bytes();
-    if bytes.len() > cap {
-        bail!("body exceeds {}-byte cap", cap);
+    use crate::swarm::server::BodyReadError;
+    match crate::swarm::server::read_body_capped(req.into_body(), cap as u64).await {
+        Ok(b) => Ok(b),
+        Err(BodyReadError::TooLarge) => bail!("body exceeds {}-byte cap", cap),
+        Err(BodyReadError::Read(e)) => bail!("reading body: {}", e),
     }
-    Ok(bytes.to_vec())
 }
 
 /// Render a plain-text response.
@@ -300,6 +336,20 @@ mod tests {
     #[test]
     fn hash_code_distinguishes_distinct_codes() {
         assert_ne!(hash_code("4827-9163"), hash_code("4827-9164"));
+    }
+
+    /// A pending session dies after MAX_CLAIM_FAILURES wrong codes, so the
+    /// code space cannot be walked during the TTL.
+    #[test]
+    fn claim_failures_cancel_session_at_the_bound() {
+        let key = format!("test-session-{}", rand::random::<u64>());
+        for _ in 1..MAX_CLAIM_FAILURES {
+            assert!(!record_claim_failure(&key));
+        }
+        assert!(record_claim_failure(&key), "the bound-th failure cancels");
+        // Counter reset afterwards (a new session gets a full budget).
+        assert!(!record_claim_failure(&key));
+        clear_claim_failures(&key);
     }
 
     #[test]

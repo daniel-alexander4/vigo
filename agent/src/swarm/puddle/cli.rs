@@ -454,10 +454,12 @@ fn cmd_join(args: &[String]) -> Result<()> {
     let status = resp.status();
     if !status.is_success() {
         let code = status.as_u16();
-        let msg = resp.text().unwrap_or_default();
+        let msg = crate::swarm::peer_client::read_body_capped(resp, 4 << 10)
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .unwrap_or_default();
         bail!("pair-claim failed (HTTP {}): {}", code, msg.trim());
     }
-    let bytes = resp.bytes().context("reading response body")?.to_vec();
+    let bytes = crate::swarm::peer_client::read_body_capped(resp, 1 << 20).context("reading response body")?;
     let (salt, wrapped) = pair::parse_pair_response(&bytes)?;
 
     // Local passphrase prompt — never crosses the wire. We unwrap
@@ -1102,10 +1104,12 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     let status = resp.status();
     if !status.is_success() {
         let code = status.as_u16();
-        let msg = resp.text().unwrap_or_default();
+        let msg = crate::swarm::peer_client::read_body_capped(resp, 4 << 10)
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .unwrap_or_default();
         bail!("rekey-claim failed (HTTP {}): {}", code, msg.trim());
     }
-    let bytes = resp.bytes().context("reading response body")?.to_vec();
+    let bytes = crate::swarm::peer_client::read_body_capped(resp, 1 << 20).context("reading response body")?;
     let (new_salt, new_blob) = codes::parse_response(&bytes)?;
 
     let new_key = unwrap_signing_key(&new_blob, passphrase.as_bytes(), &new_salt).context(

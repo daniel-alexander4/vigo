@@ -54,10 +54,8 @@ pub struct AgentSwarmState {
 /// gates like the rest; they are intentionally **not**
 /// `#[serde(default)]`, so a pre-curator / pre-poolq `state.json`
 /// written by an older daemon (with a `gates` object that lacks the
-/// key) fails to decode → [`read`] errors → the CLI's
-/// `envoy_layer_allows` fails open — the correct behavior for the one
-/// reconcile cycle between a strict-version upgrade and the first
-/// check-in that rewrites this file in the new shape. (`hostdox` can
+/// key) fails to decode → [`read`] errors → [`gate_active_at`] refuses
+/// until the first check-in rewrites this file in the new shape. (`hostdox` can
 /// be `#[serde(default)]` because its `false` default matches its
 /// fail-closed semantics; a `false` default for the content gates
 /// would be a wrong-direction refusal.)
@@ -92,6 +90,46 @@ impl Default for GateState {
             hostdox: false,
         }
     }
+}
+
+/// A content subsystem whose envoy-layer gate is read from this mirror by
+/// processes that cannot see the daemon's in-memory gates: the peer-server
+/// router ([`crate::swarm::server`]) and the per-user CLI verbs
+/// ([`crate::swarm::policy`]). Lockbox is [`Gate::Puddle`] (ADR-020).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Gate {
+    Gitback,
+    Curator,
+    Poolq,
+    Longdrawer,
+    Puddle,
+}
+
+impl GateState {
+    /// Is `gate` on — the global swarm switch AND the subsystem's own bit.
+    pub fn allows(&self, gate: Gate) -> bool {
+        self.swarm
+            && match gate {
+                Gate::Gitback => self.gitback,
+                Gate::Curator => self.curator,
+                Gate::Poolq => self.poolq,
+                Gate::Longdrawer => self.longdrawer,
+                Gate::Puddle => self.puddle,
+            }
+    }
+}
+
+/// Envoy-layer gate check against the mirror at `path`, **failing closed**:
+/// a missing or unparseable mirror means "not authorized", because the
+/// mirror is written after every accepted bundle and a reader that cannot
+/// see it cannot know the server has not switched the subsystem off.
+pub fn gate_active_at(path: &Path, gate: Gate) -> bool {
+    read(path).map(|s| s.gates.allows(gate)).unwrap_or(false)
+}
+
+/// [`gate_active_at`] on [`default_path`].
+pub fn gate_active(gate: Gate) -> bool {
+    gate_active_at(&default_path(), gate)
 }
 
 /// Path to the on-disk state mirror: `state.json` under the canonical

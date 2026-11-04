@@ -155,6 +155,34 @@ pub struct Token {
     pub signature: [u8; SIG_LEN],
 }
 
+/// Longest project handle, in bytes. Bounds the u16 length prefix in
+/// [`canonical_bytes`] far below its overflow point.
+pub const MAX_HANDLE_LEN: usize = 64;
+
+/// A project handle is 1-64 bytes of ASCII alphanumerics, `-`, `_`, `.`,
+/// not starting with `.`. Enforced at mint ([`Token::issue`]) and at
+/// verify ([`verify_chain`]), so a handle the encoding cannot represent
+/// unambiguously never reaches a signature check.
+pub fn validate_handle(handle: &str) -> Result<()> {
+    if handle.is_empty() || handle.len() > MAX_HANDLE_LEN {
+        bail!("handle must be 1-{} characters", MAX_HANDLE_LEN);
+    }
+    if handle.starts_with('.') {
+        bail!("handle must not start with '.'");
+    }
+    if let Some(c) = handle
+        .chars()
+        .find(|c| !(c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.'))
+    {
+        bail!(
+            "handle '{}' contains invalid character '{}'; use ASCII alphanumeric + '-' '_' '.'",
+            handle,
+            c
+        );
+    }
+    Ok(())
+}
+
 /// Hand-rolled deterministic encoding for `TokenBody`. NEVER mix this
 /// with serde — JSON whitespace and field-order ambiguity would
 /// silently produce two different signed messages for what looks
@@ -216,6 +244,7 @@ impl Token {
     /// `signing_key`; we re-check here so a misuse fails loudly
     /// instead of producing a body that won't verify.
     pub fn issue(signing_key: &SigningKey, body: TokenBody) -> Result<Token> {
+        validate_handle(&body.handle)?;
         let derived_pub = signing_key.verifying_key().to_bytes();
         if derived_pub != body.signer_puddle_pubkey {
             bail!(
@@ -252,6 +281,10 @@ impl Token {
 pub enum ChainError {
     /// Caller supplied an empty chain.
     Empty,
+    /// The bootstrap token's handle fails [`validate_handle`] — over 64
+    /// bytes it would also overflow the u16 length prefix and make
+    /// [`canonical_bytes`] non-bijective.
+    InvalidHandle,
     /// The first (deepest) token's parent_token_id was set; the root
     /// of a chain MUST be a founder bootstrap token with no parent.
     RootHasParent,
@@ -316,6 +349,7 @@ impl std::fmt::Display for ChainError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ChainError::Empty => write!(f, "chain is empty"),
+            ChainError::InvalidHandle => write!(f, "bootstrap token handle is not a valid project handle"),
             ChainError::RootHasParent => {
                 write!(f, "root token has parent_token_id set; root must be a founder bootstrap token")
             }
@@ -512,6 +546,10 @@ pub fn verify_chain(
 
     // ---- Bootstrap (chain[0]) checks. ----
     let root = &chain[0];
+    // Every later token must carry this same handle (checked in the walk).
+    if validate_handle(&root.body.handle).is_err() {
+        return Err(ChainError::InvalidHandle);
+    }
     if root.body.parent_token_id.is_some() {
         return Err(ChainError::RootHasParent);
     }
@@ -705,6 +743,32 @@ mod tests {
 
     fn pub_bytes(k: &SigningKey) -> [u8; ID_LEN] {
         k.verifying_key().to_bytes()
+    }
+
+    /// A bootstrap whose handle overflows the u16 length prefix (or is
+    /// otherwise not a valid handle) is refused by `verify_chain` even when
+    /// its signature is genuine, and `Token::issue` will not mint one.
+    #[test]
+    fn verify_chain_rejects_invalid_bootstrap_handle() {
+        let k = fresh_key();
+        for handle in ["x".repeat(65 * 1024 + 3), "bad handle".to_string(), String::new()] {
+            let pid = project_id_for(&pub_bytes(&k), &handle);
+            let body = TokenBody {
+                project_id: pid,
+                handle: handle.clone(),
+                subject_puddle_pubkey: pub_bytes(&k),
+                role: Role::Admin,
+                issued_at: 100,
+                expires_at: None,
+                signer_puddle_pubkey: pub_bytes(&k),
+                parent_token_id: None,
+            };
+            assert!(Token::issue(&k, body.clone()).is_err(), "issue must refuse {:.20}", handle);
+            let sig = k.sign(&canonical_bytes(&body));
+            let tok = Token { body, signature: sig.to_bytes() };
+            let r = verify_chain(&pid, &pub_bytes(&k), &[], &[tok], 200);
+            assert!(matches!(r, Err(ChainError::InvalidHandle)), "{:.20}: {:?}", handle, r);
+        }
     }
 
     #[test]

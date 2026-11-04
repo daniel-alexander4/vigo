@@ -76,6 +76,12 @@ pub const DIGEST_LEN: usize = 16;
 pub struct ResurrectRecord {
     pub resurrect_time: i64,
     pub source_hostname: String,
+    /// Hex Ed25519 signature of the originating RESURRECT envelope by
+    /// `source_hostname`'s daemon key, kept so catch-up peers can verify
+    /// the record ([`ResurrectsTable::merge_verified`]). Empty when this
+    /// envoy could not sign it: gates locally, accepted by no peer.
+    #[serde(default)]
+    pub signature: String,
 }
 
 /// Per-user resurrect table. Persisted at
@@ -251,12 +257,34 @@ impl ResurrectsTable {
         out
     }
 
-    /// Merge another table's entries into this one. Later
-    /// `resurrect_time` wins per filename. Returns true if any
-    /// entry was added or advanced — caller should `save()` when so.
-    pub fn merge(&mut self, other: &ResurrectsTable) -> bool {
+    /// Merge a peer's table, accepting only records whose RESURRECT
+    /// signature verifies against the pubkey `sign_pubkey_for` returns for
+    /// the record's `source_hostname` (the local peer table). Unverifiable
+    /// records are dropped — an unsigned resurrect would let any peer undo
+    /// a delete. Later `resurrect_time` wins per filename. Returns true if
+    /// any entry was added or advanced — caller should `save()` when so.
+    pub fn merge_verified(
+        &mut self,
+        other: &ResurrectsTable,
+        sign_pubkey_for: impl Fn(&str) -> Option<String>,
+    ) -> bool {
         let mut changed = false;
         for (name, r) in &other.resurrects {
+            if self.active(name).is_some_and(|cur| cur.resurrect_time >= r.resurrect_time) {
+                continue;
+            }
+            let Some(pk) = sign_pubkey_for(&r.source_hostname) else {
+                continue;
+            };
+            if verify_record(&self.user, name, r, &pk).is_err() {
+                tracing::warn!(
+                    user = %self.user,
+                    filename = %name,
+                    signer = %r.source_hostname,
+                    "lockbox: dropping catch-up resurrect with a bad signature"
+                );
+                continue;
+            }
             if self.upsert(name, r.clone()) {
                 changed = true;
             }
@@ -290,11 +318,17 @@ pub struct ResurrectEnvelope {
     pub signature: String,
 }
 
-/// Canonicalize the bytes that get signed / verified. Mirror of
+/// Domain tag for RESURRECT signatures — distinct from
+/// [`super::tombstones::DELETE_DOMAIN`] so neither replays as the other.
+pub const RESURRECT_DOMAIN: &[u8] = b"vigo-lockbox-resurrect-v1\0";
+
+/// Canonicalize the bytes that get signed / verified, prefixed with
+/// [`RESURRECT_DOMAIN`]. Mirror of
 /// `tombstones::canonical_sign_bytes` — single NUL separator, fields
 /// in fixed order.
 pub fn canonical_sign_bytes(user: &str, filename: &str, resurrect_time: i64) -> Vec<u8> {
-    let mut out = Vec::with_capacity(user.len() + filename.len() + 16);
+    let mut out = Vec::with_capacity(RESURRECT_DOMAIN.len() + user.len() + filename.len() + 16);
+    out.extend_from_slice(RESURRECT_DOMAIN);
     out.extend_from_slice(user.as_bytes());
     out.push(0);
     out.extend_from_slice(filename.as_bytes());
@@ -347,6 +381,21 @@ pub fn verify_envelope(envelope: &ResurrectEnvelope, expected_pubkey: &str) -> R
     Ok(())
 }
 
+/// Verify a stored resurrect record as the RESURRECT envelope it came from.
+pub fn verify_record(user: &str, filename: &str, r: &ResurrectRecord, expected_pubkey: &str) -> Result<()> {
+    verify_envelope(
+        &ResurrectEnvelope {
+            user: user.to_string(),
+            filename: filename.to_string(),
+            resurrect_time: r.resurrect_time,
+            source_hostname: r.source_hostname.clone(),
+            signer_pubkey: String::new(),
+            signature: r.signature.clone(),
+        },
+        expected_pubkey,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -355,6 +404,7 @@ mod tests {
         ResurrectRecord {
             resurrect_time: rt,
             source_hostname: "host-a".to_string(),
+            signature: String::new(),
         }
     }
 
@@ -415,17 +465,46 @@ mod tests {
         assert_ne!(d0, a.digest());
     }
 
+    fn signed(key: &ed25519_dalek::SigningKey, user: &str, name: &str, rt: i64) -> ResurrectRecord {
+        let env = build_envelope(key, "host-a", user, name, rt);
+        ResurrectRecord { resurrect_time: rt, source_hostname: "host-a".into(), signature: env.signature }
+    }
+
+    /// Catch-up resurrects from a peer are accepted only with a valid
+    /// RESURRECT signature by a signer in the local peer table.
+    #[test]
+    fn merge_verified_drops_unverifiable_records() {
+        let key = crypt::generate_signing_keypair();
+        let pk = crypt::encode_sign_pubkey(&key.verifying_key());
+        let mut remote = ResurrectsTable::empty("dan");
+        remote.upsert("unsigned.pdf", r(100));
+        remote.upsert("wronguser.pdf", signed(&key, "eve", "wronguser.pdf", 100));
+        let del = super::super::tombstones::build_envelope(&key, "host-a", "dan", "replayed.pdf", 100);
+        remote.upsert(
+            "replayed.pdf",
+            ResurrectRecord { resurrect_time: 100, source_hostname: "host-a".into(), signature: del.signature },
+        );
+        let mut local = ResurrectsTable::empty("dan");
+        assert!(!local.merge_verified(&remote, |_| Some(pk.clone())));
+        assert!(local.resurrects.is_empty(), "{:?}", local.resurrects);
+        let mut unknown = ResurrectsTable::empty("dan");
+        unknown.upsert("ok.pdf", signed(&key, "dan", "ok.pdf", 100));
+        assert!(!local.merge_verified(&unknown, |_| None));
+    }
+
     #[test]
     fn merge_adopts_newer_entries() {
+        let key = crypt::generate_signing_keypair();
+        let pk = crypt::encode_sign_pubkey(&key.verifying_key());
         let mut a = ResurrectsTable::empty("dan");
         a.upsert("foo.pdf", r(100));
         a.upsert("bar.pdf", r(100));
 
         let mut b = ResurrectsTable::empty("dan");
-        b.upsert("bar.pdf", r(500));
-        b.upsert("baz.pdf", r(100));
+        b.upsert("bar.pdf", signed(&key, "dan", "bar.pdf", 500));
+        b.upsert("baz.pdf", signed(&key, "dan", "baz.pdf", 100));
 
-        assert!(a.merge(&b));
+        assert!(a.merge_verified(&b, |_| Some(pk.clone())));
         assert_eq!(a.active("foo.pdf").unwrap().resurrect_time, 100);
         assert_eq!(a.active("bar.pdf").unwrap().resurrect_time, 500);
         assert_eq!(a.active("baz.pdf").unwrap().resurrect_time, 100);

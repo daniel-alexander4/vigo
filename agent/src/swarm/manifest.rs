@@ -12,6 +12,17 @@
 //! 2. Tie: revoked wins over active (safety)
 //! 3. Tie + same status: higher `updated_by` string wins (deterministic)
 //!
+//! Two merge entry points, by who the remote is:
+//!
+//! - [`Manifest::merge_authoritative`] — entries from the vigosrv check-in
+//!   response (mTLS to the server). Plain LWW as above.
+//! - [`Manifest::merge_from_peer`] — entries gossiped by another envoy
+//!   (`GET /manifest` from the ADDR line of an unauthenticated multicast
+//!   packet). Entries are unsigned, so a peer is trusted for nothing
+//!   destructive: it cannot revoke, cannot overwrite a local revocation,
+//!   and cannot win LWW with a timestamp from the future. Revocations reach
+//!   an envoy only from the server or from a local `revoke`.
+//!
 //! Persistence: JSON file at `/var/lib/vigo/swarm/manifest.json`.
 
 use serde::{Deserialize, Serialize};
@@ -225,13 +236,40 @@ impl Manifest {
         true
     }
 
-    /// Merge a remote manifest into ours. Returns true if anything changed.
-    pub fn merge(&self, remote: &ManifestData) -> bool {
+    /// Merge manifest entries from the server (authoritative). Plain LWW.
+    /// Returns true if anything changed.
+    pub fn merge_authoritative(&self, remote: &ManifestData) -> bool {
+        self.merge_filtered(remote, |_, _| true)
+    }
+
+    /// Merge a manifest gossiped by a peer envoy. Peer entries are unsigned,
+    /// so a remote entry is considered only when it is `Active`, is not dated
+    /// more than [`MAX_PEER_FUTURE_SKEW_MS`] past `now_ms`, and the local
+    /// entry for the same blob (if any) is not `Revoked`. Without these, one
+    /// envoy serving `updated_at = u64::MAX, status = revoked` would evict
+    /// every blob fleet-wide, permanently. Returns true if anything changed.
+    pub fn merge_from_peer(&self, remote: &ManifestData, now_ms: u64) -> bool {
+        let horizon = now_ms.saturating_add(MAX_PEER_FUTURE_SKEW_MS);
+        self.merge_filtered(remote, |remote_entry, local| {
+            remote_entry.status == BlobStatus::Active
+                && remote_entry.updated_at <= horizon
+                && local.is_none_or(|l| l.status != BlobStatus::Revoked)
+        })
+    }
+
+    fn merge_filtered(
+        &self,
+        remote: &ManifestData,
+        admit: impl Fn(&BlobEntry, Option<&BlobEntry>) -> bool,
+    ) -> bool {
         let mut guard = self.data.write().unwrap_or_else(|e| e.into_inner());
         let data = Arc::make_mut(&mut guard);
         let mut changed = false;
 
         for (sha256, remote_entry) in &remote.entries {
+            if !admit(remote_entry, data.entries.get(sha256)) {
+                continue;
+            }
             match data.entries.get(sha256) {
                 Some(local_entry) => {
                     if entry_wins(remote_entry, local_entry) {
@@ -383,8 +421,13 @@ fn entry_wins(a: &BlobEntry, b: &BlobEntry) -> bool {
     a.updated_by > b.updated_by
 }
 
+/// How far past this envoy's clock a peer-gossiped entry may be dated
+/// before [`Manifest::merge_from_peer`] drops it. Covers ordinary NTP skew;
+/// bounds how long a forged future timestamp could win LWW.
+pub const MAX_PEER_FUTURE_SKEW_MS: u64 = 5 * 60 * 1000;
+
 /// Current time in Unix milliseconds.
-fn now_millis() -> u64 {
+pub fn now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -461,7 +504,7 @@ mod tests {
         remote.version = 1;
         remote.entries.insert("abc".to_string(), make_entry("abc", BlobStatus::Active, 100, "a"));
 
-        assert!(manifest.merge(&remote));
+        assert!(manifest.merge_authoritative(&remote));
         assert!(manifest.is_active("abc"));
         assert_eq!(manifest.version(), 2); // max(0, 1) + 1
     }
@@ -479,8 +522,38 @@ mod tests {
         remote.version = 5;
         remote.entries.insert("abc".to_string(), make_entry("abc", BlobStatus::Revoked, now_millis() + 1000, "envoy-a"));
 
-        assert!(manifest.merge(&remote));
+        assert!(manifest.merge_authoritative(&remote));
         assert!(manifest.is_revoked("abc"));
+    }
+
+    /// A peer serving `updated_at = u64::MAX, status = revoked` must not
+    /// revoke anything, must not pin an entry with a future timestamp, and
+    /// must not undo a local revocation. Ordinary active gossip still lands.
+    #[test]
+    fn test_peer_merge_cannot_revoke_or_win_from_the_future() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = Manifest::load(dir.path());
+        let now = now_millis();
+        manifest.record_seed("live", "test", "*", "7d", "envoy-a", 1024, "");
+        manifest.record_seed("gone", "test", "*", "7d", "envoy-a", 1024, "");
+        assert!(manifest.revoke("gone", "envoy-a"));
+
+        let mut remote = ManifestData::new();
+        remote.version = u64::MAX - 1;
+        remote.entries.insert("live".into(), make_entry("live", BlobStatus::Revoked, u64::MAX, "x"));
+        remote.entries.insert("new-revoked".into(), make_entry("new-revoked", BlobStatus::Revoked, now, "x"));
+        remote.entries.insert("future".into(), make_entry("future", BlobStatus::Active, u64::MAX, "x"));
+        remote.entries.insert("gone".into(), make_entry("gone", BlobStatus::Active, now + 60_000, "x"));
+        assert!(!manifest.merge_from_peer(&remote, now));
+        assert!(manifest.is_active("live"));
+        assert!(manifest.is_revoked("gone"));
+        assert!(manifest.snapshot().entries.get("new-revoked").is_none());
+        assert!(manifest.snapshot().entries.get("future").is_none());
+
+        let mut ok = ManifestData::new();
+        ok.entries.insert("fresh".into(), make_entry("fresh", BlobStatus::Active, now + 1000, "y"));
+        assert!(manifest.merge_from_peer(&ok, now));
+        assert!(manifest.is_active("fresh"));
     }
 
     #[test]
@@ -492,11 +565,11 @@ mod tests {
         remote.version = 1;
         remote.entries.insert("abc".to_string(), make_entry("abc", BlobStatus::Active, 100, "a"));
 
-        assert!(manifest.merge(&remote));
+        assert!(manifest.merge_authoritative(&remote));
         let v1 = manifest.version();
 
         // Same merge again — should be idempotent.
-        assert!(!manifest.merge(&remote));
+        assert!(!manifest.merge_authoritative(&remote));
         assert_eq!(manifest.version(), v1);
     }
 

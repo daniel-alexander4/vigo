@@ -534,7 +534,7 @@ pub fn merge_manifest_entries(
         );
     }
 
-    if manifest.merge(&remote) {
+    if manifest.merge_authoritative(&remote) {
         info!(entries = entries.len(), "merged manifest entries from server");
         evict_revoked_blobs(manifest, peer_map);
     }

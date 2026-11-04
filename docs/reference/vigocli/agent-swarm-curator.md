@@ -285,15 +285,15 @@ Pruned 1 orphan .pending sentinel(s) and 0 corrupt entry file(s).
 
 ### `vigo swarm curator gc`
 
-Free blob-cache disk by revoking `curator:` manifest entries that **this envoy seeded** and that no current catalog entry — local or cached fleet — references. Peers age them out via the manifest's revocation gossip.
+Free blob-cache disk by revoking `curator:` manifest entries that **this envoy seeded** and that no current catalog entry — local or cached fleet — references. Peers keep their copies until their own retention prunes them: peer gossip never carries a revocation (only the server's check-in does).
 
 Requires root (the manifest revoke runs against the root-owned swarm state). The CLI bails with a clear pointer otherwise.
 
 ```
 $ sudo vigo swarm curator gc
 Revoked 3 curator blob(s) we seeded that no current catalog entry references (24.6 MiB).
-Peers will evict their copies via the manifest's revocation gossip; local cache reclaim happens
-on the next retention prune cycle.
+Local cache reclaim happens on the next retention prune cycle. Peers keep their copies until
+their own retention prunes them: peer gossip never carries a revocation.
 ```
 
 `gc` only touches blobs **this envoy seeded** (`seeder_id == this_envoy_id`). Blobs others have seeded aren't ours to revoke; the manifest enforces that boundary.

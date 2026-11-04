@@ -2055,7 +2055,9 @@ fn apply_evict_one(user: &str, hostname: &str, pubkey: Option<&str>) -> Result<(
     // Resolve the user's home dir for recipients.txt regeneration.
     let home = resolve_user_home(user)?;
     let leave_time = now_secs_signed();
-    crate::swarm::lockbox::apply_leave(user, &resolved_pubkey, hostname, leave_time, &home)
+    // Operator-driven and local to this envoy: no LEAVE signature, so
+    // peers never accept this record via catch-up.
+    crate::swarm::lockbox::apply_leave(user, &resolved_pubkey, hostname, leave_time, "", &home)
         .context("apply_leave")?;
     let shown = &resolved_pubkey[..resolved_pubkey.len().min(12)];
     println!(
@@ -2716,6 +2718,7 @@ mod tests {
         tombstones::Tombstone {
             deletion_time,
             source_hostname: host.into(),
+            signature: String::new(),
         }
     }
 

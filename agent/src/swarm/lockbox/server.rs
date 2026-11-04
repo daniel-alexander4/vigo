@@ -31,7 +31,7 @@
 use std::fs;
 use std::net::SocketAddr;
 
-use http_body_util::{BodyExt, Full};
+use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::{Request, Response, StatusCode};
 
@@ -205,16 +205,12 @@ pub async fn handle_push(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    // Drain body with streaming cap.
-    let body = req.into_body();
-    let collected = match body.collect().await {
-        Ok(c) => c,
-        Err(_) => return bad_request("read body"),
+    // Drain body with streaming cap: stops at the cap even when the
+    // sender declared no Content-Length (chunked).
+    let bytes = match read_capped(req.into_body(), max_push_bytes()).await {
+        Ok(b) => b,
+        Err(r) => return r,
     };
-    let bytes = collected.to_bytes();
-    if bytes.len() > max_push_bytes() {
-        return payload_too_large();
-    }
 
     // Defense-in-depth: require the first bytes to be the age magic.
     // Rejects anyone trying to push plaintext through this endpoint.
@@ -404,14 +400,10 @@ pub async fn handle_tombstone_delete(
         return bad_request("invalid filename");
     }
 
-    let collected = match req.into_body().collect().await {
-        Ok(c) => c,
-        Err(_) => return bad_request("read body"),
+    let body_bytes = match read_capped(req.into_body(), MAX_ANNOUNCE_BYTES).await {
+        Ok(b) => b,
+        Err(r) => return r,
     };
-    let body_bytes = collected.to_bytes();
-    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large();
-    }
 
     let envelope: DeleteEnvelope = match serde_json::from_slice(&body_bytes) {
         Ok(e) => e,
@@ -460,6 +452,7 @@ pub async fn handle_tombstone_delete(
             Tombstone {
                 deletion_time: envelope.deletion_time,
                 source_hostname: envelope.source_hostname.clone(),
+                signature: envelope.signature.clone(),
             },
         )
     }) {
@@ -583,14 +576,10 @@ pub async fn handle_leave(
         return bad_request("invalid user");
     }
 
-    let collected = match req.into_body().collect().await {
-        Ok(c) => c,
-        Err(_) => return bad_request("read body"),
+    let body_bytes = match read_capped(req.into_body(), MAX_ANNOUNCE_BYTES).await {
+        Ok(b) => b,
+        Err(r) => return r,
     };
-    let body_bytes = collected.to_bytes();
-    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large();
-    }
 
     let envelope: LeaveEnvelope = match serde_json::from_slice(&body_bytes) {
         Ok(e) => e,
@@ -634,6 +623,7 @@ pub async fn handle_leave(
             &envelope.age_pubkey_leaving,
             &envelope.hostname_leaving,
             envelope.leave_time,
+            &envelope.signature,
             &home,
         ) {
             tracing::warn!(error = %e, "lockbox: apply_leave failed");
@@ -645,6 +635,7 @@ pub async fn handle_leave(
         let record = super::leaves::LeaveRecord {
             leave_time: envelope.leave_time,
             hostname_leaving: envelope.hostname_leaving.clone(),
+            signature: envelope.signature.clone(),
         };
         if table.upsert(&envelope.age_pubkey_leaving, record) {
             if let Err(e) = table.save() {
@@ -698,14 +689,10 @@ pub async fn handle_resurrect(
         return bad_request("invalid filename");
     }
 
-    let collected = match req.into_body().collect().await {
-        Ok(c) => c,
-        Err(_) => return bad_request("read body"),
+    let body_bytes = match read_capped(req.into_body(), MAX_ANNOUNCE_BYTES).await {
+        Ok(b) => b,
+        Err(r) => return r,
     };
-    let body_bytes = collected.to_bytes();
-    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large();
-    }
 
     let envelope: ResurrectEnvelope = match serde_json::from_slice(&body_bytes) {
         Ok(e) => e,
@@ -748,6 +735,7 @@ pub async fn handle_resurrect(
             ResurrectRecord {
                 resurrect_time: envelope.resurrect_time,
                 source_hostname: envelope.source_hostname.clone(),
+                signature: envelope.signature.clone(),
             },
         )
     }) {
@@ -887,14 +875,10 @@ pub async fn handle_announce(
     req: Request<hyper::body::Incoming>,
     peer_addr: SocketAddr,
 ) -> Response<Full<Bytes>> {
-    let collected = match req.into_body().collect().await {
-        Ok(c) => c,
-        Err(_) => return bad_request("read body"),
+    let body_bytes = match read_capped(req.into_body(), MAX_ANNOUNCE_BYTES).await {
+        Ok(b) => b,
+        Err(r) => return r,
     };
-    let body_bytes = collected.to_bytes();
-    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large();
-    }
 
     let announcement: super::state::Announcement = match serde_json::from_slice(&body_bytes) {
         Ok(a) => a,
@@ -918,6 +902,21 @@ pub async fn handle_announce(
 }
 
 // ---------- helpers ----------
+
+/// Buffer a peer's request body, stopping at `cap` bytes (shared
+/// [`crate::swarm::server::read_body_capped`]); the error arm is the
+/// response to send.
+async fn read_capped(
+    body: hyper::body::Incoming,
+    cap: usize,
+) -> Result<Vec<u8>, Response<Full<Bytes>>> {
+    use crate::swarm::server::BodyReadError;
+    match crate::swarm::server::read_body_capped(body, cap as u64).await {
+        Ok(b) => Ok(b),
+        Err(BodyReadError::TooLarge) => Err(payload_too_large()),
+        Err(BodyReadError::Read(_)) => Err(bad_request("read body")),
+    }
+}
 
 fn valid_username(name: &str) -> bool {
     if name.is_empty() || name.len() > 64 {

@@ -35,7 +35,6 @@ use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::PeerMap;
-use crate::swarm::gitback::receiver::ClaimsHandle as GitbackClaimsHandle;
 
 /// Default swarm peer port.
 pub const DEFAULT_PORT: u16 = 1531;
@@ -50,27 +49,14 @@ struct ServerState {
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
-    /// Gitback server-side context for cross-subnet `/gitback/push`
-    /// handling (Phase 7). `None` when gitback is disabled on this
-    /// envoy — in which case the `/gitback/push` route returns
-    /// 403 regardless of sender identity, which is the correct
-    /// response for a dormant gitback subsystem.
-    gitback_ctx: Option<GitbackServerCtx>,
 }
 
-/// Handles that the gitback push handler needs to validate and
-/// accept an incoming bundle. Built once at swarm server startup and
-/// cloned into the per-request handler. The `gate` field is consulted
-/// on every `/gitback/push` request so enable/disable flips take
-/// effect without restarting the agent; when the gate is off the
-/// handler returns 403 just as it used to when this context itself
-/// was absent.
-#[derive(Clone)]
-pub struct GitbackServerCtx {
-    pub claims: GitbackClaimsHandle,
-    pub manifest: Arc<Manifest>,
-    pub local_hostname: String,
-    pub gate: crate::swarm::gitback::Gate,
+/// Pause after a failed `accept()` before trying again. EMFILE in particular
+/// returns from the syscall in microseconds; a loop that just `continue`s
+/// spins a core at >100k iterations per second. Every swarm accept loop
+/// (this peer server and the per-user / root helper daemons) calls this.
+pub async fn accept_error_backoff() {
+    tokio::time::sleep(Duration::from_millis(100)).await;
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -82,7 +68,6 @@ pub async fn run(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
-    gitback_ctx: Option<GitbackServerCtx>,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
 
@@ -92,7 +77,6 @@ pub async fn run(
         bandwidth,
         peer_map,
         manifest,
-        gitback_ctx,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -135,10 +119,7 @@ pub async fn run(
                         } else {
                             accept_error_suppressed += 1;
                         }
-                        // Back off so we don't tight-loop. EMFILE in particular
-                        // returns from the syscall in microseconds; without a
-                        // sleep this branch can fire >100k times per second.
-                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        accept_error_backoff().await;
                         continue;
                     }
                 }
@@ -222,6 +203,12 @@ async fn handle_request(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
+    if let Some(gate) = route_gate(&path) {
+        if !crate::swarm::state_mirror::gate_active(gate) {
+            return Ok(forbidden(&format!("{:?} disabled on this envoy", gate)));
+        }
+    }
+
     let resp = match (&method, path.as_str()) {
         (&Method::GET, "/health") => ok_json(r#"{"status":"ok"}"#),
 
@@ -266,11 +253,7 @@ async fn handle_request(
         // (swarm AND longdrawer) before serving; 403 when off — same
         // fail mode the longdrawer gate promises (gate.rs).
         (&Method::GET, p) if p.starts_with("/swarm/longdrawer/") => {
-            if !longdrawer_active() {
-                forbidden("longdrawer disabled on this envoy")
-            } else {
-                tokio::task::block_in_place(|| crate::swarm::longdrawer::server::handle(p))
-            }
+            tokio::task::block_in_place(|| crate::swarm::longdrawer::server::handle(p))
         }
 
         // Longdrawer cross-subnet announce. Source envoys POST their
@@ -279,34 +262,16 @@ async fn handle_request(
         // sender's peer address from the TCP connection and feeds the
         // announcement into the same reconciler path that multicast
         // uses. Returns 503 if longdrawer isn't running on this envoy.
-        (&Method::POST, "/swarm/longdrawer/announce") => {
-            if !longdrawer_active() {
-                forbidden("longdrawer disabled on this envoy")
-            } else {
-                handle_echo_announce(req, peer_addr).await
-            }
-        }
+        (&Method::POST, "/swarm/longdrawer/announce") => handle_echo_announce(req, peer_addr).await,
 
-        // Gitback cross-subnet push (Phase 7). Source envoys POST
-        // a bundle directly to this endpoint when a `.gitback.yaml`
-        // sidecar lists an explicit `cross_subnet_mirrors:` target. The
-        // handler validates the sender, writes the blob to the local
-        // swarm cache, injects a manifest entry, and ingests a LAN
-        // claim so the gitback receiver picks it up on the next
-        // tick — same path as a LAN-discovered mirror.
+        // Gitback push (ADR-015): a member POSTs a bundle for
+        // `<project_id_hex>`, authorized by the X-Vigo-Chain header.
         (&Method::POST, p) if p.starts_with("/swarm/gitback/push/") => {
-            // Two cohabiting flavors:
-            //  - Unified-substrate (ADR-015 step 4): tail is 64-char
-            //    lowercase hex `<project_id>`. Handled inline below.
-            //  - Legacy claim-based (pre-ADR-015): tail is the
-            //    url-encoded label `gitback:<host>:<user>:<project>`.
-            //    Handled by the original receiver path while the
-            //    legacy code is still in tree.
             let tail = p.trim_start_matches("/swarm/gitback/push/");
             if is_project_id_path_segment(tail) {
                 handle_gitback_push_v2(tail, req).await
             } else {
-                handle_gitback_push(p, req, state).await
+                bad_request("invalid project_id path segment")
             }
         }
 
@@ -688,6 +653,11 @@ async fn handle_gitback_push_v2(
     ) {
         return forbidden(&format!("chain rejected: {:#}", e));
     }
+    // dr_scope (ADR-025): refuse before reading a byte of a bundle this
+    // envoy would refuse to ingest anyway.
+    if let Err(e) = crate::swarm::gitback::dr_scope::ensure_locally_tracked(&project_id) {
+        return forbidden(&format!("dr_scope: {:#}", e));
+    }
 
     // Stream the body into a temp file under incoming/ so we never
     // hold a multi-GiB bundle in process memory. Body size capped at
@@ -844,6 +814,11 @@ fn handle_gitback_bundle_get(
     ) {
         return forbidden(&format!("chain rejected: {:#}", e));
     }
+    // dr_scope (ADR-025): serve only a project this envoy tracks as a
+    // member — the same rule that decides whether it may hold the bytes.
+    if let Err(e) = crate::swarm::gitback::dr_scope::ensure_locally_tracked(&project_id) {
+        return forbidden(&format!("dr_scope: {:#}", e));
+    }
 
     // We can only serve a project we hold a populated bare repo for.
     let repo =
@@ -914,37 +889,62 @@ fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::anchor::tokens::
 /// rejects abuse without rejecting legitimate input.
 const MAX_ENVELOPE_BODY: u64 = 16 * 1024;
 
+/// Why [`read_body_capped`] refused a body.
+#[derive(Debug)]
+pub enum BodyReadError {
+    /// The body (declared or streamed) exceeds the cap.
+    TooLarge,
+    /// The transport failed mid-body.
+    Read(String),
+}
+
+/// Read a request body into memory, refusing it once it passes `cap`
+/// bytes. The declared length is checked before any byte is read, and the
+/// streamed total is checked frame by frame, so a chunked body that never
+/// declares a length is stopped at the cap rather than buffered whole.
+/// Every swarm handler that buffers a peer's body goes through this one
+/// helper — `collect()` would buffer whatever the peer chose to send.
+pub async fn read_body_capped<B>(mut body: B, cap: u64) -> Result<Vec<u8>, BodyReadError>
+where
+    B: hyper::body::Body<Data = Bytes> + Unpin,
+    B::Error: std::fmt::Display,
+{
+    use http_body_util::BodyExt;
+    if body.size_hint().lower() > cap {
+        return Err(BodyReadError::TooLarge);
+    }
+    let mut buf = Vec::new();
+    loop {
+        let frame = match body.frame().await {
+            Some(Ok(f)) => f,
+            Some(Err(e)) => return Err(BodyReadError::Read(e.to_string())),
+            None => break,
+        };
+        if let Ok(data) = frame.into_data() {
+            if (buf.len() as u64).saturating_add(data.len() as u64) > cap {
+                return Err(BodyReadError::TooLarge);
+            }
+            buf.extend_from_slice(&data);
+        }
+    }
+    Ok(buf)
+}
+
 async fn handle_envelope_post(
     path: &str,
     req: Request<hyper::body::Incoming>,
     kind: EnvelopeKind,
 ) -> Response<Full<Bytes>> {
-    use http_body_util::BodyExt;
-
     let project_id = match parse_envelope_path(path) {
         Some(p) => p,
         None => return bad_request("malformed envelope path"),
     };
 
-    // Read the body with a tight cap.
-    let mut body = req.into_body();
-    let mut buf = Vec::with_capacity(1024);
-    let mut total: u64 = 0;
-    loop {
-        let frame = match body.frame().await {
-            Some(Ok(f)) => f,
-            Some(Err(e)) => return bad_request(&format!("body read error: {}", e)),
-            None => break,
-        };
-        if let Ok(data) = frame.into_data() {
-            let chunk: &[u8] = &data;
-            total = total.saturating_add(chunk.len() as u64);
-            if total > MAX_ENVELOPE_BODY {
-                return payload_too_large("envelope body exceeds 16KiB");
-            }
-            buf.extend_from_slice(chunk);
-        }
-    }
+    let buf = match read_body_capped(req.into_body(), MAX_ENVELOPE_BODY).await {
+        Ok(b) => b,
+        Err(BodyReadError::TooLarge) => return payload_too_large("envelope body exceeds 16KiB"),
+        Err(BodyReadError::Read(e)) => return bad_request(&format!("body read error: {}", e)),
+    };
 
     let gitback_base = crate::platform::paths::default_gitback_dir();
     let result = tokio::task::block_in_place(|| -> Result<bool, anyhow::Error> {
@@ -965,7 +965,7 @@ async fn handle_envelope_post(
                 // Admin authority chaining back to the founder. Rejects
                 // a forged REVOKE pushed over the envelope-gossip REST
                 // endpoint.
-                env.verify_revoke_authority()
+                env.verify_revoke_authority(&gitback_base)
                     .map_err(|e| anyhow::anyhow!("unauthorized revoke: {}", e))?;
                 let changed =
                     crate::swarm::gitback::envelopes::save_revoke(&gitback_base, &env)?;
@@ -1092,23 +1092,27 @@ fn forbidden(msg: &str) -> Response<Full<Bytes>> {
 /// no bundle yet) keeps longdrawer serving until the server says
 /// otherwise — matching the gate semantics documented in
 /// `longdrawer/gate.rs`.
-fn longdrawer_active() -> bool {
-    match crate::swarm::state_mirror::read(&crate::swarm::state_mirror::default_path()) {
-        Ok(state) => state.gates.swarm && state.gates.longdrawer,
-        Err(_) => true,
+/// The envoy-layer gate a peer request must pass before it is routed —
+/// one check for every per-subsystem route, so a new route under a
+/// subsystem prefix cannot forget it. `None` for the shared substrate
+/// (`/blob`, `/manifest`, `/health`), which every subsystem rides.
+/// Lockbox and puddle pair/rekey claims ride the puddle gate (ADR-020).
+fn route_gate(path: &str) -> Option<crate::swarm::state_mirror::Gate> {
+    use crate::swarm::state_mirror::Gate;
+    if path.starts_with("/swarm/longdrawer/") {
+        Some(Gate::Longdrawer)
+    } else if path.starts_with("/swarm/gitback/") {
+        Some(Gate::Gitback)
+    } else if path.starts_with("/swarm/lockbox/") || path.starts_with("/swarm/puddle/") {
+        Some(Gate::Puddle)
+    } else {
+        None
     }
 }
 
 fn payload_too_large(msg: &str) -> Response<Full<Bytes>> {
     Response::builder()
         .status(StatusCode::PAYLOAD_TOO_LARGE)
-        .body(Full::new(Bytes::from(msg.to_string())))
-        .unwrap()
-}
-
-fn insufficient_storage(msg: &str) -> Response<Full<Bytes>> {
-    Response::builder()
-        .status(StatusCode::INSUFFICIENT_STORAGE)
         .body(Full::new(Bytes::from(msg.to_string())))
         .unwrap()
 }
@@ -1158,249 +1162,6 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
     out
 }
 
-// ── Gitback cross-subnet push handler (Phase 7) ──────────────────────────
-
-/// Handle `POST /gitback/push/<label>` — the cross-subnet direct
-/// push endpoint.
-///
-/// Path format: `/gitback/push/<url-encoded-label>`. The label is
-/// a full content-seed label `gitback:<seeder>:<user>:<project>`;
-/// we accept it url-encoded (colons percent-escaped) or raw.
-///
-/// Required headers:
-///
-/// - `X-Vigo-Seeder` — canonical hostname of the source envoy
-///   (self-reported; validated only for shape, not identity — the
-///   fleet CA already attested the mTLS connection, so the sender
-///   is known-good at the transport layer)
-/// - `X-Vigo-Blob-Sha256` — 64-hex sha256 of the bundle body
-///
-/// Validation order (each rejection returns a specific 4xx):
-///
-/// 1. Gitback enabled on this envoy (`gitback_ctx.is_some()`)
-/// 2. Label parses into (seeder, user, project) segments
-/// 3. Label's `<seeder>` segment equals `X-Vigo-Seeder`
-/// 4. Local user from `<user>` segment exists
-/// 5. Body size ≤ the per-host `swarm.gitback.max_bundle_bytes`
-/// 6. Body sha256 matches `X-Vigo-Blob-Sha256`
-///
-/// On accept:
-///
-/// - Body is written atomically to the blob cache at the computed
-///   sha path.
-/// - A manifest entry is recorded locally so the gitback
-///   receiver's next tick can resolve the label → blob.
-/// - The `ClaimsHandle` receives an `ingest_lan_claim(label,
-///   sender, true, now)` so the reactor picks it up on its next
-///   tick.
-///
-/// Returns 200 OK with a short JSON body on success.
-async fn handle_gitback_push(
-    path: &str,
-    req: Request<hyper::body::Incoming>,
-    state: &ServerState,
-) -> Response<Full<Bytes>> {
-    // 1. Gitback must be enabled on this envoy. The context is
-    // always present on new builds, but the gate may be off — both
-    // conditions return the same 403 to the caller.
-    let ctx = match state.gitback_ctx.as_ref() {
-        Some(c) => c.clone(),
-        None => return forbidden("gitback not enabled on this envoy"),
-    };
-    if !ctx.gate.enabled() {
-        return forbidden("gitback not enabled on this envoy");
-    }
-
-    // 2. Extract the label from the URL path.
-    let raw_label = path.trim_start_matches("/swarm/gitback/push/");
-    let label = match url_decode(raw_label) {
-        Some(l) => l,
-        None => return bad_request("malformed label url-encoding"),
-    };
-
-    // 3. Parse label segments.
-    let (seeder, user, project) = match parse_gitback_label(&label) {
-        Some(t) => t,
-        None => return bad_request("malformed gitback label"),
-    };
-
-    // 4. Read required headers.
-    let seeder_header = match header_string(&req, "x-vigo-seeder") {
-        Some(s) => s,
-        None => return bad_request("missing X-Vigo-Seeder header"),
-    };
-    let sha_header = match header_string(&req, "x-vigo-blob-sha256") {
-        Some(s) => s,
-        None => return bad_request("missing X-Vigo-Blob-Sha256 header"),
-    };
-
-    // 5. Seeder in the label must match the X-Vigo-Seeder header.
-    // Both are self-reported over mTLS; we require them to agree
-    // so a compromised (but fleet-enrolled) envoy cannot push a
-    // mirror labeled as a different seeder.
-    if !seeder_header.eq_ignore_ascii_case(&seeder) {
-        return forbidden(&format!(
-            "seeder mismatch: header '{}' does not match label seeder '{}'",
-            seeder_header, seeder,
-        ));
-    }
-
-    // 6. Validate sha header shape.
-    if !validate_sha256(&sha_header) {
-        return bad_request("X-Vigo-Blob-Sha256 is not a 64-char hex sha256");
-    }
-
-    // 7. Local user must exist. Gitback won't materialize a
-    // mirror for a user with no local account on this envoy.
-    if crate::platform::users::lookup_user(&user).is_none() {
-        return forbidden(&format!("user '{}' does not exist on this envoy", user));
-    }
-
-    let _ = project; // validated as non-empty segment above
-
-    // 7a. Receiver-side disk-pressure guard. The sender probes before
-    // push, but the probe is cached 60 s — a concurrent writer could
-    // have pushed free-pct below threshold in that window. Cheap
-    // statvfs on the gitback mirror mountpoint; reject 507 before
-    // reading a byte of the bundle body.
-    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Gitback) {
-        return insufficient_storage("gitback mirror filesystem under disk pressure");
-    }
-
-    // 8-10. Stream the body straight to disk under .tmp while hashing
-    // incrementally. Previously we buffered the entire body in memory
-    // via `body.collect().await`, which for a ~10 GiB bundle spiked
-    // RSS by ~10 GiB — a principal contributor to the agent's
-    // cgroup memory.peak. Streaming caps transient RAM at the hyper
-    // frame size (tens of KiB).
-    //
-    // The tmp path is keyed on the claimed header sha. If the recomputed
-    // body sha matches, we rename into the real cache slot (same path).
-    // If it doesn't, we reject and delete the tmp file.
-    let claimed_sha_lc = sha_header.to_ascii_lowercase();
-    let tmp_path = state.cache.blob_path(&claimed_sha_lc).with_extension("tmp");
-    if let Some(parent) = tmp_path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            return service_unavailable(&format!("failed to create blob dir: {}", e));
-        }
-    }
-    let max_bundle_bytes = crate::swarm::runtime_limits::gitback_max_bundle_bytes();
-
-    let (body_len, actual_sha) = {
-        use http_body_util::BodyExt;
-        use sha2::{Digest, Sha256};
-        use std::io::Write;
-
-        let mut body = req.into_body();
-        let mut tmp = match std::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&tmp_path)
-        {
-            Ok(f) => f,
-            Err(e) => {
-                return service_unavailable(&format!("open tmp: {}", e));
-            }
-        };
-        let mut hasher = Sha256::new();
-        let mut total: u64 = 0;
-        loop {
-            let frame = match body.frame().await {
-                Some(Ok(f)) => f,
-                Some(Err(e)) => {
-                    let _ = std::fs::remove_file(&tmp_path);
-                    return bad_request(&format!("body read error: {}", e));
-                }
-                None => break,
-            };
-            if let Ok(data) = frame.into_data() {
-                let chunk: &[u8] = &data;
-                total = total.saturating_add(chunk.len() as u64);
-                if total > max_bundle_bytes {
-                    let _ = std::fs::remove_file(&tmp_path);
-                    return payload_too_large(&format!(
-                        "bundle exceeds the {}-byte cap (swarm.gitback.max_bundle_bytes)",
-                        max_bundle_bytes,
-                    ));
-                }
-                hasher.update(chunk);
-                if let Err(e) = tmp.write_all(chunk) {
-                    let _ = std::fs::remove_file(&tmp_path);
-                    return service_unavailable(&format!("write tmp: {}", e));
-                }
-            }
-        }
-        if let Err(e) = tmp.sync_all() {
-            let _ = std::fs::remove_file(&tmp_path);
-            return service_unavailable(&format!("sync tmp: {}", e));
-        }
-        drop(tmp);
-
-        let digest = hasher.finalize();
-        let mut sha = String::with_capacity(64);
-        for b in digest.iter() {
-            sha.push_str(&format!("{:02x}", b));
-        }
-        (total, sha)
-    };
-
-    // 9. Verify body sha256 matches the header. Trust-but-verify:
-    // the sender already sent the sha, but we recompute to catch
-    // transport corruption or a misbehaving sender.
-    if actual_sha != claimed_sha_lc {
-        let _ = std::fs::remove_file(&tmp_path);
-        return bad_request(&format!(
-            "sha mismatch: body hashes to {} but header claimed {}",
-            actual_sha, sha_header,
-        ));
-    }
-
-    // 10. Move the validated tmp file into its final cache slot.
-    let final_path = state.cache.blob_path(&actual_sha);
-    if let Err(e) = std::fs::rename(&tmp_path, &final_path) {
-        let _ = std::fs::remove_file(&tmp_path);
-        warn!(
-            error = %e,
-            path = %final_path.display(),
-            "gitback push: failed to move blob into place"
-        );
-        return service_unavailable(&format!("failed to write blob: {}", e));
-    }
-
-    // 11. Inject a manifest entry so the gitback receiver reactor
-    // can resolve the label → blob. The seeder_address field is
-    // set to the literal "direct-push" to distinguish manual
-    // injections from manifest entries that came through normal
-    // swarm gossip; downstream consumers only care that an entry
-    // exists.
-    ctx.manifest.record_seed(
-        &actual_sha,
-        &label,
-        "*",
-        "30d",
-        &seeder,
-        body_len,
-        "direct-push",
-    );
-
-    // 12. Ingest the LAN claim so the receiver picks it up on
-    // its next tick. Same path as a GITBACKCLAIM multicast —
-    // the source hostname is used for dedup keying.
-    let now = crate::swarm::gitback::state::unix_seconds_now();
-    ctx.claims.ingest_lan_claim(&label, &seeder, true, now);
-
-    info!(
-        label = %label,
-        seeder = %seeder,
-        size = body_len,
-        sha = %&actual_sha[..12.min(actual_sha.len())],
-        "gitback push: accepted bundle"
-    );
-
-    ok_json(r#"{"status":"accepted"}"#)
-}
-
 /// Handle `POST /swarm/longdrawer/announce` — cross-subnet unicast announcements
 /// from peers listed in a user's `~<user>/.longdrawer/config.yaml` →
 /// `cross_subnet_peers:`. The body is a JSON-serialized longdrawer Announcement.
@@ -1417,21 +1178,18 @@ async fn handle_echo_announce(
     req: Request<hyper::body::Incoming>,
     peer_addr: SocketAddr,
 ) -> Response<Full<Bytes>> {
-    use http_body_util::BodyExt;
-
     // Cap the body size — announcements are tiny (a few hundred bytes
     // per user-state), but a misbehaving client shouldn't be able to
     // pin memory.
-    const MAX_ANNOUNCE_BYTES: usize = 128 * 1024;
+    const MAX_ANNOUNCE_BYTES: u64 = 128 * 1024;
 
-    let collected = match req.into_body().collect().await {
-        Ok(c) => c,
-        Err(_) => return bad_request("read body"),
+    let body_bytes = match read_body_capped(req.into_body(), MAX_ANNOUNCE_BYTES).await {
+        Ok(b) => b,
+        Err(BodyReadError::TooLarge) => {
+            return payload_too_large("longdrawer announcement exceeds size limit")
+        }
+        Err(BodyReadError::Read(_)) => return bad_request("read body"),
     };
-    let body_bytes = collected.to_bytes();
-    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large("longdrawer announcement exceeds size limit");
-    }
 
     let announcement: crate::swarm::longdrawer::state::Announcement =
         match serde_json::from_slice(&body_bytes) {
@@ -1444,20 +1202,6 @@ async fn handle_echo_announce(
     } else {
         service_unavailable("longdrawer daemon not running on this envoy")
     }
-}
-
-/// Parse a gitback content-seed label `gitback:<seeder>:<user>:<project>`
-/// into its three segments. Returns `None` for malformed labels.
-fn parse_gitback_label(label: &str) -> Option<(String, String, String)> {
-    let rest = label.strip_prefix("gitback:")?;
-    let mut parts = rest.splitn(3, ':');
-    let seeder = parts.next()?;
-    let user = parts.next()?;
-    let project = parts.next()?;
-    if seeder.is_empty() || user.is_empty() || project.is_empty() {
-        return None;
-    }
-    Some((seeder.to_string(), user.to_string(), project.to_string()))
 }
 
 /// Minimal URL-decoding for labels. We only need to handle `%3A`
@@ -1550,6 +1294,72 @@ pub fn build_tls_acceptor(
 mod tests {
     use super::*;
 
+    /// A chunked body that never declares a length and never ends: the
+    /// shape `collect()` would buffer until the agent ran out of memory.
+    struct EndlessBody {
+        sent: u64,
+    }
+
+    impl hyper::body::Body for EndlessBody {
+        type Data = Bytes;
+        type Error = std::convert::Infallible;
+        fn poll_frame(
+            mut self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Result<hyper::body::Frame<Bytes>, Self::Error>>> {
+            self.sent += 4096;
+            std::task::Poll::Ready(Some(Ok(hyper::body::Frame::data(Bytes::from(vec![0u8; 4096])))))
+        }
+    }
+
+    /// Declares a 1 TiB Content-Length; polling it is a test failure.
+    struct DeclaredHuge;
+
+    impl hyper::body::Body for DeclaredHuge {
+        type Data = Bytes;
+        type Error = std::convert::Infallible;
+        fn poll_frame(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Result<hyper::body::Frame<Bytes>, Self::Error>>> {
+            panic!("a body whose declared length exceeds the cap must not be read");
+        }
+        fn size_hint(&self) -> hyper::body::SizeHint {
+            hyper::body::SizeHint::with_exact(1 << 40)
+        }
+    }
+
+    #[tokio::test]
+    async fn read_body_capped_stops_an_undeclared_body_at_the_cap() {
+        let mut body = EndlessBody { sent: 0 };
+        let r = read_body_capped(&mut body, 64 * 1024).await;
+        assert!(matches!(r, Err(BodyReadError::TooLarge)), "{r:?}");
+        assert!(body.sent <= 64 * 1024 + 4096, "read {} bytes past a 64 KiB cap", body.sent);
+
+        // A declared length over the cap is refused before any byte is read.
+        let r = read_body_capped(DeclaredHuge, 9).await;
+        assert!(matches!(r, Err(BodyReadError::TooLarge)));
+        let r = read_body_capped(Full::new(Bytes::from(vec![0u8; 10])), 9).await;
+        assert!(matches!(r, Err(BodyReadError::TooLarge)));
+        let ok = read_body_capped(Full::new(Bytes::from(vec![1u8; 9])), 9).await.unwrap();
+        assert_eq!(ok, vec![1u8; 9]);
+    }
+
+    /// One gate per subsystem prefix; the shared substrate is ungated.
+    #[test]
+    fn route_gate_covers_every_subsystem_prefix() {
+        use crate::swarm::state_mirror::Gate;
+        assert_eq!(route_gate("/swarm/gitback/push/ab"), Some(Gate::Gitback));
+        assert_eq!(route_gate("/swarm/gitback/bundle/ab"), Some(Gate::Gitback));
+        assert_eq!(route_gate("/swarm/gitback/envelopes/ab/all"), Some(Gate::Gitback));
+        assert_eq!(route_gate("/swarm/lockbox/push/u/f"), Some(Gate::Puddle));
+        assert_eq!(route_gate("/swarm/lockbox/tombstones/u"), Some(Gate::Puddle));
+        assert_eq!(route_gate("/swarm/puddle/pair-claim/u"), Some(Gate::Puddle));
+        assert_eq!(route_gate("/swarm/longdrawer/announce"), Some(Gate::Longdrawer));
+        assert_eq!(route_gate("/blob/ab/meta"), None);
+        assert_eq!(route_gate("/manifest"), None);
+    }
+
     fn state_with_blob(dir: &std::path::Path, sha: &str, size: u64) -> Arc<ServerState> {
         let cache = BlobCache::new(dir.to_path_buf()).unwrap();
         std::fs::write(cache.dir().join(sha), vec![0u8; size as usize]).unwrap();
@@ -1560,7 +1370,6 @@ mod tests {
             bandwidth: BandwidthMonitor::new(),
             peer_map: Arc::new(PeerMap::new()),
             manifest,
-            gitback_ctx: None,
         })
     }
 
@@ -1568,40 +1377,6 @@ mod tests {
     fn test_build_meta_etag_format() {
         assert_eq!(build_meta_etag(1, 1), r#""1-1""#);
         assert_eq!(build_meta_etag(42, 1000), r#""42-1000""#);
-    }
-
-    // ── Phase 7 gitback push pure helpers ────────────────────
-
-    #[test]
-    fn parse_gitback_label_accepts_valid_shape() {
-        let (s, u, p) = parse_gitback_label("gitback:danlap:dan:vigo-web").unwrap();
-        assert_eq!(s, "danlap");
-        assert_eq!(u, "dan");
-        assert_eq!(p, "vigo-web");
-    }
-
-    #[test]
-    fn parse_gitback_label_accepts_project_with_dashes_and_dots() {
-        let (_, _, p) = parse_gitback_label("gitback:h:u:my-repo.v2").unwrap();
-        assert_eq!(p, "my-repo.v2");
-    }
-
-    #[test]
-    fn parse_gitback_label_rejects_missing_prefix() {
-        assert!(parse_gitback_label("danlap:dan:vigo-web").is_none());
-    }
-
-    #[test]
-    fn parse_gitback_label_rejects_too_few_segments() {
-        assert!(parse_gitback_label("gitback:dan:vigo-web").is_none());
-        assert!(parse_gitback_label("gitback:danlap").is_none());
-    }
-
-    #[test]
-    fn parse_gitback_label_rejects_empty_segment() {
-        assert!(parse_gitback_label("gitback::dan:vigo-web").is_none());
-        assert!(parse_gitback_label("gitback:dan::vigo-web").is_none());
-        assert!(parse_gitback_label("gitback:dan:user:").is_none());
     }
 
     #[test]

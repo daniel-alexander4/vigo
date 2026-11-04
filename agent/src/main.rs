@@ -1622,16 +1622,6 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let swarm_cancel = cancel.clone();
                 let pm = peer_map.clone();
                 let sm = shared_manifest.clone();
-                // Gitback server-side context for cross-subnet
-                // push (Phase 7). Constructed unconditionally; the
-                // gate field is consulted by the `/gitback/push`
-                // handler, which returns 403 while dormant.
-                let gitback_srv_ctx = Some(swarm::server::GitbackServerCtx {
-                    claims: gitback_claims.clone(),
-                    manifest: shared_manifest.clone(),
-                    local_hostname: gitback_local_info.hostname.clone(),
-                    gate: gitback_gate.clone(),
-                });
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
                         swarm_port,
@@ -1641,7 +1631,6 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         pm,
                         sm,
                         swarm_cancel,
-                        gitback_srv_ctx,
                     )
                     .await
                     {

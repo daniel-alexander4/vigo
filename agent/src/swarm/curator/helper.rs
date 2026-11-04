@@ -185,6 +185,7 @@ pub async fn run(envoy_id: String, cancel: CancellationToken, manifest: Arc<Mani
                     Ok(v) => v,
                     Err(e) => {
                         debug!(error = %e, "curator helper accept error, continuing");
+                        crate::swarm::server::accept_error_backoff().await;
                         continue;
                     }
                 };

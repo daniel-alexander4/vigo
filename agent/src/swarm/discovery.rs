@@ -21,7 +21,7 @@
 
 use std::collections::HashSet;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use socket2::{Domain, Protocol, Socket, Type};
@@ -332,14 +332,20 @@ async fn listen_loop(
                                 );
                             }
                             // Trigger manifest sync if a version mismatch was detected.
+                            // Single-flight per peer and globally capped
+                            // (see `InFlight`): every datagram can ask
+                            // for this, and datagrams are spoofable.
                             if let Some(addr) = result.manifest_sync_peer {
                                 if let Some(ref agent) = shared_agent {
-                                    let m = manifest.clone();
-                                    let a = agent.clone();
-                                    let pm = peer_map.clone();
-                                    tokio::task::spawn_blocking(move || {
-                                        sync_manifest_from_peer(&addr, &m, &a, &pm);
-                                    });
+                                    if let Some(guard) = InFlight::begin(format!("manifest {addr}")) {
+                                        let m = manifest.clone();
+                                        let a = agent.clone();
+                                        let pm = peer_map.clone();
+                                        tokio::task::spawn_blocking(move || {
+                                            let _guard = guard;
+                                            sync_manifest_from_peer(&addr, &m, &a, &pm);
+                                        });
+                                    }
                                 }
                             }
                             // Resolve partial-blob sentinels via async /meta
@@ -356,10 +362,14 @@ async fn listen_loop(
                                     continue;
                                 }
                                 if let Some(ref agent) = shared_agent {
+                                    let Some(guard) = InFlight::begin(format!("probe {peer_addr} {sha}")) else {
+                                        continue;
+                                    };
                                     let pm = peer_map.clone();
                                     let a = agent.clone();
                                     let etag = peer_map.stored_etag(&sha, &peer_addr);
                                     tokio::task::spawn_blocking(move || {
+                                        let _guard = guard;
                                         probe_peer_bitmap(&peer_addr, &sha, &pm, &a, etag);
                                     });
                                 }
@@ -375,6 +385,36 @@ async fn listen_loop(
                 }
             }
         }
+    }
+}
+
+/// Most blocking peer fetches (manifest syncs + bitmap probes) the
+/// multicast receiver keeps outstanding at once.
+const MAX_IN_FLIGHT: usize = 32;
+
+static IN_FLIGHT: std::sync::LazyLock<Mutex<HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// Single-flight token for one blocking peer fetch triggered by a received
+/// datagram. [`InFlight::begin`] refuses a key that is already running and
+/// refuses everything once [`MAX_IN_FLIGHT`] are outstanding, so a flood of
+/// (spoofable) multicast packets cannot queue unbounded work on the
+/// blocking pool. Dropping the token frees the slot.
+struct InFlight(String);
+
+impl InFlight {
+    fn begin(key: String) -> Option<InFlight> {
+        let mut set = IN_FLIGHT.lock().unwrap_or_else(|p| p.into_inner());
+        if set.len() >= MAX_IN_FLIGHT || !set.insert(key.clone()) {
+            return None;
+        }
+        Some(InFlight(key))
+    }
+}
+
+impl Drop for InFlight {
+    fn drop(&mut self) {
+        IN_FLIGHT.lock().unwrap_or_else(|p| p.into_inner()).remove(&self.0);
     }
 }
 
@@ -1019,7 +1059,7 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             // index. The IP comes from the datagram source, not this
             // line. Last one wins (a packet only carries one).
             let h = rest.trim();
-            if !h.is_empty() {
+            if super::hostdox::valid_hostname(h) {
                 result.host_name = Some(h.to_string());
             }
         } else if line.starts_with("GITBACKCLAIM:") {
@@ -1135,7 +1175,7 @@ fn probe_peer_bitmap(
 fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<crate::swarm::tls::SwarmAgent>, peer_map: &Arc<PeerMap>) {
     match peer_client::fetch_manifest(agent, peer_addr) {
         Ok(remote) => {
-            let changed = manifest.merge(&remote);
+            let changed = manifest.merge_from_peer(&remote, super::manifest::now_millis());
             if changed {
                 info!(
                     peer = peer_addr,
@@ -1297,6 +1337,21 @@ mod tests {
     use super::*;
     use crate::swarm::bitmap as bitmap_mod;
     use crate::swarm::meta::CHUNK_SIZE;
+
+    /// One in-flight fetch per key, a global cap, and the slot frees on drop.
+    #[test]
+    fn in_flight_is_single_flight_and_capped() {
+        let tag = rand::random::<u64>();
+        let a = InFlight::begin(format!("t{tag} a")).expect("first begin");
+        assert!(InFlight::begin(format!("t{tag} a")).is_none(), "duplicate refused");
+        drop(a);
+        assert!(InFlight::begin(format!("t{tag} a")).is_some(), "slot freed on drop");
+        let held: Vec<_> = (0..MAX_IN_FLIGHT * 2)
+            .filter_map(|i| InFlight::begin(format!("t{tag} {i}")))
+            .collect();
+        assert!(held.len() <= MAX_IN_FLIGHT);
+        assert!(InFlight::begin(format!("t{tag} extra")).is_none(), "cap refuses");
+    }
 
     fn test_manifest() -> Arc<Manifest> {
         let dir = tempfile::tempdir().unwrap();

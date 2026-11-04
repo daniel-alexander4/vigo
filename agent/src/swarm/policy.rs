@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use crate::swarm::state_mirror::Gate;
 
 /// Default directory for the per-user policy cache. Production paths
 /// land here; tests pass a tempdir to the `_at` variants below.
@@ -171,7 +172,7 @@ pub fn require_puddle(username: &str) -> Result<()> {
              publish the config, and wait for the agent to reconcile."
         );
     }
-    if !envoy_layer_allows("puddle") {
+    if !envoy_layer_allows(Gate::Puddle) {
         bail!(
             "user {username} is authorized but this envoy is not in the \
              puddle pattern list. Add this hostname to `swarm.puddle.enabled` \
@@ -195,7 +196,7 @@ pub fn require_gitback(username: &str) -> Result<()> {
              publish the config, and wait for the agent to reconcile."
         );
     }
-    if !envoy_layer_allows("gitback") {
+    if !envoy_layer_allows(Gate::Gitback) {
         bail!(
             "user {username} is authorized but this envoy is not in the \
              gitback pattern list. Add this hostname to \
@@ -223,7 +224,7 @@ pub fn require_curator(username: &str) -> Result<()> {
              publish the config, and wait for the agent to reconcile."
         );
     }
-    if !envoy_layer_allows("curator") {
+    if !envoy_layer_allows(Gate::Curator) {
         bail!(
             "user {username} is authorized but this envoy is not in the \
              curator pattern list. Add this hostname to \
@@ -251,7 +252,7 @@ pub fn require_poolq(username: &str) -> Result<()> {
              publish the config, and wait for the agent to reconcile."
         );
     }
-    if !envoy_layer_allows("poolq") {
+    if !envoy_layer_allows(Gate::Poolq) {
         bail!(
             "user {username} is authorized but this envoy is not in the \
              poolq pattern list. Add this hostname to \
@@ -282,32 +283,13 @@ fn refuse_root(feature: &str, username: &str) -> Result<()> {
     );
 }
 
-/// Read `state.json` and report whether the named subsystem gate is on.
-/// A missing or unreadable state.json returns `true` (skip the envoy
-/// check) — the file is written by the daemon after every accepted
-/// bundle, so absence means either a freshly-enrolled envoy that hasn't
-/// completed a check-in yet OR the daemon is on a pre-0.41.1 binary.
-/// In both cases, refusing here would block the user from doing any
-/// puddle/gitback setup, so we fail open.
-fn envoy_layer_allows(subsystem: &str) -> bool {
-    envoy_layer_allows_at(&crate::swarm::state_mirror::default_path(), subsystem)
-}
-
-/// Path-overridable form of [`envoy_layer_allows`]. Production callers
-/// use the default path via [`envoy_layer_allows`]; tests pass a tempdir
-/// path so the check is hermetic.
-fn envoy_layer_allows_at(path: &std::path::Path, subsystem: &str) -> bool {
-    let state = match crate::swarm::state_mirror::read(path) {
-        Ok(s) => s,
-        Err(_) => return true,
-    };
-    match subsystem {
-        "puddle" => state.gates.puddle,
-        "gitback" => state.gates.gitback,
-        "curator" => state.gates.curator,
-        "poolq" => state.gates.poolq,
-        _ => true,
-    }
+/// Read `state.json` and report whether the subsystem's envoy-layer gate
+/// is on (swarm AND subsystem). Fails closed: a missing or unreadable
+/// state.json means this envoy has not completed a check-in that says the
+/// subsystem is allowed, so the verb is refused (default-deny on both
+/// layers). See [`crate::swarm::state_mirror::gate_active_at`].
+fn envoy_layer_allows(gate: Gate) -> bool {
+    crate::swarm::state_mirror::gate_active(gate)
 }
 
 #[cfg(test)]
@@ -387,28 +369,19 @@ mod tests {
         }
     }
 
-    // The two-layer envoy_layer_allows helper isn't directly testable
-    // without a global state.json fixture (default_path() reads
-    // /var/lib/vigo/swarm/state.json). The semantics it implements
-    // are exercised end-to-end by the home-lab smoke runs and indirectly
-    // by state_mirror::tests::round_trips_through_disk which proves
-    // the gate fields decode correctly. The fail-open-on-missing
-    // semantic is the load-bearing one — verified here by the absence
-    // of state.json on a fresh test environment causing no panic /
-    // refusal.
+    use crate::swarm::state_mirror::gate_active_at;
+
+    /// Default-deny: no state.json (fresh envoy, no check-in yet) or an
+    /// unparseable one refuses every subsystem.
     #[test]
-    fn envoy_layer_fails_open_when_state_json_missing() {
-        // Hermetic — point at a path inside an empty tempdir so the test
-        // doesn't depend on whether /var/lib/vigo/swarm/state.json
-        // happens to exist on the host running the suite.
+    fn envoy_layer_fails_closed_when_state_json_missing_or_corrupt() {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("nope.json");
-        assert!(envoy_layer_allows_at(&path, "puddle"));
-        assert!(envoy_layer_allows_at(&path, "gitback"));
-        assert!(envoy_layer_allows_at(&path, "curator"));
-        assert!(envoy_layer_allows_at(&path, "poolq"));
-        // Unknown subsystem name — defensive default-true.
-        assert!(envoy_layer_allows_at(&path, "payload"));
+        for g in [Gate::Puddle, Gate::Gitback, Gate::Curator, Gate::Poolq, Gate::Longdrawer] {
+            assert!(!gate_active_at(&path, g), "{g:?}");
+        }
+        std::fs::write(&path, b"{not json").unwrap();
+        assert!(!gate_active_at(&path, Gate::Gitback));
     }
 
     #[test]
@@ -416,9 +389,12 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("state.json");
         crate::swarm::state_mirror::write(&path, "0.41.3", 1, br#"{"swarm_puddle_enabled": false, "swarm_curator_enabled": false}"#).unwrap();
-        assert!(!envoy_layer_allows_at(&path, "puddle"));
-        assert!(!envoy_layer_allows_at(&path, "curator"));
+        assert!(!gate_active_at(&path, Gate::Puddle));
+        assert!(!gate_active_at(&path, Gate::Curator));
         // Defaults to true for keys not in vars_json.
-        assert!(envoy_layer_allows_at(&path, "gitback"));
+        assert!(gate_active_at(&path, Gate::Gitback));
+        // The global swarm switch dominates every subsystem bit.
+        crate::swarm::state_mirror::write(&path, "0.41.3", 1, br#"{"swarm_enabled": false}"#).unwrap();
+        assert!(!gate_active_at(&path, Gate::Gitback));
     }
 }

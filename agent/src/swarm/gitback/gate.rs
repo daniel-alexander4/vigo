@@ -14,10 +14,11 @@
 //! at its own natural sample point.
 //!
 //! All the gitback data structures (`PeerTable`, `PendingClaims`,
-//! `ClaimsHandle`, `GitbackServerCtx`) are constructed unconditionally
-//! and remain inert while the gate is off — a dormant envoy never emits
-//! GITBACK / GITBACKCLAIM announcements, never accepts `/gitback/push`
-//! requests, and the reactor skips its publish / receive work on every
+//! `ClaimsHandle`) are constructed unconditionally and remain inert
+//! while the gate is off — a dormant envoy never emits GITBACK /
+//! GITBACKCLAIM announcements, its peer server refuses every
+//! `/swarm/gitback/*` route (the router gate, from the state.json
+//! mirror), and the reactor skips its publish / receive work on every
 //! tick. This matches the "always-on-but-inert" pattern already used by
 //! the multicast listener.
 //!

@@ -151,8 +151,14 @@ pub async fn handle_pair_claim(
 
     let incoming_hash = hash_code(&claim.code);
     if !hashes_equal(&incoming_hash, &spec.code_hash) {
+        if codes::record_claim_failure(&spec.code_hash) {
+            clear_pending(&home);
+            tracing::warn!(user = %user, "puddle pair: too many wrong codes, pair session cancelled");
+            return Ok(codes::plain(StatusCode::GONE, "too many wrong codes; pair session cancelled"));
+        }
         return Ok(codes::plain(StatusCode::UNAUTHORIZED, "code mismatch"));
     }
+    codes::clear_claim_failures(&spec.code_hash);
 
     let wrapped_path = config::wrapped_path(&home);
     let wrapped = match fs::read(&wrapped_path) {

@@ -58,6 +58,29 @@ pub struct HostEntry {
     pub last_seen: i64,
 }
 
+/// Most hosts the index holds. `HOST:` lines arrive in unauthenticated
+/// multicast, so a flood of distinct names must not grow the map (or the
+/// rendered `/etc/hosts` block) without bound between prunes.
+pub const MAX_HOSTS: usize = 4096;
+
+/// RFC 1123 hostname: 1-253 bytes of dot-separated labels, each 1-63
+/// ASCII alphanumerics or `-`, not starting or ending with `-`. Anything
+/// else — whitespace above all, which would inject extra aliases into the
+/// `/etc/hosts` line — is refused. `localhost` is refused too: a managed
+/// line must never shadow it.
+pub fn valid_hostname(h: &str) -> bool {
+    if h.is_empty() || h.len() > 253 || h.eq_ignore_ascii_case("localhost") {
+        return false;
+    }
+    h.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    })
+}
+
 /// In-memory `hostname → entry` index, populated from `HOST:` lines.
 #[derive(Default)]
 pub struct HostMap {
@@ -70,13 +93,22 @@ impl HostMap {
     }
 
     /// Record (or refresh) `host`'s LAN address. Returns `true` if the
-    /// entry was new or its address changed. Empty hostnames ignored.
+    /// entry was new or its address changed. A name failing
+    /// [`valid_hostname`] is ignored, and a new name is refused while the
+    /// index already holds [`MAX_HOSTS`] live entries.
     pub fn record(&self, host: &str, addr: IpAddr, now: i64) -> bool {
         let host = host.trim();
-        if host.is_empty() {
+        if !valid_hostname(host) {
             return false;
         }
         let mut guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        if !guard.contains_key(host) && guard.len() >= MAX_HOSTS {
+            let cutoff = now - HOST_STALE_SECS;
+            guard.retain(|_, e| e.last_seen >= cutoff);
+            if guard.len() >= MAX_HOSTS {
+                return false;
+            }
+        }
         match guard.get_mut(host) {
             Some(e) => {
                 let changed = e.addr != addr;
@@ -511,6 +543,36 @@ mod tests {
 
         m.clear();
         assert!(m.is_empty());
+    }
+
+    /// An unauthenticated `HOST:` value must not inject extra aliases
+    /// (whitespace) or anything else that is not a hostname into
+    /// `/etc/hosts`, and a flood of names must not grow the map unbounded.
+    #[test]
+    fn host_map_refuses_invalid_names_and_caps_entries() {
+        let m = HostMap::new();
+        let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 9));
+        for bad in [
+            "evil vigo-server",
+            "evil\tbank.example",
+            "a\nb",
+            "-lead",
+            "trail-",
+            "a..b",
+            "localhost",
+            "x#comment",
+            &"a".repeat(64),
+        ] {
+            assert!(!m.record(bad, ip, 1000), "{bad:?}");
+        }
+        assert!(m.is_empty());
+        assert!(m.record("web-01.lan", ip, 1000));
+        for i in 0..MAX_HOSTS + 10 {
+            m.record(&format!("h{i}"), ip, 1000);
+        }
+        assert_eq!(m.len(), MAX_HOSTS);
+        // Once the old entries are stale, a new name gets room again.
+        assert!(m.record("late", ip, 1000 + HOST_STALE_SECS + 1));
     }
 
     #[test]

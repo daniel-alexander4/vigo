@@ -63,7 +63,7 @@ use serde::{Deserialize, Serialize};
 use super::envelopes::is_token_revoked;
 use super::git_ops::{build_command, RunAs};
 use super::project_state::{hex_id, project_repo_path, ProjectConfig, TokenChain};
-use crate::swarm::anchor::tokens::{verify_chain, ID_LEN};
+use crate::swarm::anchor::tokens::ID_LEN;
 
 /// Per-peer push timeout. Generous for a multi-GiB bundle on a slow
 /// link; bounded so a stuck connection can't pin a tokio worker.
@@ -383,17 +383,12 @@ pub fn decode_chain_header(value: &str) -> Result<PushChain> {
 /// checks `sha256(founder) == project_id` and rejects mismatches.
 /// Also rejects any chain whose tokens have been revoked.
 ///
-/// **ADR-019:** the `delegations` parameter (lifted from the wire
-/// PushChain envelope) is threaded into `verify_chain` so a
-/// post-rekey founder's leaf chains back to the genesis founder
-/// pubkey baked into `project_id`. Empty list = pre-rekey,
-/// behaviorally identical to pre-ADR-019. The receive side here
-/// trusts sender-presented delegations to verify the chain
-/// mathematically; this is acceptable because gitback is for
-/// *availability*, not confidentiality (an attacker who has
-/// compromised a retired founder key could push junk to bare
-/// repos but cannot exfiltrate user-readable bytes — lockbox
-/// owns confidentiality).
+/// **ADR-019:** the wire PushChain's `delegations` are reconciled with
+/// the root-owned chain this envoy has already verified for the project
+/// ([`super::delegation_store`]) before `verify_chain` runs, so a
+/// retired founder key presenting a short (or empty) delegation list
+/// cannot reclaim the genesis authority window. A presented extension is
+/// verified and then recorded.
 pub fn verify_chain_for_push(
     push: &PushChain,
     project_id: &[u8; ID_LEN],
@@ -405,8 +400,14 @@ pub fn verify_chain_for_push(
         .first()
         .ok_or_else(|| anyhow!("chain is empty"))?;
     let founder = root.body.signer_puddle_pubkey;
-    verify_chain(project_id, &founder, &push.delegations, &push.chain, now)
-        .map_err(|e| anyhow!("chain verification: {}", e))?;
+    super::delegation_store::verify_chain_known(
+        gitback_base,
+        project_id,
+        &founder,
+        &push.delegations,
+        &push.chain,
+        now,
+    )?;
     for (i, token) in push.chain.iter().enumerate() {
         let tid = token.id();
         if is_token_revoked(gitback_base, project_id, &tid) {
@@ -922,7 +923,7 @@ impl EnvelopesBundle {
             // A1: authorize before persisting a gossiped revoke — the
             // signer must hold Admin authority chaining back to the
             // founder. An unauthorized (forged) revoke is dropped here.
-            if let Err(e) = r.verify_revoke_authority() {
+            if let Err(e) = r.verify_revoke_authority(gitback_base) {
                 tracing::warn!(
                     token_id = %r.token_id,
                     error = %e,

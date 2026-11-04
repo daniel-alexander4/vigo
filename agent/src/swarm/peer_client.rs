@@ -18,6 +18,26 @@ use tracing::debug;
 use crate::swarm::tls::{self, SwarmAgent};
 use crate::update::TlsCerts;
 
+/// Byte caps on peer response bodies. A peer is any fleet envoy, so every
+/// body is read through [`read_body_capped`]: `resp.bytes()` would buffer
+/// whatever the peer chose to send.
+pub const MAX_META_BODY: u64 = 1 << 20;
+pub const MAX_CHUNK_BODY: u64 = super::meta::CHUNK_SIZE;
+pub const MAX_VERSION_BODY: u64 = 4 << 10;
+pub const MAX_MANIFEST_BODY: u64 = 32 << 20;
+
+/// Read at most `cap` bytes of a response body; a body past `cap` is an
+/// error, never a truncated success.
+pub fn read_body_capped(resp: impl std::io::Read, cap: u64) -> Result<Vec<u8>> {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    resp.take(cap + 1).read_to_end(&mut buf)?;
+    if buf.len() as u64 > cap {
+        bail!("peer response body exceeds {} bytes", cap);
+    }
+    Ok(buf)
+}
+
 /// Metadata response from GET /blob/{sha256}/meta.
 #[derive(Debug, Deserialize)]
 pub struct PeerBlobMeta {
@@ -100,7 +120,7 @@ pub fn fetch_meta_conditional(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    let body = resp.bytes().context("reading peer meta response")?;
+    let body = read_body_capped(resp, MAX_META_BODY).context("reading peer meta response")?;
     let meta: PeerBlobMeta =
         serde_json::from_slice(&body).context("parsing peer meta response")?;
 
@@ -140,10 +160,7 @@ pub fn fetch_chunk(
         })
         .unwrap_or_default();
 
-    let data = resp
-        .bytes()
-        .context("reading chunk body from peer")?
-        .to_vec();
+    let data = read_body_capped(resp, MAX_CHUNK_BODY).context("reading chunk body from peer")?;
 
     Ok(ChunkResult { data, peers })
 }
@@ -164,7 +181,7 @@ pub fn fetch_manifest_version(agent: &SwarmAgent, peer_addr: &str) -> Result<u64
     struct VersionResp {
         version: u64,
     }
-    let body = resp.bytes().context("reading manifest version")?;
+    let body = read_body_capped(resp, MAX_VERSION_BODY).context("reading manifest version")?;
     let v: VersionResp =
         serde_json::from_slice(&body).context("parsing manifest version")?;
     Ok(v.version)
@@ -185,7 +202,7 @@ pub fn fetch_manifest(
         bail!("manifest from {} returned {}", peer_addr, resp.status());
     }
 
-    let body = resp.bytes().context("reading manifest data")?;
+    let body = read_body_capped(resp, MAX_MANIFEST_BODY).context("reading manifest data")?;
     let data: super::manifest::ManifestData =
         serde_json::from_slice(&body).context("parsing manifest data")?;
     Ok(data)
@@ -200,4 +217,19 @@ pub fn fetch_manifest(
 /// preserved: the client still presents this envoy's client cert.
 pub fn build_peer_agent(tls: &TlsCerts) -> Result<SwarmAgent> {
     tls::build_client(tls, Duration::from_secs(5), Duration::from_secs(30))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A peer that streams forever is cut off at the cap, never buffered.
+    #[test]
+    fn read_body_capped_refuses_an_endless_body() {
+        let endless = std::io::repeat(0);
+        assert!(read_body_capped(endless, MAX_MANIFEST_BODY).is_err());
+        let exact = std::io::Cursor::new(vec![7u8; 100]);
+        assert_eq!(read_body_capped(exact, 100).unwrap().len(), 100);
+        assert!(read_body_capped(std::io::Cursor::new(vec![7u8; 101]), 100).is_err());
+    }
 }

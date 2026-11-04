@@ -336,8 +336,14 @@ pub async fn handle_rekey_claim(
         return Ok(codes::plain(StatusCode::GONE, "rekey claim code expired"));
     }
     if !codes::hashes_equal(&codes::hash_code(&claim.code), &spec.code_hash) {
+        if codes::record_claim_failure(&spec.code_hash) {
+            clear_pending(&home);
+            tracing::warn!(user = %user, "puddle rekey: too many wrong codes, rekey claim session cancelled");
+            return Ok(codes::plain(StatusCode::GONE, "too many wrong codes; rekey claim session cancelled"));
+        }
         return Ok(codes::plain(StatusCode::UNAUTHORIZED, "code mismatch"));
     }
+    codes::clear_claim_failures(&spec.code_hash);
 
     let wrapped_path = config::wrapped_path(&home);
     let wrapped = match fs::read(&wrapped_path) {

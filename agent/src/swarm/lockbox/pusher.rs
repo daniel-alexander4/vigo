@@ -213,6 +213,15 @@ async fn fan_out_delete(agent: &SwarmAgent, job: DeleteJob) -> Result<()> {
 
     let hostname = super::read_hostname();
 
+    // Sign first so the local record carries the DELETE signature that
+    // catch-up peers verify. Missing key = daemon raced enrollment: the
+    // tombstone still lands locally (unsigned, so no peer accepts it via
+    // catch-up) and nothing is fanned out.
+    let signing_key = super::load_local_signing_key(&user);
+    let envelope = signing_key.as_ref().ok().map(|k| {
+        tombstones::build_envelope(k, &hostname, &user, &filename, deletion_time)
+    });
+
     // Record tombstone locally BEFORE fanning out — if we crash
     // between steps, the authoritative state is "this envoy
     // deleted foo.pdf," and next announce will carry the digest
@@ -226,6 +235,7 @@ async fn fan_out_delete(agent: &SwarmAgent, job: DeleteJob) -> Result<()> {
             Tombstone {
                 deletion_time,
                 source_hostname: hostname.clone(),
+                signature: envelope.as_ref().map(|e| e.signature.clone()).unwrap_or_default(),
             },
         )
     }) {
@@ -250,24 +260,20 @@ async fn fan_out_delete(agent: &SwarmAgent, job: DeleteJob) -> Result<()> {
         );
     }
 
-    // Load the signing key. Missing key = daemon raced enrollment;
-    // log and return (retry on next delete event — local tombstone
-    // still exists).
-    let signing_key = match super::load_local_signing_key(&user) {
-        Ok(k) => k,
-        Err(e) => {
+    // Missing signing key = daemon raced enrollment; log and return
+    // (retry on next delete event — local tombstone still exists).
+    let envelope = match (envelope, signing_key) {
+        (Some(env), _) => env,
+        (None, res) => {
             warn!(
                 user = %user,
                 filename = %filename,
-                error = %e,
+                error = %res.err().map(|e| e.to_string()).unwrap_or_default(),
                 "pusher: cannot load signing key, tombstone recorded locally but not fanned out"
             );
             return Ok(());
         }
     };
-
-    let envelope =
-        tombstones::build_envelope(&signing_key, &hostname, &user, &filename, deletion_time);
 
     let (lan_targets, stats) = lan_targets_for(&user);
     let extra_targets = extra_targets_for(&user);

@@ -423,6 +423,7 @@ async fn run_server(
                     Ok(v) => v,
                     Err(e) => {
                         tracing::debug!(error = %e, "accept error, continuing");
+                        crate::swarm::server::accept_error_backoff().await;
                         continue;
                     }
                 };

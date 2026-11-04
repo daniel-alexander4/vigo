@@ -189,7 +189,7 @@ All swarm blobs have a default retention of **7 days**.
 vigocli swarm revoke <sha256>
 ```
 
-This marks the seed as revoked in the tracker, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation. On a LAN, all copies are removed within seconds. Cross-subnet envoys receive the revocation on their next check-in. Operator-initiated revocation and retention-driven revocation flow through identical code — the only filesystem `unlink` happens 7 days later in `cleanup_graveyard`.
+This marks the seed as revoked in the tracker, records a revocation in the manifest CRDT, and delivers the revocation to every envoy with its next check-in response. Each envoy evicts the blob from its cache upon receiving the revocation. Revocations travel only from the server: envoy-to-envoy manifest gossip is unsigned, so it carries active entries but never a revocation. Operator-initiated revocation and retention-driven revocation flow through identical code — the only filesystem `unlink` happens 7 days later in `cleanup_graveyard`.
 
 **Re-seeding:** To re-distribute revoked content, place the file and `.swarm` manifest back in `seed/`. On the next check-in, the trait collector re-hashes the file, the server records a fresh active entry in the manifest CRDT (the new timestamp beats the old revocation), and distribution resumes. The SHA256 hash is content-based — same file = same hash — so partial downloads from previous rounds are automatically resumed. Peer map entries for the revoked SHA are flushed during eviction, so the re-seeded download starts with fresh peer discovery instead of trusting stale claims from the previous round.
 
@@ -199,10 +199,10 @@ Each envoy maintains a local manifest file at `/var/lib/vigo/swarm/manifest.json
 
 You don't need to manage the manifest directly — it's maintained by the agent. The manifest ensures:
 
-- Revocations propagate fleet-wide in seconds (via multicast + peer sync)
+- New blobs propagate between envoys in seconds (via multicast + peer sync)
+- Revocations come only from the server's check-in response; a peer can neither revoke a blob nor undo a revocation, and a peer entry dated more than 5 minutes in the future is ignored
 - Revoked blobs can't be re-registered by stale trait reports
 - Offline envoys catch up when they reconnect
-- The server going down doesn't prevent revocations between envoys on the same LAN
 
 Revoked manifest entries are pruned after 7 days.
 

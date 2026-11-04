@@ -76,6 +76,13 @@ pub const DIGEST_LEN: usize = 16;
 pub struct LeaveRecord {
     pub leave_time: i64,
     pub hostname_leaving: String,
+    /// Hex Ed25519 signature of the originating LEAVE envelope by
+    /// `hostname_leaving`'s daemon key, kept so catch-up peers can verify
+    /// the record ([`LeavesTable::verified_advances`]). Empty for a leave
+    /// recorded without one (operator-driven foreign evict): applies
+    /// locally, accepted by no peer.
+    #[serde(default)]
+    pub signature: String,
 }
 
 /// Per-user leave table. Persisted at
@@ -249,16 +256,36 @@ impl LeavesTable {
         out
     }
 
-    /// Merge another table into this one. Later `leave_time` wins
-    /// per pubkey. Returns true if any entry was added or advanced.
-    pub fn merge(&mut self, other: &LeavesTable) -> bool {
-        let mut changed = false;
+    /// The records in a peer's table that are new or advanced relative to
+    /// this one AND carry a LEAVE signature that verifies against the
+    /// signing pubkey `sign_pubkey_for` returns for `hostname_leaving` (the
+    /// local peer table). Catch-up applies exactly these; an unverifiable
+    /// record is dropped, because applying a leave removes a peer from the
+    /// recipient set.
+    pub fn verified_advances(
+        &self,
+        other: &LeavesTable,
+        sign_pubkey_for: impl Fn(&str) -> Option<String>,
+    ) -> Vec<(String, LeaveRecord)> {
+        let mut out = Vec::new();
         for (pk, r) in &other.leaves {
-            if self.upsert(pk, r.clone()) {
-                changed = true;
+            if self.leave_time_for(pk).is_some_and(|prior| prior >= r.leave_time) {
+                continue;
             }
+            let Some(sign_pk) = sign_pubkey_for(&r.hostname_leaving) else {
+                continue;
+            };
+            if verify_record(&self.user, pk, r, &sign_pk).is_err() {
+                tracing::warn!(
+                    user = %self.user,
+                    hostname_leaving = %r.hostname_leaving,
+                    "lockbox: dropping catch-up leave with a bad signature"
+                );
+                continue;
+            }
+            out.push((pk.clone(), r.clone()));
         }
-        changed
+        out
     }
 }
 
@@ -294,11 +321,16 @@ pub struct LeaveEnvelope {
     pub signature: String,
 }
 
-/// Canonicalize the bytes that get signed / verified. Separator is a
+/// Domain tag for LEAVE signatures, distinct from DELETE / RESURRECT.
+pub const LEAVE_DOMAIN: &[u8] = b"vigo-lockbox-leave-v1\0";
+
+/// Canonicalize the bytes that get signed / verified, prefixed with
+/// [`LEAVE_DOMAIN`]. Separator is a
 /// single NUL so unusual pubkey encodings can't collide with a
 /// different `user + pubkey` combination.
 pub fn canonical_sign_bytes(user: &str, age_pubkey_leaving: &str, leave_time: i64) -> Vec<u8> {
-    let mut out = Vec::with_capacity(user.len() + age_pubkey_leaving.len() + 16);
+    let mut out = Vec::with_capacity(LEAVE_DOMAIN.len() + user.len() + age_pubkey_leaving.len() + 16);
+    out.extend_from_slice(LEAVE_DOMAIN);
     out.extend_from_slice(user.as_bytes());
     out.push(0);
     out.extend_from_slice(age_pubkey_leaving.as_bytes());
@@ -368,6 +400,21 @@ pub fn verify_envelope(envelope: &LeaveEnvelope, expected_pubkey: &str) -> Resul
     Ok(())
 }
 
+/// Verify a stored leave record as the LEAVE envelope it came from.
+pub fn verify_record(user: &str, age_pubkey: &str, r: &LeaveRecord, expected_pubkey: &str) -> Result<()> {
+    verify_envelope(
+        &LeaveEnvelope {
+            user: user.to_string(),
+            age_pubkey_leaving: age_pubkey.to_string(),
+            hostname_leaving: r.hostname_leaving.clone(),
+            leave_time: r.leave_time,
+            signer_sign_pubkey: String::new(),
+            signature: r.signature.clone(),
+        },
+        expected_pubkey,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -378,6 +425,7 @@ mod tests {
         LeaveRecord {
             leave_time: t,
             hostname_leaving: "host-a".to_string(),
+            signature: String::new(),
         }
     }
 
@@ -447,18 +495,48 @@ mod tests {
         assert!(!tt.leaves.contains_key("old"));
     }
 
+    fn signed_record(sk: &SigningKey, user: &str, age_pk: &str, t: i64) -> LeaveRecord {
+        let env = build_envelope(sk, "host-a", user, age_pk, t);
+        LeaveRecord { leave_time: t, hostname_leaving: "host-a".into(), signature: env.signature }
+    }
+
     #[test]
-    fn merge_advances_and_adds() {
+    fn verified_advances_takes_newer_and_new_signed_records() {
+        let sk = fresh_key();
+        let pk = crate::swarm::lockbox::crypt::encode_sign_pubkey(&sk.verifying_key());
         let mut a = LeavesTable::empty("dan");
         a.upsert("age1", sample_record(10));
+        a.upsert("age3", sample_record(30));
 
         let mut b = LeavesTable::empty("dan");
-        b.upsert("age1", sample_record(20)); // newer
-        b.upsert("age2", sample_record(5)); // new
+        b.upsert("age1", signed_record(&sk, "dan", "age1", 20)); // newer
+        b.upsert("age2", signed_record(&sk, "dan", "age2", 5)); // new
+        b.upsert("age3", signed_record(&sk, "dan", "age3", 30)); // not newer
 
-        assert!(a.merge(&b));
-        assert_eq!(a.leave_time_for("age1"), Some(20));
-        assert_eq!(a.leave_time_for("age2"), Some(5));
+        let mut got = a.verified_advances(&b, |h| (h == "host-a").then(|| pk.clone()));
+        got.sort_by(|x, y| x.0.cmp(&y.0));
+        let keys: Vec<_> = got.iter().map(|(k, r)| (k.as_str(), r.leave_time)).collect();
+        assert_eq!(keys, vec![("age1", 20), ("age2", 5)]);
+    }
+
+    /// Catch-up must not let an answering peer evict members: unsigned,
+    /// wrong-key, wrong-user and unknown-signer leaves are all dropped.
+    #[test]
+    fn verified_advances_drops_unverifiable_records() {
+        let sk = fresh_key();
+        let other = fresh_key();
+        let pk = crate::swarm::lockbox::crypt::encode_sign_pubkey(&sk.verifying_key());
+        let mut b = LeavesTable::empty("dan");
+        b.upsert("unsigned", sample_record(5));
+        b.upsert("forged", signed_record(&other, "dan", "forged", 5));
+        b.upsert("wronguser", signed_record(&sk, "eve", "wronguser", 5));
+        b.upsert("swapped", signed_record(&sk, "dan", "age-original", 5));
+        let a = LeavesTable::empty("dan");
+        assert!(a.verified_advances(&b, |_| Some(pk.clone())).is_empty());
+        let mut ok = LeavesTable::empty("dan");
+        ok.upsert("age9", signed_record(&sk, "dan", "age9", 5));
+        assert!(a.verified_advances(&ok, |_| None).is_empty(), "unknown signer");
+        assert_eq!(a.verified_advances(&ok, |_| Some(pk.clone())).len(), 1);
     }
 
     // ---------- envelope round-trip ----------

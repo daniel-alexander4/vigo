@@ -688,29 +688,10 @@ fn cmd_init(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Validate a project handle. Free-form-but-sane: 1-64 chars, ASCII
-/// alnum + `-` + `_` + `.`, no leading dot, no whitespace. Tighter
-/// than the ADR strictly requires, but matches the existing
-/// `path_guard::validate_project_name` posture for filesystem safety.
-fn validate_handle(handle: &str) -> Result<()> {
-    if handle.is_empty() || handle.len() > 64 {
-        bail!("handle must be 1-64 characters");
-    }
-    if handle.starts_with('.') {
-        bail!("handle must not start with '.'");
-    }
-    for c in handle.chars() {
-        if !(c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
-            bail!(
-                "handle '{}' contains invalid character '{}'; \
-                 use ASCII alphanumeric + '-' '_' '.'",
-                handle,
-                c
-            );
-        }
-    }
-    Ok(())
-}
+// Project-handle validation lives with the token encoding it protects
+// (`anchor::tokens::validate_handle`), so mint, verify and this CLI apply
+// one rule.
+use crate::swarm::anchor::tokens::validate_handle;
 
 // ============================================================
 // Working-repo helpers (project init / push)
