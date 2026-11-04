@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -83,51 +85,67 @@ func (d *toolDeps) listEnvoys(ctx context.Context, args map[string]any) (string,
 	if d.queries == nil {
 		return marshalResult(map[string]any{"count": 0, "envoys": []any{}})
 	}
-	envoys, err := d.queries.ListEnvoys(ctx)
+	status, _ := args["status"].(string)
+	limit := limitArg(args, "limit", 50)
+
+	// Page through the table and stop as soon as limit envoys match, so an
+	// unfiltered call reads one page instead of the whole fleet. The status
+	// filter is the freshness verdict (computed in Go, not stored), so a
+	// filter that matches few envoys still pages further.
+	var results []envoyInfo
+	err := forEachPage(func(offset int64) (int, bool, error) {
+		page, err := d.queries.ListEnvoysOffset(ctx, db.ListEnvoysOffsetParams{Limit: scanPageSize, Offset: offset})
+		if err != nil {
+			return 0, false, err
+		}
+		for _, t := range page {
+			if d.addEnvoy(&results, t, status) && len(results) >= limit {
+				return len(page), true, nil
+			}
+		}
+		return len(page), false, nil
+	})
 	if err != nil {
 		return "", err
-	}
-
-	status, _ := args["status"].(string)
-	limit := intArg(args, "limit", 50)
-
-	type envoyInfo struct {
-		ID         string `json:"id"`
-		Hostname   string `json:"hostname"`
-		IP         string `json:"ip_address"`
-		EnrolledAt string `json:"enrolled_at"`
-		LastSeen   string `json:"last_seen,omitempty"`
-		Status     string `json:"status"`
-	}
-
-	var results []envoyInfo
-	for _, t := range envoys {
-		ts := d.envoyStatus(t)
-
-		if status != "" && ts != status {
-			continue
-		}
-
-		info := envoyInfo{
-			ID:         t.ID,
-			Hostname:   t.Hostname,
-			IP:         t.IpAddress,
-			EnrolledAt: t.EnrolledAt.Format(time.RFC3339),
-			Status:     ts,
-		}
-		if t.LastSeen.Valid {
-			info.LastSeen = t.LastSeen.Time.Format(time.RFC3339)
-		}
-		results = append(results, info)
-		if len(results) >= limit {
-			break
-		}
 	}
 
 	return marshalResult(map[string]any{
 		"count":  len(results),
 		"envoys": results,
 	})
+}
+
+// envoyInfo is one row of list_envoys output.
+type envoyInfo struct {
+	ID         string `json:"id"`
+	Hostname   string `json:"hostname"`
+	IP         string `json:"ip_address"`
+	EnrolledAt string `json:"enrolled_at"`
+	LastSeen   string `json:"last_seen,omitempty"`
+	Status     string `json:"status"`
+}
+
+// addEnvoy appends t to results when it passes the status filter and
+// reports whether it did.
+func (d *toolDeps) addEnvoy(results *[]envoyInfo, t db.Envoy, status string) bool {
+	ts := d.envoyStatus(t)
+
+	if status != "" && ts != status {
+		return false
+	}
+
+	info := envoyInfo{
+		ID:         t.ID,
+		Hostname:   t.Hostname,
+		IP:         t.IpAddress,
+		EnrolledAt: t.EnrolledAt.Format(time.RFC3339),
+		Status:     ts,
+	}
+	if t.LastSeen.Valid {
+		info.LastSeen = t.LastSeen.Time.Format(time.RFC3339)
+	}
+	*results = append(*results, info)
+	return true
 }
 
 func (d *toolDeps) getEnvoy(ctx context.Context, args map[string]any) (string, error) {
@@ -191,7 +209,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 	if d.queries == nil || d.runStore == nil {
 		return marshalResult(map[string]any{"count": 0, "runs": []any{}})
 	}
-	limit := int64(intArg(args, "limit", 20))
+	limit := int64(limitArg(args, "limit", 20))
 	hostname, _ := args["hostname"].(string)
 
 	var runs []db.Run
@@ -409,10 +427,7 @@ func (d *toolDeps) queryInventory(ctx context.Context, args map[string]any) (str
 		}
 	}
 
-	all, err := d.queries.GetAllLatestTraits(ctx)
-	if err != nil {
-		return "", err
-	}
+	limit := limitArg(args, "limit", 50)
 
 	type entry struct {
 		Hostname string         `json:"hostname"`
@@ -420,35 +435,61 @@ func (d *toolDeps) queryInventory(ctx context.Context, args map[string]any) (str
 		Traits   map[string]any `json:"traits,omitempty"`
 	}
 
+	// Page through envoys by hostname and stop once limit envoys match:
+	// the filters run over the decoded trait document, so they can't be
+	// pushed into SQL, but the scan no longer loads and decodes every
+	// envoy's traits when the answer is found in the first page.
 	var results []entry
-	for _, t := range all {
-		var traits map[string]any
-		if err := json.Unmarshal([]byte(t.Traits), &traits); err != nil {
-			continue
+	truncated := false
+	cursor := ""
+	for {
+		page, err := d.queries.GetAllLatestTraitsPaged(ctx, cursor, scanPageSize)
+		if err != nil {
+			return "", err
 		}
-		if !matchFilters(traits, filters) {
-			continue
-		}
-
-		e := entry{Hostname: t.Hostname, IP: t.IPAddress}
-		if len(showFields) > 0 {
-			e.Traits = make(map[string]any)
-			for _, f := range showFields {
-				if v := getNestedValue(traits, f); v != nil {
-					e.Traits[f] = v
-				}
+		for _, t := range page {
+			if len(results) >= limit {
+				truncated = true
+				break
 			}
-		} else {
-			e.Traits = traits
+			var traits map[string]any
+			if err := json.Unmarshal([]byte(t.Traits), &traits); err != nil {
+				continue
+			}
+			if !matchFilters(traits, filters) {
+				continue
+			}
+
+			e := entry{Hostname: t.Hostname, IP: t.IPAddress}
+			if len(showFields) > 0 {
+				e.Traits = make(map[string]any)
+				for _, f := range showFields {
+					if v := getNestedValue(traits, f); v != nil {
+						e.Traits[f] = v
+					}
+				}
+			} else {
+				e.Traits = traits
+			}
+			results = append(results, e)
 		}
-		results = append(results, e)
+		if truncated || len(page) < scanPageSize {
+			break
+		}
+		cursor = page[len(page)-1].Hostname
 	}
 
 	return marshalResult(map[string]any{
-		"count":  len(results),
-		"envoys": results,
+		"count":     len(results),
+		"truncated": truncated,
+		"envoys":    results,
 	})
 }
+
+// configcrateExts are the file extensions get_configcrate_definition may
+// return. Anything else under configcrates/ (payload files, keys, PEMs) is
+// out of the tool's reach.
+var configcrateExts = []string{".vgo", ".yaml", ".yml"}
 
 func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error) {
 	if d.configStore == nil {
@@ -465,7 +506,7 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 
 	configcratesDir := filepath.Join(d.configStore.Dir(), "configcrates")
 	var found string
-	for _, ext := range []string{".vgo", ".yaml", ".yml"} {
+	for _, ext := range configcrateExts {
 		candidate := filepath.Join(configcratesDir, name+ext)
 		if _, err := os.Stat(candidate); err == nil {
 			found = candidate
@@ -482,8 +523,13 @@ func (d *toolDeps) getConfigcrateDefinition(args map[string]any) (string, error)
 			if err != nil || entry.IsDir() {
 				return nil
 			}
-			base := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
-			if base == name {
+			ext := filepath.Ext(entry.Name())
+			if !slices.Contains(configcrateExts, ext) {
+				// Only configcrate definitions — never a key, PEM, env
+				// payload or template that happens to share the base name.
+				return nil
+			}
+			if strings.TrimSuffix(entry.Name(), ext) == name {
 				found = path
 				return filepath.SkipAll
 			}
@@ -569,7 +615,7 @@ func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]an
 	if d.queries == nil {
 		return marshalResult(map[string]any{"count": 0, "snapshots": []any{}})
 	}
-	limit := int64(intArg(args, "limit", 20))
+	limit := int64(limitArg(args, "limit", 20))
 
 	history, err := d.queries.ListConvergenceHistory(ctx, limit)
 	if err != nil {
@@ -662,6 +708,37 @@ func getNestedValue(m map[string]any, dotPath string) any {
 	return current
 }
 
+// maxToolLimit is the ceiling on any LLM-supplied "limit" argument. The
+// result is capped at maxToolResultBytes before the model sees it, so a
+// larger limit buys nothing but database work.
+const maxToolLimit = 200
+
+// scanPageSize is the page size the paged tool scans read per query.
+const scanPageSize = 500
+
+// forEachPage calls fetch with increasing offsets until it reports a short
+// page or asks to stop.
+func forEachPage(fetch func(offset int64) (n int, stop bool, err error)) error {
+	var offset int64
+	for {
+		n, stop, err := fetch(offset)
+		if err != nil || stop || n < scanPageSize {
+			return err
+		}
+		offset += int64(n)
+	}
+}
+
+// limitArg reads an LLM-supplied limit: missing, non-numeric, zero or
+// negative → def; above maxToolLimit → maxToolLimit.
+func limitArg(args map[string]any, key string, def int) int {
+	n := intArg(args, key, def)
+	if n <= 0 {
+		return def
+	}
+	return min(n, maxToolLimit)
+}
+
 func intArg(args map[string]any, key string, def int) int {
 	v, ok := args[key]
 	if !ok {
@@ -669,6 +746,12 @@ func intArg(args map[string]any, key string, def int) int {
 	}
 	switch n := v.(type) {
 	case float64:
+		if n >= math.MaxInt32 {
+			return math.MaxInt32
+		}
+		if n <= math.MinInt32 {
+			return math.MinInt32
+		}
 		return int(n)
 	case int:
 		return n

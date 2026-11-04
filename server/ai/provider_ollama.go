@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -64,7 +65,7 @@ func (p *OllamaProvider) EnsureModel(ctx context.Context, model string) error {
 		resp, err := client.Do(tagsReq)
 		if err == nil {
 			if resp.StatusCode == http.StatusOK {
-				if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+				if err := json.NewDecoder(io.LimitReader(resp.Body, maxProviderResponseBytes)).Decode(&tags); err != nil {
 					resp.Body.Close()
 					return fmt.Errorf("decoding model list: %w", err)
 				}

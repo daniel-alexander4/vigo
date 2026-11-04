@@ -13,7 +13,7 @@ func toolDefs() []ToolDef {
 				"type": "object",
 				"properties": map[string]any{
 					"status": map[string]any{"type": "string", "enum": []string{"active", "revoked", "stale"}, "description": "Filter by envoy status"},
-					"limit":  map[string]any{"type": "integer", "description": "Max envoys to return (default 50)"},
+					"limit":  map[string]any{"type": "integer", "description": "Max envoys to return (default 50, max 200)"},
 				},
 			}),
 		},
@@ -46,7 +46,7 @@ func toolDefs() []ToolDef {
 				"type": "object",
 				"properties": map[string]any{
 					"hostname": map[string]any{"type": "string", "description": "Filter runs by envoy hostname"},
-					"limit":    map[string]any{"type": "integer", "description": "Max runs to return (default 20)"},
+					"limit":    map[string]any{"type": "integer", "description": "Max runs to return (default 20, max 200)"},
 				},
 			}),
 		},
@@ -98,6 +98,7 @@ func toolDefs() []ToolDef {
 						"items":       map[string]any{"type": "string"},
 						"description": "Trait dot-paths to include in output (e.g. 'os.distro', 'hardware.memory_mb')",
 					},
+					"limit": map[string]any{"type": "integer", "description": "Max envoys to return (default 50, max 200); truncated=true means more matched"},
 				},
 			}),
 		},
@@ -145,7 +146,7 @@ func toolDefs() []ToolDef {
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"limit": map[string]any{"type": "integer", "description": "Max snapshots to return (default 20)"},
+					"limit": map[string]any{"type": "integer", "description": "Max snapshots to return (default 20, max 200)"},
 				},
 			}),
 		},

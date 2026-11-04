@@ -153,13 +153,13 @@ func (p *OpenAICompatProvider) chat(ctx context.Context, req ChatRequest, maxTok
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := readProviderBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, providerStatusError(p.name, resp.StatusCode, respBody)
 	}
 
 	var oaiResp oaiResponse

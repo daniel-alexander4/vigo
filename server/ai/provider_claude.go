@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -172,13 +171,13 @@ func (p *ClaudeProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := readProviderBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("claude API returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, providerStatusError("claude", resp.StatusCode, respBody)
 	}
 
 	var cResp claudeResponse
