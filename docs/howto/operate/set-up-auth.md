@@ -255,6 +255,10 @@ The following paths are accessible without authentication regardless of the conf
 
 Agent-facing swarm reads are public too: the fleet pubkey map, the puddle name map, curator `resolve` and `blob`, and the poolq `topics` and `topic/…` reads. The poolq `block`/`unblock` moderation routes are admin-only.
 
+## Cross-Origin Request Protection
+
+The server refuses a state-changing browser request (`POST`, `PUT`, `PATCH`, `DELETE`) that comes from another origin, with `403`. It goes by the browser's `Sec-Fetch-Site` header, or the `Origin` header on browsers that do not send it. This stops a page on another site from using a logged-in operator's session cookie to act on the server. Requests that carry neither header (vigocli, agents, `curl`) and requests authenticated with an `Authorization: Bearer` API token are not affected. If you put the UI behind a reverse proxy, the proxy must pass the original `Host` header through.
+
 ## Roles and Permissions
 
 Three roles are supported:

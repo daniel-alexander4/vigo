@@ -41,11 +41,9 @@ func NewSessionManager(sqlDB *sql.DB, idleTimeout time.Duration) *SessionManager
 	return &SessionManager{SessionManager: sm}
 }
 
-// session key constants
-const (
-	sessionKeyUser      = "user"
-	sessionKeyCSRFToken = "csrf_token"
-)
+// sessionKeyUser is the session key holding the authenticated user. CSRF is
+// handled by CrossOriginGuard, not by a session-stored token.
+const sessionKeyUser = "user"
 
 // The SCS session map is gob-encoded; the User snapshot stored under
 // sessionKeyUser needs its concrete type registered before the first
@@ -136,14 +134,4 @@ func (sm *SessionManager) LoadSessionReadOnly(r *http.Request) context.Context {
 		return r.Context()
 	}
 	return ctx
-}
-
-// GetCSRFToken returns the CSRF token from the session, generating one if needed.
-func (sm *SessionManager) GetCSRFToken(ctx context.Context) string {
-	token := sm.GetString(ctx, sessionKeyCSRFToken)
-	if token == "" {
-		token = sm.Token(ctx)
-		sm.Put(ctx, sessionKeyCSRFToken, token)
-	}
-	return token
 }

@@ -1611,7 +1611,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 		// responses and large blob/agent downloads.
 		s.httpSrv = &http.Server{
 			Addr:              s.cfg.Server.APIListen,
-			Handler:           s.authProvider.Middleware(api.MaxBodyMiddleware(gwMux)),
+			Handler:           vigoauth.CrossOriginGuard(s.authProvider.Middleware(api.MaxBodyMiddleware(gwMux))),
 			ReadHeaderTimeout: httpReadHeaderTimeout,
 			IdleTimeout:       httpIdleTimeout,
 		}
