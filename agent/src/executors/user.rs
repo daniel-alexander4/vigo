@@ -372,54 +372,20 @@ impl UserExecutor {
     }
 
     fn write_authorized_keys(&self, name: &str, home: &str, keys: &str) -> Result<(), String> {
-        let ssh_dir = format!("{}/.ssh", home);
-        std::fs::create_dir_all(&ssh_dir)
-            .map_err(|e| format!("mkdir {}: {}", ssh_dir, e))?;
-
-        let ak_path = format!("{}/authorized_keys", ssh_dir);
-
-        // Remove symlinks for security.
-        if let Ok(meta) = std::fs::symlink_metadata(&ak_path) {
-            if meta.file_type().is_symlink() {
-                std::fs::remove_file(&ak_path)
-                    .map_err(|e| format!("remove symlink {}: {}", ak_path, e))?;
-            }
-        }
-
-        // Preserve any active Scrier ephemeral keys so convergence doesn't
-        // break in-progress remote access sessions.
-        let marker = crate::tunnel::sshauth::EPHEMERAL_MARKER;
-        let mut content = keys.to_string();
-        if let Ok(existing) = std::fs::read_to_string(&ak_path) {
-            for line in existing.lines() {
-                if line.contains(marker) {
-                    if !content.ends_with('\n') {
-                        content.push('\n');
-                    }
-                    content.push_str(line);
-                    content.push('\n');
-                }
-            }
-        }
-
-        std::fs::write(&ak_path, &content)
-            .map_err(|e| format!("write {}: {}", ak_path, e))?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&ak_path, std::fs::Permissions::from_mode(0o600));
-            let _ = std::fs::set_permissions(&ssh_dir, std::fs::Permissions::from_mode(0o700));
-        }
-
-        match self.runner.run("chown", &["-R", &format!("{}:", name), &ssh_dir]) {
-            Ok(o) if !o.status.success() => {
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                Err(format!("chown {}: {}", ssh_dir, stderr))
-            }
-            Err(e) => Err(format!("chown {}: {}", ssh_dir, e)),
-            _ => Ok(()),
-        }
+        // Root writing into a directory the user owns: the shared safe
+        // rewrite opens ~/.ssh no-follow, replaces (never follows) a planted
+        // symlink at authorized_keys, sets owner + mode on the temp's
+        // descriptor and preserves live scrier ephemeral lines so
+        // convergence doesn't break in-progress remote access sessions.
+        let info = crate::platform::users::lookup_user(name)
+            .ok_or_else(|| format!("write authorized_keys: user {} not found", name))?;
+        crate::tunnel::sshauth::write_managed_authorized_keys(
+            std::path::Path::new(home),
+            info.uid,
+            info.gid,
+            keys,
+        )
+        .map_err(|e| format!("write {}/.ssh/authorized_keys: {}", home, e))
     }
 
     fn desired_sudoers_content(name: &str, params: &HashMap<String, String>) -> Result<Option<String>, String> {

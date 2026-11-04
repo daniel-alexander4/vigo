@@ -12,4 +12,6 @@ pub mod paths;
 pub mod permissions;
 pub mod process;
 pub mod procprogress;
+#[cfg(unix)]
+pub mod safe_path;
 pub mod users;

@@ -3,7 +3,11 @@
 
 //! Directory executor — manages directories with mode and ownership idempotently.
 
-use super::file::{apply_ownership, check_ownership, lookup_gid, lookup_uid};
+#[cfg(not(unix))]
+use super::file::apply_ownership;
+use super::file::{check_ownership, lookup_gid, lookup_uid};
+#[cfg(unix)]
+use crate::platform::safe_path::{self, SafeDir};
 use super::{Action, Executor, ResourceResult};
 use std::collections::HashMap;
 use std::fs;
@@ -61,7 +65,20 @@ fn execute_directory(
 
     let recurse = params.get("recurse").map(|s| s.as_str()) == Some("true");
 
-    if p.is_dir() {
+    // lstat, never stat: a symlink at target_path is refused rather than
+    // followed, so a user who can write the parent can't point a root
+    // chmod/chown at /etc/shadow by swapping the managed directory for a link.
+    let top = fs::symlink_metadata(p);
+    if let Ok(m) = &top {
+        if m.file_type().is_symlink() {
+            return Err(format!(
+                "directory {}: target_path is a symlink; refusing to manage it",
+                path
+            ));
+        }
+    }
+
+    if top.as_ref().map(|m| m.is_dir()).unwrap_or(false) {
         let current_mode = crate::platform::permissions::get_mode(p)
             .map_err(|e| format!("stat {}: {}", path, e))?;
         let ownership_match = check_ownership(path, desired_uid, desired_gid);
@@ -85,13 +102,7 @@ fn execute_directory(
             return Ok(());
         }
 
-        if current_mode != mode {
-            crate::platform::permissions::set_mode(p, mode)
-                .map_err(|e| format!("chmod {}: {}", path, e))?;
-        }
-        if !ownership_match {
-            apply_ownership(path, desired_uid, desired_gid)?;
-        }
+        apply_top(p, mode, desired_uid, desired_gid)?;
         if recurse {
             apply_recursive(p, mode, desired_uid, desired_gid)?;
         }
@@ -106,61 +117,185 @@ fn execute_directory(
     }
 
     fs::create_dir_all(p).map_err(|e| format!("create directory {}: {}", path, e))?;
-    crate::platform::permissions::set_mode(p, mode)
-        .map_err(|e| format!("chmod {}: {}", path, e))?;
-    if desired_uid.is_some() || desired_gid.is_some() {
-        apply_ownership(path, desired_uid, desired_gid)?;
-    }
+    apply_top(p, mode, desired_uid, desired_gid)?;
 
     Ok(())
 }
 
-/// Check whether all entries under `dir` already match the desired mode and ownership.
+/// Deepest a `recurse: true` walk goes. Without symlink-following a tree
+/// can't loop, but a bind mount can; the cap turns that into an error
+/// instead of a stack overflow that kills the agent.
+const MAX_RECURSE_DEPTH: usize = 128;
+
+/// Set mode + ownership on the managed directory itself, through a
+/// descriptor opened `O_DIRECTORY|O_NOFOLLOW` (a symlink swapped in after the
+/// lstat makes the open fail rather than redirecting the chmod/chown).
+#[cfg(unix)]
+fn apply_top(p: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
+    let d = SafeDir::open(p).map_err(|e| format!("open {}: {}", p.display(), e))?;
+    apply_dir_fd(&d, mode, uid, gid)
+}
+
+#[cfg(not(unix))]
+fn apply_top(p: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
+    crate::platform::permissions::set_mode(p, mode).map_err(|e| format!("chmod {}: {}", p.display(), e))?;
+    if uid.is_some() || gid.is_some() {
+        apply_ownership(p.to_str().unwrap_or(""), uid, gid)?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn apply_dir_fd(d: &SafeDir, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
+    let st = d.stat_self().map_err(|e| format!("stat {}: {}", d.path().display(), e))?;
+    if !owner_matches(st.uid, st.gid, uid, gid) {
+        d.chown_self(uid, gid)
+            .map_err(|e| format!("chown {}: {}", d.path().display(), e))?;
+    }
+    // After the chown (which clears setuid/setgid bits).
+    if st.perm() != mode || !owner_matches(st.uid, st.gid, uid, gid) {
+        d.chmod_self(mode)
+            .map_err(|e| format!("chmod {}: {}", d.path().display(), e))?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn owner_matches(cur_uid: u32, cur_gid: u32, uid: Option<u32>, gid: Option<u32>) -> bool {
+    uid.is_none_or(|u| u == cur_uid) && gid.is_none_or(|g| g == cur_gid)
+}
+
+/// Check whether all entries under `dir` already match the desired mode and
+/// ownership. Walks by descriptor and lstat only: symlinks are skipped (never
+/// followed), as are FIFOs / sockets / device nodes — `recurse` manages
+/// directories and regular files.
+#[cfg(unix)]
 fn check_recursive(dir: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> bool {
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return false,
-    };
-    for entry in entries.flatten() {
-        let p = entry.path();
-        let entry_mode = match crate::platform::permissions::get_mode(&p) {
-            Ok(m) => m,
-            Err(_) => return false,
-        };
-        if entry_mode != mode {
+    fn walk(d: &SafeDir, depth: usize, mode: u32, uid: Option<u32>, gid: Option<u32>) -> bool {
+        if depth > MAX_RECURSE_DEPTH {
             return false;
         }
-        if !check_ownership(p.to_str().unwrap_or(""), uid, gid) {
-            return false;
+        let Ok(names) = d.entries() else { return false };
+        for name in names {
+            let Ok(st) = d.stat(&name) else { return false };
+            if !(st.is_dir() || st.is_file()) {
+                continue;
+            }
+            if st.perm() != mode || !owner_matches(st.uid, st.gid, uid, gid) {
+                return false;
+            }
+            if st.is_dir() {
+                let Ok(sub) = d.subdir(&name) else { return false };
+                if !walk(&sub, depth + 1, mode, uid, gid) {
+                    return false;
+                }
+            }
         }
-        if p.is_dir() && !check_recursive(&p, mode, uid, gid) {
-            return false;
-        }
+        true
     }
-    true
+    match SafeDir::open(dir) {
+        Ok(d) => walk(&d, 1, mode, uid, gid),
+        Err(_) => false,
+    }
 }
 
-/// Apply mode and ownership to all entries under `dir` recursively.
+/// Apply mode and ownership to all entries under `dir` recursively. Every
+/// change goes through a descriptor: subdirectories are opened
+/// `O_DIRECTORY|O_NOFOLLOW` relative to their parent's fd, regular files
+/// `O_NOFOLLOW|O_NONBLOCK`, and `fchmod`/`fchown` act on those fds — so an
+/// entry swapped for a symlink mid-walk makes the open fail instead of
+/// redirecting a root chmod/chown. Symlinks and special files are skipped.
+#[cfg(unix)]
 fn apply_recursive(dir: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
-    let entries = fs::read_dir(dir)
-        .map_err(|e| format!("read_dir {}: {}", dir.display(), e))?;
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("read entry in {}: {}", dir.display(), e))?;
-        let p = entry.path();
-        let current_mode = crate::platform::permissions::get_mode(&p)
-            .map_err(|e| format!("stat {}: {}", p.display(), e))?;
-        if current_mode != mode {
-            crate::platform::permissions::set_mode(&p, mode)
-                .map_err(|e| format!("chmod {}: {}", p.display(), e))?;
+    fn walk(d: &SafeDir, depth: usize, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
+        if depth > MAX_RECURSE_DEPTH {
+            return Err(format!(
+                "recurse: {} is more than {} levels deep (bind-mount loop?)",
+                d.path().display(),
+                MAX_RECURSE_DEPTH
+            ));
         }
-        if !check_ownership(p.to_str().unwrap_or(""), uid, gid) {
-            apply_ownership(p.to_str().unwrap_or(""), uid, gid)?;
+        let names = d
+            .entries()
+            .map_err(|e| format!("read_dir {}: {}", d.path().display(), e))?;
+        for name in names {
+            let shown = d.path().join(&name);
+            let st = d.stat(&name).map_err(|e| format!("stat {}: {}", shown.display(), e))?;
+            if st.is_dir() {
+                let sub = d.subdir(&name).map_err(|e| format!("open {}: {}", shown.display(), e))?;
+                apply_dir_fd(&sub, mode, uid, gid)?;
+                walk(&sub, depth + 1, mode, uid, gid)?;
+            } else if st.is_file() {
+                if st.perm() == mode && owner_matches(st.uid, st.gid, uid, gid) {
+                    continue;
+                }
+                let (f, fst) = d
+                    .open_read(&name, &[], u64::MAX)
+                    .map_err(|e| format!("open {}: {}", shown.display(), e))?;
+                if !owner_matches(fst.uid, fst.gid, uid, gid) {
+                    safe_path::fchown(&f, uid, gid)
+                        .map_err(|e| format!("chown {}: {}", shown.display(), e))?;
+                }
+                safe_path::fchmod(&f, mode).map_err(|e| format!("chmod {}: {}", shown.display(), e))?;
+            }
+            // Symlinks, FIFOs, sockets, device nodes: left alone.
         }
-        if p.is_dir() {
-            apply_recursive(&p, mode, uid, gid)?;
-        }
+        Ok(())
     }
-    Ok(())
+    let d = SafeDir::open(dir).map_err(|e| format!("open {}: {}", dir.display(), e))?;
+    walk(&d, 1, mode, uid, gid)
+}
+
+/// Non-Unix: lstat-based walk that skips symlinks (no fd-relative syscalls).
+#[cfg(not(unix))]
+fn check_recursive(dir: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> bool {
+    let _ = (uid, gid);
+    fn walk(dir: &Path, depth: usize, mode: u32) -> bool {
+        if depth > MAX_RECURSE_DEPTH {
+            return false;
+        }
+        let Ok(entries) = fs::read_dir(dir) else { return false };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            let Ok(m) = fs::symlink_metadata(&p) else { return false };
+            if m.file_type().is_symlink() {
+                continue;
+            }
+            match crate::platform::permissions::get_mode(&p) {
+                Ok(em) if em == mode => {}
+                _ => return false,
+            }
+            if m.is_dir() && !walk(&p, depth + 1, mode) {
+                return false;
+            }
+        }
+        true
+    }
+    walk(dir, 1, mode)
+}
+
+#[cfg(not(unix))]
+fn apply_recursive(dir: &Path, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
+    fn walk(dir: &Path, depth: usize, mode: u32, uid: Option<u32>, gid: Option<u32>) -> Result<(), String> {
+        if depth > MAX_RECURSE_DEPTH {
+            return Err(format!("recurse: {} is too deep", dir.display()));
+        }
+        let entries = fs::read_dir(dir).map_err(|e| format!("read_dir {}: {}", dir.display(), e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("read entry in {}: {}", dir.display(), e))?;
+            let p = entry.path();
+            let m = fs::symlink_metadata(&p).map_err(|e| format!("stat {}: {}", p.display(), e))?;
+            if m.file_type().is_symlink() {
+                continue;
+            }
+            apply_top(&p, mode, uid, gid)?;
+            if m.is_dir() {
+                walk(&p, depth + 1, mode, uid, gid)?;
+            }
+        }
+        Ok(())
+    }
+    walk(dir, 1, mode, uid, gid)
 }
 
 fn handle_absent(path: &str, dry_run: bool, result: &mut ResourceResult) {
@@ -400,5 +535,59 @@ mod tests {
         assert_eq!(result.action, Action::None);
         assert!(!result.changed);
         assert!(result.error.is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recurse_never_follows_symlinks() {
+        use std::os::unix::fs::symlink;
+        let outside = TempDir::new().unwrap();
+        let victim = outside.path().join("shadow");
+        fs::write(&victim, "secret").unwrap();
+        crate::platform::permissions::set_mode(&victim, 0o600).unwrap();
+        let victim_dir = outside.path().join("etc");
+        fs::create_dir(&victim_dir).unwrap();
+        crate::platform::permissions::set_mode(&victim_dir, 0o700).unwrap();
+
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("managed");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("a.txt"), "x").unwrap();
+        symlink(&victim, root.join("link-to-file")).unwrap();
+        symlink(&victim_dir, root.join("link-to-dir")).unwrap();
+        // A symlink loop: following it would recurse forever.
+        symlink(&root, root.join("loop")).unwrap();
+
+        let de = DirectoryExecutor::new();
+        let params = make_params(&[
+            ("target_path", root.to_str().unwrap()),
+            ("mode", "0755"),
+            ("recurse", "true"),
+        ]);
+        let result = de.execute(&params, false);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert_eq!(crate::platform::permissions::get_mode(&root.join("a.txt")).unwrap(), 0o755);
+        assert_eq!(crate::platform::permissions::get_mode(&victim).unwrap(), 0o600, "file behind a link untouched");
+        assert_eq!(crate::platform::permissions::get_mode(&victim_dir).unwrap(), 0o700, "dir behind a link untouched");
+        // Converged: the links don't count as drift.
+        let again = de.execute(&params, false);
+        assert_eq!(again.action, Action::None, "{:?}", again.error);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_target_path_refused() {
+        let outside = TempDir::new().unwrap();
+        crate::platform::permissions::set_mode(outside.path(), 0o700).unwrap();
+        let dir = TempDir::new().unwrap();
+        let link = dir.path().join("managed");
+        std::os::unix::fs::symlink(outside.path(), &link).unwrap();
+        let de = DirectoryExecutor::new();
+        let result = de.execute(
+            &make_params(&[("target_path", link.to_str().unwrap()), ("mode", "0755")]),
+            false,
+        );
+        assert!(result.error.is_some(), "a symlinked target_path must be refused");
+        assert_eq!(crate::platform::permissions::get_mode(outside.path()).unwrap(), 0o700);
     }
 }

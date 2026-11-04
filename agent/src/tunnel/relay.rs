@@ -97,10 +97,19 @@ pub async fn run(
 
     if !open.ssh_verify_pubkey.is_empty() && !open.ssh_ephemeral_pubkey.is_empty() {
         info!(tunnel_id = %tunnel_id, "scrier: scanning authorized_keys for verify pubkey");
-        match super::sshauth::scan_and_install(&open.ssh_verify_pubkey, &open.ssh_ephemeral_pubkey) {
+        // Blocking passwd/NSS walk + file I/O: off the async workers.
+        let verify = open.ssh_verify_pubkey.clone();
+        let ephemeral = open.ssh_ephemeral_pubkey.clone();
+        let scanned = tokio::task::spawn_blocking(move || {
+            super::sshauth::scan_and_install(&verify, &ephemeral)
+        })
+        .await
+        .ok()
+        .flatten();
+        match scanned {
             Some(result) => {
                 ssh_username = result.username.clone();
-                _key_guard = super::sshauth::EphemeralKeyGuard::new(result.authorized_keys_path);
+                _key_guard = super::sshauth::EphemeralKeyGuard::new(result.install);
                 info!(tunnel_id = %tunnel_id, username = %result.username, "scrier: SSH pubkey verified");
             }
             None => {

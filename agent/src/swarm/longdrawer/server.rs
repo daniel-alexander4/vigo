@@ -15,6 +15,7 @@
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::{Response, StatusCode};
+#[cfg(not(unix))]
 use std::fs;
 
 use super::applier::valid_filename;
@@ -57,50 +58,51 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
         return bad_request("invalid filename");
     }
 
-    let home = match user_home(&user) {
-        Some(h) => h,
-        None => return not_found(),
-    };
-    let target = home.join("longdrawer").join(&name);
-
-    // Belt-and-braces: ensure the resolved path is still inside ~<user>/longdrawer/
-    // after any symlink shenanigans. Use canonicalize and check prefix.
-    let sync_dir = home.join("longdrawer");
-    let canon_target = match target.canonicalize() {
-        Ok(p) => p,
-        Err(_) => return not_found(),
-    };
-    let canon_dir = match sync_dir.canonicalize() {
-        Ok(p) => p,
-        Err(_) => return not_found(),
-    };
-    if !canon_target.starts_with(&canon_dir) {
-        return not_found();
-    }
-
-    let meta = match fs::metadata(&canon_target) {
-        Ok(m) => m,
-        Err(_) => return not_found(),
-    };
-    if !meta.is_file() {
-        return not_found();
-    }
-    if meta.len() > effective_max_file_size() {
-        return Response::builder()
-            .status(StatusCode::PAYLOAD_TOO_LARGE)
-            .body(Full::new(Bytes::from("file exceeds longdrawer size limit")))
-            .unwrap();
-    }
-
-    match fs::read(&canon_target) {
+    match read_user_sync_file(&user, &name) {
         Ok(bytes) => Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/octet-stream")
             .header("Content-Length", bytes.len().to_string())
             .body(Full::new(Bytes::from(bytes)))
             .unwrap(),
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidData => Response::builder()
+            .status(StatusCode::PAYLOAD_TOO_LARGE)
+            .body(Full::new(Bytes::from("file exceeds longdrawer size limit")))
+            .unwrap(),
         Err(_) => not_found(),
     }
+}
+
+/// Read `~<user>/longdrawer/<name>` as root without trusting anything the
+/// user controls: `~/longdrawer` must be a real directory (not a symlink)
+/// owned by the user, and `<name>` a regular file (no symlink, no FIFO)
+/// owned by the user — a hard link to a root file is owned by root and is
+/// refused. Size-capped; an oversize file is `InvalidData` (→ 413).
+#[cfg(unix)]
+pub(crate) fn read_user_sync_file(user: &str, name: &str) -> std::io::Result<Vec<u8>> {
+    let not_found = || std::io::Error::from(std::io::ErrorKind::NotFound);
+    let info = crate::platform::users::lookup_user(user).ok_or_else(not_found)?;
+    let home = user_home(user).ok_or_else(not_found)?;
+    read_sync_file_in(&home, info.uid, name)
+}
+
+#[cfg(unix)]
+fn read_sync_file_in(home: &std::path::Path, uid: u32, name: &str) -> std::io::Result<Vec<u8>> {
+    crate::platform::safe_path::read_user_owned(home, "longdrawer", name, uid, effective_max_file_size())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn read_user_sync_file(user: &str, name: &str) -> std::io::Result<Vec<u8>> {
+    let home = user_home(user).ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+    let p = home.join("longdrawer").join(name);
+    let m = fs::symlink_metadata(&p)?;
+    if !m.is_file() {
+        return Err(std::io::ErrorKind::NotFound.into());
+    }
+    if m.len() > effective_max_file_size() {
+        return Err(std::io::ErrorKind::InvalidData.into());
+    }
+    fs::read(&p)
 }
 
 /// Handle `GET /swarm/longdrawer/state/{user}` — return the full UserState JSON for
@@ -193,6 +195,32 @@ fn bad_request(msg: &str) -> Response<Full<Bytes>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn serve_refuses_symlinked_sync_dir_and_symlinked_file() {
+        use std::os::unix::fs::symlink;
+        let uid = unsafe { libc::getuid() };
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("shadow"), b"root:secret").unwrap();
+        // ~/longdrawer -> /etc-like dir: refused even though the file is a
+        // regular file "inside" the canonicalized dir.
+        let home = tempfile::tempdir().unwrap();
+        symlink(outside.path(), home.path().join("longdrawer")).unwrap();
+        assert!(read_sync_file_in(home.path(), uid, "shadow").is_err());
+        // Real ~/longdrawer, but the entry is a symlink out.
+        let home2 = tempfile::tempdir().unwrap();
+        let ld = home2.path().join("longdrawer");
+        std::fs::create_dir(&ld).unwrap();
+        symlink(outside.path().join("shadow"), ld.join("shadow")).unwrap();
+        assert!(read_sync_file_in(home2.path(), uid, "shadow").is_err());
+        std::fs::write(ld.join("notes.md"), b"hi").unwrap();
+        assert_eq!(read_sync_file_in(home2.path(), uid, "notes.md").unwrap(), b"hi");
+        if uid != 0 {
+            // A file not owned by the user (stand-in: wrong expected uid) is refused.
+            assert!(read_sync_file_in(home2.path(), uid + 1, "notes.md").is_err());
+        }
+    }
 
     #[test]
     fn username_validation() {

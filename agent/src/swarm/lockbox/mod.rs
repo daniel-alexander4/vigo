@@ -1536,100 +1536,67 @@ async fn pull_one_file(
         .context("catch-up: blob signature verification failed")?;
 
     let home = home_for_user(user).context("no home for user")?;
-    let content_dir = config::content_dir(&home);
-    if !content_dir.is_dir() {
-        // Dormant — user hasn't enrolled or rm -rf'd ~/lockbox/.
-        // Same opt-in gate the push handler enforces; don't auto-
-        // recreate the dir from catch-up.
-        return Ok(());
-    }
     let user_string = user.to_string();
     let name_string = name.to_string();
-    let target = content_dir.join(&name_string);
-
-    // Replay defense (last-write-wins) on the pull path, mirroring the
-    // push handler: if we already hold this filename at an mtime at or
-    // newer than the signed one, refuse a replayed older genuine blob.
-    if let Some(local_mtime) = local_ciphertext_mtime(&target) {
-        if blobsig::is_replay(blob_sig.mtime, local_mtime) {
-            debug!(
-                user = %user,
-                name = %name,
-                signed_mtime = blob_sig.mtime,
-                local_mtime = local_mtime,
-                "lockbox: catch-up skip — signed blob older than local copy (replay/LWW)"
-            );
-            return Ok(());
-        }
-    }
-
-    let tmp = content_dir.join(format!(".{}.lockbox.catchup.tmp", name_string));
     tokio::task::spawn_blocking(move || -> Result<()> {
-        write_tmp_0600(&tmp, &bytes)
-            .with_context(|| format!("writing temp {}", tmp.display()))?;
-        if let Err(e) = finalize_user_ciphertext(&tmp, &target, &user_string) {
-            let _ = fs::remove_file(&tmp);
-            return Err(e).context("finalize ciphertext");
+        // Held no-follow `~/lockbox` (see `UserContentDir`). Absent =
+        // dormant — user hasn't enrolled or rm -rf'd ~/lockbox/. Same
+        // opt-in gate the push handler enforces; don't auto-recreate the
+        // dir from catch-up.
+        let content = match UserContentDir::open(&home, &user_string) {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e).context("catch-up: ~/lockbox is not a trusted directory"),
+        };
+
+        // Replay defense (last-write-wins) on the pull path, mirroring the
+        // push handler: if we already hold this filename at an mtime at or
+        // newer than the signed one, refuse a replayed older genuine blob.
+        if let Some(local_mtime) = content.mtime(&name_string) {
+            if blobsig::is_replay(blob_sig.mtime, local_mtime) {
+                debug!(
+                    user = %user_string,
+                    name = %name_string,
+                    signed_mtime = blob_sig.mtime,
+                    local_mtime = local_mtime,
+                    "lockbox: catch-up skip — signed blob older than local copy (replay/LWW)"
+                );
+                return Ok(());
+            }
         }
-        Ok(())
+
+        content
+            .publish(&name_string, &bytes)
+            .with_context(|| format!("writing ciphertext {}", name_string))
     })
     .await
     .context("write join")??;
     Ok(())
 }
 
-/// Local ciphertext mtime (unix seconds) for `path`, or `None` if the
-/// file is absent / un-stattable. The last-write-wins version the
-/// catch-up replay check compares the signed `mtime` against. Same
-/// derivation used by `snapshot::local_files_for_user` and the push
-/// handler, so the two mtimes are directly comparable.
-fn local_ciphertext_mtime(path: &std::path::Path) -> Option<i64> {
-    fs::metadata(path)
-        .ok()
-        .and_then(|m| m.modified().ok())
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs() as i64)
-}
-
-fn write_tmp_0600(tmp: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(tmp)?;
-        f.write_all(data)?;
-        f.sync_all().ok();
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        let mut f = fs::File::create(tmp)?;
-        f.write_all(data)?;
-        f.sync_all().ok();
-        Ok(())
+/// Remove `~<user>/lockbox/<name>` as root without following a symlinked
+/// `~/lockbox` or a link at the name. Absent dir / file is success. Shared by
+/// the tombstone DELETE handler, the catch-up tombstone sweep and the pusher's
+/// delete fan-out.
+#[cfg(unix)]
+pub(crate) fn remove_user_ciphertext(user: &str, name: &str) -> std::io::Result<()> {
+    let Some(home) = home_for_user(user) else { return Ok(()) };
+    match UserContentDir::open(&home, user) {
+        Ok(c) => c.remove(name),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
     }
 }
 
 fn remove_files_for_active_tombstones(user: &str, table: &TombstoneTable) {
-    let home = match home_for_user(user) {
-        Some(h) => h,
-        None => return,
-    };
-    let content_dir = config::content_dir(&home);
     for filename in table.tombstones.keys() {
-        let p = content_dir.join(filename);
-        if p.exists() {
-            if let Err(e) = fs::remove_file(&p) {
-                debug!(
-                    path = %p.display(),
-                    error = %e,
-                    "lockbox: catch-up file remove failed"
-                );
-            }
+        if let Err(e) = remove_user_ciphertext(user, filename) {
+            debug!(
+                user = %user,
+                filename = %filename,
+                error = %e,
+                "lockbox: catch-up file remove failed"
+            );
         }
     }
 }
@@ -2542,27 +2509,111 @@ fn pusher_agent(tls: &TlsCerts) -> Result<crate::swarm::tls::SwarmAgent> {
 }
 
 /// Finalize a freshly-written ciphertext temp file: enforce mode
-/// 0600 on the temp, atomically rename to `dst`, then chown `dst`
-/// to `username`. Both write paths into `~<user>/lockbox/` — the
-/// encrypt CLI verb (cmd_encrypt, reencrypt_one, both run as root
-/// when invoked through the sudo-only `/usr/local/sbin/vigo` binary)
-/// and the agent's push receiver (always root) — call this so the
-/// resulting ciphertext lands as `<user>:<group> 0600` regardless of
-/// which root context wrote it.
+/// 0600 and `<user>:<group>` ownership on the temp, then atomically rename it
+/// to `dst`. The path-based write paths into `~<user>/lockbox/` — the encrypt
+/// CLI verbs (cmd_encrypt, cmd_resurrect, reencrypt_one, run as root through
+/// the sudo-only `/usr/local/sbin/vigo` binary) — call this so the resulting
+/// ciphertext lands as `<user>:<group> 0600`. The daemon paths (push
+/// receiver, catch-up pull, auto-encrypt) write through a held
+/// [`UserContentDir`] instead and never reopen by name.
+///
+/// Every directory between the user's home and `tmp` / `dst` is opened
+/// no-follow and must be owned by the user (or root), and the temp must be a
+/// regular, singly-linked file owned by root or the user — so a swapped-in
+/// symlink or a hard link to a root file is refused rather than chowned.
 #[cfg(unix)]
 pub(crate) fn finalize_user_ciphertext(
     tmp: &Path,
     dst: &Path,
     username: &str,
 ) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(tmp, fs::Permissions::from_mode(0o600))
-        .with_context(|| format!("set 0600 on {}", tmp.display()))?;
-    fs::rename(tmp, dst)
+    let info = crate::platform::users::lookup_user(username)
+        .with_context(|| format!("user {} not found", username))?;
+    let home = home_for_user(username).context("no home for user")?;
+    let (tdir, tname) = open_parent_beneath(&home, tmp, info.uid)?;
+    let (ddir, dname) = open_parent_beneath(&home, dst, info.uid)?;
+    let (f, st) = tdir
+        .open_read(&tname, &[0, info.uid], u64::MAX)
+        .with_context(|| format!("open {}", tmp.display()))?;
+    if st.nlink != 1 {
+        anyhow::bail!("{} has {} links; refusing to chown it", tmp.display(), st.nlink);
+    }
+    tdir.finish_file(&f, 0o600, Some((info.uid, info.gid)), None)
+        .with_context(|| format!("chown/chmod {} to {}", tmp.display(), username))?;
+    drop(f);
+    tdir.rename_to(&tname, &ddir, &dname)
         .with_context(|| format!("rename {} → {}", tmp.display(), dst.display()))?;
-    chown_to_user(dst, username)
-        .with_context(|| format!("chown {} to {}", dst.display(), username))?;
     Ok(())
+}
+
+/// Open `path`'s parent no-follow beneath `home` (every component owned by
+/// `uid` or root) and return it with `path`'s final name.
+#[cfg(unix)]
+fn open_parent_beneath(
+    home: &Path,
+    path: &Path,
+    uid: u32,
+) -> Result<(crate::platform::safe_path::SafeDir, std::ffi::OsString)> {
+    let parent = path.parent().context("path has no parent")?;
+    let name = path.file_name().context("path has no file name")?.to_os_string();
+    let rel = parent
+        .strip_prefix(home)
+        .with_context(|| format!("{} is not under {}", path.display(), home.display()))?;
+    let dir = crate::platform::safe_path::SafeDir::open_beneath(home, rel, uid)
+        .with_context(|| format!("open {} safely", parent.display()))?;
+    Ok((dir, name))
+}
+
+/// `~<user>/lockbox/` held open by descriptor for a root write on the user's
+/// behalf: a real directory (not a symlink) owned by the user or root, with the
+/// user's uid/gid resolved. Every daemon-side write, delete and stat of a
+/// ciphertext file goes through it, so a symlinked `~/lockbox` or a planted
+/// link at a file name can never redirect a root write/chown/unlink.
+#[cfg(unix)]
+pub(crate) struct UserContentDir {
+    pub(crate) dir: crate::platform::safe_path::SafeDir,
+    pub(crate) uid: u32,
+    pub(crate) gid: u32,
+}
+
+#[cfg(unix)]
+impl UserContentDir {
+    /// `Err(NotFound)` when `~/lockbox` is absent (the dormant opt-in gate);
+    /// any other error means the directory is not trustworthy.
+    pub(crate) fn open(home: &Path, username: &str) -> std::io::Result<UserContentDir> {
+        let info = crate::platform::users::lookup_user(username)
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+        Self::open_as(home, info.uid, info.gid)
+    }
+
+    pub(crate) fn open_as(home: &Path, uid: u32, gid: u32) -> std::io::Result<UserContentDir> {
+        let dir = crate::platform::safe_path::SafeDir::open_anchor(home)?
+            .subdir("lockbox")?
+            .require_owner(uid)?;
+        Ok(UserContentDir { dir, uid, gid })
+    }
+
+    /// Local mtime (unix seconds) of `name`, `None` if absent. lstat — a
+    /// symlink's own mtime, never its target's.
+    pub(crate) fn mtime(&self, name: &str) -> Option<i64> {
+        self.dir.stat(name).ok().map(|st| st.mtime)
+    }
+
+    /// Atomically publish ciphertext `bytes` at `name`, `<user>:<group>` 0600.
+    pub(crate) fn publish(&self, name: &str, bytes: &[u8]) -> std::io::Result<()> {
+        let tmp = format!(".lockbox-{}.tmp", uuid::Uuid::new_v4().as_simple());
+        self.dir
+            .write_atomic(name, &tmp, bytes, 0o600, Some((self.uid, self.gid)), None)
+    }
+
+    /// Remove `name` (the entry itself — a symlink, never its target).
+    /// Already-absent is success.
+    pub(crate) fn remove(&self, name: &str) -> std::io::Result<()> {
+        match self.dir.unlink(name) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        }
+    }
 }
 
 #[cfg(not(unix))]

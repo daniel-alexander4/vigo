@@ -357,23 +357,29 @@ fn handle_present(
     let tmp_path = dir.join(format!(".vigo-{}", uuid::Uuid::new_v4()));
     let tmp_path_str = tmp_path.display().to_string();
 
+    // The temp is created O_EXCL|O_NOFOLLOW at 0600 — never world-readable,
+    // even for the instant before its final mode lands — and its owner, group
+    // and mode are set on the open descriptor before the rename publishes it.
+    // No path-based chown/chmod after the rename: in a directory a local user
+    // can write, they could swap a symlink in between the rename and a
+    // path-based chown and redirect it onto any file.
     {
-        let mut tmp = fs::File::create(&tmp_path)
-            .map_err(|e| format!("create temp file in {}: {}", dir.display(), e))?;
-        tmp.write_all(content.as_bytes())
-            .map_err(|e| format!("write temp file: {}", e))?;
-        // fsync before rename so a crash window can't leave a truncated/empty
-        // file (matches executors/atomic.rs).
-        tmp.sync_all()
-            .map_err(|e| format!("sync temp file: {}", e))?;
-    }
-
-    // Set permissions before rename.
-    crate::platform::permissions::set_mode(&tmp_path, mode)
-        .map_err(|e| {
+        let staged = (|| -> Result<(), String> {
+            let mut tmp = create_private_temp(&tmp_path)
+                .map_err(|e| format!("create temp file in {}: {}", dir.display(), e))?;
+            tmp.write_all(content.as_bytes())
+                .map_err(|e| format!("write temp file: {}", e))?;
+            set_owner_mode_fd(&tmp, desired_uid, desired_gid, mode)?;
+            // fsync before rename so a crash window can't leave a
+            // truncated/empty file (matches executors/atomic.rs).
+            tmp.sync_all()
+                .map_err(|e| format!("sync temp file: {}", e))
+        })();
+        if let Err(e) = staged {
             let _ = fs::remove_file(&tmp_path);
-            format!("chmod temp file: {}", e)
-        })?;
+            return Err(e);
+        }
+    }
 
     // Validate: run a command to check the new content before committing.
     // `%` in the command string is replaced with the temp file path.
@@ -401,14 +407,6 @@ fn handle_present(
         let _ = fs::remove_file(&tmp_path);
         format!("rename temp to {}: {}", path, e)
     })?;
-
-    // Apply ownership if specified.
-    if desired_uid.is_some() || desired_gid.is_some() {
-        apply_ownership(path, desired_uid, desired_gid).inspect_err(|_e| {
-            // Clean up temp on failure — but file is already renamed, so just report.
-            let _ = fs::remove_file(&tmp_path_str);
-        })?;
-    }
 
     // Apply SELinux context if specified (Linux only).
     #[cfg(target_os = "linux")]
@@ -659,11 +657,50 @@ pub(crate) fn lookup_gid(group: &str) -> Option<u32> {
 }
 
 /// Check if file ownership matches desired.
+/// Create a fresh temp file for an atomic replace: `O_CREAT|O_EXCL|O_NOFOLLOW`
+/// at mode 0600 on Unix, so it can't be opened by another local user before
+/// its final mode is set and can't be a planted symlink.
+pub(crate) fn create_private_temp(path: &Path) -> std::io::Result<fs::File> {
+    #[cfg(unix)]
+    {
+        crate::platform::safe_path::create_new_file(path, 0o600)
+    }
+    #[cfg(not(unix))]
+    {
+        fs::OpenOptions::new().write(true).create_new(true).open(path)
+    }
+}
+
+/// Set owner/group (when given) and then mode on an open temp file's
+/// descriptor — chown first, since it clears setuid/setgid bits.
+pub(crate) fn set_owner_mode_fd(
+    f: &fs::File,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    mode: u32,
+) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        if uid.is_some() || gid.is_some() {
+            crate::platform::safe_path::fchown(f, uid, gid)
+                .map_err(|e| format!("chown temp file: {}", e))?;
+        }
+        crate::platform::safe_path::fchmod(f, mode).map_err(|e| format!("chmod temp file: {}", e))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (f, uid, gid, mode);
+        Ok(())
+    }
+}
+
 pub(crate) fn check_ownership(path: &str, desired_uid: Option<u32>, desired_gid: Option<u32>) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        let meta = match fs::metadata(path) {
+        // lstat: report the entry itself, matching apply_ownership's
+        // no-follow chown.
+        let meta = match fs::symlink_metadata(path) {
             Ok(m) => m,
             Err(_) => return true,
         };
@@ -695,11 +732,17 @@ pub(crate) fn apply_ownership(
 ) -> Result<(), String> {
     #[cfg(unix)]
     {
-        use nix::unistd::{chown, Gid, Uid};
-        chown(
+        // fchownat(AT_SYMLINK_NOFOLLOW): a symlink at `path` has its own
+        // ownership changed, never its target's, so a root chown can't be
+        // redirected by whoever can write the parent directory.
+        use nix::fcntl::AtFlags;
+        use nix::unistd::{fchownat, Gid, Uid};
+        fchownat(
+            None,
             path,
             uid.map(Uid::from_raw),
             gid.map(Gid::from_raw),
+            AtFlags::AT_SYMLINK_NOFOLLOW,
         )
         .map_err(|e| format!("chown {}: {}", path, e))
     }
@@ -731,6 +774,39 @@ mod tests {
 
     fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn group_set_on_temp_descriptor_before_rename() {
+        use std::os::unix::fs::MetadataExt;
+        let primary = nix::unistd::getgid();
+        let Some(gid) = nix::unistd::getgroups()
+            .unwrap()
+            .into_iter()
+            .find(|g| *g != primary)
+        else {
+            return;
+        };
+        let Some(group) = nix::unistd::Group::from_gid(gid).unwrap() else { return };
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("owned.conf");
+        let fe = FileExecutor::new(None);
+        let result = fe.execute(
+            &make_params(&[
+                ("target_path", path.to_str().unwrap()),
+                ("content", "x\n"),
+                ("mode", "0640"),
+                ("group", group.name.as_str()),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_none(), "{:?}", result.error);
+        let m = fs::metadata(&path).unwrap();
+        assert_eq!(m.gid(), gid.as_raw());
+        assert_eq!(m.permissions().mode() & 0o777, 0o640);
+        // No temp left behind.
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]

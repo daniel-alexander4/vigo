@@ -12,12 +12,14 @@ Creates and removes directories with specified permissions and ownership.
 | `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `owner` | No | -- | Directory owner (username or UID). Linux only. |
 | `group` | No | -- | Directory group (group name or GID). Linux only. |
-| `recurse` | No | `false` | When `true`, recursively apply `mode`, `owner`, and `group` to all files and subdirectories. |
+| `recurse` | No | `false` | When `true`, recursively apply `mode`, `owner`, and `group` to all regular files and subdirectories. Symlinks are skipped, never followed, and so are FIFOs, sockets and device nodes. The walk stops with an error past 128 levels. |
 
 ## States
 
 - **`present`** -- Ensure the directory exists with the specified mode, owner, and group. Creates parent directories as needed (`mkdir -p` behavior).
 - **`absent`** -- Remove the directory and all its contents recursively.
+
+A `target_path` that is a symlink is refused with an error rather than followed.
 
 ## Idempotency
 

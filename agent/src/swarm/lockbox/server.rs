@@ -27,10 +27,9 @@
 //! and exercised by tests, but the sender-side fan-out that actually
 //! calls them lives in Week 3 (see `encrypt` verb + inotify watcher).
 
+#[cfg(not(unix))]
 use std::fs;
-use std::io::Write;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
@@ -110,42 +109,40 @@ pub fn handle_pull(path: &str) -> Response<Full<Bytes>> {
         return gone_with_tombstone(&name, t.deletion_time);
     }
 
-    let target = home.join("lockbox").join(&name);
-
-    // Canonicalize to defeat symlink-based traversal. Refuse to serve
-    // anything that resolves outside ~<user>/lockbox/.
-    let content_dir = home.join("lockbox");
-    let canon_target = match target.canonicalize() {
-        Ok(p) => p,
-        Err(_) => return not_found(),
-    };
-    let canon_dir = match content_dir.canonicalize() {
-        Ok(p) => p,
-        Err(_) => return not_found(),
-    };
-    if !canon_target.starts_with(&canon_dir) {
-        return not_found();
-    }
-
-    let meta = match fs::metadata(&canon_target) {
-        Ok(m) => m,
-        Err(_) => return not_found(),
-    };
-    if !meta.is_file() {
-        return not_found();
-    }
-    if meta.len() as usize > max_push_bytes() {
-        return payload_too_large();
-    }
-    match fs::read(&canon_target) {
+    // `~/lockbox` must be a real directory owned by the user and the entry a
+    // regular file owned by the user — never resolved through a symlink the
+    // user planted (see `safe_path::read_user_owned`).
+    match read_user_ciphertext(&home, &user, &name) {
         Ok(bytes) => Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/octet-stream")
             .header("Content-Length", bytes.len().to_string())
             .body(Full::new(Bytes::from(bytes)))
             .unwrap(),
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidData => payload_too_large(),
         Err(_) => not_found(),
     }
+}
+
+#[cfg(unix)]
+fn read_user_ciphertext(home: &std::path::Path, user: &str, name: &str) -> std::io::Result<Vec<u8>> {
+    let uid = crate::platform::users::lookup_user(user)
+        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?
+        .uid;
+    crate::platform::safe_path::read_user_owned(home, "lockbox", name, uid, max_push_bytes() as u64)
+}
+
+#[cfg(not(unix))]
+fn read_user_ciphertext(home: &std::path::Path, _user: &str, name: &str) -> std::io::Result<Vec<u8>> {
+    let p = home.join("lockbox").join(name);
+    let m = fs::symlink_metadata(&p)?;
+    if !m.is_file() {
+        return Err(std::io::ErrorKind::NotFound.into());
+    }
+    if m.len() as usize > max_push_bytes() {
+        return Err(std::io::ErrorKind::InvalidData.into());
+    }
+    fs::read(&p)
 }
 
 // ---------- push (POST /swarm/lockbox/push/{user}/{filename}) ----------
@@ -296,7 +293,11 @@ pub async fn handle_push(
         Some(h) => h,
         None => return not_found(),
     };
-    let content_dir = home.join("lockbox");
+    // `~/lockbox` held open no-follow and owner-checked (`UserContentDir`):
+    // every stat / temp write / chown / rename below is relative to that fd,
+    // so a symlinked ~/lockbox or a link planted at the temp or target name
+    // can't redirect this root write.
+    //
     // Opt-in gate: if the user's ~/lockbox/ doesn't exist, this envoy is
     // dormant for the user (they've either never enrolled or `rm -rf`'d
     // their lockbox dir). Don't auto-recreate; return 410 so the pusher
@@ -304,23 +305,28 @@ pub async fn handle_push(
     // missing ciphertext from peers when the user re-enrolls. Note: the
     // identity bootstrap (`vigo swarm lockbox {fleet,standalone} init`)
     // creates ~/lockbox/, so legitimate first-time enrollment is unaffected.
-    if !content_dir.is_dir() {
-        tracing::debug!(
-            user = %user,
-            dir = %content_dir.display(),
-            "lockbox push: ~/lockbox/ absent, returning 410 Gone"
-        );
-        return gone_dormant(&user);
-    }
-
-    let target = content_dir.join(&name);
+    let content = match super::UserContentDir::open(&home, &user) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            tracing::debug!(user = %user, "lockbox push: ~/lockbox/ absent, returning 410 Gone");
+            return gone_dormant(&user);
+        }
+        Err(e) => {
+            tracing::warn!(
+                user = %user,
+                error = %e,
+                "lockbox push: ~/lockbox is not a real directory owned by the user; refusing"
+            );
+            return forbidden("lockbox directory not trusted");
+        }
+    };
 
     // Replay defense (last-write-wins). The blob signature covers the
     // sender-asserted mtime; if we already hold this filename at an mtime
     // at or newer than the signed one, a replayed OLDER genuine blob would
     // overwrite current content with stale ciphertext. Refuse it. (A fresh
     // file — no local copy — always passes.)
-    if let Some(local_mtime) = local_ciphertext_mtime(&target) {
+    if let Some(local_mtime) = content.mtime(&name) {
         if blobsig::is_replay(blob_sig.mtime, local_mtime) {
             tracing::warn!(
                 user = %user,
@@ -334,17 +340,7 @@ pub async fn handle_push(
         }
     }
 
-    let tmp: PathBuf = content_dir.join(format!(".{}.lockbox.push.tmp", name));
-    if let Err(e) = write_tmp(&tmp, &bytes) {
-        tracing::warn!(
-            path = %tmp.display(),
-            error = %e,
-            "lockbox push: tmp write failed"
-        );
-        let _ = fs::remove_file(&tmp);
-        return internal_error("write failed");
-    }
-    match super::finalize_user_ciphertext(&tmp, &target, &user) {
+    match content.publish(&name, &bytes) {
         Ok(()) => Response::builder()
             .status(StatusCode::CREATED)
             .header("Content-Type", "application/json")
@@ -352,39 +348,13 @@ pub async fn handle_push(
             .unwrap(),
         Err(e) => {
             tracing::warn!(
-                path = %target.display(),
+                user = %user,
+                filename = %name,
                 error = %e,
-                "lockbox push: finalize failed"
+                "lockbox push: write failed"
             );
-            let _ = fs::remove_file(&tmp);
             internal_error("write failed")
         }
-    }
-}
-
-/// Write the pushed ciphertext to a temp path with mode 0600. The
-/// dotfile name keeps it hidden during the brief window before
-/// `finalize_user_ciphertext` chowns + renames it into place.
-fn write_tmp(tmp: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(tmp)?;
-        f.write_all(data)?;
-        f.sync_all().ok();
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        let mut f = fs::File::create(tmp)?;
-        f.write_all(data)?;
-        f.sync_all().ok();
-        Ok(())
     }
 }
 
@@ -496,18 +466,15 @@ pub async fn handle_tombstone_delete(
         tracing::warn!(error = %e, "lockbox DELETE: tombstone save failed");
     }
 
-    // Remove the local file if still present. Idempotent.
-    if let Some(home) = user_home(&user) {
-        let content_path = home.join("lockbox").join(&name);
-        if content_path.exists() {
-            if let Err(e) = fs::remove_file(&content_path) {
-                tracing::warn!(
-                    path = %content_path.display(),
-                    error = %e,
-                    "lockbox DELETE: local file remove failed"
-                );
-            }
-        }
+    // Remove the local file if still present. Idempotent; never follows a
+    // symlinked ~/lockbox or a link at the name.
+    if let Err(e) = super::remove_user_ciphertext(&user, &name) {
+        tracing::warn!(
+            user = %user,
+            filename = %name,
+            error = %e,
+            "lockbox DELETE: local file remove failed"
+        );
     }
 
     Response::builder()
@@ -872,10 +839,8 @@ pub fn handle_files_list(path: &str) -> Response<Full<Bytes>> {
     // puller skips them, converging on a later cycle.
     if let Ok(signing_key) = super::load_local_signing_key(&user) {
         let hostname = super::read_hostname();
-        let content_dir = home.join("lockbox");
         for f in &mut files {
-            let path = content_dir.join(&f.name);
-            match fs::read(&path) {
+            match read_user_ciphertext(&home, &user, &f.name) {
                 Ok(bytes) => {
                     f.blobsig = Some(super::blobsig::build(
                         &signing_key,
@@ -972,20 +937,6 @@ fn valid_filename(name: &str) -> bool {
         return false;
     }
     !name.contains('/') && !name.contains('\\') && !name.contains('\0')
-}
-
-/// Local ciphertext mtime (unix seconds) for `path`, or `None` if the
-/// file doesn't exist / can't be stat'd. The last-write-wins version
-/// the replay check compares the signed `mtime` against. Same derivation
-/// (`modified()` → unix seconds) used in `snapshot::local_files_for_user`,
-/// so a blob's signed mtime and the receiver's stored mtime are
-/// comparable.
-fn local_ciphertext_mtime(path: &std::path::Path) -> Option<i64> {
-    fs::metadata(path)
-        .ok()
-        .and_then(|m| m.modified().ok())
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs() as i64)
 }
 
 fn percent_decode(s: &str) -> Option<String> {

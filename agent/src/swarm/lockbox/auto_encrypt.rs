@@ -33,7 +33,6 @@
 //!   try again. Caller retries 3× with 100ms / 500ms / 2s backoff.
 //!   On exhaustion, treats as unrecoverable (rename to `.failed`).
 
-use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -42,6 +41,7 @@ use age::x25519::Recipient;
 use thiserror::Error;
 
 use super::config;
+use crate::platform::safe_path::SafeDir;
 use super::crypt;
 use super::resurrects;
 use super::tombstones;
@@ -150,45 +150,53 @@ pub fn encrypt_in_place(
         );
     }
 
-    let content_dir = config::content_dir(home);
-    let src = content_dir.join(filename);
-
-    let meta = fs::metadata(&src).map_err(|e| classify_io("stat source", &e))?;
-    if !meta.is_file() {
-        return Err(AutoEncryptError::Terminal(format!(
-            "{} is not a regular file",
-            src.display()
-        )));
-    }
-    let size = meta.len();
+    // Every step runs relative to held, no-follow, owner-checked directory
+    // fds (the daemon runs this as root against the user's own dirs): the
+    // source is opened no-follow + regular-file + owned-by-the-user (so a
+    // symlink or hard link to a root file is never read and encrypted to the
+    // user's recipients), the staged ciphertext is created O_EXCL|O_NOFOLLOW,
+    // chowned on its descriptor, and renameat'ed over the source.
+    let content = super::UserContentDir::open(home, username)
+        .map_err(|e| classify_io("open ~/lockbox", &e))?;
     let cap = max_auto_encrypt_bytes();
-    if size > cap {
-        return Err(AutoEncryptError::Terminal(format!(
-            "size={} exceeds {} push cap",
-            size, cap
-        )));
-    }
+    let (src_file, st) = match content.dir.open_read(filename, &[content.uid], cap) {
+        Ok(v) => v,
+        Err(e) if e.kind() == ErrorKind::InvalidData => {
+            return Err(AutoEncryptError::Terminal(format!(
+                "size exceeds {} push cap ({})",
+                cap, e
+            )));
+        }
+        Err(e) if e.kind() == ErrorKind::InvalidInput || e.raw_os_error() == Some(libc::ELOOP) => {
+            return Err(AutoEncryptError::Terminal(format!(
+                "{} is not a regular file",
+                config::content_dir(home).join(filename).display()
+            )));
+        }
+        Err(e) => return Err(classify_io("open source", &e)),
+    };
+    let size = st.size;
 
-    let staging_dir = staging_dir_for(home);
-    if let Err(e) = ensure_staging_dir(&staging_dir, username) {
-        return Err(classify_io("create staging dir", &e));
-    }
+    let staging = open_staging_dir(home, content.uid, content.gid)
+        .map_err(|e| classify_io("create staging dir", &e))?;
     let token = uuid::Uuid::new_v4().to_string();
-    let staged = staging_dir.join(&token);
 
-    let result = crypt::encrypt_file(&src, &staged, recipients).map_err(classify_age_error);
+    let result = (|| -> Result<(), AutoEncryptError> {
+        let mut staged = staging
+            .create_new(&token, 0o600)
+            .map_err(|e| classify_io("create staged ciphertext", &e))?;
+        crypt::encrypt_stream(src_file, &mut staged, recipients).map_err(classify_age_error)?;
+        staging
+            .finish_file(&staged, 0o600, Some((content.uid, content.gid)), None)
+            .map_err(|e| classify_io("finalize ciphertext", &e))?;
+        drop(staged);
+        staging
+            .rename_to(&token, &content.dir, filename)
+            .map_err(|e| classify_io("finalize ciphertext", &e))
+    })();
     if let Err(e) = result {
-        let _ = fs::remove_file(&staged);
+        let _ = staging.unlink(&token);
         return Err(e);
-    }
-
-    // Mode 0600 + atomic rename into ~<user>/lockbox/<filename>,
-    // then chown the result to the user. finalize_user_ciphertext
-    // does all three steps. On failure the staged tempfile is
-    // best-effort cleaned.
-    if let Err(e) = super::finalize_user_ciphertext(&staged, &src, username) {
-        let _ = fs::remove_file(&staged);
-        return Err(classify_anyhow("finalize ciphertext", e));
     }
 
     Ok(size)
@@ -199,11 +207,15 @@ pub fn encrypt_in_place(
 /// the artifact under a name `resolve_event` filters out, so the
 /// failure doesn't loop.
 pub fn rename_to_failed(home: &Path, filename: &str, now_ts: i64) -> std::io::Result<PathBuf> {
-    let content_dir = config::content_dir(home);
-    let src = content_dir.join(filename);
-    let dst = content_dir.join(format!("{}.{}{}", filename, now_ts, FAILED_SUFFIX));
-    fs::rename(&src, &dst)?;
-    Ok(dst)
+    // renameat inside a no-follow `~/lockbox` owned by the home's owner —
+    // a symlinked ~/lockbox must not let the root daemon rename files in
+    // whatever directory it points at.
+    let anchor = SafeDir::open_anchor(home)?;
+    let home_uid = anchor.stat_self()?.uid;
+    let dir = anchor.subdir("lockbox")?.require_owner(home_uid)?;
+    let failed = format!("{}.{}{}", filename, now_ts, FAILED_SUFFIX);
+    dir.rename(filename, &failed)?;
+    Ok(config::content_dir(home).join(failed))
 }
 
 /// True if `name` was produced by `rename_to_failed`. Watcher's event
@@ -233,32 +245,16 @@ pub fn staging_dir_for(home: &Path) -> PathBuf {
     config::dot_dir(home).join("staging")
 }
 
-fn ensure_staging_dir(dir: &Path, username: &str) -> std::io::Result<()> {
-    if !dir.is_dir() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(dir)?;
-        }
-        #[cfg(not(unix))]
-        {
-            fs::create_dir_all(dir)?;
-        }
-    }
-    #[cfg(unix)]
-    {
-        // Best-effort chown so files we drop here end up user-owned
-        // when the directory is touched by root.
-        let _ = super::chown_to_user(dir, username);
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = username;
-    }
-    Ok(())
+/// Open `~/.lockbox/staging` for staging, creating it 0700 if missing:
+/// `~/.lockbox` and `staging` are both opened no-follow and must be owned by
+/// the user (or root); a freshly created (root-owned) `staging` is chowned to
+/// the user through its descriptor, never through a path.
+fn open_staging_dir(home: &Path, uid: u32, gid: u32) -> std::io::Result<SafeDir> {
+    let dot = SafeDir::open_beneath(home, Path::new(".lockbox"), uid)?;
+    dot.mkdir("staging", 0o700)?;
+    let staging = dot.subdir("staging")?.require_owner(uid)?;
+    staging.chown_self(Some(uid), Some(gid))?;
+    Ok(staging)
 }
 
 /// Map a fresh `std::io::Error` from a file-staging step into the
@@ -279,21 +275,6 @@ fn classify_io(stage: &str, err: &std::io::Error) -> AutoEncryptError {
         }
         _ => AutoEncryptError::Transient(format!("{}: {}", stage, err)),
     }
-}
-
-/// Map an anyhow chain back into the taxonomy. Walk the source chain
-/// looking for an `std::io::Error`, then defer to `classify_io`. Falls
-/// back to transient when no I/O cause is found.
-fn classify_anyhow(stage: &str, err: anyhow::Error) -> AutoEncryptError {
-    if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
-        return classify_io(stage, io_err);
-    }
-    for cause in err.chain() {
-        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
-            return classify_io(stage, io_err);
-        }
-    }
-    AutoEncryptError::Transient(format!("{}: {}", stage, err))
 }
 
 /// Map an error from `crypt::encrypt_file`. The age library produces
@@ -371,17 +352,6 @@ mod tests {
         match classify_io("read", &other) {
             AutoEncryptError::Transient(_) => {}
             unexpected => panic!("expected Transient, got {:?}", unexpected),
-        }
-    }
-
-    #[test]
-    fn classify_anyhow_walks_to_io_cause() {
-        let inner = std::io::Error::from(ErrorKind::PermissionDenied);
-        let wrapped: anyhow::Error =
-            anyhow::Error::new(inner).context("outer context");
-        match classify_anyhow("rename", wrapped) {
-            AutoEncryptError::Terminal(m) => assert!(m.contains("permission denied")),
-            other => panic!("expected Terminal via chain walk, got {:?}", other),
         }
     }
 

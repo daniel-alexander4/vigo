@@ -241,17 +241,13 @@ async fn fan_out_delete(agent: &SwarmAgent, job: DeleteJob) -> Result<()> {
     // (watcher fired because the user rm'd it), but an errant rm-rf
     // pattern or a race could leave a stale copy. Idempotent — unlink
     // errors are only logged, not fatal.
-    if let Some(home) = super::home_for_user_pub(&user) {
-        let content_path = config::content_dir(&home).join(&filename);
-        if content_path.exists() {
-            if let Err(e) = std::fs::remove_file(&content_path) {
-                debug!(
-                    path = %content_path.display(),
-                    error = %e,
-                    "pusher: local file remove during delete fan-out failed"
-                );
-            }
-        }
+    if let Err(e) = super::remove_user_ciphertext(&user, &filename) {
+        debug!(
+            user = %user,
+            filename = %filename,
+            error = %e,
+            "pusher: local file remove during delete fan-out failed"
+        );
     }
 
     // Load the signing key. Missing key = daemon raced enrollment;

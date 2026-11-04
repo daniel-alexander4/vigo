@@ -206,9 +206,37 @@ pub fn is_age_encrypted(path: &Path) -> io::Result<bool> {
 }
 
 /// Encrypt `src` → age ciphertext at `dst`, to the given recipients.
-/// Truncates/creates `dst`. Does not fsync — caller's responsibility
-/// if durability matters.
+/// `dst` is created fresh (`O_CREAT|O_EXCL|O_NOFOLLOW`, mode 0600) after
+/// unlinking any stale entry at that name, so a symlink planted at the temp
+/// name in a user-writable directory is removed, never written through.
+/// Does not fsync — caller's responsibility if durability matters.
 pub fn encrypt_file(src: &Path, dst: &Path, recipients: &[Recipient]) -> Result<()> {
+    let reader = fs::File::open(src).with_context(|| format!("opening {}", src.display()))?;
+    match fs::remove_file(dst) {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e).with_context(|| format!("removing stale {}", dst.display())),
+    }
+    #[cfg(unix)]
+    let mut out = crate::platform::safe_path::create_new_file(dst, 0o600)
+        .with_context(|| format!("creating {}", dst.display()))?;
+    #[cfg(not(unix))]
+    let mut out = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dst)
+        .with_context(|| format!("creating {}", dst.display()))?;
+    encrypt_stream(reader, &mut out, recipients)
+}
+
+/// Stream `reader`'s plaintext into `writer` as age ciphertext to the given
+/// recipients. The descriptor-based core of [`encrypt_file`], used directly
+/// where the caller already holds safely-opened files.
+pub fn encrypt_stream(
+    reader: impl Read,
+    writer: &mut impl Write,
+    recipients: &[Recipient],
+) -> Result<()> {
     if recipients.is_empty() {
         bail!("encrypt_file called with no recipients");
     }
@@ -217,12 +245,8 @@ pub fn encrypt_file(src: &Path, dst: &Path, recipients: &[Recipient]) -> Result<
     )
     .map_err(|e| anyhow::anyhow!("age encryptor init failed: {}", e))?;
 
-    let mut reader = io::BufReader::new(
-        fs::File::open(src).with_context(|| format!("opening {}", src.display()))?,
-    );
-    let mut writer = io::BufWriter::new(
-        fs::File::create(dst).with_context(|| format!("creating {}", dst.display()))?,
-    );
+    let mut reader = io::BufReader::new(reader);
+    let mut writer = io::BufWriter::new(writer);
 
     {
         let mut w = encryptor
@@ -231,7 +255,7 @@ pub fn encrypt_file(src: &Path, dst: &Path, recipients: &[Recipient]) -> Result<
         io::copy(&mut reader, &mut w).context("streaming encryption")?;
         w.finish().context("age writer finish failed")?;
     }
-    writer.flush().ok();
+    writer.flush().context("flushing ciphertext")?;
     Ok(())
 }
 

@@ -142,6 +142,7 @@ pub fn socket_path() -> PathBuf {
 /// testable without faking SO_PEERCRED or `/var/lib/vigo` paths.
 struct Caller {
     username: String,
+    uid: u32,
     home: PathBuf,
     policy: UserPolicy,
 }
@@ -288,7 +289,7 @@ fn resolve_caller(uid: u32) -> Result<Caller> {
         .with_context(|| format!("resolving uid {uid} to a passwd entry"))?;
     let policy = crate::swarm::policy::read_user_policy(&username)
         .with_context(|| format!("reading usercrate policy for {username}"))?;
-    Ok(Caller { username, home, policy })
+    Ok(Caller { username, uid, home, policy })
 }
 
 /// Serve one connection — dispatches on the verb line. Returns `Ok(())` once
@@ -426,7 +427,7 @@ where
     );
 
     // --- drop the signed entry for the sentinel reactor to validate + promote.
-    write_pending_entry(&caller.home, &artifact_id_hex, &entry)
+    write_pending_entry(&caller.home, caller.uid, &artifact_id_hex, &entry)
         .with_context(|| format!("writing pending catalog entry for {}", caller.username))?;
 
     info!(
@@ -513,7 +514,7 @@ where
         }
     }
 
-    write_pending_entry(&caller.home, &artifact_id_hex, &entry)
+    write_pending_entry(&caller.home, caller.uid, &artifact_id_hex, &entry)
         .with_context(|| format!("writing pending catalog entry for {}", caller.username))?;
 
     info!(
@@ -561,44 +562,74 @@ where
 /// (creating the dirs), atomically (temp + rename within the artifact dir), mode
 /// 0644 — the root sentinel reactor promotes it to `entry.json` and the
 /// `swarm_curator` trait collector reads that.
-fn write_pending_entry(home: &Path, artifact_id_hex: &str, entry: &CatalogEntry) -> Result<()> {
-    let dir = state::artifact_dir(home, artifact_id_hex);
-    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    let dest = state::entry_pending_path(home, artifact_id_hex);
-    let tmp = dir.join(format!(
+///
+/// This runs as root inside the caller's home, so nothing here resolves a path
+/// the caller could redirect: `.vigo-curator` and `<aid>` are each created
+/// (`mkdirat`) / opened no-follow relative to the parent's fd and must be owned
+/// by the caller or root, and the temp is an `O_EXCL|O_NOFOLLOW` create
+/// `renameat`-ed inside the held `<aid>` dir fd.
+fn write_pending_entry(home: &Path, uid: u32, artifact_id_hex: &str, entry: &CatalogEntry) -> Result<()> {
+    use crate::platform::safe_path::SafeDir;
+    let bytes = serde_json::to_vec_pretty(entry).context("serializing catalog entry")?;
+    let anchor = SafeDir::open_anchor(home).with_context(|| format!("opening {}", home.display()))?;
+    anchor.mkdir(state::CURATOR_DIR_NAME, 0o755)?;
+    let curator = anchor
+        .subdir(state::CURATOR_DIR_NAME)
+        .and_then(|d| d.require_owner(uid))
+        .with_context(|| format!("{} is not a real directory owned by uid {uid}", state::user_curator_dir(home).display()))?;
+    curator.mkdir(artifact_id_hex, 0o755)?;
+    let dir = curator
+        .subdir(artifact_id_hex)
+        .and_then(|d| d.require_owner(uid))
+        .with_context(|| format!("{} is not a real directory owned by uid {uid}", state::artifact_dir(home, artifact_id_hex).display()))?;
+    let tmp = format!(
         "{}.{}.{}.tmp",
         state::ENTRY_PENDING_FILE,
         std::process::id(),
         STAGE_SEQ.fetch_add(1, Ordering::Relaxed)
-    ));
-    let bytes = serde_json::to_vec_pretty(entry).context("serializing catalog entry")?;
-    std::fs::write(&tmp, &bytes).with_context(|| format!("writing {}", tmp.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o644));
-    }
-    std::fs::rename(&tmp, &dest)
-        .with_context(|| format!("renaming {} -> {}", tmp.display(), dest.display()))?;
+    );
+    dir.write_atomic(state::ENTRY_PENDING_FILE, &tmp, &bytes, 0o644, None, None)
+        .with_context(|| format!("writing {}", state::entry_pending_path(home, artifact_id_hex).display()))?;
     Ok(())
 }
 
+/// Read one `\n`-terminated line, never buffering more than `max` bytes: a
+/// newline-less stream errors at the cap instead of growing the String
+/// without bound (the pre-auth allocation DoS gitback/helper.rs's
+/// `read_header` documents). Consumes from the BufReader's buffer in chunks,
+/// so bytes after the newline stay buffered for the next read.
 async fn read_line<R>(br: &mut BufReader<R>, max: usize) -> Result<String>
 where
     R: tokio::io::AsyncRead + Unpin,
 {
-    let mut line = String::new();
-    let n = tokio::time::timeout(NEGOTIATE_TIMEOUT, br.read_line(&mut line))
+    let read = async {
+        let mut line: Vec<u8> = Vec::new();
+        loop {
+            let avail = br.fill_buf().await.context("read_line")?;
+            if avail.is_empty() {
+                if line.is_empty() {
+                    bail!("client closed the connection before sending a line");
+                }
+                break;
+            }
+            let (take, done) = match avail.iter().position(|&b| b == b'\n') {
+                Some(i) => (i + 1, true),
+                None => (avail.len(), false),
+            };
+            if line.len() + take > max {
+                bail!("line too long (over the {max}-byte cap)");
+            }
+            line.extend_from_slice(&avail[..take]);
+            br.consume(take);
+            if done {
+                break;
+            }
+        }
+        String::from_utf8(line).map_err(|_| anyhow!("line is not valid UTF-8"))
+    };
+    tokio::time::timeout(NEGOTIATE_TIMEOUT, read)
         .await
         .map_err(|_| anyhow!("negotiation timed out"))?
-        .context("read_line")?;
-    if n == 0 {
-        bail!("client closed the connection before sending a line");
-    }
-    if line.len() > max {
-        bail!("line too long ({} bytes, cap {max})", line.len());
-    }
-    Ok(line)
 }
 
 fn sanitize_err(s: &str) -> String {
@@ -644,6 +675,7 @@ mod tests {
         fn caller(&self, curator: bool) -> Caller {
             Caller {
                 username: "dan".into(),
+                uid: nix::unistd::getuid().as_raw(),
                 home: self.home.clone(),
                 policy: UserPolicy { puddle: true, gitback: false, curator, poolq: false },
             }
@@ -706,6 +738,39 @@ mod tests {
     }
 
     // --- tests ------------------------------------------------------------
+
+    #[test]
+    fn write_pending_entry_never_writes_through_a_symlinked_dir() {
+        let bed = Bed::new();
+        let uid = nix::unistd::getuid().as_raw();
+        let k = fresh_key();
+        let entry = entry_for(&k, "vigo-agent", b"x");
+        let aid = entry.artifact_id_hex().unwrap();
+        // ~/.vigo-curator/<aid> -> outside: refused, nothing lands outside.
+        let outside = TempDir::new().unwrap();
+        std::fs::create_dir_all(state::user_curator_dir(&bed.home)).unwrap();
+        std::os::unix::fs::symlink(outside.path(), state::artifact_dir(&bed.home, &aid)).unwrap();
+        assert!(write_pending_entry(&bed.home, uid, &aid, &entry).is_err());
+        assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 0);
+        // Real dirs: written, and readable back.
+        std::fs::remove_file(state::artifact_dir(&bed.home, &aid)).unwrap();
+        write_pending_entry(&bed.home, uid, &aid, &entry).unwrap();
+        let back: CatalogEntry =
+            serde_json::from_slice(&std::fs::read(state::entry_pending_path(&bed.home, &aid)).unwrap()).unwrap();
+        assert_eq!(back, entry);
+    }
+
+    #[tokio::test]
+    async fn read_line_caps_a_newline_less_stream() {
+        let data = vec![b'a'; 1000];
+        let mut br = BufReader::new(&data[..]);
+        assert!(read_line(&mut br, 64).await.is_err());
+        let mut br = BufReader::new(&b"PUSH\nrest"[..]);
+        assert_eq!(read_line(&mut br, 64).await.unwrap(), "PUSH\n");
+        let mut rest = String::new();
+        br.read_to_string(&mut rest).await.unwrap();
+        assert_eq!(rest, "rest", "bytes after the newline stay buffered");
+    }
 
     #[tokio::test]
     #[serial_test::serial(runtime_limits)]

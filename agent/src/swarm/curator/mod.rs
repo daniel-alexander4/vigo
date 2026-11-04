@@ -126,10 +126,20 @@ async fn run_sentinel_reactor(cancel: CancellationToken) {
     }
 }
 
+/// Largest pending / canonical catalog entry the reactor will read — the same
+/// bound the helper puts on the PUSH header line that carries an entry.
+const MAX_ENTRY_BYTES: u64 = 4 * 1024 * 1024;
+
 /// Walk every user in `passwd_body`, and for each `~/.vigo-curator/<aid>/entry.json.pending`
 /// re-verify it and either promote it to `entry.json` (LWW on `issued_at`) or
 /// drop it (corrupt / non-self-verifying / misfiled / stale).
+///
+/// Runs as root over directories each user controls, so it never resolves a
+/// path the user could redirect: `~/.vigo-curator` and each `<aid>` dir are
+/// opened no-follow and must be owned by that user (or root), and every read,
+/// rename and unlink is relative to the held `<aid>` dir fd.
 fn scan_all_users(passwd_body: &str) {
+    use crate::platform::safe_path::SafeDir;
     for line in passwd_body.lines() {
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -138,34 +148,52 @@ fn scan_all_users(passwd_body: &str) {
         if fields.len() < 7 {
             continue;
         }
-        let curator_dir = state::user_curator_dir(Path::new(fields[5]));
-        let Ok(rd) = std::fs::read_dir(&curator_dir) else { continue };
-        for ent in rd.flatten() {
-            let p = ent.path();
-            if !p.is_dir() {
+        let Ok(uid) = fields[2].parse::<u32>() else { continue };
+        let Ok(curator) = SafeDir::open_anchor(Path::new(fields[5]))
+            .and_then(|h| h.subdir(state::CURATOR_DIR_NAME))
+            .and_then(|d| d.require_owner(uid))
+        else {
+            continue;
+        };
+        let Ok(names) = curator.entries() else { continue };
+        for name in names {
+            let Some(dir_name) = name.to_str() else { continue };
+            // subdir() refuses a symlink; require_owner refuses a dir
+            // another (non-root) user owns.
+            let Ok(adir) = curator.subdir(dir_name).and_then(|d| d.require_owner(uid)) else {
+                continue;
+            };
+            if adir.stat(state::ENTRY_PENDING_FILE).is_err() {
                 continue;
             }
-            let Some(dir_name) = p.file_name().and_then(|n| n.to_str()) else { continue };
-            let pending = p.join(state::ENTRY_PENDING_FILE);
-            if !pending.exists() {
-                continue;
-            }
-            if let Err(e) = promote_pending_entry(&pending, &p.join(state::ENTRY_FILE), dir_name) {
-                warn!(path = %pending.display(), error = %e, "curator reactor: dropping bad pending entry");
-                let _ = std::fs::remove_file(&pending);
+            if let Err(e) = promote_pending_entry(&adir, uid, dir_name) {
+                warn!(
+                    path = %adir.path().join(state::ENTRY_PENDING_FILE).display(),
+                    error = %e,
+                    "curator reactor: dropping bad pending entry"
+                );
+                let _ = adir.unlink(state::ENTRY_PENDING_FILE);
             }
         }
     }
 }
 
-/// Validate `pending` and atomically promote it to `entry_path` unless an
-/// existing `entry_path` is newer (LWW on `issued_at`). Returns `Err` (the
-/// caller then unlinks `pending`) for a corrupt, non-self-verifying, or misfiled
-/// pending entry. A *stale* pending entry (older than the existing one) is not an
-/// error — it's just consumed without overwriting.
-fn promote_pending_entry(pending: &Path, entry_path: &Path, dir_name: &str) -> anyhow::Result<()> {
+/// Validate `<adir>/entry.json.pending` and atomically promote it to
+/// `<adir>/entry.json` unless an existing entry is newer (LWW on
+/// `issued_at`). Returns `Err` (the caller then unlinks the pending file) for
+/// a corrupt, non-self-verifying, misfiled, or unreadable pending entry — a
+/// symlink, FIFO, oversize file, or one owned by neither the user nor root.
+/// A *stale* pending entry (older than the existing one) is not an error —
+/// it's just consumed without overwriting.
+fn promote_pending_entry(
+    adir: &crate::platform::safe_path::SafeDir,
+    uid: u32,
+    dir_name: &str,
+) -> anyhow::Result<()> {
     use anyhow::{bail, Context};
-    let raw = std::fs::read(pending).with_context(|| format!("reading {}", pending.display()))?;
+    let raw = adir
+        .read_capped(state::ENTRY_PENDING_FILE, &[uid, 0], MAX_ENTRY_BYTES)
+        .context("reading pending catalog entry")?;
     let entry: catalog::CatalogEntry =
         serde_json::from_slice(&raw).context("parsing pending catalog entry")?;
     entry.verify(DELEGATION_MAX_LEN).context("pending catalog entry failed verification")?;
@@ -175,17 +203,17 @@ fn promote_pending_entry(pending: &Path, entry_path: &Path, dir_name: &str) -> a
         bail!("pending entry's artifact_id {aid} ≠ its directory name {dir_name} (misfiled)");
     }
     // LWW: never replace a newer canonical entry with an older pending one.
-    if let Ok(existing_raw) = std::fs::read(entry_path) {
+    if let Ok(existing_raw) = adir.read_capped(state::ENTRY_FILE, &[uid, 0], MAX_ENTRY_BYTES) {
         if let Ok(existing) = serde_json::from_slice::<catalog::CatalogEntry>(&existing_raw) {
             if existing.body.issued_at > entry.body.issued_at {
-                let _ = std::fs::remove_file(pending);
+                let _ = adir.unlink(state::ENTRY_PENDING_FILE);
                 debug!(artifact_id = %aid, "curator reactor: discarding stale pending entry");
                 return Ok(());
             }
         }
     }
-    std::fs::rename(pending, entry_path)
-        .with_context(|| format!("renaming {} -> {}", pending.display(), entry_path.display()))?;
+    adir.rename(state::ENTRY_PENDING_FILE, state::ENTRY_FILE)
+        .with_context(|| format!("renaming pending entry in {}", adir.path().display()))?;
     info!(artifact_id = %aid, name = %entry.body.name, "curator reactor: promoted pending catalog entry");
     Ok(())
 }
@@ -241,6 +269,47 @@ mod tests {
         std::fs::write(dir.join(state::ENTRY_PENDING_FILE), serde_json::to_vec(entry).unwrap()).unwrap();
     }
 
+    fn me() -> u32 {
+        nix::unistd::getuid().as_raw()
+    }
+
+    #[test]
+    fn symlinked_artifact_dir_and_fifo_pending_are_never_followed() {
+        let home = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let k = SigningKey::generate(&mut OsRng);
+        let entry = entry_for(&k, "linked", 100);
+        let aid = entry.artifact_id_hex().unwrap();
+        // ~/.vigo-curator/<aid> -> outside dir holding a valid pending entry.
+        std::fs::write(outside.path().join(state::ENTRY_PENDING_FILE), serde_json::to_vec(&entry).unwrap())
+            .unwrap();
+        std::fs::create_dir_all(state::user_curator_dir(home.path())).unwrap();
+        std::os::unix::fs::symlink(outside.path(), state::artifact_dir(home.path(), &aid)).unwrap();
+        // A FIFO pending under a real dir: must not block the reactor.
+        let fifo_dir = state::artifact_dir(home.path(), &"c".repeat(64));
+        std::fs::create_dir_all(&fifo_dir).unwrap();
+        let fifo = std::ffi::CString::new(
+            fifo_dir.join(state::ENTRY_PENDING_FILE).to_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+
+        scan_all_users(&passwd_line("dan", me(), home.path()));
+
+        assert!(outside.path().join(state::ENTRY_PENDING_FILE).exists(), "outside file untouched");
+        assert!(!outside.path().join(state::ENTRY_FILE).exists(), "nothing promoted through the link");
+        assert!(!fifo_dir.join(state::ENTRY_PENDING_FILE).exists(), "the FIFO is dropped, not read");
+        // ~/.vigo-curator itself symlinked: skipped entirely.
+        let home2 = TempDir::new().unwrap();
+        let real = TempDir::new().unwrap();
+        write_pending(real.path(), &aid, &entry);
+        std::os::unix::fs::symlink(state::user_curator_dir(real.path()), state::user_curator_dir(home2.path()))
+            .unwrap();
+        scan_all_users(&passwd_line("dan", me(), home2.path()));
+        assert!(state::entry_pending_path(real.path(), &aid).exists());
+        assert!(!state::entry_path(real.path(), &aid).exists());
+    }
+
     fn passwd_line(user: &str, uid: u32, home: &Path) -> String {
         format!("{user}:x:{uid}:{uid}::{}:/bin/sh\n", home.display())
     }
@@ -253,7 +322,7 @@ mod tests {
         let aid = entry.artifact_id_hex().unwrap();
         write_pending(home.path(), &aid, &entry);
 
-        scan_all_users(&passwd_line("dan", 1000, home.path()));
+        scan_all_users(&passwd_line("dan", me(), home.path()));
 
         let entry_path = state::entry_path(home.path(), &aid);
         assert!(entry_path.exists(), "valid pending must be promoted to entry.json");
@@ -280,7 +349,7 @@ mod tests {
         tampered.body.name = "yy".into();
         write_pending(home.path(), &tampered.artifact_id_hex().unwrap(), &tampered);
 
-        scan_all_users(&passwd_line("dan", 1000, home.path()));
+        scan_all_users(&passwd_line("dan", me(), home.path()));
 
         // None promoted; all pending files removed.
         for aid in [&"a".repeat(64), &good.artifact_id_hex().unwrap(), &"b".repeat(64), &tampered.artifact_id_hex().unwrap()] {
@@ -302,7 +371,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(state::entry_path(home.path(), &aid), serde_json::to_vec(&newer).unwrap()).unwrap();
         std::fs::write(state::entry_pending_path(home.path(), &aid), serde_json::to_vec(&older).unwrap()).unwrap();
-        scan_all_users(&passwd_line("dan", 1000, home.path()));
+        scan_all_users(&passwd_line("dan", me(), home.path()));
         let kept: CatalogEntry = serde_json::from_slice(&std::fs::read(state::entry_path(home.path(), &aid)).unwrap()).unwrap();
         assert_eq!(kept.body.issued_at, 200, "stale pending must not clobber the newer entry");
         assert!(!state::entry_pending_path(home.path(), &aid).exists());
@@ -310,7 +379,7 @@ mod tests {
         // The reverse: an older entry is canonical, a newer pending arrives and wins.
         std::fs::write(state::entry_path(home.path(), &aid), serde_json::to_vec(&older).unwrap()).unwrap();
         std::fs::write(state::entry_pending_path(home.path(), &aid), serde_json::to_vec(&newer).unwrap()).unwrap();
-        scan_all_users(&passwd_line("dan", 1000, home.path()));
+        scan_all_users(&passwd_line("dan", me(), home.path()));
         let kept: CatalogEntry = serde_json::from_slice(&std::fs::read(state::entry_path(home.path(), &aid)).unwrap()).unwrap();
         assert_eq!(kept.body.issued_at, 200);
     }
