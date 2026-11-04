@@ -5,6 +5,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -83,6 +84,10 @@ func (h *S3CredentialsHandler) handleCreate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	created, err := h.store.Create(r.Context(), req.Name, req.Scope)
+	if errors.Is(err, curators3.ErrUnknownPublisher) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		slog.Error("creating curator s3 credential", "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to create credential")

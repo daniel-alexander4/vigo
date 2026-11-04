@@ -143,7 +143,7 @@ func wantSigErr(t *testing.T, err error, code string) {
 func TestVerifyRoundTrip(t *testing.T) {
 	cs := newTestCredStore(t)
 	ctx := context.Background()
-	created, err := cs.Create(ctx, "ci-runner", "alexander4")
+	created, err := cs.Create(ctx, "ci-runner", testPubkey)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestVerifyRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify rejected a correctly-signed request: %v", err)
 	}
-	if resolved == nil || resolved.Row.Scope != "alexander4" {
+	if resolved == nil || resolved.Row.Scope != testPubkey {
 		t.Errorf("Verify returned %+v, want the alexander4-scoped credential", resolved)
 	}
 }

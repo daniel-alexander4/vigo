@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -35,6 +36,7 @@ type Server struct {
 	fleetIndex *fleet.FleetIndex
 	blobsDir   string
 	metrics    *metrics.Metrics
+	names      nameCache
 }
 
 // NewServer wires the S3 endpoint. `puddleAgg` resolves the puddle-pubkey →
@@ -107,26 +109,58 @@ func (s *Server) count(op string) {
 // unambiguously-claimed puddle names (ADR-022). Both empty on error — the
 // facade then falls back to hex publishers, which always resolve.
 func (s *Server) nameMaps(ctx context.Context) (byPubkey, byName map[string]string) {
-	byPubkey, byName = map[string]string{}, map[string]string{}
 	if s.puddle == nil {
-		return
+		return map[string]string{}, map[string]string{}
 	}
-	fn, err := s.puddle.NamesSnapshot(ctx, s.envoyInputs())
-	if err != nil || fn == nil {
-		return
-	}
-	byPubkey = puddlemesh.ReverseNameMap(fn)
-	for pk, nm := range byPubkey {
-		byName[nm] = pk
-	}
-	return
+	return s.names.get(ctx, s.puddle, s.envoyInputs)
 }
 
-func (s *Server) envoyInputs() []puddlemesh.EnvoyInput {
-	if s.fleetIndex == nil {
+// NameResolver returns a friendly-name → founder-pubkey-hex lookup over the
+// puddle aggregator, for pinning a credential's scope at mint time.
+func NameResolver(agg *puddlemesh.Aggregator, fleetIndex *fleet.FleetIndex) func(ctx context.Context) map[string]string {
+	var nc nameCache
+	envoys := func() []puddlemesh.EnvoyInput { return envoyInputsOf(fleetIndex) }
+	return func(ctx context.Context) map[string]string {
+		_, byName := nc.get(ctx, agg, envoys)
+		return byName
+	}
+}
+
+// nameCache keeps the reverse maps derived from one FleetNames snapshot. The
+// aggregator returns the same *FleetNames until its TTL rebuild, so the maps
+// are recomputed only when the snapshot pointer changes, not per request.
+type nameCache struct {
+	mu       sync.Mutex
+	src      *puddlemesh.FleetNames
+	byPubkey map[string]string
+	byName   map[string]string
+}
+
+func (c *nameCache) get(ctx context.Context, agg *puddlemesh.Aggregator, envoys func() []puddlemesh.EnvoyInput) (byPubkey, byName map[string]string) {
+	fn, err := agg.NamesSnapshot(ctx, envoys())
+	if err != nil || fn == nil {
+		return map[string]string{}, map[string]string{}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.src != fn {
+		c.byPubkey = puddlemesh.ReverseNameMap(fn)
+		c.byName = make(map[string]string, len(c.byPubkey))
+		for pk, nm := range c.byPubkey {
+			c.byName[nm] = pk
+		}
+		c.src = fn
+	}
+	return c.byPubkey, c.byName
+}
+
+func (s *Server) envoyInputs() []puddlemesh.EnvoyInput { return envoyInputsOf(s.fleetIndex) }
+
+func envoyInputsOf(fleetIndex *fleet.FleetIndex) []puddlemesh.EnvoyInput {
+	if fleetIndex == nil {
 		return nil
 	}
-	envoys := s.fleetIndex.AllEnvoys()
+	envoys := fleetIndex.AllEnvoys()
 	out := make([]puddlemesh.EnvoyInput, 0, len(envoys))
 	for _, e := range envoys {
 		out = append(out, puddlemesh.EnvoyInput{ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked})

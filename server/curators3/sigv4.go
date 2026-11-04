@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -90,6 +91,19 @@ func (v *Verifier) Verify(ctx context.Context, r *http.Request) (*Resolved, erro
 	signedAt, err := time.Parse(amzDateFormat, amzDate)
 	if err != nil {
 		return nil, errMalformed("missing or malformed X-Amz-Date header")
+	}
+	// The credential-scope date must be the day the request was signed: the
+	// signing key is derived per day, so a key derived for another day must
+	// not authenticate this request.
+	if parts.date != signedAt.UTC().Format("20060102") {
+		return nil, errMalformed("credential scope date does not match X-Amz-Date")
+	}
+	// host and x-amz-date must be covered by the signature, otherwise a
+	// captured request can be replayed against another host or re-dated.
+	for _, h := range []string{"host", "x-amz-date"} {
+		if !slices.Contains(parts.signedHeaders, h) {
+			return nil, errAccessDenied(fmt.Sprintf("SignedHeaders must include %s", h))
+		}
 	}
 	if drift := v.Now().Sub(signedAt); drift > skewWindow || drift < -skewWindow {
 		return nil, &Error{

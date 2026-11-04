@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -326,16 +327,51 @@ func TestPublisherNameHelpers(t *testing.T) {
 }
 
 func TestScopeAllows(t *testing.T) {
-	byName := map[string]string{"alexander4": testPubkey}
 	wild := &Resolved{Row: db.CuratorS3Credential{Scope: "*"}}
-	if !scopeAllows(wild, testPubkey, byName) {
+	if !scopeAllows(wild, testPubkey) {
 		t.Error("`*` scope must allow any publisher")
 	}
-	scoped := &Resolved{Row: db.CuratorS3Credential{Scope: "alexander4"}}
-	if !scopeAllows(scoped, testPubkey, byName) {
-		t.Error("a name scope must allow its own publisher")
+	scoped := &Resolved{Row: db.CuratorS3Credential{Scope: testPubkey}}
+	if !scopeAllows(scoped, testPubkey) {
+		t.Error("a pubkey scope must allow its own publisher")
 	}
-	if scopeAllows(scoped, strings.Repeat("cd", 32), byName) {
-		t.Error("a name scope must deny a different publisher")
+	if scopeAllows(scoped, strings.Repeat("cd", 32)) {
+		t.Error("a pubkey scope must deny a different publisher")
+	}
+	// A stored name is never re-resolved per request: whatever the fleet
+	// name map says now, a non-pubkey scope is refused.
+	named := &Resolved{Row: db.CuratorS3Credential{Scope: "alexander4"}}
+	if scopeAllows(named, testPubkey) {
+		t.Error("a name-valued stored scope must be refused, not resolved through envoy claims")
+	}
+	if scopeAllows(&Resolved{Row: db.CuratorS3Credential{Scope: ""}}, testPubkey) {
+		t.Error("an empty stored scope must be refused")
+	}
+}
+
+// Create pins a name scope to the founder pubkey it names at mint time, and
+// refuses a name that does not resolve.
+func TestCreatePinsNameScopeToPubkey(t *testing.T) {
+	cs := newTestCredStore(t)
+	ctx := context.Background()
+	names := map[string]string{"alexander4": testPubkey}
+	cs.SetNameResolver(func(context.Context) map[string]string { return names })
+
+	created, err := cs.Create(ctx, "ci", "alexander4")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if created.Scope != testPubkey {
+		t.Fatalf("scope = %q, want the pinned pubkey %q", created.Scope, testPubkey)
+	}
+	// An envoy later re-points the name: the credential is unaffected.
+	names["alexander4"] = strings.Repeat("cd", 32)
+	got, _ := cs.Lookup(ctx, created.AccessKeyID)
+	if !scopeAllows(got, testPubkey) || scopeAllows(got, strings.Repeat("cd", 32)) {
+		t.Fatalf("credential followed the re-pointed name: scope %q", got.Row.Scope)
+	}
+
+	if _, err := cs.Create(ctx, "ci", "nobody"); !errors.Is(err, ErrUnknownPublisher) {
+		t.Fatalf("unknown name: err = %v, want ErrUnknownPublisher", err)
 	}
 }

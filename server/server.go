@@ -1400,7 +1400,10 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 
 			// Curator S3 API SigV4 credential store (ADR-027) — derive-don't-
 			// store, rooted in the LocalProvider master key. local-backend-only.
-			s3CredentialsHandler.SetStore(curators3.NewCredStore(s.queries, lp))
+			// Name scopes are pinned to a founder pubkey at mint time.
+			credStore := curators3.NewCredStore(s.queries, lp)
+			credStore.SetNameResolver(curators3.NameResolver(puddlemesh.NewAggregator(s.queries), s.fleetIndex))
+			s3CredentialsHandler.SetStore(credStore)
 			slog.Info("curator S3 credential store ready")
 		}
 

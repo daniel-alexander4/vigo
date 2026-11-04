@@ -43,15 +43,15 @@ func TestCreateLookupRoundTrip(t *testing.T) {
 	cs := newTestCredStore(t)
 	ctx := context.Background()
 
-	created, err := cs.Create(ctx, "ci-runner", "alexander4")
+	created, err := cs.Create(ctx, "ci-runner", testPubkey)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	if created.AccessKeyID == "" || created.SecretAccessKey == "" {
 		t.Fatal("Create returned an empty id or secret")
 	}
-	if created.Scope != "alexander4" {
-		t.Errorf("scope = %q, want alexander4", created.Scope)
+	if created.Scope != testPubkey {
+		t.Errorf("scope = %q, want testPubkey", created.Scope)
 	}
 
 	got, err := cs.Lookup(ctx, created.AccessKeyID)
@@ -66,7 +66,7 @@ func TestCreateLookupRoundTrip(t *testing.T) {
 	if got.Secret != created.SecretAccessKey {
 		t.Error("Lookup re-derived a different secret than Create returned")
 	}
-	if got.Row.AccessKeyID != created.AccessKeyID || got.Row.Scope != "alexander4" {
+	if got.Row.AccessKeyID != created.AccessKeyID || got.Row.Scope != testPubkey {
 		t.Errorf("Lookup row mismatch: %+v", got.Row)
 	}
 }

@@ -37,6 +37,17 @@ const accessKeyIDPrefix = "VIGO"
 type CredStore struct {
 	queries *db.Queries
 	local   *secrets.LocalProvider
+	// names resolves a publisher friendly name to its founder pubkey hex at
+	// mint time. Nil = only `*` and pubkey-hex scopes can be minted.
+	names func(ctx context.Context) map[string]string
+}
+
+// SetNameResolver wires the friendly-name → founder-pubkey lookup Create uses
+// to pin a name scope to a pubkey. Names come from envoy-reported claims that
+// can change or be contested, so they are resolved once, when an operator
+// mints the credential, and never again per request.
+func (cs *CredStore) SetNameResolver(f func(ctx context.Context) map[string]string) {
+	cs.names = f
 }
 
 // NewCredStore wires a CredStore. `local` is required — the SigV4 secret
@@ -63,12 +74,15 @@ type Resolved struct {
 	Secret string
 }
 
-// Create mints a credential scoped to a `<publisher>` prefix (`*` = every
-// publisher). Returns the access_key_id and the one-time secret_access_key.
+// Create mints a credential scoped to one publisher (`*` = every publisher).
+// A publisher given by friendly name is resolved to its founder pubkey now
+// and the pubkey is what is stored, so later name claims cannot re-point the
+// credential at another publisher. Returns the access_key_id and the
+// one-time secret_access_key.
 func (cs *CredStore) Create(ctx context.Context, name, scope string) (Created, error) {
-	scope = strings.TrimSpace(scope)
-	if scope == "" {
-		scope = "*"
+	scope, err := cs.resolveScope(ctx, scope)
+	if err != nil {
+		return Created{}, err
 	}
 	id, err := newAccessKeyID()
 	if err != nil {
@@ -86,6 +100,27 @@ func (cs *CredStore) Create(ctx context.Context, name, scope string) (Created, e
 		return Created{}, fmt.Errorf("storing s3 credential: %w", err)
 	}
 	return Created{AccessKeyID: id, SecretAccessKey: secret, Scope: scope, Name: strings.TrimSpace(name)}, nil
+}
+
+// ErrUnknownPublisher is returned by Create when a name scope does not resolve
+// to exactly one founder pubkey.
+var ErrUnknownPublisher = errors.New("scope is not a known, uncontested publisher name")
+
+// resolveScope normalizes a requested scope to `*` or a 64-hex founder pubkey.
+func (cs *CredStore) resolveScope(ctx context.Context, scope string) (string, error) {
+	scope = strings.TrimSpace(scope)
+	switch {
+	case scope == "" || scope == "*":
+		return "*", nil
+	case isHex64(scope):
+		return strings.ToLower(scope), nil
+	}
+	if cs.names != nil {
+		if pk := cs.names(ctx)[scope]; isHex64(pk) {
+			return strings.ToLower(pk), nil
+		}
+	}
+	return "", fmt.Errorf("%w: %q (pass the founder puddle pubkey as 64 hex characters)", ErrUnknownPublisher, scope)
 }
 
 // List returns all credential metadata. There are no secrets to redact — none

@@ -44,7 +44,7 @@ func (s *Server) serveObject(w http.ResponseWriter, r *http.Request, resolved *R
 		writeS3Error(w, r, http.StatusNotFound, "NoSuchKey", "unknown publisher")
 		return
 	}
-	if !scopeAllows(resolved, pubkeyHex, byName) {
+	if !scopeAllows(resolved, pubkeyHex) {
 		writeS3Error(w, r, http.StatusForbidden, "AccessDenied", "the credential is not scoped to this publisher")
 		return
 	}
@@ -110,7 +110,7 @@ func (s *Server) listObjectsV2(w http.ResponseWriter, r *http.Request, resolved 
 		writeS3Error(w, r, http.StatusInternalServerError, "InternalError", "building the catalog")
 		return
 	}
-	byPubkey, byName := s.nameMaps(r.Context())
+	byPubkey, _ := s.nameMaps(r.Context())
 
 	var objs []s3ObjectXML
 	for i := range cat.Artifacts {
@@ -119,7 +119,7 @@ func (s *Server) listObjectsV2(w http.ResponseWriter, r *http.Request, resolved 
 		if aerr != nil || isBlocked(blocked, aid) {
 			continue
 		}
-		if !scopeAllows(resolved, strings.ToLower(e.Body.FounderPuddlePubkey), byName) {
+		if !scopeAllows(resolved, strings.ToLower(e.Body.FounderPuddlePubkey)) {
 			continue
 		}
 		publisher := publisherForPubkey(e.Body.FounderPuddlePubkey, byPubkey)
@@ -247,17 +247,17 @@ func publisherForPubkey(pubkeyHex string, byPubkey map[string]string) string {
 	return strings.ToLower(pubkeyHex)
 }
 
-// scopeAllows reports whether a credential scoped to `resolved.Row.Scope` may
-// read an object under the given founder pubkey. `*` = every publisher;
-// otherwise the scope (a publisher name or hex) must resolve to the same
-// founder pubkey as the object's.
-func scopeAllows(resolved *Resolved, objectPubkeyHex string, byName map[string]string) bool {
+// scopeAllows reports whether a credential may read an object under the
+// given founder pubkey. The stored scope is `*` (every publisher) or the
+// founder pubkey hex pinned at mint time; it is never re-resolved through the
+// envoy-reported name map, which an envoy could re-point. Anything else
+// (including an empty scope) is refused.
+func scopeAllows(resolved *Resolved, objectPubkeyHex string) bool {
 	scope := resolved.Row.Scope
-	if scope == "*" || scope == "" {
+	if scope == "*" {
 		return true
 	}
-	scopePubkey := pubkeyForPublisher(scope, byName)
-	return scopePubkey != "" && strings.EqualFold(scopePubkey, objectPubkeyHex)
+	return isHex64(scope) && strings.EqualFold(scope, objectPubkeyHex)
 }
 
 func isBlocked(blocked []db.CuratorBlockedArtifact, artifactID string) bool {

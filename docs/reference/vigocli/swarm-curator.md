@@ -188,7 +188,7 @@ If the publisher has since `rm`'d the entry, unblock removes the row from the bl
 
 Manage the AWS-SigV4 credentials that authenticate non-envoy clients against the curator S3-compatible object API (ADR-027, `swarm.curator.s3_port`). Admin-only. The server requires the `local` secrets backend for this command; under any other backend it returns 503.
 
-- **`create [--name <label>] [--scope <publisher>]`** — mint a credential. Prints the access key id and the secret access key. The secret is **derived, never stored** — shown once, not recoverable. `--scope` limits the credential to one publisher (a puddle friendly-name or founder-pubkey hex); the default `*` allows every publisher.
+- **`create [--name <label>] [--scope <publisher>]`** — mint a credential. Prints the access key id and the secret access key. The secret is **derived, never stored** — shown once, not recoverable. `--scope` limits the credential to one publisher, given as a puddle friendly-name or founder-pubkey hex; the default `*` allows every publisher. A friendly name is resolved to its founder pubkey when the credential is minted and the pubkey is what is stored, so a later or contested name claim can never re-point the credential at another publisher. A name that is unknown or contested is refused; pass the pubkey instead.
 - **`list`** — credential metadata (access key id, scope, name, created-at). No secrets — none are stored.
 - **`revoke <access-key-id>`** — delete a credential; it stops authenticating immediately.
 
@@ -197,7 +197,7 @@ $ vigocli swarm curator s3-credentials create --name ci-runner --scope alexander
 Curator S3 credential created.
   Access key ID:     VIGO2X4QPL7N8K3M9R6T
   Secret access key: 9f3a…  (shown once — store it now)
-  Scope:             alexander4
+  Scope:             3f9c…e21a   (the founder pubkey alexander4 named at mint time)
 ```
 
 Point an S3 SDK at `https://<server>:<s3_port>` with these keys — see [Exposing artifacts over an S3 API](../../howto/swarm/set-up-curator.md#exposing-artifacts-over-an-s3-api).
