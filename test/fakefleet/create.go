@@ -86,7 +86,7 @@ func runCreate(cfg config) {
 	}
 	if len(enrolled) == 0 {
 		fmt.Fprintf(os.Stderr, "first enroll error: %s\n", firstErr.msg)
-		die("no envoys enrolled — likely the license node-count gate (needs MaxEnvoys >= %d)", cfg.count)
+		die("no envoys enrolled (%d planned) — see the first enroll error above", cfg.count)
 	}
 	if failed > 0 {
 		fmt.Fprintf(os.Stderr, "warning: %d/%d enrollments failed (first: %s)\n", failed, len(plan), firstErr.msg)

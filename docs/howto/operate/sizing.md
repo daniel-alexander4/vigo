@@ -76,7 +76,7 @@ The spanner setup is in [Set up spanner](set-up-spanner.md); the rationale is AD
 
 ## How these numbers were measured
 
-The figures are measured off-box on GCP (server VM + separate harness VM(s), so the offered load is real and not competing with the server for CPU), using [`test/fakefleet/`](../../../test/fakefleet/) to enroll synthetic envoys with a realistic 150 KB split-traits inventory and hold check-ins at the target cadence. Per-check-in CPU is `Δ process_cpu_seconds_total ÷ Δ check-in rate` over a settled 60s window (using the harness's own reported rate); per-envoy RAM is the settled **forced-GC live heap** (`pprof heap?gc=1`) ÷ enrolled count. The full method, run matrix, and per-figure provenance live in the registry: [`numbers-of-record.md`](../../internal.docs/numbers-of-record.md) and [`loadtest-per-cadence-runbook.md`](../../internal.docs/loadtest-per-cadence-runbook.md).
+The figures are measured off-box on GCP (server VM + separate harness VM(s), so the offered load is real and not competing with the server for CPU), using [`test/fakefleet/`](../../../test/fakefleet/) to enroll synthetic envoys with a realistic 150 KB split-traits inventory and hold check-ins at the target cadence. Per-check-in CPU is `Δ process_cpu_seconds_total ÷ Δ check-in rate` over a settled 60s window (using the harness's own reported rate); per-envoy RAM is the settled **forced-GC live heap** (`pprof heap?gc=1`) ÷ enrolled count. The full method, run matrix, and per-figure provenance live in the maintainers' measurement registry, which is not part of the published docs.
 
 ---
 *Verified on Vigo 0.76.35 · 2026-06-24. Anchor: 8 vCPU / 32 GB measured; larger rows calculated.*

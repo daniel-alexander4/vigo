@@ -873,38 +873,91 @@ func TestExecutorCountConsistent(t *testing.T) {
 
 // ---------- 8. TestCLICommandCountConsistent ----------
 
+// TestCLICommandCountConsistent checks the top-level vigocli command set
+// registered in cli/main.go against the tracked CLI reference index
+// (docs/reference/vigocli/_index.md), in both directions and by whole
+// command name: every registered command has an index row linking its
+// per-command page, and every index row names a registered command.
 func TestCLICommandCountConsistent(t *testing.T) {
 	root := repoRoot(t)
 
-	// Extract top-level command names from cli/main.go AddCommand block.
-	mainPath := filepath.Join(root, "cli", "main.go")
-	mainData, err := os.ReadFile(mainPath)
+	code := registeredTopLevelCommands(t, root)
+
+	indexPath := filepath.Join(root, "docs", "reference", "vigocli", "_index.md")
+	indexData, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", indexPath, err)
+	}
+	documented := documentedTopLevelCommands(string(indexData))
+
+	// cobra's built-in `completion` has no reference page of its own; every
+	// other command must link one.
+	noPage := map[string]bool{"completion": true}
+
+	var undocumented, unregistered []string
+	for name := range code {
+		page, ok := documented[name]
+		switch {
+		case !ok:
+			undocumented = append(undocumented, name)
+		case page == "" && !noPage[name]:
+			undocumented = append(undocumented, name+" (index row links no page)")
+		case page != "":
+			if _, err := os.Stat(filepath.Join(root, "docs", "reference", "vigocli", page)); err != nil {
+				undocumented = append(undocumented, name+" (page "+page+" missing)")
+			}
+		}
+	}
+	for name := range documented {
+		if !code[name] {
+			unregistered = append(unregistered, name)
+		}
+	}
+	sort.Strings(undocumented)
+	sort.Strings(unregistered)
+	if len(undocumented) > 0 {
+		t.Errorf("vigocli commands registered in cli/main.go but not in docs/reference/vigocli/_index.md:\n  %s",
+			strings.Join(undocumented, "\n  "))
+	}
+	if len(unregistered) > 0 {
+		t.Errorf("docs/reference/vigocli/_index.md lists commands cli/main.go does not register:\n  %s",
+			strings.Join(unregistered, "\n  "))
+	}
+}
+
+// registeredTopLevelCommands returns the command names (first word of each
+// Use:) of every var passed to rootCmd.AddCommand in cli/main.go, plus cobra's
+// default `completion` command (cli never disables it). A var that cannot be
+// resolved to a Use: is a hard failure, so the set can't silently shrink.
+func registeredTopLevelCommands(t *testing.T, root string) map[string]bool {
+	t.Helper()
+	mainData, err := os.ReadFile(filepath.Join(root, "cli", "main.go"))
 	if err != nil {
 		t.Fatalf("reading cli/main.go: %v", err)
 	}
-
-	addCmdRe := regexp.MustCompile(`rootCmd\.AddCommand\(([\s\S]*?)\)`)
-	block := addCmdRe.FindSubmatch(mainData)
+	// Drop line comments so prose (or a ')') inside them can't leak in.
+	src := regexp.MustCompile(`//[^\n]*`).ReplaceAllString(string(mainData), "")
+	block := regexp.MustCompile(`rootCmd\.AddCommand\(([^)]*)\)`).FindStringSubmatch(src)
 	if block == nil {
 		t.Fatal("could not find rootCmd.AddCommand in cli/main.go")
 	}
+	var varNames []string
+	for _, f := range strings.Split(block[1], ",") {
+		if v := strings.TrimSpace(f); v != "" {
+			varNames = append(varNames, v)
+		}
+	}
 
-	varRe := regexp.MustCompile(`(\w+)`)
-	varNames := varRe.FindAllString(string(block[1]), -1)
-
-	// For each variable, resolve the Use: field to get the command name.
-	cliDir := filepath.Join(root, "cli")
-	cliFiles, _ := filepath.Glob(filepath.Join(cliDir, "*.go"))
-
+	cliFiles, _ := filepath.Glob(filepath.Join(root, "cli", "*.go"))
+	useRe := regexp.MustCompile(`Use:\s*"([^"]+)"`)
 	cmdNames := map[string]string{}
 	for _, f := range cliFiles {
 		data, err := os.ReadFile(f)
 		if err != nil {
 			continue
 		}
-		lines := strings.Split(string(data), "\n")
 		var currentVar string
-		for _, line := range lines {
+		for _, line := range strings.Split(string(data), "\n") {
 			trimmed := strings.TrimSpace(line)
 			if strings.Contains(trimmed, "= &cobra.Command{") {
 				parts := strings.Fields(trimmed)
@@ -912,10 +965,8 @@ func TestCLICommandCountConsistent(t *testing.T) {
 					currentVar = parts[1]
 				}
 			}
-			if currentVar != "" && strings.HasPrefix(trimmed, `Use:`) {
-				useRe := regexp.MustCompile(`Use:\s*"([^"]+)"`)
-				um := useRe.FindStringSubmatch(trimmed)
-				if um != nil {
+			if currentVar != "" && strings.HasPrefix(trimmed, "Use:") {
+				if um := useRe.FindStringSubmatch(trimmed); um != nil {
 					cmdNames[currentVar] = strings.Fields(um[1])[0]
 				}
 				currentVar = ""
@@ -923,34 +974,52 @@ func TestCLICommandCountConsistent(t *testing.T) {
 		}
 	}
 
-	// Read CLAUDE.md to check that every command appears there.
-	claudePath := filepath.Join(root, "CLAUDE.md")
-	claudeData, err := os.ReadFile(claudePath)
-	if err != nil {
-		t.Fatalf("reading CLAUDE.md: %v", err)
-	}
-	claudeContent := string(claudeData)
-
-	var missing []string
-	for _, varName := range varNames {
-		cmdName, ok := cmdNames[varName]
+	out := map[string]bool{"completion": true}
+	for _, v := range varNames {
+		name, ok := cmdNames[v]
 		if !ok {
+			t.Errorf("cli/main.go registers %s but no `var %s = &cobra.Command{ Use: ... }` was found in cli/", v, v)
 			continue
 		}
-		// Check if the command name appears in CLAUDE.md's CLI description.
-		// Look for the command name as a backtick-quoted string or in the
-		// subcommands list.
-		if !strings.Contains(claudeContent, "`"+cmdName+"`") &&
-			!strings.Contains(claudeContent, " "+cmdName+",") &&
-			!strings.Contains(claudeContent, " "+cmdName+" ") &&
-			!strings.Contains(claudeContent, "`"+cmdName) &&
-			!strings.Contains(claudeContent, cmdName+"`") {
-			missing = append(missing, cmdName)
-		}
+		out[name] = true
 	}
+	return out
+}
 
-	sort.Strings(missing)
-	if len(missing) > 0 {
-		t.Errorf("CLI commands not mentioned in CLAUDE.md:\n  %s", strings.Join(missing, "\n  "))
+// documentedTopLevelCommands parses the vigocli section of the CLI reference
+// index and returns each table row's top-level command (first word of the
+// first cell, so "swarm filecast" counts as swarm) mapped to the page its
+// row links ("" for an unlinked `name` cell). A subcommand row never
+// overwrites its parent's page.
+func documentedTopLevelCommands(index string) map[string]string {
+	if i := strings.Index(index, "\n## vigocli"); i >= 0 {
+		index = index[i:]
 	}
+	linkRe := regexp.MustCompile(`^\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|`)
+	codeRe := regexp.MustCompile("^\\|\\s*`([^`]+)`\\s*\\|")
+	out := map[string]string{}
+	for _, line := range strings.Split(index, "\n") {
+		line = strings.TrimSpace(line)
+		var cell, page string
+		if m := linkRe.FindStringSubmatch(line); m != nil {
+			cell, page = m[1], m[2]
+		} else if m := codeRe.FindStringSubmatch(line); m != nil {
+			cell = m[1]
+		} else {
+			continue
+		}
+		fields := strings.Fields(cell)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "--") {
+			continue // global-flags table
+		}
+		name := fields[0]
+		if len(fields) > 1 {
+			if _, seen := out[name]; !seen {
+				out[name] = ""
+			}
+			continue
+		}
+		out[name] = page
+	}
+	return out
 }

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:a563b3771e996cd9eb7f5706a2f8053ba717037704f58c712a40dab2d9fb134d -->
+<!-- vigo-i18n source_sha:4d332bf6eca2f8ac2c739549016d5d3e77569404029354e600539543a19723f3 -->
 
 # Dimensionner un hôte vigosrv
 
@@ -77,7 +77,7 @@ La configuration de Spanner est dans [Configurer Spanner](set-up-spanner.md) ; l
 
 ## Comment ces chiffres ont été mesurés
 
-Les chiffres sont mesurés hors-machine sur GCP (VM serveur + VM(s) de harnais séparée(s), pour que la charge offerte soit réelle et n'entre pas en concurrence avec le serveur pour le CPU), à l'aide de [`test/fakefleet/`](../../../test/fakefleet/) pour enrôler des Envoys synthétiques avec un inventaire réaliste de 150 Ko à traits scindés et maintenir les check-ins à la cadence cible. Le CPU par check-in est `Δ process_cpu_seconds_total ÷ Δ taux de check-in` sur une fenêtre stabilisée de 60 s (en utilisant le taux rapporté par le harnais lui-même) ; la RAM par Envoy est le **tas vif après GC forcé** stabilisé (`pprof heap?gc=1`) ÷ le nombre enrôlé. La méthode complète, la matrice d'exécution et la provenance par chiffre vivent dans le registre : [`numbers-of-record.md`](../../internal.docs/numbers-of-record.md) et [`loadtest-per-cadence-runbook.md`](../../internal.docs/loadtest-per-cadence-runbook.md).
+Les chiffres sont mesurés hors-machine sur GCP (VM serveur + VM(s) de harnais séparée(s), pour que la charge offerte soit réelle et n'entre pas en concurrence avec le serveur pour le CPU), à l'aide de [`test/fakefleet/`](../../../test/fakefleet/) pour enrôler des Envoys synthétiques avec un inventaire réaliste de 150 Ko à traits scindés et maintenir les check-ins à la cadence cible. Le CPU par check-in est `Δ process_cpu_seconds_total ÷ Δ taux de check-in` sur une fenêtre stabilisée de 60 s (en utilisant le taux rapporté par le harnais lui-même) ; la RAM par Envoy est le **tas vif après GC forcé** stabilisé (`pprof heap?gc=1`) ÷ le nombre enrôlé. La méthode complète, la matrice d'exécution et la provenance par chiffre vivent dans le registre de mesures des mainteneurs, qui ne fait pas partie de la documentation publiée.
 
 ---
 *Vérifié sur Vigo 0.76.35 · 2026-06-24. Ancrage : 8 vCPU / 32 Go mesuré ; lignes plus grandes calculées.*

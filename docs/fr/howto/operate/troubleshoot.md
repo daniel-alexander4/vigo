@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:f999757d7bc5dec3e4122d83cb90e10e21fd96ddd80ea9d76e37c37e31a674cb -->
+<!-- vigo-i18n source_sha:3720b19197fe76855a43593fdd8bd6ecdd3ee4dd2fefa2d500b8ac35a6655e66 -->
 
 # Résoudre les problèmes courants
 
@@ -71,6 +71,21 @@ Une ressource déclare un état qu'un processus externe ne cesse d'annuler (un g
 La connexion SSH directe vers l'hôte de l'Envoy (pas via scrier) est rejetée. Généralement pression disque ou pénurie de ressources sur l'hôte.
 
 **Correction :** vérifiez le disque + la charge. Les sous-systèmes Swarm de Vigo refusent les pushs en dessous de 10 % d'espace disque libre — ce qui corrèle souvent avec un dysfonctionnement de sshd sur le même hôte. Videz journald + le cache apt ; redémarrez sshd si nécessaire.
+
+### `vigo run` reste sans sortie
+
+La sortie d'une commande est capturée, pas diffusée en continu : une ressource longue ressemble donc à une ressource bloquée jusqu'à ce qu'elle se termine. Depuis la 0.76.89, l'agent tranche lui-même : toutes les 15 secondes, il journalise une ligne `still running` avec l'état du processus et les octets transférés, si bien que `state=D` avec un `io_delta_bytes` qui grimpe vous indique qu'une décompression de paquet lente est bien en cours. Voir [Progress reporting](../../reference/vigo/resources/exec.md#progress-reporting).
+
+**S'il est réellement bloqué**, l'agent le signale désormais et le tue : `child process is STOPPED and cannot make progress`. La cause est une commande qui a tenté de lire le terminal. Les commandes au premier plan reçoivent `/dev/null` sur stdin, donc cela n'arrive que lorsque quelque chose ouvre directement `/dev/tty` — certains scripts de mainteneur Debian le font, et `DEBIAN_FRONTEND=noninteractive` ne l'empêche pas.
+
+**Correction :** rendez la commande non interactive. Pour confirmer le diagnostic à la main :
+
+```bash
+ps -o pid,stat,wchan:20,args -p <pid>   # STAT of T = stopped; D = working on disk
+ls -l /proc/<pid>/fd/0                  # should be /dev/null, never /dev/pts/N
+```
+
+Un `T` dans `STAT` n'est jamais sain. Un `D` l'est presque toujours.
 
 ## Outils de diagnostic
 

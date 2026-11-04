@@ -10,8 +10,8 @@
 // safe; nothing touches /srv/vigo.
 //
 // Scope: the REST-backed read/admin surface that round-trips through the
-// server (envoys, traits, runs, doctor, security, compliance, license,
-// spanner, approved, tokens). Out of scope — needs a real Rust agent or the
+// server (envoys, traits, runs, doctor, security, compliance, spanner,
+// approved, tokens). Out of scope — needs a real Rust agent or the
 // not-yet-relocatable CLI publish path: scrier, swarm content subsystems,
 // live task/workflow execution, peer/spanner topology, and config
 // publish/rollback (the local-filesystem config commands read /srv/vigo/stacks
@@ -85,7 +85,7 @@ func run(m *testing.M) (code int) {
 
 	// Boot vigosrv into the temp serverRoot. configFile lives under tmp, so the
 	// 0.75.8 serverRoot anchoring keeps the whole tree (.live, puddle, certs,
-	// db, license) inside tmp — /srv/vigo is never read or written.
+	// db) inside tmp — /srv/vigo is never read or written.
 	logPath := filepath.Join(tmp, "vigosrv.log")
 	logFile, _ := os.Create(logPath)
 	defer logFile.Close()
@@ -184,7 +184,6 @@ func TestCLIReadSurface(t *testing.T) {
 		{"compliance report", []string{"compliance", "report"}, ""},
 		{"compliance provisions", []string{"compliance", "provisions"}, ""},
 		{"compliance bundles", []string{"compliance", "bundles"}, ""},
-		{"license", []string{"license"}, ""},
 		{"spanner status", []string{"spanner", "status"}, ""},
 	}
 	for _, c := range cases {

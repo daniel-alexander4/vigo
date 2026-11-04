@@ -20,8 +20,7 @@
 // falls back to deleting every server-side envoy whose name has the
 // generated shape (looksSynthetic) — never a real host (guarded by the
 // realHosts allowlist) or the vigosrv-self envoy. See README.md for the
-// durability model (a `run` daemon under a systemd service) and the
-// license precondition.
+// durability model (a `run` daemon under a systemd service).
 package main
 
 import (

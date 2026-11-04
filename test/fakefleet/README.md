@@ -72,12 +72,7 @@ positive match can never hit the operator's real hosts (guarded by a
 
 1. **Run it on the vigosrv host.** It reads the root-only local-admin
    token (`/srv/vigo/cli-admin-token`) and writes under `/srv/vigo/`.
-2. **License.** Enrolling ~13.6k trips the hard license node-count gate —
-   the harness does **not** bypass it. Put the server on a license with
-   `MaxEnvoys ≥ ~13,700` first; otherwise `create` fails fast with a
-   clear message. Freshness ticks never re-enroll, so they never re-trip
-   the gate.
-3. **`vigocli` on `PATH`** (or pass `--vigocli /path/to/vigocli`) — the
+2. **`vigocli` on `PATH`** (or pass `--vigocli /path/to/vigocli`) — the
    publish step shells out to `vigocli config publish` (the canonical
    stacks → `.live/` sync; a bare reload would not see new files).
 
@@ -133,7 +128,7 @@ daemon**:
   leaves the envoy rows in SQLite (they rehydrate at boot) and grpc
   transparently reconnects the persistent conns; a **host reboot**
   relaunches the enabled service, which reloads the manifest — no
-  re-enrollment, no duplicate rows, no second license hit; a **transient
+  re-enrollment, no duplicate rows; a **transient
   outage** is just missed beats the next tick retries.
 
 If every envoy comes back `NotFound` (e.g. the server DB was wiped), the

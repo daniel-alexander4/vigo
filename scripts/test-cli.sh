@@ -243,7 +243,7 @@ if [[ -n "$TOKEN" ]]; then
 
     # Revoke the pattern we just created.
     if [[ -n "$PATTERN_ID" ]]; then
-        run_test "approved revoke" bash -c "echo y | $CLI approved revoke '$PATTERN_ID' --server '$SERVER'"
+        run_test "approved revoke" bash -c "$CLI --yes approved revoke '$PATTERN_ID' --server '$SERVER'"
     fi
 else
     skip_test "tokens generate + approved add/revoke" "token generation failed"
@@ -299,7 +299,7 @@ echo ""
 # 8. config freeze / unfreeze
 # -------------------------------------------------------------------
 echo -e "${BOLD}[config freeze]${NC}"
-run_test "config freeze" bash -c "echo y | $CLI config freeze --until 1s --server '$SERVER'"
+run_test "config freeze" bash -c "$CLI --yes config freeze --until 1s --server '$SERVER'"
 run_test "config unfreeze" $CLI config unfreeze --server "$SERVER"
 echo ""
 
@@ -381,7 +381,7 @@ CREATE_OUT=$($CLI webusers create --username "cli-test-user" --role viewer --ser
 if echo "$CREATE_OUT" | grep -qiE "created|success|cli-test-user"; then
     echo -e "  ${GREEN}PASS${NC}  webusers create"
     PASS=$((PASS + 1))
-    run_test "webusers delete" bash -c "echo y | $CLI webusers delete --username 'cli-test-user' --server '$SERVER'"
+    run_test "webusers delete" bash -c "$CLI --yes webusers delete --username 'cli-test-user' --server '$SERVER'"
 else
     echo -e "  ${RED}FAIL${NC}  webusers create"
     echo "        $CREATE_OUT" | head -3
@@ -406,7 +406,7 @@ if [[ -n "$API_TOKEN_ID" ]]; then
     echo -e "  ${GREEN}PASS${NC}  auth create-token"
     PASS=$((PASS + 1))
     run_test "auth list-tokens" $CLI auth list-tokens --server "$SERVER"
-    run_test "auth revoke-token" bash -c "echo y | $CLI auth revoke-token '$API_TOKEN_ID' --server '$SERVER'"
+    run_test "auth revoke-token" bash -c "$CLI --yes auth revoke-token '$API_TOKEN_ID' --server '$SERVER'"
 else
     # create-token may need auth mode enabled.
     skip_test "auth create-token/list-tokens/revoke-token" "auth not enabled or token creation failed"
@@ -414,44 +414,43 @@ fi
 echo ""
 
 # -------------------------------------------------------------------
-# 14. webhooks
-# -------------------------------------------------------------------
-echo -e "${BOLD}[webhooks]${NC}"
-run_test "webhooks list" $CLI webhooks list --server "$SERVER"
-
-# Create → list → delete.
-WH_OUT=$($CLI webhooks add "https://httpbin.org/post" --secret "test-secret-123" --events "run.complete" --server "$SERVER" 2>&1 || true)
-WH_ID=$(echo "$WH_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
-if [[ -n "$WH_ID" ]]; then
-    echo -e "  ${GREEN}PASS${NC}  webhooks add"
-    PASS=$((PASS + 1))
-    run_test "webhooks delete" bash -c "echo y | $CLI webhooks delete '$WH_ID' --server '$SERVER'"
-else
-    echo -e "  ${RED}FAIL${NC}  webhooks add"
-    echo "        $WH_OUT" | head -3
-    FAIL=$((FAIL + 1))
-    FAILURES+=("webhooks add")
-fi
-echo ""
-
-# -------------------------------------------------------------------
 # 15. secrets (local operations — no server needed)
 # -------------------------------------------------------------------
 echo -e "${BOLD}[secrets]${NC}"
-TMPDIR=$(mktemp -d)
-KEYFILE="$TMPDIR/master.key"
-SECRETS_DIR="$TMPDIR/secrets"
+# Everything lands in a temp dir: the master key, the secrets dir, and — via
+# VIGO_VERIFIER_PATH / VIGO_SENTINEL_PATH — the unlock verifier and sentinel,
+# so this never touches /srv/vigo's vault. init and unlock read the vault
+# passphrase from the terminal, so they run uncaptured and only when stdin is
+# one.
+SECRETS_TMP=$(mktemp -d)
+KEYFILE="$SECRETS_TMP/master.key"
+SECRETS_DIR="$SECRETS_TMP/secrets"
 mkdir -p "$SECRETS_DIR"
+export VIGO_VERIFIER_PATH="$SECRETS_TMP/secrets-verifier.json"
+export VIGO_SENTINEL_PATH="$SECRETS_TMP/.secrets-unlocked"
+SFLAGS=(--key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR")
 
-run_test "secrets init" $CLI secrets init --key-file "$KEYFILE"
-
-if [[ -f "$KEYFILE" ]]; then
-    run_test "secrets set" $CLI secrets set "test/key" "hello-world" --key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR"
-    run_test_grep "secrets reveal" "hello-world" $CLI secrets reveal "test/key" --key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR"
-    run_test "secrets list" $CLI secrets list --key-file "$KEYFILE" --secrets-dir "$SECRETS_DIR"
-    run_test "secrets delete" bash -c "echo y | $CLI secrets delete 'test/key' --key-file '$KEYFILE' --secrets-dir '$SECRETS_DIR'"
+if [[ -t 0 ]]; then
+    echo "  secrets init + unlock prompt for a throwaway passphrase (temp vault):"
+    if $CLI secrets init --key-file "$KEYFILE" && $CLI secrets unlock; then
+        echo -e "  ${GREEN}PASS${NC}  secrets init + unlock"
+        PASS=$((PASS + 1))
+        run_test "secrets set raw" bash -c "printf hello-world | $CLI secrets set raw test/key --key-file '$KEYFILE' --secrets-dir '$SECRETS_DIR' --server '$SERVER'"
+        run_test_grep "secrets reveal" "hello-world" $CLI secrets reveal test/key "${SFLAGS[@]}"
+        run_test_grep "secrets list" "test/key" $CLI secrets list "${SFLAGS[@]}"
+        run_test "secrets delete" $CLI --yes secrets delete test/key "${SFLAGS[@]}"
+        run_test "secrets lock" $CLI secrets lock
+        run_test_expect_fail "secrets list (locked)" $CLI secrets list "${SFLAGS[@]}"
+    else
+        echo -e "  ${RED}FAIL${NC}  secrets init + unlock"
+        FAIL=$((FAIL + 1))
+        FAILURES+=("secrets init + unlock")
+    fi
+else
+    skip_test "secrets init/unlock/set/reveal/list/delete/lock" "the vault passphrase prompt needs an interactive terminal"
 fi
-rm -rf "$TMPDIR"
+unset VIGO_VERIFIER_PATH VIGO_SENTINEL_PATH
+rm -rf "$SECRETS_TMP"
 echo ""
 
 # -------------------------------------------------------------------
@@ -479,7 +478,7 @@ echo -e "${BOLD}[workflow]${NC}"
 run_test "workflow list" $CLI workflow list --server "$SERVER"
 # Workflow status/abort with bad ID (error handling).
 run_test_expect_fail "workflow status bad-id" $CLI workflow status "nonexistent-wf-000" --server "$SERVER"
-run_test_expect_fail "workflow abort bad-id" bash -c "echo y | $CLI workflow abort 'nonexistent-wf-000' --server '$SERVER'"
+run_test_expect_fail "workflow abort bad-id" bash -c "$CLI --yes workflow abort 'nonexistent-wf-000' --server '$SERVER'"
 echo ""
 
 # -------------------------------------------------------------------
@@ -660,7 +659,7 @@ if [[ -n "$SWARM_SHA" ]]; then
     echo -e "  ${GREEN}PASS${NC}  swarm distribute"
     PASS=$((PASS + 1))
     run_test "swarm status" $CLI swarm status "$SWARM_SHA" --server "$SERVER"
-    run_test "swarm revoke" bash -c "echo y | $CLI swarm revoke '$SWARM_SHA' --server '$SERVER'"
+    run_test "swarm revoke" bash -c "$CLI --yes swarm revoke '$SWARM_SHA' --server '$SERVER'"
 else
     echo -e "  ${RED}FAIL${NC}  swarm distribute"
     echo "        $SWARM_OUT" | head -3
@@ -778,9 +777,9 @@ run_test_expect_fail "task run missing --target" $CLI task run "echo hi" --serve
 run_test_expect_fail "config approve bad-id" $CLI config approve 999999 --server "$SERVER"
 run_test_expect_fail "config reject bad-id" $CLI config reject 999999 --server "$SERVER"
 run_test_expect_fail "validate nonexistent" $CLI config validate "/tmp/nonexistent-file.vgo"
-run_test_expect_fail "envoys revoke bad-id" bash -c "echo y | $CLI envoys revoke 'nonexistent-000' --server '$SERVER'"
-run_test_expect_fail "envoys delete bad-id" bash -c "echo y | $CLI envoys delete 'nonexistent-000' --server '$SERVER'"
-run_test_expect_fail "spanner reassign bad-id" bash -c "echo y | $CLI spanner reassign 'nonexistent-000' --from 'a' --to 'b' --server '$SERVER'"
+run_test_expect_fail "envoys revoke bad-id" bash -c "$CLI --yes envoys revoke 'nonexistent-000' --server '$SERVER'"
+run_test_expect_fail "envoys delete bad-id" bash -c "$CLI --yes envoys delete 'nonexistent-000' --server '$SERVER'"
+run_test_expect_fail "spanner reassign bad-id" bash -c "$CLI --yes spanner reassign 'nonexistent-000' --from 'a' --to 'b' --server '$SERVER'"
 run_test "db reset (denied)" bash -c "echo n | $CLI db reset --server '$SERVER'"
 echo ""
 

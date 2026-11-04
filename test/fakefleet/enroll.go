@@ -122,7 +122,7 @@ func signWith(key ed25519.PrivateKey, msg []byte) []byte { return ed25519.Sign(k
 // publish/validate/sync machinery here.
 func publishConfig(cfg config) error {
 	cmd := exec.Command(cfg.vigocliBin, "config", "publish",
-		"--skip-url-check", "--operator", "vigo",
+		"--skip-url-check",
 		"--server", cfg.apiAddr,
 		"--server-root", cfg.serverRoot)
 	cmd.Stdout = os.Stdout
