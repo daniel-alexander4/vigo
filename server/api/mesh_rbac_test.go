@@ -19,7 +19,7 @@ import (
 // four /api/v1 routes registered in MeshHandler.RegisterRoutes.
 func TestMesh_RBACViewerBlocked(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
-	handler := NewMeshHandler(fleet.NewFleetIndex(), queries, "none")
+	handler := NewMeshHandler(fleet.NewFleetIndex(), queries)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -43,7 +43,7 @@ func TestMesh_RBACViewerBlocked(t *testing.T) {
 // about the response body here — only that 403 isn't the answer.
 func TestMesh_RBACAdminAllowed(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
-	handler := NewMeshHandler(fleet.NewFleetIndex(), queries, "none")
+	handler := NewMeshHandler(fleet.NewFleetIndex(), queries)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

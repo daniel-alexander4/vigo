@@ -23,10 +23,8 @@ type MeshHandler struct {
 	crypt      *lockboxmesh.Aggregator
 }
 
-// NewMeshHandler builds the mesh handler. The trailing string parameter is
-// unused (it was the auth method); it stays until server/api/gateway.go
-// stops passing it.
-func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, _ string) *MeshHandler {
+// NewMeshHandler builds the mesh handler.
+func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries) *MeshHandler {
 	return &MeshHandler{
 		fleetIndex: fleetIndex,
 		sync:       longdrawermesh.NewAggregator(queries),

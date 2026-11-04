@@ -159,7 +159,7 @@ func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Querie
 	// handler-sharing pattern — the `/mesh` UI page reads the
 	// cached aggregators directly. Admin-only RBAC is enforced
 	// inside RegisterRoutes; the UI handler adds its own check.
-	meshHandler := NewMeshHandler(fleetIndex, queries, authMethod)
+	meshHandler := NewMeshHandler(fleetIndex, queries)
 	meshHandler.RegisterRoutes(mux)
 	uiHandler.SetMesh(meshHandler)
 
