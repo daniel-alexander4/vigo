@@ -19,6 +19,7 @@ import (
 	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -1168,10 +1169,8 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 	// Fleet summary.
 	summary := h.fleetIndex.ConvergenceSummary()
 	total := summary.Total
-	pct := float64(0)
-	if total > 0 {
-		pct = float64(summary.Converged) / float64(total) * 100
-	}
+	// Active-fleet denominator via the SoT helper (offline excluded).
+	pct := convergence.ConvergedPct(int64(summary.Converged), int64(total-summary.Offline))
 
 	// Audit chain verification — cached at the report-handler layer to
 	// avoid re-reading every audit_entries row per render. See
