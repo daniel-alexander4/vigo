@@ -65,6 +65,12 @@ const (
 	tier1RateBurst = 128 // immediate burst absorbed
 )
 
+// tier1MaxSkew bounds how far a Tier-1 message's signed SentAt may be from
+// the listener's clock. A captured datagram older than this (or one dated in
+// the future) is ignored, so a replay cannot keep forcing Tier-2 pulls or
+// roll the observability counters back.
+const tier1MaxSkew = 2 * time.Minute
+
 // digestMessage is the signed Tier-1 announcement a bolt multicasts
 // every snapshot.tier1_interval. It carries no hostname — the pull
 // target is resolved from the local roster, never the wire.
@@ -400,6 +406,14 @@ func (g *Gossiper) handleTier1Message(ctx context.Context, msg *digestMessage, f
 		slog.Warn("spanner tier-1: ignoring digest with an invalid signature", "sender", msg.BoltPubkey, "error", err)
 		return
 	}
+	// (3b) freshness: the signed SentAt must be within tier1MaxSkew of now
+	// and not older than the newest message already accepted from this
+	// sender. Checked after the signature so an unauthenticated datagram
+	// cannot advance the per-sender high-water mark.
+	if !g.acceptTier1SentAt(msg.BoltPubkey, msg.SentAt, time.Now()) {
+		slog.Debug("spanner tier-1: ignoring stale or replayed digest", "sender", msg.BoltPubkey, "sent_at", msg.SentAt)
+		return
+	}
 
 	// Slice 2-ii-a: the digest is verified and from a known member —
 	// fold its convergence counters into the observability cache so
@@ -452,6 +466,23 @@ func (g *Gossiper) handleTier1Message(ctx context.Context, msg *digestMessage, f
 // allowTier1Pull reports whether enough time has elapsed since the
 // last Tier-1-triggered pull of peerPubkey to allow another. It
 // records "now" as the last-pull time when it returns true.
+// acceptTier1SentAt applies the Tier-1 freshness rule and records sentAt as
+// the sender's high-water mark when it passes. A message equal to the mark is
+// accepted (the per-peer pull debounce covers an exact repeat).
+func (g *Gossiper) acceptTier1SentAt(sender string, sentAt int64, now time.Time) bool {
+	skew := now.Sub(time.UnixMilli(sentAt))
+	if skew > tier1MaxSkew || skew < -tier1MaxSkew {
+		return false
+	}
+	g.pullDebounceMu.Lock()
+	defer g.pullDebounceMu.Unlock()
+	if last, ok := g.tier1LastSentAt[sender]; ok && sentAt < last {
+		return false
+	}
+	g.tier1LastSentAt[sender] = sentAt
+	return true
+}
+
 func (g *Gossiper) allowTier1Pull(peerPubkey string) bool {
 	g.pullDebounceMu.Lock()
 	defer g.pullDebounceMu.Unlock()

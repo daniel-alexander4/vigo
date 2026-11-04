@@ -98,6 +98,10 @@ type Gossiper struct {
 	// pubkey-hex; allowTier1Pull enforces pullDebounceWindow against it.
 	pullDebounceMu sync.Mutex
 	pullDebounce   map[string]time.Time
+	// tier1LastSentAt is the newest verified Tier-1 SentAt per sender
+	// (guarded by pullDebounceMu); an older message is a replay. Keyed by
+	// verified roster members only, so it is bounded by the roster.
+	tier1LastSentAt map[string]int64
 
 	// observ is the Slice 2-ii-a fleet-observability cache. The Tier-2
 	// cycle pulls each peer's signed /fleet-snapshot alongside the
@@ -193,20 +197,21 @@ func NewGossiper(sqlDB *sql.DB, queries *db.Queries, ownPubkeyHex, httpsPort str
 		}
 	}
 	return &Gossiper{
-		sqlDB:         sqlDB,
-		queries:       queries,
-		ownPubkey:     ownPubkeyHex,
-		httpsPort:     httpsPort,
-		interval:      interval,
-		httpClient:    httpClient,
-		spannerID:     spannerID,
-		signingKey:    signingKey,
-		mcastGroup:    mcastGroup,
-		mcastPort:     mcastPort,
-		tier1Interval: tier1Interval,
-		tier1Limiter:  rate.NewLimiter(tier1RateLimit, tier1RateBurst),
-		pullDebounce:  make(map[string]time.Time),
-		observ:        NewObservabilityCache(),
+		sqlDB:           sqlDB,
+		queries:         queries,
+		ownPubkey:       ownPubkeyHex,
+		httpsPort:       httpsPort,
+		interval:        interval,
+		httpClient:      httpClient,
+		spannerID:       spannerID,
+		signingKey:      signingKey,
+		mcastGroup:      mcastGroup,
+		mcastPort:       mcastPort,
+		tier1Interval:   tier1Interval,
+		tier1Limiter:    rate.NewLimiter(tier1RateLimit, tier1RateBurst),
+		pullDebounce:    make(map[string]time.Time),
+		tier1LastSentAt: make(map[string]int64),
+		observ:          NewObservabilityCache(),
 	}
 }
 
