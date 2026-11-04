@@ -235,9 +235,6 @@ func initOpsPuddle(deriver KeyDeriver, dir, friendlyName, founderPubkey string) 
 	if err := writePrivateFile(SaltPath(dir), salt); err != nil {
 		return nil, fmt.Errorf("ops-puddle: writing salt: %w", err)
 	}
-	if err := writePrivateFile(WrappedPath(dir), envelope); err != nil {
-		return nil, fmt.Errorf("ops-puddle: writing wrapped identity: %w", err)
-	}
 	if err := writePublicFile(PubkeyPath(dir), []byte(pubText+"\n")); err != nil {
 		return nil, fmt.Errorf("ops-puddle: writing pubkey: %w", err)
 	}
@@ -246,6 +243,12 @@ func initOpsPuddle(deriver KeyDeriver, dir, friendlyName, founderPubkey string) 
 	}
 	if err := writeMembers(dir, members); err != nil {
 		return nil, err
+	}
+	// Wrapped identity last: its presence is what marks the ops-puddle as
+	// founded/joined, so a crash before this point leaves a directory that is
+	// founded afresh rather than one LoadOpsPuddle fails on forever.
+	if err := writePrivateFile(WrappedPath(dir), envelope); err != nil {
+		return nil, fmt.Errorf("ops-puddle: writing wrapped identity: %w", err)
 	}
 
 	return &OpsPuddle{
@@ -482,9 +485,6 @@ func IngestOpsPuddle(deriver KeyDeriver, dir, friendlyName string, seed []byte, 
 	if err := writePrivateFile(SaltPath(dir), salt); err != nil {
 		return nil, fmt.Errorf("ops-puddle: writing salt: %w", err)
 	}
-	if err := writePrivateFile(WrappedPath(dir), envelope); err != nil {
-		return nil, fmt.Errorf("ops-puddle: writing wrapped identity: %w", err)
-	}
 	if err := writePublicFile(PubkeyPath(dir), []byte(pubText+"\n")); err != nil {
 		return nil, fmt.Errorf("ops-puddle: writing pubkey: %w", err)
 	}
@@ -493,6 +493,12 @@ func IngestOpsPuddle(deriver KeyDeriver, dir, friendlyName string, seed []byte, 
 	}
 	if err := writeMembers(dir, members); err != nil {
 		return nil, err
+	}
+	// Wrapped identity last: its presence is what marks the ops-puddle as
+	// founded/joined, so a crash before this point leaves a directory that is
+	// founded afresh rather than one LoadOpsPuddle fails on forever.
+	if err := writePrivateFile(WrappedPath(dir), envelope); err != nil {
+		return nil, fmt.Errorf("ops-puddle: writing wrapped identity: %w", err)
 	}
 
 	return &OpsPuddle{

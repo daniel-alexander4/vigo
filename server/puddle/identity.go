@@ -129,11 +129,14 @@ func initIdentity(deriver KeyDeriver, dir, purpose, wrappedPath, saltPath, pubke
 	if err := writePrivateFile(saltPath, salt); err != nil {
 		return nil, fmt.Errorf("puddle: writing salt: %w", err)
 	}
-	if err := writePrivateFile(wrappedPath, envelope); err != nil {
-		return nil, fmt.Errorf("puddle: writing wrapped identity: %w", err)
-	}
 	if err := writePublicFile(pubkeyPath, []byte(pubText+"\n")); err != nil {
 		return nil, fmt.Errorf("puddle: writing pubkey: %w", err)
+	}
+	// The wrapped identity is the "exists" marker EnsureIdentity keys on, so
+	// it is written last: a crash before it leaves a directory that is
+	// re-initialised rather than one that fails to load forever.
+	if err := writePrivateFile(wrappedPath, envelope); err != nil {
+		return nil, fmt.Errorf("puddle: writing wrapped identity: %w", err)
 	}
 
 	return &Identity{SigningKey: priv, PublicKey: pub, PublicKeyText: pubText}, nil

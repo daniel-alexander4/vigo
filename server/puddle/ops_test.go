@@ -121,11 +121,11 @@ func TestEnsureOpsPuddle_FilesOnDisk(t *testing.T) {
 	}
 
 	wantModes := map[string]os.FileMode{
-		WrappedPath(dir):       0o600,
-		SaltPath(dir):          0o600,
-		PubkeyPath(dir):        0o644,
-		friendlyNamePath(dir):  0o600,
-		membersPath(dir):       0o600,
+		WrappedPath(dir):      0o600,
+		SaltPath(dir):         0o600,
+		PubkeyPath(dir):       0o644,
+		friendlyNamePath(dir): 0o600,
+		membersPath(dir):      0o600,
 	}
 	for path, want := range wantModes {
 		info, err := os.Stat(path)
@@ -155,12 +155,12 @@ func TestValidateFriendlyName(t *testing.T) {
 		}
 	}
 	bad := []string{
-		"",                       // empty
-		strings.Repeat("a", 65),  // too long
-		".hidden",                // leading dot
-		"has space",              // space
-		"has/slash",              // slash
-		"has:colon",              // colon
+		"",                      // empty
+		strings.Repeat("a", 65), // too long
+		".hidden",               // leading dot
+		"has space",             // space
+		"has/slash",             // slash
+		"has:colon",             // colon
 		strings.Repeat("a", 32) + strings.Repeat("b", 32), // 64 hex-like chars
 	}
 	for _, n := range bad {
@@ -408,3 +408,30 @@ func ed25519keyBytes(seed byte) ed25519.PublicKey {
 }
 
 var _ = ed25519keyBytes // silence unused if not currently called
+
+// A founding that dies before members.json lands must not leave the wrapped
+// identity behind: it is the "already founded" marker, and a dir with it but
+// without members.json fails LoadOpsPuddle forever.
+func TestEnsureOpsPuddle_InterruptedFoundingRecovers(t *testing.T) {
+	dir := t.TempDir()
+	d := newDeriver(t)
+
+	// Block the members.json write: a non-empty directory cannot be renamed over.
+	blocker := filepath.Join(dir, MembersFile)
+	if err := os.MkdirAll(filepath.Join(blocker, "x"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EnsureOpsPuddle(d, dir, "alexander4-ops", founderPubkeyExample); err == nil {
+		t.Fatal("expected the blocked members.json write to fail the founding")
+	}
+	if _, err := os.Stat(WrappedPath(dir)); err == nil {
+		t.Fatal("wrapped identity written before members.json: the interrupted dir now reads as founded")
+	}
+
+	if err := os.RemoveAll(blocker); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EnsureOpsPuddle(d, dir, "alexander4-ops", founderPubkeyExample); err != nil {
+		t.Fatalf("re-founding after an interrupted founding: %v", err)
+	}
+}
