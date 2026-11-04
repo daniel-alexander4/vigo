@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:4df8dd227236f7df6625e0ed3f75c1e72091ed26825966f2fe50a740062cb3a5 -->
+<!-- vigo-i18n source_sha:fdf47000ca68fb1e69c93b6ea085e3136f01231f5e6b0a2bb732f187fe8f2c0b -->
 
 # Migrer depuis un autre CM
 
@@ -9,3 +9,5 @@ Vous venez d'un autre système de gestion de configuration ? Lisez le guide corr
 - [Depuis Chef](migrate-from-chef.md)
 - [Depuis Salt](migrate-from-salt.md)
 - [Depuis CFEngine](migrate-from-cfengine.md)
+
+Vous utilisez une version antérieure au passage de Vigo en open source (0.76.95) ? Suivez [Migrer depuis une version sous licence de Vigo](migrate-from-licensed-vigo.md).

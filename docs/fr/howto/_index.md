@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:a07e7788179ab20831953d0c8606cf2a3e3cccd719b7ef776ff15b89a1e4debd -->
+<!-- vigo-i18n source_sha:6f5ff1af7b7ddde1318d928550f9ac35decfdd1eabe1654aba7567b199d647bf -->
 
 # Guides pratiques
 
@@ -26,6 +26,7 @@ Les guides de migration en bas de page s'adressent à ceux qui viennent d'un aut
 | [Migrer depuis Chef](migrate/migrate-from-chef.md) | |
 | [Migrer depuis Salt](migrate/migrate-from-salt.md) | |
 | [Migrer depuis CFEngine](migrate/migrate-from-cfengine.md) | |
+| [Migrer depuis une version sous licence de Vigo](migrate/migrate-from-licensed-vigo.md) | Passer un serveur sous licence antérieur à 0.76.95 à la version open source |
 
 ## En cas de problème
 

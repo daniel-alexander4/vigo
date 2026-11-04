@@ -25,6 +25,7 @@ The migration guides at the bottom are for coming from another config-management
 | [Migrate from Chef](migrate/migrate-from-chef.md) | |
 | [Migrate from Salt](migrate/migrate-from-salt.md) | |
 | [Migrate from CFEngine](migrate/migrate-from-cfengine.md) | |
+| [Migrate from a licensed Vigo release](migrate/migrate-from-licensed-vigo.md) | Moving a pre-0.76.95 licensed server to the open-source release |
 
 ## When something goes wrong
 
