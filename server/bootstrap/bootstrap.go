@@ -757,7 +757,9 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("bootstrap registration refused: hostname is one of the server's own TLS names",
 			"hostname", req.Hostname, "peer_ip", peerIP)
 		h.metrics.EnrollmentsTotal.WithLabelValues("denied").Inc()
-		http.Error(w, "registration denied", http.StatusForbidden)
+		// Naming the cause gives nothing away: the reserved names are the
+		// SANs of the server's own TLS cert, which any client can read.
+		http.Error(w, errReservedNameMsg, http.StatusForbidden)
 		return
 	}
 
@@ -1027,6 +1029,12 @@ func isLoopback(ip string) bool {
 }
 
 // extractIP extracts the IP address from a host:port string.
+// errReservedNameMsg is the refusal for a non-loopback enrollment that claims
+// one of the server's own TLS names. The usual cause is enrolling the server's
+// own envoy by its LAN address instead of loopback.
+const errReservedNameMsg = "registration denied: this hostname is one of the server's own names; " +
+	"enroll the server's own envoy from the server host over loopback: curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh"
+
 func extractIP(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {

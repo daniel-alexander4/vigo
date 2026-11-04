@@ -247,8 +247,12 @@ func TestBootstrapRegister_ReservedServerName(t *testing.T) {
 	h := newTrustedHandler(t)
 	h.SetReservedNames([]string{"vigo.example.com", "localhost"})
 
-	if w := trustedRegisterReq(t, h, "VIGO.example.com", "10.0.2.10:5555"); w.Code != http.StatusForbidden {
+	w := trustedRegisterReq(t, h, "VIGO.example.com", "10.0.2.10:5555")
+	if w.Code != http.StatusForbidden {
 		t.Fatalf("remote enrollment as a server name: want 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "https://127.0.0.1:8443/bootstrap") {
+		t.Errorf("reserved-name refusal does not point at loopback enrollment: %q", w.Body.String())
 	}
 	if w := trustedRegisterReq(t, h, "localhost", "10.0.2.10:5555"); w.Code != http.StatusForbidden {
 		t.Fatalf("remote enrollment as localhost: want 403, got %d: %s", w.Code, w.Body.String())
