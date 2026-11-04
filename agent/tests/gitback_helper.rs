@@ -74,6 +74,22 @@ async fn helper_daemon_push_and_clone_roundtrip() {
     std::env::set_var("VIGO_GITBACK_DIR", &base);
     std::env::set_var("VIGO_GITBACK_PASSWD_FILE", &passwd);
 
+    // Both authorization layers the helper enforces (and fails closed on):
+    // the user's usercrate policy cache, and the envoy's state.json gate
+    // mirror (swarm + gitback on).
+    let policy_dir = tmp.path().join("usercrate-policy");
+    std::fs::create_dir_all(&policy_dir).unwrap();
+    std::fs::write(policy_dir.join("test.json"), r#"{"gitback":true}"#).unwrap();
+    std::env::set_var("VIGO_USERCRATE_POLICY_DIR", &policy_dir);
+    let swarm_base = tmp.path().join("swarm");
+    std::fs::create_dir_all(swarm_base.join("blobs")).unwrap();
+    std::fs::write(
+        swarm_base.join("state.json"),
+        r#"{"agent_version":"test","last_checkin_ts":0,"policy_version":1,"gates":{"swarm":true,"payload":true,"gitback":true,"curator":true,"poolq":true,"longdrawer":true,"puddle":true}}"#,
+    )
+    .unwrap();
+    std::env::set_var("VIGO_BLOBS_DIR", swarm_base.join("blobs"));
+
     // Founder identity.
     let mut rng = rand::rngs::OsRng;
     let signing_key = ed25519_dalek::SigningKey::generate(&mut rng);
