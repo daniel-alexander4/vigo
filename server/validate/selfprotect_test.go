@@ -345,7 +345,7 @@ func TestValidatePushCommand_ReturnsTypedViolation(t *testing.T) {
 }
 
 func TestValidatePushCommand_ProtectedPathViolation(t *testing.T) {
-	err := ValidatePushCommand("rm -rf /srv/vigo/secrets")
+	err := ValidatePushCommand("unlink /srv/vigo/secrets")
 	var v *Violation
 	if !errors.As(err, &v) {
 		t.Fatalf("expected *Violation, got %T: %v", err, err)

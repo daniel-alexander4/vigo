@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"git.alexander4.io/vigo/server/modlint"
+	"git.alexander4.io/vigo/server/validate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -200,19 +201,31 @@ func reverseResource(res retractResource) (*retractResource, *RetractWarning) {
 	}
 }
 
+// identity resolves the attribute naming what res manages through the
+// same helper the self-protection checks use (validate.IdentityAttr).
+func identity(res retractResource) (key, value string) {
+	return validate.IdentityAttr(res.Type, res.Attrs)
+}
+
+// skipNoIdentity is the warning for a resource whose target cannot be
+// found, so it is reported instead of silently left out of the retract.
+func skipNoIdentity(res retractResource, what string) *RetractWarning {
+	return &RetractWarning{
+		Resource: res.Name, Type: res.Type, Confidence: "skip",
+		Message: fmt.Sprintf("no %s — cannot reverse, manual cleanup required", what),
+	}
+}
+
 func reverseFileResource(res retractResource) (*retractResource, *RetractWarning) {
-	targetPath, _ := res.Attrs["target_path"].(string)
+	pathKey, targetPath := identity(res)
 	if targetPath == "" {
-		return nil, &RetractWarning{
-			Resource: res.Name, Type: res.Type, Confidence: "skip",
-			Message: "no target_path — cannot reverse",
-		}
+		return nil, skipNoIdentity(res, "target_path")
 	}
 	return &retractResource{
 			Name:  "remove-" + res.Name,
 			Type:  res.Type,
 			When:  res.When,
-			Attrs: map[string]any{"target_path": targetPath, "state": "absent"},
+			Attrs: map[string]any{pathKey: targetPath, "state": "absent"},
 		}, &RetractWarning{
 			Resource: res.Name, Type: res.Type, Confidence: "high",
 			Message: fmt.Sprintf("delete %s", targetPath),
@@ -220,9 +233,9 @@ func reverseFileResource(res retractResource) (*retractResource, *RetractWarning
 }
 
 func reversePackageResource(res retractResource) (*retractResource, *RetractWarning) {
-	pkg, _ := res.Attrs["package"].(string)
+	_, pkg := identity(res)
 	if pkg == "" {
-		return nil, nil
+		return nil, skipNoIdentity(res, "package")
 	}
 	return &retractResource{
 			Name:  "remove-" + res.Name,
@@ -236,9 +249,9 @@ func reversePackageResource(res retractResource) (*retractResource, *RetractWarn
 }
 
 func reverseServiceResource(res retractResource) (*retractResource, *RetractWarning) {
-	svc, _ := res.Attrs["service"].(string)
+	_, svc := identity(res)
 	if svc == "" {
-		return nil, nil
+		return nil, skipNoIdentity(res, "service")
 	}
 	return &retractResource{
 			Name:  "stop-" + res.Name,
@@ -252,9 +265,9 @@ func reverseServiceResource(res retractResource) (*retractResource, *RetractWarn
 }
 
 func reverseUserResource(res retractResource) (*retractResource, *RetractWarning) {
-	username, _ := res.Attrs["username"].(string)
+	_, username := identity(res)
 	if username == "" {
-		return nil, nil
+		return nil, skipNoIdentity(res, "username")
 	}
 	return &retractResource{
 			Name:  "remove-" + res.Name,
@@ -281,15 +294,15 @@ func reverseCronResource(res retractResource) (*retractResource, *RetractWarning
 }
 
 func reverseRepositoryResource(res retractResource) (*retractResource, *RetractWarning) {
-	repo, _ := res.Attrs["repository"].(string)
+	repoKey, repo := identity(res)
 	if repo == "" {
-		return nil, nil
+		return nil, skipNoIdentity(res, "repository")
 	}
 	return &retractResource{
 			Name:  "remove-" + res.Name,
 			Type:  "repository",
 			When:  res.When,
-			Attrs: map[string]any{"repository": repo, "state": "absent"},
+			Attrs: map[string]any{repoKey: repo, "state": "absent"},
 		}, &RetractWarning{
 			Resource: res.Name, Type: "repository", Confidence: "high",
 			Message: "remove package repository",
@@ -297,9 +310,9 @@ func reverseRepositoryResource(res retractResource) (*retractResource, *RetractW
 }
 
 func reverseSysctlResource(res retractResource) (*retractResource, *RetractWarning) {
-	key, _ := res.Attrs["key"].(string)
+	_, key := identity(res)
 	if key == "" {
-		return nil, nil
+		return nil, skipNoIdentity(res, "key")
 	}
 	return &retractResource{
 			Name:  "reset-" + res.Name,
@@ -332,12 +345,9 @@ func reverseFirewallResource(res retractResource) (*retractResource, *RetractWar
 }
 
 func reverseSourcePackageResource(res retractResource) (*retractResource, *RetractWarning) {
-	targetPath, _ := res.Attrs["target_path"].(string)
+	_, targetPath := identity(res)
 	if targetPath == "" {
-		return nil, &RetractWarning{
-			Resource: res.Name, Type: "source_package", Confidence: "skip",
-			Message: "no target_path — cannot reverse",
-		}
+		return nil, skipNoIdentity(res, "target_path")
 	}
 	return &retractResource{
 			Name:  "remove-" + res.Name,
@@ -351,9 +361,9 @@ func reverseSourcePackageResource(res retractResource) (*retractResource, *Retra
 }
 
 func reverseExecResource(res retractResource) (*retractResource, *RetractWarning) {
-	cmd, _ := res.Attrs["command"].(string)
+	_, cmd := identity(res)
 	if cmd == "" {
-		return nil, nil
+		return nil, skipNoIdentity(res, "command")
 	}
 	// Exec resources have no generic reverse. Return a placeholder that the
 	// AI will improve, or that the operator can edit manually.

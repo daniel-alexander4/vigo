@@ -5,21 +5,45 @@ package validate
 
 import (
 	"fmt"
+	"path"
 	"strings"
 )
 
+// The lists below are a publish-time preview of the agent's guardrails; the
+// agent (agent/src/guardrails.rs) is the authority and enforces them on the
+// envoy. They are a hand copy of the agent's unix lists plus its Windows
+// dangerous patterns, and TestGuardrailListsMatchAgent fails when the two
+// drift.
+
+// Exempt paths — children of protected paths that resources may write
+// (scan output). Mirrors the agent's EXEMPT_PATHS (unix).
+var exemptPaths = []string{
+	"/var/lib/vigo/security/",
+}
+
 // Protected paths — resources targeting these are flagged at config load time.
-// Mirrors the agent-side list in agent/src/guardrails.rs.
+// Mirrors the agent's PROTECTED_PATHS (unix).
 var protectedPaths = []string{
-	// Agent
+	// Agent (Linux)
 	"/usr/local/sbin/vigo",
 	"/etc/vigo-envoy/",
 	"/etc/vigo/",
 	"/var/lib/vigo/",
 	"/etc/systemd/system/vigo-envoy.service",
+	"/etc/systemd/system/vigo-envoy.service.d/",
+	"/etc/systemd/system/vigosrv.service.d/",
+	// Agent (macOS)
+	"/usr/local/etc/vigo-envoy/",
+	"/Library/Vigo/",
+	"/Library/LaunchDaemons/com.vigo.envoy.plist",
+	// Agent (FreeBSD)
+	"/usr/local/etc/rc.d/vigo_envoy",
+	// Agent (illumos)
+	"/var/svc/manifest/system/vigo-envoy.xml",
 	// Server
 	"/usr/local/sbin/vigosrv",
 	"/usr/local/bin/vigocli",
+	"/usr/local/sbin/vigo-license-manager",
 	"/srv/vigo/",
 	"/etc/systemd/system/vigosrv.service",
 }
@@ -30,7 +54,8 @@ var protectedServices = []string{"vigo-envoy", "vigosrv"}
 // Protected packages — cannot be removed.
 var protectedPackages = []string{"vigo", "vigosrv", "vigocli"}
 
-// Dangerous command patterns for exec resources.
+// Dangerous command patterns for exec resources. Mirrors the agent's
+// DANGEROUS_PATTERNS (unix, then Windows).
 var dangerousPatterns = []string{
 	"systemctl stop vigo",
 	"systemctl disable vigo",
@@ -39,11 +64,51 @@ var dangerousPatterns = []string{
 	"systemctl disable vigosrv",
 	"systemctl mask vigosrv",
 	"service vigo-envoy stop",
+	"service vigo_envoy stop",
 	"service vigosrv stop",
+	"rcctl stop vigo",
+	"rcctl disable vigo",
+	"launchctl unload com.vigo",
+	"launchctl remove com.vigo",
+	"launchctl bootout com.vigo",
+	"svcadm disable vigo",
+	"svccfg delete vigo",
 	"pkill vigo",
 	"pkill vigosrv",
 	"killall vigo",
 	"killall vigosrv",
+	"kill -9 vigo",
+	"kill -9 vigosrv",
+	"rm /usr/local/sbin/vigo",
+	"rm /usr/local/sbin/vigosrv",
+	"rm /usr/local/bin/vigocli",
+	"rm /usr/local/sbin/vigo-license-manager",
+	"rm -rf /etc/vigo",
+	"rm -rf /var/lib/vigo",
+	"rm -rf /srv/vigo",
+	"rm -rf /etc/vigo-envoy",
+	"rm -rf /library/vigo",
+	// Windows
+	"sc stop vigo",
+	"sc delete vigo",
+	"taskkill /im vigo",
+	"del /f vigo.exe",
+	"rmdir /s vigo",
+}
+
+// normalizeCommand lowercases a command, collapses whitespace runs to one
+// space and collapses `//` and `/./` in paths, so `systemctl  stop vigo` or
+// `rm /etc//vigo/x` cannot slip past a substring pattern. This is a
+// heuristic preview; the structural checks are the real boundary.
+func normalizeCommand(command string) string {
+	s := strings.Join(strings.Fields(strings.ToLower(command)), " ")
+	for {
+		next := strings.ReplaceAll(strings.ReplaceAll(s, "/./", "/"), "//", "/")
+		if next == s {
+			return s
+		}
+		s = next
+	}
 }
 
 // Violation is the typed result of a guardrail check on a command. It
@@ -81,17 +146,17 @@ func ValidateSelfProtection(mod Configcrate) []Finding {
 // violations. Returns nil on pass, or a *Violation (as error) carrying
 // the reason + matched pattern on hit.
 func ValidatePushCommand(command string) error {
-	lower := strings.ToLower(command)
+	lower := normalizeCommand(command)
 	for _, pattern := range dangerousPatterns {
 		if strings.Contains(lower, pattern) {
 			return &Violation{Reason: "command matches dangerous pattern", Pattern: pattern}
 		}
 	}
-	for _, path := range protectedPaths {
-		trimmed := strings.TrimRight(path, "/")
+	for _, p := range protectedPaths {
+		trimmed := strings.ToLower(strings.TrimRight(p, "/"))
 		if (strings.Contains(lower, "rm ") || strings.Contains(lower, "unlink ")) &&
 			strings.Contains(lower, trimmed) {
-			return &Violation{Reason: "command targets protected path", Pattern: path}
+			return &Violation{Reason: "command targets protected path", Pattern: p}
 		}
 	}
 	return nil
@@ -119,10 +184,7 @@ func checkSelfProtection(moduleName string, res Resource) []Finding {
 }
 
 func checkFileProtection(base Finding, res Resource) []Finding {
-	target := attrString(res.Attributes, "target_path")
-	if target == "" {
-		target = attrString(res.Attributes, "path")
-	}
+	_, target := IdentityAttr(res.Type, res.Attributes)
 	if target == "" {
 		return nil
 	}
@@ -136,10 +198,7 @@ func checkFileProtection(base Finding, res Resource) []Finding {
 }
 
 func checkServiceProtection(base Finding, res Resource) []Finding {
-	service := attrString(res.Attributes, "service")
-	if service == "" {
-		service = attrString(res.Attributes, "name")
-	}
+	_, service := IdentityAttr(res.Type, res.Attributes)
 	state := attrString(res.Attributes, "state")
 
 	for _, protected := range protectedServices {
@@ -156,10 +215,7 @@ func checkServiceProtection(base Finding, res Resource) []Finding {
 }
 
 func checkPackageProtection(base Finding, res Resource) []Finding {
-	pkg := attrString(res.Attributes, "package")
-	if pkg == "" {
-		pkg = attrString(res.Attributes, "name")
-	}
+	_, pkg := IdentityAttr(res.Type, res.Attributes)
 	state := attrString(res.Attributes, "state")
 
 	if state == "absent" {
@@ -175,10 +231,7 @@ func checkPackageProtection(base Finding, res Resource) []Finding {
 }
 
 func checkExecProtection(base Finding, res Resource) []Finding {
-	command := attrString(res.Attributes, "command")
-	if command == "" {
-		command = attrString(res.Attributes, "cmd")
-	}
+	_, command := IdentityAttr(res.Type, res.Attributes)
 	if command == "" {
 		return nil
 	}
@@ -191,8 +244,21 @@ func checkExecProtection(base Finding, res Resource) []Finding {
 	return nil
 }
 
+// matchProtectedPath cleans target (so `/etc//vigo/x` and `/etc/./vigo`
+// match) and returns the protected path it falls under, or "". Exempt paths
+// win, as on the agent.
 func matchProtectedPath(target string) string {
-	normalized := strings.TrimRight(target, "/")
+	normalized := target
+	if strings.HasPrefix(target, "/") {
+		normalized = path.Clean(target)
+	}
+	normalized = strings.TrimRight(normalized, "/")
+	for _, exempt := range exemptPaths {
+		enorm := strings.TrimRight(exempt, "/")
+		if normalized == enorm || strings.HasPrefix(normalized, enorm+"/") {
+			return ""
+		}
+	}
 	for _, protected := range protectedPaths {
 		pnorm := strings.TrimRight(protected, "/")
 		if normalized == pnorm || strings.HasPrefix(normalized, pnorm+"/") {
