@@ -133,3 +133,77 @@ func TestRunsStatusBlocked_RebuildPreservesPopulatedRows(t *testing.T) {
 		})
 	}
 }
+
+// TestRunsStatusBlocked_DropsOrphanRows covers a database that already holds
+// rows whose parent is gone: runs for a deleted envoy (with a run_result under
+// one), and an unrelated envoy_traits orphan. 000028 must succeed, leave the
+// orphan runs and their results behind, keep every valid row, and not touch the
+// unrelated orphan, which its integrity gate is not responsible for.
+func TestRunsStatusBlocked_DropsOrphanRows(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	dsn := dbPath + "?_foreign_keys=on"
+	src, err := iofs.New(migrations.FS, ".")
+	if err != nil {
+		t.Fatalf("iofs.New: %v", err)
+	}
+	m, err := migrate.NewWithSourceInstance("iofs", src, "sqlite3://"+dsn)
+	if err != nil {
+		t.Fatalf("NewWithSourceInstance: %v", err)
+	}
+	defer m.Close()
+	if err := m.Migrate(27); err != nil {
+		t.Fatalf("migrate to 27: %v", err)
+	}
+
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	mustExec := func(q string) {
+		t.Helper()
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	mustExec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES ('e1','h1','10.0.0.1','pk')`)
+	mustExec(`INSERT INTO runs (id, envoy_id, status) VALUES ('r1','e1','success')`)
+	mustExec(`INSERT INTO run_results (id, run_id, configcrate_name, resource_type, resource_name, action_taken) VALUES ('x1','r1','c','file','/a','updated')`)
+	mustExec(`INSERT INTO file_snapshots (id, envoy_id, file_path, content_hash, run_id) VALUES ('f1','e1','/a','h','r1')`)
+	// Orphans, written the way they arise in the field: foreign keys off.
+	mustExec(`PRAGMA foreign_keys = OFF`)
+	mustExec(`INSERT INTO runs (id, envoy_id, status) VALUES ('ro1','gone','success')`)
+	mustExec(`INSERT INTO runs (id, envoy_id, status) VALUES ('ro2','gone','failure')`)
+	mustExec(`INSERT INTO run_results (id, run_id, configcrate_name, resource_type, resource_name, action_taken) VALUES ('xo1','ro1','c','file','/o','updated')`)
+	mustExec(`INSERT INTO file_snapshots (id, envoy_id, file_path, content_hash, run_id) VALUES ('fo1','gone','/o','h',NULL)`)
+	mustExec(`INSERT INTO envoy_traits (id, envoy_id) VALUES ('t-orphan','gone')`)
+	mustExec(`PRAGMA foreign_keys = ON`)
+
+	if err := m.Migrate(28); err != nil {
+		t.Fatalf("migrate to 28 with orphan rows present: %v", err)
+	}
+
+	count := func(q string) int {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(q).Scan(&n); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+		return n
+	}
+	for q, want := range map[string]int{
+		`SELECT count(*) FROM runs WHERE id='r1'`:               1,
+		`SELECT count(*) FROM run_results WHERE id='x1'`:        1,
+		`SELECT count(*) FROM file_snapshots WHERE id='f1'`:     1,
+		`SELECT count(*) FROM runs WHERE envoy_id='gone'`:       0,
+		`SELECT count(*) FROM run_results WHERE id='xo1'`:       0,
+		`SELECT count(*) FROM file_snapshots WHERE id='fo1'`:    0,
+		`SELECT count(*) FROM envoy_traits WHERE id='t-orphan'`: 1,
+		`SELECT count(*) FROM pragma_foreign_key_check('runs')`: 0,
+	} {
+		if got := count(q); got != want {
+			t.Errorf("after 000028: %s = %d, want %d", q, got, want)
+		}
+	}
+}

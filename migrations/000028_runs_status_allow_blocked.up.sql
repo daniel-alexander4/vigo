@@ -16,6 +16,11 @@
 -- final RENAME of runs_new → runs rewrites the children's REFERENCES text back
 -- to "runs". Column order, defaults, CHECKs, FKs and indexes are carried over
 -- exactly; 'partial' stays (the /runs UI still filters on it).
+-- Rows whose parent is already gone (an envoy deleted while foreign keys were
+-- off) are not copied: they are unreachable from any envoy, and keeping them
+-- would trip the integrity gate below on every boot. The gate checks only the
+-- three tables rebuilt here, so an unrelated old orphan elsewhere in the
+-- database cannot block this migration.
 
 CREATE TABLE runs_new (
     id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
@@ -30,7 +35,8 @@ CREATE TABLE runs_new (
     trigger        TEXT NOT NULL DEFAULT 'scheduled' CHECK (trigger IN ('scheduled', 'force-push'))
 );
 INSERT INTO runs_new (id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger)
-    SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger FROM runs;
+    SELECT id, envoy_id, started_at, finished_at, status, resource_count, changed_count, failed_count, skipped_count, trigger FROM runs
+    WHERE envoy_id IN (SELECT id FROM envoys);
 
 CREATE TABLE run_results_new (
     id               TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
@@ -45,7 +51,8 @@ CREATE TABLE run_results_new (
     created_at       DATETIME NOT NULL DEFAULT (datetime('now'))
 );
 INSERT INTO run_results_new (id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at)
-    SELECT id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at FROM run_results;
+    SELECT id, run_id, configcrate_name, resource_type, resource_name, action_taken, changed, error_message, duration_ms, created_at FROM run_results
+    WHERE run_id IN (SELECT id FROM runs_new);
 
 CREATE TABLE file_snapshots_new (
     id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
@@ -56,7 +63,8 @@ CREATE TABLE file_snapshots_new (
     run_id       TEXT REFERENCES runs_new (id) ON DELETE CASCADE
 );
 INSERT INTO file_snapshots_new (id, envoy_id, file_path, content_hash, created_at, run_id)
-    SELECT id, envoy_id, file_path, content_hash, created_at, run_id FROM file_snapshots;
+    SELECT id, envoy_id, file_path, content_hash, created_at, run_id FROM file_snapshots
+    WHERE envoy_id IN (SELECT id FROM envoys) AND (run_id IS NULL OR run_id IN (SELECT id FROM runs_new));
 
 -- Children first, so the old runs has nothing left to cascade into.
 DROP TABLE run_results;
@@ -76,6 +84,8 @@ CREATE INDEX IF NOT EXISTS idx_run_results_run_id ON run_results (run_id);
 -- rebuild left a dangling reference or a damaged b-tree. A CHECK on a temp
 -- table is the only way plain SQL can abort on a pragma's result.
 CREATE TEMP TABLE _m28_guard (what TEXT NOT NULL, bad INTEGER NOT NULL CHECK (bad = 0));
-INSERT INTO _m28_guard SELECT 'foreign_key_check', count(*) FROM pragma_foreign_key_check;
+INSERT INTO _m28_guard SELECT 'foreign_key_check', count(*) FROM pragma_foreign_key_check('runs');
+INSERT INTO _m28_guard SELECT 'foreign_key_check', count(*) FROM pragma_foreign_key_check('run_results');
+INSERT INTO _m28_guard SELECT 'foreign_key_check', count(*) FROM pragma_foreign_key_check('file_snapshots');
 INSERT INTO _m28_guard SELECT 'integrity_check', count(*) FROM pragma_integrity_check WHERE integrity_check <> 'ok';
 DROP TABLE _m28_guard;
