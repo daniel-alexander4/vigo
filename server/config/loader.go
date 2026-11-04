@@ -3016,7 +3016,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 	}
 
 	// Build vars: module defaults → envoy-level overrides.
-	// Track insertion order so RenderVars can process top-down.
+	// Track insertion order (VarOrder) so the agent renders vars top-down.
 	vars := make(map[string]any)
 	var varOrder []string
 	for _, name := range configcrateNames {

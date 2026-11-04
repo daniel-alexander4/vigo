@@ -10,12 +10,15 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -32,11 +35,19 @@ type Scanner struct {
 	dir string
 	ttl time.Duration
 
+	// scanMu serializes rescans: when the TTL expires under load, one
+	// caller rescans and the rest wait for and reuse its result instead of
+	// each re-reading and re-hashing the directory.
+	scanMu sync.Mutex
+
 	mu         sync.RWMutex
 	cached     []Entry
 	cachedAt   time.Time
 	nameToFile map[string]string // trait name -> actual filename on disk
 }
+
+// testScanHook, when non-nil, runs at the start of every directory rescan.
+var testScanHook func()
 
 // NewScanner creates a Scanner that reads from the given directory.
 // Results are cached for ttl duration (0 means no caching).
@@ -67,8 +78,22 @@ func (s *Scanner) ScanDir() ([]Entry, error) {
 			return entries, nil
 		}
 		s.mu.RUnlock()
+
+		s.scanMu.Lock()
+		defer s.scanMu.Unlock()
+		// Another caller may have rescanned while this one waited.
+		s.mu.RLock()
+		if !s.cachedAt.IsZero() && time.Since(s.cachedAt) < s.ttl {
+			entries := s.cached
+			s.mu.RUnlock()
+			return entries, nil
+		}
+		s.mu.RUnlock()
 	}
 
+	if testScanHook != nil {
+		testScanHook()
+	}
 	dirEntries, err := os.ReadDir(s.dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -82,40 +107,53 @@ func (s *Scanner) ScanDir() ([]Entry, error) {
 		return nil, fmt.Errorf("reading traits directory %s: %w", s.dir, err)
 	}
 
-	var entries []Entry
-	nameToFile := make(map[string]string)
+	type found struct {
+		filename string
+		sum      string
+	}
+	byName := make(map[string][]found)
 
 	for _, de := range dirEntries {
-		if de.IsDir() {
-			continue
-		}
-
-		info, err := de.Info()
+		info, err := de.Info() // lstat: a symlink reports as a symlink
 		if err != nil {
 			continue
 		}
-
+		// Regular files only: a symlink would be followed to whatever it
+		// points at, and that is what agents would execute.
+		if !info.Mode().IsRegular() {
+			continue
+		}
 		// Only include files with at least one executable bit set.
 		if info.Mode()&0111 == 0 {
 			continue
 		}
 
 		filename := de.Name()
-		path := filepath.Join(s.dir, filename)
-
-		data, err := os.ReadFile(path)
+		data, err := readRegularFile(filepath.Join(s.dir, filename))
 		if err != nil {
 			continue
 		}
-
 		hash := sha256.Sum256(data)
 		name := stripExtension(filename)
+		byName[name] = append(byName[name], found{filename: filename, sum: fmt.Sprintf("%x", hash)})
+	}
 
-		entries = append(entries, Entry{
-			Name:   name,
-			SHA256: fmt.Sprintf("%x", hash),
-		})
-		nameToFile[name] = filename
+	var entries []Entry
+	nameToFile := make(map[string]string, len(byName))
+	for name, hits := range byName {
+		if len(hits) > 1 {
+			// foo.sh and foo.py both become trait "foo"; serving either
+			// would mismatch the hash advertised for the other. Skip the
+			// name entirely until the operator renames one.
+			files := make([]string, len(hits))
+			for i, f := range hits {
+				files[i] = f.filename
+			}
+			slog.Warn("custom traits: files collide on one trait name; skipping it", "trait", name, "files", files, "dir", s.dir)
+			continue
+		}
+		entries = append(entries, Entry{Name: name, SHA256: hits[0].sum})
+		nameToFile[name] = hits[0].filename
 	}
 
 	// Sort by name for deterministic ordering.
@@ -150,7 +188,25 @@ func (s *Scanner) ReadFile(name string) ([]byte, error) {
 		return nil, fmt.Errorf("trait %q not found", name)
 	}
 
-	return os.ReadFile(filepath.Join(s.dir, filename))
+	return readRegularFile(filepath.Join(s.dir, filename))
+}
+
+// readRegularFile reads path without following a final symlink, so a file
+// swapped for a symlink after the scan is refused rather than served.
+func readRegularFile(path string) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	return io.ReadAll(f)
 }
 
 // stripExtension removes the last file extension from a filename.
