@@ -68,7 +68,7 @@ func withDefaults(c config.AISection) config.AISection {
 		}
 	}
 	if c.BaseURL == "" && c.Provider == "ollama" {
-		c.BaseURL = "http://ollama:11434/v1"
+		c.BaseURL = "http://127.0.0.1:11434/v1"
 	}
 	return c
 }

@@ -278,7 +278,7 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, 4096, cfg.MaxTokens)
 	assert.Equal(t, 10, cfg.MaxToolRounds)
 	assert.Equal(t, "auto", cfg.ContextMode)
-	assert.Equal(t, "http://ollama:11434/v1", cfg.BaseURL)
+	assert.Equal(t, "http://127.0.0.1:11434/v1", cfg.BaseURL)
 
 	cfg2 := withDefaults(config.AISection{Enabled: true, Provider: "claude"})
 	assert.Equal(t, "claude-sonnet-4-6", cfg2.Model)

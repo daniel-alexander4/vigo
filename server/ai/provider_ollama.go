@@ -19,11 +19,11 @@ import (
 // It adds auto-pull on startup and Ollama-specific health checking.
 type OllamaProvider struct {
 	*OpenAICompatProvider
-	ollamaBaseURL string // e.g. http://ollama:11434
+	ollamaBaseURL string // e.g. http://127.0.0.1:11434
 }
 
 // NewOllamaProvider creates an Ollama provider. The baseURL should be the
-// Ollama API root (e.g. "http://ollama:11434"). The OpenAI-compat endpoint
+// Ollama API root (e.g. "http://127.0.0.1:11434"). The OpenAI-compat endpoint
 // is at baseURL + "/v1".
 func NewOllamaProvider(baseURL string) *OllamaProvider {
 	// Trim trailing /v1 if user accidentally included it.
