@@ -51,6 +51,7 @@ import (
 	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 	"git.alexander4.io/vigo/server/swarm/puddlemesh"
 	"git.alexander4.io/vigo/server/traits"
+	"git.alexander4.io/vigo/server/uifmt"
 	"github.com/google/uuid"
 )
 
@@ -737,14 +738,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)
 
-	// Sandgorgon UI surface deferred to v2: nav menu and page routes
-	// removed in this release. Server/CLI/DB/REST handlers preserved
-	// so the v2 release can re-expose without re-plumbing.
-	// mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
-	// mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
-	// mux.HandleFunc("GET /sandgorgon/certificates", h.SandgorgonCertificates)
-	// mux.HandleFunc("GET /ui/fragments/sandgorgon-assets", h.SandgorgonAssetsFragment)
-
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", fleetRead(h.DashboardStats))
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", fleetRead(h.DashboardFleet))
@@ -777,8 +770,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/run-results/{id}", fleetRead(h.RunResultsFragment))
 
 	// Under Review fragment endpoints
-	mux.HandleFunc("GET /ui/fragments/inventory", fleetRead(h.InventoryFragment))
-	mux.HandleFunc("GET /ui/fragments/inventory-search", fleetRead(h.InventorySearchFragment))
 	mux.HandleFunc("GET /ui/fragments/inventory-trait-index", fleetRead(h.InventoryTraitIndexFragment))
 	mux.HandleFunc("GET /ui/fragments/inventory-explore", fleetRead(h.InventoryExploreFragment))
 	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", fleetRead(h.InventoryExploreTableFragment))
@@ -2564,7 +2555,7 @@ func (h *Handler) convergenceSparkline() (data []float64, min, max int) {
 		row := history[i]
 		active := row.Total - row.Offline
 		if active > 0 {
-			data = append(data, float64(row.Converged)/float64(active)*100)
+			data = append(data, convergence.ConvergedPct(row.Converged, active))
 		}
 	}
 	min, max = sparklineBounds(data)
@@ -2652,10 +2643,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 	}
 	data.RecentRuns = make([]RunRow, 0, len(allRuns))
 	for _, r := range allRuns {
-		var failPct float64
-		if r.ResourceCount > 0 {
-			failPct = float64(r.FailedCount) / float64(r.ResourceCount) * 100
-		}
+		failPct := convergence.FailurePct(r.FailedCount, r.ResourceCount)
 		var finished time.Time
 		if r.FinishedAt.Valid {
 			finished = r.FinishedAt.Time
@@ -3819,6 +3807,8 @@ type EvidenceControlDrillData struct {
 	ControlID string
 	Envoys    []EvidenceControlEnvoy
 	Docs      []EvidenceControlDoc
+	// CanFleetRead gates the hostname → /envoys/{id} link (see CanFleetRead).
+	CanFleetRead bool
 }
 
 // EvidenceControlDoc is one operator-uploaded compliance document
@@ -3930,11 +3920,9 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	total := snapshot.Total
-	pct := float64(0)
-	if total > 0 {
-		pct = float64(snapshot.Converged) / float64(total) * 100
-	}
+	// Offline envoys are excluded from the denominator, matching the live
+	// branch above and every other convergence surface.
+	pct := convergence.ConvergedPct(snapshot.Converged, snapshot.Total-snapshot.Offline)
 	data := EvidenceSnapshotData{
 		SnapshotDate:   snapshot.RecordedAt,
 		ConvergencePct: pct,
@@ -4183,7 +4171,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		})
 	}
 
-	data := EvidenceControlDrillData{Locale: h.localeFromRequest(r), Slug: slug, ControlID: controlID, Envoys: envoys}
+	data := EvidenceControlDrillData{Locale: h.localeFromRequest(r), Slug: slug, ControlID: controlID, Envoys: envoys, CanFleetRead: h.CanFleetRead(r)}
 
 	// Resolve the compliance tag key for the URL slug so doc lookups
 	// match how compliance.vgo and module tags reference frameworks
@@ -4321,7 +4309,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 			fmt.Fprintln(f, "hostname,id,ip_address,status,enrolled_at,last_seen,last_run")
 			for _, e := range envoyData.Envoys {
 				fmt.Fprintf(f, "%s,%s,%s,%s,%s,%s,%s\n",
-					e.Hostname, e.ID, e.IPAddress, e.Status,
+					csvEscape(e.Hostname), csvEscape(e.ID), csvEscape(e.IPAddress), csvEscape(e.Status),
 					e.EnrolledAt.Format(time.RFC3339),
 					e.LastSeen.Format(time.RFC3339),
 					e.LastRunAt.Format(time.RFC3339))
@@ -4742,6 +4730,7 @@ type EnvoyComplianceDetailPageData struct {
 	Hostname       string
 	FrameworkSlug  string
 	FrameworkTitle string
+	CanFleetRead   bool // breadcrumb links /envoys only with fleet.read
 }
 
 // MissingControlRec is a missing control with recommended modules.
@@ -4811,35 +4800,37 @@ type AttackFactor struct {
 	URL string
 }
 
-// EnvoyAttackSurfaceFragment renders the attack surface tab for an envoy.
+// EnvoySessionsData is the envoy-sessions-fragment template dot.
+type EnvoySessionsData struct {
+	Locale   string
+	Err      bool
+	Sessions []EnvoySessionRow
+}
+
+// EnvoySessionRow is one Scrier session as rendered in the envoy's session
+// history. StatusClass is the badge modifier derived from Status.
+type EnvoySessionRow struct {
+	Username    string
+	Protocol    string
+	Port        int64
+	Started     string
+	Duration    string
+	Status      string
+	StatusClass string
+}
+
 // EnvoyScrierSessionsFragment renders the Scrier session history for an envoy.
 func (h *Handler) EnvoyScrierSessionsFragment(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	sessions, err := h.queries.ListScrierSessionsByEnvoy(r.Context(), idStr)
+	data := EnvoySessionsData{Locale: h.localeFromRequest(r)}
+	sessions, err := h.queries.ListScrierSessionsByEnvoy(r.Context(), r.PathValue("id"))
 	if err != nil {
-		fmt.Fprintf(w, `<p class="text-muted">No session data available.</p>`)
-		return
+		data.Err = true
 	}
-	if len(sessions) == 0 {
-		fmt.Fprintf(w, `<p class="text-muted u-p-20px">No remote access sessions recorded for this envoy.</p>`)
-		return
-	}
-
-	fmt.Fprintf(w, `<table class="table"><thead><tr><th>User</th><th>Protocol</th><th>Port</th><th>Started</th><th>Duration</th><th>Status</th></tr></thead><tbody>`)
 	for _, s := range sessions {
 		duration := "-"
 		if s.DurationMs.Valid {
-			d := time.Duration(s.DurationMs.Int64) * time.Millisecond
-			duration = d.Round(time.Second).String()
+			duration = (time.Duration(s.DurationMs.Int64) * time.Millisecond).Round(time.Second).String()
 		}
-		ended := "-"
-		if s.EndedAt.Valid {
-			ended = s.EndedAt.Time.Local().Format("2006-01-02 15:04")
-		}
-		_ = ended // used below in title attribute
-
 		statusCSS := "info"
 		switch s.Status {
 		case "active":
@@ -4849,20 +4840,20 @@ func (h *Handler) EnvoyScrierSessionsFragment(w http.ResponseWriter, r *http.Req
 		case "error":
 			statusCSS = "danger"
 		}
-
-		fmt.Fprintf(w, `<tr><td>%s</td><td class="mono">%s</td><td>%d</td><td>%s</td><td>%s</td><td><span class="badge badge--%s">%s</span></td></tr>`,
-			template.HTMLEscapeString(s.Username),
-			template.HTMLEscapeString(s.Protocol),
-			s.TargetPort,
-			s.StartedAt.Local().Format("2006-01-02 15:04"),
-			duration,
-			statusCSS,
-			template.HTMLEscapeString(s.Status),
-		)
+		data.Sessions = append(data.Sessions, EnvoySessionRow{
+			Username:    s.Username,
+			Protocol:    s.Protocol,
+			Port:        s.TargetPort,
+			Started:     s.StartedAt.Local().Format("2006-01-02 15:04"),
+			Duration:    duration,
+			Status:      s.Status,
+			StatusClass: statusCSS,
+		})
 	}
-	fmt.Fprintf(w, `</tbody></table>`)
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-sessions-fragment", data)
 }
 
+// EnvoyAttackSurfaceFragment renders the attack surface tab for an envoy.
 func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
@@ -5106,6 +5097,7 @@ func (h *Handler) EnvoyComplianceDetail(w http.ResponseWriter, r *http.Request) 
 		Hostname:       detail.Envoy.Hostname,
 		FrameworkSlug:  fw,
 		FrameworkTitle: title,
+		CanFleetRead:   h.CanFleetRead(r),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoy-compliance-detail", data)
@@ -5338,6 +5330,18 @@ func (h *Handler) requirePerm(perm string) func(http.HandlerFunc) http.HandlerFu
 			next(w, r)
 		}
 	}
+}
+
+// CanFleetRead reports whether the request's user holds fleet.read (always
+// true when auth is disabled). Compliance-readable surfaces use it to render
+// envoy hostnames as plain text instead of links the viewer cannot open.
+// Exported for the server/api report-builder closures in server.go.
+func (h *Handler) CanFleetRead(r *http.Request) bool {
+	if !h.authEnabled {
+		return true
+	}
+	u := auth.UserFromContext(r.Context())
+	return u != nil && u.HasPermission(auth.PermFleetRead)
 }
 
 // requireAuditRead blocks users without audit.read with a 403 and
@@ -6239,52 +6243,71 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "audit", data)
 }
 
+// AuditVerifyData is the audit-verify-fragment template dot.
+type AuditVerifyData struct {
+	Locale      string
+	Error       string // verification itself failed
+	Valid       bool
+	FirstBroken int64
+	BrokenError string
+	EntryCount  int64
+	Entries     []AuditVerifyRow
+}
+
+// AuditVerifyRow is one audit entry in the verified-chain listing.
+type AuditVerifyRow struct {
+	ID        int64
+	Timestamp string
+	EventType string
+	Source    string
+	Actor     string
+	Summary   string
+	Hash      string
+}
+
 // AuditVerify returns an HTML fragment showing the hash chain verification
 // result with individual entries. Called via HTMX from the Verify Chain button.
+// Audit entries carry operator-influenceable free text (actor, summary, and
+// the patterns/hostnames folded into them); html/template escapes each in
+// context, including Source inside the badge class attribute.
 func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAuditRead(w, r) {
 		return
 	}
 	ctx := r.Context()
+	data := AuditVerifyData{Locale: h.localeFromRequest(r)}
 
 	result, err := audit.VerifyFull(ctx, h.queries)
 	if err != nil {
-		fmt.Fprintf(w, `<span class="badge badge--failure">Verification error: %s</span>`, template.HTMLEscapeString(err.Error()))
+		data.Error = err.Error()
+		h.renderer.RenderFragment(w, "audit", "audit-verify-fragment", data)
 		return
 	}
-
-	if !result.Valid {
-		fmt.Fprintf(w, `<div class="mt-1"><span class="badge badge--failure">CHAIN BROKEN at entry #%d</span><p class="text-muted mt-1">%s</p></div>`, result.FirstBroken, template.HTMLEscapeString(result.Error))
-		return
-	}
-
-	// Chain is valid — show the entries.
-	entries, err := h.queries.ListAuditEntries(ctx, 50)
-	if err != nil {
-		fmt.Fprintf(w, `<span class="badge badge--success">Chain valid (%d entries)</span>`, result.EntryCount)
-		return
-	}
-
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf(`<div class="mt-1"><span class="badge badge--success">Chain valid — %d entries verified</span>`, result.EntryCount))
-	b.WriteString(`<table class="table mt-1"><thead><tr><th>#</th><th>Timestamp</th><th>Type</th><th>Source</th><th>Actor</th><th>Summary</th><th>Hash</th></tr></thead><tbody>`)
-	for _, e := range entries {
-		hash := e.Hash
-		if len(hash) > 12 {
-			hash = hash[:12] + "..."
+	data.Valid = result.Valid
+	data.FirstBroken = int64(result.FirstBroken)
+	data.BrokenError = result.Error
+	data.EntryCount = int64(result.EntryCount)
+	if result.Valid {
+		// A listing failure still reports the (valid) chain, just without rows.
+		if entries, err := h.queries.ListAuditEntries(ctx, 50); err == nil {
+			for _, e := range entries {
+				hash := e.Hash
+				if len(hash) > 12 {
+					hash = hash[:12] + "..."
+				}
+				data.Entries = append(data.Entries, AuditVerifyRow{
+					ID:        e.ID,
+					Timestamp: e.Timestamp.Local().Format("2006-01-02 15:04:05"),
+					EventType: e.EventType,
+					Source:    e.Source,
+					Actor:     e.Actor,
+					Summary:   e.Summary,
+					Hash:      hash,
+				})
+			}
 		}
-		// Audit entries carry operator-influenceable free text (actor,
-		// summary, and the patterns/hostnames folded into them). Escape
-		// every interpolated value — source also lands inside a class
-		// attribute, so an unescaped quote would break out of it.
-		source := template.HTMLEscapeString(e.Source)
-		b.WriteString(fmt.Sprintf(`<tr><td>%d</td><td>%s</td><td><span class="badge badge--info">%s</span></td><td><span class="badge badge--%s">%s</span></td><td>%s</td><td>%s</td><td class="text-muted">%s</td></tr>`,
-			e.ID, e.Timestamp.Local().Format("2006-01-02 15:04:05"), template.HTMLEscapeString(e.EventType), source, source,
-			template.HTMLEscapeString(e.Actor), template.HTMLEscapeString(e.Summary), template.HTMLEscapeString(hash)))
 	}
-	b.WriteString(`</tbody></table></div>`)
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprint(w, b.String())
+	h.renderer.RenderFragment(w, "audit", "audit-verify-fragment", data)
 }
 
 // taskRowFromDB converts a DB TaskRun to a TaskRow.
@@ -6386,9 +6409,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 			Offline:    conv.Offline,
 			IsLocal:    true,
 		}
-		if active := local.EnvoyCount - local.Offline; active > 0 {
-			local.ConvergencePct = float64(local.Converged) / float64(active) * 100
-		}
+		local.ConvergencePct = convergence.ConvergedPct(int64(local.Converged), int64(local.EnvoyCount-local.Offline))
 		bolts = append(bolts, local)
 		totalEnvoys += local.EnvoyCount
 		totalConverged += local.Converged
@@ -6407,9 +6428,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 			NoData:     p.Convergence.NoData,
 			Offline:    p.Convergence.Offline,
 		}
-		if active := row.EnvoyCount - row.Offline; active > 0 {
-			row.ConvergencePct = float64(row.Converged) / float64(active) * 100
-		}
+		row.ConvergencePct = convergence.ConvergedPct(int64(row.Converged), int64(row.EnvoyCount-row.Offline))
 		if u := p.UpdatedAt(); !u.IsZero() {
 			row.SnapshotAgeSeconds = int64(now.Sub(u).Seconds())
 		}
@@ -6424,10 +6443,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(bolts, func(i, j int) bool { return bolts[i].BoltPubkey < bolts[j].BoltPubkey })
 
 	// Lost-contact envoys excluded from the compliance percentage.
-	var convPct float64
-	if active := totalEnvoys - totalOffline; active > 0 {
-		convPct = float64(totalConverged) / float64(active) * 100
-	}
+	convPct := convergence.ConvergedPct(int64(totalConverged), int64(totalEnvoys-totalOffline))
 
 	data := SpannerPageData{
 		PageData:       PageData{Title: "Spanner", ActiveNav: "spanner"},
@@ -6541,9 +6557,7 @@ func (h *Handler) BoltDetail(w http.ResponseWriter, r *http.Request) {
 		Envoys:     envoyRows,
 		IsLocal:    isLocal,
 	}
-	if active := data.EnvoyCount - data.Offline; active > 0 {
-		data.ConvergencePct = float64(data.Converged) / float64(active) * 100
-	}
+	data.ConvergencePct = convergence.ConvergedPct(int64(data.Converged), int64(data.EnvoyCount-data.Offline))
 	if !updated.IsZero() {
 		data.SnapshotAgeSeconds = int64(time.Since(updated).Seconds())
 	}
@@ -6743,93 +6757,57 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 	h.renderer.RenderFragment(w, "security", "security-status", data)
 }
 
+// CVESearchData is the cve-search-fragment template dot.
+type CVESearchData struct {
+	Locale      string
+	Empty       bool // no CVE ID entered
+	Unavailable bool // no CVE searcher wired
+	CVEID       string
+	RunningOnly bool
+	TotalHosts  int
+	Matches     []CVESearchRow
+}
+
+// CVESearchRow is one affected host. SevClass is the text-color modifier for
+// the severity cell, derived via the cve.Classify SoT.
+type CVESearchRow struct {
+	CVEMatch
+	SevClass string
+}
+
 // CVESearchFragment handles GET /ui/fragments/cve-search — searches fleet for a CVE.
 // Delegates to the CVE API handler for the actual search, then renders HTML.
 // Accepts ?running_only=true to drop hosts that report the CVE but have
 // no running-binary match in their cve_running_correlation trait.
 func (h *Handler) CVESearchFragment(w http.ResponseWriter, r *http.Request) {
-	cveID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("cve")))
-	if cveID == "" {
-		w.Write([]byte(`<p class="text-muted">Enter a CVE ID to search.</p>`))
-		return
+	data := CVESearchData{
+		Locale:      h.localeFromRequest(r),
+		CVEID:       strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("cve"))),
+		RunningOnly: r.URL.Query().Get("running_only") == "true",
 	}
-
-	// Use the CVE handler's search logic via the cveSearcher interface.
-	if h.cveSearcher == nil {
-		w.Write([]byte(`<p class="text-muted">CVE search not available.</p>`))
-		return
-	}
-
-	runningOnly := r.URL.Query().Get("running_only") == "true"
-	totalHosts, matches := h.cveSearcher.SearchCVE(cveID, runningOnly)
-
-	if totalHosts == 0 {
-		if runningOnly {
-			fmt.Fprintf(w, `<p class="text-success">No hosts have running binaries affected by %s</p>`, template.HTMLEscapeString(cveID))
-		} else {
-			fmt.Fprintf(w, `<p class="text-success">No hosts affected by %s</p>`, template.HTMLEscapeString(cveID))
-		}
-		return
-	}
-
-	suffix := ""
-	if runningOnly {
-		suffix = " with running binaries affected"
-	}
-	fmt.Fprintf(w, `<p><strong>%s</strong> — %d host(s)%s</p>`, template.HTMLEscapeString(cveID), totalHosts, suffix)
-	fmt.Fprint(w, `<div class="table-container"><table class="table"><thead><tr><th>Hostname</th><th>Package</th><th>Installed</th><th>Fixed</th><th>Severity</th><th>Scanner</th><th>Running Binaries</th></tr></thead><tbody>`)
-	for _, m := range matches {
-		fixed := m.Fixed
-		if fixed == "" {
-			fixed = "-"
-		}
-		sevClass := ""
-		switch cve.Classify(m.Severity) {
-		case cve.SevCritical:
-			sevClass = "text-danger"
-		case cve.SevHigh:
-			sevClass = "text-warning"
-		}
-		running := renderRunningBinariesCell(m.RunningBinaries)
-		fmt.Fprintf(w, `<tr><td>%s</td><td class="mono">%s</td><td>%s</td><td>%s</td><td class="%s">%s</td><td>%s</td><td>%s</td></tr>`,
-			template.HTMLEscapeString(m.Hostname),
-			template.HTMLEscapeString(m.Package),
-			template.HTMLEscapeString(m.Installed),
-			template.HTMLEscapeString(fixed),
-			sevClass,
-			template.HTMLEscapeString(m.Severity),
-			template.HTMLEscapeString(m.Scanner),
-			running)
-	}
-	fmt.Fprint(w, `</tbody></table></div>`)
-}
-
-// renderRunningBinariesCell produces the HTML content for the
-// "Running Binaries" table cell on the CVE search result. Empty list
-// renders as an em dash so the cell doesn't collapse to zero width.
-// Each binary path appears on its own line; a `(deleted)` tag is
-// appended when the on-disk file has been replaced but the process
-// is still holding the old inode.
-func renderRunningBinariesCell(bins []CVERunningBinaryRef) string {
-	if len(bins) == 0 {
-		return `<span class="text-muted">—</span>`
-	}
-	var b strings.Builder
-	for i, rb := range bins {
-		if i > 0 {
-			b.WriteString("<br>")
-		}
-		b.WriteString(`<span class="mono">`)
-		b.WriteString(template.HTMLEscapeString(rb.BinaryPath))
-		b.WriteString(`</span>`)
-		if rb.Deleted {
-			b.WriteString(` <span class="text-warning" title="binary on disk was replaced or deleted — the running process is holding the old inode">(deleted)</span>`)
-		}
-		if rb.PidCount > 1 {
-			fmt.Fprintf(&b, ` <span class="text-muted">×%d</span>`, rb.PidCount)
+	switch {
+	case data.CVEID == "":
+		data.Empty = true
+	case h.cveSearcher == nil:
+		data.Unavailable = true
+	default:
+		var matches []CVEMatch
+		data.TotalHosts, matches = h.cveSearcher.SearchCVE(data.CVEID, data.RunningOnly)
+		for _, m := range matches {
+			if m.Fixed == "" {
+				m.Fixed = "-"
+			}
+			sevClass := ""
+			switch cve.Classify(m.Severity) {
+			case cve.SevCritical:
+				sevClass = "text-danger"
+			case cve.SevHigh:
+				sevClass = "text-warning"
+			}
+			data.Matches = append(data.Matches, CVESearchRow{CVEMatch: m, SevClass: sevClass})
 		}
 	}
-	return b.String()
+	h.renderer.RenderFragment(w, "security", "cve-search-fragment", data)
 }
 
 // AskStream handles POST /ui/ask — proxies to the AI assistant with server-side markdown rendering.
@@ -7189,9 +7167,11 @@ func (h *Handler) InventoryCSVExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// csvEscape wraps a value in quotes if it contains commas, quotes, or newlines.
+// csvEscape neutralizes formula-leading values (uifmt.CSVSafeCell) and wraps
+// the result in quotes if it contains commas, quotes, CR or LF.
 func csvEscape(s string) string {
-	if strings.ContainsAny(s, ",\"\n") {
+	s = uifmt.CSVSafeCell(s)
+	if strings.ContainsAny(s, ",\"\r\n") {
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 	}
 	return s
@@ -7328,166 +7308,6 @@ func healthSummaryLocale(locale string, p fleetpressure.EnvoyPressure) string {
 	return strings.Join(parts, ", ")
 }
 
-// InventoryFragment returns the fleet inventory table via HTMX, with trait
-// data, filtering (?where=key=value), and column projection (?show=fields).
-func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	// Cursor-based pagination: fetch 200 envoys at a time instead of the full fleet.
-	const pageSize = 200
-	// inventoryRenderedCap bounds infinite scroll so a very large fleet can't
-	// load unboundedly into the DOM (mirrors envoysRenderedCap on /envoys).
-	const inventoryRenderedCap = 1000
-	cursor := r.URL.Query().Get("after")
-	loaded, _ := strconv.Atoi(r.URL.Query().Get("loaded"))
-
-	all, err := h.queries.GetAllLatestTraitsPaged(r.Context(), cursor, int64(pageSize+1))
-	if err != nil {
-		fmt.Fprintf(w, `<p class="text-muted">Error loading inventory: %s</p>`, template.HTMLEscapeString(err.Error()))
-		return
-	}
-	if len(all) == 0 && cursor == "" {
-		fmt.Fprintf(w, `<p class="text-muted u-p-20px">No envoys with trait data. Traits are collected after the first check-in.</p>`)
-		return
-	}
-
-	hasMore := len(all) > pageSize
-	if hasMore {
-		all = all[:pageSize]
-	}
-
-	// Parse where filters.
-	whereParam := r.URL.Query().Get("where")
-	var filters []struct{ path, value string }
-	if whereParam != "" {
-		for _, clause := range strings.Split(whereParam, ",") {
-			clause = strings.TrimSpace(clause)
-			if idx := strings.IndexByte(clause, '='); idx > 0 {
-				filters = append(filters, struct{ path, value string }{clause[:idx], clause[idx+1:]})
-			}
-		}
-	}
-
-	// Parse show columns.
-	showParam := r.URL.Query().Get("show")
-	var showFields []string
-	if showParam != "" {
-		for _, f := range strings.Split(showParam, ",") {
-			f = strings.TrimSpace(f)
-			if f != "" {
-				showFields = append(showFields, f)
-			}
-		}
-	}
-
-	// Default columns when none specified.
-	if len(showFields) == 0 {
-		showFields = []string{"os.distro", "os.version", "os.arch", "virtual.system", "uptime.days"}
-	}
-
-	type invRow struct {
-		ID          string
-		Hostname    string
-		IPAddress   string
-		CollectedAt string
-		Fields      []string // values for each showField
-	}
-
-	var rows []invRow
-	for _, t := range all {
-		var traits map[string]any
-		if err := json.Unmarshal([]byte(t.Traits), &traits); err != nil {
-			continue
-		}
-
-		// Apply where filters (AND logic).
-		match := true
-		for _, f := range filters {
-			val := inventoryTraverse(traits, f.path)
-			if val != f.value {
-				match = false
-				break
-			}
-		}
-		if !match {
-			continue
-		}
-
-		row := invRow{
-			ID:          t.ID,
-			Hostname:    t.Hostname,
-			IPAddress:   t.IPAddress,
-			CollectedAt: t.CollectedAt.Local().Format("2006-01-02 15:04"),
-		}
-		for _, field := range showFields {
-			row.Fields = append(row.Fields, inventoryTraverse(traits, field))
-		}
-		rows = append(rows, row)
-	}
-
-	// Render count.
-	if cursor == "" {
-		fmt.Fprintf(w, `<p class="text-muted u-mb-8px">%d envoys`, len(rows))
-		if hasMore {
-			fmt.Fprintf(w, `+`)
-		}
-		if len(filters) > 0 {
-			fmt.Fprintf(w, ` (filtered)`)
-		}
-		fmt.Fprintf(w, `</p>`)
-	}
-
-	if len(rows) == 0 && cursor == "" {
-		fmt.Fprintf(w, `<p class="text-muted u-p-20px">No envoys match the filter criteria.</p>`)
-		return
-	}
-
-	// Render table (only include wrapper on first page).
-	if cursor == "" {
-		fmt.Fprintf(w, `<table class="table"><thead><tr><th>Hostname</th><th>IP</th>`)
-		for _, f := range showFields {
-			fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(f))
-		}
-		fmt.Fprintf(w, `<th>Collected</th></tr></thead><tbody id="inventory-tbody">`)
-	}
-	for _, row := range rows {
-		fmt.Fprintf(w, `<tr><td><a href="/inventory/%s">%s</a></td><td class="mono">%s</td>`,
-			template.HTMLEscapeString(row.ID),
-			template.HTMLEscapeString(row.Hostname),
-			template.HTMLEscapeString(row.IPAddress))
-		for _, val := range row.Fields {
-			fmt.Fprintf(w, `<td>%s</td>`, template.HTMLEscapeString(val))
-		}
-		fmt.Fprintf(w, `<td class="text-muted">%s</td></tr>`, row.CollectedAt)
-	}
-	if cursor == "" {
-		fmt.Fprintf(w, `</tbody></table>`)
-	}
-
-	// Infinite scroll trigger for next page, bounded by inventoryRenderedCap so a
-	// very large fleet can't load unboundedly into the DOM.
-	loaded += len(all)
-	if hasMore && len(all) > 0 {
-		if loaded >= inventoryRenderedCap {
-			fmt.Fprintf(w,
-				`<tr><td colspan="%d" class="text-muted u-p-12px">Showing the first %d envoys — add a <code>where</code> filter to narrow the list.</td></tr>`,
-				len(showFields)+3, loaded)
-		} else {
-			nextCursor := all[len(all)-1].Hostname
-			params := fmt.Sprintf("after=%s&loaded=%d", url.QueryEscape(nextCursor), loaded)
-			if whereParam != "" {
-				params += "&where=" + url.QueryEscape(whereParam)
-			}
-			if showParam != "" {
-				params += "&show=" + url.QueryEscape(showParam)
-			}
-			fmt.Fprintf(w,
-				`<tr class="u-h-1px" hx-get="/ui/fragments/inventory?%s" hx-trigger="revealed" hx-swap="afterend" hx-target="#inventory-tbody" hx-select="tr"><td colspan="%d"></td></tr>`,
-				params, len(showFields)+3)
-		}
-	}
-}
-
 // InventoryTraitIndexFragment returns a grouped list of all trait namespaces
 // and their keys so operators can browse available traits. Key counts come
 // from the in-memory fleet index (already flattened + packages-pruned), not a
@@ -7579,106 +7399,6 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 	fmt.Fprint(w, `</div>`) // modal card
 	fmt.Fprint(w, `</div>`) // overlay
 	// Focus is applied by ui-actions.js on htmx:afterSettle (no inline script).
-}
-
-// InventorySearchFragment returns trait key/value matches as HTML for the
-// typeahead search on the inventory page.
-func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if len(q) < 2 {
-		return // don't search until at least 2 characters
-	}
-	qLower := strings.ToLower(q)
-
-	all, err := h.queries.GetAllLatestTraits(r.Context())
-	if err != nil {
-		return
-	}
-
-	// Aggregate keys and sample values from all envoys.
-	type traitHit struct {
-		Key    string
-		Sample string
-		Count  int
-	}
-	keyValues := map[string]string{} // key → first non-empty sample value
-	keyCounts := map[string]int{}    // key → number of envoys reporting it
-	for _, t := range all {
-		var traits map[string]any
-		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
-			continue
-		}
-		flat := map[string]any{}
-		flattenTraits("", traits, flat)
-		for k, v := range flat {
-			keyCounts[k]++
-			if _, exists := keyValues[k]; !exists {
-				s := fmt.Sprint(v)
-				if s != "" && s != "<nil>" {
-					keyValues[k] = s
-				}
-			}
-		}
-	}
-
-	// Match against query.
-	var hits []traitHit
-	for k, sample := range keyValues {
-		if strings.Contains(strings.ToLower(k), qLower) ||
-			strings.Contains(strings.ToLower(sample), qLower) {
-			hits = append(hits, traitHit{Key: k, Sample: sample, Count: keyCounts[k]})
-		}
-	}
-
-	// Sort: key matches first, then by key name.
-	sort.Slice(hits, func(i, j int) bool {
-		iKey := strings.Contains(strings.ToLower(hits[i].Key), qLower)
-		jKey := strings.Contains(strings.ToLower(hits[j].Key), qLower)
-		if iKey != jKey {
-			return iKey
-		}
-		return hits[i].Key < hits[j].Key
-	})
-
-	// Cap results.
-	if len(hits) > 30 {
-		hits = hits[:30]
-	}
-
-	if len(hits) == 0 {
-		fmt.Fprintf(w, `<div class="trait-search__empty">No traits matching "%s"</div>`,
-			template.HTMLEscapeString(q))
-		return
-	}
-
-	fmt.Fprint(w, `<div class="trait-search__results">`)
-	for _, hit := range hits {
-		sample := hit.Sample
-		if len(sample) > 60 {
-			sample = sample[:60] + "..."
-		}
-		escapedKey := template.HTMLEscapeString(hit.Key)
-		fmt.Fprintf(w, `<div class="trait-search__hit" `+
-			`hx-get="/ui/fragments/inventory-explore?key=%s" `+
-			`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
-			`<span class="trait-search__key">%s</span>`+
-			`<span class="trait-search__sample">%s</span>`+
-			`<span class="trait-search__count">%d envoy%s</span>`+
-			`</div>`,
-			url.QueryEscape(hit.Key),
-			escapedKey,
-			template.HTMLEscapeString(sample),
-			hit.Count,
-			func() string {
-				if hit.Count != 1 {
-					return "s"
-				}
-				return ""
-			}())
-	}
-	fmt.Fprint(w, `</div>`)
 }
 
 // InventoryExploreFragment renders sibling trait checkboxes + a grouped table

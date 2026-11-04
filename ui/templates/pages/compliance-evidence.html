@@ -175,7 +175,7 @@
         <tbody>
             {{range .Envoys}}
             <tr>
-                <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
+                <td>{{if $.CanFleetRead}}<a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{else}}{{.Hostname}}{{end}}</td>
                 <td class="mono">{{.Configcrate}}</td>
                 <td>{{if gt .ResourceCount 0}}<span class="badge {{pctClassBg .FailurePct}} {{pctClass .FailurePct}}">{{.FailedCount}}/{{.ResourceCount}}</span>{{else}}{{template "status-badge" dict "Locale" $.Locale "Status" .Status}}{{end}}</td>
                 <td>{{.RunCount}}</td>
@@ -226,7 +226,7 @@
         <tbody>
             {{range .Fleet}}
             <tr>
-                <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
+                <td>{{if $.CanFleetRead}}<a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{else}}{{.Hostname}}{{end}}</td>
                 <td>
                     {{if gt .TotalControls 0}}
                     <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--relapsed{{else}}badge--failed{{end}}">

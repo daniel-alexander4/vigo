@@ -2,7 +2,7 @@
 <span data-ai-page="envoy-compliance" data-ai-envoy="{{.Hostname}}" data-ai-framework="{{.FrameworkSlug}}" hidden></span>
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/envoys">Envoys</a> &rsaquo; <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a> &rsaquo; <a href="/compliance/{{.FrameworkSlug}}">{{.FrameworkTitle}}</a>
+        {{if .CanFleetRead}}<a href="/envoys">Envoys</a> &rsaquo; <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a>{{else}}{{.Hostname}}{{end}} &rsaquo; <a href="/compliance/{{.FrameworkSlug}}">{{.FrameworkTitle}}</a>
     </div>
     <h1>{{.Hostname}} &mdash; {{.FrameworkTitle}}</h1>
 </div>

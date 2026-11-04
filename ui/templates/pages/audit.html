@@ -73,3 +73,21 @@
     </table>
 </div>
 {{end}}
+
+{{define "audit-verify-fragment"}}
+{{if .Error}}
+<span class="badge badge--failure">{{T $.Locale "audit.verify_error"}} {{.Error}}</span>
+{{else if not .Valid}}
+<div class="mt-1"><span class="badge badge--failure">{{T $.Locale "audit.chain_broken"}}</span> {{T $.Locale "audit.integrity_failure"}} #{{.FirstBroken}}<p class="text-muted mt-1">{{.BrokenError}}</p></div>
+{{else}}
+<div class="mt-1"><span class="badge badge--success">{{T $.Locale "audit.chain_valid"}}</span> <span class="text-muted">{{.EntryCount}} {{T $.Locale "audit.entries_verified"}}</span>
+{{if .Entries}}
+<table class="table mt-1"><thead><tr><th>#</th><th>{{T $.Locale "audit.th_timestamp"}}</th><th>{{T $.Locale "th.type"}}</th><th>{{T $.Locale "audit.th_source"}}</th><th>{{T $.Locale "audit.th_actor"}}</th><th>{{T $.Locale "audit.th_summary"}}</th><th>{{T $.Locale "audit.th_hash"}}</th></tr></thead><tbody>
+{{range .Entries}}
+<tr><td>{{.ID}}</td><td>{{.Timestamp}}</td><td><span class="badge badge--info">{{.EventType}}</span></td><td><span class="badge badge--{{.Source}}">{{.Source}}</span></td><td>{{.Actor}}</td><td>{{.Summary}}</td><td class="text-muted">{{.Hash}}</td></tr>
+{{end}}
+</tbody></table>
+{{end}}
+</div>
+{{end}}
+{{end}}

@@ -947,7 +947,12 @@ type ComplianceReport struct {
 	// builder closures so the compliance-report-content / evidence-coverage
 	// fragments (which receive this struct as their template dot) can read
 	// $.Locale. Not serialized — it's a render-time concern only.
-	Locale        string                  `json:"-"`
+	Locale string `json:"-"`
+	// CanFleetRead is stamped by the same ui closures: whether the viewer
+	// holds fleet.read. The fleet-coverage tables link each hostname to
+	// /envoys/{id} only when it is true — the compliance role reads this
+	// report but would get a 403 from the envoy page. Render-time only.
+	CanFleetRead  bool                    `json:"-"`
 	Title         string                  `json:"title"`
 	FrameworkName string                  `json:"framework_name,omitempty"`
 	Slug          string                  `json:"slug,omitempty"`

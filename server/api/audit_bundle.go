@@ -23,6 +23,7 @@ import (
 
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/uifmt"
 )
 
 // auditBundleEndpoint registers the audit-bundle export route. The
@@ -184,11 +185,11 @@ func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request
 				_ = cw.Write([]string{
 					strconv.FormatInt(e.ID, 10),
 					e.Timestamp.UTC().Format(time.RFC3339),
-					e.EventType,
-					e.Actor,
-					e.Source,
-					e.Summary,
-					e.Payload,
+					uifmt.CSVSafeCell(e.EventType),
+					uifmt.CSVSafeCell(e.Actor),
+					uifmt.CSVSafeCell(e.Source),
+					uifmt.CSVSafeCell(e.Summary),
+					uifmt.CSVSafeCell(e.Payload),
 					e.PrevHash,
 					e.Hash,
 				})

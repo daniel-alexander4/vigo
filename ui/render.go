@@ -1094,7 +1094,7 @@ func failureBadgeClass(failed, total any) string {
 	if t <= 0 {
 		return "badge--compliant"
 	}
-	pct := (toFloat64(failed) / t) * 100.0
+	pct := convergence.FailurePct(int64(toFloat64(failed)), int64(t))
 	switch {
 	case pct == 0:
 		return "badge--compliant"

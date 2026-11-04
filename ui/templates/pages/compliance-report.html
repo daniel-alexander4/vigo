@@ -125,7 +125,7 @@
         <tbody>
             {{range .Fleet}}
             <tr>
-                <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
+                <td>{{if $.CanFleetRead}}<a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{else}}{{.Hostname}}{{end}}</td>
                 <td>
                     {{if gt .TotalControls 0}}
                     <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--relapsed{{else}}badge--failed{{end}}">

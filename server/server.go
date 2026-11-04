@@ -1433,6 +1433,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 				rep, err := s.reportHandler.BuildFrameworkReport(r, slug)
 				if rep != nil {
 					rep.Locale = uiHandler.LocaleFromRequest(r)
+					rep.CanFleetRead = uiHandler.CanFleetRead(r)
 				}
 				return rep, err
 			},

@@ -558,3 +558,17 @@
 </div>
 {{end}}
 {{end}}
+
+{{define "envoy-sessions-fragment"}}
+{{if .Err}}
+<p class="text-muted">{{T $.Locale "scrier_sessions.unavailable"}}</p>
+{{else if not .Sessions}}
+<p class="text-muted u-p-20px">{{T $.Locale "scrier_sessions.empty"}}</p>
+{{else}}
+<table class="table"><thead><tr><th>{{T $.Locale "th.user"}}</th><th>{{T $.Locale "scrier_sessions.th_protocol"}}</th><th>{{T $.Locale "envoy_detail.th_port"}}</th><th>{{T $.Locale "scrier_sessions.th_started"}}</th><th>{{T $.Locale "th.duration"}}</th><th>{{T $.Locale "th.status"}}</th></tr></thead><tbody>
+{{range .Sessions}}
+<tr><td>{{.Username}}</td><td class="mono">{{.Protocol}}</td><td>{{.Port}}</td><td>{{.Started}}</td><td>{{.Duration}}</td><td><span class="badge badge--{{.StatusClass}}">{{tEnum $.Locale .Status}}</span></td></tr>
+{{end}}
+</tbody></table>
+{{end}}
+{{end}}

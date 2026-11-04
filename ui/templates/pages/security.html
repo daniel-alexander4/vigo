@@ -761,6 +761,26 @@
 {{end}}
 {{end}}
 
+{{define "cve-search-fragment"}}
+{{if .Empty}}
+<p class="text-muted">{{T $.Locale "cve_search.enter_id"}}</p>
+{{else if .Unavailable}}
+<p class="text-muted">{{T $.Locale "cve_search.unavailable"}}</p>
+{{else if eq .TotalHosts 0}}
+<p class="text-success">{{if .RunningOnly}}{{T $.Locale "cve_search.none_running"}}{{else}}{{T $.Locale "cve_search.none"}}{{end}} {{.CVEID}}</p>
+{{else}}
+<p><strong>{{.CVEID}}</strong> — {{.TotalHosts}} {{T $.Locale "cve_search.hosts"}}{{if .RunningOnly}} {{T $.Locale "cve_search.with_running"}}{{end}}</p>
+<div class="table-container"><table class="table"><thead><tr><th>{{T $.Locale "th.hostname"}}</th><th>{{T $.Locale "cve_search.th_package"}}</th><th>{{T $.Locale "cve_search.th_installed"}}</th><th>{{T $.Locale "cve_search.th_fixed"}}</th><th>{{T $.Locale "envoy_detail.th_severity"}}</th><th>{{T $.Locale "cve_search.th_scanner"}}</th><th>{{T $.Locale "cve_search.th_running"}}</th></tr></thead><tbody>
+{{range .Matches}}
+<tr><td>{{.Hostname}}</td><td class="mono">{{.Package}}</td><td>{{.Installed}}</td><td>{{.Fixed}}</td><td class="{{.SevClass}}">{{.Severity}}</td><td>{{.Scanner}}</td><td>
+{{- if not .RunningBinaries}}<span class="text-muted">—</span>{{end}}
+{{- range $i, $rb := .RunningBinaries}}{{if $i}}<br>{{end}}<span class="mono">{{$rb.BinaryPath}}</span>{{if $rb.Deleted}} <span class="text-warning" title="{{T $.Locale "cve_search.deleted_tip"}}">{{T $.Locale "cve_search.deleted"}}</span>{{end}}{{if gt $rb.PidCount 1}} <span class="text-muted">×{{$rb.PidCount}}</span>{{end}}{{end -}}
+</td></tr>
+{{end}}
+</tbody></table></div>
+{{end}}
+{{end}}
+
 
 
 

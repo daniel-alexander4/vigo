@@ -20,7 +20,7 @@ import (
 // TestAuditVerify_EscapesEntryContent proves the AuditVerify fragment escapes
 // operator-influenceable audit fields (actor, summary) and the source field
 // that lands inside a class attribute — a crafted value must not inject markup
-// into the hand-built HTML.
+// into the rendered fragment.
 func TestAuditVerify_EscapesEntryContent(t *testing.T) {
 	sqlDB, err := sql.Open("sqlite3", "file:auditxsstest?mode=memory&cache=shared&_foreign_keys=on")
 	if err != nil {
@@ -56,7 +56,8 @@ func TestAuditVerify_EscapesEntryContent(t *testing.T) {
 		t.Fatalf("record audit entry: %v", err)
 	}
 
-	h := &Handler{queries: queries}
+	h := newTestHandler(t)
+	h.queries = queries
 	rec := httptest.NewRecorder()
 	h.AuditVerify(rec, httptest.NewRequest(http.MethodGet, "/ui/fragments/audit-verify", nil))
 
