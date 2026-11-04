@@ -818,24 +818,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		// Clone config so we don't mutate the shared ConfigStore entry.
 		cloned := cfg.Clone()
-		if hasCaseRes {
-			for i := range cloned.Configcrates {
-				expanded, err := config.ExpandCase(cloned.Configcrates[i].Resources, traits, cloned.Vars)
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "expanding case for configcrate %q: %v", cloned.Configcrates[i].Name, err)
-				}
-				cloned.Configcrates[i].Resources = expanded
-			}
-		}
-		if hasLookups {
-			// Flatten traits into a string map for MatchEnvoy's trait-filter
-			// key form (e.g. "os.distro=ubuntu").
-			flatTraits := make(map[string]string)
-			fleet.FlattenJSON("", traits, flatTraits)
-			if err := config.ResolveLookupsInConfig(cloned, envoy.Hostname, flatTraits); err != nil {
-				return nil, status.Errorf(codes.Internal, "resolving lookups: %v", err)
-			}
-		}
+		// Order matters: fleet: vars resolve first (they only touch vars), so a
+		// case: key that references a fleet var renders the resolved value,
+		// not the lookup struct; case then expands, and lookups and fleet
+		// foreach run over the expanded resources.
 		if hasFleetLookups {
 			members := func() []config.FleetMember {
 				es := s.fleetIndex.AllEnvoys()
@@ -860,6 +846,26 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			if err := s.configStore.ResolveFleetLookupsInConfig(cloned, members, isStale, time.Now()); err != nil {
 				return nil, status.Errorf(codes.Internal, "resolving fleet lookups: %v", err)
 			}
+		}
+		if hasCaseRes {
+			for i := range cloned.Configcrates {
+				expanded, err := config.ExpandCase(cloned.Configcrates[i].Resources, traits, cloned.Vars)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "expanding case for configcrate %q: %v", cloned.Configcrates[i].Name, err)
+				}
+				cloned.Configcrates[i].Resources = expanded
+			}
+		}
+		if hasLookups {
+			// Flatten traits into a string map for MatchEnvoy's trait-filter
+			// key form (e.g. "os.distro=ubuntu").
+			flatTraits := make(map[string]string)
+			fleet.FlattenJSON("", traits, flatTraits)
+			if err := config.ResolveLookupsInConfig(cloned, envoy.Hostname, flatTraits); err != nil {
+				return nil, status.Errorf(codes.Internal, "resolving lookups: %v", err)
+			}
+		}
+		if hasFleetLookups {
 			// foreach: over a now-resolved fleet: var (a list) expands here.
 			// Its items come from other envoys' self-reported data, so the
 			// fleet variant drops any item outside the safe character set.

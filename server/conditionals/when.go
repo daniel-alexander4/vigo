@@ -194,22 +194,56 @@ func (l *lexer) lexWord() string {
 	return l.input[start:l.pos]
 }
 
+// lexString reads a single-quoted literal. A backslash escapes the next
+// byte (`\'` is a quote, `\\` a backslash) and is dropped from the value;
+// quoteString is the inverse, so ExprString output re-lexes to the same
+// value.
 func (l *lexer) lexString() (string, error) {
 	l.pos++ // skip opening quote
 	start := l.pos
+	var b strings.Builder
 	for l.pos < len(l.input) {
-		if l.input[l.pos] == '\'' {
-			str := l.input[start:l.pos]
+		c := l.input[l.pos]
+		if c == '\'' {
 			l.pos++ // skip closing quote
-			return str, nil
+			return b.String(), nil
 		}
-		if l.input[l.pos] == '\\' && l.pos+1 < len(l.input) {
+		if c == '\\' && l.pos+1 < len(l.input) {
+			b.WriteByte(l.input[l.pos+1])
 			l.pos += 2
 			continue
 		}
+		b.WriteByte(c)
 		l.pos++
 	}
 	return "", fmt.Errorf("unterminated string literal starting at position %d", start-1)
+}
+
+// quoteString renders s as a single-quoted literal lexString reads back
+// as s.
+func quoteString(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "'", "\\'")
+	return "'" + s + "'"
+}
+
+// isUnaryLevel reports whether e prints as a unary-precedence term (a
+// primary or a not), so it needs no parentheses as the operand of not or
+// of a comparison.
+func isUnaryLevel(e WhenExpr) bool {
+	switch e.(type) {
+	case *BoolLitExpr, *VarRefExpr, *FuncCallExpr, *StringLitExpr, *NotWhenExpr:
+		return true
+	}
+	return false
+}
+
+// unaryOperand prints e, parenthesised unless it is unary-level.
+func unaryOperand(e WhenExpr) string {
+	if isUnaryLevel(e) {
+		return ExprString(e)
+	}
+	return "(" + ExprString(e) + ")"
 }
 
 // -- Parser --
@@ -641,6 +675,9 @@ func TristateEval(expr WhenExpr) *bool {
 }
 
 // ExprString returns the string representation of a when expression AST.
+// The output re-parses (ParseWhenExpr) to the same AST: operands are
+// parenthesised wherever precedence would otherwise regroup them, and
+// string literals are escaped.
 func ExprString(expr WhenExpr) string {
 	switch e := expr.(type) {
 	case *BoolLitExpr:
@@ -651,11 +688,7 @@ func ExprString(expr WhenExpr) string {
 	case *VarRefExpr:
 		return e.Name
 	case *NotWhenExpr:
-		switch e.Operand.(type) {
-		case *AndWhenExpr, *OrWhenExpr:
-			return "not (" + ExprString(e.Operand) + ")"
-		}
-		return "not " + ExprString(e.Operand)
+		return "not " + unaryOperand(e.Operand)
 	case *AndWhenExpr:
 		left := ExprString(e.Left)
 		if _, ok := e.Left.(*OrWhenExpr); ok {
@@ -671,15 +704,15 @@ func ExprString(expr WhenExpr) string {
 	case *FuncCallExpr:
 		var quotedArgs []string
 		for _, arg := range e.Args {
-			quotedArgs = append(quotedArgs, "'"+arg+"'")
+			quotedArgs = append(quotedArgs, quoteString(arg))
 		}
 		return e.Name + "(" + strings.Join(quotedArgs, ", ") + ")"
 	case *StringLitExpr:
-		return "'" + e.Value + "'"
+		return quoteString(e.Value)
 	case *EqExpr:
-		return ExprString(e.Left) + " == " + ExprString(e.Right)
+		return unaryOperand(e.Left) + " == " + unaryOperand(e.Right)
 	case *NeqExpr:
-		return ExprString(e.Left) + " != " + ExprString(e.Right)
+		return unaryOperand(e.Left) + " != " + unaryOperand(e.Right)
 	default:
 		return "?"
 	}

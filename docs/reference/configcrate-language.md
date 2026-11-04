@@ -1040,7 +1040,7 @@ when: "os_family('redhat') && !version_ge('9')"
 | `!=` | String inequality | `'{{ .Vars.target_release }}' != ''` |
 | `(` `)` | Grouping | `(os_family('debian') \|\| os_family('redhat')) && arch('amd64')` |
 
-`==` and `!=` are string-typed: operands must be single-quoted string literals or variable references. Function calls return booleans and aren't comparable. Comparisons don't chain — write `(a == b) && (b == c)`, not `a == b == c`. Precedence sits between unary `!` and `&&`, matching C / Java / Python: `a && b == c` parses as `a && (b == c)`.
+`==` and `!=` are string-typed: operands must be single-quoted string literals or variable references. Function calls return booleans and aren't comparable. Comparisons don't chain — write `(a == b) && (b == c)`, not `a == b == c`. Precedence sits between unary `!` and `&&`, matching C / Java / Python: `a && b == c` parses as `a && (b == c)`. Inside a single-quoted literal, `\'` is a quote and `\\` a backslash: `name == 'it\'s'` compares against `it's`.
 
 ## Builtin Functions (16)
 
