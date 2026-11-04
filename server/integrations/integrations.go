@@ -22,6 +22,7 @@ import (
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/daemon"
+	"git.alexander4.io/vigo/server/httpsec"
 )
 
 // Severity levels for events — integrations can filter by minimum severity.
@@ -381,9 +382,11 @@ func postJSON(ctx context.Context, client *http.Client, url string, headers map[
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
+	// Errors drop the URL (httpsec.RedactURLError): for Slack and Teams
+	// the webhook URL is the credential, and Dispatch logs these errors.
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("request: %w", err)
+		return fmt.Errorf("request: %w", httpsec.RedactURLError(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range headers {
@@ -391,7 +394,7 @@ func postJSON(ctx context.Context, client *http.Client, url string, headers map[
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("http: %w", err)
+		return fmt.Errorf("http: %w", httpsec.RedactURLError(err))
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)

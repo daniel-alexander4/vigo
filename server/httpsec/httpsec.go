@@ -6,9 +6,42 @@
 // the web UI (pages + HTMX fragments) and the auth login / TOTP pages. The
 // policy is defined in exactly one place here so the login page can never
 // drift from the UI's policy.
+//
+// It also holds the outbound-side counterpart: RedactURLError and URLHost
+// keep webhook / API URLs, which often carry a credential in the path or
+// query (Slack, Teams), out of errors and logs.
 package httpsec
 
-import "net/http"
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+)
+
+// RedactURLError strips the request URL from an outbound HTTP error. A
+// *url.Error (what http.Client.Do and URL parsing return) prints the full
+// URL, and Go redacts only userinfo — a Slack or Teams webhook token in the
+// path would reach the log verbatim. The operation and the underlying cause
+// are kept. Every outbound client whose error can be logged wraps with this.
+func RedactURLError(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return fmt.Errorf("%s: %w", ue.Op, ue.Err)
+	}
+	return err
+}
+
+// URLHost returns only the host of raw, for logging where an endpoint is
+// useful to name but its path or query may hold a credential. An
+// unparsable URL yields "<invalid url>", never the input.
+func URLHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "<invalid url>"
+	}
+	return u.Host
+}
 
 // CSP is the single Content-Security-Policy for all HTML responses. Fully
 // locked: no 'unsafe-inline' and no nonce, for either scripts or styles —

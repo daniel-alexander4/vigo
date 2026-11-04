@@ -16,6 +16,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/httpsec"
 )
 
 // Pusher periodically pushes compliance evidence to configured GRC platforms.
@@ -53,7 +54,7 @@ func (p *Pusher) Start(ctx context.Context) {
 		if err != nil || interval < time.Minute {
 			interval = 6 * time.Hour
 		}
-		slog.Info("GRC integration started", "name", intg.Name, "endpoint", intg.Endpoint, "interval", interval)
+		slog.Info("GRC integration started", "name", intg.Name, "host", httpsec.URLHost(intg.Endpoint), "interval", interval)
 		go p.runLoop(ctx, intg, interval)
 	}
 
@@ -107,20 +108,20 @@ type AuditStatus struct {
 
 // FrameworkEvidence is per-standard compliance evidence.
 type FrameworkEvidence struct {
-	Standard        string           `json:"standard"`
-	GRCFrameworkID  string           `json:"grc_framework_id,omitempty"`
-	ID              string           `json:"id"`
-	Name            string           `json:"name"`
-	CoveragePercent float64          `json:"coverage_percent"`
-	ScorePercent    float64          `json:"score_percent"`
-	TotalControls   int              `json:"total_controls"`
-	CoveredControls int              `json:"covered_controls"`
-	MissingControls int              `json:"missing_controls"`
-	Satisfied       int              `json:"satisfied"`
-	Partial         int              `json:"partial"`
-	NotSatisfied    int              `json:"not_satisfied"`
-	EnvoyCount      int              `json:"envoy_count"`
-	Controls        []ControlStatus  `json:"controls,omitempty"`
+	Standard        string          `json:"standard"`
+	GRCFrameworkID  string          `json:"grc_framework_id,omitempty"`
+	ID              string          `json:"id"`
+	Name            string          `json:"name"`
+	CoveragePercent float64         `json:"coverage_percent"`
+	ScorePercent    float64         `json:"score_percent"`
+	TotalControls   int             `json:"total_controls"`
+	CoveredControls int             `json:"covered_controls"`
+	MissingControls int             `json:"missing_controls"`
+	Satisfied       int             `json:"satisfied"`
+	Partial         int             `json:"partial"`
+	NotSatisfied    int             `json:"not_satisfied"`
+	EnvoyCount      int             `json:"envoy_count"`
+	Controls        []ControlStatus `json:"controls,omitempty"`
 }
 
 // ControlStatus is a single control's compliance status.
@@ -202,7 +203,7 @@ func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
 
 	req, err := http.NewRequestWithContext(ctx, "POST", intg.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		slog.Error("GRC push: request creation failed", "name", intg.Name, "error", err)
+		slog.Error("GRC push: request creation failed", "name", intg.Name, "error", httpsec.RedactURLError(err))
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -210,7 +211,7 @@ func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		slog.Error("GRC push: request failed", "name", intg.Name, "error", err)
+		slog.Error("GRC push: request failed", "name", intg.Name, "error", httpsec.RedactURLError(err))
 		return
 	}
 	resp.Body.Close()

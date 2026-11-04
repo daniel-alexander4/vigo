@@ -4,7 +4,10 @@
 package httpsec
 
 import (
+	"errors"
+	"fmt"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,6 +67,29 @@ func TestIsowebauthSignerOrigin_MatchesScript(t *testing.T) {
 	}
 	if !strings.Contains(string(js), "fetch('"+IsowebauthSignerOrigin+"/") {
 		t.Errorf("isowebauth.js does not fetch %s — update IsowebauthSignerOrigin", IsowebauthSignerOrigin)
+	}
+}
+
+func TestRedactURLError(t *testing.T) {
+	const tok = "TOKEN123"
+	_, err := url.Parse("http://[::1/x/" + tok)
+	if err == nil {
+		t.Fatal("expected a parse error")
+	}
+	wrapped := fmt.Errorf("outer: %w", err)
+	got := RedactURLError(wrapped)
+	if strings.Contains(got.Error(), tok) {
+		t.Errorf("RedactURLError kept the URL: %v", got)
+	}
+	plain := errors.New("plain")
+	if RedactURLError(plain) != plain {
+		t.Error("non-url error must pass through unchanged")
+	}
+	if h := URLHost("https://hooks.slack.com/services/" + tok); h != "hooks.slack.com" {
+		t.Errorf("URLHost = %q", h)
+	}
+	if h := URLHost("http://[::1/" + tok); strings.Contains(h, tok) {
+		t.Errorf("URLHost echoed an invalid input: %q", h)
 	}
 }
 
