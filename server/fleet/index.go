@@ -1911,8 +1911,7 @@ func FlattenForIndex(parsed map[string]any) map[string]string {
 // not_after to derive expiry buckets; the full per-cert detail (path/cn/issuer/
 // is_ca/sans — ~5/6 of the family's ~60 KB/envoy) is served on demand from the DB
 // JSON by EnvoyCertDetails alone, so it need not sit in the in-memory map. The
-// agent emits not_after plus an `expires` back-compat alias; prefer not_after,
-// fall back to expires. The DB JSON keeps the full records (this mutates only the
+// DB JSON keeps the full records (this mutates only the
 // parsed copy headed for the flattened map). cert_lifecycle stays OUT of
 // indexDeadInventoryKeys — it is pruned, not dropped (not_after must survive).
 func pruneCertDetailForIndex(parsed map[string]any) {
@@ -1930,9 +1929,6 @@ func pruneCertDetailForIndex(parsed map[string]any) {
 			continue
 		}
 		na := cm["not_after"]
-		if na == nil {
-			na = cm["expires"]
-		}
 		for k := range cm {
 			delete(cm, k)
 		}

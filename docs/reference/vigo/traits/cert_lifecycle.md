@@ -44,7 +44,6 @@ Java keystores in JKS or PKCS#12 format are **not** parsed by this collector. Op
         "serial": "01:ab:cd:ef",
         "not_before": "2026-04-01T00:00:00Z",
         "not_after": "2027-04-01T00:00:00Z",
-        "expires": "2027-04-01T00:00:00Z",
         "is_ca": false
       }
     ]
@@ -64,7 +63,6 @@ Java keystores in JKS or PKCS#12 format are **not** parsed by this collector. Op
 | `certificates[].serial` | string | Serial number formatted as colon-separated hex |
 | `certificates[].not_before` | string | RFC 3339 start-of-validity timestamp |
 | `certificates[].not_after` | string | RFC 3339 end-of-validity timestamp |
-| `certificates[].expires` | string | Alias for `not_after` kept for back-compat with the prior `cert_expiry` trait |
 | `certificates[].is_ca` | bool | `true` when the certificate has the CA basic-constraints bit set |
 
 Days-remaining is **not** a field: it is a pure function of `not_after` and the current time, so emitting it would change every collection and force a needless re-send. The server derives it from `not_after` for the dashboard's expiring-certs card, the per-envoy certificate drill-down, and risk scoring.
@@ -101,7 +99,7 @@ directly:
 
 This collector replaces the earlier `cert_expiry` trait (0.23.x and earlier). The rename is clean — any `.vgo` templates or `vigocli inventory` queries referencing `cert_expiry.certificates.*` need updating to `cert_lifecycle.certificates.*`. The old top-level key is no longer emitted.
 
-Fields added during the rename: `cn`, `sans`, `issuer`, `serial`, `not_before`, `not_after`, `is_ca`. The `expires` field from `cert_expiry` is preserved for straightforward migration; `days_remaining` is no longer emitted (the server derives it from `not_after`).
+Fields added during the rename: `cn`, `sans`, `issuer`, `serial`, `not_before`, `not_after`, `is_ca`. The old `expires` field is gone — read `not_after` — and `days_remaining` is no longer emitted (the server derives it from `not_after`).
 
 ## Classification
 

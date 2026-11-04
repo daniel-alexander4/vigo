@@ -162,7 +162,6 @@ fn cert_to_row(path: &str, cert: &X509Certificate<'_>) -> Value {
         "serial": serial,
         "not_before": not_before,
         "not_after": not_after,
-        "expires": not_after, // back-compat with the old cert_expiry trait
         "is_ca": cert.is_ca(),
     })
 }
@@ -321,6 +320,8 @@ mod tests {
         // days_remaining is intentionally NOT emitted (derived server-side from
         // not_after — see server/certexpiry); the collector stays deterministic.
         assert!(c.get("days_remaining").is_none(), "days_remaining must not be emitted");
+        // The `expires` alias of not_after is retired; the server reads not_after only.
+        assert!(c.get("expires").is_none(), "expires alias must not be emitted");
         // SAN populated from the cn passed to CertificateParams::new.
         let sans: Vec<&str> = c["sans"]
             .as_array()

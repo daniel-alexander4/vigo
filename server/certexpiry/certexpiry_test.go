@@ -62,3 +62,26 @@ func TestBucketsAdd(t *testing.T) {
 		t.Errorf("buckets = %+v, want {Expired:2 In7:3 In30:3}", b)
 	}
 }
+
+// TestBucketsFromTraits pins the one flattened-key walk risk scoring and the
+// fleet cert card share: only cert_lifecycle.certificates.<N>.not_after keys,
+// single-segment <N>, parseable timestamps.
+func TestBucketsFromTraits(t *testing.T) {
+	now := time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC)
+	at := func(days int) string { return now.AddDate(0, 0, days).Format(time.RFC3339) }
+	traits := map[string]string{
+		"cert_lifecycle.certificates.0.not_after":   at(-2),  // expired
+		"cert_lifecycle.certificates.1.not_after":   at(3),   // <7d
+		"cert_lifecycle.certificates.2.not_after":   at(20),  // <30d
+		"cert_lifecycle.certificates.3.not_after":   at(200), // fine
+		"cert_lifecycle.certificates.4.not_after":   "garbage",
+		"cert_lifecycle.certificates.5.x.not_after": at(-9), // nested: skipped
+		"cert_lifecycle.certificates.6.expires":     at(-9), // not not_after: skipped
+		"other.certificates.7.not_after":            at(-9), // wrong family: skipped
+		"cert_lifecycle.certificates.not_after":     at(-9), // no index segment: skipped
+	}
+	b := BucketsFromTraits(traits, now)
+	if b.Expired != 1 || b.In7 != 1 || b.In30 != 1 {
+		t.Errorf("BucketsFromTraits = %+v, want 1 expired / 1 <7d / 1 <30d", b)
+	}
+}

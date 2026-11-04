@@ -1882,8 +1882,6 @@ func parseIntTrait(traitMap map[string]string, key string) int {
 // counts plus the number of hosts with at least one cert in any of those buckets.
 // Runs on each dashboard render via the Security Posture stat card.
 func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
-	const prefix = "cert_lifecycle.certificates."
-	const suffix = ".not_after"
 	now := time.Now()
 
 	var summary ui.CertExpirySummary
@@ -1891,19 +1889,7 @@ func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
 		if ts.Revoked || ts.Traits == nil {
 			continue
 		}
-		var host certexpiry.Buckets
-		for k, v := range ts.Traits {
-			if !strings.HasPrefix(k, prefix) || !strings.HasSuffix(k, suffix) {
-				continue
-			}
-			inner := k[len(prefix) : len(k)-len(suffix)]
-			if strings.Contains(inner, ".") {
-				continue
-			}
-			if days, ok := certexpiry.DaysRemaining(v, now); ok {
-				host.Add(days)
-			}
-		}
+		host := certexpiry.BucketsFromTraits(ts.Traits, now)
 		summary.Expired += host.Expired
 		summary.ExpiringIn7 += host.In7
 		summary.ExpiringIn30 += host.In30
@@ -1970,9 +1956,6 @@ func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail,
 	out := make([]ui.CertDetail, 0, len(certs))
 	for _, cm := range certs {
 		notAfter := jsonString(cm["not_after"])
-		if notAfter == "" {
-			notAfter = jsonString(cm["expires"])
-		}
 		// days-remaining is derived from not_after (never a stored trait —
 		// see server/certexpiry); skip certs whose not_after won't parse.
 		days, ok := certexpiry.DaysRemaining(notAfter, now)

@@ -312,24 +312,7 @@ func countTraitPrefix(traits map[string]string, prefix string) int {
 // within-7-days / within-30-days. Rows with an empty or unparseable not_after
 // are skipped; certs with >= 30 days left contribute to no bucket.
 func classifyCertExpiry(traitMap map[string]string, now time.Time) (expired, in7, in30 int) {
-	const prefix = "cert_lifecycle.certificates."
-	const suffix = ".not_after"
-	var b certexpiry.Buckets
-	for k, v := range traitMap {
-		if !strings.HasPrefix(k, prefix) || !strings.HasSuffix(k, suffix) {
-			continue
-		}
-		inner := k[len(prefix) : len(k)-len(suffix)]
-		// Single segment only — skip nested keys from future trait shapes.
-		if strings.Contains(inner, ".") {
-			continue
-		}
-		days, ok := certexpiry.DaysRemaining(v, now)
-		if !ok {
-			continue
-		}
-		b.Add(days)
-	}
+	b := certexpiry.BucketsFromTraits(traitMap, now)
 	return b.Expired, b.In7, b.In30
 }
 

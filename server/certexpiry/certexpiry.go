@@ -13,6 +13,7 @@
 package certexpiry
 
 import (
+	"strings"
 	"time"
 
 	"git.alexander4.io/vigo/server/uifmt"
@@ -73,4 +74,34 @@ func (b *Buckets) Add(days int) {
 	case days < SoonThreshold:
 		b.In30++
 	}
+}
+
+// Flattened trait keys for a certificate's not_after:
+// cert_lifecycle.certificates.<N>.not_after.
+const (
+	flatCertPrefix = "cert_lifecycle.certificates."
+	flatCertSuffix = ".not_after"
+)
+
+// BucketsFromTraits walks a flattened trait map's
+// `cert_lifecycle.certificates.<N>.not_after` keys, derives each cert's
+// days-remaining as of now, and buckets it. Only single-segment <N> keys count
+// (nested keys from a future trait shape are skipped); an empty or unparseable
+// not_after is skipped. The one walk shared by risk scoring and the fleet
+// cert-expiry card, so the two can't disagree on which keys are certificates.
+func BucketsFromTraits(traits map[string]string, now time.Time) Buckets {
+	var b Buckets
+	for k, v := range traits {
+		if !strings.HasPrefix(k, flatCertPrefix) || !strings.HasSuffix(k, flatCertSuffix) ||
+			len(k) < len(flatCertPrefix)+len(flatCertSuffix) {
+			continue
+		}
+		if strings.Contains(k[len(flatCertPrefix):len(k)-len(flatCertSuffix)], ".") {
+			continue
+		}
+		if days, ok := DaysRemaining(v, now); ok {
+			b.Add(days)
+		}
+	}
+	return b
 }

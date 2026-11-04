@@ -13,12 +13,12 @@ import (
 // TestCertificatesFromTraits pins the nested-JSON cert extraction that
 // EnvoyCertDetails now uses (Lever 1c: per-cert detail read from the DB JSON,
 // not the pruned in-memory flattened map). Native JSON types: is_ca bool, sans
-// []string, not_after with an expires fallback.
+// []string, not_after.
 func TestCertificatesFromTraits(t *testing.T) {
 	raw := `{"cert_lifecycle":{"certificates":[
 		{"path":"/etc/ssl/svc.pem","cn":"svc.example.com","issuer":"Example CA",
 		 "not_after":"2027-01-01T00:00:00Z","is_ca":false,"sans":["a.example.com","b.example.com"]},
-		{"cn":"legacy","expires":"2026-06-01T00:00:00Z","is_ca":true}
+		{"cn":"ca","not_after":"2026-06-01T00:00:00Z","is_ca":true}
 	]}}`
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
@@ -41,12 +41,9 @@ func TestCertificatesFromTraits(t *testing.T) {
 	if got := jsonString(certs[0]["not_after"]); got != "2027-01-01T00:00:00Z" {
 		t.Errorf("not_after = %q", got)
 	}
-	// Cert 1: not_after absent → expires fallback; is_ca true.
-	if jsonString(certs[1]["not_after"]) != "" {
-		t.Errorf("cert 1 should have no not_after")
-	}
-	if got := jsonString(certs[1]["expires"]); got != "2026-06-01T00:00:00Z" {
-		t.Errorf("expires fallback = %q", got)
+	// Cert 1: is_ca true.
+	if got := jsonString(certs[1]["not_after"]); got != "2026-06-01T00:00:00Z" {
+		t.Errorf("cert 1 not_after = %q", got)
 	}
 	if !jsonBool(certs[1]["is_ca"]) {
 		t.Errorf("cert 1 is_ca should be true")
