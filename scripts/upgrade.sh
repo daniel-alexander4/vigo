@@ -24,6 +24,9 @@ set -euo pipefail
 #                running container.
 #   arm64        Cross-compile the linux/arm64 agent, inject it.
 #   (darwin / freebsd / windows are also accepted as agent cross-targets.)
+#   deploy       No build. Redeploy from the image already built: stop the
+#                containers, write docker-compose.yml from the image, start.
+#                The second step after `full --norun`. Must be used alone.
 #
 # Modifiers:
 #   --norun  Build/swap but do not restart or redeploy the container.
@@ -46,6 +49,8 @@ set -euo pipefail
 #   sudo scripts/upgrade.sh arm64           # cross-compile + inject arm64
 #   sudo scripts/upgrade.sh                 # = full amd64 arm64
 #   sudo scripts/upgrade.sh full --push     # full image, push to registry
+#   sudo scripts/upgrade.sh full --norun    # build now…
+#   sudo scripts/upgrade.sh deploy          # …deploy it later
 
 DATA_DIR="/srv/vigo"
 IMAGE="us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest"
@@ -87,6 +92,8 @@ Components (name it to build it, omit it to skip it):
   amd64        cross-compile + inject the linux/amd64 agent
   arm64        cross-compile + inject the linux/arm64 agent
                (darwin / freebsd / windows are also accepted)
+  deploy       no build: redeploy from the already-built image (use alone;
+               the second step after `full --norun`)
 
 Modifiers:
   --norun  build/swap but do not restart the container
@@ -106,6 +113,40 @@ EOF
 # Empty string if the marker is missing (should never happen).
 agent_bin_version() {
     grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' "$1" 2>/dev/null | cut -d= -f2
+}
+
+# Write docker-compose.yml from the seed baked into the image about to run.
+# The vigo entrypoint rewrites this file from ITS image's seed on every
+# start, so while a container from an older image exists — above all one in
+# a restart loop — anything written here gets reverted within seconds, and
+# the next `docker compose up` builds the sidecars (guacd) from the old
+# definition. So this is only ever called with no vigo container present.
+write_compose_from_image() {
+    local cid
+    cid="$(docker create "$IMAGE")"
+    docker cp "$cid:/seed/docker-compose.yml" "$DATA_DIR/docker-compose.yml"
+    docker rm "$cid" >/dev/null
+}
+
+vigo_container_exists() {
+    docker ps -aq -f name='^vigo$' | grep -q .
+}
+
+# Replace the running deployment with containers from $IMAGE: down first
+# (nothing left that can rewrite the compose file), then write it, then up.
+redeploy() {
+    echo "Stopping the current containers..."
+    docker compose down --remove-orphans 2>/dev/null || true
+    if vigo_container_exists; then
+        echo "ERROR: the vigo container still exists after 'docker compose down';" >&2
+        echo "       not writing docker-compose.yml while it can still rewrite it." >&2
+        exit 1
+    fi
+    echo "Writing docker-compose.yml from the image..."
+    write_compose_from_image
+    docker compose up -d
+    echo ""
+    wait_for_server
 }
 
 # Block until vigosrv logs "server ready" (or 60s elapse).
@@ -147,6 +188,7 @@ DO_ARM64=false
 DO_DARWIN=false
 DO_FREEBSD=false
 DO_WINDOWS=false
+DO_DEPLOY=false
 START=true           # --norun clears this
 PUSH=false           # --push sets this
 n_components=0
@@ -162,6 +204,7 @@ for arg in "$@"; do
         darwin)      DO_DARWIN=true;     n_components=$((n_components + 1)) ;;
         freebsd)     DO_FREEBSD=true;    n_components=$((n_components + 1)) ;;
         windows)     DO_WINDOWS=true;    n_components=$((n_components + 1)) ;;
+        deploy)      DO_DEPLOY=true;     n_components=$((n_components + 1)) ;;
         --norun)     START=false ;;
         --push)      PUSH=true ;;
         *)
@@ -172,6 +215,20 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# deploy builds nothing, so it combines with nothing: alongside a build it
+# would either be redundant (full already deploys) or undo the build's
+# hot-swaps (a recreate reverts them).
+if $DO_DEPLOY; then
+    if [ "$n_components" -ne 1 ] || ! $START || $PUSH; then
+        echo "ERROR: 'deploy' is used alone — no other components, --norun or --push." >&2
+        exit 1
+    fi
+    if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+        echo "ERROR: no local image $IMAGE to deploy — build it with 'upgrade.sh full'." >&2
+        exit 1
+    fi
+fi
 
 # No components → full durable build.
 if [ "$n_components" -eq 0 ]; then
@@ -247,7 +304,9 @@ fi
 
 SIGN_KEY="${SIGN_KEY:-$REPO_DIR/signing.key}"
 SIGN_PUBKEY=""
-if [ -s "$SIGN_KEY" ]; then
+if $DO_DEPLOY; then
+    :   # nothing is built, so nothing is signed
+elif [ -s "$SIGN_KEY" ]; then
     SIGN_PUBKEY="$(cd "$REPO_DIR" && go run ./server/hardening/cmd/sign -key "$SIGN_KEY" -pubkey-only 2>/dev/null)"
     if [ -z "$SIGN_PUBKEY" ]; then
         echo "ERROR: failed to derive pubkey from SIGN_KEY=$SIGN_KEY" >&2
@@ -609,25 +668,30 @@ if $DO_FULL; then
         echo "Pushed $IMAGE"
     fi
 
-    # Keep the deployed scripts + compose file in sync with the repo.
-    echo "Updating scripts and compose file..."
+    # Keep the deployed scripts in sync with the repo. The compose file is
+    # written by redeploy() / below, never while an older vigo container
+    # exists (see write_compose_from_image).
+    echo "Updating scripts..."
     mkdir -p "$DATA_DIR/scripts"
     for s in upgrade.sh stage-build-context.sh example2stacks.sh reset-envoy.sh; do
         [ -f "$REPO_DIR/scripts/$s" ] && cp "$REPO_DIR/scripts/$s" "$DATA_DIR/scripts/$s"
     done
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
-    cp "$REPO_DIR/docker-compose.prod.yml" "$DATA_DIR/docker-compose.yml"
 
     if $START; then
         echo "Redeploying container from the new image..."
-        docker compose down --remove-orphans 2>/dev/null || true
-        docker compose up -d
+        redeploy
+    elif vigo_container_exists; then
         echo ""
-        wait_for_server
+        echo "Image built; the existing container is untouched (--norun)."
+        echo "Deploy it with: sudo scripts/upgrade.sh deploy"
+        echo "(Not a plain 'docker compose up -d': the existing container rewrites"
+        echo " docker-compose.yml from its older image whenever it restarts.)"
     else
+        write_compose_from_image
         echo ""
-        echo "Image built; the running container is untouched (--norun)."
-        echo "Run 'docker compose up -d' from $DATA_DIR to deploy."
+        echo "Image built (--norun); no container exists yet."
+        echo "Run 'docker compose up -d' from $DATA_DIR to start it."
     fi
 
     # Host vigocli — extracted from the freshly built image (works whether or
@@ -696,6 +760,15 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $DO_FULL && docker ps -q -f name=vigo | g
                 ;;
         esac
     done
+fi
+
+# ---------------------------------------------------------------------------
+# deploy — redeploy from the already-built image
+# ---------------------------------------------------------------------------
+
+if $DO_DEPLOY; then
+    echo "Redeploying from $IMAGE..."
+    redeploy
 fi
 
 # ---------------------------------------------------------------------------

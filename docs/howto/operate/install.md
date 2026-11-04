@@ -129,15 +129,24 @@ TZ=America/New_York
 
 ### Configuration
 
-Edit `server.yaml` for server settings (check-in interval, TLS paths, spanner federation, SMTP, webhooks). Edit `.env` for optional services and environment variables. See [Server Configuration](../../reference/server-yaml.md) for the full reference.
+Edit `server.yaml` for server settings (check-in interval, TLS paths, spanner federation, SMTP, integrations). Edit `.env` for optional services and environment variables. See [Server Configuration](../../reference/server-yaml.md) for the full reference.
 
 ### Upgrading
 
+From your source checkout, rebuild the image and redeploy in one step:
+
 ```bash
-cd /srv/vigo
-docker compose pull
-docker compose up -d
+sudo scripts/upgrade.sh full
 ```
+
+Or build now and deploy later, for example to take the restart at a quiet moment:
+
+```bash
+sudo scripts/upgrade.sh full --norun
+sudo scripts/upgrade.sh deploy
+```
+
+Use `upgrade.sh deploy` rather than a plain `docker compose up -d` here. On every start, the `vigo` container rewrites `/srv/vigo/docker-compose.yml` from the image it runs, so while a container from the old image exists, the file on disk can still be the old one, and the `guacd` sidecar would be created from it. `deploy` stops the old containers before it writes the file.
 
 Your config, database, secrets, and TLS certs persist in `/srv/vigo/` across upgrades.
 

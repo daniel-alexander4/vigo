@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:ae129cfad2eb5f7438a36c1b679a7a9604d65b89faddd24350f939c41ce4419f -->
+<!-- vigo-i18n source_sha:3e7565e02720c2885d51cde0a4b26bf9f73243b83a60c9b010aae3da8aa8ada3 -->
 
 # Installer le serveur Vigo
 
@@ -130,15 +130,24 @@ TZ=America/New_York
 
 ### Configuration
 
-Éditez `server.yaml` pour les paramètres du serveur (intervalle de check-in, chemins TLS, fédération Spanner, SMTP, webhooks). Éditez `.env` pour les services optionnels et les variables d'environnement. Voir [Configuration du serveur](../../reference/server-yaml.md) pour la référence complète.
+Éditez `server.yaml` pour les paramètres du serveur (intervalle de check-in, chemins TLS, fédération Spanner, SMTP, intégrations). Éditez `.env` pour les services optionnels et les variables d'environnement. Voir [Configuration du serveur](../../reference/server-yaml.md) pour la référence complète.
 
 ### Mise à niveau
 
+Depuis votre copie des sources, recompilez l'image et redéployez en une seule étape :
+
 ```bash
-cd /srv/vigo
-docker compose pull
-docker compose up -d
+sudo scripts/upgrade.sh full
 ```
+
+Ou compilez maintenant et déployez plus tard, par exemple pour redémarrer à un moment calme :
+
+```bash
+sudo scripts/upgrade.sh full --norun
+sudo scripts/upgrade.sh deploy
+```
+
+Utilisez ici `upgrade.sh deploy` plutôt qu'un simple `docker compose up -d`. À chaque démarrage, le conteneur `vigo` réécrit `/srv/vigo/docker-compose.yml` à partir de l'image qu'il exécute : tant qu'un conteneur de l'ancienne image existe, le fichier sur disque peut encore être l'ancien, et le conteneur annexe `guacd` serait créé à partir de celui-ci. `deploy` arrête les anciens conteneurs avant d'écrire le fichier.
 
 Votre configuration, votre base de données, vos secrets et vos certificats TLS persistent dans `/srv/vigo/` à travers les mises à niveau.
 
