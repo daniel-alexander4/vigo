@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/httpsec"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/testutil"
 )
@@ -109,4 +110,17 @@ func TestIsowebauthMiddleware_NoAuth_RemoteAPI_Returns401(t *testing.T) {
 	got, rec := runIsowebauthMiddleware(provider, req)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Nil(t, got)
+}
+
+// TestIsowebauthLoginPage_CSPAllowsLocalSigner: the login script fetches
+// the local signing app; the locked CSP alone would block it, so the
+// login page — and only it — carries the connect-src for that origin.
+func TestIsowebauthLoginPage_CSPAllowsLocalSigner(t *testing.T) {
+	provider := &IsowebauthProvider{}
+	rec := httptest.NewRecorder()
+	provider.handleLoginPage(rec, httptest.NewRequest(http.MethodGet, "/login", nil))
+	csp := rec.Header().Get("Content-Security-Policy")
+	assert.Contains(t, csp, "connect-src 'self' "+httpsec.IsowebauthSignerOrigin)
+	assert.Equal(t, httpsec.IsowebauthLoginCSP, csp)
+	assert.NotContains(t, httpsec.CSP, "7890", "the locked CSP must not carry the isowebauth signer origin")
 }

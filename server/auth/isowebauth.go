@@ -132,8 +132,10 @@ func (p *IsowebauthProvider) RegisterRoutes(mux *http.ServeMux) {
 
 func (p *IsowebauthProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	// Serve the login page — the isowebauth JS flow lives in the external
-	// /static/js/isowebauth.js (no inline script, per the locked CSP).
-	httpsec.Headers(w)
+	// /static/js/isowebauth.js (no inline script, per the locked CSP). That
+	// script fetches the local signing app, so this page alone gets the
+	// policy that adds its origin to connect-src.
+	httpsec.HeadersWithCSP(w, httpsec.IsowebauthLoginCSP)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(isowebauthLoginPage(i18n.LocaleFromRequest(p.i18n, r))))
 }
