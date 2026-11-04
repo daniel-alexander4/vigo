@@ -180,12 +180,6 @@ COPY server-seed/stacks/ /seed/stacks/
 # Documentation — seeded into /srv/vigo/docs/ by entrypoint.
 COPY docs/ /seed/docs/
 
-# CLI test script — seeded into /srv/vigo/scripts/ by entrypoint.
-# Only scripts that work without the source tree belong here.
-# test-unit.sh requires the repo and should be run from the checkout.
-RUN mkdir -p /seed/scripts
-COPY scripts/test-cli.sh /seed/scripts/
-
 COPY entrypoint.sh /entrypoint.sh
 
 EXPOSE 1530 8443

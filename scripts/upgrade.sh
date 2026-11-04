@@ -612,7 +612,7 @@ if $DO_FULL; then
     # Keep the deployed scripts + compose file in sync with the repo.
     echo "Updating scripts and compose file..."
     mkdir -p "$DATA_DIR/scripts"
-    for s in test-cli.sh upgrade.sh stage-build-context.sh example2stacks.sh reset-envoy.sh; do
+    for s in upgrade.sh stage-build-context.sh example2stacks.sh reset-envoy.sh; do
         [ -f "$REPO_DIR/scripts/$s" ] && cp "$REPO_DIR/scripts/$s" "$DATA_DIR/scripts/$s"
     done
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
