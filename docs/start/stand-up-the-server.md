@@ -1,21 +1,22 @@
 # 1 · Stand up the server
 
-By the end of this page you'll have a running Vigo server, be logged into its web UI, and have the server's own machine enrolled as the first envoy. Budget ten minutes.
+By the end of this page you'll have a running Vigo server, be logged into its web UI, and have the server's own machine enrolled as the first envoy. Budget ten minutes, plus about 20 for the first image build.
 
 This is the first of four tutorials — work through them in order; each builds on the last.
 
 ## Prerequisites
 
-- A Linux host with Docker + Docker Compose, Go 1.25 and a Rust toolchain.
+- A Linux host with Docker and the Docker Compose plugin (Go 1.25 too if you create the optional signing key).
 - Root (or `sudo`) on that host.
 - That's it. No external services.
 
 ## 1. Bring it up
 
-Prebuilt images are not published yet, so build the server image from source first. You need Docker, Go 1.25 and a Rust toolchain.
+Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker, so Docker with the Compose plugin is all it needs, and the first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+go run ./server/hardening/cmd/sign -genkey -output signing.key   # optional: lets envoys self-update
 sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
 IMAGE=vigo:latest   # the tag the build gives the local image
 ```
@@ -24,8 +25,8 @@ Then seed the data directory and start it:
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
-cd /srv/vigo && docker compose up -d
+sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+cd /srv/vigo && sudo docker compose up -d
 ```
 
 The server listens on **`:1530`** (gRPC, for agents) and **`:8443`** (REST + web UI). Give it a few seconds, then check it's healthy:

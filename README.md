@@ -10,15 +10,16 @@ Vigo is open source under the [Apache License 2.0](LICENSE). Every feature is in
 
 ### 1. Build and start the server
 
-Prebuilt images are not published yet, so build from source. You need Docker, Go 1.25 and a Rust toolchain.
+Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker, so Docker with the Compose plugin is all it needs, and the first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+go run ./server/hardening/cmd/sign -genkey -output signing.key   # optional: lets envoys self-update
 sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
 IMAGE=vigo:latest   # the local image tag
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
-cd /srv/vigo && docker compose up -d
+sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+cd /srv/vigo && sudo docker compose up -d
 ```
 
 `--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, and example configs, and `docker compose up -d` starts the server, which generates its CA and TLS certificates under `/srv/vigo/tls/` on first start. The dashboard is at `https://localhost:8443/`. Then enroll the server's own agent over loopback with `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`.
@@ -63,9 +64,9 @@ envoys:
 ### 4. Publish and verify
 
 ```bash
-vigocli config publish
-vigocli envoys list
-vigocli runs list
+sudo vigocli config publish
+sudo vigocli envoys list
+sudo vigocli runs list
 ```
 
 Or open the web dashboard at `https://<server-ip>:8443/`.

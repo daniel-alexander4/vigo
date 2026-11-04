@@ -15,17 +15,18 @@ Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the 
 
 ### 1. Seed the data directory
 
-Prebuilt images are not published yet, so build the server image from source first. You need Docker, Go 1.25 and a Rust toolchain.
+Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker, so Docker with the Compose plugin is all it needs, and the first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+go run ./server/hardening/cmd/sign -genkey -output signing.key   # optional: lets envoys self-update
 sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
 IMAGE=vigo:latest   # the tag the build gives the local image
 ```
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 ```
 
 This populates `/srv/vigo/` with everything needed to run the server:
@@ -54,22 +55,21 @@ This populates `/srv/vigo/` with everything needed to run the server:
 │                            #   (rebuilt from image on every container start;
 │                            #    vigocli config examples copy)
 ├── .live/                   # published config (locked between publishes)
-├── config-history/          # rollback snapshots
-└── docs/                    # browsable documentation
+└── config-history/          # rollback snapshots
 ```
 
 ### 2. Start the server
 
 ```bash
 cd /srv/vigo
-docker compose up -d
+sudo docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). Three CLI steps stand the install up from here, **in order**:
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). Three CLI steps stand the install up from here, **in order**. `vigocli` on the host is root-only, so run it with `sudo`:
 
-1. **Bootstrap the secrets vault** — `vigocli secrets init --key-file /srv/vigo/secrets/.master.key` (prompts for the unlock passphrase), then `vigocli secrets unlock`.
-2. **Enroll the local agent** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` from the server host. **Use `127.0.0.1`, not `localhost` or this host's own hostname** — the agent the script installs dials whatever address the curl URL used on every subsequent check-in, and only the IPv4 loopback literal is resolver-independent (no nsswitch, no mDNS, no IPv6 link-local trap). This step enrolls *only* the server's own host; every other machine you want to manage follows the separate procedure in [Enroll an envoy](enroll-an-envoy.md), which dials the server by its reachable hostname. The server has a canonical assumption (per CLAUDE.md) that a `vigo` agent runs on the same host alongside the container; the admin-create step below uses that agent's `users` trait to verify the OS-user mapping. Wait until the agent has reported one check-in (~30s) before continuing.
-3. **Create your per-operator admin** — `sudo vigocli webusers create --username <yourname> --role admin` from the server host, where `<yourname>` is a real human OS account on this machine (uid≥1000, real shell). The CLI auto-reads your pubkey from `/home/<yourname>/.ssh/id_ed25519.pub` (fallback `id_rsa.pub`); no `--ssh-key-file` flag for admin role. Then `vigocli webusers set-password --username <yourname>` to set your login password (it stores a bcrypt hash; don't write the vault key directly).
+1. **Bootstrap the secrets vault** — `sudo vigocli secrets init` (the server already created the master key; this sets the unlock passphrase), then `sudo vigocli secrets unlock`. The vault must be initialized before you can store secrets with `vigocli secrets set`.
+2. **Enroll the local agent** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` from the server host. **Use `127.0.0.1`, not `localhost` or this host's own hostname** — the agent the script installs dials whatever address the curl URL used on every subsequent check-in, and only the IPv4 loopback literal is resolver-independent (no nsswitch, no mDNS, no IPv6 link-local trap). Enrolling this host by its LAN address or hostname is refused, because its hostname is one of the server's own TLS names. This step enrolls *only* the server's own host; every other machine you want to manage follows the separate procedure in [Enroll an envoy](enroll-an-envoy.md), which dials the server by its reachable hostname. The server has a canonical assumption (per CLAUDE.md) that a `vigo` agent runs on the same host alongside the container; the admin-create step below uses that agent's `users` trait to verify the OS-user mapping. Wait until the agent has reported one check-in (~30s) before continuing.
+3. **Create your per-operator admin** — `sudo vigocli webusers create --username <yourname> --role admin` from the server host, where `<yourname>` is a real human OS account on this machine (uid≥1000, real shell). The CLI auto-reads your pubkey from `/home/<yourname>/.ssh/id_ed25519.pub` (fallback `id_rsa.pub`); no `--ssh-key-file` flag for admin role. Then `sudo vigocli webusers set-password --username <yourname>` to set your login password (it stores a bcrypt hash; don't write the vault key directly).
 
 Sign in at `https://localhost:8443/login` as `<yourname>`. The default `admin` user is deliberately not auto-created — admin webusers map 1:1 with real OS users so audit attribution always names a real human and browser scrier sessions seed your pubkey automatically. If you need multiple operators, repeat step 3 for each.
 
@@ -78,9 +78,9 @@ If no envoy has checked in yet, the dashboard shows a first-run panel with the s
 ### 3. Verify
 
 ```bash
-docker compose ps                    # container running
+sudo docker compose ps                # containers running
 curl -sk https://127.0.0.1:8443/healthz # ok = server ready (503 while it starts or stops)
-vigocli doctor                     # full diagnostic
+sudo vigocli doctor                   # full diagnostic
 ```
 
 ### 4. Enroll the server's own envoy (do this first)
@@ -99,7 +99,7 @@ The bootstrap script downloads the agent binary, generates a CSR, registers via 
 
 ```bash
 systemctl is-active vigo-envoy       # → active
-vigocli envoys list                  # the server should appear under its host's hostname
+sudo vigocli envoys list             # the server should appear under its host's hostname
 ```
 
 The agent's enrolled hostname is whatever `hostname` returns on the host. Match this with `server.hostname` in `server.yaml` (used for compliance display) so the two views agree.

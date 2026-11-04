@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:33519c66fbb96b4420b2f897e38790739ede1a0f019e3bc57f4e48876aaee417 -->
+<!-- vigo-i18n source_sha:4218fd22e28bb37ded169cbf92dbb69518b000db59dcd5706e97563d0ef0c244 -->
 
 # Installer le serveur Vigo
 
@@ -16,17 +16,18 @@ Vigo comporte trois composants : le serveur (`vigosrv`), la CLI (`vigocli`) et l
 
 ### 1. Initialiser le répertoire de données
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. Il vous faut Docker, Go 1.25 et une chaîne d'outils Rust.
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker : Docker avec le plugin Compose suffit, et la première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+go run ./server/hardening/cmd/sign -genkey -output signing.key   # facultatif : mise à jour automatique des envoys
 sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
 IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 ```
 
 Cela peuple `/srv/vigo/` avec tout ce qui est nécessaire pour exécuter le serveur :
@@ -55,22 +56,21 @@ Cela peuple `/srv/vigo/` avec tout ce qui est nécessaire pour exécuter le serv
 │                            #   (rebuilt from image on every container start;
 │                            #    vigocli config examples copy)
 ├── .live/                   # published config (locked between publishes)
-├── config-history/          # rollback snapshots
-└── docs/                    # browsable documentation
+└── config-history/          # rollback snapshots
 ```
 
 ### 2. Démarrer le serveur
 
 ```bash
 cd /srv/vigo
-docker compose up -d
+sudo docker compose up -d
 ```
 
 Le serveur démarre sur les ports **1530** (gRPC, check-in des agents) et **8443** (HTTPS — API REST, interface web, métriques, bootstrap). Trois étapes CLI mettent l'installation en route à partir d'ici, **dans l'ordre** :
 
-1. **Initialiser le coffre à secrets** — `vigocli secrets init --key-file /srv/vigo/secrets/.master.key` (demande la phrase secrète de déverrouillage), puis `vigocli secrets unlock`.
-2. **Enrôler l'agent local** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` depuis l'hôte du serveur. **Utilisez `127.0.0.1`, pas `localhost` ni le nom d'hôte propre de cette machine** — l'agent que le script installe compose, à chaque check-in ultérieur, l'adresse exacte utilisée par l'URL de curl, et seule la valeur littérale de bouclage IPv4 est indépendante du résolveur (pas de nsswitch, pas de mDNS, pas de piège IPv6 link-local). Cette étape enrôle *uniquement* l'hôte propre du serveur ; toute autre machine que vous souhaitez gérer suit la procédure distincte dans [Enrôler un envoy](enroll-an-envoy.md), qui compose le serveur par son nom d'hôte joignable. Le serveur a une hypothèse canonique (selon CLAUDE.md) qu'un agent `vigo` s'exécute sur le même hôte aux côtés du conteneur ; l'étape de création d'admin ci-dessous utilise le trait `users` de cet agent pour vérifier la correspondance utilisateur-OS. Attendez que l'agent ait remonté un check-in (~30s) avant de continuer.
-3. **Créer votre admin par opérateur** — `sudo vigocli webusers create --username <yourname> --role admin` depuis l'hôte du serveur, où `<yourname>` est un véritable compte OS humain sur cette machine (uid≥1000, shell réel). La CLI lit automatiquement votre clé publique depuis `/home/<yourname>/.ssh/id_ed25519.pub` (repli sur `id_rsa.pub`) ; pas de drapeau `--ssh-key-file` pour le rôle admin. Ensuite, `vigocli webusers set-password --username <yourname>` pour définir votre mot de passe de connexion (il stocke un hash bcrypt ; n'écrivez pas directement la clé du coffre).
+1. **Initialiser le coffre à secrets** — `sudo vigocli secrets init` (le serveur a déjà créé la clé maîtresse ; cette commande définit la phrase secrète de déverrouillage), puis `sudo vigocli secrets unlock`. Le coffre doit être initialisé avant de pouvoir stocker des secrets avec `vigocli secrets set`. Sur l'hôte, `vigocli` est réservé à root : lancez-le avec `sudo`.
+2. **Enrôler l'agent local** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` depuis l'hôte du serveur. **Utilisez `127.0.0.1`, pas `localhost` ni le nom d'hôte propre de cette machine** — l'agent que le script installe compose, à chaque check-in ultérieur, l'adresse exacte utilisée par l'URL de curl, et seule la valeur littérale de bouclage IPv4 est indépendante du résolveur (pas de nsswitch, pas de mDNS, pas de piège IPv6 link-local). L'enrôlement de cet hôte par son adresse LAN ou son nom d'hôte est refusé, car ce nom fait partie des noms TLS du serveur. Cette étape enrôle *uniquement* l'hôte propre du serveur ; toute autre machine que vous souhaitez gérer suit la procédure distincte dans [Enrôler un envoy](enroll-an-envoy.md), qui compose le serveur par son nom d'hôte joignable. Le serveur a une hypothèse canonique (selon CLAUDE.md) qu'un agent `vigo` s'exécute sur le même hôte aux côtés du conteneur ; l'étape de création d'admin ci-dessous utilise le trait `users` de cet agent pour vérifier la correspondance utilisateur-OS. Attendez que l'agent ait remonté un check-in (~30s) avant de continuer.
+3. **Créer votre admin par opérateur** — `sudo vigocli webusers create --username <yourname> --role admin` depuis l'hôte du serveur, où `<yourname>` est un véritable compte OS humain sur cette machine (uid≥1000, shell réel). La CLI lit automatiquement votre clé publique depuis `/home/<yourname>/.ssh/id_ed25519.pub` (repli sur `id_rsa.pub`) ; pas de drapeau `--ssh-key-file` pour le rôle admin. Ensuite, `sudo vigocli webusers set-password --username <yourname>` pour définir votre mot de passe de connexion (il stocke un hash bcrypt ; n'écrivez pas directement la clé du coffre).
 
 Connectez-vous à `https://localhost:8443/login` en tant que `<yourname>`. L'utilisateur `admin` par défaut n'est délibérément pas créé automatiquement — les webusers admin correspondent 1:1 à de véritables utilisateurs OS afin que l'attribution d'audit nomme toujours un humain réel et que les sessions Scrier dans le navigateur initialisent automatiquement votre clé publique. Si vous avez besoin de plusieurs opérateurs, répétez l'étape 3 pour chacun.
 
@@ -79,9 +79,9 @@ Si aucun envoy n'a encore fait de check-in, le tableau de bord affiche un pannea
 ### 3. Vérifier
 
 ```bash
-docker compose ps                    # container running
+sudo docker compose ps                # containers running
 curl -sk https://127.0.0.1:8443/healthz # ok = serveur prêt (503 pendant le démarrage ou l'arrêt)
-vigocli doctor                     # full diagnostic
+sudo vigocli doctor                   # full diagnostic
 ```
 
 ### 4. Enrôler l'envoy propre du serveur (faites-le en premier)
@@ -100,7 +100,7 @@ Le script de bootstrap télécharge le binaire de l'agent, génère une CSR, s'e
 
 ```bash
 systemctl is-active vigo-envoy       # → active
-vigocli envoys list                  # the server should appear under its host's hostname
+sudo vigocli envoys list             # the server should appear under its host's hostname
 ```
 
 Le nom d'hôte enrôlé de l'agent est ce que renvoie `hostname` sur l'hôte. Faites-le correspondre avec `server.hostname` dans `server.yaml` (utilisé pour l'affichage de conformité) afin que les deux vues s'accordent.

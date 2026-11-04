@@ -1,25 +1,26 @@
 # Quickstart
 
-Stand up the Vigo server, enroll your first envoy, and apply your first configcrate. Ten minutes, copy-paste. If you'd rather be walked through it step by step, take the [tutorials](start/) instead — same path, more explanation.
+Stand up the Vigo server, enroll your first envoy, and apply your first configcrate. About ten minutes of copy-paste once the image is built. If you'd rather be walked through it step by step, take the [tutorials](start/) instead — same path, more explanation.
 
 ## 1. Start the server
 
-Prebuilt images are not published yet, so build the server image from source first. You need Docker, Go 1.25 and a Rust toolchain.
+Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker, so Docker with the Compose plugin is all it needs, and the first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+go run ./server/hardening/cmd/sign -genkey -output signing.key   # optional: lets envoys self-update
 sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
 IMAGE=vigo:latest   # the tag the build gives the local image
 ```
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 cd /srv/vigo
-docker compose up -d
+sudo docker compose up -d
 ```
 
-`--seed-only` writes `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env`, TLS material, and example configs, then exits. `docker compose up -d` starts the server. REST + Web UI on `https://localhost:8443`, gRPC on `localhost:1530`.
+`--seed-only` writes `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env`, and example configs, then exits. `docker compose up -d` starts the server, which generates its CA and TLS certificates under `/srv/vigo/tls/` on first start. REST + Web UI on `https://localhost:8443`, gRPC on `localhost:1530`.
 
 Single-`docker run` if you don't want compose:
 

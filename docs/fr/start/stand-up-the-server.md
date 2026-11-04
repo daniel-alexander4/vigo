@@ -1,23 +1,24 @@
-<!-- vigo-i18n source_sha:2e4c6cbdd1669dd5cf945f84c00dbd43bef022c8c9ae974ca419964d9a00f5a8 -->
+<!-- vigo-i18n source_sha:c63c3b232af46aa6469da5d1b409728ed6f332b9444079d6b63be91ed800a9ed -->
 
 # 1 · Mettre le serveur en service
 
-À la fin de cette page, vous aurez un serveur Vigo en fonctionnement, vous serez connecté à son interface web, et la machine du serveur elle-même sera enrôlée comme premier envoy. Comptez dix minutes.
+À la fin de cette page, vous aurez un serveur Vigo en fonctionnement, vous serez connecté à son interface web, et la machine du serveur elle-même sera enrôlée comme premier envoy. Comptez dix minutes, plus environ 20 pour la première compilation de l'image.
 
 C'est le premier des quatre tutoriels — suivez-les dans l'ordre ; chacun s'appuie sur le précédent.
 
 ## Prérequis
 
-- Un hôte Linux avec Docker + Docker Compose, Go 1.25 et une chaîne d'outils Rust.
+- Un hôte Linux avec Docker et le plugin Docker Compose (et Go 1.25 si vous créez la clé de signature facultative).
 - Les droits root (ou `sudo`) sur cet hôte.
 - C'est tout. Aucun service externe.
 
 ## 1. Le démarrer
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. Il vous faut Docker, Go 1.25 et une chaîne d'outils Rust.
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker : Docker avec le plugin Compose suffit, et la première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+go run ./server/hardening/cmd/sign -genkey -output signing.key   # facultatif : mise à jour automatique des envoys
 sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
 IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```
@@ -26,8 +27,8 @@ Initialisez ensuite le répertoire de données et démarrez le serveur :
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
-cd /srv/vigo && docker compose up -d
+sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+cd /srv/vigo && sudo docker compose up -d
 ```
 
 Le serveur écoute sur **`:1530`** (gRPC, pour les agents) et **`:8443`** (REST + interface web). Laissez-lui quelques secondes, puis vérifiez qu'il est en bonne santé :

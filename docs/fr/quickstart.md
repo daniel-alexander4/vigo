@@ -1,27 +1,28 @@
-<!-- vigo-i18n source_sha:d4f5d004da9919183100a8eefa61c20adf3d28783bd470cd8a733d7f96121c42 -->
+<!-- vigo-i18n source_sha:32f56b39ee41792ac45eeddd803fad9f76248e7fc54f74c7c33906cbd4a46e09 -->
 
 # Démarrage rapide
 
-Mettez en route le serveur Vigo, enrôlez votre premier Envoy et appliquez votre premier configcrate. Dix minutes, par copier-coller. Si vous préférez être guidé pas à pas, suivez plutôt les [tutoriels](start/) — même parcours, plus d'explications.
+Mettez en route le serveur Vigo, enrôlez votre premier Envoy et appliquez votre premier configcrate. Une dizaine de minutes de copier-coller une fois l'image compilée. Si vous préférez être guidé pas à pas, suivez plutôt les [tutoriels](start/) — même parcours, plus d'explications.
 
 ## 1. Démarrer le serveur
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. Il vous faut Docker, Go 1.25 et une chaîne d'outils Rust.
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker : Docker avec le plugin Compose suffit, et la première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+go run ./server/hardening/cmd/sign -genkey -output signing.key   # facultatif : mise à jour automatique des envoys
 sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
 IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 cd /srv/vigo
-docker compose up -d
+sudo docker compose up -d
 ```
 
-`--seed-only` écrit `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env`, le matériel TLS et des configurations d'exemple, puis se termine. `docker compose up -d` démarre le serveur. REST + interface Web sur `https://localhost:8443`, gRPC sur `localhost:1530`.
+`--seed-only` écrit `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env` et des configurations d'exemple, puis se termine. `docker compose up -d` démarre le serveur, qui génère son autorité de certification et ses certificats TLS sous `/srv/vigo/tls/` au premier démarrage. REST + interface Web sur `https://localhost:8443`, gRPC sur `localhost:1530`.
 
 `docker run` unique si vous ne voulez pas de compose :
 
