@@ -75,3 +75,21 @@ func TestMaxBodyMiddleware_OversizedBody(t *testing.T) {
 		t.Fatalf("expected 413, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// The client-controlled `Upgrade: websocket` header must not lift the body
+// cap: only the scrier relay route is exempt, by method + path.
+func TestMaxBodyMiddleware_UpgradeHeaderDoesNotBypass(t *testing.T) {
+	handler := MaxBodyMiddleware(echoHandler())
+
+	body := bytes.Repeat([]byte("b"), maxRequestBodySize+1)
+	req := httptest.NewRequest("POST", "/api/v1/bootstrap/register", bytes.NewReader(body))
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 despite Upgrade header, got %d", rec.Code)
+	}
+}

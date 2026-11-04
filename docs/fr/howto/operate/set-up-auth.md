@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:b07d0bf28b83a5c9c6a9bec7df3171e4be36c9eaa5df682a64609e2de501501f -->
+<!-- vigo-i18n source_sha:0d19777a2057d6a993227a7f49081a33621f58b4f27a9a595f456dd1a324f1c3 -->
 
 ---
 title: Authentification
@@ -247,19 +247,19 @@ sudo vigocli webusers create --username alice --role admin
 
 ## Points de terminaison publics
 
-Les chemins suivants sont accessibles sans authentification quelle que soit la méthode d'auth configurée. Cela garantit que l'amorçage de l'agent, les contrôles de santé et la collecte de métriques fonctionnent sans identifiants.
+Les chemins suivants sont accessibles sans authentification quelle que soit la méthode d'auth configurée. Cela garantit que l'amorçage de l'agent et la collecte de métriques fonctionnent sans identifiants.
 
 | Préfixe de chemin | Objet |
 |-------------|---------|
-| `/bootstrap` | Script d'amorçage de l'agent et points de terminaison de certificat |
+| `/bootstrap` | Script d'amorçage de l'agent |
 | `/api/v1/agent/` | Téléchargements du binaire de l'agent |
 | `/api/v1/bootstrap/` | Inscription d'enrôlement de l'agent |
 | `/metrics` | Collecte de métriques Prometheus |
-| `/healthz` | Sonde de contrôle de santé |
 | `/static/` | Ressources CSS, JavaScript et images |
 | `/auth/` | Gestionnaires de connexion et de rappel SSO |
-| `/login` | Page de connexion |
-| `/setup` | Page de configuration du premier utilisateur |
+| `/login`, `/totp` | Pages de connexion et de second facteur |
+
+Les lectures swarm destinées aux agents sont aussi publiques : la table des clés publiques de la flotte, la table des noms de puddle, `resolve` et `blob` de curator, et les lectures poolq `topics` et `topic/…`. Les routes de modération poolq `block`/`unblock` sont réservées aux administrateurs.
 
 ## Rôles et permissions
 

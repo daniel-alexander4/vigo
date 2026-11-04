@@ -75,7 +75,6 @@ var publicPrefixes = []string{
 	"/auth/",
 	"/api/v1/agent/",
 	"/api/v1/bootstrap/",
-	"/api/v1/swarm/filecast/blob/",
 	// Curator (ADR-024) blob relay — artifacts are fleet-readable (the
 	// publish side is gated, not the read side), so the relay is
 	// public-by-construction like the name map below; mTLS is the
@@ -85,22 +84,24 @@ var publicPrefixes = []string{
 	// Poolq (ADR-029) read endpoints — messages are fleet-readable
 	// (confidentiality is not a goal; pair with lockbox for confidential
 	// payloads), so reads are public-by-construction like curator's
-	// blob/resolve. mTLS is the transport guard. Block/unblock admin
-	// moderation is registered separately with its own admin() wrapper.
-	"/api/v1/swarm/poolq/",
+	// blob/resolve. mTLS is the transport guard. Only the read routes are
+	// public (`/topic/...` here, `/topics` in publicPaths): the
+	// POST /api/v1/swarm/poolq/{block,unblock}/{id} moderation routes sit
+	// behind an admin() wrapper, which needs the middleware to resolve the
+	// caller — a public path skips that and the wrapper would always 403.
+	"/api/v1/swarm/poolq/topic/",
 }
 
 // publicPaths are exact URL paths that never require authentication.
+// Every entry must be a path some route actually serves: a dead public
+// entry silently makes any handler later registered there public.
 var publicPaths = map[string]bool{
-	"/bootstrap":        true,
-	"/bootstrap/agent":  true,
-	"/bootstrap/cert":   true,
-	"/bootstrap/csr":    true,
-	"/metrics":          true,
-	"/healthz":          true,
-	"/login":            true,
-	"/totp":             true,
-	"/api/v1/bootstrap": true,
+	"/bootstrap": true,
+	"/metrics":   true,
+	"/login":     true,
+	"/totp":      true,
+	// Poolq topic list — see the `/api/v1/swarm/poolq/topic/` prefix above.
+	"/api/v1/swarm/poolq/topics": true,
 	// Apache-2.0 LICENSE and NOTICE. The bootstrap script fetches them with
 	// no session to ship beside the agent binary (license section 4).
 	"/license/LICENSE": true,

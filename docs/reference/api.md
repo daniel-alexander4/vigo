@@ -1595,23 +1595,6 @@ Returns the OpenAPI specification as JSON.
 
 ---
 
-## Health Check
-
-### GET /healthz
-
-**Permission:** Public (no authentication)
-
-Returns a simple health status. Useful for load balancer probes and monitoring.
-
-**Response:**
-
-```json
-{"status":"ok","bolt_id":""}
-```
-
-The `bolt_id` field is populated when the server runs in spoke mode (i.e. this vigosrv is one bolt in a spanner).
-
----
 
 ## Database Administration
 
@@ -1726,14 +1709,11 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/metrics` | Prometheus metrics (see [Metrics](../howto/operate/set-up-monitoring.md)) |
-| GET | `/healthz` | Health check (see above) |
 | GET | `/bootstrap` | Agent bootstrap script |
-| GET | `/bootstrap/agent/{os}/{arch}` | Agent binary download |
-| GET | `/bootstrap/ca.pem` | CA certificate download |
-| GET | `/api/v1/agent/latest` | Agent version, SHA256 checksum, and ED25519 signature (`?os=&arch=`) |
+| GET | `/api/v1/agent/latest` | Agent version, SHA256 checksum, and ED25519 signature (`?os=&arch=`; an unsupported platform returns `400`) |
 | GET | `/api/v1/agent/download/{os}/{arch}` | Agent binary download |
 | GET | `/api/v1/agent/signing-key` | ED25519 signing public key (hex) |
-| POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing |
+| POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing. The hostname must be a plain DNS name (RFC 1123 labels; no wildcard, no IP literal) or the call returns `400`; a hostname the server's own TLS certificate carries is refused `403` unless the request comes over loopback (the server's own envoy). A refused enrollment returns `403` with a generic body; the reason is in the server log. |
 | GET | `/api/v1/fleet/pubkeys` | Hostname → Ed25519 pubkey map for the (non-revoked) fleet. Used by agents to bootstrap their gitback peer-pubkey TOFU cache. Pubkeys are public-by-construction (broadcast on multicast); endpoint is unauthenticated. |
 
 ---

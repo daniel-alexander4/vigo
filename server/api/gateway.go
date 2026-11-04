@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
@@ -198,10 +199,10 @@ const maxRequestBodySize = 1 << 20 // 1 MB
 // This prevents unbounded memory consumption from oversized POST bodies.
 func MaxBodyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip body limiting for WebSocket upgrade requests — MaxBytesReader
-		// wraps the ResponseWriter which strips the Hijacker interface
-		// needed by the WebSocket upgrade.
-		if r.Header.Get("Upgrade") == "websocket" {
+		// The scrier WebSocket relay (GET /ws/scrier/{id}) is the only
+		// upgrade route; it is exempted by method + path, never by the
+		// client-controlled Upgrade header (which would exempt every route).
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/ws/scrier/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -217,4 +218,3 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-

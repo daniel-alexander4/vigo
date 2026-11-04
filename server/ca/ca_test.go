@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -182,5 +183,41 @@ func TestSignCSR_InvalidPEM(t *testing.T) {
 	_, err = authority.SignCSR([]byte("not a PEM"), "host", 24*time.Hour)
 	if err == nil {
 		t.Fatal("SignCSR should fail with invalid PEM")
+	}
+}
+
+func TestValidateHostname(t *testing.T) {
+	valid := []string{"web01", "web-01.example.com", "A1.B2.c3", "x"}
+	for _, h := range valid {
+		if err := ValidateHostname(h); err != nil {
+			t.Errorf("ValidateHostname(%q) = %v, want nil", h, err)
+		}
+	}
+	invalid := []string{
+		"", "*", "*.example.com", "web.*.com", "10.0.0.1", "::1", "fe80::1",
+		"bad_host", "-web.example.com", "web-.example.com", "a..b", "trailing.",
+		".leading", "sp ace", "unié.com", strings.Repeat("a", 64) + ".com",
+		strings.Repeat("a.", 127) + "aaa",
+	}
+	for _, h := range invalid {
+		if err := ValidateHostname(h); err == nil {
+			t.Errorf("ValidateHostname(%q) = nil, want error", h)
+		}
+	}
+}
+
+// SignCSR itself refuses a wildcard / IP-literal name even if a caller
+// skipped the enrollment-time validation.
+func TestSignCSR_RejectsInvalidHostname(t *testing.T) {
+	dir := t.TempDir()
+	certPath, keyPath := generateTestCA(t, dir)
+	authority, err := Load(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	for _, h := range []string{"*.example.com", "10.0.0.1"} {
+		if _, err := authority.SignCSR(generateTestCSR(t, "x"), h, time.Hour); err == nil {
+			t.Errorf("SignCSR(%q) succeeded, want rejection", h)
+		}
 	}
 }

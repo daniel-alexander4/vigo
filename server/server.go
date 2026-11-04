@@ -101,13 +101,13 @@ type Server struct {
 	secretsCfg      secrets.Config       // first-pass secrets backend config
 
 	// --- Resolved paths (env var > cfg.Paths.* > built-in default) ---
-	traitsDir       string
-	docsDir         string
-	taskDir         string
-	workflowsDir    string
-	agentDir        string
-	liveDir         string // serverRoot/.live — validated published config the server reads
-	historyDir      string // serverRoot/config-history — rollback snapshots
+	traitsDir    string
+	docsDir      string
+	taskDir      string
+	workflowsDir string
+	agentDir     string
+	liveDir      string // serverRoot/.live — validated published config the server reads
+	historyDir   string // serverRoot/config-history — rollback snapshots
 
 	// --- Identity / secrets ---
 	provider     secrets.Provider
@@ -122,7 +122,6 @@ type Server struct {
 	isPostgres  bool
 	queries     *db.Queries
 	auditWriter *audit.Writer
-
 
 	// --- Auth ---
 	authProvider vigoauth.Provider
@@ -251,6 +250,14 @@ type Server struct {
 	// nil unless swarm.curator.s3_port is set and the `local` backend runs.
 	s3Srv *http.Server
 }
+
+// HTTP listener timeouts (REST/UI and curator S3). ReadHeaderTimeout bounds
+// a slow-loris header trickle; IdleTimeout reaps idle keep-alives. Body
+// size is bounded separately by api.MaxBodyMiddleware.
+const (
+	httpReadHeaderTimeout = 10 * time.Second
+	httpIdleTimeout       = 120 * time.Second
+)
 
 // NewServer constructs a *Server from configFile. Performs no I/O beyond
 // reading the config + opening the database + materializing identity
@@ -1323,8 +1330,17 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 				}
 			}
 
+			// The server's own TLS names: an envoy cert (same CA, ServerAuth)
+			// must never carry one of them except for the loopback server-self
+			// envoy. Fail closed: no names readable ⇒ refuse to start signing.
+			serverNames, snErr := bootstrap.ServerCertNames(s.cfg.Server.TLS.CertFile)
+			if snErr != nil {
+				return nil, fmt.Errorf("reading server TLS cert names for bootstrap: %w", snErr)
+			}
+
 			gwOpts = append(gwOpts, func(bh *bootstrap.Handler) {
 				bh.SetCA(certAuthority)
+				bh.SetReservedNames(serverNames)
 				bh.SetRegistry(s.reg)
 				bh.SetTrustedPatterns(s.cfg.Bootstrap.TrustedPatterns)
 				bh.SetCertValidity(certValidity)
@@ -1513,8 +1529,10 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 						s.metrics,
 					)
 					s.s3Srv = &http.Server{
-						Addr:    fmt.Sprintf(":%d", port),
-						Handler: s3Server.Handler(),
+						Addr:              fmt.Sprintf(":%d", port),
+						Handler:           s3Server.Handler(),
+						ReadHeaderTimeout: httpReadHeaderTimeout,
+						IdleTimeout:       httpIdleTimeout,
 					}
 					slog.Info("curator S3 API enabled", "port", port)
 				} else {
@@ -1586,9 +1604,14 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 			slog.Warn("curator S3 API configured but disabled — this server does not run the curator substrate (swarm.enabled does not match this host)",
 				"port", s.cfg.Swarm.Curator.S3Port)
 		}
+		// Header and idle timeouts only: no ReadTimeout/WriteTimeout, which
+		// would cut the long-lived scrier WebSocket, SSE/streaming AI
+		// responses and large blob/agent downloads.
 		s.httpSrv = &http.Server{
-			Addr:    s.cfg.Server.APIListen,
-			Handler: s.authProvider.Middleware(api.MaxBodyMiddleware(gwMux)),
+			Addr:              s.cfg.Server.APIListen,
+			Handler:           s.authProvider.Middleware(api.MaxBodyMiddleware(gwMux)),
+			ReadHeaderTimeout: httpReadHeaderTimeout,
+			IdleTimeout:       httpIdleTimeout,
 		}
 	}
 

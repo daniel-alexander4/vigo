@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d3bf8250a54d58b8667e02f133d619df5983936a8f1973b3e97991d293dc6282 -->
+<!-- vigo-i18n source_sha:b44e2a2d746d2753eeef1efadc61683d226bc33b309f8e9473f51ddfc4e4f668 -->
 
 # Installer le serveur Vigo
 
@@ -80,7 +80,7 @@ Si aucun envoy n'a encore fait de check-in, le tableau de bord affiche un pannea
 
 ```bash
 docker compose ps                    # container running
-curl -sk https://127.0.0.1:8443/healthz # health check
+curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8443/metrics # 200 = REST listener up
 vigocli doctor                     # full diagnostic
 ```
 

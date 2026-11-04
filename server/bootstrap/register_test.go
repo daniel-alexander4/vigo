@@ -215,6 +215,78 @@ func mustJSON(s string) string {
 	return string(b)
 }
 
+// trustedRegisterReq posts a token-less (trusted) enrollment for hostname
+// from remoteAddr against a handler that trusts every peer.
+func trustedRegisterReq(t *testing.T, h *Handler, hostname, remoteAddr string) *httptest.ResponseRecorder {
+	t.Helper()
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	csr := generateTestCSR(t, "x")
+	body := fmt.Sprintf(`{"hostname":%s,"ip_address":"10.0.2.10","pubkey_pem":"fakepk","csr_pem":%s}`, mustJSON(hostname), mustJSON(string(csr)))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/bootstrap/register", strings.NewReader(body))
+	req.RemoteAddr = remoteAddr
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	return w
+}
+
+func newTrustedHandler(t *testing.T) *Handler {
+	t.Helper()
+	cleanDB(t)
+	reg := registry.NewRegistry(db.New(testDB))
+	h := newTestHandlerWithCA(t, t.TempDir())
+	h.SetRegistry(reg)
+	h.SetTrustedPatterns([]config.TrustedEnrollment{{Pattern: "*"}})
+	return h
+}
+
+// An envoy cert carries ServerAuth from the server's own CA, so a remote
+// enrollee must not be able to take one of the server's TLS names. The
+// loopback server-self envoy, which shares the server hostname, still can.
+func TestBootstrapRegister_ReservedServerName(t *testing.T) {
+	h := newTrustedHandler(t)
+	h.SetReservedNames([]string{"vigo.example.com", "localhost"})
+
+	if w := trustedRegisterReq(t, h, "VIGO.example.com", "10.0.2.10:5555"); w.Code != http.StatusForbidden {
+		t.Fatalf("remote enrollment as a server name: want 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if w := trustedRegisterReq(t, h, "localhost", "10.0.2.10:5555"); w.Code != http.StatusForbidden {
+		t.Fatalf("remote enrollment as localhost: want 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if w := trustedRegisterReq(t, h, "vigo.example.com", "127.0.0.1:5555"); w.Code != http.StatusOK {
+		t.Fatalf("loopback server-self enrollment: want 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// Wildcard / IP-literal / malformed hostnames are refused before anything
+// else runs.
+func TestBootstrapRegister_InvalidHostname(t *testing.T) {
+	h := newTrustedHandler(t)
+	for _, name := range []string{"*.example.com", "10.0.0.5", "bad_host"} {
+		if w := trustedRegisterReq(t, h, name, "10.0.2.10:5555"); w.Code != http.StatusBadRequest {
+			t.Errorf("hostname %q: want 400, got %d: %s", name, w.Code, w.Body.String())
+		}
+	}
+}
+
+// A failed registration tells the unauthenticated caller nothing about the
+// registry's internal state.
+func TestBootstrapRegister_DeniedIsGeneric(t *testing.T) {
+	cleanDB(t)
+	reg := registry.NewRegistry(db.New(testDB))
+	h := newTestHandlerWithCA(t, t.TempDir())
+	h.SetRegistry(reg)
+	h.SetTrustedPatterns([]config.TrustedEnrollment{{Pattern: "*.example.com", CIDRs: []string{"10.9.0.0/16"}}})
+
+	w := trustedRegisterReq(t, h, "web-01.example.com", "10.0.2.10:5555")
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("want 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := strings.TrimSpace(w.Body.String()); got != "registration denied" {
+		t.Fatalf("want generic body %q, got %q", "registration denied", got)
+	}
+}
+
 // stubSpannerRouter is a test double for the spanner enrollment router so the
 // REST routing path can be exercised without standing up a second bolt.
 type stubSpannerRouter struct {

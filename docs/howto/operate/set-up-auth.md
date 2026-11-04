@@ -241,19 +241,19 @@ sudo vigocli webusers create --username alice --role admin
 
 ## Public Endpoints
 
-The following paths are accessible without authentication regardless of the configured auth method. This ensures agent bootstrap, health checks, and metrics scraping work without credentials.
+The following paths are accessible without authentication regardless of the configured auth method. This ensures agent bootstrap and metrics scraping work without credentials.
 
 | Path prefix | Purpose |
 |-------------|---------|
-| `/bootstrap` | Agent bootstrap script and certificate endpoints |
+| `/bootstrap` | Agent bootstrap script |
 | `/api/v1/agent/` | Agent binary downloads |
 | `/api/v1/bootstrap/` | Agent enrollment registration |
 | `/metrics` | Prometheus metrics scraping |
-| `/healthz` | Health check probe |
 | `/static/` | CSS, JavaScript, and image assets |
 | `/auth/` | Login and SSO callback handlers |
-| `/login` | Login page |
-| `/setup` | First-user setup page |
+| `/login`, `/totp` | Login and second-factor pages |
+
+Agent-facing swarm reads are public too: the fleet pubkey map, the puddle name map, curator `resolve` and `blob`, and the poolq `topics` and `topic/…` reads. The poolq `block`/`unblock` moderation routes are admin-only.
 
 ## Roles and Permissions
 

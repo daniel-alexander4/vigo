@@ -583,6 +583,59 @@ func TestAgentDownload_RejectsInvalidOsArch(t *testing.T) {
 	}
 }
 
+// AgentLatest joins os/arch into a filesystem path, so it must apply the same
+// platform gate as AgentDownload: `?os=..&arch=.` would otherwise hash (and
+// cache) any server-readable file named `vigo` outside the dist tree.
+func TestAgentLatest_RejectsTraversalOsArch(t *testing.T) {
+	dir := t.TempDir()
+	agentDir := filepath.Join(dir, "agents")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "vigo"), []byte("outside the dist tree"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler("https://server:8443", "", agentDir, "1.0.0", metrics.NewTestMetrics())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	for _, q := range []string{"os=..&arch=.", "os=linux&arch=../..", "os=solaris&arch=amd64"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/agent/latest?"+q, nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: want 400, got %d: %s", q, w.Code, w.Body.String())
+		}
+	}
+}
+
+// On Windows a checksum mismatch must abort. Under
+// $ErrorActionPreference='Stop' anything thrown inside a try lands in its
+// catch, which only warned and went on to run the binary — so the mismatch
+// branch must sit outside every try block.
+func TestBootstrapScript_WindowsChecksumMismatchAborts(t *testing.T) {
+	h := NewHandler("https://server:8443", "", t.TempDir(), "1.0.0", metrics.NewTestMetrics())
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	req := httptest.NewRequest(http.MethodGet, "/bootstrap?os=windows", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	script := w.Body.String()
+
+	mm := strings.Index(script, "checksum mismatch")
+	if mm < 0 {
+		t.Fatalf("windows script has no checksum-mismatch branch:\n%s", script)
+	}
+	before := script[:mm]
+	lastTry := strings.LastIndex(before, "try {")
+	if lastTry >= 0 && !strings.Contains(before[lastTry:], "} catch") {
+		t.Fatalf("checksum-mismatch branch is inside a try block; a mismatch would be caught and the binary run anyway")
+	}
+	if !strings.Contains(script[mm:], "exit 1") {
+		t.Fatalf("checksum-mismatch branch does not exit 1")
+	}
+}
+
 // TestBootstrapScript_IPv6HostIsBracketed guards the derived-SERVER_ADDR path.
 // net.SplitHostPort strips the brackets off an IPv6 Host header, and the
 // derivation used to concatenate the bare address straight back into a URL —

@@ -1074,3 +1074,77 @@ func TestRevokeEnvoy_DecrementsCount(t *testing.T) {
 		t.Errorf("expected ActiveCount=1 after revoke, got %d", fi.ActiveCount())
 	}
 }
+
+// --- Credentials before conflict resolution ---
+
+// An unauthenticated force request (bad token) must not revoke the existing
+// envoy: the force-revoke runs only after the token has matched a pattern.
+func TestRegisterForceBadTokenLeavesVictimActive(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	if _, err := reg.AddApprovedPattern(ctx, "victim.example.com", "victim-token"); err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	victimID, err := reg.Register(ctx, "victim.example.com", "10.0.0.1", "pubkey-victim", "victim-token", false)
+	if err != nil {
+		t.Fatalf("victim Register: %v", err)
+	}
+	// A second unused pattern exists so the attacker's request reaches the
+	// bcrypt compare (not the empty-pattern early return).
+	if _, err := reg.AddApprovedPattern(ctx, "*.example.com", "real-token"); err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+
+	_, err = reg.Register(ctx, "victim.example.com", "10.0.0.66", "pubkey-attacker", "wrong-token", true)
+	if !errors.Is(err, registry.ErrNoMatchingPattern) {
+		t.Fatalf("expected ErrNoMatchingPattern, got: %v", err)
+	}
+	if err := reg.ValidateEnvoy(ctx, victimID); err != nil {
+		t.Fatalf("victim envoy must stay active after an unauthenticated force request, got: %v", err)
+	}
+}
+
+// Same for the trusted path: a peer outside the trusted CIDRs must not be
+// able to force-revoke.
+func TestTrustedRegisterForceOutsideCIDRLeavesVictimActive(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+
+	patterns := []config.TrustedEnrollment{
+		{Pattern: "*.example.com", CIDRs: []string{"10.0.0.0/8"}},
+	}
+	victimID, err := reg.TrustedRegister(ctx, "tvictim.example.com", "10.0.0.1", "pubkey-victim", patterns, "10.0.0.50", false)
+	if err != nil {
+		t.Fatalf("victim TrustedRegister: %v", err)
+	}
+
+	_, err = reg.TrustedRegister(ctx, "tvictim.example.com", "10.0.0.1", "pubkey-attacker", patterns, "203.0.113.9", true)
+	if !errors.Is(err, registry.ErrNoMatchingPattern) {
+		t.Fatalf("expected ErrNoMatchingPattern, got: %v", err)
+	}
+	if err := reg.ValidateEnvoy(ctx, victimID); err != nil {
+		t.Fatalf("victim envoy must stay active after a force request from outside the trusted CIDRs, got: %v", err)
+	}
+}
+
+// Every enrollment path refuses a hostname that cannot be a cert DNS SAN.
+func TestEnrollmentRejectsInvalidHostname(t *testing.T) {
+	reg := newTestRegistry(t)
+	ctx := context.Background()
+	patterns := []config.TrustedEnrollment{{Pattern: "*"}}
+	if _, err := reg.AddApprovedPattern(ctx, "*", "any-token"); err != nil {
+		t.Fatalf("AddApprovedPattern: %v", err)
+	}
+	for _, h := range []string{"*.example.com", "10.0.0.9", "bad_host", "a..b"} {
+		if _, err := reg.Register(ctx, h, "10.0.0.9", "pk", "any-token", false); !errors.Is(err, registry.ErrInvalidHostname) {
+			t.Errorf("Register(%q): expected ErrInvalidHostname, got %v", h, err)
+		}
+		if _, err := reg.TrustedRegister(ctx, h, "10.0.0.9", "pk", patterns, "10.0.0.9", false); !errors.Is(err, registry.ErrInvalidHostname) {
+			t.Errorf("TrustedRegister(%q): expected ErrInvalidHostname, got %v", h, err)
+		}
+		if _, err := reg.CreateEnvoy(ctx, h, "10.0.0.9", "pk", false); !errors.Is(err, registry.ErrInvalidHostname) {
+			t.Errorf("CreateEnvoy(%q): expected ErrInvalidHostname, got %v", h, err)
+		}
+	}
+}

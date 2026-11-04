@@ -8,8 +8,10 @@
 // handler), TrustedRegister (bootstrap HTTP + trusted CIDR patterns), and
 // CreateEnvoy (hub→bolt AdminService.EnrollEnvoy) — funnel through the same
 // internal chokepoint. That chokepoint holds the registry-wide mutex for the
-// duration of the hostname-conflict check, the DB insert, and the FleetIndex
-// update, which makes the operation atomic across all three paths.
+// duration of the credential check, the hostname-conflict check, the DB
+// insert, and the FleetIndex update, which makes the operation atomic across
+// all three paths. Credentials are always validated BEFORE the conflict check,
+// because a forced conflict revokes the existing envoy.
 //
 // The FleetIndex is injected via SetFleetIndex so registry can keep the
 // in-memory index in sync with DB writes under the same mutex.
@@ -28,6 +30,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"git.alexander4.io/vigo/server/ca"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -43,7 +46,20 @@ var (
 	ErrEnvoyNotFound     = errors.New("envoy not found")
 	ErrHostnameRevoked   = errors.New("hostname belongs to a revoked envoy and cannot re-enroll")
 	ErrHostnameInUse     = errors.New("an active envoy with this hostname already exists (use force to replace)")
+	// ErrInvalidHostname wraps a ca.ValidateHostname rejection. The enrolled
+	// hostname becomes the CN/DNS SAN of the envoy's fleet-CA cert, so a
+	// malformed, wildcard, or IP-literal name is refused before anything else.
+	ErrInvalidHostname = errors.New("invalid hostname")
 )
+
+// validateEnrollHostname is the shared entry gate for all three enrollment
+// paths.
+func validateEnrollHostname(hostname string) error {
+	if err := ca.ValidateHostname(hostname); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidHostname, err)
+	}
+	return nil
+}
 
 // Registry manages envoy enrollment: approved pattern creation, agent
 // registration with glob matching and bcrypt token validation, and
@@ -107,7 +123,8 @@ func (r *Registry) AddApprovedPattern(ctx context.Context, pattern, token string
 // an envoy record, marks the pattern as used, and returns the envoy UUID string.
 //
 // If force is true and an active envoy with the same hostname exists, the old
-// envoy is revoked first, under the same mutex.
+// envoy is revoked, under the same mutex — but only after the token has
+// matched an approved pattern, never for an unauthenticated caller.
 // If force is false, registration is rejected when the hostname is in use.
 func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token string, force bool) (string, error) {
 	if hostname == "" {
@@ -120,13 +137,16 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 		return "", fmt.Errorf("token must not be empty")
 	}
 
-	r.enrollMu.Lock()
-	defer r.enrollMu.Unlock()
-
-	if _, err := r.checkHostnameConflictLocked(ctx, hostname, force); err != nil {
+	if err := validateEnrollHostname(hostname); err != nil {
 		return "", err
 	}
 
+	r.enrollMu.Lock()
+	defer r.enrollMu.Unlock()
+
+	// The hostname-conflict check (which with force=true REVOKES the
+	// existing envoy) runs only after the token has matched a pattern below:
+	// an unauthenticated caller must never be able to revoke anything.
 	patterns, err := r.queries.ListUnusedApprovedPatterns(ctx)
 	if err != nil {
 		return "", fmt.Errorf("listing unused patterns: %w", err)
@@ -151,7 +171,12 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 			continue
 		}
 
-		// Pattern + token matched — create the envoy.
+		// Pattern + token matched — the caller is authenticated, so the
+		// hostname conflict (incl. force-revoke) may now be resolved.
+		if _, err := r.checkHostnameConflictLocked(ctx, hostname, force); err != nil {
+			return "", err
+		}
+
 		envoyID, err := r.insertEnvoyLocked(ctx, hostname, ip, pubkeyPEM)
 		if err != nil {
 			return "", err
@@ -195,13 +220,15 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 		return "", fmt.Errorf("public key must not be empty")
 	}
 
-	r.enrollMu.Lock()
-	defer r.enrollMu.Unlock()
-
-	if _, err := r.checkHostnameConflictLocked(ctx, hostname, force); err != nil {
+	if err := validateEnrollHostname(hostname); err != nil {
 		return "", err
 	}
 
+	r.enrollMu.Lock()
+	defer r.enrollMu.Unlock()
+
+	// As in Register: the conflict check (force-revoke) runs only once the
+	// caller has matched a trusted pattern + CIDR.
 	for _, tp := range trustedPatterns {
 		hostnameMatch, hErr := filepath.Match(tp.Pattern, hostname)
 		ipMatch, iErr := filepath.Match(tp.Pattern, ip)
@@ -216,6 +243,9 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 			continue
 		}
 
+		if _, err := r.checkHostnameConflictLocked(ctx, hostname, force); err != nil {
+			return "", err
+		}
 		return r.insertEnvoyLocked(ctx, hostname, ip, pubkeyPEM)
 	}
 
@@ -231,6 +261,10 @@ func (r *Registry) CreateEnvoy(ctx context.Context, hostname, ip, pubkeyPEM stri
 	}
 	if pubkeyPEM == "" {
 		return "", fmt.Errorf("public key must not be empty")
+	}
+
+	if err := validateEnrollHostname(hostname); err != nil {
+		return "", err
 	}
 
 	r.enrollMu.Lock()

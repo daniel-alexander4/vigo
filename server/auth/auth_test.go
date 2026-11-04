@@ -17,14 +17,28 @@ func TestIsPublicPath(t *testing.T) {
 		public bool
 	}{
 		{"/bootstrap", true},
-		{"/bootstrap/agent", true},
+		// Dead public entries (no route serves them) were removed: a
+		// handler later registered there must not become public silently.
+		{"/bootstrap/agent", false},
+		{"/bootstrap/cert", false},
+		{"/bootstrap/csr", false},
+		{"/healthz", false},
+		{"/api/v1/bootstrap", false},
+		{"/api/v1/swarm/filecast/blob/abc", false},
 		{"/metrics", true},
-		{"/healthz", true},
 		{"/login", true},
 		{"/auth/callback", true},
 		{"/auth/isowebauth/challenge", true},
 		{"/static/css/style.css", true},
-		{"/api/v1/bootstrap", true},
+		// Poolq: the GET read routes are public, the admin moderation
+		// routes are not (they need the middleware to resolve the caller).
+		{"/api/v1/swarm/poolq/topics", true},
+		{"/api/v1/swarm/poolq/topic/abc/head", true},
+		{"/api/v1/swarm/poolq/topic/abc/range", true},
+		{"/api/v1/swarm/poolq/topic/abc/log", true},
+		{"/api/v1/swarm/poolq/block/abc", false},
+		{"/api/v1/swarm/poolq/unblock/abc", false},
+		{"/api/v1/swarm/curator/blob/abc", true},
 		// Fetched by the bootstrap script with no session (Apache-2.0 section 4).
 		{"/license/LICENSE", true},
 		{"/license/NOTICE", true},
