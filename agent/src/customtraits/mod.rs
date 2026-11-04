@@ -60,6 +60,20 @@ impl Executor {
         std::fs::create_dir_all(&self.cache_dir)
             .with_context(|| format!("create cache dir {:?}", self.cache_dir))?;
 
+        // The name is server-supplied and becomes a path under the cache dir
+        // that root executes: anything but a single plain file-name component
+        // (`../x`, `/etc/cron.d/x`, `a/b`) would write and run outside it.
+        let manifest: Vec<&ManifestEntry> = manifest
+            .iter()
+            .filter(|e| {
+                let ok = is_safe_trait_name(&e.name);
+                if !ok {
+                    warn!(name = %e.name, "custom trait name is not a single file name — refusing it (not downloaded, not run)");
+                }
+                ok
+            })
+            .collect();
+
         // Build set of manifest names for stale cleanup.
         let manifest_names: std::collections::HashSet<&str> =
             manifest.iter().map(|e| e.name.as_str()).collect();
@@ -67,13 +81,20 @@ impl Executor {
         // Compute local checksums.
         let local = local_checksums(&self.cache_dir)?;
 
+        // Only an executable whose bytes match the manifest hash this cycle is
+        // run — a cached file from an older manifest must not run in place of
+        // a download that failed or did not verify.
+        let mut verified: std::collections::HashSet<&str> = std::collections::HashSet::new();
+
         // Download new or changed executables.
-        for entry in manifest {
+        for entry in &manifest {
             if let Some(local_hash) = local.get(&entry.name) {
                 if *local_hash == entry.sha256 {
+                    verified.insert(entry.name.as_str());
                     continue; // up to date
                 }
             }
+            let path = self.cache_dir.join(&entry.name);
 
             match downloader.download_custom_trait(&entry.name).await {
                 Ok(data) => {
@@ -89,17 +110,24 @@ impl Executor {
                             name = %entry.name,
                             expected = %entry.sha256,
                             got = %got,
-                            "custom trait hash mismatch — skipping (not written, not run)",
+                            "custom trait hash mismatch — skipping (not written, not run; stale cached copy removed)",
                         );
+                        remove_stale(&path);
                         continue;
                     }
-                    let path = self.cache_dir.join(&entry.name);
-                    if let Err(e) = write_executable(&path, &data) {
-                        warn!(name = %entry.name, error = %e, "failed to write custom trait");
+                    match write_executable(&path, &data) {
+                        Ok(()) => {
+                            verified.insert(entry.name.as_str());
+                        }
+                        Err(e) => {
+                            warn!(name = %entry.name, error = %e, "failed to write custom trait");
+                            remove_stale(&path);
+                        }
                     }
                 }
                 Err(e) => {
-                    warn!(name = %entry.name, error = %e, "failed to download custom trait");
+                    warn!(name = %entry.name, error = %e, "failed to download custom trait (stale cached copy removed, not run)");
+                    remove_stale(&path);
                 }
             }
         }
@@ -119,11 +147,11 @@ impl Executor {
 
         // Execute each trait and collect results.
         let mut custom_map = serde_json::Map::new();
-        for entry in manifest {
-            let path = self.cache_dir.join(&entry.name);
-            if !path.exists() {
-                continue; // download failed earlier
+        for entry in &manifest {
+            if !verified.contains(entry.name.as_str()) {
+                continue; // download failed or did not verify
             }
+            let path = self.cache_dir.join(&entry.name);
 
             match self.run_one(&entry.name, &path).await {
                 Ok(parsed) => {
@@ -143,22 +171,30 @@ impl Executor {
         Ok(Value::Object(result))
     }
 
-    /// Execute a single trait executable with a timeout and parse its stdout
-    /// as JSON. Uses process group kill so child processes are also terminated.
+    /// Execute a single trait executable and parse its stdout as JSON.
+    /// Runs through the shared bounded runner off the async runtime: niced,
+    /// stdin from /dev/null, its own process group killed (children too) at
+    /// the timeout, and stdout/stderr capped at [`MAX_TRAIT_OUTPUT`].
     async fn run_one(&self, name: &str, path: &Path) -> Result<Value> {
-        use tokio::process::Command;
-
-        let output = tokio::time::timeout(
-            self.timeout,
-            Command::new(path)
-                .kill_on_drop(true)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .output(),
-        )
+        let cmd = std::process::Command::new(path);
+        let label = name.to_string();
+        let timeout = self.timeout;
+        let output = tokio::task::spawn_blocking(move || {
+            crate::executors::run_built_command_niced_timeout_capped(
+                cmd,
+                &label,
+                crate::traits::COLLECTOR_NICE,
+                timeout,
+                MAX_TRAIT_OUTPUT,
+            )
+        })
         .await
-        .with_context(|| format!("timeout executing {}", name))?
+        .with_context(|| format!("join {}", name))?
         .with_context(|| format!("execute {}", name))?;
+
+        if output.stdout.len() as u64 >= MAX_TRAIT_OUTPUT {
+            anyhow::bail!("{} wrote more than {} bytes of output", name, MAX_TRAIT_OUTPUT);
+        }
 
         if !output.status.success() {
             anyhow::bail!(
@@ -180,14 +216,46 @@ impl Executor {
     }
 }
 
-/// Write data to a file and mark it executable (0755).
+/// Largest stdout (and stderr) a custom trait may produce. Trait output is
+/// a small JSON object; anything this size is a broken or hostile script.
+const MAX_TRAIT_OUTPUT: u64 = 1024 * 1024;
+
+/// is_safe_trait_name: the name is exactly one plain file-name component.
+fn is_safe_trait_name(name: &str) -> bool {
+    use std::path::Component;
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains('\0') {
+        return false;
+    }
+    let mut comps = Path::new(name).components();
+    matches!((comps.next(), comps.next()), (Some(Component::Normal(_)), None))
+}
+
+/// Remove a cached executable that no longer matches the manifest.
+fn remove_stale(path: &Path) {
+    if let Err(e) = std::fs::remove_file(path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            warn!(path = %path.display(), error = %e, "failed to remove stale custom trait");
+        }
+    }
+}
+
+/// Write data to a file and mark it executable (0755): written to a temp
+/// file in the same directory and renamed over the target, so a reader
+/// never sees a partial executable and an existing symlink at the target is
+/// replaced, not followed.
 fn write_executable(path: &Path, data: &[u8]) -> Result<()> {
-    std::fs::write(path, data)?;
+    use std::io::Write;
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let mut f = tempfile::Builder::new().prefix(".trait-").tempfile_in(dir)?;
+    f.write_all(data)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))?;
+        f.as_file().set_permissions(std::fs::Permissions::from_mode(0o755))?;
     }
+    f.as_file().sync_all()?;
+    // Close the writer before anything can exec the file (ETXTBSY).
+    f.into_temp_path().persist(path).map_err(|e| e.error)?;
     Ok(())
 }
 
@@ -490,5 +558,131 @@ mod tests {
 
         assert!(!stale.exists(), "stale file should be deleted");
         assert!(dir.path().join("active-trait").exists());
+    }
+
+    /// A server-supplied name that is not one plain file-name component
+    /// must never be joined onto the cache dir: `../x` or `/abs/x` would let
+    /// the manifest write and run a root executable anywhere.
+    #[tokio::test]
+    async fn sync_and_run_rejects_path_traversal_names() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = root.path().join("cache");
+        let abs_target = root.path().join("abs-escape");
+        let mut dl = MockDownloader::new();
+        let script = make_script(r#"{"escaped":true}"#);
+        let names = vec![
+            "../escape".to_string(),
+            abs_target.to_string_lossy().to_string(),
+            "a/b".to_string(),
+            "..".to_string(),
+            String::new(),
+        ];
+        for n in &names {
+            dl.data.insert(n.clone(), script.clone());
+        }
+        let manifest: Vec<ManifestEntry> = names
+            .iter()
+            .map(|n| ManifestEntry { name: n.clone(), sha256: compute_sha256(&script) })
+            .collect();
+
+        let exec = Executor::new(&cache, Duration::from_secs(10));
+        let result = exec.sync_and_run(&mut dl, &manifest).await.unwrap();
+
+        assert!(dl.called.is_empty(), "an unsafe name was downloaded: {:?}", dl.called);
+        assert!(!root.path().join("escape").exists(), "../ escaped the cache dir");
+        assert!(!abs_target.exists(), "absolute name was written");
+        assert!(result.get("custom").is_none());
+    }
+
+    #[test]
+    fn safe_trait_name_accepts_plain_names_only() {
+        assert!(is_safe_trait_name("app-version"));
+        assert!(is_safe_trait_name("x.sh"));
+        for bad in ["", ".", "..", "../x", "/etc/x", "a/b", "a\\b", "nul\0x"] {
+            assert!(!is_safe_trait_name(bad), "{bad:?} accepted");
+        }
+    }
+
+    /// A cached executable from an older manifest must not run when the
+    /// new download fails verification — it is removed instead.
+    #[tokio::test]
+    async fn sync_and_run_hash_mismatch_removes_stale_cached_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut dl = MockDownloader::new();
+        let old_script = make_script(r#"{"v":"old"}"#);
+        write_executable(&dir.path().join("t"), &old_script).unwrap();
+        dl.data.insert("t".into(), make_script(r#"{"v":"tampered"}"#));
+
+        let exec = Executor::new(dir.path(), Duration::from_secs(10));
+        let manifest = vec![ManifestEntry {
+            name: "t".into(),
+            sha256: compute_sha256(b"what the server vouched for"),
+        }];
+        let result = exec.sync_and_run(&mut dl, &manifest).await.unwrap();
+
+        assert!(result.get("custom").is_none(), "stale cached trait ran: {result}");
+        assert!(!dir.path().join("t").exists(), "stale cached trait was left on disk");
+    }
+
+    /// Same when the download itself fails: the outdated cached copy is
+    /// neither run nor kept.
+    #[tokio::test]
+    async fn sync_and_run_download_failure_does_not_run_stale_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut dl = MockDownloader::new();
+        write_executable(&dir.path().join("t"), &make_script(r#"{"v":"old"}"#)).unwrap();
+        dl.fail_name = Some("t".into());
+
+        let exec = Executor::new(dir.path(), Duration::from_secs(10));
+        let manifest = vec![ManifestEntry {
+            name: "t".into(),
+            sha256: compute_sha256(&make_script(r#"{"v":"new"}"#)),
+        }];
+        let result = exec.sync_and_run(&mut dl, &manifest).await.unwrap();
+
+        assert!(result.get("custom").is_none(), "stale cached trait ran: {result}");
+        assert!(!dir.path().join("t").exists());
+    }
+
+    /// Output past MAX_TRAIT_OUTPUT is refused rather than buffered.
+    #[tokio::test]
+    async fn run_one_caps_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big");
+        // ~2 MiB of output from a trait that would otherwise be valid JSON-ish.
+        write_executable(&path, b"#!/bin/sh\nhead -c 2097152 /dev/zero | tr '\\0' 'a'\n").unwrap();
+        let exec = Executor::new(dir.path(), Duration::from_secs(10));
+        let err = exec.run_one("big", &path).await.unwrap_err();
+        assert!(format!("{err:#}").contains("more than"), "got: {err:#}");
+    }
+
+    /// On timeout the whole process group dies — a background grandchild
+    /// the trait started is killed too, not left running.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn run_one_timeout_kills_grandchildren() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("grandchild.pid");
+        let path = dir.path().join("hang");
+        let script = format!(
+            "#!/bin/sh\nsleep 30 &\necho $! > {}\nsleep 30\n",
+            pidfile.display()
+        );
+        write_executable(&path, script.as_bytes()).unwrap();
+        let exec = Executor::new(dir.path(), Duration::from_millis(500));
+        assert!(exec.run_one("hang", &path).await.is_err());
+
+        let pid: i32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
+        let mut alive = true;
+        for _ in 0..50 {
+            // kill(pid, 0) fails with ESRCH once the grandchild is gone; a
+            // reaped-by-init zombie also disappears quickly.
+            alive = unsafe { libc::kill(pid, 0) } == 0;
+            if !alive {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!alive, "grandchild {pid} survived the trait timeout");
     }
 }

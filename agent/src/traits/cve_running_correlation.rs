@@ -527,7 +527,7 @@ fn run_with_timeout(cmd: &str, args: &[&str]) -> Option<String> {
     // emits more than the pipe buffer can't block on a full pipe and get
     // killed as a false timeout (which returned nothing on large hosts).
     let output =
-        crate::executors::run_command_niced_timeout(cmd, args, 0, PKG_LOOKUP_TIMEOUT).ok()?;
+        crate::traits::run_cmd_timeout(cmd, args, PKG_LOOKUP_TIMEOUT).ok()?;
     // dpkg-query -S exits 1 when some paths don't match but still prints hits,
     // so read stdout regardless of exit code.
     let out = String::from_utf8_lossy(&output.stdout).into_owned();

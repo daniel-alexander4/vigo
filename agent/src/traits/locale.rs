@@ -3,10 +3,9 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::process::Command;
 
 pub fn collect() -> Result<Value> {
-    let output = match Command::new("locale").output() {
+    let output = match crate::traits::run_cmd("locale", &[]) {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => return Ok(json!({})),
     };

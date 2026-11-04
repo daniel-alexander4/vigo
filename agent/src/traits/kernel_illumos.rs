@@ -17,9 +17,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn run_cmd(cmd: &str, args: &[&str]) -> String {
-    std::process::Command::new(cmd)
-        .args(args)
-        .output()
+    crate::traits::run_cmd(cmd, args)
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())

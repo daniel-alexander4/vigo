@@ -21,9 +21,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn parse_psrinfo_count() -> u64 {
-    std::process::Command::new("psrinfo")
-        .args(["-p"])
-        .output()
+    crate::traits::run_cmd("psrinfo", &["-p"])
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| {
@@ -37,8 +35,7 @@ fn parse_psrinfo_count() -> u64 {
 
 fn parse_prtconf_memory_mb() -> u64 {
     // prtconf outputs "Memory size: 16384 Megabytes"
-    std::process::Command::new("prtconf")
-        .output()
+    crate::traits::run_cmd("prtconf", &[])
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| {
@@ -57,9 +54,7 @@ fn parse_prtconf_memory_mb() -> u64 {
 
 fn parse_cpu_model() -> String {
     // kstat -p cpu_info:0:cpu_info0:brand
-    std::process::Command::new("kstat")
-        .args(["-p", "cpu_info:0:cpu_info0:brand"])
-        .output()
+    crate::traits::run_cmd("kstat", &["-p", "cpu_info:0:cpu_info0:brand"])
         .ok()
         .filter(|o| o.status.success())
         .map(|o| {
@@ -72,7 +67,7 @@ fn parse_cpu_model() -> String {
 
 fn collect_disk_sizes() -> Value {
     let mut map = serde_json::Map::new();
-    if let Ok(output) = std::process::Command::new("df").args(["-k"]).output() {
+    if let Ok(output) = crate::traits::run_cmd("df", &["-k"]) {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines().skip(1) {
             let parts: Vec<&str> = line.split_whitespace().collect();

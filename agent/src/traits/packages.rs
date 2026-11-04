@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
+use super::{run_built_cmd, run_cmd};
 use std::process::Command;
 
 pub fn collect() -> Result<Value> {
@@ -50,11 +51,9 @@ fn updates_available() -> i64 {
 }
 
 fn apt_upgradable() -> Option<i64> {
-    let output = Command::new("apt")
-        .args(["list", "--upgradable"])
-        .env("DEBIAN_FRONTEND", "noninteractive")
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("apt");
+    cmd.args(["list", "--upgradable"]).env("DEBIAN_FRONTEND", "noninteractive");
+    let output = run_built_cmd(cmd, "apt").ok()?;
     if !output.status.success() {
         return None;
     }
@@ -65,10 +64,7 @@ fn apt_upgradable() -> Option<i64> {
 }
 
 fn dnf_check_update() -> Option<i64> {
-    let output = Command::new("dnf")
-        .args(["check-update", "--quiet"])
-        .output()
-        .ok()?;
+    let output = run_cmd("dnf", &["check-update", "--quiet"]).ok()?;
     // dnf returns exit code 100 when updates are available, 0 when none.
     match output.status.code() {
         Some(0) => Some(0),
@@ -82,10 +78,7 @@ fn dnf_check_update() -> Option<i64> {
 }
 
 fn yum_check_update() -> Option<i64> {
-    let output = Command::new("yum")
-        .args(["check-update", "--quiet"])
-        .output()
-        .ok()?;
+    let output = run_cmd("yum", &["check-update", "--quiet"]).ok()?;
     match output.status.code() {
         Some(0) => Some(0),
         Some(100) => {
@@ -98,10 +91,7 @@ fn yum_check_update() -> Option<i64> {
 }
 
 fn brew_outdated() -> Option<i64> {
-    let output = Command::new("brew")
-        .args(["outdated", "--quiet"])
-        .output()
-        .ok()?;
+    let output = run_cmd("brew", &["outdated", "--quiet"]).ok()?;
     if !output.status.success() {
         return None;
     }
@@ -130,10 +120,7 @@ fn collect_packages() -> Value {
 }
 
 fn dpkg_packages() -> Option<Value> {
-    let output = Command::new("dpkg-query")
-        .args(["-W", "-f", "${Package}\\t${Version}\\n"])
-        .output()
-        .ok()?;
+    let output = run_cmd("dpkg-query", &["-W", "-f", "${Package}\\t${Version}\\n"]).ok()?;
 
     if !output.status.success() {
         return None;
@@ -143,10 +130,7 @@ fn dpkg_packages() -> Option<Value> {
 }
 
 fn rpm_packages() -> Option<Value> {
-    let output = Command::new("rpm")
-        .args(["-qa", "--queryformat", "%{NAME}\\t%{VERSION}-%{RELEASE}\\n"])
-        .output()
-        .ok()?;
+    let output = run_cmd("rpm", &["-qa", "--queryformat", "%{NAME}\\t%{VERSION}-%{RELEASE}\\n"]).ok()?;
 
     if !output.status.success() {
         return None;
@@ -156,10 +140,7 @@ fn rpm_packages() -> Option<Value> {
 }
 
 fn brew_packages() -> Option<Value> {
-    let output = Command::new("brew")
-        .args(["list", "--versions"])
-        .output()
-        .ok()?;
+    let output = run_cmd("brew", &["list", "--versions"]).ok()?;
 
     if !output.status.success() {
         return None;
@@ -214,11 +195,9 @@ fn apt_broken_repos() -> Option<Vec<String>> {
 
     // Run apt-get update --print-uris to check repo reachability
     // without downloading. Parse stderr for Err:/Failed lines.
-    let output = Command::new("apt-get")
-        .args(["update", "-qq", "--print-uris"])
-        .env("DEBIAN_FRONTEND", "noninteractive")
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("apt-get");
+    cmd.args(["update", "-qq", "--print-uris"]).env("DEBIAN_FRONTEND", "noninteractive");
+    let output = run_built_cmd(cmd, "apt-get").ok()?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let mut broken = Vec::new();
@@ -240,10 +219,7 @@ fn apt_broken_repos() -> Option<Vec<String>> {
 }
 
 fn dnf_broken_repos() -> Option<Vec<String>> {
-    let output = Command::new("dnf")
-        .args(["repolist", "--all", "--quiet"])
-        .output()
-        .ok()?;
+    let output = run_cmd("dnf", &["repolist", "--all", "--quiet"]).ok()?;
     if !output.status.success() {
         return None;
     }

@@ -98,6 +98,9 @@ pub struct TlsCerts {
 /// binary, ample headroom without unbounded risk.
 const MAX_AGENT_BINARY_BYTES: u64 = 256 * 1024 * 1024;
 
+/// Ceiling for the pre-rename `version` probe of a downloaded binary.
+const VERSION_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// Build a ureq agent with mTLS if certs are available, otherwise plain HTTPS.
 fn build_agent(tls: Option<&TlsCerts>) -> ureq::Agent {
     if let Some(certs) = tls {
@@ -296,15 +299,11 @@ pub async fn apply(
     current_binary: &str,
     exec_self: bool,
     tls: Option<&TlsCerts>,
-    api_addr: Option<&str>,
 ) -> Result<()> {
     let dir = Path::new(current_binary)
         .parent()
         .unwrap_or(Path::new("/tmp"));
 
-    // Download to temp file in same directory for atomic rename.
-    let tmp_path = dir.join(format!(".vigo-update-{}", std::process::id()));
-    let _cleanup = TempFileGuard(tmp_path.clone());
 
     let download_url = info.download_url.clone();
     let tls_certs = tls.map(|t| TlsCerts {
@@ -312,7 +311,6 @@ pub async fn apply(
         client_cert: t.client_cert.clone(),
         client_key: t.client_key.clone(),
     });
-    let _ = api_addr; // baked-in pubkey replaced fetch_signing_key (ADR-031)
     let signature = info.signature.clone();
 
     let expected_sha = info.sha256.clone();
@@ -371,8 +369,22 @@ pub async fn apply(
     .await
     .context("spawn_blocking join")??;
 
-    // Write temp file.
-    std::fs::write(&tmp_path, &body).context("write temp binary")?;
+    // Write a uniquely-named temp file in the target's directory (same
+    // filesystem → atomic rename). A PID-only name collided when two update
+    // attempts ran in one process (stream `try_update!` and the poll path).
+    // `into_temp_path` closes the write handle before the probe execs it
+    // (an open writer would fail the exec with ETXTBSY) and still removes
+    // the file on drop if we bail before the rename.
+    let tmp_path = {
+        use std::io::Write;
+        let mut f = tempfile::Builder::new()
+            .prefix(".vigo-update-")
+            .tempfile_in(dir)
+            .context("create temp binary")?;
+        f.write_all(&body).context("write temp binary")?;
+        f.as_file().sync_all().context("sync temp binary")?;
+        f.into_temp_path()
+    };
     crate::platform::permissions::set_executable(&tmp_path)
         .context("chmod temp binary")?;
 
@@ -390,9 +402,20 @@ pub async fn apply(
     // `(deleted)` suffix, and `current_exe()` returned that suffixed string,
     // poisoning every subsequent update target until process restart). With
     // the probe before rename, an aborted update leaves on-disk state
-    // completely untouched (TempFileGuard cleans up the tmp file).
+    // completely untouched (the TempPath removes the tmp file on drop).
+    //
+    // The probe runs a freshly-downloaded binary, so it is bounded like any
+    // other subprocess: niced, own process group, killed at
+    // VERSION_PROBE_TIMEOUT, and off the async runtime — a binary that hangs
+    // on `version` must not wedge a tokio worker.
     if !info.version.is_empty() {
-        match std::process::Command::new(&tmp_path).arg("version").output() {
+        let probe_path = tmp_path.to_string_lossy().to_string();
+        let probe = tokio::task::spawn_blocking(move || {
+            crate::executors::run_command_niced_timeout(&probe_path, &["version"], 10, VERSION_PROBE_TIMEOUT)
+        })
+        .await
+        .context("spawn_blocking join")?;
+        match probe {
             Ok(out) if out.status.success() => {
                 let probed = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 if !probed.is_empty() && probed != info.version {
@@ -403,7 +426,11 @@ pub async fn apply(
                         tmp_path = %tmp_path.display(),
                         "version mismatch on downloaded binary — server advertised one version, the binary's compiled-in version is another. Aborting update before rename so the on-disk binary is untouched. Likely cause: cross-arch labeling bug in the server's dist tree (each arch's vigo.version sidecar must match its binary)."
                     );
-                    return Ok(());
+                    bail!(
+                        "downloaded binary reports version {} but the server advertised {}",
+                        probed,
+                        info.version
+                    );
                 }
             }
             Ok(out) => {
@@ -411,6 +438,11 @@ pub async fn apply(
                     status = ?out.status,
                     "pre-rename version probe exited non-zero — proceeding with rename + exec (binary may need first-run init)"
                 );
+            }
+            // A binary that cannot answer `version` inside the ceiling would
+            // hang the same way once exec'd as the daemon — refuse it.
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                bail!("downloaded binary did not answer `version` in time: {}", e);
             }
             Err(e) => {
                 debug!(error = %e, "pre-rename version probe failed — proceeding with rename + exec");
@@ -420,7 +452,10 @@ pub async fn apply(
 
     // Atomic rename — only fires after the probe passes (or no info.version
     // was provided), so an aborted update never replaces the on-disk binary.
-    std::fs::rename(&tmp_path, current_binary).context("atomic rename")?;
+    tmp_path
+        .persist(current_binary)
+        .map_err(|e| e.error)
+        .context("atomic rename")?;
 
     info!(
         version = %info.version,
@@ -490,55 +525,6 @@ pub async fn apply(
     Ok(())
 }
 
-/// Check for a self-update and apply it if available.
-///
-/// Failures are logged but never crash the agent.
-pub async fn check_self_update(api_addr: &str, current_version: &str, tls: Option<&TlsCerts>) {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
-
-    match check_for_update(api_addr, current_version, os, arch, tls).await {
-        Ok(Some(info)) => {
-            let current_binary = match resolve_current_binary() {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!(error = %e, "cannot determine current binary path");
-                    return;
-                }
-            };
-
-            // Circuit breaker: skip if the compiled-in version already matches
-            // the server's advertised version. We compare version strings rather
-            // than on-disk SHA256 because after a successful download + failed
-            // exec(), the on-disk binary would match even though this process is
-            // still running the old code.
-            if info.version == current_version {
-                info!(
-                    version = current_version,
-                    "update available but running version already matches, skipping"
-                );
-                return;
-            }
-
-            info!(
-                current = current_version,
-                new = %info.version,
-                "newer agent version available, updating"
-            );
-
-            if let Err(e) = apply(&info, &current_binary, true, tls, Some(api_addr)).await {
-                warn!(error = %e, "self-update apply failed, continuing with current version");
-            }
-        }
-        Ok(None) => {
-            debug!(version = current_version, "agent is up to date");
-        }
-        Err(e) => {
-            warn!(error = %e, "self-update version check failed");
-        }
-    }
-}
-
 /// Force a self-update regardless of version. Downloads the latest binary,
 /// verifies checksum + signature, replaces the current binary, and exec restarts.
 ///
@@ -576,13 +562,28 @@ pub async fn force_self_update(api_addr: &str, current_version: &str, tls: Optio
                 return;
             }
 
+            if update_already_failed(&info) {
+                debug!(
+                    version = %info.version,
+                    sha256 = %info.sha256,
+                    "forced update: this exact binary already failed to install in this process, not downloading it again until the server advertises a different sha256"
+                );
+                return;
+            }
+
             info!(
                 current = current_version,
                 new = %info.version,
                 "forced update: downloading latest binary"
             );
-            if let Err(e) = apply(&info, &current_binary, true, tls, Some(api_addr)).await {
-                warn!(error = %e, "forced update apply failed, continuing with current version");
+            if let Err(e) = apply(&info, &current_binary, true, tls).await {
+                record_failed_update(&info);
+                warn!(
+                    error = %e,
+                    version = %info.version,
+                    sha256 = %info.sha256,
+                    "forced update apply failed, continuing with current version; this binary will not be retried until the server advertises a different sha256"
+                );
             }
         }
         Ok(None) => {
@@ -594,13 +595,25 @@ pub async fn force_self_update(api_addr: &str, current_version: &str, tls: Optio
     }
 }
 
-/// RAII guard that removes a temp file on drop (if it still exists).
-struct TempFileGuard(std::path::PathBuf);
+/// The (version, sha256) of the last update this process tried and failed
+/// to install — bad signature, checksum mismatch, a version-probe mismatch,
+/// the dev-sentinel pubkey. The server keeps `force_update` set until the
+/// envoy reports the new version, so without this every check-in downloaded
+/// the same binary again (up to 256 MiB, fleet-wide, every cycle) only to
+/// reject it the same way. Cleared implicitly by execv; a different advertised
+/// sha (the operator fixed the dist tree) is tried again.
+static FAILED_UPDATE: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
 
-impl Drop for TempFileGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
+fn update_already_failed(info: &VersionInfo) -> bool {
+    let guard = FAILED_UPDATE.lock().unwrap_or_else(|e| e.into_inner());
+    guard
+        .as_ref()
+        .is_some_and(|(v, sha)| *v == info.version && *sha == info.sha256)
+}
+
+fn record_failed_update(info: &VersionInfo) {
+    let mut guard = FAILED_UPDATE.lock().unwrap_or_else(|e| e.into_inner());
+    *guard = Some((info.version.clone(), info.sha256.clone()));
 }
 
 #[cfg(test)]
@@ -681,6 +694,40 @@ mod tests {
             .await
             .unwrap();
         assert!(info.is_none());
+    }
+
+    /// A forced update whose binary fails verification must not be
+    /// downloaded again on the next check-in: the server keeps
+    /// `force_update` set, so without the failed-(version, sha) memo every
+    /// cycle re-fetched the whole binary only to reject it again.
+    #[tokio::test]
+    async fn failed_forced_update_is_not_downloaded_again() {
+        let mut server = mockito::Server::new_async().await;
+        let latest = format!(
+            "/api/v1/agent/latest?os={}&arch={}",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        );
+        let _latest = server
+            .mock("GET", latest.as_str())
+            .with_body(
+                r#"{"version":"9.9.9-failmemo","sha256":"0000000000000000000000000000000000000000000000000000000000000000","download_url":"/dl/failmemo"}"#,
+            )
+            .expect_at_least(2)
+            .create_async()
+            .await;
+        // The body never matches the advertised sha → checksum failure.
+        let download = server
+            .mock("GET", "/dl/failmemo")
+            .with_body("not the advertised binary")
+            .expect(1)
+            .create_async()
+            .await;
+
+        force_self_update(&server.url(), "1.0.0", None).await;
+        force_self_update(&server.url(), "1.0.0", None).await;
+
+        download.assert_async().await;
     }
 
     #[test]

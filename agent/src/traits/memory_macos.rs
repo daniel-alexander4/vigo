@@ -41,7 +41,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn parse_vm_stat() -> (u64, u64, u64, u64, u64) {
-    let output = std::process::Command::new("vm_stat").output().ok();
+    let output = crate::traits::run_cmd("vm_stat", &[]).ok();
     let stdout = output
         .as_ref()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())

@@ -72,7 +72,7 @@ impl SshParams {
 
     /// Open an SSH session with these params.
     pub async fn connect(&self) -> anyhow::Result<SshSession> {
-        SshSession::connect(&self.host, self.port, &self.username, &self.credential, None).await
+        SshSession::connect(&self.host, self.port, &self.username, &self.credential).await
     }
 }
 

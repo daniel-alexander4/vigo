@@ -24,8 +24,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn freebsd_version() -> String {
-    std::process::Command::new("freebsd-version")
-        .output()
+    crate::traits::run_cmd("freebsd-version", &[])
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())

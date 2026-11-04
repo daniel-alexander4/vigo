@@ -3,13 +3,10 @@
 
 //! Shared sysctl utilities for macOS/FreeBSD/OpenBSD/NetBSD trait collectors.
 
-use std::process::Command;
 
 /// Run `sysctl -n <key>` and return trimmed stdout, or None on failure.
 pub fn sysctl_raw(key: &str) -> Option<String> {
-    Command::new("sysctl")
-        .args(["-n", key])
-        .output()
+    crate::traits::run_cmd("sysctl", &["-n", key])
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())

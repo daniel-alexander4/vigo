@@ -50,7 +50,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn parse_swapinfo() -> (u64, u64, u64) {
-    let output = std::process::Command::new("swapinfo").args(["-k"]).output().ok();
+    let output = crate::traits::run_cmd("swapinfo", &["-k"]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     let mut total: u64 = 0;
@@ -68,7 +68,7 @@ fn parse_swapinfo() -> (u64, u64, u64) {
 }
 
 fn parse_swapctl() -> (u64, u64, u64) {
-    let output = std::process::Command::new("swapctl").args(["-sk"]).output().ok();
+    let output = crate::traits::run_cmd("swapctl", &["-sk"]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     // "total: 1048576 1k-blocks allocated, 0 used, 1048576 available"

@@ -12,7 +12,6 @@ pub mod pending;
 pub mod policy;
 pub mod power;
 pub mod reversal;
-pub mod server_key;
 pub mod ssh_keys;
 pub mod swarm_retention;
 pub mod traits;
@@ -26,22 +25,21 @@ use tracing::info;
 const MAP_SIZE: usize = 256 * 1024 * 1024;
 
 /// Maximum number of named databases within the environment. Headroom is
-/// deliberate: nine are in use, and hitting the ceiling is a runtime failure
+/// deliberate: eight are in use, and hitting the ceiling is a runtime failure
 /// at store-open, not a compile error.
 const MAX_DBS: u32 = 16;
 
 /// Persistent state store backed by LMDB.
 ///
 /// Contains separate databases for policy bundles, file checksums,
-/// traits snapshots, a pending results queue, and the server's signing
-/// public key. All operations are ACID-safe and survive agent restarts.
+/// traits snapshots, a pending results queue, SSH host keys of proxied
+/// devices, swarm retention, resource reversals, and power state. All operations are ACID-safe and survive agent restarts.
 pub struct StateStore {
     env: heed::Env,
     pub policy: policy::PolicyCache,
     pub checksums: checksums::ChecksumCache,
     pub traits: traits::TraitsCache,
     pub pending: pending::PendingQueue,
-    pub server_key: server_key::ServerKeyCache,
     pub ssh_keys: ssh_keys::SshKeysCache,
     pub swarm_retention: swarm_retention::SwarmRetentionCache,
     pub reversal: reversal::ReversalCache,
@@ -71,7 +69,6 @@ impl StateStore {
         let checksums = checksums::ChecksumCache::open(&env, &mut wtxn)?;
         let traits = traits::TraitsCache::open(&env, &mut wtxn)?;
         let pending = pending::PendingQueue::open(&env, &mut wtxn)?;
-        let server_key = server_key::ServerKeyCache::open(&env, &mut wtxn)?;
         let ssh_keys = ssh_keys::SshKeysCache::open(&env, &mut wtxn)?;
         let swarm_retention = swarm_retention::SwarmRetentionCache::open(&env, &mut wtxn)?;
         let reversal = reversal::ReversalCache::open(&env, &mut wtxn)?;
@@ -87,7 +84,6 @@ impl StateStore {
             checksums,
             traits,
             pending,
-            server_key,
             ssh_keys,
             swarm_retention,
             reversal,

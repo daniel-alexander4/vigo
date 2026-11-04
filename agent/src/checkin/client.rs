@@ -206,8 +206,21 @@ pub struct Client {
     inventory_gate: std::sync::Mutex<InventoryGate>,
 }
 
+/// Deadline for every unary agent RPC. The channel itself carries none (see
+/// `build_channel`), so each unary request states its own.
+const UNARY_RPC_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// unary wraps a unary request message with [`UNARY_RPC_TIMEOUT`].
+fn unary<T>(msg: T) -> tonic::Request<T> {
+    let mut req = tonic::Request::new(msg);
+    req.set_timeout(UNARY_RPC_TIMEOUT);
+    req
+}
+
 impl Client {
-    /// Connect to the Vigo server with mTLS.
+    /// Build a client for the Vigo server with mTLS. Reads the TLS material
+    /// now; the connection itself is made lazily on the first RPC, so this
+    /// does not fail when the server is unreachable.
     /// If `client_cert` and `client_key` are None, connects with CA-only verification.
     pub async fn connect(
         server_addr: &str,
@@ -297,18 +310,26 @@ impl Client {
         };
         tls_config = tls_config.domain_name(domain);
 
-        Channel::from_shared(endpoint_uri)
+        // Lazy: the TCP/TLS connection is made on the first RPC (and remade
+        // on demand), so building a client never fails because the server is
+        // down. A boot during a server outage therefore reaches the daemon
+        // loop, whose failure path fails over to the configured fallbacks and
+        // converges offline from the cached bundle — an eager connect here
+        // retried the primary forever and did neither.
+        //
+        // No channel-wide `.timeout()`: tonic applies it as min(per-request
+        // deadline, channel timeout), which capped the long-held Wake RPC
+        // (held for the server's base interval) at 30s. Unary RPCs carry
+        // their own deadline instead (`unary`); Wake sets its own.
+        Ok(Channel::from_shared(endpoint_uri)
             .context("parse server address")?
             .tls_config(tls_config)
             .context("configure TLS")?
             .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
             .tcp_keepalive(Some(Duration::from_secs(30)))
             .http2_keep_alive_interval(Duration::from_secs(30))
             .keep_alive_timeout(Duration::from_secs(10))
-            .connect()
-            .await
-            .context("connect to gRPC server")
+            .connect_lazy())
     }
 
     /// Sign arbitrary bytes with the agent's signing key. Used for tunnel handshake.
@@ -463,7 +484,7 @@ impl Client {
                     ..Default::default() // ADR-033 vitals/inventory: empty for a probe (no traits)
                 };
 
-                match probe_client.check_in(tonic::Request::new(req)).await {
+                match probe_client.check_in(unary(req)).await {
                     Ok(_) => {
                         tracing::info!(
                             primary = %self.servers[0],
@@ -606,7 +627,7 @@ impl Client {
         let span = tracing::info_span!("check_in", trace_id = %trace_id);
         let resp = self
             .agent
-            .check_in(tonic::Request::new(req))
+            .check_in(unary(req))
             .instrument(span)
             .await
             .context("check-in RPC")?
@@ -674,7 +695,7 @@ impl Client {
         // holds a `&Client`, can warm the secret cache too.
         let mut agent = self.agent.clone();
         let resp = agent
-            .resolve_secrets(tonic::Request::new(req))
+            .resolve_secrets(unary(req))
             .await
             .context("resolve_secrets RPC")?;
 
@@ -700,7 +721,7 @@ impl Client {
 
         let resp = self
             .agent
-            .register(tonic::Request::new(req))
+            .register(unary(req))
             .await
             .context("register RPC")?;
 
@@ -731,7 +752,7 @@ impl Client {
         let span = tracing::info_span!("report_result", trace_id = %trace_id, run_id = %run_id);
         let resp = self
             .agent
-            .report_result(tonic::Request::new(req))
+            .report_result(unary(req))
             .instrument(span)
             .await
             .context("report-result RPC")?;
@@ -764,7 +785,7 @@ impl Client {
         let span = tracing::info_span!("report_result_for", trace_id = %trace_id, run_id = %run_id);
         let resp = self
             .agent
-            .report_result(tonic::Request::new(req))
+            .report_result(unary(req))
             .instrument(span)
             .await
             .context("report-result-for RPC")?;
@@ -788,7 +809,7 @@ impl Client {
 
         let span = tracing::info_span!("report_traits", trace_id = %trace_id);
         self.agent
-            .report_traits(tonic::Request::new(req))
+            .report_traits(unary(req))
             .instrument(span)
             .await
             .context("report-traits RPC")?;
@@ -812,7 +833,7 @@ impl Client {
 
         let span = tracing::info_span!("report_traits_for", trace_id = %trace_id);
         self.agent
-            .report_traits(tonic::Request::new(req))
+            .report_traits(unary(req))
             .instrument(span)
             .await
             .context("report-traits-for RPC")?;
@@ -828,7 +849,7 @@ impl Client {
 
         let resp = self
             .agent
-            .download_custom_trait(tonic::Request::new(req))
+            .download_custom_trait(unary(req))
             .await
             .with_context(|| format!("download custom trait {:?}", name))?;
 
@@ -1080,6 +1101,19 @@ mod tests {
     fn test_vitals_state_hash_empty_when_no_operational_vitals() {
         let none = r#"{"loadavg":{"load1":1.0},"memory":{"total":8}}"#;
         assert!(vsh(none).is_empty(), "no operational collectors → empty hash");
+    }
+
+    #[tokio::test]
+    async fn test_connect_does_not_fail_when_server_is_down() {
+        // Port 1 on loopback: nothing listens. An eager connect failed here,
+        // which kept a booting agent retrying the primary forever instead of
+        // reaching the daemon loop's failover + offline convergence.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let started = std::time::Instant::now();
+        let client = Client::connect("127.0.0.1:1", None, None, None, "envoy", key).await;
+        assert!(client.is_ok(), "connect failed eagerly: {:?}", client.err());
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 
     #[tokio::test]

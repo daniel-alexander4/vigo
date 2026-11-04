@@ -29,9 +29,14 @@ pub struct RegisterResponse {
     // overrides the server addr at runtime). Empty ⇒ the contacted bolt owns it.
     #[serde(default)]
     pub bolt_addr: String,
-    #[serde(default)]
-    pub fallback_servers: Vec<String>,
 }
+
+/// Ceiling for the whole bootstrap registration request.
+#[cfg(not(test))]
+const BOOTSTRAP_HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+/// Short under test so the black-holed-server test runs in seconds.
+#[cfg(test)]
+const BOOTSTRAP_HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// POST the bootstrap registration request and return the signed certs.
 ///
@@ -80,10 +85,14 @@ pub async fn register(
             None => tls_builder.disable_verification(true).build(),
         };
 
+        // Bounded like every other agent HTTP call (update/mod.rs uses the
+        // same 60s): a black-holed server must fail `vigo bootstrap`, not
+        // hang it forever.
         let agent = ureq::Agent::new_with_config(
             ureq::config::Config::builder()
                 .tls_config(tls)
                 .http_status_as_error(false)
+                .timeout_global(Some(BOOTSTRAP_HTTP_TIMEOUT))
                 .build(),
         );
 
@@ -167,6 +176,35 @@ mod tests {
         };
         let json = serde_json::to_value(&req).unwrap();
         assert_eq!(json["force"], true);
+    }
+
+    /// A server that accepts the connection and never answers must fail
+    /// `vigo bootstrap`, not hang it (the ureq agent had no timeout).
+    #[tokio::test]
+    async fn register_times_out_on_a_black_holed_server() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        // Accept and hold the socket open without ever responding.
+        let _hold = std::thread::spawn(move || {
+            let conns: Vec<_> = listener.incoming().take(1).collect();
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            drop(conns);
+        });
+        let req = RegisterRequest {
+            hostname: "h".into(),
+            ip_address: "127.0.0.1".into(),
+            pubkey_pem: "p".into(),
+            csr_pem: "c".into(),
+            token: None,
+            force: false,
+        };
+        let res = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            register(&format!("http://{addr}"), &req, None),
+        )
+        .await
+        .expect("bootstrap register hung on a server that never answers");
+        assert!(res.is_err());
     }
 
     #[test]

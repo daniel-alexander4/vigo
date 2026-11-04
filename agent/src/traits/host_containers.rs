@@ -100,7 +100,7 @@ fn run_docker(args: &[&str]) -> String {
     // A wedged docker socket must not hang the collector; the outer collector
     // timeout can't kill a spawn_blocking task, so give the child its own 4s
     // deadline (under the 5s collector budget) with a kill on expiry.
-    crate::executors::run_command_niced_timeout("docker", args, 0, std::time::Duration::from_secs(4))
+    crate::traits::run_cmd_timeout("docker", args, std::time::Duration::from_secs(4))
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())

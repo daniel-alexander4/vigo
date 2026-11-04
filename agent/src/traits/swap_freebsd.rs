@@ -23,7 +23,7 @@ pub fn collect() -> Result<Value> {
 
 fn parse_swapinfo() -> Vec<Value> {
     let mut devices = Vec::new();
-    let output = std::process::Command::new("swapinfo").output().ok();
+    let output = crate::traits::run_cmd("swapinfo", &[]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     for (i, line) in stdout.lines().enumerate() {
@@ -43,7 +43,7 @@ fn parse_swapinfo() -> Vec<Value> {
 
 fn parse_swapctl() -> Vec<Value> {
     let mut devices = Vec::new();
-    let output = std::process::Command::new("swapctl").args(["-l"]).output().ok();
+    let output = crate::traits::run_cmd("swapctl", &["-l"]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     for (i, line) in stdout.lines().enumerate() {

@@ -1,8 +1,6 @@
 #[cfg(target_os = "windows")]
 use crate::exec;
 use anyhow::Result;
-#[cfg(target_os = "windows")]
-use std::process::Command;
 use std::time::Instant;
 
 use super::{Capability, CapabilityContext, CapabilityResult, Evidence, VerificationStatus};

@@ -15,7 +15,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn logged_in_users() -> Vec<String> {
-    let output = std::process::Command::new("who").output().ok();
+    let output = crate::traits::run_cmd("who", &[]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     let mut users = Vec::new();

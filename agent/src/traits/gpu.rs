@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::process::Command;
 
 pub fn collect() -> Result<Value> {
     // Try nvidia-smi first; fall back to /sys/class/drm scan, then to the
@@ -43,13 +42,12 @@ fn nvidia_smi_devices() -> Option<Vec<Value>> {
     // 4s internal deadline (under the 5s collector timeout): a wedged GPU can
     // leave nvidia-smi in D-state, and the outer collector timeout can't kill a
     // spawn_blocking task — route through the runner so the child is killed.
-    let output = crate::executors::run_command_niced_timeout(
+    let output = crate::traits::run_cmd_timeout(
         "nvidia-smi",
         &[
             "--query-gpu=name,driver_version,vbios_version,memory.total",
             "--format=csv,noheader,nounits",
         ],
-        0,
         std::time::Duration::from_secs(4),
     )
     .ok()?;
@@ -125,7 +123,7 @@ fn drm_devices() -> Vec<Value> {
 
         // Resolve human-readable name via lspci (single device, instant).
         if !pci_slot.is_empty() {
-            if let Ok(output) = Command::new("lspci").args(["-s", &pci_slot, "-m"]).output() {
+            if let Ok(output) = crate::traits::run_cmd("lspci", &["-s", &pci_slot, "-m"]) {
                 if output.status.success() {
                     let line = String::from_utf8_lossy(&output.stdout);
                     // Machine-readable format: slot "class" "vendor" "device" ...
@@ -182,7 +180,7 @@ fn parse_lspci_machine(line: &str) -> Vec<String> {
 /// Detect Raspberry Pi VideoCore GPU via vcgencmd.
 fn videocore_device() -> Option<Value> {
     // Check if vcgencmd exists.
-    let version_out = Command::new("vcgencmd").arg("version").output().ok()?;
+    let version_out = crate::traits::run_cmd("vcgencmd", &["version"]).ok()?;
     if !version_out.status.success() {
         return None;
     }
@@ -205,7 +203,7 @@ fn videocore_device() -> Option<Value> {
     }
 
     // GPU memory allocation.
-    if let Ok(mem_out) = Command::new("vcgencmd").args(["get_mem", "gpu"]).output() {
+    if let Ok(mem_out) = crate::traits::run_cmd("vcgencmd", &["get_mem", "gpu"]) {
         if mem_out.status.success() {
             let s = String::from_utf8_lossy(&mem_out.stdout);
             // Output: "gpu=128M" or "gpu=256M"

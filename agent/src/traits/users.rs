@@ -4,7 +4,6 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
-use std::process::Command;
 
 /// Well-known OS accounts present on virtually all Linux distributions.
 /// Anything UID < 1000 not in this set is classified as thirdparty.
@@ -99,7 +98,7 @@ fn is_nologin_shell(shell: &str) -> bool {
 
 /// Returns the set of currently logged-in usernames via `who`.
 fn logged_in_users() -> BTreeSet<String> {
-    let output = match Command::new("who").output() {
+    let output = match crate::traits::run_cmd("who", &[]) {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => return BTreeSet::new(),
     };

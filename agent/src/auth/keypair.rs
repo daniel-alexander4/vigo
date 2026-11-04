@@ -19,6 +19,52 @@ const TLS_KEY_FILENAME: &str = "tls.key";
 const TLS_CERT_FILENAME: &str = "tls.crt";
 const CA_CERT_FILENAME: &str = "ca.crt";
 
+/// write_private_file writes `data` to `path` so that nobody but the owner
+/// can ever read it, not even for a moment: the bytes go to a fresh temp in
+/// the same directory created `O_CREAT|O_EXCL|O_NOFOLLOW` at mode 0600, are
+/// fsynced, and the temp is renamed over `path`. Writing in place and
+/// chmodding afterwards (the old way) left a umask-default window and
+/// followed a symlink planted at `path`. Used for every secret the agent
+/// persists (private keys, envoy id) and for the cached server pubkey.
+pub fn write_private_file(path: &Path, data: &[u8]) -> Result<()> {
+    use std::io::Write;
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let base = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let tmp = dir.join(format!(
+        ".{}.tmp-{}-{}",
+        base,
+        std::process::id(),
+        uuid::Uuid::new_v4().as_simple()
+    ));
+    let res = (|| -> Result<()> {
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        let mut f = opts
+            .open(&tmp)
+            .with_context(|| format!("create {}", tmp.display()))?;
+        f.write_all(data)
+            .with_context(|| format!("write {}", tmp.display()))?;
+        f.sync_all()
+            .with_context(|| format!("sync {}", tmp.display()))?;
+        drop(f);
+        std::fs::rename(&tmp, path)
+            .with_context(|| format!("rename {} over {}", tmp.display(), path.display()))?;
+        Ok(())
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    res
+}
+
 /// Generate a new ED25519 keypair.
 pub fn generate_keypair() -> Result<(VerifyingKey, SigningKey)> {
     let mut csprng = rand::rngs::OsRng;
@@ -34,13 +80,7 @@ pub fn save_keypair(dir: &Path, signing: &SigningKey) -> Result<()> {
         .context("marshal private key to PKCS8 PEM")?;
 
     let path = dir.join(KEY_FILENAME);
-    std::fs::write(&path, pem.as_bytes()).context("write private key file")?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    }
+    write_private_file(&path, pem.as_bytes()).context("write private key file")?;
 
     Ok(())
 }
@@ -158,12 +198,7 @@ pub fn save_tls_key(dir: &Path, key: &p256::ecdsa::SigningKey) -> Result<()> {
     }
 
     let path = certs_dir.join(TLS_KEY_FILENAME);
-    std::fs::write(&path, pem.as_bytes()).context("write TLS key file")?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    }
+    write_private_file(&path, pem.as_bytes()).context("write TLS key file")?;
     Ok(())
 }
 
@@ -387,5 +422,44 @@ mod tests {
         save_ca_cert(dir.path(), "ca-placeholder").unwrap();
 
         assert!(has_bootstrap_certs(dir.path()));
+    }
+
+    /// A symlink planted at the key path must be replaced, never written
+    /// through: `fs::write` followed it, so a link to another file got the
+    /// private key written into that file (and a later chmod 0600 on it).
+    #[cfg(unix)]
+    #[test]
+    fn test_save_keypair_replaces_planted_symlink() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("victim");
+        std::fs::write(&victim, b"original").unwrap();
+        std::os::unix::fs::symlink(&victim, dir.path().join(KEY_FILENAME)).unwrap();
+
+        let (_, signing) = generate_keypair().unwrap();
+        save_keypair(dir.path(), &signing).unwrap();
+
+        assert_eq!(std::fs::read(&victim).unwrap(), b"original", "key written through the symlink");
+        let meta = std::fs::symlink_metadata(dir.path().join(KEY_FILENAME)).unwrap();
+        assert!(meta.file_type().is_file(), "key path is still a symlink");
+        assert_eq!(meta.permissions().mode() & 0o777, 0o600);
+        load_keypair(dir.path()).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_private_file_mode_and_replace() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret");
+        std::fs::write(&path, b"old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_private_file(&path, b"new").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        // No temp left behind.
+        let names: Vec<_> = std::fs::read_dir(dir.path()).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(names.len(), 1, "leftover files: {names:?}");
     }
 }

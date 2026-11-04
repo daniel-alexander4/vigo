@@ -4,7 +4,6 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::net::UdpSocket;
-use std::process::Command;
 
 pub fn collect() -> Result<Value> {
     let hostname = hostname::get()
@@ -183,9 +182,7 @@ fn collect_interface_details() -> serde_json::Map<String, Value> {
 
         // Firmware version from ethtool -i (subprocess, only for up interfaces).
         // The per-collector 5s timeout in mod.rs caps total runtime.
-        if let Ok(output) = Command::new("ethtool")
-            .args(["-i", &name])
-            .output()
+        if let Ok(output) = crate::traits::run_cmd("ethtool", &["-i", &name])
         {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);

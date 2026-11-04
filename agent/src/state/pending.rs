@@ -71,13 +71,16 @@ impl PendingQueue {
         }
     }
 
-    /// Enqueue a DeltaEvent for later delivery.
+    /// Enqueue a DeltaEvent for later delivery. Allocates the next sequence
+    /// number, stamps it on `delta.sequence`, and stores the delta under that
+    /// same number — the one place a pending delta's sequence is assigned.
     pub fn enqueue(
         &self,
         wtxn: &mut RwTxn<'_>,
-        delta: &crate::proto::DeltaEvent,
+        delta: &mut crate::proto::DeltaEvent,
     ) -> Result<u64> {
         let seq = self.next_seq(wtxn)?;
+        delta.sequence = seq as i64;
         let key = format!("d:{:020}", seq);
         let bytes = delta.encode_to_vec();
         self.db.put(wtxn, &key, &bytes)?;
@@ -179,9 +182,9 @@ mod tests {
         let store = crate::state::StateStore::open(dir.path()).unwrap();
 
         let mut wtxn = store.write_txn().unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("run-1", 1)).unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("run-2", 2)).unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("run-3", 3)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("run-1", 1)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("run-2", 2)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("run-3", 3)).unwrap();
         wtxn.commit().unwrap();
 
         let rtxn = store.read_txn().unwrap();
@@ -213,9 +216,9 @@ mod tests {
         let store = crate::state::StateStore::open(dir.path()).unwrap();
 
         let mut wtxn = store.write_txn().unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("run-1", 1)).unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("run-2", 2)).unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("run-3", 3)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("run-1", 1)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("run-2", 2)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("run-3", 3)).unwrap();
         wtxn.commit().unwrap();
 
         // Simulate a delivery where run-2 (the middle entry) failed: remove only
@@ -266,7 +269,7 @@ mod tests {
         {
             let store = crate::state::StateStore::open(dir.path()).unwrap();
             let mut wtxn = store.write_txn().unwrap();
-            store.pending.enqueue(&mut wtxn, &make_delta("run-a", 1)).unwrap();
+            store.pending.enqueue(&mut wtxn, &mut make_delta("run-a", 1)).unwrap();
             wtxn.commit().unwrap();
         }
 
@@ -293,8 +296,8 @@ mod tests {
         drop(rtxn);
 
         let mut wtxn = store.write_txn().unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("r1", 1)).unwrap();
-        store.pending.enqueue(&mut wtxn, &make_delta("r2", 2)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("r1", 1)).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut make_delta("r2", 2)).unwrap();
         wtxn.commit().unwrap();
 
         let rtxn = store.read_txn().unwrap();
@@ -306,18 +309,42 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = crate::state::StateStore::open(dir.path()).unwrap();
 
-        let heartbeat = DeltaEvent {
+        let mut heartbeat = DeltaEvent {
             sequence: 1,
             event: Some(delta_event::Event::Heartbeat(HeartbeatDelta {})),
         };
 
         let mut wtxn = store.write_txn().unwrap();
-        store.pending.enqueue(&mut wtxn, &heartbeat).unwrap();
+        store.pending.enqueue(&mut wtxn, &mut heartbeat).unwrap();
         wtxn.commit().unwrap();
 
         let rtxn = store.read_txn().unwrap();
         let (entries, _) = store.pending.peek(&rtxn).unwrap();
         assert_eq!(entries.len(), 1);
         assert!(matches!(entries[0].delta.event, Some(delta_event::Event::Heartbeat(_))));
+    }
+
+    /// The stored delta's own `sequence` is the number it is queued under —
+    /// a caller-allocated sequence plus a second allocation inside enqueue
+    /// left them one apart and advanced the counter by two per delta.
+    #[test]
+    fn enqueue_stamps_the_sequence_it_allocates() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+
+        let mut wtxn = store.write_txn().unwrap();
+        let mut d1 = make_delta("r1", 0);
+        let mut d2 = make_delta("r2", 0);
+        let s1 = store.pending.enqueue(&mut wtxn, &mut d1).unwrap();
+        let s2 = store.pending.enqueue(&mut wtxn, &mut d2).unwrap();
+        wtxn.commit().unwrap();
+
+        assert_eq!((s1, s2), (1, 2), "sequence must advance by one per delta");
+        assert_eq!(d1.sequence, 1);
+        assert_eq!(d2.sequence, 2);
+        let rtxn = store.read_txn().unwrap();
+        let (entries, _) = store.pending.peek(&rtxn).unwrap();
+        let stored: Vec<i64> = entries.iter().map(|e| e.delta.sequence).collect();
+        assert_eq!(stored, vec![1, 2], "stored delta sequence must equal its queue key");
     }
 }

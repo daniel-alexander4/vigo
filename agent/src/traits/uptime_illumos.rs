@@ -24,9 +24,7 @@ pub fn collect() -> Result<Value> {
 
 fn kstat_boot_time() -> u64 {
     // kstat -p unix:0:system_misc:boot_time
-    std::process::Command::new("kstat")
-        .args(["-p", "unix:0:system_misc:boot_time"])
-        .output()
+    crate::traits::run_cmd("kstat", &["-p", "unix:0:system_misc:boot_time"])
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| {

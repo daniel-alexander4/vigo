@@ -454,10 +454,45 @@ pub fn run_command_niced_timeout(
 /// enforces the timeout with a process-tree kill. `display_name` labels
 /// the `TimedOut` error.
 pub fn run_built_command_niced_timeout(
+    cmd: std::process::Command,
+    display_name: &str,
+    nice_level: i32,
+    timeout: std::time::Duration,
+) -> std::io::Result<Output> {
+    run_bounded(cmd, display_name, nice_level, timeout, None)
+}
+
+/// [`run_built_command_niced_timeout`] with stdout and stderr each capped at
+/// `max_output` bytes, for children whose output is untrusted in size (a
+/// server-supplied custom trait). Past the cap the pipe is closed, so a child
+/// that keeps writing gets EPIPE/SIGPIPE rather than growing agent memory;
+/// the timeout still bounds one that ignores it.
+pub fn run_built_command_niced_timeout_capped(
+    cmd: std::process::Command,
+    display_name: &str,
+    nice_level: i32,
+    timeout: std::time::Duration,
+    max_output: u64,
+) -> std::io::Result<Output> {
+    run_bounded(cmd, display_name, nice_level, timeout, Some(max_output))
+}
+
+/// Reads at most `cap` bytes from a child pipe, then drops it.
+fn read_capped(pipe: Option<impl std::io::Read>, cap: u64) -> Vec<u8> {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    if let Some(p) = pipe {
+        let _ = p.take(cap).read_to_end(&mut buf);
+    }
+    buf
+}
+
+fn run_bounded(
     mut cmd: std::process::Command,
     display_name: &str,
     nice_level: i32,
     timeout: std::time::Duration,
+    max_output: Option<u64>,
 ) -> std::io::Result<Output> {
     use std::process::Stdio;
     use std::sync::mpsc;
@@ -495,13 +530,34 @@ pub fn run_built_command_niced_timeout(
     }
     crate::platform::process::apply_oom_score_adj(&mut cmd);
 
-    let child = cmd.spawn()?;
+    let mut child = cmd.spawn()?;
     let pid = child.id();
     let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let result = child.wait_with_output();
-        let _ = tx.send(result);
-    });
+    match max_output {
+        None => {
+            thread::spawn(move || {
+                let result = child.wait_with_output();
+                let _ = tx.send(result);
+            });
+        }
+        Some(cap) => {
+            let stdout = child.stdout.take();
+            let stderr = child.stderr.take();
+            thread::spawn(move || {
+                // stderr on its own thread so a child filling one pipe can't
+                // deadlock against us reading the other.
+                let err_reader = thread::spawn(move || read_capped(stderr, cap));
+                let out = read_capped(stdout, cap);
+                let err = err_reader.join().unwrap_or_default();
+                let result = child.wait().map(|status| Output {
+                    status,
+                    stdout: out,
+                    stderr: err,
+                });
+                let _ = tx.send(result);
+            });
+        }
+    }
 
     wait_with_heartbeat(rx, pid, display_name, timeout)
 }

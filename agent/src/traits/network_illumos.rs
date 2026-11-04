@@ -36,9 +36,7 @@ fn collect_ips() -> Vec<String> {
     }
 
     // ipadm show-addr -p -o ADDR
-    if let Ok(output) = std::process::Command::new("ipadm")
-        .args(["show-addr", "-p", "-o", "ADDR"])
-        .output()
+    if let Ok(output) = crate::traits::run_cmd("ipadm", &["show-addr", "-p", "-o", "ADDR"])
     {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
@@ -58,9 +56,7 @@ fn collect_macs() -> Vec<String> {
     let mut macs = Vec::new();
 
     // dladm show-phys -p -o ADDRESS
-    if let Ok(output) = std::process::Command::new("dladm")
-        .args(["show-phys", "-p", "-o", "ADDRESS"])
-        .output()
+    if let Ok(output) = crate::traits::run_cmd("dladm", &["show-phys", "-p", "-o", "ADDRESS"])
     {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {

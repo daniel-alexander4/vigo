@@ -41,7 +41,7 @@ fn detect_virtualization() -> (String, String) {
         }
         "illumos" => {
             // Check zonename — "global" means bare metal, anything else is a zone.
-            if let Ok(output) = std::process::Command::new("zonename").output() {
+            if let Ok(output) = crate::traits::run_cmd("zonename", &[]) {
                 let zone = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if output.status.success() && zone != "global" {
                     return (format!("zone:{}", zone), "guest".into());

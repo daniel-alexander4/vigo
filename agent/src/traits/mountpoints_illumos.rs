@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 pub fn collect() -> Result<Value> {
     let mut mounts = Vec::new();
 
-    if let Ok(output) = std::process::Command::new("mount").output() {
+    if let Ok(output) = crate::traits::run_cmd("mount", &[]) {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             // illumos mount output: "<device> on <mountpoint> type <fstype> ..."

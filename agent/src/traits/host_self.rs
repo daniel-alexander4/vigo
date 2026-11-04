@@ -203,53 +203,17 @@ fn scan_kern_log_oom() -> bool {
 
 #[cfg(target_os = "linux")]
 fn scan_journalctl_oom() -> bool {
-    use std::process::{Command, Stdio};
-    use std::time::Duration;
-    let child = match Command::new("journalctl")
-        .args(["-k", "--since", "1 hour ago", "--no-pager", "-q"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
     // 2-second cap so a wedged journalctl can never block check-in.
-    let out = match child.wait_with_output_timeout(Duration::from_secs(2)) {
+    let out = match crate::traits::run_cmd_timeout(
+        "journalctl",
+        &["-k", "--since", "1 hour ago", "--no-pager", "-q"],
+        std::time::Duration::from_secs(2),
+    ) {
         Ok(o) => o,
         Err(_) => return false,
     };
     let s = String::from_utf8_lossy(&out.stdout);
     s.contains("invoked oom-killer") || s.contains("Out of memory: Killed process")
-}
-
-/// Tiny shim: std::process::Child has no wait_with_output_timeout —
-/// add one inline. We poll exit status with a short busy loop bounded
-/// by the timeout; if the child hasn't exited we kill it and return.
-/// Not a hot path (only when /var/log/kern.log is missing).
-#[cfg(target_os = "linux")]
-trait ChildTimeoutExt {
-    fn wait_with_output_timeout(self, timeout: std::time::Duration) -> std::io::Result<std::process::Output>;
-}
-
-#[cfg(target_os = "linux")]
-impl ChildTimeoutExt for std::process::Child {
-    fn wait_with_output_timeout(mut self, timeout: std::time::Duration) -> std::io::Result<std::process::Output> {
-        let start = std::time::Instant::now();
-        loop {
-            match self.try_wait()? {
-                Some(_status) => return self.wait_with_output(),
-                None => {
-                    if start.elapsed() >= timeout {
-                        let _ = self.kill();
-                        let _ = self.wait();
-                        return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "journalctl timeout"));
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]

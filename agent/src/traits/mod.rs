@@ -217,6 +217,42 @@ use tracing::warn;
 /// Maximum time a single trait collector may run.
 pub const COLLECTOR_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Nice level for every collector subprocess — collectors run on production
+/// hosts and must stay out of the workload's way.
+pub(crate) const COLLECTOR_NICE: i32 = 10;
+
+/// Ceiling for one collector subprocess — under [`COLLECTOR_TIMEOUT`], so the
+/// child is killed before the collector itself is abandoned.
+pub(crate) const COLLECTOR_CMD_TIMEOUT: Duration = Duration::from_secs(4);
+
+/// run_cmd is the single way a trait collector runs a subprocess: niced
+/// (and ioniced on Linux), stdin from /dev/null, in its own process group,
+/// and killed — group and all — once [`COLLECTOR_CMD_TIMEOUT`] passes.
+/// `collect_all`'s outer timeout only abandons the blocking thread; without
+/// this the child (`dnf check-update`, `apt-get update`, a wedged `who` on
+/// NSS) kept running after the collector gave up on it.
+pub(crate) fn run_cmd(name: &str, args: &[&str]) -> std::io::Result<std::process::Output> {
+    run_cmd_timeout(name, args, COLLECTOR_CMD_TIMEOUT)
+}
+
+/// run_cmd_timeout is [`run_cmd`] with an explicit ceiling, for the
+/// collectors whose own budget is not [`COLLECTOR_TIMEOUT`].
+pub(crate) fn run_cmd_timeout(
+    name: &str,
+    args: &[&str],
+    timeout: Duration,
+) -> std::io::Result<std::process::Output> {
+    crate::executors::run_command_niced_timeout(name, args, COLLECTOR_NICE, timeout)
+}
+
+/// run_built_cmd is [`run_cmd`] for a `Command` the caller prepared (env).
+pub(crate) fn run_built_cmd(
+    cmd: std::process::Command,
+    name: &str,
+) -> std::io::Result<std::process::Output> {
+    crate::executors::run_built_command_niced_timeout(cmd, name, COLLECTOR_NICE, COLLECTOR_CMD_TIMEOUT)
+}
+
 /// Enum dispatch for the 50 built-in trait collectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollectorKind {
@@ -901,6 +937,31 @@ pub fn format_value(v: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// A collector subprocess that outlives its ceiling is killed — group
+    /// and all — instead of being left running when the collector is
+    /// abandoned (the old plain `.output()` had no timeout at all).
+    #[cfg(unix)]
+    #[test]
+    fn run_cmd_timeout_kills_the_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("pid");
+        let script = format!("sleep 30 & echo $! > {}; sleep 30", pidfile.display());
+        let started = std::time::Instant::now();
+        let res = run_cmd_timeout("sh", &["-c", &script], Duration::from_millis(300));
+        assert!(res.is_err(), "hung collector command returned {res:?}");
+        assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
+        let pid: i32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
+        let mut alive = true;
+        for _ in 0..50 {
+            alive = unsafe { libc::kill(pid, 0) } == 0;
+            if !alive {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!alive, "grandchild {pid} outlived the collector timeout");
+    }
+
     use super::*;
 
     #[test]

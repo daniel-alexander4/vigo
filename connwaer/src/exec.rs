@@ -4,10 +4,15 @@
 //! concurrently while it runs, and on deadline the whole group is killed
 //! (SIGTERM, short grace, SIGKILL) so a wedged tool — or a grandchild it
 //! spawned via `sh -c` — can never pin a scheduler thread past its budget.
+//! That includes the case where the direct child exits but a backgrounded
+//! grandchild keeps the output pipes open: the drain is waited on only until
+//! the same deadline, then the group is killed. Captured output is capped at
+//! [`MAX_CAPTURE`] per stream.
 
 use anyhow::{Context, Result};
 use std::io::{Read, Write};
 use std::process::{Child, Command, Output, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -15,6 +20,14 @@ use std::time::{Duration, Instant};
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(60);
 
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Most bytes kept from one stream (stdout or stderr) of one command. Past
+/// it the pipe is still drained (so the child is never blocked on a full
+/// pipe) but the bytes are discarded.
+pub const MAX_CAPTURE: usize = 16 * 1024 * 1024;
+
+/// How long to wait for the drains once the group has been killed.
+const DRAIN_SETTLE: Duration = Duration::from_secs(2);
 #[cfg(unix)]
 const TERM_GRACE: Duration = Duration::from_secs(2);
 
@@ -85,8 +98,8 @@ pub fn run_with_stdin(
     // we're still feeding it a large stdin must not deadlock on a full pipe.
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
-    let out_handle = thread::spawn(move || drain(stdout_pipe));
-    let err_handle = thread::spawn(move || drain(stderr_pipe));
+    let out_rx = spawn_drain(stdout_pipe);
+    let err_rx = spawn_drain(stderr_pipe);
 
     // The stdin write also gets its own thread: if the child neither reads
     // nor exits, a write past the pipe buffer would otherwise block this
@@ -110,11 +123,9 @@ pub fn run_with_stdin(
                 if Instant::now() >= deadline {
                     kill_tree(&mut child);
                     let _ = child.wait();
-                    let _ = out_handle.join();
-                    let _ = err_handle.join();
-                    if let Some(h) = stdin_handle {
-                        let _ = h.join();
-                    }
+                    let _ = out_rx.recv_timeout(DRAIN_SETTLE);
+                    let _ = err_rx.recv_timeout(DRAIN_SETTLE);
+                    drop(stdin_handle); // detached; the killed child closed the pipe
                     anyhow::bail!(
                         "{program} timed out after {}s and was killed",
                         timeout.as_secs()
@@ -125,30 +136,51 @@ pub fn run_with_stdin(
             Err(e) => {
                 kill_tree(&mut child);
                 let _ = child.wait();
-                let _ = out_handle.join();
-                let _ = err_handle.join();
-                if let Some(h) = stdin_handle {
-                    let _ = h.join();
-                }
+                let _ = out_rx.recv_timeout(DRAIN_SETTLE);
+                let _ = err_rx.recv_timeout(DRAIN_SETTLE);
+                drop(stdin_handle);
                 return Err(e).with_context(|| format!("waiting for {program}"));
             }
         }
     };
 
-    let stdout = out_handle.join().unwrap_or_default();
-    let stderr = err_handle.join().unwrap_or_default();
-    if let Some(h) = stdin_handle {
-        let _ = h.join();
+    // The direct child has exited, but a grandchild it backgrounded may
+    // still hold the pipes open — the drains reach EOF only when it exits.
+    // Wait for them no longer than the command's own deadline; past it, kill
+    // the group (which closes the pipes) and take what was read.
+    let mut stdout = out_rx.recv_timeout(deadline.saturating_duration_since(Instant::now()));
+    let mut stderr = err_rx.recv_timeout(deadline.saturating_duration_since(Instant::now()));
+    if stdout.is_err() || stderr.is_err() {
+        kill_tree(&mut child);
+        if stdout.is_err() {
+            stdout = out_rx.recv_timeout(DRAIN_SETTLE);
+        }
+        if stderr.is_err() {
+            stderr = err_rx.recv_timeout(DRAIN_SETTLE);
+        }
     }
-    Ok(Output { status, stdout, stderr })
+    drop(stdin_handle);
+    Ok(Output {
+        status,
+        stdout: stdout.unwrap_or_default(),
+        stderr: stderr.unwrap_or_default(),
+    })
 }
 
-fn drain<R: Read>(pipe: Option<R>) -> Vec<u8> {
-    let mut buf = Vec::new();
-    if let Some(mut p) = pipe {
-        let _ = p.read_to_end(&mut buf);
-    }
-    buf
+/// Drain a pipe on its own thread; the result arrives on the returned
+/// channel at EOF. Keeps at most [`MAX_CAPTURE`] bytes and discards the
+/// rest, still reading so the writer never blocks on a full pipe.
+fn spawn_drain<R: Read + Send + 'static>(pipe: Option<R>) -> mpsc::Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut p) = pipe {
+            let _ = (&mut p).take(MAX_CAPTURE as u64).read_to_end(&mut buf);
+            let _ = std::io::copy(&mut p, &mut std::io::sink());
+        }
+        let _ = tx.send(buf);
+    });
+    rx
 }
 
 /// Kill the child's whole process group: SIGTERM, a short grace for clean
@@ -215,6 +247,31 @@ mod tests {
             thread::sleep(Duration::from_millis(50));
         }
         assert!(!alive, "grandchild sleep (pid {pid}) survived the group kill");
+    }
+
+    /// A child that exits while a backgrounded grandchild still holds
+    /// stdout open must return at the deadline, not when the grandchild
+    /// finally exits (the old drain join waited the full 30s here).
+    #[test]
+    fn exited_child_with_lingering_grandchild_returns_at_deadline() {
+        let start = Instant::now();
+        let out = run_shell("echo hi; sleep 30 &", Duration::from_secs(1)).unwrap();
+        assert!(
+            start.elapsed() < Duration::from_secs(6),
+            "drain pinned the caller for {:?}",
+            start.elapsed()
+        );
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "hi");
+    }
+
+    /// Captured output stops at MAX_CAPTURE; the child still completes.
+    #[test]
+    fn output_capture_is_capped() {
+        let cmd = format!("head -c {} /dev/zero", MAX_CAPTURE + 1_000_000);
+        let out = run_shell(&cmd, Duration::from_secs(60)).unwrap();
+        assert!(out.status.success());
+        assert_eq!(out.stdout.len(), MAX_CAPTURE);
     }
 
     #[test]

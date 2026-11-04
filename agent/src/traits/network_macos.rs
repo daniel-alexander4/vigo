@@ -34,7 +34,7 @@ fn collect_interfaces() -> (Vec<String>, Vec<String>) {
     }
 
     // Parse ifconfig output for additional IPs and MACs.
-    if let Ok(output) = std::process::Command::new("ifconfig").output() {
+    if let Ok(output) = crate::traits::run_cmd("ifconfig", &[]) {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             let trimmed = line.trim();

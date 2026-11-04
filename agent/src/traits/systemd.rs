@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::process::Command;
 
 pub fn collect() -> Result<Value> {
     let available = which("systemctl");
@@ -45,9 +44,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn collect_failed_units() -> Vec<String> {
-    let output = match Command::new("systemctl")
-        .args(["--state=failed", "list-units", "--no-legend", "--plain"])
-        .output()
+    let output = match crate::traits::run_cmd("systemctl", &["--state=failed", "list-units", "--no-legend", "--plain"])
     {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => return vec![],
@@ -67,18 +64,14 @@ fn collect_failed_units() -> Vec<String> {
 }
 
 fn run_cmd(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd)
-        .args(args)
-        .output()
+    crate::traits::run_cmd(cmd, args)
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
 }
 
 fn which(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
-        .output()
+    crate::traits::run_cmd("which", &[cmd])
         .map(|o| o.status.success())
         .unwrap_or(false)
 }

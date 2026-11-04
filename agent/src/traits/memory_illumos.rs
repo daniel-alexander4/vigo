@@ -42,8 +42,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn parse_prtconf_memory_mb() -> u64 {
-    std::process::Command::new("prtconf")
-        .output()
+    crate::traits::run_cmd("prtconf", &[])
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| {
@@ -61,8 +60,7 @@ fn parse_prtconf_memory_mb() -> u64 {
 }
 
 fn parse_pagesize() -> u64 {
-    std::process::Command::new("pagesize")
-        .output()
+    crate::traits::run_cmd("pagesize", &[])
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| {
@@ -75,9 +73,7 @@ fn parse_pagesize() -> u64 {
 }
 
 fn kstat_u64(stat: &str) -> u64 {
-    std::process::Command::new("kstat")
-        .args(["-p", stat])
-        .output()
+    crate::traits::run_cmd("kstat", &["-p", stat])
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| {
@@ -92,7 +88,7 @@ fn parse_swap() -> (u64, u64, u64) {
     // swap -l output:
     // swapfile             dev    swaplo  blocks    free
     // /dev/zvol/dsk/...    ...    ...     2097152   2097152
-    let output = std::process::Command::new("swap").args(["-l"]).output().ok();
+    let output = crate::traits::run_cmd("swap", &["-l"]).ok();
     let stdout = output.as_ref()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();

@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::process::Command;
 
 pub fn collect() -> Result<Value> {
     // SELinux config must exist.
@@ -15,8 +14,7 @@ pub fn collect() -> Result<Value> {
         }));
     }
 
-    let mode = Command::new("getenforce")
-        .output()
+    let mode = crate::traits::run_cmd("getenforce", &[])
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_lowercase())
@@ -34,7 +32,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn get_policy() -> String {
-    let output = match Command::new("sestatus").output() {
+    let output = match crate::traits::run_cmd("sestatus", &[]) {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => return String::new(),
     };

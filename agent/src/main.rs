@@ -15,6 +15,7 @@ use vigo::snapshots;
 use vigo::state;
 use vigo::swarm;
 use vigo::traits;
+use vigo::transport;
 use vigo::update;
 
 use anyhow::{bail, Context, Result};
@@ -92,6 +93,10 @@ enum Commands {
     Status,
     Traits {
         collectors: Vec<String>,
+    },
+    /// Pinned SSH host keys of proxied network devices: `list`, `forget`.
+    SshHostKey {
+        args: Vec<String>,
     },
     /// User-facing gitback inspection and recovery tree.
     /// Pure local state reads; does not start the daemon or touch the
@@ -454,6 +459,9 @@ fn parse_args() -> Result<Cli> {
             "traits" => Commands::Traits {
                 collectors: positional[1..].to_vec(),
             },
+            "ssh-hostkey" => Commands::SshHostKey {
+                args: positional[1..].to_vec(),
+            },
             "swarm" => match positional.get(1).map(|s| s.as_str()) {
                 Some("gitback") => Commands::Gitback {
                     args: positional[2..].to_vec(),
@@ -546,6 +554,8 @@ COMMANDS:
     version     Print agent version
     status      Show agent state (config, cached policy, pending results)
     traits      Print collected traits as JSON [COLLECTORS...]
+    ssh-hostkey Pinned SSH host keys of proxied network devices
+                  list | forget <host>[:<port>]
     swarm gitback     Inspect + recover gitback mirrors on this envoy
                           list | show | log | branches | peers | recover | recover-all
     swarm lockbox     Manage lockbox — per-user encrypted P2P directory
@@ -688,25 +698,35 @@ fn load_envoy_id(data_dir: &std::path::Path) -> Result<String> {
 /// Write envoy UUID to <data-dir>/envoy.uuid.
 fn save_envoy_id(data_dir: &std::path::Path, id: &str) -> Result<()> {
     let path = data_dir.join("envoy.uuid");
-    std::fs::write(&path, format!("{}\n", id))
+    auth::keypair::write_private_file(&path, format!("{}\n", id).as_bytes())
         .with_context(|| format!("write envoy UUID to {}", path.display()))?;
-    // Set permissions to 0600
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    }
     Ok(())
 }
 
-/// Save bolt address to <data-dir>/bolt.addr.
+/// Save bolt address to <data-dir>/bolt.addr; an empty address removes the
+/// file. Every enrollment calls it, so re-enrolling onto a server that does
+/// not route clears a bolt address left by an earlier spanner enrollment
+/// (otherwise every later run kept checking in at the old bolt).
 fn save_bolt_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
     let path = data_dir.join("bolt.addr");
     if addr.is_empty() {
-        let _ = std::fs::remove_file(&path);
-        return Ok(());
+        return match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+            _ => Ok(()),
+        };
     }
     std::fs::write(&path, format!("{}\n", addr))?;
+    Ok(())
+}
+
+/// record_bolt_routing persists an enrollment's spanner routing — the bolt
+/// address, or its absence — so the next run checks in where the server said.
+/// Both enrollment paths (`vigo register`, `vigo bootstrap`) call it.
+fn record_bolt_routing(data_dir: &std::path::Path, bolt_addr: &str) -> Result<()> {
+    save_bolt_addr(data_dir, bolt_addr)?;
+    if !bolt_addr.is_empty() {
+        info!(bolt_addr = %bolt_addr, "spanner routed to bolt");
+    }
     Ok(())
 }
 
@@ -718,11 +738,10 @@ fn load_bolt_addr(data_dir: &std::path::Path) -> String {
         .unwrap_or_default()
 }
 
-/// Save server's bundle-signing public key to <data-dir>/server_pubkey.pem.
+/// Save server's bundle-signing public key to <data-dir>/server_pubkey.pem
+/// (atomically — see [`checkin::loop_impl::save_server_pubkey`]).
 fn save_server_pubkey(data_dir: &std::path::Path, pem: &str) -> Result<()> {
-    let path = data_dir.join("server_pubkey.pem");
-    std::fs::write(&path, pem)?;
-    Ok(())
+    checkin::loop_impl::save_server_pubkey(data_dir, pem)
 }
 
 /// Load server's bundle-signing public key. Returns empty string if not set.
@@ -923,6 +942,17 @@ async fn run_once(cli: &Cli, module_filter: Option<String>, dry_run: bool) -> Re
         // policy::secrets for the marker convention; without this
         // substitution, eval_bundle would feed placeholder strings
         // into executors.
+        //
+        // Verify the signature first, fail-closed, exactly as the daemon does
+        // — against the response's key, else the cached one.
+        if let Some(ref bundle) = server_resp.policy_bundle {
+            checkin::verify::verify_server_bundle(
+                bundle,
+                &server_resp.server_pubkey_pem,
+                &load_server_pubkey(&cli.data_dir),
+            )
+            .context("policy bundle signature verification failed — refusing to apply it")?;
+        }
         if let Some(bundle) = server_resp.policy_bundle.as_mut() {
             policy::secrets::resolve_and_substitute(
                 bundle,
@@ -1104,6 +1134,12 @@ async fn run_once(cli: &Cli, module_filter: Option<String>, dry_run: bool) -> Re
 
     // Load custom executors.
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
+
+    // Network-device executors pin SSH host keys in the state store and
+    // refuse to connect without it.
+    if let Ok(s) = state::StateStore::open(&platform::paths::default_state_dir()) {
+        transport::ssh::install_host_key_store(std::sync::Arc::new(s));
+    }
 
     // Acquire convergence lock — stop the daemon if it holds it.
     let _lock = match runner::lock::ConvergenceLock::try_acquire(&cli.data_dir)? {
@@ -1490,6 +1526,13 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // inverses. No-op when the state store is unavailable.
     runner::reversal::wrap_reversible(&mut executors, state_store.clone());
 
+    // Proxied-device SSH pins each device's host key in the state store on
+    // first connect and refuses a changed key; without the store it refuses
+    // to connect at all rather than accept any key.
+    if let Some(ref s) = state_store {
+        transport::ssh::install_host_key_store(s.clone());
+    }
+
     // Configure daemon loop.
     let traits_cache_dir = cli.data_dir.join("traits").to_string_lossy().to_string();
     // Create the peer map and manifest early so they can be shared between LoopConfig,
@@ -1803,6 +1846,66 @@ async fn install_platform_service(_bootstrap_server: &str, _grpc_port: &str) -> 
 
 /// Show local agent state: config, cached policy, pending results.
 /// Reads only from local files and the LMDB state store — no server communication.
+/// ssh_hostkey_id normalizes an operator-typed device address to the pin
+/// store's "host:port" key (port 22 when omitted; IPv6 literals bracketed or
+/// not).
+fn ssh_hostkey_id(addr: &str) -> String {
+    let a = addr.trim();
+    if let Some(rest) = a.strip_prefix('[') {
+        // [v6]:port or [v6]
+        return match rest.split_once(']') {
+            Some((host, tail)) => match tail.strip_prefix(':') {
+                Some(port) if !port.is_empty() => format!("{host}:{port}"),
+                _ => format!("{host}:22"),
+            },
+            None => format!("{rest}:22"),
+        };
+    }
+    match a.rsplit_once(':') {
+        // Exactly one colon with a numeric tail is host:port; more colons is
+        // a bare IPv6 literal.
+        Some((host, port)) if !host.contains(':') && port.parse::<u16>().is_ok() => a.to_string(),
+        _ => format!("{a}:22"),
+    }
+}
+
+/// `vigo ssh-hostkey list | forget <host>[:<port>]` — inspect and reset the
+/// host keys this gateway envoy pinned for proxied network devices. A
+/// device whose key legitimately changed is refused until its pin is
+/// forgotten; the next connection pins the new key.
+fn run_ssh_hostkey(args: &[String]) -> Result<()> {
+    let store = state::StateStore::open(&platform::paths::default_state_dir())
+        .context("open the agent state store (run as root)")?;
+    match args.first().map(String::as_str) {
+        Some("list") | None => {
+            let rtxn = store.read_txn()?;
+            let keys = store.ssh_keys.list(&rtxn)?;
+            if keys.is_empty() {
+                println!("no pinned SSH host keys");
+            }
+            for (id, record) in keys {
+                let algo = record.split_whitespace().next().unwrap_or("");
+                println!("{id}\t{algo}");
+            }
+            Ok(())
+        }
+        Some("forget") => {
+            let addr = args.get(1).context("usage: vigo ssh-hostkey forget <host>[:<port>]")?;
+            let id = ssh_hostkey_id(addr);
+            let mut wtxn = store.write_txn()?;
+            let existed = store.ssh_keys.delete(&mut wtxn, &id)?;
+            wtxn.commit()?;
+            if existed {
+                println!("forgot the pinned host key for {id}; the next connection pins the key it presents");
+            } else {
+                println!("no pinned host key for {id}");
+            }
+            Ok(())
+        }
+        Some(other) => bail!("unknown ssh-hostkey verb {other:?} (expected: list | forget <host>[:<port>])"),
+    }
+}
+
 fn run_status(cli: &Cli) -> Result<()> {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -2082,6 +2185,8 @@ async fn async_main() -> Result<()> {
 
         Some(Commands::Status) => run_status(&cli),
 
+        Some(Commands::SshHostKey { args }) => run_ssh_hostkey(args),
+
         Some(Commands::Register { token, force }) => {
             let (pub_key, priv_key) = auth::keypair::load_or_generate(&cli.data_dir)?;
             let pub_pem = auth::keypair::public_key_pem(&pub_key)?;
@@ -2129,10 +2234,7 @@ async fn async_main() -> Result<()> {
                 info!("stored server bundle-signing public key");
             }
 
-            if !resp.bolt_addr.is_empty() {
-                save_bolt_addr(&cli.data_dir, &resp.bolt_addr)?;
-                info!(bolt_addr = %resp.bolt_addr, "spanner routed to bolt");
-            }
+            record_bolt_routing(&cli.data_dir, &resp.bolt_addr)?;
 
             // Persist fallback servers for agent failover.
             if !resp.fallback_servers.is_empty() {
@@ -2341,11 +2443,9 @@ async fn async_main() -> Result<()> {
             // Spanner: if the contacted bolt routed us to the bolt that owns our
             // hostname, persist that address — load_bolt_addr overrides the
             // server addr on every subsequent run, so check-ins land on the
-            // owning bolt. Mirrors the gRPC enroll path above.
-            if !resp.bolt_addr.is_empty() {
-                save_bolt_addr(&cli.data_dir, &resp.bolt_addr)?;
-                info!(bolt_addr = %resp.bolt_addr, "spanner routed to bolt");
-            }
+            // owning bolt. Mirrors the gRPC enroll path above. Called even
+            // when empty so a stale bolt.addr from an earlier enrollment goes.
+            record_bolt_routing(&cli.data_dir, &resp.bolt_addr)?;
 
             // Persist server address so subsequent runs don't need --server.
             // Use the shared helper rather than re-deriving inline: the
@@ -2355,17 +2455,10 @@ async fn async_main() -> Result<()> {
             // port by rfind + digit check, which leaves an IPv6 authority's
             // brackets intact.
             let grpc_addr = bootstrap::derive_grpc_addr(bootstrap_server, grpc_port);
-            let mut config_pairs: Vec<(&str, &str)> =
+            let config_pairs: Vec<(&str, &str)> =
                 vec![("server", &grpc_addr), ("api_addr", bootstrap_server)];
-            let fb_str = resp.fallback_servers.join(",");
-            if !resp.fallback_servers.is_empty() {
-                config_pairs.push(("fallback_servers", &fb_str));
-            }
             if let Err(e) = config::save(&cli.data_dir, &config_pairs) {
                 warn!(error = %e, "failed to save config");
-            }
-            if !resp.fallback_servers.is_empty() {
-                info!(fallback_servers = %fb_str, "stored fallback servers for failover");
             }
 
             info!(
@@ -2449,5 +2542,32 @@ async fn async_main() -> Result<()> {
             // Daemon mode — persistent loop with backoff + stream mode.
             run_daemon(&cli).await
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Re-enrolling onto a server that does not route must clear a bolt
+    /// address left by an earlier spanner enrollment; the call sites used to
+    /// skip the save when the new address was empty, so the stale one won.
+    #[test]
+    fn enrollment_without_bolt_clears_stale_bolt_addr() {
+        let dir = tempfile::tempdir().unwrap();
+        record_bolt_routing(dir.path(), "bolt-a:1530").unwrap();
+        assert_eq!(load_bolt_addr(dir.path()), "bolt-a:1530");
+        record_bolt_routing(dir.path(), "").unwrap();
+        assert_eq!(load_bolt_addr(dir.path()), "", "stale bolt.addr survived re-enrollment");
+    }
+
+    #[test]
+    fn ssh_hostkey_id_matches_the_pin_store_key() {
+        assert_eq!(ssh_hostkey_id("10.0.0.7"), "10.0.0.7:22");
+        assert_eq!(ssh_hostkey_id("10.0.0.7:2222"), "10.0.0.7:2222");
+        assert_eq!(ssh_hostkey_id("sw1.lan"), "sw1.lan:22");
+        assert_eq!(ssh_hostkey_id("fe80::1"), "fe80::1:22");
+        assert_eq!(ssh_hostkey_id("[fe80::1]:2222"), "fe80::1:2222");
+        assert_eq!(ssh_hostkey_id("[fe80::1]"), "fe80::1:22");
     }
 }

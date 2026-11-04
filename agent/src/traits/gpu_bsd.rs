@@ -14,9 +14,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn macos_gpu() -> Result<Value> {
-    let output = std::process::Command::new("system_profiler")
-        .args(["SPDisplaysDataType", "-json"])
-        .output()
+    let output = crate::traits::run_cmd("system_profiler", &["SPDisplaysDataType", "-json"])
         .ok();
 
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();

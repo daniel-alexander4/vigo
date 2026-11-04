@@ -7,7 +7,7 @@ use anyhow::Result;
 use serde_json::{json, Value};
 
 pub fn collect() -> Result<Value> {
-    let output = std::process::Command::new("locale").output().ok();
+    let output = crate::traits::run_cmd("locale", &[]).ok();
     let stdout = output.as_ref()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())

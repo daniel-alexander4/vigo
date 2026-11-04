@@ -22,7 +22,7 @@
 
 use crate::proto::PolicyBundle;
 use anyhow::{bail, Result};
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 use prost::Message;
 use prost_reflect::{DescriptorPool, Value};
 use spki::DecodePublicKey;
@@ -55,11 +55,37 @@ pub fn verify_bundle(bundle: &PolicyBundle, server_pubkey_pem: &str) -> Result<(
     let sig = Signature::from_slice(&bundle.signature)
         .map_err(|e| anyhow::anyhow!("parsing signature: {}", e))?;
 
+    // verify_strict, not verify: the lax check accepts small-order (weak)
+    // public keys and non-canonical R, under which a forged signature can
+    // validate for any message. Self-update uses the strict check too.
     verifying_key
-        .verify(&content_bytes, &sig)
+        .verify_strict(&content_bytes, &sig)
         .map_err(|_| anyhow::anyhow!("bundle signature verification failed"))?;
 
     Ok(())
+}
+
+/// Verify a bundle the server sent, fail-closed, on every path that applies
+/// one (poll check-in, stream handshake / periodic / force-push, policy push,
+/// proxied devices, `vigo run`). The key is the one in the same response when
+/// the server included it (it does on every response — see
+/// `server/grpc/agentstream.go` `buildCheckInResponse`), else the one cached
+/// from enrollment or the last response. No key, no signature, or a bad one
+/// is an error: an unverifiable bundle is never applied.
+pub fn verify_server_bundle(
+    bundle: &PolicyBundle,
+    response_pubkey_pem: &str,
+    cached_pubkey_pem: &str,
+) -> Result<()> {
+    let key = if !response_pubkey_pem.is_empty() {
+        response_pubkey_pem
+    } else {
+        cached_pubkey_pem
+    };
+    if key.is_empty() {
+        bail!("no server bundle-signing public key (none in the response, none cached) — refusing an unverifiable bundle");
+    }
+    verify_bundle(bundle, key)
 }
 
 /// Serialize the policy content fields for signature computation. Must
@@ -253,6 +279,47 @@ mod tests {
         // Empty PEM = server public key not configured — must reject.
         let result = verify_bundle(&bundle, "");
         assert!(result.is_err(), "should reject when server public key is not configured");
+    }
+
+    /// No key anywhere is a refusal, not a skip — the pre-fix poll path
+    /// skipped verification entirely when neither key was present.
+    #[test]
+    fn verify_server_bundle_fails_closed_without_any_key() {
+        let mut bundle = PolicyBundle { policy_version: 3, ..Default::default() };
+        let pem = sign_test_bundle(&mut bundle);
+        assert!(verify_server_bundle(&bundle, "", "").is_err(), "no key must refuse");
+        verify_server_bundle(&bundle, &pem, "").expect("response key verifies");
+        verify_server_bundle(&bundle, "", &pem).expect("cached key verifies");
+    }
+
+    /// An unsigned bundle is refused even with a key available.
+    #[test]
+    fn verify_server_bundle_rejects_unsigned() {
+        let mut signed = PolicyBundle { policy_version: 3, ..Default::default() };
+        let pem = sign_test_bundle(&mut signed);
+        let unsigned = PolicyBundle { policy_version: 3, ..Default::default() };
+        assert!(verify_server_bundle(&unsigned, &pem, &pem).is_err());
+    }
+
+    /// A small-order (weak) public key with an identity-R, zero-s signature
+    /// satisfies the lax ed25519 equation for every message. verify_strict
+    /// rejects it; plain verify accepted it.
+    #[test]
+    fn reject_weak_key_forgery() {
+        use spki::EncodePublicKey;
+        let mut identity = [0u8; 32];
+        identity[0] = 1; // compressed Edwards identity point
+        let weak = VerifyingKey::from_bytes(&identity).expect("identity decodes");
+        let pem = weak.to_public_key_pem(pkcs8::LineEnding::LF).unwrap();
+        let mut sig = vec![0u8; 64];
+        sig[0] = 1; // R = identity, s = 0
+        let bundle = PolicyBundle {
+            policy_version: 66,
+            matched_pattern: "*".into(),
+            signature: sig,
+            ..Default::default()
+        };
+        assert!(verify_bundle(&bundle, &pem).is_err(), "weak-key forgery verified");
     }
 
     /// The drift check itself. Runs the same code the agent runs at

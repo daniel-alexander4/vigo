@@ -23,9 +23,7 @@ pub fn collect() -> Result<Value> {
 
 fn collect_disk_sizes() -> Value {
     let mut map = serde_json::Map::new();
-    let output = std::process::Command::new("df")
-        .args(["-k"])
-        .output()
+    let output = crate::traits::run_cmd("df", &["-k"])
         .ok();
 
     if let Some(o) = output {

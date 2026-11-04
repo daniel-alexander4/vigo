@@ -22,6 +22,45 @@ impl Drop for VncSession {
     }
 }
 
+/// Ceiling for the short lookups (`who`, `id`) and the notify-send.
+const VNC_CMD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Ceiling for the consent dialog — zenity's own `--timeout=30` plus slack
+/// for `su` and the X server, so a wedged session can't hold the tunnel open.
+const CONSENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
+
+/// run_lookup runs a short console lookup through the bounded runner
+/// (own process group, killed at [`VNC_CMD_TIMEOUT`]); a `who` or `id`
+/// blocked on NSS/LDAP no longer hangs tunnel setup.
+fn run_lookup(name: &str, args: &[&str]) -> Option<std::process::Output> {
+    crate::executors::run_command_niced_timeout(name, args, 0, VNC_CMD_TIMEOUT).ok()
+}
+
+/// status_bounded spawns `cmd` in its own process group and waits at most
+/// `timeout` for it; past that the whole group (su, the shell, zenity) is
+/// killed and a TimedOut error returned.
+async fn status_bounded(
+    mut cmd: Command,
+    timeout: std::time::Duration,
+) -> std::io::Result<std::process::ExitStatus> {
+    crate::platform::process::configure_process_group(&mut cmd);
+    cmd.kill_on_drop(true);
+    let mut child = cmd.spawn()?;
+    match tokio::time::timeout(timeout, child.wait()).await {
+        Ok(r) => r,
+        Err(_) => {
+            if let Some(pid) = child.id() {
+                let _ = tokio::task::spawn_blocking(move || {
+                    crate::platform::process::kill_process_tree(pid, std::time::Duration::from_millis(500))
+                })
+                .await;
+            }
+            let _ = child.wait().await;
+            Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "timed out"))
+        }
+    }
+}
+
 /// Information about the active X11 console session.
 struct ConsoleInfo {
     display: String,     // e.g., ":0"
@@ -41,9 +80,7 @@ fn find_console() -> Option<ConsoleInfo> {
     };
 
     // Find who owns the display by checking Xorg process.
-    let output = std::process::Command::new("who")
-        .output()
-        .ok()?;
+    let output = run_lookup("who", &[])?;
     let who_output = String::from_utf8_lossy(&output.stdout);
 
     // Parse `who` output: look for a line with the display (e.g., "dan  :0")
@@ -64,10 +101,7 @@ fn find_console() -> Option<ConsoleInfo> {
         // Fallback: check who owns the X socket.
         if let Ok(meta) = std::fs::metadata(format!("/tmp/.X11-unix/X{}", display_num)) {
             use std::os::unix::fs::MetadataExt;
-            if let Ok(output) = std::process::Command::new("id")
-                .args(["-nu", &meta.uid().to_string()])
-                .output()
-            {
+            if let Some(output) = run_lookup("id", &["-nu", &meta.uid().to_string()]) {
                 user = String::from_utf8_lossy(&output.stdout).trim().to_string();
             }
         }
@@ -88,10 +122,7 @@ fn find_console() -> Option<ConsoleInfo> {
         format!("{}/.Xauthority", home)
     } else {
         // Try run directory (GDM, SDDM).
-        let uid_output = std::process::Command::new("id")
-            .args(["-u", &user])
-            .output()
-            .ok()?;
+        let uid_output = run_lookup("id", &["-u", &user])?;
         let uid = String::from_utf8_lossy(&uid_output.stdout).trim().to_string();
         let run_path = format!("/run/user/{}/gdm/Xauthority", uid);
         if std::path::Path::new(&run_path).exists() {
@@ -125,8 +156,9 @@ async fn prompt_consent(console: &ConsoleInfo) -> bool {
         console.display, console.xauthority
     );
 
-    // Fire-and-forget notification (don't block on it).
-    let _ = Command::new("su")
+    // Notification first; bounded so a wedged su/notify-send can't stall.
+    let mut notify = Command::new("su");
+    notify
         .args([
             "-", &console.user, "-c",
             &format!(
@@ -134,10 +166,10 @@ async fn prompt_consent(console: &ConsoleInfo) -> bool {
                 env_prefix
             ),
         ])
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
+        .stderr(Stdio::null());
+    let _ = status_bounded(notify, VNC_CMD_TIMEOUT).await;
 
     // Small delay so the notification appears before the dialog.
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
@@ -146,7 +178,8 @@ async fn prompt_consent(console: &ConsoleInfo) -> bool {
     // rules can target it if needed. xdotool search --sync blocks until
     // the zenity window exists (up to 5s via timeout), then raises it
     // above all other windows so the user sees it immediately.
-    let result = Command::new("su")
+    let mut dialog = Command::new("su");
+    dialog
         .args([
             "-", &console.user, "-c",
             &format!(
@@ -169,10 +202,10 @@ async fn prompt_consent(console: &ConsoleInfo) -> bool {
                 env_prefix
             ),
         ])
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
+        .stderr(Stdio::null());
+    let result = status_bounded(dialog, CONSENT_TIMEOUT).await;
 
     match result {
         Ok(status) => status.success(), // exit 0 = Allow, non-zero = Deny/timeout
@@ -190,7 +223,11 @@ pub async fn start_session(
     consent_mode: &str,
 ) -> Result<VncSession, String> {
     // Find the console X11 display.
-    let console = find_console()
+    // find_console runs blocking lookups (`who`, `id`): off the async workers.
+    let console = tokio::task::spawn_blocking(find_console)
+        .await
+        .ok()
+        .flatten()
         .ok_or_else(|| "no X11 display found (is a graphical session running?)".to_string())?;
 
     info!(
@@ -287,4 +324,30 @@ fn pick_ephemeral_port() -> Option<u32> {
     let port = listener.local_addr().ok()?.port();
     drop(listener);
     Some(port as u32)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// A console command that never returns (a wedged `su`, a dialog on a
+    /// hung X server) is killed at its ceiling; the old `.status().await`
+    /// waited forever.
+    #[tokio::test]
+    async fn status_bounded_kills_a_hung_command() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "sleep 30"]);
+        let started = std::time::Instant::now();
+        let res = status_bounded(cmd, std::time::Duration::from_millis(300)).await;
+        assert_eq!(res.unwrap_err().kind(), std::io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[tokio::test]
+    async fn status_bounded_passes_exit_status_through() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "exit 3"]);
+        let st = status_bounded(cmd, std::time::Duration::from_secs(5)).await.unwrap();
+        assert_eq!(st.code(), Some(3));
+    }
 }

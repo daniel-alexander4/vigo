@@ -23,7 +23,7 @@ fn detect_timezone() -> String {
         }
     }
     // macOS: try systemsetup
-    if let Ok(output) = std::process::Command::new("systemsetup").args(["-gettimezone"]).output() {
+    if let Ok(output) = crate::traits::run_cmd("systemsetup", &["-gettimezone"]) {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(tz) = stdout.trim().strip_prefix("Time Zone: ") {

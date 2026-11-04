@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::process::Command;
 
 pub fn collect() -> Result<Value> {
     let installed = which("docker");
@@ -37,10 +36,9 @@ pub fn collect() -> Result<Value> {
 }
 
 fn collect_running_containers() -> Vec<String> {
-    let output = match crate::executors::run_command_niced_timeout(
+    let output = match crate::traits::run_cmd_timeout(
         "docker",
         &["ps", "--format", "{{.Names}}"],
-        0,
         std::time::Duration::from_secs(4),
     ) {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
@@ -62,7 +60,7 @@ fn run_docker(args: &[&str]) -> String {
     // A wedged docker socket must not hang the collector; the outer collector
     // timeout can't kill a spawn_blocking task, so give the child its own 4s
     // deadline (under the 5s collector budget) with a kill on expiry.
-    crate::executors::run_command_niced_timeout("docker", args, 0, std::time::Duration::from_secs(4))
+    crate::traits::run_cmd_timeout("docker", args, std::time::Duration::from_secs(4))
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -70,9 +68,7 @@ fn run_docker(args: &[&str]) -> String {
 }
 
 fn which(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
-        .output()
+    crate::traits::run_cmd("which", &[cmd])
         .map(|o| o.status.success())
         .unwrap_or(false)
 }

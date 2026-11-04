@@ -35,8 +35,8 @@ pub fn collect() -> Result<Value> {
 }
 
 fn pkg_info_packages() -> Vec<Value> {
-    let output = std::process::Command::new("pkg").args(["info", "-q"]).output()
-        .or_else(|_| std::process::Command::new("pkg_info").output())
+    let output = crate::traits::run_cmd("pkg", &["info", "-q"])
+        .or_else(|_| crate::traits::run_cmd("pkg_info", &[]))
         .ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
@@ -53,7 +53,7 @@ fn pkg_info_packages() -> Vec<Value> {
 }
 
 fn pkgin_packages() -> Vec<Value> {
-    let output = std::process::Command::new("pkgin").args(["list"]).output().ok();
+    let output = crate::traits::run_cmd("pkgin", &["list"]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     stdout.lines()
@@ -71,7 +71,7 @@ fn pkgin_packages() -> Vec<Value> {
 }
 
 fn brew_packages() -> Vec<Value> {
-    let output = std::process::Command::new("brew").args(["list", "--versions"]).output().ok();
+    let output = crate::traits::run_cmd("brew", &["list", "--versions"]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     stdout.lines()
@@ -87,7 +87,7 @@ fn brew_packages() -> Vec<Value> {
 
 fn ips_packages() -> Vec<Value> {
     // pkg list -H: "NAME  VERSION  IFO"
-    let output = std::process::Command::new("pkg").args(["list", "-H"]).output().ok();
+    let output = crate::traits::run_cmd("pkg", &["list", "-H"]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     stdout.lines()

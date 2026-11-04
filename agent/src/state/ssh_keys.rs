@@ -31,6 +31,21 @@ impl SshKeysCache {
         Ok(())
     }
 
+    /// Forget a pinned host key. Returns whether one was stored.
+    pub fn delete(&self, wtxn: &mut RwTxn<'_>, key_id: &str) -> Result<bool> {
+        Ok(self.db.delete(wtxn, key_id)?)
+    }
+
+    /// Every pinned host key as ("{host}:{port}", record), sorted by key.
+    pub fn list(&self, rtxn: &RoTxn<'_>) -> Result<Vec<(String, String)>> {
+        let mut out = Vec::new();
+        for item in self.db.iter(rtxn)? {
+            let (k, v) = item?;
+            out.push((k.to_string(), String::from_utf8_lossy(v).into_owned()));
+        }
+        Ok(out)
+    }
+
     /// Load a host key by "{host}:{port}". Returns None if not stored.
     pub fn load(&self, rtxn: &RoTxn<'_>, key_id: &str) -> Result<Option<String>> {
         match self.db.get(rtxn, key_id)? {

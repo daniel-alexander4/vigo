@@ -24,7 +24,7 @@ fn freebsd_disks() -> Vec<Value> {
 }
 
 fn macos_disks() -> Vec<Value> {
-    let output = std::process::Command::new("diskutil").args(["list"]).output().ok();
+    let output = crate::traits::run_cmd("diskutil", &["list"]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     let mut disks = Vec::new();

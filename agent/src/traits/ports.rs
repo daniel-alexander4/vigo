@@ -62,12 +62,10 @@ fn parse_proc_net_tcp(path: &str, ports: &mut BTreeSet<u16>) {
     target_os = "illumos"
 ))]
 fn collect_listening_ports() -> BTreeSet<u16> {
-    use std::process::Command;
-
     let mut ports = BTreeSet::new();
 
     // Try sockstat -l (FreeBSD, illumos).
-    if let Ok(output) = Command::new("sockstat").args(["-l"]).output() {
+    if let Ok(output) = crate::traits::run_cmd("sockstat", &["-l"]) {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines().skip(1) {
@@ -89,7 +87,7 @@ fn collect_listening_ports() -> BTreeSet<u16> {
     }
 
     // Fallback: try netstat -tlnp.
-    if let Ok(output) = Command::new("netstat").args(["-tln"]).output() {
+    if let Ok(output) = crate::traits::run_cmd("netstat", &["-tln"]) {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {

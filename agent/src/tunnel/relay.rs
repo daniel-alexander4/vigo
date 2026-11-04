@@ -24,6 +24,49 @@ use tracing::{info, warn};
 /// Maximum payload size per TunnelData message (64 KB).
 const MAX_PAYLOAD: usize = 64 * 1024;
 
+/// How long to wait for the stream to open and the server's TunnelOpen to
+/// arrive. The server gives up on an unanswered tunnel after 30s; past that
+/// the relay is waiting on nothing.
+const TUNNEL_OPEN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Most tunnel relays this agent runs at once. Each `tunnel_requested` /
+/// TunnelRequest spawns one; without a cap a burst (or a misbehaving server)
+/// spawned connections and tasks without bound.
+const MAX_CONCURRENT_TUNNELS: usize = 16;
+
+static TUNNEL_SLOTS: std::sync::LazyLock<std::sync::Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_TUNNELS)));
+
+/// Take a relay slot, or None when [`MAX_CONCURRENT_TUNNELS`] are running.
+fn acquire_tunnel_slot(
+    slots: &std::sync::Arc<tokio::sync::Semaphore>,
+) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    slots.clone().try_acquire_owned().ok()
+}
+
+/// relay_until_first_done waits for either relay direction to finish, then
+/// aborts both: the direction that lost the race (a TCP read blocked on an
+/// idle target, a gRPC read on an idle stream) used to keep running, holding
+/// its socket half, after the tunnel was reported closed.
+async fn relay_until_first_done(
+    tunnel_id: &str,
+    tcp_to_grpc: tokio::task::JoinHandle<()>,
+    grpc_to_tcp: tokio::task::JoinHandle<()>,
+) {
+    let a = tcp_to_grpc.abort_handle();
+    let b = grpc_to_tcp.abort_handle();
+    tokio::select! {
+        _ = tcp_to_grpc => {
+            info!(tunnel_id = %tunnel_id, "tcp→grpc relay finished");
+        }
+        _ = grpc_to_tcp => {
+            info!(tunnel_id = %tunnel_id, "grpc→tcp relay finished");
+        }
+    }
+    a.abort();
+    b.abort();
+}
+
 /// Run a tunnel relay session on a dedicated gRPC connection.
 ///
 /// 1. Opens TunnelStream, sends TunnelHandshake
@@ -36,6 +79,11 @@ pub async fn run(
     signature: Vec<u8>,
     timestamp: String,
 ) -> Result<()> {
+    // Held for the whole relay; dropped (slot freed) on every return path.
+    let _slot = acquire_tunnel_slot(&TUNNEL_SLOTS).ok_or_else(|| {
+        anyhow::anyhow!("{MAX_CONCURRENT_TUNNELS} tunnel relays already running — refusing another")
+    })?;
+
     // Build the handshake message.
     let handshake = TunnelClientMessage {
         msg: Some(tunnel_client_message::Msg::Handshake(TunnelHandshake {
@@ -55,19 +103,23 @@ pub async fn run(
         }
     };
 
-    let response = client
-        .tunnel_stream(outbound)
-        .await
-        .context("open tunnel stream")?;
-
-    let mut inbound = response.into_inner();
-
-    // Wait for TunnelOpen from server.
-    let open_msg = inbound
-        .message()
-        .await
-        .context("recv tunnel open")?
-        .ok_or_else(|| anyhow::anyhow!("stream closed before TunnelOpen"))?;
+    // Open the stream and wait for TunnelOpen, bounded: a server that never
+    // answers must not pin this task (and its connection) forever.
+    let (mut inbound, open_msg) = tokio::time::timeout(TUNNEL_OPEN_TIMEOUT, async {
+        let response = client
+            .tunnel_stream(outbound)
+            .await
+            .context("open tunnel stream")?;
+        let mut inbound = response.into_inner();
+        let open_msg = inbound
+            .message()
+            .await
+            .context("recv tunnel open")?
+            .ok_or_else(|| anyhow::anyhow!("stream closed before TunnelOpen"))?;
+        Ok::<_, anyhow::Error>((inbound, open_msg))
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("no TunnelOpen from the server within {}s", TUNNEL_OPEN_TIMEOUT.as_secs()))??;
 
     let open = match open_msg.msg {
         Some(tunnel_server_message::Msg::Open(o)) => o,
@@ -265,15 +317,8 @@ pub async fn run(
         let _ = tcp_write.shutdown().await;
     });
 
-    // Wait for either direction to finish, then clean up.
-    tokio::select! {
-        _ = tcp_to_grpc => {
-            info!(tunnel_id = %tunnel_id, "tcp→grpc relay finished");
-        }
-        _ = grpc_to_tcp => {
-            info!(tunnel_id = %tunnel_id, "grpc→tcp relay finished");
-        }
-    }
+    // Wait for either direction to finish, then stop both.
+    relay_until_first_done(&tunnel_id, tcp_to_grpc, grpc_to_tcp).await;
 
     // Drop the sender to close the gRPC stream.
     drop(tx);
@@ -289,6 +334,48 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    /// Once one direction finishes, the other is aborted rather than left
+    /// running on its half of the socket.
+    #[tokio::test]
+    async fn relay_aborts_the_losing_direction() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        struct SetOnDrop(Arc<AtomicBool>);
+        impl Drop for SetOnDrop {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let dropped = Arc::new(AtomicBool::new(false));
+        let guard = SetOnDrop(dropped.clone());
+        let quick = tokio::spawn(async {});
+        let stuck = tokio::spawn(async move {
+            let _g = guard;
+            std::future::pending::<()>().await;
+        });
+        relay_until_first_done("t", quick, stuck).await;
+        for _ in 0..50 {
+            if dropped.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(dropped.load(Ordering::SeqCst), "losing relay direction was left running");
+    }
+
+    /// The relay count is capped: past MAX_CONCURRENT_TUNNELS a request is
+    /// refused, and a finished relay frees its slot.
+    #[test]
+    fn tunnel_slots_are_capped() {
+        let slots = std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_TUNNELS));
+        let held: Vec<_> = (0..MAX_CONCURRENT_TUNNELS)
+            .map(|_| acquire_tunnel_slot(&slots).expect("slot under the cap"))
+            .collect();
+        assert!(acquire_tunnel_slot(&slots).is_none(), "relay past the cap was allowed");
+        drop(held);
+        assert!(acquire_tunnel_slot(&slots).is_some());
+    }
 
     /// Test that the relay connects to a local TCP server and can exchange data.
     /// This is a unit test using a mock TCP echo server — no real gRPC involved.

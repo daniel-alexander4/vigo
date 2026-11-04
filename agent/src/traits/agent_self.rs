@@ -191,9 +191,7 @@ fn collect_macos(uptime_secs: u64) -> Value {
     // procfs is not available on macOS; call ps once. Short timeout,
     // best-effort — if ps fails we emit zeros so the shape stays stable.
     let pid = std::process::id().to_string();
-    let output = std::process::Command::new("ps")
-        .args(["-o", "rss=,vsz=,nlwp=", "-p", &pid])
-        .output();
+    let output = crate::traits::run_cmd("ps", &["-o", "rss=,vsz=,nlwp=", "-p", &pid]);
     let (rss_kb, vsz_kb, threads) = match output {
         Ok(o) if o.status.success() => parse_ps(&String::from_utf8_lossy(&o.stdout)),
         _ => (0, 0, 0),

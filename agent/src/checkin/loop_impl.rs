@@ -201,21 +201,96 @@ fn jittered_duration(base: Duration, jitter_pct: i32) -> Duration {
 }
 
 /// Call the Wake RPC instead of sleeping. The server holds the response
-/// until urgent work arrives or the timeout expires. Falls back to normal
-/// sleep if the RPC fails (e.g., server doesn't support Wake yet).
+/// until urgent work arrives or its own hold (the base interval) expires.
+/// Falls back to sleeping if the RPC fails (e.g., server unreachable).
 async fn wake_or_sleep(client: &mut Client, timeout: Duration) {
-    match client.wake(timeout).await {
-        Ok(resp) if !resp.reason.is_empty() => {
+    wait_for_wake(client.wake(timeout), timeout).await
+}
+
+/// wait_for_wake bounds one between-check-in wait to `timeout` total, however
+/// the Wake RPC ends: a wake signal returns early; our own interval running
+/// out while the server still holds the call returns on time (the server's
+/// hold is its base interval, which can exceed this envoy's target); and an
+/// RPC error sleeps only what is left of `timeout` — the old path slept the
+/// whole interval again after the error, so a Wake that failed at the 30s
+/// channel deadline made every cycle interval + 30s.
+async fn wait_for_wake<F>(wake: F, timeout: Duration)
+where
+    F: std::future::Future<Output = Result<crate::proto::WakeResponse>>,
+{
+    let start = Instant::now();
+    match tokio::time::timeout(timeout, wake).await {
+        Ok(Ok(resp)) if !resp.reason.is_empty() => {
             info!(reason = %resp.reason, "server woke agent");
         }
-        Ok(_) => {
-            // Timeout — normal, proceed to next check-in.
+        // The server's hold expired — proceed to the next check-in.
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => {
+            debug!(error = %e, "wake RPC unavailable, sleeping the rest of the interval");
+            tokio::time::sleep(timeout.saturating_sub(start.elapsed())).await;
         }
+        // Our interval elapsed first; dropping the call cancels it.
+        Err(_) => {}
+    }
+}
+
+/// response_interval is the check-in interval a response asks for (the
+/// server's `interval`, 5m when absent or unparseable).
+fn response_interval(resp: &CheckInResponse) -> Duration {
+    if resp.interval.is_empty() {
+        Duration::from_secs(300)
+    } else {
+        parse_go_duration(&resp.interval).unwrap_or(Duration::from_secs(300))
+    }
+}
+
+/// response_bundle_verified: true when `resp` carries no bundle, or one whose
+/// signature verifies against the response's key (else `cached_pubkey`).
+/// Fail-closed — no key or no signature is a rejection. Every path that
+/// applies a server-sent bundle gates on this before touching it.
+fn response_bundle_verified(resp: &CheckInResponse, cached_pubkey: &str, path: &str) -> bool {
+    let Some(ref bundle) = resp.policy_bundle else {
+        return true;
+    };
+    match verify::verify_server_bundle(bundle, &resp.server_pubkey_pem, cached_pubkey) {
+        Ok(()) => true,
         Err(e) => {
-            // Wake RPC unavailable — fall back to normal sleep.
-            debug!(error = %e, "wake RPC unavailable, sleeping normally");
-            tokio::time::sleep(timeout).await;
+            warn!(path = path, error = %e, "bundle signature verification failed, rejecting the bundle");
+            false
         }
+    }
+}
+
+/// save_server_pubkey persists the server's bundle-signing public key to
+/// `<data-dir>/server_pubkey.pem`, atomically (temp + rename) so a crash
+/// mid-write can't leave a truncated key that fails every later verify.
+pub fn save_server_pubkey(data_dir: &Path, pem: &str) -> Result<()> {
+    crate::auth::keypair::write_private_file(&data_dir.join("server_pubkey.pem"), pem.as_bytes())
+}
+
+/// secrets_unresolved_result is the run result when the bundle's secrets
+/// could not be resolved: nothing applied, and the response's own interval —
+/// so the loop waits a normal cycle before the next check-in. It used to carry
+/// `Duration::ZERO`, which the loop took as "check in again now": an envoy
+/// with one unresolvable secret ran check-in + ResolveSecrets every few
+/// seconds, indefinitely.
+fn secrets_unresolved_result(resp: &CheckInResponse) -> RunResult {
+    RunResult {
+        results: vec![],
+        interval: response_interval(resp),
+        jitter_pct: resp.jitter_percent,
+        no_change: false,
+        response_fingerprint: resp.response_fingerprint.clone(),
+        policy_version: resp.policy_version,
+        policy_bundle: resp.policy_bundle.clone(),
+        stream_requested: resp.stream_requested,
+        tunnel_requested: resp.tunnel_requested,
+        proxied_devices: resp.proxied_devices.clone(),
+        server_pubkey_pem: resp.server_pubkey_pem.clone(),
+        force_update: resp.force_update,
+        swarm_manifest_entries: resp.manifest_entries.clone(),
+        curator_catalog: resp.curator_catalog.clone(),
+        bundle_verify_failed: false,
     }
 }
 
@@ -303,11 +378,7 @@ fn converge(
     }
 
     // Parse server-provided timing.
-    let interval = if resp.interval.is_empty() {
-        Duration::from_secs(300) // 5m default
-    } else {
-        parse_go_duration(&resp.interval).unwrap_or(Duration::from_secs(300))
-    };
+    let interval = response_interval(resp);
     let jitter_pct = if resp.jitter_percent == 0 {
         10 // default
     } else {
@@ -584,39 +655,24 @@ pub async fn run_once_with_update(
     // `bundle_verify_failed: true` so the daemon loop sleeps the response's
     // interval and tries the next check-in — never accepts a bundle whose
     // signature didn't match.
-    if let Some(ref bundle) = resp.policy_bundle {
-        let pubkey_for_verify = if !resp.server_pubkey_pem.is_empty() {
-            resp.server_pubkey_pem.as_str()
-        } else {
-            server_pubkey_pem
-        };
-        if !pubkey_for_verify.is_empty() {
-            if let Err(e) = verify::verify_bundle(bundle, pubkey_for_verify) {
-                warn!(error = %e, "bundle signature verification failed, rejecting");
-                let interval = if resp.interval.is_empty() {
-                    Duration::from_secs(300)
-                } else {
-                    parse_go_duration(&resp.interval).unwrap_or(Duration::from_secs(300))
-                };
-                return Ok(RunResult {
-                    results: vec![],
-                    interval,
-                    jitter_pct: resp.jitter_percent,
-                    no_change: false,
-                    response_fingerprint: resp.response_fingerprint.clone(),
-                    policy_version: resp.policy_version,
-                    policy_bundle: None,
-                    stream_requested: false,
-                    tunnel_requested: false,
-                    proxied_devices: vec![],
-                    server_pubkey_pem: resp.server_pubkey_pem.clone(),
-                    force_update: false,
-                    swarm_manifest_entries: vec![],
-                    curator_catalog: vec![],
-                    bundle_verify_failed: true,
-                });
-            }
-        }
+    if !response_bundle_verified(&resp, server_pubkey_pem, "poll") {
+        return Ok(RunResult {
+            results: vec![],
+            interval: response_interval(&resp),
+            jitter_pct: resp.jitter_percent,
+            no_change: false,
+            response_fingerprint: resp.response_fingerprint.clone(),
+            policy_version: resp.policy_version,
+            policy_bundle: None,
+            stream_requested: false,
+            tunnel_requested: false,
+            proxied_devices: vec![],
+            server_pubkey_pem: resp.server_pubkey_pem.clone(),
+            force_update: false,
+            swarm_manifest_entries: vec![],
+            curator_catalog: vec![],
+            bundle_verify_failed: true,
+        });
     }
 
     // Warm the in-memory secret cache for the bundle `converge` will
@@ -626,23 +682,7 @@ pub async fn run_once_with_update(
     {
         if let Err(e) = warm_secret_cache(&resp, policy_state, client).await {
             warn!("secret resolution/substitution failed, skipping convergence: {}", e);
-            return Ok(RunResult {
-                results: vec![],
-                interval: Duration::ZERO,
-                jitter_pct: resp.jitter_percent,
-                no_change: false,
-                response_fingerprint: resp.response_fingerprint.clone(),
-                policy_version: resp.policy_version,
-                policy_bundle: resp.policy_bundle.clone(),
-                stream_requested: resp.stream_requested,
-                tunnel_requested: resp.tunnel_requested,
-                proxied_devices: resp.proxied_devices.clone(),
-                server_pubkey_pem: resp.server_pubkey_pem.clone(),
-                force_update: resp.force_update,
-                swarm_manifest_entries: resp.manifest_entries.clone(),
-                curator_catalog: resp.curator_catalog.clone(),
-                bundle_verify_failed: false,
-            });
+            return Ok(secrets_unresolved_result(&resp));
         }
     }
 
@@ -982,13 +1022,11 @@ fn accept_bundle(store: &StateStore, policy_state: &PolicyState, traits_json: Op
                     warn!(error = %e, "failed to persist traits");
                 }
             }
-            // Persist custom trait script entries for offline re-collection.
-            if !bundle.custom_traits.is_empty() {
-                if let Err(e) = store.traits.store_scripts(&mut wtxn, &bundle.custom_traits) {
-                    warn!(error = %e, "failed to persist trait scripts");
-                }
+            if let Err(e) = wtxn.commit() {
+                warn!(error = %e, "failed to commit accepted bundle — offline convergence will use the previous one");
             }
-            let _ = wtxn.commit();
+        } else {
+            warn!("failed to open state-store write txn — accepted bundle not persisted");
         }
         // Mirror the resolved swarm gate state to the user-readable
         // /var/lib/vigo/swarm/state.json (0.41.1+) so `vigo swarm
@@ -1225,8 +1263,9 @@ pub async fn daemon_loop(
                     info!("updating server bundle-signing public key");
                     server_pubkey_pem = rr.server_pubkey_pem.clone();
                     if let Some(dd) = data_dir.as_ref() {
-                        let path = dd.join("server_pubkey.pem");
-                        let _ = std::fs::write(&path, &server_pubkey_pem);
+                        if let Err(e) = save_server_pubkey(dd, &server_pubkey_pem) {
+                            warn!(error = %format!("{e:#}"), "failed to persist server bundle-signing public key");
+                        }
                     }
                 }
 
@@ -1238,7 +1277,7 @@ pub async fn daemon_loop(
 
                 // Proxy convergence: converge network devices managed by this gateway.
                 if !rr.proxied_devices.is_empty() {
-                    converge_proxied_devices(client, &rr.proxied_devices, executors).await;
+                    converge_proxied_devices(client, &rr.proxied_devices, executors, &server_pubkey_pem).await;
                 }
 
                 // Deliver pending results on successful reconnect.
@@ -1310,6 +1349,7 @@ pub async fn daemon_loop(
                                 &mut handle,
                                 client,
                                 &initial_resp,
+                                &server_pubkey_pem,
                                 &traits_val,
                                 executors,
                                 &collectors,
@@ -1453,25 +1493,19 @@ pub async fn daemon_loop(
                         // Enqueue delta for delivery on reconnect.
                         if !rr.results.is_empty() {
                             if let Ok(mut wtxn) = store.write_txn() {
-                                // A next_seq error must not collapse to seq 1 — that
-                                // risks colliding with an already-queued delta on the
-                                // offline path. Log and skip; the cached bundle re-
-                                // derives this delta on the next cycle.
-                                match store.pending.next_seq(&mut wtxn) {
-                                    Ok(seq) => {
-                                        let (delta, _run_id) = build_run_delta(&rr.results, seq as i64, policy_state.version);
-                                        match store.pending.enqueue(&mut wtxn, &delta) {
-                                            Ok(s) => {
-                                                if let Err(e) = wtxn.commit() {
-                                                    warn!(error = %e, "failed to commit offline delta transaction");
-                                                } else {
-                                                    info!(seq = s, "enqueued offline delta for later delivery");
-                                                }
-                                            }
-                                            Err(e) => warn!(error = %e, "failed to enqueue offline delta"),
+                                // `enqueue` allocates the sequence and stamps it on
+                                // the delta, so the stored key and the delta's own
+                                // `sequence` are one number.
+                                let (mut delta, _run_id) = build_run_delta(&rr.results, 0, policy_state.version);
+                                match store.pending.enqueue(&mut wtxn, &mut delta) {
+                                    Ok(s) => {
+                                        if let Err(e) = wtxn.commit() {
+                                            warn!(error = %e, "failed to commit offline delta transaction");
+                                        } else {
+                                            info!(seq = s, "enqueued offline delta for later delivery");
                                         }
                                     }
-                                    Err(e) => warn!(error = %e, "failed to allocate offline delta seq — skipping enqueue this cycle"),
+                                    Err(e) => warn!(error = %e, "failed to enqueue offline delta"),
                                 }
                             }
                         }
@@ -1573,6 +1607,7 @@ async fn stream_loop(
     handle: &mut stream::StreamHandle,
     client: &Client,
     initial_resp: &CheckInResponse,
+    cached_pubkey_pem: &str,
     initial_traits: &Value,
     executors: &HashMap<String, Box<dyn Executor>>,
     collectors: &CachedCollectors,
@@ -1589,6 +1624,13 @@ async fn stream_loop(
 ) -> StreamExit {
     let use_delta = state_store.is_some();
     let mut delta_seq: i64 = 0;
+    // The bundle-signing key for this stream: the latest one a response
+    // carried, else the cached one. Pushes carry no key of their own.
+    let mut stream_pubkey = if initial_resp.server_pubkey_pem.is_empty() {
+        cached_pubkey_pem.to_string()
+    } else {
+        initial_resp.server_pubkey_pem.clone()
+    };
 
     // Helper: report results over the stream (legacy path).
     let report = |request_tx: &tokio::sync::mpsc::Sender<AgentStreamMessage>,
@@ -1657,13 +1699,20 @@ async fn stream_loop(
     }
     spawn_swarm(initial_resp);
     try_update!(initial_resp);
-    if let Err(e) = warm_secret_cache(initial_resp, policy_state, client).await {
-        // converge refuses the run on a cache miss; this just names the cause.
-        warn!(error = %e, "stream initial: secret resolution failed");
+    let initial_ok = response_bundle_verified(initial_resp, &stream_pubkey, "stream handshake");
+    if initial_ok {
+        if let Err(e) = warm_secret_cache(initial_resp, policy_state, client).await {
+            // converge refuses the run on a cache miss; this just names the cause.
+            warn!(error = %e, "stream initial: secret resolution failed");
+        }
     }
-    match converge(
-        initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker,
-    ) {
+    match if initial_ok {
+        converge(
+            initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker,
+        )
+    } else {
+        Err(anyhow::anyhow!("handshake bundle rejected (signature)"))
+    } {
         Ok(rr) => {
             if !rr.results.is_empty() {
                 if use_delta {
@@ -1737,6 +1786,9 @@ async fn stream_loop(
                         policy_version: push.policy_version,
                         ..Default::default()
                     };
+                    if !response_bundle_verified(&synth_resp, &stream_pubkey, "stream policy push") {
+                        continue;
+                    }
                     if let Err(e) = warm_secret_cache(&synth_resp, policy_state, client).await {
                         warn!(error = %e, "stream push: secret resolution failed, skipping");
                         continue;
@@ -1789,6 +1841,14 @@ async fn stream_loop(
                             }
                             spawn_swarm(&resp);
                             try_update!(resp);
+                            if !resp.server_pubkey_pem.is_empty() {
+                                stream_pubkey = resp.server_pubkey_pem.clone();
+                            }
+                            if !response_bundle_verified(&resp, &stream_pubkey, "stream force push") {
+                                next_checkin.as_mut().reset(Instant::now() + jittered_duration(interval, jitter_pct));
+                                cycle_start = Instant::now();
+                                continue;
+                            }
                             if let Err(e) = warm_secret_cache(&resp, policy_state, client).await {
                                 // converge refuses the run on a cache miss; this names the cause.
                                 warn!(error = %e, "stream: secret resolution failed");
@@ -1942,11 +2002,21 @@ async fn stream_loop(
                             }
                             spawn_swarm(&resp);
                             try_update!(resp);
-                            if let Err(e) = warm_secret_cache(&resp, policy_state, client).await {
-                                // converge refuses the run on a cache miss; this names the cause.
-                                warn!(error = %e, "stream: secret resolution failed");
+                            if !resp.server_pubkey_pem.is_empty() {
+                                stream_pubkey = resp.server_pubkey_pem.clone();
                             }
-                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker) {
+                            let bundle_ok = response_bundle_verified(&resp, &stream_pubkey, "stream periodic check-in");
+                            if bundle_ok {
+                                if let Err(e) = warm_secret_cache(&resp, policy_state, client).await {
+                                    // converge refuses the run on a cache miss; this names the cause.
+                                    warn!(error = %e, "stream: secret resolution failed");
+                                }
+                            }
+                            match if bundle_ok {
+                                converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker)
+                            } else {
+                                Err(anyhow::anyhow!("periodic bundle rejected (signature)"))
+                            } {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
                                         if use_delta {
@@ -2042,6 +2112,7 @@ async fn converge_proxied_devices(
     client: &mut Client,
     devices: &[ProxiedDevice],
     executors: &HashMap<String, Box<dyn Executor>>,
+    server_pubkey_pem: &str,
 ) {
     info!(count = devices.len(), "converging proxied network devices");
 
@@ -2070,6 +2141,12 @@ async fn converge_proxied_devices(
                 continue;
             }
         };
+        // The server signs every device bundle like the envoy's own; verify
+        // before anything (secret resolution, SSH) acts on it.
+        if let Err(e) = verify::verify_server_bundle(&device_bundle, "", server_pubkey_pem) {
+            warn!(hostname, error = %e, "proxied device bundle signature verification failed, skipping");
+            continue;
+        }
         if let Err(e) = crate::policy::secrets::resolve_and_substitute(
             &mut device_bundle,
             crate::policy::secrets::global_cache(),
@@ -2119,7 +2196,6 @@ async fn converge_proxied_devices(
             port as u16,
             username_for_ssh,
             &resolved_credential,
-            None,
         )
         .await
         {
@@ -2279,6 +2355,60 @@ mod tests {
     #[test]
     fn jittered_negative_pct() {
         assert_eq!(jittered_duration(Duration::from_secs(30), -5), Duration::from_secs(30));
+    }
+
+    /// A secret-resolution failure must not hand the loop a zero interval
+    /// (it read that as "check in again now" — check-in + ResolveSecrets
+    /// every few seconds); it carries the response's own interval.
+    #[test]
+    fn secrets_unresolved_result_waits_the_response_interval() {
+        let resp = CheckInResponse { interval: "2m".into(), ..Default::default() };
+        let rr = secrets_unresolved_result(&resp);
+        assert_eq!(rr.interval, Duration::from_secs(120));
+        assert!(rr.results.is_empty());
+        let rr = secrets_unresolved_result(&CheckInResponse::default());
+        assert_eq!(rr.interval, Duration::from_secs(300), "no interval → 5m default, never zero");
+    }
+
+    /// Every bundle-applying path gates on this; an unsigned bundle with no
+    /// key anywhere used to be applied (the poll path skipped the check, the
+    /// stream / push / proxied paths never checked).
+    #[test]
+    fn response_bundle_verified_fails_closed() {
+        let unsigned = CheckInResponse {
+            policy_bundle: Some(PolicyBundle { policy_version: 1, ..Default::default() }),
+            ..Default::default()
+        };
+        assert!(!response_bundle_verified(&unsigned, "", "test"), "unsigned bundle with no key accepted");
+        let no_bundle = CheckInResponse { no_change: true, ..Default::default() };
+        assert!(response_bundle_verified(&no_bundle, "", "test"), "a response without a bundle has nothing to verify");
+    }
+
+    /// An erroring Wake sleeps only what is left of the interval: the old
+    /// path slept the whole interval again after the error.
+    #[tokio::test]
+    async fn wait_for_wake_error_sleeps_only_the_remainder() {
+        let timeout = Duration::from_millis(400);
+        let start = std::time::Instant::now();
+        let failing = async {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            Err::<crate::proto::WakeResponse, _>(anyhow::anyhow!("deadline exceeded"))
+        };
+        wait_for_wake(failing, timeout).await;
+        let took = start.elapsed();
+        assert!(took >= Duration::from_millis(390), "returned early: {took:?}");
+        assert!(took < Duration::from_millis(600), "slept past the interval: {took:?}");
+    }
+
+    /// A Wake the server holds past this envoy's interval returns on time.
+    #[tokio::test]
+    async fn wait_for_wake_never_outlasts_the_interval() {
+        let start = std::time::Instant::now();
+        let held = std::future::pending::<Result<crate::proto::WakeResponse>>();
+        tokio::time::timeout(Duration::from_secs(5), wait_for_wake(held, Duration::from_millis(200)))
+            .await
+            .expect("wait_for_wake outlived its interval");
+        assert!(start.elapsed() < Duration::from_millis(500));
     }
 
     #[test]

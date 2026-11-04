@@ -119,7 +119,22 @@ Devices authenticate via password or SSH key, determined automatically:
 - If the credential contains `PRIVATE KEY`, key-based authentication is used
 - Otherwise, password authentication is used
 
-Host keys are verified using Trust On First Use (TOFU): the first connection accepts and caches the device's host key. Subsequent connections verify against the cached key. A mismatch is a hard error (possible MITM attack).
+Host keys are verified using Trust On First Use (TOFU): the first connection from the gateway pins the device's host key in the gateway agent's state store, keyed by `host:port`. Every later connection must present that same key. A different key is a hard error (possible man-in-the-middle) and the device is not touched. Without a working state store the gateway refuses to connect rather than skip the check.
+
+To see the pinned keys on a gateway envoy:
+
+```bash
+sudo vigo ssh-hostkey list
+```
+
+If a device's host key changed legitimately (re-imaged, key regenerated), clear its pin on the gateway. The next connection pins the new key:
+
+```bash
+sudo vigo ssh-hostkey forget 10.0.1.1        # port 22
+sudo vigo ssh-hostkey forget 10.0.1.1:2222   # non-default port
+```
+
+Use the address the gateway connects to (`ip_address`, or the hostname when `ip_address` is unset).
 
 ## Network Executors
 
@@ -206,7 +221,7 @@ Network devices participate fully in Vigo's compliance system:
 ## What's next
 
 - **Write configcrates against the device executors** → see `cisco_vlan`, `network_ntp`, `network_syslog`, `network_user` in the resource reference. Cross-platform executors abstract the device-type differences where possible.
-- **A device's SSH host key changed** → the TOFU cache hard-errors; investigate before clearing. If the change is legitimate, remove the cached key on the gateway and re-converge.
+- **A device's SSH host key changed** → the gateway refuses to connect; investigate before clearing. If the change is legitimate, run `sudo vigo ssh-hostkey forget <address>[:<port>]` on the gateway and re-converge.
 - **The gateway can't reach a device** → [Troubleshoot common issues](troubleshoot.md) covers the gateway-proxy connectivity matrix.
 
 ---

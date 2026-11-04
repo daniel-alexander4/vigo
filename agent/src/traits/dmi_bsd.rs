@@ -16,9 +16,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn macos_hardware_info() -> Result<Value> {
-    let output = std::process::Command::new("system_profiler")
-        .args(["SPHardwareDataType", "-json"])
-        .output()
+    let output = crate::traits::run_cmd("system_profiler", &["SPHardwareDataType", "-json"])
         .ok();
 
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
@@ -54,9 +52,7 @@ fn freebsd_kenv_info() -> Result<Value> {
 }
 
 fn kenv(key: &str) -> String {
-    std::process::Command::new("kenv")
-        .arg(key)
-        .output()
+    crate::traits::run_cmd("kenv", &[key])
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -65,9 +61,7 @@ fn kenv(key: &str) -> String {
 
 fn illumos_smbios_info() -> Result<Value> {
     // smbios -t SMB_TYPE_SYSTEM: parse Manufacturer, Product, Serial, UUID
-    let output = std::process::Command::new("smbios")
-        .args(["-t", "SMB_TYPE_SYSTEM"])
-        .output()
+    let output = crate::traits::run_cmd("smbios", &["-t", "SMB_TYPE_SYSTEM"])
         .ok();
     let stdout = output.as_ref()
         .filter(|o| o.status.success())

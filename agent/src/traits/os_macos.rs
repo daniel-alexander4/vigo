@@ -27,8 +27,7 @@ pub fn collect() -> Result<Value> {
 }
 
 fn sw_vers() -> (String, String, String) {
-    let output = std::process::Command::new("sw_vers")
-        .output()
+    let output = crate::traits::run_cmd("sw_vers", &[])
         .ok();
 
     let stdout = output

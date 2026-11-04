@@ -21,7 +21,7 @@ pub fn collect() -> Result<Value> {
 
 pub fn physical_mounts() -> Vec<(String, String, String)> {
     let mut mounts = Vec::new();
-    let output = std::process::Command::new("mount").output().ok();
+    let output = crate::traits::run_cmd("mount", &[]).ok();
     let stdout = output.as_ref().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
 
     for line in stdout.lines() {

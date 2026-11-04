@@ -27,7 +27,7 @@ pub fn collect() -> Result<Value> {
 
 fn collect_disk_sizes() -> Value {
     let mut map = serde_json::Map::new();
-    if let Ok(output) = std::process::Command::new("df").args(["-k"]).output() {
+    if let Ok(output) = crate::traits::run_cmd("df", &["-k"]) {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines().skip(1) {
             let parts: Vec<&str> = line.split_whitespace().collect();
