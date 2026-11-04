@@ -5,7 +5,9 @@ package grpc
 
 import (
 	"context"
+	"runtime"
 	"testing"
+	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/config"
@@ -16,7 +18,7 @@ import (
 
 func TestRateLimitInterceptor_AllowsNonCheckIn(t *testing.T) {
 	cfg := config.RateLimitSection{Enabled: true, CheckinPerEnvoy: 1, CheckinGlobal: 1}
-	interceptor := RateLimitInterceptor(cfg)
+	interceptor := RateLimitInterceptor(cfg, stopOnCleanup(t))
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "ok", nil
@@ -36,7 +38,7 @@ func TestRateLimitInterceptor_AllowsNonCheckIn(t *testing.T) {
 
 func TestRateLimitInterceptor_PerEnvoyLimit(t *testing.T) {
 	cfg := config.RateLimitSection{Enabled: true, CheckinPerEnvoy: 1, CheckinGlobal: 10000}
-	interceptor := RateLimitInterceptor(cfg)
+	interceptor := RateLimitInterceptor(cfg, stopOnCleanup(t))
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "ok", nil
@@ -70,7 +72,7 @@ func TestRateLimitInterceptor_PerEnvoyLimit(t *testing.T) {
 
 func TestRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	cfg := config.RateLimitSection{Enabled: true, CheckinPerEnvoy: 10000, CheckinGlobal: 1}
-	interceptor := RateLimitInterceptor(cfg)
+	interceptor := RateLimitInterceptor(cfg, stopOnCleanup(t))
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "ok", nil
@@ -92,5 +94,36 @@ func TestRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	}
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.ResourceExhausted {
 		t.Fatalf("expected ResourceExhausted, got: %v", err)
+	}
+}
+
+// stopOnCleanup returns a stop channel closed when the test ends, so each
+// interceptor's eviction goroutine exits with its test.
+func stopOnCleanup(t *testing.T) <-chan struct{} {
+	t.Helper()
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	return stop
+}
+
+// TestRateLimitInterceptor_EvictionStopsOnStop: the eviction goroutine used to
+// run forever (one leaked goroutine per constructed interceptor). Closing stop
+// must end it.
+func TestRateLimitInterceptor_EvictionStopsOnStop(t *testing.T) {
+	base := runtime.NumGoroutine()
+	stop := make(chan struct{})
+	for range 20 {
+		_ = RateLimitInterceptor(config.RateLimitSection{Enabled: true}, stop)
+	}
+	if n := runtime.NumGoroutine(); n < base+20 {
+		t.Fatalf("expected 20 eviction goroutines running (base %d, now %d)", base, n)
+	}
+	close(stop)
+	deadline := time.Now().Add(3 * time.Second)
+	for runtime.NumGoroutine() > base+2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := runtime.NumGoroutine(); n > base+2 {
+		t.Errorf("eviction goroutines still running after stop: base %d, now %d", base, n)
 	}
 }

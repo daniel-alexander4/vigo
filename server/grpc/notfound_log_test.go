@@ -41,6 +41,30 @@ func TestUnknownEnvoyLogThrottleEvictsWhenLarge(t *testing.T) {
 	}
 }
 
+// TestUnknownEnvoyLogBoundedUnderFreshFlood: the old map only evicted entries
+// older than 2× the interval, so a flood of distinct ids all inside the window
+// grew it without bound (and swept it O(n) per call). The ring caps it.
+func TestUnknownEnvoyLogBoundedUnderFreshFlood(t *testing.T) {
+	l := newUnknownEnvoyLogCap(10*time.Minute, 64)
+	now := time.Now()
+	for i := 0; i < 10_000; i++ {
+		if !l.shouldLog(uuidish(i), now) {
+			t.Fatalf("first sighting of id %d did not log", i)
+		}
+	}
+	if got := len(l.last); got != 64 {
+		t.Errorf("map holds %d ids after a fresh flood, want the cap 64", got)
+	}
+	// The newest ids are the ones kept: the last one is still throttled.
+	if l.shouldLog(uuidish(9_999), now.Add(time.Second)) {
+		t.Error("newest id was evicted; the ring should evict oldest first")
+	}
+	// An evicted (oldest) id logs again.
+	if !l.shouldLog(uuidish(0), now.Add(time.Second)) {
+		t.Error("evicted id 0 should log again")
+	}
+}
+
 func uuidish(i int) string {
 	return "envoy-" + time.Unix(int64(i), 0).Format("150405.000000000")
 }

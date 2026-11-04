@@ -291,6 +291,11 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 	if s.fleetIndex != nil {
 		s.fleetIndex.SetRevoked(req.Id, true)
 	}
+	// End a held stream now: the per-message revoked re-check only fires when
+	// the envoy next sends, so until then pushes kept reaching it.
+	if s.closeStream != nil {
+		s.closeStream(req.Id)
+	}
 
 	slog.Warn("envoy revoked", "envoy_id", req.Id, "hostname", hostname)
 
@@ -363,6 +368,10 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 	// Dual-write: remove from FleetIndex.
 	if s.fleetIndex != nil {
 		s.fleetIndex.RemoveEnvoy(req.Id)
+	}
+	// End a held stream now, as RevokeEnvoy does.
+	if s.closeStream != nil {
+		s.closeStream(req.Id)
 	}
 
 	slog.Warn("envoy deleted", "envoy_id", req.Id, "hostname", hostname)

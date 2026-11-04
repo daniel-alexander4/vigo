@@ -6,6 +6,7 @@
 package grpc
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -112,6 +113,10 @@ type ServerConfig struct {
 	// sessions instead of full-handshaking on every deploy. nil → Go's
 	// default per-process key (correct but expensive on restart).
 	TicketsStore *tickets.Store
+	// Done, when closed, stops the server's background goroutines that have
+	// no other lifecycle (the rate limiter's eviction sweep). nil → they run
+	// for the process lifetime.
+	Done <-chan struct{}
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -183,7 +188,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 	// whole process. The streaming sibling is the only stream interceptor.
 	interceptors := []grpc.UnaryServerInterceptor{RecoveryUnaryInterceptor(cfg.Metrics)}
 	if cfg.RateLimit.Enabled {
-		interceptors = append(interceptors, RateLimitInterceptor(cfg.RateLimit))
+		interceptors = append(interceptors, RateLimitInterceptor(cfg.RateLimit, cfg.Done))
 	}
 	interceptors = append(interceptors, sigInterceptor)
 
@@ -331,6 +336,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 		}
 	}
 	pb.RegisterVigoAgentServer(srv, agentSvc)
+	// A held stream that goes away takes its in-flight task dispatches with it
+	// (results only arrive on the stream they rode): fail those targets.
+	agentSvc.streamMgr.onDisconnect = func(envoyID string) {
+		agentSvc.taskRouter.failEnvoyTargets(context.Background(), envoyID, "agent stream closed before the task result arrived")
+	}
 
 	adminSvc := &AdminService{
 		registry:         cfg.Registry,
@@ -345,6 +355,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 		reassignStore:    reassignStore,
 		auditWriter:      cfg.AuditWriter,
 		integrations:     cfg.Integrations,
+		closeStream:      agentSvc.streamMgr.closeStream,
 	}
 	pb.RegisterVigoAdminServer(srv, adminSvc)
 	// VigoAdmin is the only service the grpc-gateway bridges, so it's all the

@@ -373,6 +373,10 @@ type AdminService struct {
 	// main.go where AgentService.DispatchPush is in scope. Nil when
 	// no agent dispatcher is available (rare; mostly tests).
 	swarmCleanup func(ctx context.Context, hostname string) error
+	// closeStream ends an envoy's held AgentStream (streamManager.closeStream);
+	// RevokeEnvoy / DeleteEnvoy call it so pushes stop at once. nil in tests
+	// that build an AdminService without an agent service.
+	closeStream func(envoyID string) bool
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.

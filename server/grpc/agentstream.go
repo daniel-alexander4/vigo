@@ -347,19 +347,23 @@ func (s *AgentService) serveAgentStream(stream pb.VigoAgent_AgentStreamServer, o
 					return
 				}
 
+			// workCompleted only for work this server actually dispatched: an
+			// unknown or duplicate ack/result/response must not decrement the
+			// promoted stream's work count and release it early.
 			case *pb.AgentStreamMessage_TaskAck:
-				s.taskRouter.handleTaskAck(stream.Context(), envoyID, m.TaskAck)
-				if !m.TaskAck.Accepted {
+				if s.taskRouter.handleTaskAck(stream.Context(), envoyID, m.TaskAck) && !m.TaskAck.Accepted {
 					s.streamMgr.workCompleted(envoyID)
 				}
 
 			case *pb.AgentStreamMessage_TaskResult:
-				s.taskRouter.handleTaskResult(stream.Context(), envoyID, m.TaskResult)
-				s.streamMgr.workCompleted(envoyID)
+				if s.taskRouter.handleTaskResult(stream.Context(), envoyID, m.TaskResult) {
+					s.streamMgr.workCompleted(envoyID)
+				}
 
 			case *pb.AgentStreamMessage_QueryResponse:
-				s.queryRouter.handleQueryResponse(envoyID, m.QueryResponse)
-				s.streamMgr.workCompleted(envoyID)
+				if s.queryRouter.handleQueryResponse(envoyID, m.QueryResponse) {
+					s.streamMgr.workCompleted(envoyID)
+				}
 
 			case *pb.AgentStreamMessage_Delta:
 				// Delta carries no per-message signature: the stream is

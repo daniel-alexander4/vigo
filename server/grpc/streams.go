@@ -27,6 +27,10 @@ type streamManager struct {
 	metrics          *metrics.Metrics // per-instance prometheus collectors
 	promotionTimeout time.Duration    // default: 12 minutes
 	maxConns         int              // 0 → no cap; >0 → refuse new envoys past this held-stream count
+	// onDisconnect, when set, runs after the envoy's current stream leaves the
+	// map (its own cleanup or closeStream) — not when a reconnect replaced it.
+	// The task router uses it to fail targets the dropped stream was carrying.
+	onDisconnect func(envoyID string)
 }
 
 type agentStream struct {
@@ -114,22 +118,55 @@ func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func(
 		slog.Info("delivered pending promotion messages",
 			"envoy_id", envoyID, "count", len(pending))
 	}
+	active, promoted := len(sm.streams), as.promoted
 	sm.mu.Unlock()
 
-	sm.metrics.StreamsActive.Set(float64(len(sm.streams)))
+	sm.metrics.StreamsActive.Set(float64(active))
 	slog.Info("agent stream connected", "envoy_id", envoyID, "hostname", hostname,
-		"promoted", as.promoted)
+		"promoted", promoted)
 
 	return as, func() {
 		sm.mu.Lock()
-		// Only remove if it's still our stream (could have been replaced).
-		if sm.streams[envoyID] == as {
+		// Only remove if it's still our stream (could have been replaced, or
+		// already removed by closeStream).
+		current := sm.streams[envoyID] == as
+		if current {
 			delete(sm.streams, envoyID)
 		}
-		sm.metrics.StreamsActive.Set(float64(len(sm.streams)))
+		active := len(sm.streams)
 		sm.mu.Unlock()
+		sm.metrics.StreamsActive.Set(float64(active))
+		if current && sm.onDisconnect != nil {
+			sm.onDisconnect(envoyID)
+		}
 		slog.Info("agent stream disconnected", "envoy_id", envoyID, "hostname", hostname)
 	}, true
+}
+
+// closeStream ends the envoy's held stream, if any: it is removed from the map
+// and its done channel closed, so the writer goroutine returns, the AgentStream
+// handler exits and the connection's stream context is cancelled. Used on
+// revoke and delete, so pushes stop reaching the envoy at once rather than when
+// it next sends a message. Returns whether a stream was closed. The stream's
+// own cleanup then finds itself already gone and does nothing.
+func (sm *streamManager) closeStream(envoyID string) bool {
+	sm.mu.Lock()
+	as, ok := sm.streams[envoyID]
+	if ok {
+		delete(sm.streams, envoyID)
+		close(as.done)
+	}
+	active := len(sm.streams)
+	sm.mu.Unlock()
+	if !ok {
+		return false
+	}
+	sm.metrics.StreamsActive.Set(float64(active))
+	if sm.onDisconnect != nil {
+		sm.onDisconnect(envoyID)
+	}
+	slog.Info("agent stream closed by server", "envoy_id", envoyID)
+	return true
 }
 
 // queueForPromotion stores a message for delivery when the agent opens a stream.
@@ -200,8 +237,9 @@ func (sm *streamManager) queueForPromotion(envoyID string, msg *pb.ServerStreamM
 func (sm *streamManager) workCompleted(envoyID string) {
 	sm.mu.RLock()
 	as, ok := sm.streams[envoyID]
+	promoted := ok && as.promoted // promoted is written under sm.mu
 	sm.mu.RUnlock()
-	if !ok || !as.promoted {
+	if !promoted {
 		return
 	}
 
@@ -284,9 +322,10 @@ func (sm *streamManager) connectedEnvoyIDs() map[string]bool {
 	return ids
 }
 
-// dispatchPush sends a TaskDispatch to a specific agent. Uses a blocking
-// send with a short timeout to avoid silent drops (Pitfall 6).
-// Returns false if the agent is not connected or the send buffer is full.
+// dispatchPush sends a TaskDispatch to a specific agent. The send is
+// non-blocking: a full send buffer drops the dispatch (logged) rather than
+// stalling the dispatcher. Returns false if the agent is not connected or the
+// buffer is full, and the caller marks the target offline — never a silent drop.
 func (sm *streamManager) dispatchPush(envoyID string, msg *pb.ServerStreamMessage) bool {
 	sm.mu.RLock()
 	as, ok := sm.streams[envoyID]

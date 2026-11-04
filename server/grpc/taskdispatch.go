@@ -123,13 +123,57 @@ func (r *taskRouter) notifyCompletion(taskRunID, envoyID string) {
 	}
 }
 
-// handleTaskAck processes an incoming TaskAck from an agent.
-func (r *taskRouter) handleTaskAck(ctx context.Context, envoyID string, ack *pb.TaskAck) {
+// failEnvoyTargets marks every target still tracked for envoyID failed — the
+// envoy's held stream went away (dropped, revoked, deleted) before it sent a
+// result, and a result can only arrive on the stream the dispatch rode. Without
+// this the pending entry and the task_run stayed "running" forever. Each
+// affected task run is then finalized if that was its last open target.
+func (r *taskRouter) failEnvoyTargets(ctx context.Context, envoyID, reason string) int {
+	type orphan struct{ taskRunID, targetID string }
+	var orphans []orphan
+	r.mu.Lock()
+	for taskRunID, targets := range r.pending {
+		if targetID, ok := targets[envoyID]; ok {
+			orphans = append(orphans, orphan{taskRunID, targetID})
+			delete(targets, envoyID)
+			if len(targets) == 0 {
+				delete(r.pending, taskRunID)
+			}
+		}
+	}
+	r.mu.Unlock()
+
+	now := sql.NullTime{Time: time.Now(), Valid: true}
+	for _, o := range orphans {
+		if r.queries != nil {
+			if err := r.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
+				ID:         o.targetID,
+				Status:     "failed",
+				ErrorMsg:   sql.NullString{String: reason, Valid: true},
+				FinishedAt: now,
+			}); err != nil {
+				slog.Error("failed to mark orphaned task target failed",
+					"target_id", o.targetID, "error", err)
+			}
+		}
+		r.notifyCompletion(o.taskRunID, envoyID)
+		if r.queries != nil {
+			r.maybeFinishTaskRun(ctx, o.taskRunID)
+		}
+		slog.Warn("task target failed: agent stream closed before a result",
+			"task_run_id", o.taskRunID, "envoy_id", envoyID, "reason", reason)
+	}
+	return len(orphans)
+}
+
+// handleTaskAck processes an incoming TaskAck from an agent. Returns whether
+// the ack matched a tracked target (an unknown or duplicate ack is ignored).
+func (r *taskRouter) handleTaskAck(ctx context.Context, envoyID string, ack *pb.TaskAck) bool {
 	targetID, ok := r.lookupTarget(ack.TaskId, envoyID)
 	if !ok {
 		slog.Warn("received task ack for unknown target",
 			"task_id", ack.TaskId, "envoy_id", envoyID)
-		return
+		return false
 	}
 
 	if !ack.Accepted {
@@ -147,7 +191,7 @@ func (r *taskRouter) handleTaskAck(ctx context.Context, envoyID string, ack *pb.
 		r.removeTarget(ack.TaskId, envoyID)
 		r.notifyCompletion(ack.TaskId, envoyID)
 		r.maybeFinishTaskRun(ctx, ack.TaskId)
-		return
+		return true
 	}
 
 	// Agent accepted — update dispatched_at timestamp.
@@ -160,15 +204,18 @@ func (r *taskRouter) handleTaskAck(ctx context.Context, envoyID string, ack *pb.
 		slog.Error("failed to update dispatched push target",
 			"target_id", targetID, "error", err)
 	}
+	return true
 }
 
-// handleTaskResult processes an incoming TaskResult from an agent.
-func (r *taskRouter) handleTaskResult(ctx context.Context, envoyID string, result *pb.TaskResult) {
+// handleTaskResult processes an incoming TaskResult from an agent. Returns
+// whether the result matched a tracked target (an unknown or duplicate result
+// is ignored).
+func (r *taskRouter) handleTaskResult(ctx context.Context, envoyID string, result *pb.TaskResult) bool {
 	targetID, ok := r.lookupTarget(result.TaskId, envoyID)
 	if !ok {
 		slog.Warn("received task result for unknown target",
 			"task_id", result.TaskId, "envoy_id", envoyID)
-		return
+		return false
 	}
 
 	now := sql.NullTime{Time: time.Now(), Valid: true}
@@ -199,6 +246,7 @@ func (r *taskRouter) handleTaskResult(ctx context.Context, envoyID string, resul
 	r.removeTarget(result.TaskId, envoyID)
 	r.notifyCompletion(result.TaskId, envoyID)
 	r.maybeFinishTaskRun(ctx, result.TaskId)
+	return true
 }
 
 // maybeFinishTaskRun checks if all targets for a task run are done and
@@ -374,7 +422,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 	for _, t := range offlineTargets {
 		if _, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
 			TaskRunID: taskRun.ID,
-			EnvoyID:  t.EnvoyID,
+			EnvoyID:   t.EnvoyID,
 			Hostname:  t.Hostname,
 			Status:    "offline",
 		}); err != nil {
@@ -394,7 +442,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			for _, t := range batch {
 				target, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
 					TaskRunID: taskRun.ID,
-					EnvoyID:  t.EnvoyID,
+					EnvoyID:   t.EnvoyID,
 					Hostname:  t.Hostname,
 					Status:    "pending",
 				})
@@ -422,7 +470,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		for _, t := range onlineTargets {
 			target, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
 				TaskRunID: taskRun.ID,
-				EnvoyID:  t.EnvoyID,
+				EnvoyID:   t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
 			})
@@ -467,7 +515,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		for _, t := range promotableTargets {
 			target, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
 				TaskRunID: taskRun.ID,
-				EnvoyID:  t.EnvoyID,
+				EnvoyID:   t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
 			})

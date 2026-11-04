@@ -148,8 +148,12 @@ type Server struct {
 	// --- Run + integrations + task store ---
 	// (Workflow engine stays in run() for now — workflows.NewEngine
 	// requires the agentSvc TaskRunner which is constructed in chunk 4.)
-	runStore     db.RunStore
-	runBatcher   *fleet.RunBatcher
+	runStore   db.RunStore
+	runBatcher *fleet.RunBatcher
+	// grpcDone stops the gRPC package's lifecycle-less goroutines (rate
+	// limiter eviction); closed once by Close.
+	grpcDone     chan struct{}
+	grpcDoneOnce sync.Once
 	integrations *integrations.Dispatcher
 	taskStore    *task.Store
 
@@ -908,7 +912,9 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 	// --- gRPC server + services (chunk 4). All goroutine starts
 	// (grpcSrv.Serve, traitsBatch.Start, peer primary push, etc.) stay
 	// in run() / chunk 5. ---
+	s.grpcDone = make(chan struct{})
 	grpcSrv, operatorSrv, certCache, traitsBatch, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
+		Done:                       s.grpcDone,
 		CertFile:                   s.cfg.Server.TLS.CertFile,
 		KeyFile:                    s.cfg.Server.TLS.KeyFile,
 		CAFile:                     s.cfg.Server.TLS.CAFile,
@@ -1684,6 +1690,9 @@ func (s *Server) Close() error {
 	}
 	if s.manifestStore != nil {
 		s.manifestStore.Stop()
+	}
+	if s.grpcDone != nil {
+		s.grpcDoneOnce.Do(func() { close(s.grpcDone) })
 	}
 	// Workflow engine BEFORE the DB — Close() drains every in-flight
 	// executeWorkflow goroutine, all of which hold *db.Queries handles

@@ -11,6 +11,7 @@ import (
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/daemon"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -25,8 +26,9 @@ type perEnvoyEntry struct {
 
 // RateLimitInterceptor returns a unary server interceptor that enforces
 // per-envoy and global rate limits on check-in RPCs. Non-check-in RPCs
-// pass through without rate limiting.
-func RateLimitInterceptor(cfg config.RateLimitSection) grpc.UnaryServerInterceptor {
+// pass through without rate limiting. The stale-entry eviction goroutine
+// exits when stop is closed (nil: runs for the process lifetime).
+func RateLimitInterceptor(cfg config.RateLimitSection, stop <-chan struct{}) grpc.UnaryServerInterceptor {
 	perEnvoyRate := cfg.CheckinPerEnvoy
 	if perEnvoyRate <= 0 {
 		// 120/min ≈ the 1s default cadence (60/min) plus headroom for
@@ -48,21 +50,29 @@ func RateLimitInterceptor(cfg config.RateLimitSection) grpc.UnaryServerIntercept
 	var mu sync.Mutex
 	envoyLimiters := make(map[string]*perEnvoyEntry)
 
-	// Evict stale per-envoy entries every 10 minutes.
-	go func() {
+	// Evict stale per-envoy entries every 10 minutes until stop closes. Each
+	// sweep is guarded so a panic logs and the loop keeps evicting.
+	daemon.SafeGo("ratelimit-evict", func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			mu.Lock()
-			cutoff := time.Now().Add(-30 * time.Minute)
-			for id, entry := range envoyLimiters {
-				if entry.lastSeen.Before(cutoff) {
-					delete(envoyLimiters, id)
-				}
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				daemon.Guard("ratelimit-evict", func() {
+					mu.Lock()
+					defer mu.Unlock()
+					cutoff := time.Now().Add(-30 * time.Minute)
+					for id, entry := range envoyLimiters {
+						if entry.lastSeen.Before(cutoff) {
+							delete(envoyLimiters, id)
+						}
+					}
+				})
 			}
-			mu.Unlock()
 		}
-	}()
+	})
 
 	return func(
 		ctx context.Context,

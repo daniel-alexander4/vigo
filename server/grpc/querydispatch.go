@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"github.com/google/uuid"
 )
 
 // queryRouter tracks in-flight live queries and routes incoming
@@ -29,7 +29,7 @@ type pendingQuery struct {
 }
 
 type queryResult struct {
-	envoyID string
+	envoyID  string
 	hostname string
 	value    string
 	found    bool
@@ -54,32 +54,33 @@ func (r *queryRouter) remove(queryID string) {
 }
 
 // handleQueryResponse routes an incoming QueryResponse to the waiting caller.
-func (r *queryRouter) handleQueryResponse(envoyID string, resp *pb.QueryResponse) {
+func (r *queryRouter) handleQueryResponse(envoyID string, resp *pb.QueryResponse) bool {
 	r.mu.Lock()
 	pq, ok := r.pending[resp.QueryId]
 	r.mu.Unlock()
 	if !ok {
 		slog.Warn("received query response for unknown query",
 			"query_id", resp.QueryId, "envoy_id", envoyID)
-		return
+		return false
 	}
 
 	hostname := pq.hostnames[envoyID]
 
 	select {
 	case pq.resultCh <- queryResult{
-		envoyID: envoyID,
+		envoyID:  envoyID,
 		hostname: hostname,
 		value:    resp.Value,
 		found:    resp.Found,
 	}:
 	default:
 	}
+	return true
 }
 
 // QueryEntry is a single envoy's result in a live query.
 type QueryEntry struct {
-	EnvoyID    string `json:"envoyId"`
+	EnvoyID     string `json:"envoyId"`
 	Hostname    string `json:"hostname"`
 	Value       string `json:"value,omitempty"`
 	Found       bool   `json:"found"`
@@ -188,7 +189,7 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 	var offline []QueryEntry
 	for _, t := range offlineTargets {
 		entry := QueryEntry{
-			EnvoyID: t.EnvoyID,
+			EnvoyID:  t.EnvoyID,
 			Hostname: t.Hostname,
 			Status:   "offline",
 		}
@@ -220,7 +221,7 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 			remaining--
 			delete(dispatched, r.envoyID)
 			responded = append(responded, QueryEntry{
-				EnvoyID: r.envoyID,
+				EnvoyID:  r.envoyID,
 				Hostname: r.hostname,
 				Value:    r.value,
 				Found:    r.found,
@@ -237,7 +238,7 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 	var timedOut []QueryEntry
 	for _, t := range dispatched {
 		timedOut = append(timedOut, QueryEntry{
-			EnvoyID: t.EnvoyID,
+			EnvoyID:  t.EnvoyID,
 			Hostname: t.Hostname,
 			Status:   "timed_out",
 		})
