@@ -831,6 +831,13 @@
       "properties": {
         "envoy": {
           "$ref": "#/definitions/v1Envoy"
+        },
+        "pubkeyPem": {
+          "type": "string",
+          "description": "The envoy's stored signing pubkey and mTLS cert SPKI pin (empty when\nunpinned). Public material; spanner ReassignEnvoy re-enrolls the envoy\non the target bolt with them, since EnrollEnvoy requires the pubkey."
+        },
+        "certSpkiSha256": {
+          "type": "string"
         }
       }
     },
@@ -941,7 +948,7 @@
         },
         "actionTaken": {
           "type": "string",
-          "title": "none, created, updated, deleted, blocked"
+          "title": "settled, created, updated, deleted, skipped, blocked"
         },
         "changed": {
           "type": "boolean"

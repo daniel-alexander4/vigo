@@ -249,7 +249,9 @@ func (s *AdminService) GetEnvoy(ctx context.Context, req *pb.GetEnvoyRequest) (*
 		}
 	}
 	return &pb.GetEnvoyResponse{
-		Envoy: pt,
+		Envoy:          pt,
+		PubkeyPem:      n.PubkeyPem,
+		CertSpkiSha256: n.CertSpkiSha256,
 	}, nil
 }
 

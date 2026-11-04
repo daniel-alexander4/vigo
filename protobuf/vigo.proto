@@ -431,7 +431,7 @@ message ResourceRunResult {
   string configcrate_name = 1;
   string resource_type = 2;
   string resource_name = 3;
-  string action_taken = 4;     // none, created, updated, deleted, blocked
+  string action_taken = 4;     // settled, created, updated, deleted, skipped, blocked
   bool changed = 5;
   string error_message = 6;
   int32 duration_ms = 7;
@@ -679,6 +679,11 @@ message GetEnvoyRequest {
 
 message GetEnvoyResponse {
   Envoy envoy = 1;
+  // The envoy's stored signing pubkey and mTLS cert SPKI pin (empty when
+  // unpinned). Public material; spanner ReassignEnvoy re-enrolls the envoy
+  // on the target bolt with them, since EnrollEnvoy requires the pubkey.
+  string pubkey_pem = 2;
+  string cert_spki_sha256 = 3;
 }
 
 message RevokeEnvoyRequest {

@@ -1669,7 +1669,7 @@ type ResourceRunResult struct {
 	ConfigcrateName string                 `protobuf:"bytes,1,opt,name=configcrate_name,json=configcrateName,proto3" json:"configcrate_name,omitempty"`
 	ResourceType    string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
 	ResourceName    string                 `protobuf:"bytes,3,opt,name=resource_name,json=resourceName,proto3" json:"resource_name,omitempty"`
-	ActionTaken     string                 `protobuf:"bytes,4,opt,name=action_taken,json=actionTaken,proto3" json:"action_taken,omitempty"` // none, created, updated, deleted, blocked
+	ActionTaken     string                 `protobuf:"bytes,4,opt,name=action_taken,json=actionTaken,proto3" json:"action_taken,omitempty"` // settled, created, updated, deleted, skipped, blocked
 	Changed         bool                   `protobuf:"varint,5,opt,name=changed,proto3" json:"changed,omitempty"`
 	ErrorMessage    string                 `protobuf:"bytes,6,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	DurationMs      int32                  `protobuf:"varint,7,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
@@ -3896,10 +3896,15 @@ func (x *GetEnvoyRequest) GetId() string {
 }
 
 type GetEnvoyResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Envoy         *Envoy                 `protobuf:"bytes,1,opt,name=envoy,proto3" json:"envoy,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Envoy *Envoy                 `protobuf:"bytes,1,opt,name=envoy,proto3" json:"envoy,omitempty"`
+	// The envoy's stored signing pubkey and mTLS cert SPKI pin (empty when
+	// unpinned). Public material; spanner ReassignEnvoy re-enrolls the envoy
+	// on the target bolt with them, since EnrollEnvoy requires the pubkey.
+	PubkeyPem      string `protobuf:"bytes,2,opt,name=pubkey_pem,json=pubkeyPem,proto3" json:"pubkey_pem,omitempty"`
+	CertSpkiSha256 string `protobuf:"bytes,3,opt,name=cert_spki_sha256,json=certSpkiSha256,proto3" json:"cert_spki_sha256,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetEnvoyResponse) Reset() {
@@ -3937,6 +3942,20 @@ func (x *GetEnvoyResponse) GetEnvoy() *Envoy {
 		return x.Envoy
 	}
 	return nil
+}
+
+func (x *GetEnvoyResponse) GetPubkeyPem() string {
+	if x != nil {
+		return x.PubkeyPem
+	}
+	return ""
+}
+
+func (x *GetEnvoyResponse) GetCertSpkiSha256() string {
+	if x != nil {
+		return x.CertSpkiSha256
+	}
+	return ""
 }
 
 type RevokeEnvoyRequest struct {
@@ -7357,9 +7376,12 @@ const file_vigo_proto_rawDesc = "" +
 	"\x17pending_rotated_secrets\x18\b \x03(\tR\x15pendingRotatedSecrets\x12#\n" +
 	"\ragent_version\x18\t \x01(\tR\fagentVersion\"!\n" +
 	"\x0fGetEnvoyRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"8\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x81\x01\n" +
 	"\x10GetEnvoyResponse\x12$\n" +
-	"\x05envoy\x18\x01 \x01(\v2\x0e.vigo.v1.EnvoyR\x05envoy\"R\n" +
+	"\x05envoy\x18\x01 \x01(\v2\x0e.vigo.v1.EnvoyR\x05envoy\x12\x1d\n" +
+	"\n" +
+	"pubkey_pem\x18\x02 \x01(\tR\tpubkeyPem\x12(\n" +
+	"\x10cert_spki_sha256\x18\x03 \x01(\tR\x0ecertSpkiSha256\"R\n" +
 	"\x12RevokeEnvoyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
 	"\x12skip_swarm_cleanup\x18\x02 \x01(\bR\x10skipSwarmCleanup\"\x15\n" +

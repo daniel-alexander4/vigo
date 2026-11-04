@@ -6,6 +6,7 @@ package spanner
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -163,11 +164,20 @@ func (c *recordingAdminClient) record(name string) {
 
 func (c *recordingAdminClient) GetEnvoy(_ context.Context, req *pb.GetEnvoyRequest, _ ...grpc.CallOption) (*pb.GetEnvoyResponse, error) {
 	c.record("GetEnvoy")
-	return &pb.GetEnvoyResponse{Envoy: c.envoy}, nil
+	// The stored pubkey + cert pin ride the response, as on the real handler.
+	return &pb.GetEnvoyResponse{Envoy: c.envoy, PubkeyPem: "pk-" + c.envoy.GetId(), CertSpkiSha256: testSPKI}, nil
 }
+
+// testSPKI is a well-formed cert pin (64 lowercase hex) the fake GetEnvoy returns.
+const testSPKI = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 func (c *recordingAdminClient) EnrollEnvoy(_ context.Context, req *pb.EnrollEnvoyRequest, _ ...grpc.CallOption) (*pb.EnrollEnvoyResponse, error) {
 	c.record("EnrollEnvoy")
+	// Mirror the real handler's contract (server/grpc/enroll.go): no pubkey,
+	// no enrollment. Without this the fake accepted what production rejects.
+	if req.GetPubkeyPem() == "" {
+		return nil, fmt.Errorf("hostname and pubkey_pem are required")
+	}
 	c.mu.Lock()
 	c.enrollR = append(c.enrollR, req)
 	c.mu.Unlock()
@@ -322,6 +332,9 @@ func TestReassignEnvoyRPCOrdering(t *testing.T) {
 	// EnrollEnvoy carried the envoy's identity from GetEnvoy.
 	if len(dst.enrollR) != 1 || dst.enrollR[0].Hostname != "node.example.com" || dst.enrollR[0].IpAddress != "10.0.0.5" {
 		t.Errorf("EnrollEnvoy request = %+v, want hostname+ip from the source envoy", dst.enrollR)
+	}
+	if len(dst.enrollR) == 1 && (dst.enrollR[0].PubkeyPem != "pk-envoy-1" || dst.enrollR[0].CertSpkiSha256 != testSPKI) {
+		t.Errorf("EnrollEnvoy pubkey/pin = %q/%q, want the source's stored pubkey + cert pin", dst.enrollR[0].PubkeyPem, dst.enrollR[0].CertSpkiSha256)
 	}
 	// SetReassignment pointed the agent at the target bolt + new id.
 	if len(src.reassR) != 1 || src.reassR[0].TargetAddr != "dst.example.com:1530" || src.reassR[0].NewEnvoyId != "bolt-assigned-id" {

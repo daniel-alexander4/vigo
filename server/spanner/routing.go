@@ -246,7 +246,8 @@ type PeerReassignResult struct {
 // Any bolt can orchestrate it — the three steps are direct peer admin
 // RPCs over the PeerDialer:
 //
-//  1. source bolt GetEnvoy   — fetch the envoy's hostname + IP.
+//  1. source bolt GetEnvoy   — fetch the envoy's hostname, IP, pubkey
+//     and cert pin.
 //  2. target bolt EnrollEnvoy — create the envoy record on the target.
 //  3. source bolt SetReassignment — mark the envoy so it reconnects to
 //     the target on its next check-in.
@@ -291,7 +292,12 @@ func (a *SpannerAdmin) ReassignEnvoy(ctx context.Context, envoyID, fromBoltHostn
 	targetAddr := toBoltHostname + ":" + a.grpcPort
 
 	// Step 2 — create the envoy record on the target bolt.
-	newID, err := a.EnrollOnPeerBolt(ctx, toBoltHostname, envoy.Hostname, envoy.IpAddress, "", "", true)
+	// EnrollEnvoy requires the pubkey; carry the cert pin too so the
+	// target pins the same mTLS identity the source did.
+	if getResp.GetPubkeyPem() == "" {
+		return nil, fmt.Errorf("source bolt %s returned no pubkey for envoy %s", fromBoltHostname, envoyID)
+	}
+	newID, err := a.EnrollOnPeerBolt(ctx, toBoltHostname, envoy.Hostname, envoy.IpAddress, getResp.GetPubkeyPem(), getResp.GetCertSpkiSha256(), true)
 	if err != nil {
 		return nil, fmt.Errorf("enrolling on target bolt %s: %w", toBoltHostname, err)
 	}
