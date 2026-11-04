@@ -18,6 +18,11 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 use tracing::{info, warn};
 
+/// Ceiling on a `pre_command` / `post_command` hook. Hooks may dump a
+/// database or quiesce a service, so this is a hung-hook backstop, not the
+/// 300s executor default.
+const BACKUP_HOOK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
+
 pub struct BackupExecutor;
 
 impl BackupExecutor {
@@ -148,9 +153,7 @@ fn execute_backup(
 
     // Run pre_command (flush logs, stop service, dump DB, etc.).
     if let Some(pre) = params.get("pre_command").filter(|s| !s.is_empty()) {
-        let output = std::process::Command::new("sh")
-            .args(["-c", pre])
-            .output()
+        let output = super::run_command_niced_timeout("sh", &["-c", pre], 0, BACKUP_HOOK_TIMEOUT)
             .map_err(|e| format!("pre_command failed to start: {}", e))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -197,9 +200,7 @@ fn execute_backup(
 
     // Run post_command (restart service, thaw, cleanup, etc.).
     if let Some(post) = params.get("post_command").filter(|s| !s.is_empty()) {
-        let output = std::process::Command::new("sh")
-            .args(["-c", post])
-            .output()
+        let output = super::run_command_niced_timeout("sh", &["-c", post], 0, BACKUP_HOOK_TIMEOUT)
             .map_err(|e| format!("post_command failed to start: {}", e))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

@@ -121,11 +121,8 @@ pub struct RunResult {
     /// `run_once_with_update` before any mutation of the bundle; the
     /// daemon loop reads this and sleeps the response's interval before
     /// the next check-in rather than treating the result as a successful
-    /// cycle. Required because `secrets::resolve_and_substitute` mutates
-    /// signed fields (vars_json byte representation, module/resource
-    /// `when:` strings, attribute values) — verifying after substitution
-    /// is unsound, so verify happens before substitute and the rejection
-    /// is signaled back here.
+    /// cycle. The bundle is never mutated before (or after) verification:
+    /// secret substitution happens only on `converge`'s local eval copy.
     pub bundle_verify_failed: bool,
 }
 
@@ -367,8 +364,38 @@ fn converge(
     // Delta transfer: fill stub modules from cache.
     bundle.configcrates = merge_stubs(bundle.configcrates, &policy_state.module_cache);
 
-    // Update module cache with fully resolved modules.
+    // Update module cache with fully resolved modules (placeholder form —
+    // the cache never holds resolved secret values).
     policy_state.module_cache.update(&bundle.configcrates);
+
+    // Substitute placeholder secrets into this local eval copy ONLY. `resp`'s
+    // bundle, `RunResult.policy_bundle`, `accepted_bundle`, the module cache
+    // and the LMDB copy all keep the placeholders; every run re-substitutes
+    // from the in-memory cache (warmed by `warm_secret_cache` before this
+    // call) and refuses rather than apply a placeholder or read plaintext
+    // from disk.
+    if let Err(e) =
+        crate::policy::secrets::substitute_in_bundle_pub(&mut bundle, crate::policy::secrets::global_cache())
+    {
+        warn!("secret substitution failed, skipping convergence: {}", e);
+        return Ok(RunResult {
+            results: vec![],
+            interval,
+            jitter_pct,
+            no_change: false,
+            response_fingerprint: resp.response_fingerprint.clone(),
+            policy_version: resp.policy_version,
+            policy_bundle: resp.policy_bundle.clone(),
+            stream_requested: resp.stream_requested,
+            tunnel_requested: resp.tunnel_requested,
+            proxied_devices,
+            server_pubkey_pem: resp.server_pubkey_pem.clone(),
+            force_update: resp.force_update,
+            swarm_manifest_entries: resp.manifest_entries.clone(),
+            curator_catalog: resp.curator_catalog.clone(),
+            bundle_verify_failed: false,
+        });
+    }
 
     // Evaluate the policy bundle with traits.
     let modules = match crate::policy::eval::eval_bundle(Some(&bundle), traits_val) {
@@ -522,11 +549,8 @@ pub async fn run_once(
 /// signature on `resp.policy_bundle` is verified against either it or
 /// `resp.server_pubkey_pem` (which the server includes on every response
 /// — preferred when present, falling back to the cache for the empty
-/// case). Verification must happen BEFORE
-/// [`crate::policy::secrets::resolve_and_substitute`] mutates signed
-/// fields (vars_json byte representation, module/resource `when:`
-/// strings, attribute values); verifying afterward would check bytes
-/// the server never signed.
+/// case). The received bundle is never mutated: secret substitution
+/// happens on `converge`'s local eval copy only.
 pub async fn run_once_with_update(
     client: &mut Client,
     executors: &HashMap<String, Box<dyn Executor>>,
@@ -545,7 +569,7 @@ pub async fn run_once_with_update(
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
     server_pubkey_pem: &str,
 ) -> Result<RunResult> {
-    let mut resp = client
+    let resp = client
         .check_in(
             state_fingerprint,
             traits_json,
@@ -554,9 +578,7 @@ pub async fn run_once_with_update(
         )
         .await?;
 
-    // Verify the bundle signature BEFORE any mutation. Substitute touches
-    // signed fields; verifying after substitution checks bytes the server
-    // never signed. Use the response's pubkey when the server included one
+    // Verify the bundle signature. Use the response's pubkey when the server included one
     // (handles in-band key rotation), else fall back to the cached pubkey
     // the caller threaded in. On failure, return early with
     // `bundle_verify_failed: true` so the daemon loop sleeps the response's
@@ -597,20 +619,12 @@ pub async fn run_once_with_update(
         }
     }
 
-    // Resolve placeholder secrets in-place before eval_bundle sees the
-    // strings. Walks vars_json + every module's resource attributes + the
-    // module/resource `when:` strings for `__VIGO_SECRET__<key>__END_VIGO_SECRET__`
-    // markers, fetches missing values via ResolveSecrets, substitutes.
-    // Failure here aborts the apply rather than letting a placeholder
-    // string flow through to an executor — see `secrets::substitute_in_bundle`.
-    if let Some(bundle) = resp.policy_bundle.as_mut() {
-        if let Err(e) = crate::policy::secrets::resolve_and_substitute(
-            bundle,
-            crate::policy::secrets::global_cache(),
-            client,
-        )
-        .await
-        {
+    // Warm the in-memory secret cache for the bundle `converge` will
+    // evaluate. The bundle itself is NOT substituted — `converge` substitutes
+    // its own throwaway eval copy, so nothing the agent keeps or persists
+    // ever holds a resolved value. Failure here aborts the apply.
+    {
+        if let Err(e) = warm_secret_cache(&resp, policy_state, client).await {
             warn!("secret resolution/substitution failed, skipping convergence: {}", e);
             return Ok(RunResult {
                 results: vec![],
@@ -717,6 +731,29 @@ pub async fn run_once_with_update(
     Ok(rr)
 }
 
+/// warm_secret_cache resolves, into the process-wide in-memory cache, every
+/// placeholder secret the bundle `converge` will evaluate for `resp` carries
+/// — the wire bundle with its delta-transfer stubs filled from the module
+/// cache, or `accepted_bundle` on a no-change response. Mirrors `converge`'s
+/// bundle choice; nothing is substituted here.
+async fn warm_secret_cache(resp: &CheckInResponse, ps: &PolicyState, client: &Client) -> Result<()> {
+    use crate::policy::secrets;
+    let bundle = match (&resp.policy_bundle, &ps.accepted_bundle) {
+        (_, Some(acc)) if resp.no_change => acc,
+        (Some(b), _) => b,
+        _ => return Ok(()),
+    };
+    let cache = secrets::global_cache();
+    cache.invalidate_if_epoch_changed(bundle.secrets_epoch);
+    let mut refs = std::collections::HashSet::new();
+    secrets::collect_refs_in_vars(&bundle.vars_json, &mut refs);
+    for m in &bundle.configcrates {
+        let filled = if m.stub { ps.module_cache.get(&m.name, &m.content_hash).unwrap_or(m) } else { m };
+        secrets::collect_refs_in_configcrate(filled, &mut refs);
+    }
+    secrets::fetch_missing(&refs, cache, client).await
+}
+
 /// Update policy state from a run result. When a new bundle is accepted,
 /// records the acceptance time for TTL tracking.
 fn update_state(
@@ -743,9 +780,12 @@ fn update_state(
         // no resources); persisting it as-is leaves the cached bundle with zero
         // resources, which is what offline `vigo run` and the no_change fast
         // path re-use. Store the *resolved* form instead: stubs filled from the
-        // module cache (already updated with this cycle's resolved modules in
+        // module cache (already updated with this cycle's full modules in
         // `converge`), one-shot secret triggers stripped. Keep these two
         // transforms in sync with `converge`'s `merge_stubs` + `strip_secret_triggers`.
+        // Secret placeholders stay placeholders: neither `wire` nor the module
+        // cache ever holds a resolved value (`converge` substitutes only its
+        // own eval copy), so this is what reaches LMDB via `accept_bundle`.
         let mut resolved = wire.clone();
         resolved.configcrates = merge_stubs(resolved.configcrates, &ps.module_cache);
         strip_secret_triggers(&mut resolved);
@@ -1039,13 +1079,8 @@ fn converge_local(
         );
         return None;
     }
-    let mut bundle = bundle.clone();
-    if let Err(e) = crate::policy::secrets::substitute_in_bundle_pub(&mut bundle, cache) {
-        warn!(error = %e, "offline reconvergence: secret substitution failed, skipping");
-        return None;
-    }
-
-    // Build a synthetic response from accepted bundle (now substituted).
+    // `converge` substitutes its own eval copy from the cache; the bundle
+    // kept as `accepted_bundle` stays in placeholder form.
     let synth_resp = CheckInResponse {
         policy_bundle: Some(bundle.clone()),
         policy_version: version,
@@ -1622,6 +1657,10 @@ async fn stream_loop(
     }
     spawn_swarm(initial_resp);
     try_update!(initial_resp);
+    if let Err(e) = warm_secret_cache(initial_resp, policy_state, client).await {
+        // converge refuses the run on a cache miss; this just names the cause.
+        warn!(error = %e, "stream initial: secret resolution failed");
+    }
     match converge(
         initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker,
     ) {
@@ -1693,37 +1732,15 @@ async fn stream_loop(
                     info!(version = push.policy_version, "received policy push via stream");
                     let (traits_val, _) = collect_traits_basic(collectors).await;
 
-                    let mut pushed_bundle = push.policy_bundle;
-                    if let Some(bundle) = pushed_bundle.as_mut() {
-                        // Stream-push runs on a &Client (no &mut handle to
-                        // make the ResolveSecrets RPC here); substitute
-                        // from the in-memory cache only. The check-in
-                        // path that runs alongside this stream keeps the
-                        // cache warm. If a placeholder isn't cached yet
-                        // (cold-stream-arrival before any check-in), fail
-                        // loud and let the next check-in fill the cache.
-                        let cache = crate::policy::secrets::global_cache();
-                        cache.invalidate_if_epoch_changed(bundle.secrets_epoch);
-                        let refs = crate::policy::secrets::collect_refs_in_bundle_pub(bundle);
-                        let missing = cache.missing_refs_pub(refs.iter().map(|s| s.as_str()));
-                        if !missing.is_empty() {
-                            warn!(
-                                missing_count = missing.len(),
-                                "stream push: {} placeholder secrets not yet cached, awaiting check-in",
-                                missing.len()
-                            );
-                            continue;
-                        }
-                        if let Err(e) = crate::policy::secrets::substitute_in_bundle_pub(bundle, cache) {
-                            warn!(error = %e, "stream push: secret substitution failed, skipping");
-                            continue;
-                        }
-                    }
                     let synth_resp = CheckInResponse {
-                        policy_bundle: pushed_bundle,
+                        policy_bundle: push.policy_bundle,
                         policy_version: push.policy_version,
                         ..Default::default()
                     };
+                    if let Err(e) = warm_secret_cache(&synth_resp, policy_state, client).await {
+                        warn!(error = %e, "stream push: secret resolution failed, skipping");
+                        continue;
+                    }
 
                     match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker) {
                         Ok(rr) => {
@@ -1772,6 +1789,10 @@ async fn stream_loop(
                             }
                             spawn_swarm(&resp);
                             try_update!(resp);
+                            if let Err(e) = warm_secret_cache(&resp, policy_state, client).await {
+                                // converge refuses the run on a cache miss; this names the cause.
+                                warn!(error = %e, "stream: secret resolution failed");
+                            }
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
@@ -1921,6 +1942,10 @@ async fn stream_loop(
                             }
                             spawn_swarm(&resp);
                             try_update!(resp);
+                            if let Err(e) = warm_secret_cache(&resp, policy_state, client).await {
+                                // converge refuses the run on a cache miss; this names the cause.
+                                warn!(error = %e, "stream: secret resolution failed");
+                            }
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, state_store, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
@@ -2731,5 +2756,95 @@ mod tests {
 
         assert!(!ps.is_bundle_expired());
         assert!(!ps.needs_renewal());
+    }
+
+    /// Resolved secrets must never reach anything the agent keeps: the
+    /// RunResult bundle, `accepted_bundle`, the module cache (which a later
+    /// stub response is filled from), or LMDB. Drives the real converge →
+    /// update_state → accept_bundle path over two cycles (full module, then a
+    /// delta-transfer stub filled from the module cache) and scans the LMDB
+    /// files on disk for the plaintext. Then an offline converge_local must
+    /// re-substitute from the in-memory cache and keep the placeholder too.
+    #[test]
+    fn accepted_bundle_and_lmdb_keep_secret_placeholders() {
+        use prost::Message;
+        const SECRET: &str = "plaintext-t1-7f3a9c";
+        const PLACEHOLDER: &str = "__VIGO_SECRET__t1/accept/key__END_VIGO_SECRET__";
+        crate::policy::secrets::global_cache().insert_for_test("t1/accept/key", SECRET);
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+        let module = PolicyConfigcrate {
+            name: "app".into(),
+            content_hash: "h1".into(),
+            resources: vec![crate::proto::PolicyResource {
+                name: "cfg".into(),
+                r#type: "mock-none".into(),
+                attributes: [("content".to_string(), format!("pw={PLACEHOLDER}"))].into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let full = PolicyBundle {
+            policy_version: 1,
+            vars_json: format!(r#"{{"dbpass":"{PLACEHOLDER}"}}"#).into_bytes(),
+            configcrates: vec![module],
+            ..Default::default()
+        };
+        let stub = PolicyBundle {
+            policy_version: 2,
+            vars_json: full.vars_json.clone(),
+            configcrates: vec![PolicyConfigcrate {
+                name: "app".into(),
+                content_hash: "h1".into(),
+                stub: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        let mut rc = ResultCache::new(5);
+        let mut ps = PolicyState::new();
+        let mut breaker = runner::pkg_breaker::PackageBreaker::new();
+        let traits = br#"{"os":{"family":"debian"}}"#;
+
+        for (v, b) in [(1u64, full), (2u64, stub)] {
+            let resp = CheckInResponse { policy_bundle: Some(b), policy_version: v, ..Default::default() };
+            let rr = converge(&resp, &executors, &serde_json::json!({}), &mut rc, &mut ps, false, None,
+                dir.path(), Some(&store), &mut breaker).unwrap();
+            // Substitution happened on the eval copy: the run was not refused.
+            assert_eq!(rr.results.len(), 1, "cycle {v}: converge must evaluate the substituted copy");
+            let kept = rr.policy_bundle.as_ref().unwrap().encode_to_vec();
+            assert!(!String::from_utf8_lossy(&kept).contains(SECRET), "cycle {v}: RunResult bundle holds plaintext");
+            update_state(&mut ps, &rr, None);
+            accept_bundle(&store, &ps, Some(traits));
+            let acc = ps.accepted_bundle.as_ref().unwrap();
+            assert_eq!(acc.configcrates[0].resources[0].attributes["content"], format!("pw={PLACEHOLDER}"),
+                "cycle {v}: accepted bundle lost its placeholder");
+        }
+
+        let rtxn = store.read_txn().unwrap();
+        let (_, loaded) = store.policy.load(&rtxn).unwrap().unwrap();
+        drop(rtxn);
+        assert_eq!(loaded.configcrates[0].resources[0].attributes["content"], format!("pw={PLACEHOLDER}"));
+        assert!(String::from_utf8_lossy(&loaded.vars_json).contains(PLACEHOLDER));
+        drop(store);
+        for e in std::fs::read_dir(dir.path()).unwrap().flatten() {
+            if e.path().is_file() {
+                let bytes = std::fs::read(e.path()).unwrap();
+                assert!(!bytes.windows(SECRET.len()).any(|w| w == SECRET.as_bytes()),
+                    "plaintext secret persisted in {}", e.path().display());
+            }
+        }
+
+        // Offline: re-substitutes from the in-memory cache, keeps placeholders.
+        let store = crate::state::StateStore::open(dir.path()).unwrap();
+        let mut ps2 = PolicyState::new();
+        let (rr, _) = converge_local(&store, &executors, &mut rc, &mut ps2, dir.path(), &mut breaker)
+            .expect("offline converge with a warm cache");
+        assert_eq!(rr.results.len(), 1);
+        let acc = ps2.accepted_bundle.as_ref().unwrap();
+        assert_eq!(acc.configcrates[0].resources[0].attributes["content"], format!("pw={PLACEHOLDER}"));
     }
 }

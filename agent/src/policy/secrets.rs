@@ -9,8 +9,16 @@
 //! the agent can't apply them as-is (a placeholder string written into a
 //! config file is a catastrophic failure mode). This module is the one
 //! place that walks the bundle, fetches the placeholder values via the
-//! server's `VigoAgent.ResolveSecrets` RPC, and substitutes them in
-//! place before eval_bundle's template renderer sees the values.
+//! server's `VigoAgent.ResolveSecrets` RPC, and substitutes them into a
+//! throwaway evaluation copy before eval_bundle's template renderer sees
+//! the values.
+//!
+//! The bundle the agent *keeps* — `RunResult.policy_bundle`, the
+//! `accepted_bundle`, the module cache, the LMDB-persisted copy, the
+//! user-readable swarm state mirror — always stays in the placeholder
+//! form the server sent. Only `checkin::loop_impl::converge`'s local
+//! eval copy is substituted; every later run (no-change, offline,
+//! stream push) re-substitutes from the in-memory cache or refuses.
 //!
 //! Substituting BEFORE template render lets the existing eval pipeline
 //! work unchanged — `{{.Vars.dbPass}}` in a template renders the
@@ -107,7 +115,48 @@ impl SecretCache {
         let g = self.inner.lock().unwrap();
         g.values.get(ref_).cloned()
     }
+
+    /// scrub replaces every resolved secret value this cache holds that
+    /// occurs in `s` with [`REDACTED`]. The cache is exactly the set of
+    /// values substitution can have pasted into this process's bundle
+    /// strings (and a proxied device's credential), so scrubbing against
+    /// it covers any executor/runner string built from resolved params —
+    /// a failed exec's command text, a `when:` skip reason, a log line.
+    /// Longest value first, so a secret that contains another is replaced
+    /// whole. Every non-empty value is scrubbed, however short: an over-
+    /// redacted error message is the cheap failure, a leaked secret isn't.
+    pub fn scrub(&self, s: &str) -> String {
+        let g = self.inner.lock().unwrap();
+        if g.values.is_empty() || s.is_empty() {
+            return s.to_string();
+        }
+        let mut vals: Vec<&str> = g.values.values().map(|v| v.as_str()).filter(|v| !v.is_empty()).collect();
+        vals.sort_by(|a, b| b.len().cmp(&a.len()));
+        let mut out = s.to_string();
+        for v in vals {
+            if out.contains(v) {
+                out = out.replace(v, REDACTED);
+            }
+        }
+        out
+    }
+
+    /// scrub_opt is [`scrub`](Self::scrub) over an optional string in place.
+    pub fn scrub_opt(&self, s: &mut Option<String>) {
+        if let Some(v) = s.as_mut() {
+            *v = self.scrub(v);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn insert_for_test(&self, key: &str, value: &str) {
+        self.extend([(key.to_string(), value.to_string())]);
+    }
 }
+
+/// REDACTED stands in for a resolved secret value scrubbed out of a run
+/// result or log line.
+pub const REDACTED: &str = "[REDACTED]";
 
 /// resolve_credential substitutes a single placeholder-bearing string
 /// (e.g. ProxiedDevice.Credential) and returns the resolved value. The
@@ -117,7 +166,7 @@ impl SecretCache {
 pub async fn resolve_credential(
     raw: &str,
     cache: &SecretCache,
-    client: &mut crate::checkin::client::Client,
+    client: &crate::checkin::client::Client,
     epoch: i64,
 ) -> Result<String> {
     if !raw.contains(PLACEHOLDER_BEGIN) {
@@ -126,11 +175,7 @@ pub async fn resolve_credential(
     cache.invalidate_if_epoch_changed(epoch);
     let mut refs = HashSet::new();
     scan_into(raw, &mut refs);
-    let missing = cache.missing_refs(refs.iter().map(|s| s.as_str()));
-    if !missing.is_empty() {
-        let resp = client.resolve_secrets(missing).await?;
-        cache.extend(resp.values);
-    }
+    fetch_missing(&refs, cache, client).await?;
     let out = substitute_in_string(raw, cache)?;
     if out.contains(PLACEHOLDER_BEGIN) {
         bail!("placeholder survived substitution in credential — refusing to use");
@@ -138,31 +183,62 @@ pub async fn resolve_credential(
     Ok(out)
 }
 
-/// resolve_and_substitute is the integration point check-in call sites
-/// use. Walks `bundle` for placeholder markers in resource attributes +
-/// vars_json + module-level templates, fetches missing values via the
-/// server's ResolveSecrets RPC, populates the cache, then substitutes
-/// in place. After this returns, the bundle's strings are placeholder-
-/// free and safe to hand to `eval_bundle`.
+/// resolve_and_substitute resolves and substitutes `bundle` in place.
+/// Only for a bundle that is a process-local throwaway copy (`vigo run`,
+/// a proxied device's eval copy) — never one the agent keeps or persists;
+/// the check-in loop warms the cache with [`fetch_missing`] and lets
+/// `converge` substitute its own eval copy.
 pub async fn resolve_and_substitute(
     bundle: &mut proto::PolicyBundle,
     cache: &SecretCache,
-    client: &mut crate::checkin::client::Client,
+    client: &crate::checkin::client::Client,
 ) -> Result<()> {
     cache.invalidate_if_epoch_changed(bundle.secrets_epoch);
-
     let refs = collect_refs_in_bundle(bundle);
+    fetch_missing(&refs, cache, client).await?;
+    substitute_in_bundle(bundle, cache)
+}
+
+/// fetch_missing resolves every ref in `refs` the cache doesn't already
+/// hold via the server's ResolveSecrets RPC. The caller invalidates the
+/// cache against the bundle's `secrets_epoch` first.
+pub async fn fetch_missing(
+    refs: &HashSet<String>,
+    cache: &SecretCache,
+    client: &crate::checkin::client::Client,
+) -> Result<()> {
     if refs.is_empty() {
         return Ok(());
     }
-
     let missing = cache.missing_refs(refs.iter().map(|s| s.as_str()));
     if !missing.is_empty() {
         let resp = client.resolve_secrets(missing).await?;
         cache.extend(resp.values);
     }
+    Ok(())
+}
 
-    substitute_in_bundle(bundle, cache)
+/// collect_refs_in_vars adds every placeholder ref in a bundle's
+/// `vars_json` to `out`.
+pub fn collect_refs_in_vars(vars_json: &[u8], out: &mut HashSet<String>) {
+    if vars_json.is_empty() {
+        return;
+    }
+    if let Ok(v) = serde_json::from_slice::<Value>(vars_json) {
+        scan_value(&v, out);
+    }
+}
+
+/// collect_refs_in_configcrate adds every placeholder ref in one
+/// configcrate (its `when:`, each resource's `when:` and attributes).
+pub fn collect_refs_in_configcrate(m: &proto::PolicyConfigcrate, out: &mut HashSet<String>) {
+    scan_into(&m.when, out);
+    for r in &m.resources {
+        scan_into(&r.when, out);
+        for v in r.attributes.values() {
+            scan_into(v, out);
+        }
+    }
 }
 
 /// collect_refs_in_bundle_pub is the public form used by the offline
@@ -185,19 +261,9 @@ pub fn substitute_in_bundle_pub(bundle: &mut proto::PolicyBundle, cache: &Secret
 /// bundle and returns the set of secret keys that need substituting.
 fn collect_refs_in_bundle(bundle: &proto::PolicyBundle) -> HashSet<String> {
     let mut refs = HashSet::new();
-    if !bundle.vars_json.is_empty() {
-        if let Ok(v) = serde_json::from_slice::<Value>(&bundle.vars_json) {
-            scan_value(&v, &mut refs);
-        }
-    }
+    collect_refs_in_vars(&bundle.vars_json, &mut refs);
     for m in &bundle.configcrates {
-        scan_into(&m.when, &mut refs);
-        for r in &m.resources {
-            scan_into(&r.when, &mut refs);
-            for v in r.attributes.values() {
-                scan_into(v, &mut refs);
-            }
-        }
+        collect_refs_in_configcrate(m, &mut refs);
     }
     refs
 }

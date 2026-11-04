@@ -652,7 +652,7 @@ impl Client {
     /// The signed payload is the sorted refs joined with NUL bytes, plus
     /// the timestamp — matches verifyResolveSecretsCtx on the server.
     pub async fn resolve_secrets(
-        &mut self,
+        &self,
         refs: Vec<String>,
     ) -> Result<crate::proto::ResolveSecretsResponse> {
         use crate::proto::ResolveSecretsRequest;
@@ -669,8 +669,11 @@ impl Client {
             refs,
         };
 
-        let resp = self
-            .agent
+        // `&self` + a cloned channel handle (tonic clients are cheap
+        // clones over one shared Channel) so the stream loop, which only
+        // holds a `&Client`, can warm the secret cache too.
+        let mut agent = self.agent.clone();
+        let resp = agent
             .resolve_secrets(tonic::Request::new(req))
             .await
             .context("resolve_secrets RPC")?;

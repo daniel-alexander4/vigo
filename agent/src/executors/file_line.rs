@@ -34,7 +34,14 @@ impl Executor for FileLineExecutor {
         let region_start = params.get("region_start").map(|s| s.as_str());
         let region_end = params.get("region_end").map(|s| s.as_str());
 
-        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        let content = match super::read_for_edit(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
         let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
 
         // Compute region bounds if specified.
@@ -99,7 +106,22 @@ impl Executor for FileLineExecutor {
                         result.action = Action::Updated;
                         result.changed = true;
                     } else {
-                        // No match found — insert at position.
+                        // No line matches the pattern. If the exact line is
+                        // already there (a `line:` the pattern doesn't match —
+                        // e.g. pattern `^Foo=1`, line `Foo=2`), it was inserted
+                        // by an earlier cycle: settled, not a fresh insert.
+                        // Without this, every cycle appended another copy.
+                        let exists = if has_region && !lines.is_empty() {
+                            lines[region_lo..=region_hi].contains(&line)
+                        } else {
+                            lines.contains(&line)
+                        };
+                        if exists {
+                            result.action = Action::None;
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
+                        // Insert at position.
                         result.action = Action::Created;
                         result.changed = true;
                         insert_line(&mut lines, &line, position);
@@ -591,5 +613,40 @@ mod tests {
         let content = std::fs::read_to_string(&path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines, vec!["# END", "port=9090"]);
+    }
+
+    /// An unreadable / non-UTF-8 file is an error, never "empty" (which
+    /// rewrote it holding only this one line).
+    #[test]
+    fn unreadable_file_fails_and_is_left_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bin.conf");
+        let original: &[u8] = b"keep=\xff\xfe\n";
+        std::fs::write(&path, original).unwrap();
+        let params = make_params(&[("target_path", path.to_str().unwrap()), ("line", "x=1"), ("state", "present")]);
+        let r = FileLineExecutor.execute(&params, false);
+        assert!(r.error.is_some(), "non-UTF-8 file must fail the resource");
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+    }
+
+    /// match_pattern that the managed line itself doesn't match: the first
+    /// cycle inserts it, later cycles must see it and settle (they appended a
+    /// fresh copy every cycle).
+    #[test]
+    fn insert_when_pattern_misses_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.conf");
+        std::fs::write(&path, "a=1\n").unwrap();
+        let params = make_params(&[
+            ("target_path", path.to_str().unwrap()),
+            ("line", "Foo=2"),
+            ("match_pattern", "^Foo=1$"),
+            ("state", "present"),
+        ]);
+        assert!(FileLineExecutor.execute(&params, false).changed);
+        let r2 = FileLineExecutor.execute(&params, false);
+        assert!(r2.error.is_none());
+        assert!(!r2.changed, "second cycle re-inserted the line");
+        assert_eq!(std::fs::read_to_string(&path).unwrap().matches("Foo=2").count(), 1);
     }
 }

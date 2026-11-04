@@ -681,9 +681,10 @@ impl PacmanRepoManager {
         "/etc/pacman.conf"
     }
 
-    /// Read the pacman.conf file.
-    fn read_conf(&self) -> String {
-        std::fs::read_to_string(Self::conf_path()).unwrap_or_default()
+    /// Read the pacman.conf file. A read failure other than NotFound is an
+    /// error — `add`/`remove` rewrite the whole file from what this returns.
+    fn read_conf(&self) -> Result<String, String> {
+        super::read_for_edit(Self::conf_path())
     }
 
     /// Write the pacman.conf file.
@@ -729,7 +730,9 @@ impl PacmanRepoManager {
 
 impl RepoManager for PacmanRepoManager {
     fn is_present(&self, name: &str) -> bool {
-        let content = self.read_conf();
+        // Query only: an unreadable file reads as "absent", and the `add`
+        // that follows reports the read error instead of rewriting it.
+        let content = self.read_conf().unwrap_or_default();
         let section = format!("[{}]", name);
         let commented = format!("# [{}]", name);
         content.lines().any(|l| {
@@ -739,7 +742,7 @@ impl RepoManager for PacmanRepoManager {
     }
 
     fn current_content(&self, name: &str) -> Option<String> {
-        let content = self.read_conf();
+        let content = self.read_conf().ok()?;
         let lines: Vec<&str> = content.lines().collect();
         let (start, end) = Self::find_section(&lines, name)?;
         Some(lines[start..end].join("\n") + "\n")
@@ -783,7 +786,7 @@ impl RepoManager for PacmanRepoManager {
                 .run_niced_timeout("pacman-key", &["--lsign-key", fpr], PKG_NICE, PKG_MUTATE_TIMEOUT);
         }
 
-        let content = self.read_conf();
+        let content = self.read_conf()?;
         let lines: Vec<&str> = content.lines().collect();
         let section_block = Self::build_section(name, repo, enabled);
 
@@ -814,7 +817,7 @@ impl RepoManager for PacmanRepoManager {
     }
 
     fn remove(&self, name: &str) -> Result<(), String> {
-        let content = self.read_conf();
+        let content = self.read_conf()?;
         let lines: Vec<&str> = content.lines().collect();
 
         if let Some((start, end)) = Self::find_section(&lines, name) {

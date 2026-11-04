@@ -1008,6 +1008,8 @@ Default timeouts by resource type:
 | `exec`, `source_package`, `nonrepo_package`, `custom`, `package`, `repository` | 300s (5 min) |
 | All others (`file`, `service`, `user`, etc.) | 60s |
 
+Separately, every command an executor runs on the agent is killed (with its whole process group) if it is still running after 300s, unless the executor has its own budget: `exec`/`custom`/`source_package`/`nonrepo_package` honor `timeout:`, package mutations allow 1h, a `db_backup` dump 6h, and a `backup` `pre_command`/`post_command` 1h. `when:` builtins that probe the host (`command_succeeds`, `has_command`, …) are killed after 30s.
+
 
 ---
 ## When Expressions

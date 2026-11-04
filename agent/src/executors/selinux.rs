@@ -11,8 +11,14 @@
 
 use super::{Action, Executor, ResourceResult};
 use std::collections::HashMap;
-use std::process::Command;
 use std::time::Instant;
+
+/// Every SELinux tool call runs under the agent's bounded subprocess path
+/// (own process group, killed on the default timeout) — a wedged
+/// `semanage`/`restorecon` on a big tree can't hang the convergence cycle.
+fn bounded(prog: &str, args: &[&str]) -> std::io::Result<std::process::Output> {
+    super::run_command_niced_timeout(prog, args, 0, super::DEFAULT_COMMAND_TIMEOUT)
+}
 
 pub struct SelinuxExecutor;
 
@@ -78,9 +84,7 @@ impl Executor for SelinuxExecutor {
 
 /// Get the current SELinux context of a file via `ls -Z`.
 fn get_current_context(path: &str) -> Result<String, String> {
-    let output = Command::new("ls")
-        .args(["-Z", "-d", path])
-        .output()
+    let output = bounded("ls", &["-Z", "-d", path])
         .map_err(|e| format!("ls -Z {}: {}", path, e))?;
 
     if !output.status.success() {
@@ -121,9 +125,7 @@ fn apply_full_context(
         return Ok(());
     }
 
-    let output = Command::new("chcon")
-        .args([context, path])
-        .output()
+    let output = bounded("chcon", &[context, path])
         .map_err(|e| format!("chcon {} {}: {}", context, path, e))?;
 
     if !output.status.success() {
@@ -163,16 +165,12 @@ fn apply_type_context(
     }
 
     // Add or modify the fcontext rule.
-    let add_output = Command::new("semanage")
-        .args(["fcontext", "-a", "-t", se_type, path])
-        .output()
+    let add_output = bounded("semanage", &["fcontext", "-a", "-t", se_type, path])
         .map_err(|e| format!("semanage fcontext -a -t {} {}: {}", se_type, path, e))?;
 
     if !add_output.status.success() {
         // If it already exists, try modify instead.
-        let mod_output = Command::new("semanage")
-            .args(["fcontext", "-m", "-t", se_type, path])
-            .output()
+        let mod_output = bounded("semanage", &["fcontext", "-m", "-t", se_type, path])
             .map_err(|e| format!("semanage fcontext -m -t {} {}: {}", se_type, path, e))?;
 
         if !mod_output.status.success() {
@@ -186,9 +184,7 @@ fn apply_type_context(
     }
 
     // Apply the context.
-    let restore_output = Command::new("restorecon")
-        .args(["-v", path])
-        .output()
+    let restore_output = bounded("restorecon", &["-v", path])
         .map_err(|e| format!("restorecon -v {}: {}", path, e))?;
 
     if !restore_output.status.success() {
@@ -210,9 +206,7 @@ fn remove_fcontext(
     result: &mut ResourceResult,
 ) -> Result<(), String> {
     // Check if a custom fcontext rule exists for this path.
-    let output = Command::new("semanage")
-        .args(["fcontext", "-l"])
-        .output()
+    let output = bounded("semanage", &["fcontext", "-l"])
         .map_err(|e| format!("semanage fcontext -l: {}", e))?;
 
     if !output.status.success() {
@@ -238,9 +232,7 @@ fn remove_fcontext(
         return Ok(());
     }
 
-    let del_output = Command::new("semanage")
-        .args(["fcontext", "-d", path])
-        .output()
+    let del_output = bounded("semanage", &["fcontext", "-d", path])
         .map_err(|e| format!("semanage fcontext -d {}: {}", path, e))?;
 
     if !del_output.status.success() {
@@ -252,7 +244,7 @@ fn remove_fcontext(
     }
 
     // Restore default context after removing the rule.
-    let _ = Command::new("restorecon").args(["-v", path]).output();
+    let _ = bounded("restorecon", &["-v", path]);
 
     Ok(())
 }

@@ -24,7 +24,9 @@ Manages systemd services -- start, stop, restart, reload, and enable/disable at 
 
 Uses `systemctl is-active` to check the current state and `systemctl is-enabled` for boot configuration. For `running` and `stopped` states, only acts when the current state differs from desired. `restarted` and `reloaded` always trigger — they are inherently non-idempotent actions.
 
-Because `restarted` and `reloaded` always fire, they **must** be gated with `when: "changed"` so they only run when triggered by a dependency change (via `notify` or `subscribes`). The publish validator enforces this — a service with `state: restarted` or `reloaded` without `when: "changed"` or `subscribes` will be rejected.
+Because `restarted` and `reloaded` always fire, they **must** be gated with `when: "changed"` or `subscribes:` so they only run when triggered by a dependency change (via `notify` or `subscribes`). The publish validator enforces this — a service with `state: restarted` or `reloaded` without `when: "changed"` or `subscribes` will be rejected. A subscriber that nothing has triggered this cycle is held to `running`: it is started if it is down, and is not restarted or reloaded.
+
+`notify:` and `subscribes:` belong to the resource that declares them. Other resources in the same configcrate are not wired in.
 
 ## Examples
 

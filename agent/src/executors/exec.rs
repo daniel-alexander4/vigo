@@ -18,8 +18,9 @@
 //!   Accepts a bare integer (seconds) or a duration suffix: `s`, `m`, `h`.
 //!   On expiry the agent SIGTERMs the child's process group, waits 5s, then
 //!   SIGKILLs — leaked children of a shell-spawned scan are killed too.
-//!   Background execs clear their bg_pids slot on timeout so the next
-//!   convergence cycle is free to respawn.
+//!   A background exec runs in its own process group (so that kill reaches
+//!   it) and clears its bg_pids slot only once the killed child is reaped,
+//!   so the next convergence cycle respawns it rather than doubling it.
 //! - `retries`: number of retry attempts on failure (default 0)
 //! - `retry_delay`: seconds between retries (default 5)
 //! - `sensitive`: when `"true"`, suppress command from result names and error messages
@@ -470,6 +471,10 @@ fn execute_exec(
             .stderr(std::process::Stdio::null());
 
         crate::platform::process::apply_nice(&mut cmd, nice_level);
+        // Own process group, so the reaper's timeout kill (killpg) actually
+        // reaches the child and its descendants.
+        crate::platform::process::configure_std_process_group(&mut cmd);
+        crate::platform::process::apply_oom_score_adj(&mut cmd);
 
         match cmd.spawn() {
             Ok(child) => {
@@ -503,10 +508,16 @@ fn execute_exec(
                                 let _ = tx.send(child.wait());
                             });
                             if rx.recv_timeout(dur).is_err() {
-                                // Fire-and-forget kill; the waiter thread above
-                                // drains the zombie once the kernel reaps it.
+                                #[cfg(not(test))]
                                 let grace = std::time::Duration::from_secs(5);
+                                #[cfg(test)]
+                                let grace = std::time::Duration::from_millis(100);
                                 crate::platform::process::kill_process_tree(pid_copy, grace);
+                                // Release the slot only once the child is
+                                // actually reaped — clearing it while the
+                                // process lives lets the next cycle spawn a
+                                // second copy beside it.
+                                let _ = rx.recv();
                             }
                         }
                         None => {
@@ -554,7 +565,7 @@ fn execute_exec(
     for attempt in 0..max_attempts {
         if attempt > 0 {
             warn!(
-                command = cmd_label,
+                command = %crate::policy::secrets::global_cache().scrub(cmd_label),
                 attempt,
                 retries,
                 retry_delay,
@@ -628,6 +639,45 @@ fn execute_exec(
     Err(last_error.unwrap_or_else(|| format!("exec {}: unknown error", cmd_label)))
 }
 
+/// create_secret_file writes `secret` to `<tmp>/vigo-secret-<uuid>/secret`.
+/// The directory is created 0700 and the file 0600 + `create_new` in the same
+/// syscall, so there is no window in which the file exists with looser
+/// permissions, and no other user can pre-create, swap, or link the path (the
+/// old create-then-chmod in shared /tmp had both holes). Returns (dir, file).
+fn create_secret_file(secret: &str) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    let dir = std::env::temp_dir().join(format!("vigo-secret-{}", uuid::Uuid::new_v4()));
+    let mut db = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        db.mode(0o700);
+    }
+    db.create(&dir).map_err(|e| format!("creating secret temp dir: {}", e))?;
+    let path = dir.join("secret");
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let written = opts
+        .open(&path)
+        .map_err(|e| format!("creating secret temp file: {}", e))
+        .and_then(|mut f| f.write_all(secret.as_bytes()).map_err(|e| format!("writing secret file: {}", e)));
+    #[cfg(not(unix))]
+    let written = written.and_then(|_| {
+        crate::platform::permissions::set_owner_only(&path)
+            .map_err(|e| format!("setting secret file permissions: {}", e))
+    });
+    if let Err(e) = written {
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir(&dir);
+        return Err(e);
+    }
+    Ok((dir, path))
+}
+
 /// Write secret to 0600 temp file, replace {{secret_file}} in command, run, cleanup.
 fn run_with_secret_file(
     runner: &dyn CommandRunner,
@@ -640,18 +690,8 @@ fn run_with_secret_file(
     nice_level: i32,
     timeout: Option<Duration>,
 ) -> Result<std::process::Output, String> {
-    let tmp_dir = std::env::temp_dir();
-    let tmp_path = tmp_dir.join(format!("vigo-secret-{}", uuid::Uuid::new_v4()));
+    let (tmp_dir, tmp_path) = create_secret_file(secret)?;
     let tmp_path_str = tmp_path.to_string_lossy().to_string();
-
-    {
-        let mut f = fs::File::create(&tmp_path)
-            .map_err(|e| format!("creating secret temp file: {}", e))?;
-        crate::platform::permissions::set_owner_only(&tmp_path)
-            .map_err(|e| format!("setting secret file permissions: {}", e))?;
-        f.write_all(secret.as_bytes())
-            .map_err(|e| format!("writing secret file: {}", e))?;
-    }
 
     let resolved = command.replace("{{secret_file}}", &tmp_path_str);
     let (prog, args) = build_wrapped_command(&resolved, cwd, user, env_pairs, shell);
@@ -666,6 +706,7 @@ fn run_with_secret_file(
 
     // Always clean up.
     let _ = fs::remove_file(&tmp_path);
+    let _ = fs::remove_dir(&tmp_dir);
 
     result.map_err(|e| format!("exec {}: {}", command, e))
 }
@@ -1821,5 +1862,53 @@ mod tests {
         );
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("timed out"));
+    }
+
+    /// A timed-out background exec must actually be killed (it leads its own
+    /// process group) and its bg_pids slot freed only once it is gone — the
+    /// old code killpg'd a group that didn't exist and freed the slot anyway,
+    /// so every cycle stacked another live copy.
+    #[cfg(unix)]
+    #[test]
+    fn background_timeout_kills_child_before_freeing_slot() {
+        let exec = ExecExecutor::new();
+        let params: HashMap<String, String> = [
+            ("command", "sleep 30"),
+            ("background", "true"),
+            ("timeout", "1"),
+            ("name", "bg-t5"),
+        ]
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+        let r = exec.execute(&params, false);
+        assert!(r.error.is_none(), "{:?}", r.error);
+        let pid = *exec.bg_pids.lock().unwrap().get("bg-t5").expect("slot taken");
+        let deadline = std::time::Instant::now() + Duration::from_secs(8);
+        loop {
+            let freed = !exec.bg_pids.lock().unwrap().contains_key("bg-t5");
+            let alive = unsafe { libc::kill(pid as i32, 0) } == 0;
+            if freed {
+                assert!(!alive, "slot freed while pid {pid} still alive");
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline, "background child never killed/reaped");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// The secret_file temp file is born 0600 inside a fresh 0700 directory.
+    #[cfg(unix)]
+    #[test]
+    fn secret_file_is_private_from_creation() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, path) = create_secret_file("s3cr3t").unwrap();
+        let dmode = fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+        let fmode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(fs::read_to_string(&path).unwrap(), "s3cr3t");
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir(&dir);
+        assert_eq!(dmode, 0o700);
+        assert_eq!(fmode, 0o600);
     }
 }

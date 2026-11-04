@@ -41,7 +41,21 @@ const FILE_EDITING_TYPES: &[&str] = &[
 /// Before a file-editing resource executes, capture the file's original content.
 /// If the resource errors, restore the file from the snapshot.
 struct FileTransactionTracker {
-    snapshots: HashMap<String, Option<String>>,
+    snapshots: HashMap<String, FileSnapshot>,
+}
+
+/// What a file looked like before a file-editing resource ran.
+#[derive(Debug, PartialEq)]
+enum FileSnapshot {
+    /// The file did not exist: rollback removes it.
+    Absent,
+    /// The file's exact bytes (not a `String` — a non-UTF-8 file is still a
+    /// file to restore).
+    Content(Vec<u8>),
+    /// The file exists but could not be read. Rollback leaves it alone:
+    /// deleting it (the old `read_to_string(..).ok()` → `None` reading) would
+    /// destroy a file the agent never saw.
+    Unreadable,
 }
 
 impl FileTransactionTracker {
@@ -56,21 +70,29 @@ impl FileTransactionTracker {
         if self.snapshots.contains_key(path) {
             return;
         }
-        let content = std::fs::read_to_string(path).ok();
-        self.snapshots.insert(path.to_string(), content);
+        let snap = match std::fs::read(path) {
+            Ok(bytes) => FileSnapshot::Content(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => FileSnapshot::Absent,
+            Err(e) => {
+                warn!(path = %path, error = %e, "rollback snapshot: file unreadable, rollback will leave it untouched");
+                FileSnapshot::Unreadable
+            }
+        };
+        self.snapshots.insert(path.to_string(), snap);
     }
 
     /// Restore `path` to its original content (or delete if it didn't exist).
     fn rollback(&self, path: &str) {
-        if let Some(original) = self.snapshots.get(path) {
-            match original {
-                Some(content) => {
-                    let _ = std::fs::write(path, content);
-                }
-                None => {
-                    let _ = std::fs::remove_file(path);
+        match self.snapshots.get(path) {
+            Some(FileSnapshot::Content(bytes)) => {
+                if let Err(e) = std::fs::write(path, bytes) {
+                    warn!(path = %path, error = %e, "rollback: restoring file failed");
                 }
             }
+            Some(FileSnapshot::Absent) => {
+                let _ = std::fs::remove_file(path);
+            }
+            Some(FileSnapshot::Unreadable) | None => {}
         }
     }
 }
@@ -546,8 +568,49 @@ pub fn converge(
     results
 }
 
-/// Execute a single resource node.
+/// Execute a single resource node, then scrub every resolved secret value
+/// out of the result before it leaves the runner (reported to the server,
+/// queued in LMDB, logged). Executors build error / skip strings from
+/// resolved params — a failed exec's command line, a `when:` skip reason —
+/// so the scrub is applied here, once, rather than in each executor.
 fn execute_resource(
+    node: &ResourceNode,
+    executors: &HashMap<String, Box<dyn Executor>>,
+    cache: &mut ResultCache,
+    opts: &RunOptions,
+    traits: &serde_json::Value,
+) -> ResourceResult {
+    let mut result = execute_resource_unscrubbed(node, executors, cache, opts, traits);
+    scrub_result(&mut result);
+
+    if let Some(ref err) = result.error {
+        warn!(
+            resource = %node.name,
+            resource_type = %node.resource_type,
+            error = %err,
+            "resource execution failed"
+        );
+    } else {
+        debug!(
+            resource = %node.name,
+            resource_type = %node.resource_type,
+            action = %result.action,
+            "resource executed"
+        );
+    }
+    result
+}
+
+/// scrub_result replaces resolved secret values in every free-text field of
+/// a result. See [`crate::policy::secrets::SecretCache::scrub`].
+pub(crate) fn scrub_result(r: &mut ResourceResult) {
+    let cache = crate::policy::secrets::global_cache();
+    cache.scrub_opt(&mut r.error);
+    cache.scrub_opt(&mut r.skip_reason);
+    cache.scrub_opt(&mut r.file_path);
+}
+
+fn execute_resource_unscrubbed(
     node: &ResourceNode,
     executors: &HashMap<String, Box<dyn Executor>>,
     cache: &mut ResultCache,
@@ -616,7 +679,7 @@ fn execute_resource(
                         // builtins or wrong arity) rather than executing it.
                         warn!(
                             resource = %node.name,
-                            error = %e,
+                            error = %crate::policy::secrets::global_cache().scrub(&e.to_string()),
                             "when expression eval error, skipping resource (fail-safe)"
                         );
                         return ResourceResult {
@@ -638,7 +701,7 @@ fn execute_resource(
                 // Fail-safe: skip on parse error too.
                 warn!(
                     resource = %node.name,
-                    error = %e,
+                    error = %crate::policy::secrets::global_cache().scrub(&e.to_string()),
                     "when expression parse error, skipping resource (fail-safe)"
                 );
                 return ResourceResult {
@@ -714,6 +777,18 @@ fn execute_resource(
     let mut params = node.params.clone();
     if !params.contains_key("name") {
         params.insert("name".to_string(), node.name.clone());
+    }
+    // A subscriber service with `state: restarted|reloaded` restarts only
+    // when something it subscribes to changed (or a watched secret rotated).
+    // Untriggered, it is held to `running` — ensure it is up, don't bounce it
+    // every cycle. Done here, once, so every OS's service executor gets it.
+    if node.resource_type == "service" && !triggered {
+        let subscriber = params.get(dag::SUBSCRIBER_PARAM).is_some_and(|v| v == "true")
+            || params.get("_watch_secret").is_some_and(|v| v == "true");
+        let bounces = matches!(params.get("state").map(|s| s.as_str()), Some("restarted") | Some("reloaded"));
+        if subscriber && bounces {
+            params.insert("state".to_string(), "running".to_string());
+        }
     }
     if node.resource_type == "file" {
         if !run_id.is_empty() {
@@ -800,22 +875,6 @@ fn execute_resource(
     // Cache the result.
     if !dry_run {
         cache.store(&node.name, &node.resource_type, &node.params, &result);
-    }
-
-    if let Some(ref err) = result.error {
-        warn!(
-            resource = %node.name,
-            resource_type = %node.resource_type,
-            error = %err,
-            "resource execution failed"
-        );
-    } else {
-        debug!(
-            resource = %node.name,
-            resource_type = %node.resource_type,
-            action = %result.action,
-            "resource executed"
-        );
     }
 
     result
@@ -1533,14 +1592,11 @@ fn is_package_type(resource_type: &str) -> bool {
 /// Attempt to free disk space by cleaning the package manager cache.
 /// Best-effort — errors are silently ignored.
 fn try_cleanup_package_cache() {
+    use crate::executors::{run_command_niced_timeout, DEFAULT_COMMAND_TIMEOUT, PKG_NICE};
     // Try apt-get clean (Debian/Ubuntu).
-    let _ = std::process::Command::new("apt-get")
-        .args(["clean"])
-        .output();
+    let _ = run_command_niced_timeout("apt-get", &["clean"], PKG_NICE, DEFAULT_COMMAND_TIMEOUT);
     // Try dnf clean (RHEL/Fedora).
-    let _ = std::process::Command::new("dnf")
-        .args(["clean", "packages"])
-        .output();
+    let _ = run_command_niced_timeout("dnf", &["clean", "packages"], PKG_NICE, DEFAULT_COMMAND_TIMEOUT);
 }
 
 // ---------------------------------------------------------------------------
@@ -1598,6 +1654,142 @@ fn disk_free_bytes(path: &str) -> Option<u64> {
 mod tests {
     use super::*;
     use crate::proto::{Configcrate, Resource};
+
+    fn opts_for_test() -> RunOptions {
+        RunOptions {
+            dry_run: false,
+            module_filter: None,
+            run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
+            data_dir: None,
+        }
+    }
+
+    /// A failed exec puts its (resolved) command line into `error`, and a
+    /// `when:` skip puts the resolved expression into `skip_reason`. Every
+    /// resolved secret value must be scrubbed before the result leaves the
+    /// runner.
+    #[test]
+    fn resolved_secrets_scrubbed_from_results() {
+        const SECRET: &str = "hunter2-t2-c41d";
+        crate::policy::secrets::global_cache().insert_for_test("t2/scrub/key", SECRET);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("exec".into(), Box::new(crate::executors::exec::ExecExecutor::new()));
+        executors.insert("mock".into(), Box::new(MockExecutor { action: Action::None, changed: false }));
+
+        let mut exec_params = std::collections::BTreeMap::new();
+        exec_params.insert("command".to_string(), format!("false {SECRET}"));
+        let modules = vec![Configcrate {
+            name: "m".into(),
+            resources: vec![
+                Resource { name: "leaky-exec".into(), r#type: "exec".into(), params: exec_params, when: String::new() },
+                Resource {
+                    name: "leaky-when".into(),
+                    r#type: "mock".into(),
+                    params: Default::default(),
+                    when: format!("file_exists('/nonexistent/{SECRET}')"),
+                },
+            ],
+            ..Default::default()
+        }];
+        let results = converge(&modules, &executors, &mut ResultCache::new(5), &opts_for_test(),
+            &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
+        let exec_r = results.iter().find(|r| r.resource_name == "leaky-exec").unwrap();
+        let err = exec_r.error.as_deref().expect("exec must fail");
+        assert!(!err.contains(SECRET), "secret leaked into error: {err}");
+        assert!(err.contains(crate::policy::secrets::REDACTED), "error not redacted: {err}");
+        let when_r = results.iter().find(|r| r.resource_name == "leaky-when").unwrap();
+        let skip = when_r.skip_reason.as_deref().expect("when skip");
+        assert!(!skip.contains(SECRET), "secret leaked into skip_reason: {skip}");
+    }
+
+    /// Rollback snapshot keeps exact bytes: a non-UTF-8 file is restored, not
+    /// deleted (the old `read_to_string(..).ok()` read it as "absent").
+    #[test]
+    fn rollback_restores_non_utf8_file_instead_of_deleting_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blob.conf");
+        let original: &[u8] = b"key=\xff\xfe\x00binary\n";
+        std::fs::write(&path, original).unwrap();
+        let p = path.to_str().unwrap();
+        let mut t = FileTransactionTracker::new();
+        t.ensure_snapshot(p);
+        std::fs::write(&path, b"clobbered").unwrap();
+        t.rollback(p);
+        assert_eq!(std::fs::read(&path).expect("rollback deleted the file"), original);
+    }
+
+    /// An unreadable existing file is left alone on rollback, never deleted.
+    #[test]
+    fn rollback_never_deletes_a_file_it_could_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        // A directory at the path: read() fails with something other than
+        // NotFound, the same class as EACCES/EIO (works as root too).
+        let path = dir.path().join("d");
+        std::fs::create_dir(&path).unwrap();
+        let mut t = FileTransactionTracker::new();
+        t.ensure_snapshot(path.to_str().unwrap());
+        assert_eq!(t.snapshots[path.to_str().unwrap()], FileSnapshot::Unreadable);
+        let missing = dir.path().join("missing");
+        t.ensure_snapshot(missing.to_str().unwrap());
+        assert_eq!(t.snapshots[missing.to_str().unwrap()], FileSnapshot::Absent);
+    }
+
+    /// Records the `state` param of every service call (and whether it was
+    /// the triggered second pass).
+    struct StateRecorder {
+        calls: std::sync::Arc<std::sync::Mutex<Vec<(String, bool)>>>,
+    }
+    impl Executor for StateRecorder {
+        fn execute(&self, params: &HashMap<String, String>, _dry_run: bool) -> ResourceResult {
+            let triggered = params.get("_triggered").is_some_and(|v| v == "true");
+            self.calls.lock().unwrap().push((params.get("state").cloned().unwrap_or_default(), triggered));
+            ResourceResult { action: Action::None, ..Default::default() }
+        }
+    }
+
+    /// A resource-level `subscribes:` service with `state: restarted` is held
+    /// to `running` until something it subscribes to changes, then restarted.
+    #[test]
+    fn untriggered_subscriber_service_is_not_restarted() {
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("service".into(), Box::new(StateRecorder { calls: std::sync::Arc::clone(&calls) }));
+        executors.insert("mock-changed".into(), Box::new(MockExecutor { action: Action::Updated, changed: true }));
+        executors.insert("mock-same".into(), Box::new(MockExecutor { action: Action::None, changed: false }));
+
+        let svc = |sub: &str| {
+            let mut p = std::collections::BTreeMap::new();
+            p.insert("state".to_string(), "restarted".to_string());
+            p.insert(dag::SUBSCRIBE_TARGETS_PARAM.to_string(), dag::encode_targets(&[sub.to_string()]));
+            p
+        };
+        // Cycle 1: the subscribed resource does not change → no restart.
+        let modules = vec![Configcrate {
+            name: "m".into(),
+            resources: vec![
+                Resource { name: "cfg".into(), r#type: "mock-same".into(), params: Default::default(), when: String::new() },
+                Resource { name: "svc".into(), r#type: "service".into(), params: svc("cfg"), when: String::new() },
+            ],
+            ..Default::default()
+        }];
+        converge(&modules, &executors, &mut ResultCache::new(5), &opts_for_test(),
+            &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
+        assert_eq!(*calls.lock().unwrap(), vec![("running".to_string(), false)]);
+
+        // Cycle 2: it changes → held to running in pass 1, restarted when triggered.
+        calls.lock().unwrap().clear();
+        let mut modules = modules;
+        modules[0].resources[0].r#type = "mock-changed".into();
+        converge(&modules, &executors, &mut ResultCache::new(5), &opts_for_test(),
+            &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
+        assert_eq!(
+            *calls.lock().unwrap(),
+            vec![("running".to_string(), false), ("restarted".to_string(), true)]
+        );
+    }
 
     struct MockExecutor {
         action: Action,

@@ -39,7 +39,7 @@ impl SwapExecutor {
 
     fn add_to_fstab(&self, path: &str) -> Result<(), String> {
         let entry = format!("{}\tnone\tswap\tsw\t0\t0\n", path);
-        let mut content = std::fs::read_to_string("/etc/fstab").unwrap_or_default();
+        let mut content = super::read_for_edit("/etc/fstab")?;
         if !content.ends_with('\n') && !content.is_empty() {
             content.push('\n');
         }
@@ -49,7 +49,7 @@ impl SwapExecutor {
     }
 
     fn remove_from_fstab(&self, path: &str) -> Result<(), String> {
-        let content = std::fs::read_to_string("/etc/fstab").unwrap_or_default();
+        let content = super::read_for_edit("/etc/fstab")?;
         let filtered: Vec<&str> = content
             .lines()
             .filter(|line| {

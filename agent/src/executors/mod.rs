@@ -331,8 +331,32 @@ pub(crate) const PKG_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::f
 /// not the responsiveness bound.
 pub(crate) const PKG_MUTATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3600);
 
-/// Runs a command and returns (stdout, success).
-/// This is the default command runner used by executors.
+/// read_for_edit reads a text file an executor is about to rewrite in place
+/// (file_line, ini, field_edit, fstab, sysctl.conf, known_hosts, …).
+///
+/// Only `NotFound` means "start from empty". Any other failure — permission
+/// denied, an I/O error, content that is not valid UTF-8 — is an error the
+/// resource must report: treating it as empty would make the executor write
+/// a file holding only its own line and silently destroy everything else.
+pub fn read_for_edit(path: impl AsRef<std::path::Path>) -> Result<String, String> {
+    let path = path.as_ref();
+    match std::fs::read_to_string(path) {
+        Ok(s) => Ok(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(format!("read {}: {} (refusing to rewrite a file that could not be read)", path.display(), e)),
+    }
+}
+
+/// Default ceiling for an executor subprocess that has no resource-level
+/// `timeout:` of its own. On expiry the child's process group is killed, so a
+/// hung `systemctl`/`useradd`/VCS fetch can't wedge the convergence cycle (the
+/// runner's own per-resource timer only detects an overrun; it cannot kill).
+pub(crate) const DEFAULT_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Runs a command with no timeout, nice level, or process group. Windows-only
+/// executors still call this directly (Windows parity is frozen — and
+/// `windows_update`/`choco` legitimately outlast any fixed ceiling); every
+/// other executor subprocess goes through [`DefaultRunner`], which bounds it.
 pub fn run_command(name: &str, args: &[&str]) -> std::io::Result<Output> {
     std::process::Command::new(name).args(args).output()
 }
@@ -780,9 +804,16 @@ pub trait CommandRunner: Send + Sync {
 /// Default command runner that shells out via std::process.
 pub struct DefaultRunner;
 
+/// Every call is bounded: the un-timed trait methods delegate to the timed
+/// path with [`DEFAULT_COMMAND_TIMEOUT`], so each executor subprocess runs in
+/// its own process group (killable as a tree), with /dev/null stdin and the
+/// OOM-adj bias. `run`/`run_with_stdin` add no nice level: a child here is
+/// often an init script that execs the managed daemon itself (`service nginx
+/// restart` on BSD/sysv), which would inherit it. Callers that want a nice
+/// level or a longer budget (exec's `timeout:`, package mutations) pass one.
 impl CommandRunner for DefaultRunner {
     fn run(&self, name: &str, args: &[&str]) -> std::io::Result<Output> {
-        run_command(name, args)
+        run_command_niced_timeout(name, args, 0, DEFAULT_COMMAND_TIMEOUT)
     }
 
     fn run_with_stdin(
@@ -791,11 +822,11 @@ impl CommandRunner for DefaultRunner {
         name: &str,
         args: &[&str],
     ) -> std::io::Result<Output> {
-        run_command_with_stdin(name, args, stdin_data)
+        run_command_with_stdin_niced_timeout(name, args, stdin_data, 0, DEFAULT_COMMAND_TIMEOUT)
     }
 
     fn run_niced(&self, name: &str, args: &[&str], nice_level: i32) -> std::io::Result<Output> {
-        run_command_niced(name, args, nice_level)
+        run_command_niced_timeout(name, args, nice_level, DEFAULT_COMMAND_TIMEOUT)
     }
 
     fn run_with_stdin_niced(
@@ -805,7 +836,7 @@ impl CommandRunner for DefaultRunner {
         args: &[&str],
         nice_level: i32,
     ) -> std::io::Result<Output> {
-        run_command_with_stdin_niced(name, args, stdin_data, nice_level)
+        run_command_with_stdin_niced_timeout(name, args, stdin_data, nice_level, DEFAULT_COMMAND_TIMEOUT)
     }
 
     fn run_niced_timeout(
@@ -1058,5 +1089,35 @@ mod tests {
         r.normalize_for_error();
         assert_eq!(r.action, Action::None);
         assert!(!r.changed);
+    }
+
+    /// Every DefaultRunner call runs the child in its own process group (the
+    /// timed path), so a timeout can kill the whole tree. `run` used to be a
+    /// bare `Command::output()` in the agent's group, with no timeout.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn default_runner_children_lead_their_own_process_group() {
+        let r = DefaultRunner;
+        let script = "echo $$ $(cut -d' ' -f5 /proc/$$/stat)";
+        for out in [
+            r.run("sh", &["-c", script]).unwrap(),
+            r.run_niced("sh", &["-c", script], 0).unwrap(),
+            r.run_with_stdin(b"", "sh", &["-c", script]).unwrap(),
+        ] {
+            let s = String::from_utf8_lossy(&out.stdout);
+            let v: Vec<&str> = s.split_whitespace().collect();
+            assert_eq!(v.len(), 2, "{s}");
+            assert_eq!(v[0], v[1], "child pid != pgid: not in its own process group");
+        }
+    }
+
+    #[test]
+    fn read_for_edit_only_notfound_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(read_for_edit(dir.path().join("nope")).unwrap(), "");
+        let bad = dir.path().join("bad");
+        std::fs::write(&bad, b"\xff\xfe").unwrap();
+        assert!(read_for_edit(&bad).is_err());
+        assert!(read_for_edit(dir.path()).is_err());
     }
 }

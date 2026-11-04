@@ -65,8 +65,8 @@ pub fn eval_bundle(
                 Err(e) => {
                     warn!(
                         module = %pmod.name,
-                        when = %pmod.when,
-                        error = %e,
+                        when = %crate::policy::secrets::global_cache().scrub(&pmod.when),
+                        error = %crate::policy::secrets::global_cache().scrub(&e.to_string()),
                         "skipping module: when expression failed"
                     );
                     continue;
@@ -96,8 +96,8 @@ pub fn eval_bundle(
                         warn!(
                             module = %pmod.name,
                             resource = %pres.name,
-                            when = %pres.when,
-                            error = %e,
+                            when = %crate::policy::secrets::global_cache().scrub(&pres.when),
+                            error = %crate::policy::secrets::global_cache().scrub(&e.to_string()),
                             "skipping resource: when template render failed"
                         );
                         continue;
@@ -118,7 +118,7 @@ pub fn eval_bundle(
                     module = %pmod.name,
                     resource = %pres.name,
                     raw = %pres.when,
-                    rendered = %rendered_when,
+                    rendered = %crate::policy::secrets::global_cache().scrub(&rendered_when),
                     "when template rendered"
                 );
             }
@@ -130,8 +130,8 @@ pub fn eval_bundle(
                     warn!(
                         module = %pmod.name,
                         resource = %pres.name,
-                        when = %rendered_when,
-                        error = %e,
+                        when = %crate::policy::secrets::global_cache().scrub(&rendered_when),
+                        error = %crate::policy::secrets::global_cache().scrub(&e.to_string()),
                         "skipping resource: when expression failed"
                     );
                     continue;
@@ -160,7 +160,7 @@ pub fn eval_bundle(
                         warn!(
                             resource = %pres.name,
                             attr = %k,
-                            error = %e,
+                            error = %crate::policy::secrets::global_cache().scrub(&e.to_string()),
                             "skipping resource: template render failed"
                         );
                         render_failed = true;
@@ -180,6 +180,25 @@ pub fn eval_bundle(
                 params.insert("_watch_secret".to_string(), "true".to_string());
             }
 
+            // notify / subscribes belong to THIS resource, not to its
+            // configcrate: carry them on the resource (the evaluated
+            // `proto::Resource` has no fields for them) and let
+            // `runner::dag::build_dag` lift them onto the node. Lifting them
+            // to `pb_mod.notify` made every sibling resource notify (and every
+            // sibling subscribe) too.
+            if !pres.notify.is_empty() {
+                params.insert(
+                    crate::runner::dag::NOTIFY_TARGETS_PARAM.to_string(),
+                    crate::runner::dag::encode_targets(&pres.notify),
+                );
+            }
+            if !pres.subscribes.is_empty() {
+                params.insert(
+                    crate::runner::dag::SUBSCRIBE_TARGETS_PARAM.to_string(),
+                    crate::runner::dag::encode_targets(&pres.subscribes),
+                );
+            }
+
             let mut pb_res = proto::Resource {
                 name: pres.name.clone(),
                 r#type: pres.r#type.clone(),
@@ -196,8 +215,6 @@ pub fn eval_bundle(
                 pb_mod.resource_type = pres.r#type.clone();
             }
 
-            pb_mod.notify.extend(pres.notify.iter().cloned());
-            pb_mod.subscribes.extend(pres.subscribes.iter().cloned());
         }
 
         if pb_mod.resources.is_empty() {
@@ -472,7 +489,10 @@ mod tests {
         let modules = eval_bundle(Some(&bundle), &json!(null)).unwrap();
         assert_eq!(modules.len(), 2);
         assert_eq!(modules[1].depends_on, vec!["config"]);
-        assert_eq!(modules[0].notify, vec!["svc"]);
+        // Resource-level notify rides on the resource, never lifted to the module.
+        assert!(modules[0].notify.is_empty());
+        let targets = &modules[0].resources[0].params[crate::runner::dag::NOTIFY_TARGETS_PARAM];
+        assert_eq!(crate::runner::dag::decode_targets(targets), vec!["svc"]);
     }
 
     #[test]

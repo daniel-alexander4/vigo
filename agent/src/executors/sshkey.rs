@@ -34,7 +34,14 @@ impl Executor for SshKeyExecutor {
             .map(|s| s.as_str())
             .unwrap_or("/etc/ssh/ssh_known_hosts");
 
-        let content = std::fs::read_to_string(file).unwrap_or_default();
+        let content = match super::read_for_edit(file) {
+            Ok(c) => c,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
 
         match state {
             "present" => {

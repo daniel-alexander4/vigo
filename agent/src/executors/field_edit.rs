@@ -82,7 +82,14 @@ impl Executor for FieldEditExecutor {
             None
         };
 
-        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        let content = match super::read_for_edit(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
         let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
         let mut changed = false;
 
@@ -555,5 +562,22 @@ mod tests {
 
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, "keep:1\nkeep:3\n");
+    }
+
+    #[test]
+    fn unreadable_file_fails_and_is_left_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("passwd");
+        let original: &[u8] = b"root:x:0:0:\xff:/root:/bin/bash\n";
+        std::fs::write(&path, original).unwrap();
+        let params = make_params(&[
+            ("path", path.to_str().unwrap()),
+            ("line_match", "^root:"),
+            ("select_field", "7"),
+            ("field_value", "/bin/zsh"),
+        ]);
+        let r = FieldEditExecutor.execute(&params, false);
+        assert!(r.error.is_some(), "non-UTF-8 file must fail the resource");
+        assert_eq!(std::fs::read(&path).unwrap(), original);
     }
 }

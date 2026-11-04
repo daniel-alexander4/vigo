@@ -42,7 +42,14 @@ impl Executor for IniExecutor {
         let sep = params.get("separator").map(|s| s.as_str()).unwrap_or("=");
         let value = params.get("value").cloned().unwrap_or_default();
 
-        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        let content = match super::read_for_edit(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
         let mut elements = parse_ini(&content, sep);
 
         match state {
@@ -407,5 +414,17 @@ mod tests {
         // File should be unchanged because of dry_run.
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, original);
+    }
+
+    #[test]
+    fn unreadable_file_fails_and_is_left_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bin.ini");
+        let original: &[u8] = b"[s]\nkeep=\xff\n";
+        std::fs::write(&path, original).unwrap();
+        let params = make_params(&[("target_path", path.to_str().unwrap()), ("section", "s"), ("key", "k"), ("value", "v")]);
+        let r = IniExecutor.execute(&params, false);
+        assert!(r.error.is_some(), "non-UTF-8 file must fail the resource");
+        assert_eq!(std::fs::read(&path).unwrap(), original);
     }
 }

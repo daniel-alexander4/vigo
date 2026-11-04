@@ -62,6 +62,24 @@ pub fn configure_process_group(_cmd: &mut tokio::process::Command) {
     // CREATE_NEW_PROCESS_GROUP, but we don't need it for our use case.
 }
 
+/// [`configure_process_group`] for a `std::process::Command`: the child leads
+/// its own process group (pgid == pid), so [`kill_process_tree`]'s `killpg`
+/// reaches it and everything it forked. Without this the child sits in the
+/// agent's group and `killpg(child_pid)` signals nothing (ESRCH).
+#[cfg(unix)]
+pub fn configure_std_process_group(cmd: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::setpgid(0, 0);
+            Ok(())
+        });
+    }
+}
+
+#[cfg(not(unix))]
+pub fn configure_std_process_group(_cmd: &mut std::process::Command) {}
+
 /// Apply nice (CPU) and ionice (I/O) priority to a std::process::Command.
 /// `nice_level` is clamped to 0..=19.
 ///

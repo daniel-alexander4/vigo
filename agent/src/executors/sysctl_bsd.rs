@@ -79,7 +79,14 @@ impl Executor for SysctlBsdExecutor {
         // Persist to /etc/sysctl.conf if requested.
         if params.get("persist").map(|s| s.as_str()) == Some("true") {
             let conf_path = "/etc/sysctl.conf";
-            let content = std::fs::read_to_string(conf_path).unwrap_or_default();
+            let content = match super::read_for_edit(conf_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    result.error = Some(e);
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
             let line = format!("{}={}", key, value);
             let mut found = false;
             let mut new_lines: Vec<String> = Vec::new();

@@ -52,7 +52,7 @@ impl MountExecutor {
             "{}\t{}\t{}\t{}\t{}\t{}\n",
             device, mount_point, fstype, options, dump, pass
         );
-        let mut content = std::fs::read_to_string(&self.fstab_path).unwrap_or_default();
+        let mut content = super::read_for_edit(&self.fstab_path)?;
         if !content.ends_with('\n') && !content.is_empty() {
             content.push('\n');
         }
@@ -62,7 +62,7 @@ impl MountExecutor {
     }
 
     fn remove_fstab_entry(&self, mount_point: &str) -> Result<bool, String> {
-        let content = std::fs::read_to_string(&self.fstab_path).unwrap_or_default();
+        let content = super::read_for_edit(&self.fstab_path)?;
         let mut lines: Vec<&str> = content.lines().collect();
         let original_len = lines.len();
 
@@ -97,7 +97,7 @@ impl MountExecutor {
         dump: &str,
         pass: &str,
     ) -> Result<bool, String> {
-        let content = std::fs::read_to_string(&self.fstab_path).unwrap_or_default();
+        let content = super::read_for_edit(&self.fstab_path)?;
         let desired = format!("{}\t{}\t{}\t{}\t{}\t{}", device, mount_point, fstype, options, dump, pass);
         let mut updated = false;
         let mut lines: Vec<String> = Vec::new();

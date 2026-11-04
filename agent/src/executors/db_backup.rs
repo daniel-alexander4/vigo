@@ -19,6 +19,10 @@ use std::path::Path;
 use std::time::Instant;
 use tracing::info;
 
+/// Ceiling on one database dump. A backstop against a wedged dump tool, not a
+/// performance bound — a multi-hundred-GB dump legitimately runs for hours.
+const DB_DUMP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6 * 3600);
+
 /// Builds the dump-tool argument vector given an output path.
 type DumpArgsFn = Box<dyn Fn(&str) -> Vec<String>>;
 
@@ -346,10 +350,14 @@ impl DbBackupExecutor {
         let args = args_fn(&dump_path);
 
         // For custom commands, run via shell. For built-in, run the tool directly.
+        // Bounded like every agent subprocess, but with a dump-sized ceiling
+        // (DefaultRunner's 300s default would kill a large dump mid-write) and
+        // niced: the dump client is I/O-heavy housekeeping.
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let run_result = if custom_command.is_some() {
-            self.runner.run("sh", &args.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+            self.runner.run_niced_timeout("sh", &arg_refs, super::PKG_NICE, DB_DUMP_TIMEOUT)
         } else {
-            self.runner.run(&tool, &args.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+            self.runner.run_niced_timeout(&tool, &arg_refs, super::PKG_NICE, DB_DUMP_TIMEOUT)
         };
 
         match run_result {

@@ -460,6 +460,7 @@ pub fn expr_string(expr: &WhenExpr) -> String {
 
 use serde_json::Value;
 use std::path::Path;
+#[cfg(windows)]
 use std::process::Command;
 
 /// Evaluate a builtin function call on the agent.
@@ -510,17 +511,30 @@ pub fn evaluate_builtin(name: &str, args: &[String], traits: &Value) -> Result<b
             let path = crate::platform::paths::default_flags_dir().join(&args[0]);
             Ok(path.exists())
         }
+        // has_command / has_service / has_package never paste their argument
+        // into a shell string: a `when:` arg is operator/var-controlled text,
+        // and `has_command('x; rm -rf /')` used to run the `rm`. The arg goes
+        // in as its own argv entry (after `--`, so a leading `-` can't be read
+        // as an option); has_command passes it to `sh` as positional `$1`.
         "has_command" => {
             check_arity(name, args, 1)?;
-            Ok(command_succeeds(&format!("command -v {} >/dev/null 2>&1", &args[0])))
+            #[cfg(unix)]
+            {
+                Ok(run_succeeds("/bin/sh", &["-c", "command -v -- \"$1\" >/dev/null 2>&1", "sh", &args[0]]))
+            }
+            #[cfg(not(unix))]
+            {
+                Ok(false)
+            }
         }
         "has_service" => {
             check_arity(name, args, 1)?;
-            Ok(command_succeeds(&format!("systemctl list-unit-files {}.service >/dev/null 2>&1", &args[0])))
+            let unit = format!("{}.service", &args[0]);
+            Ok(run_succeeds("systemctl", &["list-unit-files", "--", &unit]))
         }
         "has_package" => {
             check_arity(name, args, 1)?;
-            Ok(command_succeeds(&format!("dpkg -l {} >/dev/null 2>&1 || rpm -q {} >/dev/null 2>&1", &args[0], &args[0])))
+            Ok(run_succeeds("dpkg", &["-l", "--", &args[0]]) || run_succeeds("rpm", &["-q", "--", &args[0]]))
         }
         "os" => {
             check_arity(name, args, 1)?;
@@ -580,16 +594,24 @@ fn check_arity(name: &str, args: &[String], expected: usize) -> Result<()> {
     Ok(())
 }
 
+/// Ceiling for a `when:` builtin's probe subprocess. These run inline in the
+/// convergence pass, per resource, so they are bounded like every other
+/// agent subprocess (own process group, killed as a tree on expiry).
+const WHEN_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// run_succeeds runs `prog args…` directly (no shell) under the agent's
+/// bounded subprocess path; true iff it started and exited 0.
+fn run_succeeds(prog: &str, args: &[&str]) -> bool {
+    crate::executors::run_command_niced_timeout(prog, args, 0, WHEN_PROBE_TIMEOUT)
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// command_succeeds runs an operator-written shell command (`command_succeeds`
+/// builtin — the shell is the point there).
 fn command_succeeds(cmd: &str) -> bool {
     let (shell, shell_arg) = crate::platform::paths::shell_command();
-    Command::new(shell)
-        .arg(shell_arg)
-        .arg(cmd)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    run_succeeds(shell, &[shell_arg, cmd])
 }
 
 #[cfg(target_os = "linux")]
@@ -612,13 +634,7 @@ fn process_running(name: &str) -> bool {
 
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
 fn process_running(name: &str) -> bool {
-    Command::new("pgrep")
-        .args(["-x", name])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    run_succeeds("pgrep", &["-x", "--", name])
 }
 
 #[cfg(windows)]
@@ -774,22 +790,11 @@ fn version_ge(actual: &str, required: &str) -> bool {
 #[cfg(unix)]
 fn in_group(group: &str) -> bool {
     // Try getent first (Linux, FreeBSD, OpenBSD, NetBSD).
-    if let Ok(status) = Command::new("getent")
-        .args(["group", group])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-    {
-        return status.success();
+    match crate::executors::run_command_niced_timeout("getent", &["group", "--", group], 0, WHEN_PROBE_TIMEOUT) {
+        Ok(o) => o.status.success(),
+        // Fallback for macOS (no getent): use dscl.
+        Err(_) => run_succeeds("dscl", &[".", "-read", &format!("/Groups/{}", group)]),
     }
-    // Fallback for macOS: use dscl.
-    Command::new("dscl")
-        .args([".", "-read", &format!("/Groups/{}", group)])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
 }
 
 #[cfg(windows)]
@@ -1252,5 +1257,22 @@ mod tests {
         assert!(version_ge("22.10", "22.04"));
         assert!(!version_ge("22.04", "22.10"));
         assert!(version_ge("1.0.0", "1.0.0")); // exactly equal
+    }
+
+    /// has_command / has_service / has_package must never hand their argument
+    /// to a shell: `has_command('true; touch X')` used to run the touch.
+    #[cfg(unix)]
+    #[test]
+    fn has_builtins_do_not_shell_inject() {
+        let dir = tempfile::tempdir().unwrap();
+        let pwned = dir.path().join("pwned");
+        let t = Value::Null;
+        for f in ["has_command", "has_service", "has_package"] {
+            let arg = format!("x; touch {}", pwned.display());
+            let _ = evaluate_builtin(f, &[arg], &t);
+            assert!(!pwned.exists(), "{f} executed an injected shell command");
+        }
+        assert!(evaluate_builtin("has_command", &["sh".to_string()], &t).unwrap());
+        assert!(!evaluate_builtin("has_command", &["no-such-cmd-vigo-t4c".to_string()], &t).unwrap());
     }
 }

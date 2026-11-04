@@ -60,7 +60,14 @@ impl Executor for TimezoneIllumosExecutor {
         }
 
         // Update TZ= line in /etc/default/init.
-        let content = std::fs::read_to_string("/etc/default/init").unwrap_or_default();
+        let content = match super::read_for_edit("/etc/default/init") {
+            Ok(c) => c,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
         let mut found = false;
         let mut lines: Vec<String> = content.lines().map(|line| {
             if line.trim().starts_with("TZ=") {

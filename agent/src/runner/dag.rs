@@ -25,6 +25,28 @@ pub struct ResourceNode {
 /// Maps a resource name → list of resource names to notify when it changes.
 pub type NotifyMap = HashMap<String, Vec<String>>;
 
+/// Internal param carrying a resource's own `notify:` list from
+/// `policy::eval` to [`build_dag`] (JSON array). Removed from the node's
+/// params here — executors never see it.
+pub const NOTIFY_TARGETS_PARAM: &str = "_notify_targets";
+/// Internal param carrying a resource's own `subscribes:` list (JSON array).
+pub const SUBSCRIBE_TARGETS_PARAM: &str = "_subscribe_targets";
+/// Marker [`build_dag`] sets on every node that subscribes to anything
+/// (resource- or configcrate-level), so executors can tell "run only when
+/// triggered" apart from an ordinary resource (exec skips untriggered; the
+/// runner turns an untriggered `restarted`/`reloaded` service into `running`).
+pub const SUBSCRIBER_PARAM: &str = "_subscribes";
+
+/// encode_targets serializes a notify/subscribes list for the param carrier.
+pub fn encode_targets(targets: &[String]) -> String {
+    serde_json::to_string(targets).unwrap_or_default()
+}
+
+/// decode_targets is the inverse of [`encode_targets`]; malformed → empty.
+pub fn decode_targets(raw: &str) -> Vec<String> {
+    serde_json::from_str(raw).unwrap_or_default()
+}
+
 /// Build the execution DAG from proto modules.
 ///
 /// Returns (resource_nodes, notify_map) where notify_map maps resource name →
@@ -39,17 +61,36 @@ pub fn build_dag(modules: &[Configcrate]) -> Result<(Vec<ResourceNode>, NotifyMa
 
     for module in modules {
         for res in &module.resources {
+            // Convert from proto's BTreeMap (sorted, for deterministic
+            // encoding) to ResourceNode's HashMap — executors and
+            // guardrails are all typed against HashMap, and iteration
+            // order doesn't matter past this point.
+            let mut params: HashMap<String, String> =
+                res.params.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            // A node's notify/subscribes = its configcrate's (the compiled
+            // `Configcrate` path) plus its own (the param carrier from
+            // `policy::eval`). Each node resolves only its own lists below,
+            // so a resource-level `notify:` makes only that resource notify.
+            let mut notify = module.notify.clone();
+            let mut subscribes = module.subscribes.clone();
+            if let Some(raw) = params.remove(NOTIFY_TARGETS_PARAM) {
+                append_unique(&mut notify, &decode_targets(&raw));
+            }
+            if let Some(raw) = params.remove(SUBSCRIBE_TARGETS_PARAM) {
+                append_unique(&mut subscribes, &decode_targets(&raw));
+            }
+            if subscribes.is_empty() {
+                params.remove(SUBSCRIBER_PARAM);
+            } else {
+                params.insert(SUBSCRIBER_PARAM.to_string(), "true".to_string());
+            }
             let node = ResourceNode {
                 name: res.name.clone(),
                 resource_type: res.r#type.clone(),
-                // Convert from proto's BTreeMap (sorted, for deterministic
-                // encoding) to ResourceNode's HashMap — executors and
-                // guardrails are all typed against HashMap, and iteration
-                // order doesn't matter past this point.
-                params: res.params.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                params,
                 depends_on: module.depends_on.clone(),
-                notify: module.notify.clone(),
-                subscribes: module.subscribes.clone(),
+                notify,
+                subscribes,
                 configcrate_name: module.name.clone(),
                 when: res.when.clone(),
             };
@@ -81,55 +122,34 @@ pub fn build_dag(modules: &[Configcrate]) -> Result<(Vec<ResourceNode>, NotifyMa
     // Build notify map.
     let mut notify_map: HashMap<String, Vec<String>> = HashMap::new();
 
-    // Resolve Notify: try module name first, then resource name.
+    // Resolve Notify per node: a target naming a configcrate expands to all
+    // its resources, otherwise it names a resource. Only THIS node notifies —
+    // a configcrate-level list reaches every resource because every node in
+    // that configcrate carries it.
     for node in &nodes {
         for target in &node.notify {
             if let Some(target_resources) = module_resources.get(target) {
-                // Module-level: all resources in this module notify all resources in target module.
-                if let Some(source_resources) = module_resources.get(&node.configcrate_name) {
-                    for src in source_resources {
-                        append_unique(
-                            notify_map.entry(src.clone()).or_default(),
-                            target_resources,
-                        );
-                    }
-                }
+                append_unique(notify_map.entry(node.name.clone()).or_default(), target_resources);
             } else if all_resource_names.contains(target) {
-                // Resource-level: this resource's module resources notify the target resource.
-                if let Some(source_resources) = module_resources.get(&node.configcrate_name) {
-                    let target_vec = vec![target.clone()];
-                    for src in source_resources {
-                        append_unique(
-                            notify_map.entry(src.clone()).or_default(),
-                            &target_vec,
-                        );
-                    }
-                }
+                append_unique(
+                    notify_map.entry(node.name.clone()).or_default(),
+                    std::slice::from_ref(target),
+                );
             }
         }
     }
 
-    // Normalize subscribes → notify: try module name first, then resource name.
+    // Normalize subscribes → notify, per node: the subscribed resource (or
+    // every resource of the subscribed configcrate) notifies THIS node.
     for node in &nodes {
         for sub in &node.subscribes {
+            let me = std::slice::from_ref(&node.name);
             if let Some(sub_resources) = module_resources.get(sub) {
-                // Module-level: all resources in subscribed module notify all resources in this module.
-                if let Some(subscriber_resources) = module_resources.get(&node.configcrate_name) {
-                    for sub_res in sub_resources {
-                        append_unique(
-                            notify_map.entry(sub_res.clone()).or_default(),
-                            subscriber_resources,
-                        );
-                    }
+                for sub_res in sub_resources {
+                    append_unique(notify_map.entry(sub_res.clone()).or_default(), me);
                 }
             } else if all_resource_names.contains(sub) {
-                // Resource-level: the subscribed resource notifies all resources in this module.
-                if let Some(subscriber_resources) = module_resources.get(&node.configcrate_name) {
-                    append_unique(
-                        notify_map.entry(sub.clone()).or_default(),
-                        subscriber_resources,
-                    );
-                }
+                append_unique(notify_map.entry(sub.clone()).or_default(), me);
             }
         }
     }
@@ -621,5 +641,55 @@ mod tests {
             },
         ];
         assert!(needs_topo_sort(&nodes));
+    }
+
+    fn with_param(mut r: Resource, k: &str, v: String) -> Resource {
+        r.params.insert(k.to_string(), v);
+        r
+    }
+
+    /// A resource's own `notify:` makes only THAT resource notify — not its
+    /// configcrate siblings — and its own `subscribes:` wires only it.
+    #[test]
+    fn resource_level_notify_and_subscribes_stay_per_resource() {
+        let modules = vec![
+            Configcrate {
+                name: "web".into(),
+                resources: vec![
+                    with_param(make_resource("site-conf", "file"), NOTIFY_TARGETS_PARAM, encode_targets(&["reload".into()])),
+                    make_resource("motd", "file"),
+                    with_param(make_resource("reload", "service"), SUBSCRIBE_TARGETS_PARAM, encode_targets(&["tls-cert".into()])),
+                    make_resource("logrotate-cfg", "file"),
+                ],
+                ..Default::default()
+            },
+            Configcrate { name: "tls".into(), resources: vec![make_resource("tls-cert", "file")], ..Default::default() },
+        ];
+        let (nodes, nm) = build_dag(&modules).unwrap();
+        assert_eq!(nm.get("site-conf").unwrap(), &vec!["reload".to_string()]);
+        assert!(nm.get("motd").is_none(), "sibling must not notify: {:?}", nm.get("motd"));
+        assert_eq!(nm.get("tls-cert").unwrap(), &vec!["reload".to_string()]);
+
+        let by = |n: &str| nodes.iter().find(|x| x.name == n).unwrap();
+        // Subscriber marker on the subscriber only; carriers removed from params.
+        assert_eq!(by("reload").params.get(SUBSCRIBER_PARAM).map(|s| s.as_str()), Some("true"));
+        assert!(!by("logrotate-cfg").params.contains_key(SUBSCRIBER_PARAM));
+        assert!(!by("site-conf").params.contains_key(NOTIFY_TARGETS_PARAM));
+        assert!(!by("reload").params.contains_key(SUBSCRIBE_TARGETS_PARAM));
+    }
+
+    /// Configcrate-level subscribes (compiled path) marks every resource.
+    #[test]
+    fn module_level_subscribes_marks_every_resource() {
+        let modules = vec![Configcrate {
+            name: "ssh".into(),
+            resources: vec![make_resource("sshd-config", "file"), make_resource("restart-sshd", "exec")],
+            subscribes: vec!["sshd-config".into()],
+            ..Default::default()
+        }];
+        let (nodes, _) = build_dag(&modules).unwrap();
+        for n in &nodes {
+            assert_eq!(n.params.get(SUBSCRIBER_PARAM).map(|s| s.as_str()), Some("true"), "{}", n.name);
+        }
     }
 }

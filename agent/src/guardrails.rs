@@ -49,7 +49,6 @@ const PROTECTED_PATHS: &[&str] = &[
     // Server
     "/usr/local/sbin/vigosrv",
     "/usr/local/bin/vigocli",
-    "/usr/local/sbin/vigo-license-manager",
     "/srv/vigo/",
     "/etc/systemd/system/vigosrv.service",
 ];
@@ -66,7 +65,7 @@ const PROTECTED_SERVICES: &[&str] = &["vigo-envoy", "vigosrv"];
 
 /// Process names that must never be killed/stopped by a `process` resource.
 /// (The agent binary runs as `vigo`; the server as `vigosrv`.)
-const PROTECTED_PROCESSES: &[&str] = &["vigo", "vigosrv", "vigo-envoy", "vigo-license-manager"];
+const PROTECTED_PROCESSES: &[&str] = &["vigo", "vigosrv", "vigo-envoy"];
 
 /// Packages that must never be removed.
 const PROTECTED_PACKAGES: &[&str] = &["vigo", "vigosrv", "vigocli"];
@@ -107,7 +106,6 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     "rm /usr/local/sbin/vigo",
     "rm /usr/local/sbin/vigosrv",
     "rm /usr/local/bin/vigocli",
-    "rm /usr/local/sbin/vigo-license-manager",
     "rm -rf /etc/vigo",
     "rm -rf /var/lib/vigo",
     "rm -rf /srv/vigo",
@@ -479,22 +477,30 @@ fn check_service_resource(
     }
 
     let state = params.get("state").map(|s| s.as_str()).unwrap_or("");
+    let disables = params.get("enabled").is_some_and(|v| v.trim() == "false");
 
-    for &protected in PROTECTED_SERVICES {
-        if service == protected {
-            match state {
-                "stopped" | "disabled" | "masked" | "absent" => {
-                    return Some(Violation {
-                        resource_name: resource_name.to_string(),
-                        resource_type: resource_type.to_string(),
-                        reason: format!(
-                            "cannot set protected service {:?} to state {:?}",
-                            service, state
-                        ),
-                    });
-                }
-                _ => {}
-            }
+    // The service executors accept a comma-separated list (`service: "nginx,
+    // vigo-envoy"`) and act on each name, so each name is checked — comparing
+    // the whole string let a list smuggle a protected service past. A
+    // `.service` unit suffix names the same unit.
+    for name in service.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let unit = name.strip_suffix(".service").unwrap_or(name);
+        if !PROTECTED_SERVICES.contains(&unit) {
+            continue;
+        }
+        if matches!(state, "stopped" | "disabled" | "masked" | "absent") {
+            return Some(Violation {
+                resource_name: resource_name.to_string(),
+                resource_type: resource_type.to_string(),
+                reason: format!("cannot set protected service {:?} to state {:?}", unit, state),
+            });
+        }
+        if disables {
+            return Some(Violation {
+                resource_name: resource_name.to_string(),
+                resource_type: resource_type.to_string(),
+                reason: format!("cannot disable protected service {:?} (enabled: false)", unit),
+            });
         }
     }
 
@@ -1008,5 +1014,23 @@ mod tests {
         // are the real enforcement; the free-form command surface is not.
         assert!(check_push_command("S=systemctl; $S stop vigo-envoy").is_none());
         assert!(check_push_command("kill -9 $(pidof vigo-envoy)").is_none());
+    }
+
+    #[test]
+    fn protected_service_checked_per_listed_name_and_on_disable() {
+        let svc = |name: &str, state: &str, enabled: Option<&str>| {
+            let mut p = params(&[("service", name), ("state", state)]);
+            if let Some(e) = enabled {
+                p.insert("enabled".into(), e.into());
+            }
+            check_resource("r", "service", &p)
+        };
+        assert!(svc("nginx,vigo-envoy", "stopped", None).is_some(), "comma list smuggled a protected service");
+        assert!(svc("nginx, vigosrv", "stopped", None).is_some());
+        assert!(svc("vigo-envoy.service", "stopped", None).is_some());
+        assert!(svc("vigo-envoy", "running", Some("false")).is_some(), "enabled: false must be refused");
+        assert!(svc("vigo-envoy", "running", Some("true")).is_none());
+        assert!(svc("nginx,postfix", "stopped", None).is_none());
+        assert!(svc("nginx", "running", Some("false")).is_none());
     }
 }

@@ -32,11 +32,30 @@ impl Executor for JsonFileExecutor {
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
         let indent = params.get("indent").map(|s| s.as_str()).unwrap_or("  ");
 
-        // Read existing file or start with empty object.
-        let mut doc: serde_json::Value = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        // Read existing file or start with empty object. Only a missing file
+        // (or an empty one) starts empty: a read error or content that isn't
+        // JSON fails the resource rather than being overwritten with `{}` +
+        // this one key.
+        let raw = match super::read_for_edit(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
+        let mut doc: serde_json::Value = if raw.trim().is_empty() {
+            serde_json::Value::Object(serde_json::Map::new())
+        } else {
+            match serde_json::from_str(&raw) {
+                Ok(v) => v,
+                Err(e) => {
+                    result.error = Some(format!("parse {} as JSON: {} (refusing to rewrite it)", path, e));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            }
+        };
 
         let segments: Vec<&str> = key.split('.').collect();
 
@@ -344,5 +363,19 @@ mod tests {
         // File should be unchanged because of dry_run.
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, original);
+    }
+
+    /// Unparseable JSON is not "empty": rewriting it as `{key: value}` would
+    /// discard the whole document.
+    #[test]
+    fn unparseable_json_fails_and_is_left_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("c.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        let params: HashMap<String, String> = [("target_path", path.to_str().unwrap()), ("key", "a"), ("value", "1")]
+            .iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let r = JsonFileExecutor.execute(&params, false);
+        assert!(r.error.is_some());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ not json");
     }
 }
