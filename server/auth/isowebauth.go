@@ -4,6 +4,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/httpsec"
@@ -30,7 +32,12 @@ type IsowebauthProvider struct {
 	namespace   string
 	auditWriter auditRecorder
 	i18n        config.I18nSection
+	authLimiter *authLimiter
 }
+
+// sshKeygenTimeout bounds one `ssh-keygen -Y verify`. Verification of one
+// signature is milliseconds; the bound only matters for a wedged process.
+const sshKeygenTimeout = 5 * time.Second
 
 // IsowebauthConfig holds the isowebauth configuration from server.yaml.
 type IsowebauthConfig struct {
@@ -55,6 +62,9 @@ func NewIsowebauthProvider(cfg IsowebauthConfig, sessions *SessionManager, userS
 		userStore:  userStore,
 		tokenStore: tokenStore,
 		namespace:  ns,
+		// Same per-IP budget as basic login: each verify spawns ssh-keygen,
+		// so an unthrottled caller could fork processes at will.
+		authLimiter: newAuthLimiter(10, 10),
 	}, nil
 }
 
@@ -159,7 +169,16 @@ func (p *IsowebauthProvider) handleChallenge(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// verifyFailedMsg is the one error every failed verify returns, whatever
+// the cause (unknown user, no key on file, bad signature), so the endpoint
+// is not a username oracle. The audit entry keeps the real reason.
+const verifyFailedMsg = "authentication failed"
+
 func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request) {
+	if !allowAuthAttempt(r, p.authLimiter, p.auditWriter) {
+		writeVerifyError(w, http.StatusTooManyRequests, "too many authentication attempts — wait a minute and try again")
+		return
+	}
 	var req struct {
 		Challenge string `json:"challenge"`
 		Signature string `json:"signature"`
@@ -188,26 +207,20 @@ func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request
 	}
 	if user == nil {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "user not found", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "user not found"})
+		writeVerifyError(w, http.StatusUnauthorized, verifyFailedMsg)
 		return
 	}
 	if user.SSHPublicKey == "" {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "no SSH key configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "no SSH key configured for user"})
+		writeVerifyError(w, http.StatusUnauthorized, verifyFailedMsg)
 		return
 	}
 
 	// Verify the signature using ssh-keygen.
-	if err := verifySSHSignature(req.Username, user.SSHPublicKey, req.Challenge, req.Signature, p.namespace); err != nil {
+	if err := verifySSHSignature(r.Context(), req.Username, user.SSHPublicKey, req.Challenge, req.Signature, p.namespace); err != nil {
 		slog.Warn("isowebauth signature verification failed", "username", req.Username, "error", err)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "signature verification failed", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "signature verification failed"})
+		writeVerifyError(w, http.StatusUnauthorized, verifyFailedMsg)
 		return
 	}
 
@@ -220,6 +233,12 @@ func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request
 	recordAudit(r.Context(), p.auditWriter, "auth.login", req.Username, "auth", "isowebauth login", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+}
+
+func writeVerifyError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
 func (p *IsowebauthProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +255,7 @@ func (p *IsowebauthProvider) handleLogout(w http.ResponseWriter, r *http.Request
 // verifySSHSignature verifies an SSH signature using ssh-keygen -Y verify.
 // This shells out to ssh-keygen because Go's x/crypto/ssh doesn't support
 // the OpenSSH signature format that isowebauth produces.
-func verifySSHSignature(username, pubkey, challenge, signature, namespace string) error {
+func verifySSHSignature(ctx context.Context, username, pubkey, challenge, signature, namespace string) error {
 	tmpDir, err := os.MkdirTemp("", "vigo-iwa-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
@@ -262,8 +281,11 @@ func verifySSHSignature(username, pubkey, challenge, signature, namespace string
 		return fmt.Errorf("writing challenge: %w", err)
 	}
 
-	// Run ssh-keygen -Y verify.
-	cmd := exec.Command("ssh-keygen", "-Y", "verify",
+	// Run ssh-keygen -Y verify, bounded: the request context plus a hard
+	// timeout, so a wedged ssh-keygen cannot pin the handler.
+	ctx, cancel := context.WithTimeout(ctx, sshKeygenTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "verify",
 		"-f", allowedSigners,
 		"-I", username,
 		"-n", namespace,

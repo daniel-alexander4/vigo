@@ -154,16 +154,23 @@ func (p *BasicProvider) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // allowAuthAttempt applies the per-IP auth rate limit and audits a denial.
-// Nil-guarded so tests that construct a bare BasicProvider aren't throttled.
 func (p *BasicProvider) allowAuthAttempt(r *http.Request) bool {
-	if p.authLimiter == nil {
+	return allowAuthAttempt(r, p.authLimiter, p.auditWriter)
+}
+
+// allowAuthAttempt is the per-IP auth rate limit shared by every provider
+// that verifies a credential over HTTP (basic login + TOTP, isowebauth
+// verify). Nil-guarded so tests that construct a bare provider aren't
+// throttled.
+func allowAuthAttempt(r *http.Request, limiter *authLimiter, audit auditRecorder) bool {
+	if limiter == nil {
 		return true
 	}
 	ip := clientIP(r)
-	if p.authLimiter.allow(ip) {
+	if limiter.allow(ip) {
 		return true
 	}
-	recordAudit(r.Context(), p.auditWriter, "auth.rate_limited", "", "auth", "auth attempt rate-limited", fmt.Sprintf(`{"ip":%q}`, ip))
+	recordAudit(r.Context(), audit, "auth.rate_limited", "", "auth", "auth attempt rate-limited", fmt.Sprintf(`{"ip":%q}`, ip))
 	return false
 }
 
