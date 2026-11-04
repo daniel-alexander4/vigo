@@ -293,6 +293,7 @@ type metricsFleetAdapter struct {
 func (a *metricsFleetAdapter) ConvergenceSummary() metrics.ConvergenceSnapshot {
 	s := a.fleetIndex.ConvergenceSummary()
 	return metrics.ConvergenceSnapshot{
+		Total:     s.Total,
 		Converged: s.Converged,
 		Degraded:  s.Degraded,
 		Failed:    s.Failed,

@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/traits"
 )
@@ -33,6 +35,7 @@ type EnvoySnapshot struct {
 // axis (Converged/Degraded/Failed/NoData), drift axis
 // (Changed/Diverged), and reachability (Offline). Diverged ⊆ Changed.
 type ConvergenceSnapshot struct {
+	Total     int // non-revoked fleet size
 	Converged int
 	Degraded  int
 	Failed    int
@@ -97,7 +100,6 @@ const swarmRefreshInterval = 5 * time.Minute
 // Collector periodically queries the database and fleet to update gauge metrics.
 // Runs in a background goroutine — never on the request hot path.
 type Collector struct {
-	queries          *db.Queries
 	sqlDB            *sql.DB
 	fleetSource      FleetSource
 	swarmSource      SwarmSource
@@ -111,12 +113,12 @@ type Collector struct {
 }
 
 // NewCollector creates a new metrics collector. fleetSource and swarmSource
-// may be nil (bolt mode / swarm disabled). The Metrics value is
+// may be nil (tests / swarm disabled); a nil fleetSource leaves the envoy
+// and convergence gauges at zero. The Metrics value is
 // the per-instance collector set; the gauges it owns are the ones this
 // collector mutates each tick.
-func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, swarmSource SwarmSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
+func NewCollector(sqlDB *sql.DB, fleetSource FleetSource, swarmSource SwarmSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
 	return &Collector{
-		queries:          queries,
 		sqlDB:            sqlDB,
 		fleetSource:      fleetSource,
 		swarmSource:      swarmSource,
@@ -128,27 +130,6 @@ func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, s
 
 // UpdateGauges queries the database and fleet and updates all gauge metrics.
 func (c *Collector) UpdateGauges(ctx context.Context) error {
-	envoys, err := c.queries.ListEnvoys(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Single pass: compute all envoy metrics from DB.
-	c.metrics.EnvoysTotal.Set(float64(len(envoys)))
-
-	now := time.Now()
-	oneHourAgo := now.Add(-1 * time.Hour)
-	var activeCount int
-	for _, n := range envoys {
-		if n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo) {
-			activeCount++
-		}
-		if n.LastSeen.Valid {
-			c.metrics.CheckinAgeDist.Observe(now.Sub(n.LastSeen.Time).Seconds())
-		}
-	}
-	c.metrics.EnvoysActive.Set(float64(activeCount))
-
 	// Update database size metric.
 	if c.sqlDB != nil {
 		if size, err := db.DatabaseSizeBytes(c.sqlDB); err == nil {
@@ -156,10 +137,13 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		}
 	}
 
-	// Fleet-backed metrics (convergence breakdown, security, risk).
+	// Fleet-backed metrics (envoy counts, check-in age, convergence
+	// breakdown, security, risk). The FleetIndex is the authoritative
+	// fleet state, so nothing here re-reads the envoys table.
 	if c.fleetSource != nil {
 		// Convergence breakdown — O(1) from pre-computed counters.
 		summary := c.fleetSource.ConvergenceSummary()
+		c.metrics.EnvoysTotal.Set(float64(summary.Total))
 		c.metrics.ConvergenceConverged.Set(float64(summary.Converged))
 		c.metrics.ConvergenceDegraded.Set(float64(summary.Degraded))
 		c.metrics.ConvergenceFailed.Set(float64(summary.Failed))
@@ -168,22 +152,16 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		c.metrics.ConvergenceDiverged.Set(float64(summary.Diverged))
 		c.metrics.ConvergenceOffline.Set(float64(summary.Offline))
 
-		// Fleet-wide convergence fraction (0.0-1.0), derived from the same
-		// convergence SoT and denominator the /convergence page uses:
-		// Converged / (Total - Offline). The failure axis sums to the fleet
-		// total, so Total = Converged+Degraded+Failed+NoData. Offline envoys
-		// are excluded — they are powered-off/decommissioned nodes, not
-		// convergence failures.
-		total := summary.Converged + summary.Degraded + summary.Failed + summary.NoData
-		activeTotal := total - summary.Offline
-		if activeTotal > 0 {
-			c.metrics.ConvergencePct.Set(float64(summary.Converged) / float64(activeTotal))
-		} else {
-			c.metrics.ConvergencePct.Set(0)
-		}
+		// Fleet-wide convergence fraction (0.0-1.0): the convergence SoT
+		// helper over its active denominator (Total - Offline), scaled from
+		// the helper's 0-100 to this gauge's 0-1 — the same figure the
+		// /convergence page shows.
+		c.metrics.ConvergencePct.Set(convergence.ConvergedPct(int64(summary.Converged), int64(summary.Total)-int64(summary.Offline)) / 100)
 
-		// Single snapshot — one RLock, reused for security + risk.
+		// Single snapshot — one RLock, reused for activity, check-in age,
+		// security and risk.
 		allEnvoys := c.fleetSource.AllEnvoySnapshots()
+		updateActivityMetrics(c.metrics, allEnvoys, time.Now(), c.baseInterval, c.offlineThreshold)
 		updateSecurityMetrics(c.metrics, allEnvoys)
 		updateRiskMetrics(c.metrics, allEnvoys, c.baseInterval, c.offlineThreshold)
 	}
@@ -199,6 +177,28 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// updateActivityMetrics sets the active-envoy gauge and the check-in age
+// snapshot. "Active" is the canonical freshness predicate (not stale for the
+// envoy's own cycle — the rule the UI envoys page and the stale notifier
+// use), not a fixed one-hour window. Revoked and never-seen envoys are
+// excluded from both. The age distribution is a snapshot of the fleet now,
+// replaced every tick, never accumulated across ticks.
+func updateActivityMetrics(m *Metrics, envoys []EnvoySnapshot, now time.Time, baseInterval, offlineThreshold time.Duration) {
+	var active int
+	ages := make([]float64, 0, len(envoys))
+	for _, es := range envoys {
+		if es.Revoked || es.LastSeen.IsZero() {
+			continue
+		}
+		if !freshness.IsStaleFromCycle(es.LastSeen, baseInterval, es.ObservedCycle, offlineThreshold) {
+			active++
+		}
+		ages = append(ages, now.Sub(es.LastSeen).Seconds())
+	}
+	m.EnvoysActive.Set(float64(active))
+	m.CheckinAgeDist.Set(ages)
 }
 
 // updateSwarmMetrics sets the swarm-substrate, content-subsystem, and

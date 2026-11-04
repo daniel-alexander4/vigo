@@ -17,8 +17,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	m.CheckinsTotal.WithLabelValues("test").Add(0)
 	m.DriftDetected.WithLabelValues("test", "test").Add(0)
 	m.ConfigcrateActions.WithLabelValues("test", "test").Add(0)
-	m.ConvergenceStatus.WithLabelValues("test", "test").Set(0)
-	m.CheckinAgeDist.Observe(0)
+	m.CheckinAgeDist.Set([]float64{0})
 	m.RunDuration.WithLabelValues("test").Observe(0)
 	m.SigVerifyFailed.WithLabelValues("test").Add(0)
 	m.GRPCRequestsTotal.WithLabelValues("test", "test").Add(0)
@@ -56,7 +55,6 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"vigo_run_duration_seconds",
 		"vigo_drift_detected_total",
 		"vigo_configcrate_actions_total",
-		"vigo_convergence_status",
 		"vigo_convergence_pct",
 		"vigo_checkin_age_seconds",
 		"vigo_sig_verify_failed_total",
@@ -114,14 +112,13 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	m.EnvoysTotal.Set(5)
 	m.EnvoysActive.Set(3)
 	m.ConvergencePct.Set(0.85)
-	m.ConvergenceStatus.WithLabelValues("testnode", "converged").Set(1)
 	m.UptimeSeconds.Set(3600)
 	m.BuildInfo.WithLabelValues("dev").Set(1)
 	m.StreamsActive.Set(5)
 	m.FleetIndexDirtyCount.Set(42)
 
 	// Verify histograms can observe.
-	m.CheckinAgeDist.Observe(30.0)
+	m.CheckinAgeDist.Set([]float64{30.0})
 	m.RunDuration.WithLabelValues("testnode").Observe(1.5)
 	m.GRPCRequestDuration.WithLabelValues("/vigo.VigoAgent/CheckIn").Observe(0.05)
 	m.WebhookDuration.Observe(0.5)

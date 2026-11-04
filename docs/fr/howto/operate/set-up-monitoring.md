@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:c731c15ef2b861c3bdc97f15dd1795ad9898925dce74adee88a5a1105ae9e469 -->
+<!-- vigo-i18n source_sha:6a69d5fc613733698ee7116c6a07647eee3c19633ecb7643f2091e37161c58ff -->
 
 # Mettre en place la supervision
 
@@ -19,25 +19,19 @@ Le serveur Vigo expose les métriques Prometheus sur `GET /metrics` sur le port 
 | Métrique | Type | Description |
 |--------|------|-------------|
 | `vigo_nodes_total` | Gauge | Nombre total d'Envoys enrôlés |
-| `vigo_nodes_active_total` | Gauge | Envoys ayant fait un check-in dans la dernière heure |
-| `vigo_convergence_pct` | Gauge | Pourcentage de conformité à l'échelle de la flotte (0.0 à 1.0) |
+| `vigo_nodes_active_total` | Gauge | Envoys non révoqués dans leur fenêtre de fraîcheur (non obsolètes pour leur propre cycle de check-in — la même règle que la page des Envoys et la notification d'Envoy obsolète) |
+| `vigo_convergence_pct` | Gauge | Fraction de convergence à l'échelle de la flotte (0.0 à 1.0) : converged / (total − offline), le même chiffre que la page de convergence |
 | `vigo_database_size_bytes` | Gauge | Taille actuelle du fichier de base de données SQLite en octets |
-
-### Conformité
-
-| Métrique | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `vigo_compliance_status` | Gauge | `envoy`, `status` | Statut de convergence par Envoy (1 pour le statut courant). Valeurs de statut : converged, degraded, failed, no data (axe échec) ; changed, diverged (axe dérive) ; offline |
 
 ### Check-ins
 
 | Métrique | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_checkins_total` | Counter | `status` | Nombre total de check-ins d'agents |
-| `vigo_checkin_age_seconds` | Histogram | | Distribution des secondes écoulées depuis le dernier check-in sur l'ensemble des Envoys |
+| `vigo_checkin_age_seconds` | Histogram (instantané) | | Distribution actuelle des secondes écoulées depuis le dernier check-in sur les Envoys non révoqués. Remplacée à chaque tick du collecteur, non cumulative : interrogez-la sans `rate()` |
 | `vigo_envoy_state_transitions_total` | Counter | `transition` | Bascules d'accessibilité : `offline` (non-obsolète→obsolète) et `online` (obsolète→non-obsolète). Une hausse des transitions `offline` alors que les Envoys sont actifs indique que le seuil d'obsolescence les fait osciller sous charge |
 
-L'histogramme `vigo_checkin_age_seconds` utilise des buckets personnalisés : 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. Les buckets sous les 60s chevauchent le seuil d'obsolescence de 30s (`freshness.MinStaleThreshold`) afin que l'histogramme puisse mesurer à quel point des check-ins sains s'approchent de la limite d'obsolescence sous une cadence rapide (1s par défaut). Cela remplace les jauges de dernière-vue par Envoy pour éviter une explosion de cardinalité à l'échelle.
+L'histogramme `vigo_checkin_age_seconds` utilise des buckets personnalisés : 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. Les buckets sous les 60s chevauchent le seuil d'obsolescence de 30s (`freshness.MinStaleThreshold`) afin que l'histogramme puisse mesurer à quel point des check-ins sains s'approchent de la limite d'obsolescence sous une cadence rapide (1s par défaut). Chaque scrape montre la flotte telle qu'elle est maintenant (un échantillon par Envoy vu et non révoqué), donc `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)` donne l'âge médian actuel. Cela remplace les jauges de dernière-vue par Envoy pour éviter une explosion de cardinalité à l'échelle.
 
 ### gRPC
 
@@ -212,13 +206,13 @@ scrape_configs:
 ### Panneau Vue d'ensemble de la flotte
 
 - **Total Envoys** : `vigo_nodes_total`
-- **Envoys actifs (1h)** : `vigo_nodes_active_total`
+- **Envoys actifs** : `vigo_nodes_active_total`
 - **Conformité %** : `vigo_convergence_pct * 100`
 - **Taux de check-in** : `rate(vigo_checkins_total[5m])`
 
 ### Répartition de la conformité
 
-- Jauge empilée ou diagramme circulaire utilisant `vigo_compliance_status` groupé par `status`
+- Diagramme circulaire sur les jauges de l’axe échec `vigo_convergence_converged`, `_degraded`, `_failed`, `_no_data` (leur somme est la flotte)
 - Série temporelle de `vigo_convergence_pct` pour l'analyse de tendance
 
 ### Performance des exécutions
@@ -261,7 +255,7 @@ scrape_configs:
 
 ### Obsolescence des check-ins
 
-- **Âge médian des check-ins** : `histogram_quantile(0.5, rate(vigo_checkin_age_seconds_bucket[5m]))`
+- **Âge médian des check-ins** : `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)`
 - Alertez quand `histogram_quantile(0.95, ...)` dépasse votre intervalle de check-in attendu
 
 ## Intervalle de rafraîchissement des métriques
@@ -330,7 +324,7 @@ Pour les hôtes où Vigo ne gère pas la pile de supervision, importez chaque ta
 |-------|------|--------|
 | Total Nodes | Stat | `vigo_nodes_total` |
 | Active Nodes | Stat | `vigo_nodes_active_total` |
-| Compliance % | Gauge (0-100, rouge/jaune/vert) | `vigo_compliance_pct` |
+| Convergence % | Gauge (0-100, rouge/jaune/vert) | `vigo_convergence_pct * 100` |
 | Uptime | Stat | `vigo_uptime_seconds` |
 | Fleet size | Stat (enrôlés vs actifs) | `vigo_nodes_total` / `vigo_nodes_active_total` |
 | Active Streams | Stat | `vigo_streams_active` |
@@ -340,8 +334,8 @@ Pour les hôtes où Vigo ne gère pas la pile de supervision, importez chaque ta
 
 | Panneau | Type | Métrique |
 |-------|------|--------|
-| Compliance Status by Type | Diagramme circulaire (vert/jaune/rouge/gris) | `vigo_compliance_status` par label `status` |
-| Compliance % Over Time | Série temporelle | `vigo_compliance_pct` |
+| Convergence Status by Type | Diagramme circulaire (vert/jaune/rouge/gris) | `vigo_convergence_converged`, `_degraded`, `_failed`, `_no_data` |
+| Convergence % Over Time | Série temporelle | `vigo_convergence_pct * 100` |
 
 ### Ligne 3 — Check-in & gRPC
 

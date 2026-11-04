@@ -297,7 +297,7 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 		fleetSource = &metricsFleetAdapter{fleetIndex: s.fleetIndex}
 		swarmSource = newMetricsSwarmAdapter(s)
 	}
-	metricsCollector := metrics.NewCollector(s.queries, s.db, fleetSource, swarmSource, s.metrics, s.baseInterval, s.offlineThreshold)
+	metricsCollector := metrics.NewCollector(s.db, fleetSource, swarmSource, s.metrics, s.baseInterval, s.offlineThreshold)
 	daemon.SafeGo("metrics-collector", func() { metricsCollector.Run(ctx, s.metricsInterval) })
 
 	// Start stale envoy checker — fires envoy.stale events on transition.

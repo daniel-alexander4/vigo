@@ -18,25 +18,19 @@ The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (d
 | Metric | Type | Description |
 |--------|------|-------------|
 | `vigo_nodes_total` | Gauge | Total number of enrolled envoys |
-| `vigo_nodes_active_total` | Gauge | Envoys that checked in within the last hour |
-| `vigo_convergence_pct` | Gauge | Fleet-wide compliance percentage (0.0 to 1.0) |
+| `vigo_nodes_active_total` | Gauge | Non-revoked envoys within their freshness window (not stale for their own check-in cycle — the same rule as the envoys page and the stale-envoy notifier) |
+| `vigo_convergence_pct` | Gauge | Fleet-wide convergence fraction (0.0 to 1.0): converged / (total − offline), the same figure as the convergence page |
 | `vigo_database_size_bytes` | Gauge | Current SQLite database file size in bytes |
-
-### Compliance
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `vigo_compliance_status` | Gauge | `envoy`, `status` | Per-envoy convergence status (1 for current status). Status values: converged, degraded, failed, no data (failure axis); changed, diverged (drift axis); offline |
 
 ### Check-ins
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_checkins_total` | Counter | `status` | Total number of agent check-ins |
-| `vigo_checkin_age_seconds` | Histogram | | Distribution of seconds since last check-in across all envoys |
+| `vigo_checkin_age_seconds` | Histogram (snapshot) | | Current distribution of seconds since last check-in across non-revoked envoys. Replaced every collector tick, not cumulative: query it without `rate()` |
 | `vigo_envoy_state_transitions_total` | Counter | `transition` | Reachability edges: `offline` (non-stale→stale) and `online` (stale→non-stale). Rising `offline` transitions while envoys are live indicate the staleness floor is flapping them under load |
 
-The `vigo_checkin_age_seconds` histogram uses custom buckets: 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. The sub-60s buckets straddle the 30s staleness floor (`freshness.MinStaleThreshold`) so the histogram can measure how close healthy check-ins get to the stale boundary under a fast (1s-default) cadence. This replaced per-envoy last-seen gauges to avoid cardinality explosion at scale.
+The `vigo_checkin_age_seconds` histogram uses custom buckets: 5s, 15s, 30s, 45s, 60s, 120s, 300s, 600s, 900s, 1800s, 3600s, 7200s. The sub-60s buckets straddle the 30s staleness floor (`freshness.MinStaleThreshold`) so the histogram can measure how close healthy check-ins get to the stale boundary under a fast (1s-default) cadence. Each scrape shows the fleet as it is now (one sample per seen, non-revoked envoy), so `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)` is the current median age. It replaced per-envoy last-seen gauges to avoid cardinality explosion at scale.
 
 ### gRPC
 
@@ -211,13 +205,13 @@ scrape_configs:
 ### Fleet Overview Panel
 
 - **Total Envoys**: `vigo_nodes_total`
-- **Active Envoys (1h)**: `vigo_nodes_active_total`
+- **Active Envoys**: `vigo_nodes_active_total`
 - **Compliance %**: `vigo_convergence_pct * 100`
 - **Check-in Rate**: `rate(vigo_checkins_total[5m])`
 
 ### Compliance Breakdown
 
-- Stacked gauge or pie chart using `vigo_compliance_status` grouped by `status`
+- Pie chart over the failure-axis gauges `vigo_convergence_converged`, `_degraded`, `_failed`, `_no_data` (they sum to the fleet)
 - Time-series of `vigo_convergence_pct` for trend analysis
 
 ### Run Performance
@@ -260,7 +254,7 @@ scrape_configs:
 
 ### Check-in Staleness
 
-- **Median check-in age**: `histogram_quantile(0.5, rate(vigo_checkin_age_seconds_bucket[5m]))`
+- **Median check-in age**: `histogram_quantile(0.5, vigo_checkin_age_seconds_bucket)`
 - Alert when `histogram_quantile(0.95, ...)` exceeds your expected check-in interval
 
 ## Metrics Refresh Interval
@@ -329,7 +323,7 @@ For hosts where Vigo isn't managing the monitoring stack, import each dashboard 
 |-------|------|--------|
 | Total Nodes | Stat | `vigo_nodes_total` |
 | Active Nodes | Stat | `vigo_nodes_active_total` |
-| Compliance % | Gauge (0-100, red/yellow/green) | `vigo_compliance_pct` |
+| Convergence % | Gauge (0-100, red/yellow/green) | `vigo_convergence_pct * 100` |
 | Uptime | Stat | `vigo_uptime_seconds` |
 | Fleet size | Stat (enrolled vs active) | `vigo_nodes_total` / `vigo_nodes_active_total` |
 | Active Streams | Stat | `vigo_streams_active` |
@@ -339,8 +333,8 @@ For hosts where Vigo isn't managing the monitoring stack, import each dashboard 
 
 | Panel | Type | Metric |
 |-------|------|--------|
-| Compliance Status by Type | Pie chart (green/yellow/red/gray) | `vigo_compliance_status` by `status` label |
-| Compliance % Over Time | Time series | `vigo_compliance_pct` |
+| Convergence Status by Type | Pie chart (green/yellow/red/gray) | `vigo_convergence_converged`, `_degraded`, `_failed`, `_no_data` |
+| Convergence % Over Time | Time series | `vigo_convergence_pct * 100` |
 
 ### Row 3 — Check-in & gRPC
 

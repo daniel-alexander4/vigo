@@ -149,14 +149,17 @@
       "fieldConfig": {
         "overrides": [
           { "matcher": { "id": "byName", "options": "converged" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "relapsed" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "diverged" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "degraded" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "failed" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "offline" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "no_data" }, "properties": [{ "id": "color", "value": { "fixedColor": "text", "mode": "fixed" } }] }
         ]
       },
-      "targets": [{ "expr": "vigo_convergence_status", "legendFormat": "{{status}}" }]
+      "targets": [
+        { "expr": "vigo_convergence_converged", "legendFormat": "converged" },
+        { "expr": "vigo_convergence_degraded", "legendFormat": "degraded" },
+        { "expr": "vigo_convergence_failed", "legendFormat": "failed" },
+        { "expr": "vigo_convergence_no_data", "legendFormat": "no_data" }
+      ]
     },
     {
       "title": "Convergence % Over Time",

@@ -28,9 +28,8 @@ type Metrics struct {
 	RunDuration          *prometheus.HistogramVec
 	DriftDetected        *prometheus.CounterVec
 	ConfigcrateActions   *prometheus.CounterVec
-	ConvergenceStatus    *prometheus.GaugeVec
 	ConvergencePct       prometheus.Gauge
-	CheckinAgeDist       prometheus.Histogram
+	CheckinAgeDist       *SnapshotHistogram
 	SigVerifyFailed      *prometheus.CounterVec
 	ConfigReloadDuration prometheus.Histogram
 	ConfigReloadErrors   prometheus.Counter
@@ -187,9 +186,21 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
+	// Snapshot of the current fleet's check-in ages, replaced every
+	// collector tick (see SnapshotHistogram). Sub-60s buckets (5/15/30/45)
+	// straddle the 30s freshness.MinStaleThreshold floor so the snapshot
+	// shows how close healthy check-ins get to the stale boundary under a
+	// live 1s cadence.
+	checkinAge := NewSnapshotHistogram("vigo_checkin_age_seconds",
+		"Current distribution of seconds since last check-in across non-revoked envoys (a snapshot of the fleet now, not cumulative).",
+		[]float64{5, 15, 30, 45, 60, 120, 300, 600, 900, 1800, 3600, 7200})
+	reg.MustRegister(checkinAge)
+
 	f := promauto.With(reg)
 	return &Metrics{
 		// --- Core ---
+
+		CheckinAgeDist: checkinAge,
 
 		EnvoysTotal: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_nodes_total",
@@ -197,7 +208,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		}),
 		EnvoysActive: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_nodes_active_total",
-			Help: "Number of envoys that checked in within the last hour.",
+			Help: "Number of non-revoked envoys within their freshness window (not stale for their own check-in cycle).",
 		}),
 		CheckinsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_checkins_total",
@@ -220,23 +231,9 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_configcrate_actions_total",
 			Help: "Total number of configcrate actions taken.",
 		}, []string{"type", "action"}),
-		ConvergenceStatus: f.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "vigo_convergence_status",
-			Help: "Envoy convergence status (1 for current status).",
-		}, []string{"envoy", "status"}),
 		ConvergencePct: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_pct",
 			Help: "Fleet-wide convergence percentage (0.0 to 1.0).",
-		}),
-		CheckinAgeDist: f.NewHistogram(prometheus.HistogramOpts{
-			Name: "vigo_checkin_age_seconds",
-			Help: "Distribution of seconds since last check-in across all envoys.",
-			// Sub-60s buckets (5/15/30/45) straddle the 30s
-			// freshness.MinStaleThreshold floor so the histogram can
-			// measure how close healthy check-ins get to the stale
-			// boundary under a live 1s cadence — without them the
-			// finest bucket (60s) is 2× the floor and blind to margin.
-			Buckets: []float64{5, 15, 30, 45, 60, 120, 300, 600, 900, 1800, 3600, 7200},
 		}),
 		SigVerifyFailed: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_sig_verify_failed_total",
