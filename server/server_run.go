@@ -60,6 +60,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startSpannerGossip(ctx)
 	s.startSpannerAutoAdmit(ctx)
 
+	s.ready.Store(true)
 	slog.Info("server ready",
 		"mode", s.mode,
 		"grpc", s.cfg.Server.GRPCListen,
@@ -67,6 +68,7 @@ func (s *Server) Run(ctx context.Context) error {
 	)
 
 	<-ctx.Done()
+	s.ready.Store(false)
 	slog.Info("shutting down...")
 	s.shutdownListeners(shutdownTimeout)
 

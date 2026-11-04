@@ -79,7 +79,7 @@ If no envoy has checked in yet, the dashboard shows a first-run panel with the s
 
 ```bash
 docker compose ps                    # container running
-curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8443/metrics # 200 = REST listener up
+curl -sk https://127.0.0.1:8443/healthz # ok = server ready (503 while it starts or stops)
 vigocli doctor                     # full diagnostic
 ```
 

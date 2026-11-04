@@ -100,6 +100,8 @@ var publicPaths = map[string]bool{
 	"/metrics":   true,
 	"/login":     true,
 	"/totp":      true,
+	// Readiness probe: status code only, no detail (server/api/healthz.go).
+	"/healthz": true,
 	// Poolq topic list — see the `/api/v1/swarm/poolq/topic/` prefix above.
 	"/api/v1/swarm/poolq/topics": true,
 	// Apache-2.0 LICENSE and NOTICE. The bootstrap script fetches them with

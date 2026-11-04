@@ -22,7 +22,6 @@ func TestIsPublicPath(t *testing.T) {
 		{"/bootstrap/agent", false},
 		{"/bootstrap/cert", false},
 		{"/bootstrap/csr", false},
-		{"/healthz", false},
 		{"/api/v1/bootstrap", false},
 		{"/api/v1/swarm/filecast/blob/abc", false},
 		{"/metrics", true},
@@ -40,6 +39,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"/api/v1/swarm/poolq/unblock/abc", false},
 		{"/api/v1/swarm/curator/blob/abc", true},
 		// Fetched by the bootstrap script with no session (Apache-2.0 section 4).
+		{"/healthz", true},
 		{"/license/LICENSE", true},
 		{"/license/NOTICE", true},
 		{"/license/other", false},

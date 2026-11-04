@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -85,6 +86,10 @@ import (
 // in Phase A; see commit d5c0b4e4 + the audit at
 // /tmp/vigo-server-package-state-audit-2026-05-18.md for the catalog.
 type Server struct {
+	// ready is true between "server ready" and the start of shutdown; it is
+	// what GET /healthz reports.
+	ready atomic.Bool
+
 	// --- Prometheus (per-instance registry + collector set) ---
 	promReg   *prometheus.Registry
 	metrics   *metrics.Metrics
@@ -1413,6 +1418,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 		}
 		s.gwMux = gwMux
 		s.uiHandler = uiHandler
+		gwMux.Handle("GET /healthz", api.HealthzHandler(s.ready.Load))
 
 		// Wire the compliance snapshotter so successful config publishes
 		// refresh compliance_history alongside the daily background tick —
@@ -1690,6 +1696,7 @@ func (s *Server) Close() error {
 	if s == nil {
 		return nil
 	}
+	s.ready.Store(false)
 	s.peerPushMu.Lock()
 	peerPrimary := s.peerPrimary
 	s.peerPrimary = nil

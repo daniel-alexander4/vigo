@@ -34,7 +34,7 @@ The server listens on **`:1530`** (gRPC, for agents) and **`:8443`** (REST + web
 docker compose ps
 ```
 
-You'll see the `vigo` container `Up` and `vigo-guacd` `Up (healthy)`.
+You'll see `vigo` and `vigo-guacd` both `Up (healthy)`. While the server is still starting, `vigo` shows `Up (health: starting)`; `curl -sk https://127.0.0.1:8443/healthz` prints `ok` once it is ready.
 
 ## 2. Log in
 

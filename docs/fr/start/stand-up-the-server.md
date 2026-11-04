@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:51ba86de3aeb75385e400361684787bc3f742cf4a38f8603898e705ae596ff0f -->
+<!-- vigo-i18n source_sha:d07fc5f5063b590c0185114604637fcfc659eeabab7ab8d3492164cf8a2cb14f -->
 
 # 1 · Mettre le serveur en service
 
@@ -36,7 +36,7 @@ Le serveur écoute sur **`:1530`** (gRPC, pour les agents) et **`:8443`** (REST 
 docker compose ps
 ```
 
-Vous verrez le conteneur `vigo` en `Up` et `vigo-guacd` en `Up (healthy)`.
+Vous verrez `vigo` et `vigo-guacd` tous deux en `Up (healthy)`. Tant que le serveur démarre, `vigo` affiche `Up (health: starting)` ; `curl -sk https://127.0.0.1:8443/healthz` affiche `ok` dès qu'il est prêt.
 
 ## 2. Se connecter
 
