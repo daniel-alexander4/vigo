@@ -59,7 +59,7 @@ vigocli db checkpoint
 
 ### query
 
-Execute a read-only SQL query against the database. Write operations (INSERT, UPDATE, DELETE, DROP) are blocked server-side.
+Execute a read-only SQL query against the database. Writes are refused server-side. Each query is recorded in the audit log, results stop at 10,000 rows (the output says when it was truncated), and a query is cancelled after 30 seconds.
 
 ```bash
 vigocli db query "SELECT hostname, compliance_status FROM envoys"

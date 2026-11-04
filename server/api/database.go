@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -413,7 +414,18 @@ func parsePruneDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// handleQuery executes a read-only SQL query. Rejects writes.
+// Bounds on one /db/query call. The row cap keeps an unbounded SELECT
+// from building an arbitrarily large response in memory; the timeout
+// keeps a runaway join from holding a read connection.
+const (
+	dbQueryMaxRows    = 10000
+	dbQueryTimeout    = 30 * time.Second
+	dbQueryAuditBytes = 4096 // SQL text kept in the audit entry
+)
+
+// handleQuery executes a read-only SQL query. Rejects writes. Every query
+// is audited before it runs: it can read any table (the audit chain,
+// tokens' hashes, user rows), so who read what is part of the record.
 func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SQL string `json:"sql"`
@@ -455,10 +467,24 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if queryDB == nil {
-		queryDB = h.sqlDB // non-SQLite: fall back to shared handle + denylist
+		// Without a connection that refuses writes, the keyword denylist
+		// would be the only guard, and it is bypassable. Refuse rather
+		// than run arbitrary SQL on the shared read-write handle.
+		writeError(w, http.StatusBadRequest, "ad-hoc queries are only available on SQLite")
+		return
 	}
 
-	rows, err := queryDB.Query(req.SQL)
+	auditSQL := req.SQL
+	if len(auditSQL) > dbQueryAuditBytes {
+		auditSQL = auditSQL[:dbQueryAuditBytes] + "…"
+	}
+	payload, _ := json.Marshal(map[string]string{"sql": auditSQL})
+	recordAudit(r.Context(), h.auditWriter, "db.query", actorFromRequest(r), "rest",
+		"ran an ad-hoc read-only SQL query", string(payload))
+
+	ctx, cancel := context.WithTimeout(r.Context(), dbQueryTimeout)
+	defer cancel()
+	rows, err := queryDB.QueryContext(ctx, req.SQL)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("query failed: %v", err))
 		return
@@ -467,8 +493,13 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	cols, _ := rows.Columns()
 	var results []map[string]any
+	truncated := false
 
 	for rows.Next() {
+		if len(results) == dbQueryMaxRows {
+			truncated = true
+			break
+		}
 		values := make([]any, len(cols))
 		ptrs := make([]any, len(cols))
 		for i := range values {
@@ -489,11 +520,16 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 		results = append(results, row)
 	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("query failed: %v", err))
+		return
+	}
 
 	writeJSON(w, r, http.StatusOK, map[string]any{
-		"columns": cols,
-		"rows":    results,
-		"count":   len(results),
+		"columns":   cols,
+		"rows":      results,
+		"count":     len(results),
+		"truncated": truncated,
 	})
 }
 

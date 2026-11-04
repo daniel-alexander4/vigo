@@ -1679,10 +1679,9 @@ Forces a WAL checkpoint with `TRUNCATE` mode. SQLite only.
 
 **Permission:** Admin role
 
-Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `ATTACH`, `DETACH`, `REINDEX`, `VACUUM`, `PRAGMA`) are rejected with 403.
+Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `ATTACH`, `DETACH`, `REINDEX`, `VACUUM`, `PRAGMA`) are rejected with 403, and the query runs on a connection that refuses writes. Every query is recorded in the audit log (`db.query`, with the SQL text). At most 10,000 rows are returned, with `truncated: true` when the result was cut; a query that runs past 30 seconds is cancelled. SQLite only; other drivers answer 400.
 
 **Request body:**
-
 
 ```json
 {
@@ -1698,7 +1697,8 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
   "rows": [
     {"hostname": "web-01.example.com", "ip_address": "10.0.1.10"}
   ],
-  "count": 1
+  "count": 1,
+  "truncated": false
 }
 ```
 

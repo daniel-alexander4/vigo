@@ -271,9 +271,10 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var result struct {
-			Columns []string         `json:"columns"`
-			Rows    []map[string]any `json:"rows"`
-			Count   int              `json:"count"`
+			Columns   []string         `json:"columns"`
+			Rows      []map[string]any `json:"rows"`
+			Count     int              `json:"count"`
+			Truncated bool             `json:"truncated"`
 		}
 		if err := client.post("/api/v1/db/query", map[string]string{"sql": args[0]}, &result); err != nil {
 			return err
@@ -304,6 +305,10 @@ Examples:
 			fmt.Println()
 		}
 
+		if result.Truncated {
+			fmt.Printf("\n(%d rows — truncated at the server's row limit; add a LIMIT or narrow the WHERE)\n", result.Count)
+			return nil
+		}
 		fmt.Printf("\n(%d rows)\n", result.Count)
 		return nil
 	},
