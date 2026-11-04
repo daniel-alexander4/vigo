@@ -196,6 +196,10 @@ func (s *AgentService) dispatchRunEvents(rep runReport, runID, runStatus string,
 		})
 	}
 
+	for _, k := range s.blocked.observe(rep.envoyID, rep.results, blockedCount) {
+		s.dispatchUnblocked(k, rep.hostname, rep.envoyID, runID, rep.traceID, now)
+	}
+
 	if blockedCount == 0 {
 		return
 	}
@@ -217,6 +221,39 @@ func (s *AgentService) dispatchRunEvents(rep runReport, runID, runStatus string,
 				"error":       result.GetErrorMessage(),
 			},
 		})
+	}
+}
+
+// dispatchUnblocked fires resource.unblocked, the resolve event for the
+// fleet-wide resource.blocked incident on k. Its details carry the same
+// configcrate/resource pair, so integrations.incidentKey matches the
+// incident it resolves.
+func (s *AgentService) dispatchUnblocked(k blockedKey, hostname, envoyID, runID, traceID string, now time.Time) {
+	s.integrations.Dispatch(integrations.Event{
+		Name:      "resource.unblocked",
+		Timestamp: now,
+		Hostname:  hostname,
+		EnvoyID:   envoyID,
+		Summary:   fmt.Sprintf("%s/%s no longer blocked on any envoy", k.configcrate, k.resource),
+		Details: map[string]any{
+			"run_id":      runID,
+			"configcrate": k.configcrate,
+			"resource":    k.resource,
+			"trace_id":    traceID,
+		},
+	})
+}
+
+// forgetBlocked drops a departed envoy from the blocked tracker and resolves
+// any incident it was the last holder of.
+func (s *AgentService) forgetBlocked(envoyID string) {
+	cleared := s.blocked.forget(envoyID)
+	if s.integrations == nil {
+		return
+	}
+	now := time.Now()
+	for _, k := range cleared {
+		s.dispatchUnblocked(k, "", envoyID, "", "", now)
 	}
 }
 

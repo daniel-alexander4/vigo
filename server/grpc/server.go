@@ -328,7 +328,10 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *grpc.Server, *CertCache, *db.Tr
 	// without bound. Eviction is self-healing — if the envoy ever returns, its
 	// next vitals-only check-in misses the cache and the server requests a resend.
 	if cfg.FleetIndex != nil {
-		cfg.FleetIndex.SetOnRemove(func(id string) { agentSvc.inventoryCache.Delete(id) })
+		cfg.FleetIndex.SetOnRemove(func(id string) {
+			agentSvc.inventoryCache.Delete(id)
+			agentSvc.forgetBlocked(id)
+		})
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {

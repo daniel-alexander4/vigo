@@ -51,11 +51,15 @@ type AgentService struct {
 	// live working set itself (~213 KB × fleet) is inherent to reconstruct-and-
 	// reuse — shrinking that is the FleetIndex-partition follow-up (ADR-033 #4).
 	inventoryCache sync.Map
-	policyCache    *policyCache
-	streamMgr      *streamManager
-	taskRouter     *taskRouter
-	queryRouter    *queryRouter
-	taskStore      *task.Store
+	// blocked tracks each envoy's blocked resources so resource.unblocked
+	// fires once a resource is blocked on no envoy (see blockedtrack.go).
+	// Evicted with inventoryCache via FleetIndex.SetOnRemove.
+	blocked     blockedTracker
+	policyCache *policyCache
+	streamMgr   *streamManager
+	taskRouter  *taskRouter
+	queryRouter *queryRouter
+	taskStore   *task.Store
 	// spannerAdmin drives the peer-equal enrollment routing (Slice
 	// 2-ii-b). Non-nil when this vigosrv is in a spanner (mode !=
 	// standalone). Register dispatches: spannerAdmin != nil →

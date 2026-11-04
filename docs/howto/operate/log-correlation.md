@@ -15,7 +15,7 @@ You'll finish this page knowing how to take a single check-in, report, force-pus
 Every agent-initiated request (`CheckIn`, `ReportResult`, `ReportTraits`) and every server-pushed event the agent processes (`TaskDispatch`, `ForcePush`) carries a W3C `traceparent` string in the proto message body. Server and agent both extract the 32-hex `trace_id` portion and attach it to:
 
 - **Server** — every `slog` log line for that operation. Field: `trace_id`.
-- **Server** — the integrations event payload at `Event.Details["trace_id"]` for every `run.*`, `drift.detected`, `resource.blocked`. Loki, Splunk, Sentinel, etc. all see it.
+- **Server** — the integrations event payload at `Event.Details["trace_id"]` for every `run.*`, `drift.detected`, `resource.blocked`, `resource.unblocked`. Loki, Splunk, Sentinel, etc. all see it.
 - **Agent** — every `tracing` log line emitted under the operation's span. Same field name: `trace_id`.
 
 `TaskDispatch` round-trips end-to-end: the server generates the `trace_id` when dispatching, the agent uses it for execution logs, and echoes it back in `TaskResult` — so server-side "received task result" and agent-side "executing task" share the same field.
