@@ -12,6 +12,11 @@
 </div>
 
 <div class="card mt-3">
+    <h2>{{T $.Locale "support.paid_heading"}}</h2>
+    <p>{{T $.Locale "support.paid_body"}} <a href="https://github.com/daniel-alexander4/vigo/blob/main/SUPPORT.md" target="_blank" rel="noopener" hx-boost="false"><code>SUPPORT.md</code></a></p>
+</div>
+
+<div class="card mt-3">
     <h2>{{T $.Locale "support.filing_heading"}}</h2>
     <p>{{T $.Locale "support.filing_email_prefix"}} <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a>. {{T $.Locale "support.filing_include"}}</p>
     <ul>

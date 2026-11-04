@@ -1329,6 +1329,8 @@
   "support.help_body": "Vigo est un logiciel libre sous licence Apache 2.0, fourni en l'état. Les questions et rapports de bogues reçoivent une réponse au mieux, par e-mail :",
   "support.help_heading": "Obtenir de l'aide",
   "support.or": "ou",
+  "support.paid_body": "Les abonnements Standard et Premium ajoutent des délais de réponse, un contrat écrit et, avec Premium, un ingénieur attitré. Tarifs et conditions :",
+  "support.paid_heading": "Support payant",
   "support.title": "Assistance",
   "swarm.active": "actives",
   "swarm.active_pill": "actif",

@@ -472,4 +472,6 @@ Spanner federates fleets that outgrow one server. Each bolt is a write-equal pee
 Contributions are welcome under the same license with a DCO sign-off — see
 [CONTRIBUTING.md](CONTRIBUTING.md). The Vigo name and logo are trademarks; see
 [TRADEMARKS.md](TRADEMARKS.md). For questions and bug reports, open an issue or
-email vigo.support@alexander4.io.
+email vigo.support@alexander4.io. Paid support subscriptions are described in
+[SUPPORT.md](SUPPORT.md); report security vulnerabilities as described in
+[SECURITY.md](SECURITY.md).
