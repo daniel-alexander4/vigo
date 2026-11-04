@@ -6,16 +6,26 @@ This is the first of four tutorials — work through them in order; each builds 
 
 ## Prerequisites
 
-- A Linux host with Docker + Docker Compose.
+- A Linux host with Docker + Docker Compose, Go 1.25 and a Rust toolchain.
 - Root (or `sudo`) on that host.
 - That's it. No external services.
 
 ## 1. Bring it up
 
-From a checkout of the server bundle:
+Prebuilt images are not published yet, so build the server image from source first. You need Docker, Go 1.25 and a Rust toolchain.
 
 ```bash
-make up        # docker compose up -d (vigosrv + guacd)
+git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
+IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # the tag the build gives the local image
+```
+
+Then seed the data directory and start it:
+
+```bash
+sudo mkdir -p /srv/vigo
+docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+cd /srv/vigo && docker compose up -d
 ```
 
 The server listens on **`:1530`** (gRPC, for agents) and **`:8443`** (REST + web UI). Give it a few seconds, then check it's healthy:
@@ -28,7 +38,7 @@ You'll see the `vigo` container `Up` and `vigo-guacd` `Up (healthy)`.
 
 ## 2. Log in
 
-Open **`https://127.0.0.1:8443`** in a browser and accept the self-signed certificate. Log in with the bootstrap admin credentials printed in the server logs (`docker compose logs vigo | grep -i admin`).
+Open **`https://127.0.0.1:8443`** in a browser and accept the self-signed certificate. There is no default admin login. Do step 3 first, then create your admin from a real OS account on this host with `sudo vigocli webusers create --username <yourname> --role admin` and `sudo vigocli webusers set-password --username <yourname>`, and sign in as `<yourname>`.
 
 You'll land on the dashboard — empty for now, because no envoys exist yet.
 

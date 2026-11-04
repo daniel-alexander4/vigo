@@ -4,10 +4,17 @@ Stand up the Vigo server, enroll your first envoy, and apply your first configcr
 
 ## 1. Start the server
 
+Prebuilt images are not published yet, so build the server image from source first. You need Docker, Go 1.25 and a Rust toolchain.
+
+```bash
+git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
+IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # the tag the build gives the local image
+```
+
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo \
-  us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 cd /srv/vigo
 docker compose up -d
 ```
@@ -21,12 +28,12 @@ sudo mkdir -p /srv/vigo
 docker run -d --name vigo \
   --network host \
   -v /srv/vigo:/srv/vigo \
-  us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
+  "$IMAGE"
 ```
 
 `--network host` binds 8443 (REST/UI), 1530 (gRPC), and 1531 (swarm) directly on the host — matching the generated compose, which host-networks the server so agent traffic doesn't route through Docker's per-port userland proxy. (Scrier's `guacd` sidecar isn't started by this bare `docker run`; use compose if you need RDP/VNC scrier sessions.)
 
-Open `https://localhost:8443` — accept the self-signed cert, you'll land on the dashboard.
+Open `https://localhost:8443` and accept the self-signed cert. There is no default admin login; create yours after the next step, as described in [Install](howto/operate/install.md#2-start-the-server).
 
 ## 2. Enroll envoys
 

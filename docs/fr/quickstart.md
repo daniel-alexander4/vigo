@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:e5be23f0b1f21f6daa8255dd86453062dd006964302d3d15d146bd1352bd6e4c -->
+<!-- vigo-i18n source_sha:a8617de5cf125787a4cb016c7e864074db1a8da160523df146fc3c98b3ea5115 -->
 
 # Démarrage rapide
 
@@ -6,10 +6,17 @@ Mettez en route le serveur Vigo, enrôlez votre premier Envoy et appliquez votre
 
 ## 1. Démarrer le serveur
 
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. Il vous faut Docker, Go 1.25 et une chaîne d'outils Rust.
+
+```bash
+git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
+IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # le tag que la compilation donne à l'image locale
+```
+
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo \
-  us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 cd /srv/vigo
 docker compose up -d
 ```
@@ -23,12 +30,12 @@ sudo mkdir -p /srv/vigo
 docker run -d --name vigo \
   --network host \
   -v /srv/vigo:/srv/vigo \
-  us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
+  "$IMAGE"
 ```
 
 `--network host` lie 8443 (REST/UI), 1530 (gRPC) et 1531 (Swarm) directement sur l'hôte — correspondant au compose généré, qui place le serveur sur le réseau de l'hôte afin que le trafic des agents ne passe pas par le proxy userland par port de Docker. (Le sidecar `guacd` de Scrier n'est pas démarré par ce `docker run` nu ; utilisez compose si vous avez besoin de sessions Scrier RDP/VNC.)
 
-Ouvrez `https://localhost:8443` — acceptez le certificat auto-signé, et vous arriverez sur le tableau de bord.
+Ouvrez `https://localhost:8443` et acceptez le certificat auto-signé. Il n'existe pas de connexion admin par défaut : créez la vôtre après l'étape suivante, comme décrit dans [Installer](howto/operate/install.md#2-démarrer-le-serveur).
 
 ## 2. Enrôler des Envoys
 

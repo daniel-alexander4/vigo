@@ -15,9 +15,17 @@ Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the 
 
 ### 1. Seed the data directory
 
+Prebuilt images are not published yet, so build the server image from source first. You need Docker, Go 1.25 and a Rust toolchain.
+
+```bash
+git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
+IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # the tag the build gives the local image
+```
+
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 ```
 
 This populates `/srv/vigo/` with everything needed to run the server:

@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:75fc8f3adfbc6b35227f89adca534b6479d916d3e65c73af5b376712e19d793d -->
+<!-- vigo-i18n source_sha:d3bf8250a54d58b8667e02f133d619df5983936a8f1973b3e97991d293dc6282 -->
 
 # Installer le serveur Vigo
 
@@ -16,9 +16,17 @@ Vigo comporte trois composants : le serveur (`vigosrv`), la CLI (`vigocli`) et l
 
 ### 1. Initialiser le répertoire de données
 
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. Il vous faut Docker, Go 1.25 et une chaîne d'outils Rust.
+
+```bash
+git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
+IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # le tag que la compilation donne à l'image locale
+```
+
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 ```
 
 Cela peuple `/srv/vigo/` avec tout ce qui est nécessaire pour exécuter le serveur :

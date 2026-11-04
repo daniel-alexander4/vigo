@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:7896a6d17b1cc44356748f370a4903ccda7a2438695670b4f6dd573f450c900d -->
+<!-- vigo-i18n source_sha:51ba86de3aeb75385e400361684787bc3f742cf4a38f8603898e705ae596ff0f -->
 
 # 1 · Mettre le serveur en service
 
@@ -8,16 +8,26 @@ C'est le premier des quatre tutoriels — suivez-les dans l'ordre ; chacun s'app
 
 ## Prérequis
 
-- Un hôte Linux avec Docker + Docker Compose.
+- Un hôte Linux avec Docker + Docker Compose, Go 1.25 et une chaîne d'outils Rust.
 - Les droits root (ou `sudo`) sur cet hôte.
 - C'est tout. Aucun service externe.
 
 ## 1. Le démarrer
 
-Depuis un checkout du bundle serveur :
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. Il vous faut Docker, Go 1.25 et une chaîne d'outils Rust.
 
 ```bash
-make up        # docker compose up -d (vigosrv + guacd)
+git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
+sudo scripts/upgrade.sh full --norun   # compile l'image du serveur et l'agent amd64
+IMAGE=us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest   # le tag que la compilation donne à l'image locale
+```
+
+Initialisez ensuite le répertoire de données et démarrez le serveur :
+
+```bash
+sudo mkdir -p /srv/vigo
+docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+cd /srv/vigo && docker compose up -d
 ```
 
 Le serveur écoute sur **`:1530`** (gRPC, pour les agents) et **`:8443`** (REST + interface web). Laissez-lui quelques secondes, puis vérifiez qu'il est en bonne santé :
@@ -30,7 +40,7 @@ Vous verrez le conteneur `vigo` en `Up` et `vigo-guacd` en `Up (healthy)`.
 
 ## 2. Se connecter
 
-Ouvrez **`https://127.0.0.1:8443`** dans un navigateur et acceptez le certificat auto-signé. Connectez-vous avec les identifiants admin de bootstrap affichés dans les journaux du serveur (`docker compose logs vigo | grep -i admin`).
+Ouvrez **`https://127.0.0.1:8443`** dans un navigateur et acceptez le certificat auto-signé. Il n'existe pas de connexion admin par défaut. Faites d'abord l'étape 3, puis créez votre admin à partir d'un véritable compte OS de cet hôte avec `sudo vigocli webusers create --username <yourname> --role admin` et `sudo vigocli webusers set-password --username <yourname>`, et connectez-vous en tant que `<yourname>`.
 
 Vous arriverez sur le tableau de bord — vide pour l'instant, car aucun envoy n'existe encore.
 
