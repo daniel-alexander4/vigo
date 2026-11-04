@@ -52,6 +52,48 @@ pub struct BlobCache {
     /// used in the ETag on `/meta` responses so probing peers can cheaply
     /// detect that our inventory hasn't changed.
     version: Arc<AtomicU64>,
+    /// Free-space source behind [`Self::check_disk_space`]. Always
+    /// [`DiskProbe::HOST`] in production; tests swap it so they don't
+    /// depend on how full the build host's disk is.
+    disk_probe: DiskProbe,
+}
+
+/// The two disk measurements [`BlobCache::check_disk_space`] gates on.
+#[derive(Clone, Copy)]
+pub(crate) struct DiskProbe {
+    /// Bytes available to unprivileged writers on the filesystem holding
+    /// the given path.
+    available: fn(&Path) -> Result<u64>,
+    /// Whether the swarm disk is at or below the pressure threshold.
+    pressured: fn() -> bool,
+}
+
+impl DiskProbe {
+    /// The real host measurements: statvfs / GetDiskFreeSpaceExW on the
+    /// cache dir, and the swarm-purpose pressure check.
+    const HOST: DiskProbe = DiskProbe {
+        available: available_disk_space,
+        pressured: || {
+            crate::swarm::peer_health::is_self_pressured(
+                &crate::swarm::peer_health::Purpose::Swarm,
+            )
+        },
+    };
+
+    /// A disk with 1 TiB free and no pressure.
+    #[cfg(test)]
+    pub(crate) const ROOMY: DiskProbe = DiskProbe {
+        available: |_| Ok(1 << 40),
+        pressured: || false,
+    };
+
+    /// A disk with 1 TiB free that is nonetheless past the pressure
+    /// threshold (a very large, nearly full volume).
+    #[cfg(test)]
+    pub(crate) const PRESSURED: DiskProbe = DiskProbe {
+        available: |_| Ok(1 << 40),
+        pressured: || true,
+    };
 }
 
 impl BlobCache {
@@ -63,7 +105,15 @@ impl BlobCache {
             reserve_mb: DEFAULT_RESERVE_MB,
             max_mb: DEFAULT_CACHE_MAX_MB,
             version: Arc::new(AtomicU64::new(1)),
+            disk_probe: DiskProbe::HOST,
         })
+    }
+
+    /// Replace the free-space source (tests only).
+    #[cfg(test)]
+    pub(crate) fn with_disk_probe(mut self, probe: DiskProbe) -> Self {
+        self.disk_probe = probe;
+        self
     }
 
     /// Current monotonic version of the local cache. Incremented on any
@@ -382,7 +432,7 @@ impl BlobCache {
     ///    from the push subsystems lands here as "receiver refuses to
     ///    start a download when the target disk is already pressured."
     pub fn check_disk_space(&self, size: u64) -> Result<()> {
-        let available = available_disk_space(&self.dir)?;
+        let available = (self.disk_probe.available)(&self.dir)?;
         let needed = size + self.reserve_mb * 1024 * 1024;
         if available < needed {
             let avail_mb = available / (1024 * 1024);
@@ -393,9 +443,7 @@ impl BlobCache {
                 need_mb
             );
         }
-        if crate::swarm::peer_health::is_self_pressured(
-            &crate::swarm::peer_health::Purpose::Swarm,
-        ) {
+        if (self.disk_probe.pressured)() {
             bail!(
                 "disk_pressure:free_pct_at_or_below={}",
                 crate::swarm::peer_health::min_free_pct()
@@ -604,13 +652,34 @@ mod tests {
     #[test]
     fn test_disk_space_check() {
         let dir = tempfile::tempdir().unwrap();
-        let cache = BlobCache::new(dir.path().to_path_buf()).unwrap();
+        let cache = BlobCache::new(dir.path().to_path_buf())
+            .unwrap()
+            .with_disk_probe(DiskProbe::ROOMY);
 
-        // Checking for a reasonable size should succeed (we have disk space in tests).
+        // A reasonable size fits on a roomy, unpressured disk.
         assert!(cache.check_disk_space(1024).is_ok());
 
-        // Checking for an absurd size should fail.
-        assert!(cache.check_disk_space(u64::MAX / 2).is_err());
+        // A size past what's available fails the absolute-reserve gate.
+        let err = cache.check_disk_space(u64::MAX / 2).unwrap_err().to_string();
+        assert!(err.starts_with("insufficient_disk:"), "{err}");
+
+        // Space for the blob is not enough once the disk is pressured.
+        let cache = cache.with_disk_probe(DiskProbe::PRESSURED);
+        let err = cache.check_disk_space(1024).unwrap_err().to_string();
+        assert!(err.starts_with("disk_pressure:"), "{err}");
+    }
+
+    #[test]
+    fn test_disk_space_check_counts_reserve() {
+        // 1 MiB short of size + reserve must fail; exactly enough passes.
+        let dir = tempfile::tempdir().unwrap();
+        let mut cache = BlobCache::new(dir.path().to_path_buf()).unwrap().with_disk_probe(DiskProbe {
+            available: |_| Ok(600 * 1024 * 1024),
+            pressured: || false,
+        });
+        cache.set_reserve_mb(512);
+        assert!(cache.check_disk_space(88 * 1024 * 1024).is_ok());
+        assert!(cache.check_disk_space(89 * 1024 * 1024).is_err());
     }
 
     #[test]

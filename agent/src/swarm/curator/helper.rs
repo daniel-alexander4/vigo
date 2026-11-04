@@ -634,8 +634,12 @@ mod tests {
             let manifest = Manifest::load(&root.join("manifest-state"));
             Bed { _tmp: tmp, blobs, home, manifest }
         }
+        // A roomy fixed probe: the tests must not depend on how full the
+        // build host's disk is.
         fn cache(&self) -> BlobCache {
-            BlobCache::new(self.blobs.clone()).unwrap()
+            BlobCache::new(self.blobs.clone())
+                .unwrap()
+                .with_disk_probe(crate::swarm::cache::DiskProbe::ROOMY)
         }
         fn caller(&self, curator: bool) -> Caller {
             Caller {
