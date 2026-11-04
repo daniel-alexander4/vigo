@@ -660,52 +660,64 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		})
 	}
 
+	// Authorization is declared at registration, mirroring the REST side's
+	// auth.RequirePermission wrappers. Every route that shows fleet state
+	// (envoys, runs, effective config, traits, inventory, security, tasks,
+	// workflows, swarm, health, the AI drawer whose tools read all of that)
+	// needs fleet.read; the compliance surfaces need compliance.read. The
+	// routes left bare gate inside the handler (Dashboard redirects,
+	// audit pages use requireAuditRead, server-config and the swarm
+	// subsystem pages use adminOnly) or are open to every signed-in user
+	// (docs, support, the /mesh redirect).
+	fleetRead := h.requirePerm(auth.PermFleetRead)
+	compRead := h.requirePerm(auth.PermComplianceRead)
+
 	// Page routes
 	mux.HandleFunc("GET /{$}", h.Dashboard)
-	mux.HandleFunc("GET /envoys", h.Envoys)
-	mux.HandleFunc("GET /envoys/tree", h.EnvoyTree)
-	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
-	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
-	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)
-	mux.HandleFunc("GET /fleet/config-tree", h.ConfigTree)
-	mux.HandleFunc("GET /ui/fragments/config-tree/file", h.ConfigTreeFileFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-swarm-load/{id}", h.EnvoySwarmLoadFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-footprint/{id}", h.EnvoyFootprintFragment)
-	mux.HandleFunc("GET /ui/fragments/dashboard-pressure", h.DashboardPressureFragment)
-	mux.HandleFunc("GET /ui/api/envoys/{id}/security", h.EnvoySecurityTraits)
-	mux.HandleFunc("GET /ui/fragments/security-envoy/{id}", h.SecurityEnvoyFragment)
-	mux.HandleFunc("GET /runs", h.Runs)
-	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
-	mux.HandleFunc("GET /config/{hostname}", h.Config)
+	mux.HandleFunc("GET /envoys", fleetRead(h.Envoys))
+	mux.HandleFunc("GET /envoys/tree", fleetRead(h.EnvoyTree))
+	mux.HandleFunc("GET /envoys/{id}", fleetRead(h.EnvoyDetail))
+	mux.HandleFunc("GET /envoys/{id}/trace", fleetRead(h.EnvoyTrace))
+	mux.HandleFunc("GET /envoys/{id}/trace/viz", fleetRead(h.EnvoyTraceViz))
+	mux.HandleFunc("GET /fleet/config-tree", fleetRead(h.ConfigTree))
+	mux.HandleFunc("GET /ui/fragments/config-tree/file", fleetRead(h.ConfigTreeFileFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-swarm-load/{id}", fleetRead(h.EnvoySwarmLoadFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-footprint/{id}", fleetRead(h.EnvoyFootprintFragment))
+	mux.HandleFunc("GET /ui/fragments/dashboard-pressure", fleetRead(h.DashboardPressureFragment))
+	mux.HandleFunc("GET /ui/api/envoys/{id}/security", fleetRead(h.EnvoySecurityTraits))
+	mux.HandleFunc("GET /ui/fragments/security-envoy/{id}", fleetRead(h.SecurityEnvoyFragment))
+	mux.HandleFunc("GET /runs", fleetRead(h.Runs))
+	mux.HandleFunc("GET /runs/{id}", fleetRead(h.RunDetail))
+	mux.HandleFunc("GET /config/{hostname}", fleetRead(h.Config))
 	mux.HandleFunc("GET /server/config", h.ServerConfig)
 	mux.HandleFunc("GET /server/config/{section}", h.ServerConfigSection)
-	mux.HandleFunc("GET /plans/{id}", h.Plans)
-	mux.HandleFunc("GET /risk", h.RiskPosture)
-	mux.HandleFunc("GET /agent-health", h.AgentHealth)
-	mux.HandleFunc("GET /compliance", h.Compliance)
-	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
-	mux.HandleFunc("GET /integrations", h.Integrations)
-	mux.HandleFunc("GET /integrations/{slug}", h.IntegrationDetailPage)
-	mux.HandleFunc("GET /ui/fragments/integration/{slug}", h.IntegrationDetail)
-	mux.HandleFunc("GET /compliance/evidence", h.EvidenceCenter)
-	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
-	mux.HandleFunc("GET /compliance/waivers", h.ComplianceWaivers)
-	mux.HandleFunc("GET /compliance/{framework}", h.ComplianceFramework)
-	mux.HandleFunc("GET /compliance/{framework}/viz", h.ComplianceFrameworkViz)
-	mux.HandleFunc("GET /task", h.TaskList)
-	mux.HandleFunc("GET /task/{id}", h.TaskDetail)
-	mux.HandleFunc("GET /workflows", h.Workflows)
-	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
+	mux.HandleFunc("GET /plans/{id}", fleetRead(h.Plans))
+	mux.HandleFunc("GET /risk", fleetRead(h.RiskPosture))
+	mux.HandleFunc("GET /agent-health", fleetRead(h.AgentHealth))
+	mux.HandleFunc("GET /compliance", compRead(h.Compliance))
+	mux.HandleFunc("GET /compliance/executive", compRead(h.ComplianceExecutive))
+	mux.HandleFunc("GET /integrations", fleetRead(h.Integrations))
+	mux.HandleFunc("GET /integrations/{slug}", fleetRead(h.IntegrationDetailPage))
+	mux.HandleFunc("GET /ui/fragments/integration/{slug}", fleetRead(h.IntegrationDetail))
+	mux.HandleFunc("GET /compliance/evidence", compRead(h.EvidenceCenter))
+	mux.HandleFunc("GET /compliance/evidence/bundle", compRead(h.EvidenceBundleDownload))
+	mux.HandleFunc("GET /compliance/waivers", compRead(h.ComplianceWaivers))
+	mux.HandleFunc("GET /compliance/{framework}", compRead(h.ComplianceFramework))
+	mux.HandleFunc("GET /compliance/{framework}/viz", compRead(h.ComplianceFrameworkViz))
+	mux.HandleFunc("GET /task", fleetRead(h.TaskList))
+	mux.HandleFunc("GET /task/{id}", fleetRead(h.TaskDetail))
+	mux.HandleFunc("GET /workflows", fleetRead(h.Workflows))
+	mux.HandleFunc("GET /workflows/{id}", fleetRead(h.WorkflowDetail))
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
-	mux.HandleFunc("GET /platform/compliance", h.PlatformCompliance)
+	mux.HandleFunc("GET /platform/compliance", compRead(h.PlatformCompliance))
 	// Filecast pages (admin-distributed files riding the swarm substrate) —
 	// always registered because SetSwarm is called after RegisterRoutes.
 	// The handlers check h.swarmTracker at request time.
-	mux.HandleFunc("GET /swarm", h.Swarm)
-	mux.HandleFunc("GET /swarm/filecast", h.Filecast)
-	mux.HandleFunc("GET /swarm/filecast/{sha256}", h.Filecast)
-	mux.HandleFunc("GET /ui/fragments/swarm-filecast-envoys", h.FilecastEnvoysFragment)
+	mux.HandleFunc("GET /swarm", fleetRead(h.Swarm))
+	mux.HandleFunc("GET /swarm/filecast", fleetRead(h.Filecast))
+	mux.HandleFunc("GET /swarm/filecast/{sha256}", fleetRead(h.Filecast))
+	mux.HandleFunc("GET /ui/fragments/swarm-filecast-envoys", fleetRead(h.FilecastEnvoysFragment))
 
 	// Longdrawer, lockbox, gitback observability — sibling pages
 	// under the Swarm nav group. Each admin-only; viewer sees a 403.
@@ -734,50 +746,50 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// mux.HandleFunc("GET /ui/fragments/sandgorgon-assets", h.SandgorgonAssetsFragment)
 
 	// HTMX fragment endpoints
-	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
-	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
-	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
-	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
-	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", h.ComplianceFrameworksFragment)
-	mux.HandleFunc("GET /ui/fragments/evidence-snapshot", h.EvidenceSnapshotFragment)
-	mux.HandleFunc("GET /ui/fragments/evidence-mttr", h.EvidenceMTTRFragment)
-	mux.HandleFunc("GET /ui/fragments/evidence-controls/{slug}", h.EvidenceControlsFragment)
-	mux.HandleFunc("GET /ui/fragments/evidence-control-drill/{slug}/{controlID}", h.EvidenceControlDrillFragment)
-	mux.HandleFunc("GET /ui/fragments/evidence-coverage/{slug}", h.EvidenceCoverageFragment)
-	mux.HandleFunc("GET /ui/fragments/evidence-audit", h.EvidenceAuditFragment)
-	mux.HandleFunc("GET /ui/fragments/dashboard-integrations", h.DashboardIntegrationsFragment)
-	mux.HandleFunc("GET /ui/fragments/compliance-report/{slug}", h.ComplianceReportFragment)
-	mux.HandleFunc("GET /ui/fragments/compliance-executive", h.ComplianceExecutiveFragment)
-	mux.HandleFunc("GET /ui/fragments/security-status", h.SecurityStatus)
-	mux.HandleFunc("GET /ui/fragments/cve-search", h.CVESearchFragment)
-	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
-	mux.HandleFunc("GET /ui/fragments/envoys-stats", h.EnvoysStats)
-	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-trait-group/{id}", h.EnvoyTraitGroupFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-config/{id}", h.EnvoyConfigFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-trace/{id}", h.EnvoyTraceFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-compliance/{id}", h.EnvoyComplianceFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-attack-surface/{id}", h.EnvoyAttackSurfaceFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-sessions/{id}", h.EnvoyScrierSessionsFragment)
-	mux.HandleFunc("GET /envoys/{id}/compliance/{framework}", h.EnvoyComplianceDetail)
-	mux.HandleFunc("GET /ui/fragments/envoy-standard-coverage/{id}/{framework}", h.EnvoyStandardCoverageFragment)
-	mux.HandleFunc("GET /ui/fragments/run-results/{id}", h.RunResultsFragment)
+	mux.HandleFunc("GET /ui/fragments/dashboard-stats", fleetRead(h.DashboardStats))
+	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", fleetRead(h.DashboardFleet))
+	mux.HandleFunc("GET /ui/fragments/dashboard-activity", fleetRead(h.DashboardActivity))
+	mux.HandleFunc("GET /ui/fragments/compliance-status", compRead(h.ComplianceStatus))
+	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", compRead(h.ComplianceFrameworksFragment))
+	mux.HandleFunc("GET /ui/fragments/evidence-snapshot", compRead(h.EvidenceSnapshotFragment))
+	mux.HandleFunc("GET /ui/fragments/evidence-mttr", compRead(h.EvidenceMTTRFragment))
+	mux.HandleFunc("GET /ui/fragments/evidence-controls/{slug}", compRead(h.EvidenceControlsFragment))
+	mux.HandleFunc("GET /ui/fragments/evidence-control-drill/{slug}/{controlID}", compRead(h.EvidenceControlDrillFragment))
+	mux.HandleFunc("GET /ui/fragments/evidence-coverage/{slug}", compRead(h.EvidenceCoverageFragment))
+	mux.HandleFunc("GET /ui/fragments/evidence-audit", compRead(h.EvidenceAuditFragment))
+	mux.HandleFunc("GET /ui/fragments/dashboard-integrations", fleetRead(h.DashboardIntegrationsFragment))
+	mux.HandleFunc("GET /ui/fragments/compliance-report/{slug}", compRead(h.ComplianceReportFragment))
+	mux.HandleFunc("GET /ui/fragments/compliance-executive", compRead(h.ComplianceExecutiveFragment))
+	mux.HandleFunc("GET /ui/fragments/security-status", fleetRead(h.SecurityStatus))
+	mux.HandleFunc("GET /ui/fragments/cve-search", fleetRead(h.CVESearchFragment))
+	mux.HandleFunc("GET /ui/fragments/envoys-table", fleetRead(h.EnvoysTable))
+	mux.HandleFunc("GET /ui/fragments/envoys-stats", fleetRead(h.EnvoysStats))
+	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", fleetRead(h.EnvoyRunsFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", fleetRead(h.EnvoyTraitsFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-trait-group/{id}", fleetRead(h.EnvoyTraitGroupFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-config/{id}", fleetRead(h.EnvoyConfigFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-trace/{id}", fleetRead(h.EnvoyTraceFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-compliance/{id}", compRead(h.EnvoyComplianceFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-attack-surface/{id}", fleetRead(h.EnvoyAttackSurfaceFragment))
+	mux.HandleFunc("GET /ui/fragments/envoy-sessions/{id}", fleetRead(h.EnvoyScrierSessionsFragment))
+	mux.HandleFunc("GET /envoys/{id}/compliance/{framework}", compRead(h.EnvoyComplianceDetail))
+	mux.HandleFunc("GET /ui/fragments/envoy-standard-coverage/{id}/{framework}", compRead(h.EnvoyStandardCoverageFragment))
+	mux.HandleFunc("GET /ui/fragments/run-results/{id}", fleetRead(h.RunResultsFragment))
 
 	// Under Review fragment endpoints
-	mux.HandleFunc("GET /ui/fragments/inventory", h.InventoryFragment)
-	mux.HandleFunc("GET /ui/fragments/inventory-search", h.InventorySearchFragment)
-	mux.HandleFunc("GET /ui/fragments/inventory-trait-index", h.InventoryTraitIndexFragment)
-	mux.HandleFunc("GET /ui/fragments/inventory-explore", h.InventoryExploreFragment)
-	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", h.InventoryExploreTableFragment)
-	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
-	mux.HandleFunc("GET /ui/fragments/health", h.HealthFragment)
+	mux.HandleFunc("GET /ui/fragments/inventory", fleetRead(h.InventoryFragment))
+	mux.HandleFunc("GET /ui/fragments/inventory-search", fleetRead(h.InventorySearchFragment))
+	mux.HandleFunc("GET /ui/fragments/inventory-trait-index", fleetRead(h.InventoryTraitIndexFragment))
+	mux.HandleFunc("GET /ui/fragments/inventory-explore", fleetRead(h.InventoryExploreFragment))
+	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", fleetRead(h.InventoryExploreTableFragment))
+	mux.HandleFunc("GET /ui/export/inventory-explore.ods", fleetRead(h.InventoryExploreODSExport))
+	mux.HandleFunc("GET /ui/fragments/health", fleetRead(h.HealthFragment))
 
 	// Spanner pages — registered only in spanner mode (peer-equal;
 	// standalone has no spanner admin and no federation to show).
 	if h.spannerAdmin != nil {
-		mux.HandleFunc("GET /spanner", h.Spanner)
-		mux.HandleFunc("GET /spanner/bolts/{id}", h.BoltDetail)
+		mux.HandleFunc("GET /spanner", fleetRead(h.Spanner))
+		mux.HandleFunc("GET /spanner/bolts/{id}", fleetRead(h.BoltDetail))
 	}
 
 	// Docs pages (only registered when docsDir is configured and exists)
@@ -787,24 +799,23 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	}
 
 	// Security page — always available. AI chat is optional.
-	mux.HandleFunc("GET /security", h.SecurityPage)
-	mux.HandleFunc("GET /security/certs/{id}", h.SecurityCerts)
+	mux.HandleFunc("GET /security", fleetRead(h.SecurityPage))
+	mux.HandleFunc("GET /security/certs/{id}", fleetRead(h.SecurityCerts))
 	if h.assistant != nil {
-		mux.HandleFunc("POST /ui/ask", h.AskStream)
+		mux.HandleFunc("POST /ui/ask", fleetRead(h.AskStream))
 	}
 
 	// Combined operations page (tasks + workflows)
-	mux.HandleFunc("GET /operations", h.Operations)
-
+	mux.HandleFunc("GET /operations", fleetRead(h.Operations))
 
 	// Support page
 	mux.HandleFunc("GET /support", h.Support)
 
 	// Under Review pages
-	mux.HandleFunc("GET /inventory", h.Inventory)
-	mux.HandleFunc("GET /inventory/{id}", h.InventoryDetail)
-	mux.HandleFunc("GET /ui/export/inventory.csv", h.InventoryCSVExport)
-	mux.HandleFunc("GET /health", h.Health)
+	mux.HandleFunc("GET /inventory", fleetRead(h.Inventory))
+	mux.HandleFunc("GET /inventory/{id}", fleetRead(h.InventoryDetail))
+	mux.HandleFunc("GET /ui/export/inventory.csv", fleetRead(h.InventoryCSVExport))
+	mux.HandleFunc("GET /health", fleetRead(h.Health))
 
 	// Admin functions are CLI-only (vigocli). No admin pages in web UI.
 }
@@ -830,12 +841,12 @@ type PageData struct {
 	// NoEnvoys is true when zero envoys are enrolled — the first-run
 	// state. The shared nav partial collapses to the brand block only,
 	// and the dashboard renders the enrollment panel.
-	NoEnvoys       bool
-	CurrentUser    *AuthUser
-	OrgName          string // custom org name from branding config
-	CustomLogo       bool   // true when a custom logo path is configured
-	CustomFavicon    bool   // true when a custom favicon path is configured
-	Theme            string // "light" (default), "dark", or "auto"
+	NoEnvoys      bool
+	CurrentUser   *AuthUser
+	OrgName       string // custom org name from branding config
+	CustomLogo    bool   // true when a custom logo path is configured
+	CustomFavicon bool   // true when a custom favicon path is configured
+	Theme         string // "light" (default), "dark", or "auto"
 	// Locale is the resolved per-request locale (set in setCommonWithRequest);
 	// templates read it as $.Locale for the {{T}} helper. Empty falls back to
 	// English. Locales is the topbar picker's option set — nil (the default,
@@ -907,15 +918,15 @@ type DashboardPageData struct {
 	AgentPlatforms []AgentPlatform
 	// BootstrapCommand is the agent-enrollment one-liner shown on the
 	// first-run panel, addressed to the server's configured hostname.
-	BootstrapCommand string
-	TotalEnvoys      int
-	ActiveEnvoys     int
-	RecentFailures   int
-	DriftRate        float64
-	RecentRuns                    []RunRow
-	FleetRows                     []FleetRow
-	FleetRowsCapped               bool // true when fleet table is capped (more envoys exist)
-	FleetRowsRemaining            int  // how many envoys not shown
+	BootstrapCommand   string
+	TotalEnvoys        int
+	ActiveEnvoys       int
+	RecentFailures     int
+	DriftRate          float64
+	RecentRuns         []RunRow
+	FleetRows          []FleetRow
+	FleetRowsCapped    bool // true when fleet table is capped (more envoys exist)
+	FleetRowsRemaining int  // how many envoys not shown
 	// Security posture
 	CVECritical     int64
 	CVEHigh         int64
@@ -2388,6 +2399,11 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 				DisplayName: u.DisplayName,
 				Role:        u.Role,
 				Permissions: u.Permissions,
+			}
+			// The AI drawer's tools read fleet data and POST /ui/ask is
+			// fleet.read-gated, so don't offer it to users without it.
+			if !u.HasPermission(auth.PermFleetRead) {
+				pd.AIEnabled = false
 			}
 		}
 	}
@@ -5303,6 +5319,25 @@ func (h *Handler) adminOnly(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+// requirePerm returns a route wrapper that answers 403 to a signed-in
+// user lacking perm. Used at registration (RegisterRoutes) so a page or
+// fragment cannot be reached by typing its URL when the nav hides it.
+// With auth disabled every request passes, as elsewhere in the UI.
+func (h *Handler) requirePerm(perm string) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if h.authEnabled {
+				u := auth.UserFromContext(r.Context())
+				if u == nil || !u.HasPermission(perm) {
+					http.Error(w, perm+" permission required", http.StatusForbidden)
+					return
+				}
+			}
+			next(w, r)
+		}
+	}
 }
 
 // requireAuditRead blocks users without audit.read with a 403 and
