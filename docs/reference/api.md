@@ -1713,7 +1713,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 | GET | `/api/v1/agent/latest` | Agent version, SHA256 checksum, and ED25519 signature (`?os=&arch=`; an unsupported platform returns `400`) |
 | GET | `/api/v1/agent/download/{os}/{arch}` | Agent binary download |
 | GET | `/api/v1/agent/signing-key` | ED25519 signing public key (hex) |
-| POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing. The hostname must be a plain DNS name (RFC 1123 labels; no wildcard, no IP literal) or the call returns `400`; a hostname the server's own TLS certificate carries is refused `403` unless the request comes over loopback (the server's own envoy). A refused enrollment returns `403` with a generic body; the reason is in the server log. |
+| POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing. The hostname must be a plain DNS name (RFC 1123 labels; no wildcard, no IP literal) or the call returns `400`. A CSR that does not parse or whose signature does not verify returns `400` before any envoy record is created. A hostname the server's own TLS certificate carries is refused `403` unless the request comes over loopback (the server's own envoy). A refused enrollment returns `403` with a generic body; the reason is in the server log. |
 | GET | `/api/v1/fleet/pubkeys` | Hostname → Ed25519 pubkey map for the (non-revoked) fleet. Used by agents to bootstrap their gitback peer-pubkey TOFU cache. Pubkeys are public-by-construction (broadcast on multicast); endpoint is unauthenticated. |
 
 ---

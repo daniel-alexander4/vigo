@@ -768,8 +768,20 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		"has_token", req.Token != "",
 	)
 
+	// Sign the CSR before any envoy row exists. Signing depends only on the
+	// CSR and the hostname, and it is the step that fails on bad input: done
+	// after registration, a bad CSR left a cert-less envoy row behind (and,
+	// with --force, had already replaced the previous envoy). The cert is
+	// returned only if registration below succeeds.
+	signedCert, err := h.ca.SignCSR([]byte(req.CSRPEM), req.Hostname, h.certValidity)
+	if err != nil {
+		slog.Warn("bootstrap registration refused: CSR rejected", "hostname", req.Hostname, "error", err)
+		h.metrics.EnrollmentsTotal.WithLabelValues("denied").Inc()
+		http.Error(w, "registration failed: invalid CSR", http.StatusBadRequest)
+		return
+	}
+
 	var envoyID string
-	var err error
 
 	if req.Token != "" {
 		// Token-based enrollment (existing flow).
@@ -798,15 +810,6 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 			msg = "registration denied: an active envoy with this hostname already exists (re-run with --force to replace it)"
 		}
 		http.Error(w, msg, http.StatusForbidden)
-		return
-	}
-
-	// Sign the CSR.
-	signedCert, err := h.ca.SignCSR([]byte(req.CSRPEM), req.Hostname, h.certValidity)
-	if err != nil {
-		slog.Error("CSR signing failed", "hostname", req.Hostname, "error", err)
-		h.metrics.EnrollmentsTotal.WithLabelValues("error").Inc()
-		http.Error(w, "registration failed", http.StatusInternalServerError)
 		return
 	}
 

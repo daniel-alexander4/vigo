@@ -387,3 +387,27 @@ func TestBootstrapRegister_SpannerRouting(t *testing.T) {
 		})
 	}
 }
+
+// TestBootstrapRegister_BadCSRCreatesNoEnvoy: the CSR used to be signed after
+// the envoy row was created, so a malformed CSR failed the request but left
+// a cert-less envoy registered. A bad CSR must be refused with no row.
+func TestBootstrapRegister_BadCSRCreatesNoEnvoy(t *testing.T) {
+	h := newTrustedHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	body := `{"hostname":"bad-csr.example.com","ip_address":"10.0.2.10","pubkey_pem":"fakepk","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\nAAAA\n-----END CERTIFICATE REQUEST-----\n"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/bootstrap/register", strings.NewReader(body))
+	req.RemoteAddr = "10.0.2.10:5555"
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("bad CSR: want 400, got %d: %s", w.Code, w.Body.String())
+	}
+	var n int
+	if err := testDB.QueryRow("SELECT COUNT(*) FROM envoys WHERE hostname = ?", "bad-csr.example.com").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("bad CSR left %d envoy row(s) behind", n)
+	}
+}
