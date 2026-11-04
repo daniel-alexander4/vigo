@@ -1129,14 +1129,15 @@ type ComplianceClaims struct {
 // It has a custom UnmarshalYAML that flattens conditional_block entries
 // in the resources list into plain ResourceConfig items.
 type ConfigcrateDefinition struct {
-	Name       string           `yaml:"name"`
-	Kind       ConfigcrateKind  `yaml:"-"` // set by loader: regular module vs usercrate
-	SourceFile string           `yaml:"-"` // stacks-relative path, set by loader
-	DependsOn  []string         `yaml:"depends_on"`
-	Before     []string         `yaml:"before"`
-	Defaults   map[string]any   `yaml:"defaults"`
-	Resources  []ResourceConfig `yaml:"resources"`
-	Vars       map[string]any   `yaml:"vars"`
+	Name        string           `yaml:"name"`
+	Description string           `yaml:"description"` // optional one-line summary for operators; no effect on resolution
+	Kind        ConfigcrateKind  `yaml:"-"`           // set by loader: regular module vs usercrate
+	SourceFile  string           `yaml:"-"`           // stacks-relative path, set by loader
+	DependsOn   []string         `yaml:"depends_on"`
+	Before      []string         `yaml:"before"`
+	Defaults    map[string]any   `yaml:"defaults"`
+	Resources   []ResourceConfig `yaml:"resources"`
+	Vars        map[string]any   `yaml:"vars"`
 	// Compliance is the per-module compliance attribution block (0.66.57+).
 	// Two sub-keys, both routed through Vigo-curated catalogs:
 	//
@@ -1174,81 +1175,19 @@ type ConfigcrateDefinition struct {
 	TemplateSources []string `yaml:"-"`
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler for ConfigcrateDefinition.
-// It handles the "resources" key specially by passing its child nodes
-// through FlattenResourceNodes to support conditional_block entries.
-// All other keys are decoded via the default YAML decoder.
+// UnmarshalYAML implements yaml.Unmarshaler for ConfigcrateDefinition by
+// delegating to decodeConfigcrateNode, the one configcrate decoder the
+// loader's ParseConfigcrateFile also uses.
 func (m *ConfigcrateDefinition) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("ConfigcrateDefinition: expected mapping, got %v", value.Kind)
-	}
-
-	// Walk key-value pairs in the mapping.
-	for i := 0; i < len(value.Content)-1; i += 2 {
-		key := value.Content[i].Value
-		val := value.Content[i+1]
-
-		switch key {
-		case "name":
-			if err := val.Decode(&m.Name); err != nil {
-				return fmt.Errorf("decoding name: %w", err)
-			}
-		case "depends_on":
-			if err := val.Decode(&m.DependsOn); err != nil {
-				return fmt.Errorf("decoding depends_on: %w", err)
-			}
-		case "before":
-			if err := val.Decode(&m.Before); err != nil {
-				return fmt.Errorf("decoding before: %w", err)
-			}
-		case "defaults":
-			if err := val.Decode(&m.Defaults); err != nil {
-				return fmt.Errorf("decoding defaults: %w", err)
-			}
-		case "vars":
-			if err := val.Decode(&m.Vars); err != nil {
-				return fmt.Errorf("decoding vars: %w", err)
-			}
-		case "resources":
-			if val.Kind != yaml.SequenceNode {
-				return fmt.Errorf("resources: expected sequence, got %v", val.Kind)
-			}
-			resources, err := FlattenResourceNodes(val.Content)
-			if err != nil {
-				return fmt.Errorf("flattening resources: %w", err)
-			}
-			m.Resources = resources
-		case "compliance":
-			// 0.66.57+ shape: { provides: [...], bundle: [...] }.
-			// ComplianceClaims silently ignores any other sub-key,
-			// so pre-0.66.48 framework→control lists decode as
-			// empty here; modlint (rule_configcrate_compliance_key_retired)
-			// is the gate that errors on the old shape.
-			if err := val.Decode(&m.Compliance); err != nil {
-				return fmt.Errorf("decoding compliance: %w", err)
-			}
-		case "provides", "bundle":
-			// Defense-in-depth against the 0.66.48-through-0.66.56
-			// authoring shape. modlint catches this at publish-time
-			// via rule_configcrate_top_level_provides_bundle, but the
-			// loader also has direct-decode paths (test fixtures,
-			// hand-rolled callers of parseConfigcrateYAML) that don't
-			// pass through modlint — Go's YAML decoder would silently
-			// drop the unknown keys without this arm.
-			return errRetiredTopLevelComplianceKey(key)
-		}
-	}
-
-	applyDefaults(m.Resources, m.Defaults)
-	return nil
+	return decodeConfigcrateNode(value, m)
 }
 
 // errRetiredTopLevelComplianceKey is the single source of truth for the
 // error returned when a module YAML declares `provides:` or `bundle:`
 // at the top level — the authoring shape introduced in 0.66.48 and
 // retired in 0.66.57 in favor of a single `compliance:` parent block.
-// Both YAML decode paths (ConfigcrateDefinition.UnmarshalYAML in this file,
-// parseConfigcrateYAML in parse.go) call this so the wording can't drift.
+// The one configcrate decoder (decodeConfigcrateNode in parse.go) calls
+// this, so the wording can't drift.
 // Message mirrors modlint/rule_configcrate_top_level_provides_bundle.go so
 // operators see the same diagnostic from either gate.
 func errRetiredTopLevelComplianceKey(key string) error {
@@ -1590,12 +1529,15 @@ type EnvoysConfig struct {
 }
 
 // StandardCoverage describes an envoy's coverage of a compliance standard.
+//
+// It carries only what the config store can know: which controls the
+// envoy's configcrates claim. Totals, missing controls and percentages
+// need the framework's control catalog as denominator, which lives in the
+// report builder (server/api/report.go ComputeFrameworkScore) — every
+// score is computed there, never from this struct.
 type StandardCoverage struct {
 	Standard        string            `json:"standard"`
-	TotalControls   int               `json:"total_controls"`
 	CoveredControls []ControlCoverage `json:"covered_controls"`
-	MissingControls []string          `json:"missing_controls"`
-	CoveragePercent float64           `json:"coverage_percent"`
 }
 
 // ControlCoverage describes an envoy's coverage of a single control.

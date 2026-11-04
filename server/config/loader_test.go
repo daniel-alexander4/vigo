@@ -3379,17 +3379,8 @@ envoys:
 	if cov == nil {
 		t.Fatal("expected coverage, got nil")
 	}
-	if cov.TotalControls != 3 {
-		t.Errorf("TotalControls = %d, want 3", cov.TotalControls)
-	}
 	if len(cov.CoveredControls) != 3 {
 		t.Errorf("CoveredControls = %d, want 3", len(cov.CoveredControls))
-	}
-	if len(cov.MissingControls) != 0 {
-		t.Errorf("MissingControls = %v, want empty", cov.MissingControls)
-	}
-	if cov.CoveragePercent != 100 {
-		t.Errorf("CoveragePercent = %.1f, want 100", cov.CoveragePercent)
 	}
 
 	// db01 has only sshd — should cover 2 of 3 pci-dss controls, missing 6.5.1.
@@ -3400,8 +3391,10 @@ envoys:
 	if len(cov2.CoveredControls) != 2 {
 		t.Errorf("db01 CoveredControls = %d, want 2", len(cov2.CoveredControls))
 	}
-	if len(cov2.MissingControls) != 1 || cov2.MissingControls[0] != "6.5.1" {
-		t.Errorf("db01 MissingControls = %v, want [6.5.1]", cov2.MissingControls)
+	for _, cc := range cov2.CoveredControls {
+		if cc.ControlID == "6.5.1" {
+			t.Errorf("db01 covers 6.5.1, which only nginx claims")
+		}
 	}
 
 	// Unknown standard returns nil.

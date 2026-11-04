@@ -4,8 +4,11 @@
 package config
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -100,8 +103,18 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 	cfg := ServerConfig{
 		Risk: RiskSection{NVD: NVDConfig{Enabled: true}},
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing server config: %w", err)
+	// KnownFields: a misspelled or removed key is an error, not silently
+	// ignored. The retired-key detectors above run first so a known
+	// retiree still gets its migration pointer instead of a bare
+	// "field not found".
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("parsing server config %s: %w", path, err)
+	}
+
+	if err := ValidateSwarmPatterns(cfg.Swarm); err != nil {
+		return nil, fmt.Errorf("server config: %w", err)
 	}
 
 	// Resolve secret: prefixes in config values.

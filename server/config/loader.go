@@ -1814,14 +1814,7 @@ func computeStandardCoverage(entryConfigcrates map[string]bool, standard string,
 				ControlID:    cid,
 				Configcrates: assigned,
 			})
-		} else {
-			sc.MissingControls = append(sc.MissingControls, cid)
 		}
-	}
-
-	sc.TotalControls = len(controlIDs)
-	if sc.TotalControls > 0 {
-		sc.CoveragePercent = float64(len(sc.CoveredControls)) / float64(sc.TotalControls) * 100
 	}
 	return sc
 }
@@ -1842,7 +1835,14 @@ func buildCoverageCache(entries []resolvedEntry, complianceIndex map[string]map[
 		}
 		entryConfigcrates := make(map[string]bool, len(cfg.Configcrates))
 		for _, mod := range cfg.Configcrates {
-			entryConfigcrates[mod.Name] = true
+			// complianceIndex is keyed by definition name; a foreach
+			// instance ("vhost[www]") claims its definition's ("vhost")
+			// controls.
+			name := mod.Name
+			if mod.BaseName != "" {
+				name = mod.BaseName
+			}
+			entryConfigcrates[name] = true
 		}
 		perStandard := make(map[string]*StandardCoverage, len(complianceIndex))
 		for standard, controlIndex := range complianceIndex {

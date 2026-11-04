@@ -30,7 +30,7 @@ func TestFlattenPlainResourcesPassThrough(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 2 {
 		t.Fatalf("len = %d, want 2", len(resources))
@@ -60,7 +60,7 @@ func TestFlattenBlockMergesConditionals(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 2 {
 		t.Fatalf("len = %d, want 2", len(resources))
@@ -90,7 +90,7 @@ func TestFlattenBlockMergesDifferentConditionals(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 1 {
 		t.Fatalf("len = %d, want 1", len(resources))
@@ -113,7 +113,7 @@ func TestFlattenBlockSameFieldConcatenated(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 1 {
 		t.Fatalf("len = %d, want 1", len(resources))
@@ -144,7 +144,7 @@ func TestFlattenMixedResourcesAndBlocksOrdering(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 4 {
 		t.Fatalf("len = %d, want 4", len(resources))
@@ -174,7 +174,7 @@ func TestFlattenDependsOnAcrossBlockBoundaryOutsideToInside(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 2 {
 		t.Fatalf("len = %d, want 2", len(resources))
@@ -205,7 +205,7 @@ func TestFlattenDependsOnFromInsideToOutside(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 2 {
 		t.Fatalf("len = %d, want 2", len(resources))
@@ -250,7 +250,7 @@ func TestFlattenBlockWhenExpression(t *testing.T) {
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
-		t.Fatalf("FlattenResourceNodes: %v", err)
+		t.Fatalf("parseResourceNodes: %v", err)
 	}
 	if len(resources) != 1 {
 		t.Fatalf("len = %d, want 1", len(resources))
@@ -322,7 +322,7 @@ resources:
 // --- test helpers ---
 
 // flattenFromYAML parses a YAML sequence of resource nodes and calls
-// FlattenResourceNodes.
+// parseResourceNodes, the loader's resource parser.
 func flattenFromYAML(t *testing.T, yamlStr string) ([]ResourceConfig, error) {
 	t.Helper()
 	var node yaml.Node
@@ -333,7 +333,7 @@ func flattenFromYAML(t *testing.T, yamlStr string) ([]ResourceConfig, error) {
 	if len(node.Content) == 0 || node.Content[0].Kind != yaml.SequenceNode {
 		t.Fatal("expected YAML sequence node")
 	}
-	return FlattenResourceNodes(node.Content[0].Content)
+	return parseResourceNodes(node.Content[0].Content)
 }
 
 func assertSliceEqual(t *testing.T, name string, got, want []string) {

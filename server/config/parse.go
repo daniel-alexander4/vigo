@@ -46,6 +46,26 @@ func ParseConfigcrateFile(data []byte) (*ConfigcrateDefinition, error) {
 	}
 
 	var def ConfigcrateDefinition
+	if err := decodeConfigcrateNode(root, &def); err != nil {
+		return nil, err
+	}
+	return &def, nil
+}
+
+// configcrateTopLevelKeys is the closed set of keys a configcrate file may
+// carry at its top level.
+var configcrateTopLevelKeys = []string{"name", "description", "depends_on", "before", "defaults", "vars", "resources", "compliance"}
+
+// decodeConfigcrateNode is the one configcrate decoder: ParseConfigcrateFile
+// (the loader) and ConfigcrateDefinition.UnmarshalYAML both call it. An
+// unknown top-level key, or a `compliance:` sub-key other than provides /
+// bundle (the pre-0.66.48 framework→control shape), is an error here, so a
+// typo or a retired shape can never silently drop resources or claims —
+// whether or not modlint ran on the file.
+func decodeConfigcrateNode(root *yaml.Node, def *ConfigcrateDefinition) error {
+	if root.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected mapping at root, got %v", root.Kind)
+	}
 	for i := 0; i < len(root.Content)-1; i += 2 {
 		key := root.Content[i].Value
 		val := root.Content[i+1]
@@ -53,52 +73,74 @@ func ParseConfigcrateFile(data []byte) (*ConfigcrateDefinition, error) {
 		switch key {
 		case "name":
 			def.Name = val.Value
+		case "description":
+			def.Description = val.Value
 		case "depends_on":
 			if err := val.Decode(&def.DependsOn); err != nil {
-				return nil, fmt.Errorf("decoding %s: %w", key, err)
+				return fmt.Errorf("decoding %s: %w", key, err)
 			}
 		case "before":
 			if err := val.Decode(&def.Before); err != nil {
-				return nil, fmt.Errorf("decoding before: %w", err)
+				return fmt.Errorf("decoding before: %w", err)
 			}
 		case "defaults":
 			if err := val.Decode(&def.Defaults); err != nil {
-				return nil, fmt.Errorf("decoding defaults: %w", err)
+				return fmt.Errorf("decoding defaults: %w", err)
 			}
 		case "vars":
 			if err := val.Decode(&def.Vars); err != nil {
-				return nil, fmt.Errorf("decoding vars: %w", err)
+				return fmt.Errorf("decoding vars: %w", err)
 			}
 		case "resources":
 			if val.Kind != yaml.SequenceNode {
-				return nil, fmt.Errorf("resources: expected sequence")
+				return fmt.Errorf("resources: expected sequence")
 			}
 			resources, err := parseResourceNodes(val.Content)
 			if err != nil {
-				return nil, fmt.Errorf("parsing resources: %w", err)
+				return fmt.Errorf("parsing resources: %w", err)
 			}
 			def.Resources = resources
 		case "compliance":
-			// 0.66.57+ shape: { provides: [...], bundle: [...] }.
-			// Pre-0.66.48 framework→control lists decode as empty;
-			// modlint's rule_configcrate_compliance_key_retired is the
-			// gate that errors on the old shape.
-			if err := val.Decode(&def.Compliance); err != nil {
-				return nil, fmt.Errorf("decoding compliance: %w", err)
+			if err := decodeComplianceClaims(val, &def.Compliance); err != nil {
+				return err
 			}
 		case "provides", "bundle":
-			// Defense-in-depth against the 0.66.48-through-0.66.56
-			// authoring shape — see errRetiredTopLevelComplianceKey
-			// in types.go for the rationale. modlint
-			// (rule_configcrate_top_level_provides_bundle) catches this at
-			// publish time; this arm is the parallel rejection for
-			// direct-decode callers that bypass modlint.
-			return nil, errRetiredTopLevelComplianceKey(key)
+			// The 0.66.48-through-0.66.56 top-level shape — see
+			// errRetiredTopLevelComplianceKey.
+			return errRetiredTopLevelComplianceKey(key)
+		default:
+			return fmt.Errorf("line %d: unknown configcrate key %q (allowed: %s)%s",
+				root.Content[i].Line, key, strings.Join(configcrateTopLevelKeys, ", "),
+				notFoundHint(key, configcrateTopLevelKeys, ""))
 		}
 	}
 
 	applyDefaults(def.Resources, def.Defaults)
-	return &def, nil
+	return nil
+}
+
+// decodeComplianceClaims decodes the 0.66.57+ `compliance: { provides,
+// bundle }` block. Any other sub-key is the pre-0.66.48 framework→control
+// list shape (e.g. `compliance: { hipaa: [...] }`), which used to decode to
+// an empty claim set and silently drop every claim of an unchanged crate.
+func decodeComplianceClaims(val *yaml.Node, out *ComplianceClaims) error {
+	if val.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: compliance: expected a mapping with provides: and/or bundle:", val.Line)
+	}
+	for i := 0; i < len(val.Content)-1; i += 2 {
+		k := val.Content[i].Value
+		switch k {
+		case "provides", "bundle":
+		default:
+			return fmt.Errorf("line %d: compliance: %q is not a valid key — the framework→control list shape is retired (0.66.48); "+
+				"declare `compliance: { provides: [<tag>], bundle: [<id>] }` (see `vigocli compliance provisions` / `bundles`)",
+				val.Content[i].Line, k)
+		}
+	}
+	if err := val.Decode(out); err != nil {
+		return fmt.Errorf("decoding compliance: %w", err)
+	}
+	return nil
 }
 
 // parseResourceNodes walks resource YAML nodes manually, extracting known

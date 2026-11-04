@@ -3,7 +3,10 @@
 
 package config
 
-import "path/filepath"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 // HostMatchesPatterns reports whether `hostname` is allowed by the swarm
 // authorization pattern list. The semantics are intentionally identical
@@ -12,9 +15,9 @@ import "path/filepath"
 //   - Empty list  → false (default-deny when nothing is configured).
 //   - First match wins. Patterns evaluated in order; first hit decides.
 //   - "-" prefix  → deny pattern. Remainder is a filepath.Match glob;
-//                   match means the host is denied.
+//     match means the host is denied.
 //   - Otherwise   → allow pattern. The pattern is a filepath.Match glob;
-//                   match means the host is allowed.
+//     match means the host is allowed.
 //   - No match    → false (default-deny on no match).
 //
 // Examples:
@@ -25,8 +28,11 @@ import "path/filepath"
 //	["annlap", "plex"]                    → only those two; everything else denied
 //	["-*.test.example.com", "*"]          → all production envoys, no test
 //
-// Malformed patterns (filepath.Match returns ErrBadPattern) are skipped
-// silently so a single typo doesn't take down the whole list.
+// Malformed patterns are rejected when server.yaml loads
+// (ValidatePatternList). Should one reach this function anyway, it fails
+// closed: a malformed deny pattern denies the host, and a malformed allow
+// pattern never matches — a typo can never let a host through that the
+// operator meant to deny.
 func HostMatchesPatterns(hostname string, patterns []string) bool {
 	for _, pat := range patterns {
 		if pat == "" {
@@ -41,9 +47,34 @@ func HostMatchesPatterns(hostname string, patterns []string) bool {
 		if glob == "" {
 			continue
 		}
-		if matched, err := filepath.Match(glob, hostname); err == nil && matched {
+		matched, err := filepath.Match(glob, hostname)
+		if err != nil {
+			if deny {
+				return false
+			}
+			continue
+		}
+		if matched {
 			return !deny
 		}
 	}
 	return false
+}
+
+// ValidatePatternList returns an error naming the first malformed glob in a
+// hostcrate-semantics pattern list (a `-` deny prefix is stripped first).
+func ValidatePatternList(name string, patterns []string) error {
+	for i, pat := range patterns {
+		glob := pat
+		if len(glob) > 0 && glob[0] == '-' {
+			glob = glob[1:]
+		}
+		if glob == "" {
+			continue
+		}
+		if _, err := filepath.Match(glob, ""); err != nil {
+			return fmt.Errorf("%s[%d]: %q is not a valid hostname glob: %w", name, i, pat, err)
+		}
+	}
+	return nil
 }

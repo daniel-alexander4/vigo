@@ -94,6 +94,7 @@ resources:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | yes | Unique configcrate name |
+| `description` | no | One-line summary for readers; no effect on resolution |
 | `vars` | no | Default variable values (overridden by envoy-level vars) |
 | `defaults` | no | Default attributes applied to all resources in this configcrate |
 | `depends_on` | no | Other configcrates this configcrate depends on (configcrate-level ordering) |
@@ -101,7 +102,7 @@ resources:
 | `resources` | yes | List of resources to manage |
 | `compliance` | no | Per-configcrate compliance attribution block — two sub-keys, both routed through Vigo-curated catalogs (see [Compliance authoring](#compliance-authoring) below): `compliance.provides:` (functional capability tags) and `compliance.bundle:` (framework-scope-cut tags). |
 
-> **Shape history.** Pre-0.66.48 `compliance:` carried inline framework→control lists; that shape was retired when the catalogs landed. 0.66.48-through-0.66.56 parked the replacement keys at top level (`provides:` / `bundle:`). 0.66.57 re-folded them under a `compliance:` parent block — same catalog semantics, but the at-a-glance compliance signal is restored in configcrate YAML. Modlint hard-errors on both retired shapes with migration pointers (`configcrate-compliance-key-retired` for the framework→control shape; `configcrate-top-level-provides-bundle` for the 0.66.48 top-level keys). Directory-level `compliance.vgo` files keep the framework→control shape — that's a different file kind (inheritance, not configcrate attribution).
+> **Shape history.** Pre-0.66.48 `compliance:` carried inline framework→control lists; that shape was retired when the catalogs landed. 0.66.48-through-0.66.56 parked the replacement keys at top level (`provides:` / `bundle:`). 0.66.57 re-folded them under a `compliance:` parent block — same catalog semantics, but the at-a-glance compliance signal is restored in configcrate YAML. Modlint hard-errors on both retired shapes with migration pointers (`configcrate-compliance-key-retired` for the framework→control shape; `configcrate-top-level-provides-bundle` for the 0.66.48 top-level keys), and the loader refuses them too, so a crate that publish did not re-lint cannot lose its claims silently. Any other top-level key (a typo such as `resouces:`) is a load error naming the key. Directory-level `compliance.vgo` files keep the framework→control shape — that's a different file kind (inheritance, not configcrate attribution).
 
 ### Compliance authoring
 

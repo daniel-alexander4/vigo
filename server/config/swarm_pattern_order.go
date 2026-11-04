@@ -107,3 +107,27 @@ func checkPatternList(subsystem string, patterns []string) []SwarmPatternFinding
 	}
 	return out
 }
+
+// ValidateSwarmPatterns rejects any malformed glob in the swarm pattern
+// lists. Called from LoadServerConfig so a typo such as `-[rasp1` is a
+// startup error rather than a deny entry that silently never matches.
+func ValidateSwarmPatterns(s SwarmSection) error {
+	lists := []struct {
+		name     string
+		patterns []string
+	}{
+		{"swarm.enabled", s.Enabled},
+		{"swarm.puddle.enabled", s.Puddle.Enabled},
+		{"swarm.gitback.enabled", s.Gitback.Enabled},
+		{"swarm.curator.enabled", s.Curator.Enabled},
+		{"swarm.poolq.enabled", s.Poolq.Enabled},
+		{"swarm.longdrawer.enabled", s.Longdrawer.Enabled},
+		{"swarm.filecast.enabled", s.Filecast.Enabled},
+	}
+	for _, l := range lists {
+		if err := ValidatePatternList(l.name, l.patterns); err != nil {
+			return err
+		}
+	}
+	return nil
+}

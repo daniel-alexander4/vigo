@@ -9,6 +9,8 @@ Complete reference for all `server.yaml` configuration sections. The server look
 
 Fields that accept `secret:path` are resolved through the secrets backend at startup.
 
+Unknown keys are an error: a misspelled or removed key stops the server with the file, line and key name rather than being ignored. Retired keys with a known replacement still get a migration pointer.
+
 ## server
 
 Ports and TLS configuration.
@@ -539,6 +541,8 @@ i18n:
 | `supported_locales` | all bundled | Locales offered in the picker and matched against `Accept-Language`. Empty = every locale with a bundled catalog. Always include `default_locale`. |
 
 ## swarm
+
+Every `enabled:` pattern list uses hostcrate glob syntax (`-` prefix denies). A malformed glob such as `-[rasp1` is a startup error naming the list and index, so a broken deny entry can never fall through to a later `*`.
 
 Peer-to-peer content distribution (six content subsystems: filecast, gitback, longdrawer, lockbox, curator, poolq). Each subsystem documents the full field set in its howto — the section below covers **poolq** (ADR-029); see [`server.yaml.example`](https://github.com/alexander4/vigo/blob/main/server/config/server.yaml.example) for the full template plus the other subsystems.
 

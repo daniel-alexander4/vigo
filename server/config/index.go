@@ -18,10 +18,17 @@ type patternIndex struct {
 	globs []globEntry    // ordered glob patterns (patterns with *, ?, [)
 
 	// globCache caches hostname → entry index for glob lookups. Invalidated
-	// on config reload by building a new patternIndex.
+	// on config reload by building a new patternIndex. Bounded by
+	// maxGlobCacheEntries: Lookup is reachable with arbitrary hostnames
+	// (AI tools, export), so an unbounded map would grow without limit.
 	globCacheMu sync.RWMutex
 	globCache   map[string]int // hostname → entry index (or -1 for no match)
 }
+
+// maxGlobCacheEntries bounds globCache. Sized above the largest fleet the
+// server is built for, so every enrolled hostname fits; when it fills, the
+// cache is dropped and rebuilt from the hostnames looked up next.
+const maxGlobCacheEntries = 1 << 17
 
 type globEntry struct {
 	pattern string
@@ -82,6 +89,9 @@ func (idx *patternIndex) Lookup(hostname string) int {
 			}
 		}
 		idx.globCacheMu.Lock()
+		if len(idx.globCache) >= maxGlobCacheEntries {
+			idx.globCache = make(map[string]int)
+		}
 		idx.globCache[hostname] = cachedGlobIdx
 		idx.globCacheMu.Unlock()
 	}

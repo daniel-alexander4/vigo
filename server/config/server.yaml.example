@@ -137,11 +137,13 @@ bootstrap:
 
 
 # ── Webhooks ──────────────────────────────────────────────────────────────
-# Configure endpoints via vigocli or REST API. This section controls dispatch.
-
-webhooks:
-  timeout: "10s"
-  max_retries: 3
+# Dispatch tuning lives under tuning.webhook (timeout, max_retries,
+# max_concurrent, retry_delay); the defaults suit most fleets.
+#
+# tuning:
+#   webhook:
+#     timeout: "10s"
+#     max_retries: 3
 
 
 # ── Secret Rotation Watcher ──────────────────────────────────────────────
