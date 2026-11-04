@@ -23,13 +23,13 @@ func NewAIHandler(assistant *ai.Assistant) *AIHandler {
 	return &AIHandler{assistant: assistant}
 }
 
-// RegisterRoutes mounts the AI endpoint on the given mux. The
-// assistant has tool access to live fleet data and can dispatch
-// queries, so the endpoint requires query.execute (admin-only by
-// default).
+// RegisterRoutes mounts the AI endpoint on the given mux. The assistant's
+// tools are strictly read-only over fleet data, so the endpoint requires
+// fleet.read — the same gate as the web-UI drawer (POST /ui/ask), so the
+// two doors to one assistant cannot disagree.
 func (h *AIHandler) RegisterRoutes(mux *http.ServeMux) {
-	exec := auth.RequirePermission(auth.PermQueryExecute)
-	mux.Handle("POST /api/v1/ask", exec(http.HandlerFunc(h.handleAsk)))
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("POST /api/v1/ask", read(http.HandlerFunc(h.handleAsk)))
 }
 
 func (h *AIHandler) handleAsk(w http.ResponseWriter, r *http.Request) {

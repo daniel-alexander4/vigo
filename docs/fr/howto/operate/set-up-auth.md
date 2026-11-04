@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:c34df237122dc01ecb1a048cfefc5be460197b636b07d9c083ee38060f7af7ad -->
+<!-- vigo-i18n source_sha:9b9d411349b8970262416f2f45686b1d4801dded12c87d2289c687e1858e0096 -->
 
 ---
 title: Authentification
@@ -296,12 +296,12 @@ Au-delà des étiquettes de rôle, chaque utilisateur dispose d'un ensemble de p
 
 | Permission | Description | Admin | Viewer | Compliance |
 |------------|-------------|-------|--------|------------|
-| `fleet.read` | Voir Envoys, exécutions, inventaire, tâches, workflows, sécurité, santé ; utiliser le tiroir IA de l'interface web | Oui | Oui | Non |
+| `fleet.read` | Voir Envoys, exécutions, inventaire, tâches, workflows, sécurité, santé ; utiliser l'assistant IA (tiroir de l'interface web et REST `POST /api/v1/ask`) | Oui | Oui | Non |
 | `fleet.write` | Modifier les étiquettes d'Envoy, la maintenance, forcer la mise à jour | Oui | Non | Non |
 | `config.publish` | Publier / geler / recharger la configuration | Oui | Non | Non |
 | `config.rollback` | Revenir à une version antérieure de la config | Oui | Non | Non |
 | `push.execute` | Lancer des tâches ad-hoc | Oui | Non | Non |
-| `query.execute` | Exécuter des requêtes de traits en direct (y compris REST `POST /api/v1/ask`) | Oui | Non | Non |
+| `query.execute` | Exécuter des requêtes de traits en direct | Oui | Non | Non |
 | `workflow.execute` | Exécuter / interrompre des workflows | Oui | Non | Non |
 | `audit.read` | Voir la chaîne du journal d'audit brut | Oui | Oui | **Non** |
 | `compliance.read` | Voir les rapports de cadre + le paquet d'audit | Oui | Oui | Oui |

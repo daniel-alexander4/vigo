@@ -290,12 +290,12 @@ Beyond the role labels, each user has a permission set stored as a JSON array. A
 
 | Permission | Description | Admin | Viewer | Compliance |
 |------------|-------------|-------|--------|------------|
-| `fleet.read` | View envoys, runs, inventory, tasks, workflows, security, health; use the web-UI AI drawer | Yes | Yes | No |
+| `fleet.read` | View envoys, runs, inventory, tasks, workflows, security, health; use the AI assistant (web-UI drawer and REST `POST /api/v1/ask`) | Yes | Yes | No |
 | `fleet.write` | Modify envoy tags, maintenance, force update | Yes | No | No |
 | `config.publish` | Publish / freeze / reload configuration | Yes | No | No |
 | `config.rollback` | Roll back to a prior config version | Yes | No | No |
 | `push.execute` | Dispatch ad-hoc tasks | Yes | No | No |
-| `query.execute` | Execute live trait queries (incl. REST `POST /api/v1/ask`) | Yes | No | No |
+| `query.execute` | Execute live trait queries | Yes | No | No |
 | `workflow.execute` | Run / abort workflows | Yes | No | No |
 | `audit.read` | View raw audit-log chain | Yes | Yes | **No** |
 | `compliance.read` | View framework reports + audit bundle | Yes | Yes | Yes |

@@ -7,7 +7,7 @@ All endpoints return JSON and accept JSON request bodies. Errors use the format 
 
 ## Authorization
 
-Every endpoint requires both authentication (session cookie or `vgot_*` API token) and a specific permission. Read endpoints (status, list, get) require `fleet.read`; mutation endpoints require a permission matched to the action — `config.publish` for publish/freeze/reload/retract, `config.rollback` for rollback, `push.execute` for task dispatch, `workflow.execute` for workflow run/abort, `query.execute` for live queries and the AI assistant, `fleet.write` for envoy maintenance and force-update, `audit.read` for the raw audit log. Database administration, peer promotion, secret-rotation callbacks, and emergency-access recording require the admin role. The compliance framework reports + audit-bundle download ride `compliance.read`; supporting-doc upload requires `compliance.docs.write`. See the [Authentication doc](../howto/operate/set-up-auth.md#roles-and-permissions) for the full role/permission matrix.
+Every endpoint except the public ones listed under [Other Endpoints](#other-endpoints) requires both authentication (session cookie or `vgot_*` API token) and a specific permission. Read endpoints (status, list, get) require `fleet.read`; mutation endpoints require a permission matched to the action — `config.publish` for publish/freeze/reload/retract, `config.rollback` for rollback, `push.execute` for task dispatch, `workflow.execute` for workflow run/abort, `query.execute` for live queries, `fleet.write` for envoy maintenance and force-update, `audit.read` for the raw audit log. Database administration, peer promotion, secret-rotation callbacks, and emergency-access recording require the admin role. The compliance framework reports + audit-bundle download ride `compliance.read`; supporting-doc upload requires `compliance.docs.write`. See the [Authentication doc](../howto/operate/set-up-auth.md#roles-and-permissions) for the full role/permission matrix.
 
 ## Tasks
 
@@ -293,9 +293,9 @@ Query trait values from connected agents in real time.
 
 ### POST /api/v1/ask
 
-**Permission:** `query.execute`
+**Permission:** `fleet.read`
 
-Ask the AI assistant a question about your fleet.
+Ask the AI assistant a question about your fleet. The assistant's tools only read fleet data, so this carries the same permission as the web-UI AI drawer: viewers can use it, the compliance role cannot.
 
 **Request body:**
 
@@ -1708,6 +1708,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/healthz` | Readiness probe, no authentication. `200` with body `ok` once the server has finished starting; `503` with body `unavailable` while it starts or shuts down. Reports nothing else. The Docker Compose healthcheck reads it. |
 | GET | `/metrics` | Prometheus metrics (see [Metrics](../howto/operate/set-up-monitoring.md)) |
 | GET | `/bootstrap` | Agent bootstrap script |
 | GET | `/api/v1/agent/latest` | Agent version, SHA256 checksum, and ED25519 signature (`?os=&arch=`; an unsupported platform returns `400`) |
