@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:c63c3b232af46aa6469da5d1b409728ed6f332b9444079d6b63be91ed800a9ed -->
+<!-- vigo-i18n source_sha:1c3e8dddc73dd6b805362a492b218e18d325e2c72c29091bcf495c1ec28e1003 -->
 
 # 1 · Mettre le serveur en service
 
@@ -8,13 +8,14 @@ C'est le premier des quatre tutoriels — suivez-les dans l'ordre ; chacun s'app
 
 ## Prérequis
 
-- Un hôte Linux avec Docker et le plugin Docker Compose (et Go 1.25 si vous créez la clé de signature facultative).
+- Un hôte Linux avec Docker (plugins Compose et Buildx), `git` et `rsync`, plus Go 1.25 si vous créez la clé de signature facultative.
+- Les ports 8443, 1530 et 1531 accessibles depuis les machines que vous enrôlerez.
 - Les droits root (ou `sudo`) sur cet hôte.
 - C'est tout. Aucun service externe.
 
 ## 1. Le démarrer
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker : Docker avec le plugin Compose suffit, et la première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker. L'hôte a besoin de Docker avec les plugins Compose et Buildx, ainsi que de `git` et `rsync` ; sous Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` les installe. La première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo

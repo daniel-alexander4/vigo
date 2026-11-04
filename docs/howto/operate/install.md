@@ -15,7 +15,7 @@ Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the 
 
 ### 1. Seed the data directory
 
-Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker, so Docker with the Compose plugin is all it needs, and the first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
+Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker. The host needs Docker with the Compose and Buildx plugins, plus `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
@@ -65,7 +65,7 @@ cd /srv/vigo
 sudo docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). Three CLI steps stand the install up from here, **in order**. `vigocli` on the host is root-only, so run it with `sudo`:
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap), plus **1531** for swarm blob transfer between envoys. Open all three to the machines you will enroll if a firewall is in the way. Three CLI steps stand the install up from here, **in order**. `vigocli` on the host is root-only, so run it with `sudo`:
 
 1. **Bootstrap the secrets vault** — `sudo vigocli secrets init` (the server already created the master key; this sets the unlock passphrase), then `sudo vigocli secrets unlock`. The vault must be initialized before you can store secrets with `vigocli secrets set`.
 2. **Enroll the local agent** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` from the server host. **Use `127.0.0.1`, not `localhost` or this host's own hostname** — the agent the script installs dials whatever address the curl URL used on every subsequent check-in, and only the IPv4 loopback literal is resolver-independent (no nsswitch, no mDNS, no IPv6 link-local trap). Enrolling this host by its LAN address or hostname is refused, because its hostname is one of the server's own TLS names. This step enrolls *only* the server's own host; every other machine you want to manage follows the separate procedure in [Enroll an envoy](enroll-an-envoy.md), which dials the server by its reachable hostname. The server has a canonical assumption (per CLAUDE.md) that a `vigo` agent runs on the same host alongside the container; the admin-create step below uses that agent's `users` trait to verify the OS-user mapping. Wait until the agent has reported one check-in (~30s) before continuing.

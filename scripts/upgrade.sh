@@ -858,12 +858,17 @@ echo "Checking freshness..."
 
 STALE=0
 
+# Every check below compares against the running container. A fresh install
+# built with --norun has none yet, and under `set -euo pipefail` a failed
+# `docker exec` would end the script with an error after a good build.
+if docker ps -q -f name='^vigo$' | grep -q .; then
+
 # Compare host CLI against container CLI.
 if [ -f /usr/local/bin/vigocli ]; then
     HOST_VER=$(vigocli --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
     CTR_VER=$(docker exec vigo vigocli --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
     HOST_MD5=$(md5sum /usr/local/bin/vigocli 2>/dev/null | awk '{print $1}')
-    CTR_MD5=$(docker exec vigo md5sum /usr/local/bin/vigocli 2>/dev/null | awk '{print $1}')
+    CTR_MD5=$(docker exec vigo md5sum /usr/local/bin/vigocli 2>/dev/null | awk '{print $1}' || true)
     if [ "$HOST_MD5" != "$CTR_MD5" ]; then
         echo "  STALE  vigocli  host=$HOST_VER  container=$CTR_VER  (host differs from container)"
         STALE=1
@@ -922,7 +927,7 @@ fi
 # Check entrypoint.sh against the copy baked into the container.
 if [ -d "$REPO_DIR" ]; then
     REPO_EP_MD5=$(md5sum "$REPO_DIR/entrypoint.sh" 2>/dev/null | awk '{print $1}')
-    CTR_EP_MD5=$(docker exec vigo md5sum /entrypoint.sh 2>/dev/null | awk '{print $1}')
+    CTR_EP_MD5=$(docker exec vigo md5sum /entrypoint.sh 2>/dev/null | awk '{print $1}' || true)
     if [ "$REPO_EP_MD5" != "$CTR_EP_MD5" ]; then
         echo "  STALE  entrypoint.sh (repo differs from container)"
         STALE=1
@@ -936,6 +941,9 @@ if [ "$STALE" -eq 0 ]; then
     echo "All files are fresh."
 else
     echo "NOTE: Some files are stale. Run 'upgrade.sh full' for a full image rebuild."
+fi
+else
+    echo "  SKIP   no running vigo container to compare against."
 fi
 
 echo ""

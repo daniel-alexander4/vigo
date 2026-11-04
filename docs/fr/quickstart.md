@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:8b727a4657a4369906da7db84997ec1428fac70d99abf7ed6471da9cb49dd22a -->
+<!-- vigo-i18n source_sha:31c8b1016831110e864d52498f7aa7b2abf0904b93737d2149f71cbfac24a17d -->
 
 # Démarrage rapide
 
@@ -6,7 +6,7 @@ Mettez en route le serveur Vigo, enrôlez votre premier Envoy et appliquez votre
 
 ## 1. Démarrer le serveur
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker : Docker avec le plugin Compose suffit, et la première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker. L'hôte a besoin de Docker avec les plugins Compose et Buildx, ainsi que de `git` et `rsync` ; sous Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` les installe. La première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo

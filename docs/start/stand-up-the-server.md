@@ -6,13 +6,14 @@ This is the first of four tutorials — work through them in order; each builds 
 
 ## Prerequisites
 
-- A Linux host with Docker and the Docker Compose plugin (Go 1.25 too if you create the optional signing key).
+- A Linux host with Docker (Compose and Buildx plugins), `git` and `rsync`, plus Go 1.25 if you create the optional signing key.
+- Ports 8443, 1530 and 1531 reachable from the machines you will enroll.
 - Root (or `sudo`) on that host.
 - That's it. No external services.
 
 ## 1. Bring it up
 
-Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker, so Docker with the Compose plugin is all it needs, and the first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
+Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker. The host needs Docker with the Compose and Buildx plugins, plus `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo

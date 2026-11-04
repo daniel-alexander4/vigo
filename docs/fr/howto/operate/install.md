@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:4218fd22e28bb37ded169cbf92dbb69518b000db59dcd5706e97563d0ef0c244 -->
+<!-- vigo-i18n source_sha:296eed1d330228e185a10b33f14ffaed204a6830e277072d349911dacf6e56ab -->
 
 # Installer le serveur Vigo
 
@@ -16,7 +16,7 @@ Vigo comporte trois composants : le serveur (`vigosrv`), la CLI (`vigocli`) et l
 
 ### 1. Initialiser le répertoire de données
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker : Docker avec le plugin Compose suffit, et la première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
+Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker. L'hôte a besoin de Docker avec les plugins Compose et Buildx, ainsi que de `git` et `rsync` ; sous Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` les installe. La première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
@@ -66,7 +66,7 @@ cd /srv/vigo
 sudo docker compose up -d
 ```
 
-Le serveur démarre sur les ports **1530** (gRPC, check-in des agents) et **8443** (HTTPS — API REST, interface web, métriques, bootstrap). Trois étapes CLI mettent l'installation en route à partir d'ici, **dans l'ordre** :
+Le serveur démarre sur les ports **1530** (gRPC, check-in des agents) et **8443** (HTTPS — API REST, interface web, métriques, bootstrap), plus **1531** pour le transfert de blobs swarm entre envoys. Ouvrez les trois aux machines que vous enrôlerez si un pare-feu est en travers. Trois étapes CLI mettent l'installation en route à partir d'ici, **dans l'ordre** :
 
 1. **Initialiser le coffre à secrets** — `sudo vigocli secrets init` (le serveur a déjà créé la clé maîtresse ; cette commande définit la phrase secrète de déverrouillage), puis `sudo vigocli secrets unlock`. Le coffre doit être initialisé avant de pouvoir stocker des secrets avec `vigocli secrets set`. Sur l'hôte, `vigocli` est réservé à root : lancez-le avec `sudo`.
 2. **Enrôler l'agent local** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` depuis l'hôte du serveur. **Utilisez `127.0.0.1`, pas `localhost` ni le nom d'hôte propre de cette machine** — l'agent que le script installe compose, à chaque check-in ultérieur, l'adresse exacte utilisée par l'URL de curl, et seule la valeur littérale de bouclage IPv4 est indépendante du résolveur (pas de nsswitch, pas de mDNS, pas de piège IPv6 link-local). L'enrôlement de cet hôte par son adresse LAN ou son nom d'hôte est refusé, car ce nom fait partie des noms TLS du serveur. Cette étape enrôle *uniquement* l'hôte propre du serveur ; toute autre machine que vous souhaitez gérer suit la procédure distincte dans [Enrôler un envoy](enroll-an-envoy.md), qui compose le serveur par son nom d'hôte joignable. Le serveur a une hypothèse canonique (selon CLAUDE.md) qu'un agent `vigo` s'exécute sur le même hôte aux côtés du conteneur ; l'étape de création d'admin ci-dessous utilise le trait `users` de cet agent pour vérifier la correspondance utilisateur-OS. Attendez que l'agent ait remonté un check-in (~30s) avant de continuer.
