@@ -449,12 +449,13 @@ sudo systemctl daemon-reload
 sudo rm -rf /etc/vigo-envoy
 sudo rm -rf /var/lib/vigo
 sudo rm -f /usr/local/sbin/vigo
+sudo rm -f /usr/local/bin/git-remote-gitback
 
 # 3. Re-bootstrap
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
-Or use the reset script:
+Or use the reset script, which runs the same steps. It never touches server state in `/srv/vigo`, so it is safe on a server host that runs its own envoy:
 
 ```bash
 sudo scripts/reset-envoy.sh
