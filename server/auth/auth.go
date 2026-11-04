@@ -101,6 +101,10 @@ var publicPaths = map[string]bool{
 	"/login":            true,
 	"/totp":             true,
 	"/api/v1/bootstrap": true,
+	// Apache-2.0 LICENSE and NOTICE. The bootstrap script fetches them with
+	// no session to ship beside the agent binary (license section 4).
+	"/license/LICENSE": true,
+	"/license/NOTICE":  true,
 	// /api/v1/secrets/rotated is INTENTIONALLY NOT public. The route's own
 	// admin() wrapper (server/api/config.go) handles auth. Listing it here
 	// bypassed the auth middleware entirely (no user injected into context),

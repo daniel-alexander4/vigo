@@ -25,6 +25,10 @@ func TestIsPublicPath(t *testing.T) {
 		{"/auth/isowebauth/challenge", true},
 		{"/static/css/style.css", true},
 		{"/api/v1/bootstrap", true},
+		// Fetched by the bootstrap script with no session (Apache-2.0 section 4).
+		{"/license/LICENSE", true},
+		{"/license/NOTICE", true},
+		{"/license/other", false},
 		{"/api/v1/agent/download/linux/arm64", true},
 		{"/api/v1/agent/latest", true},
 		{"/api/v1/bootstrap/register", true},
