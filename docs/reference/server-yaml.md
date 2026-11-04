@@ -224,6 +224,8 @@ smtp:
 
 External platform integrations. Each forwards events asynchronously. All API keys support `secret:` prefix. Empty `events` list = forward all events.
 
+Every event carries one incident key per condition and envoy. `envoy.stale`, `envoy.offline` and `envoy.online` share a key, so an outage is one incident and `envoy.online` resolves it. `resource.blocked` is keyed by configcrate and resource across the fleet, and each `security.*` event type is one incident. PagerDuty uses the key as `dedup_key` and Opsgenie as `alias`. ServiceNow gets it as `correlation_id` and Zendesk as `external_id`. The ticket targets (Jira, Zendesk, Freshservice, Linear, GitHub Issues, ServiceNow, ConnectWise, Autotask, NinjaRMM, Kaseya) open at most one ticket per key every 24 hours. A resolve event clears the key, so a recurrence opens a new ticket. That window is held in memory and resets when vigosrv restarts.
+
 ### Alerting
 
 ```yaml

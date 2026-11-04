@@ -19,7 +19,8 @@ type jiraTarget struct {
 	client *http.Client
 }
 
-func (j *jiraTarget) Name() string                  { return "jira" }
+func (j *jiraTarget) Name() string             { return "jira" }
+func (j *jiraTarget) opensTicket()             {}
 func (j *jiraTarget) Accepts(event Event) bool { return acceptsEvent(j.cfg.Events, event.Name) }
 func (j *jiraTarget) Dispatch(ctx context.Context, e Event) error {
 	issueType := j.cfg.IssueType
@@ -58,7 +59,8 @@ type zendeskTarget struct {
 	client *http.Client
 }
 
-func (z *zendeskTarget) Name() string                  { return "zendesk" }
+func (z *zendeskTarget) Name() string             { return "zendesk" }
+func (z *zendeskTarget) opensTicket()             {}
 func (z *zendeskTarget) Accepts(event Event) bool { return acceptsEvent(z.cfg.Events, event.Name) }
 func (z *zendeskTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
@@ -68,7 +70,8 @@ func (z *zendeskTarget) Dispatch(ctx context.Context, e Event) error {
 				"body": fmt.Sprintf("Vigo detected %s on %s at %s.\n\n%s",
 					e.Name, e.Hostname, e.Timestamp.Format("2006-01-02 15:04:05 UTC"), e.Summary),
 			},
-			"priority": zendeskPriority(e.Name),
+			"priority":    zendeskPriority(e.Name),
+			"external_id": e.DedupKey,
 		},
 	}
 	url := fmt.Sprintf("https://%s.zendesk.com/api/v2/tickets.json", z.cfg.Subdomain)
@@ -94,7 +97,8 @@ type freshserviceTarget struct {
 	client *http.Client
 }
 
-func (f *freshserviceTarget) Name() string                  { return "freshservice" }
+func (f *freshserviceTarget) Name() string             { return "freshservice" }
+func (f *freshserviceTarget) opensTicket()             {}
 func (f *freshserviceTarget) Accepts(event Event) bool { return acceptsEvent(f.cfg.Events, event.Name) }
 func (f *freshserviceTarget) Dispatch(ctx context.Context, e Event) error {
 	priority := 2 // medium
@@ -123,7 +127,8 @@ type linearTarget struct {
 	client *http.Client
 }
 
-func (l *linearTarget) Name() string                  { return "linear" }
+func (l *linearTarget) Name() string             { return "linear" }
+func (l *linearTarget) opensTicket()             {}
 func (l *linearTarget) Accepts(event Event) bool { return acceptsEvent(l.cfg.Events, event.Name) }
 func (l *linearTarget) Dispatch(ctx context.Context, e Event) error {
 	priority := 3 // medium
@@ -157,7 +162,8 @@ type githubIssuesTarget struct {
 	client *http.Client
 }
 
-func (g *githubIssuesTarget) Name() string                  { return "github_issues" }
+func (g *githubIssuesTarget) Name() string             { return "github_issues" }
+func (g *githubIssuesTarget) opensTicket()             {}
 func (g *githubIssuesTarget) Accepts(event Event) bool { return acceptsEvent(g.cfg.Events, event.Name) }
 func (g *githubIssuesTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{

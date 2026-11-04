@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -86,6 +87,9 @@ type Event struct {
 	Summary   string
 	Details   map[string]any
 	Severity  Severity
+	// DedupKey is the stable incident key (see incidentKey). Dispatch sets
+	// it; any caller-supplied value is overwritten.
+	DedupKey string
 }
 
 // suppressionWindow is the time window for grouping identical events.
@@ -112,6 +116,7 @@ type Dispatcher struct {
 	targets    []target
 	client     *http.Client
 	suppressor *eventSuppressor
+	tickets    *ticketDedup  // one ticket per incident key per window, ticketTarget only
 	inflight   chan struct{} // bounded semaphore — see dispatcherInflightCap
 }
 
@@ -165,6 +170,8 @@ func (s *eventSuppressor) check(event *Event) bool {
 		entry.flushed = true
 		event.Summary = fmt.Sprintf("%s across %d envoys", event.Name, len(entry.envoys))
 		event.Hostname = fmt.Sprintf("%d envoys", len(entry.envoys))
+		// EnvoyID is cleared (the summary is not about one envoy) but
+		// DedupKey is left as computed, so the incident stays keyed.
 		event.EnvoyID = ""
 		event.Details["suppressed_count"] = entry.count
 		event.Details["affected_envoys"] = len(entry.envoys)
@@ -214,6 +221,7 @@ func New(cfg config.IntegrationsSection) *Dispatcher {
 	d := &Dispatcher{
 		client:     &http.Client{Timeout: 10 * time.Second},
 		suppressor: newEventSuppressor(),
+		tickets:    newTicketDedup(),
 		inflight:   make(chan struct{}, dispatcherInflightCap),
 	}
 
@@ -309,15 +317,30 @@ func (d *Dispatcher) Dispatch(event Event) {
 	if event.Severity == 0 && event.Name != "" {
 		event.Severity = DefaultSeverity(event.Name)
 	}
+	// Copy Details: the suppressor writes into it, every target goroutine
+	// reads it, and the caller still owns the map it passed in.
 	if event.Details == nil {
 		event.Details = make(map[string]any)
+	} else {
+		event.Details = maps.Clone(event.Details)
 	}
+	event.DedupKey = incidentKey(event)
 	if !d.suppressor.check(&event) {
 		return // suppressed — group notification already sent
 	}
 	for _, t := range d.targets {
 		if !t.Accepts(event) {
 			continue
+		}
+		// Ticket targets have no native dedup on create: open at most one
+		// ticket per incident key per window.
+		var ticketKey string
+		if _, ok := t.(ticketTarget); ok {
+			k, admitted := d.tickets.admit(t.Name(), event)
+			if !admitted {
+				continue
+			}
+			ticketKey = k
 		}
 		// Bound in-flight dispatch goroutines. Non-blocking acquire so the
 		// audit hot path can't be pinned by a slow webhook target; the warn
@@ -339,6 +362,9 @@ func (d *Dispatcher) Dispatch(event Event) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := tgt.Dispatch(ctx, event); err != nil {
+				if ticketKey != "" {
+					d.tickets.release(ticketKey) // a failed open must not suppress the retry
+				}
 				slog.Error("integration dispatch failed",
 					"target", tgt.Name(),
 					"event", event.Name,
@@ -463,14 +489,12 @@ func (p *pagerdutyTarget) Dispatch(ctx context.Context, e Event) error {
 		action = "resolve"
 	}
 
-	// Dedup key groups related events into a single incident.
-	// Same error class across multiple envoys → one incident, not N.
-	dedupKey := pagerdutyDedupKey(e)
-
+	// Dedup key groups related events into a single incident and lets a
+	// resolve event match its trigger (see incidentKey).
 	payload := map[string]any{
 		"routing_key":  p.cfg.RoutingKey,
 		"event_action": action,
-		"dedup_key":    dedupKey,
+		"dedup_key":    e.DedupKey,
 		"payload": map[string]any{
 			"summary":        fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Summary),
 			"source":         e.Hostname,
@@ -480,27 +504,6 @@ func (p *pagerdutyTarget) Dispatch(ctx context.Context, e Event) error {
 		},
 	}
 	return postJSON(ctx, p.client, "https://events.pagerduty.com/v2/enqueue", nil, payload)
-}
-
-// pagerdutyDedupKey generates a dedup key for PagerDuty incident grouping.
-// Events with the same dedup key are grouped into a single incident.
-func pagerdutyDedupKey(e Event) string {
-	// For resource.blocked events, group by error class (not per-envoy).
-	if e.Name == "resource.blocked" {
-		configcrate, _ := e.Details["configcrate"].(string)
-		resource, _ := e.Details["resource"].(string)
-		return fmt.Sprintf("vigo:%s:%s:%s", e.Name, configcrate, resource)
-	}
-	// For security events, group by event type (one incident per threat type).
-	if strings.HasPrefix(e.Name, "security.") {
-		return fmt.Sprintf("vigo:%s", e.Name)
-	}
-	// For fleet-wide events (no hostname), use event name only.
-	if e.Hostname == "" {
-		return fmt.Sprintf("vigo:%s", e.Name)
-	}
-	// Default: per-envoy, per-event.
-	return fmt.Sprintf("vigo:%s:%s", e.Name, e.EnvoyID)
 }
 
 // isResolveEvent returns true for events that indicate a previous issue has cleared.
@@ -535,6 +538,11 @@ func (o *opsgenieTarget) Dispatch(ctx context.Context, e Event) error {
 		"source":      "vigo",
 		"entity":      e.Hostname,
 		"details":     e.Details,
+	}
+	// Opsgenie dedups open alerts natively on alias. A resolve event is a
+	// different alert, so it must not merge into the one it resolves.
+	if !isResolveEvent(e.Name) {
+		payload["alias"] = e.DedupKey
 	}
 	headers := map[string]string{"Authorization": "GenieKey " + o.cfg.APIKey}
 	return postJSON(ctx, o.client, "https://api.opsgenie.com/v2/alerts", headers, payload)
@@ -586,6 +594,7 @@ type connectwiseTarget struct {
 }
 
 func (c *connectwiseTarget) Name() string             { return "connectwise" }
+func (c *connectwiseTarget) opensTicket()             {}
 func (c *connectwiseTarget) Accepts(event Event) bool { return acceptsEvent(c.cfg.Events, event.Name) }
 func (c *connectwiseTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{

@@ -19,7 +19,8 @@ type servicenowTarget struct {
 	client *http.Client
 }
 
-func (s *servicenowTarget) Name() string                  { return "servicenow" }
+func (s *servicenowTarget) Name() string             { return "servicenow" }
+func (s *servicenowTarget) opensTicket()             {}
 func (s *servicenowTarget) Accepts(event Event) bool { return acceptsEvent(s.cfg.Events, event.Name) }
 func (s *servicenowTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
@@ -28,6 +29,7 @@ func (s *servicenowTarget) Dispatch(ctx context.Context, e Event) error {
 		"urgency":           "2",
 		"impact":            "2",
 		"category":          "Software",
+		"correlation_id":    e.DedupKey,
 	}
 	url := fmt.Sprintf("https://%s/api/now/table/incident", s.cfg.Instance)
 	auth := basicAuth(s.cfg.Username + ":" + s.cfg.Password)
@@ -45,14 +47,14 @@ type device42Target struct {
 	client *http.Client
 }
 
-func (d *device42Target) Name() string                  { return "device42" }
+func (d *device42Target) Name() string             { return "device42" }
 func (d *device42Target) Accepts(event Event) bool { return acceptsEvent(d.cfg.Events, event.Name) }
 func (d *device42Target) Dispatch(ctx context.Context, e Event) error {
 	// Device42 REST API — create or update a device.
 	payload := map[string]any{
-		"name":       e.Hostname,
-		"notes":      fmt.Sprintf("Vigo event: %s at %s\n%s", e.Name, e.Timestamp.Format("2006-01-02 15:04:05 UTC"), e.Summary),
-		"tags":       "vigo-managed",
+		"name":          e.Hostname,
+		"notes":         fmt.Sprintf("Vigo event: %s at %s\n%s", e.Name, e.Timestamp.Format("2006-01-02 15:04:05 UTC"), e.Summary),
+		"tags":          "vigo-managed",
 		"service_level": "Production",
 	}
 	url := strings.TrimSuffix(d.cfg.URL, "/") + "/api/1.0/devices/"
@@ -68,13 +70,13 @@ type snipeITTarget struct {
 	client *http.Client
 }
 
-func (s *snipeITTarget) Name() string                  { return "snipeit" }
+func (s *snipeITTarget) Name() string             { return "snipeit" }
 func (s *snipeITTarget) Accepts(event Event) bool { return acceptsEvent(s.cfg.Events, event.Name) }
 func (s *snipeITTarget) Dispatch(ctx context.Context, e Event) error {
 	// Snipe-IT REST API — create or update hardware asset.
 	payload := map[string]any{
-		"name":   e.Hostname,
-		"notes":  fmt.Sprintf("Vigo event: %s at %s\n%s", e.Name, e.Timestamp.Format("2006-01-02 15:04:05 UTC"), e.Summary),
+		"name":      e.Hostname,
+		"notes":     fmt.Sprintf("Vigo event: %s at %s\n%s", e.Name, e.Timestamp.Format("2006-01-02 15:04:05 UTC"), e.Summary),
 		"status_id": 2, // deployed
 	}
 	url := strings.TrimSuffix(s.cfg.URL, "/") + "/hardware"

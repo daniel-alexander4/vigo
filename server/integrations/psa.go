@@ -19,7 +19,8 @@ type autotaskTarget struct {
 	client *http.Client
 }
 
-func (a *autotaskTarget) Name() string                  { return "autotask" }
+func (a *autotaskTarget) Name() string             { return "autotask" }
+func (a *autotaskTarget) opensTicket()             {}
 func (a *autotaskTarget) Accepts(event Event) bool { return acceptsEvent(a.cfg.Events, event.Name) }
 func (a *autotaskTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
@@ -52,7 +53,8 @@ type ninjaRMMTarget struct {
 	client *http.Client
 }
 
-func (n *ninjaRMMTarget) Name() string                  { return "ninjarmm" }
+func (n *ninjaRMMTarget) Name() string             { return "ninjarmm" }
+func (n *ninjaRMMTarget) opensTicket()             {}
 func (n *ninjaRMMTarget) Accepts(event Event) bool { return acceptsEvent(n.cfg.Events, event.Name) }
 func (n *ninjaRMMTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
@@ -78,14 +80,15 @@ type kaseyaTarget struct {
 	client *http.Client
 }
 
-func (k *kaseyaTarget) Name() string                  { return "kaseya" }
+func (k *kaseyaTarget) Name() string             { return "kaseya" }
+func (k *kaseyaTarget) opensTicket()             {}
 func (k *kaseyaTarget) Accepts(event Event) bool { return acceptsEvent(k.cfg.Events, event.Name) }
 func (k *kaseyaTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"ServiceDeskTicketId": 0,
-		"Summary":            fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Hostname),
-		"Description":        fmt.Sprintf("Vigo detected %s on %s at %s.\n\n%s", e.Name, e.Hostname, e.Timestamp.Format("2006-01-02 15:04:05 UTC"), e.Summary),
-		"Priority":           "Normal",
+		"Summary":             fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Hostname),
+		"Description":         fmt.Sprintf("Vigo detected %s on %s at %s.\n\n%s", e.Name, e.Hostname, e.Timestamp.Format("2006-01-02 15:04:05 UTC"), e.Summary),
+		"Priority":            "Normal",
 	}
 	url := strings.TrimSuffix(k.cfg.URL, "/") + "/api/v1.0/automation/servicedesks/tickets"
 	auth := basicAuth(k.cfg.Username + ":" + k.cfg.Password)
