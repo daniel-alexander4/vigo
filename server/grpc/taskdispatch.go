@@ -32,6 +32,10 @@ type taskRouter struct {
 	notifiers map[string]map[string]chan struct{}
 }
 
+// taskRunStatusCancelled is the task_runs.status the CancelTaskRun /
+// CancelAllRunningTaskRuns queries write (server/db/queries/task_runs.sql).
+const taskRunStatusCancelled = "cancelled"
+
 func newTaskRouter(queries *db.Queries, m *metrics.Metrics) *taskRouter {
 	return &taskRouter{
 		queries:   queries,
@@ -274,7 +278,12 @@ func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
 		}
 	}
 
-	// All targets are done.
+	// All targets are done. A cancelled run keeps its status: the cancel
+	// already set finished_at, and a late result from a target dispatched
+	// before the cancel must not rewrite it to complete/failed.
+	if run, err := r.queries.GetTaskRun(ctx, taskRunID); err == nil && run.Status == taskRunStatusCancelled {
+		return
+	}
 	status := "complete"
 	if totalFailed > 0 {
 		status = "failed"

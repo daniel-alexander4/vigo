@@ -42,9 +42,11 @@ UPDATE task_runs
 SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP
 WHERE id = ? AND status IN ('pending', 'running');
 
+-- task_run_targets.status has no 'cancelled' value (CHECK in migration
+-- 000001): a cancelled target is 'skipped' with error_msg 'cancelled'.
 -- name: CancelTaskRunTargets :exec
 UPDATE task_run_targets
-SET status = 'cancelled'
+SET status = 'skipped', error_msg = 'cancelled', finished_at = CURRENT_TIMESTAMP
 WHERE task_run_id = ? AND status IN ('pending', 'dispatched');
 
 -- name: CancelAllRunningTaskRuns :exec

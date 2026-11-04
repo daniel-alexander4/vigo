@@ -189,6 +189,19 @@ func (s *AgentService) runRollingExecution(
 	})
 
 	for batchIdx, batch := range batches {
+		// An operator cancel (REST /task/{id}/cancel) or a workflow abort
+		// flips the run to "cancelled" and its pending targets with it.
+		// Stop before dispatching the next batch; the run row keeps its
+		// cancelled status (maybeFinishTaskRun never overwrites it).
+		if s.taskRunCancelled(ctx, taskRunID) {
+			slog.Info("rolling execution: run cancelled, stopping",
+				"task_run_id", taskRunID,
+				"batch", batchIdx+1,
+				"total_batches", len(batches),
+			)
+			return
+		}
+
 		slog.Info("rolling execution: starting batch",
 			"task_run_id", taskRunID,
 			"batch", batchIdx+1,
@@ -304,6 +317,19 @@ func (s *AgentService) countFailedTargets(ctx context.Context, taskRunID string)
 		}
 	}
 	return failed
+}
+
+// taskRunCancelled reports whether the task run has been cancelled. A read
+// error counts as not cancelled: the batch loop keeps its existing
+// failure-threshold and health-check stops, and a transient DB error must
+// not silently abandon a rollout.
+func (s *AgentService) taskRunCancelled(ctx context.Context, taskRunID string) bool {
+	run, err := s.queries.GetTaskRun(ctx, taskRunID)
+	if err != nil {
+		slog.Warn("rolling execution: reading task run status", "task_run_id", taskRunID, "error", err)
+		return false
+	}
+	return run.Status == taskRunStatusCancelled
 }
 
 // skipRemainingBatches marks all targets in remaining batches as 'skipped'.
