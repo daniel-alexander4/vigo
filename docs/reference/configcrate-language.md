@@ -98,7 +98,7 @@ resources:
 | `vars` | no | Default variable values (overridden by envoy-level vars) |
 | `defaults` | no | Default attributes applied to all resources in this configcrate |
 | `depends_on` | no | Other configcrates this configcrate depends on (configcrate-level ordering) |
-| `before` | no | Configcrates that must run after this configcrate |
+| `before` | no | Configcrates that must run after this configcrate. `depends_on` and `before` edges across an envoy's configcrates must not form a cycle; one is a load error showing the whole cycle (`a → b → c → a`). |
 | `resources` | yes | List of resources to manage |
 | `compliance` | no | Per-configcrate compliance attribution block — two sub-keys, both routed through Vigo-curated catalogs (see [Compliance authoring](#compliance-authoring) below): `compliance.provides:` (functional capability tags) and `compliance.bundle:` (framework-scope-cut tags). |
 

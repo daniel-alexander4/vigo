@@ -3004,6 +3004,30 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, configcrateDefs map[string
 		}
 	}
 
+	// Configcrate-level depends_on / before must form a DAG: the agent
+	// orders configcrates by these edges, and a cycle would leave it with no
+	// valid order. A depends_on naming a foreach-expanded definition fans out
+	// to every instance, as before: does above.
+	{
+		adj := make(map[string][]string, len(configcrates))
+		order := make([]string, 0, len(configcrates))
+		for _, mod := range configcrates {
+			order = append(order, mod.Name)
+			for _, dep := range mod.DependsOn {
+				if idxs, ok := configcratesByBase[dep]; ok {
+					for _, idx := range idxs {
+						adj[mod.Name] = append(adj[mod.Name], configcrates[idx].Name)
+					}
+				} else {
+					adj[mod.Name] = append(adj[mod.Name], dep)
+				}
+			}
+		}
+		if cycle := validate.FindCycle(adj, order); cycle != nil {
+			return nil, fmt.Errorf("configcrate dependency cycle (depends_on / before): %s", strings.Join(cycle, " → "))
+		}
+	}
+
 	// Extract module definition names for var collection below. A foreach
 	// instance's var defaults come from the base module definition.
 	configcrateNames := make([]string, len(configcrateRefs))

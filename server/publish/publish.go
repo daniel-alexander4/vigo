@@ -1088,10 +1088,14 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	// snapshot behind it.
 	version, err := SnapshotTree(opts.LiveDir, opts.HistoryDir, DefaultMaxVersions)
 	if err != nil {
+		var undoErr error
 		if prevErr == nil {
-			_ = os.WriteFile(destPath, prev, 0o640)
+			undoErr = os.WriteFile(destPath, prev, 0o640)
 		} else {
-			os.Remove(destPath)
+			undoErr = os.Remove(destPath)
+		}
+		if undoErr != nil {
+			return nil, fmt.Errorf("snapshotting config for rollback failed (%v) and undoing the write of %s also failed: %w", err, relPath, undoErr)
 		}
 		return nil, fmt.Errorf("snapshotting config for rollback (%s not published): %w", relPath, err)
 	}

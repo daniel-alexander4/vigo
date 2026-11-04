@@ -469,28 +469,48 @@ func validateCrossReferences(mod Configcrate) []Finding {
 // detectCycles checks the depends_on + before graph for cycles using DFS.
 func detectCycles(resources []Resource) error {
 	adj := make(map[string][]string)
+	order := make([]string, 0, len(resources))
 	for _, res := range resources {
+		order = append(order, res.Name)
 		adj[res.Name] = append(adj[res.Name], res.DependsOn...)
 		for _, b := range res.Before {
 			adj[b] = append(adj[b], res.Name)
 		}
 	}
+	if cycle := FindCycle(adj, order); cycle != nil {
+		return fmt.Errorf("dependency cycle detected: %s", strings.Join(cycle, " → "))
+	}
+	return nil
+}
 
+// FindCycle returns one cycle in the directed graph adj (node → the nodes
+// it depends on) as the full path, first node repeated at the end
+// (a → b → c → a), or nil when the graph is acyclic. Nodes are visited in
+// order, so the result is deterministic. Shared by the resource-level check
+// here and the configcrate-level check in the config loader.
+func FindCycle(adj map[string][]string, order []string) []string {
 	const (
 		white = 0
 		gray  = 1
 		black = 2
 	)
 	color := make(map[string]int)
+	var stack []string
 	var cycle []string
 
 	var dfs func(string) bool
 	dfs = func(node string) bool {
 		color[node] = gray
+		stack = append(stack, node)
 		for _, next := range adj[node] {
 			switch color[next] {
 			case gray:
-				cycle = append(cycle, node, next)
+				for i, n := range stack {
+					if n == next {
+						cycle = append(append([]string(nil), stack[i:]...), next)
+						break
+					}
+				}
 				return true
 			case white:
 				if dfs(next) {
@@ -498,15 +518,14 @@ func detectCycles(resources []Resource) error {
 				}
 			}
 		}
+		stack = stack[:len(stack)-1]
 		color[node] = black
 		return false
 	}
 
-	for _, res := range resources {
-		if color[res.Name] == white {
-			if dfs(res.Name) {
-				return fmt.Errorf("dependency cycle detected: %s", strings.Join(cycle, " → "))
-			}
+	for _, n := range order {
+		if color[n] == white && dfs(n) {
+			return cycle
 		}
 	}
 	return nil
