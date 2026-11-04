@@ -347,6 +347,8 @@ grc:
 | `push_interval` | `6h` | How often to push evidence |
 | `frameworks` | (required) | Vigo standard key → GRC platform framework ID mapping |
 
+Each pushed framework carries the same numbers as that framework's compliance report: `satisfied`, `waived`, `partial` and `not_satisfied` control counts (they sum to `total_controls`), `coverage_percent`, and the active envoy count. Every control is listed with a fleet status: `satisfied` when every active envoy covers it, `waived` when every envoy has it waived, `not_satisfied` when none covers, waives or partially meets it, and `partial` otherwise. The evidence text gives the per-envoy split. Unknown framework keys are skipped with a warning.
+
 ## spanner
 
 Peer-equal control-plane federation (ADR-026). See [Set up Spanner](../howto/operate/set-up-spanner.md) for the walkthrough.

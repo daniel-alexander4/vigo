@@ -1303,7 +1303,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 	// --- GRC evidence pusher (nil unless GRC integrations configured).
 	// The `.Start(ctx)` goroutine stays in run() / chunk 5. ---
 	if len(s.cfg.GRC.Integrations) > 0 {
-		s.grcPusher = grc.NewPusher(s.cfg.GRC.Integrations, s.fleetIndex, s.configStore)
+		s.grcPusher = grc.NewPusher(s.cfg.GRC.Integrations, s.fleetIndex, s.reportHandler)
 	}
 
 	// --- REST gateway construction. Every vigosrv — standalone or a

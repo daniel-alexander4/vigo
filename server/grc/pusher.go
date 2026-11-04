@@ -11,24 +11,33 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"time"
 
+	"git.alexander4.io/vigo/server/api"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/daemon"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/httpsec"
 )
 
+// FrameworkScorer is the canonical compliance scorer. Satisfied by
+// *api.ReportHandler.
+type FrameworkScorer interface {
+	ComputeFrameworkScoreCtx(ctx context.Context, slug string) (*api.FrameworkScore, bool)
+}
+
 // Pusher periodically pushes compliance evidence to configured GRC platforms.
 type Pusher struct {
 	integrations []config.GRCIntegration
 	fleetIndex   *fleet.FleetIndex
-	configStore  *config.ConfigStore
+	scorer       FrameworkScorer
 	client       *http.Client
 }
 
-// NewPusher creates a GRC pusher.
-func NewPusher(integrations []config.GRCIntegration, fleetIndex *fleet.FleetIndex, configStore *config.ConfigStore) *Pusher {
+// NewPusher creates a GRC pusher. scorer may be nil (frameworks are then
+// omitted from the payload).
+func NewPusher(integrations []config.GRCIntegration, fleetIndex *fleet.FleetIndex, scorer FrameworkScorer) *Pusher {
 	var enabled []config.GRCIntegration
 	for _, i := range integrations {
 		if i.Enabled {
@@ -38,7 +47,7 @@ func NewPusher(integrations []config.GRCIntegration, fleetIndex *fleet.FleetInde
 	return &Pusher{
 		integrations: enabled,
 		fleetIndex:   fleetIndex,
-		configStore:  configStore,
+		scorer:       scorer,
 		client:       &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -113,11 +122,9 @@ type FrameworkEvidence struct {
 	ID              string          `json:"id"`
 	Name            string          `json:"name"`
 	CoveragePercent float64         `json:"coverage_percent"`
-	ScorePercent    float64         `json:"score_percent"`
 	TotalControls   int             `json:"total_controls"`
-	CoveredControls int             `json:"covered_controls"`
-	MissingControls int             `json:"missing_controls"`
 	Satisfied       int             `json:"satisfied"`
+	Waived          int             `json:"waived"`
 	Partial         int             `json:"partial"`
 	NotSatisfied    int             `json:"not_satisfied"`
 	EnvoyCount      int             `json:"envoy_count"`
@@ -132,66 +139,96 @@ type ControlStatus struct {
 	Evidence string `json:"evidence"`
 }
 
-func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
-	envoys := p.fleetIndex.AllEnvoys()
-	var activeHostnames []string
-	for _, e := range envoys {
-		if !e.Revoked {
-			activeHostnames = append(activeHostnames, e.Hostname)
-		}
-	}
-
+// buildPayload assembles the evidence for one integration. Every framework
+// number comes from the canonical compliance scorer (api.ReportHandler's
+// ComputeFrameworkScoreCtx — the same SoT behind /compliance and the framework
+// reports), so waived and partial controls are counted the way the report
+// counts them.
+func (p *Pusher) buildPayload(ctx context.Context, intg config.GRCIntegration) *EvidencePayload {
+	summary := p.fleetIndex.ConvergenceSummary()
 	payload := &EvidencePayload{
 		Timestamp: time.Now().UTC(),
 		Source:    "vigo",
+		// Failure axis (Converged/Degraded/Failed) plus drift (Diverged:
+		// envoys with persistent change loops). Total is non-revoked.
 		Fleet: FleetSummary{
-			Total: len(activeHostnames),
+			Total:     summary.Total,
+			Converged: summary.Converged,
+			Degraded:  summary.Degraded,
+			Failed:    summary.Failed,
+			Diverged:  summary.Diverged,
 		},
 	}
+	if p.scorer == nil {
+		return payload
+	}
 
-	// Counts split by axis: failure (Converged/Degraded/Failed) plus
-	// drift (Diverged subset of envoys with persistent change loops).
-	summary := p.fleetIndex.ConvergenceSummary()
-	payload.Fleet.Converged = summary.Converged
-	payload.Fleet.Degraded = summary.Degraded
-	payload.Fleet.Failed = summary.Failed
-	payload.Fleet.Diverged = summary.Diverged
-
-	// Compute per-standard coverage with control detail.
-	for vigoKey, grcID := range intg.Frameworks {
-		var totalCovered, totalMissing, totalControls, envoyCount int
-		for _, hostname := range activeHostnames {
-			cov := p.configStore.EnvoyStandardCoverage(hostname, vigoKey)
-			if cov == nil || cov.TotalControls == 0 {
-				continue
-			}
-			envoyCount++
-			totalControls = cov.TotalControls
-			totalCovered += len(cov.CoveredControls)
-			totalMissing += len(cov.MissingControls)
-		}
-		if envoyCount == 0 {
+	keys := make([]string, 0, len(intg.Frameworks))
+	for k := range intg.Frameworks {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, standardKey := range keys {
+		grcID := intg.Frameworks[standardKey]
+		slug, ok := config.SlugForStandardKey[standardKey]
+		if !ok {
+			slog.Warn("GRC push: unknown framework key, skipped", "name", intg.Name, "framework", standardKey)
 			continue
 		}
-		avgCovered := float64(totalCovered) / float64(envoyCount)
-		pct := avgCovered / float64(totalControls) * 100
-
-		fe := FrameworkEvidence{
-			Standard:        vigoKey,
-			GRCFrameworkID:  grcID,
-			ID:              grcID,
-			Name:            vigoKey,
-			CoveragePercent: pct,
-			TotalControls:   totalControls,
-			CoveredControls: int(avgCovered),
-			MissingControls: int(float64(totalMissing) / float64(envoyCount)),
-			EnvoyCount:      envoyCount,
-			ScorePercent:    pct,
-			Satisfied:       int(avgCovered),
-			NotSatisfied:    totalControls - int(avgCovered),
+		score, ok := p.scorer.ComputeFrameworkScoreCtx(ctx, slug)
+		if !ok || score.Fleet.ActiveEnvoys == 0 {
+			continue
 		}
-		payload.Frameworks = append(payload.Frameworks, fe)
+		payload.Frameworks = append(payload.Frameworks, frameworkEvidence(standardKey, grcID, score))
 	}
+	return payload
+}
+
+// frameworkEvidence maps a canonical framework score onto the GRC payload.
+// The summary buckets are the scorer's fleet aggregate verbatim. Each
+// control's status is its partition across the active fleet: satisfied when
+// every envoy covers it, waived when every envoy has it waived,
+// not_satisfied when no envoy covers, waives or partially meets it, and
+// partial otherwise.
+func frameworkEvidence(standardKey, grcID string, score *api.FrameworkScore) FrameworkEvidence {
+	agg := score.Fleet
+	fe := FrameworkEvidence{
+		Standard:        standardKey,
+		GRCFrameworkID:  grcID,
+		ID:              grcID,
+		Name:            score.Name,
+		CoveragePercent: agg.CoveragePercent,
+		TotalControls:   agg.Total,
+		Satisfied:       agg.Covered,
+		Waived:          agg.Waived,
+		Partial:         agg.Partial,
+		NotSatisfied:    agg.Missing,
+		EnvoyCount:      agg.ActiveEnvoys,
+	}
+	n := agg.ActiveEnvoys
+	for _, f := range score.Controls {
+		pc := score.PerControl[f.ControlID]
+		status := "partial"
+		switch {
+		case pc.Covered == n:
+			status = "satisfied"
+		case pc.Waived == n:
+			status = "waived"
+		case pc.Missing == n:
+			status = "not_satisfied"
+		}
+		fe.Controls = append(fe.Controls, ControlStatus{
+			ID:       f.ControlID,
+			Title:    f.Title,
+			Status:   status,
+			Evidence: fmt.Sprintf("%s (covered on %d of %d envoys, waived on %d, partial on %d)", f.Evidence, pc.Covered, n, pc.Waived, pc.Partial),
+		})
+	}
+	return fe
+}
+
+func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
+	payload := p.buildPayload(ctx, intg)
 
 	// Format using platform-specific adapter.
 	adapter := GetAdapter(intg.Name)

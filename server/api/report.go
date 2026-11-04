@@ -474,32 +474,62 @@ func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string,
 //
 // Covered + Waived + Partial + Missing = len(findings).
 func partitionEnvoyFindings(findings []ControlFinding, coverage *config.StandardCoverage) (covered, waived, partial, missing int) {
-	coveredByConfigcrates := make(map[string]bool)
-	if coverage != nil {
-		for _, cc := range coverage.CoveredControls {
-			coveredByConfigcrates[cc.ControlID] = true
-		}
-	}
+	set := configcrateCoveredSet(coverage)
 	for _, f := range findings {
-		switch {
-		case coveredByConfigcrates[f.ControlID]:
+		switch classifyEnvoyFinding(f, set) {
+		case BucketCovered:
 			covered++
-		case f.Status == "satisfied":
-			// Reached only via Connwaer trait-driven escalation today.
-			// Framework-builder findings now ship as "not_satisfied" and
-			// flip via module coverage above or waivers below.
-			covered++
-		case f.Status == "waived":
+		case BucketWaived:
 			waived++
-		case f.Scope == ScopeDocumented && f.DocCount > 0:
-			covered++
-		case f.Status == "partial":
+		case BucketPartial:
 			partial++
 		default:
 			missing++
 		}
 	}
 	return
+}
+
+// Partition buckets for one (envoy, control) pair — see partitionEnvoyFindings.
+const (
+	BucketCovered = "covered"
+	BucketWaived  = "waived"
+	BucketPartial = "partial"
+	BucketMissing = "missing"
+)
+
+// configcrateCoveredSet is the set of control IDs an envoy's configcrates
+// cover for one standard.
+func configcrateCoveredSet(coverage *config.StandardCoverage) map[string]bool {
+	set := make(map[string]bool)
+	if coverage != nil {
+		for _, cc := range coverage.CoveredControls {
+			set[cc.ControlID] = true
+		}
+	}
+	return set
+}
+
+// classifyEnvoyFinding is the single per-(envoy, control) partition rule,
+// in the priority order documented on partitionEnvoyFindings.
+func classifyEnvoyFinding(f ControlFinding, coveredByConfigcrates map[string]bool) string {
+	switch {
+	case coveredByConfigcrates[f.ControlID]:
+		return BucketCovered
+	case f.Status == "satisfied":
+		// Reached only via Connwaer trait-driven escalation today.
+		// Framework-builder findings now ship as "not_satisfied" and
+		// flip via module coverage above or waivers below.
+		return BucketCovered
+	case f.Status == "waived":
+		return BucketWaived
+	case f.Scope == ScopeDocumented && f.DocCount > 0:
+		return BucketCovered
+	case f.Status == "partial":
+		return BucketPartial
+	default:
+		return BucketMissing
+	}
 }
 
 // partitionFindingsForEnvoy is the canonical per-envoy partition entry
@@ -633,6 +663,20 @@ type FrameworkScore struct {
 
 	// Controls is the findings list with waivers applied.
 	Controls []ControlFinding
+
+	// PerControl counts, for each control ID, how many active envoys land
+	// it in each partition bucket — the same per-(envoy, control) rule that
+	// produces PerEnvoy, tallied the other way. Covered + Waived + Partial +
+	// Missing == ActiveEnvoys for every entry.
+	PerControl map[string]ControlFleetPartition
+}
+
+// ControlFleetPartition is one control's partition across the active fleet.
+type ControlFleetPartition struct {
+	Covered int
+	Waived  int
+	Partial int
+	Missing int
 }
 
 // FrameworkFleetAggregate summarizes a framework across all active envoys
@@ -709,8 +753,32 @@ func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChain
 		}
 	}
 
+	score.PerControl = make(map[string]ControlFleetPartition, len(findings))
 	for _, hostname := range activeHostnames {
-		covered, waived, partial, missing := h.partitionFindingsForEnvoy(slug, hostname, findings)
+		var coverage *config.StandardCoverage
+		if hasKey {
+			coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
+		}
+		set := configcrateCoveredSet(coverage)
+		var covered, waived, partial, missing int
+		for _, f := range findings {
+			pc := score.PerControl[f.ControlID]
+			switch classifyEnvoyFinding(f, set) {
+			case BucketCovered:
+				covered++
+				pc.Covered++
+			case BucketWaived:
+				waived++
+				pc.Waived++
+			case BucketPartial:
+				partial++
+				pc.Partial++
+			default:
+				missing++
+				pc.Missing++
+			}
+			score.PerControl[f.ControlID] = pc
+		}
 		pct := 0.0
 		if total > 0 {
 			pct = float64(covered) / float64(total) * 100
