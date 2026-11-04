@@ -67,6 +67,20 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	// below.
 	localEnvoyID := envoyID
 
+	// Pin the client certificate this Register arrived on, as bootstrap does
+	// for the cert it signs: without it the envoy was never pinned and
+	// enforceCertPin skipped it forever. Best-effort like bootstrap — a
+	// failure leaves the envoy unpinned, not unenrolled.
+	spki, spkiErr := peerCertSPKI(ctx)
+	if spkiErr != nil {
+		slog.Warn("register: no client certificate to pin; envoy left unpinned",
+			"hostname", req.GetHostname(), "envoy_id", localEnvoyID, "error", spkiErr)
+		spki = ""
+	} else if err := s.registry.SetEnvoyCertPin(ctx, localEnvoyID, spki); err != nil {
+		slog.Warn("register: could not store cert pin; envoy left unpinned",
+			"hostname", req.GetHostname(), "envoy_id", localEnvoyID, "error", err)
+	}
+
 	var boltAddr string
 
 	// Peer-equal enrollment routing (Slice 2-ii-b): resolve which
@@ -81,7 +95,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	if s.spannerAdmin != nil {
 		ownerPubkey, ownerHostname, owned := s.spannerAdmin.OwningBolt(ctx, req.GetHostname())
 		if owned && !s.spannerAdmin.OwnsLocally(ownerPubkey) && ownerHostname != "" {
-			boltEnvoyID, enrollErr := s.spannerAdmin.EnrollOnPeerBolt(ctx, ownerHostname, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
+			boltEnvoyID, enrollErr := s.spannerAdmin.EnrollOnPeerBolt(ctx, ownerHostname, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), spki, req.GetForce())
 			if enrollErr != nil {
 				slog.Error("spanner bolt enrollment failed, envoy registered locally only",
 					"hostname", req.GetHostname(),

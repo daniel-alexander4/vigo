@@ -654,7 +654,7 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 		return resp, nil
 	}
 
-	// Standalone path — no hub, no spanner. Source the fleet-wide
+	// Standalone path — no spanner. Source the fleet-wide
 	// counters from the canonical fleet index (the convergence
 	// single-source-of-truth) via the same helper + converter the
 	// spanner-local and fanout paths use, so all three paths agree.
@@ -878,7 +878,7 @@ func foldLocalConvergence(agg *pb.GetConvergenceSummaryResponse, local spanner.C
 
 // finalizeConvergencePct computes ConvergencePct from the aggregate's
 // counters — Offline envoys excluded from the denominator, matching
-// the local and hub paths.
+// the spanner-local and fanout paths.
 func finalizeConvergencePct(resp *pb.GetConvergenceSummaryResponse) {
 	activeTotal := resp.Total - resp.Offline
 	if activeTotal > 0 {

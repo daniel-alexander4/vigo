@@ -6,7 +6,7 @@
 //
 // All three enrollment entry points — token-based Register (gRPC Register
 // handler), TrustedRegister (bootstrap HTTP + trusted CIDR patterns), and
-// CreateEnvoy (hub→bolt AdminService.EnrollEnvoy) — funnel through the same
+// CreateEnvoy (bolt-to-bolt AdminService.EnrollEnvoy) — funnel through the same
 // internal chokepoint. That chokepoint holds the registry-wide mutex for the
 // duration of the credential check, the hostname-conflict check, the DB
 // insert, and the FleetIndex update, which makes the operation atomic across
@@ -253,8 +253,9 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 }
 
 // CreateEnvoy creates an envoy record without token validation. Used by
-// AdminService.EnrollEnvoy (hub→bolt enrollment routing) where the hub has
-// already validated the enrollment token before calling into the bolt.
+// AdminService.EnrollEnvoy (spanner enrollment routing), where the bolt that
+// received the enrollment has already validated the token before calling the
+// owning bolt.
 func (r *Registry) CreateEnvoy(ctx context.Context, hostname, ip, pubkeyPEM string, force bool) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")

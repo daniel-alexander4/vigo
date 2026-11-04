@@ -295,14 +295,16 @@ type stubSpannerRouter struct {
 	boltEnvoyID   string
 	enrollErr     error
 	enrolledCount int
+	gotCertSPKI   string // the pin the routed enrollment carried
 }
 
 func (s *stubSpannerRouter) OwningBolt(context.Context, string) (string, string, bool) {
 	return "ownerpub", s.ownerHostname, s.ownerHostname != ""
 }
 func (s *stubSpannerRouter) OwnsLocally(string) bool { return s.ownsLocally }
-func (s *stubSpannerRouter) EnrollOnPeerBolt(context.Context, string, string, string, string, bool) (string, error) {
+func (s *stubSpannerRouter) EnrollOnPeerBolt(_ context.Context, _, _, _, _, certSPKI string, _ bool) (string, error) {
 	s.enrolledCount++
+	s.gotCertSPKI = certSPKI
 	return s.boltEnvoyID, s.enrollErr
 }
 func (s *stubSpannerRouter) GRPCPort() string { return "1530" }
@@ -359,6 +361,11 @@ func TestBootstrapRegister_SpannerRouting(t *testing.T) {
 			}
 			if tc.router.enrolledCount != tc.wantEnrolled {
 				t.Errorf("EnrollOnPeerBolt calls = %d, want %d", tc.router.enrolledCount, tc.wantEnrolled)
+			}
+			// A routed enrollment carries the signed cert's pin to the owning
+			// bolt; it used to arrive unpinned.
+			if tc.wantEnrolled > 0 && len(tc.router.gotCertSPKI) != 64 {
+				t.Errorf("routed enrollment carried cert pin %q, want the signed cert's 64-hex SPKI pin", tc.router.gotCertSPKI)
 			}
 			if tc.wantBoltID {
 				if resp.EnvoyID != "bolt2-id" {

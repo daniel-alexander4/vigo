@@ -152,9 +152,11 @@ func (a *SpannerAdmin) dialBolt(boltHostname string) (*PeerConn, error) {
 // EnrollOnPeerBolt creates an envoy record on a target bolt via a
 // direct EnrollEnvoy admin gRPC call over the PeerDialer. boltHostname is the target
 // bolt's hostname (from the roster); the gRPC port is the
-// SpannerAdmin's configured peer port. Returns the envoy UUID the
+// SpannerAdmin's configured peer port. certSPKI is the envoy's mTLS
+// client-cert pin (hex SHA-256 of its SPKI) captured by this bolt; the
+// target stores it so the routed envoy is pinned. Returns the envoy UUID the
 // target bolt assigned.
-func (a *SpannerAdmin) EnrollOnPeerBolt(ctx context.Context, boltHostname, hostname, ipAddress, pubkeyPEM string, force bool) (string, error) {
+func (a *SpannerAdmin) EnrollOnPeerBolt(ctx context.Context, boltHostname, hostname, ipAddress, pubkeyPEM, certSPKI string, force bool) (string, error) {
 	pc, err := a.dialBolt(boltHostname)
 	if err != nil {
 		return "", fmt.Errorf("dialing target bolt %s: %w", boltHostname, err)
@@ -164,10 +166,11 @@ func (a *SpannerAdmin) EnrollOnPeerBolt(ctx context.Context, boltHostname, hostn
 	callCtx, cancel := context.WithTimeout(ctx, fanOutTimeout)
 	defer cancel()
 	resp, err := pc.Admin.EnrollEnvoy(callCtx, &pb.EnrollEnvoyRequest{
-		Hostname:  hostname,
-		IpAddress: ipAddress,
-		PubkeyPem: pubkeyPEM,
-		Force:     force,
+		Hostname:       hostname,
+		IpAddress:      ipAddress,
+		PubkeyPem:      pubkeyPEM,
+		CertSpkiSha256: certSPKI,
+		Force:          force,
 	})
 	if err != nil {
 		return "", fmt.Errorf("EnrollEnvoy on bolt %s: %w", boltHostname, err)
@@ -288,7 +291,7 @@ func (a *SpannerAdmin) ReassignEnvoy(ctx context.Context, envoyID, fromBoltHostn
 	targetAddr := toBoltHostname + ":" + a.grpcPort
 
 	// Step 2 — create the envoy record on the target bolt.
-	newID, err := a.EnrollOnPeerBolt(ctx, toBoltHostname, envoy.Hostname, envoy.IpAddress, "", true)
+	newID, err := a.EnrollOnPeerBolt(ctx, toBoltHostname, envoy.Hostname, envoy.IpAddress, "", "", true)
 	if err != nil {
 		return nil, fmt.Errorf("enrolling on target bolt %s: %w", toBoltHostname, err)
 	}

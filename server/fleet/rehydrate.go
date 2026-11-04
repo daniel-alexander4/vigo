@@ -44,8 +44,9 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 	}
 
 	// Load the trailing run window used by convergence computation in a
-	// single query. ListFleetConvergence returns up to 3 runs per envoy
-	// which is exactly the diverged-detection horizon. Convergence status
+	// single query. ListFleetConvergence returns up to DivergedThreshold
+	// (convergence.DivergedThreshold) runs per envoy, which is exactly the
+	// diverged-detection horizon. Convergence status
 	// is recomputed below from this trailing history, so row status and
 	// fleet counts stay consistent across a server restart.
 	fleetRuns, err := queries.ListFleetConvergence(ctx)

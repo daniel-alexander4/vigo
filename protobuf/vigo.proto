@@ -842,6 +842,10 @@ message EnrollEnvoyRequest {
   string ip_address = 2;
   string pubkey_pem = 3;
   bool force = 4; // revoke existing active envoy with same hostname and re-enroll
+  // Hex SHA-256 of the envoy's mTLS client-cert SubjectPublicKeyInfo, captured
+  // by the receiving bolt at enrollment. The owning bolt stores it as the
+  // envoy's cert pin, so a routed envoy is pinned like a local one.
+  string cert_spki_sha256 = 5;
 }
 
 message EnrollEnvoyResponse {

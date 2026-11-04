@@ -459,16 +459,11 @@ func enforceCertPin(ctx context.Context, envoy db.Envoy, m *metrics.Metrics) err
 		}
 		return nil
 	}
-	p, ok := peer.FromContext(ctx)
-	if !ok {
-		return status.Error(codes.Unauthenticated, "cert pin: no peer connection")
+	got, err := peerCertSPKI(ctx)
+	if err != nil {
+		return err
 	}
-	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
-	if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
-		return status.Error(codes.Unauthenticated, "cert pin: no client certificate")
-	}
-	sum := sha256.Sum256(tlsInfo.State.PeerCertificates[0].RawSubjectPublicKeyInfo)
-	if hex.EncodeToString(sum[:]) != pin {
+	if got != pin {
 		m.SigVerifyFailed.WithLabelValues("cert_pin_mismatch").Inc()
 		if certPinMismatchLog.shouldLog(envoy.ID, time.Now()) {
 			slog.Warn("cert-pin: client certificate does not match enrolled identity — TLS-terminating proxy/MITM on the gRPC path or wrong cert; rejecting",
@@ -477,6 +472,23 @@ func enforceCertPin(ctx context.Context, envoy db.Envoy, m *metrics.Metrics) err
 		return status.Error(codes.Unauthenticated, "client certificate does not match enrolled identity")
 	}
 	return nil
+}
+
+// peerCertSPKI returns the hex SHA-256 of the mTLS client certificate's
+// SubjectPublicKeyInfo — the cert pin form enforceCertPin compares and every
+// enrollment path stores. A nil/non-TLS peer or a missing client cert is an
+// Unauthenticated error.
+func peerCertSPKI(ctx context.Context) (string, error) {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return "", status.Error(codes.Unauthenticated, "cert pin: no peer connection")
+	}
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok || len(tlsInfo.State.PeerCertificates) == 0 {
+		return "", status.Error(codes.Unauthenticated, "cert pin: no client certificate")
+	}
+	sum := sha256.Sum256(tlsInfo.State.PeerCertificates[0].RawSubjectPublicKeyInfo)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // fleetEnvoyToDB converts a FleetIndex EnvoyState to a db.Envoy for

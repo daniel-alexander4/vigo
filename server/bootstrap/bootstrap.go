@@ -87,7 +87,7 @@ type Handler struct {
 type spannerRouter interface {
 	OwningBolt(ctx context.Context, hostname string) (boltPubkeyHex, boltHostname string, found bool)
 	OwnsLocally(boltPubkeyHex string) bool
-	EnrollOnPeerBolt(ctx context.Context, boltHostname, hostname, ipAddress, pubkeyPEM string, force bool) (string, error)
+	EnrollOnPeerBolt(ctx context.Context, boltHostname, hostname, ipAddress, pubkeyPEM, certSPKI string, force bool) (string, error)
 	GRPCPort() string
 }
 
@@ -814,9 +814,11 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	// TLS-terminating proxy/MITM presenting a different cert (cert-pinning).
 	// Best-effort: a failure here leaves the envoy grandfathered (verify path
 	// skips enforcement), not unenrolled — enrollment already succeeded.
-	if spki, perr := certPinFromPEM(signedCert); perr != nil {
+	spki, perr := certPinFromPEM(signedCert)
+	if perr != nil {
 		slog.Warn("bootstrap: could not derive cert pin from signed cert; envoy grandfathered",
 			"hostname", req.Hostname, "envoy_id", envoyID, "error", perr)
+		spki = ""
 	} else if perr := h.registry.SetEnvoyCertPin(r.Context(), envoyID, spki); perr != nil {
 		slog.Warn("bootstrap: could not store cert pin; envoy grandfathered",
 			"hostname", req.Hostname, "envoy_id", envoyID, "error", perr)
@@ -834,7 +836,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	if h.spannerRouter != nil {
 		ownerPubkey, ownerHostname, owned := h.spannerRouter.OwningBolt(r.Context(), req.Hostname)
 		if owned && !h.spannerRouter.OwnsLocally(ownerPubkey) && ownerHostname != "" {
-			boltEnvoyID, enrollErr := h.spannerRouter.EnrollOnPeerBolt(r.Context(), ownerHostname, req.Hostname, req.IPAddress, req.PubkeyPEM, req.Force)
+			boltEnvoyID, enrollErr := h.spannerRouter.EnrollOnPeerBolt(r.Context(), ownerHostname, req.Hostname, req.IPAddress, req.PubkeyPEM, spki, req.Force)
 			if enrollErr != nil {
 				slog.Error("spanner bolt enrollment failed, envoy registered locally only",
 					"hostname", req.Hostname, "owning_bolt", ownerHostname, "error", enrollErr)

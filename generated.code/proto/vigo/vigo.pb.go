@@ -5235,13 +5235,17 @@ func (x *RollbackResponse) GetMessage() string {
 }
 
 type EnrollEnvoyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	IpAddress     string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
-	PubkeyPem     string                 `protobuf:"bytes,3,opt,name=pubkey_pem,json=pubkeyPem,proto3" json:"pubkey_pem,omitempty"`
-	Force         bool                   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active envoy with same hostname and re-enroll
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Hostname  string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	IpAddress string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	PubkeyPem string                 `protobuf:"bytes,3,opt,name=pubkey_pem,json=pubkeyPem,proto3" json:"pubkey_pem,omitempty"`
+	Force     bool                   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"` // revoke existing active envoy with same hostname and re-enroll
+	// Hex SHA-256 of the envoy's mTLS client-cert SubjectPublicKeyInfo, captured
+	// by the receiving bolt at enrollment. The owning bolt stores it as the
+	// envoy's cert pin, so a routed envoy is pinned like a local one.
+	CertSpkiSha256 string `protobuf:"bytes,5,opt,name=cert_spki_sha256,json=certSpkiSha256,proto3" json:"cert_spki_sha256,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *EnrollEnvoyRequest) Reset() {
@@ -5300,6 +5304,13 @@ func (x *EnrollEnvoyRequest) GetForce() bool {
 		return x.Force
 	}
 	return false
+}
+
+func (x *EnrollEnvoyRequest) GetCertSpkiSha256() string {
+	if x != nil {
+		return x.CertSpkiSha256
+	}
+	return ""
 }
 
 type EnrollEnvoyResponse struct {
@@ -7431,14 +7442,15 @@ const file_vigo_proto_rawDesc = "" +
 	"\tfile_path\x18\x03 \x01(\tR\bfilePath\"F\n" +
 	"\x10RollbackResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x84\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xae\x01\n" +
 	"\x12EnrollEnvoyRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1d\n" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
-	"\x05force\x18\x04 \x01(\bR\x05force\"0\n" +
+	"\x05force\x18\x04 \x01(\bR\x05force\x12(\n" +
+	"\x10cert_spki_sha256\x18\x05 \x01(\tR\x0ecertSpkiSha256\"0\n" +
 	"\x13EnrollEnvoyResponse\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\"v\n" +
 	"\x16SetReassignmentRequest\x12\x19\n" +
