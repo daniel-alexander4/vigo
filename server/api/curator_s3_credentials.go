@@ -39,7 +39,7 @@ func (h *S3CredentialsHandler) SetAuditWriter(w auditRecorder) { h.auditWriter =
 
 // RegisterRoutes mounts the credential-management endpoints (on :8443).
 func (h *S3CredentialsHandler) RegisterRoutes(mux *http.ServeMux) {
-	admin := vigoauth.RequireAdmin("")
+	admin := vigoauth.RequireAdmin()
 	mux.Handle("POST /api/v1/swarm/curator/s3-credentials", admin(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("GET /api/v1/swarm/curator/s3-credentials", admin(http.HandlerFunc(h.handleList)))
 	mux.Handle("DELETE /api/v1/swarm/curator/s3-credentials/{access_key_id}", admin(http.HandlerFunc(h.handleDelete)))

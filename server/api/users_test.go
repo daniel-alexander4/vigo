@@ -40,7 +40,7 @@ func userRequestWithUser(method, path string, body []byte, userID, username, rol
 func TestUsers_CreateUser(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -74,7 +74,7 @@ func TestUsers_CreateUser(t *testing.T) {
 func TestUsers_Update_AdminWithoutPubkey_Rejected(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -102,7 +102,7 @@ func TestUsers_Update_AdminWithoutPubkey_Rejected(t *testing.T) {
 func TestUsers_CreateUserMissingUsername(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -119,7 +119,7 @@ func TestUsers_CreateUserMissingUsername(t *testing.T) {
 func TestUsers_CreateUserReservedUsername(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -140,7 +140,7 @@ func TestUsers_CreateUserReservedUsername(t *testing.T) {
 func TestUsers_CreateUserDuplicate_Conflict(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -168,7 +168,7 @@ func TestUsers_CreateUserDuplicate_Conflict(t *testing.T) {
 func TestUsers_DeleteUnknown_NotFound(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -183,7 +183,7 @@ func TestUsers_DeleteUnknown_NotFound(t *testing.T) {
 func TestUsers_CreateUserInvalidRole(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -200,7 +200,7 @@ func TestUsers_CreateUserInvalidRole(t *testing.T) {
 func TestUsers_CreateUserDefaultsToViewer(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -268,7 +268,7 @@ func mustMarshal(t *testing.T, v any) []byte {
 func TestUsers_AdminValidation_Success(t *testing.T) {
 	queries, sqlDB := seedLocalAgent(t, "vigo.test", []string{"dan", "alice"})
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	handler.SetAdminValidation(queries, "vigo.test")
 	_ = sqlDB
 	mux := http.NewServeMux()
@@ -290,7 +290,7 @@ func TestUsers_AdminValidation_Success(t *testing.T) {
 func TestUsers_AdminValidation_UsernameNotHuman(t *testing.T) {
 	queries, _ := seedLocalAgent(t, "vigo.test", []string{"dan"})
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	handler.SetAdminValidation(queries, "vigo.test")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -312,7 +312,7 @@ func TestUsers_AdminValidation_NoLocalAgent(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	handler.SetAdminValidation(queries, "vigo.test") // no envoy with this hostname
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -341,7 +341,7 @@ func TestUsers_AdminValidation_NoTraitsYet(t *testing.T) {
 		t.Fatalf("create envoy: %v", err)
 	}
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	handler.SetAdminValidation(queries, "vigo.test")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -363,7 +363,7 @@ func TestUsers_AdminValidation_NotConfigured(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	// SetAdminValidation NOT called.
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -386,7 +386,7 @@ func TestUsers_AdminValidation_ViewerSkipsCheck(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	handler.SetAdminValidation(queries, "vigo.test") // wired but no envoy/traits
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -405,7 +405,7 @@ func TestUsers_ListUsers(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -436,7 +436,7 @@ func TestUsers_DeleteUser(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -459,7 +459,7 @@ func TestUsers_DeleteSelfBlocked(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -482,7 +482,7 @@ func TestUsers_DeleteSelfBlocked(t *testing.T) {
 func TestUsers_RBACViewerCannotListUsers(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -499,7 +499,7 @@ func TestUsers_RBACViewerCannotListUsers(t *testing.T) {
 func TestUsers_RBACViewerCannotCreate(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
-	handler := NewUsersHandler(store, "none")
+	handler := NewUsersHandler(store)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

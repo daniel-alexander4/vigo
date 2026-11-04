@@ -93,7 +93,7 @@ func (h *DatabaseHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 // the table-row counts surface internal record counts (envoys,
 // secrets, audit chain entries) that aren't on any public surface.
 func (h *DatabaseHandler) RegisterRoutes(mux *http.ServeMux) {
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("GET /api/v1/db/stats", admin(http.HandlerFunc(h.handleStats)))
 	mux.Handle("GET /api/v1/db/integrity", admin(http.HandlerFunc(h.handleIntegrity)))
 	mux.Handle("POST /api/v1/db/vacuum", admin(http.HandlerFunc(h.handleVacuum)))

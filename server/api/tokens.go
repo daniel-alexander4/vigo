@@ -19,7 +19,6 @@ import (
 type TokensHandler struct {
 	tokenStore  *vigoauth.TokenStore
 	userStore   *vigoauth.UserStore
-	authMethod  string
 	auditWriter auditRecorder
 }
 
@@ -28,13 +27,13 @@ func (h *TokensHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
 // NewTokensHandler creates a tokens API handler. userStore is required to
 // validate that every minted token is owned by a real web user.
-func NewTokensHandler(tokenStore *vigoauth.TokenStore, userStore *vigoauth.UserStore, authMethod string) *TokensHandler {
-	return &TokensHandler{tokenStore: tokenStore, userStore: userStore, authMethod: authMethod}
+func NewTokensHandler(tokenStore *vigoauth.TokenStore, userStore *vigoauth.UserStore) *TokensHandler {
+	return &TokensHandler{tokenStore: tokenStore, userStore: userStore}
 }
 
 // RegisterRoutes mounts token management endpoints.
 func (h *TokensHandler) RegisterRoutes(mux *http.ServeMux) {
-	authMW := vigoauth.RequireAuth(h.authMethod)
+	authMW := vigoauth.RequireAuth()
 	mux.Handle("POST /api/v1/auth/tokens", authMW(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("GET /api/v1/auth/tokens", authMW(http.HandlerFunc(h.handleList)))
 	mux.Handle("DELETE /api/v1/auth/tokens/{id}", authMW(http.HandlerFunc(h.handleDelete)))

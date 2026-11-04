@@ -147,7 +147,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
 	publish := auth.RequirePermission(auth.PermConfigPublish)
 	rollback := auth.RequirePermission(auth.PermConfigRollback)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 
 	mux.Handle("GET /api/v1/config/publishes", read(http.HandlerFunc(h.ListPublishes)))
 	mux.Handle("POST /api/v1/config/publishes", publish(http.HandlerFunc(h.RecordPublish)))

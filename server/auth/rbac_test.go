@@ -12,7 +12,7 @@ import (
 )
 
 func TestRequireAdminBlocksViewer(t *testing.T) {
-	mw := RequireAdmin("basic")
+	mw := RequireAdmin()
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -30,7 +30,7 @@ func TestRequireAdminBlocksViewer(t *testing.T) {
 }
 
 func TestRequireAdminAllowsAdmin(t *testing.T) {
-	mw := RequireAdmin("basic")
+	mw := RequireAdmin()
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -47,7 +47,7 @@ func TestRequireAdminAllowsAdmin(t *testing.T) {
 }
 
 func TestRequireAdminBlocksUnauthenticated(t *testing.T) {
-	mw := RequireAdmin("basic")
+	mw := RequireAdmin()
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -64,7 +64,7 @@ func TestRequireAdminBlocksUnauthenticated(t *testing.T) {
 }
 
 func TestRequireAuthBlocksUnauthenticated(t *testing.T) {
-	mw := RequireAuth("basic")
+	mw := RequireAuth()
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true

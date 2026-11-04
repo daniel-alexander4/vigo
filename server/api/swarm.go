@@ -76,7 +76,7 @@ func (h *SwarmHandler) SetCleanupDispatcher(d CleanupDispatcher) {
 // agent verb to every targeted envoy.
 func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("GET /api/v1/swarm/status", read(http.HandlerFunc(h.Status)))
 	mux.Handle("GET /api/v1/swarm/peers", read(http.HandlerFunc(h.Peers)))
 	mux.Handle("POST /api/v1/swarm/cleanup", admin(http.HandlerFunc(h.Cleanup)))

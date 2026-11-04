@@ -9,7 +9,7 @@ import (
 )
 
 // RequireAdmin returns middleware that blocks non-admin users with 403.
-func RequireAdmin(_ string) func(http.Handler) http.Handler {
+func RequireAdmin() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u := UserFromContext(r.Context())
@@ -27,7 +27,7 @@ func RequireAdmin(_ string) func(http.Handler) http.Handler {
 }
 
 // RequireAuth returns middleware that blocks unauthenticated requests with 401.
-func RequireAuth(_ string) func(http.Handler) http.Handler {
+func RequireAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u := UserFromContext(r.Context())

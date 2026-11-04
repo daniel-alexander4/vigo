@@ -40,7 +40,6 @@ func validateSSHPubkey(raw string) (string, error) {
 // UsersHandler provides REST endpoints for user management.
 type UsersHandler struct {
 	store          *auth.UserStore
-	authMethod     string
 	auditWriter    auditRecorder
 	secrets        secrets.Provider
 	sessions       *auth.SessionManager // optional; required for session revocation on role change/delete
@@ -72,8 +71,8 @@ func (h *UsersHandler) SetAdminValidation(q *db.Queries, serverHostname string) 
 }
 
 // NewUsersHandler creates a users API handler.
-func NewUsersHandler(store *auth.UserStore, authMethod string) *UsersHandler {
-	return &UsersHandler{store: store, authMethod: authMethod}
+func NewUsersHandler(store *auth.UserStore) *UsersHandler {
+	return &UsersHandler{store: store}
 }
 
 // validateAdminUsername confirms that `username` is a human OS account on the
@@ -125,10 +124,10 @@ func (h *UsersHandler) validateAdminUsername(ctx context.Context, username strin
 
 // RegisterRoutes mounts user management endpoints.
 func (h *UsersHandler) RegisterRoutes(mux *http.ServeMux) {
-	adminMW := auth.RequireAdmin(h.authMethod)
-	authMW := auth.RequireAuth(h.authMethod)
+	adminMW := auth.RequireAdmin()
+	authMW := auth.RequireAuth()
 	mux.Handle("GET /api/v1/users", adminMW(http.HandlerFunc(h.handleList)))
-	mux.Handle("POST /api/v1/users", http.HandlerFunc(h.handleCreate)) // special: first-user bootstrap
+	mux.Handle("POST /api/v1/users", adminMW(http.HandlerFunc(h.handleCreate)))
 	mux.Handle("PUT /api/v1/users/{id}", adminMW(http.HandlerFunc(h.handleUpdate)))
 	mux.Handle("DELETE /api/v1/users/{id}", adminMW(http.HandlerFunc(h.handleDelete)))
 	mux.Handle("POST /api/v1/users/{id}/revoke-sessions", adminMW(http.HandlerFunc(h.handleRevokeSessions)))
@@ -178,12 +177,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Require admin role for user creation.
-	u := auth.UserFromContext(r.Context())
-	if u == nil || !u.IsAdmin() {
-		writeError(w, http.StatusForbidden, "admin role required")
-		return
-	}
+	u := auth.UserFromContext(r.Context()) // admin, enforced by adminMW
 
 	// Admin webusers must map 1:1 with a human OS user on the server host.
 	// Viewer / compliance users have no such constraint — they're one-offs.

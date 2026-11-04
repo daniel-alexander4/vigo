@@ -38,7 +38,7 @@ func (h *AuditHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 // only because it asserts identity bypass.
 func (h *AuditHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := vigoauth.RequirePermission(vigoauth.PermAuditRead)
-	admin := vigoauth.RequireAdmin("")
+	admin := vigoauth.RequireAdmin()
 	mux.Handle("GET /api/v1/audit", read(http.HandlerFunc(h.ListAuditEvents)))
 	mux.Handle("GET /api/v1/audit/verify", read(http.HandlerFunc(h.VerifyChain)))
 	mux.Handle("POST /api/v1/emergency-access", admin(http.HandlerFunc(h.RecordEmergencyAccess)))

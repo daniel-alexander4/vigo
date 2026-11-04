@@ -25,7 +25,7 @@ func NewOpenAPIHandler(specPath string) *OpenAPIHandler {
 // leak to unauthenticated callers — RequireAuth is the right gate,
 // any role can fetch it for tooling.
 func (h *OpenAPIHandler) RegisterRoutes(mux *http.ServeMux) {
-	authed := auth.RequireAuth("")
+	authed := auth.RequireAuth()
 	mux.Handle("GET /api/v1/openapi.json", authed(http.HandlerFunc(h.ServeSpec)))
 }
 

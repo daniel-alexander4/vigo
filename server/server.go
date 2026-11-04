@@ -1236,7 +1236,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 	// constructed before userStore (which depends on the auth provider).
 	doctorHandler.SetUserStore(userStore)
 	tokenStore := vigoauth.NewTokenStore(s.queries, s.localAdminToken, s.metrics)
-	usersHandler := api.NewUsersHandler(userStore, s.authMethod)
+	usersHandler := api.NewUsersHandler(userStore)
 	usersHandler.SetAuditWriter(s.auditWriter)
 	usersHandler.SetSecretsProvider(s.provider)
 	usersHandler.SetAdminValidation(s.queries, s.cfg.Server.Hostname)
@@ -1266,7 +1266,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 		}
 		s.spannerGossip.SetAuditWriter(s.auditWriter)
 	}
-	tokensHandler := api.NewTokensHandler(tokenStore, userStore, s.authMethod)
+	tokensHandler := api.NewTokensHandler(tokenStore, userStore)
 	tokensHandler.SetAuditWriter(s.auditWriter)
 	// Curator S3 API (ADR-027) credential management. The store is wired
 	// below only under the `local` secrets backend (SetStore); the routes

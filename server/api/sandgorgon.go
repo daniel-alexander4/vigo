@@ -70,7 +70,7 @@ func (h *SandgorgonHandler) SetLifecycleDataSource(ds sandgorgon.LifecycleDataSo
 // begin with). Revisit when the PXE delivery path is finalized.
 func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("GET /api/v1/sandgorgon/assets", read(http.HandlerFunc(h.listAssets)))
 	mux.Handle("GET /api/v1/sandgorgon/assets/{id}", read(http.HandlerFunc(h.getAsset)))
 	mux.Handle("POST /api/v1/sandgorgon/commission", admin(http.HandlerFunc(h.commission)))

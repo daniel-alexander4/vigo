@@ -28,7 +28,7 @@ func NewPeerHandler(peerSvc *peer.Service) *PeerHandler {
 // reshapes replication) is admin-only.
 func (h *PeerHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("GET /api/v1/peer/status", read(http.HandlerFunc(h.handleStatus)))
 	mux.Handle("POST /api/v1/peer/promote", admin(http.HandlerFunc(h.handlePromote)))
 }

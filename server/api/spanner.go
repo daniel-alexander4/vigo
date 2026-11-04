@@ -83,7 +83,7 @@ func (h *SpannerHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 // fleet state.
 func (h *SpannerHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("GET /api/v1/spanner/status", read(http.HandlerFunc(h.handleStatus)))
 	// Bolt drill-downs are served from the gossip-backed observability
 	// cache (Slice 2-ii-a). The mutating push/reassign/drain verbs route

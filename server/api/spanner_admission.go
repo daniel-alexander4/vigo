@@ -111,7 +111,7 @@ func NewSpannerAdmissionHandler(sqlDB *sql.DB, queries *db.Queries, boltID *bolt
 // converges — found standing up a real 2-bolt spanner.)
 func (h *SpannerAdmissionHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("POST /api/v1/spanner/init", admin(http.HandlerFunc(h.handleInit)))
 	mux.Handle("POST /api/v1/spanner/bolt/invite", admin(http.HandlerFunc(h.handleInvite)))
 	mux.Handle("POST /api/v1/spanner/bolt/admit", http.HandlerFunc(h.handleAdmit))

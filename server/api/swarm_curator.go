@@ -54,7 +54,7 @@ func NewCuratorHandler(agg *curatormesh.Aggregator, queries *db.Queries, fleetIn
 // fleet.read; `block`/`unblock` are admin-only.
 func (h *CuratorHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.HandleFunc("GET /api/v1/swarm/curator/resolve", h.handleResolve)
 	mux.HandleFunc("GET /api/v1/swarm/curator/blob/{sha256}", h.handleBlob)
 	mux.Handle("GET /api/v1/swarm/curator/list", read(http.HandlerFunc(h.handleList)))

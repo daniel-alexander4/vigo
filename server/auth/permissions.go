@@ -8,21 +8,20 @@ import (
 	"net/http"
 )
 
-// Permission constants for fine-grained RBAC.
+// Permission constants for fine-grained RBAC. Each one is checked by some
+// route's RequirePermission. User, token, enrollment and backup management
+// have no permission of their own: those routes are RequireAdmin, and no
+// role grants that authority without being admin.
 const (
-	PermFleetRead          = "fleet.read"
-	PermFleetWrite         = "fleet.write"
-	PermConfigPublish      = "config.publish"
-	PermConfigRollback     = "config.rollback"
-	PermPushExecute        = "push.execute"
-	PermQueryExecute       = "query.execute"
-	PermWorkflowExecute    = "workflow.execute"
-	PermUsersManage        = "users.manage"
-	PermTokensManage       = "tokens.manage"
-	PermBackupManage       = "backup.manage"
-	PermEnrollManage       = "enrollment.manage"
-	PermAuditRead          = "audit.read"
-	PermComplianceRead     = "compliance.read"
+	PermFleetRead           = "fleet.read"
+	PermFleetWrite          = "fleet.write"
+	PermConfigPublish       = "config.publish"
+	PermConfigRollback      = "config.rollback"
+	PermPushExecute         = "push.execute"
+	PermQueryExecute        = "query.execute"
+	PermWorkflowExecute     = "workflow.execute"
+	PermAuditRead           = "audit.read"
+	PermComplianceRead      = "compliance.read"
 	PermComplianceDocsWrite = "compliance.docs.write"
 	PermComplianceDocsPurge = "compliance.docs.purge"
 )
@@ -32,8 +31,7 @@ var AllPermissions = []string{
 	PermFleetRead, PermFleetWrite,
 	PermConfigPublish, PermConfigRollback,
 	PermPushExecute, PermQueryExecute, PermWorkflowExecute,
-	PermUsersManage, PermTokensManage,
-	PermBackupManage, PermEnrollManage, PermAuditRead,
+	PermAuditRead,
 	PermComplianceRead, PermComplianceDocsWrite, PermComplianceDocsPurge,
 }
 
@@ -68,21 +66,30 @@ func IsValidRole(role string) bool {
 	return false
 }
 
-// DefaultPermissions returns the default permission set for a role.
+// DefaultPermissions returns the default permission set for a role. An
+// unknown role gets none: a role string the code does not recognise (a
+// replicated row from a newer bolt, a hand-edited DB) must not quietly
+// read as viewer.
 func DefaultPermissions(role string) []string {
 	switch role {
 	case "admin":
 		return AllPermissions
+	case "viewer":
+		return ViewerPermissions
 	case "compliance":
 		return CompliancePermissions
 	default:
-		return ViewerPermissions
+		return nil
 	}
 }
 
 // PermissionsJSON returns the JSON-encoded permissions for a role.
 func PermissionsJSON(role string) string {
-	data, _ := json.Marshal(DefaultPermissions(role))
+	perms := DefaultPermissions(role)
+	if perms == nil {
+		perms = []string{}
+	}
+	data, _ := json.Marshal(perms)
 	return string(data)
 }
 
@@ -119,8 +126,8 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
 				json.NewEncoder(w).Encode(map[string]string{
-					"error":      "insufficient permissions",
-					"required":   perm,
+					"error":    "insufficient permissions",
+					"required": perm,
 				})
 				return
 			}

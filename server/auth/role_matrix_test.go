@@ -27,7 +27,7 @@ func TestRoleDefaults(t *testing.T) {
 			mustHave: []string{PermFleetRead, PermAuditRead, PermComplianceRead},
 			mustNotHave: []string{
 				PermFleetWrite, PermConfigPublish, PermPushExecute,
-				PermUsersManage, PermComplianceDocsWrite, PermComplianceDocsPurge,
+				PermConfigRollback, PermComplianceDocsWrite, PermComplianceDocsPurge,
 			},
 		},
 		{
@@ -38,7 +38,7 @@ func TestRoleDefaults(t *testing.T) {
 				// the raw audit log stays admin-only. Verifies the
 				// scrutinize-decision constraint.
 				PermAuditRead, PermFleetRead, PermFleetWrite,
-				PermConfigPublish, PermPushExecute, PermUsersManage,
+				PermConfigPublish, PermPushExecute, PermConfigRollback,
 				PermComplianceDocsPurge,
 			},
 		},

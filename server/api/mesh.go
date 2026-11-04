@@ -21,15 +21,16 @@ type MeshHandler struct {
 	fleetIndex *fleet.FleetIndex
 	sync       *longdrawermesh.Aggregator
 	crypt      *lockboxmesh.Aggregator
-	authMethod string
 }
 
-func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMethod string) *MeshHandler {
+// NewMeshHandler builds the mesh handler. The trailing string parameter is
+// unused (it was the auth method); it stays until server/api/gateway.go
+// stops passing it.
+func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, _ string) *MeshHandler {
 	return &MeshHandler{
 		fleetIndex: fleetIndex,
 		sync:       longdrawermesh.NewAggregator(queries),
 		crypt:      lockboxmesh.NewAggregator(queries),
-		authMethod: authMethod,
 	}
 }
 
@@ -37,7 +38,7 @@ func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMetho
 // middleware — fleet-wide per-user sync and crypt state is only
 // visible to admins.
 func (h *MeshHandler) RegisterRoutes(mux *http.ServeMux) {
-	adminMW := auth.RequireAdmin(h.authMethod)
+	adminMW := auth.RequireAdmin()
 	mux.Handle("GET /api/v1/swarm/longdrawer/fleet", adminMW(http.HandlerFunc(h.handleLongdrawerFleet)))
 	mux.Handle("GET /api/v1/swarm/lockbox/fleet", adminMW(http.HandlerFunc(h.handleLockboxFleet)))
 	mux.Handle("GET /api/v1/swarm/longdrawer/envoy/{id}/users/{user}/files",

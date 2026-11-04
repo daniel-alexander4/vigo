@@ -63,7 +63,7 @@ func NewSpannerOpsPuddleHandler(provider secrets.Provider, opsDir string, auditW
 // joining vigosrvs aren't enrolled envoys, they're peer vigosrvs
 // whose operator is authenticated to this vigosrv.
 func (h *SpannerOpsPuddleHandler) RegisterRoutes(mux *http.ServeMux) {
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("POST /api/v1/spanner/ops-puddle/pair-claim", admin(http.HandlerFunc(h.handlePairClaim)))
 }
 

@@ -47,7 +47,7 @@ func NewPoolqHandler(agg *poolqmesh.Aggregator, queries *db.Queries, fleetIndex 
 // (matching public-path entries live in `server/auth/auth.go`); the
 // admin moderation endpoints are admin-only.
 func (h *PoolqHandler) RegisterRoutes(mux *http.ServeMux) {
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.HandleFunc("GET /api/v1/swarm/poolq/topics", h.handleTopics)
 	mux.HandleFunc("GET /api/v1/swarm/poolq/topic/{topic_id}/head", h.handleHead)
 	mux.HandleFunc("GET /api/v1/swarm/poolq/topic/{topic_id}/range", h.handleRange)

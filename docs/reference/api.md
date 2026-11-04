@@ -1378,7 +1378,7 @@ Force an immediate check-in for all envoys.
 
 ## Users
 
-User account management. Requires admin authentication (except first-user bootstrap).
+User account management. Requires admin authentication.
 
 ### GET /api/v1/users
 
@@ -1406,7 +1406,7 @@ List all user accounts. Admin only.
 
 **Permission:** Admin role (open until the first admin exists, then admin-gated)
 
-Create a new user account. The first user created is automatically assigned the admin role regardless of the request.
+Create a new user account. Requires admin authentication; the first admin is created with `vigocli webusers create` on the server host (local-admin token).
 
 **Request body:**
 
@@ -1825,34 +1825,6 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 | `environment` | string | Environment tier |
 | `enrolled_at` | string | RFC 3339 enrollment time |
 | `uptime` | int | System uptime in seconds |
-
----
-
-## Backup
-
-### POST /api/v1/backup/snapshot
-
-**Permission:** `backup.manage` (rides the gRPC gateway; gate enforced by the gRPC interceptor)
-
-Create an on-demand backup snapshot. Requires admin authentication.
-
-**Response (201 Created):**
-
-```json
-{
-  "path": "/backup/vigo-20260315T140000Z.tar.gz",
-  "size": 4218924,
-  "created_at": "2026-03-15T14:00:00Z"
-}
-```
-
-### GET /api/v1/backup/download
-
-**Permission:** `backup.manage` (rides the gRPC gateway; gate enforced by the gRPC interceptor)
-
-Download the latest backup archive as a `.tar.gz` file. Requires admin authentication.
-
-**Response:** Binary stream with `Content-Type: application/gzip` and `Content-Disposition: attachment; filename="vigo-backup.tar.gz"`.
 
 ---
 

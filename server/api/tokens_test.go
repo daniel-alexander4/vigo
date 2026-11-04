@@ -56,7 +56,7 @@ func TestTokens_CreateToken(t *testing.T) {
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -94,7 +94,7 @@ func TestTokens_CreateTokenOwner(t *testing.T) {
 	insertTestUser(t, sqlDB, "bob", "viewer")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -142,7 +142,7 @@ func TestTokens_CreateTokenInvalidExpiry(t *testing.T) {
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -162,7 +162,7 @@ func TestTokens_ListTokens(t *testing.T) {
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -199,7 +199,7 @@ func TestTokens_DeleteToken(t *testing.T) {
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -247,7 +247,7 @@ func TestTokens_DeleteAuthz(t *testing.T) {
 	bobID := insertTestUser(t, sqlDB, "bob", "viewer")
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -289,7 +289,7 @@ func TestTokens_UnauthorizedWithoutUser(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
 	tokenStore := vigoauth.NewTokenStore(queries, "", metrics.NewTestMetrics())
-	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries), "none")
+	handler := NewTokensHandler(tokenStore, vigoauth.NewUserStore(queries))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

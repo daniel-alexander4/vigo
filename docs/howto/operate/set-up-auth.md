@@ -127,6 +127,8 @@ auth:
     scopes: [openid, profile, email]
 ```
 
+Every login uses PKCE (`S256`) and sends a nonce that the returned ID token must echo, so the identity provider must accept a `code_challenge` on the authorization request. All the providers below do. On each login Vigo refreshes the user's display name and email from the ID token; role, permissions and SSH public key stay as stored.
+
 ### Provider Examples
 
 **Keycloak:**
@@ -295,10 +297,6 @@ Beyond the role labels, each user has a permission set stored as a JSON array. A
 | `push.execute` | Dispatch ad-hoc tasks | Yes | No | No |
 | `query.execute` | Execute live trait queries (incl. REST `POST /api/v1/ask`) | Yes | No | No |
 | `workflow.execute` | Run / abort workflows | Yes | No | No |
-| `users.manage` | Create/delete/modify users | Yes | No | No |
-| `tokens.manage` | Manage API tokens | Yes | No | No |
-| `backup.manage` | Create/download backups | Yes | No | No |
-| `enrollment.manage` | Manage enrollment patterns | Yes | No | No |
 | `audit.read` | View raw audit-log chain | Yes | Yes | **No** |
 | `compliance.read` | View framework reports + audit bundle | Yes | Yes | Yes |
 | `compliance.docs.write` | Upload supporting compliance documentation | Yes | No | Yes |
@@ -306,7 +304,7 @@ Beyond the role labels, each user has a permission set stored as a JSON array. A
 
 The `audit.read` exclusion on the compliance role is deliberate: the raw hash-chained audit log is admin-and-viewer-only, while the audit-bundle export (a per-framework compliance evidence artifact built from the same data) rides `compliance.read` so the role can download what an auditor asks for without being handed the entire audit stream.
 
-Custom permission sets can be assigned per-user via the REST API to tailor access outside the three named roles (e.g., an operator who can dispatch tasks but not manage users, or a viewer who can also publish config).
+A user's permission set is the default for their role; there is no API for assigning a custom set. Managing users, API tokens and enrollment patterns needs the admin role itself, not a permission. A role the server does not recognise gets no permissions.
 
 ## Two-Factor Authentication (TOTP)
 

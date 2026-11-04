@@ -116,7 +116,7 @@ func (h *LodeHandler) recordPayloadDenial(ctx context.Context, actor, reason str
 // they aggregate per-envoy distribution state across the swarm.
 func (h *LodeHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
-	admin := auth.RequireAdmin("")
+	admin := auth.RequireAdmin()
 	mux.Handle("POST /api/v1/swarm/filecast/distribute", admin(http.HandlerFunc(h.Distribute)))
 	mux.Handle("GET /api/v1/swarm/filecast/list", read(http.HandlerFunc(h.List)))
 	mux.Handle("GET /api/v1/swarm/filecast/status/{sha256}", read(http.HandlerFunc(h.Status)))
