@@ -230,7 +230,8 @@ pub fn eval_bundle(
 /// Evaluate a module-level when expression against vars.
 fn eval_module_when(when_str: &str, vars: &serde_json::Map<String, Value>) -> Result<bool> {
     let expr = when::parse(when_str)?;
-    when::eval(&expr, &|name| when::when_var_is_true(name, vars))
+    // Substitute first so `==` / `!=` operands become string literals.
+    when::eval(&when::substitute_vars(&expr, vars), &|name| when::when_var_is_true(name, vars))
 }
 
 /// Evaluate a resource's when expression (split server/agent-side).
@@ -258,7 +259,9 @@ fn evaluate_resource_when(
 
     if !when::contains_func_calls(&expr) {
         // Pure var expression — evaluate fully.
-        let result = when::eval(&expr, &|name| when::when_var_is_true(name, vars))?;
+        let result = when::eval(&when::substitute_vars(&expr, vars), &|name| {
+            when::when_var_is_true(name, vars)
+        })?;
         return Ok((result, String::new()));
     }
 

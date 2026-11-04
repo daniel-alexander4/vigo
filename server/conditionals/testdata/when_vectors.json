@@ -1,0 +1,20 @@
+[
+  {"expr": "os == 'debian'", "vars": {"os": "debian"}, "want": true, "canon": "os == 'debian'"},
+  {"expr": "os != 'debian'", "vars": {"os": "debian"}, "want": false, "canon": "os != 'debian'"},
+  {"expr": "os == 'debian' && is_web", "vars": {"os": "debian", "is_web": "true"}, "want": true, "canon": "os == 'debian' and is_web"},
+  {"expr": "'it\\'s' == name", "vars": {"name": "it's"}, "want": true, "canon": "'it\\'s' == name"},
+  {"expr": "'a\\\\b' == p", "vars": {"p": "a\\b"}, "want": true, "canon": "'a\\\\b' == p"},
+  {"expr": "'a\\\\b' == p", "vars": {"p": "a\\\\b"}, "want": false},
+  {"expr": "'\\x' == 'x'", "vars": {}, "want": true, "canon": "'x' == 'x'"},
+  {"expr": "not (os == 'debian')", "vars": {"os": "rhel"}, "want": true, "canon": "not (os == 'debian')"},
+  {"expr": "!(os != 'rhel') || false", "vars": {"os": "rhel"}, "want": true, "canon": "not (os != 'rhel') or false"},
+  {"expr": "count == '3'", "vars": {"count": 3}, "want": true},
+  {"expr": "a and b or c", "vars": {"a": "true", "b": "false", "c": "true"}, "want": true, "canon": "a and b or c"},
+  {"expr": "(a or b) and c", "vars": {"a": "true", "c": "true"}, "want": true, "canon": "(a or b) and c"},
+  {"expr": "file_exists('/etc/it\\'s')", "vars": {}, "want": "error", "canon": "file_exists('/etc/it\\'s')"},
+  {"expr": "unknown == 'x'", "vars": {}, "want": "error"},
+  {"expr": "'lonely'", "vars": {}, "want": "error"},
+  {"expr": "a == b == c", "vars": {}, "want": "parse_error"},
+  {"expr": "a = b", "vars": {}, "want": "parse_error"},
+  {"expr": "'unterminated", "vars": {}, "want": "parse_error"}
+]

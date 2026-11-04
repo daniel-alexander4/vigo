@@ -5,10 +5,17 @@
 //! Port of server/conditionals/when.go (501 lines).
 //!
 //! Grammar:
-//!   or_expr  → and_expr ('or' and_expr)*
-//!   and_expr → unary ('and' unary)*
-//!   unary    → 'not' unary | primary
-//!   primary  → 'true' | 'false' | ident | ident '(' args ')' | '(' or_expr ')'
+//!   or_expr    → and_expr ('or' and_expr)*
+//!   and_expr   → comparison ('and' comparison)*
+//!   comparison → unary (('==' | '!=') unary)?      (non-chainable)
+//!   unary      → 'not' unary | primary
+//!   primary    → 'true' | 'false' | string | ident | ident '(' args ')' | '(' or_expr ')'
+//!
+//! Strings are single-quoted; a backslash escapes the next character and is
+//! dropped (`\'` is a quote, `\\` a backslash) — byte-for-byte the same as
+//! server/conditionals lexString, so an expression the server leaves for the
+//! agent reads the same here. `testdata/when_vectors.json` (under
+//! server/conditionals) is the shared cross-language vector set.
 
 use anyhow::{bail, Result};
 
@@ -25,6 +32,10 @@ pub enum WhenExpr {
     And(Box<WhenExpr>, Box<WhenExpr>),
     Or(Box<WhenExpr>, Box<WhenExpr>),
     FuncCall { name: String, args: Vec<String> },
+    /// String literal; only meaningful as a comparison operand.
+    StringLit(String),
+    Eq(Box<WhenExpr>, Box<WhenExpr>),
+    Neq(Box<WhenExpr>, Box<WhenExpr>),
 }
 
 // -- Lexer --
@@ -42,6 +53,8 @@ enum TokenKind {
     RParen,
     StringLit(String),
     Comma,
+    Eq,
+    Neq,
 }
 
 #[derive(Debug, Clone)]
@@ -79,29 +92,50 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 pos += 1;
             }
             '\'' => {
-                // String literal
+                // String literal. A backslash escapes the next character and
+                // is dropped from the value — server/conditionals lexString.
                 pos += 1; // skip opening quote
                 let start = pos;
+                let mut s = String::new();
+                let mut closed = false;
                 while pos < chars.len() {
-                    if chars[pos] == '\'' {
-                        let s: String = chars[start..pos].iter().collect();
+                    let c = chars[pos];
+                    if c == '\'' {
                         pos += 1; // skip closing quote
-                        tokens.push(Token { kind: TokenKind::StringLit(s) });
+                        closed = true;
                         break;
                     }
-                    if chars[pos] == '\\' && pos + 1 < chars.len() {
+                    if c == '\\' && pos + 1 < chars.len() {
+                        s.push(chars[pos + 1]);
                         pos += 2;
                         continue;
                     }
+                    s.push(c);
                     pos += 1;
                 }
-                if pos > chars.len() || (pos == chars.len() && tokens.last().map(|t| matches!(t.kind, TokenKind::StringLit(_))) != Some(true)) {
+                if !closed {
                     bail!("unterminated string literal starting at position {}", start - 1);
                 }
+                tokens.push(Token { kind: TokenKind::StringLit(s) });
             }
             '!' => {
-                tokens.push(Token { kind: TokenKind::Not });
-                pos += 1;
+                // `!=` before the bare `!` (NOT).
+                if pos + 1 < chars.len() && chars[pos + 1] == '=' {
+                    tokens.push(Token { kind: TokenKind::Neq });
+                    pos += 2;
+                } else {
+                    tokens.push(Token { kind: TokenKind::Not });
+                    pos += 1;
+                }
+            }
+            '=' => {
+                // `==` only; a bare `=` is invalid (no assignment).
+                if pos + 1 < chars.len() && chars[pos + 1] == '=' {
+                    tokens.push(Token { kind: TokenKind::Eq });
+                    pos += 2;
+                } else {
+                    bail!("unexpected character '=' at position {} (did you mean `==`?)", pos);
+                }
             }
             // `&&` / `||` alongside the word forms. server/conditionals/when.go
             // lexes both (tokAnd/tokOr), the docs use the symbolic form, and the
@@ -180,13 +214,34 @@ impl Parser {
     }
 
     fn parse_and_expr(&mut self) -> Result<WhenExpr> {
-        let mut left = self.parse_unary()?;
+        let mut left = self.parse_comparison()?;
         while matches!(self.current(), TokenKind::And) {
             self.advance();
-            let right = self.parse_unary()?;
+            let right = self.parse_comparison()?;
             left = WhenExpr::And(Box::new(left), Box::new(right));
         }
         Ok(left)
+    }
+
+    /// Between AND and unary, so `a && b == c` is `a && (b == c)`.
+    /// Non-chainable: `a == b == c` is an error (server/conditionals).
+    fn parse_comparison(&mut self) -> Result<WhenExpr> {
+        let left = self.parse_unary()?;
+        let is_eq = match self.current() {
+            TokenKind::Eq => true,
+            TokenKind::Neq => false,
+            _ => return Ok(left),
+        };
+        self.advance();
+        let right = self.parse_unary()?;
+        if matches!(self.current(), TokenKind::Eq | TokenKind::Neq) {
+            bail!("comparison operators do not chain — wrap in parens or use `&&`");
+        }
+        Ok(if is_eq {
+            WhenExpr::Eq(Box::new(left), Box::new(right))
+        } else {
+            WhenExpr::Neq(Box::new(left), Box::new(right))
+        })
     }
 
     fn parse_unary(&mut self) -> Result<WhenExpr> {
@@ -215,6 +270,11 @@ impl Parser {
                 } else {
                     Ok(WhenExpr::VarRef(name))
                 }
+            }
+            TokenKind::StringLit(v) => {
+                // Only valid as a comparison operand; eval rejects it alone.
+                self.advance();
+                Ok(WhenExpr::StringLit(v))
             }
             TokenKind::LParen => {
                 self.advance();
@@ -311,17 +371,29 @@ pub fn eval_with_funcs(
             Some(f) => f(name, args),
             None => bail!("function call {:?} not supported in this context", name),
         },
+        WhenExpr::Eq(left, right) => match (left.as_ref(), right.as_ref()) {
+            (WhenExpr::StringLit(l), WhenExpr::StringLit(r)) => Ok(l == r),
+            _ => bail!("`==` operands must be string literals (substitute vars first)"),
+        },
+        WhenExpr::Neq(left, right) => match (left.as_ref(), right.as_ref()) {
+            (WhenExpr::StringLit(l), WhenExpr::StringLit(r)) => Ok(l != r),
+            _ => bail!("`!=` operands must be string literals (substitute vars first)"),
+        },
+        WhenExpr::StringLit(v) => {
+            bail!("string literal {:?} used outside a comparison context", v)
+        }
     }
 }
 
 /// Returns true if the expression contains any function calls.
 pub fn contains_func_calls(expr: &WhenExpr) -> bool {
     match expr {
-        WhenExpr::BoolLit(_) | WhenExpr::VarRef(_) => false,
+        WhenExpr::BoolLit(_) | WhenExpr::VarRef(_) | WhenExpr::StringLit(_) => false,
         WhenExpr::Not(operand) => contains_func_calls(operand),
-        WhenExpr::And(left, right) | WhenExpr::Or(left, right) => {
-            contains_func_calls(left) || contains_func_calls(right)
-        }
+        WhenExpr::And(left, right)
+        | WhenExpr::Or(left, right)
+        | WhenExpr::Eq(left, right)
+        | WhenExpr::Neq(left, right) => contains_func_calls(left) || contains_func_calls(right),
         WhenExpr::FuncCall { .. } => true,
     }
 }
@@ -341,17 +413,20 @@ pub const CHANGED_SENTINEL: &str = "changed";
 /// would silently turn a normal conditional into a trigger-only resource.
 pub fn references_changed(expr: &WhenExpr) -> bool {
     match expr {
-        WhenExpr::BoolLit(_) | WhenExpr::FuncCall { .. } => false,
+        WhenExpr::BoolLit(_) | WhenExpr::FuncCall { .. } | WhenExpr::StringLit(_) => false,
         WhenExpr::VarRef(name) => name == CHANGED_SENTINEL,
         WhenExpr::Not(operand) => references_changed(operand),
-        WhenExpr::And(left, right) | WhenExpr::Or(left, right) => {
-            references_changed(left) || references_changed(right)
-        }
+        WhenExpr::And(left, right)
+        | WhenExpr::Or(left, right)
+        | WhenExpr::Eq(left, right)
+        | WhenExpr::Neq(left, right) => references_changed(left) || references_changed(right),
     }
 }
 
 /// Replace all VarRef nodes with BoolLit based on vars map.
-/// Function calls are unchanged.
+/// Function calls are unchanged. Inside `==` / `!=` a VarRef operand becomes
+/// a StringLit of the var's value instead (comparison is string-typed); an
+/// unknown var is left in place — server/conditionals SubstituteVars.
 pub fn substitute_vars(
     expr: &WhenExpr,
     vars: &serde_json::Map<String, serde_json::Value>,
@@ -368,7 +443,31 @@ pub fn substitute_vars(
             Box::new(substitute_vars(left, vars)),
             Box::new(substitute_vars(right, vars)),
         ),
-        WhenExpr::FuncCall { .. } => expr.clone(),
+        WhenExpr::FuncCall { .. } | WhenExpr::StringLit(_) => expr.clone(),
+        WhenExpr::Eq(left, right) => WhenExpr::Eq(
+            Box::new(substitute_string_operand(left, vars)),
+            Box::new(substitute_string_operand(right, vars)),
+        ),
+        WhenExpr::Neq(left, right) => WhenExpr::Neq(
+            Box::new(substitute_string_operand(left, vars)),
+            Box::new(substitute_string_operand(right, vars)),
+        ),
+    }
+}
+
+/// A comparison operand's var ref becomes its value as a string; anything
+/// else passes through for eval to accept or reject.
+fn substitute_string_operand(
+    expr: &WhenExpr,
+    vars: &serde_json::Map<String, serde_json::Value>,
+) -> WhenExpr {
+    match expr {
+        WhenExpr::VarRef(name) => match vars.get(name) {
+            Some(serde_json::Value::String(s)) => WhenExpr::StringLit(s.clone()),
+            Some(v) => WhenExpr::StringLit(v.to_string()),
+            None => expr.clone(),
+        },
+        _ => expr.clone(),
     }
 }
 
@@ -415,24 +514,43 @@ pub fn tristate_eval(expr: &WhenExpr) -> Option<bool> {
                 _ => None,
             }
         }
-        WhenExpr::FuncCall { .. } => None, // unknown
+        WhenExpr::FuncCall { .. } | WhenExpr::StringLit(_) => None, // unknown
+        WhenExpr::Eq(left, right) => match (left.as_ref(), right.as_ref()) {
+            (WhenExpr::StringLit(l), WhenExpr::StringLit(r)) => Some(l == r),
+            _ => None,
+        },
+        WhenExpr::Neq(left, right) => match (left.as_ref(), right.as_ref()) {
+            (WhenExpr::StringLit(l), WhenExpr::StringLit(r)) => Some(l != r),
+            _ => None,
+        },
     }
 }
 
-/// Convert AST back to string representation.
+/// Render a string as a single-quoted literal the lexer reads back as `s`.
+fn quote_string(s: &str) -> String {
+    format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
+/// Print `e`, parenthesised unless it is unary-level (a primary or a not).
+fn unary_operand(e: &WhenExpr) -> String {
+    match e {
+        WhenExpr::BoolLit(_)
+        | WhenExpr::VarRef(_)
+        | WhenExpr::FuncCall { .. }
+        | WhenExpr::StringLit(_)
+        | WhenExpr::Not(_) => expr_string(e),
+        _ => format!("({})", expr_string(e)),
+    }
+}
+
+/// Convert AST back to string representation. Matches server/conditionals
+/// ExprString byte for byte, and re-parses to the same AST.
 pub fn expr_string(expr: &WhenExpr) -> String {
     match expr {
         WhenExpr::BoolLit(true) => "true".to_string(),
         WhenExpr::BoolLit(false) => "false".to_string(),
         WhenExpr::VarRef(name) => name.clone(),
-        WhenExpr::Not(operand) => {
-            match operand.as_ref() {
-                WhenExpr::And(_, _) | WhenExpr::Or(_, _) => {
-                    format!("not ({})", expr_string(operand))
-                }
-                _ => format!("not {}", expr_string(operand)),
-            }
-        }
+        WhenExpr::Not(operand) => format!("not {}", unary_operand(operand)),
         WhenExpr::And(left, right) => {
             let l = if matches!(left.as_ref(), WhenExpr::Or(_, _)) {
                 format!("({})", expr_string(left))
@@ -450,8 +568,15 @@ pub fn expr_string(expr: &WhenExpr) -> String {
             format!("{} or {}", expr_string(left), expr_string(right))
         }
         WhenExpr::FuncCall { name, args } => {
-            let quoted: Vec<String> = args.iter().map(|a| format!("'{}'", a)).collect();
+            let quoted: Vec<String> = args.iter().map(|a| quote_string(a)).collect();
             format!("{}({})", name, quoted.join(", "))
+        }
+        WhenExpr::StringLit(v) => quote_string(v),
+        WhenExpr::Eq(left, right) => {
+            format!("{} == {}", unary_operand(left), unary_operand(right))
+        }
+        WhenExpr::Neq(left, right) => {
+            format!("{} != {}", unary_operand(left), unary_operand(right))
         }
     }
 }
@@ -816,6 +941,39 @@ fn in_group(_group: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Cross-language parity: the same vector file the Go side runs
+    /// (server/conditionals/when_vectors_test.go). Each case is parsed,
+    /// var-substituted and evaluated; `want` is true/false or "error", and
+    /// `canon` is the printed form both printers must produce.
+    #[test]
+    fn test_cross_language_vectors() {
+        let raw = include_str!("../../../server/conditionals/testdata/when_vectors.json");
+        let cases: Vec<serde_json::Value> = serde_json::from_str(raw).unwrap();
+        assert!(cases.len() >= 10);
+        for c in cases {
+            let input = c["expr"].as_str().unwrap();
+            let vars = c["vars"].as_object().cloned().unwrap_or_default();
+            let parsed = parse(input);
+            let want = &c["want"];
+            if want == "parse_error" {
+                assert!(parsed.is_err(), "{input}: parsed, want a parse error");
+                continue;
+            }
+            let expr = parsed.unwrap_or_else(|e| panic!("{input}: {e}"));
+            if let Some(canon) = c["canon"].as_str() {
+                assert_eq!(expr_string(&expr), canon, "{input}: printed form");
+                assert_eq!(parse(canon).unwrap(), expr, "{input}: canon re-parse");
+            }
+            let got = eval(&substitute_vars(&expr, &vars), &|_| false);
+            match want {
+                serde_json::Value::Bool(b) => {
+                    assert_eq!(got.unwrap_or_else(|e| panic!("{input}: {e}")), *b, "{input}")
+                }
+                _ => assert!(got.is_err(), "{input}: evaluated, want an eval error"),
+            }
+        }
+    }
 
     #[test]
     fn test_parse_empty() {
