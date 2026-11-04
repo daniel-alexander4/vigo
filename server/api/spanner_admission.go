@@ -524,7 +524,7 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 	}
 
 	var admitResp admitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&admitResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, spanner.MaxPeerResponseBytes)).Decode(&admitResp); err != nil {
 		writeError(w, http.StatusBadGateway, "decoding inviter /admit response: "+err.Error())
 		return
 	}
@@ -552,13 +552,17 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// Every row verified above; VerifyRoster additionally strips any
+	// unsigned revocation and drops consumed tokens no signed row binds —
+	// the same trust filter the gossip merge applies.
+	verifiedRoster, verifiedTokens := spanner.VerifyRoster(admitResp.Roster, admitResp.ConsumedTokens, ed25519.PublicKey(bundle.FounderPubkey))
+
 	// Persist the returned roster locally. Each bolt row is
-	// peer-signed (the inviter signed every row it returned); we
-	// store them verbatim. Consumed-token rows go in first — they
+	// founder-signed (verified above). Consumed-token rows go in first — they
 	// are the FK target of spanner_bolts.consumed_token_hash — and
 	// the whole write is one transaction so a partial roster never
 	// lands.
-	written, err := h.persistRoster(r.Context(), admitResp.ConsumedTokens, admitResp.Roster)
+	written, err := h.persistRoster(r.Context(), verifiedTokens, verifiedRoster)
 	if err != nil {
 		slog.Error("persisting roster", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")

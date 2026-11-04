@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	vigoauth "git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/testutil"
 )
@@ -190,14 +191,13 @@ func TestMergeSnapshotOrderIndependent(t *testing.T) {
 	}
 }
 
-// TestMergeSnapshotConcurrentRevokeConverges pins the deterministic
-// revoke-vs-revoke tiebreak: two nodes revoke the same bolt
-// concurrently (equal admitted_at, differing revoked_at/revoked_by);
-// after exchanging snapshots both ways, both DBs must hold the SAME
-// tuple — the smallest (revoked_at, revoked_by) — and compute the same
-// Tier-1 digest. Before the tiebreak, both merge directions were
-// no-ops and the digests diverged permanently (endless no-op pulls).
-func TestMergeSnapshotConcurrentRevokeConverges(t *testing.T) {
+// TestMergeSnapshotRefusesWireRevocation: revoked_* is outside the signed
+// admission row and nothing signs a revocation, so a revocation arriving on
+// the wire is refused (the admission merges live). Before, any MITM or
+// admitted bolt could permanently revoke every bolt — founder included —
+// under absolute revoke-wins. Two nodes fed different forged revocations in
+// opposite orders still converge (same state, same Tier-1 digest).
+func TestMergeSnapshotRefusesWireRevocation(t *testing.T) {
 	fa := newCRDTFixture(t)
 	fb := &crdtFixture{
 		t: t, sqlDB: testutil.OpenMigratedTestDB(t),
@@ -206,32 +206,27 @@ func TestMergeSnapshotConcurrentRevokeConverges(t *testing.T) {
 	fb.q = db.New(fb.sqlDB)
 
 	target := hexKey(0x44)
-
-	// Node A's view: revoked earlier (the operative first revocation).
 	revA := fa.revokedRow(target, "t.example.com", 100, 500)
 	revA.RevokedBy = "revoker-a"
-	// Node B's view: a concurrent, later revocation by someone else.
 	revB := fa.revokedRow(target, "t.example.com", 100, 600)
 	revB.RevokedBy = "revoker-b"
+	founderRevoked := fa.founderSelfRow()
+	founderRevoked.RevokedAt, founderRevoked.RevokedBy = 700, target
 
 	snapA := Snapshot{Roster: []RosterRow{fa.founderSelfRow(), revA}}
-	snapB := Snapshot{Roster: []RosterRow{fa.founderSelfRow(), revB}}
+	snapB := Snapshot{Roster: []RosterRow{founderRevoked, revB}}
 
-	// fa: A then B. fb: B then A.
 	fa.merge(snapA)
 	fa.merge(snapB)
 	fb.merge(snapB)
 	fb.merge(snapA)
 
 	sameRosterState(t, fa.rosterState(), fb.rosterState())
-
-	// Both must have converged on the smallest tuple, (500, revoker-a).
-	got := fa.rosterState()[target]
-	if got.RevokedAt.Int64 != 500 || got.RevokedBy.String != "revoker-a" {
-		t.Errorf("winner = (%d, %q), want (500, revoker-a)", got.RevokedAt.Int64, got.RevokedBy.String)
+	for pk, row := range fa.rosterState() {
+		if row.RevokedAt.Valid || row.RevokedBy.Valid {
+			t.Errorf("%s revoked by an unsigned wire claim: (%v, %v)", pk, row.RevokedAt, row.RevokedBy)
+		}
 	}
-
-	// The Tier-1 digests must agree, or the fleet pulls forever.
 	rowsA, err := fa.q.ListBolts(t.Context())
 	if err != nil {
 		t.Fatalf("ListBolts fa: %v", err)
@@ -241,30 +236,78 @@ func TestMergeSnapshotConcurrentRevokeConverges(t *testing.T) {
 		t.Fatalf("ListBolts fb: %v", err)
 	}
 	if da, db2 := Tier1Digest(rowsA, nil), Tier1Digest(rowsB, nil); da != db2 {
-		t.Errorf("Tier-1 digests diverge after convergent merge: %s != %s", da, db2)
+		t.Errorf("Tier-1 digests diverge: %s != %s", da, db2)
 	}
 }
 
-// TestMergeSnapshotRevokeWins verifies a revoked row never returns to
-// live, regardless of merge order.
-func TestMergeSnapshotRevokeWins(t *testing.T) {
+// TestMergeSnapshotLocalRevokeSurvivesLiveRow: a revocation recorded
+// locally is never undone by a peer serving the row live.
+func TestMergeSnapshotLocalRevokeSurvivesLiveRow(t *testing.T) {
 	f := newCRDTFixture(t)
 	bolt1 := hexKey(0x33)
-
 	live := f.signedRow(bolt1, "b1.example.com", 100, "")
-	revoked := f.revokedRow(bolt1, "b1.example.com", 100, 100)
-
-	// Merge live, then revoked → must end revoked.
 	f.merge(Snapshot{Roster: []RosterRow{f.founderSelfRow(), live}})
-	f.merge(Snapshot{Roster: []RosterRow{revoked}})
-	if !f.rosterState()[bolt1].RevokedAt.Valid {
-		t.Fatal("bolt1 should be revoked after merging the revoked row")
+	if err := f.q.RevokeBolt(t.Context(), db.RevokeBoltParams{
+		Pubkey:    bolt1,
+		RevokedAt: sql.NullInt64{Int64: 200, Valid: true},
+		RevokedBy: sql.NullString{String: f.founderHex, Valid: true},
+	}); err != nil {
+		t.Fatalf("RevokeBolt: %v", err)
 	}
-
-	// Re-merge the live row → revoke must still win.
-	f.merge(Snapshot{Roster: []RosterRow{live}})
+	f.merge(Snapshot{Roster: []RosterRow{f.founderSelfRow(), live}})
 	if !f.rosterState()[bolt1].RevokedAt.Valid {
-		t.Error("revoke-wins violated: live row resurrected a revoked bolt")
+		t.Error("revoke-wins violated: live wire row resurrected a locally revoked bolt")
+	}
+}
+
+// TestMergeSnapshotRefusesUnboundConsumedToken: a consumed-token entry no
+// signed admission row names is refused — it would pre-burn an outstanding
+// invite token. A bound entry merges.
+func TestMergeSnapshotRefusesUnboundConsumedToken(t *testing.T) {
+	f := newCRDTFixture(t)
+	bolt1 := hexKey(0x7a)
+	bound := TokenHash("bound-token")
+	unbound := TokenHash("outstanding-invite")
+	f.merge(Snapshot{
+		Roster: []RosterRow{f.founderSelfRow(), f.signedRow(bolt1, "b1.example.com", 100, bound)},
+		ConsumedTokens: []ConsumedToken{
+			{TokenHash: bound, ConsumedAt: 90, ConsumedBy: f.founderHex, AdmittedPubkey: bolt1, ExpiresAt: 999},
+			{TokenHash: unbound, ConsumedAt: 90, ConsumedBy: f.founderHex, AdmittedPubkey: bolt1, ExpiresAt: 999},
+		},
+	})
+	if ok, err := f.q.IsTokenConsumed(t.Context(), bound); err != nil || ok != 1 {
+		t.Errorf("bound token not merged (consumed=%v, err=%v)", ok, err)
+	}
+	if ok, err := f.q.IsTokenConsumed(t.Context(), unbound); err != nil || ok != 0 {
+		t.Errorf("unbound token merged — invite pre-burned (consumed=%v, err=%v)", ok, err)
+	}
+}
+
+// TestMergeSnapshotUserRowsUseLocalRevocation: a bolt revoked locally that a
+// peer serves as live must not get its user rows accepted — MergeUsers'
+// known-bolt map comes from the local merged roster, not the wire.
+func TestMergeSnapshotUserRowsUseLocalRevocation(t *testing.T) {
+	f := newCRDTFixture(t)
+	boltPub, boltKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boltHex := hex.EncodeToString(boltPub)
+	live := f.signedRow(boltHex, "b.example.com", 100, "")
+	f.merge(Snapshot{Roster: []RosterRow{f.founderSelfRow(), live}})
+	if err := f.q.RevokeBolt(t.Context(), db.RevokeBoltParams{
+		Pubkey:    boltHex,
+		RevokedAt: sql.NullInt64{Int64: 200, Valid: true},
+		RevokedBy: sql.NullString{String: f.founderHex, Valid: true},
+	}); err != nil {
+		t.Fatalf("RevokeBolt: %v", err)
+	}
+	user := signedUserRow(t, boltKey, boltHex, vigoauth.UserRow{
+		ID: "user-evil", Username: "evil", Role: "admin", UpdatedAtMs: 1000,
+	})
+	f.merge(Snapshot{Roster: []RosterRow{f.founderSelfRow(), live}, Users: []UserSnapshotRow{user}})
+	if _, err := f.q.GetUserByID(t.Context(), "user-evil"); err == nil {
+		t.Error("user row from a locally revoked bolt was accepted")
 	}
 }
 

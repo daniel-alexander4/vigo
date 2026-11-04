@@ -257,7 +257,7 @@ func (g *Gossiper) autoAdmitPeer(ctx context.Context, peer, hostname string, pat
 	}
 
 	var par PeerAdmitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&par); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, peerResponseLimit)).Decode(&par); err != nil {
 		return fmt.Errorf("decoding response: %w", err)
 	}
 

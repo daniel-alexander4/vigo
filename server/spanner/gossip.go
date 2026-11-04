@@ -45,6 +45,17 @@ import (
 // slow peer cannot stall the whole cycle.
 const gossipSnapshotTimeout = 30 * time.Second
 
+// MaxPeerResponseBytes caps how much of a peer's 2xx response body
+// (/snapshot, /fleet-snapshot, /peer-admit, /admit) is JSON-decoded.
+// The peer is not yet authenticated at the transport (see NewGossiper),
+// so without a cap only the timeout bounded the allocation. Sized for a
+// full fleet-snapshot of a large partition (tens of thousands of envoys).
+const MaxPeerResponseBytes = 256 << 20
+
+// peerResponseLimit is the cap this package applies; a var only so tests
+// can lower it.
+var peerResponseLimit int64 = MaxPeerResponseBytes
+
 // pullDebounceWindow is the minimum gap between two Tier-1-triggered
 // pulls of the same peer. A convergence-window flurry of Tier-1
 // digest mismatches collapses to at most one pull per peer per
@@ -333,7 +344,7 @@ func (g *Gossiper) pullFleetSnapshot(ctx context.Context, peerHostname, peerPubk
 	}
 
 	var snap FleetSnapshot
-	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, peerResponseLimit)).Decode(&snap); err != nil {
 		return fmt.Errorf("decoding peer /fleet-snapshot: %w", err)
 	}
 
@@ -388,7 +399,7 @@ func (g *Gossiper) pullAndMerge(ctx context.Context, peerHostname string, founde
 	}
 
 	var snap Snapshot
-	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, peerResponseLimit)).Decode(&snap); err != nil {
 		return 0, fmt.Errorf("decoding peer /snapshot: %w", err)
 	}
 

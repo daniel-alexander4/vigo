@@ -274,30 +274,29 @@ func writeField(h hash.Hash, b []byte) {
 	_, _ = h.Write(b)
 }
 
-// MergeSnapshot CRDT-merges a peer's Snapshot into the local DB and
-// returns how many spanner_bolts rows the LWW merge actually mutated.
+// VerifyRoster is the trust filter every wire roster passes before it
+// touches the DB (gossip MergeSnapshot and the join ceremony alike). It
+// returns:
 //
-// Every bolt row is verified end-to-end before it is merged: in
-// Slice 2-i-a every admission is founder-issued, so a row is accepted
-// only when its admitted_by equals the founder's pubkey-hex AND its
-// signature verifies against the founder's pubkey. A row that fails
-// either check is skipped (and logged) — a bad row never reaches the
-// DB.
-//
-// The whole merge runs in one sql.Tx (mirroring persistRoster): the
-// consumed-token G-Set is unioned first because it is the FK target
-// of spanner_bolts.consumed_token_hash, then every verified bolt row
-// is run through MergeBoltLWW.
-func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snapshot, founderPubkey ed25519.PublicKey, sessions *auth.SessionManager, audit AuditRecorder) (merged int, err error) {
-	if len(founderPubkey) != ed25519.PublicKeySize {
-		return 0, fmt.Errorf("spanner crdt: founder pubkey is %d bytes, expected %d", len(founderPubkey), ed25519.PublicKeySize)
-	}
+//   - the rows whose admission is founder-issued and founder-signed
+//     (admitted_by == founder AND the signature verifies), each with its
+//     revoked_* fields STRIPPED. Revocation is outside the signed
+//     admission row and no signed revocation record exists yet (the
+//     bolt-revocation feature is deferred; nothing in production creates
+//     a revocation), so an unsigned revoked_at/revoked_by from the wire is
+//     an unauthenticated claim — accepting it let any MITM or admitted
+//     bolt permanently revoke every bolt, founder included, under absolute
+//     revoke-wins. A locally-recorded revocation still survives a live
+//     wire row (MergeBoltLWW's revoke-wins guard).
+//   - the consumed-token G-Set entries bound to one of those rows (some
+//     verified row's founder-signed consumed_token_hash names it). An
+//     unbound entry is an unauthenticated claim that a token was spent —
+//     accepting it let a peer pre-burn outstanding invite tokens.
+func VerifyRoster(roster []RosterRow, tokens []ConsumedToken, founderPubkey ed25519.PublicKey) ([]RosterRow, []ConsumedToken) {
 	founderHex := hex.EncodeToString(founderPubkey)
-
-	// Verify every bolt row up front. A row that fails verification is
-	// dropped here and never enters the transaction.
-	verified := make([]RosterRow, 0, len(snap.Roster))
-	for _, rr := range snap.Roster {
+	verified := make([]RosterRow, 0, len(roster))
+	bound := make(map[string]bool)
+	for _, rr := range roster {
 		if rr.AdmittedBy != founderHex {
 			slog.Warn("spanner crdt: skipping roster row not admitted by the founder",
 				"pubkey", rr.Pubkey, "admitted_by", rr.AdmittedBy)
@@ -309,8 +308,47 @@ func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snaps
 				"pubkey", rr.Pubkey, "error", vErr)
 			continue
 		}
+		if rr.RevokedAt != 0 || rr.RevokedBy != "" {
+			slog.Warn("spanner crdt: refusing unsigned revocation from the wire",
+				"pubkey", rr.Pubkey, "revoked_at", rr.RevokedAt, "revoked_by", rr.RevokedBy)
+			rr.RevokedAt, rr.RevokedBy = 0, ""
+		}
+		if rr.ConsumedTokenHash != "" {
+			bound[rr.ConsumedTokenHash] = true
+		}
 		verified = append(verified, rr)
 	}
+	keptTokens := make([]ConsumedToken, 0, len(tokens))
+	for _, tok := range tokens {
+		if !bound[tok.TokenHash] {
+			slog.Warn("spanner crdt: refusing consumed token not bound to a signed admission",
+				"token_hash", tok.TokenHash)
+			continue
+		}
+		keptTokens = append(keptTokens, tok)
+	}
+	return verified, keptTokens
+}
+
+// MergeSnapshot CRDT-merges a peer's Snapshot into the local DB and
+// returns how many spanner_bolts rows the LWW merge actually mutated.
+//
+// The snapshot passes VerifyRoster first: only founder-signed admission
+// rows (revocations stripped) and the consumed tokens they bind reach
+// the DB.
+//
+// The whole merge runs in one sql.Tx (mirroring persistRoster): the
+// consumed-token G-Set is unioned first because it is the FK target
+// of spanner_bolts.consumed_token_hash, then every verified bolt row
+// is run through MergeBoltLWW.
+func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snapshot, founderPubkey ed25519.PublicKey, sessions *auth.SessionManager, audit AuditRecorder) (merged int, err error) {
+	if len(founderPubkey) != ed25519.PublicKeySize {
+		return 0, fmt.Errorf("spanner crdt: founder pubkey is %d bytes, expected %d", len(founderPubkey), ed25519.PublicKeySize)
+	}
+
+	// Verify up front. A row or token that fails is dropped here and
+	// never enters the transaction.
+	verified, tokens := VerifyRoster(snap.Roster, snap.ConsumedTokens, founderPubkey)
 
 	tx, err := sqlDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -323,7 +361,7 @@ func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snaps
 	// Token G-Set union first — FK targets of spanner_bolts. The
 	// G-Set merge is idempotent (ON CONFLICT DO NOTHING), so a
 	// re-applied snapshot is a no-op.
-	for _, tok := range snap.ConsumedTokens {
+	for _, tok := range tokens {
 		if _, mErr := qtx.MergeConsumedToken(ctx, db.MergeConsumedTokenParams{
 			TokenHash:      tok.TokenHash,
 			ConsumedAt:     tok.ConsumedAt,
@@ -351,7 +389,14 @@ func MergeSnapshot(ctx context.Context, q *db.Queries, sqlDB *sql.DB, snap Snaps
 	// atomic with the user-row soft-delete. Side-effect dispatch
 	// (DestroyUserSessions + audit emission) deliberately runs
 	// AFTER commit — see dispatchUserEffects.
-	userEffects, mErr := MergeUsers(ctx, qtx, snap.Users, buildKnownBolts(verified))
+	// Known bolts come from the LOCAL roster as it stands after the bolt
+	// merge, never from the wire rows — a locally-revoked bolt stays
+	// revoked for user-row authorization whatever the peer claims.
+	localRoster, lErr := qtx.ListBolts(ctx)
+	if lErr != nil {
+		return 0, fmt.Errorf("spanner crdt: reading merged roster: %w", lErr)
+	}
+	userEffects, mErr := MergeUsers(ctx, qtx, snap.Users, buildKnownBolts(localRoster))
 	if mErr != nil {
 		return 0, mErr
 	}

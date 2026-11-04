@@ -42,10 +42,10 @@ import (
 // peer demoting + deleting at once), and the post-commit handler
 // dedupes by firing one DestroyUserSessions per effect regardless.
 type UserMergeEffect struct {
-	UserID       string
-	OriginBolt   string // pubkey-hex of the writing bolt; the audit actor
-	RoleChanged  bool
-	Tombstoned   bool
+	UserID      string
+	OriginBolt  string // pubkey-hex of the writing bolt; the audit actor
+	RoleChanged bool
+	Tombstoned  bool
 }
 
 // knownBolt is the subset of spanner_bolts MergeUsers needs to
@@ -164,20 +164,23 @@ func MergeUsers(ctx context.Context, qtx *db.Queries, users []UserSnapshotRow, k
 	return effects, nil
 }
 
-// buildKnownBolts projects the verified roster into the per-pubkey
-// lookup MergeUsers consumes. Skips rows whose pubkey-hex doesn't
-// decode to a valid 32-byte Ed25519 key -- those can never be the
-// signer of a user row that verifies anyway.
-func buildKnownBolts(roster []RosterRow) map[string]knownBolt {
+// buildKnownBolts projects the LOCAL merged roster (read back inside the
+// merge transaction, after the bolt merge) into the per-pubkey lookup
+// MergeUsers consumes. It must never be built from the wire roster: a
+// bolt revoked locally that a peer serves as live would otherwise get its
+// user rows accepted. Skips rows whose pubkey-hex doesn't decode to a
+// valid 32-byte Ed25519 key -- those can never be the signer of a user
+// row that verifies anyway.
+func buildKnownBolts(roster []db.SpannerBolt) map[string]knownBolt {
 	out := make(map[string]knownBolt, len(roster))
-	for _, rr := range roster {
-		raw, err := hex.DecodeString(rr.Pubkey)
+	for _, b := range roster {
+		raw, err := hex.DecodeString(b.Pubkey)
 		if err != nil || len(raw) != ed25519.PublicKeySize {
 			continue
 		}
-		out[rr.Pubkey] = knownBolt{
+		out[b.Pubkey] = knownBolt{
 			pubkey:  ed25519.PublicKey(raw),
-			revoked: rr.RevokedAt != 0,
+			revoked: b.RevokedAt.Valid,
 		}
 	}
 	return out
