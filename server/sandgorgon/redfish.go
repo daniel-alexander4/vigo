@@ -25,9 +25,17 @@ type RedfishClient struct {
 	client   *http.Client
 }
 
-// NewRedfishClient creates a client for the given BMC address.
-// TLS verification is skipped because BMC certificates are typically self-signed.
-func NewRedfishClient(address, username, password string) *RedfishClient {
+// RedfishTLS controls how a RedfishClient verifies the BMC's TLS
+// certificate. The zero value verifies against the system roots.
+// InsecureSkipVerify exists for self-signed BMCs and must be opted into
+// explicitly: the connection carries the BMC username and password.
+type RedfishTLS struct {
+	InsecureSkipVerify bool
+}
+
+// NewRedfishClient creates a client for the given BMC address. The BMC
+// certificate is verified unless tlsOpts.InsecureSkipVerify is set.
+func NewRedfishClient(address, username, password string, tlsOpts RedfishTLS) *RedfishClient {
 	if !strings.HasPrefix(address, "https://") && !strings.HasPrefix(address, "http://") {
 		address = "https://" + address
 	}
@@ -38,7 +46,10 @@ func NewRedfishClient(address, username, password string) *RedfishClient {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: &tls.Config{
+					MinVersion:         tls.VersionTLS12,
+					InsecureSkipVerify: tlsOpts.InsecureSkipVerify, //nolint:gosec // explicit opt-in for self-signed BMCs
+				},
 			},
 		},
 	}
@@ -70,15 +81,15 @@ type StorageDrive struct {
 
 // SanitizeResult captures the outcome of a disk sanitization operation.
 type SanitizeResult struct {
-	DriveName              string    `json:"drive_name"`
-	DriveSerial            string    `json:"drive_serial"`
-	MediaType              string    `json:"media_type"`
-	Method                 string    `json:"method"` // Clear, Purge, Destroy
-	VerificationMethod     string    `json:"verification_method"`
-	VerificationResult     string    `json:"verification_result"` // verified, unverifiable, failed
-	VerificationLimitations string   `json:"verification_limitations"`
-	StartedAt              time.Time `json:"started_at"`
-	CompletedAt            time.Time `json:"completed_at"`
+	DriveName               string    `json:"drive_name"`
+	DriveSerial             string    `json:"drive_serial"`
+	MediaType               string    `json:"media_type"`
+	Method                  string    `json:"method"` // Clear, Purge, Destroy
+	VerificationMethod      string    `json:"verification_method"`
+	VerificationResult      string    `json:"verification_result"` // verified, unverifiable, failed
+	VerificationLimitations string    `json:"verification_limitations"`
+	StartedAt               time.Time `json:"started_at"`
+	CompletedAt             time.Time `json:"completed_at"`
 }
 
 // get performs an authenticated GET against the Redfish API.

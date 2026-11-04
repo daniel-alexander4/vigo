@@ -35,6 +35,7 @@ type Manager struct {
 	queries     *db.Queries
 	fleetIndex  FleetTraitWriter
 	lifecycleDS LifecycleDataSource
+	bmcTLS      RedfishTLS
 }
 
 // FleetTraitWriter is the subset of FleetIndex needed for writing traits.
@@ -45,6 +46,16 @@ type FleetTraitWriter interface {
 // NewManager creates a new sandgorgon manager.
 func NewManager(queries *db.Queries) *Manager {
 	return &Manager{queries: queries}
+}
+
+// SetBMCTLS sets how BMC certificates are verified. Never calling it
+// leaves verification on (system roots).
+func (m *Manager) SetBMCTLS(opts RedfishTLS) { m.bmcTLS = opts }
+
+// NewBMCClient returns a Redfish client using the manager's BMC TLS
+// policy. Every BMC connection goes through here.
+func (m *Manager) NewBMCClient(address, username, password string) *RedfishClient {
+	return NewRedfishClient(address, username, password, m.bmcTLS)
 }
 
 // SetFleetIndex enables lifecycle trait writing.
@@ -88,7 +99,7 @@ func (m *Manager) Decommission(ctx context.Context, req DecommissionRequest) (*D
 
 	if asset.BmcAddress != "" {
 		// Rack server path: automated drive sanitization via Redfish.
-		rf := NewRedfishClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
+		rf := m.NewBMCClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
 		if err := rf.Ping(ctx); err != nil {
 			m.recordEvent(ctx, asset.ID, "bmc_unreachable", err.Error())
 			result.Error = fmt.Sprintf("BMC unreachable: %v", err)
@@ -136,10 +147,10 @@ func (m *Manager) Decommission(ctx context.Context, req DecommissionRequest) (*D
 	// Write lifecycle traits.
 	if m.fleetIndex != nil && asset.EnvoyID.Valid {
 		traits := map[string]string{
-			"lifecycle.state":                  "retired",
-			"lifecycle.decommissioned_at":      time.Now().Format(time.RFC3339),
-			"sanitization.certificate_id":      result.CertificateID,
-			"sanitization.date":                time.Now().Format(time.RFC3339),
+			"lifecycle.state":             "retired",
+			"lifecycle.decommissioned_at": time.Now().Format(time.RFC3339),
+			"sanitization.certificate_id": result.CertificateID,
+			"sanitization.date":           time.Now().Format(time.RFC3339),
 		}
 		if len(result.Drives) > 0 {
 			traits["sanitization.method"] = result.Drives[0].Method

@@ -504,6 +504,8 @@ grafana:
 
 Optional. Gates the sandgorgon bare-metal lifecycle REST surface (Redfish BMC power/disk control, the NIST 800-88 decommission workflow, CSV/NetBox asset import). The subsystem is **deferred until after Vigo 1.0** and exposes destructive BMC operations against plaintext-stored BMC credentials, so its routes are **not mounted unless explicitly enabled**. Leave off.
 
+BMC connections verify the BMC's TLS certificate against the system roots. A BMC with a self-signed certificate is rejected; there is no configuration key to skip verification yet.
+
 ```yaml
 sandgorgon:
   enabled: false

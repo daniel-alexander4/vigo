@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"git.alexander4.io/vigo/server/db"
 )
@@ -57,7 +58,7 @@ func (m *Manager) RegisterImage(ctx context.Context, reg ImageRegistration) (db.
 
 	// For ISO images, auto-extract kernel/initrd if not provided.
 	if reg.ImageType == "iso" && reg.KernelPath == "" && reg.InitrdPath == "" {
-		kernel, initrd, extractErr := extractKernelFromISO(reg.Path, reg.Name)
+		kernel, initrd, extractErr := extractKernelFromISO(ctx, reg.Path, reg.Name)
 		if extractErr != nil {
 			return db.SandgorgonImage{}, fmt.Errorf("extracting kernel/initrd from ISO: %w", extractErr)
 		}
@@ -126,33 +127,45 @@ func defaultPreseedType(osFamily string) string {
 	}
 }
 
+// isoToolTimeout bounds each bsdtar call (list, then extract of two
+// files). A var so tests can shorten it.
+var isoToolTimeout = 2 * time.Minute
+
+// bsdtarBin is the ISO extraction tool. A var so tests can substitute it.
+var bsdtarBin = "bsdtar"
+
 // extractKernelFromISO extracts vmlinuz + initrd from an ISO using bsdtar.
 // No mount or privileges required. Files are placed alongside the ISO.
-func extractKernelFromISO(isoPath, imageName string) (kernel, initrd string, err error) {
+//
+// Each bsdtar invocation runs under isoToolTimeout so a corrupt or
+// hostile ISO cannot hang the request.
+func extractKernelFromISO(ctx context.Context, isoPath, imageName string) (kernel, initrd string, err error) {
 	dir := filepath.Dir(isoPath)
 
 	// Search common kernel/initrd locations inside the ISO.
 	kernelCandidates := []string{
-		"casper/vmlinuz",          // Ubuntu
-		"casper/hwe-vmlinuz",      // Ubuntu HWE
-		"live/vmlinuz",            // Debian live
-		"images/pxeboot/vmlinuz",  // RHEL/Rocky
-		"isolinux/vmlinuz",        // older distros
-		"boot/vmlinuz",            // generic
+		"casper/vmlinuz",         // Ubuntu
+		"casper/hwe-vmlinuz",     // Ubuntu HWE
+		"live/vmlinuz",           // Debian live
+		"images/pxeboot/vmlinuz", // RHEL/Rocky
+		"isolinux/vmlinuz",       // older distros
+		"boot/vmlinuz",           // generic
 	}
 	initrdCandidates := []string{
-		"casper/initrd",           // Ubuntu 24.04+
-		"casper/initrd.lz",        // Ubuntu older
-		"casper/initrd.gz",        // Ubuntu older
-		"casper/hwe-initrd",       // Ubuntu HWE
-		"live/initrd.img",         // Debian live
+		"casper/initrd",             // Ubuntu 24.04+
+		"casper/initrd.lz",          // Ubuntu older
+		"casper/initrd.gz",          // Ubuntu older
+		"casper/hwe-initrd",         // Ubuntu HWE
+		"live/initrd.img",           // Debian live
 		"images/pxeboot/initrd.img", // RHEL/Rocky
-		"isolinux/initrd.img",     // older distros
-		"boot/initrd.img",         // generic
+		"isolinux/initrd.img",       // older distros
+		"boot/initrd.img",           // generic
 	}
 
 	// List ISO contents to find which candidates exist.
-	listOut, err := exec.Command("bsdtar", "-tf", isoPath).CombinedOutput()
+	listCtx, cancelList := context.WithTimeout(ctx, isoToolTimeout)
+	defer cancelList()
+	listOut, err := exec.CommandContext(listCtx, bsdtarBin, "-tf", isoPath).CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("listing ISO contents: %s: %w", strings.TrimSpace(string(listOut)), err)
 	}
@@ -186,7 +199,9 @@ func extractKernelFromISO(isoPath, imageName string) (kernel, initrd string, err
 	}
 	defer os.RemoveAll(tmpDir)
 
-	extractOut, err := exec.Command("bsdtar", "-xf", isoPath, "-C", tmpDir, foundKernel, foundInitrd).CombinedOutput()
+	extractCtx, cancelExtract := context.WithTimeout(ctx, isoToolTimeout)
+	defer cancelExtract()
+	extractOut, err := exec.CommandContext(extractCtx, bsdtarBin, "-xf", isoPath, "-C", tmpDir, foundKernel, foundInitrd).CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("extracting from ISO: %s: %w", strings.TrimSpace(string(extractOut)), err)
 	}

@@ -90,7 +90,7 @@ func (m *Manager) Provision(ctx context.Context, req ProvisionRequest, serverAdd
 	// BMC-automated or manual boot path.
 	if asset.BmcAddress != "" {
 		// Rack server path: automated PXE boot via Redfish.
-		rf := NewRedfishClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
+		rf := m.NewBMCClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
 		if err := rf.Ping(ctx); err != nil {
 			m.recordEvent(ctx, asset.ID, "bmc_unreachable", err.Error())
 			result.Error = fmt.Sprintf("BMC unreachable: %v", err)

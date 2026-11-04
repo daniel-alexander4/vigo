@@ -169,7 +169,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 
 	// Auto-discover hardware from BMC if available and serial/model still missing.
 	if req.BMCAddress != "" && (req.SerialNumber == "" || req.Model == "") {
-		rf := sandgorgon.NewRedfishClient(req.BMCAddress, req.BMCUsername, req.BMCPassword)
+		rf := h.mgr.NewBMCClient(req.BMCAddress, req.BMCUsername, req.BMCPassword)
 		if info, err := rf.GetSystemInfo(r.Context()); err == nil {
 			if req.SerialNumber == "" {
 				req.SerialNumber = info.SerialNumber
