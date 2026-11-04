@@ -35,11 +35,15 @@ type EnvoyWithLatestRun struct {
 // ListEnvoysWithLatestRun returns all non-revoked envoys joined with their
 // latest run in a single query using a window function, replacing the O(N^2)
 // correlated subqueries that degraded at scale.
+//
+// It selects every envoys column: the fleet index is rehydrated from it, and
+// check-in verification reads the index, so a column left out here (as
+// cert_spki_sha256 once was) reads as empty for every envoy after a restart.
 func (q *Queries) ListEnvoysWithLatestRun(ctx context.Context) ([]EnvoyWithLatestRun, error) {
 	const query = `
 SELECT n.id, n.hostname, n.ip_address, n.pubkey_pem, n.enrolled_at,
        n.last_seen, n.revoked, n.revoked_at, n.force_push, n.pending_rotated_secrets,
-       n.maintenance_until,
+       n.maintenance_until, n.agent_version, n.cert_spki_sha256,
        lr.id, lr.status, lr.changed_count, lr.failed_count, lr.resource_count
 FROM envoys n
 LEFT JOIN (
@@ -62,7 +66,8 @@ ORDER BY n.enrolled_at DESC`
 		if err := rows.Scan(
 			&i.ID, &i.Hostname, &i.IpAddress, &i.PubkeyPem,
 			&i.EnrolledAt, &i.LastSeen, &i.Revoked, &i.RevokedAt, &i.ForcePush,
-			&i.PendingRotatedSecrets, &i.MaintenanceUntil,
+			&i.PendingRotatedSecrets, &i.MaintenanceUntil, &i.AgentVersion,
+			&i.CertSpkiSha256,
 			&i.LatestRunID, &i.LatestRunStatus, &i.LatestRunChangedCount,
 			&i.LatestRunFailedCount, &i.LatestRunResourceCount,
 		); err != nil {

@@ -48,3 +48,35 @@ func TestRehydrateSeedsRevokedIDs(t *testing.T) {
 		t.Errorf("UnpinnedEnvoys = %+v, want only the active, unpinned envoy", got)
 	}
 }
+
+// TestRehydrateCarriesCertPin: check-in verification reads the cert pin from
+// the fleet index, so rehydrate must load it. Without it every envoy reads as
+// unpinned after a restart and is refused at check-in.
+func TestRehydrateCarriesCertPin(t *testing.T) {
+	sqlDB := testutil.OpenMigratedTestDB(t)
+	q := db.New(sqlDB)
+	ctx := context.Background()
+	e, err := q.CreateEnvoy(ctx, db.CreateEnvoyParams{Hostname: "pinned.example.com", IpAddress: "10.0.0.3", PubkeyPem: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const pin = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	if err := q.UpdateEnvoyCertPin(ctx, db.UpdateEnvoyCertPinParams{CertSpkiSha256: pin, ID: e.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	fi := NewFleetIndex()
+	if err := Rehydrate(ctx, fi, q, nil, time.Minute, 0, nil); err != nil {
+		t.Fatalf("Rehydrate: %v", err)
+	}
+	got := fi.GetEnvoy(e.ID)
+	if got == nil {
+		t.Fatal("pinned envoy not held after rehydrate")
+	}
+	if got.CertSPKI != pin {
+		t.Errorf("CertSPKI after rehydrate = %q, want %q", got.CertSPKI, pin)
+	}
+	if u := fi.UnpinnedEnvoys(); len(u) != 0 {
+		t.Errorf("UnpinnedEnvoys = %+v, want none", u)
+	}
+}
